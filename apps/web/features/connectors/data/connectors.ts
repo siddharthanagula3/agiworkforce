@@ -79,7 +79,7 @@ export const ACTION_SOURCE_COPY: Record<ConnectorActionSource, string> = {
     'cannot be listed here beforehand. Once connected, set a permission on each discovered tool: ' +
     'one you leave unset can run without asking you first.',
   'device-local':
-    'The CLI runs these tools on your own machine. The web app and current public Desktop neither list nor run them.',
+    'The CLI runs these tools on your own machine. The web app and Desktop neither list nor run them.',
 };
 
 export function describeConnectorActions(connectorId: string): string {

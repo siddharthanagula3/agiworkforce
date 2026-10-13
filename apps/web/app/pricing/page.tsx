@@ -85,7 +85,10 @@ import {
 import { UpgradeWaitlistDialog } from '@features/billing/components/UpgradeWaitlistDialog';
 import { DowngradeReviewDialog } from '@features/billing/components/DowngradeReviewDialog';
 import { fetchPlanChangeState } from '@features/billing/services/billing-account';
-import type { UpgradeWaitlistRequest } from '@features/billing/services/upgrade-waitlist';
+import {
+  isUpgradeWaitlistRequired,
+  type UpgradeWaitlistRequest,
+} from '@features/billing/services/upgrade-waitlist';
 import { useBillingData } from '@features/billing/hooks/use-billing-queries';
 import { useLocalizedPricing } from '@features/billing/hooks/use-localized-pricing';
 import { useFreeMediaOffer } from '@features/billing/hooks/use-free-media-offer';
@@ -605,11 +608,22 @@ export default function PricingPage() {
       return;
     }
 
-    setWaitlistRequest({
+    const request: UpgradeWaitlistRequest = {
       plan,
       billingInterval: selectedInterval(plan),
       ...(isPerSeatBillingPlan(plan) ? { seats: teamSeats, premiumSeats: teamPremiumSeats } : {}),
-    });
+    };
+    setPendingPlan(plan);
+    if (await isUpgradeWaitlistRequired()) {
+      setPendingPlan(null);
+      setWaitlistRequest(request);
+      return;
+    }
+    try {
+      await startInitialCheckout(request);
+    } catch (error) {
+      toast.error(toUserMessage(error, 'Failed to start checkout.'));
+    }
   }
 
   async function startInitialCheckout(request: UpgradeWaitlistRequest) {

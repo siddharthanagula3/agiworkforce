@@ -10,7 +10,8 @@ import {
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { Reveal } from '@/features/marketing/components/Reveal';
 import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
-import { LAUNCH, SURFACE_STATUS } from '../../lib/marketing-constants';
+import { LAUNCH, NOTIFY_CTA, SURFACE_STATUS } from '../../lib/marketing-constants';
+import { OG_IMAGE } from '@/lib/seo/site';
 
 export const metadata: Metadata = {
   title: 'AGI Mobile Preview | Coming soon to iPhone & Android',
@@ -23,13 +24,13 @@ export const metadata: Metadata = {
       'AGI Mobile is not published. Preview the planned on-device Local experience and explicit cloud boundary.',
     type: 'website',
     url: 'https://agiworkforce.com/mobile',
-    images: [{ url: '/api/og', width: 1200, height: 630, alt: 'AGI app preview' }],
+    images: [{ url: OG_IMAGE.url, width: 1200, height: 630, alt: 'AGI app preview' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'AGI Mobile Preview | Coming soon to iPhone & Android',
     description: `The app is not published. Local Mode is the planned default. ${LAUNCH.publicLabel}.`,
-    images: ['/api/og'],
+    images: [OG_IMAGE.url],
   },
 };
 
@@ -109,8 +110,8 @@ export default function MobilePage() {
                 AGI Mobile
               </h1>
               <div className="agi-fl-cta-row">
-                <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-                  Get notified
+                <Link href={NOTIFY_CTA.href} className="agi-fl-cta agi-fl-cta--primary">
+                  {NOTIFY_CTA.label}
                 </Link>
                 <WaitlistTrigger
                   label="Discuss Enterprise access"
@@ -255,13 +256,10 @@ export default function MobilePage() {
         />
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
+          eyebrow={SURFACE_STATUS.mobile}
           title="Get notified when Mobile ships."
           body="AGI Mobile is not published. The planned iPhone and Android app uses Local Mode by default and offers an explicit managed-cloud continuation."
-          ctas={[
-            { href: '/download', label: 'Get notified' },
-            { label: 'Discuss Enterprise access', waitlist: true },
-          ]}
+          ctas={[NOTIFY_CTA, { label: 'Discuss Enterprise access', waitlist: true }]}
           stamp={`iPhone & Android · ${LAUNCH.shortLabel}`}
         />
       </main>

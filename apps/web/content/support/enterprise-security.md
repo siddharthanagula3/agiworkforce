@@ -4,16 +4,17 @@ title: Security review of AGI for an enterprise
 path: /enterprise
 category: administration
 tags: enterprise, security review, questionnaire, soc 2, hipaa, certification, audit export, siem, trust ledger, data residency, procurement, evaluation
-updated: 2026-09-17
+updated: 2026-10-12
 scope: public
 ---
 
 ## Evaluate before you sign anything
 
-Local mode and BYOK need no contract, no trial and no seat, so a reviewer can
-run the product on their own hardware while procurement is still reading. In
-Local mode nothing reaches AGI infrastructure at all, which makes it the
-cheapest way to assess behaviour without a data-processing conversation.
+Local mode and BYOK need no contract, no trial and no seat. They run in the
+CLI, which is {{STATUS.cli}}. In Local mode on the CLI, conversations stay on
+your device and are never uploaded. A signed-in CLI may still refresh the
+managed model catalog when it is not cached.
+See [Run a local model](https://agiworkforce.com/help/local-mode) for setup.
 
 ## What is claimed, and what is not
 
@@ -33,12 +34,12 @@ click-through.
 - Local, BYOK and managed cloud allowed or refused per workspace.
 - Public share links and phone sync switched off server side, not by asking
   people not to use them.
-- Retention windows, enforced when the workspace owner turns them on, with a
-  record of what retention deleted and legal holds that suspend it.
+- Retention windows, enforced once the workspace turns them on, with a record
+  of what retention deleted and legal holds that suspend it.
 - Feature, model and connector policy, with exceptions scoped to a role, a
   group or a person.
-- The route each answer took, printed on every reply, so a claim about where a
-  request went is checkable rather than trusted.
+- The model that answered, named on the reply, and a **Local** mark on a reply
+  from a model running on the device.
 
 ## Audit evidence
 
@@ -51,3 +52,5 @@ batches drained to a SIEM endpoint every thirty minutes.
 Hosted data lives in the United States. EU and UK residency hosting is on the
 roadmap and is not available today. Local conversations never leave the device
 in the first place, which is the residency answer for the strictest cases.
+
+Local mode runs in the CLI, which is {{STATUS.cli}}.

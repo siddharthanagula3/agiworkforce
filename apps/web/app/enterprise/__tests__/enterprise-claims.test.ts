@@ -163,7 +163,7 @@ describe('/enterprise, control claims stay accurate: shipped controls say so, un
       expect(index, `${term} row missing`).toBeGreaterThan(-1);
       const context = source.slice(index, index + 200).toLowerCase();
       expect(
-        /planned|roadmap|not available|no audit report|not held/u.test(context),
+        /not available|no audit report|not held/u.test(context),
         `${term} is claimed affirmatively`,
       ).toBe(true);
     }
@@ -173,5 +173,31 @@ describe('/enterprise, control claims stay accurate: shipped controls say so, un
     const lower = rendered().toLowerCase();
     expect(lower).not.toContain('residency');
     expect(lower).not.toContain('custom regions');
+  });
+
+  it('describes the Local route in the words the enterprise help article uses', () => {
+    const source = rendered();
+    const article = readFileSync(
+      path.join(
+        path.resolve(__dirname, '..', '..', '..'),
+        'content/support/enterprise-security.md',
+      ),
+      'utf8',
+    ).replace(/\s+/gu, ' ');
+    const statusBar = readFileSync(
+      path.join(path.resolve(__dirname, '..', '..', '..', '..'), 'cli/src/tui/tui_app.rs'),
+      'utf8',
+    );
+
+    expect(article).toContain('conversations stay on your device and are never uploaded');
+    expect(source).toContain(
+      'In Local mode, conversations stay on your device and are never uploaded',
+    );
+    expect(source).not.toMatch(/Nothing reaches AGI infrastructure/u);
+    expect(statusBar).toMatch(
+      /fn render_status_bar[\s\S]{0,1200}let name = ctx\.access_mode\.trust_word\(\);/u,
+    );
+    expect(source).toContain('The status bar names the route in use');
+    expect(source).not.toMatch(/printed on every reply/u);
   });
 });

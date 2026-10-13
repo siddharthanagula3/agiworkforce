@@ -13,11 +13,24 @@ import {
 } from '@/features/marketing/components/system';
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import {
+  BILLING_PLAN_PRICING,
+  CONNECTORS_COMING_SOON_DETAIL,
+  connectorsReleased,
+} from '@agiworkforce/types';
+import { PAID_UPGRADE_ACCESS_NOTE } from '@/lib/billing/paid-upgrade-copy';
+import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
+import {
+  AVAILABLE_NOW_LABEL,
+  BYOK_SURFACES,
   CATALOG_AS_OF,
-  MARKETING,
+  COMING_SOON_LABEL,
+  RELEASED_SURFACES,
+  SURFACE_NAMES,
   SURFACE_STATUS,
+  UNRELEASED_SURFACES,
   surfaceAvailabilitySummary,
 } from '../../lib/marketing-constants';
+import { SURFACE_IDS, joinSurfaceNames, type SurfaceId } from '../../lib/surface-status';
 import {
   FOUNDER_NAME,
   FOUNDER_ROLE,
@@ -25,6 +38,8 @@ import {
   GOVERNING_LAW,
   LEGAL_ENTITY,
   LEGAL_ENTITY_DESCRIPTOR,
+  MANAGED_CLOUD_STATUS,
+  PUBLIC_WEB_LAUNCH_DATE,
   REGISTERED_AGENT_ADDRESS,
   contactMailto,
 } from '../../lib/legal-constants';
@@ -36,44 +51,63 @@ export const metadata = buildMetadata({
   path: '/press',
 });
 
+const NESTED_SEPARATOR = ' · ';
+
+const CONNECTORS_RELEASED = connectorsReleased();
+const TOOLS_FACT = CONNECTORS_RELEASED ? 'tools and connectors' : 'tools';
+const CONNECTORS_NOTE = CONNECTORS_RELEASED ? '' : ` ${CONNECTORS_COMING_SOON_DETAIL}`;
+
+const SURFACE_PRODUCTS = {
+  web: 'AGI Web, in any browser',
+  desktop: 'AGI Desktop for macOS',
+  cli: 'AGI CLI for macOS, Linux and Windows',
+  mobile: 'AGI Mobile (iOS, Android)',
+  vscode: 'AGI for VS Code',
+  chrome: 'AGI for Chrome',
+} as const satisfies Record<SurfaceId, string>;
+
+const ALL_SURFACE_NAMES = joinSurfaceNames(SURFACE_IDS.map((surface) => SURFACE_NAMES[surface]));
+
+function productList(surfaces: readonly SurfaceId[]): string {
+  return surfaces.map((surface) => SURFACE_PRODUCTS[surface]).join(NESTED_SEPARATOR);
+}
+
+const RELEASED_FACT = { label: AVAILABLE_NOW_LABEL, value: productList(RELEASED_SURFACES) };
+const UNRELEASED_FACT = {
+  label: COMING_SOON_LABEL,
+  value: `${productList(UNRELEASED_SURFACES)}. Each exists in the repository with a release workflow. The download page shows what is published.`,
+};
+
+const SURFACE_FACTS: { label: string; value: string }[] = [
+  ...(RELEASED_SURFACES.length > 0 ? [RELEASED_FACT] : []),
+  ...(UNRELEASED_SURFACES.length > 0 ? [UNRELEASED_FACT] : []),
+];
+
 const PRODUCT_FACTS: { label: string; value: string }[] = [
   {
     label: 'What it is',
-    value:
-      'An AI assistant and agent platform: chat, code, research, files, projects, artifacts, tools and connectors, memory, and scheduled work.',
+    value: `An AI assistant and agent platform: chat, code, research, files, projects, artifacts, ${TOOLS_FACT}, memory, and scheduled work.${CONNECTORS_NOTE}`,
   },
-  {
-    label: SURFACE_STATUS.web,
-    value: 'AGI Web, in any browser',
-  },
-  {
-    label: 'Built, not yet released',
-    value:
-      'AGI CLI for macOS, Linux and Windows · AGI Desktop for macOS · AGI Mobile (iOS, Android) · AGI for VS Code · AGI for Chrome. All five exist in the repository with release workflows, and none has a published release. They are not installable from any store today.',
-  },
+  ...SURFACE_FACTS,
   {
     label: 'Where inference runs',
-    value:
-      'Three separate routes the user picks between: Local (models on the user’s own hardware, works offline), BYOK (the user’s own provider key, traffic goes directly to that provider), and AGI managed cloud (hosted and metered by AGI). Work does not move between routes without an explicit, labeled action.',
+    value: `Three separate routes: Local (models on the user’s own hardware, works offline), BYOK (the user’s own provider key, traffic goes directly to that provider), and AGI managed cloud (hosted and metered by AGI). Work does not move between routes without an explicit, labeled action. AGI Web runs on managed cloud. Local runs in the CLI. BYOK runs on ${BYOK_SURFACES.label}. ${BYOK_SURFACES.availability}`,
   },
   {
     label: 'Managed cloud status',
-    value:
-      'Open by default since 2026-06-27. No waitlist and no invite. It is not generally available.',
+    value: `In ${MANAGED_CLOUD_STATUS}, not general availability. AGI Web launched publicly on ${PUBLIC_WEB_LAUNCH_DATE}. The ${BILLING_PLAN_PRICING.free.label} plan is open by default: sign in and start, with no waitlist and no invite. ${PAID_UPGRADE_ACCESS_NOTE}`,
   },
   {
     label: 'Model catalog',
-    value: `${MARKETING.models.count} models across ${MARKETING.providers.count} provider integrations, as of ${CATALOG_AS_OF}. The catalog is a versioned, dated file in the repository rather than a marketing figure.`,
+    value: `${CATALOG_SCOPES.catalogueEntries.text} across ${CATALOG_SCOPES.providerRecords.text}, as of ${CATALOG_AS_OF}. The catalog is a versioned, dated file in the repository rather than a marketing figure.`,
   },
   {
     label: 'Model access by plan',
-    value:
-      'Tiered and enforced in shared code, not uniform: an economy roster, further models added on Pro, and frontier models on Max. A plan cannot reach a model above its tier, so lower plans do not get frontier access.',
+    value: `Tiered and enforced in shared code, not uniform: free models on ${BILLING_PLAN_PRICING.free.label}, an economy roster from ${BILLING_PLAN_PRICING.basic.label}, further models added on ${BILLING_PLAN_PRICING.pro.label}, and frontier models on ${BILLING_PLAN_PRICING.max.label} and above. A plan cannot reach a model above its tier, so lower plans do not get frontier access.`,
   },
   {
     label: 'Pricing posture',
-    value:
-      'Local and BYOK cost nothing to AGI: users pay their provider directly, or nothing at all when running locally. Managed cloud is metered. Team is priced per seat, with current checkout availability shown on Pricing; Enterprise is sales-assisted.',
+    value: `AGI charges nothing for Local or BYOK: users pay their provider directly, or nothing at all when running locally. Managed cloud is metered. ${BILLING_PLAN_PRICING.team.label} is priced per seat, with current checkout availability shown on Pricing; ${BILLING_PLAN_PRICING.enterprise.label} is sales-assisted.`,
   },
 ];
 
@@ -87,22 +121,19 @@ const COMPANY_FACTS: { label: string; value: string }[] = [
 ];
 
 const NOT_CLAIMED: string[] = [
-  'No security certifications. SOC 2 and ISO 27001 are planned with no audit report and no date; HIPAA workflows are not offered. The trust page carries the qualified status.',
+  'No security certifications. SOC 2 and ISO 27001 are not held: no report or certificate exists, no auditor or certification body is engaged, and no audit is in progress. HIPAA workflows are not offered. The trust page carries the dated ledger.',
   'No named customers, logos, or testimonials, and no case studies. We publish those only with written permission, and we have none cleared to publish.',
   'No usage, revenue, headcount, or funding figures.',
   'No uptime or availability record. The SLA page states planned targets, not measured history.',
   'No general availability claim for managed cloud.',
 ];
 
-const NESTED_SEPARATOR = ' · ';
-const FACT_SEPARATOR = ', ';
-
 const HERO_FACTS = [
-  `${MARKETING.models.count} models`,
-  `${MARKETING.providers.count} provider integrations`,
+  CATALOG_SCOPES.catalogueEntries.text,
+  CATALOG_SCOPES.providerRecords.text,
   `Web ${SURFACE_STATUS.web.toLowerCase()}`,
   `CLI ${SURFACE_STATUS.cli.toLowerCase()}`,
-  `Desktop ${SURFACE_STATUS.desktop.replace(NESTED_SEPARATOR, FACT_SEPARATOR)}`,
+  `Desktop ${SURFACE_STATUS.desktop.toLowerCase()}`,
   `As of ${CATALOG_AS_OF}`,
 ];
 
@@ -142,19 +173,22 @@ export default function PressPage() {
                 <Prose size="sm">
                   AGI is an AI assistant designed to work across the web, desktop, and terminal, and
                   to let you choose whether each request runs on your own hardware, on your own
-                  provider key, or on AGI&rsquo;s hosted service. {surfaceAvailabilitySummary()}
+                  provider key, or on AGI&rsquo;s hosted service. AGI Web runs on the hosted
+                  service. The CLI runs models on your own hardware, and your own provider key works
+                  on {BYOK_SURFACES.label}. {surfaceAvailabilitySummary()}
                 </Prose>
               </Stack>
               <Stack gap="tight">
                 <h3 className="agi-ds-h3">Long</h3>
                 <Prose size="sm">
                   AGI is an AI assistant and agent platform built by {LEGAL_ENTITY},{' '}
-                  {LEGAL_ENTITY_DESCRIPTOR}. It spans six surfaces (web, desktop, mobile, command
-                  line, VS Code, and Chrome). {surfaceAvailabilitySummary()} Its distinguishing
-                  design choice is that the user selects where inference happens: locally on their
-                  own hardware, through their own provider API key, or on AGI&rsquo;s managed cloud.
+                  {LEGAL_ENTITY_DESCRIPTOR}. It spans {SURFACE_IDS.length} surfaces (
+                  {ALL_SURFACE_NAMES}). {surfaceAvailabilitySummary()} Its distinguishing design
+                  choice is that the user selects where inference happens: locally on their own
+                  hardware, through their own provider API key, or on AGI&rsquo;s managed cloud.
                   Those three routes are separate trust boundaries, and work does not move between
-                  them without an explicit, labeled action.
+                  them without an explicit, labeled action. AGI Web runs on managed cloud. The local
+                  route runs in the CLI, and the provider-key route runs on {BYOK_SURFACES.label}.
                 </Prose>
               </Stack>
             </Stack>
@@ -168,9 +202,7 @@ export default function PressPage() {
                 The product, stated precisely.
               </h2>
               <Prose>
-                &ldquo;Available now&rdquo; means there is a published release. &ldquo;Built, not
-                yet released&rdquo; means the code exists and nothing has shipped. Please do not
-                describe those as products readers can get.
+                {`“${AVAILABLE_NOW_LABEL}” means the surface is released. “${COMING_SOON_LABEL}” means the code exists and the surface is not released. Please do not describe those as products readers can get.`}
               </Prose>
             </div>
             <Ledger caption="Product facts" rows={PRODUCT_FACTS} />

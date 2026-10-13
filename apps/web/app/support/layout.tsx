@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { OG_IMAGE } from '@/lib/seo/site';
 
 export const metadata: Metadata = {
   title: 'Support',
@@ -14,13 +15,12 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: 'Support',
-    description:
-      'Need help? Contact our support team, report bugs, or request features. We respond fast.',
+    description: 'Need help? Contact our support team, report bugs, or request features.',
     type: 'website',
     url: 'https://agiworkforce.com/support',
     images: [
       {
-        url: '/api/og',
+        url: OG_IMAGE.url,
         width: 1200,
         height: 630,
         alt: 'AGI Support',
@@ -30,9 +30,8 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Support',
-    description:
-      'Need help? Contact our support team, report bugs, or request features. We respond fast.',
-    images: ['/api/og'],
+    description: 'Need help? Contact our support team, report bugs, or request features.',
+    images: [OG_IMAGE.url],
     creator: '@agiworkforce',
   },
   alternates: {

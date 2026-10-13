@@ -4,7 +4,7 @@ title: Administering a workspace
 path: /workspace
 category: administration
 tags: admin, administration, workspace console, members, seats, invite, audit log, usage analytics, sharing, legal hold, retention, api keys, spend limit, create workspace, switch workspace, leave workspace, delete workspace, successor, owner
-updated: 2026-09-21
+updated: 2026-10-12
 scope: public
 ---
 
@@ -34,8 +34,9 @@ settings. Its sections are:
 ## Creating a workspace
 
 Settings, Workspace is where a workspace is created: give it a name, and a slug
-made of lowercase letters, numbers and hyphens. Creating one needs a Team or
-Enterprise plan, and on any other plan the page says so in place of the form.
+made of lowercase letters, numbers and hyphens. Creating one needs a
+{{PLAN.team}} or {{PLAN.enterprise}} plan, and on any other plan the page says
+so in place of the form.
 
 An account owns one workspace at most. A second attempt is refused with "You
 already own a workspace. Switch to it from the account menu." Other workspaces

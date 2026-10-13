@@ -13,6 +13,7 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
+import { PAID_UPGRADE_ACCESS_NOTE } from '@/lib/billing/paid-upgrade-copy';
 
 const RESEARCH_PLANS = billingPlanCapabilityPlanLabels('deep_research');
 
@@ -156,7 +157,8 @@ export default function DeepResearchPage() {
               </h2>
               <p className="agi-lp-lede">
                 Deep Research is included on {RESEARCH_PLANS} plans. Choose Auto or a model with
-                research support. Availability also depends on account and workspace access.
+                research support. Availability also depends on account and workspace access.{' '}
+                {PAID_UPGRADE_ACCESS_NOTE}
               </p>
               <ButtonRow>
                 <Button href="/pricing#pricing-compare-title">See which plans include it</Button>

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { OG_IMAGE } from '@/lib/seo/site';
 
 export const metadata: Metadata = {
   title: 'API Documentation',
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com/api-docs',
     images: [
       {
-        url: '/api/og',
+        url: OG_IMAGE.url,
         width: 1200,
         height: 630,
         alt: 'AGI API Documentation',
@@ -32,7 +33,7 @@ export const metadata: Metadata = {
     title: 'API Documentation',
     description:
       'REST API reference for AGI. Authentication, endpoints, and the published OpenAPI bundle.',
-    images: ['/api/og'],
+    images: [OG_IMAGE.url],
     creator: '@agiworkforce',
   },
   alternates: {

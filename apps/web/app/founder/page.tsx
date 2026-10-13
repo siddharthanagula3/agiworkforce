@@ -39,7 +39,7 @@ export default function FounderPage() {
         <PageHero
           id="agi-founder-title"
           eyebrow="The founder"
-          title="Siddhartha Nagula."
+          title={`${FOUNDER_NAME}.`}
           lede={`${FOUNDER_ROLE} of ${LEGAL_ENTITY}, the company behind ${PRODUCT_NAME}. It is built and led by one person. That is stated here rather than implied away with a plural "we", because it is the thing most likely to matter to someone deciding whether to depend on this product.`}
           ctas={[]}
         />
@@ -47,7 +47,7 @@ export default function FounderPage() {
         <Section id="conviction" labelledBy="agi-founder-conviction-title" rule>
           <FounderBlock
             quote={<>&ldquo;You should own the choice of model.&rdquo;</>}
-            body={`The person doing the work should decide where it runs and which model answers, not a vendor holding the only key. Local Mode never phones home, BYOK keeps your keys on your own machine, and managed cloud is a choice you make rather than the only door. Every design decision in ${PRODUCT_NAME} follows from that.`}
+            body={`The person doing the work should decide where it runs and which model answers, not a vendor holding the only key. Local Mode keeps your conversations on your device, BYOK keeps your keys on your own machine, and managed cloud is a choice you make rather than the only door. Every design decision in ${PRODUCT_NAME} follows from that.`}
             name={FOUNDER_NAME}
             role={`${FOUNDER_ROLE}, ${LEGAL_ENTITY}`}
           />

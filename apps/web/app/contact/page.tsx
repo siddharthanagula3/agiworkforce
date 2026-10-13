@@ -27,15 +27,11 @@ export default function ContactPage() {
       const subject = String(data.get('subject') ?? '').trim();
       const message = String(data.get('message') ?? '').trim();
       const body = `Name: ${name}\nEmail: ${email}\n\n${message}`;
-      const mailto =
-        `mailto:contact@agiworkforce.com` +
-        `?subject=${encodeURIComponent(subject)}` +
-        `&body=${encodeURIComponent(body)}`;
-      window.location.href = mailto;
+      window.location.href = contactMailto(subject, body);
       setDraftOpened(true);
       form.reset();
     } catch {
-      setError('Could not open your mail app. Email contact@agiworkforce.com directly.');
+      setError(`Could not open your mail app. Email ${CONTACT_EMAIL} directly.`);
     } finally {
       setPending(false);
     }
@@ -57,7 +53,7 @@ export default function ContactPage() {
                 Settings, Help
               </Link>{' '}
               instead, and the replies stay on the ticket. For sales conversations, head to contact
-              sales. For everything else, contact@agiworkforce.com reaches a person who reads it.
+              sales. For everything else, {CONTACT_EMAIL} reaches a person who reads it.
             </>
           }
           ctas={[

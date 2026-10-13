@@ -540,8 +540,8 @@ export default async function StatusPage() {
               <Button href="/security" variant="secondary">
                 Security details
               </Button>
-              <Button href="/changelog" variant="secondary">
-                Read the changelog
+              <Button href="/release-notes" variant="secondary">
+                Read the release notes
               </Button>
               <Button href="/sla" variant="secondary">
                 Service levels

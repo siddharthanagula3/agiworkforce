@@ -21,6 +21,8 @@ import {
   BADGE_NOTE,
   BASE_PATH,
   CONNECT_LABEL,
+  CONNECTORS_RELEASE_NOTE,
+  CONNECTORS_RELEASED,
   NOT_PROVIDED,
   SIGN_IN_HREF,
   SOURCE_LABELS,
@@ -31,6 +33,10 @@ import {
 } from '../directory-public';
 
 export const dynamic = 'force-dynamic';
+
+const CONNECT_STEPS = CONNECTORS_RELEASED
+  ? 'After you sign in and choose Connect, the provider asks for its own sign-in or key where it needs one, and every tool stays behind your per-tool permission.'
+  : `${CONNECTORS_RELEASE_NOTE} When they open, you sign in and choose Connect, the provider asks for its own sign-in or key where it needs one, and every tool stays behind your per-tool permission.`;
 
 interface PageProps {
   params: Promise<{ id: string[] }>;
@@ -132,11 +138,7 @@ export default async function ConnectorDetailPage({ params }: PageProps) {
             <Prose>
               <strong>{BADGE_LABELS[record.badge]}.</strong> {BADGE_NOTE}
             </Prose>
-            <Prose>
-              Reading this page connects nothing. After you sign in and choose Connect, the provider
-              asks for its own sign-in or key where it needs one, and every tool stays behind your
-              per-tool permission.
-            </Prose>
+            <Prose>Reading this page connects nothing. {CONNECT_STEPS}</Prose>
             <Ledger caption="The record" rows={rows} />
           </Stack>
         </Section>

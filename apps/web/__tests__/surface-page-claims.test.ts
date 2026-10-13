@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   BILLING_PLAN_PRICING,
@@ -136,8 +136,9 @@ describe('/business, enterprise admin controls are not underclaimed', () => {
  * What a workflow builds and what a user can download are different facts, and
  * this page is about the second one. An earlier pass read a release workflow,
  * saw macOS signed and notarized, and rewrote the page to list a notarized dmg
- * as published. No desktop installer has ever been published. Reasoning from
- * the pipeline to the shelf is the mistake these cases exist to stop. Since
+ * as published. Reasoning from the pipeline to the shelf is the mistake these
+ * cases exist to stop, in either direction: the page types no publication
+ * state for macOS and leaves it to the live release check it embeds. Since
  * D-2026-09-15-04 the desktop is the Electron app for macOS, so the page must
  * also stop describing the Tauri build and its Linux packages.
  */
@@ -164,15 +165,34 @@ describe('/desktop separates what is built from what is published', () => {
     }
   });
 
-  it('says plainly that macOS is built but not yet published', () => {
+  it('leaves the macOS publication state to the live release check instead of typing it', () => {
     const page = collapsed('app/desktop/page.tsx');
-    expect(page).toMatch(/not yet published/iu);
+    expect(page).toMatch(/<DesktopDownloadAvailability \/>/u);
+    expect(page).toMatch(/reports what that check finds for macOS right now/u);
+    expect(page).not.toMatch(/not yet published|has not been published/iu);
+    expect(page).not.toMatch(/macOS (?:build|app|installer) (?:is|has been) published/iu);
+
+    const live = collapsed('app/download/DesktopDownloadAvailability.tsx');
+    expect(live).toMatch(/fetch\('\/api\/releases\/desktop-cloud\/latest'/u);
+    expect(live).toMatch(/No signed AGI Desktop installer is available right now/u);
+  });
+
+  it('shows the registry label on the landing Desktop cards and types no publication state', () => {
+    for (const file of [
+      'features/marketing/components/MarketingLanding.tsx',
+      'features/marketing/components/next/LandingNext.tsx',
+    ]) {
+      const card = collapsed(file);
+      expect(card, file).toMatch(
+        /platforms: 'macOS, Apple silicon and Intel', status: SURFACE_STATUS\.desktop,/u,
+      );
+      expect(card, file).not.toMatch(/not yet published|has not been published/iu);
+    }
   });
 
   it('advertises computer use only as the macOS implementation supports it', () => {
     const page = collapsed('app/desktop/page.tsx');
     expect(page).toMatch(/Screen Recording and Accessibility/u);
-    expect(page).toMatch(/one approved step at a time/u);
   });
 
   it('keeps Windows stated as unpublished, which is still true', () => {
@@ -183,6 +203,62 @@ describe('/desktop separates what is built from what is published', () => {
   it('still gates every download on a verified signature', () => {
     const page = collapsed('app/desktop/page.tsx');
     expect(page).toMatch(/verifies a signed build/iu);
+  });
+});
+
+describe('Desktop computer use is described by the prompts the runtime really shows', () => {
+  const PAGES = [
+    'app/desktop/page.tsx',
+    'features/marketing/components/MarketingLanding.tsx',
+    'features/marketing/components/next/LandingNext.tsx',
+    'lib/changelog-entries.ts',
+  ];
+
+  it('grants every screen step from one session prompt and asks again per app', () => {
+    const runtime = (file: string) => repoText('apps', 'desktop', 'electron', 'runtime', file);
+
+    expect(runtime('dispatcher.ts')).toMatch(
+      /computer_click: \{ capability: 'computer\.use', reason: COMPUTER_USE_REASON \}/u,
+    );
+    expect(runtime('permissionManager.ts')).toMatch(
+      /It lasts until you quit the app; there is no permanent grant from this prompt/u,
+    );
+    expect(runtime('applicationControl.ts')).toMatch(
+      /It asks again before it touches any other app/u,
+    );
+    expect(runtime('computerUseSteps.ts')).toMatch(/title: 'Check this step'/u);
+    expect(runtime('computerUseSession.ts')).toMatch(
+      /globalShortcut\.register\(COMPUTER_USE_STOP_SHORTCUT, \(\) => \{\s*stopComputerUse\(\);/u,
+    );
+    expect(repoText('packages', 'contracts', 'local-runtime', 'src', 'computer-use.ts')).toMatch(
+      /COMPUTER_USE_STOP_SHORTCUT = 'Escape'/u,
+    );
+  });
+
+  it('states the session prompt, the per-app prompt and the stop key on /desktop', () => {
+    const page = collapsed('app/desktop/page.tsx');
+    expect(page).toMatch(/It asks each session and before each app, not at every step/u);
+    expect(page).toMatch(/\$\{COMPUTER_USE_STOP_SHORTCUT\} stops it/u);
+  });
+
+  it('never says every step is approved, on any page that describes Desktop', () => {
+    for (const file of PAGES) {
+      expect(
+        /one (?:approved )?step at a time|step by step/iu.test(collapsed(file)),
+        `${file} still says each computer-use step is approved`,
+      ).toBe(false);
+    }
+  });
+
+  it('carries the same two prompts into the landing cards and the dated changelog entry', () => {
+    for (const file of PAGES.slice(1, 3)) {
+      const page = collapsed(file);
+      expect(page).toContain('computer use that asks each session and before each app');
+      expect(page).toContain('Computer use on macOS, asked per session and per app');
+    }
+    expect(collapsed('lib/changelog-entries.ts')).toContain(
+      'computer use that asks before its first step each session and before each app it controls',
+    );
   });
 });
 
@@ -204,8 +280,13 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
       /Desktop contract is cloud-only for inference/u,
     );
     expect(collapsed('app/local/page.tsx')).toMatch(
-      /public Electron Desktop contract does not accept local-inference commands or provider keys/u,
+      /The Electron Desktop contract does not accept local-inference commands or provider keys/u,
     );
+    for (const page of ['app/desktop/page.tsx', 'app/local/page.tsx']) {
+      expect(collapsed(page), `${page} words Desktop as already released`).not.toMatch(
+        /current public (Electron )?Desktop/iu,
+      );
+    }
     expect(collapsed('app/byok/page.tsx')).toMatch(
       /Desktop runs on your AGI account and takes no provider key/u,
     );
@@ -311,7 +392,9 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
       .map(collapsed)
       .join('\n');
 
-    expect(localRuntimeCopy).toMatch(/current public Desktop reports no local MCP capability/iu);
+    expect(localRuntimeCopy).toMatch(/\. Desktop reports no local MCP capability/u);
+    expect(localRuntimeCopy).toMatch(/The web app and Desktop neither list nor run them/u);
+    expect(localRuntimeCopy).not.toMatch(/current public Desktop/iu);
     expect(localRuntimeCopy).toMatch(/Panel chat remains Managed Cloud/u);
     expect(localRuntimeCopy).toMatch(/Connect it from the CLI instead/u);
     expect(localRuntimeCopy).not.toMatch(/released CLI/iu);
@@ -353,6 +436,172 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
       ['a public Desktop MCP client', /an MCP client in desktop\/CLI/iu],
     ] as ReadonlyArray<readonly [string, RegExp]>) {
       expect(pattern.test(currentDocs), `current documentation still claims ${label}`).toBe(false);
+    }
+  });
+});
+
+describe('/desktop and /web state connectors by the release switch', () => {
+  it('reads the switch that locks every connector path', () => {
+    expect(repoText('packages', 'contracts', 'types', 'src', 'connector-release.ts')).toMatch(
+      /export const CONNECTOR_RELEASE_STATE: ConnectorReleaseState = '(?:released|coming_soon)';/u,
+    );
+  });
+
+  it('branches the Desktop account sentence on the switch instead of typing connectors in', () => {
+    const page = collapsed('app/desktop/page.tsx');
+    expect(page).toMatch(/const ACCOUNT_CARRIES = connectorsReleased\(\) \?/u);
+    expect(page).toMatch(/\$\{CONNECTORS_COMING_SOON_MESSAGE\}/u);
+    expect(page).toMatch(/body: ACCOUNT_CARRIES/u);
+  });
+
+  it('does not list connectors among what Desktop adds on /web', () => {
+    expect(collapsed('app/web/page.tsx')).not.toMatch(/Desktop adds[^.;]*connectors/iu);
+  });
+});
+
+describe('a notify action lands on the form that takes the address', () => {
+  const NOTIFY_PAGES = [
+    'app/mobile/page.tsx',
+    'app/vscode-extension/page.tsx',
+    'app/chrome-extension/page.tsx',
+    'app/get-started/page.tsx',
+  ];
+
+  it('keeps the form on /download and names its anchor once, in the registry action itself', () => {
+    const registry = collapsed('lib/surface-status.ts');
+    expect(registry).toMatch(/export const NOTIFY_FORM_ID = 'notify';/u);
+    expect(registry).toMatch(
+      /export const NOTIFY_CTA = \{ label: 'Get notified', href: `\/download#\$\{NOTIFY_FORM_ID\}`, \} as const;/u,
+    );
+    expect(existsSync(join(WEB_ROOT, 'app/download/notify-form.ts'))).toBe(false);
+
+    const download = collapsed('app/download/page.tsx');
+    expect(download).toMatch(/<section id=\{NOTIFY_FORM_ID\}/u);
+    expect(download).toMatch(/<PublicWaitlistForm source="other" ctaLabel="Get notified"/u);
+  });
+
+  it('scrolls /download to the section a link names once the page has replaced its loading state', () => {
+    expect(collapsed('app/download/page.tsx')).toMatch(/<ScrollToHashTarget \/>/u);
+
+    const landing = collapsed('app/download/ScrollToHashTarget.tsx');
+    expect(landing).toMatch(/^'use client';/u);
+    expect(landing).toMatch(
+      /document\.getElementById\(window\.location\.hash\.slice\(1\)\)\?\.scrollIntoView\(\)/u,
+    );
+  });
+
+  it('says what Get notified does wherever the closing section offers it first', () => {
+    for (const file of ['app/vscode-extension/page.tsx', 'app/chrome-extension/page.tsx']) {
+      expect(collapsed(file), file).toMatch(
+        /\$\{NOTIFY_CTA\.label\} takes you to the form on the download page, where you leave an email/u,
+      );
+    }
+    const chrome = collapsed('app/chrome-extension/page.tsx');
+    expect(chrome).toMatch(
+      /The extension itself is \$\{SURFACE_STATUS\.chrome\.toLowerCase\(\)\}\./u,
+    );
+    expect(chrome).not.toMatch(/no waitlist\.["`]\}? ctas=/u);
+  });
+
+  it('points every Get notified control at that form rather than the top of /download', () => {
+    for (const file of NOTIFY_PAGES) {
+      const page = collapsed(file);
+      expect(page, file).toMatch(/NOTIFY_CTA/u);
+      expect(
+        /href[=:]\s*["']\/download["'][^}]*Get notified|Get notified[^}]*href[=:]\s*["']\/download["']/u.test(
+          page,
+        ),
+        `${file} sends Get notified to the top of /download`,
+      ).toBe(false);
+      expect(page, `${file} types the form address instead of reading NOTIFY_CTA`).not.toMatch(
+        /\/download#notify/u,
+      );
+    }
+    expect(collapsed('app/agi-code/page.tsx')).toMatch(/surfaceCta\('vscode'\), \]\}/u);
+
+    const nextLanding = collapsed('features/marketing/components/next/LandingNext.tsx');
+    for (const surface of ['chrome', 'vscode', 'mobile']) {
+      expect(nextLanding, surface).toContain(`_CTA = surfaceCta('${surface}');`);
+    }
+  });
+
+  it('gives the notify-list surfaces a notify action first, not the Enterprise enquiry', () => {
+    for (const file of ['app/vscode-extension/page.tsx', 'app/chrome-extension/page.tsx']) {
+      const page = collapsed(file);
+      expect(page, file).toMatch(
+        /<Link href=\{NOTIFY_CTA\.href\} className="agi-fl-cta agi-fl-cta--primary">/u,
+      );
+      expect(page, file).toMatch(/ctas=\{\[ NOTIFY_CTA,/u);
+    }
+    expect(collapsed('app/vscode-extension/page.tsx')).not.toMatch(/Ask to be notified/u);
+  });
+
+  it('never tells a reader to request a preview no control offers', () => {
+    expect(collapsed('app/agi-code/page.tsx')).not.toMatch(/request the preview/iu);
+  });
+});
+
+describe('unreleased surface pages take their status label from the registry', () => {
+  it('reads SURFACE_STATUS in the hero and the closing section', () => {
+    for (const [file, surface] of [
+      ['app/vscode-extension/page.tsx', 'vscode'],
+      ['app/chrome-extension/page.tsx', 'chrome'],
+    ] as const) {
+      const page = collapsed(file);
+      expect(page, file).toContain(`· {SURFACE_STATUS.${surface}}</p>`);
+      expect(page, file).toContain(`eyebrow={SURFACE_STATUS.${surface}}`);
+      expect(page, file).not.toMatch(/· coming soon<|Coming soon ·|LAUNCH\.publicLabel/u);
+    }
+  });
+
+  it('heads no closing section with the launch-date label beside a registry status', () => {
+    const mobile = collapsed('app/mobile/page.tsx');
+    expect(mobile).toContain('· {SURFACE_STATUS.mobile} </p>');
+    expect(mobile).toContain('eyebrow={SURFACE_STATUS.mobile}');
+
+    for (const file of ['app/mobile/page.tsx', 'app/agi-code/page.tsx', 'app/cli/page.tsx']) {
+      expect(collapsed(file), file).not.toMatch(/eyebrow=\{LAUNCH\.publicLabel\}/u);
+    }
+  });
+
+  it('lets the live release lookup overrule the registry label on /cli', () => {
+    const lookup = collapsed('app/cli/CliInstallCommand.tsx');
+    expect(lookup).toMatch(
+      /release\.state === 'published' \? RELEASE_PUBLISHED_LABEL : SURFACE_STATUS\.cli/u,
+    );
+    const page = collapsed('app/cli/page.tsx');
+    expect(page).toMatch(/AGI CLI · <CliReleaseStatus \/>/u);
+    expect(page).not.toMatch(/eyebrow">\{SURFACE_STATUS\.cli\}|eyebrow=\{SURFACE_STATUS\.cli\}/u);
+  });
+
+  it('says where the /download labels come from, and that the sections below check live', () => {
+    const page = collapsed('app/download/page.tsx');
+    expect(page).toMatch(/Every label here reads one status list we update by hand/u);
+    expect(page).toMatch(/check the stable channel live/u);
+    expect(fileText('lib/surface-status.ts')).toMatch(/export const SURFACE_STATUS = \{/u);
+    expect(page).not.toMatch(/same release registry as the footer/u);
+  });
+});
+
+describe('/cli and /agi-code, Managed Cloud on the developer surfaces is a paid-plan capability', () => {
+  it('gates the CLI and VS Code on developer_surfaces, which Free and Basic do not hold', () => {
+    for (const surface of ['cli', 'vscode'] as const) {
+      expect(getCloudChatSurfaceCapability(surface)).toBe('developer_surfaces');
+      expect(canUseManagedCloudChatSurface('free', surface)).toBe(false);
+      expect(canUseManagedCloudChatSurface('basic', surface)).toBe(false);
+      expect(canUseManagedCloudChatSurface('pro', surface)).toBe(true);
+    }
+  });
+
+  it('names the plans from the catalog and never calls these surfaces open by default', () => {
+    for (const file of ['app/cli/page.tsx', 'app/agi-code/page.tsx']) {
+      const page = collapsed(file);
+      expect(page, file).toMatch(/billingPlanCapabilityPlanLabels\('developer_surfaces'\)/u);
+      expect(page, file).toMatch(/included with \$\{DEVELOPER_SURFACE_PLANS\}/u);
+      expect(
+        /open by default/iu.test(page),
+        `${file} calls CLI managed cloud open by default`,
+      ).toBe(false);
     }
   });
 });
@@ -440,8 +689,14 @@ describe('/get-started, desktop availability matches the release pipeline', () =
     const page = collapsed('app/get-started/page.tsx');
     expect(page).toMatch(/signed and notarized by the release job/iu);
     // The distinction the page has to keep: notarized in the pipeline is not
-    // the same as downloadable, and no macOS asset has been published.
-    expect(page).toMatch(/has not been published yet/iu);
+    // the same as downloadable. Whether a macOS asset is published is read live
+    // by /download, so this page types neither answer.
+    expect(page).toMatch(
+      /The download page checks that live and shows whether an installer is available for your Mac/u,
+    );
+    expect(page).not.toMatch(
+      /has not been published yet|no signed release has been published yet/iu,
+    );
     expect(page).toMatch(/release API verifies that platform's signature/iu);
     expect(page).toMatch(/Windows installers have not been published/iu);
   });
@@ -494,9 +749,12 @@ describe('/get-started leads with the surface a visitor can use now', () => {
     expect(transcript).toBeGreaterThan(webAction);
   });
 
-  it('says the signed CLI release is not published before showing its commands', () => {
+  it('sends the reader to the live CLI release check before showing its commands', () => {
+    expect(collapsed('app/cli/CliInstallCommand.tsx')).toMatch(
+      /fetch\('\/api\/releases\/cli\/latest'/u,
+    );
     const prerequisite = collapsed('app/get-started/page.tsx').indexOf(
-      'no signed release has been published yet, so there is nothing to install',
+      'the CLI page shows the install command only once a signed release is published',
     );
     const transcript = collapsed('app/get-started/page.tsx').indexOf(
       'lines={CLI_PREVIEW_TRANSCRIPT}',
@@ -567,27 +825,32 @@ describe('/support chrome-extension, managed chat is on every cloud plan', () =>
   it('no longer sells Chrome managed cloud as a higher-tier feature', () => {
     const article = collapsed('content/support/chrome-extension.md');
     expect(article).toContain(
-      'Managed chat in the Chrome side panel works on every cloud plan, Free included',
+      'Managed chat in the Chrome side panel works on every cloud plan, {{PLAN.free}} included',
     );
+    expect(article).not.toMatch(/all run on your AGI account/u);
     expect(/higher paid tiers/iu.test(article)).toBe(false);
   });
 });
 
 describe('/about, the colophon names every face the page is set in', () => {
-  it('loads Newsreader as the display face of the agi design system', () => {
-    const layout = readFileSync(join(WEB_ROOT, 'app', 'layout.tsx'), 'utf8');
-    expect(layout).toMatch(/Newsreader/u);
-    expect(layout).toMatch(/variable: '--font-newsreader'/u);
+  it('sets the company pages in the body face, headings included', () => {
     const globals = readFileSync(join(WEB_ROOT, 'app', 'globals.css'), 'utf8');
-    expect(globals).toMatch(/--agi-font-display: var\(--font-newsreader\)/u);
+    expect(globals).toMatch(/--agi-font: var\(--font-geist-sans\)/u);
+    const company = readFileSync(
+      join(WEB_ROOT, 'features', 'marketing', 'components', 'pages', 'company', 'company.css'),
+      'utf8',
+    );
+    expect(company).toMatch(/--agi-font-display: var\(--agi-font\);/u);
+    expect(company).not.toMatch(/--agi-font-mono|--font-newsreader|--font-jetbrains/u);
+    expect(collapsed('app/about/page.tsx')).toContain('className="agi-ds-page agi-co"');
   });
 
-  it('lists Newsreader alongside Geist and JetBrains Mono', () => {
+  it('names Geist and no face the page does not render', () => {
     const page = collapsed('app/about/page.tsx');
-    expect(page).toMatch(/Newsreader, Geist & JetBrains Mono/u);
+    expect(page).toContain("{ label: 'Set in', value: 'Geist' }");
     expect(
-      /'Geist & JetBrains Mono'/u.test(page),
-      'colophon omits the Newsreader display face the headings are set in',
+      /Newsreader|JetBrains Mono/u.test(page),
+      'colophon names a face no text on the page is set in',
     ).toBe(false);
   });
 });
@@ -781,7 +1044,9 @@ describe('/byok, custody names the store each runtime really writes to', () => {
     expect(page).toContain(
       'Reports stored credentials; it does not validate the key with the provider',
     );
-    expect(page).not.toMatch(/BYOK_PROVIDERS|provider env vars|href="\/docs\/byok-env"/u);
+    expect(page).not.toMatch(
+      /BYOK_PROVIDERS|SELF_HOSTED_KEY_PROVIDERS|provider env vars|href="\/docs\/byok-env"/u,
+    );
   });
 
   it('keeps Managed Cloud account authentication separate without a blanket billing promise', () => {
@@ -809,8 +1074,9 @@ describe('/web, the browser surface has one route and it is managed cloud', () =
     const processor = fileText('app/api/llm/v1/chat/completions/lib/request-processor.ts');
     expect(processor).toMatch(/const MANAGED_WEB_CLOUD_TRUST_MODE = 'managed_cloud';/u);
     expect(fileText('lib/marketing-constants.ts')).toMatch(
-      /'Web, Mobile, Desktop and Chrome do not accept provider keys; each runs on your AGI account\.'/u,
+      /exclusion: 'Web, Mobile, Desktop and Chrome do not accept provider keys\.'/u,
     );
+    expect(fileText('lib/marketing-constants.ts')).not.toMatch(/each runs on your AGI account/u);
   });
 
   it('never counts more than one route, with or without a numbers band', () => {
@@ -867,6 +1133,7 @@ describe('/web, the served-by label is stated where the code renders it', () => 
         ['a served-by receipt under every reply', /served-by receipt under every reply/u],
         ['a receipt on every reply', /Receipt · on every reply/u],
         ['the reply itself names its route', /the reply names the route that served it/u],
+        ['a route named on every reply', /route (?:is )?(?:named|printed) on every reply/u],
       ] as ReadonlyArray<readonly [string, RegExp]>) {
         expect(pattern.test(page), `${file} still claims: ${label}`).toBe(false);
       }

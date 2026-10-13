@@ -4,7 +4,7 @@ title: Run a task with AGI Work
 path: /agi-work
 category: work
 tags: agi work, work, agent, task, autonomous, session dock, outputs, progress, sources, approvals, work history, deliverables
-updated: 2026-09-22
+updated: 2026-10-12
 scope: public
 ---
 
@@ -47,6 +47,6 @@ you to review and send, rather than re-running it unattended.
 
 ## Availability
 
-AGI Work is one of the features a workspace administrator can turn off for a
-managed workspace, and higher-capacity work is a paid-plan feature. The pricing
-page carries the current details.
+AGI Work is a paid-plan feature, included on {{PLANS.agi_work}}. A workspace
+administrator can also turn it off for a managed workspace. The pricing page
+carries the current details.

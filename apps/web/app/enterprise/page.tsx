@@ -13,12 +13,11 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { ConsoleWindow } from '@/features/marketing/components/FeatureScenes';
-import { BYOK_SURFACES } from '@/lib/marketing-constants';
+import { BYOK_SURFACES, CLI_AVAILABILITY_NOTE, SURFACE_STATUS } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'Enterprise: evaluate without exposing your data',
-  description:
-    'Run AGI fully local or on your own provider keys, so no conversation content reaches our infrastructure. Identity, audit, and retention controls are administered by your own workspace owner, with build status stated honestly.',
+  title: 'Enterprise: identity, audit, and retention controls',
+  description: `The AGI CLI runs fully local or on your own provider keys, so no conversation content reaches our infrastructure. ${CLI_AVAILABILITY_NOTE} Identity, audit, and retention controls are administered by your own workspace owner, with build status stated honestly.`,
   path: '/enterprise',
 });
 
@@ -76,9 +75,9 @@ export default function EnterprisePage() {
           minimal
           id="agi-enterprise-title"
           eyebrow="AGI for enterprise"
-          title="Your data can stay where it is while the security review runs."
-          em="while the security review runs."
-          lede="Run the evaluation on your own hardware or your own provider contract, so nothing reaches AGI infrastructure until you decide to buy. Identity, policy, audit and retention then sit with your own owner in the workspace console."
+          title="Identity, policy, audit and retention, run by your own workspace owner."
+          em="run by your own workspace owner."
+          lede={`The CLI runs fully local or on your own provider keys, so that work does not reach AGI Cloud while the review runs. ${CLI_AVAILABILITY_NOTE} Identity, policy, audit and retention sit with your own owner in the workspace console.`}
           ctas={[
             { href: '/contact-sales', label: 'Contact sales' },
             { href: '/trust', label: 'Read the dated trust ledger', variant: 'secondary' },
@@ -186,7 +185,7 @@ export default function EnterprisePage() {
               rows={[
                 {
                   label: 'BYOK posture',
-                  value: `The CLI can run fully local or on your own provider keys, so that work does not reach AGI Cloud. ${BYOK_SURFACES.availability} The current public Desktop is managed-cloud only. A member who moves a CLI thread to managed cloud does so through an explicit, reviewed handoff.`,
+                  value: `The CLI can run fully local or on your own provider keys, so that work does not reach AGI Cloud. ${BYOK_SURFACES.availability} Desktop is managed-cloud only and is ${SURFACE_STATUS.desktop.toLowerCase()}. A member who moves a CLI thread to managed cloud does so through an explicit, reviewed handoff.`,
                 },
                 {
                   label: 'Service levels',
@@ -251,7 +250,8 @@ export default function EnterprisePage() {
                 },
                 {
                   label: 'Everything else',
-                  value: 'On the roadmap with no date until there is a date.',
+                  value:
+                    'Not claimed here. The trust ledger carries the remaining rows, each with the artifact that would prove it and the date it was checked.',
                 },
               ]}
             />
@@ -279,19 +279,19 @@ export default function EnterprisePage() {
             <div>
               <Eyebrow>Start the evaluation</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-enterprise-close-title">
-                You can start before you talk to us.
+                Two ways to evaluate.
               </h2>
             </div>
             <CtaPanel
               label="Two ways to evaluate"
               cards={[
                 {
-                  title: 'Run it on your own hardware first',
-                  body: 'Local and BYOK need no contract, no trial, and no seat, so a reviewer can run the product while procurement is still reading.',
+                  title: 'On your own hardware, in the CLI',
+                  body: `Local and BYOK run in the CLI and need no contract, no trial, and no seat. ${CLI_AVAILABILITY_NOTE} The download page shows what is published.`,
                   points: [
-                    'Nothing reaches AGI infrastructure in Local mode',
+                    'In Local mode, conversations stay on your device and are never uploaded',
                     'BYOK traffic goes straight to your provider contract',
-                    'The route is printed on every reply',
+                    'The status bar names the route in use',
                   ],
                   cta: { href: '/download', label: "See what's live" },
                 },

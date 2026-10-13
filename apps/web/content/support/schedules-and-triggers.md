@@ -4,7 +4,7 @@ title: Schedule a task, or run it on a trigger
 path: /chat/schedules
 category: work
 tags: schedule, scheduled task, cron, recurring, timezone, trigger, webhook, gmail, google calendar, github, run history, automation
-updated: 2026-10-08
+updated: 2026-10-12
 scope: public
 ---
 
@@ -27,9 +27,8 @@ A schedule can also be attached to an event:
   watch is registered for it.
 - **Google Calendar**, which waits until the calendar watch is registered.
 
-Connecting Gmail, Google Drive, Calendar and other apps is coming soon, and
-the Gmail and Google Calendar triggers need their connector, so neither can be
-set up until connectors open.
+{{AVAILABILITY.connectorApps}} A Gmail or Google Calendar trigger requires
+its connector, so neither can be set up without it.
 
 - **GitHub**, which fires for the repositories your GitHub App installation
   covers.

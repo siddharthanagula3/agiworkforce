@@ -27,7 +27,7 @@ const hashSources = () =>
     ]),
   );
 
-const title = 'Every claim names the source it came from.';
+const title = 'A plan you approve, then a report with numbered sources.';
 const figure = 'Authored example of a research plan waiting to start';
 
 async function nativeStoryState(page: Page) {

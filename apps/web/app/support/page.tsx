@@ -1,3 +1,4 @@
+import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
@@ -21,10 +22,13 @@ export const metadata = buildMetadata({
   path: '/support',
 });
 
+const TEAM_AND_ENTERPRISE = `${BILLING_PLAN_PRICING.team.label} and ${BILLING_PLAN_PRICING.enterprise.label}`;
+const HERO_LEDE = `The help centre and email are the published channels. ${BILLING_PLAN_PRICING.free.label} through ${BILLING_PLAN_PRICING.max_15x.label} carry no response-time commitment; ${TEAM_AND_ENTERPRISE} commitments are stated below in Central Time. We do not claim 24/7 coverage.`;
+
 const HERO_FACTS = [
   `Channel: help centre and email ${CONTACT_EMAIL}`,
   'Time zone: Central Time (America/Chicago)',
-  'Team and Enterprise carry a stated first-response target',
+  `${TEAM_AND_ENTERPRISE} carry a stated first-response target`,
 ];
 
 export default function SupportPage() {
@@ -36,7 +40,7 @@ export default function SupportPage() {
           id="agi-support-title"
           eyebrow="Support"
           title="Support channels and plan commitments."
-          lede="The help centre and email are the published channels. Free through Max carry no response-time commitment; Team and Enterprise commitments are stated below in Central Time. We do not claim 24/7 coverage."
+          lede={HERO_LEDE}
           ctas={[
             { href: contactMailto(), label: `Email ${CONTACT_EMAIL}` },
             { href: '/help', label: 'Browse the help index', variant: 'secondary' },
@@ -52,7 +56,7 @@ export default function SupportPage() {
                 What you can count on, by tier.
               </h2>
               <Prose>
-                One table names the available channel for each tier. Team and Enterprise carry a
+                One table names the available channel for each tier. {TEAM_AND_ENTERPRISE} carry a
                 stated first-response target; other tiers do not. The uptime and credit targets on{' '}
                 <Link href="/sla" className="agi-ds-link">
                   /sla

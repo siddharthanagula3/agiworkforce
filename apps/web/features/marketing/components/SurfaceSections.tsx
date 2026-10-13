@@ -11,8 +11,6 @@ export interface FlagshipCta {
   waitlist?: boolean;
 }
 
-export type ModeRibbonItem = string | { label: string; note: string };
-
 function CtaButton({ cta, kind }: { cta: FlagshipCta; kind: 'primary' | 'secondary' | 'ghost' }) {
   const className = `agi-fl-cta agi-fl-cta--${kind}`;
   if (cta.waitlist) {
@@ -39,10 +37,8 @@ export function FlagshipHero({
   brand?: string;
   titleLines?: string[];
   em?: string;
-  lede?: string;
   ctas: FlagshipCta[];
   ctas2?: FlagshipCta[];
-  modeRibbon: ModeRibbonItem[];
   frame?: ProductFrameImage;
   visual?: ReactNode;
 }) {

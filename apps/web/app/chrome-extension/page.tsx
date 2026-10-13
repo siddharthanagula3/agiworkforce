@@ -5,7 +5,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { FinalCta } from '@/features/marketing/components/SurfaceSections';
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { Reveal } from '@/features/marketing/components/Reveal';
-import { LAUNCH } from '../../lib/marketing-constants';
+import { NOTIFY_CTA, SURFACE_STATUS } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'AGI in Chrome | Browser Context, Desktop Bridge',
@@ -117,15 +117,18 @@ export default function ChromeExtensionPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
-              <p className="agi-fl-eyebrow">AGI in Chrome · coming soon</p>
+              <p className="agi-fl-eyebrow">AGI in Chrome · {SURFACE_STATUS.chrome}</p>
               <h1 id="agi-fl-chrome-hero-title" className="sr-only">
                 AGI in Chrome
               </h1>
               <div className="agi-fl-cta-row">
-                <Link href="/desktop" className="agi-fl-cta agi-fl-cta--primary">
+                <Link href={NOTIFY_CTA.href} className="agi-fl-cta agi-fl-cta--primary">
+                  {NOTIFY_CTA.label}
+                </Link>
+                <Link href="/desktop" className="agi-fl-cta agi-fl-cta--secondary">
                   See AGI Desktop
                 </Link>
-                <Link href="/get-started" className="agi-fl-cta agi-fl-cta--secondary">
+                <Link href="/get-started" className="agi-fl-cta agi-fl-cta--ghost">
                   Get Started
                 </Link>
               </div>
@@ -212,10 +215,11 @@ export default function ChromeExtensionPage() {
         </section>
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
+          eyebrow={SURFACE_STATUS.chrome}
           title="Put AGI beside the page."
-          body="The panel answers from AGI Managed Cloud, and computer use posts the conversation, its screenshots, and any console messages and request records it read to that same gateway. Pair AGI Desktop when you want a local road for selections and captures. AGI managed cloud is in public alpha and open by default: sign in and start, no waitlist."
+          body={`The panel answers from AGI Managed Cloud, and computer use posts the conversation, its screenshots, and any console messages and request records it read to that same gateway. Pair AGI Desktop when you want a local road for selections and captures. AGI managed cloud is in public alpha and open by default on the web: sign in and start, no waitlist. The extension itself is ${SURFACE_STATUS.chrome.toLowerCase()}. ${NOTIFY_CTA.label} takes you to the form on the download page, where you leave an email to hear when it is ready to install.`}
           ctas={[
+            NOTIFY_CTA,
             { href: '/desktop', label: 'See AGI Desktop' },
             { href: '/get-started', label: 'Get Started' },
           ]}

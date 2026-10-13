@@ -4,7 +4,7 @@ title: Create an account and send your first message
 path: /get-started
 category: getting-started
 tags: sign up, signup, create account, register, new account, google, github, oauth, verification code, terms, first message, first chat
-updated: 2026-10-07
+updated: 2026-10-12
 scope: public
 ---
 
@@ -26,10 +26,11 @@ unticked.
 
 ## What you can do immediately
 
-The Free plan is open by default. A new account can open the chat surface and
+The {{PLAN.free}} plan is open by default. A new account can open the chat surface and
 send a message straight away: it has no waitlist and no invite code to redeem.
-Paid upgrades are opening in stages, so every self-serve paid plan needs an
-access code, and without one you join the upgrade waitlist.
+A self-serve paid plan starts at checkout when paid upgrades are open to your
+account; while they are not, it needs an access code, and without one you join
+the upgrade waitlist.
 
 ## Send the first message
 
@@ -46,4 +47,4 @@ pick a model for each message from the ones your plan and trust mode allow.
   common-password list. Choose a longer, less common one.
 - A sign-up that needs a detail the screen cannot collect ends with a message
   that starts "This sign-up also needs" and tells you to contact support. Email
-  contact@agiworkforce.com to finish creating the account.
+  {{CONTACT.email}} to finish creating the account.

@@ -3,8 +3,9 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import ProductRuntimeProviders from '../ProductRuntimeProviders';
 
 export const metadata = buildMetadata({
-  title: 'Apps | Everything AGI connects to',
-  description: 'The apps and services AGI works with, and what each one can do once connected.',
+  title: 'Apps: the public catalogue of workflow packs',
+  description:
+    'The public catalogue of AGI apps: packs of skills you install into the assistant, each shown with its install status.',
   path: '/apps',
 });
 

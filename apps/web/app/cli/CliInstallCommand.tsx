@@ -1,9 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { Spinner } from '@agiworkforce/ui';
+import { SURFACE_STATUS } from '@/lib/surface-status';
 
 const INSTALL_COMMAND = 'curl -fsSL https://agiworkforce.com/install.sh | bash';
+
+const RELEASE_PUBLISHED_LABEL = 'Signed release published';
 
 type ReleaseState =
   | { state: 'loading' }
@@ -11,13 +23,26 @@ type ReleaseState =
   | { state: 'unpublished' }
   | { state: 'error' };
 
+interface CliReleaseLookup {
+  release: ReleaseState;
+  checkRelease: (signal?: AbortSignal) => Promise<void>;
+}
+
+const CliReleaseContext = createContext<CliReleaseLookup | null>(null);
+
 function publishedVersion(value: unknown): string | null {
   if (!value || typeof value !== 'object') return null;
   const version = (value as Record<string, unknown>)['version'];
   return typeof version === 'string' && version.trim() !== '' ? version : null;
 }
 
-export function CliInstallCommand() {
+function useCliRelease(): CliReleaseLookup {
+  const lookup = useContext(CliReleaseContext);
+  if (!lookup) throw new Error('The CLI release lookup needs a CliReleaseProvider above it.');
+  return lookup;
+}
+
+export function CliReleaseProvider({ children }: { children: ReactNode }) {
   const [release, setRelease] = useState<ReleaseState>({ state: 'loading' });
   const requestId = useRef(0);
 
@@ -47,6 +72,19 @@ export function CliInstallCommand() {
     void checkRelease(controller.signal);
     return () => controller.abort();
   }, [checkRelease]);
+
+  const lookup = useMemo(() => ({ release, checkRelease }), [release, checkRelease]);
+
+  return <CliReleaseContext.Provider value={lookup}>{children}</CliReleaseContext.Provider>;
+}
+
+export function CliReleaseStatus() {
+  const { release } = useCliRelease();
+  return <>{release.state === 'published' ? RELEASE_PUBLISHED_LABEL : SURFACE_STATUS.cli}</>;
+}
+
+export function CliInstallCommand() {
+  const { release, checkRelease } = useCliRelease();
 
   if (release.state === 'loading') {
     return <Spinner size="sm" aria-label="Checking for a signed CLI release" aria-busy="true" />;

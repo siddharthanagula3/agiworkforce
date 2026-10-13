@@ -1,4 +1,9 @@
-import { MIN_PURCHASABLE_SEATS } from '@agiworkforce/types';
+import {
+  CONNECTORS_COMING_SOON_MESSAGE,
+  MIN_PURCHASABLE_SEATS,
+  connectorsReleased,
+} from '@agiworkforce/types';
+import { PAID_UPGRADE_ACCESS_NOTE } from '@/lib/billing/paid-upgrade-copy';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { ConsoleWindow } from '@/features/marketing/components/FeatureScenes';
@@ -20,6 +25,8 @@ export const metadata = buildMetadata({
     'How team membership works in AGI: seats held by members and pending invitations, the owner, admin, member and viewer roles, invitations as expiring private links, shared projects and connectors, and the workspace console that sets approved models and integrations on managed cloud.',
   path: '/teams',
 });
+
+const CONNECTORS_RELEASE_NOTE = connectorsReleased() ? '' : ` ${CONNECTORS_COMING_SOON_MESSAGE}`;
 
 const CONTROL_STATES = [
   {
@@ -92,13 +99,13 @@ export default function TeamsPage() {
                 },
                 {
                   meta: 'Invitations',
-                  title: 'A private link you send yourself',
-                  body: 'No transactional email provider is wired up, and the product states that plainly: you create the invitation, copy the private link, and pass it on. The token is hashed, expires after seven days, and opens only for someone signing in with the address it was issued to.',
+                  title: 'An emailed link, or one you pass on yourself',
+                  body: 'AGI emails the invitation link to the invited address when it can. If the email cannot be sent, the product says so and gives you the private link to pass on yourself. The token is hashed, expires after seven days, and opens only for someone signing in with the address it was issued to.',
                 },
                 {
                   meta: 'Shared work',
                   title: 'Projects and connectors the workspace can open',
-                  body: 'Share a project and members read its instructions and knowledge files while each member’s own conversations stay private; you can withdraw any single member’s access without unsharing it from everyone. Share a remote MCP connector once and every member can call it, while its stored credential stays out of their reach.',
+                  body: `Share a project and members read its instructions and knowledge files while each member’s own conversations stay private; you can withdraw any single member’s access without unsharing it from everyone. Share a remote MCP connector once and every member can call it, while its stored credential stays out of their reach.${CONNECTORS_RELEASE_NOTE}`,
                 },
               ]}
             />
@@ -144,8 +151,7 @@ export default function TeamsPage() {
                 },
                 {
                   label: 'Connectors',
-                  value:
-                    'Which integrations members may use, and whether they may add their own. The list is read while a member’s tool set is assembled, so a blocked connector never appears in it.',
+                  value: `Which integrations members may use, and whether they may add their own. The list is read while a member’s tool set is assembled, so a blocked connector never appears in it.${CONNECTORS_RELEASE_NOTE}`,
                 },
                 {
                   label: 'Usage and billing',
@@ -176,6 +182,7 @@ export default function TeamsPage() {
                 or admin. Work a member runs locally, or on their own provider keys, never reaches
                 AGI&rsquo;s servers at all, so it sits outside what this console can govern.
               </Prose>
+              <Prose>{PAID_UPGRADE_ACCESS_NOTE}</Prose>
             </div>
             <ButtonRow>
               <Button href="/pricing#pricing-team-title">{`Start with ${MIN_PURCHASABLE_SEATS} seats`}</Button>

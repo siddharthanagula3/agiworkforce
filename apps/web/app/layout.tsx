@@ -110,7 +110,7 @@ export const metadata: Metadata = {
     description:
       'Chat, code, research, files, artifacts, tools, connectors, and automation in one AGI workspace.',
     creator: '@agiworkforce',
-    images: ['/api/og'],
+    images: [OG_IMAGE.url],
   },
   robots: {
     index: true,

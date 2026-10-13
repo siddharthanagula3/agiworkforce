@@ -4,7 +4,7 @@ title: Approvals: what a tool may do without asking
 path: /agent-permissions
 category: connectors
 tags: approval, approvals, permission, always allow, ask every time, auto approve, read only, tool permissions, deny tool, call log, reset permissions
-updated: 2026-09-22
+updated: 2026-10-12
 scope: public
 ---
 
@@ -28,6 +28,8 @@ Your saved choice syncs to your account. If the website cannot read it, tools
 ask rather than assuming automatic approval.
 
 ## Per-tool permissions
+
+{{AVAILABILITY.connectors}} These panels belong to a connector you have connected.
 
 Each connector has a **Tool Permissions** panel that overrides the default for
 one tool at a time: **Always run without asking**, **Needs approval each time**,

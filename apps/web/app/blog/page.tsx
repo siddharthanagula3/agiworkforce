@@ -2,32 +2,21 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Prose, Section, Stack } from '@/features/marketing/components/system';
+import { Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { NoteList } from '@/features/marketing/components/pages/company/shared';
+import { RELEASES, releasePath } from '@/lib/changelog-entries';
 import '@/features/marketing/components/pages/company/company.css';
 
+const RELEASE_NOTES_PATH = '/release-notes';
+const LATEST_ANNOUNCEMENT_COUNT = 3;
+const LATEST_ANNOUNCEMENTS = RELEASES.slice(0, LATEST_ANNOUNCEMENT_COUNT);
+
 export const metadata = buildMetadata({
-  title: 'Writing: engineering notes, not content marketing',
+  title: 'Writing: no posts yet, announcements are in the release notes',
   description:
-    'We post when we have something to say. Engineering deep-dives, security postures, design notes.',
+    'AGI has not published a blog post. Product announcements are dated and published in the release notes, each on its own page.',
   path: '/blog',
 });
-
-const TOPICS = [
-  {
-    title: 'Engineering deep-dives',
-    body: 'How a surface is actually built: the provider adapter contract, the egress separation behind Local and BYOK, and the decisions we would take back.',
-  },
-  {
-    title: 'Security postures',
-    body: 'What the trust boundary enforces, what it does not, and the gaps we name on our security page rather than leave for someone else to find.',
-  },
-  {
-    title: 'Design notes',
-    body: 'Why the interface reads the way it does, including the things we removed and the constraint that made the call.',
-  },
-];
 
 export default function BlogPage() {
   return (
@@ -37,30 +26,42 @@ export default function BlogPage() {
         <PageHero
           id="agi-blog-title"
           eyebrow="Writing"
-          title="We post when we have something to say."
-          em="something to say."
-          lede="Engineering deep-dives, security postures, and design notes, not content marketing. Posts will appear here when they exist."
-          ctas={[]}
+          title="No posts yet."
+          lede="We have not published a post here. Product announcements go in the release notes, where each one is dated and has its own page."
+          ctas={[{ href: RELEASE_NOTES_PATH, label: 'Read the release notes' }]}
         />
 
-        <Section id="topics" labelledBy="agi-blog-topics-title" rule>
+        <Section id="announcements" labelledBy="agi-blog-announcements-title" rule>
           <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-blog-topics-title">
-              What we write about.
+            <h2 className="agi-ds-h2" id="agi-blog-announcements-title">
+              The latest announcements.
             </h2>
-            <NoteList items={TOPICS} />
+            <Ledger
+              caption="Latest announcements"
+              rows={LATEST_ANNOUNCEMENTS.map((release) => ({
+                label: release.date,
+                value: (
+                  <Link href={releasePath(release)} className="agi-ds-link">
+                    {release.headline}
+                  </Link>
+                ),
+              }))}
+            />
+            <Prose>
+              The <Link href={RELEASE_NOTES_PATH}>release notes</Link> hold the full archive, with
+              the surfaces each release reached.
+            </Prose>
           </Stack>
         </Section>
 
-        <Section id="until-then" labelledBy="agi-blog-until-title" rule ground="2">
+        <Section id="elsewhere" labelledBy="agi-blog-elsewhere-title" rule ground="2">
           <Stack>
-            <h2 className="agi-ds-h2" id="agi-blog-until-title">
-              Until then.
+            <h2 className="agi-ds-h2" id="agi-blog-elsewhere-title">
+              Elsewhere on this site.
             </h2>
             <Prose>
-              Read the <Link href="/changelog">changelog</Link> for what shipped, the{' '}
-              <Link href="/about">about page</Link> for who we are, and the{' '}
-              <Link href="/security">security page</Link> for the operational posture.
+              The <Link href="/about">about page</Link> says who we are, and the{' '}
+              <Link href="/security">security page</Link> sets out the operational posture.
             </Prose>
           </Stack>
         </Section>

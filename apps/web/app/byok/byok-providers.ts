@@ -1,27 +1,14 @@
 import { modelsCatalogJson } from '@agiworkforce/types';
+import { CLI_CATALOG_PROVIDER_IDS, CLI_KEY_PROVIDERS } from '@/lib/byok-providers';
 
-export const BYOK_PROVIDER_IDS = [
-  'anthropic',
-  'openai',
-  'google',
-  'xai',
-  'deepseek',
-  'minimax',
-  'qwen',
-  'moonshot',
-  'perplexity',
-  'zhipu',
-  'open_router',
-  'nvidia_nim',
-  'groq',
-  'workers_ai',
-  'vercel_gateway',
-] as const;
+export const BYOK_PROVIDER_IDS: ReadonlyArray<string> = CLI_CATALOG_PROVIDER_IDS;
 
 const catalogProviders = modelsCatalogJson.providers as Record<string, { label?: string }>;
 
 export function byokProviderLabels(): string[] {
-  return BYOK_PROVIDER_IDS.map((id) => catalogProviders[id]?.label).filter(
-    (label): label is string => typeof label === 'string' && label.length > 0,
+  return CLI_KEY_PROVIDERS.map((provider) =>
+    provider.catalogId === null
+      ? provider.label
+      : (catalogProviders[provider.catalogId]?.label ?? provider.label),
   );
 }

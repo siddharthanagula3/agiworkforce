@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { OG_IMAGE } from '@/lib/seo/site';
 
 export const metadata: Metadata = {
   title: 'Frequently Asked Questions',
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
     type: 'website',
     images: [
       {
-        url: '/api/og',
+        url: OG_IMAGE.url,
         width: 1200,
         height: 630,
         alt: 'AGI FAQ',
@@ -33,7 +34,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'FAQ',
     description: 'Find answers to common questions about AGI.',
-    images: ['/api/og'],
+    images: [OG_IMAGE.url],
     creator: '@agiworkforce',
   },
 };

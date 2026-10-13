@@ -25,11 +25,27 @@ const PNG = bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
 const JPEG = bytes(0xff, 0xd8, 0xff, 0xe0);
 const ZIP = bytes(0x50, 0x4b, 0x03, 0x04);
 const PDF = utf8('%PDF-1.7\nharmless document body');
+const WEBP = Uint8Array.from(
+  Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64'),
+);
+const riff = (formType: string, firstChunk: string) =>
+  Uint8Array.from([
+    ...utf8('RIFF'),
+    0x24,
+    0x00,
+    0x00,
+    0x00,
+    ...utf8(formType),
+    ...utf8(firstChunk),
+  ]);
+const WAV = riff('WAVE', 'fmt ');
+const AVI = riff('AVI ', 'LIST');
 
 describe('inspectUploadBytes, honest files', () => {
   it.each([
     ['image/png', PNG],
     ['image/jpeg', JPEG],
+    ['image/webp', WEBP],
     ['application/pdf', PDF],
   ])('accepts a real %s', (mime, content) => {
     expect(inspectUploadBytes(content, mime).ok).toBe(true);
@@ -60,6 +76,64 @@ describe('inspectUploadBytes, type confusion', () => {
   it('rejects an image MIME whose bytes match no image format', () => {
     const result = inspectUploadBytes(utf8('not an image at all'), 'image/png');
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('inspectUploadBytes, WebP', () => {
+  it('reads the fixture as the RIFF container a real WebP is', () => {
+    expect(new TextDecoder().decode(WEBP.subarray(0, 4))).toBe('RIFF');
+    expect(new TextDecoder().decode(WEBP.subarray(8, 12))).toBe('WEBP');
+    expect(new DataView(WEBP.buffer).getUint32(4, true)).toBe(WEBP.length - 8);
+  });
+
+  it.each([
+    ['WAV', WAV],
+    ['AVI', AVI],
+  ])('rejects a %s container declared as a WebP', (_label, content) => {
+    const result = inspectUploadBytes(content, 'image/webp');
+    expect(result.ok).toBe(false);
+    expect(result.findings.map((finding) => finding.code)).toEqual(['type_confusion']);
+  });
+
+  it.each([
+    ['WAV', WAV, 'audio/wav'],
+    ['AVI', AVI, 'video/x-msvideo'],
+  ])('does not mistake a %s declared as itself for an image', (_label, content, mime) => {
+    expect(inspectUploadBytes(content, mime)).toEqual({ ok: true, findings: [] });
+  });
+
+  it.each([
+    ['the container tag alone', WEBP.subarray(0, 4)],
+    ['a header cut before the form type', WEBP.subarray(0, 8)],
+    ['a header cut inside the form type', WEBP.subarray(0, 11)],
+  ])('rejects %s', (_label, content) => {
+    const result = inspectUploadBytes(content, 'image/webp');
+    expect(result.ok).toBe(false);
+    expect(result.findings.map((finding) => finding.code)).toEqual(['type_confusion']);
+  });
+
+  it('reads the form type at its own offset, not wherever the letters appear', () => {
+    const misplaced = Uint8Array.from([...utf8('RIFF'), ...utf8('WEBP'), ...utf8('VP8L')]);
+
+    expect(inspectUploadBytes(misplaced, 'image/webp').ok).toBe(false);
+  });
+
+  it('rejects a WebP disguised as a PNG and names what it really is', () => {
+    const result = inspectUploadBytes(WEBP, 'image/png');
+    expect(result.ok).toBe(false);
+    expect(result.findings).toContainEqual({
+      code: 'type_confusion',
+      detail: 'Content is WebP but was declared image/png',
+    });
+  });
+
+  it('lets a WebP attachment through the gate the upload routes call', async () => {
+    const result = await scanUploadBytes(WEBP, 'image/webp', {
+      leadsObject: true,
+      filename: 'photo.webp',
+    });
+
+    expect(result).toEqual({ ok: true, findings: [] });
   });
 });
 

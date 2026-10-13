@@ -310,7 +310,7 @@ export const LATEST = RELEASES.slice(0, LATEST_COUNT).map((release) => ({
 }));
 
 export const LATEST_TITLE = 'What shipped';
-export const CHANGELOG_LINK = { label: 'Full changelog', href: '/changelog' } as const;
+export const CHANGELOG_LINK = { label: 'All release notes', href: '/release-notes' } as const;
 
 export const START = {
   title: 'Start on the web.',

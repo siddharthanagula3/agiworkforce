@@ -53,55 +53,64 @@ const managedRoster = new Set(
   ),
 );
 
-function scope(value: number, label: string, definition: string): CatalogScope {
+type CountForms = readonly [one: string, other: string];
+
+function scope(value: number, forms: CountForms, definition: string): CatalogScope {
+  const label = value === 1 ? forms[0] : forms[1];
   return Object.freeze({ value, label, text: `${value} ${label}`, definition });
 }
+
+const withoutModelsCount = keyedProvidersWithoutModels.length;
+const withoutModelsClause =
+  withoutModelsCount === 1
+    ? '1 of them lists no models in the catalogue, so it adds to the provider count and not to the model count.'
+    : `${withoutModelsCount} of them list no models in the catalogue, so they add to the provider count and not to the model count.`;
 
 export const CATALOG_SCOPES = Object.freeze({
   asOf: CATALOG_AS_OF,
   catalogueEntries: scope(
     modelEntries.length,
-    'catalogue entries',
+    ['catalogue entry', 'catalogue entries'],
     'Every model record in the shared catalogue, whichever provider lists it. This is the widest figure, and it is the catalogue the apps compile in, not a list of models an account can use.',
   ),
   byokModelEntries: scope(
     byokEntries.length,
-    'BYOK model entries',
+    ['BYOK model entry', 'BYOK model entries'],
     `The catalogue entries listed under the ${BYOK_PROVIDER_IDS.length} providers on the bring-your-own-key list. It is the gateway entries plus the direct entries, and it leaves out the ${modelEntries.length - byokEntries.length} entries listed under providers that are not on that list.`,
   ),
   gatewayEntries: scope(
     gatewayEntries.length,
-    'gateway entries',
+    ['gateway entry', 'gateway entries'],
     'Entries a gateway lists on behalf of other developers, reached with your gateway key. The same model can also appear under its own developer, so this is a count of routes, not of distinct models.',
   ),
   directModelEntries: scope(
     directEntries.length,
-    'direct model entries',
+    ['direct model entry', 'direct model entries'],
     "Entries listed under a provider you reach with that provider's own key, with no gateway in between.",
   ),
   byokProviders: scope(
     BYOK_PROVIDER_IDS.length,
-    'BYOK providers',
-    `Providers on the bring-your-own-key list. ${keyedProvidersWithoutModels.length} of them list no models in the catalogue, so they add to the provider count and not to the model count.`,
+    ['BYOK provider', 'BYOK providers'],
+    `Providers on the bring-your-own-key list that have a catalogue record. ${withoutModelsClause}`,
   ),
   byokProvidersWithoutModels: scope(
-    keyedProvidersWithoutModels.length,
-    'providers with no listed models',
-    'Providers that take your key but carry no catalogued models, so they add to the provider count and not to the model count.',
+    withoutModelsCount,
+    ['provider with no listed models', 'providers with no listed models'],
+    'Providers that take your key but carry no catalogued models. Each adds to the provider count and not to the model count.',
   ),
   localRuntimes: scope(
     CLI_LOCAL_RUNTIME_IDS.length,
-    'local runtimes',
+    ['local runtime', 'local runtimes'],
     'Runtimes the CLI discovers on your own machine. They carry no catalogued models, because the server you started reports what it holds.',
   ),
   providerRecords: scope(
     providerRecordIds.length,
-    'provider records',
+    ['provider record', 'provider records'],
     `Every provider record in the catalogue. ${PROVIDER_RECORD_SPLIT.onByokList} are on the bring-your-own-key list, ${PROVIDER_RECORD_SPLIT.localRuntime} are local runtime records, of which the CLI uses ${PROVIDER_RECORD_SPLIT.localRuntimeUsedByCli}, and ${PROVIDER_RECORD_SPLIT.other} are records for the managed router, media models and providers that are not on the bring-your-own-key list. It is a bookkeeping count, not a number of integrations you can configure.`,
   ),
   managedRosterModels: scope(
     managedRoster.size,
-    'managed roster models',
+    ['managed roster model', 'managed roster models'],
     'The models the plan allow lists name for AGI managed cloud, which is the only route AGI Web uses. Which of them a plan includes is shown on the pricing page.',
   ),
 });

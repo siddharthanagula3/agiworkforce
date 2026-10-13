@@ -17,12 +17,15 @@ import { FounderBlock, NoteList } from '@/features/marketing/components/pages/co
 import {
   BYOK_SURFACES,
   CATALOG_AS_OF,
-  MARKETING,
+  CLI_AVAILABILITY_NOTE,
   POSITIONING,
+  SURFACE_NAMES,
   SURFACE_STATUS,
   surfaceAvailabilitySummary,
   surfaceCta,
 } from '../../lib/marketing-constants';
+import { CATALOG_SCOPES } from '../../lib/catalog-scopes';
+import { SURFACE_IDS, joinSurfaceNames } from '../../lib/surface-status';
 import {
   FOUNDER_NAME,
   FOUNDER_ROLE,
@@ -36,16 +39,22 @@ const CLI_CTA = surfaceCta('cli');
 
 const PROGRESS_COUNT = 5;
 const PROGRESS = RELEASES.slice(0, PROGRESS_COUNT)
-  .map((release) => ({
-    date: release.date,
-    headline: release.headline.split(' · ')[0] ?? release.headline,
-  }))
+  .map((release) => ({ date: release.date, headline: release.headline }))
   .reverse();
+
+const SURFACE_COUNT = SURFACE_IDS.length;
+const ALL_SURFACE_NAMES = joinSurfaceNames(SURFACE_IDS.map((surface) => SURFACE_NAMES[surface]));
+
+const SURFACE_STATES = SURFACE_IDS.map(
+  (surface) => `${SURFACE_NAMES[surface]} · ${SURFACE_STATUS[surface]}.`,
+).join(' ');
+
+const CERTIFICATION_STATUS =
+  'No certifications held. No SOC 2 report exists, no auditor is engaged, and no audit is in progress.';
 
 export const metadata = buildMetadata({
   title: 'About: multi-provider by design',
-  description:
-    'AGI is built by AGI Automation LLC, an independent US company. Six surfaces over one contract layer, and a real choice of where inference runs: your hardware, your key, or our cloud.',
+  description: `AGI is built by ${LEGAL_ENTITY}, an independent US company. ${SURFACE_COUNT} surfaces over one contract layer, built so that you choose where inference runs: your hardware, your key, or our cloud. ${surfaceAvailabilitySummary()}`,
   path: '/about',
 });
 
@@ -59,8 +68,8 @@ const PRINCIPLES = [
     body: `Bring your own provider keys in the CLI. ${BYOK_SURFACES.availability} Traffic goes straight to your provider, the CLI saves keys in the operating system credential store, or in owner-only files on Linux or when the keyring is turned off, and Desktop remains managed-cloud only.`,
   },
   {
-    title: 'One contract layer, six surfaces at different stages.',
-    body: `Web, Desktop, Mobile, CLI, Chrome, and VS Code share one contract layer: the same model catalog, the same trust-boundary rules, the same capability gates. They are not all live at once. ${surfaceAvailabilitySummary()} Each surface that has shipped is native to its platform rather than a wrapped web view.`,
+    title: `One contract layer, ${SURFACE_COUNT} surfaces at different stages.`,
+    body: `${ALL_SURFACE_NAMES} share one contract layer: the same model catalog, the same trust-boundary rules, the same capability gates. They are not all live at once. ${surfaceAvailabilitySummary()}`,
   },
 ];
 
@@ -85,10 +94,11 @@ export default function AboutPage() {
                 An AI workspace you can actually trust.
               </h2>
               <Prose>
-                An AI application suite across six surfaces, with one difference that decides the
-                rest: you choose whether a request runs on Local models, on your own provider keys,
-                or on AGI managed cloud. That choice is architectural, not a setting bolted on late.
-                These are the rules the product is built around.
+                An AI application suite across {SURFACE_COUNT} surfaces, with one difference that
+                decides the rest: it is built so that you choose whether a request runs on Local
+                models, on your own provider keys, or on AGI managed cloud. That choice is
+                architectural, not a setting bolted on late. These are the rules the product is
+                built around.
               </Prose>
             </div>
             <NoteList items={PRINCIPLES} />
@@ -98,7 +108,7 @@ export default function AboutPage() {
         <Section id="founder" labelledBy="agi-about-founder-title" rule ground="2">
           <FounderBlock
             quote={<>&ldquo;You should own the choice of model.&rdquo;</>}
-            body="AGI is built on a single conviction: the person doing the work should decide where it runs and which model answers, not a vendor lock-in. Everything here follows from that, from Local Mode that never phones home to BYOK that keeps your keys on your machine."
+            body="AGI is built on a single conviction: the person doing the work should decide where it runs and which model answers, not a vendor lock-in. Everything here follows from that, from Local Mode that keeps your conversations on your device to BYOK that keeps your keys on your machine."
             id="agi-about-founder-title"
             name={FOUNDER_NAME}
             role={`${FOUNDER_ROLE}, ${LEGAL_ENTITY}`}
@@ -119,8 +129,8 @@ export default function AboutPage() {
                 </li>
               ))}
             </ol>
-            <Link href="/changelog" className="agi-ds-timeline-more">
-              Full changelog →
+            <Link href="/release-notes" className="agi-ds-timeline-more">
+              All release notes →
             </Link>
           </div>
         </Section>
@@ -148,30 +158,24 @@ export default function AboutPage() {
                 { label: 'License', value: 'Proprietary' },
                 {
                   label: 'Built with',
-                  value:
-                    'Rust for the CLI and the desktop core, TypeScript and React across the app surfaces',
+                  value: 'Rust for the CLI, TypeScript and React across the app surfaces',
                 },
                 {
                   label: 'Surfaces',
-                  value: (
-                    <>
-                      Web · {SURFACE_STATUS.web}. CLI · {SURFACE_STATUS.cli}. Desktop ·{' '}
-                      {SURFACE_STATUS.desktop}. Mobile, Chrome, VS Code · {SURFACE_STATUS.mobile}.
-                    </>
-                  ),
+                  value: SURFACE_STATES,
                 },
                 {
                   label: 'Model catalog',
-                  value: `${MARKETING.models.count} models · ${MARKETING.providers.count} provider integrations, as of ${CATALOG_AS_OF}`,
+                  value: `${CATALOG_SCOPES.catalogueEntries.text} · ${CATALOG_SCOPES.providerRecords.text}, as of ${CATALOG_AS_OF}`,
                 },
                 { label: 'Trust modes', value: 'Local · BYOK · Managed cloud' },
                 { label: 'Data policy', value: POSITIONING.routeBoundary },
-                { label: 'Set in', value: 'Newsreader, Geist & JetBrains Mono' },
+                { label: 'Set in', value: 'Geist' },
                 {
                   label: 'Compliance',
                   value: (
                     <>
-                      No certifications held. SOC 2 is planned with no audit report and no date.{' '}
+                      {CERTIFICATION_STATUS}{' '}
                       <Link href="/trust" className="agi-ds-link">
                         See the full trust posture
                       </Link>
@@ -190,9 +194,7 @@ export default function AboutPage() {
               Judge the bet on its merits.
             </h2>
             <Prose>
-              Try AGI Web in the browser, or run the CLI on your own hardware with local models and
-              your own keys. Either way, you see where every request runs before it leaves your
-              device.
+              {`Try AGI Web in the browser. The CLI runs local models and your own keys on your own hardware. ${CLI_AVAILABILITY_NOTE} Either way, you see where every request runs before it leaves your device.`}
             </Prose>
             <ButtonRow>
               <Button href="/login?redirectTo=%2F">Try AGI Web</Button>

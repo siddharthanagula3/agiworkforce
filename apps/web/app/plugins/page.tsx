@@ -9,12 +9,15 @@ import {
 } from '@/features/marketing/components/system';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 import { loadPluginCatalog } from '@/features/plugins/server/registry-source';
-import { pluginAvailabilityClaim } from '@/features/plugins/availability';
 import {
-  isPluginEntryInstallable,
-  isPluginEntryWebInstallable,
-  type PluginRegistryEntry,
-} from '@agiworkforce/types';
+  pluginAvailabilityClaim,
+  pluginConnectorWiringNote,
+  pluginModelHeading,
+  pluginStatusLabel,
+  pluginStatusMeaningNote,
+} from '@/features/plugins/availability';
+import { CLI_AVAILABILITY_NOTE } from '@/lib/surface-status';
+import type { PluginRegistryEntry } from '@agiworkforce/types';
 import { PluginsCta } from './PluginsCta';
 
 export const metadata = buildMetadata({
@@ -30,13 +33,6 @@ function sourceLabel(source: PluginRegistryEntry['source']): string {
   if (source === 'builtin') return 'Built-in';
   if (source === 'marketplace') return 'Marketplace';
   return 'Custom';
-}
-
-function statusLabel(entry: PluginRegistryEntry): string {
-  if (isPluginEntryWebInstallable(entry)) return 'Available on Web';
-  if (isPluginEntryInstallable(entry)) return 'Installable';
-  if (entry.status === 'deprecated') return 'Deprecated';
-  return 'Declared, not installable yet';
 }
 
 export default async function PluginsPage() {
@@ -73,7 +69,7 @@ export default async function PluginsPage() {
                       {preview.map((entry) => (
                         <li className="agi-ds-ledger-row" key={entry.id}>
                           <span className="agi-ds-ledger-label">{entry.name}</span>
-                          <span className="agi-ds-ledger-value">{statusLabel(entry)}</span>
+                          <span className="agi-ds-ledger-value">{pluginStatusLabel(entry)}</span>
                         </li>
                       ))}
                     </ul>
@@ -93,7 +89,7 @@ export default async function PluginsPage() {
             <div className="agi-lp-heading">
               <Eyebrow>How a plugin works</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-plugins-model-title">
-                Skills plus connectors, wired once.
+                {pluginModelHeading()}
               </h2>
             </div>
             <div className="agi-ds-grid-2">
@@ -106,12 +102,12 @@ export default async function PluginsPage() {
                 {
                   meta: 'Connectors',
                   title: 'Connector wiring',
-                  body: 'A plugin declares which connectors it needs. Connect once, and every skill in the pack can use it, inside the permission boundary you chose.',
+                  body: pluginConnectorWiringNote(),
                 },
                 {
                   meta: 'Status',
                   title: 'What a status means',
-                  body: 'Website packs install only from reviewed embedded manifests. CLI and Desktop packs still require a separately published, integrity-pinned artifact. Until one of those paths exists, the entry remains declared and no control pretends to install it.',
+                  body: pluginStatusMeaningNote(),
                 },
               ].map((item) => (
                 <div className="agi-ds-card" style={{ padding: '1.5rem' }} key={item.title}>
@@ -146,7 +142,7 @@ export default async function PluginsPage() {
             ) : (
               <LinkGrid
                 items={entries.map((entry) => ({
-                  meta: `${entry.category} · ${sourceLabel(entry.source)} · ${statusLabel(entry)}`,
+                  meta: `${entry.category} · ${sourceLabel(entry.source)} · ${pluginStatusLabel(entry)}`,
                   title: entry.name,
                   href: `/plugins/${entry.id}`,
                   body:
@@ -171,11 +167,11 @@ export default async function PluginsPage() {
                 Install a pack <em className="agi-ds-accent">from the catalogue.</em>
               </h2>
               <Prose size="lg">
-                Hosted installation is live. A pack marked Available on Web installs into your
-                account from the plugins section of Settings, and its skills join the assistant on
-                your next message. A pack that has published an integrity-pinned artifact prints its
-                desktop and CLI install command on its own page. A pack still marked declared prints
-                none, because there is nothing published to install yet.
+                A pack marked Available on Web installs into your account from the plugins section
+                of Settings, and its skills join the assistant on your next message. A pack that has
+                published an integrity-pinned artifact prints its AGI CLI install command on its own
+                page. {CLI_AVAILABILITY_NOTE} A pack still marked declared prints none, because
+                there is nothing published to install yet.
               </Prose>
               <PluginsCta />
             </div>

@@ -4,7 +4,7 @@ title: Start, steer and manage a chat
 path: /chat
 category: chat
 tags: chat, new chat, conversation, compose, send message, edit message, regenerate, retry, branch, variant, rename, archive, delete chat, thinking, response style
-updated: 2026-09-21
+updated: 2026-10-12
 scope: public
 ---
 
@@ -25,7 +25,8 @@ the same menu.
 ## Attach files and tools
 
 The **+** button beside the composer attaches files, adds a project or folder as
-scope, and lists your connectors. Typing `/` opens the command menu:
+scope, and lists **Connectors**. {{AVAILABILITY.connectors}} Typing `/` opens the
+command menu:
 `/search` searches the web, `/think` asks for extended reasoning, `/image`
 generates an image, `/code` runs code in a sandbox. `/browser`, `/terminal` and
 `/database` appear only on surfaces whose capabilities allow them.

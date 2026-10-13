@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import { billingPlanCapabilityPlanLabels } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { RouteMap } from '@/features/marketing/components/LandingSections';
@@ -9,7 +10,9 @@ import {
   FlagshipHero,
   SurfaceIndex,
 } from '@/features/marketing/components/SurfaceSections';
-import { LAUNCH, SURFACE_STATUS, surfaceCta } from '../../lib/marketing-constants';
+import { SURFACE_STATUS, surfaceCta } from '../../lib/marketing-constants';
+
+const DEVELOPER_SURFACE_PLANS = billingPlanCapabilityPlanLabels('developer_surfaces');
 
 export const metadata = buildMetadata({
   title: 'AGI Code | CLI + VS Code developer stack',
@@ -27,13 +30,11 @@ export default function AgiCodePage() {
           eyebrow="AGI Code · for developers"
           titleLines={['Your terminal.', 'Your editor.', 'One agent.']}
           em="One agent."
-          lede="AGI Code spans the agi CLI and the VS Code extension. Resume and fork sessions. Review diffs before they land. Run commands in an OS sandbox. Extend the agent with hooks, skills, and MCP. Local models, your own keys, or AGI managed cloud (public alpha)."
           ctas={[
             { href: '/cli', label: 'See the CLI' },
             { href: '/vscode-extension', label: 'See the VS Code extension' },
             surfaceCta('vscode'),
           ]}
-          modeRibbon={['Local · offline-capable', 'BYOK · your keys', 'Cloud · public alpha']}
         />
 
         <SurfaceIndex
@@ -151,9 +152,9 @@ export default function AgiCodePage() {
         />
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
+          eyebrow="AGI Code"
           title="Bring the agent to your repo."
-          body="AGI in the CLI and in VS Code is coming soon: request the preview, and choose the route for every task: local models, your own keys, or AGI managed cloud (public alpha, open by default)."
+          body={`The CLI is ${SURFACE_STATUS.cli.toLowerCase()} and AGI in VS Code is ${SURFACE_STATUS.vscode.toLowerCase()}. The download page shows what is published and takes an email to tell you when the VS Code extension is ready to install. Choose the route for every task: local models, your own keys, or AGI managed cloud, which is in public alpha and included with ${DEVELOPER_SURFACE_PLANS} on these two surfaces.`}
           ctas={[
             { href: '/download', label: 'Check availability' },
             { href: '/cli', label: 'See the CLI' },

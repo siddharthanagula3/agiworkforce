@@ -312,6 +312,7 @@ test.describe('/pricing comparison is one table from 1100px', () => {
 
       const lastRow = table.locator('tbody tr').last();
       await lastRow.evaluate((row) => row.scrollIntoView({ block: 'center' }));
+      await expect(page.locator('.agi-ds-header')).toHaveAttribute('data-scrolled', 'true');
 
       const pinned = await table.evaluate((element) => {
         const siteHeader = document.querySelector('.agi-ds-header-surface');

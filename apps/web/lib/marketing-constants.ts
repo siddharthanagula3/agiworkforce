@@ -42,7 +42,7 @@ export const LAUNCH = {
 export const POSITIONING = {
   wedge: 'Try AGI on the web. Run Local and BYOK from the CLI. Managed cloud, open by default.',
   routeBoundary: [
-    'Website users can use AGI managed cloud. The Free plan runs on the free models providers give away, and paid plans with more capacity are opening in stages, so an upgrade needs an access code or a place on the upgrade waitlist.',
+    'Website users can use AGI managed cloud. The Free plan runs on the free models providers give away, and paid plans with more capacity start from the pricing page, which offers the upgrade waitlist or takes an access code if upgrades are not open to your account yet.',
     'The CLI supports Local and BYOK.',
     CLI_AVAILABILITY_NOTE,
     `VS Code BYOK is ${SURFACE_STATUS.vscode.toLowerCase()}.`,
@@ -51,7 +51,7 @@ export const POSITIONING = {
     .filter(Boolean)
     .join(' '),
   cloudInvite:
-    'Managed cloud is open by default. Higher capacity is a paid subscription, and paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.',
+    'Managed cloud is open by default. Higher capacity is a paid subscription that starts from the pricing page; if paid upgrades are not open to your account yet, you can join the upgrade waitlist there or enter an access code.',
 } as const;
 
 const BYOK_SURFACE_IDS = ['cli', 'vscode'] as const;
@@ -79,8 +79,7 @@ export const BYOK_SURFACES = {
   ]
     .filter(Boolean)
     .join(' '),
-  exclusion:
-    'Web, Mobile, Desktop and Chrome do not accept provider keys; each runs on your AGI account.',
+  exclusion: 'Web, Mobile, Desktop and Chrome do not accept provider keys.',
 } as const;
 
 export const LOCAL_RUNTIME_LABEL_SUFFIX = /\s+\(Local\)$/;

@@ -174,10 +174,6 @@
   text-wrap: wrap;
 }
 
-[data-design='agi'].agi-ds-page.agi-co main .agi-ds-section .agi-ds-prose[data-size='sm'] {
-  font-size: var(--agi-text-md);
-}
-
 [data-design='agi'].agi-ds-page.agi-co
   main
   .agi-ds-section

@@ -98,11 +98,44 @@ describe('pricing locale bundles, plan feature claims', () => {
       expect(bundle['chatsAtOnce'], `${locale}/pricing.json chatsAtOnce`).toContain('{{chats}}');
       expect(bundle['chatsAtOnce'], `${locale}/pricing.json chatsAtOnce`).not.toMatch(/\p{N}/u);
       expect(
-        bundle['unlimitedProjectsAndStorage'],
-        `${locale}/pricing.json unlimitedProjectsAndStorage`,
+        bundle['unlimitedProjectsWithStorage'],
+        `${locale}/pricing.json unlimitedProjectsWithStorage`,
       ).not.toMatch(/MCP|\p{N}/u);
       expect(bundle['compareSubheading'], `${locale}/pricing.json compareSubheading`).not.toMatch(
         /Desktop|デスクトップ|桌面|데스크톱|डेस्कटॉप|سطح المكتب/u,
+      );
+    }
+  });
+
+  it('states Max storage as the figure the catalog funds, never as unlimited', () => {
+    for (const plan of ['max', 'max_15x'] as const) {
+      const limits = BILLING_PLAN_PRODUCT_LIMITS[plan];
+      expect(limits.projects, `${plan} projects`).toBe('unlimited');
+      expect(limits.customMcpServers, `${plan} custom MCP servers`).toBe('unlimited');
+      expect(
+        typeof limits.knowledgeStorageBytes,
+        `${plan} storage is no longer a funded figure; rewrite the Max card line with it`,
+      ).toBe('number');
+    }
+
+    const bundles = pricingBundles();
+    expect(bundles.map(([locale]) => locale).sort()).toEqual(
+      SUPPORTED_LANGUAGES.map((language) => language.code).sort(),
+    );
+    for (const [locale, bundle] of bundles) {
+      expect(bundle, `${locale}/pricing.json`).not.toHaveProperty('unlimitedProjectsAndStorage');
+      for (const key of ['unlimitedProjectsWithStorage', 'maxFeature4', 'max15xFeature4']) {
+        const copy = bundle[key] ?? '';
+        expect(copy, `${locale}/pricing.json ${key} omits the storage figure`).toContain(
+          '{{storage}}',
+        );
+        expect(copy, `${locale}/pricing.json ${key} types a figure`).not.toMatch(/\p{N}/u);
+      }
+    }
+    const english = bundles.find(([locale]) => locale === 'en')?.[1] ?? {};
+    for (const key of ['unlimitedProjectsWithStorage', 'maxFeature4', 'max15xFeature4']) {
+      expect(english[key], `en/pricing.json ${key}`).not.toMatch(
+        /unlimited projects(?:,| and) storage/iu,
       );
     }
   });

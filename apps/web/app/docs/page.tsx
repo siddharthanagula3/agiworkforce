@@ -1,16 +1,27 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
+
 import { DocsShell } from '@/features/docs/components/DocsShell';
+import {
+  BYOK_SURFACES,
+  CLI_AVAILABILITY_NOTE,
+  SURFACE_NAMES,
+  SURFACE_STATUS,
+  surfaceAvailabilitySummary,
+} from '@/lib/marketing-constants';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { readTopicParam, resolveDocTopic } from '@/lib/support/doc-topics';
 import { helpArticlePath } from '@/lib/support/help-paths';
 import { documentationIndex } from './doc-index';
 
+const SURFACE_STATES = surfaceAvailabilitySummary();
+const CONNECTORS_NOTE = connectorsReleased() ? '' : ` ${CONNECTORS_COMING_SOON_MESSAGE}`;
+
 export const metadata = buildMetadata({
   title: 'Documentation',
-  description:
-    'Reference for every AGI surface: CLI, Desktop, Mobile, Web, Chrome, and VS Code extension.',
+  description: `Guides and reference for AGI. ${SURFACE_STATES}`,
   path: '/docs',
 });
 
@@ -22,33 +33,39 @@ const SURFACE_GUIDES = [
   },
   {
     href: '/web',
-    title: 'Web',
-    body: 'Managed chat, projects, artifacts, memory, cited research, connected tools, and account settings.',
+    title: SURFACE_NAMES.web,
+    status: SURFACE_STATUS.web,
+    body: 'Managed chat, projects, artifacts, memory, cited research, and account settings.',
   },
   {
     href: '/mobile',
-    title: 'Mobile',
-    body: 'The planned iPhone and Android clients, including Cloud continuity and device-local work.',
+    title: SURFACE_NAMES.mobile,
+    status: SURFACE_STATUS.mobile,
+    body: 'The iPhone and Android clients, including Cloud continuity and device-local work.',
   },
   {
     href: '/desktop',
-    title: 'Desktop',
-    body: 'The planned macOS app for Managed Cloud, approved folders, computer use, voice, and the trusted local host.',
+    title: SURFACE_NAMES.desktop,
+    status: SURFACE_STATUS.desktop,
+    body: 'The macOS app for Managed Cloud, with approved folders, computer use, Quick Ask, and dictation.',
   },
   {
     href: '/chrome-extension',
-    title: 'Chrome',
-    body: 'The planned browser side panel for page context and approvals. Answers come back from AGI Managed Cloud; pairing Desktop is an optional local road for approved handoffs.',
+    title: SURFACE_NAMES.chrome,
+    status: SURFACE_STATUS.chrome,
+    body: 'The browser side panel for page context and approvals. Answers come back from AGI Managed Cloud; pairing Desktop is an optional local road for approved handoffs.',
   },
   {
     href: '/cli',
-    title: 'CLI',
+    title: SURFACE_NAMES.cli,
+    status: SURFACE_STATUS.cli,
     body: 'The Rust-native local developer agent for sessions, tools, diffs, reviews, sandboxed execution, and hooks.',
   },
   {
     href: '/vscode-extension',
-    title: 'VS Code',
-    body: 'The planned IDE client over the same host-owned developer sessions, tools, permissions, and files as the CLI.',
+    title: SURFACE_NAMES.vscode,
+    status: SURFACE_STATUS.vscode,
+    body: 'The IDE client over the same host-owned developer sessions, tools, permissions, and files as the CLI.',
   },
 ] as const;
 
@@ -61,22 +78,22 @@ const REFERENCE_GUIDES = [
   {
     href: '/providers',
     title: 'Providers and models',
-    body: 'The current catalogue, provider routes, capability labels, and availability information.',
+    body: 'The providers the CLI takes a key for, the local runtimes it discovers, and how the catalogue counts are defined.',
   },
   {
     href: '/integrations',
     title: 'Tools and integrations',
-    body: 'Connected apps, MCP tools, plugins, and the trust boundary around every route.',
+    body: `MCP servers, plugins, and provider keys in the CLI, and the Chrome bridge to Desktop. ${CLI_AVAILABILITY_NOTE}${CONNECTORS_NOTE}`,
   },
   {
     href: '/local',
     title: 'Local mode',
-    body: 'What stays on the device, which surfaces can run locally, and how an explicit handoff works.',
+    body: `What stays on the device, which surfaces can run locally, and how an explicit handoff works. ${CLI_AVAILABILITY_NOTE}`,
   },
   {
     href: '/byok',
     title: 'Bring your own key',
-    body: 'Where BYOK is available, how provider credentials are stored, and what never enters account sync.',
+    body: `Where BYOK is available, how provider credentials are stored, and what never enters account sync. ${BYOK_SURFACES.availability}`,
   },
   {
     href: '/security',
@@ -103,7 +120,7 @@ const START_HERE = [
   },
 ] as const;
 
-type Guide = { href: string; title: string; body: string };
+type Guide = { href: string; title: string; body: string; status?: string };
 
 function GuideCards({ guides, columns }: { guides: readonly Guide[]; columns: 2 | 3 }) {
   return (
@@ -111,7 +128,9 @@ function GuideCards({ guides, columns }: { guides: readonly Guide[]; columns: 2 
       {guides.map((guide) => (
         <Link key={guide.href} href={guide.href} className="dx-card">
           <span className="dx-card-title">{guide.title}</span>{' '}
-          <span className="dx-card-body">{guide.body}</span>
+          <span className="dx-card-body">
+            {guide.status ? `${guide.status}. ${guide.body}` : guide.body}
+          </span>
         </Link>
       ))}
     </div>
@@ -165,8 +184,8 @@ export default async function DocsPage({
           Guides by surface
         </h2>
         <p className="dx-section-note">
-          The website is the active launch surface. The remaining guides describe the current
-          implementation and release state without presenting planned clients as published.
+          {SURFACE_STATES} Each guide below carries the state of its surface, and describes what is
+          built for it.
         </p>
         <GuideCards guides={SURFACE_GUIDES} columns={2} />
       </section>

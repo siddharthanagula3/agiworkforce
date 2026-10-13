@@ -69,15 +69,24 @@ export interface UploadScanResult {
   findings: UploadScanFinding[];
 }
 
-const MAGIC_SIGNATURES: ReadonlyArray<{
+interface MagicSignature {
   bytes: readonly number[];
   label: string;
   mimes: readonly string[];
-}> = [
+  formType?: { offset: number; bytes: readonly number[] };
+}
+
+const MAGIC_SIGNATURES: readonly MagicSignature[] = [
   { bytes: [0x25, 0x50, 0x44, 0x46], label: 'PDF', mimes: ['application/pdf'] },
   { bytes: [0xff, 0xd8, 0xff], label: 'JPEG', mimes: ['image/jpeg', 'image/jpg'] },
   { bytes: [0x89, 0x50, 0x4e, 0x47], label: 'PNG', mimes: ['image/png'] },
   { bytes: [0x47, 0x49, 0x46, 0x38], label: 'GIF', mimes: ['image/gif'] },
+  {
+    bytes: [0x52, 0x49, 0x46, 0x46],
+    formType: { offset: 8, bytes: [0x57, 0x45, 0x42, 0x50] },
+    label: 'WebP',
+    mimes: ['image/webp'],
+  },
   { bytes: [0x50, 0x4b, 0x03, 0x04], label: 'ZIP', mimes: [] },
 ];
 
@@ -90,9 +99,20 @@ const EXECUTABLE_SIGNATURES: ReadonlyArray<{ bytes: readonly number[]; label: st
   { bytes: [0x23, 0x21], label: 'script shebang' },
 ];
 
+function matchesAt(bytes: Uint8Array, signature: readonly number[], offset: number): boolean {
+  if (bytes.length < offset + signature.length) return false;
+  return signature.every((byte, index) => bytes[offset + index] === byte);
+}
+
 function startsWith(bytes: Uint8Array, signature: readonly number[]): boolean {
-  if (bytes.length < signature.length) return false;
-  return signature.every((byte, index) => bytes[index] === byte);
+  return matchesAt(bytes, signature, 0);
+}
+
+function matchesMagic(bytes: Uint8Array, signature: MagicSignature): boolean {
+  if (!startsWith(bytes, signature.bytes)) return false;
+  return (
+    !signature.formType || matchesAt(bytes, signature.formType.bytes, signature.formType.offset)
+  );
 }
 
 function textPrefix(bytes: Uint8Array, limit = 64_000): string {
@@ -212,7 +232,7 @@ export function inspectUploadBytes(bytes: Uint8Array, declaredMime: string): Upl
   }
 
   for (const signature of MAGIC_SIGNATURES) {
-    if (!startsWith(bytes, signature.bytes)) continue;
+    if (!matchesMagic(bytes, signature)) continue;
     if (signature.mimes.length === 0) {
       if (mime.startsWith('image/') || mime.startsWith('text/')) {
         findings.push({
@@ -235,7 +255,7 @@ export function inspectUploadBytes(bytes: Uint8Array, declaredMime: string): Upl
     mime !== 'image/svg+xml' &&
     bytes.length > 0 &&
     !MAGIC_SIGNATURES.some(
-      (signature) => signature.mimes.includes(mime) && startsWith(bytes, signature.bytes),
+      (signature) => signature.mimes.includes(mime) && matchesMagic(bytes, signature),
     )
   ) {
     findings.push({

@@ -8,10 +8,12 @@ import { contactMailto } from '@/lib/legal-constants';
 import '@/features/marketing/components/pages/company/company.css';
 
 export const metadata = buildMetadata({
-  title: 'Careers: a small team, on purpose',
+  title: 'Careers: founder-led, no open roles',
   description: 'AGI Automation LLC is small and intentional. We do not have open roles right now.',
   path: '/careers',
 });
+
+const CAREERS_SUBJECT = 'Careers';
 
 const HERO_FACTS = [
   'Open roles: 0',
@@ -27,12 +29,12 @@ export default function CareersPage() {
         <PageHero
           id="agi-careers-title"
           eyebrow="Careers"
-          title="A small team, on purpose."
-          em="on purpose."
+          title="Founder-led, no open roles."
+          em="no open roles."
           lede="AGI Automation LLC is small and intentional. We do not have open roles right now. If that changes, we will list them here, no ghost listings."
           ctas={[
-            { href: '/download', label: 'Get notified' },
-            { href: '/changelog', label: 'Follow the changelog', variant: 'secondary' },
+            { href: contactMailto(CAREERS_SUBJECT), label: 'Email us about working here' },
+            { href: '/release-notes', label: 'Follow the release notes', variant: 'secondary' },
           ]}
         />
 
@@ -48,19 +50,19 @@ export default function CareersPage() {
                 {
                   meta: 'Build',
                   title: 'Use the product',
-                  href: '/download',
+                  href: '/get-started',
                   body: 'The best way to get on our radar is to ship something real with AGI: agents, MCP connectors, downstream tooling.',
                 },
                 {
                   meta: 'Follow',
-                  title: 'Follow the changelog',
-                  href: '/changelog',
+                  title: 'Follow the release notes',
+                  href: '/release-notes',
                   body: 'A dated archive of what shipped, the clearest signal of where the product is going.',
                 },
                 {
                   meta: 'Write',
                   title: 'Stay in touch',
-                  href: contactMailto(),
+                  href: contactMailto(CAREERS_SUBJECT),
                   body: "Email us and tell us what you're building. This is an open contact channel, not a response-time promise.",
                   external: true,
                 },

@@ -111,31 +111,3 @@ export function collectionPageSchema(input: {
     isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
   };
 }
-
-export function articleSchema(input: {
-  title: string;
-  description: string;
-  slug: string;
-  datePublished: string;
-  dateModified?: string;
-  author?: string;
-  image?: string;
-}): JsonLdObject {
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'Article',
-    headline: input.title,
-    description: input.description,
-    url: `${SITE_URL}/blog/${input.slug}`,
-    datePublished: input.datePublished,
-    dateModified: input.dateModified ?? input.datePublished,
-    image: input.image ?? OG_IMAGE_URL,
-    author: { '@type': 'Organization', name: input.author ?? SITE_NAME },
-    publisher: {
-      '@type': 'Organization',
-      name: SITE_NAME,
-      logo: { '@type': 'ImageObject', url: `${SITE_URL}/logo.png` },
-    },
-    mainEntityOfPage: { '@type': 'WebPage', '@id': `${SITE_URL}/blog/${input.slug}` },
-  };
-}

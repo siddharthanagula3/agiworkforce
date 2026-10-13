@@ -14,12 +14,14 @@ import {
 } from '@/features/marketing/components/system';
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { HelpSearch } from '@/features/support/components/HelpSearch';
-import { BYOK_SURFACES, MARKETING, SURFACE_STATUS } from '@/lib/marketing-constants';
+import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
+import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
+import { BYOK_SURFACES, SURFACE_STATUS } from '@/lib/marketing-constants';
 import { readTopicParam, resolveDocTopic } from '@/lib/support/doc-topics';
 import { supportCollectionIndex } from './collections';
 
 const HERO_FACTS = [
-  `Catalog: ${MARKETING.models.display} models, ${MARKETING.providers.display} providers`,
+  `Catalog: ${CATALOG_SCOPES.catalogueEntries.text}, ${CATALOG_SCOPES.providerRecords.text}`,
   `BYOK: ${BYOK_SURFACES.label}`,
   `VS Code: ${SURFACE_STATUS.vscode.toLowerCase()}`,
 ];
@@ -52,7 +54,7 @@ export default async function HelpPage({
           eyebrow="Help"
           title="Get unstuck, fast."
           em="fast."
-          lede="Search every help article, or browse the help centre by collection. For anything else, email contact@agiworkforce.com; no response time is promised unless your plan says otherwise."
+          lede={`Search every help article, or browse the help centre by collection. For anything else, email ${CONTACT_EMAIL}; no response time is promised unless your plan says otherwise.`}
           ctas={[]}
         />
 
@@ -92,8 +94,7 @@ export default async function HelpPage({
               />
             ) : (
               <Prose>
-                The collection index is not loading right now. Email contact@agiworkforce.com for
-                support.
+                The collection index is not loading right now. Email {CONTACT_EMAIL} for support.
               </Prose>
             )}
           </Stack>
@@ -113,7 +114,7 @@ export default async function HelpPage({
               <Button href="/support" variant="secondary">
                 Get support
               </Button>
-              <Button href="mailto:contact@agiworkforce.com" variant="secondary">
+              <Button href={contactMailto()} variant="secondary">
                 Email us
               </Button>
             </ButtonRow>

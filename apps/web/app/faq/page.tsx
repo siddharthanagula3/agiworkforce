@@ -5,11 +5,13 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
+import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+import { CLI_KEYS_OUTSIDE_CATALOG_NOTE } from '@/lib/byok-providers';
+import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
 import {
   BYOK_SURFACES,
   CLI_AVAILABILITY_NOTE,
   CLI_LOCAL_RUNTIMES,
-  MARKETING,
 } from '@/lib/marketing-constants';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
@@ -20,17 +22,21 @@ export const metadata = buildMetadata({
   path: '/faq',
 });
 
+const FREE_PLAN = BILLING_PLAN_PRICING.free.label;
+const TEAM_PLAN = BILLING_PLAN_PRICING.team.label;
+const ENTERPRISE_PLAN = BILLING_PLAN_PRICING.enterprise.label;
+
 const HERO_FACTS = [
-  `Providers: ${MARKETING.providers.display}`,
-  `Models: ${MARKETING.models.display}`,
+  CATALOG_SCOPES.byokProviders.text,
+  CATALOG_SCOPES.catalogueEntries.text,
   `BYOK: ${BYOK_SURFACES.label}`,
-  `CLI local runtimes: ${CLI_LOCAL_RUNTIMES.names.length}`,
+  `${CATALOG_SCOPES.localRuntimes.text} in the CLI`,
 ];
 
 const QA: { title: string; body: string }[] = [
   {
     title: 'How many providers do you support?',
-    body: `${MARKETING.providers.display} provider integrations, including Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot and Zhipu. The CLI can additionally route to a custom OpenAI-compatible endpoint you declare in its own config file, over https or localhost only, and Local mode supports ${CLI_LOCAL_RUNTIMES.label}. Desktop and Web have no provider-key or local-model entry. The in-product catalog is the current source of truth.`,
+    body: `The CLI takes your own key for the ${CATALOG_SCOPES.byokProviders.text}, and the provider directory names each one. ${CLI_KEYS_OUTSIDE_CATALOG_NOTE} ${CLI_AVAILABILITY_NOTE} The CLI can additionally route to a custom OpenAI-compatible endpoint you declare in its own config file, over https or localhost only, and Local mode supports ${CLI_LOCAL_RUNTIMES.label}. Desktop and Web have no provider-key or local-model entry. The in-product catalog is the current source of truth.`,
   },
   {
     title: 'What does BYOK mean here?',
@@ -46,15 +52,15 @@ const QA: { title: string; body: string }[] = [
   },
   {
     title: 'What does AGI Cloud cost?',
-    body: 'The Free plan on AGI managed cloud is open by default: sign in and start, no waitlist. Paid upgrades are opening in stages: without an access code you join the upgrade waitlist rather than reaching checkout. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Pricing is also the source of truth for which self-serve checkouts are configured for your region and billing cadence; Team is priced per seat when its checkout is available. Enterprise is contract-scoped and sales-assisted, with a contact list for access and additional governance requirements.',
+    body: `The ${FREE_PLAN} plan on AGI managed cloud is open by default: sign in and start, no waitlist. Paid upgrades start from the pricing page; if they are not open to your account yet, you can join the upgrade waitlist there or enter an access code. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Pricing is also the source of truth for which self-serve checkouts are configured for your region and billing cadence; ${TEAM_PLAN} is priced per seat when its checkout is available. ${ENTERPRISE_PLAN} is contract-scoped and sales-assisted, with a contact list for access and additional governance requirements.`,
   },
   {
     title: 'How do I upgrade, downgrade, cancel, or get an invoice?',
-    body: 'Start an available self-serve upgrade from Pricing. For a Stripe-billed plan, open Settings, Billing and choose Manage billing to use the Stripe Customer Portal for plan changes, cancellation, payment methods, and invoices; a scheduled cancellation date is shown in Billing after it is recorded. App Store and Google Play subscriptions must be managed in the store that bills them. Operator-provisioned Enterprise plans are handled through your organization. Refund eligibility is described in the Refund Policy.',
+    body: `Start an available self-serve upgrade from Pricing. For a Stripe-billed plan, open Settings, Billing and choose Manage billing to use the Stripe Customer Portal for plan changes, cancellation, payment methods, and invoices; a scheduled cancellation date is shown in Billing after it is recorded. App Store and Google Play subscriptions must be managed in the store that bills them. Operator-provisioned ${ENTERPRISE_PLAN} plans are handled through your organization. Refund eligibility is described in the Refund Policy.`,
   },
   {
     title: 'Do you train on my data?',
-    body: 'AGI does not use customer conversation content to train AGI-owned models, and we do not sell your data. Be precise about the part people misread: in managed cloud we send your prompt and attachments to the provider serving the model you selected. On the Free plan, a chat on the default model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model Studio, on AGI’s own key at its international endpoint in Singapore, or OpenRouter’s free router. Which one answers depends on what is available for that turn, and the reply shows the model that answered. Alibaba’s published privacy notice says it never uses your data for model training, which we rely on and cannot verify; the providers behind OpenRouter’s free models may train on what you send. Qwen and Zhipu route through OpenRouter unless AGI holds its own key for that provider, and OpenRouter is also the failover for every other chat model in the catalogue, so content for a model from any provider can pass through it. Those third parties handle that content under their applicable terms and data-use policies, our statement about AGI-owned models is not a promise on their behalf. MiniMax models receive nothing from managed cloud and are reachable only with your own key. In BYOK mode your own provider account and terms govern, and in Local mode none of them are contacted. Recipients are listed at /subprocessors.',
+    body: `AGI does not use customer conversation content to train AGI-owned models, and we do not sell your data. Be precise about the part people misread: in managed cloud we send your prompt and attachments to the provider serving the model you selected. On the ${FREE_PLAN} plan, a chat on the default model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model Studio, on AGI’s own key at its international endpoint in Singapore, or OpenRouter’s free router. Which one answers depends on what is available for that turn, and the reply shows the model that answered. Alibaba’s published privacy notice says it never uses your data for model training, which we rely on and cannot verify; the providers behind OpenRouter’s free models may train on what you send. Qwen and Zhipu route through OpenRouter unless AGI holds its own key for that provider, and OpenRouter is also the failover for every other chat model in the catalogue, so content for a model from any provider can pass through it. Those third parties handle that content under their applicable terms and data-use policies, our statement about AGI-owned models is not a promise on their behalf. MiniMax models receive nothing from managed cloud and are reachable only with your own key. In BYOK mode your own provider account and terms govern, and in Local mode none of them are contacted. Recipients are listed at /subprocessors.`,
   },
   {
     title: 'Who can read my conversations?',
@@ -85,8 +91,8 @@ const QA: { title: string; body: string }[] = [
     body: `The CLI stores provider credentials in the operating system credential store, except on Linux or when the keyring is turned off, where it uses owner-only files in its configuration directory. It keeps only non-secret provider names in its local index. Desktop accepts no provider key. ${BYOK_SURFACES.availability}`,
   },
   {
-    title: 'Is there an Enterprise plan?',
-    body: 'Enterprise is contract-scoped rather than self-serve. There is no checkout for it, so it starts with a conversation. On what actually exists rather than what is planned: single sign-on, SCIM directory provisioning, a customer-facing audit-log export (filterable and downloaded as JSONL at /workspace/audit), and per-workspace retention windows are all implemented, gated on the enterprise_controls entitlement and configured by your own workspace owner. What is NOT built: dedicated capacity, org-wide BYOK enforcement, and data-region pinning, and we would rather say that here than let Enterprise imply the whole category. Contact sales to discuss requirements and timing.',
+    title: `Is there an ${ENTERPRISE_PLAN} plan?`,
+    body: `${ENTERPRISE_PLAN} is contract-scoped rather than self-serve. There is no checkout for it, so it starts with a conversation. On what actually exists rather than what is planned: single sign-on, SCIM directory provisioning, a customer-facing audit-log export (filterable and downloaded as JSONL at /workspace/audit), and per-workspace retention windows are all implemented, gated on the enterprise_controls entitlement and configured by your own workspace owner. What is NOT built: dedicated capacity, org-wide BYOK enforcement, and data-region pinning, and we would rather say that here than let ${ENTERPRISE_PLAN} imply the whole category. Contact sales to discuss requirements and timing.`,
   },
   {
     title: 'Where do you host data?',

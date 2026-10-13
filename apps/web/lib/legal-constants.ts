@@ -60,9 +60,13 @@ export function grievanceOfficerLabel(
 export const GRIEVANCE_OFFICER_NAME = grievanceOfficerLabel();
 export const GRIEVANCE_RESPONSE_TARGET_DAYS = 30;
 
-export function contactMailto(subject?: string): string {
-  return subject
-    ? `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}`
+export function contactMailto(subject?: string, body?: string): string {
+  const fields = [
+    subject ? `subject=${encodeURIComponent(subject)}` : '',
+    body ? `body=${encodeURIComponent(body)}` : '',
+  ].filter(Boolean);
+  return fields.length > 0
+    ? `mailto:${CONTACT_EMAIL}?${fields.join('&')}`
     : `mailto:${CONTACT_EMAIL}`;
 }
 

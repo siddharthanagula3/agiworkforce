@@ -50,6 +50,8 @@ const stripeMocks = vi.hoisted(() => ({
   openBillingPortal: vi.fn(async () => {}),
 }));
 
+const waitlistMocks = vi.hoisted(() => ({ required: vi.fn(async () => true) }));
+
 const routerMocks = vi.hoisted(() => ({
   push: vi.fn(),
 }));
@@ -67,6 +69,7 @@ const billingMocks = vi.hoisted(() => {
 });
 
 type ReactI18nextModule = typeof import('react-i18next');
+type UpgradeWaitlistModule = typeof import('@features/billing/services/upgrade-waitlist');
 
 vi.mock('next/navigation', () => ({ useRouter: () => routerMocks }));
 vi.mock('react-i18next', async (importOriginal) => {
@@ -93,7 +96,8 @@ vi.mock('react-i18next', async (importOriginal) => {
           key === 'compareLocalByokNote' ||
           key === 'compareLimitedPreview' ||
           key === 'compareContextTokens' ||
-          key === 'freeLocalByok'
+          key === 'freeLocalByok' ||
+          key === 'unlimitedProjectsWithStorage'
         ) {
           if (!instance.exists(key))
             throw new Error(`Missing pricing availability translation: ${key}`);
@@ -169,6 +173,10 @@ vi.mock('@features/billing/components/DowngradeReviewDialog', () => ({
   DowngradeReviewDialog: ({ open, initialPlan }: { open: boolean; initialPlan: string | null }) =>
     open ? <div>{`Downgrade review for ${initialPlan}`}</div> : null,
 }));
+vi.mock('@features/billing/services/upgrade-waitlist', async (importOriginal) => ({
+  ...(await importOriginal<UpgradeWaitlistModule>()),
+  isUpgradeWaitlistRequired: () => waitlistMocks.required(),
+}));
 vi.mock('@features/billing/components/UpgradeWaitlistDialog', () => ({
   UpgradeWaitlistDialog: ({
     request,
@@ -189,6 +197,7 @@ vi.mock('@features/billing/components/UpgradeWaitlistDialog', () => ({
     ) : null,
 }));
 
+import { toast } from 'sonner';
 import PricingPage from './page';
 
 /**
@@ -315,6 +324,22 @@ function stackedRows(): Array<Omit<ComparisonRowView, 'cells'> & { value: string
   );
 }
 
+function maxCardStorageLine(): string | undefined {
+  const card = screen.getByRole('group', { name: 'maxVariantLabel' }).closest('article');
+  if (!card) throw new Error('the Max capacity selector is not inside a plan card');
+  return [...card.querySelectorAll('.agi-tier-features li')]
+    .map((line) => line.textContent ?? '')
+    .find((line) => /storage/i.test(line));
+}
+
+function storageLineFor(plan: 'max' | 'max_15x'): string {
+  const funded = comparisonRow('compareRowKnowledgeStorage').cells[
+    BILLING_PLAN_PRICING[plan].label
+  ];
+  expect(funded, `${plan} knowledge storage in the comparison table`).toMatch(/^\d+ GB$/);
+  return `Unlimited projects and ${funded} of storage`;
+}
+
 const TEAM_BOTH_CADENCES = {
   monthly: { amountMinor: 2_500, currency: 'usd', localized: false, checkoutReady: true },
   yearly: { amountMinor: 24_000, currency: 'usd', localized: false, checkoutReady: true },
@@ -373,6 +398,7 @@ describe('PricingPage', () => {
     testState.account.isLoading = false;
     testState.account.error = null;
     vi.spyOn(global, 'fetch').mockImplementation(() => new Promise<Response>(() => undefined));
+    waitlistMocks.required.mockResolvedValue(true);
   });
 
   it('does not flash purchase controls before account identity is known', () => {
@@ -507,6 +533,64 @@ describe('PricingPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue with code' }));
 
     await waitFor(() => expect(stripeMocks.upgradeToTeamPlan).toHaveBeenCalledWith({ seats: 14 }));
+  });
+
+  it('offers the waitlist and starts no checkout while paid upgrades are gated', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    mockPricingFetch(TEAM_BOTH_CADENCES);
+
+    render(<PricingPage />);
+
+    await showTeamAndEnterprise();
+    const teamCta = screen.getByRole('button', { name: 'teamCta' });
+    await waitFor(() => expect(teamCta).toBeEnabled());
+    fireEvent.click(teamCta);
+
+    expect(await screen.findByText('Waitlist for team')).toBeVisible();
+    expect(waitlistMocks.required).toHaveBeenCalledTimes(1);
+    expect(stripeMocks.upgradeToTeamPlan).not.toHaveBeenCalled();
+  });
+
+  it('goes straight to checkout with no waitlist or access code once upgrades are open', async () => {
+    waitlistMocks.required.mockResolvedValue(false);
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    mockPricingFetch(TEAM_BOTH_CADENCES);
+
+    render(<PricingPage />);
+
+    await showTeamAndEnterprise();
+    const seatInput = await screen.findByRole('spinbutton', { name: 'seatCountLabel' });
+    fireEvent.change(seatInput, { target: { value: '6' } });
+    const teamCta = screen.getByRole('button', { name: 'teamCta' });
+    await waitFor(() => expect(teamCta).toBeEnabled());
+    fireEvent.click(teamCta);
+
+    await waitFor(() =>
+      expect(stripeMocks.upgradeToTeamPlan).toHaveBeenCalledWith({
+        seats: 6,
+        billingPeriod: 'yearly',
+      }),
+    );
+    expect(screen.queryByText('Waitlist for team')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Continue with code' })).toBeNull();
+  });
+
+  it('reports a checkout that fails to start instead of falling back to the waitlist', async () => {
+    waitlistMocks.required.mockResolvedValue(false);
+    stripeMocks.upgradeToTeamPlan.mockRejectedValueOnce(new Error('Checkout is unavailable.'));
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    mockPricingFetch(TEAM_BOTH_CADENCES);
+
+    render(<PricingPage />);
+
+    await showTeamAndEnterprise();
+    const teamCta = screen.getByRole('button', { name: 'teamCta' });
+    await waitFor(() => expect(teamCta).toBeEnabled());
+    fireEvent.click(teamCta);
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Waitlist for team')).toBeNull();
+    await waitFor(() => expect(teamCta).toBeEnabled());
   });
 
   it('preserves the chosen Team seats through signed-out authentication', async () => {
@@ -861,10 +945,12 @@ describe('PricingPage', () => {
       /\b(basicFeature5|proFeature2|maxFeature4|maxFeature5|max15xFeature4|max15xFeature5|teamFeature3)\b/;
     expect(document.body.textContent).not.toMatch(lockedKeys);
     expect(screen.getAllByText('chatsAtOnce').length).toBeGreaterThanOrEqual(3);
-    expect(screen.getByText('unlimitedProjectsAndStorage')).toBeInTheDocument();
+    expect(maxCardStorageLine()).toBe(storageLineFor('max'));
     await showMax20x();
     expect(document.body.textContent).not.toMatch(lockedKeys);
-    expect(screen.getByText('unlimitedProjectsAndStorage')).toBeInTheDocument();
+    expect(maxCardStorageLine()).toBe(storageLineFor('max_15x'));
+    expect(storageLineFor('max_15x')).not.toBe(storageLineFor('max'));
+    expect(document.body.textContent).not.toMatch(/unlimited projects and storage/i);
     await showTeamAndEnterprise();
     expect(document.body.textContent).not.toMatch(lockedKeys);
   });

@@ -27,6 +27,9 @@ import {
   BASE_PATH,
   COMMUNITY_VIEW,
   COMMUNITY_VIEW_NOTICE,
+  CONNECT_LABEL,
+  CONNECTORS_RELEASE_NOTE,
+  CONNECTORS_RELEASED,
   DEFAULT_VIEW_LINK_LABEL,
   SHORT_LIST_COMMUNITY_LINK_LABEL,
   SHORT_LIST_NOTICE,
@@ -40,10 +43,18 @@ export const dynamic = 'force-dynamic';
 
 export const metadata = buildMetadata({
   title: 'MCP connector directory',
-  description:
-    'Browse indexed remote MCP servers, inspect their publisher and listed tools, then sign in to connect one.',
+  description: CONNECTORS_RELEASED
+    ? 'Browse indexed remote MCP servers, inspect their publisher and listed tools, then sign in to connect one.'
+    : `Browse indexed remote MCP servers and inspect their publisher and listed tools. ${CONNECTORS_RELEASE_NOTE}`,
   path: '/connectors/mcp-directory',
 });
+
+const HERO_LEDE = CONNECTORS_RELEASED
+  ? 'Search the remote MCP servers indexed here. Open a listing to inspect its publisher and tools before you connect.'
+  : `Search the remote MCP servers indexed here. Open a listing to inspect its publisher and tools. ${CONNECTORS_RELEASE_NOTE}`;
+const CUSTOM_CONNECTOR_NOTE = CONNECTORS_RELEASED
+  ? 'Signed in, the custom connector dialog also accepts any remote HTTP or SSE MCP endpoint and your own token, and every tool a connector offers stays behind your per-tool permission.'
+  : `${CONNECTORS_RELEASE_NOTE} When they open, the custom connector dialog accepts any remote HTTP or SSE MCP endpoint and your own token, and every tool a connector offers stays behind your per-tool permission.`;
 
 const PAGE_SIZE = 60;
 const SEARCH_PARAM = 'q';
@@ -116,9 +127,9 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
           id="agi-mcp-directory-title"
           eyebrow="Connectors · MCP directory"
           title="Find a connector for your work."
-          lede="Search the remote MCP servers indexed here. Open a listing to inspect its publisher and tools before you connect."
+          lede={HERO_LEDE}
           ctas={[
-            { href: SIGN_IN_HREF, label: 'Sign in to connect' },
+            { href: SIGN_IN_HREF, label: CONNECT_LABEL },
             {
               href: 'https://modelcontextprotocol.io/registry/about',
               label: 'About the MCP registry',
@@ -161,23 +172,28 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
                   className="agi-ds-input"
                 />
               </div>
-              <div className="agi-ds-field w-full sm:hidden">
-                <label htmlFor={CATEGORY_SELECT_ID} className="text-sm font-medium text-foreground">
-                  Category
-                </label>
-                <select
-                  id={CATEGORY_SELECT_ID}
-                  name={CATEGORY_PARAM}
-                  defaultValue={category}
-                  className="agi-ds-input"
-                >
-                  <option value="">{ALL_CATEGORIES_LABEL}</option>
-                  {DIRECTORY_CATEGORIES.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
+              <div className="w-full sm:hidden">
+                <div className="agi-ds-field">
+                  <label
+                    htmlFor={CATEGORY_SELECT_ID}
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Category
+                  </label>
+                  <select
+                    id={CATEGORY_SELECT_ID}
+                    name={CATEGORY_PARAM}
+                    defaultValue={category}
+                    className="agi-ds-input"
+                  >
+                    <option value="">{ALL_CATEGORIES_LABEL}</option>
+                    {DIRECTORY_CATEGORIES.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <button type="submit" className="agi-ds-btn" data-variant="secondary">
                 Search
@@ -269,12 +285,10 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
                 Bring <em className="agi-ds-accent">your own tools.</em>
               </h2>
               <Prose size="lg">
-                {BADGE_NOTE} Signed in, the custom connector dialog also accepts any remote HTTP or
-                SSE MCP endpoint and your own token, and every tool a connector offers stays behind
-                your per-tool permission.
+                {BADGE_NOTE} {CUSTOM_CONNECTOR_NOTE}
               </Prose>
               <ButtonRow>
-                <Button href={SIGN_IN_HREF}>Sign in to connect</Button>
+                <Button href={SIGN_IN_HREF}>{CONNECT_LABEL}</Button>
                 <Button href={helpHref('connectors')} variant="secondary">
                   {helpEntryPoint('connectors').label}
                 </Button>

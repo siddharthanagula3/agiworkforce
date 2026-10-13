@@ -5,7 +5,7 @@ path: /docs
 category: getting-started
 tags: glossary, terminology, definitions, what does mean, jargon, terms, vocabulary, acronym
 platforms: web, desktop, cli, mobile, vscode, chrome, macos, windows, linux, ios, android
-updated: 2026-10-07
+updated: 2026-10-12
 scope: public
 ---
 
@@ -74,8 +74,10 @@ facts; search past chats instead reads your history at answer time.
 **Connector** lets AGI call an external system on your behalf. Every connector
 is scoped to your own account.
 
+{{AVAILABILITY.connectors}}
+
 **MCP**, the Model Context Protocol, is the open protocol a connector can use to
-expose tools. Custom MCP endpoints can be added with their own URL.
+expose tools. A custom MCP endpoint is a connector too, added with its own URL.
 
 **Tool approval** is the verdict that decides whether a tool may run without
 asking. On the website, an account that has never chosen one defaults to **Skip
@@ -87,9 +89,11 @@ session plans, works, and produces files.
 
 ## Platform and surface names
 
-**Surface** is one of the six places AGI runs: Web, Desktop, CLI, Mobile, VS
-Code, and Chrome. A feature can be available on one surface and not another, so
-articles name the surface rather than assuming it.
+**Surface** is one of the places AGI is built to run: {{SURFACES.names}}. A
+feature can be available on one surface and not another, so articles name the
+surface rather than assuming it.
+
+{{AVAILABILITY.summary}}
 
 **Web** is agiworkforce.com in a browser.
 

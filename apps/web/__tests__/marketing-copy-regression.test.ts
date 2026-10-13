@@ -143,6 +143,15 @@ describe('public marketing copy regressions', () => {
     );
   });
 
+  it('captions the waitlist status ledger with the surfaces it lists, not with every surface', () => {
+    const waitlist = readWebFile('app/waitlist/page.tsx').replace(/\s+/g, ' ');
+
+    expect(waitlist).toContain(
+      'const HERO_STATUS_CAPTION = `Where ${joinSurfaceNames( HERO_STATUS_SURFACES.map((surface) => surface.label), )} stand today`;',
+    );
+    expect(waitlist).not.toMatch(/Where each surface stands/);
+  });
+
   it('does not imply public Web or Mobile BYOK chat', () => {
     const byok = readWebFile('app/byok/page.tsx');
     const pricingEn = readWebFile('../../packages/ui/i18n/locales/en/pricing.json');
@@ -227,8 +236,11 @@ describe('public marketing copy regressions', () => {
       'app/agi-code/page.tsx',
       'app/features/artifacts/page.tsx',
       'app/features/deep-research/page.tsx',
+      'app/features/images/page.tsx',
       'app/features/memory/page.tsx',
       'app/features/projects/page.tsx',
+      'app/features/video/page.tsx',
+      'app/features/voice/page.tsx',
     ];
     const forbidden = [
       'The page should',
@@ -292,7 +304,8 @@ describe('public marketing copy regressions', () => {
     expect(waitlist).not.toContain('rolling out by invite');
     expect(waitlist).not.toContain('private beta');
     expect(waitlist).toContain('open by default');
-    expect(waitlist).toContain('Team');
+    expect(waitlist).toContain('const TEAM_PLAN = BILLING_PLAN_PRICING.team.label;');
+    expect(waitlist).toContain('self-serve {TEAM_PLAN}');
   });
 
   it('chat upgrade dialog tells the pricing page story, not a waitlist-gated cloud (WEB-12 / PA-1)', () => {

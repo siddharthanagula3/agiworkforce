@@ -45,6 +45,7 @@ const owners = [
 const sourceFiles = [
   'apps/web/app/providers/page.tsx',
   'apps/web/app/byok/byok-providers.ts',
+  'apps/web/lib/byok-providers.ts',
   'apps/web/lib/catalog-scopes.ts',
   'apps/web/lib/marketing-constants.ts',
   'apps/web/features/marketing/components/system/ProviderGrid.tsx',

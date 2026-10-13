@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { OG_IMAGE } from '@/lib/seo/site';
 
 const TITLE = 'Use cases: startups, consultants, sales, and IT providers';
 const DESCRIPTION =
@@ -23,7 +24,7 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com/use-cases',
     images: [
       {
-        url: '/api/og',
+        url: OG_IMAGE.url,
         width: 1200,
         height: 630,
         alt: 'AGI use cases',
@@ -34,7 +35,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: TITLE,
     description: DESCRIPTION,
-    images: ['/api/og'],
+    images: [OG_IMAGE.url],
     creator: '@agiworkforce',
   },
   alternates: {

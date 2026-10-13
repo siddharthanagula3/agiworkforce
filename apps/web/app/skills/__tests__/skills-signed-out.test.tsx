@@ -108,6 +108,33 @@ describe('/skills is decided on the server', () => {
     expect(body.querySelector(`a[href="${SIGN_IN_HREF}"]`)).not.toBeNull();
   });
 
+  it('says so when the catalogue holds no built-in skills, instead of a heading over an empty list', async () => {
+    mocks.identity.mockResolvedValue(SIGNED_OUT);
+    mocks.getManagedSkillCatalog.mockResolvedValue([]);
+
+    const body = await firstResponse();
+
+    expect(body.querySelector('[role="status"]')?.textContent).toBe(
+      'No built-in skills are published right now.',
+    );
+    expect(body.querySelector('ul[aria-label="Built-in skills"]')).toBeNull();
+    expect(body.textContent).not.toContain('the built-in skills below');
+    expect(body.querySelector('h1')?.textContent).toBe('Skills live in your workspace');
+    expect(body.querySelector(`a[href="${SIGN_IN_HREF}"]`)).not.toBeNull();
+  });
+
+  it('points at the list only when the catalogue could be read', async () => {
+    mocks.identity.mockResolvedValue(SIGNED_OUT);
+
+    const listed = await firstResponse();
+    expect(listed.textContent).toContain('the built-in skills below');
+    expect(listed.querySelector('ul[aria-label="Built-in skills"]')).not.toBeNull();
+
+    mocks.getManagedSkillCatalog.mockRejectedValue(new Error('catalogue offline'));
+    const unreachable = await firstResponse();
+    expect(unreachable.textContent).not.toContain('the built-in skills below');
+  });
+
   it('opens the skills section of the settings modal for a signed-in account, and none of the signed-out page', async () => {
     mocks.identity.mockResolvedValue(SIGNED_IN);
 

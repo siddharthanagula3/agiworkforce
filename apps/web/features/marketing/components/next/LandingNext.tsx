@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
+import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import '../legacy-landing.css';
@@ -28,6 +29,7 @@ import { isReleased, surfaceAvailabilitySummary, surfaceCta } from '@/lib/surfac
 import { SurfaceShowcase, type ShowcaseSurface } from './SurfaceShowcase';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
+const CONNECTORS_NOTE = connectorsReleased() ? '' : ` ${CONNECTORS_COMING_SOON_MESSAGE}`;
 const LATEST_ENTRY_COUNT = 3;
 const BRAND_MARK_SIZE = 82;
 
@@ -78,11 +80,11 @@ const SURFACES: readonly ShowcaseSurface[] = [
     id: 'desktop',
     tab: 'Desktop',
     name: 'AGI Desktop',
-    body: 'The AGI app for macOS. Your managed-cloud account in a window that stays open, plus approved folders and computer use one step at a time.',
+    body: 'The AGI app for macOS. Your managed-cloud account in a window that stays open, plus approved folders and computer use that asks each session and before each app.',
     capabilities: [
       'Managed-cloud chat with visible model labels',
       'Approved folders and programs',
-      'Computer use on macOS, step by step',
+      'Computer use on macOS, asked per session and per app',
       'Quick Ask, screenshot and dictation shortcuts',
     ],
     platforms: 'macOS, Apple silicon and Intel',
@@ -214,7 +216,7 @@ const CAPABILITIES = [
   },
   {
     title: 'Tools and connectors',
-    body: 'MCP servers and OAuth apps, behind explicit permissions. Connectors are coming soon.',
+    body: `MCP servers and OAuth apps, behind explicit permissions.${CONNECTORS_NOTE}`,
     href: '/connectors/mcp-directory',
   },
   { title: 'Memory', body: 'Saved facts you can read, edit and delete.', href: '/features/memory' },
@@ -466,8 +468,8 @@ export function LandingNext() {
               ))}
             </ol>
             <p className="lnx-latest-more">
-              <Link href="/changelog" className="lnx-link">
-                Full changelog
+              <Link href="/release-notes" className="lnx-link">
+                All release notes
               </Link>
             </p>
           </div>

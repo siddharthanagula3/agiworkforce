@@ -1,4 +1,5 @@
 import type { FreeQuotaMediaOffer } from '@agiworkforce/cloud-contracts';
+import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import './legacy-landing.css';
 import './motion/motion.css';
@@ -26,7 +27,7 @@ import {
 } from '@/features/marketing/components/FlagshipSections';
 import { landingAnnouncement } from '@/features/marketing/components/landing-announcement';
 import { RELEASES } from '@/lib/changelog-entries';
-import { BYOK_PROVIDER_IDS } from '@/app/byok/byok-providers';
+import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
 import {
   approximateCount,
@@ -39,6 +40,7 @@ import {
 } from '@/lib/marketing-constants';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
+const CONNECTORS_NOTE = connectorsReleased() ? '' : ` ${CONNECTORS_COMING_SOON_MESSAGE}`;
 const LATEST_ENTRY_COUNT = 3;
 const LATEST_ENTRIES = RELEASES.slice(0, LATEST_ENTRY_COUNT).map((release) => ({
   date: release.date,
@@ -65,7 +67,7 @@ export function MarketingLanding({
           visual={<MobileHeroVisual />}
           announcement={landingAnnouncement(freeMediaOffer, {
             tag: 'New',
-            label: `${approximateCount(MARKETING.models.count)} models across ${approximateCount(BYOK_PROVIDER_IDS.length)} providers`,
+            label: `${approximateCount(CATALOG_SCOPES.byokModelEntries.value)} models across ${CATALOG_SCOPES.byokProviders.text}`,
             href: '/providers',
           })}
         />
@@ -77,8 +79,8 @@ export function MarketingLanding({
           facts={[
             { value: approximateCount(MARKETING.models.count), label: 'models in the catalogue' },
             {
-              value: approximateCount(BYOK_PROVIDER_IDS.length),
-              label: 'providers that take your key',
+              value: `${CATALOG_SCOPES.byokProviders.value}`,
+              label: `${CATALOG_SCOPES.byokProviders.label} in the catalogue`,
             },
             {
               value: approximateCount(CLI_LOCAL_RUNTIMES.names.length),
@@ -106,15 +108,15 @@ export function MarketingLanding({
               index: '01',
               name: 'AGI Desktop',
               tagline: 'Your managed account on your Mac.',
-              body: 'The AGI app for macOS. Your managed-cloud account in a window that stays open, plus approved folders and computer use one step at a time. The current Desktop accepts no provider keys or local models.',
+              body: 'The AGI app for macOS. Your managed-cloud account in a window that stays open, plus approved folders and computer use that asks each session and before each app. The current Desktop accepts no provider keys or local models.',
               capabilities: [
                 'Managed-cloud chat with visible model labels',
                 'Approved folders and programs',
-                'Computer use on macOS, step by step',
+                'Computer use on macOS, asked per session and per app',
                 'Pairs with the Chrome extension',
                 'Quick Ask, screenshot and dictation shortcuts',
               ],
-              platforms: 'macOS, Apple silicon and Intel · not yet published',
+              platforms: 'macOS, Apple silicon and Intel',
               status: SURFACE_STATUS.desktop,
               href: '/desktop',
               frame: { variant: 'desktop', title: 'AGI Workforce', badge: 'Cloud' },
@@ -279,7 +281,7 @@ export function MarketingLanding({
             {
               meta: 'Tools',
               title: 'Tools & Connectors',
-              body: 'MCP servers and OAuth apps, behind explicit permissions. Connectors are coming soon.',
+              body: `MCP servers and OAuth apps, behind explicit permissions.${CONNECTORS_NOTE}`,
               href: '/apps',
             },
             {
@@ -347,7 +349,7 @@ export function MarketingLanding({
           eyebrow="Latest"
           title="What shipped."
           entries={LATEST_ENTRIES}
-          more={{ href: '/changelog', label: 'Full changelog' }}
+          more={{ href: '/release-notes', label: 'All release notes' }}
         />
 
         <StartCards

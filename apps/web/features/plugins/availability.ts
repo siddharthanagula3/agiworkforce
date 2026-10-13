@@ -1,13 +1,20 @@
 import {
+  CONNECTOR_RELEASE_STATE,
+  CONNECTORS_COMING_SOON_MESSAGE,
+  connectorsReleased,
   isPluginEntryInstallable,
   isPluginEntryWebInstallable,
+  type ConnectorReleaseState,
   type PluginRegistryEntry,
 } from '@agiworkforce/types';
 import { PLUGIN_STATE_DESKTOP_AND_CLI } from '@/features/directory/constants';
 import {
+  SURFACE_NAMES,
   SURFACE_STATUS,
   cliAvailabilityNote,
   isReleased,
+  joinSurfaceNames,
+  type SurfaceId,
   type SurfaceStatusMap,
 } from '@/lib/surface-status';
 import type { PluginCatalogResult } from './server/registry-source';
@@ -75,6 +82,43 @@ export function pluginAvailabilityClaim(
   return sentences.join(' ');
 }
 
+const DIRECTORY_PACK_SURFACES = ['desktop', 'cli'] as const satisfies readonly SurfaceId[];
+
+function pendingDirectoryPackSurfaces(statuses: SurfaceStatusMap): SurfaceId[] {
+  return DIRECTORY_PACK_SURFACES.filter((surface) => !isReleased(surface, statuses));
+}
+
+function directoryPackLabel(statuses: SurfaceStatusMap): string {
+  const pending = pendingDirectoryPackSurfaces(statuses);
+  const first = pending[0];
+  if (first === undefined) return PLUGIN_STATE_DESKTOP_AND_CLI;
+  const status = statuses[first].toLowerCase();
+  if (pending.length === DIRECTORY_PACK_SURFACES.length) {
+    return `${PLUGIN_STATE_DESKTOP_AND_CLI}, ${status}`;
+  }
+  const names = joinSurfaceNames(pending.map((surface) => SURFACE_NAMES[surface]));
+  return `${PLUGIN_STATE_DESKTOP_AND_CLI}, ${names} ${status}`;
+}
+
+export function pluginClientAvailabilityNote(statuses: SurfaceStatusMap = SURFACE_STATUS): string {
+  const pending = pendingDirectoryPackSurfaces(statuses);
+  const first = pending[0];
+  if (first === undefined) return '';
+  const names = joinSurfaceNames(pending.map((surface) => SURFACE_NAMES[surface]));
+  return `${names} ${pending.length > 1 ? 'are' : 'is'} ${statuses[first].toLowerCase()}.`;
+}
+
+export function pluginStatusMeaningNote(statuses: SurfaceStatusMap = SURFACE_STATUS): string {
+  return [
+    'Website packs install only from reviewed embedded manifests.',
+    'CLI and Desktop packs still require a separately published, integrity-pinned artifact.',
+    pluginClientAvailabilityNote(statuses),
+    'Until one of those paths exists, the entry remains declared and no control pretends to install it.',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
 export function pluginStatusLabel(
   entry: PluginRegistryEntry,
   {
@@ -89,11 +133,35 @@ export function pluginStatusLabel(
   if (entry.status === 'deprecated') return 'Deprecated: do not install';
   if (entry.status === 'suspended') return 'Suspended: installs stopped';
   if (entry.status === 'draft' || entry.status === 'in_review') return 'Not offered yet';
-  if (cliCommand !== null) return PLUGIN_STATE_DESKTOP_AND_CLI;
+  if (cliCommand !== null) return directoryPackLabel(statuses);
   return 'Declared: not installable yet';
 }
 
 export function pluginCliInstallNote(statuses: SurfaceStatusMap = SURFACE_STATUS): string {
   if (isReleased('cli', statuses)) return 'Install it with the AGI CLI, using the command below.';
   return `The command below is for the AGI CLI. ${cliAvailabilityNote(statuses)}`;
+}
+
+const CONNECTORS_DECLARED_SENTENCE = 'A plugin declares which connectors it needs.';
+
+export function pluginModelHeading(state: ConnectorReleaseState = CONNECTOR_RELEASE_STATE): string {
+  return connectorsReleased(state)
+    ? 'Skills plus connectors, wired once.'
+    : 'Skills, plus the connectors a pack declares.';
+}
+
+export function pluginConnectorWiringNote(
+  state: ConnectorReleaseState = CONNECTOR_RELEASE_STATE,
+): string {
+  return connectorsReleased(state)
+    ? `${CONNECTORS_DECLARED_SENTENCE} Connect once, and every skill in the pack can use it, inside the permission boundary you chose.`
+    : `${CONNECTORS_DECLARED_SENTENCE} ${CONNECTORS_COMING_SOON_MESSAGE}`;
+}
+
+export function pluginRequiredConnectorsHeading(
+  state: ConnectorReleaseState = CONNECTOR_RELEASE_STATE,
+): string {
+  return connectorsReleased(state)
+    ? 'Connect once, use everywhere in the pack.'
+    : 'The connectors this pack declares.';
 }

@@ -14,6 +14,13 @@ vi.mock('@/features/marketing/components/MarketingFooter', () => ({
 }));
 vi.mock('@/lib/identity/client', () => ({ useCurrentUser: useCurrentUserMock }));
 
+import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
+import {
+  pluginConnectorWiringNote,
+  pluginModelHeading,
+  pluginStatusLabel,
+} from '@/features/plugins/availability';
+import { cliAvailabilityNote, isReleased } from '@/lib/surface-status';
 import PluginsPage from './page';
 
 const DECLARED_ONLY_CLAIM = /no pack is installable in this environment yet/i;
@@ -140,11 +147,70 @@ describe('PluginsPage closing call to action', () => {
     );
   });
 
-  it('says hosted installation is live rather than promising it later', async () => {
+  it('explains how a web pack installs without a typed claim the computed status can contradict', async () => {
     loadPluginCatalogMock.mockResolvedValue({ status: 'ok', entries: [] });
 
     render(await PluginsPage());
 
-    expect(screen.getByText(/hosted installation is live/i)).toBeInTheDocument();
+    expect(screen.getByText(/holds no packs yet/i)).toBeInTheDocument();
+    expect(screen.queryByText(/hosted installation is live/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /A pack marked Available on Web installs into your account from the plugins section of Settings/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('takes the CLI release state beside the install command from the surface registry', async () => {
+    loadPluginCatalogMock.mockResolvedValue({ status: 'ok', entries: [] });
+
+    render(await PluginsPage());
+
+    const explainer = screen.getByText(/prints its AGI CLI install command on its own page/);
+    expect(explainer).not.toHaveTextContent(/desktop and CLI install command/i);
+    expect(explainer).toHaveTextContent(
+      /prints none, because there is nothing published to install yet/,
+    );
+    if (isReleased('cli')) expect(explainer).not.toHaveTextContent(/coming soon/i);
+    else expect(explainer).toHaveTextContent(cliAvailabilityNote());
+  });
+});
+
+describe('PluginsPage status labels', () => {
+  it('never labels a CLI-only pack with the bare word Installable', async () => {
+    const cliPack = entry({
+      status: 'published',
+      distribution: { manifestUrl: 'https://example.com/plugin.json', sha256: null },
+    });
+    loadPluginCatalogMock.mockResolvedValue({ status: 'ok', entries: [cliPack] });
+
+    render(await PluginsPage());
+
+    expect(screen.queryByText('Installable')).not.toBeInTheDocument();
+    expect(screen.queryByText(/· Installable$/)).not.toBeInTheDocument();
+    expect(screen.getByText(pluginStatusLabel(cliPack))).toBeInTheDocument();
+    expect(
+      screen.getByText(`Developer · Built-in · ${pluginStatusLabel(cliPack)}`),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('PluginsPage connector wording', () => {
+  it('describes connector wiring through the connector release registry', async () => {
+    loadPluginCatalogMock.mockResolvedValue({ status: 'ok', entries: [] });
+
+    render(await PluginsPage());
+
+    expect(screen.getByRole('heading', { name: pluginModelHeading() })).toBeInTheDocument();
+    expect(screen.getByText(pluginConnectorWiringNote())).toBeInTheDocument();
+    if (connectorsReleased()) {
+      expect(
+        screen.getByText(/Connect once, and every skill in the pack can use it/),
+      ).toBeVisible();
+    } else {
+      expect(screen.queryByText(/Connect once/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/wired once/)).not.toBeInTheDocument();
+      expect(pluginConnectorWiringNote()).toContain(CONNECTORS_COMING_SOON_MESSAGE);
+    }
   });
 });

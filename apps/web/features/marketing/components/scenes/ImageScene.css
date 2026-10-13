@@ -1,0 +1,150 @@
+[data-design='agi'] .agi-app-window {
+  --u: calc(100cqw / var(--app-w));
+  --agi-image-text-xs: calc(var(--u) * 12);
+}
+
+[data-design='agi'] .agi-image-icon {
+  flex: none;
+  inline-size: calc(var(--u) * 14);
+  block-size: calc(var(--u) * 14);
+  stroke-width: 1.75;
+}
+
+[data-design='agi'] .agi-image-art {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  background: white;
+  color: black;
+}
+
+[data-design='agi'] .agi-image-card {
+  inline-size: 100%;
+  max-inline-size: calc(var(--u) * 420);
+  font-size: var(--agi-image-text-xs);
+  line-height: 1.3;
+}
+
+[data-design='agi'] .agi-image-frame {
+  position: relative;
+  border: 1px solid var(--chat-border);
+  border-radius: calc(var(--u) * 16);
+  overflow: hidden;
+}
+
+[data-design='agi'] .agi-image-overlay {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(var(--u) * 36) calc(var(--u) * 12) calc(var(--u) * 12);
+  background: linear-gradient(to top, color-mix(in srgb, black 70%, transparent), transparent);
+  color: white;
+}
+
+[data-design='agi'] .agi-image-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 6);
+  padding: calc(var(--u) * 6) calc(var(--u) * 12);
+  border-radius: var(--corner-pill);
+  background: color-mix(in srgb, white 15%, transparent);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-image-chip[data-round] {
+  inline-size: calc(var(--u) * 32);
+  block-size: calc(var(--u) * 32);
+  padding: 0;
+}
+
+[data-design='agi'] .agi-image-actions {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 4);
+  margin-block-start: calc(var(--u) * 6);
+  color: var(--chat-text-muted);
+}
+
+[data-design='agi'] .agi-image-action {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 6);
+  min-inline-size: calc(var(--u) * 28);
+  block-size: calc(var(--u) * 28);
+  padding-inline: calc(var(--u) * 8);
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-image-action[data-square] {
+  padding-inline: 0;
+}
+
+[data-design='agi'] .agi-image-action[data-idle] {
+  opacity: 0.4;
+}
+
+[data-design='agi'] .agi-image-versions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+[data-design='agi'] .agi-image-count {
+  padding-inline: calc(var(--u) * 4);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-image-caption {
+  min-inline-size: 0;
+  padding-inline-end: calc(var(--u) * 4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-design='agi'] .agi-image-composer .agi-app-composer-row {
+  gap: calc(var(--u) * 8);
+}
+
+[data-design='agi'] .agi-image-pills {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--u) * 4);
+}
+
+[data-design='agi'] .agi-image-pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--u) * 4);
+  block-size: calc(var(--u) * 32);
+  padding-inline: calc(var(--u) * 10);
+  border: 1px solid var(--chat-border-strong);
+  border-radius: var(--corner-pill);
+  background: var(--chat-surface-hover);
+  font-size: var(--agi-image-text-xs);
+  font-weight: 500;
+  color: var(--chat-text-secondary);
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-image-pill[data-on] {
+  gap: calc(var(--u) * 6);
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-image-model {
+  max-inline-size: calc(var(--u) * 120);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

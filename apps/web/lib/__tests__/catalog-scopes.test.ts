@@ -74,15 +74,31 @@ describe('catalogue count scopes', () => {
     expect(CATALOG_SCOPES.byokProviders.value).toBe(byokIds.length);
     expect(CATALOG_SCOPES.byokProvidersWithoutModels.value).toBe(withoutModels.length);
     expect(CATALOG_SCOPES.byokProviders.definition).toContain(
-      `${withoutModels.length} of them list no models`,
+      withoutModels.length === 1
+        ? '1 of them lists no models in the catalogue, so it adds to'
+        : `${withoutModels.length} of them list no models in the catalogue, so they add to`,
     );
   });
 
   it('defines the key providers by their list, not by what one surface can call', () => {
     expect(CATALOG_SCOPES.byokProviders.definition).toMatch(
-      /^Providers on the bring-your-own-key list\./,
+      /^Providers on the bring-your-own-key list that have a catalogue record\./,
     );
     expect(CATALOG_SCOPES.byokProviders.definition).not.toMatch(/\bCLI\b/);
+  });
+
+  it('writes each count in the grammatical number its value takes', () => {
+    for (const id of CATALOG_SCOPE_ORDER) {
+      const scope = CATALOG_SCOPES[id];
+      const head = scope.label.split(' with ')[0]?.split(' ').at(-1) ?? '';
+
+      expect(head.endsWith('s'), `${id}: ${scope.text}`).toBe(scope.value !== 1);
+    }
+    expect(CATALOG_SCOPES.byokProvidersWithoutModels.label).toBe(
+      CATALOG_SCOPES.byokProvidersWithoutModels.value === 1
+        ? 'provider with no listed models'
+        : 'providers with no listed models',
+    );
   });
 
   it('counts the CLI local runtimes, which carry no catalogued models', () => {
@@ -247,21 +263,9 @@ describe('the pages that print a scope keep the scope and its definition reachab
 });
 
 const BARE_COUNT_READ =
-  /MARKETING\.(?:models|providers)\b|\bapproximateCount\b|BYOK_PROVIDER_IDS\.length/;
+  /MARKETING\.(?:models|providers)\b|\bapproximateCount\b|\b(?:BYOK_PROVIDER_IDS|CLI_KEY_PROVIDERS|SELF_HOSTED_KEY_PROVIDERS)\.length/;
 
 const PENDING_BARE_COUNT_SITES: Record<string, readonly string[]> = {
-  'L03-WP3': [
-    'app/about/page.tsx',
-    'app/business/page.tsx',
-    'app/help/page.tsx',
-    'app/press/page.tsx',
-  ],
-  'L03-WP4': [
-    'app/faq/page.tsx',
-    'app/features/ai-chat/page.tsx',
-    'app/integrations/page.tsx',
-    'features/marketing/components/pages/business/use-cases-content.ts',
-  ],
   'L03-WP5': ['features/marketing/components/MarketingLanding.tsx'],
 };
 
@@ -300,6 +304,8 @@ describe('a public page states a count through its scope, never a bare or floore
     expect(BARE_COUNT_READ.test('MARKETING.providers.count')).toBe(true);
     expect(BARE_COUNT_READ.test('approximateCount(total)')).toBe(true);
     expect(BARE_COUNT_READ.test('BYOK_PROVIDER_IDS.length')).toBe(true);
+    expect(BARE_COUNT_READ.test('CLI_KEY_PROVIDERS.length')).toBe(true);
+    expect(BARE_COUNT_READ.test('SELF_HOSTED_KEY_PROVIDERS.length')).toBe(true);
     expect(BARE_COUNT_READ.test('CATALOG_SCOPES.byokProviders.text')).toBe(false);
     expect(BARE_COUNT_READ.test('MARKETING.surfaces.count')).toBe(false);
   });

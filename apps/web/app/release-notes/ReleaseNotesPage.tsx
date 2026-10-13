@@ -11,26 +11,42 @@ import {
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { DOC_MATURITIES, type DocMaturity } from '@/lib/support/doc-metadata';
 
 import { ATOM_MEDIA_TYPE, CHANGELOG_FEED_PATH } from './changelog-feed';
 import {
   FORTHCOMING,
   RELEASE_NOTES,
-  isGenerallyAvailable,
   releaseStateLine,
+  releasedNoteCount,
 } from './release-notes-data';
 
-const GA_COUNT = RELEASE_NOTES.filter(isGenerallyAvailable).length;
+const MATURITY_FACT_LABELS: Readonly<Record<DocMaturity, string>> = {
+  ga: 'Generally available',
+  beta: 'In beta',
+  alpha: 'In alpha',
+};
+const MATURITY_FACTS = DOC_MATURITIES.flatMap((maturity) => {
+  const count = releasedNoteCount(maturity);
+  return count > 0 ? [`${MATURITY_FACT_LABELS[maturity]}: ${count}`] : [];
+});
+const HAS_FORTHCOMING = FORTHCOMING.length > 0;
 
 const HERO_FACTS = [
   `Dated releases: ${RELEASE_NOTES.length}`,
   ...RELEASE_NOTES.slice(0, 1).map((note) => `Newest: ${note.date}`),
-  `Generally available: ${GA_COUNT}`,
-  `Forthcoming: ${FORTHCOMING.length}`,
+  ...MATURITY_FACTS,
+  ...(HAS_FORTHCOMING ? [`Forthcoming: ${FORTHCOMING.length}`] : []),
 ];
 
-const LEDE =
-  'Every release states which surfaces it reached and whether it is generally available, in beta or alpha. Work on a surface with no published release is marked not yet released. Forthcoming items are listed separately with their target, which stays to be announced until a date is set.';
+const LEDE = [
+  'Every release states which surfaces it reached and whether it is generally available, in beta or alpha. Work on a surface with no published release is marked not yet released.',
+  ...(HAS_FORTHCOMING
+    ? [
+        'Forthcoming items are listed separately with their target, which stays to be announced until a date is set.',
+      ]
+    : []),
+].join(' ');
 
 const POLICY_CHANGES = policyChanges();
 
@@ -42,8 +58,8 @@ export function ReleaseNotesPage({ titleId }: { titleId: string }) {
         <PageHero
           id={titleId}
           eyebrow="Release notes"
-          title="Every shipped feature is dated."
-          em="is dated."
+          title="What shipped, and when."
+          em="and when."
           lede={
             <>
               {LEDE}{' '}
@@ -150,20 +166,22 @@ export function ReleaseNotesPage({ titleId }: { titleId: string }) {
           </Stack>
         </Section>
 
-        <Section id="forthcoming" labelledBy="agi-release-notes-forthcoming-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-release-notes-forthcoming-title">
-              Forthcoming.
-            </h2>
-            <Ledger
-              caption="Forthcoming"
-              rows={FORTHCOMING.map((row) => ({
-                label: row.item,
-                value: `${row.detail} Target: ${row.target}.`,
-              }))}
-            />
-          </Stack>
-        </Section>
+        {HAS_FORTHCOMING ? (
+          <Section id="forthcoming" labelledBy="agi-release-notes-forthcoming-title" rule>
+            <Stack gap="loose">
+              <h2 className="agi-ds-h2" id="agi-release-notes-forthcoming-title">
+                Forthcoming.
+              </h2>
+              <Ledger
+                caption="Forthcoming"
+                rows={FORTHCOMING.map((row) => ({
+                  label: row.item,
+                  value: `${row.detail} Target: ${row.target}.`,
+                }))}
+              />
+            </Stack>
+          </Section>
+        ) : null}
       </main>
       <MarketingFooter />
     </div>

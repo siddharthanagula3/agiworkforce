@@ -48,6 +48,9 @@ const routes: RouteConfig[] = [
   { path: '/features/plugins', priority: 0.8, changeFrequency: 'weekly' },
   { path: '/features/projects', priority: 0.85, changeFrequency: 'weekly' },
   { path: '/features/tools', priority: 0.8, changeFrequency: 'weekly' },
+  { path: '/features/images', priority: 0.8, changeFrequency: 'weekly' },
+  { path: '/features/video', priority: 0.8, changeFrequency: 'weekly' },
+  { path: '/features/voice', priority: 0.8, changeFrequency: 'weekly' },
 
   { path: '/apps', priority: 0.9, changeFrequency: 'weekly' },
   { path: '/skills', priority: 0.8, changeFrequency: 'weekly' },
@@ -64,15 +67,15 @@ const routes: RouteConfig[] = [
   { path: '/waitlist', priority: 0.8, changeFrequency: 'weekly' },
 
   { path: '/about', priority: 0.7, changeFrequency: 'monthly' },
-  { path: '/blog', priority: 0.7, changeFrequency: 'daily' },
-  { path: '/changelog', priority: 0.6, changeFrequency: 'weekly' },
+  { path: '/founder', priority: 0.5, changeFrequency: 'monthly' },
+  { path: '/blog', priority: 0.7, changeFrequency: 'monthly' },
   { path: '/release-notes', priority: 0.6, changeFrequency: 'weekly' },
   { path: '/careers', priority: 0.6, changeFrequency: 'weekly' },
-  { path: '/resources', priority: 0.6, changeFrequency: 'weekly' },
   { path: '/customers', priority: 0.7, changeFrequency: 'monthly' },
   { path: '/partners', priority: 0.6, changeFrequency: 'monthly' },
   { path: '/press', priority: 0.5, changeFrequency: 'monthly' },
   { path: '/community', priority: 0.6, changeFrequency: 'weekly' },
+  { path: '/beta', priority: 0.5, changeFrequency: 'monthly' },
 
   { path: '/use-cases', priority: 0.75, changeFrequency: 'weekly' },
   { path: '/use-cases/consulting', priority: 0.65, changeFrequency: 'monthly' },
@@ -83,6 +86,8 @@ const routes: RouteConfig[] = [
   { path: '/help', priority: 0.7, changeFrequency: 'weekly' },
   { path: '/support', priority: 0.6, changeFrequency: 'monthly' },
   { path: '/faq', priority: 0.7, changeFrequency: 'monthly' },
+  { path: '/recover', priority: 0.4, changeFrequency: 'yearly' },
+  { path: '/appeal', priority: 0.4, changeFrequency: 'yearly' },
   { path: '/status', priority: 0.7, changeFrequency: 'daily' },
 
   { path: '/trust', priority: 0.7, changeFrequency: 'monthly' },
@@ -100,6 +105,7 @@ const routes: RouteConfig[] = [
   { path: '/referral-terms', priority: 0.5, changeFrequency: 'yearly' },
   { path: '/cookies', priority: 0.5, changeFrequency: 'yearly' },
   { path: '/copyright', priority: 0.5, changeFrequency: 'yearly' },
+  { path: '/copyright/report', priority: 0.4, changeFrequency: 'yearly' },
   { path: '/model-licenses', priority: 0.5, changeFrequency: 'monthly' },
   { path: '/legal', priority: 0.5, changeFrequency: 'yearly' },
   { path: '/legal/eu-representative', priority: 0.4, changeFrequency: 'monthly' },
@@ -113,7 +119,6 @@ const routes: RouteConfig[] = [
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const lastModified = new Date('2026-08-13');
   const templates: RouteConfig[] = INSPIRATION.map((template) => ({
     path: inspirationPath(template.id),
     priority: 0.5,
@@ -126,7 +131,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
   }));
   return [...routes, ...templates, ...releases].map((route) => ({
     url: `${SITE_URL}${route.path}`,
-    lastModified,
     changeFrequency: route.changeFrequency,
     priority: route.priority,
   }));

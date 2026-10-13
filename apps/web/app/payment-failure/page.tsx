@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Button, ButtonRow, Eyebrow, Prose, Section } from '@/features/marketing/components/system';
+import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
 export const metadata: Metadata = {
   title: 'Payment issue',
@@ -51,8 +52,8 @@ export default function PaymentFailurePage() {
             </ButtonRow>
             <Prose size="sm">
               Still stuck? Email{' '}
-              <a className="agi-ds-link" href="mailto:contact@agiworkforce.com">
-                contact@agiworkforce.com
+              <a className="agi-ds-link" href={contactMailto()}>
+                {CONTACT_EMAIL}
               </a>
               .
             </Prose>

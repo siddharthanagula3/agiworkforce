@@ -8,7 +8,14 @@ export interface PublicSkill {
   description: string;
 }
 
+const LISTED_SKILLS_LEDE =
+  'Every account starts with the built-in skills below; signing in lets you turn them on or off, install more and write your own.';
+const UNLISTED_SKILLS_LEDE =
+  'Signing in lets you turn built-in skills on or off, install more and write your own.';
+
 export function SignedOutSkills({ skills }: { skills: readonly PublicSkill[] | null }) {
+  const listed = skills !== null && skills.length > 0;
+
   return (
     <SignedOutSurface
       eyebrow="Skills"
@@ -26,6 +33,10 @@ export function SignedOutSkills({ skills }: { skills: readonly PublicSkill[] | n
               <p className="agi-ds-prose" role="status">
                 The skill catalogue is temporarily unreachable. Reload in a moment.
               </p>
+            ) : skills.length === 0 ? (
+              <p className="agi-ds-prose" role="status">
+                No built-in skills are published right now.
+              </p>
             ) : (
               <Ledger
                 caption="Built-in skills"
@@ -37,8 +48,7 @@ export function SignedOutSkills({ skills }: { skills: readonly PublicSkill[] | n
       }
     >
       A skill is a reusable instruction set the assistant loads on demand: a house style, a review
-      checklist, a domain glossary. Every account starts with the built-in skills below; signing in
-      lets you turn them on or off, install more and write your own.
+      checklist, a domain glossary. {listed ? LISTED_SKILLS_LEDE : UNLISTED_SKILLS_LEDE}
     </SignedOutSurface>
   );
 }

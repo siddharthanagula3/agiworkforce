@@ -156,6 +156,10 @@ export const RAW_SUBSCRIPTION_READERS = Object.freeze([
     why: 'the store ledger writes the row a purchase creates',
   },
   {
+    path: 'apps/web/lib/services/mobile-iap-notification-service.ts',
+    why: 'the store webhook writes the row a store notification reports on, and reads the plan it replaces',
+  },
+  {
     path: 'apps/web/features/admin/services/',
     why: 'operator analytics aggregate every row',
   },

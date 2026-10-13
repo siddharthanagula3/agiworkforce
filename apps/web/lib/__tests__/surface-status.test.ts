@@ -11,6 +11,7 @@ import {
   CLI_AVAILABILITY_NOTE,
   COMING_SOON_LABEL,
   NOTIFY_CTA,
+  NOTIFY_FORM_ID,
   RELEASED_SURFACES,
   SURFACE_IDS,
   SURFACE_NAMES,
@@ -133,6 +134,22 @@ describe('the action offered for a surface', () => {
       const anchor = surfaceCta(surface, ONLY_WEB_RELEASED).href.split('#')[1];
       expect(anchor).toBeTruthy();
       expect(readFileSync(join(WEB_ROOT, file), 'utf8')).toContain(`id="${anchor}"`);
+    }
+  });
+
+  it('sends a notify-list visitor to the form that takes the address, not the top of the page', () => {
+    expect(NOTIFY_CTA).toEqual({ label: 'Get notified', href: `/download#${NOTIFY_FORM_ID}` });
+    expect(readFileSync(join(WEB_ROOT, 'app/download/page.tsx'), 'utf8')).toContain(
+      'id={NOTIFY_FORM_ID}',
+    );
+    const notifyList = INSTALLABLE_SURFACES.filter(
+      (surface) => surfaceCta(surface, ONLY_WEB_RELEASED).label === NOTIFY_CTA.label,
+    );
+    expect(notifyList.length).toBeGreaterThan(0);
+    for (const surface of notifyList) {
+      expect(surfaceCta(surface, ONLY_WEB_RELEASED).href.split('#')[1], surface).toBe(
+        NOTIFY_FORM_ID,
+      );
     }
   });
 

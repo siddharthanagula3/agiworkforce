@@ -44,9 +44,11 @@ export const SURFACE_PLATFORMS = {
   chrome: DESKTOP_OPERATING_SYSTEMS,
 } as const satisfies Record<SurfaceId, readonly string[]>;
 
+export const NOTIFY_FORM_ID = 'notify';
+
 export const NOTIFY_CTA = {
   label: 'Get notified',
-  href: '/download',
+  href: `/download#${NOTIFY_FORM_ID}`,
 } as const;
 
 const SURFACE_ACTIONS = {

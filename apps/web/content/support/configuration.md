@@ -5,11 +5,13 @@ path: /cli
 category: surfaces
 tags: configuration, config, config.toml, settings, default model, permission mode, agi init, agiworkforce_home, multiple accounts, update check, project config, mcp.json, hooks.json
 platforms: cli, vscode, macos, windows, linux
-updated: 2026-09-29
+updated: 2026-10-12
 scope: public
 ---
 
 ## Where the settings live
+
+The CLI is {{STATUS.cli}}, and this page applies to an installed CLI.
 
 The CLI keeps its settings in `~/.agiworkforce/config.toml` on every operating
 system. `agi init` creates the file if it is missing, together with

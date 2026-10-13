@@ -4,7 +4,7 @@ title: Search: the web, your chats and the help centre
 path: /chat
 category: search
 tags: search, web search, find a conversation, search messages, search history, search past chats, deep research, sources, citations, help search
-updated: 2026-09-28
+updated: 2026-10-12
 scope: public
 ---
 
@@ -49,4 +49,4 @@ your other conversations when answering." It is never used in temporary chats.
 The help page carries a search box over everything published here. It is plain
 keyword retrieval over the published pages, with no model call, so it keeps
 working even when the support assistant is off. If nothing matches, it says so
-rather than guessing, and points at contact@agiworkforce.com.
+rather than guessing, and points at {{CONTACT.email}}.

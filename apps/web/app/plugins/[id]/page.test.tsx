@@ -24,6 +24,13 @@ vi.mock('@/lib/identity/client', () => ({
   useCurrentUser: () => ({ isLoaded: true, isSignedIn: false, user: null }),
 }));
 
+import {
+  pluginCliInstallNote,
+  pluginRequiredConnectorsHeading,
+  pluginStatusLabel,
+} from '@/features/plugins/availability';
+import { PLUGIN_STATE_DESKTOP_AND_CLI } from '@/features/directory/constants';
+import { CLI_AVAILABILITY_NOTE, SURFACE_STATUS } from '@/lib/surface-status';
 import PluginDetailPage from './page';
 import PluginsPage from '../page';
 
@@ -129,6 +136,37 @@ describe('PluginDetailPage', () => {
     const command = screen.getByTestId('plugin-install-command');
     expect(command.textContent).toContain(`--integrity sha256:${'a'.repeat(64)}`);
     expect(command.style.overflowWrap).toBe('anywhere');
+  });
+
+  it('states a CLI-published pack through the surface registry, never as plainly installable', async () => {
+    const published = {
+      ...BASE_ENTRY,
+      webInstallable: false,
+      distribution: {
+        manifestUrl: 'https://example.com/packs/research/manifest.json',
+        sha256: 'a'.repeat(64),
+      },
+    };
+    loadPluginEntryMock.mockResolvedValue({ status: 'ok', entry: published, manifest: null });
+
+    render(await PluginDetailPage({ params: Promise.resolve({ id: published.id }) }));
+
+    expect(screen.getByText(`Published. ${pluginCliInstallNote()}`)).toBeVisible();
+    expect(screen.queryByText(/Install it with the AGI CLI \(see below\)/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Installable')).not.toBeInTheDocument();
+    expect(screen.getAllByText(pluginStatusLabel(published)).length).toBe(2);
+    if (CLI_AVAILABILITY_NOTE) {
+      expect(screen.getByText(CLI_AVAILABILITY_NOTE)).toBeVisible();
+      expect(pluginCliInstallNote()).toContain(CLI_AVAILABILITY_NOTE);
+    }
+  });
+
+  it('heads the required connectors with the wording the connector release state allows', async () => {
+    loadPluginEntryMock.mockResolvedValue({ status: 'ok', entry: BASE_ENTRY, manifest: null });
+
+    render(await PluginDetailPage({ params: Promise.resolve({ id: BASE_ENTRY.id }) }));
+
+    expect(screen.getByRole('heading', { name: pluginRequiredConnectorsHeading() })).toBeVisible();
   });
 
   it('sends a declared-only pack to a fragment the plugins page actually has', async () => {
@@ -252,6 +290,9 @@ describe('a marketplace pack the web app cannot run', () => {
       'claude plugin install superpowers',
     );
     expect(screen.queryByText('Declared: not installable yet')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Desktop and CLI').length).toBeGreaterThan(0);
+    const label = pluginStatusLabel(cliOnly, { cliCommand: cliOnly.installCommand });
+    expect(label).toContain(PLUGIN_STATE_DESKTOP_AND_CLI);
+    if (CLI_AVAILABILITY_NOTE) expect(label).toContain(SURFACE_STATUS.cli.toLowerCase());
+    expect(screen.getAllByText(label).length).toBeGreaterThan(0);
   });
 });

@@ -1,9 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FreeQuotaCatalogue, FreeQuotaModel } from '@agiworkforce/cloud-contracts';
-import { BYOK_PROVIDER_IDS } from '@/app/byok/byok-providers';
 import { FREE_MEDIA_LIMITED_LABEL } from '@/features/models/lib/free-media-offer';
-import { approximateCount, MARKETING } from '@/lib/marketing-constants';
+import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
+import { approximateCount } from '@/lib/marketing-constants';
 import type { LimitedMediaOffer } from '@/lib/server/free-pools';
 type FreePoolsModule = typeof import('@/lib/server/free-pools');
 type CatalogueCacheModule = typeof import('@/lib/server/free-quota-catalogue-cache');
@@ -40,7 +40,7 @@ const { default: Home } = await import('./page');
 
 const OFFER: LimitedMediaOffer = { dailyCapPerUser: { image: 5, video: 1 } };
 const PILL_ARROW = '→';
-const STANDING_PILL = `New${approximateCount(MARKETING.models.count)} models across ${approximateCount(BYOK_PROVIDER_IDS.length)} providers${PILL_ARROW}`;
+const STANDING_PILL = `New${approximateCount(CATALOG_SCOPES.byokModelEntries.value)} models across ${CATALOG_SCOPES.byokProviders.text}${PILL_ARROW}`;
 
 function ready(category: FreeQuotaModel['category']): FreeQuotaModel {
   return {

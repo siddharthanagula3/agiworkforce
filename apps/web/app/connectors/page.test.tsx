@@ -12,6 +12,10 @@ const mocks = vi.hoisted(() => ({
 
 const HEADING = 'Connectors bring your own tools into a thread';
 const SIGN_IN_HREF = '/login?redirectTo=%2Fconnectors';
+const SIGN_IN_LABEL_BY_RELEASE_STATE = {
+  released: 'Sign in to add a connector',
+  coming_soon: 'Sign in to see connectors',
+} as const satisfies Record<ConnectorReleaseState, string>;
 
 vi.mock('next-themes', () => ({ useTheme: () => ({ theme: 'dark', setTheme: vi.fn() }) }));
 
@@ -37,6 +41,13 @@ vi.mock('@/features/settings/components/SettingsModalRedirect', () => ({
   ),
 }));
 
+import {
+  CONNECTOR_RELEASE_STATE,
+  CONNECTORS_COMING_SOON_DETAIL,
+  connectorsReleased,
+  type ConnectorReleaseState,
+} from '@agiworkforce/types';
+
 import ConnectorsPage from './page';
 
 async function firstResponse(): Promise<HTMLElement> {
@@ -59,7 +70,7 @@ describe('/connectors is decided on the server', () => {
     expect(body.querySelector('h1')?.textContent).toBe(HEADING);
     expect(body.textContent).toContain('a scoped way to read from and act in a service');
     expect(body.querySelector(`a[href="${SIGN_IN_HREF}"]`)?.textContent).toBe(
-      'Sign in to add a connector',
+      SIGN_IN_LABEL_BY_RELEASE_STATE[CONNECTOR_RELEASE_STATE],
     );
     expect(body.querySelector('main a[href="/connectors/mcp-directory"]')?.textContent).toBe(
       'Browse the MCP directory',
@@ -106,6 +117,22 @@ describe('/connectors is decided on the server', () => {
       );
     },
   );
+
+  it('offers to add a connector only once connectors are released, and says so until then', async () => {
+    mocks.identity.mockResolvedValue({ subject: null, isSignedIn: false });
+    const source = readFileSync(join(__dirname, 'page.tsx'), 'utf8').replace(/\s+/gu, ' ');
+
+    expect(source).toContain(
+      `const SIGN_IN_LABEL = connectorsReleased() ? '${SIGN_IN_LABEL_BY_RELEASE_STATE.released}' : '${SIGN_IN_LABEL_BY_RELEASE_STATE.coming_soon}';`,
+    );
+    expect(source).toContain(
+      "const RELEASE_NOTE = connectorsReleased() ? '' : `${CONNECTORS_COMING_SOON_DETAIL} `;",
+    );
+
+    const body = await firstResponse();
+    expect(body.textContent?.includes(CONNECTORS_COMING_SOON_DETAIL)).toBe(!connectorsReleased());
+    if (!connectorsReleased()) expect(body.textContent).not.toMatch(/sign in to add/iu);
+  });
 
   it('is a server component that waits on no browser identity state', () => {
     const source = readFileSync(join(__dirname, 'page.tsx'), 'utf8');

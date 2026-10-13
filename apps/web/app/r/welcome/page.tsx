@@ -70,7 +70,7 @@ export default async function ReferralWelcomePage() {
             eyebrow="Invitation"
             title="A friend invited you to AGI Workforce."
             em="invited you"
-            lede={`Create your account in this browser within ${REFERRAL_PROGRAM.attributionDays} days to accept. Paid upgrades are opening in stages, so your ${PRO} trial is ready when your account can upgrade.`}
+            lede={`Create your account in this browser within ${REFERRAL_PROGRAM.attributionDays} days to accept. Your ${PRO} trial is ready as soon as paid upgrades are open to your account.`}
             ctas={[{ href: AUTH_SIGNUP_PATH, label: 'Create your account' }, terms]}
           />
         ) : (

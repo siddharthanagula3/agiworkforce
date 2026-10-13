@@ -28,7 +28,7 @@
         "revoke session",
         "api keys"
       ],
-      "updated": "2026-10-07",
+      "updated": "2026-10-12",
       "source": "content/support/account-security.md",
       "chunks": [
         {
@@ -43,7 +43,7 @@
           "ordinal": 1,
           "heading": "Second factors",
           "headingPath": "Passkeys, two-factor and active sessions › Second factors",
-          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in. Authenticator apps (TOTP) and backup codes are temporarily unavailable:\nSettings, Security shows **Temporarily unavailable** where you would set one up\nor replace your backup codes, and a workspace cannot start requiring\nmulti-factor authentication until they return. SMS MFA is not part of the\ncurrent account contract, so it is not offered rather than silently ignored.\nHardware security keys work with Advanced Account Security. An account with an\nauthenticator app already set up keeps it, and the parts of this page about\nauthenticator codes and backup codes apply to those accounts.\n\nNo device skips the sign-in checks. Devices you linked, such as the CLI, VS\nCode, the Chrome extension or the desktop app, are listed in Settings, Account\nunder **Linked devices**, where you can unlink each one."
+          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in. Setting up an authenticator app (TOTP) and replacing backup codes can be\nswitched off for a time: while it is, Settings, Security shows **Temporarily\nunavailable** where you would set one up or replace your backup codes, and a\nworkspace cannot start requiring multi-factor authentication until they return.\nSMS MFA is not part of the\ncurrent account contract, so it is not offered rather than silently ignored.\nHardware security keys work with Advanced Account Security. An account with an\nauthenticator app already set up keeps it, and the parts of this page about\nauthenticator codes and backup codes apply to those accounts.\n\nNo device skips the sign-in checks. Devices you linked, such as the CLI, VS\nCode, the Chrome extension or the desktop app, are listed in Settings, Account\nunder **Linked devices**, where you can unlink each one.\n{{AVAILABILITY.summary}}"
         },
         {
           "id": "account-security#2",
@@ -179,7 +179,7 @@
         "work history",
         "deliverables"
       ],
-      "updated": "2026-09-22",
+      "updated": "2026-10-12",
       "source": "content/support/agi-work.md",
       "chunks": [
         {
@@ -215,7 +215,7 @@
           "ordinal": 4,
           "heading": "Availability",
           "headingPath": "Run a task with AGI Work › Availability",
-          "text": "AGI Work is one of the features a workspace administrator can turn off for a\nmanaged workspace, and higher-capacity work is a paid-plan feature. The pricing\npage carries the current details."
+          "text": "AGI Work is a paid-plan feature, included on {{PLANS.agi_work}}. A workspace\nadministrator can also turn it off for a managed workspace. The pricing page\ncarries the current details."
         }
       ]
     },
@@ -302,7 +302,7 @@
         "seats",
         "renewal"
       ],
-      "updated": "2026-10-08",
+      "updated": "2026-10-12",
       "source": "content/support/billing-and-plans.md",
       "chunks": [
         {
@@ -317,21 +317,21 @@
           "ordinal": 1,
           "heading": "Upgrading",
           "headingPath": "Plans, upgrading, and cancelling › Upgrading",
-          "text": "**Upgrade plan** lists the plans available to you. Paid upgrades are opening in\nstages, so on the Free plan choosing one opens the upgrade waitlist rather than\ncheckout: join the waitlist, or enter an access code to continue to checkout.\nCheckout is refused to an account that has neither. On a plan you already pay\nfor the access step does not apply, and an upgrade shows what it will cost and\nwaits for you to confirm before anything is charged.\n\nAn upgrade takes effect straight away and starts a new billing period that day:\nyou pay the new plan's price, minus a credit for the unused time on your current\nplan, and your renewal date moves to the day you upgrade. Adding seats to a Team\nplan keeps the renewal date and charges only for the rest of the current period.\n\nLocal mode and BYOK are free and need no plan at all. Managed cloud plans differ\nin usage capacity and in which features they include: projects, custom MCP\nconnections, concurrent responses, sandboxes, connector tools and scheduled\ntasks all scale with the plan. The pricing page carries the current prices,\nregional prices and per-plan limits."
+          "text": "**Upgrade plan** lists the plans available to you. On the {{PLAN.free}} plan\nchoosing one goes to checkout when paid upgrades are open to your account; while\nthey are not, it opens the upgrade waitlist instead: join the waitlist, or enter an\naccess code to continue to checkout. While upgrades are not open, checkout is\nrefused to an account that has not redeemed a code. On a plan you already pay\nfor the access step does not apply, and an upgrade shows what it will cost and\nwaits for you to confirm before anything is charged.\n\nAn upgrade takes effect straight away and starts a new billing period that day:\nyou pay the new plan's price, minus a credit for the unused time on your current\nplan, and your renewal date moves to the day you upgrade. Adding seats to a\n{{PLAN.team}} plan keeps the renewal date and charges only for the rest of the\ncurrent period.\n\nLocal mode and BYOK are free and need no plan at all. Managed cloud plans differ\nin usage capacity and in which features they include: projects, concurrent\nresponses, sandboxes and scheduled tasks all scale with the plan, as do custom\nMCP connections and connector tools. The pricing page carries the current\nprices, regional prices and per-plan limits, and adds the connector limits once\nconnectors are open. {{AVAILABILITY.connectors}}"
         },
         {
           "id": "billing-and-plans#2",
           "ordinal": 2,
           "heading": "Team seat types",
           "headingPath": "Plans, upgrading, and cancelling › Team seat types",
-          "text": "A Team plan sells two seat types on one subscription, Standard and Premium, and\none team can hold both. A Premium seat carries the usage limits and model access\nof Max 5x, which is five times the usage of a Standard seat, and keeps every\nTeam feature.\n\nSeat types are set in Settings, Team. An owner or admin can assign a Premium\nseat the team already pays for and has not assigned, at no extra charge. Only\nthe workspace owner can make a change that alters the bill. Moving a member to\nPremium when no paid Premium seat is free charges the difference for the rest of\nthe current period straight away and keeps the renewal date. Moving a member\nback to Standard bills the Standard price from the next renewal: the current\nperiod is not refunded, and the member keeps Premium usage until it ends.\n\nPremium seats are priced in US dollars only. The pricing page carries the price\nof each seat type."
+          "text": "A {{PLAN.team}} plan sells two seat types on one subscription, Standard and\nPremium, and one team can hold both. A Premium seat carries the usage limits and\nmodel access of {{PLAN.max}}, which is five times the usage of a Standard seat,\nand keeps every {{PLAN.team}} feature.\n\nSeat types are set in Settings, Team. An owner or admin can assign a Premium\nseat the team already pays for and has not assigned, at no extra charge. Only\nthe workspace owner can make a change that alters the bill. Moving a member to\nPremium when no paid Premium seat is free charges the difference for the rest of\nthe current period straight away and keeps the renewal date. Moving a member\nback to Standard bills the Standard price from the next renewal: the current\nperiod is not refunded, and the member keeps Premium usage until it ends.\n\nPremium seats are priced in US dollars only. The pricing page carries the price\nof each seat type."
         },
         {
           "id": "billing-and-plans#3",
           "ordinal": 3,
           "heading": "Monthly and yearly billing",
           "headingPath": "Plans, upgrading, and cancelling › Monthly and yearly billing",
-          "text": "Basic, Pro, Max 5x and Max 20x are billed monthly only; Team can be billed\nmonthly or yearly.\n\nIf you already pay yearly for Pro, nothing changes. Your subscription keeps its\nprice and renews yearly until you switch to monthly or cancel. Once you switch\nto monthly, yearly billing is no longer available for that plan.\n\n**Switch to monthly billing** in Settings, Billing makes the switch when your\nyearly term ends. Upgrading to Max 5x or Max 20x moves you to that plan's\nmonthly price straight away, and the unused part of your year is credited\ntoward future invoices."
+          "text": "{{PLAN.basic}}, {{PLAN.pro}}, {{PLAN.max}} and {{PLAN.max_15x}} are billed\nmonthly only; {{PLAN.team}} can be billed monthly or yearly.\n\nIf you already pay yearly for {{PLAN.pro}}, nothing changes. Your subscription keeps its\nprice and renews yearly until you switch to monthly or cancel. Once you switch\nto monthly, yearly billing is no longer available for that plan.\n\n**Switch to monthly billing** in Settings, Billing makes the switch when your\nyearly term ends. Upgrading to {{PLAN.max}} or {{PLAN.max_15x}} moves you to\nthat plan's monthly price straight away, and the unused part of your year is credited\ntoward future invoices."
         },
         {
           "id": "billing-and-plans#4",
@@ -459,7 +459,7 @@
         "thinking",
         "response style"
       ],
-      "updated": "2026-09-21",
+      "updated": "2026-10-12",
       "source": "content/support/chat-basics.md",
       "chunks": [
         {
@@ -481,7 +481,7 @@
           "ordinal": 2,
           "heading": "Attach files and tools",
           "headingPath": "Start, steer and manage a chat › Attach files and tools",
-          "text": "The **+** button beside the composer attaches files, adds a project or folder as\nscope, and lists your connectors. Typing `/` opens the command menu:\n`/search` searches the web, `/think` asks for extended reasoning, `/image`\ngenerates an image, `/code` runs code in a sandbox. `/browser`, `/terminal` and\n`/database` appear only on surfaces whose capabilities allow them."
+          "text": "The **+** button beside the composer attaches files, adds a project or folder as\nscope, and lists **Connectors**. {{AVAILABILITY.connectors}} Typing `/` opens the\ncommand menu:\n`/search` searches the web, `/think` asks for extended reasoning, `/image`\ngenerates an image, `/code` runs code in a sandbox. `/browser`, `/terminal` and\n`/database` appear only on surfaces whose capabilities allow them."
         },
         {
           "id": "chat-basics#3",
@@ -532,7 +532,7 @@
       "platforms": [
         "chrome"
       ],
-      "updated": "2026-09-27",
+      "updated": "2026-10-12",
       "source": "content/support/chrome-extension.md",
       "chunks": [
         {
@@ -540,13 +540,13 @@
           "ordinal": 0,
           "heading": "Availability",
           "headingPath": "The Chrome extension › Availability",
-          "text": "The Chrome extension, AGI Browser Companion, is not published yet. The Chrome\npage carries its status and the download page keeps a notify list; there is no\nWeb Store listing to install from today."
+          "text": "The Chrome extension, AGI Browser Companion, is {{STATUS.chrome}}. The\n[Chrome page](https://agiworkforce.com/chrome-extension) carries its status and\nthe [download page](https://agiworkforce.com/download) keeps a notify list.\nUntil it is released there is no Web Store listing to install from."
         },
         {
           "id": "chrome-extension#1",
           "ordinal": 1,
-          "heading": "What it is being built to do",
-          "headingPath": "The Chrome extension › What it is being built to do",
+          "heading": "What the extension does",
+          "headingPath": "The Chrome extension › What the extension does",
           "text": "It opens AGI in a browser side panel next to the page you are reading, with a\nkeyboard command to open the panel and another to capture the current page into\nthe conversation. Its host permissions are limited to agiworkforce.com, the AGI\nAPI and localhost, so it talks to AGI and to nothing else by default."
         },
         {
@@ -561,13 +561,13 @@
           "ordinal": 3,
           "heading": "Managed cloud from the extension",
           "headingPath": "The Chrome extension › Managed cloud from the extension",
-          "text": "Managed chat in the Chrome side panel works on every cloud plan, Free included,\nand spends the same credits as the web app. The extension does not accept\nprovider keys: web, mobile, desktop and Chrome all run on your AGI account,\nwhile BYOK is a CLI and VS Code capability."
+          "text": "Managed chat in the Chrome side panel works on every cloud plan, {{PLAN.free}}\nincluded, and spends the same credits as the web app. The extension does not\naccept provider keys, and neither do web, mobile or desktop; BYOK is a CLI and\nVS Code capability."
         },
         {
           "id": "chrome-extension#4",
           "ordinal": 4,
-          "heading": "Until it ships",
-          "headingPath": "The Chrome extension › Until it ships",
+          "heading": "Without the extension",
+          "headingPath": "The Chrome extension › Without the extension",
           "text": "The web app runs in the same browser and covers everything except the\npage-capture and side-panel workflow."
         }
       ]
@@ -599,7 +599,7 @@
         "vscode",
         "windows"
       ],
-      "updated": "2026-09-29",
+      "updated": "2026-10-12",
       "source": "content/support/configuration.md",
       "chunks": [
         {
@@ -607,7 +607,7 @@
           "ordinal": 0,
           "heading": "Where the settings live",
           "headingPath": "Configure the CLI › Where the settings live",
-          "text": "The CLI keeps its settings in `~/.agiworkforce/config.toml` on every operating\nsystem. `agi init` creates the file if it is missing, together with\n`instructions.md` and `mcp.json` in the same folder. To keep the folder\nsomewhere else, set `AGIWORKFORCE_HOME` to an absolute path; `agi` creates the\nfolder if it is missing.\n\nA repository can add its own `.agiworkforce/config.toml`. It is read from the\nfolder you start `agi` in and only applies once you trust that workspace."
+          "text": "The CLI is {{STATUS.cli}}, and this page applies to an installed CLI.\n\nThe CLI keeps its settings in `~/.agiworkforce/config.toml` on every operating\nsystem. `agi init` creates the file if it is missing, together with\n`instructions.md` and `mcp.json` in the same folder. To keep the folder\nsomewhere else, set `AGIWORKFORCE_HOME` to an absolute path; `agi` creates the\nfolder if it is missing.\n\nA repository can add its own `.agiworkforce/config.toml`. It is read from the\nfolder you start `agi` in and only applies once you trust that workspace."
         },
         {
           "id": "configuration#1",
@@ -663,7 +663,7 @@
         "permissions",
         "always allow"
       ],
-      "updated": "2026-10-08",
+      "updated": "2026-10-12",
       "source": "content/support/connectors-and-mcp.md",
       "chunks": [
         {
@@ -671,14 +671,14 @@
           "ordinal": 0,
           "heading": "What connectors do",
           "headingPath": "Connectors and MCP › What connectors do",
-          "text": "Connectors are coming soon, and none can be connected until they open.\n\nConnectors let AGI call an external system on your behalf, reading a repository,\nquerying a service, or running a tool exposed over MCP (Model Context Protocol).\nEvery connector is scoped to your own account."
+          "text": "{{AVAILABILITY.connectors}}\n\nConnectors let AGI call an external system on your behalf, reading a repository,\nquerying a service, or running a tool exposed over MCP (Model Context Protocol).\nEvery connector is scoped to your own account."
         },
         {
           "id": "connectors-and-mcp#1",
           "ordinal": 1,
           "heading": "Adding a connector",
           "headingPath": "Connectors and MCP › Adding a connector",
-          "text": "Once connectors open, open the connectors page, choose the connector, and complete\nits authorization flow.\nCustom MCP endpoints can be added with their own URL."
+          "text": "Adding a connector requires connectors to be open. On the connectors page,\nchoose the connector and complete its authorization flow. A custom MCP endpoint\nis added there too, with its own URL."
         },
         {
           "id": "connectors-and-mcp#2",
@@ -699,7 +699,7 @@
           "ordinal": 4,
           "heading": "Custom MCP connections and plans",
           "headingPath": "Connectors and MCP › Custom MCP connections and plans",
-          "text": "The number of custom MCP connections available depends on your plan. Current plan\ndetails live on the pricing page."
+          "text": "The number of custom MCP connections available depends on your plan. The pricing\npage lists that limit once connectors are open."
         }
       ]
     },
@@ -788,7 +788,7 @@
         "vscode",
         "windows"
       ],
-      "updated": "2026-09-28",
+      "updated": "2026-10-12",
       "source": "content/support/custom-instructions.md",
       "chunks": [
         {
@@ -796,7 +796,7 @@
           "ordinal": 0,
           "heading": "Files every session reads",
           "headingPath": "Custom instructions for the CLI and VS Code › Files every session reads",
-          "text": "Before a session starts, `agi` reads your own instructions from\n`~/.agiworkforce/instructions.md`, then walks from the folder you are in up to\nthe top of the disk and reads, in each folder, `AGENTS.md`, `CLAUDE.md` and\n`.agiworkforce/instructions.md`. Your own file comes first and the folder you\nare in comes last, so the closest file has the final word. Together they may\nuse about 10,000 tokens; files past that are left out and the session says so.\n\nRules in `.agiworkforce/rules/*.md` in the repository and in\n`~/.agiworkforce/rules/*.md` are added too, some only for matching files."
+          "text": "The CLI is {{STATUS.cli}} and the VS Code extension is {{STATUS.vscode}}.\n\nBefore a session starts, `agi` reads your own instructions from\n`~/.agiworkforce/instructions.md`, then walks from the folder you are in up to\nthe top of the disk and reads, in each folder, `AGENTS.md`, `CLAUDE.md` and\n`.agiworkforce/instructions.md`. Your own file comes first and the folder you\nare in comes last, so the closest file has the final word. Together they may\nuse about 10,000 tokens; files past that are left out and the session says so.\n\nRules in `.agiworkforce/rules/*.md` in the repository and in\n`~/.agiworkforce/rules/*.md` are added too, some only for matching files."
         },
         {
           "id": "custom-instructions#1",
@@ -939,7 +939,7 @@
         "procurement",
         "evaluation"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-10-12",
       "source": "content/support/enterprise-security.md",
       "chunks": [
         {
@@ -947,7 +947,7 @@
           "ordinal": 0,
           "heading": "Evaluate before you sign anything",
           "headingPath": "Security review of AGI for an enterprise › Evaluate before you sign anything",
-          "text": "Local mode and BYOK need no contract, no trial and no seat, so a reviewer can\nrun the product on their own hardware while procurement is still reading. In\nLocal mode nothing reaches AGI infrastructure at all, which makes it the\ncheapest way to assess behaviour without a data-processing conversation."
+          "text": "Local mode and BYOK need no contract, no trial and no seat. They run in the\nCLI, which is {{STATUS.cli}}. In Local mode on the CLI, conversations stay on\nyour device and are never uploaded. A signed-in CLI may still refresh the\nmanaged model catalog when it is not cached.\nSee [Run a local model](https://agiworkforce.com/help/local-mode) for setup."
         },
         {
           "id": "enterprise-security#1",
@@ -961,7 +961,7 @@
           "ordinal": 2,
           "heading": "Controls an administrator actually has",
           "headingPath": "Security review of AGI for an enterprise › Controls an administrator actually has",
-          "text": "- Local, BYOK and managed cloud allowed or refused per workspace.\n- Public share links and phone sync switched off server side, not by asking\n  people not to use them.\n- Retention windows, enforced when the workspace owner turns them on, with a\n  record of what retention deleted and legal holds that suspend it.\n- Feature, model and connector policy, with exceptions scoped to a role, a\n  group or a person.\n- The route each answer took, printed on every reply, so a claim about where a\n  request went is checkable rather than trusted."
+          "text": "- Local, BYOK and managed cloud allowed or refused per workspace.\n- Public share links and phone sync switched off server side, not by asking\n  people not to use them.\n- Retention windows, enforced once the workspace turns them on, with a record\n  of what retention deleted and legal holds that suspend it.\n- Feature, model and connector policy, with exceptions scoped to a role, a\n  group or a person.\n- The model that answered, named on the reply, and a **Local** mark on a reply\n  from a model running on the device."
         },
         {
           "id": "enterprise-security#3",
@@ -975,7 +975,7 @@
           "ordinal": 4,
           "heading": "Data residency",
           "headingPath": "Security review of AGI for an enterprise › Data residency",
-          "text": "Hosted data lives in the United States. EU and UK residency hosting is on the\nroadmap and is not available today. Local conversations never leave the device\nin the first place, which is the residency answer for the strictest cases."
+          "text": "Hosted data lives in the United States. EU and UK residency hosting is on the\nroadmap and is not available today. Local conversations never leave the device\nin the first place, which is the residency answer for the strictest cases.\n\nLocal mode runs in the CLI, which is {{STATUS.cli}}."
         }
       ]
     },
@@ -1173,7 +1173,7 @@
         "web",
         "windows"
       ],
-      "updated": "2026-10-07",
+      "updated": "2026-10-12",
       "source": "content/support/glossary.md",
       "chunks": [
         {
@@ -1209,14 +1209,14 @@
           "ordinal": 4,
           "heading": "Tools and connectors",
           "headingPath": "Glossary of AGI terms › Tools and connectors",
-          "text": "**Connector** lets AGI call an external system on your behalf. Every connector\nis scoped to your own account.\n\n**MCP**, the Model Context Protocol, is the open protocol a connector can use to\nexpose tools. Custom MCP endpoints can be added with their own URL.\n\n**Tool approval** is the verdict that decides whether a tool may run without\nasking. On the website, an account that has never chosen one defaults to **Skip\napprovals**, which runs eligible tools without asking; destructive and unknown\nactions still ask.\n\n**AGI Work** is the mode for a multi-step task rather than a question: the\nsession plans, works, and produces files."
+          "text": "**Connector** lets AGI call an external system on your behalf. Every connector\nis scoped to your own account.\n\n{{AVAILABILITY.connectors}}\n\n**MCP**, the Model Context Protocol, is the open protocol a connector can use to\nexpose tools. A custom MCP endpoint is a connector too, added with its own URL.\n\n**Tool approval** is the verdict that decides whether a tool may run without\nasking. On the website, an account that has never chosen one defaults to **Skip\napprovals**, which runs eligible tools without asking; destructive and unknown\nactions still ask.\n\n**AGI Work** is the mode for a multi-step task rather than a question: the\nsession plans, works, and produces files."
         },
         {
           "id": "glossary#5",
           "ordinal": 5,
           "heading": "Platform and surface names",
           "headingPath": "Glossary of AGI terms › Platform and surface names",
-          "text": "**Surface** is one of the six places AGI runs: Web, Desktop, CLI, Mobile, VS\nCode, and Chrome. A feature can be available on one surface and not another, so\narticles name the surface rather than assuming it.\n\n**Web** is agiworkforce.com in a browser.\n\n**Desktop** is the installable desktop app, published for macOS, Windows and\nLinux as those releases become available.\n\n**CLI** is the `agi` command, a Rust-native developer agent that runs in a\nterminal on macOS, Windows and Linux.\n\n**Mobile** is the phone app, for iOS and Android.\n\n**VS Code** and **Chrome** are the editor extension and the browser extension.\n\n**macOS**, **Windows** and **Linux** are the desktop operating systems;\n**iOS** and **Android** are the mobile ones. Support articles tag the platforms\nthey apply to."
+          "text": "**Surface** is one of the places AGI is built to run: {{SURFACES.names}}. A\nfeature can be available on one surface and not another, so articles name the\nsurface rather than assuming it.\n\n{{AVAILABILITY.summary}}\n\n**Web** is agiworkforce.com in a browser.\n\n**Desktop** is the installable desktop app, published for macOS, Windows and\nLinux as those releases become available.\n\n**CLI** is the `agi` command, a Rust-native developer agent that runs in a\nterminal on macOS, Windows and Linux.\n\n**Mobile** is the phone app, for iOS and Android.\n\n**VS Code** and **Chrome** are the editor extension and the browser extension.\n\n**macOS**, **Windows** and **Linux** are the desktop operating systems;\n**iOS** and **Android** are the mobile ones. Support articles tag the platforms\nthey apply to."
         }
       ]
     },
@@ -1319,7 +1319,7 @@
         "macos",
         "windows"
       ],
-      "updated": "2026-10-07",
+      "updated": "2026-10-12",
       "source": "content/support/install-the-cli.md",
       "chunks": [
         {
@@ -1327,7 +1327,7 @@
           "ordinal": 0,
           "heading": "Getting the binary",
           "headingPath": "Install and set up the CLI › Getting the binary",
-          "text": "Check [surface availability](https://agiworkforce.com/get-started) first: the\ncommand below installs the CLI only once a signed release is published.\n\n```\ncurl -fsSL https://agiworkforce.com/install.sh | bash\n```\n\nThe installer downloads the release archive for your platform, checks the\nrelease's signed checksum manifest with `openssl`, checks the archive's SHA-256\nagainst it, and installs `agi` to `~/.agi/bin`. It refuses anything it cannot\nverify, and says so when no signed release is published yet. On Windows, run\nit in Git Bash or WSL. There is no npm package or Homebrew tap.\n\n`agi update` compares your build with the newest release, and\n`agi update --install` installs that release after verifying its signature with\nthe key built into your `agi`. AGI Cloud for desktop ships its own copy of `agi`\nfor local coding sessions, and the VS Code extension offers **Install AGI CLI**\nwhen it cannot find one.\n\n`agi` is the primary command. `agiworkforce` remains available as a\nbackward-compatible alias."
+          "text": "The CLI is {{STATUS.cli}}; [surface availability](https://agiworkforce.com/get-started)\nlists each client's release state. The [CLI page](https://agiworkforce.com/cli)\nshows the install command once a signed release is published; until then there\nis no install command to run.\n\nThe installer downloads the release archive for your platform, checks the\nrelease's signed checksum manifest with `openssl`, checks the archive's SHA-256\nagainst it, and installs `agi` to `~/.agi/bin`. It refuses anything it cannot\nverify, and says so when no signed release is published yet. On Windows, run\nit in Git Bash or WSL. There is no npm package or Homebrew tap.\n\n`agi update` compares your build with the newest release, and\n`agi update --install` installs that release after verifying its signature with\nthe key built into your `agi`. The Desktop app is built to carry its own copy of\n`agi` for coding sessions on your machine, and the VS Code extension offers\n**Install AGI CLI** when it cannot find one. Desktop is {{STATUS.desktop}} and VS\nCode is {{STATUS.vscode}}.\n\n`agi` is the primary command. `agiworkforce` remains available as a\nbackward-compatible alias."
         },
         {
           "id": "install-the-cli#1",
@@ -1362,7 +1362,7 @@
           "ordinal": 5,
           "heading": "Managed cloud from the CLI",
           "headingPath": "Install and set up the CLI › Managed cloud from the CLI",
-          "text": "Managed cloud access from the CLI is part of the higher paid tiers. Local mode\nand BYOK work on any account, including one with no subscription at all. The\npricing page carries the current details."
+          "text": "Managed cloud access from the CLI requires one of these plans:\n{{PLANS.developer_surfaces}}. Local mode and BYOK work on any account, including\none with no subscription at all. The pricing page lists it once the CLI or the\nVS Code extension is released."
         },
         {
           "id": "install-the-cli#6",
@@ -1544,7 +1544,7 @@
         "quota",
         "limit"
       ],
-      "updated": "2026-10-07",
+      "updated": "2026-10-12",
       "source": "content/support/managed-cloud.md",
       "chunks": [
         {
@@ -1552,14 +1552,14 @@
           "ordinal": 0,
           "heading": "Open by default",
           "headingPath": "AGI managed cloud › Open by default",
-          "text": "The Free plan on AGI managed cloud is open by default. Sign in and start: it has no\nwaitlist and needs no invite code. Paid upgrades are opening in stages, so every\nself-serve paid plan needs an access code, and without one you join the upgrade\nwaitlist. Team is one of those self-serve plans, billed per seat. Enterprise,\nwith SSO and SCIM, is a contract conversation rather than a self-serve checkout."
+          "text": "The {{PLAN.free}} plan on AGI managed cloud is open by default. Sign in and start:\nit has no waitlist and needs no invite code. A self-serve paid plan starts at checkout when\npaid upgrades are open to your account; while they are not, it needs an access\ncode, and without one you join the upgrade waitlist. The {{PLAN.team}} plan is\none of those self-serve plans, billed per seat. The {{PLAN.enterprise}} plan,\nwith SSO and SCIM, is a contract conversation rather than a self-serve checkout."
         },
         {
           "id": "managed-cloud#1",
           "ordinal": 1,
           "heading": "How usage works",
           "headingPath": "AGI managed cloud › How usage works",
-          "text": "Managed cloud usage is metered. Each plan carries a capacity allowance, and the\nusage view in Settings shows how much of your current allowance you have used and\nwhen it resets. Usage is reported as a percentage of your allowance and a reset\ntime."
+          "text": "Managed cloud usage is metered. A paid plan carries a capacity allowance, and the\nusage view in Settings shows how much of your current allowance you have used and\nwhen it resets. Usage is reported as a percentage of your allowance and a reset\ntime. On the {{PLAN.free}} plan the usage view shows only **Upgrade**, never a\nmeter."
         },
         {
           "id": "managed-cloud#2",
@@ -1602,7 +1602,7 @@
         "mcp-server",
         "scopes"
       ],
-      "updated": "2026-10-08",
+      "updated": "2026-10-12",
       "source": "content/support/mcp-connections.md",
       "chunks": [
         {
@@ -1617,7 +1617,7 @@
           "ordinal": 1,
           "heading": "Adding one",
           "headingPath": "Connect a custom MCP server › Adding one",
-          "text": "Connectors are coming soon, and none can be connected until they open, a\ncustom MCP server included. The steps below apply once they open.\n\nA custom MCP connection needs a name to show it under and the server's URL,\nplus either an auth token or an OAuth client ID and secret if the server\nrequires one. AGI then queries the\nserver for its tools, showing \"Discovering live MCP capabilities…\" while it\ndoes.\n\nWhere a server offers an API key instead, AGI checks how that server accepts a\nkey before asking you for it, and offers **Test and save** so a bad key fails at\nthe point you paste it rather than mid-conversation."
+          "text": "{{AVAILABILITY.connectors}} A custom MCP server is a connector, so adding one\nrequires connectors to be open.\n\nA custom MCP connection needs a name to show it under and the server's URL,\nplus either an auth token or an OAuth client ID and secret if the server\nrequires one. AGI then queries the\nserver for its tools, showing \"Discovering live MCP capabilities…\" while it\ndoes.\n\nWhere a server offers an API key instead, AGI checks how that server accepts a\nkey before asking you for it, and offers **Test and save** so a bad key fails at\nthe point you paste it rather than mid-conversation."
         },
         {
           "id": "mcp-connections#2",
@@ -1645,14 +1645,14 @@
           "ordinal": 5,
           "heading": "Limits",
           "headingPath": "Connect a custom MCP server › Limits",
-          "text": "How many custom MCP connections you can keep depends on your plan; the pricing\npage carries the current figures. A workspace administrator can restrict which\nconnectors a managed workspace permits."
+          "text": "How many custom MCP connections you can keep depends on your plan; the pricing\npage lists the figures once connectors are open. A workspace administrator can\nrestrict which connectors a managed workspace permits."
         },
         {
           "id": "mcp-connections#6",
           "ordinal": 6,
           "heading": "AGI as an MCP server",
           "headingPath": "Connect a custom MCP server › AGI as an MCP server",
-          "text": "The CLI also runs the other way round: `agi mcp-server` exposes AGI to another\nMCP client, so the protocol works in both directions."
+          "text": "The CLI also runs the other way round: `agi mcp-server` exposes AGI to another\nMCP client, so the protocol works in both directions. The CLI is {{STATUS.cli}}."
         }
       ]
     },
@@ -1733,7 +1733,7 @@
         "retired model",
         "prompt cache"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-10-12",
       "source": "content/support/models-and-reasoning.md",
       "chunks": [
         {
@@ -1741,7 +1741,7 @@
           "ordinal": 0,
           "heading": "Picking a model by name",
           "headingPath": "Pick a model, and control how hard it thinks › Picking a model by name",
-          "text": "The model control under the composer lists every model your plan and trust mode\nmake available, grouped and searchable by name. Each entry carries what it can\ndo: **Vision**, **Tools**, **Search**, **Image output**, **Video output**,\n**Reasoning**. Models on your own machine appear under **On this device**.\n\nLeaving the control on **Auto** picks the best model for each message. An\nexplicit choice is never silently replaced with a different provider."
+          "text": "The model control under the composer lists every model your plan and trust mode\nmake available, grouped and searchable by name. Each entry carries what it can\ndo: **Vision**, **Tools**, **Search**, **Image output**, **Video output**,\n**Reasoning**.\n\nLeaving the control on **Auto** picks the best model for each message. An\nexplicit choice is never silently replaced with a different provider."
         },
         {
           "id": "models-and-reasoning#1",
@@ -1755,28 +1755,28 @@
           "ordinal": 2,
           "heading": "Thinking and effort",
           "headingPath": "Pick a model, and control how hard it thinks › Thinking and effort",
-          "text": "How reasoning is controlled depends on the model. Some have no reasoning\ncontrol, some always reason, some expose an on/off **Extended thinking**\nswitch, some a thinking budget, and some a set of effort levels. The control\nunder the composer says which applies: \"Always on for this model\", \"Extended\nthinking is off for this model\", or an effort picker whose hint is \"Higher\neffort thinks longer before it answers.\""
+          "text": "How reasoning is controlled depends on the model. Some have no reasoning\ncontrol, some always reason, some expose an on/off **Extended thinking**\nswitch, and some a set of effort levels. The control under the composer says\nwhich applies: \"Always on for this model\", \"Extended thinking is off for this\nmodel\", or an effort picker whose hint is \"Higher effort thinks longer before it\nanswers.\""
         },
         {
           "id": "models-and-reasoning#3",
           "ordinal": 3,
           "heading": "Switching mid-conversation",
           "headingPath": "Pick a model, and control how hard it thinks › Switching mid-conversation",
-          "text": "Within the same trust boundary you can switch models in the middle of a\nconversation; the provider label updates before the next request. The control\nwarns that switching here starts a new prompt cache, so the next message is\nprocessed fresh.\n\nMoving between Local, BYOK and managed cloud is different: it is always an\nexplicit continuation with context selection, a payload preview, your consent,\nand a visible destination label."
+          "text": "Within the same trust boundary you can switch models in the middle of a\nconversation; the provider label updates before the next request. The control\nwarns that switching here starts a new prompt cache, so the next message is\nprocessed fresh.\n\nContinuing a Local chat on a BYOK provider is different: it is an explicit\ncontinuation with context selection, a payload preview, your consent, and a\nlabel naming the destination provider."
         },
         {
           "id": "models-and-reasoning#4",
           "ordinal": 4,
           "heading": "A model that was retired",
           "headingPath": "Pick a model, and control how hard it thinks › A model that was retired",
-          "text": "If a conversation was saved with a model that no longer exists, the chat says so\nin place: that model is no longer available, new messages will use the named\nreplacement, and you can pick a different one. The conversation is not lost and\nnothing is rewritten."
+          "text": "If a conversation was saved with a model that no longer exists, the chat says so\nin place: that model is no longer available, new messages will use the named\nreplacement, and you can pick a different one."
         },
         {
           "id": "models-and-reasoning#5",
           "ordinal": 5,
           "heading": "How many there are",
           "headingPath": "Pick a model, and control how hard it thinks › How many there are",
-          "text": "{{MARKETING.models.display}} models across {{MARKETING.providers.display}}\nprovider integrations. Providers ship and retire models constantly, so the\npicker in the product is the current source of truth, never a number in a\ndocument."
+          "text": "Providers ship and retire models constantly, so the picker in the product is the\ncurrent source of truth, never a number in a document. The provider-key catalog\ncounts, and what they measure, are in\n[Providers and models](https://agiworkforce.com/help/providers-and-models)."
         }
       ]
     },
@@ -1797,7 +1797,7 @@
         "sell data",
         "anonymized usage"
       ],
-      "updated": "2026-10-07",
+      "updated": "2026-10-12",
       "source": "content/support/privacy-controls.md",
       "chunks": [
         {
@@ -1805,7 +1805,7 @@
           "ordinal": 0,
           "heading": "What is stored where",
           "headingPath": "Privacy controls in Settings › What is stored where",
-          "text": "In Local mode on the CLI, conversations stay on your device and are never\nuploaded. CLI BYOK sends requests directly to the provider you select; VS Code\nBYOK is coming soon. Web, Mobile, Desktop and Chrome use managed cloud and do not\naccept provider keys. Managed cloud conversations are encrypted in transit, and\nat rest by the database and object-storage vendors that hold them, as a property\nof those vendors' platforms and not a layer AGI adds. AGI does not sell your\ndata, and does not use customer conversation content to train AGI-owned models.\nThe Free plan is served by free capacity from model providers, AGI picks the\nprovider for the default model, and some of those providers' terms may allow\ntraining on what you send; to keep your chats out of training, turn on\n**Only use models that do not train on your chats** in Settings, Privacy."
+          "text": "In Local mode on the CLI, conversations stay on your device and are never\nuploaded. CLI BYOK sends requests directly to the provider you select. The CLI is\n{{STATUS.cli}} and VS Code is {{STATUS.vscode}}. Web, Mobile, Desktop and Chrome\nuse managed cloud and do not accept provider keys. Managed cloud conversations\nare encrypted in transit, and at rest by the database and object-storage vendors\nthat hold them, as a property of those vendors' platforms and not a layer AGI\nadds. AGI does not sell your\ndata, and does not use customer conversation content to train AGI-owned models.\nThe {{PLAN.free}} plan is served by free capacity from model providers, AGI picks the\nprovider for the default model, and some of those providers' terms may allow\ntraining on what you send; to keep your chats out of training, turn on\n**Only use models that do not train on your chats** in Settings, Privacy."
         },
         {
           "id": "privacy-controls#1",
@@ -1862,7 +1862,7 @@
         "duplicate project",
         "delete project"
       ],
-      "updated": "2026-10-08",
+      "updated": "2026-10-12",
       "source": "content/support/projects.md",
       "chunks": [
         {
@@ -1884,7 +1884,7 @@
           "ordinal": 2,
           "heading": "Add sources",
           "headingPath": "Projects: group chats around shared context › Add sources",
-          "text": "**Add sources** takes files from your device and text you paste or type. Google\nDrive is listed there as **Coming soon**: connecting Gmail, Google Drive,\nCalendar and other apps is coming soon, and no file can be added from Drive\nuntil then.\n\nYou may see **Indexing for search**, **Keyword search only** or **Not indexed**\nbeside a file. Keyword search matches words rather than using semantic search."
+          "text": "**Add sources** takes files from your device and text you paste or type.\n**Google Drive** is listed there too; adding a file from it requires the\n**Google Drive** connector. {{AVAILABILITY.connectorApps}}\n\nYou may see **Indexing for search**, **Keyword search only** or **Not indexed**\nbeside a file. Keyword search matches words rather than using semantic search."
         },
         {
           "id": "projects#3",
@@ -1984,7 +1984,7 @@
         "run history",
         "automation"
       ],
-      "updated": "2026-10-08",
+      "updated": "2026-10-12",
       "source": "content/support/schedules-and-triggers.md",
       "chunks": [
         {
@@ -1999,7 +1999,7 @@
           "ordinal": 1,
           "heading": "Triggers instead of a clock",
           "headingPath": "Schedule a task, or run it on a trigger › Triggers instead of a clock",
-          "text": "A schedule can also be attached to an event:\n\n- **Gmail**, which fires when the mailbox changes and waits until the mailbox\n  watch is registered for it.\n- **Google Calendar**, which waits until the calendar watch is registered.\n\nConnecting Gmail, Google Drive, Calendar and other apps is coming soon, and\nthe Gmail and Google Calendar triggers need their connector, so neither can be\nset up until connectors open.\n\n- **GitHub**, which fires for the repositories your GitHub App installation\n  covers.\n- **Anything else**, through a signed webhook addressed to its own channel.\n\nA trigger that is still waiting for its watch to register says so rather than\nreporting itself as live."
+          "text": "A schedule can also be attached to an event:\n\n- **Gmail**, which fires when the mailbox changes and waits until the mailbox\n  watch is registered for it.\n- **Google Calendar**, which waits until the calendar watch is registered.\n\n{{AVAILABILITY.connectorApps}} A Gmail or Google Calendar trigger requires\nits connector, so neither can be set up without it.\n\n- **GitHub**, which fires for the repositories your GitHub App installation\n  covers.\n- **Anything else**, through a signed webhook addressed to its own channel.\n\nA trigger that is still waiting for its watch to register says so rather than\nreporting itself as live."
         },
         {
           "id": "schedules-and-triggers#2",
@@ -2041,7 +2041,7 @@
         "citations",
         "help search"
       ],
-      "updated": "2026-09-28",
+      "updated": "2026-10-12",
       "source": "content/support/search.md",
       "chunks": [
         {
@@ -2077,7 +2077,7 @@
           "ordinal": 4,
           "heading": "Searching the help centre",
           "headingPath": "Search: the web, your chats and the help centre › Searching the help centre",
-          "text": "The help page carries a search box over everything published here. It is plain\nkeyword retrieval over the published pages, with no model call, so it keeps\nworking even when the support assistant is off. If nothing matches, it says so\nrather than guessing, and points at contact@agiworkforce.com."
+          "text": "The help page carries a search box over everything published here. It is plain\nkeyword retrieval over the published pages, with no model call, so it keeps\nworking even when the support assistant is off. If nothing matches, it says so\nrather than guessing, and points at {{CONTACT.email}}."
         }
       ]
     },
@@ -2158,7 +2158,7 @@
         "first message",
         "first chat"
       ],
-      "updated": "2026-10-07",
+      "updated": "2026-10-12",
       "source": "content/support/signing-up.md",
       "chunks": [
         {
@@ -2173,7 +2173,7 @@
           "ordinal": 1,
           "heading": "What you can do immediately",
           "headingPath": "Create an account and send your first message › What you can do immediately",
-          "text": "The Free plan is open by default. A new account can open the chat surface and\nsend a message straight away: it has no waitlist and no invite code to redeem.\nPaid upgrades are opening in stages, so every self-serve paid plan needs an\naccess code, and without one you join the upgrade waitlist."
+          "text": "The {{PLAN.free}} plan is open by default. A new account can open the chat surface and\nsend a message straight away: it has no waitlist and no invite code to redeem.\nA self-serve paid plan starts at checkout when paid upgrades are open to your\naccount; while they are not, it needs an access code, and without one you join\nthe upgrade waitlist."
         },
         {
           "id": "signing-up#2",
@@ -2187,7 +2187,7 @@
           "ordinal": 3,
           "heading": "If sign-up does not complete",
           "headingPath": "Create an account and send your first message › If sign-up does not complete",
-          "text": "- \"No account uses this email. Sign up instead.\" on a sign-in screen means the\n  address has never been registered. Sign up rather than resetting a password.\n- \"That password is too common.\" means the password was rejected against a\n  common-password list. Choose a longer, less common one.\n- A sign-up that needs a detail the screen cannot collect ends with a message\n  that starts \"This sign-up also needs\" and tells you to contact support. Email\n  contact@agiworkforce.com to finish creating the account."
+          "text": "- \"No account uses this email. Sign up instead.\" on a sign-in screen means the\n  address has never been registered. Sign up rather than resetting a password.\n- \"That password is too common.\" means the password was rejected against a\n  common-password list. Choose a longer, less common one.\n- A sign-up that needs a detail the screen cannot collect ends with a message\n  that starts \"This sign-up also needs\" and tells you to contact support. Email\n  {{CONTACT.email}} to finish creating the account."
         }
       ]
     },
@@ -2335,7 +2335,7 @@
         "call log",
         "reset permissions"
       ],
-      "updated": "2026-09-22",
+      "updated": "2026-10-12",
       "source": "content/support/tool-approvals.md",
       "chunks": [
         {
@@ -2350,7 +2350,7 @@
           "ordinal": 1,
           "heading": "Per-tool permissions",
           "headingPath": "Approvals: what a tool may do without asking › Per-tool permissions",
-          "text": "Each connector has a **Tool Permissions** panel that overrides the default for\none tool at a time: **Always run without asking**, **Needs approval each time**,\nor **Never run this tool**. **Reset all to default** clears every override for\nthat connector and applies the account policy."
+          "text": "{{AVAILABILITY.connectors}} These panels belong to a connector you have connected.\n\nEach connector has a **Tool Permissions** panel that overrides the default for\none tool at a time: **Always run without asking**, **Needs approval each time**,\nor **Never run this tool**. **Reset all to default** clears every override for\nthat connector and applies the account policy."
         },
         {
           "id": "tool-approvals#2",
@@ -2404,7 +2404,7 @@
         "device code",
         "extension"
       ],
-      "updated": "2026-09-28",
+      "updated": "2026-10-12",
       "source": "content/support/troubleshooting.md",
       "chunks": [
         {
@@ -2433,7 +2433,7 @@
           "ordinal": 3,
           "heading": "A message will not send",
           "headingPath": "Troubleshooting: when something does not work › A message will not send",
-          "text": "- \"Your previous message was still starting, so this one is back here. Send it\n  again.\" Send it once more; nothing was lost.\n- \"Your queued message was not sent: you switched chats before the reply\n  finished.\" It was saved as a draft in the original chat. Its attachments were\n  not kept, so re-attach them.\n- A plan-limited refusal names the plan, not a fault. Check the usage view in\n  Settings for the current allowance and reset time."
+          "text": "- \"Your previous message was still starting, so this one is back here. Send it\n  again.\" Send it once more; nothing was lost.\n- \"Your queued message was not sent: you switched chats before the reply\n  finished.\" It was saved as a draft in the original chat. Its attachments were\n  not kept, so re-attach them.\n- A plan-limited refusal names the plan, not a fault. On a paid plan, check the\n  usage view in Settings for the current allowance and reset time."
         },
         {
           "id": "troubleshooting#4",
@@ -2447,7 +2447,7 @@
           "ordinal": 5,
           "heading": "A tool or connector did nothing",
           "headingPath": "Troubleshooting: when something does not work › A tool or connector did nothing",
-          "text": "Under the website's Skip approvals default, eligible tools run automatically.\nA session may still wait for a destructive or unknown action, a saved Ask choice,\nor a workspace restriction. Check the approval prompt, the connector's\n**Recent calls** log, and its per-tool permissions: a tool set to\n**Never run this tool** is refused by your own setting."
+          "text": "{{AVAILABILITY.connectors}} The connector steps below need a connected connector.\n\nUnder the website's Skip approvals default, eligible tools run automatically.\nA session may still wait for a destructive or unknown action, a saved Ask choice,\nor a workspace restriction. Check the approval prompt, the connector's\n**Recent calls** log, and its per-tool permissions: a tool set to\n**Never run this tool** is refused by your own setting."
         },
         {
           "id": "troubleshooting#6",
@@ -2482,21 +2482,21 @@
           "ordinal": 10,
           "heading": "The CLI will not sign in",
           "headingPath": "Troubleshooting: when something does not work › The CLI will not sign in",
-          "text": "`agi login` with no provider signs in to your AGI account. It shows a link and\na code, opens the link in your browser, and waits while you approve the code\nthere, signed in to the same account. If the wait stops with \"Device code\nexpired. Please run /login again.\" or \"Authorization timed out\", the code was\nnot approved in time: run `agi login` again for a fresh one.\n\n`agi auth-status` lists every credential the CLI holds and how each one\nauthenticates; \"No authentication configured.\" means nothing is stored yet.\n`agi doctor` runs the local preflight checks. The CLI keeps credentials in the\noperating system's credential store, and a credentials file that other accounts\non the machine can read is refused, with the command that fixes it."
+          "text": "The CLI is {{STATUS.cli}}, and these steps apply to an installed CLI.\n\n`agi login` with no provider signs in to your AGI account. It shows a link and\na code, opens the link in your browser, and waits while you approve the code\nthere, signed in to the same account. If the wait stops with \"Device code\nexpired. Please run /login again.\" or \"Authorization timed out\", the code was\nnot approved in time: run `agi login` again for a fresh one.\n\n`agi auth-status` lists every credential the CLI holds and how each one\nauthenticates; \"No authentication configured.\" means nothing is stored yet.\n`agi doctor` runs the local preflight checks. The CLI keeps credentials in the\noperating system's credential store, or in owner-only files on Linux or when the\nkeyring is turned off, and a credentials file that other accounts on the machine\ncan read is refused, with the command that fixes it."
         },
         {
           "id": "troubleshooting#11",
           "ordinal": 11,
           "heading": "An extension will not connect",
           "headingPath": "Troubleshooting: when something does not work › An extension will not connect",
-          "text": "Neither the Chrome extension nor the VS Code extension is published yet, so\nthere is no public build to connect. In Chrome, use the web app; in VS Code, use\nthe CLI in the integrated terminal."
+          "text": "The Chrome extension is {{STATUS.chrome}} and the VS Code extension is {{STATUS.vscode}}.\nUntil one is released there is no public build to connect, so use the web app."
         },
         {
           "id": "troubleshooting#12",
           "ordinal": 12,
           "heading": "Still stuck",
           "headingPath": "Troubleshooting: when something does not work › Still stuck",
-          "text": "Email contact@agiworkforce.com. Include your **User ID** from Settings, Account,\nand the **Organization ID** too if the problem is workspace-wide. The support\npage lists the available channels and response commitments."
+          "text": "Email {{CONTACT.email}}. Include your **User ID** from Settings, Account,\nand the **Organization ID** too if the problem is workspace-wide. The support\npage lists the available channels and response commitments."
         }
       ]
     },
@@ -2706,7 +2706,7 @@
         "successor",
         "owner"
       ],
-      "updated": "2026-09-21",
+      "updated": "2026-10-12",
       "source": "content/support/workspace-administration.md",
       "chunks": [
         {
@@ -2721,7 +2721,7 @@
           "ordinal": 1,
           "heading": "Creating a workspace",
           "headingPath": "Administering a workspace › Creating a workspace",
-          "text": "Settings, Workspace is where a workspace is created: give it a name, and a slug\nmade of lowercase letters, numbers and hyphens. Creating one needs a Team or\nEnterprise plan, and on any other plan the page says so in place of the form.\n\nAn account owns one workspace at most. A second attempt is refused with \"You\nalready own a workspace. Switch to it from the account menu.\" Other workspaces\nare joined by invitation. A slug another workspace already uses is refused with\n\"That organization slug is already taken\".\n\nA new workspace starts with the seats you paid for. When the seat count cannot\nbe read, nothing is created: \"Your purchased seats could not be verified. No\norganization was created; please try again.\" A workspace that is created opens\nstraight away, and the app reloads inside it."
+          "text": "Settings, Workspace is where a workspace is created: give it a name, and a slug\nmade of lowercase letters, numbers and hyphens. Creating one needs a\n{{PLAN.team}} or {{PLAN.enterprise}} plan, and on any other plan the page says\nso in place of the form.\n\nAn account owns one workspace at most. A second attempt is refused with \"You\nalready own a workspace. Switch to it from the account menu.\" Other workspaces\nare joined by invitation. A slug another workspace already uses is refused with\n\"That organization slug is already taken\".\n\nA new workspace starts with the seats you paid for. When the seat count cannot\nbe read, nothing is created: \"Your purchased seats could not be verified. No\norganization was created; please try again.\" A workspace that is created opens\nstraight away, and the app reloads inside it."
         },
         {
           "id": "workspace-administration#2",

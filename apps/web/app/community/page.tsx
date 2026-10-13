@@ -11,7 +11,8 @@ const HERO_FACTS = ['Discord: none', 'Forum: none', 'Slack: none', 'X: mirror on
 
 export const metadata = buildMetadata({
   title: 'Community: where to find AGI',
-  description: 'Where to find AGI: follow the changelog for what ships, email for everything else.',
+  description:
+    'Where to find AGI: follow the release notes for what ships, email for everything else.',
   path: '/community',
 });
 
@@ -25,9 +26,9 @@ export default function CommunityPage() {
           eyebrow="Community"
           title="Where to find us."
           em="find us."
-          lede={`We do not run a Discord, a forum, or a Slack workspace yet. Follow the changelog for what ships, and use ${CONTACT_EMAIL} as the published contact channel. No response time is promised.`}
+          lede={`We do not run a Discord, a forum, or a Slack workspace yet. Follow the release notes for what ships, and use ${CONTACT_EMAIL} as the published contact channel. No response time is promised.`}
           ctas={[
-            { href: '/changelog', label: 'Follow the changelog' },
+            { href: '/release-notes', label: 'Follow the release notes' },
             { href: contactMailto(), label: 'Email us', variant: 'secondary' },
           ]}
         />
@@ -42,9 +43,9 @@ export default function CommunityPage() {
             <LinkGrid
               items={[
                 {
-                  meta: 'Changelog',
-                  title: 'Follow the changelog',
-                  href: '/changelog',
+                  meta: 'Release notes',
+                  title: 'Follow the release notes',
+                  href: '/release-notes',
                   body: (
                     <>
                       A dated archive of what shipped. The fastest way to track where the product is
@@ -66,7 +67,7 @@ export default function CommunityPage() {
                   meta: 'Email',
                   title: 'Email us',
                   href: contactMailto(),
-                  body: `${CONTACT_EMAIL}. Use it for billing, partnerships, press, and anything the changelog does not answer. No response time is promised.`,
+                  body: `${CONTACT_EMAIL}. Use it for billing, partnerships, press, and anything the release notes do not answer. No response time is promised.`,
                   external: true,
                 },
               ]}

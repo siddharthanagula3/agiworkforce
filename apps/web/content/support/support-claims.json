@@ -11,7 +11,7 @@
     },
     {
       "doc": "agi-work",
-      "sha256": "6391c3f69946f2ee74a255b14742dd39301946a206c7dd8e689f25082ddb4e8a"
+      "indexed": true
     },
     {
       "doc": "artifacts",
@@ -59,7 +59,7 @@
     },
     {
       "doc": "enterprise-security",
-      "sha256": "8d6b0bf8c9dc2dfba75157a305a2db1c0562cddff9aa69ad2c15f4e9185729ea"
+      "indexed": true
     },
     {
       "doc": "export-your-data",
@@ -111,7 +111,7 @@
     },
     {
       "doc": "models-and-reasoning",
-      "sha256": "59f50aa03dea5e6f8a7bdc2224ddc19de8670e6ad24472baa31e313dc325775e"
+      "indexed": true
     },
     {
       "doc": "privacy-controls",
@@ -401,11 +401,11 @@
       ]
     },
     {
-      "id": "connectors-coming-soon",
+      "id": "connectors-adding-needs-connectors-open",
       "doc": "connectors-and-mcp",
-      "section": "What connectors do",
+      "section": "Adding a connector",
       "kind": "prose",
-      "sentence": "Connectors are coming soon, and none can be connected until they open.",
+      "sentence": "Adding a connector requires connectors to be open.",
       "implementation": [
         "packages/contracts/types/src/connector-release.ts#CONNECTOR_RELEASE_STATE"
       ],
@@ -414,6 +414,11 @@
           "kind": "test",
           "file": "apps/web/lib/connectors/__tests__/connector-release.test.ts",
           "name": "refuses a direct entry point with a plain coming-soon message, not an upgrade"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/connector-release.test.ts",
+          "name": "opens the same gates once connectors are released, so the switch is what refused"
         }
       ]
     },
@@ -2155,12 +2160,18 @@
       "doc": "billing-and-plans",
       "section": "Upgrading",
       "kind": "prose",
-      "sentence": "Paid upgrades are opening in stages, so on the Free plan choosing one opens the upgrade waitlist rather than checkout: join the waitlist, or enter an access code to continue to checkout.",
+      "sentence": "On the {{PLAN.free}} plan choosing one goes to checkout when paid upgrades are open to your account; while they are not, it opens the upgrade waitlist instead: join the waitlist, or enter an access code to continue to checkout.",
       "implementation": [
         "apps/web/features/billing/hooks/use-upgrade-plan-flow.tsx",
-        "apps/web/features/billing/components/UpgradeWaitlistDialog.tsx"
+        "apps/web/features/billing/components/UpgradeWaitlistDialog.tsx",
+        "apps/web/features/billing/services/upgrade-waitlist.ts#isUpgradeWaitlistRequired"
       ],
       "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/pricing/page.test.tsx",
+          "name": "goes straight to checkout with no waitlist or access code once upgrades are open"
+        },
         {
           "kind": "test",
           "file": "apps/web/features/billing/components/UpgradeWaitlistDialog.test.tsx",
@@ -2183,7 +2194,7 @@
       "doc": "billing-and-plans",
       "section": "Upgrading",
       "kind": "prose",
-      "sentence": "Checkout is refused to an account that has neither.",
+      "sentence": "While upgrades are not open, checkout is refused to an account that has not redeemed a code.",
       "implementation": [
         "apps/web/app/api/checkout/route.ts",
         "apps/web/lib/server/billing-waitlist-access.ts#hasBillingWaitlistAccess"
@@ -2249,8 +2260,11 @@
       "doc": "billing-and-plans",
       "section": "Upgrading",
       "kind": "prose",
-      "sentence": "The pricing page carries the current prices, regional prices and per-plan limits.",
-      "implementation": ["apps/web/app/pricing/page.tsx"],
+      "sentence": "The pricing page carries the current prices, regional prices and per-plan limits, and adds the connector limits once connectors are open. {{AVAILABILITY.connectors}}",
+      "implementation": [
+        "apps/web/app/pricing/page.tsx",
+        "apps/web/features/billing/lib/plan-display.ts#getBillingPlanDisplay"
+      ],
       "proof": [
         {
           "kind": "test",
@@ -2266,6 +2280,11 @@
           "kind": "test",
           "file": "apps/web/app/pricing/page.test.tsx",
           "name": "shows the enforceable usage, project, storage, MCP, media, and developer-surface plan differences"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/billing/lib/plan-capability-release.test.ts",
+          "name": "keeps unreleased capabilities and connector limits out of every plan feature list"
         }
       ]
     },
@@ -2274,7 +2293,7 @@
       "doc": "billing-and-plans",
       "section": "Monthly and yearly billing",
       "kind": "prose",
-      "sentence": "Basic, Pro, Max 5x and Max 20x are billed monthly only; Team can be billed monthly or yearly.",
+      "sentence": "{{PLAN.basic}}, {{PLAN.pro}}, {{PLAN.max}} and {{PLAN.max_15x}} are billed monthly only; {{PLAN.team}} can be billed monthly or yearly.",
       "implementation": [
         "packages/contracts/types/src/billing-catalog.ts#planOffersBillingInterval",
         "apps/web/lib/validations/checkout.ts#planOffersBillingInterval"
@@ -2302,7 +2321,7 @@
       "doc": "billing-and-plans",
       "section": "Monthly and yearly billing",
       "kind": "prose",
-      "sentence": "If you already pay yearly for Pro, nothing changes.",
+      "sentence": "If you already pay yearly for {{PLAN.pro}}, nothing changes.",
       "implementation": [
         "apps/web/lib/price-tier-mapping.ts#STRIPE_PRICE_PRO_YEARLY",
         "packages/contracts/types/src/billing-plan-catalog.ts#WITHDRAWN_BILLING_INTERVALS"
@@ -2381,7 +2400,7 @@
       "doc": "billing-and-plans",
       "section": "Upgrading",
       "kind": "prose",
-      "sentence": "Adding seats to a Team plan keeps the renewal date and charges only for the rest of the current period.",
+      "sentence": "Adding seats to a {{PLAN.team}} plan keeps the renewal date and charges only for the rest of the current period.",
       "implementation": ["apps/web/lib/server/stripe-plan-change.ts#planChangeAnchor"],
       "proof": [
         {
@@ -2401,7 +2420,7 @@
       "doc": "billing-and-plans",
       "section": "Team seat types",
       "kind": "prose",
-      "sentence": "A Premium seat carries the usage limits and model access of Max 5x, which is five times the usage of a Standard seat, and keeps every Team feature.",
+      "sentence": "A Premium seat carries the usage limits and model access of {{PLAN.max}}, which is five times the usage of a Standard seat, and keeps every {{PLAN.team}} feature.",
       "implementation": ["apps/web/lib/services/team-seat-entitlement.ts#seatHolderPlanTier"],
       "proof": [
         {
@@ -2953,8 +2972,8 @@
       "doc": "troubleshooting",
       "section": "The CLI will not sign in",
       "kind": "prose",
-      "sentence": "The CLI keeps credentials in the operating system's credential store, and a credentials file that other accounts on the machine can read is refused, with the command that fixes it.",
-      "implementation": ["apps/cli/src/auth.rs#read_file_store"],
+      "sentence": "The CLI keeps credentials in the operating system's credential store, or in owner-only files on Linux or when the keyring is turned off, and a credentials file that other accounts on the machine can read is refused, with the command that fixes it.",
+      "implementation": ["apps/cli/src/auth.rs", "apps/cli/src/secure_store.rs#uses_keychain"],
       "proof": [
         {
           "kind": "copy",
@@ -2965,6 +2984,21 @@
           "kind": "copy",
           "file": "apps/cli/src/auth.rs",
           "text": "const AUTH_INDEX_STORAGE: &str = \"os-keyring\";"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/secure_store.rs",
+          "text": "!cfg!(target_os = \"linux\") && !keyring_disabled()"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/auth.rs",
+          "text": "return write_owner_only_file(&path, &data);"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "retains both the keyring path and the implemented file-storage exceptions"
         }
       ]
     },
@@ -2973,21 +3007,31 @@
       "doc": "troubleshooting",
       "section": "An extension will not connect",
       "kind": "prose",
-      "sentence": "Neither the Chrome extension nor the VS Code extension is published yet, so there is no public build to connect.",
+      "sentence": "Until one is released there is no public build to connect, so use the web app.",
       "implementation": [
-        "apps/web/app/chrome-extension/page.tsx",
-        "apps/web/app/vscode-extension/page.tsx"
+        "apps/web/lib/surface-status.ts#SURFACE_STATUS",
+        "apps/web/lib/support/agent/corpus/index.ts#SURFACE_STATUS_TOKENS"
       ],
       "proof": [
         {
-          "kind": "copy",
-          "file": "apps/web/app/chrome-extension/page.tsx",
-          "text": "AGI in Chrome · coming soon"
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/marketing-constants.test.ts",
+          "name": "keeps the surfaces with no release tag marked unreleased"
         },
         {
           "kind": "copy",
-          "file": "apps/web/app/vscode-extension/page.tsx",
-          "text": "No VSIX has been published yet"
+          "file": "apps/web/lib/surface-status.ts",
+          "text": "chrome: COMING_SOON_LABEL,"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/surface-status.ts",
+          "text": "vscode: COMING_SOON_LABEL,"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/support/agent/__tests__/fact-tokens.test.ts",
+          "name": "gives help articles a status word for every surface, read from the registry"
         }
       ]
     },
@@ -3040,13 +3084,15 @@
       ]
     },
     {
-      "id": "chrome-extension-not-published",
+      "id": "chrome-extension-status-and-notify-list",
       "doc": "chrome-extension",
       "section": "Availability",
       "kind": "prose",
-      "sentence": "The Chrome extension, AGI Browser Companion, is not published yet.",
+      "sentence": "Until it is released there is no Web Store listing to install from.",
       "implementation": [
         "apps/web/lib/surface-status.ts#SURFACE_STATUS",
+        "apps/web/app/chrome-extension/page.tsx",
+        "apps/web/app/download/page.tsx",
         "apps/extension/manifest.json"
       ],
       "proof": [
@@ -3057,32 +3103,13 @@
         },
         {
           "kind": "copy",
-          "file": "apps/web/app/chrome-extension/page.tsx",
-          "text": "AGI in Chrome · coming soon"
+          "file": "apps/web/lib/surface-status.ts",
+          "text": "chrome: COMING_SOON_LABEL,"
         },
         {
           "kind": "copy",
-          "file": "apps/extension/manifest.json",
-          "text": "\"name\": \"AGI Browser Companion\""
-        }
-      ]
-    },
-    {
-      "id": "chrome-extension-status-and-notify-list",
-      "doc": "chrome-extension",
-      "section": "Availability",
-      "kind": "prose",
-      "sentence": "The Chrome page carries its status and the download page keeps a notify list; there is no Web Store listing to install from today.",
-      "implementation": [
-        "apps/web/app/chrome-extension/page.tsx",
-        "apps/web/app/download/page.tsx",
-        "apps/web/lib/surface-status.ts#SURFACE_STATUS"
-      ],
-      "proof": [
-        {
-          "kind": "copy",
           "file": "apps/web/app/chrome-extension/page.tsx",
-          "text": "AGI in Chrome · coming soon"
+          "text": "AGI in Chrome · {SURFACE_STATUS.chrome}"
         },
         {
           "kind": "copy",
@@ -3091,20 +3118,20 @@
         },
         {
           "kind": "copy",
-          "file": "apps/web/app/integrations/page.tsx",
-          "text": "not on the Chrome Web Store yet"
+          "file": "apps/extension/manifest.json",
+          "text": "\"name\": \"AGI Browser Companion\""
         },
         {
           "kind": "test",
-          "file": "apps/web/lib/__tests__/marketing-constants.test.ts",
-          "name": "keeps the surfaces with no release tag marked unreleased"
+          "file": "apps/web/lib/support/agent/__tests__/fact-tokens.test.ts",
+          "name": "gives help articles a status word for every surface, read from the registry"
         }
       ]
     },
     {
       "id": "chrome-extension-host-permissions-agi-only",
       "doc": "chrome-extension",
-      "section": "What it is being built to do",
+      "section": "What the extension does",
       "kind": "prose",
       "sentence": "Its host permissions are limited to agiworkforce.com, the AGI API and localhost, so it talks to AGI and to nothing else by default.",
       "implementation": ["apps/extension/manifest.json"],
@@ -3184,7 +3211,7 @@
       "doc": "chrome-extension",
       "section": "Managed cloud from the extension",
       "kind": "prose",
-      "sentence": "Managed chat in the Chrome side panel works on every cloud plan, Free included, and spends the same credits as the web app.",
+      "sentence": "Managed chat in the Chrome side panel works on every cloud plan, {{PLAN.free}} included, and spends the same credits as the web app.",
       "implementation": [
         "apps/web/lib/free-chat-surface-policy.ts#getCloudChatSurfaceCapability",
         "packages/contracts/types/src/billing-catalog.ts#CLOUD_CHAT_TIERS",
@@ -3218,7 +3245,7 @@
       "doc": "chrome-extension",
       "section": "Managed cloud from the extension",
       "kind": "prose",
-      "sentence": "The extension does not accept provider keys: web, mobile, desktop and Chrome all run on your AGI account, while BYOK is a CLI and VS Code capability.",
+      "sentence": "The extension does not accept provider keys, and neither do web, mobile or desktop; BYOK is a CLI and VS Code capability.",
       "implementation": [
         "packages/contracts/types/src/surface-capability-manifest.ts",
         "apps/web/app/chrome-extension/page.tsx"
@@ -3681,7 +3708,7 @@
       "doc": "install-the-cli",
       "section": "Getting the binary",
       "kind": "prose",
-      "sentence": "AGI Cloud for desktop ships its own copy of `agi` for local coding sessions, and the VS Code extension offers **Install AGI CLI** when it cannot find one.",
+      "sentence": "The Desktop app is built to carry its own copy of `agi` for coding sessions on your machine, and the VS Code extension offers **Install AGI CLI** when it cannot find one.",
       "implementation": [
         "apps/desktop/electron-builder.yml",
         "apps/desktop/electron/runtime/developerSessionService.ts#BUNDLED_BINARY",
@@ -3775,10 +3802,11 @@
       "doc": "install-the-cli",
       "section": "Managed cloud from the CLI",
       "kind": "prose",
-      "sentence": "Managed cloud access from the CLI is part of the higher paid tiers.",
+      "sentence": "Managed cloud access from the CLI requires one of these plans: {{PLANS.developer_surfaces}}.",
       "implementation": [
         "apps/web/lib/free-chat-surface-policy.ts#canUseManagedCloudChatSurface",
-        "packages/contracts/types/src/billing-catalog.ts#developer_surfaces: PRO_TIERS"
+        "packages/contracts/types/src/billing-catalog.ts#developer_surfaces: PRO_TIERS",
+        "apps/web/lib/support/agent/corpus/index.ts#CAPABILITY_PLAN_TOKENS"
       ],
       "proof": [
         {
@@ -3813,9 +3841,9 @@
       "doc": "account-security",
       "section": "Second factors",
       "kind": "prose",
-      "sentence": "Authenticator apps (TOTP) and backup codes are temporarily unavailable: Settings, Security shows **Temporarily unavailable** where you would set one up or replace your backup codes, and a workspace cannot start requiring multi-factor authentication until they return.",
+      "sentence": "Setting up an authenticator app (TOTP) and replacing backup codes can be switched off for a time: while it is, Settings, Security shows **Temporarily unavailable** where you would set one up or replace your backup codes, and a workspace cannot start requiring multi-factor authentication until they return.",
       "implementation": [
-        "apps/web/lib/authenticator-enrollment.ts",
+        "apps/web/lib/authenticator-enrollment.ts#authenticatorEnrollmentAvailable",
         "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
         "apps/web/app/api/settings/organization/policy/route.ts"
       ],
@@ -3823,7 +3851,22 @@
         {
           "kind": "copy",
           "file": "apps/web/lib/authenticator-enrollment.ts",
-          "text": "'Authenticator apps and backup codes are temporarily unavailable.'"
+          "text": "return process.env[AUTHENTICATOR_ENROLLMENT_ENV_VAR] === '1';"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/2fa/route.test.ts",
+          "name": "reports enrollment as available once authenticator enrollment is switched on"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.test.tsx",
+          "name": "keeps setup visible but disabled, says why, and calls no setup route"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.test.tsx",
+          "name": "disables new backup codes but still lets an enrolled account turn two-factor off"
         },
         {
           "kind": "copy",
@@ -4580,13 +4623,26 @@
       "doc": "search",
       "section": "Searching the help centre",
       "kind": "prose",
-      "sentence": "If nothing matches, it says so rather than guessing, and points at contact@agiworkforce.com.",
-      "implementation": ["apps/web/features/support/components/HelpSearch.tsx"],
+      "sentence": "If nothing matches, it says so rather than guessing, and points at {{CONTACT.email}}.",
+      "implementation": [
+        "apps/web/features/support/components/HelpSearch.tsx",
+        "apps/web/lib/legal-constants.ts#CONTACT_EMAIL"
+      ],
       "proof": [
         {
           "kind": "copy",
           "file": "apps/web/features/support/components/HelpSearch.tsx",
-          "text": "Nothing here covers that yet. Email contact@agiworkforce.com for support."
+          "text": "Nothing here covers that yet."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/legal-constants.ts",
+          "text": "export const CONTACT_EMAIL = 'contact@agiworkforce.com';"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/support/agent/__tests__/fact-tokens.test.ts",
+          "name": "gives help articles the support address from the legal constants"
         }
       ]
     },
@@ -5491,11 +5547,11 @@
       ]
     },
     {
-      "id": "projects-drive-source-coming-soon",
+      "id": "projects-drive-source-needs-its-connector",
       "doc": "projects",
       "section": "Add sources",
       "kind": "prose",
-      "sentence": "Google Drive is listed there as **Coming soon**: connecting Gmail, Google Drive, Calendar and other apps is coming soon, and no file can be added from Drive until then.",
+      "sentence": "**Google Drive** is listed there too; adding a file from it requires the **Google Drive** connector. {{AVAILABILITY.connectorApps}}",
       "implementation": [
         "apps/web/features/projects/components/AddSourcesModal.tsx#ComingSoonSourceButton",
         "packages/contracts/types/src/connector-release.ts#CONNECTORS_COMING_SOON_DETAIL"
@@ -5505,6 +5561,16 @@
           "kind": "test",
           "file": "apps/web/features/projects/components/__tests__/AddSourcesModal.connectors.test.tsx",
           "name": "shows Google Drive locked and coming soon, and adds nothing from it"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/projects/components/__tests__/AddSourcesModal.connectors.test.tsx",
+          "name": "keeps the live Drive picker and its setup link once connectors are released"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/projects/components/AddSourcesModal.tsx",
+          "text": "Google Drive needs its connector."
         }
       ]
     },
@@ -5513,7 +5579,7 @@
       "doc": "managed-cloud",
       "section": "Open by default",
       "kind": "prose",
-      "sentence": "The Free plan on AGI managed cloud is open by default.",
+      "sentence": "The {{PLAN.free}} plan on AGI managed cloud is open by default.",
       "implementation": ["apps/web/lib/managed-compute-gate.ts#isManagedComputePrivateBetaEnabled"],
       "proof": [
         {
@@ -5543,7 +5609,7 @@
       "doc": "managed-cloud",
       "section": "Open by default",
       "kind": "prose",
-      "sentence": "Paid upgrades are opening in stages, so every self-serve paid plan needs an access code, and without one you join the upgrade waitlist.",
+      "sentence": "A self-serve paid plan starts at checkout when paid upgrades are open to your account; while they are not, it needs an access code, and without one you join the upgrade waitlist.",
       "implementation": [
         "apps/web/lib/server/billing-waitlist-access.ts#hasBillingWaitlistAccess",
         "apps/web/app/api/checkout/route.ts"
@@ -5553,6 +5619,11 @@
           "kind": "test",
           "file": "apps/web/lib/server/__tests__/billing-waitlist-access.test.ts",
           "name": "admits only an account that redeemed an access code while staged"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/billing-waitlist-access.test.ts",
+          "name": "admits every account without reading redemptions once the switch is on"
         },
         {
           "kind": "test",
@@ -5637,18 +5708,28 @@
       "doc": "install-the-cli",
       "section": "Getting the binary",
       "kind": "prose",
-      "sentence": "Check [surface availability](https://agiworkforce.com/get-started) first: the command below installs the CLI only once a signed release is published.",
-      "implementation": ["apps/web/public/install.sh"],
+      "sentence": "The [CLI page](https://agiworkforce.com/cli) shows the install command once a signed release is published; until then there is no install command to run.",
+      "implementation": ["apps/web/app/cli/CliInstallCommand.tsx", "apps/web/public/install.sh"],
       "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/cli/CliInstallCommand.test.tsx",
+          "name": "exposes a busy status until the release response arrives and keeps an unpublished command unavailable"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/cli/CliInstallCommand.test.tsx",
+          "name": "shows the version returned by a published release after loading finishes"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/cli/CliInstallCommand.tsx",
+          "text": "No signed release is published yet, so there is no install command to run."
+        },
         {
           "kind": "test",
           "file": "apps/web/__tests__/surface-page-claims.test.ts",
           "name": "reads the provenance gate install.sh actually enforces"
-        },
-        {
-          "kind": "copy",
-          "file": "apps/web/public/install.sh",
-          "text": "RELEASE_SIGNING_KEY=''"
         }
       ]
     },
@@ -5657,7 +5738,7 @@
       "doc": "privacy-controls",
       "section": "What is stored where",
       "kind": "prose",
-      "sentence": "The Free plan is served by free capacity from model providers, AGI picks the provider for the default model, and some of those providers' terms may allow training on what you send; to keep your chats out of training, turn on **Only use models that do not train on your chats** in Settings, Privacy.",
+      "sentence": "The {{PLAN.free}} plan is served by free capacity from model providers, AGI picks the provider for the default model, and some of those providers' terms may allow training on what you send; to keep your chats out of training, turn on **Only use models that do not train on your chats** in Settings, Privacy.",
       "implementation": [
         "packages/contracts/compliance/src/free-plan-training-disclosure.ts#FREE_PLAN_TRAINING_SIGNUP_STATEMENT",
         "apps/web/features/settings/sections/PrivacySection.tsx",
@@ -5742,7 +5823,7 @@
       "doc": "signing-up",
       "section": "What you can do immediately",
       "kind": "prose",
-      "sentence": "The Free plan is open by default.",
+      "sentence": "The {{PLAN.free}} plan is open by default.",
       "implementation": ["apps/web/lib/managed-compute-gate.ts#isManagedComputePrivateBetaEnabled"],
       "proof": [
         {
@@ -5772,7 +5853,7 @@
       "doc": "signing-up",
       "section": "What you can do immediately",
       "kind": "prose",
-      "sentence": "Paid upgrades are opening in stages, so every self-serve paid plan needs an access code, and without one you join the upgrade waitlist.",
+      "sentence": "A self-serve paid plan starts at checkout when paid upgrades are open to your account; while they are not, it needs an access code, and without one you join the upgrade waitlist.",
       "implementation": [
         "apps/web/lib/server/billing-waitlist-access.ts#hasBillingWaitlistAccess",
         "apps/web/app/api/checkout/route.ts"
@@ -5782,6 +5863,11 @@
           "kind": "test",
           "file": "apps/web/lib/server/__tests__/billing-waitlist-access.test.ts",
           "name": "admits only an account that redeemed an access code while staged"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/billing-waitlist-access.test.ts",
+          "name": "admits every account without reading redemptions once the switch is on"
         },
         {
           "kind": "test",
@@ -5989,10 +6075,10 @@
     },
     {
       "kind": "prose",
-      "id": "mcp-coming-soon",
+      "id": "mcp-adding-needs-connectors-open",
       "doc": "mcp-connections",
       "section": "Adding one",
-      "sentence": "Connectors are coming soon, and none can be connected until they open, a custom MCP server included.",
+      "sentence": "{{AVAILABILITY.connectors}} A custom MCP server is a connector, so adding one requires connectors to be open.",
       "implementation": [
         "packages/contracts/types/src/connector-release.ts#CONNECTOR_RELEASE_STATE",
         "apps/web/lib/connectors/custom-connector-creation.ts"
@@ -6052,9 +6138,10 @@
       "id": "mcp-connection-count-by-plan",
       "doc": "mcp-connections",
       "section": "Limits",
-      "sentence": "How many custom MCP connections you can keep depends on your plan; the pricing page carries the current figures.",
+      "sentence": "How many custom MCP connections you can keep depends on your plan; the pricing page lists the figures once connectors are open.",
       "implementation": [
-        "packages/contracts/types/src/billing-catalog.ts#BILLING_PLAN_PRODUCT_LIMITS"
+        "packages/contracts/types/src/billing-catalog.ts#BILLING_PLAN_PRODUCT_LIMITS",
+        "apps/web/features/billing/lib/plan-display.ts#getBillingPlanDisplay"
       ],
       "proof": [
         {
@@ -6066,15 +6153,20 @@
           "kind": "test",
           "file": "apps/web/app/api/connectors/custom/route.test.ts",
           "name": "rejects a second custom remote MCP for a free user before network work"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/billing/lib/plan-capability-release.test.ts",
+          "name": "keeps unreleased capabilities and connector limits out of every plan feature list"
         }
       ]
     },
     {
       "kind": "prose",
-      "id": "schedules-mail-calendar-triggers-coming-soon",
+      "id": "schedules-mail-calendar-triggers-need-their-connector",
       "doc": "schedules-and-triggers",
       "section": "Triggers instead of a clock",
-      "sentence": "Connecting Gmail, Google Drive, Calendar and other apps is coming soon, and the Gmail and Google Calendar triggers need their connector, so neither can be set up until connectors open.",
+      "sentence": "{{AVAILABILITY.connectorApps}} A Gmail or Google Calendar trigger requires its connector, so neither can be set up without it.",
       "implementation": [
         "packages/contracts/types/src/connector-release.ts#CONNECTORS_COMING_SOON_DETAIL",
         "apps/web/lib/triggers/gmail-watch.ts#registerGmailWatch"
@@ -6257,6 +6349,457 @@
           "name": "rejects a non-image executable URL instead of handing it to the browser"
         }
       ]
+    },
+    {
+      "id": "managed-cloud-free-usage-view-is-upgrade-only",
+      "doc": "managed-cloud",
+      "section": "How usage works",
+      "kind": "prose",
+      "sentence": "On the {{PLAN.free}} plan the usage view shows only **Upgrade**, never a meter.",
+      "implementation": [
+        "apps/web/features/settings/sections/UsageSection.tsx",
+        "apps/web/lib/support/agent/corpus/index.ts#PLAN_LABEL_TOKENS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/UsageSection.test.tsx",
+          "name": "shows a free account an upgrade prompt and no usage meters"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/UsageSection.tsx",
+          "text": "{isFreePlan ? 'Upgrade for higher capacity' : 'Plan usage limits'}"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/support/agent/__tests__/fact-tokens.test.ts",
+          "name": "gives help articles plan names and plan lists read from the billing catalogue"
+        }
+      ]
+    },
+    {
+      "id": "agi-work-plain-chat-dock-is-chat-details",
+      "doc": "agi-work",
+      "section": "Watching a session",
+      "kind": "prose",
+      "sentence": "A plain chat gets the same dock titled **Chat details**, listing the files created in that chat, and does not claim to be a Work session.",
+      "implementation": [
+        "apps/web/features/chat/lib/agi-work.ts#CHAT_DOCK_PANEL_LABEL",
+        "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/agi-work.ts",
+          "text": "export const CHAT_DOCK_PANEL_LABEL = 'Chat details';"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx",
+          "text": "const panelLabel = agiWork ? TASK_DOCK_PANEL_LABEL : CHAT_DOCK_PANEL_LABEL;"
+        }
+      ]
+    },
+    {
+      "id": "agi-work-approval-settings-offered",
+      "doc": "agi-work",
+      "section": "Approvals during a session",
+      "kind": "prose",
+      "sentence": "You can choose **Ask before every action** or **Run read-only actions without asking** instead.",
+      "implementation": ["apps/web/features/settings/components/ToolApprovalDefaultsPanel.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/components/ToolApprovalDefaultsPanel.test.tsx",
+          "name": "shows Skip approvals for an unconfigured website account"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/components/ToolApprovalDefaultsPanel.test.tsx",
+          "name": "persists the account-wide default when the user opts into read-only auto-approval"
+        }
+      ]
+    },
+    {
+      "id": "enterprise-local-conversations-are-never-uploaded",
+      "doc": "enterprise-security",
+      "section": "Evaluate before you sign anything",
+      "kind": "prose",
+      "sentence": "In Local mode on the CLI, conversations stay on your device and are never uploaded.",
+      "implementation": ["crates/agiworkforce-llm/src/lib.rs"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-rust-egress-boundary.mjs"
+        }
+      ]
+    },
+    {
+      "id": "enterprise-signed-in-cli-may-refresh-the-catalog",
+      "doc": "enterprise-security",
+      "section": "Evaluate before you sign anything",
+      "kind": "prose",
+      "sentence": "A signed-in CLI may still refresh the managed model catalog when it is not cached.",
+      "implementation": [
+        "apps/cli/src/tier_cache.rs#pub async fn ensure_plan_models_cached",
+        "apps/cli/src/lib.rs#crate::tier_cache::ensure_plan_models_cached().await;"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "scopes local inference separately from conditional catalog refresh and tool network use"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/support/agent/__tests__/fact-tokens.test.ts",
+          "name": "does not say nothing reaches AGI infrastructure in Local mode"
+        }
+      ]
+    },
+    {
+      "id": "enterprise-hipaa-not-offered",
+      "doc": "enterprise-security",
+      "section": "What is claimed, and what is not",
+      "kind": "prose",
+      "sentence": "HIPAA-covered workflows are not offered today.",
+      "implementation": ["apps/web/app/trust/page.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/trust/page.tsx",
+          "text": "AGI is not offered for protected health information"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/compliance-claim-honesty.test.ts",
+          "name": "claims no certification AGI does not hold"
+        }
+      ]
+    },
+    {
+      "id": "enterprise-trust-modes-per-workspace",
+      "doc": "enterprise-security",
+      "section": "Controls an administrator actually has",
+      "kind": "prose",
+      "sentence": "Local, BYOK and managed cloud allowed or refused per workspace.",
+      "implementation": [
+        "apps/web/lib/services/organization-policy-evaluator.ts",
+        "packages/contracts/types/src/enterprise/index.ts#allowedPrivacyModes"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/organization-policy-evaluator.test.ts",
+          "name": "denies a privacy mode outside allowedPrivacyModes"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/organization-policy-evaluator.test.ts",
+          "name": "denies when the administrator has turned managed compute off"
+        }
+      ]
+    },
+    {
+      "id": "enterprise-retention-enforced-once-turned-on",
+      "doc": "enterprise-security",
+      "section": "Controls an administrator actually has",
+      "kind": "prose",
+      "sentence": "Retention windows, enforced once the workspace turns them on, with a record of what retention deleted and legal holds that suspend it.",
+      "implementation": [
+        "apps/web/lib/services/domain-retention-service.ts",
+        "apps/web/app/api/settings/organization/retention/route.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/retention/__tests__/route.test.ts",
+          "name": "lists a window for every domain, defaulting to not enforced"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/domain-retention-service.test.ts",
+          "name": "deletes stored files before their records and records the sweep"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/domain-retention-service.test.ts",
+          "name": "deletes nothing while an organization-wide legal hold is active"
+        }
+      ]
+    },
+    {
+      "id": "enterprise-audit-trail-append-only-newest-first",
+      "doc": "enterprise-security",
+      "section": "Audit evidence",
+      "kind": "prose",
+      "sentence": "The audit trail is an append-only table, newest first, one event per line, streamed as it is read.",
+      "implementation": [
+        "apps/web/lib/services/enterprise-audit-service.ts#iterateAuditEventsForExport",
+        "apps/web/app/api/settings/organization/audit/export/route.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/db/neon/0087_enterprise_audit_event_writes.sql",
+          "text": "revoke insert, update, delete on public.enterprise_audit_events from app_rls;"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/services/enterprise-audit-service.ts",
+          "text": "order by created_at desc, id desc"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/audit/export/__tests__/route.test.ts",
+          "name": "streams every batch the reader yields, one event per line"
+        }
+      ]
+    },
+    {
+      "id": "enterprise-audit-export-jsonl-or-siem-drain",
+      "doc": "enterprise-security",
+      "section": "Audit evidence",
+      "kind": "prose",
+      "sentence": "An administrator downloads it as JSONL, or has signed batches drained to a SIEM endpoint every thirty minutes.",
+      "implementation": [
+        "apps/web/app/api/settings/organization/audit/export/route.ts",
+        "apps/web/app/api/cron/drain-audit-streams/route.ts",
+        "apps/web/lib/services/audit-streaming-proxy.ts#auditDeliveryHeaders"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/audit/__tests__/route.test.ts",
+          "name": "streams JSONL, one event per line"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/audit-streaming-proxy.test.ts",
+          "name": "signs with the timestamp bound into the material"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/support/agent/__tests__/fact-tokens.test.ts",
+          "name": "states the audit drain interval the cron manifest schedules"
+        }
+      ]
+    },
+    {
+      "id": "enterprise-local-conversations-never-leave-the-device",
+      "doc": "enterprise-security",
+      "section": "Data residency",
+      "kind": "prose",
+      "sentence": "Local conversations never leave the device in the first place, which is the residency answer for the strictest cases.",
+      "implementation": ["crates/agiworkforce-llm/src/lib.rs"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-rust-egress-boundary.mjs"
+        }
+      ]
+    },
+    {
+      "id": "models-picker-lists-what-plan-and-trust-mode-allow",
+      "doc": "models-and-reasoning",
+      "section": "Picking a model by name",
+      "kind": "prose",
+      "sentence": "The model control under the composer lists every model your plan and trust mode make available, grouped and searchable by name.",
+      "implementation": [
+        "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+        "apps/web/features/chat/components/Composer/ModelCatalogue.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/__tests__/ComposerFooter.integration.test.tsx",
+          "name": "renders grouped model options (an All models section) when the selector is opened"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/__tests__/ComposerFooter.picker-parity.test.tsx",
+          "name": "opens the catalogue from All models and names the plan on a locked row there"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/__tests__/ComposerFooter.picker-parity.test.tsx",
+          "name": "opens the catalogue on the typed query instead of filtering the short list"
+        }
+      ]
+    },
+    {
+      "id": "models-explicit-choice-is-not-silently-replaced",
+      "doc": "models-and-reasoning",
+      "section": "Picking a model by name",
+      "kind": "prose",
+      "sentence": "An explicit choice is never silently replaced with a different provider.",
+      "implementation": [
+        "apps/web/shared/stores/model-store.ts#describeModelSubstitution",
+        "apps/web/features/chat/components/UnavailableModelNotice.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/pages/__tests__/WebChatPage.retired-model.test.tsx",
+          "name": "tells the user the saved model was retired instead of swapping it silently"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/ComposerFooter.modelSwitch.test.tsx",
+          "name": "repeats the server substitution disclosure in the picker"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/free-model-promotion-turn.test.ts",
+          "name": "leaves a model the account picked by name alone"
+        }
+      ]
+    },
+    {
+      "id": "models-badge-upgrade",
+      "doc": "models-and-reasoning",
+      "section": "What the badges mean",
+      "kind": "prose",
+      "sentence": "**Upgrade**: the model exists but your plan does not include it.",
+      "implementation": ["apps/web/features/chat/lib/model-plan-admission.ts#modelLock"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+          "text": "{planLockLabel ?? 'Upgrade'}"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/__tests__/ComposerFooter.billing-readiness.test.tsx",
+          "name": "expands the Free section and marks paid models Upgrade to use on the free plan"
+        }
+      ]
+    },
+    {
+      "id": "models-badge-coming-soon",
+      "doc": "models-and-reasoning",
+      "section": "What the badges mean",
+      "kind": "prose",
+      "sentence": "**Coming soon, not yet available**: it is in the catalogue but not live.",
+      "implementation": ["apps/web/features/chat/lib/model-plan-admission.ts#COMING_SOON_REASON"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/model-plan-admission.ts",
+          "text": "const COMING_SOON_REASON = 'Coming soon, not yet available';"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/__tests__/ComposerFooter.picker-parity.test.tsx",
+          "name": "keeps a coming soon row non-selectable in the catalogue"
+        }
+      ]
+    },
+    {
+      "id": "models-badge-free-lane",
+      "doc": "models-and-reasoning",
+      "section": "What the badges mean",
+      "kind": "prose",
+      "sentence": "**Auto (free) · community models, capacity varies**: the free routing lane, whose capacity is not guaranteed.",
+      "implementation": [
+        "apps/web/features/chat/components/Composer/ComposerFooter.tsx#FREE_LANE_SLOT_TEXT"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+          "text": "const FREE_LANE_SLOT_TEXT = 'Auto (free) · community models, capacity varies';"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/__tests__/ComposerFooter.free-lane-copy.test.tsx",
+          "name": "describes the community lane once the free-lane copy is switched on"
+        }
+      ]
+    },
+    {
+      "id": "models-reasoning-control-depends-on-the-model",
+      "doc": "models-and-reasoning",
+      "section": "Thinking and effort",
+      "kind": "prose",
+      "sentence": "Some have no reasoning control, some always reason, some expose an on/off **Extended thinking** switch, and some a set of effort levels.",
+      "implementation": ["apps/web/features/chat/components/Composer/ComposerFooter.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/__tests__/ComposerFooter.reasoning-flyout.test.tsx",
+          "name": "(b) non-reasoning Non-Reasoning Fixture shows NO effort control"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/__tests__/ComposerFooter.reasoning-flyout.test.tsx",
+          "name": "(e) Always-On Fixture shows mandatory reasoning without an off switch"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/__tests__/ComposerFooter.reasoning-flyout.test.tsx",
+          "name": "(c2) Five-Level Fixture hides the slider while extended thinking is off"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/__tests__/ComposerFooter.reasoning-flyout.test.tsx",
+          "name": "(a) Six-Level Fixture exposes its six exact levels on the effort slider"
+        }
+      ]
+    },
+    {
+      "id": "models-reasoning-control-names-its-state",
+      "doc": "models-and-reasoning",
+      "section": "Thinking and effort",
+      "kind": "prose",
+      "sentence": "The control under the composer says which applies: \"Always on for this model\", \"Extended thinking is off for this model\", or an effort picker whose hint is \"Higher effort thinks longer before it answers.\"",
+      "implementation": ["apps/web/features/chat/components/Composer/ComposerFooter.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+          "text": "'Always on for this model'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+          "text": "'Extended thinking is off for this model.'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+          "text": "'Higher effort thinks longer before it answers.'"
+        }
+      ]
+    },
+    {
+      "id": "models-retired-model-is-named-in-the-chat",
+      "doc": "models-and-reasoning",
+      "section": "A model that was retired",
+      "kind": "prose",
+      "sentence": "If a conversation was saved with a model that no longer exists, the chat says so in place: that model is no longer available, new messages will use the named replacement, and you can pick a different one.",
+      "implementation": [
+        "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+        "apps/web/shared/stores/model-store.ts#describeModelSubstitution"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+          "text": "is no longer available"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+          "text": "so new messages will use {substitution.resolvedLabel}"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/pages/__tests__/WebChatPage.retired-model.test.tsx",
+          "name": "tells the user the saved model was retired instead of swapping it silently"
+        }
+      ]
     }
   ],
   "unproven": [
@@ -6310,15 +6853,6 @@
     }
   ],
   "narrative": [
-    {
-      "id": "privacy-byok-surface-availability",
-      "doc": "privacy-controls",
-      "section": "What is stored where",
-      "kind": "prose",
-      "sentence": "CLI BYOK sends requests directly to the provider you select; VS Code BYOK is coming soon.",
-      "implementation": ["packages/contracts/types/src/surface-capability-manifest.ts"],
-      "why": "roadmap-statement"
-    },
     {
       "id": "privacy-settings-gathers-the-controls",
       "doc": "privacy-controls",
@@ -6536,6 +7070,33 @@
       "sentence": "The pricing page carries the current per-plan figures.",
       "implementation": ["packages/contracts/types/src/billing-catalog.ts"],
       "why": "reader-instruction"
+    },
+    {
+      "id": "enterprise-roadmap-carries-no-date",
+      "doc": "enterprise-security",
+      "section": "What is claimed, and what is not",
+      "kind": "prose",
+      "sentence": "Anything on the roadmap stays on the roadmap with no date until there is one.",
+      "implementation": ["apps/web/app/trust/page.tsx"],
+      "why": "editorial-rule"
+    },
+    {
+      "id": "enterprise-residency-roadmap",
+      "doc": "enterprise-security",
+      "section": "Data residency",
+      "kind": "prose",
+      "sentence": "EU and UK residency hosting is on the roadmap and is not available today.",
+      "implementation": ["apps/web/app/faq/page.tsx"],
+      "why": "roadmap-statement"
+    },
+    {
+      "id": "models-picker-is-the-source-of-truth",
+      "doc": "models-and-reasoning",
+      "section": "How many there are",
+      "kind": "prose",
+      "sentence": "Providers ship and retire models constantly, so the picker in the product is the current source of truth, never a number in a document.",
+      "implementation": ["apps/web/lib/catalog-scopes.ts"],
+      "why": "editorial-rule"
     }
   ]
 }

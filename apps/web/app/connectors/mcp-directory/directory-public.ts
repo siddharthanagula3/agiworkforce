@@ -1,3 +1,5 @@
+import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
+
 import { hasDescription } from '@/lib/connectors/directory/snapshot-view';
 import type {
   DirectoryAuthMode,
@@ -8,7 +10,11 @@ import type {
 
 export const BASE_PATH = '/connectors/mcp-directory';
 export const SIGN_IN_HREF = '/login?redirectTo=%2Fconnectors';
-export const CONNECT_LABEL = 'Sign in to connect';
+export const CONNECTORS_RELEASED = connectorsReleased();
+export const CONNECT_LABEL = CONNECTORS_RELEASED
+  ? 'Sign in to connect'
+  : 'Sign in to see connectors';
+export const CONNECTORS_RELEASE_NOTE = CONNECTORS_RELEASED ? '' : CONNECTORS_COMING_SOON_MESSAGE;
 export const NOT_PROVIDED = 'Not provided';
 
 export const BADGE_LABELS = {

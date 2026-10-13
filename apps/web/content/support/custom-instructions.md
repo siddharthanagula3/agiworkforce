@@ -5,11 +5,13 @@ path: /cli
 category: surfaces
 tags: custom instructions, instructions, agents.md, claude.md, instructions.md, rules, repository memory, remember for this repository, project instructions
 platforms: cli, vscode, macos, windows, linux
-updated: 2026-09-28
+updated: 2026-10-12
 scope: public
 ---
 
 ## Files every session reads
+
+The CLI is {{STATUS.cli}} and the VS Code extension is {{STATUS.vscode}}.
 
 Before a session starts, `agi` reads your own instructions from
 `~/.agiworkforce/instructions.md`, then walks from the folder you are in up to

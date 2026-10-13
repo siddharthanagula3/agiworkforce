@@ -4,8 +4,7 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { DevBand, FinalCta, TrustTriptych } from '@/features/marketing/components/SurfaceSections';
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
-import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
-import { LAUNCH } from '../../lib/marketing-constants';
+import { NOTIFY_CTA, SURFACE_STATUS } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'AGI in VS Code: the @agi chat participant',
@@ -32,16 +31,14 @@ export default function VscodeExtensionPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
-              <p className="agi-fl-eyebrow">AGI in VS Code · coming soon</p>
+              <p className="agi-fl-eyebrow">AGI in VS Code · {SURFACE_STATUS.vscode}</p>
               <h1 id="agi-vscode-hero-title" className="sr-only">
                 AGI in VS Code
               </h1>
               <div className="agi-fl-cta-row">
-                <WaitlistTrigger
-                  label="Discuss Enterprise access"
-                  source="website"
-                  className="agi-fl-cta agi-fl-cta--primary"
-                />
+                <Link href={NOTIFY_CTA.href} className="agi-fl-cta agi-fl-cta--primary">
+                  {NOTIFY_CTA.label}
+                </Link>
                 <Link href="/agi-code" className="agi-fl-cta agi-fl-cta--secondary">
                   Explore AGI Code
                 </Link>
@@ -71,7 +68,7 @@ export default function VscodeExtensionPage() {
                 'Adds diagnostics, open files, and project structure',
                 'Pinned files travel with the conversation',
               ],
-              cta: { label: 'Discuss Enterprise access', waitlist: true },
+              cta: NOTIFY_CTA,
             },
             {
               mode: 'Diff review',
@@ -134,15 +131,15 @@ export default function VscodeExtensionPage() {
         />
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
+          eyebrow={SURFACE_STATUS.vscode}
           title="Bring @agi into your editor."
-          body="AGI in VS Code is in developer preview and will ship as a VSIX. Ask to be notified, and pair it with AGI Desktop and the AGI CLI when they are released. Installers open when it is released."
+          body={`AGI in VS Code is in developer preview and will ship as a VSIX. ${NOTIFY_CTA.label} takes you to the form on the download page, where you leave an email to hear when it is published. Pair it with AGI Desktop and the AGI CLI when they are released.`}
           ctas={[
-            { label: 'Discuss Enterprise access', waitlist: true },
-            { href: '/download', label: 'Get notified' },
+            NOTIFY_CTA,
             { href: '/cli', label: 'See the CLI' },
+            { label: 'Discuss Enterprise access', waitlist: true },
           ]}
-          stamp="Coming soon · VSIX distribution"
+          stamp="VS Code · VSIX distribution"
         />
       </main>
       <MarketingFooter />

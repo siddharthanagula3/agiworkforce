@@ -10,10 +10,12 @@ import {
   missingRequiredConsents,
   toConsentDecisions,
 } from './ConsentCheckboxes';
+import { ENTERPRISE_ENQUIRY_SUBMIT_LABEL, WAITLIST_SUBMITTING_LABEL } from './PublicWaitlistForm';
 import { Eyebrow } from './system';
 import type { WaitlistModalSource } from './WaitlistModal';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CLOSE_LABEL = 'Close Enterprise enquiry dialog';
 
 type FormState = 'idle' | 'submitting' | 'success' | 'error';
 
@@ -84,7 +86,7 @@ export function WaitlistDialog({
       <DialogContent
         data-design="agi"
         className="agi-modal-scope agi-ds-waitlist-modal"
-        closeLabel="Close waitlist dialog"
+        closeLabel={CLOSE_LABEL}
         hideCloseButton
       >
         {state === 'success' ? (
@@ -166,7 +168,9 @@ export function WaitlistDialog({
                   data-variant="primary"
                   disabled={state === 'submitting'}
                 >
-                  {state === 'submitting' ? 'Joining…' : 'Join waitlist'}
+                  {state === 'submitting'
+                    ? WAITLIST_SUBMITTING_LABEL
+                    : ENTERPRISE_ENQUIRY_SUBMIT_LABEL}
                 </button>
               </form>
 
@@ -190,12 +194,12 @@ export function WaitlistDialog({
         )}
         <button
           type="button"
-          aria-label="Close waitlist dialog"
+          aria-label={CLOSE_LABEL}
           className="absolute end-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-colors hover:border-border/70 hover:bg-accent hover:text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
           onClick={() => handleOpenChange(false)}
         >
           <X className="h-4 w-4" aria-hidden="true" />
-          <span className="sr-only">Close waitlist dialog</span>
+          <span className="sr-only">{CLOSE_LABEL}</span>
         </button>
       </DialogContent>
     </Dialog>

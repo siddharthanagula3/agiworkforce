@@ -117,7 +117,7 @@ describe('PublicWaitlistForm', () => {
     expect(enterpriseBox).toHaveAccessibleName(/contract-scoped Enterprise access/i);
     expect(consentBox(container, 'platform_availability_waitlist')).not.toBeInTheDocument();
 
-    const status = await submitWithRequiredConsent('visitor@example.com', /^join waitlist$/i);
+    const status = await submitWithRequiredConsent('visitor@example.com', /^request a follow-up$/i);
 
     expect(status).toHaveTextContent(/contract-scoped Enterprise access/i);
     expect(mockJoinPublicWaitlist).toHaveBeenCalledWith({
@@ -129,6 +129,16 @@ describe('PublicWaitlistForm', () => {
         { purpose: 'product_updates', granted: false },
       ],
     });
+  });
+
+  it('names its submit control after what the list does when a caller gives no label', () => {
+    const enterprise = render(<PublicWaitlistForm source="website" />);
+    expect(screen.getByRole('button', { name: 'Request a follow-up' })).toBeInTheDocument();
+    enterprise.unmount();
+
+    render(<PublicWaitlistForm source="mobile" />);
+    expect(screen.getByRole('button', { name: 'Get notified' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /waitlist/i })).toBeNull();
   });
 
   it('keeps platform sources out of the Enterprise dialog', () => {

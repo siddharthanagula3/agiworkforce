@@ -6,27 +6,44 @@ import { Eyebrow, Ledger, Prose, Section, Stack } from '@/features/marketing/com
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
-import { COMING_SOON_LABEL, SURFACE_STATUS } from '@/lib/marketing-constants';
+import {
+  BYOK_SURFACES,
+  COMING_SOON_LABEL,
+  SURFACE_NAMES,
+  SURFACE_STATUS,
+} from '@/lib/marketing-constants';
+import { joinSurfaceNames } from '@/lib/surface-status';
+import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 import '@/features/marketing/components/pages/company/company.css';
 
 const BYOK_RELEASE_SURFACES = [
-  { id: 'desktop', label: 'Desktop' },
-  { id: 'cli', label: 'CLI' },
-  { id: 'vscode', label: 'VS Code' },
+  { id: 'cli', label: SURFACE_NAMES.cli },
+  { id: 'vscode', label: SURFACE_NAMES.vscode },
 ] as const;
+
+const BYOK_RELEASED_LABELS = BYOK_RELEASE_SURFACES.filter(
+  (surface) => SURFACE_STATUS[surface.id] !== COMING_SOON_LABEL,
+).map((surface) => surface.label);
 
 const BYOK_RELEASE_LABEL = new Intl.ListFormat('en', {
   style: 'long',
   type: 'conjunction',
-}).format(
-  BYOK_RELEASE_SURFACES.filter((surface) => SURFACE_STATUS[surface.id] !== COMING_SOON_LABEL).map(
-    (surface) => surface.label,
-  ),
-);
+}).format(BYOK_RELEASED_LABELS);
 
-const HERO_STATUS_CAPTION = 'Where each surface stands today';
+const BYOK_CARD_BODY =
+  BYOK_RELEASED_LABELS.length > 0
+    ? `Use your provider accounts on supported ${BYOK_RELEASE_LABEL} releases with visible labels.`
+    : `Bring your own provider keys on ${BYOK_SURFACES.label}. ${BYOK_SURFACES.availability}`;
 
-const HERO_STATUS_SURFACES = [{ id: 'web', label: 'Web' }, ...BYOK_RELEASE_SURFACES] as const;
+const HERO_STATUS_SURFACES = [
+  { id: 'web', label: SURFACE_NAMES.web },
+  { id: 'desktop', label: SURFACE_NAMES.desktop },
+  ...BYOK_RELEASE_SURFACES,
+] as const;
+
+const HERO_STATUS_CAPTION = `Where ${joinSurfaceNames(
+  HERO_STATUS_SURFACES.map((surface) => surface.label),
+)} stand today`;
 
 const HERO_STATUS_ROWS = HERO_STATUS_SURFACES.map((surface) => ({
   label: surface.label,
@@ -34,10 +51,13 @@ const HERO_STATUS_ROWS = HERO_STATUS_SURFACES.map((surface) => ({
   quiet: SURFACE_STATUS[surface.id] === COMING_SOON_LABEL,
 }));
 
+const FREE_PLAN = BILLING_PLAN_PRICING.free.label;
+const TEAM_PLAN = BILLING_PLAN_PRICING.team.label;
+const ENTERPRISE_PLAN = BILLING_PLAN_PRICING.enterprise.label;
+
 export const metadata = buildMetadata({
-  title: 'AGI Cloud is open: Enterprise contract access',
-  description:
-    'The Free plan on AGI managed cloud is open by default: sign in and start, no waitlist. Paid upgrades are opening in stages and need an access code. Request a conversation about contract-scoped Enterprise access and additional governance requirements.',
+  title: `${ENTERPRISE_PLAN} access list: leave an email to discuss a contract`,
+  description: `The ${FREE_PLAN} plan on AGI managed cloud is open by default: sign in and start, no waitlist. Paid plans start from the pricing page. Request a conversation about contract-scoped ${ENTERPRISE_PLAN} access and additional governance requirements.`,
   path: '/waitlist',
 });
 
@@ -49,7 +69,7 @@ const WHILE_YOU_WAIT = [
     href: '/login?redirectTo=%2F',
   },
   {
-    meta: 'Free',
+    meta: `Free · ${SURFACE_NAMES.cli} ${SURFACE_STATUS.cli.toLowerCase()}`,
     title: 'Run AGI locally',
     body: 'Free forever, offline-capable, and never silently routed to the cloud.',
     href: '/local',
@@ -57,13 +77,13 @@ const WHILE_YOU_WAIT = [
   {
     meta: 'BYOK',
     title: 'Bring your own keys',
-    body: `Use your provider accounts on supported ${BYOK_RELEASE_LABEL} releases with visible labels.`,
+    body: BYOK_CARD_BODY,
     href: '/byok',
   },
   {
-    meta: 'Team',
-    title: 'Team pricing',
-    body: 'Team is a self-serve per-seat plan with no enterprise contract. Paid upgrades are opening in stages, so checkout needs an access code or a place on the upgrade waitlist.',
+    meta: TEAM_PLAN,
+    title: `${TEAM_PLAN} pricing`,
+    body: `${TEAM_PLAN} is a self-serve per-seat plan with no enterprise contract. Checkout starts from the pricing page; if paid upgrades are not open to your account yet, it offers the upgrade waitlist or takes an access code.`,
     href: '/pricing',
   },
 ];
@@ -76,22 +96,23 @@ export default function WaitlistPage() {
         <PageHero
           id="agi-waitlist-title"
           eyebrow="AGI Cloud"
-          title="Managed compute, open today."
+          title={`${ENTERPRISE_PLAN} access, by contract.`}
           lede={
             <>
-              The Free plan on AGI managed cloud is open by default:{' '}
+              This list is for <strong>contract-scoped {ENTERPRISE_PLAN} access</strong>. SSO, SCIM,
+              audit export, and retention controls are live for entitled workspaces; leave your
+              email to discuss contracts, custom governance, and additional capabilities beyond
+              self-serve {TEAM_PLAN}. You do not need this list to use AGI. The {FREE_PLAN} plan on
+              AGI managed cloud is open by default:{' '}
               <Link href="/get-started" className="agi-ds-link">
                 sign in and start
               </Link>
-              , no waitlist. Paid upgrades are opening in stages, so without an access code you join
-              the upgrade waitlist from{' '}
+              , no waitlist. Paid upgrades start from{' '}
               <Link href="/pricing" className="agi-ds-link">
                 pricing
               </Link>
-              . This list is for <strong>contract-scoped Enterprise access</strong>. SSO, SCIM,
-              audit export, and retention controls are live for entitled workspaces; leave your
-              email to discuss contracts, custom governance, and additional capabilities beyond
-              self-serve Team. If you want builds before they ship instead,{' '}
+              ; if they are not open to your account yet, you can join the upgrade waitlist there or
+              enter an access code. If you want builds before they ship instead,{' '}
               <Link href="/beta" className="agi-ds-link">
                 apply to the beta programme
               </Link>
@@ -109,7 +130,7 @@ export default function WaitlistPage() {
 
         <Section id="join" size="sm">
           <Stack gap="tight">
-            <PublicWaitlistForm source="website" ctaLabel="Discuss Enterprise access" />
+            <PublicWaitlistForm source="website" ctaLabel={`Discuss ${ENTERPRISE_PLAN} access`} />
             <Prose size="sm">
               To come off the list, record a withdrawal at{' '}
               <Link href="/privacy/requests" className="agi-ds-link">

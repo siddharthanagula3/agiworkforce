@@ -1,8 +1,9 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import { BILLING_PLAN_CAPABILITY_LABELS } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { AgentRunWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { surfaceCta } from '@/lib/marketing-constants';
+import { CLI_AVAILABILITY_NOTE, surfaceCta } from '@/lib/marketing-constants';
 import {
   Button,
   ButtonRow,
@@ -15,12 +16,13 @@ import {
 
 export const metadata = buildMetadata({
   title: 'Agents: delegated work that stops to ask',
-  description:
-    'An AGI agent is a markdown file with frontmatter naming the tools it may touch. Subagents fan out through the task tool, hooks fire on the session lifecycle, and the approval dialog opens with its cursor parked on No.',
+  description: `In the agi CLI, an agent is a markdown file with frontmatter naming the tools it may touch. Subagents fan out through the task tool, hooks fire on the session lifecycle, and a tool call that needs permission stops at an approval overlay where Esc always answers No. ${CLI_AVAILABILITY_NOTE}`,
   path: '/features/agents',
 });
 
 const CLI_CTA = surfaceCta('cli');
+const AGI_WORK = BILLING_PLAN_CAPABILITY_LABELS.agi_work;
+const AGI_WORK_NOTE = `In the browser, the agent mode is ${AGI_WORK}.`;
 
 const IDS = {
   hero: 'agi-features-agents-title',
@@ -58,8 +60,8 @@ export default function FeaturesAgentsPage() {
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">Features &middot; Agents</p>
               <h1 className="sr-only" id={IDS.hero}>
-                <span className="agi-lp-line">Delegation only works</span>{' '}
-                <em className="agi-lp-accent">if the default is no.</em>
+                <span className="agi-lp-line">Delegated work</span>{' '}
+                <em className="agi-lp-accent">that stops to ask.</em>
               </h1>
               <ButtonRow>
                 <Button href="/cli">See the agi CLI</Button>
@@ -81,6 +83,11 @@ export default function FeaturesAgentsPage() {
               <h2 className="agi-ds-h2" id={IDS.anatomy}>
                 An agent is a session you named and narrowed.
               </h2>
+              <Prose>
+                The preview above shows a tool waiting for approval in AGI Web. The agent files,
+                subagents, hooks and sandbox described below belong to the agi CLI.{' '}
+                {CLI_AVAILABILITY_NOTE} {AGI_WORK_NOTE}
+              </Prose>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               {ANATOMY.map((item) => (
@@ -99,11 +106,10 @@ export default function FeaturesAgentsPage() {
             <div>
               <Eyebrow>Defaults</Eyebrow>
               <h2 className="agi-ds-h2" id={IDS.defaults}>
-                Where a setting could have gone either way, it shipped closed.
+                The values the code picks when you have not picked one.
               </h2>
               <Prose>
-                Delegation is only as good as what happens when nobody is watching the screen. These
-                are the values the code picks when you have not picked one.
+                Delegation is only as good as what happens when nobody is watching the screen.
               </Prose>
             </div>
             <Ledger
@@ -112,7 +118,7 @@ export default function FeaturesAgentsPage() {
                 {
                   label: 'Approval',
                   value:
-                    'The overlay opens with the cursor parked on No, held there by an assertion the build checks.',
+                    'The overlay opens with the cursor on Yes, and Enter confirms whatever is highlighted. Esc always answers No, and a prompt left unanswered expires without running the call.',
                 },
                 {
                   label: 'Your answer',
@@ -166,14 +172,18 @@ export default function FeaturesAgentsPage() {
           <div className="agi-ds-container">
             <div className="agi-lp-close-inner">
               <h2 className="agi-lp-h2" id={IDS.close}>
-                Write one agent file <em className="agi-lp-accent">and hand it a task.</em>
+                One agent file, <em className="agi-lp-accent">run by the agi CLI.</em>
               </h2>
               <p className="agi-lp-lede">
                 Agent definitions, parallel subagents, lifecycle hooks, the approval overlay, and
-                the OS sandbox are all in the agi CLI source today.
+                the OS sandbox are all in the agi CLI source today. {CLI_AVAILABILITY_NOTE}{' '}
+                {AGI_WORK_NOTE}
               </p>
               <ButtonRow>
                 <Button href={CLI_CTA.href}>{CLI_CTA.label}</Button>
+                <Button href="/agi-work" variant="secondary">
+                  See {AGI_WORK}
+                </Button>
               </ButtonRow>
             </div>
           </div>

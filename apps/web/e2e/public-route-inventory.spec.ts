@@ -47,7 +47,7 @@ test('canonical content owners and their path helpers populate current generated
   expect(result.unresolvedDynamic.map((route) => route.pattern)).toContain(
     '/connectors/mcp-directory/[...id]',
   );
-  expect(result.unavailableDynamic.map((route) => route.pattern)).toContain('/blog/[slug]');
+  expect(result.unavailableDynamic.map((route) => route.pattern)).toEqual([]);
 });
 
 test('runtime samples distinguish handler guards from execution requiring local fixtures', () => {
@@ -128,13 +128,11 @@ test('not-found transport statuses remain allowed outcomes with independent UI a
   const inventory = getPublicRouteInventory();
   const absent = inventory.stateSamples.filter((sample) => sample.expectedNotFoundUi);
   expect(absent.map((sample) => sample.pattern).sort()).toEqual([
-    '/blog/[slug]',
     '/share/[token]',
     '/share/schedules/[token]',
   ]);
   expect(absent.every((sample) => sample.expectedRobots === 'noindex')).toBe(true);
   expect(absent.map((sample) => [sample.pattern, sample.dataAccess]).sort()).toEqual([
-    ['/blog/[slug]', 'unverified'],
     ['/share/[token]', 'handler-guarded'],
     ['/share/schedules/[token]', 'handler-guarded'],
   ]);

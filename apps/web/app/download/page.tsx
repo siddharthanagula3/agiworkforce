@@ -17,6 +17,7 @@ import {
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
 import {
   NOTIFY_CTA,
+  NOTIFY_FORM_ID,
   SURFACE_IDS,
   SURFACE_NAMES,
   SURFACE_PLATFORMS,
@@ -28,9 +29,10 @@ import {
 } from '@/lib/surface-status';
 import { DesktopDownloadAvailability } from './DesktopDownloadAvailability';
 import { CliDownloadAvailability } from './CliDownloadAvailability';
+import { ScrollToHashTarget } from './ScrollToHashTarget';
 import '@/features/marketing/components/pages/business/code-block.css';
 
-const NOTIFY_FORM_HREF = '#notify';
+const NOTIFY_FORM_HREF = `#${NOTIFY_FORM_ID}`;
 
 const SURFACE_PAGES: Record<SurfaceId, { href: string; name: string; what: string }> = {
   web: {
@@ -194,8 +196,8 @@ export default function DownloadPage() {
               Where each surface stands.
             </h2>
             <Prose>
-              Every label here reads the same release registry as the footer. The Desktop and CLI
-              sections below read the stable channel: beta and nightly tags are never linked.
+              Every label here reads one status list we update by hand. The Desktop and CLI sections
+              below check the stable channel live: beta and nightly tags are never linked.
             </Prose>
             <Ledger caption="Surface availability" rows={SURFACE_AVAILABILITY_ROWS} />
           </Stack>
@@ -300,7 +302,11 @@ export default function DownloadPage() {
           </div>
         </section>
 
-        <section id="notify" className="agi-lp-section" aria-labelledby="agi-download-notify-title">
+        <section
+          id={NOTIFY_FORM_ID}
+          className="agi-lp-section"
+          aria-labelledby="agi-download-notify-title"
+        >
           <div className="agi-ds-container">
             <div className="agi-lp-heading">
               <Eyebrow>Platforms without an installer</Eyebrow>
@@ -353,6 +359,7 @@ export default function DownloadPage() {
         </section>
       </main>
       <MarketingFooter />
+      <ScrollToHashTarget />
     </div>
   );
 }

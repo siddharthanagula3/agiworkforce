@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { OG_IMAGE } from '@/lib/seo/site';
 
 export const metadata: Metadata = {
   title: 'Help Center',
@@ -19,7 +20,7 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com/help',
     images: [
       {
-        url: '/api/og',
+        url: OG_IMAGE.url,
         width: 1200,
         height: 630,
         alt: 'AGI Help Center',
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
     title: 'Help Center',
     description:
       'Find answers fast. Guides, troubleshooting articles, and a contact route to a human.',
-    images: ['/api/og'],
+    images: [OG_IMAGE.url],
     creator: '@agiworkforce',
   },
   alternates: {

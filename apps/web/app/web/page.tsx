@@ -26,13 +26,13 @@ import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
 export const metadata = buildMetadata({
   title: 'AGI Web: the workspace in your browser',
   description:
-    'Chat, projects, artifacts, memory, deep research and agents in the browser, with every admitted model behind one selector and the route named on every reply.',
+    'Chat, projects, artifacts, memory, deep research and agents in the browser, with every admitted model behind one selector. Every reply names the model that answered in its actions menu.',
   path: '/web',
 });
 
 const DESKTOP_CTA = surfaceCta('desktop');
 const FINAL_CTA_BODY = [
-  'Free to try in the browser. Every reply names the model that answered in its actions menu, and prints a receipt line under itself whenever Auto left the model you pinned. Desktop adds approved folders, computer use, connectors and scheduled work on the same managed-cloud account; Local and BYOK run in the CLI.',
+  'Free to try in the browser. Every reply names the model that answered in its actions menu, and prints a receipt line under itself whenever Auto left the model you pinned. Desktop adds approved folders, computer use and scheduled work on the same managed-cloud account; Local and BYOK run in the CLI.',
   CLI_AVAILABILITY_NOTE,
 ]
   .filter(Boolean)
@@ -118,14 +118,14 @@ export default function WebSurfacePage() {
                 },
                 {
                   eyebrow: 'Deep research',
-                  title: 'A source behind every claim',
+                  title: 'Reports with numbered sources',
                   body: 'Searches you approve, then a report with numbered citations.',
                   href: '/features/deep-research',
                   visual: <ResearchWindow />,
                 },
                 {
                   eyebrow: 'Agents',
-                  title: 'Delegation with approval as the default',
+                  title: 'Delegated work that stops to ask',
                   body: 'Risky steps stop for you inside a permission list you set.',
                   href: '/features/agents',
                   visual: <AgentRunWindow />,

@@ -9,7 +9,7 @@
   padding: var(--agi-space-1) var(--agi-space-3);
   border-bottom: 1px solid var(--agi-rule);
   font-family: var(--agi-font-mono);
-  font-size: var(--agi-text-xs);
+  font-size: var(--agi-text-label);
   letter-spacing: var(--agi-tracking-label);
   color: var(--agi-ink-2);
 }
@@ -19,7 +19,8 @@
   padding: var(--agi-space-3);
   overflow-x: auto;
   font-family: var(--agi-font-mono);
-  font-size: var(--agi-text-xs);
+  font-size: var(--agi-text-label);
+  font-variant-ligatures: none;
   line-height: 1.6;
   color: var(--agi-ink-2);
   white-space: pre-wrap;

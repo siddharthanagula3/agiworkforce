@@ -77,7 +77,21 @@ describe('landing, the Desktop surface card', () => {
   it('names capabilities the macOS app actually ships', () => {
     const source = collapsed(LANDING);
     expect(source).toContain('Approved folders and programs');
-    expect(source).toContain('Computer use on macOS, step by step');
+    expect(source).toContain('Computer use on macOS, asked per session and per app');
+    expect(source).not.toMatch(/step by step|one step at a time/iu);
+  });
+});
+
+describe('landing, the Tools and Connectors card', () => {
+  it('reads the connectors note from the release switch instead of typing it', () => {
+    const source = collapsed(LANDING);
+    expect(source).toContain(
+      "const CONNECTORS_NOTE = connectorsReleased() ? '' : ` ${CONNECTORS_COMING_SOON_MESSAGE}`;",
+    );
+    expect(source).toContain(
+      'body: `MCP servers and OAuth apps, behind explicit permissions.${CONNECTORS_NOTE}`,',
+    );
+    expect(source).not.toContain('Connectors are coming soon');
   });
 });
 
@@ -189,6 +203,18 @@ describe('/agi-work, the plan', () => {
   it('keeps the plan gate on Pro and above', () => {
     expect(collapsed(AGI_WORK)).toContain('Pro plans and above');
   });
+
+  /**
+   * apps/web/app/chat/page.tsx preselects AGI Work only when the proxy stamps
+   * the requested path as /agi-work, so a link to /chat opens plain chat.
+   */
+  it('sends Open AGI Work through sign-in back to /agi-work, not to plain chat', () => {
+    expect(read('app/chat/page.tsx')).toMatch(/requestedPath === AGI_WORK_PATH/u);
+    const source = collapsed(AGI_WORK);
+    expect(source).toContain("const AGI_WORK_ENTRY_HREF = '/login?redirectTo=%2Fagi-work';");
+    expect(source).toContain('<Button href={AGI_WORK_ENTRY_HREF}>Open AGI Work</Button>');
+    expect(source).not.toMatch(/<Button href="\/chat">/u);
+  });
 });
 
 describe('/agi-code, session forking', () => {
@@ -204,5 +230,19 @@ describe('/agi-code, session forking', () => {
 
   it('names the command that forks a session', () => {
     expect(collapsed(AGI_CODE)).toContain('agi session fork');
+  });
+});
+
+describe('/agi-code, Managed Cloud on the developer surfaces', () => {
+  /**
+   * packages/contracts/types/src/billing-catalog.ts maps `developer_surfaces`
+   * to PRO_TIERS, and apps/web/lib/free-chat-surface-policy.ts puts the CLI and
+   * VS Code under that capability, so neither is open to a Free account.
+   */
+  it('names the plans from the catalog instead of calling it open by default', () => {
+    const source = collapsed(AGI_CODE);
+    expect(source).toContain("billingPlanCapabilityPlanLabels('developer_surfaces')");
+    expect(source).toMatch(/included with \$\{DEVELOPER_SURFACE_PLANS\} on these two surfaces/u);
+    expect(source).not.toMatch(/open by default/iu);
   });
 });

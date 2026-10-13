@@ -1519,6 +1519,7 @@ html[data-contrast='more'] *:focus-visible {
 
   --agi-text-xs: 0.75rem;
   --agi-text-sm: 0.875rem;
+  --agi-text-label: 0.9375rem;
   --agi-text-md: 1rem;
   --agi-text-lg: 1.25rem;
   --agi-text-xl: 1.75rem;

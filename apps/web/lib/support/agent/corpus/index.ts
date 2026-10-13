@@ -1,16 +1,49 @@
+import {
+  BILLING_PLAN_CAPABILITY_TIERS,
+  BILLING_PLAN_PRICING,
+  billingPlanCapabilityPlanLabels,
+  CONNECTORS_COMING_SOON_DETAIL,
+  CONNECTORS_COMING_SOON_MESSAGE,
+  connectorsReleased,
+  type BillingPlanCapability,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
+import { CONTACT_EMAIL } from '@/lib/legal-constants';
 import {
   CLI_AVAILABILITY_NOTE,
   MARKETING,
   POSITIONING,
   surfaceAvailabilitySummary,
 } from '@/lib/marketing-constants';
+import { SURFACE_IDS, SURFACE_NAMES, SURFACE_STATUS, joinSurfaceNames } from '@/lib/surface-status';
 import type { CorpusChunk } from '../types';
 import { buildStaticDataChunks } from './static-data-source';
 import { corpusArtifactSchema, isPublicCorpusPath } from './schema';
 import rawCorpus from '../corpus.generated.json';
 
+const SURFACE_STATUS_TOKENS: Readonly<Record<string, string>> = Object.fromEntries(
+  SURFACE_IDS.map((surface) => [`STATUS.${surface}`, SURFACE_STATUS[surface].toLowerCase()]),
+);
+
+const PLAN_LABEL_TOKENS: Readonly<Record<string, string>> = Object.fromEntries(
+  (Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[]).map((plan) => [
+    `PLAN.${plan.replace(/-/g, '_')}`,
+    BILLING_PLAN_PRICING[plan].label,
+  ]),
+);
+
+const CAPABILITY_PLAN_TOKENS: Readonly<Record<string, string>> = Object.fromEntries(
+  (Object.keys(BILLING_PLAN_CAPABILITY_TIERS) as BillingPlanCapability[]).map((capability) => [
+    `PLANS.${capability}`,
+    billingPlanCapabilityPlanLabels(capability),
+  ]),
+);
+
 const FACT_TOKENS: Readonly<Record<string, string>> = Object.freeze({
+  ...SURFACE_STATUS_TOKENS,
+  ...PLAN_LABEL_TOKENS,
+  ...CAPABILITY_PLAN_TOKENS,
   'MARKETING.providers.display': String(CATALOG_SCOPES.byokProviders.value),
   'MARKETING.providers.count': String(CATALOG_SCOPES.byokProviders.value),
   'MARKETING.models.display': String(CATALOG_SCOPES.byokModelEntries.value),
@@ -20,6 +53,10 @@ const FACT_TOKENS: Readonly<Record<string, string>> = Object.freeze({
   'POSITIONING.wedge': POSITIONING.wedge,
   'AVAILABILITY.cli': CLI_AVAILABILITY_NOTE,
   'AVAILABILITY.summary': surfaceAvailabilitySummary(),
+  'AVAILABILITY.connectors': connectorsReleased() ? '' : CONNECTORS_COMING_SOON_MESSAGE,
+  'AVAILABILITY.connectorApps': connectorsReleased() ? '' : CONNECTORS_COMING_SOON_DETAIL,
+  'SURFACES.names': joinSurfaceNames(SURFACE_IDS.map((surface) => SURFACE_NAMES[surface])),
+  'CONTACT.email': CONTACT_EMAIL,
 });
 
 const TOKEN_PATTERN = /\{\{\s*([A-Za-z0-9_.]+)\s*\}\}/g;

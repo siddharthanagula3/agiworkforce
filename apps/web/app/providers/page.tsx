@@ -19,6 +19,7 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { BYOK_PROVIDER_IDS } from '@/app/byok/byok-providers';
+import { CLI_KEY_PROVIDERS_OUTSIDE_CATALOG, CLI_SEARCH_KEYS } from '@/lib/byok-providers';
 import { CATALOG_SCOPES, CATALOG_SCOPE_ORDER, GATEWAY_PROVIDER_IDS } from '@/lib/catalog-scopes';
 import {
   CATALOG_AS_OF,
@@ -51,9 +52,16 @@ const PROVIDER_ROWS: ProviderRow[] = BYOK_PROVIDER_IDS.flatMap((id) => {
 
 const LOCAL_RUNTIMES = CLI_LOCAL_RUNTIMES.names;
 
+const LIST = new Intl.ListFormat('en', { type: 'conjunction' });
+const OUTSIDE_CATALOG_NOTE =
+  CLI_KEY_PROVIDERS_OUTSIDE_CATALOG.length > 0
+    ? `Outside the catalogue, so in none of these counts and without a tile below, the CLI also takes a key for ${LIST.format(CLI_KEY_PROVIDERS_OUTSIDE_CATALOG.map((provider) => provider.label))}.`
+    : '';
+const SEARCH_KEY_LABELS = LIST.format(CLI_SEARCH_KEYS.map((key) => key.label));
+
 export const metadata = buildMetadata({
-  title: 'Providers: the catalog AGI routes to',
-  description: `Every cloud provider and local runtime available to the CLI, generated from the shared model catalog the CLI compiles into its binary. Desktop uses managed cloud and accepts no provider key or local-runtime URL. Catalog dated ${CATALOG_AS_OF}.`,
+  title: 'Providers: the catalog the CLI reads',
+  description: `The cloud providers in the shared model catalog that the CLI takes a key for, and the local runtimes it discovers. The CLI compiles that catalog into its binary. Desktop and the web app use managed cloud and accept no provider key or local-runtime URL. Catalog dated ${CATALOG_AS_OF}. ${CLI_AVAILABILITY_NOTE}`,
   path: '/providers',
 });
 
@@ -79,7 +87,7 @@ const SOURCE_TABS = [
   {
     label: 'Rust',
     language: 'rust',
-    code: 'const CATALOG: &str = include_str!("../../packages/contracts/types/src/models.json");\n\nlet catalog: ModelCatalog = serde_json::from_str(CATALOG)?;\nlet provider = catalog.providers.get(&args.provider)?;',
+    code: 'pub const SHARED_MODELS_JSON: &str =\n    include_str!("../../../packages/contracts/types/src/models.json");',
     note: 'The CLI embeds the file at compile time.',
   },
   {
@@ -91,7 +99,7 @@ const SOURCE_TABS = [
   {
     label: 'CLI',
     language: 'shell',
-    code: '$ agi models scan\nollama · http://localhost:11434 · 1 model\n\n$ agi --provider ollama --model <model>',
+    code: '$ agi models scan\nLocal model servers\n\nollama  running  http://localhost:11434\n  models:\n    - <model>\n\n$ agi --provider ollama --model <model>',
     note: 'Local runtimes are discovered on loopback, never assumed.',
   },
 ] as const;
@@ -100,12 +108,12 @@ const SESSION_TABS = [
   {
     label: 'Swap',
     language: 'text',
-    code: '› /model <another cloud model>\nSwitched. Same thread, same authority: byok.',
+    code: '› /model <model>\nSwitched to <model> (<provider>)',
   },
   {
-    label: 'Refused',
+    label: 'Blocked',
     language: 'text',
-    code: "› /model <a byok model>\nRefused: this session's authority is local.\n  A fork that moves it is /continue-with-byok, and it shows the payload first.",
+    code: "› /model <model>\nSwitched to <model> (<provider>)\n\n› <your next message>\nPrivacy boundary blocked: this session is Local, but\nmodel `<model>` routes to <Provider> (selected context\nmay be sent directly to the user's configured provider\nkey) through byok mode. Use `/continue-with-byok` to\ncreate a reviewable, redacted continuation before\nanything leaves Local mode.",
   },
 ] as const;
 
@@ -122,8 +130,8 @@ export default function ProvidersPage() {
           em="local runtimes."
           lede={`A BYOK provider needs a key you own; a local runtime needs a URL you already run. The CLI supports both. ${CLI_AVAILABILITY_NOTE} Every row reads its label and default model from the shared catalog.`}
           ctas={[
-            { href: '/byok', label: 'Add a provider key' },
-            { href: '/local', label: 'Point at a local runtime', variant: 'secondary' },
+            { href: '/byok', label: 'How BYOK works' },
+            { href: '/local', label: 'How Local mode works', variant: 'secondary' },
           ]}
         />
 
@@ -136,7 +144,7 @@ export default function ProvidersPage() {
             stats={[
               {
                 value: `${CATALOG_SCOPES.byokProviders.value}`,
-                label: 'providers that take your key',
+                label: 'BYOK providers in the catalogue',
               },
               {
                 value: `${CATALOG_SCOPES.byokModelEntries.value}`,
@@ -167,6 +175,7 @@ export default function ProvidersPage() {
                 because each one counts something different, and none of them is a promise about
                 what a plan includes.
               </Prose>
+              {OUTSIDE_CATALOG_NOTE ? <Prose>{OUTSIDE_CATALOG_NOTE}</Prose> : null}
             </div>
             <Ledger
               caption="Catalogue counts and what each one counts"
@@ -186,10 +195,14 @@ export default function ProvidersPage() {
                 Each tile is a read from the shared model catalog.
               </h2>
               <Prose>
-                These {CATALOG_SCOPES.byokProviders.value} providers accept a key you hold and bill
-                you on your own account at their own rates. AGI adds no markup and shows no
-                per-token price. Between them they carry {CATALOG_SCOPES.byokModelEntries.value}{' '}
-                catalogue entries.
+                The CLI takes a key you hold for each of the {CATALOG_SCOPES.byokProviders.text}{' '}
+                below, and each one bills you on your own account at its own rates. AGI adds no
+                markup and shows no per-token price. Between them they carry{' '}
+                {CATALOG_SCOPES.byokModelEntries.value} catalogue entries.
+              </Prose>
+              <Prose>
+                The CLI also keeps web search keys for {SEARCH_KEY_LABELS}, which are not model
+                providers. {CLI_AVAILABILITY_NOTE}
               </Prose>
             </div>
             <ProviderGrid tiles={PROVIDER_TILES} label="Cloud providers and gateways" />
@@ -212,8 +225,9 @@ export default function ProvidersPage() {
             body={
               <p>
                 <code>packages/contracts/types/src/models.json</code> is embedded in the CLI, and
-                the web app imports the same module. Adding a provider moves both and this page at
-                once. The CLI surface itself is {SURFACE_STATUS.cli.toLowerCase()}.
+                the web app imports the same module. A label, default model, or model entry changed
+                there changes both and this page at once. The CLI surface itself is{' '}
+                {SURFACE_STATUS.cli.toLowerCase()}.
               </p>
             }
             visual={<CodeTabs tabs={SOURCE_TABS} title="How each surface reads the catalog" />}
@@ -228,12 +242,12 @@ export default function ProvidersPage() {
             flip
             body={
               <p>
-                <code>/model</code> resolves the provider from the catalog, then compares the route
-                that model needs against the privacy authority already written beside the
-                transcript. One cloud provider to another is a swap, and the thread carries on.
-                Anything that would change the authority, such as pointing a Local session at a BYOK
-                model, is refused by name; the reviewed fork that would do it properly is described
-                on the Local page.
+                <code>/model</code> resolves the provider for the model you name. In a BYOK session,
+                one cloud provider to another is a swap, and the thread carries on; a model on
+                another route is refused, with a message to start a new session. In a Local session,
+                naming a cloud model changes the model and the next send stops at the privacy
+                boundary; the error names the command for the reviewed fork described on the Local
+                page.
               </p>
             }
             cta={
@@ -260,11 +274,11 @@ export default function ProvidersPage() {
               cards={[
                 {
                   title: 'Your key, your provider',
-                  body: 'The CLI keeps one credential per provider, in the operating system keyring or in owner-only files on Linux or when the keyring is turned off, and calls that provider directly.',
+                  body: `The CLI keeps one credential per provider, in the operating system keyring or in owner-only files on Linux or when the keyring is turned off, and calls that provider directly. ${CLI_AVAILABILITY_NOTE}`,
                   points: [
                     'Keys saved on your own machine',
                     'Traffic goes straight to the provider',
-                    'The route is named on every reply',
+                    'The status bar names the route in use',
                   ],
                   cta: { href: '/docs/byok-env', label: 'Read the provider-key guide' },
                 },
@@ -273,7 +287,7 @@ export default function ProvidersPage() {
                   body: `The CLI compiles the same catalog and is ${SURFACE_STATUS.cli.toLowerCase()}.`,
                   points: [
                     'agi models scan finds local servers',
-                    'Every run prints its provider and cost',
+                    'Every turn prints its tokens and cost',
                     'Works offline with a local model',
                   ],
                   cta: { href: '/download', label: 'Check surface availability' },

@@ -1,5 +1,11 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  CONNECTOR_RELEASE_STATE,
+  CONNECTORS_COMING_SOON_MESSAGE,
+  connectorsReleased,
+  type ConnectorReleaseState,
+} from '@agiworkforce/types';
 
 import { CLI_AVAILABILITY_NOTE } from '@/lib/surface-status';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
@@ -24,7 +30,12 @@ vi.mock('@/features/marketing/components/system/MarketingFooter', () => ({
   MarketingFooter: () => null,
 }));
 
-import McpDirectoryPage from '../page';
+import McpDirectoryPage, { metadata } from '../page';
+
+const SIGN_IN_LABEL_BY_RELEASE_STATE = {
+  released: 'Sign in to connect',
+  coming_soon: 'Sign in to see connectors',
+} as const satisfies Record<ConnectorReleaseState, string>;
 
 const PAGE_SIZE = 60;
 const LONG_NAME = 'A'.repeat(60);
@@ -259,6 +270,30 @@ describe('McpDirectoryPage', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
       'Find a connector for your work.',
     );
+  });
+
+  it('offers to connect only once connectors are released, and says so until then', async () => {
+    getSnapshotViewMock.mockResolvedValue(snapshot([record()]));
+
+    await renderPage();
+
+    const signIn = screen.getAllByRole('link', {
+      name: SIGN_IN_LABEL_BY_RELEASE_STATE[CONNECTOR_RELEASE_STATE],
+    });
+    expect(signIn).toHaveLength(2);
+    for (const link of signIn) {
+      expect(link).toHaveAttribute('href', '/login?redirectTo=%2Fconnectors');
+    }
+
+    const text = document.body.textContent ?? '';
+    expect(text.includes(CONNECTORS_COMING_SOON_MESSAGE)).toBe(!connectorsReleased());
+    expect(String(metadata.description).includes(CONNECTORS_COMING_SOON_MESSAGE)).toBe(
+      !connectorsReleased(),
+    );
+    if (!connectorsReleased()) {
+      expect(text).not.toMatch(/sign in to connect|before you connect|Signed in, the custom/iu);
+      expect(String(metadata.description)).not.toMatch(/sign in to connect/iu);
+    }
   });
 
   describe('listing policy', () => {

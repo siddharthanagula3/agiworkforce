@@ -1,4 +1,9 @@
 import Link from 'next/link';
+import {
+  BILLING_PLAN_PRICING,
+  CONNECTORS_COMING_SOON_MESSAGE,
+  connectorsReleased,
+} from '@agiworkforce/types';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { WebWindow } from '@/features/marketing/components/DeviceMockups';
@@ -13,7 +18,7 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { MARKETING } from '@/lib/marketing-constants';
+import { SURFACE_STATUS } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'AI chat: one composer, a reply that shows its work',
@@ -21,6 +26,8 @@ export const metadata = buildMetadata({
     'The AGI composer takes files, images, dictation, and slash commands, then sends them to the model picked for that thread. The reply carries its tool calls, its reasoning, and its sources.',
   path: '/features/ai-chat',
 });
+
+const CONNECTORS_NOTE = connectorsReleased() ? '' : ` ${CONNECTORS_COMING_SOON_MESSAGE}`;
 
 const IDS = {
   hero: 'agi-features-ai-chat-title',
@@ -52,7 +59,7 @@ const AROUND_THE_CHAT = [
   {
     meta: 'Tools',
     title: 'Tools and connectors',
-    body: 'Connected MCP servers and OAuth apps appear in the tool timeline under per-tool permissions. Connectors are coming soon.',
+    body: `Connected MCP servers and OAuth apps appear in the tool timeline under per-tool permissions.${CONNECTORS_NOTE}`,
     href: '/features/tools',
   },
 ] as const;
@@ -68,7 +75,7 @@ export default function AiChatFeaturePage() {
               <p className="agi-lp-eyebrow">Features &middot; AI chat</p>
               <h1 className="sr-only" id={IDS.hero}>
                 <span className="agi-lp-line">One composer.</span>{' '}
-                <span className="agi-lp-line">Every model.</span>{' '}
+                <span className="agi-lp-line">The model you picked.</span>{' '}
                 <em className="agi-lp-accent">The reply shows its work.</em>
               </h1>
               <ButtonRow>
@@ -101,9 +108,9 @@ export default function AiChatFeaturePage() {
                     inspect or remove before sending. The voice button transcribes speech into
                     editable text. Search-capable models reach the live web on their own when an
                     answer should not come from model memory alone. The composer states whether
-                    search is on for the model you picked. The footer names the model in use,
-                    reaching {MARKETING.models.display} models across {MARKETING.providers.display}{' '}
-                    providers.
+                    search is on for the model you picked. The footer names the model in use. Which
+                    models you can pick depends on your plan: the {BILLING_PLAN_PRICING.free.label}{' '}
+                    plan runs on the free models only, and the pricing page lists the rest.
                   </p>
                 </div>
                 <ComposerWindow />
@@ -138,9 +145,6 @@ export default function AiChatFeaturePage() {
                   value:
                     'Run code in a sandbox. Listed when the selected model supports code execution.',
                 },
-                { label: '/browser', value: 'Automate browser actions. Desktop only.' },
-                { label: '/terminal', value: 'Execute shell commands. Desktop only.' },
-                { label: '/database', value: 'Run database queries. Desktop only.' },
               ]}
             />
           </Stack>
@@ -177,7 +181,8 @@ export default function AiChatFeaturePage() {
               </h2>
               <p className="agi-lp-lede">
                 AGI Web runs in the browser with the command menu, the model footer, and the
-                artifacts panel. The desktop app adds the terminal, browser, and database commands.
+                artifacts panel. AGI Desktop carries the same chat in a macOS app, and Desktop is{' '}
+                {SURFACE_STATUS.desktop.toLowerCase()}.
               </p>
               <ButtonRow>
                 <Button href="/login?redirectTo=%2F">Open AGI Web</Button>

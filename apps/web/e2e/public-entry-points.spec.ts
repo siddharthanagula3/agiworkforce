@@ -6,8 +6,8 @@ const TRIGGER_NAME = 'Discuss Enterprise access';
 const DIALOG_NAME = 'Discuss Enterprise access';
 const EMAIL_LABEL = 'Email address';
 const CONSENT_GROUP_NAME = 'What you are agreeing to';
-const SUBMIT_NAME = 'Join waitlist';
-const CLOSE_NAME = 'Close waitlist dialog';
+const SUBMIT_NAME = 'Request a follow-up';
+const CLOSE_NAME = 'Close Enterprise enquiry dialog';
 const COOKIE_REGION_NAME = 'Cookie consent';
 const COOKIE_DISMISS_LABEL = 'Close and reject non-essential cookies';
 

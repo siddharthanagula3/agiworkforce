@@ -42,8 +42,6 @@ const CLI_PREVIEW_TRANSCRIPT: TranscriptLine[] = [
   { kind: 'cmd', text: 'agi login anthropic' },
 ] as const;
 
-const NOTIFY_LIST_HREF = `${NOTIFY_CTA.href}#notify`;
-
 const NOTIFY_LIST_SURFACES = [
   { id: 'mobile', detail: `The app for ${joinSurfaceNames(SURFACE_PLATFORMS.mobile)}.` },
   { id: 'chrome', detail: 'A side panel in the browser.' },
@@ -57,7 +55,7 @@ const NOTIFY_LIST_ROWS = NOTIFY_LIST_SURFACES.map((surface) => ({
       <span>
         <strong>{SURFACE_STATUS[surface.id]}.</strong> {surface.detail}
       </span>
-      <Link href={NOTIFY_LIST_HREF} className="agi-ds-link">
+      <Link href={NOTIFY_CTA.href} className="agi-ds-link">
         {NOTIFY_CTA.label}
       </Link>
     </Stack>
@@ -122,12 +120,12 @@ export default function GetStartedPage() {
               <SurfaceStatus
                 state="pending"
                 name="CLI"
-                blockedOn="The release job builds and signs agi for macOS, Linux, and Windows, but no signed release has been published yet. Once one is, the CLI page shows its install command, and the CLI hosts the local and BYOK modes below."
+                blockedOn="The release job builds and signs agi for macOS, Linux, and Windows. The CLI page checks the release channel and shows the install command only once a signed release is published. The CLI hosts the local and BYOK modes below."
               />
               <SurfaceStatus
                 state="pending"
                 name="Desktop"
-                blockedOn="The macOS app is signed and notarized by the release job but has not been published yet, and each download opens only once the release API verifies that platform's signature. Windows installers have not been published. The download page resolves what is live for your platform."
+                blockedOn="The macOS app is signed and notarized by the release job, and each download opens only once the release API verifies that platform's signature. The download page checks that live and shows whether an installer is available for your Mac. Windows installers have not been published."
               />
               <Ledger caption="Surfaces on the notify list" rows={NOTIFY_LIST_ROWS} />
             </Stack>
@@ -144,9 +142,8 @@ export default function GetStartedPage() {
               <Stack gap="base">
                 <Prose>
                   The CLI is {SURFACE_STATUS.cli.toLowerCase()}. The release job builds and signs
-                  it, but no signed release has been published yet, so there is nothing to install.
-                  Once one is, the CLI page shows its install command and these three commands reach
-                  a working chat.
+                  it, and the CLI page shows the install command only once a signed release is
+                  published. After that, these three commands reach a working chat.
                 </Prose>
                 <ButtonRow>
                   <Button href="/cli" variant="secondary">

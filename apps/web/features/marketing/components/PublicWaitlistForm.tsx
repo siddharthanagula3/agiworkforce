@@ -7,6 +7,7 @@ import {
   isEnterpriseWaitlistSource,
   type WaitlistSource,
 } from '@/lib/consent-purposes';
+import { NOTIFY_CTA } from '@/lib/surface-status';
 import {
   ConsentCheckboxes,
   missingRequiredConsents,
@@ -14,6 +15,10 @@ import {
 } from './ConsentCheckboxes';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const ENTERPRISE_ENQUIRY_SUBMIT_LABEL = 'Request a follow-up';
+
+export const WAITLIST_SUBMITTING_LABEL = 'Sending…';
 
 const ENTERPRISE_SUCCESS_MESSAGE =
   "You're on the list. A person will contact you to discuss contract-scoped Enterprise access for your requirements.";
@@ -25,7 +30,9 @@ type FormState = 'idle' | 'submitting' | 'success' | 'error';
 
 export function PublicWaitlistForm({
   source = 'website',
-  ctaLabel = 'Join Waitlist',
+  ctaLabel = isEnterpriseWaitlistSource(source)
+    ? ENTERPRISE_ENQUIRY_SUBMIT_LABEL
+    : NOTIFY_CTA.label,
   successMessage = isEnterpriseWaitlistSource(source)
     ? ENTERPRISE_SUCCESS_MESSAGE
     : PLATFORM_AVAILABILITY_SUCCESS_MESSAGE,
@@ -132,7 +139,7 @@ export function PublicWaitlistForm({
         data-variant="primary"
         disabled={state === 'submitting'}
       >
-        {state === 'submitting' ? 'Joining…' : ctaLabel}
+        {state === 'submitting' ? WAITLIST_SUBMITTING_LABEL : ctaLabel}
       </button>
       {state === 'error' && errorMsg ? (
         <p id={errorId} role="alert" aria-live="polite" className="agi-ds-form-error">

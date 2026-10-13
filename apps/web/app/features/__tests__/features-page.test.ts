@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -34,6 +34,33 @@ describe('/features page', () => {
     expect(pageSource).not.toContain('runs in Local, BYOK, or AGI Cloud');
     expect(pageSource).not.toContain('Local and Cloud allowed per project');
     expect(pageSource).not.toContain('Stays on the device in Local mode');
+    expect(pageSource).not.toContain('Across every surface and trust mode');
+  });
+
+  it('links every feature detail page that exists, and none that does not', () => {
+    const detailRoutes = readdirSync(FEATURES_DIR, { withFileTypes: true })
+      .filter(
+        (entry) => entry.isDirectory() && existsSync(resolve(FEATURES_DIR, entry.name, 'page.tsx')),
+      )
+      .map((entry) => `/features/${entry.name}`)
+      .sort();
+    expect([...new Set(hrefs)].sort()).toEqual(detailRoutes);
+  });
+
+  it('names connectors as part of the workspace only once the connector switch is released', () => {
+    expect(pageSource).toContain('const CONNECTORS_RELEASED = connectorsReleased();');
+    expect(pageSource).toContain("CONNECTORS_RELEASED ? 'tools and connectors' : 'tools'");
+    expect(pageSource).toContain("CONNECTORS_RELEASED ? '' : ` ${CONNECTORS_COMING_SOON_MESSAGE}`");
+    expect(pageSource).toContain('voice, ${TOOLS_IN_THE_WORKSPACE}, plugins, and skills.');
+    expect(pageSource).toContain('with a default of asking first.${CONNECTORS_NOTE}');
+    expect(pageSource).not.toContain('Connectors are coming soon');
+  });
+
+  it('reads the image and video plan lists from the billing catalog', () => {
+    expect(pageSource).toContain("billingPlanCapabilityPlanLabels('image_generation')");
+    expect(pageSource).toContain("billingPlanCapabilityPlanLabels('video_generation')");
+    expect(pageSource).toContain('Included on ${IMAGE_PLANS} plans.');
+    expect(pageSource).toContain('Included on ${VIDEO_PLANS} plans.');
   });
 });
 

@@ -7,9 +7,9 @@ import { DOCS_HOME_PATH, docsNavGroups, docsNeighbours } from '@/features/docs/l
 import { buildMetadata } from '@/lib/seo/metadata';
 import {
   DOC_AUDIENCE_LABELS,
-  DOC_MATURITY_LABELS,
   describePlans,
   describePlatforms,
+  describeReleaseState,
   docMetadataFor,
 } from '@/lib/support/doc-metadata';
 import { headingAnchor } from '@/lib/support/doc-topics';
@@ -77,7 +77,7 @@ export default async function HelpArticlePage({ params }: ArticleProps) {
           <li>{`Updated ${article.updated}`}</li>
           {metadata ? (
             <>
-              <li>{DOC_MATURITY_LABELS[metadata.maturity]}</li>
+              <li>{describeReleaseState(metadata)}</li>
               <li>{DOC_AUDIENCE_LABELS[metadata.audience]}</li>
               <li>{describePlatforms(metadata.applicability.platforms)}</li>
               <li>{describePlans(metadata.applicability.plans)}</li>

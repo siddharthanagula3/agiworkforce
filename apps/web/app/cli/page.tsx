@@ -7,7 +7,7 @@ import { FeatureGrid } from '@/features/marketing/components/LandingSections';
 import { DevBand, FinalCta, TrustTriptych } from '@/features/marketing/components/SurfaceSections';
 import { billingPlanCapabilityPlanLabels } from '@agiworkforce/types';
 import { SURFACE_STATUS } from '../../lib/marketing-constants';
-import { CliInstallCommand } from './CliInstallCommand';
+import { CliInstallCommand, CliReleaseProvider, CliReleaseStatus } from './CliInstallCommand';
 
 export const metadata = buildMetadata({
   title: 'AGI CLI: the agi agent in your terminal',
@@ -80,6 +80,14 @@ const FEATURES = [
 
 export default function CliPage() {
   return (
+    <CliReleaseProvider>
+      <CliPageContent />
+    </CliReleaseProvider>
+  );
+}
+
+function CliPageContent() {
+  return (
     <div data-design="agi">
       <Header />
       <main id="main-content" tabIndex={-1} className="agi-shell agi-surface">
@@ -87,7 +95,9 @@ export default function CliPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
-              <p className="agi-fl-eyebrow">AGI CLI · {SURFACE_STATUS.cli}</p>
+              <p className="agi-fl-eyebrow">
+                AGI CLI · <CliReleaseStatus />
+              </p>
               <h1 id="agi-fl-cli-hero-title" className="sr-only">
                 AGI CLI
               </h1>
@@ -173,7 +183,7 @@ export default function CliPage() {
               title: 'Managed compute, public alpha.',
               body: 'Cloud execution from the CLI is public alpha, part of the higher paid plans, and still fails closed without an explicit route.',
               points: [
-                `Included with ${DEVELOPER_SURFACE_PLANS}; paid upgrades are opening in stages`,
+                `Included with ${DEVELOPER_SURFACE_PLANS}; upgrades start from the pricing page`,
                 'No agi cloud command: managed runs use the normal model path',
                 'Clear labels before anything routes to cloud',
                 'Usage metered and transparent',
@@ -184,7 +194,9 @@ export default function CliPage() {
         />
 
         <section className="agi-fl-section" aria-labelledby="agi-fl-cli-install-title">
-          <p className="agi-fl-eyebrow">{SURFACE_STATUS.cli}</p>
+          <p className="agi-fl-eyebrow">
+            <CliReleaseStatus />
+          </p>
           <h2 id="agi-fl-cli-install-title" className="agi-fl-h2">
             Every install is verified.
           </h2>
@@ -202,9 +214,9 @@ export default function CliPage() {
         </section>
 
         <FinalCta
-          eyebrow={SURFACE_STATUS.cli}
+          eyebrow="AGI CLI"
           title="An agent for your terminal."
-          body="Resumable sessions, sandboxed execution, and AGI managed cloud in public alpha, open by default."
+          body={`Resumable sessions, sandboxed execution, and AGI managed cloud in public alpha, included with ${DEVELOPER_SURFACE_PLANS}.`}
           ctas={[
             { href: '/download#cli-downloads', label: 'Check availability' },
             { href: '/agi-code', label: 'Explore AGI Code' },

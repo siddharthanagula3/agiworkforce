@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import { OG_IMAGE } from '@/lib/seo/site';
 
 export const metadata: Metadata = {
   title: 'Create Account',
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com/signup',
     images: [
       {
-        url: '/api/og',
+        url: OG_IMAGE.url,
         width: 1200,
         height: 630,
         alt: 'Sign up for AGI',

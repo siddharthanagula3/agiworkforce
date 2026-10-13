@@ -1,6 +1,20 @@
-import { Fragment } from 'react';
 import Link from 'next/link';
+import {
+  CONNECTORS_COMING_SOON_DETAIL,
+  CONNECTORS_COMING_SOON_LABEL,
+  CONNECTORS_COMING_SOON_MESSAGE,
+  TOOL_APPROVAL_ACTION_LABELS,
+  TOOL_APPROVAL_HIGH_RISK_NOTICE,
+  connectorsReleased,
+} from '@agiworkforce/types';
 import { buildMetadata } from '@/lib/seo/metadata';
+import { CLI_AVAILABILITY_NOTE } from '@/lib/surface-status';
+import { buildToolApprovalPolicyRows } from '@/lib/tool-approval-view';
+import {
+  DEFAULT_TOOL_APPROVAL_POLICY,
+  WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
+  toolApprovalPolicyOption,
+} from '@shared/types/toolApprovalPolicy';
 import { Header } from '@shared/components/layout/Header';
 import { AgentRunWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -17,7 +31,7 @@ import {
 export const metadata = buildMetadata({
   title: 'Tools and connectors: MCP servers, OAuth apps, and permissions',
   description:
-    'How a tool call is gated inside AGI: the mode check, the per-tool default, the approval prompt that opens on No, the 120-second timeout that cancels rather than approves, and the tools no standing grant can answer for.',
+    'How a tool call is gated in AGI Web: a tool you denied, your saved choice, the account default, the connector tools AGI does not know, and the high-risk approval no standing answer covers.',
   path: '/features/tools',
 });
 
@@ -29,27 +43,17 @@ const IDS = {
   close: 'agi-features-tools-close-title',
 } as const;
 
-const NEVER_REMEMBERABLE = [
-  'set_auto_approve_all',
-  'set_agent_mode:autopilot',
-  'set_tool_approval_policy',
-  'execute_code',
-  'code_execute',
-  'file_write',
-  'file_write_text',
-  'file_write_binary',
-  'file_open_with_default_app',
-  'terminal_execute',
-  'folder_access',
-  'playwright_evaluate',
-  'email_send',
-  'git_push',
-  'cloud_upload',
-  'db_execute',
-  'browser_execute_async_js',
-  'browser_evaluate',
-  'browser_execute_in_frame',
-];
+const CONNECTORS_RELEASED = connectorsReleased();
+const CONNECTORS_STATUS_LABEL = `Connectors: ${CONNECTORS_COMING_SOON_LABEL.toLowerCase()}`;
+const CONNECTORS_NOTE = CONNECTORS_RELEASED ? '' : ` ${CONNECTORS_COMING_SOON_MESSAGE}`;
+const CLI_NOTE = CLI_AVAILABILITY_NOTE ? ` ${CLI_AVAILABILITY_NOTE}` : '';
+
+const ACCOUNT_DEFAULT = toolApprovalPolicyOption(WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY);
+const WITHHELD_FALLBACK = toolApprovalPolicyOption(DEFAULT_TOOL_APPROVAL_POLICY);
+const RUNS_UNDER_ACCOUNT_DEFAULT =
+  buildToolApprovalPolicyRows().find((row) => row.isDefault)?.runsWithoutAsking ?? [];
+
+const { allow, allowForChat, alwaysAllow, ask, deny } = TOOL_APPROVAL_ACTION_LABELS;
 
 export default function FeaturesToolsPage() {
   return (
@@ -59,15 +63,20 @@ export default function FeaturesToolsPage() {
         <section className="agi-lp-hero" aria-labelledby={IDS.hero}>
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
-              <p className="agi-lp-eyebrow">Features &middot; Tool permissions</p>
+              <p className="agi-lp-eyebrow">
+                Features &middot; Tool permissions
+                {CONNECTORS_RELEASED ? null : <> &middot; {CONNECTORS_STATUS_LABEL}</>}
+              </p>
               <h1 className="sr-only" id={IDS.hero}>
-                <span className="agi-lp-line">In AGI Desktop the agent asks first,</span>{' '}
-                <em className="agi-lp-accent">and nineteen tools ask every time.</em>
+                <span className="agi-lp-line">
+                  On the website the default is {ACCOUNT_DEFAULT.label}.
+                </span>{' '}
+                <em className="agi-lp-accent">{ACCOUNT_DEFAULT.hint}</em>
               </h1>
               <ButtonRow>
                 <Button href="/agent-permissions">Read the permission reference</Button>
-                <Button href="/connectors" variant="secondary">
-                  See what connects
+                <Button href="/connectors/mcp-directory" variant="secondary">
+                  Browse the MCP directory
                 </Button>
               </ButtonRow>
             </div>
@@ -86,37 +95,42 @@ export default function FeaturesToolsPage() {
               </h2>
             </div>
             <Prose>
-              On the website the default is Skip approvals: eligible reads, searches, and sandboxed
-              code run on their own, while destructive actions and connector tools AGI does not know
-              still ask.
+              Under {ACCOUNT_DEFAULT.label}, eligible reads, searches, and sandboxed code run on
+              their own, while destructive actions and connector tools AGI does not know still ask.
+              {CONNECTORS_RELEASED ? null : ` ${CONNECTORS_COMING_SOON_DETAIL}`}
             </Prose>
             <Ledger
               caption="Tool approval gate order"
               rows={[
                 {
-                  label: 'Mode',
-                  value:
-                    'In Safe and Plan, AGI Desktop may call only read-only tools, so a write is refused before a prompt is even offered.',
+                  label: deny,
+                  value: `A connector tool you set to ${deny} is refused first, before any other rule is read.${CONNECTORS_NOTE}`,
                 },
                 {
-                  label: 'Default',
-                  value:
-                    'A connector tool you have never ruled on is Needs approval. A write-shaped name defaults to Blocked instead.',
+                  label: alwaysAllow,
+                  value: `A connector tool saved as ${alwaysAllow} runs, unless the escalation below trips, and then it asks.`,
                 },
                 {
-                  label: 'The ask',
-                  value:
-                    'The request carries the tool name, the arguments the model actually wrote, and a risk level.',
+                  label: ask,
+                  value: `A connector tool saved as ${ask} asks every time, whatever the account default says.`,
                 },
                 {
-                  label: 'Silence',
-                  value:
-                    'The desktop dialog holds the call open for 120 seconds and then cancels it. It is never counted as a yes.',
+                  label: 'Account default',
+                  value: `A new account uses ${ACCOUNT_DEFAULT.label}. ${ACCOUNT_DEFAULT.hint} Where a workspace withholds it, the account falls back to ${WITHHELD_FALLBACK.label}.`,
                 },
                 {
-                  label: 'Reach',
+                  label: 'Unknown tools',
                   value:
-                    'Inside Local mode the CLI will only open a stdio MCP server; SSE and Streamable HTTP are network egress and are not offered there.',
+                    'A connector or MCP tool AGI has not classified is treated as an irreversible write that can send data out, so no account default runs it on its own.',
+                },
+                {
+                  label: 'Escalation',
+                  value:
+                    'When untrusted content is in the chat, a private source is in reach and the call can send data out, the call waits for a person even if it would otherwise have run.',
+                },
+                {
+                  label: 'Local mode',
+                  value: `Inside Local mode the CLI will only open a stdio MCP server; SSE and Streamable HTTP are network egress and are not offered there.${CLI_NOTE}`,
                 },
               ]}
             />
@@ -128,27 +142,23 @@ export default function FeaturesToolsPage() {
             <div>
               <Eyebrow>Standing grants</Eyebrow>
               <h2 className="agi-ds-h2" id={IDS.standing}>
-                Some tools refuse to remember your answer.
+                A high-risk approval cannot be answered in advance.
               </h2>
             </div>
             <Prose>
-              Always allow, an approval scoped to the session, and Autopilot are one grant at three
-              lengths. Nineteen tools are excluded from all three and prompt again on every call:
-              the ones that rewrite the permission model itself, the ones that run code or write to
-              your disk, and the ones that publish or destroy data outside the app. Every MCP tool
-              is excluded as well, because what a tool does is decided by a third-party server.
+              An approval card offers {allow}, {allowForChat} and {deny}. {allowForChat} also
+              answers later calls to the same tool in that chat for as long as the page stays open.
+              A high-risk approval is the exception. The card warns &ldquo;
+              {TOOL_APPROVAL_HIGH_RISK_NOTICE}&rdquo; and offers only {allow} and {deny}, and an
+              allowance the chat already holds does not answer it.
             </Prose>
             <Prose size="sm">
-              {NEVER_REMEMBERABLE.map((tool, index) => (
-                <Fragment key={tool}>
-                  {index > 0 ? ', ' : ''}
-                  <code>{tool}</code>
-                </Fragment>
-              ))}
+              Under {ACCOUNT_DEFAULT.label} these built-in tools run without asking:{' '}
+              {RUNS_UNDER_ACCOUNT_DEFAULT.join(', ')}.
             </Prose>
             <Prose size="sm">
-              That list is a constant in the desktop source with a test pinning it entry for entry.
-              What the agent may do <em>without</em> asking on each surface is written out at{' '}
+              That list is built from the same table the server reads. What the agent may do{' '}
+              <em>without</em> asking under each setting is written out at{' '}
               <Link href="/agent-permissions" className="agi-ds-link">
                 the permission reference
               </Link>
@@ -162,8 +172,9 @@ export default function FeaturesToolsPage() {
             <div>
               <Eyebrow>Saved rules</Eyebrow>
               <h2 className="agi-ds-h2" id={IDS.saved}>
-                Your saved answers live in a file you can open.
+                In the CLI, your saved answers live in a file you can open.
               </h2>
+              {CLI_AVAILABILITY_NOTE ? <Prose>{CLI_AVAILABILITY_NOTE}</Prose> : null}
             </div>
             <Ledger
               caption="Saved permission rules"
@@ -181,9 +192,9 @@ export default function FeaturesToolsPage() {
                   label: 'Commands',
                   value: (
                     <>
-                      <code>agi approvals list</code> prints its Allow, Ask, Deny and Workspace
-                      tabs; allow, deny, session and remove edit them; export and import carry them
-                      to another machine; reset clears them.
+                      <code>agi approvals list</code> prints the Allow, Ask and Deny rules; allow,
+                      ask, deny, session and remove edit them; export and import carry them to
+                      another machine; reset clears them.
                     </>
                   ),
                 },

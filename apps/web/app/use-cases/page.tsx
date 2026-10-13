@@ -1,3 +1,4 @@
+import { connectorsReleased } from '@agiworkforce/types';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -34,6 +35,10 @@ const USE_CASE_VISUALS: Record<(typeof INDEX_ORDER)[number], ReactNode> = {
   'it-providers': <AgentRunWindow />,
   'sales-teams': <ResearchWindow />,
 };
+
+const SHARED_ACROSS_PAGES = connectorsReleased()
+  ? 'the same projects, connectors and routing'
+  : 'the same projects and routing';
 
 const IDS = {
   hero: 'agi-usecases-title',
@@ -75,8 +80,7 @@ export default function UseCasesPage() {
                 Each page opens on the surface its team actually works in.
               </h2>
               <Prose>
-                Underneath they are the same product, with the same projects, connectors and
-                routing, so what changes between them is where the work starts.
+                {`Underneath they are the same product, with ${SHARED_ACROSS_PAGES}, so what changes between them is where the work starts.`}
               </Prose>
             </div>
             <Bento

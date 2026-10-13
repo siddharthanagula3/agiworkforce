@@ -6,6 +6,7 @@ import type { CSSProperties } from 'react';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Button, ButtonRow, Eyebrow, Ledger, Prose } from '@/features/marketing/components/system';
+import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
 const STATEMENT_MAX_WIDTH = '30rem';
 
@@ -53,8 +54,8 @@ function AuthErrorBody() {
         </ButtonRow>
         <Prose size="sm">
           Still stuck? Email{' '}
-          <a className="agi-ds-link" href="mailto:contact@agiworkforce.com">
-            contact@agiworkforce.com
+          <a className="agi-ds-link" href={contactMailto()}>
+            {CONTACT_EMAIL}
           </a>{' '}
           with the error code above.
         </Prose>

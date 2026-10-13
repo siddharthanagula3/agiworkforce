@@ -1,5 +1,4 @@
 export const DYNAMIC_PAGE_ROUTES = [
-  '/blog/[slug]',
   '/chat/[sessionId]',
   '/chat/from-share/[token]',
   '/chat/projects/[id]',

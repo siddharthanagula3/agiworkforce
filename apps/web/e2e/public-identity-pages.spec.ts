@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { connectorsReleased } from '@agiworkforce/types';
 
 interface PublicIdentityPage {
   path: string;
@@ -9,13 +10,13 @@ interface PublicIdentityPage {
 const PAGES: PublicIdentityPage[] = [
   {
     path: '/apps',
-    heading: 'Apps connect AGI to the tools you already use',
-    signInLabel: 'Sign in to browse apps',
+    heading: 'Apps are packs you install into AGI',
+    signInLabel: 'Sign in to install apps',
   },
   {
     path: '/connectors',
     heading: 'Connectors bring your own tools into a thread',
-    signInLabel: 'Sign in to add a connector',
+    signInLabel: connectorsReleased() ? 'Sign in to add a connector' : 'Sign in to see connectors',
   },
   {
     path: '/skills',

@@ -16,6 +16,9 @@ const routes = [
   '/features/memory',
   '/features/projects',
   '/features/ai-chat',
+  '/features/images',
+  '/features/video',
+  '/features/voice',
   '/enterprise',
 ] as const;
 

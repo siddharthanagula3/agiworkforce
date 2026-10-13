@@ -2,40 +2,40 @@
   "_description": "Grandfathered hardcoded color literals in apps/web (AP-02). New violations fail CI via the check:no-hex-web step. Shrink this list; do not add to it. Replace each entry with a Tailwind class or a var(--color-*) custom property.",
   "violations": [
     {
-      "file": "app/api/og/route.tsx",
-      "line": 3,
+      "file": "app/api/og/card.tsx",
+      "line": 16,
+      "rule": "hex",
+      "literal": "#000000"
+    },
+    {
+      "file": "app/api/og/card.tsx",
+      "line": 17,
+      "rule": "hex",
+      "literal": "#1f1f1f"
+    },
+    {
+      "file": "app/api/og/card.tsx",
+      "line": 18,
+      "rule": "hex",
+      "literal": "#fafafa"
+    },
+    {
+      "file": "app/api/og/card.tsx",
+      "line": 19,
+      "rule": "hex",
+      "literal": "#a3a3a3"
+    },
+    {
+      "file": "app/api/og/card.tsx",
+      "line": 20,
       "rule": "hex",
       "literal": "#f0a84a"
     },
     {
-      "file": "app/api/og/route.tsx",
-      "line": 29,
-      "rule": "hex",
-      "literal": "#0b0a08"
-    },
-    {
-      "file": "app/api/og/route.tsx",
-      "line": 31,
+      "file": "app/api/og/card.tsx",
+      "line": 21,
       "rule": "rgb",
       "literal": "rgba("
-    },
-    {
-      "file": "app/api/og/route.tsx",
-      "line": 44,
-      "rule": "hex",
-      "literal": "#f5f0e6"
-    },
-    {
-      "file": "app/api/og/route.tsx",
-      "line": 54,
-      "rule": "hex",
-      "literal": "#f5f0e6"
-    },
-    {
-      "file": "app/api/og/route.tsx",
-      "line": 62,
-      "rule": "hex",
-      "literal": "#c4bcac"
     },
     {
       "file": "app/billing/UpgradeWelcome.tsx",

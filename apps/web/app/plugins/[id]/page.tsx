@@ -21,7 +21,12 @@ import {
   isPluginEntryWebInstallable,
   type PluginRegistryEntry,
 } from '@agiworkforce/types';
-import { pluginCliInstallNote } from '@/features/plugins/availability';
+import {
+  pluginCliInstallNote,
+  pluginRequiredConnectorsHeading,
+  pluginStatusLabel,
+} from '@/features/plugins/availability';
+import { CLI_AVAILABILITY_NOTE } from '@/lib/surface-status';
 import { ConnectorChecklist } from './ConnectorChecklist';
 
 interface Props {
@@ -54,14 +59,6 @@ function releaseRowValue(release: PluginVersionRecord, currentVersion: string): 
   if (release.lifecycleReason) parts.push(release.lifecycleReason);
   else if (release.changelog) parts.push(release.changelog);
   return parts.join(' · ');
-}
-
-function statusLabel(entry: PluginRegistryEntry, cliCommand: string | null): string {
-  if (isPluginEntryWebInstallable(entry)) return 'Available on Web';
-  if (isPluginEntryInstallable(entry)) return 'Installable';
-  if (entry.status === 'deprecated') return 'Deprecated: do not install';
-  if (cliCommand !== null) return 'Desktop and CLI';
-  return 'Declared: not installable yet';
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -138,7 +135,7 @@ export default async function PluginDetailPage({ params }: Props) {
                 {webInstallable ? (
                   <strong>Managed in Website Settings.</strong>
                 ) : installable ? (
-                  <strong>Published. Install it with the AGI CLI (see below).</strong>
+                  <strong>Published. {pluginCliInstallNote()}</strong>
                 ) : entry.status === 'deprecated' ? (
                   <strong>Deprecated. This pack should no longer be installed.</strong>
                 ) : installCommand !== null ? (
@@ -175,7 +172,10 @@ export default async function PluginDetailPage({ params }: Props) {
                         value: `${entry.publisher.name}${entry.publisher.kind === 'first-party' ? ' (first-party)' : ' (third-party)'}`,
                       },
                       { label: 'Version', value: `v${entry.version}` },
-                      { label: 'Status', value: statusLabel(entry, installCommand) },
+                      {
+                        label: 'Status',
+                        value: pluginStatusLabel(entry, { cliCommand: installCommand }),
+                      },
                     ]}
                   />
                 </div>
@@ -209,7 +209,10 @@ export default async function PluginDetailPage({ params }: Props) {
                 { label: 'Version', value: `v${entry.version}` },
                 { label: 'Category', value: entry.category },
                 { label: 'Source', value: sourceLabel(entry.source) },
-                { label: 'Status', value: statusLabel(entry, installCommand) },
+                {
+                  label: 'Status',
+                  value: pluginStatusLabel(entry, { cliCommand: installCommand }),
+                },
                 {
                   label: 'Integrity',
                   value: entry.integrity.sha256
@@ -243,6 +246,11 @@ export default async function PluginDetailPage({ params }: Props) {
                   },
                 ]}
               />
+              {CLI_AVAILABILITY_NOTE ? (
+                <div style={{ marginTop: '1rem' }}>
+                  <Prose size="sm">{CLI_AVAILABILITY_NOTE}</Prose>
+                </div>
+              ) : null}
             </div>
           </section>
         ) : null}
@@ -336,7 +344,7 @@ export default async function PluginDetailPage({ params }: Props) {
             <div className="agi-lp-close-inner">
               <Eyebrow>Required connectors</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-plugin-connectors-title">
-                Connect once, use everywhere in the pack.
+                {pluginRequiredConnectorsHeading()}
               </h2>
               <ConnectorChecklist connectorIds={entry.requiredConnectors} />
             </div>

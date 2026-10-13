@@ -5,9 +5,22 @@ import { describe, expect, it } from 'vitest';
 import { modelsCatalogJson } from '@agiworkforce/types';
 
 import { RELEASES } from '@/lib/changelog-entries';
+import { MANAGED_CLOUD_STATUS } from '@/lib/legal-constants';
 import { SURFACE_STATUS } from '@/lib/surface-status';
-import { RELEASED_DOC_PLATFORMS } from '@/lib/support/doc-metadata';
-import { RELEASE_NOTES, RELEASE_STATE_DATES, releaseStateLine } from '../release-notes-data';
+import {
+  DOC_MATURITIES,
+  DOC_MATURITY_LABELS,
+  MANAGED_CLOUD_MATURITY,
+  MANAGED_CLOUD_ONLY_PLATFORMS,
+  RELEASED_DOC_PLATFORMS,
+  publishedMaturity,
+} from '@/lib/support/doc-metadata';
+import {
+  RELEASE_NOTES,
+  RELEASE_STATE_DATES,
+  releaseStateLine,
+  releasedNoteCount,
+} from '../release-notes-data';
 
 const REPO_ROOT = join(__dirname, '..', '..', '..', '..', '..');
 
@@ -54,11 +67,39 @@ describe('release notes', () => {
   });
 
   it('renders a state line a reader can scan', () => {
-    expect(releaseStateLine(noteFor('2026-09-05'))).toBe('GA · Web');
+    const cloudLabel = DOC_MATURITY_LABELS[MANAGED_CLOUD_MATURITY];
+    expect(releaseStateLine(noteFor('2026-09-05'))).toBe(`${cloudLabel} · Web`);
     expect(releaseStateLine(noteFor('2026-02 to 2026-05'))).toBe('Not yet released: Desktop');
     expect(releaseStateLine(noteFor('2026-07-31'))).toBe(
-      'GA · Web · Not yet released: CLI, Desktop',
+      `${cloudLabel} · Web · Not yet released: CLI, Desktop`,
     );
+  });
+
+  it('never prints a release as more mature than the managed cloud it runs on', () => {
+    expect(MANAGED_CLOUD_STATUS).toBe(`public ${MANAGED_CLOUD_MATURITY}`);
+    expect(
+      RELEASED_DOC_PLATFORMS.every((platform) => MANAGED_CLOUD_ONLY_PLATFORMS.includes(platform)),
+    ).toBe(true);
+
+    const ceiling = DOC_MATURITIES.indexOf(MANAGED_CLOUD_MATURITY);
+    let onReleasedSurface = 0;
+    for (const note of RELEASE_NOTES) {
+      if (!note.surfaces.some((surface) => RELEASED_DOC_PLATFORMS.includes(surface))) continue;
+      onReleasedSurface += 1;
+      const published = publishedMaturity(note.maturity, note.surfaces);
+      expect(DOC_MATURITIES.indexOf(published), note.date).toBeGreaterThanOrEqual(ceiling);
+      expect(releaseStateLine(note), note.date).toMatch(
+        new RegExp(`^${DOC_MATURITY_LABELS[published]} · `, 'u'),
+      );
+      if (MANAGED_CLOUD_MATURITY !== 'ga') {
+        expect(releaseStateLine(note), note.date).not.toMatch(/\bGA\b/u);
+      }
+    }
+    expect(onReleasedSurface).toBeGreaterThan(0);
+    expect(DOC_MATURITIES.reduce((total, maturity) => total + releasedNoteCount(maturity), 0)).toBe(
+      onReleasedSurface,
+    );
+    if (MANAGED_CLOUD_MATURITY !== 'ga') expect(releasedNoteCount('ga')).toBe(0);
   });
 });
 

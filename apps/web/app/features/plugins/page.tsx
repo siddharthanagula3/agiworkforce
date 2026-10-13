@@ -14,16 +14,18 @@ import {
 } from '@/features/marketing/components/system';
 import { loadPluginCatalog } from '@/features/plugins/server/registry-source';
 import { pluginAvailabilityClaim } from '@/features/plugins/availability';
-import { SURFACE_STATUS } from '@/lib/marketing-constants';
+import { CLI_AVAILABILITY_NOTE, SURFACE_STATUS, surfaceCta } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Plugins: bundle commands, skills, hooks, and MCP servers',
   description:
-    'AGI plugins bundle slash commands, skills, agents, hooks, and MCP server wiring into one install. Browse the hosted catalogue to see which packs are installable today.',
+    'AGI plugins bundle slash commands, skills, agents, hooks, and MCP server wiring into one install. The hosted catalogue states which packs install on the web and which are published for the CLI.',
   path: '/features/plugins',
 });
 
 export const dynamic = 'force-dynamic';
+
+const CLI_CTA = surfaceCta('cli');
 
 const IDS = {
   hero: 'agi-features-plugins-title',
@@ -97,7 +99,9 @@ export default async function FeaturesPluginsPage() {
                 Some of what a plugin carries is inert, and some of it executes.
               </h2>
             </div>
-            <Prose size="sm">{availability}</Prose>
+            <Prose size="sm">
+              {availability} The install shown above runs in the AGI CLI. {CLI_AVAILABILITY_NOTE}
+            </Prose>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               {FOLDER_CONTENTS.map((item) => (
                 <div key={item.meta} className="agi-ds-card">
@@ -163,7 +167,7 @@ export default async function FeaturesPluginsPage() {
                 {SURFACE_STATUS.cli.toLowerCase()}.
               </p>
               <ButtonRow>
-                <Button href="/download">Check CLI availability</Button>
+                <Button href={CLI_CTA.href}>{CLI_CTA.label}</Button>
                 <Button href="/features/tools" variant="secondary">
                   How tool permissions work
                 </Button>

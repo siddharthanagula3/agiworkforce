@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Menu } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@agiworkforce/ui/sheet';
 import { ActiveNavLink } from './ActiveNavLink';
 import { CHAT_ROOT_HREF, CONTACT_SALES_HREF, NAV_GROUPS, WEB_ENTRY_HREF } from './nav';
@@ -10,6 +11,7 @@ const ICON_SIZE = 20;
 const SIGN_IN_HREF = '/login';
 
 export function MarketingMobileNav({ signedIn = false }: { signedIn?: boolean } = {}) {
+  const pathname = usePathname() ?? '';
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -37,6 +39,17 @@ export function MarketingMobileNav({ signedIn = false }: { signedIn?: boolean } 
                       </ActiveNavLink>
                     </li>
                   ))}
+                  {group.footer ? (
+                    <li>
+                      <Link
+                        href={group.footer.href}
+                        className="agi-ds-mobile-nav-link"
+                        aria-current={pathname === group.footer.href ? 'page' : undefined}
+                      >
+                        {group.footer.label}
+                      </Link>
+                    </li>
+                  ) : null}
                 </ul>
               </li>
             ))}

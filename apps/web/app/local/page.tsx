@@ -10,11 +10,16 @@ import {
   Transcript,
   type TranscriptLine,
 } from '@/features/marketing/components/system';
-import { CLI_LOCAL_RUNTIMES, SURFACE_STATUS, surfaceCta } from '@/lib/marketing-constants';
+import {
+  CLI_AVAILABILITY_NOTE,
+  CLI_LOCAL_RUNTIMES,
+  SURFACE_STATUS,
+  surfaceCta,
+} from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'Local: run AGI on your own hardware, at no cost',
-  description: `Run AGI locally from the CLI with ${CLI_LOCAL_RUNTIMES.label}. No account is required for local mode, and nothing leaves the device unless you explicitly send it out.`,
+  title: 'Local: AGI on your own hardware, at no cost',
+  description: `Local mode runs in the CLI with ${CLI_LOCAL_RUNTIMES.label}. It needs no account, and conversations stay on your device. ${CLI_AVAILABILITY_NOTE}`,
   path: '/local',
 });
 
@@ -23,7 +28,10 @@ const CLI_CTA = surfaceCta('cli');
 const HERO_TRANSCRIPT: TranscriptLine[] = [
   { kind: 'cmd', text: 'ollama pull <model>' },
   { kind: 'cmd', text: 'agi models scan' },
-  { kind: 'out', text: 'ollama · http://localhost:11434 · 1 model' },
+  { kind: 'out', text: 'Local model servers' },
+  { kind: 'out', text: 'ollama  running  http://localhost:11434' },
+  { kind: 'out', text: '  models:' },
+  { kind: 'out', text: '    - <model>' },
   { kind: 'cmd', text: 'agi --provider ollama --model <model>' },
 ];
 
@@ -36,12 +44,12 @@ const SURFACE_FACTS = [
   {
     meta: `Desktop · ${SURFACE_STATUS.desktop}`,
     title: 'Managed Cloud only',
-    body: 'The current public Electron Desktop contract does not accept local-inference commands or provider keys. Local mode belongs to the CLI.',
+    body: 'The Electron Desktop contract does not accept local-inference commands or provider keys. Local mode belongs to the CLI.',
   },
   {
-    meta: 'Mobile · not shipped',
+    meta: `Mobile · ${SURFACE_STATUS.mobile}`,
     title: 'Local mode on the phone',
-    body: 'Local mode keeps the conversation, memory, and files on the device. The surface itself has not shipped.',
+    body: 'Local mode on the phone is built to keep the conversation, memory, and files on the device.',
   },
 ] as const;
 
@@ -79,6 +87,7 @@ export default function LocalPage() {
               <Ledger
                 caption="Local mode cost"
                 rows={[
+                  { label: 'Where', value: `The CLI. ${CLI_AVAILABILITY_NOTE}` },
                   { label: 'Account', value: 'Not required.' },
                   { label: 'Cost', value: '$0.00. The model runs on hardware you already own.' },
                 ]}
@@ -117,7 +126,7 @@ export default function LocalPage() {
               <Prose>
                 Nothing is installed on your behalf. Start the runtime, pull or load a model the way
                 you normally would, then let AGI discover what is there and name the provider
-                explicitly.
+                explicitly. {CLI_AVAILABILITY_NOTE}
               </Prose>
             </div>
             <Ledger
@@ -197,8 +206,8 @@ export default function LocalPage() {
               </h2>
               <Prose size="lg">
                 The CLI answers from {CLI_LOCAL_RUNTIMES.label} on the machine you own. BYOK on the
-                CLI is the reviewed way out on the days a local model is not enough; the current
-                public Desktop is managed-cloud only.
+                CLI is the reviewed way out on the days a local model is not enough; Desktop is
+                managed-cloud only. {CLI_AVAILABILITY_NOTE}
               </Prose>
               <ButtonRow>
                 <Button href="/desktop" variant="secondary">

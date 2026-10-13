@@ -295,7 +295,7 @@ const INLINE_RADIUS_PROPERTIES = new Set([
   'borderBottomLeftRadius',
 ]);
 const STANDALONE_RENDERERS = new Set([
-  'apps/web/app/api/og/route.tsx',
+  'apps/web/app/api/og/card.tsx',
   'apps/web/app/global-error.tsx',
 ]);
 
@@ -349,12 +349,10 @@ function belongsToInlineStyle(node) {
 const SOURCE_RULES = [
   {
     id: 'verbose-theme-utility',
-    advice: 'use the generated semantic utility, such as text-foreground, instead of wrapping its token in hsl(var())',
+    advice:
+      'use the generated semantic utility, such as text-foreground, instead of wrapping its token in hsl(var())',
     scan(source, file) {
-      if (
-        !['.ts', '.tsx'].includes(path.extname(file)) ||
-        /\.(?:test|spec)\.tsx?$/.test(file)
-      ) {
+      if (!['.ts', '.tsx'].includes(path.extname(file)) || /\.(?:test|spec)\.tsx?$/.test(file)) {
         return [];
       }
       const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
@@ -384,7 +382,8 @@ const SOURCE_RULES = [
   },
   {
     id: 'mixed-icon-families',
-    advice: 'choose one icon package per production file so one control does not mix glyph geometry',
+    advice:
+      'choose one icon package per production file so one control does not mix glyph geometry',
     scan(source, file) {
       if (
         !file.startsWith('apps/web/') ||
@@ -405,7 +404,8 @@ const SOURCE_RULES = [
       const secondImport = iconImports[1];
       return [
         {
-          line: sourceFile.getLineAndCharacterOfPosition(secondImport.getStart(sourceFile)).line + 1,
+          line:
+            sourceFile.getLineAndCharacterOfPosition(secondImport.getStart(sourceFile)).line + 1,
           literal: '@agiworkforce/icons + lucide-react',
         },
       ];

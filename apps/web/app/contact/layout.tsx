@@ -1,66 +1,13 @@
-import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
+import { CONTACT_EMAIL, LEGAL_ENTITY } from '@/lib/legal-constants';
+import { buildMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = {
-  title: 'Contact Us',
-  description:
-    'Get in touch with AGI Automation LLC. Have questions about AGI? Our support team is ready to help you with any inquiries.',
-  keywords: ['contact AGI', 'AGI Automation support', 'AI automation help', 'customer support'],
-  alternates: {
-    canonical: 'https://agiworkforce.com/contact',
-  },
-  openGraph: {
-    title: 'Contact Us',
-    description: 'Have questions about AGI? Our support team is ready to help. Contact us today.',
-    url: 'https://agiworkforce.com/contact',
-    siteName: 'AGI',
-    type: 'website',
-    images: [
-      {
-        url: '/api/og',
-        width: 1200,
-        height: 630,
-        alt: 'Contact AGI',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Contact Us',
-    description: 'Have questions about AGI? Get in touch with our team.',
-    images: ['/api/og'],
-    creator: '@agiworkforce',
-  },
-};
+export const metadata = buildMetadata({
+  title: 'Contact',
+  description: `Email ${LEGAL_ENTITY} at ${CONTACT_EMAIL}. The contact page drafts the message in your own mail app, and a signed-in account can raise a support ticket from Settings, Help.`,
+  path: '/contact',
+});
 
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'ContactPage',
-  '@id': 'https://agiworkforce.com/contact',
-  url: 'https://agiworkforce.com/contact',
-  name: 'Contact AGI',
-  description: 'Get in touch with AGI Automation LLC support team.',
-  mainEntity: {
-    '@type': 'Organization',
-    name: 'AGI Automation LLC',
-    email: 'contact@agiworkforce.com',
-    address: {
-      '@type': 'PostalAddress',
-      addressCountry: 'US',
-    },
-    contactPoint: {
-      '@type': 'ContactPoint',
-      contactType: 'customer support',
-      email: 'contact@agiworkforce.com',
-      availableLanguage: 'English',
-    },
-    sameAs: [
-      'https://www.linkedin.com/company/agi-automation-llc',
-      'https://www.instagram.com/agiworkforce',
-    ],
-  },
-};
-
-export default function ContactLayout({ children }: { children: React.ReactNode }) {
-  void jsonLd;
+export default function ContactLayout({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }

@@ -19,8 +19,13 @@ describe('Deep Research tier claims', () => {
   });
 
   it('names the Pro tier on both feature pages and never calls the gate a free trial', () => {
-    expect(FEATURES).toContain('Pro plans and above');
-    expect(DEEP_RESEARCH).toContain("billingPlanCapabilityPlanLabels('deep_research')");
+    for (const source of [FEATURES, DEEP_RESEARCH]) {
+      expect(source).toContain("billingPlanCapabilityPlanLabels('deep_research')");
+      expect(source).not.toContain('Pro plans and above');
+    }
+    expect(FEATURES).toContain(
+      '`Included on ${RESEARCH_PLANS} plans; web search is on every plan`',
+    );
     expect(DEEP_RESEARCH).toMatch(/Deep Research is included on \{RESEARCH_PLANS\} plans/);
     expect(billingPlanCapabilityPlanLabels('deep_research')).toMatch(/^Pro\b/);
     for (const source of [FEATURES, DEEP_RESEARCH]) {

@@ -129,7 +129,7 @@ describe('describeConnectorSetup', () => {
       kind: 'device-local',
       missingEnv: [],
       message:
-        'Local Filesystem runs on your own machine, so connect it from the CLI rather than from the browser. The current public Desktop reports no local MCP capability.',
+        'Local Filesystem runs on your own machine, so connect it from the CLI rather than from the browser. Desktop reports no local MCP capability.',
     });
   });
 

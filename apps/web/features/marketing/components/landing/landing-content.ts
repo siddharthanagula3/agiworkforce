@@ -1,5 +1,4 @@
 import { BILLING_PLAN_PRICING, modelsCatalogJson } from '@agiworkforce/types';
-import { BYOK_PROVIDERS } from '@/lib/byok-providers';
 import {
   AVAILABLE_NOW_LABEL,
   BYOK_SURFACES,
@@ -294,7 +293,7 @@ export const ROUTES = {
       label: 'Where it runs',
       values: [
         `Your hardware, through ${CLI_LOCAL_RUNTIMES.label} in the CLI`,
-        `Your account at one of ${BYOK_PROVIDERS.length} providers, from one key list`,
+        `Your account at one of the ${CATALOG_SCOPES.byokProviders.text}, from one key list`,
         'Capacity we run. The router names the provider and model on the answer',
       ],
     },

@@ -21,8 +21,8 @@ const CAUSE_SENTENCE: Record<E2BUnavailableCause, string> = {
   'no-capacity':
     'this account already has as many sandboxes running as its plan allows; one frees up when an earlier session ends',
   policy: 'the network policy for this request does not allow a sandbox',
-  // Upgrades need an access code or a waitlist place, so no sentence sends the
-  // reader to buy one; Usage is where the reset is shown.
+  // Upgrades can be behind an access code or the waitlist, so no sentence sends
+  // the reader to buy one; Usage is where the reset is shown.
   'over-quota':
     'this account has no usage budget left to pay for sandbox time; Usage in Settings shows when it resets',
   // An outage read as the account's own limit the last time these were one

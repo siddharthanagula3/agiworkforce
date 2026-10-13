@@ -4,7 +4,7 @@ title: Pick a model, and control how hard it thinks
 path: /models
 category: models
 tags: model picker, choose model, auto, switch model, extended thinking, reasoning effort, thinking budget, vision, image output, video output, tools, model unavailable, retired model, prompt cache
-updated: 2026-09-17
+updated: 2026-10-12
 scope: public
 ---
 
@@ -13,7 +13,7 @@ scope: public
 The model control under the composer lists every model your plan and trust mode
 make available, grouped and searchable by name. Each entry carries what it can
 do: **Vision**, **Tools**, **Search**, **Image output**, **Video output**,
-**Reasoning**. Models on your own machine appear under **On this device**.
+**Reasoning**.
 
 Leaving the control on **Auto** picks the best model for each message. An
 explicit choice is never silently replaced with a different provider.
@@ -30,10 +30,10 @@ explicit choice is never silently replaced with a different provider.
 
 How reasoning is controlled depends on the model. Some have no reasoning
 control, some always reason, some expose an on/off **Extended thinking**
-switch, some a thinking budget, and some a set of effort levels. The control
-under the composer says which applies: "Always on for this model", "Extended
-thinking is off for this model", or an effort picker whose hint is "Higher
-effort thinks longer before it answers."
+switch, and some a set of effort levels. The control under the composer says
+which applies: "Always on for this model", "Extended thinking is off for this
+model", or an effort picker whose hint is "Higher effort thinks longer before it
+answers."
 
 ## Switching mid-conversation
 
@@ -42,20 +42,19 @@ conversation; the provider label updates before the next request. The control
 warns that switching here starts a new prompt cache, so the next message is
 processed fresh.
 
-Moving between Local, BYOK and managed cloud is different: it is always an
-explicit continuation with context selection, a payload preview, your consent,
-and a visible destination label.
+Continuing a Local chat on a BYOK provider is different: it is an explicit
+continuation with context selection, a payload preview, your consent, and a
+label naming the destination provider.
 
 ## A model that was retired
 
 If a conversation was saved with a model that no longer exists, the chat says so
 in place: that model is no longer available, new messages will use the named
-replacement, and you can pick a different one. The conversation is not lost and
-nothing is rewritten.
+replacement, and you can pick a different one.
 
 ## How many there are
 
-{{MARKETING.models.display}} models across {{MARKETING.providers.display}}
-provider integrations. Providers ship and retire models constantly, so the
-picker in the product is the current source of truth, never a number in a
-document.
+Providers ship and retire models constantly, so the picker in the product is the
+current source of truth, never a number in a document. The provider-key catalog
+counts, and what they measure, are in
+[Providers and models](https://agiworkforce.com/help/providers-and-models).

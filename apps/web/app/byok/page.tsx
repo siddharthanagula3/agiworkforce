@@ -46,7 +46,7 @@ export default function ByokPage() {
                 Bring your own provider keys.
               </h1>
               <ButtonRow>
-                <Button href="/help/byok-provider-keys">Set up a provider key</Button>
+                <Button href="/help/byok-provider-keys">Read the provider-key guide</Button>
                 <Button href="/download" variant="secondary">
                   Check surface availability
                 </Button>

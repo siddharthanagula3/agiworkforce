@@ -5,18 +5,16 @@ path: /cli
 category: surfaces
 tags: cli, install cli, install.sh, agi command, terminal, agi login, auth-status, list-models, exec, resume, fork, sandbox, update, checksum, signature
 platforms: cli, macos, windows, linux
-updated: 2026-10-07
+updated: 2026-10-12
 scope: public
 ---
 
 ## Getting the binary
 
-Check [surface availability](https://agiworkforce.com/get-started) first: the
-command below installs the CLI only once a signed release is published.
-
-```
-curl -fsSL https://agiworkforce.com/install.sh | bash
-```
+The CLI is {{STATUS.cli}}; [surface availability](https://agiworkforce.com/get-started)
+lists each client's release state. The [CLI page](https://agiworkforce.com/cli)
+shows the install command once a signed release is published; until then there
+is no install command to run.
 
 The installer downloads the release archive for your platform, checks the
 release's signed checksum manifest with `openssl`, checks the archive's SHA-256
@@ -26,9 +24,10 @@ it in Git Bash or WSL. There is no npm package or Homebrew tap.
 
 `agi update` compares your build with the newest release, and
 `agi update --install` installs that release after verifying its signature with
-the key built into your `agi`. AGI Cloud for desktop ships its own copy of `agi`
-for local coding sessions, and the VS Code extension offers **Install AGI CLI**
-when it cannot find one.
+the key built into your `agi`. The Desktop app is built to carry its own copy of
+`agi` for coding sessions on your machine, and the VS Code extension offers
+**Install AGI CLI** when it cannot find one. Desktop is {{STATUS.desktop}} and VS
+Code is {{STATUS.vscode}}.
 
 `agi` is the primary command. `agiworkforce` remains available as a
 backward-compatible alias.
@@ -74,9 +73,10 @@ without an explicit route.
 
 ## Managed cloud from the CLI
 
-Managed cloud access from the CLI is part of the higher paid tiers. Local mode
-and BYOK work on any account, including one with no subscription at all. The
-pricing page carries the current details.
+Managed cloud access from the CLI requires one of these plans:
+{{PLANS.developer_surfaces}}. Local mode and BYOK work on any account, including
+one with no subscription at all. The pricing page lists it once the CLI or the
+VS Code extension is released.
 
 ## When something is wrong
 

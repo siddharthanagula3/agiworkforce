@@ -27,7 +27,7 @@ export default function BlogError({
 
       <h1 className="text-h1 text-foreground mb-3">Unable to Load Blog</h1>
       <p className="text-muted-foreground max-w-sm mx-auto mb-2">
-        An unexpected error occurred while loading this post or page. Please try again.
+        An unexpected error occurred while loading this page. Please try again.
       </p>
 
       {error.digest && (

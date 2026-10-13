@@ -19,6 +19,8 @@ export const metadata = buildMetadata({
   path: '/agi-work',
 });
 
+const AGI_WORK_ENTRY_HREF = '/login?redirectTo=%2Fagi-work';
+
 const IDS = {
   hero: 'agi-work-hero-title',
   facts: 'agi-work-facts-title',
@@ -66,7 +68,7 @@ export default function AgiWorkPage() {
                 <em className="agi-lp-accent">then asks before it acts.</em>
               </h1>
               <ButtonRow>
-                <Button href="/chat">Open AGI Work</Button>
+                <Button href={AGI_WORK_ENTRY_HREF}>Open AGI Work</Button>
                 <Button href="/tasks" variant="secondary">
                   See your runs
                 </Button>

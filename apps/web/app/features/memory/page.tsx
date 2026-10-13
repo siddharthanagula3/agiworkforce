@@ -11,6 +11,7 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
+import { SURFACE_STATUS } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Memory: the list of facts you can read and edit',
@@ -41,7 +42,7 @@ const ORIGINS = [
   {
     meta: 'You import it',
     title: 'Parsed from an export file',
-    body: 'On mobile, a ChatGPT, Claude, or Gemini export is parsed on the device, and the facts inside it join the list as ordinary rows.',
+    body: 'Paste memories exported from another assistant, or upload a text or JSON file. You review what was found before anything is saved, and the facts you keep join the list as ordinary rows.',
   },
 ] as const;
 
@@ -158,13 +159,12 @@ export default function MemoryFeaturePage() {
               rows={[
                 {
                   label: 'Stored',
-                  value:
-                    'Kept in your AGI account for chats on AGI managed cloud. Planned Mobile Local mode is designed to keep it on the phone.',
+                  value: `Kept in your AGI account for chats on AGI managed cloud. Mobile is ${SURFACE_STATUS.mobile.toLowerCase()}, and its Local mode is built to keep the list on the phone.`,
                 },
                 {
                   label: 'Recalled',
                   value:
-                    'Up to 30 facts on AGI managed cloud and 50 on mobile, capped at 8,000 characters either way.',
+                    'Up to 30 facts on AGI managed cloud, capped at 8,000 characters in total.',
                 },
                 { label: 'Per turn', value: 'A single chat turn can add at most five new facts.' },
                 { label: 'Temporary chats', value: 'A temporary chat never writes to the list.' },

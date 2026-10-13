@@ -1,3 +1,4 @@
+import { connectorsReleased } from '@agiworkforce/types';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -65,12 +66,12 @@ const SOLUTION_VISUALS: Record<string, ReactNode> = {
   'Use cases': <ProjectWindow />,
 };
 
-const MAP_FACTS = [
+const MAP_FACTS: readonly string[] = [
   'the same chat',
   'the same projects',
-  'the same connectors',
+  ...(connectorsReleased() ? ['the same connectors'] : []),
   'the same approval prompts',
-] as const;
+];
 
 export default function SolutionsPage() {
   return (

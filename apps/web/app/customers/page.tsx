@@ -14,12 +14,17 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { BILLING_PLAN_PRICING, BILLING_PLAN_PRODUCT_LIMITS } from '@agiworkforce/types';
-import { BYOK_SURFACES, CLI_LOCAL_RUNTIMES, SURFACE_STATUS } from '@/lib/marketing-constants';
+import {
+  CLI_AVAILABILITY_NOTE,
+  CLI_LOCAL_RUNTIMES,
+  SURFACE_NAMES,
+  SURFACE_STATUS,
+} from '@/lib/marketing-constants';
+import { contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'Customers',
-  description:
-    'We print no customer name without written permission, so this page carries none. It works through three situations instead, each naming the surface it runs on, the mechanics behind it, the plan limit it meets, and the work it leaves to you.',
+  description: `We print no customer name without written permission, so this page carries none. It works through three situations instead, each naming the surface it runs on, the mechanics behind it, the plan limit it meets, and the work it leaves to you. All three run on the CLI. ${CLI_AVAILABILITY_NOTE}`,
   path: '/customers',
 });
 
@@ -39,6 +44,8 @@ const HERO_TRANSCRIPT: TranscriptLine[] = [
 
 const HERO_TRANSCRIPT_LABEL = 'Two commands quoted from the scenarios on this page';
 
+const REFERENCE_PERMISSION_SUBJECT = 'Customer reference permission';
+
 interface ScenarioMechanic {
   label: string;
   value: string;
@@ -50,8 +57,9 @@ interface Scenario {
   problem: string;
   mechanics: ScenarioMechanic[];
   caveat: string;
-  meta: string;
+  surface: string;
   status: string;
+  note: string;
   href: string;
   hrefLabel: string;
 }
@@ -84,8 +92,9 @@ const SCENARIOS: Scenario[] = [
     ],
     caveat:
       'AGI supplies neither the hardware nor the weights, and a model you host will lose to a frontier hosted model on the hardest problems. That is capability traded for containment, and it is a trade you have to want.',
-    meta: `CLI · ${SURFACE_STATUS.cli}`,
-    status: 'Local inference · available',
+    surface: SURFACE_NAMES.cli,
+    status: SURFACE_STATUS.cli,
+    note: 'No AGI account takes part',
     href: '/local',
     hrefLabel: 'How Local mode works',
   },
@@ -122,8 +131,9 @@ const SCENARIOS: Scenario[] = [
     ],
     caveat:
       'Per-client attribution comes out of your provider’s own billing tooling, one key or project per engagement. The number the CLI prints is an estimate from a local rate table; AGI never sees your invoice and writes no per-client spend report for you.',
-    meta: BYOK_SURFACES.compact,
-    status: 'No AGI charge on this route',
+    surface: SURFACE_NAMES.cli,
+    status: SURFACE_STATUS.cli,
+    note: 'No AGI charge on this route',
     href: '/byok',
     hrefLabel: 'How BYOK works',
   },
@@ -155,8 +165,9 @@ const SCENARIOS: Scenario[] = [
     ],
     caveat:
       'A trigger can read and report; it cannot edit a file or run a shell command, so remediation still lands on an engineer. You also have to write the runbook each trigger follows, because AGI will not discover your clients’ processes on your behalf.',
-    meta: `CLI · ${SURFACE_STATUS.cli}`,
-    status: 'No AGI account required for this route',
+    surface: SURFACE_NAMES.cli,
+    status: SURFACE_STATUS.cli,
+    note: 'No AGI account required for this route',
     href: '/cli',
     hrefLabel: 'How the CLI runs unattended',
   },
@@ -173,7 +184,7 @@ export default function CustomersPage() {
           eyebrow="Customers"
           title="Only written permission puts a name on this page."
           em="puts a name on this page."
-          lede='Nobody has given us that permission yet, so there are no logos here, no testimonials, and no anonymised "a leading bank". What stands in their place is three situations built entirely out of behaviour that has shipped, with the part AGI declines to do written next to the part it does.'
+          lede={`Nobody has given us that permission yet, so there are no logos here, no testimonials, and no anonymised "a leading bank". What stands in their place is three situations built entirely out of what the CLI does in the repository, with the part AGI declines to do written next to the part it does. ${CLI_AVAILABILITY_NOTE}`}
           ctas={[
             { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
             { href: '/pricing', label: 'See what a plan includes', variant: 'secondary' },
@@ -195,10 +206,7 @@ export default function CustomersPage() {
                 A scenario that only lists benefits would be an advertisement.
               </h2>
               <Prose>
-                None of these is a customer. Each is a configuration we have built, named down to
-                the command that proves it: the surface it runs on, the mechanics underneath, the
-                plan limit it meets, and the work it hands back to you. Follow the link under any of
-                them and you can check the claim against the product yourself.
+                {`None of these is a customer. Each is a configuration we have built, named down to the command that proves it: the surface it runs on, the mechanics underneath, the plan limit it meets, and the work it hands back to you. All three run on the CLI. ${CLI_AVAILABILITY_NOTE} The link under each scenario goes to the page that describes the behaviour in full.`}
               </Prose>
             </div>
 
@@ -212,7 +220,7 @@ export default function CustomersPage() {
                   <strong>What it does not do.</strong> {scenario.caveat}
                 </Prose>
                 <Prose size="sm">
-                  {scenario.meta} · {scenario.status}
+                  {scenario.surface} · {scenario.status} · {scenario.note}
                 </Prose>
                 <ButtonRow>
                   <Button href={scenario.href} variant="secondary">
@@ -247,12 +255,14 @@ export default function CustomersPage() {
                 We will ask you before your name ever appears here.
               </h2>
               <Prose>
-                {`AGI Web is ${SURFACE_STATUS.web.toLowerCase()}, and every other surface reports its own state on the download page rather than in a claim on this one. If AGI earns a place in how you work and you are willing to say so in writing, this page will finally carry something other than worked examples.`}
+                {`AGI Web is ${SURFACE_STATUS.web.toLowerCase()}. ${CLI_AVAILABILITY_NOTE} The download page shows what is published. If AGI earns a place in how you work and you are willing to say so in writing, this page will finally carry something other than worked examples.`}
               </Prose>
               <Prose size="sm">Nothing on this page is a customer reference.</Prose>
             </div>
             <ButtonRow>
-              <Button href="/contact-sales">Tell us we can use your name</Button>
+              <Button href={contactMailto(REFERENCE_PERMISSION_SUBJECT)}>
+                Tell us we can use your name
+              </Button>
             </ButtonRow>
           </Stack>
         </Section>

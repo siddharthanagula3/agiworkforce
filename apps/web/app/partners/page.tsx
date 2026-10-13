@@ -16,13 +16,16 @@ import {
   PageHero,
 } from '@/features/marketing/components/pages/surfaces/shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
-import { CLI_AVAILABILITY_NOTE } from '@/lib/marketing-constants';
+import {
+  CLI_AVAILABILITY_NOTE,
+  CLI_LOCAL_RUNTIMES,
+  SURFACE_STATUS,
+} from '@/lib/marketing-constants';
 import '@/features/marketing/components/pages/company/company.css';
 
 export const metadata = buildMetadata({
   title: 'Partners',
-  description:
-    'There is no formal partner program yet. The CLI speaks MCP, so connectors built against the open protocol work with it, and developers can list plugins in the reviewed community directory. Here is what we are looking for.',
+  description: `There is no formal partner program yet. The CLI speaks MCP, so tool servers built against the open protocol work with it. ${CLI_AVAILABILITY_NOTE} Developers can list plugins in the reviewed community directory. Here is what we are looking for.`,
   path: '/partners',
 });
 
@@ -30,7 +33,7 @@ const OPPORTUNITIES = [
   {
     meta: 'Open protocol',
     title: 'Build on MCP',
-    body: `The AGI CLI implements the Model Context Protocol, so a connector or tool server you build against the open spec works with it, behind explicit tool-approval prompts. ${CLI_AVAILABILITY_NOTE} Desktop is coming soon. You do not need an agreement with us, or our permission, to build one.`,
+    body: `The AGI CLI implements the Model Context Protocol, so a tool server you build against the open spec works with it, behind explicit tool-approval prompts. ${CLI_AVAILABILITY_NOTE} Desktop is ${SURFACE_STATUS.desktop.toLowerCase()}. You do not need an agreement with us, or our permission, to build one.`,
   },
   {
     meta: 'Available today',
@@ -45,7 +48,7 @@ const OPPORTUNITIES = [
   {
     meta: 'Looking for',
     title: 'Local runtime and model ecosystems',
-    body: 'The CLI routes to Ollama and LM Studio as local runtimes. If you build a local runtime or distribute open models and want AGI to work well with yours, that is a conversation we want.',
+    body: `The CLI routes to ${CLI_LOCAL_RUNTIMES.label} as local runtimes. If you build a local runtime or distribute open models and want AGI to work well with yours, that is a conversation we want.`,
   },
 ] as const;
 
@@ -63,10 +66,10 @@ export default function PartnersPage() {
           eyebrow="Partners"
           title="No program yet. Two open doors."
           em="Two open doors."
-          lede="There is no partner program yet: no reseller agreement, no tiers, no certification. What is real today is that AGI speaks MCP, so anything built on that protocol already works with it, and that a plugin you build can be listed in the community directory once it is reviewed."
+          lede={`There is no partner program yet: no reseller agreement, no tiers, no certification. What exists is the AGI CLI, which implements MCP so that a server built on that protocol works with it, and a community directory where a plugin you build can be listed once it is reviewed. ${CLI_AVAILABILITY_NOTE}`}
           ctas={[
             { href: contactMailto('Partnership enquiry'), label: 'Email partnerships' },
-            { href: '/apps', label: 'See tools & connectors', variant: 'secondary' },
+            { href: '/plugins', label: 'Browse the plugin catalogue', variant: 'secondary' },
           ]}
         />
 
@@ -77,7 +80,7 @@ export default function PartnersPage() {
             <div>
               <Eyebrow>Where we are</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-partners-opps-title">
-                Two things that work now, two we are exploring.
+                Two things you can build now, two we are exploring.
               </h2>
               <Prose>
                 Each of these says plainly whether it is available today or still a conversation, so

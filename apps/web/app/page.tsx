@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 import { MarketingLanding } from '@/features/marketing/components/MarketingLanding';
 import { readFreeMediaOfferForRender } from '@/lib/server/free-media-offer-reader';
+import { OG_IMAGE } from '@/lib/seo/site';
 
-const TITLE = 'AGI | One AI Workspace. Six Surfaces. Your Rules.';
+const TITLE = 'AGI: ChatGPT, Claude, Gemini and more in one app';
 const DESCRIPTION =
   'The AI application suite for six surfaces. Local models, your own keys, or AGI managed cloud. You see the route before anything leaves your device.';
 const SHARE_DESCRIPTION =
-  'One workspace on six surfaces. Local, BYOK, or AGI managed cloud. Your rules.';
-const OG_IMAGE = { url: '/api/og', width: 1200, height: 630, alt: 'AGI Web composer' } as const;
+  'Chat, code, research and automate with models from OpenAI, Anthropic, Google and more, in one workspace. Free to start.';
 
 export const metadata: Metadata = {
   title: TITLE,

@@ -85,7 +85,7 @@ describe('WaitlistModal', () => {
       target: { value: '  Visitor@Example.COM ' },
     });
     grantRequiredConsent();
-    fireEvent.click(screen.getByRole('button', { name: /^join waitlist$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^request a follow-up$/i }));
 
     await waitFor(() => {
       expect(mockJoinPublicWaitlist).toHaveBeenCalledWith({
@@ -113,7 +113,7 @@ describe('WaitlistModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /team access/i }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /close waitlist dialog/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close Enterprise enquiry dialog' }));
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
@@ -128,7 +128,7 @@ describe('WaitlistModal', () => {
     fireEvent.change(await screen.findByRole('textbox', { name: /email address/i }), {
       target: { value: 'not-an-email' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /^join waitlist$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^request a follow-up$/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/valid email/i);
     expect(mockJoinPublicWaitlist).not.toHaveBeenCalled();
@@ -151,7 +151,7 @@ describe('WaitlistModal', () => {
       target: { value: 'visitor@example.com' },
     });
     grantRequiredConsent();
-    fireEvent.click(screen.getByRole('button', { name: /^join waitlist$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^request a follow-up$/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/failed to join/i);
     expect(screen.getByText(/discuss enterprise access/i)).toBeInTheDocument();
@@ -170,7 +170,7 @@ describe('WaitlistModal', () => {
     fireEvent.change(await screen.findByRole('textbox', { name: /email address/i }), {
       target: { value: 'visitor@example.com' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /^join waitlist$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^request a follow-up$/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/tick the box/i);
     expect(mockJoinPublicWaitlist).not.toHaveBeenCalled();
@@ -203,7 +203,7 @@ describe('WaitlistModal', () => {
       target: { value: 'visitor@example.com' },
     });
     grantRequiredConsent();
-    fireEvent.click(screen.getByRole('button', { name: /^join waitlist$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^request a follow-up$/i }));
 
     await waitFor(() => {
       expect(mockJoinPublicWaitlist).toHaveBeenCalledWith({
@@ -246,8 +246,22 @@ describe('WaitlistModal', () => {
     expect(body).toContainElement(dialog.querySelector('form'));
     expect(body).toContainElement(dialog.querySelector('.agi-ds-hint'));
     expect(body).not.toContainElement(
-      within(dialog).getByRole('button', { name: 'Close waitlist dialog' }),
+      within(dialog).getByRole('button', { name: 'Close Enterprise enquiry dialog' }),
     );
+  });
+
+  it('names the submit control after the follow-up it asks for, not after a waitlist', async () => {
+    const { dialog } = await openDialog('Team access');
+
+    expect(
+      within(dialog).getByRole('heading', { name: 'Discuss Enterprise access' }),
+    ).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Request a follow-up' })).toHaveAttribute(
+      'type',
+      'submit',
+    );
+    expect(within(dialog).queryByRole('button', { name: /join waitlist/i })).toBeNull();
+    expect(dialog.querySelector('.agi-ds-hint')?.textContent).toContain('One personal follow-up');
   });
 
   it('keeps the success title in the head and its message in the body', async () => {
@@ -258,7 +272,7 @@ describe('WaitlistModal', () => {
       target: { value: 'visitor@example.com' },
     });
     grantRequiredConsent();
-    fireEvent.click(within(dialog).getByRole('button', { name: /^join waitlist$/i }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /^request a follow-up$/i }));
 
     const title = await within(dialog).findByRole('heading', { name: /you.re on the list/i });
     expect(title.closest('.agi-ds-waitlist-head')).not.toBeNull();
@@ -276,7 +290,7 @@ describe('WaitlistModal', () => {
     const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE));
     expect(focusable[0]).toBe(within(dialog).getByRole('textbox', { name: 'Email address' }));
     expect(focusable.at(-1)).toBe(
-      within(dialog).getByRole('button', { name: 'Close waitlist dialog' }),
+      within(dialog).getByRole('button', { name: 'Close Enterprise enquiry dialog' }),
     );
   });
 

@@ -1,9 +1,11 @@
 import { LAUNCH } from '@/lib/marketing-constants';
 import { RELEASES, type Release } from '@/lib/changelog-entries';
+import { UNRELEASED_SURFACES, type InstallableSurfaceId } from '@/lib/surface-status';
 import {
   DOC_MATURITY_LABELS,
   DOC_PLATFORM_LABELS,
   RELEASED_DOC_PLATFORMS,
+  publishedMaturity,
   type DocMaturity,
   type DocPlatform,
 } from '@/lib/support/doc-metadata';
@@ -47,19 +49,28 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = RELEASES.map((release) => {
 
 export const RELEASE_STATE_DATES: readonly string[] = Object.keys(RELEASE_STATE);
 
-export const FORTHCOMING: readonly { item: string; detail: string; target: string }[] = [
-  { item: 'Mobile', detail: 'App Store + Play Store listings.', target: LAUNCH.shortLabel },
-  {
-    item: 'Chrome extension',
-    detail: 'CWS submission once visual review clears.',
-    target: LAUNCH.shortLabel,
+const FORTHCOMING_SURFACES: Readonly<
+  Record<InstallableSurfaceId, { item: string; detail: string }>
+> = {
+  desktop: {
+    item: 'Desktop',
+    detail: 'macOS installer, signed and notarized by its release workflow.',
   },
-  {
-    item: 'VS Code extension',
-    detail: 'Marketplace listing planned for its release.',
+  cli: { item: 'CLI', detail: 'A signed release the install script can verify.' },
+  mobile: { item: 'Mobile', detail: 'App Store + Play Store listings.' },
+  vscode: { item: 'VS Code extension', detail: 'Marketplace listing planned for its release.' },
+  chrome: { item: 'Chrome extension', detail: 'CWS submission once visual review clears.' },
+};
+
+function isInstallableSurface(surface: string): surface is InstallableSurfaceId {
+  return surface in FORTHCOMING_SURFACES;
+}
+
+export const FORTHCOMING: readonly { item: string; detail: string; target: string }[] =
+  UNRELEASED_SURFACES.filter(isInstallableSurface).map((surface) => ({
+    ...FORTHCOMING_SURFACES[surface],
     target: LAUNCH.shortLabel,
-  },
-];
+  }));
 
 export function isReleasedSurface(surface: DocPlatform): boolean {
   return RELEASED_DOC_PLATFORMS.includes(surface);
@@ -73,13 +84,19 @@ export function releaseStateLine(note: ReleaseNote): string {
   const released = note.surfaces.filter(isReleasedSurface);
   const unreleased = note.surfaces.filter((surface) => !isReleasedSurface(surface));
   return [
-    released.length > 0 ? `${DOC_MATURITY_LABELS[note.maturity]} · ${surfaceLabels(released)}` : '',
+    released.length > 0
+      ? `${DOC_MATURITY_LABELS[publishedMaturity(note.maturity, note.surfaces)]} · ${surfaceLabels(released)}`
+      : '',
     unreleased.length > 0 ? `Not yet released: ${surfaceLabels(unreleased)}` : '',
   ]
     .filter(Boolean)
     .join(' · ');
 }
 
-export function isGenerallyAvailable(note: ReleaseNote): boolean {
-  return note.maturity === 'ga' && note.surfaces.some(isReleasedSurface);
+export function releasedNoteCount(maturity: DocMaturity): number {
+  return RELEASE_NOTES.filter(
+    (note) =>
+      note.surfaces.some(isReleasedSurface) &&
+      publishedMaturity(note.maturity, note.surfaces) === maturity,
+  ).length;
 }

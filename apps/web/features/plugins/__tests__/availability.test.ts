@@ -2,14 +2,40 @@ import { describe, expect, it } from 'vitest';
 import type { PluginRegistryEntry } from '@agiworkforce/types';
 import {
   AVAILABLE_NOW_LABEL,
+  COMING_SOON_LABEL,
   SURFACE_STATUS,
   cliAvailabilityNote,
   type SurfaceStatusMap,
 } from '@/lib/surface-status';
 import { PLUGIN_STATE_DESKTOP_AND_CLI } from '@/features/directory/constants';
-import { pluginAvailabilityClaim, pluginCliInstallNote, pluginStatusLabel } from '../availability';
+import { CONNECTORS_COMING_SOON_MESSAGE } from '@agiworkforce/types';
+import {
+  pluginAvailabilityClaim,
+  pluginCliInstallNote,
+  pluginClientAvailabilityNote,
+  pluginConnectorWiringNote,
+  pluginModelHeading,
+  pluginRequiredConnectorsHeading,
+  pluginStatusLabel,
+  pluginStatusMeaningNote,
+} from '../availability';
 
 const RELEASED_CLI: SurfaceStatusMap = { ...SURFACE_STATUS, cli: AVAILABLE_NOW_LABEL };
+const UNRELEASED_CLIENTS: SurfaceStatusMap = {
+  ...SURFACE_STATUS,
+  desktop: COMING_SOON_LABEL,
+  cli: COMING_SOON_LABEL,
+};
+const RELEASED_CLI_ONLY: SurfaceStatusMap = {
+  ...SURFACE_STATUS,
+  desktop: COMING_SOON_LABEL,
+  cli: AVAILABLE_NOW_LABEL,
+};
+const RELEASED_CLIENTS: SurfaceStatusMap = {
+  ...SURFACE_STATUS,
+  desktop: AVAILABLE_NOW_LABEL,
+  cli: AVAILABLE_NOW_LABEL,
+};
 const MAPS = [
   ['the real registry', SURFACE_STATUS],
   ['a simulated released CLI', RELEASED_CLI],
@@ -183,12 +209,42 @@ describe('pluginStatusLabel', () => {
   });
 
   it('uses the desktop and CLI label for a declared pack that has a CLI command', () => {
-    expect(pluginStatusLabel(declaredPack('a'), { cliCommand: 'agi plugin install a' })).toBe(
+    const cliCommand = 'agi plugin install a';
+    expect(pluginStatusLabel(declaredPack('a'), { cliCommand, statuses: RELEASED_CLIENTS })).toBe(
       PLUGIN_STATE_DESKTOP_AND_CLI,
     );
-    expect(
-      pluginStatusLabel(entry({ status: 'suspended' }), { cliCommand: 'agi plugin install a' }),
-    ).toBe('Suspended: installs stopped');
+    expect(pluginStatusLabel(entry({ status: 'suspended' }), { cliCommand })).toBe(
+      'Suspended: installs stopped',
+    );
+  });
+
+  it('carries the registry status on the desktop and CLI label until both clients are released', () => {
+    const cliCommand = 'agi plugin install a';
+    const status = COMING_SOON_LABEL.toLowerCase();
+    expect(pluginStatusLabel(declaredPack('a'), { cliCommand, statuses: UNRELEASED_CLIENTS })).toBe(
+      `${PLUGIN_STATE_DESKTOP_AND_CLI}, ${status}`,
+    );
+    expect(pluginStatusLabel(declaredPack('a'), { cliCommand, statuses: RELEASED_CLI_ONLY })).toBe(
+      `${PLUGIN_STATE_DESKTOP_AND_CLI}, Desktop ${status}`,
+    );
+  });
+});
+
+describe('pluginStatusMeaningNote', () => {
+  it('states the release status of the clients it names, read from the registry', () => {
+    expect(pluginClientAvailabilityNote(UNRELEASED_CLIENTS)).toBe(
+      `Desktop and CLI are ${COMING_SOON_LABEL.toLowerCase()}.`,
+    );
+    expect(pluginClientAvailabilityNote(RELEASED_CLI_ONLY)).toBe(
+      `Desktop is ${COMING_SOON_LABEL.toLowerCase()}.`,
+    );
+    expect(pluginClientAvailabilityNote(RELEASED_CLIENTS)).toBe('');
+    expect(pluginStatusMeaningNote(UNRELEASED_CLIENTS)).toContain(
+      `integrity-pinned artifact. ${pluginClientAvailabilityNote(UNRELEASED_CLIENTS)} Until one`,
+    );
+    expect(pluginStatusMeaningNote(RELEASED_CLIENTS)).toContain(
+      'integrity-pinned artifact. Until one',
+    );
   });
 });
 
@@ -203,5 +259,25 @@ describe('pluginCliInstallNote', () => {
     const note = pluginCliInstallNote(RELEASED_CLI);
     expect(note).toBe('Install it with the AGI CLI, using the command below.');
     expect(note).not.toMatch(/coming soon/i);
+  });
+});
+
+describe('plugin connector wording', () => {
+  it('states the connector release status while connectors are unreleased', () => {
+    expect(pluginConnectorWiringNote('coming_soon')).toBe(
+      `A plugin declares which connectors it needs. ${CONNECTORS_COMING_SOON_MESSAGE}`,
+    );
+    expect(pluginConnectorWiringNote('coming_soon')).not.toMatch(/connect once/i);
+    expect(pluginModelHeading('coming_soon')).not.toMatch(/wired once/i);
+    expect(pluginRequiredConnectorsHeading('coming_soon')).not.toMatch(/connect once/i);
+  });
+
+  it('describes connecting only once connectors are released', () => {
+    expect(pluginConnectorWiringNote('released')).toMatch(/Connect once, and every skill/);
+    expect(pluginConnectorWiringNote('released')).not.toContain(CONNECTORS_COMING_SOON_MESSAGE);
+    expect(pluginModelHeading('released')).toBe('Skills plus connectors, wired once.');
+    expect(pluginRequiredConnectorsHeading('released')).toBe(
+      'Connect once, use everywhere in the pack.',
+    );
   });
 });

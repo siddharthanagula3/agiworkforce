@@ -1,5 +1,7 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
+import { COMPUTER_USE_STOP_SHORTCUT } from '@agiworkforce/local-runtime-contract';
+import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -14,10 +16,14 @@ import { DesktopDownloadAvailability } from '../download/DesktopDownloadAvailabi
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 
+const ACCOUNT_CARRIES = connectorsReleased()
+  ? 'Chats, projects, memory and connectors are the ones you have on the web.'
+  : `Chats, projects and memory are the ones you have on the web. ${CONNECTORS_COMING_SOON_MESSAGE}`;
+
 export const metadata = buildMetadata({
   title: 'AGI Desktop | Your account, on your Mac',
   description:
-    'The AGI app for macOS: managed-cloud chat in a window that stays open, plus the folders you approve, computer use one step at a time, and a menu bar shortcut. The current public Desktop contract does not accept provider keys or local-model connections. Check installer availability.',
+    'The AGI app for macOS: managed-cloud chat in a window that stays open, plus the folders you approve, computer use that asks each session and before each app, and a menu bar shortcut. The Desktop contract does not accept provider keys or local-model connections. Check installer availability.',
   path: '/desktop',
 });
 
@@ -73,7 +79,7 @@ export default function DesktopPage() {
             {
               meta: 'Computer use',
               title: 'Screen and pointer',
-              body: 'On macOS, with Screen Recording and Accessibility granted, the app can look at the screen and act on it, one approved step at a time.',
+              body: `On macOS, with Screen Recording and Accessibility granted, the app can look at the screen and act on it. It asks each session and before each app, not at every step. ${COMPUTER_USE_STOP_SHORTCUT} stops it.`,
               href: '/features/agents',
             },
             {
@@ -106,7 +112,7 @@ export default function DesktopPage() {
               mode: 'AGI Cloud',
               glyph: '●',
               title: 'Your account, signed in once.',
-              body: 'Chats, projects, memory and connectors are the ones you have on the web.',
+              body: ACCOUNT_CARRIES,
               points: [
                 'One account across web, desktop, mobile, CLI, VS Code and Chrome',
                 'Sign-in opens the browser; tokens are encrypted with the system keychain',
@@ -176,7 +182,7 @@ export default function DesktopPage() {
         <FinalCta
           eyebrow="macOS"
           title="Check AGI Desktop availability."
-          body="A download control appears only once the release API verifies a signed build for your architecture, so this page reflects what is published rather than what is built. The macOS build is signed and notarized by the release job but not yet published, and Windows installers are not published."
+          body="A download control appears only once the release API verifies a signed build for your architecture, so this page reflects what is published rather than what is built. The availability section above reports what that check finds for macOS right now. Windows and Linux installers are not published."
           ctas={[
             { href: '#desktop-downloads', label: 'Check installer availability' },
             { href: WEB_CHAT_ENTRY_HREF, label: 'Use AGI Web' },

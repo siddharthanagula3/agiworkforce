@@ -1,13 +1,15 @@
 import type { LedgerRow } from '@/features/marketing/components/system';
 import type { FactItem, PageCta } from '@/features/marketing/components/pages/surfaces/shared';
+import { CLI_KEYS_OUTSIDE_CATALOG_NOTE } from '@/lib/byok-providers';
+import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
 import {
   BYOK_SURFACES,
   CLI_AVAILABILITY_NOTE,
-  MARKETING,
   MARKETING_FEATURE_MATRIX,
   POSITIONING,
   surfaceCta,
 } from '@/lib/marketing-constants';
+import { surfaceAvailabilitySummary } from '@/lib/surface-status';
 
 export interface UseCaseVisual {
   light: string;
@@ -43,12 +45,20 @@ const STARTUP_PLAN_ROWS: LedgerRow[] = MARKETING_FEATURE_MATRIX.individual.map((
   value: `${plan.price} · ${plan.billingInterval}. ${plan.bestFor}.`,
 }));
 
+const BYOK_EXPLAINER_CTA: PageCta = {
+  href: '/byok',
+  label: 'How BYOK works',
+  variant: 'secondary',
+};
+
+const CLI_CONFIDENTIALITY = `In the CLI, Local mode keeps conversations on your device and BYOK keys are saved on your own machine. ${CLI_AVAILABILITY_NOTE}`;
+
 export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
   startups: {
     slug: 'startups',
     metaTitle: 'Startups: ship faster, spend deliberately',
     metaDescription:
-      'How startups use AGI: ship product faster with multi-provider AI, BYOK in the CLI, upcoming VS Code support, and a CLI that fits CI.',
+      'How startups use AGI: multi-provider AI on the web, with BYOK, VS Code support and a CLI that fits CI coming soon.',
     eyebrow: 'Use case · startups',
     title: 'Ship faster. Spend deliberately.',
     lede: `Use the CLI in CI, the Desktop app for managed-cloud work once it ships, and the Chrome side panel for inbox and docs once it ships. Provider spend stays under your control through your own keys in the CLI. ${BYOK_SURFACES.availability}`,
@@ -72,12 +82,12 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       {
         meta: 'Automation',
         title: 'Real CI',
-        body: 'agi exec works as a Unix tool. Pipe a task in, get structured output back, in GitHub Actions or anywhere a shell runs.',
+        body: `agi exec works as a Unix tool. Pipe a task in, get structured output back, in GitHub Actions or anywhere a shell runs. ${CLI_AVAILABILITY_NOTE}`,
       },
       {
         meta: 'Cost',
         title: 'Cheap experiments',
-        body: 'Local mode is free. BYOK pays providers at their public rates. Managed compute is opt-in, never the default.',
+        body: `Local mode is free and BYOK pays providers at their public rates, both in the CLI. ${CLI_AVAILABILITY_NOTE} AGI Web runs on managed cloud.`,
       },
     ],
     ledgerEyebrow: 'What you actually get',
@@ -86,16 +96,16 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       ...STARTUP_PLAN_ROWS,
       {
         label: 'Surfaces',
-        value: `${MARKETING.surfaces.count} surfaces: Desktop, Web, Mobile, CLI, Chrome extension, VS Code extension.`,
+        value: surfaceAvailabilitySummary(),
       },
       {
         label: 'Providers',
-        value: `${MARKETING.providers.display} providers wired in, plus any OpenAI-compatible endpoint.`,
+        value: `The CLI takes your key for the ${CATALOG_SCOPES.byokProviders.text}, plus any OpenAI-compatible endpoint you declare. ${CLI_KEYS_OUTSIDE_CATALOG_NOTE} ${CLI_AVAILABILITY_NOTE}`,
       },
       { label: 'Privacy', value: POSITIONING.routeBoundary },
     ],
     closeTitle: 'Start free, route deliberately.',
-    closeBody: `Run Local and BYOK in the CLI at no platform cost and turn on managed cloud whenever you want hosted compute. ${CLI_AVAILABILITY_NOTE}`,
+    closeBody: `Local and BYOK run in the CLI at no platform cost, and AGI Web runs on managed cloud when you want hosted compute. ${CLI_AVAILABILITY_NOTE}`,
     closeCtas: [
       { href: '/download', label: "See what's live" },
       { ...surfaceCta('cli'), variant: 'secondary' },
@@ -110,10 +120,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
     eyebrow: 'Use case · sales teams',
     title: 'Know the account. Own the context.',
     lede: `Research, outreach drafts, deal-room briefings, and pipeline triage. Provider choice through your own keys is part of the CLI, with a visible label on every route. ${BYOK_SURFACES.availability}`,
-    ctas: [
-      { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
-      { href: '/byok', label: 'Set up BYOK', variant: 'secondary' },
-    ],
+    ctas: [{ href: '/login?redirectTo=%2F', label: 'Try AGI Web' }, BYOK_EXPLAINER_CTA],
     visual: {
       light: '/product/hero-thread-light.png',
       dark: '/product/hero-thread-dark.png',
@@ -146,7 +153,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
     ledgerRows: [
       {
         label: 'Confidentiality',
-        value: 'Local Mode for sensitive deals; keys stay encrypted on your device.',
+        value: CLI_CONFIDENTIALITY,
       },
       {
         label: 'BYOK',
@@ -166,7 +173,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
     closeBody: `Bring your own keys in the CLI and keep account context under your control while the team works. ${BYOK_SURFACES.availability}`,
     closeCtas: [
       { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
-      { href: '/byok', label: 'Set up BYOK', variant: 'secondary' },
+      BYOK_EXPLAINER_CTA,
       { href: '/apps', label: 'Browse apps & connectors', variant: 'secondary' },
     ],
   },
@@ -174,10 +181,10 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
     slug: 'it-providers',
     metaTitle: 'IT service providers: runbooks that actually run',
     metaDescription:
-      'How MSPs and IT shops use AGI: triage, runbooks, and scripted operations with sandboxed execution, explicit approvals, and multi-provider routing.',
+      'How MSPs and IT shops plan around AGI: triage, runbooks, and scripted operations in a CLI with sandboxed execution and explicit approvals, coming soon.',
     eyebrow: 'Use case · IT service providers',
     title: 'Runbooks that actually run.',
-    lede: 'Triage, runbooks, and scripted operations with a real CLI. Sandboxed execution, explicit approvals, and provider routing that sends routine work to inexpensive models and saves the flagship calls for the hard cases.',
+    lede: `Triage, runbooks, and scripted operations with a real CLI. Sandboxed execution, explicit approvals, and a model choice per task, so routine work can go to inexpensive models and the flagship calls are saved for the hard cases. ${CLI_AVAILABILITY_NOTE}`,
     ctas: [
       { href: '/contact-sales', label: 'Contact sales' },
       { href: '/cli', label: 'See the CLI', variant: 'secondary' },
@@ -201,12 +208,12 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       {
         meta: 'Runbooks',
         title: 'Encode and execute',
-        body: 'Encode runbooks as MCP tools. The agent runs them sandboxed by default: macOS Seatbelt, Linux bwrap. Behind explicit approvals.',
+        body: `Encode runbooks as MCP tools in the CLI. The commands the agent runs go through the OS sandbox, Seatbelt on macOS and bubblewrap on Linux, behind explicit approvals. ${CLI_AVAILABILITY_NOTE}`,
       },
       {
         meta: 'Operations',
         title: 'CI-style workflows',
-        body: 'agi exec in headless mode for scripted incident workflows: pipe a ticket in, get a structured response back.',
+        body: `agi exec in headless mode for scripted incident workflows: pipe a ticket in, get a structured response back. ${CLI_AVAILABILITY_NOTE}`,
       },
     ],
     ledgerEyebrow: 'Posture',
@@ -214,7 +221,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
     ledgerRows: [
       {
         label: 'Sandboxed tools',
-        value: 'File writes, shell, and network run sandboxed by default.',
+        value: `In the CLI, command execution runs inside the OS sandbox, and a sandboxed command has no outbound network unless you grant it. ${CLI_AVAILABILITY_NOTE}`,
       },
       {
         label: 'Provider routing',
@@ -231,8 +238,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       },
     ],
     closeTitle: 'Put the agent on the bench.',
-    closeBody:
-      'Start with the CLI on Local and BYOK, and talk to sales when client contracts need enterprise controls.',
+    closeBody: `Local and BYOK run in the CLI. ${CLI_AVAILABILITY_NOTE} Talk to sales when client contracts need enterprise controls.`,
     closeCtas: [
       { href: '/contact-sales', label: 'Contact sales' },
       { href: '/cli', label: 'See the CLI', variant: 'secondary' },
@@ -247,10 +253,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
     eyebrow: 'Use case · consulting',
     title: 'Client work, across providers.',
     lede: 'Research, deliverables, data analysis, and client reporting. Switch providers mid-engagement as the work changes shape, from long-context analysis to prose drafting to tool-heavy automation, without losing the thread.',
-    ctas: [
-      { href: '/contact-sales', label: 'Contact sales' },
-      { href: '/byok', label: 'Set up BYOK', variant: 'secondary' },
-    ],
+    ctas: [{ href: '/contact-sales', label: 'Contact sales' }, BYOK_EXPLAINER_CTA],
     visual: {
       light: '/product/deep-research-report-light.png',
       dark: '/product/deep-research-report-dark.png',
@@ -275,7 +278,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       {
         meta: 'Scale',
         title: 'Reporting in pipelines',
-        body: 'Run the same analysis across many client datasets through the CLI, headless, in CI-style pipelines.',
+        body: `Run the same analysis across many client datasets through the CLI, headless, in CI-style pipelines. ${CLI_AVAILABILITY_NOTE}`,
       },
     ],
     ledgerEyebrow: 'What partners ask for',
@@ -287,7 +290,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       },
       {
         label: 'Confidentiality',
-        value: 'Local Mode for sensitive engagements; keys stored encrypted on your device.',
+        value: CLI_CONFIDENTIALITY,
       },
       {
         label: 'Records',
@@ -299,11 +302,10 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       },
     ],
     closeTitle: 'Bring the engagement, keep the boundary.',
-    closeBody:
-      'Start on Local and BYOK today, and talk to sales when the practice needs enterprise controls.',
+    closeBody: `Local and BYOK run in the CLI. ${CLI_AVAILABILITY_NOTE} Talk to sales when the practice needs enterprise controls.`,
     closeCtas: [
       { href: '/contact-sales', label: 'Contact sales' },
-      { href: '/byok', label: 'Set up BYOK', variant: 'secondary' },
+      BYOK_EXPLAINER_CTA,
       { href: '/enterprise', label: 'See enterprise controls', variant: 'secondary' },
     ],
   },

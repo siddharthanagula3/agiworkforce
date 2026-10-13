@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import { OG_IMAGE } from '@/lib/seo/site';
 
 export const metadata: Metadata = {
   title: 'Download AGI Desktop',
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com/download',
     images: [
       {
-        url: '/api/og',
+        url: OG_IMAGE.url,
         width: 1200,
         height: 630,
         alt: 'AGI Desktop application preview',
@@ -32,7 +33,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Download AGI Desktop',
     description: 'Verified macOS installer availability, with the current Windows release status.',
-    images: ['/api/og'],
+    images: [OG_IMAGE.url],
     creator: '@agiworkforce',
   },
   alternates: {

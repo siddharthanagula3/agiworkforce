@@ -7,7 +7,7 @@ import { PageHero } from '@/features/marketing/components/pages/surfaces/shared'
 
 export const metadata = buildMetadata({
   title: 'Sitemap',
-  description: 'Every public page on AGI, organized.',
+  description: 'Public pages of AGI, grouped by section.',
   path: '/sitemap-page',
 });
 
@@ -61,13 +61,14 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
     title: 'Company',
     links: [
       { href: '/about', label: 'About' },
+      { href: '/founder', label: 'Founder' },
       { href: '/enterprise', label: 'Enterprise' },
       { href: '/customers', label: 'Customers' },
       { href: '/partners', label: 'Partners' },
       { href: '/press', label: 'Press' },
       { href: '/community', label: 'Community' },
       { href: '/careers', label: 'Careers' },
-      { href: '/changelog', label: 'Changelog' },
+      { href: '/release-notes', label: 'Release notes' },
       { href: '/blog', label: 'Blog' },
       { href: '/contact', label: 'Contact' },
       { href: '/contact-sales', label: 'Contact sales' },
@@ -90,8 +91,13 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
       { href: '/features/memory', label: 'Memory' },
       { href: '/features/tools', label: 'Tools and connectors' },
       { href: '/features/plugins', label: 'Plugins feature' },
+      { href: '/features/images', label: 'Image generation' },
+      { href: '/features/video', label: 'Video generation' },
+      { href: '/features/voice', label: 'Voice' },
       { href: '/help', label: 'Help' },
       { href: '/support', label: 'Support' },
+      { href: '/recover', label: 'Account recovery' },
+      { href: '/appeal', label: 'Appeal a suspension' },
       { href: '/faq', label: 'FAQ' },
       { href: '/get-started', label: 'Get started' },
       { href: '/status', label: 'Status' },
@@ -120,6 +126,7 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
       { href: '/sla', label: 'SLA' },
       { href: '/subprocessors', label: 'Subprocessors' },
       { href: '/refund-policy', label: 'Refunds' },
+      { href: '/referral-terms', label: 'Referral program terms' },
       { href: '/accessibility', label: 'Accessibility' },
       { href: '/trust', label: 'Trust' },
       { href: '/security', label: 'Security' },
@@ -136,7 +143,7 @@ export default function SitemapPage() {
           id="agi-sitemap-title"
           eyebrow="Sitemap"
           title="Sitemap."
-          lede="Every public page, in one place."
+          lede="Public pages of this site, grouped by section."
           ctas={[]}
         />
 

@@ -44,6 +44,11 @@ const RESEARCH = 'Authored example of a research plan waiting to start';
 const CONSOLE = 'Authored example of the AGI workspace console';
 const COMPOSER = 'Authored example of the AGI Web composer';
 const WORK_RUN = 'Authored example of an AGI Work run in AGI Web';
+const IMAGE = 'Authored example of a generated image in a chat';
+const VIDEO_GENERATING = 'Authored example of a video being generated in a chat';
+const VIDEO_READY = 'Authored example of a finished video in a chat';
+const VOICE_SESSION = 'Authored example of a voice session in AGI Web';
+const VOICE_DICTATION = 'Authored example of dictation recording in the AGI Web composer';
 
 const hero = (labelledBy: string, label: string, device: Device = 'web'): Caller => ({
   owner: { labelledBy },
@@ -146,6 +151,15 @@ const PLACEMENTS: Record<string, readonly Caller[]> = {
     section('agi-features-ai-chat-moment-title', COMPOSER),
   ],
   '/features/tools': [hero('agi-features-tools-title', APPROVAL)],
+  '/features/images': [hero('agi-features-images-title', IMAGE)],
+  '/features/video': [
+    hero('agi-features-video-title', VIDEO_GENERATING),
+    section('agi-features-video-wait-title', VIDEO_READY),
+  ],
+  '/features/voice': [
+    hero('agi-features-voice-title', VOICE_SESSION),
+    section('agi-features-voice-dictation-title', VOICE_DICTATION),
+  ],
   '/enterprise': [
     hero('agi-enterprise-title', CONSOLE),
     section('agi-enterprise-identity-title', CONSOLE),

@@ -58,7 +58,7 @@ describe('waitlist surfaces point their off-the-list promise at a route that exi
       target: { value: 'visitor@example.com' },
     });
     fireEvent.click(screen.getByRole('checkbox', { name: /store my email address/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^join waitlist$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^request a follow-up$/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/you.re on the list/i)).toBeInTheDocument();

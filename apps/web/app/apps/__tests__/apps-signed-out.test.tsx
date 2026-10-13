@@ -32,6 +32,14 @@ vi.mock('@/features/settings/components/SettingsModalRedirect', () => ({
   ),
 }));
 
+vi.mock('@/features/plugins/server/registry-source', () => ({
+  detailInstallCommand: vi.fn(),
+  entryReaderCountForTests: vi.fn(),
+  loadPluginCatalog: async () => ({ status: 'ok', entries: [] }),
+  loadPluginEntry: vi.fn(),
+  loadPluginReleaseHistory: vi.fn(),
+}));
+
 import AppsPage from '../page';
 
 beforeEach(() => {
@@ -50,8 +58,10 @@ describe('/apps for a signed-out visitor', () => {
 
     render(await AppsPage());
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/apps connect/i);
-    expect(screen.getByText(/bundles the commands, skills and connections/i)).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      'Apps are packs you install into AGI',
+    );
+    expect(screen.getByText(/an app is a pack you install into the assistant/i)).toBeTruthy();
   });
 
   it('offers the sign-in with a return path back here', async () => {
@@ -59,7 +69,7 @@ describe('/apps for a signed-out visitor', () => {
 
     render(await AppsPage());
 
-    const signIn = screen.getByText('Sign in to browse apps').closest('a');
+    const signIn = screen.getByText('Sign in to install apps').closest('a');
     expect(signIn?.getAttribute('href')).toBe('/login?redirectTo=%2Fapps');
   });
 

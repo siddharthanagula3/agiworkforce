@@ -4,7 +4,7 @@ title: Troubleshooting: when something does not work
 path: /support
 category: troubleshooting
 tags: troubleshooting, not working, error, failed, broken, stuck, unsupported browser, supported browsers, javascript, cannot send, no response, offline, retry, upgrade required, unavailable, contact support, search failed, search unavailable, cli login, agi login, device code, extension
-updated: 2026-09-28
+updated: 2026-10-12
 scope: public
 ---
 
@@ -38,8 +38,8 @@ lost its connection: reconnect and try again.
 - "Your queued message was not sent: you switched chats before the reply
   finished." It was saved as a draft in the original chat. Its attachments were
   not kept, so re-attach them.
-- A plan-limited refusal names the plan, not a fault. Check the usage view in
-  Settings for the current allowance and reset time.
+- A plan-limited refusal names the plan, not a fault. On a paid plan, check the
+  usage view in Settings for the current allowance and reset time.
 
 ## A file was not attached
 
@@ -48,6 +48,8 @@ the file and the reason, such as too large, a type it cannot read, or too many
 files. Convert, split, or paste the contents as text.
 
 ## A tool or connector did nothing
+
+{{AVAILABILITY.connectors}} The connector steps below need a connected connector.
 
 Under the website's Skip approvals default, eligible tools run automatically.
 A session may still wait for a destructive or unknown action, a saved Ask choice,
@@ -92,6 +94,8 @@ query that matched nothing, so "nothing matched" really means nothing matched.
 
 ## The CLI will not sign in
 
+The CLI is {{STATUS.cli}}, and these steps apply to an installed CLI.
+
 `agi login` with no provider signs in to your AGI account. It shows a link and
 a code, opens the link in your browser, and waits while you approve the code
 there, signed in to the same account. If the wait stops with "Device code
@@ -101,17 +105,17 @@ not approved in time: run `agi login` again for a fresh one.
 `agi auth-status` lists every credential the CLI holds and how each one
 authenticates; "No authentication configured." means nothing is stored yet.
 `agi doctor` runs the local preflight checks. The CLI keeps credentials in the
-operating system's credential store, and a credentials file that other accounts
-on the machine can read is refused, with the command that fixes it.
+operating system's credential store, or in owner-only files on Linux or when the
+keyring is turned off, and a credentials file that other accounts on the machine
+can read is refused, with the command that fixes it.
 
 ## An extension will not connect
 
-Neither the Chrome extension nor the VS Code extension is published yet, so
-there is no public build to connect. In Chrome, use the web app; in VS Code, use
-the CLI in the integrated terminal.
+The Chrome extension is {{STATUS.chrome}} and the VS Code extension is {{STATUS.vscode}}.
+Until one is released there is no public build to connect, so use the web app.
 
 ## Still stuck
 
-Email contact@agiworkforce.com. Include your **User ID** from Settings, Account,
+Email {{CONTACT.email}}. Include your **User ID** from Settings, Account,
 and the **Organization ID** too if the problem is workspace-wide. The support
 page lists the available channels and response commitments.

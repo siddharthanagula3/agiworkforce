@@ -5,17 +5,18 @@ path: /chrome-extension
 category: surfaces
 tags: chrome, browser extension, browser companion, side panel, capture page, screenshot, tabs, browser automation, computer use
 platforms: chrome
-updated: 2026-09-27
+updated: 2026-10-12
 scope: public
 ---
 
 ## Availability
 
-The Chrome extension, AGI Browser Companion, is not published yet. The Chrome
-page carries its status and the download page keeps a notify list; there is no
-Web Store listing to install from today.
+The Chrome extension, AGI Browser Companion, is {{STATUS.chrome}}. The
+[Chrome page](https://agiworkforce.com/chrome-extension) carries its status and
+the [download page](https://agiworkforce.com/download) keeps a notify list.
+Until it is released there is no Web Store listing to install from.
 
-## What it is being built to do
+## What the extension does
 
 It opens AGI in a browser side panel next to the page you are reading, with a
 keyboard command to open the panel and another to capture the current page into
@@ -32,12 +33,12 @@ still asks, because driving a browser is not a read.
 
 ## Managed cloud from the extension
 
-Managed chat in the Chrome side panel works on every cloud plan, Free included,
-and spends the same credits as the web app. The extension does not accept
-provider keys: web, mobile, desktop and Chrome all run on your AGI account,
-while BYOK is a CLI and VS Code capability.
+Managed chat in the Chrome side panel works on every cloud plan, {{PLAN.free}}
+included, and spends the same credits as the web app. The extension does not
+accept provider keys, and neither do web, mobile or desktop; BYOK is a CLI and
+VS Code capability.
 
-## Until it ships
+## Without the extension
 
 The web app runs in the same browser and covers everything except the
 page-capture and side-panel workflow.

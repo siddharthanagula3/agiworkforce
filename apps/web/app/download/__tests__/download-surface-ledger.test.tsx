@@ -23,6 +23,8 @@ vi.mock('@/features/marketing/components/Reveal', async (importOriginal) => ({
 import {
   AVAILABLE_NOW_LABEL,
   COMING_SOON_LABEL,
+  NOTIFY_CTA,
+  NOTIFY_FORM_ID,
   SURFACE_IDS,
   SURFACE_NAMES,
   SURFACE_STATUS,
@@ -81,6 +83,22 @@ describe('the /download surface availability ledger', () => {
     expect(notify).toHaveLength(3);
     for (const link of notify) expect(link).toHaveAttribute('href', '#notify');
     expect(document.getElementById('notify')).not.toBeNull();
+  });
+
+  it('scrolls to the notify form when a Get notified link on another page opens it', () => {
+    const scrollIntoView = vi
+      .spyOn(HTMLElement.prototype, 'scrollIntoView')
+      .mockImplementation(() => {});
+    window.history.replaceState(null, '', NOTIFY_CTA.href);
+
+    render(<DownloadPage />);
+
+    const form = document.getElementById(NOTIFY_FORM_ID);
+    expect(form).toContainElement(screen.getByLabelText('Email address'));
+    expect(scrollIntoView.mock.contexts).toContain(form);
+
+    scrollIntoView.mockRestore();
+    window.history.replaceState(null, '', '/');
   });
 
   it('types no row and no status label by hand', () => {

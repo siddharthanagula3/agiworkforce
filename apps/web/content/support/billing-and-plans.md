@@ -4,7 +4,7 @@ title: Plans, upgrading, and cancelling
 path: /pricing
 category: billing
 tags: billing, plan, upgrade, downgrade, waitlist, access code, cancel, cancel subscription, invoice, receipt, payment method, card, billing portal, app store, google play, seats, renewal
-updated: 2026-10-08
+updated: 2026-10-12
 scope: public
 ---
 
@@ -16,30 +16,33 @@ where the card and the subscription itself are changed.
 
 ## Upgrading
 
-**Upgrade plan** lists the plans available to you. Paid upgrades are opening in
-stages, so on the Free plan choosing one opens the upgrade waitlist rather than
-checkout: join the waitlist, or enter an access code to continue to checkout.
-Checkout is refused to an account that has neither. On a plan you already pay
+**Upgrade plan** lists the plans available to you. On the {{PLAN.free}} plan
+choosing one goes to checkout when paid upgrades are open to your account; while
+they are not, it opens the upgrade waitlist instead: join the waitlist, or enter an
+access code to continue to checkout. While upgrades are not open, checkout is
+refused to an account that has not redeemed a code. On a plan you already pay
 for the access step does not apply, and an upgrade shows what it will cost and
 waits for you to confirm before anything is charged.
 
 An upgrade takes effect straight away and starts a new billing period that day:
 you pay the new plan's price, minus a credit for the unused time on your current
-plan, and your renewal date moves to the day you upgrade. Adding seats to a Team
-plan keeps the renewal date and charges only for the rest of the current period.
+plan, and your renewal date moves to the day you upgrade. Adding seats to a
+{{PLAN.team}} plan keeps the renewal date and charges only for the rest of the
+current period.
 
 Local mode and BYOK are free and need no plan at all. Managed cloud plans differ
-in usage capacity and in which features they include: projects, custom MCP
-connections, concurrent responses, sandboxes, connector tools and scheduled
-tasks all scale with the plan. The pricing page carries the current prices,
-regional prices and per-plan limits.
+in usage capacity and in which features they include: projects, concurrent
+responses, sandboxes and scheduled tasks all scale with the plan, as do custom
+MCP connections and connector tools. The pricing page carries the current
+prices, regional prices and per-plan limits, and adds the connector limits once
+connectors are open. {{AVAILABILITY.connectors}}
 
 ## Team seat types
 
-A Team plan sells two seat types on one subscription, Standard and Premium, and
-one team can hold both. A Premium seat carries the usage limits and model access
-of Max 5x, which is five times the usage of a Standard seat, and keeps every
-Team feature.
+A {{PLAN.team}} plan sells two seat types on one subscription, Standard and
+Premium, and one team can hold both. A Premium seat carries the usage limits and
+model access of {{PLAN.max}}, which is five times the usage of a Standard seat,
+and keeps every {{PLAN.team}} feature.
 
 Seat types are set in Settings, Team. An owner or admin can assign a Premium
 seat the team already pays for and has not assigned, at no extra charge. Only
@@ -54,16 +57,16 @@ of each seat type.
 
 ## Monthly and yearly billing
 
-Basic, Pro, Max 5x and Max 20x are billed monthly only; Team can be billed
-monthly or yearly.
+{{PLAN.basic}}, {{PLAN.pro}}, {{PLAN.max}} and {{PLAN.max_15x}} are billed
+monthly only; {{PLAN.team}} can be billed monthly or yearly.
 
-If you already pay yearly for Pro, nothing changes. Your subscription keeps its
+If you already pay yearly for {{PLAN.pro}}, nothing changes. Your subscription keeps its
 price and renews yearly until you switch to monthly or cancel. Once you switch
 to monthly, yearly billing is no longer available for that plan.
 
 **Switch to monthly billing** in Settings, Billing makes the switch when your
-yearly term ends. Upgrading to Max 5x or Max 20x moves you to that plan's
-monthly price straight away, and the unused part of your year is credited
+yearly term ends. Upgrading to {{PLAN.max}} or {{PLAN.max_15x}} moves you to
+that plan's monthly price straight away, and the unused part of your year is credited
 toward future invoices.
 
 ## Cancelling

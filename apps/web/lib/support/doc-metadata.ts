@@ -1,15 +1,19 @@
 import {
   BILLING_PLAN_PRICING,
+  billingPlanCapabilityWireTiers,
+  getTierPolicy,
   isByokPlanTier,
   isContractPricedPlan,
   isFreeBillingPlanTier,
   isLocalOnlyPlanTier,
   isTeamPlanTier,
   isTeamSeatUpgradeTier,
+  connectorsReleased,
   type BillingPlanTier,
 } from '@agiworkforce/types';
 
-import { AVAILABLE_NOW_LABEL, SURFACE_STATUS } from '@/lib/surface-status';
+import { MANAGED_CLOUD_STATUS } from '@/lib/legal-constants';
+import { AVAILABLE_NOW_LABEL, COMING_SOON_LABEL, SURFACE_STATUS } from '@/lib/surface-status';
 
 export const DOC_MATURITIES = ['ga', 'beta', 'alpha'] as const;
 export type DocMaturity = (typeof DOC_MATURITIES)[number];
@@ -57,6 +61,35 @@ export const RELEASED_DOC_PLATFORMS = Object.freeze(
   ALL_DOC_PLATFORMS.filter((platform) => SURFACE_STATUS[platform] === AVAILABLE_NOW_LABEL),
 ) as readonly DocPlatform[];
 
+const MATURITY_BY_MANAGED_CLOUD_STATUS = {
+  'public alpha': 'alpha',
+} as const satisfies Record<typeof MANAGED_CLOUD_STATUS, DocMaturity>;
+
+export const MANAGED_CLOUD_MATURITY: DocMaturity =
+  MATURITY_BY_MANAGED_CLOUD_STATUS[MANAGED_CLOUD_STATUS];
+
+export const MANAGED_CLOUD_ONLY_PLATFORMS: readonly DocPlatform[] = Object.freeze([
+  'web',
+  'desktop',
+  'mobile',
+  'chrome',
+]);
+
+// A capability reached only through managed cloud is no more mature than managed cloud itself.
+export function publishedMaturity(
+  maturity: DocMaturity,
+  platforms: readonly DocPlatform[],
+): DocMaturity {
+  const released = platforms.filter((platform) => RELEASED_DOC_PLATFORMS.includes(platform));
+  const managedCloudOnly =
+    released.length > 0 &&
+    released.every((platform) => MANAGED_CLOUD_ONLY_PLATFORMS.includes(platform));
+  if (!managedCloudOnly) return maturity;
+  return DOC_MATURITIES.indexOf(maturity) < DOC_MATURITIES.indexOf(MANAGED_CLOUD_MATURITY)
+    ? MANAGED_CLOUD_MATURITY
+    : maturity;
+}
+
 export const ALL_DOC_PLANS = Object.freeze(
   (Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[]).filter(
     (plan) => !isTeamSeatUpgradeTier(plan),
@@ -78,6 +111,14 @@ export const PAID_CLOUD_DOC_PLANS = Object.freeze(
   CLOUD_DOC_PLANS.filter((plan) => !isFreeBillingPlanTier(plan)),
 ) as readonly BillingPlanTier[];
 
+export const AGI_WORK_DOC_PLANS = Object.freeze(
+  billingPlanCapabilityWireTiers('agi_work'),
+) as readonly BillingPlanTier[];
+
+export const VOICE_DOC_PLANS = Object.freeze(
+  CLOUD_DOC_PLANS.filter((plan) => getTierPolicy(plan).allowVoice === true),
+) as readonly BillingPlanTier[];
+
 export const KEY_BEARING_DOC_PLANS = Object.freeze([
   'local-only',
   'byok',
@@ -93,6 +134,7 @@ export interface DocMetadata {
   maturity: DocMaturity;
   audience: DocAudience;
   applicability: DocApplicability;
+  featureReleased?: boolean;
 }
 
 export function planLabel(plan: BillingPlanTier): string {
@@ -118,12 +160,17 @@ export function appliesToEveryPlatform(platforms: readonly DocPlatform[]): boole
   return ALL_DOC_PLATFORMS.every((platform) => platforms.includes(platform));
 }
 
+interface DocMetadataOptions {
+  apiVersions?: readonly string[];
+  featureReleased?: boolean;
+}
+
 function metadata(
   maturity: DocMaturity,
   audience: DocAudience,
   platforms: readonly DocPlatform[],
   plans: readonly BillingPlanTier[],
-  apiVersions?: readonly string[],
+  { apiVersions, featureReleased }: DocMetadataOptions = {},
 ): DocMetadata {
   return Object.freeze({
     maturity,
@@ -133,8 +180,11 @@ function metadata(
       plans: Object.freeze([...plans]),
       ...(apiVersions ? { apiVersions: Object.freeze([...apiVersions]) } : {}),
     }),
+    ...(featureReleased === undefined ? {} : { featureReleased }),
   });
 }
+
+const CONNECTOR_DOC: DocMetadataOptions = Object.freeze({ featureReleased: connectorsReleased() });
 
 /**
  * Applicability per help-centre document. Keyed by corpus document id, so a new
@@ -143,14 +193,14 @@ function metadata(
 export const SUPPORT_DOC_METADATA: Readonly<Record<string, DocMetadata>> = Object.freeze({
   'account-security': metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),
   'accounts-and-sign-in': metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),
-  'agi-work': metadata('beta', 'user', ['web'], PAID_CLOUD_DOC_PLANS),
+  'agi-work': metadata('beta', 'user', ['web'], AGI_WORK_DOC_PLANS),
   artifacts: metadata('ga', 'user', ['web', 'desktop'], CLOUD_DOC_PLANS),
   'billing-and-plans': metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),
   'byok-provider-keys': metadata('beta', 'developer', ['cli', 'vscode'], ALL_DOC_PLANS),
   'chat-basics': metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),
   'chrome-extension': metadata('beta', 'user', ['chrome'], CLOUD_DOC_PLANS),
   configuration: metadata('beta', 'developer', ['cli', 'vscode'], ALL_DOC_PLANS),
-  'connectors-and-mcp': metadata('ga', 'user', ALL_DOC_PLATFORMS, CLOUD_DOC_PLANS),
+  'connectors-and-mcp': metadata('ga', 'user', ALL_DOC_PLATFORMS, CLOUD_DOC_PLANS, CONNECTOR_DOC),
   'crisis-resources': metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),
   'custom-instructions': metadata('beta', 'developer', ['cli', 'vscode'], ALL_DOC_PLANS),
   'delete-your-account': metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),
@@ -165,8 +215,10 @@ export const SUPPORT_DOC_METADATA: Readonly<Record<string, DocMetadata>> = Objec
   'keyboard-shortcuts': metadata('ga', 'user', ['web', 'desktop'], ALL_DOC_PLANS),
   library: metadata('ga', 'user', ['web'], CLOUD_DOC_PLANS),
   'local-mode': metadata('beta', 'developer', ['cli'], KEY_BEARING_DOC_PLANS),
-  'managed-cloud': metadata('ga', 'developer', ALL_DOC_PLATFORMS, CLOUD_DOC_PLANS, ['v1']),
-  'mcp-connections': metadata('ga', 'developer', ALL_DOC_PLATFORMS, CLOUD_DOC_PLANS),
+  'managed-cloud': metadata('ga', 'developer', ALL_DOC_PLATFORMS, CLOUD_DOC_PLANS, {
+    apiVersions: ['v1'],
+  }),
+  'mcp-connections': metadata('ga', 'developer', ALL_DOC_PLATFORMS, CLOUD_DOC_PLANS, CONNECTOR_DOC),
   memory: metadata('ga', 'user', ['web', 'desktop'], CLOUD_DOC_PLANS),
   'models-and-reasoning': metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),
   'privacy-controls': metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),
@@ -181,7 +233,7 @@ export const SUPPORT_DOC_METADATA: Readonly<Record<string, DocMetadata>> = Objec
   'tool-approvals': metadata('ga', 'user', ALL_DOC_PLATFORMS, CLOUD_DOC_PLANS),
   troubleshooting: metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),
   'usage-and-credits': metadata('ga', 'user', ALL_DOC_PLATFORMS, CLOUD_DOC_PLANS),
-  voice: metadata('beta', 'user', ['web'], PAID_CLOUD_DOC_PLANS),
+  voice: metadata('beta', 'user', ['web'], VOICE_DOC_PLANS),
   'vscode-extension': metadata('beta', 'developer', ['vscode'], ALL_DOC_PLANS),
   'workspace-administration': metadata('ga', 'admin', ['web'], WORKSPACE_DOC_PLANS),
   'workspace-policy': metadata('ga', 'admin', ['web'], WORKSPACE_DOC_PLANS),
@@ -206,6 +258,18 @@ export function describePlans(plans: readonly BillingPlanTier[]): string {
   const named = NAMED_PLAN_SETS.find((set) => sameSet(set.plans, plans));
   if (named) return named.label;
   return plans.map(planLabel).join(', ');
+}
+
+export function hasReleasedPlatform(platforms: readonly DocPlatform[]): boolean {
+  return platforms.some((platform) => RELEASED_DOC_PLATFORMS.includes(platform));
+}
+
+export function describeReleaseState(metadata: DocMetadata): string {
+  const { platforms } = metadata.applicability;
+  if (metadata.featureReleased === false || !hasReleasedPlatform(platforms)) {
+    return COMING_SOON_LABEL;
+  }
+  return DOC_MATURITY_LABELS[publishedMaturity(metadata.maturity, platforms)];
 }
 
 export function describePlatforms(platforms: readonly DocPlatform[]): string {

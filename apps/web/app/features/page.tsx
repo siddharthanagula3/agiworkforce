@@ -14,7 +14,13 @@ import {
   type ScrollFeature,
 } from '@/features/marketing/components/system';
 import { WebWindow } from '@/features/marketing/components/DeviceMockups';
-import { BYOK_SURFACES, surfaceCta } from '@/lib/marketing-constants';
+import { BYOK_SURFACES, CLI_AVAILABILITY_NOTE, surfaceCta } from '@/lib/marketing-constants';
+import {
+  BILLING_PLAN_CAPABILITY_LABELS,
+  CONNECTORS_COMING_SOON_MESSAGE,
+  billingPlanCapabilityPlanLabels,
+  connectorsReleased,
+} from '@agiworkforce/types';
 import {
   AgentRunWindow,
   ArtifactsWindow,
@@ -23,18 +29,25 @@ import {
   ResearchWindow,
 } from '@/features/marketing/components/FeatureScenes';
 
+const CONNECTORS_RELEASED = connectorsReleased();
+const TOOLS_IN_THE_WORKSPACE = CONNECTORS_RELEASED ? 'tools and connectors' : 'tools';
+const CONNECTORS_NOTE = CONNECTORS_RELEASED ? '' : ` ${CONNECTORS_COMING_SOON_MESSAGE}`;
+
 export const metadata = buildMetadata({
   title: 'Features: chat, artifacts, projects, tools, memory, and research',
-  description:
-    'Everything inside the AGI workspace: chat, artifacts, projects, tools and connectors, memory, deep research, agents, plugins, and skills. Across every surface and trust mode.',
+  description: `What is inside the AGI workspace: chat, artifacts, projects, memory, deep research, agents, image and video generation, voice, ${TOOLS_IN_THE_WORKSPACE}, plugins, and skills.`,
   path: '/features',
 });
 
 const CLI_CTA = surfaceCta('cli');
+const RESEARCH_PLANS = billingPlanCapabilityPlanLabels('deep_research');
+const IMAGE_PLANS = billingPlanCapabilityPlanLabels('image_generation');
+const VIDEO_PLANS = billingPlanCapabilityPlanLabels('video_generation');
 
 const IDS = {
   hero: 'agi-features-hero-title',
   loop: 'agi-features-loop-title',
+  media: 'agi-features-media-title',
   extend: 'agi-features-extend-title',
   close: 'agi-features-close-title',
 } as const;
@@ -43,8 +56,8 @@ const FEATURES: readonly ScrollFeature[] = [
   {
     id: 'feature-ai-chat',
     eyebrow: 'AI chat',
-    title: 'One composer. Every model. A reply that shows its work.',
-    body: 'Attachments, dictation, web search and slash commands go in; the tools it called, the sources it read and the route that served it come back with the answer.',
+    title: 'One composer. The models on your plan. A reply that shows its work.',
+    body: 'Attachments, dictation, web search and slash commands go in; the tools it called, the sources it read and the model that answered come back with the answer.',
     points: [
       'Auto picks the model per message, or you pin one',
       'Search, code and files as tool rows you can open',
@@ -86,12 +99,12 @@ const FEATURES: readonly ScrollFeature[] = [
   {
     id: 'feature-deep-research',
     eyebrow: 'Deep research',
-    title: 'Every claim names the source it came from.',
-    body: 'The run writes out its searches, waits for you to approve them, then returns a report with a numbered citation behind each factual claim.',
+    title: 'A plan you approve, then a report with numbered sources.',
+    body: 'The run writes out an editable plan and waits for you to start it, then returns a report in which the model is asked to cite factual claims with numbered sources.',
     points: [
-      'Plan approved before anything searches',
-      'Rejected sources listed with the reason',
-      'Included on Pro plans and above; web search is on every plan',
+      'Plan approved before web gathering starts',
+      'Sources chosen, and sites ruled out, before it runs',
+      `Included on ${RESEARCH_PLANS} plans; web search is on every plan`,
     ],
     href: '/features/deep-research',
     linkLabel: 'Learn more about deep research',
@@ -100,20 +113,41 @@ const FEATURES: readonly ScrollFeature[] = [
   {
     id: 'feature-agents',
     eyebrow: 'Agents',
-    title: 'Delegation only works if the default is no.',
-    body: 'An agent reads files, runs commands and calls connectors, and every risky step opens an approval you answer, inside a permission list you set for the run.',
-    points: ['Allow once, always, or deny per tool', 'Commands run in an OS sandbox'],
+    title: 'Delegated work that stops to ask.',
+    body: `A tool call that needs permission stops at an approval you answer. Agent files, subagents, hooks and the OS sandbox belong to the agi CLI. ${CLI_AVAILABILITY_NOTE} In the browser, the agent mode is ${BILLING_PLAN_CAPABILITY_LABELS.agi_work}.`,
+    points: ['Allow once, always, or deny per tool', 'In the CLI, commands run in an OS sandbox'],
     href: '/features/agents',
     linkLabel: 'Learn more about agents',
     visual: <AgentRunWindow />,
   },
 ];
 
+const MEDIA = [
+  {
+    meta: 'Images',
+    title: 'Image generation',
+    body: `Describe a picture in chat, choose its shape and style, then revise the result. Included on ${IMAGE_PLANS} plans.`,
+    href: '/features/images',
+  },
+  {
+    meta: 'Video',
+    title: 'Video generation',
+    body: `Describe a short video, follow its progress while it renders, then play or download it. Included on ${VIDEO_PLANS} plans.`,
+    href: '/features/video',
+  },
+  {
+    meta: 'Voice',
+    title: 'Voice',
+    body: 'Hold a spoken conversation that is added to the chat, or dictate a message into the composer.',
+    href: '/features/voice',
+  },
+] as const;
+
 const EXTEND = [
   {
     meta: 'Tools',
     title: 'Tools and connectors',
-    body: 'MCP servers and OAuth apps, added one explicit permission at a time, with a default of asking first. Connectors are coming soon.',
+    body: `MCP servers and OAuth apps, added one explicit permission at a time, with a default of asking first.${CONNECTORS_NOTE}`,
     href: '/features/tools',
   },
   {
@@ -174,6 +208,29 @@ export default function FeaturesPage() {
               </Prose>
             </div>
             <ScrollFeatures features={FEATURES} label="Six things a chat opens into" />
+          </Stack>
+        </Section>
+
+        <Section id="media" labelledBy={IDS.media} rule>
+          <Stack gap="loose">
+            <div>
+              <Eyebrow>Images, video and voice</Eyebrow>
+              <h2 className="agi-ds-h2" id={IDS.media}>
+                Create and speak from the same composer.
+              </h2>
+            </div>
+            <div className="agi-ds-grid-2">
+              {MEDIA.map((item) => (
+                <div className="agi-ds-card" key={item.title}>
+                  <Eyebrow>{item.meta}</Eyebrow>
+                  <h3 className="agi-ds-h3">{item.title}</h3>
+                  <Prose size="sm">{item.body}</Prose>
+                  <Link href={item.href} className="agi-ds-link">
+                    Read more
+                  </Link>
+                </div>
+              ))}
+            </div>
           </Stack>
         </Section>
 

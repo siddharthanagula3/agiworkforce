@@ -5,7 +5,7 @@ import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/c
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { Ledger, type LedgerRow } from '@/features/marketing/components/system';
-import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { POLICY_LAST_UPDATED, contactMailto } from '@/lib/legal-constants';
 import { ScanScope } from './ScanScope';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
@@ -119,7 +119,7 @@ export default function AccessibilityPage() {
             </Prose>
             <ButtonRow>
               <Button href="/settings/help">Report from Settings, Help</Button>
-              <Button href="mailto:contact@agiworkforce.com" variant="secondary">
+              <Button href={contactMailto()} variant="secondary">
                 Email contact@agiworkforce.com
               </Button>
               <Button href="/security" variant="secondary">

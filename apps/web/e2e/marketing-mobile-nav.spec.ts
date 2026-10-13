@@ -5,7 +5,15 @@ const ROUTES = ['/', '/dev/landing-preview'];
 const PHONE = { width: 390, height: 844 };
 const MIN_TARGET_PX = 44;
 const SHEET_GROUPS = ['Product', 'Features', 'Solutions', 'Developers', 'Company'];
-const SHEET_LINKS = ['Pricing', 'Contact sales', 'Sign in', 'Try AGI Web'];
+const SHEET_LINKS = [
+  'Downloads and release status',
+  'All features',
+  'All solutions',
+  'Pricing',
+  'Contact sales',
+  'Sign in',
+  'Try AGI Web',
+];
 
 for (const route of ROUTES) {
   test.describe(`marketing mobile navigation on ${route}`, () => {

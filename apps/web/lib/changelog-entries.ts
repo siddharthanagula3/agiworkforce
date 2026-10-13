@@ -27,7 +27,7 @@ export const RELEASES: readonly Release[] = [
     date: '2026-09-15',
     headline: 'Desktop · one desktop app',
     body: [
-      'The macOS app built on Electron is the AGI desktop application: your managed-cloud account in a window that stays open, approved folders, computer use one step at a time, and the Chrome bridge. Its release workflow signs, notarizes and verifies one installer per architecture; no installer has been published yet.',
+      'The macOS app built on Electron is the AGI desktop application: your managed-cloud account in a window that stays open, approved folders, computer use that asks before its first step each session and before each app it controls, and the Chrome bridge. Its release workflow signs, notarizes and verifies one installer per architecture; no installer has been published yet.',
       'The earlier Tauri build leaves the public download flows, and its Linux packages are no longer offered.',
     ],
   },

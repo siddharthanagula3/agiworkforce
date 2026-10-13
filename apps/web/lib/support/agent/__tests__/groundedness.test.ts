@@ -1,3 +1,4 @@
+import { billingPlanCapabilityPlanLabels } from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
 import { getSupportCorpus } from '../corpus';
 import type { CorpusChunk } from '../types';
@@ -22,15 +23,15 @@ const FAITHFUL_ANSWERS: readonly (readonly [docId: string, answer: string])[] = 
   ],
   [
     'projects',
-    'In a project, choose Add sources to add files from your device or text you paste or type. Google Drive is listed there as Coming soon, so no file can be added from Drive until connecting apps opens.',
+    'In a project, choose Add sources to add files from your device or text you paste or type. Google Drive is listed there too, and adding a file from it requires the Google Drive connector. Connecting apps is coming soon.',
   ],
   [
     'static-faq',
-    'Basic gives you Managed Cloud chat on Web, Mobile and Desktop. Pro adds higher usage, more projects, custom MCP connections, image generation, AGI Work, and Managed Cloud from the CLI, Chrome and VS Code. Check the pricing page for current availability and prices.',
+    'Basic includes Managed Cloud chat on the web. Pro adds higher usage, plus AGI Work, Deep Research and image generation. The pricing page shows current availability, regional prices and per-plan limits.',
   ],
   [
     'install-the-cli',
-    'Local mode and BYOK work on any account, even without a subscription. Managed cloud from the CLI needs one of the higher paid tiers; the pricing page has the details.',
+    `Local mode and BYOK work on any account, even without a subscription. Managed cloud from the CLI requires one of these plans: ${billingPlanCapabilityPlanLabels('developer_surfaces')}.`,
   ],
   [
     'projects',
@@ -42,7 +43,7 @@ const FAITHFUL_ANSWERS: readonly (readonly [docId: string, answer: string])[] = 
   ],
   [
     'troubleshooting',
-    "The Chrome extension hasn't been published yet, so there isn't a public build to connect to. For now, use the web app in Chrome. The same applies to VS Code, where you can use the CLI in the integrated terminal instead.",
+    'The Chrome extension is coming soon, and so is the VS Code extension. Until one is released there is no public build to connect, so use the web app for now.',
   ],
   [
     'account-security',
@@ -86,7 +87,10 @@ const FAITHFUL_ANSWERS: readonly (readonly [docId: string, answer: string])[] = 
     'byok-provider-keys',
     'CLI Managed Cloud requests need an AGI account token, not a saved provider API key.',
   ],
-  ['troubleshooting', "Not yet. Neither extension is published, so you can't connect one today."],
+  [
+    'troubleshooting',
+    'Not yet. Until an extension is released there is no public build to connect, so use the web app.',
+  ],
 ];
 
 const PLAINLY_UNRELATED: readonly (readonly [label: string, answer: string])[] = [

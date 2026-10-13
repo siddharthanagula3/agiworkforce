@@ -1,11 +1,22 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  CONNECTOR_RELEASE_STATE,
+  CONNECTORS_COMING_SOON_MESSAGE,
+  connectorsReleased,
+  type ConnectorReleaseState,
+} from '@agiworkforce/types';
 
 import { directoryRecordFixture } from '@/lib/connectors/__tests__/directory-record-fixture';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 import { computeDirectoryCounts } from '@/lib/connectors/directory/snapshot-view';
 import { absoluteUrl } from '@/lib/seo/site';
 import { directoryRecordPath, NOT_PROVIDED } from '../directory-public';
+
+const SIGN_IN_LABEL_BY_RELEASE_STATE = {
+  released: 'Sign in to connect',
+  coming_soon: 'Sign in to see connectors',
+} as const satisfies Record<ConnectorReleaseState, string>;
 
 const { getSnapshotRecords, getSnapshotView, notFound } = vi.hoisted(() => ({
   getSnapshotRecords: vi.fn(),
@@ -86,10 +97,9 @@ describe('public connector details', () => {
     await renderPage();
 
     expect(screen.getByRole('heading', { level: 1, name: 'Linear' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Sign in to connect' })).toHaveAttribute(
-      'href',
-      '/login?redirectTo=%2Fconnectors',
-    );
+    expect(
+      screen.getByRole('link', { name: SIGN_IN_LABEL_BY_RELEASE_STATE[CONNECTOR_RELEASE_STATE] }),
+    ).toHaveAttribute('href', '/login?redirectTo=%2Fconnectors');
     const ledger = screen.getByRole('list', { name: 'The record' });
     expect(ledger).toHaveTextContent('Linear, Inc.');
     expect(ledger).toHaveTextContent('Official MCP registry');
@@ -113,6 +123,12 @@ describe('public connector details', () => {
     expect(screen.getByText('list_issues')).toBeInTheDocument();
     expect(screen.getByText('create_issue')).toBeInTheDocument();
     expect(document.body.textContent).toContain('Reading this page connects nothing.');
+    expect(document.body.textContent?.includes(CONNECTORS_COMING_SOON_MESSAGE)).toBe(
+      !connectorsReleased(),
+    );
+    if (!connectorsReleased()) {
+      expect(document.body.textContent).not.toMatch(/sign in to connect|After you sign in/iu);
+    }
     expect(document.body.textContent).not.toMatch(/\bCLI\b|\bDesktop\b/);
     expect(getSnapshotView).toHaveBeenCalledOnce();
     expect(fetch).not.toHaveBeenCalled();

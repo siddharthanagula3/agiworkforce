@@ -19,7 +19,7 @@ const AUDIENCE_ROUTES = [
   {
     label: 'Teams',
     value:
-      'Per-seat plan on the pricing page; checkout needs an access code while upgrades open in stages',
+      'Per-seat plan on the pricing page, self-serve; the upgrade waitlist or an access code applies only while upgrades are not open to your account',
   },
   { label: 'Enterprise', value: 'Security review, rollout, and contract terms' },
 ] as const;

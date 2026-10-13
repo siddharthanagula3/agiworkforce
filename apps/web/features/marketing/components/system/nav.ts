@@ -5,6 +5,8 @@ export const CHAT_ROOT_HREF = '/chat';
 
 export const CONTACT_SALES_HREF = '/contact-sales';
 
+const CLI_ROUTE_STATE = `in the CLI, ${SURFACE_STATUS.cli.toLowerCase()}`;
+
 export interface NavGroupItem {
   href: string;
   label: string;
@@ -45,6 +47,16 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
         description: 'Chat, diffs and commands inside the editor',
       },
       { href: '/mobile', label: 'AGI Mobile', description: 'Local mode on the phone by default' },
+      {
+        href: '/agi-work',
+        label: 'AGI Work',
+        description: 'A goal in, a plan first, approvals on sensitive steps',
+      },
+      {
+        href: '/agi-code',
+        label: 'AGI Code',
+        description: 'One coding agent across the CLI and VS Code',
+      },
     ],
     footer: { href: '/download', label: 'Downloads and release status' },
   },
@@ -60,7 +72,7 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
       {
         href: '/features/agents',
         label: 'Agents',
-        description: 'Delegation with approval as the default',
+        description: 'Delegated work that stops to ask',
       },
       {
         href: '/features/artifacts',
@@ -70,7 +82,7 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
       {
         href: '/features/deep-research',
         label: 'Deep research',
-        description: 'Reports with a source behind every claim',
+        description: 'Reports with numbered sources you can check',
       },
       {
         href: '/features/memory',
@@ -92,6 +104,21 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
         label: 'Plugins',
         description: 'Commands, agents and skills in one install',
       },
+      {
+        href: '/features/images',
+        label: 'Image generation',
+        description: 'Create and revise images in chat',
+      },
+      {
+        href: '/features/video',
+        label: 'Video generation',
+        description: 'Describe a short video in chat',
+      },
+      {
+        href: '/features/voice',
+        label: 'Voice',
+        description: 'Voice mode and dictation',
+      },
     ],
     footer: { href: '/features', label: 'All features' },
   },
@@ -104,18 +131,26 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
         description: 'SSO, SCIM, audit export, contract scoped',
       },
       { href: '/teams', label: 'Teams', description: 'Seats, roles and shared workspaces' },
-      { href: '/local', label: 'Local', description: 'Models on your hardware, works offline' },
+      {
+        href: '/local',
+        label: 'Local',
+        description: `Models on your hardware, ${CLI_ROUTE_STATE}`,
+      },
       {
         href: '/byok',
         label: 'Bring your own key',
-        description: 'Your keys, your bill, no markup',
+        description: `Your keys and your bill, ${CLI_ROUTE_STATE}`,
       },
       {
         href: '/providers',
         label: 'Providers',
-        description: 'Every provider the catalogue compiles in',
+        description: 'The providers the CLI takes your key for',
       },
-      { href: '/use-cases', label: 'Use cases', description: 'What teams run on AGI today' },
+      {
+        href: '/use-cases',
+        label: 'Use cases',
+        description: 'Startups, sales teams, consulting and IT providers',
+      },
     ],
     footer: { href: '/solutions', label: 'All solutions' },
   },
@@ -127,14 +162,14 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
       {
         href: '/integrations',
         label: 'Integrations',
-        description: 'Connect the tools you already use',
+        description: 'MCP plugins, the browser bridge and provider keys',
       },
       {
         href: '/connectors/mcp-directory',
         label: 'MCP directory',
-        description: 'Servers you can attach in one step',
+        description: 'Remote MCP servers, with publisher and tools',
       },
-      { href: '/changelog', label: 'Changelog', description: 'Every shipped feature, dated' },
+      { href: '/release-notes', label: 'Release notes', description: 'What shipped, and when' },
       { href: '/status', label: 'Status', description: 'One signal, honestly checked' },
     ],
   },
@@ -142,8 +177,12 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
     label: 'Company',
     items: [
       { href: '/about', label: 'About', description: 'Multi-provider, by design' },
-      { href: '/blog', label: 'Blog', description: 'Posts when we have something to say' },
-      { href: '/careers', label: 'Careers', description: 'A small team, on purpose' },
+      {
+        href: '/blog',
+        label: 'Blog',
+        description: 'No posts yet; announcements are in the release notes',
+      },
+      { href: '/careers', label: 'Careers', description: 'Founder-led, no open roles' },
       { href: '/trust', label: 'Trust centre', description: 'Claims with dates' },
       { href: '/security', label: 'Security', description: 'Three boundaries, three answers' },
       { href: '/contact', label: 'Contact', description: 'One inbox, one human' },
@@ -159,6 +198,7 @@ export const FOOTER_COLUMNS = [
       { href: '/download', label: 'Download' },
       { href: '/local', label: 'Local' },
       { href: '/byok', label: 'Bring your own key' },
+      { href: '/providers', label: 'Providers' },
       { href: '/teams', label: 'Teams' },
       { href: '/enterprise', label: 'Enterprise' },
     ],
@@ -166,25 +206,25 @@ export const FOOTER_COLUMNS = [
   {
     title: 'Surfaces',
     links: [
-      { href: '/web', label: 'Web', status: SURFACE_STATUS.web },
-      { href: '/cli', label: 'CLI', status: SURFACE_STATUS.cli },
-      { href: '/desktop', label: 'Desktop', status: SURFACE_STATUS.desktop },
-      { href: '/vscode-extension', label: 'VS Code', status: SURFACE_STATUS.vscode },
-      { href: '/chrome-extension', label: 'Chrome', status: SURFACE_STATUS.chrome },
-      { href: '/mobile', label: 'Mobile', status: SURFACE_STATUS.mobile },
+      { href: '/web', label: 'Web' },
+      { href: '/cli', label: 'CLI' },
+      { href: '/desktop', label: 'Desktop' },
+      { href: '/vscode-extension', label: 'VS Code' },
+      { href: '/chrome-extension', label: 'Chrome' },
+      { href: '/mobile', label: 'Mobile' },
       { href: '/download', label: 'Release status' },
     ],
   },
   {
     title: 'Capabilities',
     links: [
+      { href: '/agi-work', label: 'AGI Work' },
+      { href: '/agi-code', label: 'AGI Code' },
       { href: '/features/agents', label: 'Agents' },
       { href: '/features/artifacts', label: 'Artifacts' },
       { href: '/features/memory', label: 'Memory' },
       { href: '/features/deep-research', label: 'Deep research' },
       { href: '/features/projects', label: 'Projects' },
-      { href: '/providers', label: 'Providers' },
-      { href: '/skills', label: 'Skills' },
     ],
   },
   {
@@ -194,7 +234,8 @@ export const FOOTER_COLUMNS = [
       { href: '/help', label: 'Help' },
       { href: '/support', label: 'Support' },
       { href: '/faq', label: 'FAQ' },
-      { href: '/changelog', label: 'Changelog' },
+      { href: '/skills', label: 'Skills' },
+      { href: '/release-notes', label: 'Release notes' },
       { href: '/status', label: 'Status' },
     ],
   },
@@ -204,6 +245,9 @@ export const FOOTER_COLUMNS = [
       { href: '/about', label: 'About' },
       { href: '/blog', label: 'Blog' },
       { href: '/careers', label: 'Careers' },
+      { href: '/customers', label: 'Customers' },
+      { href: '/partners', label: 'Partners' },
+      { href: '/press', label: 'Press' },
       { href: '/contact', label: 'Contact' },
     ],
   },
