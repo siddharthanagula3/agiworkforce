@@ -208,3 +208,26 @@ test('Rust auditing has one cache owner and reports without issue-writing permis
   assert.match(audit.run, /exit "\$audit_status"/);
   assert.match(audit.run, /node scripts\/report-cargo-audit.mjs/);
 });
+
+test('Windows caches the Cargo workspace once without removing toolchain binaries or reducing coverage', () => {
+  const job = workflow('ci.yml').jobs['windows-smoke'];
+  const setup = job.steps.find((step) =>
+    step.uses?.startsWith('actions-rust-lang/setup-rust-toolchain@'),
+  );
+  assert.equal(setup.with.cache, false);
+  const caches = job.steps.filter((step) => step.uses?.startsWith('Swatinem/rust-cache@'));
+  assert.equal(caches.length, 1);
+  assert.equal(caches[0].with.workspaces, '. -> target');
+  assert.equal(caches[0].with['cache-bin'], false);
+  assert.equal(caches[0].with['cache-on-failure'], true);
+  assert.equal(caches[0].with.key, 'windows-smoke');
+  assert.equal(job['timeout-minutes'], 90);
+  assert.deepEqual(
+    job.steps.filter((step) => step.run?.startsWith('cargo ')).map((step) => step.run),
+    [
+      'cargo check --locked --workspace',
+      'cargo test --locked --workspace --lib -- --skip landlock --skip seccomp --skip linux_sandbox',
+      'cargo clippy --locked --workspace --lib -- -D warnings -D unsafe-code',
+    ],
+  );
+});
