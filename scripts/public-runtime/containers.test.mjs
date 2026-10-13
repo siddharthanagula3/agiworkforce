@@ -25,6 +25,41 @@ test('the isolated database uses the official image bootstrap socket directory',
   assert.equal(DATABASE_SOCKET, '/var/run/postgresql');
 });
 
+test('a ready bootstrap child cannot stand in for the final postgres process', async () => {
+  for (const command of ['bash', 'docker-entrypoi', 'sh', '']) {
+    const value = harness();
+    value.pgName = 'database';
+    const calls = [];
+    value.docker = async (args) => {
+      calls.push(args);
+      return command;
+    };
+    assert.equal(await value.postgresReady(), false);
+    assert.deepEqual(calls, [['exec', 'database', 'cat', '/proc/1/comm']]);
+  }
+});
+
+test('the final postgres process must accept the exact fixture connection', async () => {
+  const value = harness();
+  value.pgName = 'database';
+  value.database = 'fixture';
+  const calls = [];
+  value.docker = async (args) => {
+    calls.push(args);
+    return args.includes('/proc/1/comm') ? 'postgres' : '';
+  };
+  assert.equal(await value.postgresReady(), true);
+  assert.deepEqual(calls, [
+    ['exec', 'database', 'cat', '/proc/1/comm'],
+    ['exec', 'database', 'pg_isready', '-h', DATABASE_SOCKET, '-U', 'postgres', '-d', 'fixture'],
+  ]);
+  value.docker = async (args) => {
+    if (args.includes('/proc/1/comm')) return 'postgres';
+    throw new Error('server is not accepting connections');
+  };
+  await assert.rejects(value.postgresReady(), /not accepting connections/);
+});
+
 test('startup diagnostics read bounded stdout and stderr from the recorded owner', async () => {
   const value = harness();
   value.names.set('database', { id: 'original', image: value.postgresImageId });

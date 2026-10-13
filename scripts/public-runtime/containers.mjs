@@ -96,6 +96,23 @@ export class PublicRuntimeContainers {
     return JSON.parse(await this.docker(['inspect', name]))[0];
   }
 
+  async postgresReady() {
+    const command = await this.docker(['exec', this.pgName, 'cat', '/proc/1/comm']);
+    if (command !== 'postgres') return false;
+    await this.docker([
+      'exec',
+      this.pgName,
+      'pg_isready',
+      '-h',
+      DATABASE_SOCKET,
+      '-U',
+      'postgres',
+      '-d',
+      this.database,
+    ]);
+    return true;
+  }
+
   async readinessError(name, message) {
     const owned = this.names.get(name);
     if (!owned) throw new Error('Refusing startup diagnostics for an unowned container');
@@ -288,19 +305,10 @@ export class PublicRuntimeContainers {
     let ready = false;
     for (let attempt = 0; attempt < 60; attempt++) {
       try {
-        await this.docker([
-          'exec',
-          this.pgName,
-          'pg_isready',
-          '-h',
-          DATABASE_SOCKET,
-          '-U',
-          'postgres',
-          '-d',
-          this.database,
-        ]);
-        ready = true;
-        break;
+        if (await this.postgresReady()) {
+          ready = true;
+          break;
+        }
       } catch {
         if (!(await this.inspect(this.pgName)).State.Running)
           throw await this.readinessError(
