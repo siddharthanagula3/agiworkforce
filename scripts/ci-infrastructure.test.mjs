@@ -209,6 +209,90 @@ test('Rust auditing has one cache owner and reports without issue-writing permis
   assert.match(audit.run, /node scripts\/report-cargo-audit.mjs/);
 });
 
+test('the model rollback drill reuses Canary evidence for the same commit and fails closed', (t) => {
+  const { canary, stable } = workflow('model-probe.yml').jobs;
+  const signal = canary.steps.find((step) => step.id === 'signal');
+  assert.equal(canary.outputs.quality_state, '${{ steps.signal.outputs.state }}');
+  assert.equal(canary.outputs.quality_commit, '${{ steps.signal.outputs.commit }}');
+  assert.match(signal.run, /commits\/\$\{GITHUB_SHA\}\/status/);
+  assert.match(signal.run, /echo "commit=\$GITHUB_SHA" >> "\$GITHUB_OUTPUT"/);
+  assert.equal(stable.needs, 'canary');
+  assert.equal(stable.if, "github.event_name != 'pull_request'");
+  const drill = stable.steps.find((step) => step.run?.includes('release-cli.mjs drill'));
+  assert.deepEqual(drill.env, {
+    QUALITY_STATE: '${{ needs.canary.outputs.quality_state }}',
+    QUALITY_COMMIT: '${{ needs.canary.outputs.quality_commit }}',
+  });
+
+  const directory = mkdtempSync(path.join(tmpdir(), 'model-rollback-evidence-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const commandLog = path.join(directory, 'commands');
+  const executable = path.join(directory, 'pnpm');
+  writeFileSync(
+    executable,
+    '#!/bin/sh\nprintf "%s\\n" "$@" > "$COMMAND_LOG"\nexit "$DRILL_STATUS"\n',
+  );
+  chmodSync(executable, 0o755);
+  const commit = 'a'.repeat(40);
+  const invoke = (environment) => {
+    rmSync(commandLog, { force: true });
+    const result = spawnSync('/bin/bash', ['-e', '-c', drill.run], {
+      encoding: 'utf8',
+      env: {
+        PATH: directory,
+        COMMAND_LOG: commandLog,
+        GITHUB_SHA: commit,
+        DRILL_STATUS: '0',
+        ...environment,
+      },
+    });
+    let argumentsPassed = [];
+    try {
+      argumentsPassed = readFileSync(commandLog, 'utf8').trim().split('\n');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    return { ...result, argumentsPassed };
+  };
+
+  for (const environment of [
+    {},
+    { QUALITY_STATE: 'success' },
+    { QUALITY_STATE: 'success', QUALITY_COMMIT: '' },
+    { QUALITY_STATE: 'success', QUALITY_COMMIT: 'b'.repeat(40) },
+    ...['missing', 'pending', 'failure', 'error'].map((state) => ({
+      QUALITY_STATE: state,
+      QUALITY_COMMIT: commit,
+    })),
+  ]) {
+    const result = invoke(environment);
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.deepEqual(result.argumentsPassed, []);
+  }
+
+  const expectedArguments = [
+    'exec',
+    'tsx',
+    'packages/ai/routing/src/promotion/release-cli.mjs',
+    'drill',
+    '--families',
+    '--require-quality',
+    '--quality-commit',
+    commit,
+    '--quality-verdict',
+    'held',
+  ];
+  for (const status of [0, 7]) {
+    const result = invoke({
+      QUALITY_STATE: 'success',
+      QUALITY_COMMIT: commit,
+      DRILL_STATUS: String(status),
+    });
+    assert.equal(result.status, status, result.stdout + result.stderr);
+    assert.deepEqual(result.argumentsPassed, expectedArguments);
+  }
+});
+
 test('Windows caches the Cargo workspace once without removing toolchain binaries or reducing coverage', () => {
   const job = workflow('ci.yml').jobs['windows-smoke'];
   const setup = job.steps.find((step) =>

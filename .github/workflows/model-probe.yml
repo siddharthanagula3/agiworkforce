@@ -168,6 +168,9 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      quality_state: ${{ steps.signal.outputs.state }}
+      quality_commit: ${{ steps.signal.outputs.commit }}
     permissions:
       contents: read
       statuses: read
@@ -192,6 +195,7 @@ jobs:
             --jq '[.statuses[] | select(.context == "evals-quality")][0].state // "missing"')
           echo "the evals-quality signal for ${GITHUB_SHA} is ${state}"
           echo "state=$state" >> "$GITHUB_OUTPUT"
+          echo "commit=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
       # Without a green signal the gate is offered nothing, and every artifact
       # waiting on internal refuses to advance. With one, the advance is planned
@@ -230,7 +234,16 @@ jobs:
       # owns the family slot, not a git revert. Both are dry-run here, and the
       # checkout check below is what proves they wrote nothing.
       - name: Drill the rollback of every release and every family slot
-        run: pnpm exec tsx packages/ai/routing/src/promotion/release-cli.mjs drill --families
+        env:
+          QUALITY_STATE: ${{ needs.canary.outputs.quality_state }}
+          QUALITY_COMMIT: ${{ needs.canary.outputs.quality_commit }}
+        run: |
+          if [ "$QUALITY_STATE" != "success" ] || [ -z "$QUALITY_COMMIT" ] || [ "$QUALITY_COMMIT" != "$GITHUB_SHA" ]; then
+            echo "::error::Stable requires Canary's successful eval quality evidence for this commit"
+            exit 1
+          fi
+          pnpm exec tsx packages/ai/routing/src/promotion/release-cli.mjs drill --families \
+            --require-quality --quality-commit "$QUALITY_COMMIT" --quality-verdict held
 
       - name: Leave the checkout untouched
         if: always()
