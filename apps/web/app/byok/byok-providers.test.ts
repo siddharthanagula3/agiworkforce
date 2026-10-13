@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { spawnSync } from 'node:child_process';
 import { modelsCatalogJson } from '@agiworkforce/types';
 import {
   CLI_CATALOG_PROVIDER_IDS,
@@ -48,17 +49,188 @@ function cliSharedCatalogProviders(): string[] {
   return [...table[1]!.matchAll(/"([^"]+)"/gu)].map((entry) => entry[1]!);
 }
 
-function cliNameForCatalogProvider(catalogId: string): string {
-  const mapping = /fn canonical_cli_provider\(provider: &str\) -> &str \{([\s\S]*?)\n\}/u.exec(
-    CLI_MODEL_CATALOG,
-  );
-  if (!mapping) throw new Error('canonical_cli_provider not found in model_catalog.rs');
-  for (const arm of mapping[1]!.matchAll(/((?:"[^"]+"\s*\|?\s*)+)=>\s*"([^"]+)"/gu)) {
-    const aliases = [...arm[1]!.matchAll(/"([^"]+)"/gu)].map((alias) => alias[1]!);
-    if (aliases.includes(catalogId)) return arm[2]!;
+function cliNameForCatalogProvider(catalogId: string, source = CLI_MODEL_CATALOG): string {
+  let cursor = 0;
+  const nextToken = (): { kind: 'word' | 'string' | 'symbol'; value: string } | null => {
+    while (cursor < source.length) {
+      const character = source[cursor]!;
+      if (/\s/u.test(character)) {
+        cursor += 1;
+      } else if (source.startsWith('//', cursor)) {
+        const newline = source.indexOf('\n', cursor + 2);
+        cursor = newline === -1 ? source.length : newline + 1;
+      } else if (source.startsWith('/*', cursor)) {
+        cursor += 2;
+        let depth = 1;
+        while (cursor < source.length && depth > 0) {
+          if (source.startsWith('/*', cursor)) {
+            depth += 1;
+            cursor += 2;
+          } else if (source.startsWith('*/', cursor)) {
+            depth -= 1;
+            cursor += 2;
+          } else cursor += 1;
+        }
+        if (depth) throw new Error('Unterminated Rust block comment');
+      } else if (character === '"') {
+        const start = cursor++;
+        while (cursor < source.length) {
+          const next = source[cursor++];
+          if (next === '\\') cursor += 1;
+          else if (next === '"') {
+            return { kind: 'string', value: JSON.parse(source.slice(start, cursor)) as string };
+          }
+        }
+        throw new Error('Unterminated Rust string literal');
+      } else if (/[A-Za-z_]/u.test(character)) {
+        const start = cursor++;
+        while (cursor < source.length && /[A-Za-z0-9_]/u.test(source[cursor]!)) cursor += 1;
+        return { kind: 'word', value: source.slice(start, cursor) };
+      } else if (source.startsWith('=>', cursor)) {
+        cursor += 2;
+        return { kind: 'symbol', value: '=>' };
+      } else {
+        cursor += 1;
+        return { kind: 'symbol', value: character };
+      }
+    }
+    return null;
+  };
+
+  let afterFn = false;
+  let token;
+  while ((token = nextToken())) {
+    if (afterFn && token.kind === 'word' && token.value === 'canonical_cli_provider') break;
+    afterFn = token.kind === 'word' && token.value === 'fn';
   }
-  return catalogId;
+  if (!token) throw new Error('canonical_cli_provider not found in model_catalog.rs');
+  do {
+    token = nextToken();
+  } while (token && (token.kind !== 'symbol' || token.value !== '{'));
+  if (!token) throw new Error('canonical_cli_provider has no body');
+
+  let depth = 1;
+  let state: 'alias' | 'separator' | 'target' = 'alias';
+  let matched = false;
+  while ((token = nextToken())) {
+    if (token.kind === 'string') {
+      if (state === 'target') {
+        if (matched) return token.value;
+        matched = false;
+        state = 'alias';
+      } else {
+        matched = (state === 'alias' && matched) || token.value === catalogId;
+        state = 'separator';
+      }
+    } else if (token.value === '|' && state === 'separator') {
+      state = 'alias';
+    } else if (token.value === '=>' && state === 'separator') {
+      state = 'target';
+    } else {
+      matched = false;
+      state = 'alias';
+      if (token.value === '{') depth += 1;
+      else if (token.value === '}' && --depth === 0) return catalogId;
+    }
+  }
+  throw new Error('Unterminated canonical_cli_provider body');
 }
+
+describe('the CLI provider mapping parser', () => {
+  const marker = 'fn canonical_cli_provider(provider: &str) -> &str {';
+  const parseInChild = (source: string, provider: string) =>
+    spawnSync(
+      process.execPath,
+      [
+        '--eval',
+        `const parse = ${cliNameForCatalogProvider.toString()}; process.stdout.write(JSON.stringify(parse(process.argv[1], require('node:fs').readFileSync(0, 'utf8'))));`,
+        provider,
+      ],
+      { input: source, encoding: 'utf8', timeout: 3_000, killSignal: 'SIGKILL' },
+    );
+
+  it.each([
+    ['quoted sequences', '"a" '.repeat(64)],
+    ['long whitespace', `"a"${' '.repeat(100_000)}`],
+    ['unterminated pipe chain', '"a" | '.repeat(100_000)],
+  ])('stays bounded when a Rust comment contains %s', (_, comment) => {
+    const source = CLI_MODEL_CATALOG.replace(marker, `${marker}\n    // ${comment}`);
+    expect(source).not.toBe(CLI_MODEL_CATALOG);
+    const result = parseInChild(source, 'unmapped');
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toBe('unmapped');
+  });
+
+  it('keeps pipe-separated aliases, multiline whitespace and identity fallback', () => {
+    const source = `${marker}
+    match provider {
+        "first" |\n        "second" | "third" => "canonical",
+        other => other,
+    }
+}`;
+    for (const provider of ['first', 'second', 'third', 'unmapped']) {
+      const result = parseInChild(source, provider);
+      expect(result.error).toBeUndefined();
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout)).toBe(provider === 'unmapped' ? provider : 'canonical');
+    }
+  });
+
+  it('ignores line and nested block comments while keeping quoted comment markers and escapes', () => {
+    const source = String.raw`
+// ${marker} "first" => "wrong" }
+/* ${marker}
+   /* "second" => "wrong" } */
+*/
+${marker}
+    match provider {
+        // "commented" => "wrong",
+        "first" /* outer "commented" => "wrong" /* nested } */ */ |
+        "second" | // "commented" => "wrong",
+        "third" => /* target */ "canonical",
+        "slash//marker" | "block/*marker*/" => "markers",
+        "quote\"alias" | "backslash\\alias" => "escaped",
+        other => other,
+    }
+}`;
+    for (const [provider, expected] of [
+      ['first', 'canonical'],
+      ['second', 'canonical'],
+      ['third', 'canonical'],
+      ['commented', 'commented'],
+      ['slash//marker', 'markers'],
+      ['block/*marker*/', 'markers'],
+      ['quote"alias', 'escaped'],
+      ['backslash\\alias', 'escaped'],
+      ['unmapped', 'unmapped'],
+    ]) {
+      const result = parseInChild(source, provider!);
+      expect(result.error).toBeUndefined();
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout)).toBe(expected);
+    }
+  });
+
+  it('stays bounded across deeply nested Rust block comments', () => {
+    const comment = `${'/*'.repeat(20_000)}${'"a" | '.repeat(100_000)}${'*/'.repeat(20_000)}`;
+    const source = CLI_MODEL_CATALOG.replace(marker, `${marker}\n    ${comment}`);
+    const result = parseInChild(source, 'unmapped');
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toBe('unmapped');
+  });
+
+  it.each(['/* unfinished', '"unfinished\\'])(
+    'rejects unterminated quoted or comment input: %s',
+    (tail) => {
+      const result = parseInChild(`${marker}\n${tail}`, 'unmapped');
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('Unterminated Rust');
+    },
+  );
+});
 
 function serverKeyVariables(): Map<string, string> {
   const config = /const SERVER_PROVIDER_CONFIG:[\s\S]*?= \{([\s\S]*?)\n\};/u.exec(SERVER_ADAPTERS);
