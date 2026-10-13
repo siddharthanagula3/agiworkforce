@@ -113,7 +113,10 @@ mod element_tree_tests {
 
         let result = service.find_elements(None, &query);
 
-        assert!(result.is_ok(), "find_elements with empty query should work");
+        assert!(
+            result.is_ok(),
+            "find_elements with empty query should work: {result:#?}"
+        );
 
         let elements = result.unwrap();
 

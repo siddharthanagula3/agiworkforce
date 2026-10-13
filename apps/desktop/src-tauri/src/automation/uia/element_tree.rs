@@ -23,6 +23,14 @@ fn element_no_longer_available(error: &anyhow::Error) -> bool {
         .is_some_and(|error| error.code() == UIA_E_ELEMENTNOTAVAILABLE)
 }
 
+fn available_element<T>(result: Result<T>) -> Result<Option<T>> {
+    match result {
+        Ok(element) => Ok(Some(element)),
+        Err(error) if element_no_longer_available(&error) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 impl UIAutomationState {
     pub fn list_windows(&self) -> Result<Vec<UIElementInfo>> {
         let desktop = self.root_element()?;
@@ -39,12 +47,15 @@ impl UIAutomationState {
 
         let mut results = Vec::new();
         for index in 0..count {
-            let element =
-                unsafe { array.GetElement(index) }.map_err(|err| anyhow!("GetElement: {err:?}"))?;
-            match self.describe_element(&element) {
-                Ok(info) => results.push(info),
-                Err(error) if element_no_longer_available(&error) => continue,
-                Err(error) => return Err(error),
+            let Some(element) = available_element(
+                unsafe { array.GetElement(index) }
+                    .map_err(|error| anyhow::Error::new(error).context("GetElement")),
+            )?
+            else {
+                continue;
+            };
+            if let Some(info) = available_element(self.describe_element(&element))? {
+                results.push(info);
             }
         }
 
@@ -81,12 +92,15 @@ impl UIAutomationState {
                 break;
             }
 
-            let element = unsafe { collection.GetElement(index) }
-                .map_err(|err| anyhow!("GetElement: {err:?}"))?;
-            match self.describe_element(&element) {
-                Ok(info) => results.push(info),
-                Err(error) if element_no_longer_available(&error) => continue,
-                Err(error) => return Err(error),
+            let Some(element) = available_element(
+                unsafe { collection.GetElement(index) }
+                    .map_err(|error| anyhow::Error::new(error).context("GetElement")),
+            )?
+            else {
+                continue;
+            };
+            if let Some(info) = available_element(self.describe_element(&element))? {
+                results.push(info);
             }
         }
 
@@ -285,5 +299,88 @@ mod element_availability_tests {
         assert!(!element_no_longer_available(&anyhow!(
             "CurrentControlType: HRESULT(0x80040201)"
         )));
+    }
+
+    #[test]
+    fn unavailable_elements_are_skipped() {
+        let error = anyhow::Error::new(windows::core::Error::from(UIA_E_ELEMENTNOTAVAILABLE));
+
+        assert!(available_element::<()>(Err(error)).unwrap().is_none());
+    }
+
+    #[test]
+    fn unavailable_elements_are_skipped_through_nested_method_context() {
+        for method in [
+            "GetElement",
+            "GetRuntimeId",
+            "CurrentControlType",
+            "CurrentBoundingRectangle",
+        ] {
+            let error = anyhow::Error::new(windows::core::Error::from(UIA_E_ELEMENTNOTAVAILABLE))
+                .context(method)
+                .context("find_elements");
+
+            assert!(available_element::<()>(Err(error)).unwrap().is_none());
+        }
+    }
+
+    #[test]
+    fn permission_errors_preserve_their_typed_cause_and_context() {
+        let code = windows::core::HRESULT(0x8007_0005_u32 as i32);
+        let error = anyhow::Error::new(windows::core::Error::from(code))
+            .context("GetElement")
+            .context("find_elements");
+
+        let error = available_element::<()>(Err(error)).unwrap_err();
+
+        assert_eq!(
+            error.downcast_ref::<windows::core::Error>().unwrap().code(),
+            code
+        );
+        let context: Vec<_> = error.chain().take(2).map(ToString::to_string).collect();
+        assert_eq!(context, ["find_elements", "GetElement"]);
+    }
+
+    #[test]
+    fn unknown_windows_errors_preserve_their_typed_cause_and_context() {
+        let code = windows::core::HRESULT(0x8000_4005_u32 as i32);
+        let error = anyhow::Error::new(windows::core::Error::from(code)).context("GetRuntimeId");
+
+        let error = available_element::<()>(Err(error)).unwrap_err();
+
+        assert_eq!(
+            error.downcast_ref::<windows::core::Error>().unwrap().code(),
+            code
+        );
+        assert_eq!(error.to_string(), "GetRuntimeId");
+    }
+
+    #[test]
+    fn string_lookalikes_remain_errors() {
+        let message = "GetElement: HRESULT(0x80040201)";
+        let error = available_element::<()>(Err(anyhow!(message))).unwrap_err();
+
+        assert_eq!(error.to_string(), message);
+        assert!(error.downcast_ref::<windows::core::Error>().is_none());
+    }
+
+    #[test]
+    fn available_elements_are_returned_without_requiring_a_clone() {
+        #[derive(Debug, PartialEq)]
+        struct Element {
+            id: String,
+        }
+
+        let element = Element {
+            id: "runtime-id".to_string(),
+        };
+        let result = available_element(Ok(element)).unwrap();
+
+        assert_eq!(
+            result,
+            Some(Element {
+                id: "runtime-id".to_string(),
+            })
+        );
     }
 }

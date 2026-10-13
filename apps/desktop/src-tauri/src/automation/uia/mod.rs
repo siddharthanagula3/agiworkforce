@@ -309,8 +309,8 @@ impl UIAutomationState {
     ///
     /// The runtime ID is used as a key to retrieve the element later.
     pub(super) fn register_element(&self, element: &IUIAutomationElement) -> Result<String> {
-        let runtime_id =
-            unsafe { element.GetRuntimeId() }.map_err(|err| anyhow!("GetRuntimeId: {err:?}"))?;
+        let runtime_id = unsafe { element.GetRuntimeId() }
+            .map_err(|error| anyhow::Error::new(error).context("GetRuntimeId"))?;
         let id = safe_array_to_runtime_id(runtime_id)?;
 
         let mut cache = self.cache.lock();
