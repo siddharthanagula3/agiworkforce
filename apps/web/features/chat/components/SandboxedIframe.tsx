@@ -307,14 +307,16 @@ export function SandboxedIframe({
   return (
     <>
       {scriptsAreDead ? (
-        <p
+        <div
           role="status"
           data-testid="artifact-scripts-blocked"
-          className="border-b border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+          className="border-b border-border bg-background px-3 py-2 text-base text-foreground"
         >
-          This artifact&rsquo;s scripts cannot run here, so what you see below is its layout only -
-          controls will not calculate or update. Open the Source tab to read what it does.
-        </p>
+          <span>
+            This artifact&rsquo;s scripts cannot run here, so what you see below is its layout only
+            - controls will not calculate or update. Open the Source tab to read what it does.
+          </span>
+        </div>
       ) : null}
       <iframe
         ref={iframeRef}

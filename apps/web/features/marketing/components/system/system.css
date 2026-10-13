@@ -705,8 +705,7 @@
   background: var(--agi-ground);
 }
 
-[data-design='agi'] .agi-ds-header-surface::after {
-  content: '';
+[data-design='agi'] .agi-ds-header-edge {
   position: absolute;
   inset-block-start: 100%;
   inset-inline: 0;

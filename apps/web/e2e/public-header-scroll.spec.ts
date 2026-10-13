@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { measurePublicFontProof } from './lib/public-page-readiness';
 
@@ -129,6 +130,95 @@ for (const viewport of [
           }
         });
       }
+
+      test(`keeps the decorative edge below readable raw-axe header content in ${colorScheme}`, async ({
+        page,
+      }, info) => {
+        await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+        expect((await page.goto('/pricing'))?.status()).toBe(200);
+        await page.evaluate(() => document.fonts.ready);
+        await expect(page.locator('html')).toHaveAttribute('data-theme', colorScheme);
+        const header = page.locator('header.agi-ds-header');
+        const surface = header.locator('.agi-ds-header-surface');
+        const edge = surface.locator(':scope > .agi-ds-header-edge');
+        await expect(edge).toHaveCount(1);
+        await expect(edge).toHaveAttribute('aria-hidden', 'true');
+        await expect(header.getByRole('link', { name: 'Try AGI Web', exact: true })).toBeVisible();
+        const records: unknown[] = [];
+        for (const scroll of [0, 600, 0]) {
+          await page.evaluate((top) => scrollTo({ top, behavior: 'instant' }), scroll);
+          if (scroll) await expect(header).toHaveAttribute('data-scrolled', 'true');
+          else await expect(header).not.toHaveAttribute('data-scrolled');
+          const geometry = await surface.evaluate((element) => {
+            const decoration = element.querySelector(':scope > .agi-ds-header-edge');
+            if (!(decoration instanceof HTMLElement)) throw new Error('Header edge is missing');
+            const parentRect = element.getBoundingClientRect();
+            const edgeRect = decoration.getBoundingClientRect();
+            const parentStyle = getComputedStyle(element);
+            const edgeStyle = getComputedStyle(decoration);
+            const reference = document.createElement('div');
+            reference.style.cssText =
+              'position:absolute;visibility:hidden;width:0;pointer-events:none;';
+            reference.style.blockSize = 'var(--space-6)';
+            reference.style.background = `linear-gradient(to bottom, ${parentStyle.backgroundColor}, transparent)`;
+            document.documentElement.append(reference);
+            let referenceHeight;
+            let referenceGradient;
+            try {
+              referenceHeight = reference.getBoundingClientRect().height;
+              referenceGradient = getComputedStyle(reference).backgroundImage;
+            } finally {
+              reference.remove();
+            }
+            return {
+              surface: {
+                top: parentRect.top,
+                bottom: parentRect.bottom,
+                left: parentRect.left,
+                right: parentRect.right,
+              },
+              edge: {
+                top: edgeRect.top,
+                bottom: edgeRect.bottom,
+                left: edgeRect.left,
+                right: edgeRect.right,
+                height: edgeRect.height,
+              },
+              position: edgeStyle.position,
+              pointerEvents: edgeStyle.pointerEvents,
+              zIndex: edgeStyle.zIndex,
+              gradient: edgeStyle.backgroundImage,
+              referenceGradient,
+              referenceHeight,
+              surfaceBackground: parentStyle.backgroundColor,
+              lastChild: element.lastElementChild === decoration,
+              afterContent: getComputedStyle(element, '::after').content,
+            };
+          });
+          expect(geometry.lastChild).toBe(true);
+          expect(geometry.position).toBe('absolute');
+          expect(geometry.pointerEvents).toBe('none');
+          expect(geometry.zIndex).toBe('auto');
+          expect(['none', 'normal']).toContain(geometry.afterContent);
+          expect(geometry.edge.top).toBeCloseTo(geometry.surface.bottom, 2);
+          expect(geometry.edge.left).toBeCloseTo(geometry.surface.left, 2);
+          expect(geometry.edge.right).toBeCloseTo(geometry.surface.right, 2);
+          expect(geometry.referenceHeight).toBeGreaterThan(0);
+          expect(geometry.edge.height).toBeCloseTo(geometry.referenceHeight!, 2);
+          expect(geometry.gradient).toBe(geometry.referenceGradient);
+          const accessibility = await new AxeBuilder({ page })
+            .include('.agi-ds-header-surface')
+            .withRules(['color-contrast'])
+            .analyze();
+          expect(accessibility.violations).toEqual([]);
+          expect(accessibility.incomplete).toEqual([]);
+          records.push({ scroll, geometry, accessibility });
+        }
+        await info.attach('header-edge-geometry-and-raw-axe.json', {
+          body: JSON.stringify(records, null, 2),
+          contentType: 'application/json',
+        });
+      });
 
       test(`keeps navigation and the action stable across scrolling in ${colorScheme}`, async ({
         page,

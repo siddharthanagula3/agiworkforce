@@ -1,5 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import path from 'node:path';
+import { PublicRuntimeContainers } from '../../../../scripts/public-runtime/containers.mjs';
+import { publicRuntimeCases, type PublicRuntimeCase } from '../lib/public-runtime-cases';
+import {
+  loadPublicRuntimeArtifact,
+  runtimeWitness,
+  assertRuntimeInputMatch,
+} from '../lib/public-runtime-artifact';
+import { assertPublicRuntimeState, startBrowserObservation } from '../lib/public-runtime-browser';
 
 import { OG_IMAGE } from '../../lib/seo/site';
 import {
@@ -11,52 +20,41 @@ import {
   measurePublicPageIntegrity,
   measurePublicReducedMotion,
 } from '../lib/public-page-integrity';
-import {
-  getPublicRouteInventory,
-  selectPublicRouteCases,
-  type PublicRouteCase,
-  type PublicRouteStateInput,
-} from '../lib/public-route-inventory';
+import { getPublicRouteInventory, selectPublicRouteCases } from '../lib/public-route-inventory';
 import { settlePublicPage } from '../lib/public-page-readiness';
 import { evaluatePublicTextContrast } from '../lib/public-text-contrast';
 import { measurePublicTypographyWithScroll } from '../lib/public-typography-scroll';
 
 const inventory = getPublicRouteInventory();
-type PublicDesignCase = PublicRouteCase & {
-  state?: string;
-  dataAccess?: PublicRouteStateInput['dataAccess'];
-  expectedNotFoundUi?: boolean;
-  expectedRobots?: 'noindex' | null;
-};
-
-const stateCases: PublicDesignCase[] = inventory.stateSamples.flatMap((state) => {
-  if (!state.path || state.dataAccess === 'fixture-required') return [];
-  const source = [...inventory.unresolvedDynamic, ...inventory.unavailableDynamic].find(
-    (candidate) => candidate.pattern === state.pattern,
-  );
-  if (!source) throw new Error(`Public state has no route source: ${state.pattern}`);
-  return [
-    {
-      route: state.route,
-      path: state.path,
-      pattern: state.pattern,
-      kind: 'generated',
-      sourceFiles: source.sourceFiles,
-      dataSource: state.source,
-      pageType: state.pageType,
-      expectedHttpStatuses: state.expectedHttpStatuses,
-      expectedFinalPath: state.expectedFinalPath,
-      ownership: state.ownership,
-      context: state.context,
-      unresolvedFlags: state.unresolvedFlags,
-      state: state.state,
-      dataAccess: state.dataAccess,
-      expectedNotFoundUi: state.expectedNotFoundUi,
-      expectedRobots: state.expectedRobots,
-    },
-  ];
+const artifactFile = process.env['PUBLIC_RUNTIME_PROOF_ARTIFACT'];
+const artifact = loadPublicRuntimeArtifact(artifactFile);
+type PublicDesignCase = PublicRuntimeCase;
+const measurableCases: PublicDesignCase[] = publicRuntimeCases(inventory, artifact.fixtures);
+const stateCases = measurableCases.filter((route) => route.state !== undefined);
+let runtime: PublicRuntimeContainers;
+test.beforeAll(async ({}, testInfo) => {
+  testInfo.setTimeout(600_000);
+  if (testInfo.config.workers !== 1)
+    throw new Error('The public matrix requires one owner of its canonical runtime origin');
+  if (!artifact.snapshot || artifact.snapshot.filename !== 'template.dump' || !artifactFile)
+    throw new Error('Missing exact runtime database snapshot');
+  runtime = new PublicRuntimeContainers({
+    root: path.resolve(__dirname, '../../../..'),
+    image: artifact.imageId,
+    postgresImage: artifact.postgresImageId,
+    fixtures: artifact.fixtures,
+    revision: artifact.revision,
+    snapshot: artifact.snapshot,
+    snapshotFile: path.join(path.dirname(artifactFile), artifact.snapshot.filename),
+  });
+  await runtime.initialize();
+  expect(runtime.imageId).toBe(artifact.imageId);
+  expect(runtime.buildId).toBe(artifact.buildId);
+  expect(runtime.migrationDigest).toBe(artifact.migrationDigest);
 });
-const measurableCases: PublicDesignCase[] = [...inventory.routes, ...stateCases];
+test.afterAll(async () => {
+  if (runtime) await runtime.close();
+});
 if (new Set(measurableCases.map((route) => route.path)).size !== measurableCases.length) {
   throw new Error('The public matrix contains duplicate content or state paths');
 }
@@ -76,15 +74,17 @@ if (
 if (selectedWidths && new Set(selectedWidths).size !== selectedWidths.length) {
   throw new Error('PUBLIC_DESIGN_WIDTHS contains a duplicate');
 }
-const cases = selectPublicRouteCases(
+const selectedCases = selectPublicRouteCases(
   { ...inventory, routes: measurableCases },
   { paths: selectedPaths },
 );
+const selectedCasePaths = new Set(selectedCases.map((route) => route.path));
+const cases = measurableCases.filter((route) => selectedCasePaths.has(route.path));
 const points = widths.filter((width) => !selectedWidths || selectedWidths.includes(width));
 
 test.use({ screenshot: 'off', video: 'off', trace: 'off' });
 
-test('the public acceptance matrix retains runtime content and navigation proof gaps', async () => {
+test('the public acceptance matrix requires bound runtime content and navigation evidence', async () => {
   const testInfo = test.info();
   const coverage = {
     patterns: inventory.patterns,
@@ -95,13 +95,24 @@ test('the public acceptance matrix retains runtime content and navigation proof 
     partial: Boolean(selectedPaths || selectedWidths),
     runtimeStates: inventory.stateSamples,
     runtimePaths: stateCases.map((route) => route.path),
-    unverifiedRuntimeExecution: stateCases
+    sourceExecutionLimits: stateCases
       .filter((route) => route.unresolvedFlags.some((flag) => flag.endsWith('-unverified')))
       .map((route) => ({
         path: route.path,
         dataAccess: route.dataAccess,
         unresolvedFlags: route.unresolvedFlags,
       })),
+    runtimeWitnesses: measurableCases
+      .filter((route) => route.needsRuntimeProof)
+      .map((route) => {
+        const { proof } = runtimeWitness(artifact, route);
+        return {
+          stateId: route.stateId,
+          path: route.path,
+          runId: proof.runId,
+          buildId: proof.buildId,
+        };
+      }),
     unavailablePatterns: inventory.unavailableDynamic,
     unknownNavigation: measurableCases.filter((route) => route.expectedHttpStatuses === null),
   };
@@ -110,13 +121,22 @@ test('the public acceptance matrix retains runtime content and navigation proof 
     contentType: 'application/json',
   });
   expect(
-    inventory.stateSamples.filter((state) => state.dataAccess === 'fixture-required'),
+    inventory.stateSamples.filter(
+      (state) =>
+        state.dataAccess === 'fixture-required' &&
+        !measurableCases.some(
+          (route) =>
+            route.pattern === state.pattern &&
+            route.state === 'successful-content' &&
+            runtimeWitness(artifact, route).proof.render.stateMatched,
+        ),
+    ),
     'Successful runtime content needs local fixtures before complete public proof',
   ).toEqual([]);
   expect(
-    coverage.unverifiedRuntimeExecution,
-    'Handler source guards do not establish full route execution or data-access proof',
-  ).toEqual([]);
+    coverage.runtimeWitnesses.length,
+    'Every required runtime state must have independent completed execution evidence',
+  ).toBe(measurableCases.filter((route) => route.needsRuntimeProof).length);
   expect(
     coverage.unknownNavigation,
     'Conditional public navigation needs explicit state expectations',
@@ -132,16 +152,20 @@ for (const width of points) {
           baseURL,
         }, testInfo) => {
           if (!baseURL) throw new Error('Public acceptance requires a configured base URL');
+          const handle = await runtime.startCase(route, { visual: true });
+          expect(baseURL).toBe(handle.origin);
           const context = await browser.newContext({
             baseURL,
             viewport: { width, height: width < 768 ? 844 : 900 },
             colorScheme: theme,
             reducedMotion: 'reduce',
+            serviceWorkers: 'block',
             hasTouch: width < 1024,
             storageState: { cookies: [], origins: [] },
           });
           try {
             const page = await context.newPage();
+            const observation = await startBrowserObservation(page, route, handle.origin);
             const expectedLocation = new URL(route.path, baseURL);
             const readiness = await settlePublicPage(
               page,
@@ -186,6 +210,7 @@ for (const width of points) {
               );
               expect(robots, 'Unavailable public content must not be indexed').toContain('noindex');
             }
+            await assertPublicRuntimeState(page, route);
             const appliedTheme = await page.evaluate(() => ({
               value: document.documentElement.dataset['theme'],
               light: document.documentElement.classList.contains('light'),
@@ -232,10 +257,13 @@ for (const width of points) {
             const serious = accessibility.violations.filter(
               (violation) => violation.impact === 'serious' || violation.impact === 'critical',
             );
-            const seriousIncomplete = accessibility.incomplete.filter(
-              (finding) => finding.impact === 'serious' || finding.impact === 'critical',
-            );
+            const browserEvidence = await observation.finish();
+            const runtimeEvidence = route.needsRuntimeProof
+              ? assertRuntimeInputMatch(artifact, route, browserEvidence)
+              : [];
             const report = {
+              runtimeEvidence,
+              clientExecution: browserEvidence.clientExecution,
               route,
               width,
               theme,
@@ -262,7 +290,8 @@ for (const width of points) {
                 incomplete: accessibility.incomplete,
               },
               limits: [
-                'This development-server gate does not prove production performance or loaded-library necessity.',
+                'This local production-image gate does not prove production performance or loaded-library necessity.',
+                ...browserEvidence.limits,
                 'This sample does not activate every control or prove asynchronous success, empty and error states.',
                 'Metadata presence and URL agreement do not prove that title and description copy is true or that the share image depicts this page correctly.',
                 'Share-image resources, sitemap membership and link destinations require separate checks.',
@@ -295,10 +324,14 @@ for (const width of points) {
             expect.soft(motion.findings, 'Reduced motion').toEqual([]);
             expect.soft(serious, 'Serious or critical accessibility findings').toEqual([]);
             expect
-              .soft(seriousIncomplete, 'Serious or critical accessibility checks needing review')
+              .soft(accessibility.incomplete, 'Accessibility checks needing review')
               .toEqual([]);
           } finally {
-            await context.close();
+            try {
+              await context.close();
+            } finally {
+              await runtime.finishVisual(handle);
+            }
           }
         });
       }

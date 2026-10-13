@@ -89,6 +89,7 @@ test('every affected small-runner job prepares memory after checkout and before 
     ['security-scanning.yml', 'web-image-scan-and-dast'],
     ['web-container-drill.yml', 'boot-outside-the-platform'],
     ['web-public-matrix.yml', 'public-matrix'],
+    ['web-public-matrix.yml', 'public-runtime-proof'],
   ]) {
     const steps = workflow(name).jobs[id].steps;
     const checkout = steps.findIndex((step) => step.uses?.startsWith('actions/checkout@'));
@@ -120,9 +121,71 @@ test('private repositories cannot reach CodeQL extraction and retain an explicit
 });
 
 test('the public acceptance matrix visits the canonical origin compiled into its server', () => {
-  const environment = workflow('web-public-matrix.yml').jobs['public-matrix'].env;
-  assert.ok(environment.PLAYWRIGHT_BASE_URL);
-  assert.equal(environment.PLAYWRIGHT_BASE_URL, environment.NEXT_PUBLIC_APP_URL);
+  const { jobs } = workflow('web-public-matrix.yml');
+  for (const id of ['public-runtime-proof', 'public-matrix']) {
+    const environment = jobs[id].env;
+    assert.ok(environment.PLAYWRIGHT_BASE_URL);
+    assert.equal(environment.PLAYWRIGHT_BASE_URL, environment.NEXT_PUBLIC_APP_URL);
+  }
+  assert.equal(
+    jobs['public-runtime-proof'].env.NEXT_PUBLIC_APP_URL,
+    jobs['public-matrix'].env.NEXT_PUBLIC_APP_URL,
+  );
+});
+
+test('the public matrix consumes one complete proof and the exact built images without rebuilding', () => {
+  const { jobs } = workflow('web-public-matrix.yml');
+  const producer = jobs['public-runtime-proof'];
+  const consumer = jobs['public-matrix'];
+  const commands = (job) => job.steps.map((step) => step.run ?? '').join('\n');
+  assert.equal(consumer.needs, 'public-runtime-proof');
+  assert.equal((commands(producer).match(/docker build\b/g) ?? []).length, 1);
+  assert.match(commands(producer), /git rev-parse HEAD/);
+  assert.match(commands(producer), /git status --porcelain/);
+  assert.match(commands(producer), /docker image save "\$app_image" "\$postgres_image"/);
+  assert.match(commands(consumer), /sha256sum --check runtime-images.sha256/);
+  assert.match(commands(consumer), /docker image load/);
+  assert.doesNotMatch(commands(consumer), /docker build\b|db:migrate/);
+  const upload = producer.steps.find((step) => step.name === 'Upload the shared runtime evidence');
+  const download = consumer.steps.find(
+    (step) => step.name === 'Download the shared runtime evidence',
+  );
+  assert.equal(upload.with.name, download.with.name);
+  assert.equal(upload.with['if-no-files-found'], 'error');
+  assert.equal(upload.with['include-hidden-files'], true);
+  for (const job of [producer, consumer]) {
+    assert.ok(
+      job.steps.some(
+        (step) => step.if === 'always()' && step.run === 'node scripts/public-runtime/cleanup.mjs',
+      ),
+    );
+    for (const step of job.steps.filter((step) =>
+      step.run?.includes('playwright test e2e/matrix/'),
+    )) {
+      assert.match(step.run, /--workers=1 --retries=0/);
+    }
+  }
+});
+
+test('footer measurements survive standard assertion failure but exclude setup failure and cancellation', () => {
+  const steps = workflow('web-public-matrix.yml').jobs['public-matrix'].steps;
+  const standard = steps.find(
+    (step) => step.name === 'Run the public acceptance matrix at this width',
+  );
+  const footer = steps.find((step) => step.name === 'Measure the shared footer at this width');
+  assert.equal(standard.id, 'public_standard');
+  assert.equal(standard['continue-on-error'], undefined);
+  assert.equal(
+    footer.if,
+    "${{ !cancelled() && (steps.public_standard.outcome == 'success' || steps.public_standard.outcome == 'failure') }}",
+  );
+  const outcomes = [...footer.if.matchAll(/steps\.public_standard\.outcome == '([^']+)'/g)].map(
+    (match) => match[1],
+  );
+  assert.deepEqual(outcomes.sort(), ['failure', 'success']);
+  for (const unavailable of ['skipped', 'cancelled', ''])
+    assert.ok(!outcomes.includes(unavailable));
+  assert.ok(steps.indexOf(standard) < steps.indexOf(footer));
 });
 
 test('Rust auditing has one cache owner and reports without issue-writing permissions', () => {

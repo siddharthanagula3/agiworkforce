@@ -23,6 +23,8 @@ const ON_DEMAND_MATRIX = [
   // Three footer callers x 8 widths x 2 themes with native strip capture: 48
   // cases at about 42 seconds each, more than the push step's whole budget.
   'public-footer-measured.spec.ts',
+  // Cold image, process, database and V8 observations are produced once for all widths.
+  'public-runtime-proof.spec.ts',
 ];
 
 function specs(dir = e2eDir): string[] {
@@ -83,9 +85,11 @@ describe('the on-demand matrix is a named exception, not a place to park specs',
     expect(ciSpecList().filter((spec) => ON_DEMAND_MATRIX.includes(spec))).toEqual([]);
   });
 
-  it('runs the whole folder from a workflow someone can start', () => {
+  it('runs every named matrix spec from a workflow someone can start', () => {
     expect(matrixWorkflow).toMatch(/^\s*workflow_dispatch:/m);
-    expect(matrixWorkflow).toMatch(/playwright test e2e\/matrix\b/);
+    for (const spec of ON_DEMAND_MATRIX) {
+      expect(matrixWorkflow).toContain(`playwright test e2e/matrix/${spec}`);
+    }
     expect(matrixWorkflow).not.toMatch(/continue-on-error/);
   });
 

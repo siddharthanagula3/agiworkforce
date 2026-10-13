@@ -1236,6 +1236,7 @@ jobs:
             public-reduced-motion.spec.ts \
             public-route-inventory-instrument.spec.ts \
             public-route-inventory.spec.ts \
+            public-runtime-proof-instrument.spec.ts \
             public-scroll-features-activation.spec.ts \
             public-text-contrast-instrument.spec.ts \
             public-typography-instrument.spec.ts \

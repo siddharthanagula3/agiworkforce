@@ -21,7 +21,10 @@ export function HeaderScrollState({ children }: { children: ReactNode }) {
 
   return (
     <header ref={header} className="agi-ds-header">
-      <div className="agi-ds-header-surface">{children}</div>
+      <div className="agi-ds-header-surface">
+        {children}
+        <div className="agi-ds-header-edge" aria-hidden="true" />
+      </div>
     </header>
   );
 }

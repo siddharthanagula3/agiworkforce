@@ -1,5 +1,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+import { scanPublicTypography } from './lib/public-typography';
+import { evaluatePublicTextContrast } from './lib/public-text-contrast';
+
 import { INSPIRATION, inspirationPath, type InspirationCard } from '../app/gallery/inspiration';
 
 const VIEWPORTS = [
@@ -259,4 +262,65 @@ for (const viewport of VIEWPORTS) {
       for (const sandbox of sandboxes) expect(sandbox).toBe('');
     });
   });
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [320, 1440]) {
+    test.describe(`script-blocked artifact notices at ${width}px in ${theme}`, () => {
+      test.use({
+        colorScheme: theme,
+        viewport: { width, height: 900 },
+        storageState: { cookies: [], origins: [] },
+      });
+
+      for (const template of INSPIRATION.filter((item) => FRAMED_TYPES.includes(item.type))) {
+        test(`${template.id} keeps host status readable over the artifact canvas`, async ({
+          page,
+        }) => {
+          expect((await page.goto(inspirationPath(template.id)))?.status()).toBe(200);
+          await page.evaluate(() => document.fonts.ready);
+          await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+          const notice = page.getByTestId('artifact-scripts-blocked');
+          await expect(notice).toBeVisible();
+          await expect(notice).toHaveAttribute('role', 'status');
+          await notice.scrollIntoViewIfNeeded();
+          const expectedText = (await notice.textContent())?.replace(/\s+/g, ' ').trim();
+          expect(expectedText).toBeTruthy();
+          const measured = await page.evaluate(scanPublicTypography, {
+            pageType: 'marketing' as const,
+            scopeSelector: '[data-testid="artifact-scripts-blocked"]',
+          });
+          expect(measured.samples.length).toBeGreaterThan(0);
+          expect(
+            measured.samples
+              .map((sample) => sample.text)
+              .join(' ')
+              .replace(/\s+/g, ' ')
+              .trim(),
+          ).toBe(expectedText);
+          expect(measured.findings).toEqual([]);
+          expect(measured.unmeasured).toEqual([]);
+          expect(measured.samples.every((sample) => sample.role === 'ui')).toBe(true);
+          expect(measured.canvasColor).not.toBeNull();
+          const contrast = evaluatePublicTextContrast(measured.samples, measured.canvasColor!);
+          expect(contrast.coverage.measured).toBe(contrast.coverage.eligible);
+          expect(contrast.unmeasured).toEqual([]);
+          expect(contrast.findings).toEqual([]);
+          for (const sample of measured.samples) {
+            expect(
+              sample.backgroundLayers.some(
+                (layer) =>
+                  layer.selector.includes('artifact-scripts-blocked') && layer.rgba?.a === 1,
+              ),
+            ).toBe(true);
+          }
+          expect(
+            await notice.evaluate(
+              (element) => getComputedStyle(element.parentElement!).backgroundColor,
+            ),
+          ).toBe('rgb(255, 255, 255)');
+        });
+      }
+    });
+  }
 }
