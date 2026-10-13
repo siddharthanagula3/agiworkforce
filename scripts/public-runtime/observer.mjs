@@ -8,6 +8,8 @@ import childProcess from 'node:child_process';
 import workerThreads from 'node:worker_threads';
 import { pathToFileURL } from 'node:url';
 import { runInNewContext } from 'node:vm';
+import { performance } from 'node:perf_hooks';
+import { observeProcessShutdown } from './shutdown.mjs';
 import { startPublicHttpBridge } from './http-bridge.mjs';
 import { probeApplicationAuthority } from './database-authority.mjs';
 import { buildEvidenceReader } from './build-evidence.mjs';
@@ -215,9 +217,20 @@ const control = net.createServer((socket) => {
     const command = JSON.parse(input);
     if (command.command !== 'snapshot' || command.stateId !== state.stateId)
       return socket.destroy(new Error('Invalid observer command'));
+    const snapshotStarted = performance.now();
+    record('snapshot-start', { stateId: state.stateId });
     void (async () => {
       const coverage = await inspect('Profiler.takePreciseCoverage');
       const scripts = coverage.result;
+      record('snapshot-coverage', {
+        scripts: scripts.length,
+        functions: scripts.reduce((count, script) => count + script.functions.length, 0),
+        elapsedMilliseconds: performance.now() - snapshotStarted,
+      });
+      writeFileSync('/proof-output/coverage.json', JSON.stringify(coverage));
+      record('snapshot-coverage-written', {
+        elapsedMilliseconds: performance.now() - snapshotStarted,
+      });
       const executed = (script) =>
         script.functions.some((fn) => fn.ranges.some((range) => range.count > 0));
       report.coverageCanaryObserved = scripts.some(
@@ -227,13 +240,23 @@ const control = net.createServer((socket) => {
         (script) =>
           [routeFile, pathToFileURL(routeFile).href].includes(script.url) && executed(script),
       );
+      record('snapshot-render-start', {
+        elapsedMilliseconds: performance.now() - snapshotStarted,
+      });
       report.renderExecution = renderExecutionWitness(
         coverage,
         state.renderSource,
         readBuildSource,
       );
+      record('snapshot-render-witness', {
+        observed: Boolean(report.renderExecution),
+        elapsedMilliseconds: performance.now() - snapshotStarted,
+      });
       report.compiledSource = compiledSourceWitness(coverage, state.renderSource, readBuildSource);
-      writeFileSync('/proof-output/coverage.json', JSON.stringify(coverage));
+      record('snapshot-compiled-source', {
+        observed: Boolean(report.compiledSource),
+        elapsedMilliseconds: performance.now() - snapshotStarted,
+      });
       writeFileSync('/proof-output/observer.json', JSON.stringify(report));
       record('snapshot-after-render', { coverageDigest: digest(coverage) });
       socket.end(JSON.stringify({ complete: true, stateId: state.stateId }) + '\n');
@@ -248,8 +271,7 @@ await new Promise((resolve, reject) => {
   control.listen(CONTROL_SOCKET, resolve);
 });
 chmodSync(CONTROL_SOCKET, 0o666);
-process.on('exit', (code) => {
+observeProcessShutdown(process, record, () => {
   writeFileSync('/proof-output/observer.json', JSON.stringify(report));
-  record('observer-exit', { code });
 });
 await import(pathToFileURL('/app/apps/web/server.js').href);

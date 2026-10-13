@@ -5,6 +5,7 @@ import { mkdtemp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
+import { isControlledShutdown } from './shutdown.mjs';
 import {
   APP_OS_USER,
   APP_UID,
@@ -812,6 +813,7 @@ export class PublicRuntimeContainers {
 
   async finishCase(handle, render, browserObservation) {
     this.assertCase(handle);
+    if (handle.state.visual) throw new Error('Visual cases cannot produce execution receipts');
     const snapshot = JSON.parse(
       await this.docker([
         'exec',
@@ -825,7 +827,11 @@ export class PublicRuntimeContainers {
     if (!snapshot.complete || snapshot.stateId !== handle.state.stateId)
       throw new Error('Observer did not acknowledge the measured state');
     const stopped = await this.stopContainer(handle.appName);
-    if (stopped.State.Running || stopped.State.ExitCode !== 0)
+    if (
+      stopped.State.Running !== false ||
+      stopped.State.OOMKilled !== false ||
+      stopped.State.Error !== ''
+    )
       throw new Error('Observed server did not finish a clean teardown');
     assertIsolatedContainer(stopped, this.runId, this.imageId, handle.mounts);
     const output = path.join(handle.caseDir, 'observed');
@@ -839,11 +845,14 @@ export class PublicRuntimeContainers {
       .split('\n')
       .map((line) => JSON.parse(line));
     if (
-      events.some((entry, index) => entry.sequence !== index) ||
-      events[0]?.kind !== 'observer-start' ||
-      events.at(-1)?.kind !== 'observer-exit' ||
-      events.at(-1)?.code !== 0 ||
-      !events.some((entry) => entry.kind === 'snapshot-after-render')
+      events[0]?.runId !== this.runId ||
+      events[0]?.stateId !== handle.state.stateId ||
+      !events.some((entry) => entry.kind === 'snapshot-after-render') ||
+      !isControlledShutdown(
+        events,
+        stopped.State.ExitCode,
+        events.findLast((entry) => entry.kind === 'snapshot-after-render').sequence,
+      )
     ) {
       throw new Error('Observer lifecycle is incomplete');
     }
@@ -864,6 +873,7 @@ export class PublicRuntimeContainers {
     )
       throw new Error('Unowned HTTP traffic preceded the cold document request');
     observer.stoppedAfterRender = true;
+    observer.exitCode = stopped.State.ExitCode;
     await this.configurePeer();
     await this.databaseCommand('canary', handle.database, handle.state.endCanary);
     let statements;
@@ -975,10 +985,27 @@ export class PublicRuntimeContainers {
 
   async finishVisual(handle) {
     this.assertCase(handle);
+    if (!handle.state.visual) throw new Error('Execution cases require a measured snapshot');
     const stopped = await this.stopContainer(handle.appName);
-    if (stopped.State.Running || stopped.State.ExitCode !== 0)
+    if (
+      stopped.State.Running !== false ||
+      stopped.State.OOMKilled !== false ||
+      stopped.State.Error !== ''
+    )
       throw new Error('Visual server teardown did not complete');
     assertIsolatedContainer(stopped, this.runId, this.imageId, handle.mounts);
+    const output = path.join(handle.caseDir, 'shutdown.jsonl');
+    await this.docker(['cp', `${handle.appName}:/proof-output/shutdown.jsonl`, output]);
+    const events = (await readFile(output, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    if (
+      events[0]?.runId !== this.runId ||
+      events[0]?.stateId !== handle.state.stateId ||
+      !isControlledShutdown(events, stopped.State.ExitCode)
+    )
+      throw new Error('Visual server shutdown observation is incomplete');
     await this.configurePeer();
     await this.removeContainer(handle.relayName);
     await this.removeContainer(handle.appName);
@@ -1051,7 +1078,13 @@ export class PublicRuntimeContainers {
       current.Config?.Labels?.[PROOF_LABEL] !== this.runId
     )
       throw new Error('Container ownership changed before stopping');
-    await this.docker(['stop', '--time', '15', owned.id]);
+    if (
+      current.State.Running !== true ||
+      current.State.OOMKilled !== false ||
+      current.State.Error !== ''
+    )
+      throw new Error('Owned container stopped before controlled shutdown');
+    await this.docker(['stop', '--signal', 'SIGTERM', '--time', '15', owned.id]);
     return this.inspect(owned.id);
   }
 

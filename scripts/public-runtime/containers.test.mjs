@@ -460,6 +460,124 @@ test('stop and removal recheck recorded container identity, image and ownership'
   assert.deepEqual(calls, [['rm', '--force', 'original']]);
 });
 
+test('controlled stops require a live owned container and send an explicit termination signal', async () => {
+  for (const state of [
+    { Running: true, OOMKilled: false, Error: '' },
+    { Running: false, OOMKilled: false, Error: '' },
+    { Running: true, OOMKilled: true, Error: '' },
+    { Running: true, OOMKilled: false, Error: 'runtime error' },
+    { Running: true },
+  ]) {
+    const value = harness();
+    value.names.set('owned', { id: 'original', image: value.imageId });
+    const current = {
+      Id: 'original',
+      Image: value.imageId,
+      Config: { Labels: { [PROOF_LABEL]: value.runId } },
+      State: state,
+    };
+    const stopped = {
+      ...current,
+      State: { Running: false, OOMKilled: false, Error: '', ExitCode: 143 },
+    };
+    const calls = [];
+    value.inspect = async () => (calls.length === 0 ? current : stopped);
+    value.docker = async (args) => calls.push(args);
+    if (state.Running && state.OOMKilled === false && state.Error === '') {
+      assert.equal(await value.stopContainer('owned'), stopped);
+      assert.deepEqual(calls, [['stop', '--signal', 'SIGTERM', '--time', '15', 'original']]);
+    } else {
+      await assert.rejects(value.stopContainer('owned'), /before controlled shutdown/);
+      assert.deepEqual(calls, []);
+    }
+  }
+});
+
+test('visual teardown rejects crashes and foreign lifecycle evidence before resource removal', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'agi-proof-visual-shutdown-'));
+  try {
+    for (const mode of [
+      'complete',
+      'oom',
+      'running',
+      'error',
+      'missing-state',
+      'wrong-exit',
+      'missing-exit',
+      'foreign-state',
+      'execution-case',
+    ]) {
+      const value = harness();
+      const state = {
+        stateId: 'visual-state',
+        runId: value.runId,
+        visual: mode !== 'execution-case',
+      };
+      const handle = {
+        index: 0,
+        state,
+        appName: 'app',
+        relayName: 'relay',
+        mounts: [],
+        caseDir: directory,
+        database: 'owned',
+      };
+      value.activeCase = 0;
+      value.handleBindings = new WeakMap([[handle, digest(state)]]);
+      const stopped = {
+        Image: value.imageId,
+        Config: {
+          Labels: { [PROOF_LABEL]: value.runId },
+          User: '1000:1000',
+          Healthcheck: { Test: ['NONE'] },
+        },
+        HostConfig: {
+          NetworkMode: 'none',
+          ReadonlyRootfs: true,
+          CapDrop: ['ALL'],
+          SecurityOpt: ['no-new-privileges'],
+        },
+        Mounts: [],
+        State: { Running: false, OOMKilled: false, Error: '', ExitCode: 143 },
+      };
+      const events = [
+        { sequence: 0, kind: 'observer-start', runId: value.runId, stateId: state.stateId },
+        { sequence: 1, kind: 'shutdown-signal', signal: 'SIGTERM' },
+        { sequence: 2, kind: 'observer-exit', code: 143, signal: 'SIGTERM' },
+      ];
+      if (mode === 'oom') stopped.State.OOMKilled = true;
+      if (mode === 'running') stopped.State.Running = true;
+      if (mode === 'error') stopped.State.Error = 'runtime error';
+      if (mode === 'missing-state') delete stopped.State.OOMKilled;
+      if (mode === 'wrong-exit') stopped.State.ExitCode = 137;
+      if (mode === 'missing-exit') events.pop();
+      if (mode === 'foreign-state') events[0].stateId = 'foreign';
+      const removed = [];
+      value.stopContainer = async () => stopped;
+      value.docker = async (args) => {
+        assert.equal(args[0], 'cp');
+        assert.equal(args[1], 'app:/proof-output/shutdown.jsonl');
+        await writeFile(args[2], events.map((event) => JSON.stringify(event)).join('\n') + '\n');
+      };
+      value.configurePeer = async () => removed.push('peer');
+      value.removeContainer = async (name) => removed.push(name);
+      value.databaseCommand = async () => removed.push('database');
+      value.removeCaseVolumes = async () => removed.push('volumes');
+      if (mode === 'complete') {
+        await value.finishVisual(handle);
+        assert.deepEqual(removed, ['peer', 'relay', 'app', 'database', 'volumes']);
+        assert.equal(value.activeCase, null);
+      } else {
+        await assert.rejects(value.finishVisual(handle), /teardown|observation|snapshot/);
+        assert.deepEqual(removed, []);
+        assert.equal(value.activeCase, 0);
+      }
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('volumes cannot be reused or removed based only on their requested name', async () => {
   const value = harness();
   const calls = [];

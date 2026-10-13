@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import test from 'node:test';
 import { authorityQueries, caseDatabaseRole } from './database-authority.mjs';
 import {
@@ -453,6 +454,73 @@ test('source-mapped module loading is distinct from observed render invocation',
   );
 });
 
+test('render witnesses decode indexed map sections once without accepting an earlier unrelated function', () => {
+  const source = 'function wrong(){}\nexport default function render(){}';
+  const generated =
+    'function earlier(){}\nfunction other(){}\nfunction wrong(){}\nfunction render(){}';
+  const filename = '/app/apps/web/.next/server/indexed.js';
+  const map = (file, contents) => ({
+    version: 3,
+    sources: [file],
+    sourcesContent: [contents],
+    names: [],
+    mappings: 'AAAA;AACA',
+  });
+  const payload = {
+    version: 3,
+    sections: [
+      { offset: { line: 0, column: 0 }, map: map('/src/unrelated.tsx', 'unrelated') },
+      { offset: { line: 2, column: 0 }, map: map('/src/owner.tsx', source) },
+    ],
+  };
+  const coverage = {
+    result: [
+      {
+        url: filename,
+        functions: ['earlier', 'other', 'wrong', 'render'].map((name) => {
+          const startOffset = generated.indexOf(`function ${name}`);
+          return {
+            functionName: name,
+            ranges: [
+              { startOffset, endOffset: startOffset + `function ${name}(){}`.length, count: 1 },
+            ],
+          };
+        }),
+      },
+    ],
+  };
+  const target = { file: 'src/owner.tsx', startLine: 1, endLine: 1, sourceDigest: digest(source) };
+  const read = (file) => {
+    assert.ok([filename, `${filename}.map`].includes(file));
+    return file.endsWith('.map') ? JSON.stringify(payload) : generated;
+  };
+  const module = createRequire(import.meta.url)('node:module');
+  const originalSourceMap = module.SourceMap;
+  let constructions = 0;
+  try {
+    module.SourceMap = class extends originalSourceMap {
+      constructor(...args) {
+        super(...args);
+        constructions++;
+      }
+    };
+    syncBuiltinESMExports();
+    const witness = renderExecutionWitness(coverage, target, read);
+    assert.equal(witness.functionName, 'render');
+    assert.equal(witness.originalLine, 1);
+    assert.equal(witness.startOffset, generated.indexOf('function render'));
+    assert.equal(witness.sourceDigest, target.sourceDigest);
+    assert.equal(constructions, 2);
+    constructions = 0;
+    for (const fn of coverage.result[0].functions) fn.ranges[0].count = 0;
+    assert.equal(renderExecutionWitness(coverage, target, read), null);
+    assert.equal(constructions, 0);
+  } finally {
+    module.SourceMap = originalSourceMap;
+    syncBuiltinESMExports();
+  }
+});
+
 test('raw receipts reproduce SQL attribution and V8 invocation instead of trusting summary booleans', () => {
   const make = () => {
     const proof = cleanProof();
@@ -495,8 +563,8 @@ test('raw receipts reproduce SQL attribution and V8 invocation instead of trusti
       probes,
       queries,
     );
-    const bind = () => {
-      receipt.eventsJsonl = serialize([
+    const bind = (
+      events = [
         { sequence: 0, kind: 'observer-start' },
         {
           sequence: 1,
@@ -504,7 +572,9 @@ test('raw receipts reproduce SQL attribution and V8 invocation instead of trusti
           coverageDigest: digest(receipt.nodeCoverage),
         },
         { sequence: 2, kind: 'observer-exit', code: 0 },
-      ]);
+      ],
+    ) => {
+      receipt.eventsJsonl = serialize(events);
       proof.evidence = {
         nodeCoverageDigest: digest(receipt.nodeCoverage),
         browserCoverageDigest: digest(receipt.browserCoverage),
@@ -518,6 +588,43 @@ test('raw receipts reproduce SQL attribution and V8 invocation instead of trusti
   };
   const complete = make();
   assert.equal(validateRawReceipt(complete.receipt, complete.proof, queries), true);
+  const terminated = make();
+  terminated.proof.observer.exitCode = 143;
+  const shutdownEvents = [
+    { sequence: 0, kind: 'observer-start' },
+    {
+      sequence: 1,
+      kind: 'snapshot-after-render',
+      coverageDigest: digest(terminated.receipt.nodeCoverage),
+    },
+    { sequence: 2, kind: 'shutdown-signal', signal: 'SIGTERM' },
+    { sequence: 3, kind: 'observer-exit', code: 143, signal: 'SIGTERM' },
+  ];
+  terminated.bind(shutdownEvents);
+  assert.equal(validateRawReceipt(terminated.receipt, terminated.proof, queries), true);
+  for (const mutate of [
+    (events) => events.splice(1, 1),
+    (events) => {
+      [events[1], events[2]] = [events[2], events[1]];
+    },
+    (events) => (events[1].coverageDigest = 'foreign'),
+    (events) => events.pop(),
+  ]) {
+    const events = structuredClone(shutdownEvents);
+    mutate(events);
+    events.forEach((event, sequence) => (event.sequence = sequence));
+    terminated.bind(events);
+    assert.throws(
+      () => validateRawReceipt(terminated.receipt, terminated.proof, queries),
+      /lifecycle or snapshot binding/,
+    );
+  }
+  terminated.bind(shutdownEvents);
+  terminated.proof.observer.exitCode = 0;
+  assert.throws(
+    () => validateRawReceipt(terminated.receipt, terminated.proof, queries),
+    /lifecycle or snapshot binding/,
+  );
   complete.receipt.nodeCoverage.result[1].functions[0].ranges[0].count = 0;
   assert.throws(
     () => validateRawReceipt(complete.receipt, complete.proof, queries),

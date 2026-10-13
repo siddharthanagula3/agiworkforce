@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { SourceMap } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isControlledShutdown } from './shutdown.mjs';
 
 export const PROOF_VERSION = 1;
 export const PROOF_LABEL = 'agi.public-runtime.run';
@@ -67,6 +68,7 @@ export function renderExecutionWitness(coverage, target, readText) {
       continue;
     }
     const sections = payload.sections ?? [{ offset: { line: 0, column: 0 }, map: payload }];
+    const sourceMaps = new Map();
     for (const fn of script.functions) {
       if (!fn.functionName || !fn.ranges[0] || fn.ranges[0].count <= 0) continue;
       const declaration = /^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/.exec(
@@ -80,7 +82,12 @@ export function renderExecutionWitness(coverage, target, readText) {
       for (const section of [...sections].reverse()) {
         const offset = section.offset;
         if (line < offset.line || (line === offset.line && column < offset.column)) continue;
-        const entry = new SourceMap(section.map).findEntry(
+        let sourceMap = sourceMaps.get(section);
+        if (!sourceMap) {
+          sourceMap = new SourceMap(section.map);
+          sourceMaps.set(section, sourceMap);
+        }
+        const entry = sourceMap.findEntry(
           line - offset.line,
           column - (line === offset.line ? offset.column : 0),
         );
@@ -448,12 +455,9 @@ export function validateRawReceipt(receipt, proof, expectedQueries) {
     .map((line) => JSON.parse(line));
   const snapshots = events.filter((event) => event.kind === 'snapshot-after-render');
   if (
-    events.some((event, index) => event.sequence !== index) ||
     snapshots.length !== 1 ||
     snapshots[0].coverageDigest !== evidence.nodeCoverageDigest ||
-    events[0]?.kind !== 'observer-start' ||
-    events.at(-1)?.kind !== 'observer-exit' ||
-    events.at(-1)?.code !== 0
+    !isControlledShutdown(events, proof.observer.exitCode ?? 0, snapshots[0].sequence)
   )
     throw new Error('Raw observer lifecycle or snapshot binding is incomplete');
   const positiveRange = (script, witness, name = null) =>
