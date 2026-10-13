@@ -6,6 +6,7 @@ import net from 'node:net';
 import http from 'node:http';
 import childProcess from 'node:child_process';
 import workerThreads from 'node:worker_threads';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { performance } from 'node:perf_hooks';
@@ -117,9 +118,26 @@ const routeManifest = JSON.parse(
   readFileSync('/app/apps/web/.next/server/app-paths-manifest.json', 'utf8'),
 );
 const routeEntry = routeManifest[`${state.pattern === '/' ? '' : state.pattern}/page`];
-if (typeof routeEntry !== 'string' || routeEntry.includes('..'))
+if (
+  typeof routeEntry !== 'string' ||
+  routeEntry.length === 0 ||
+  routeEntry.length > 4096 ||
+  routeEntry.includes('\\') ||
+  routeEntry.includes('\0') ||
+  routeEntry.split('/').includes('..') ||
+  path.posix.isAbsolute(routeEntry) ||
+  path.win32.isAbsolute(routeEntry)
+)
   throw new Error('Production route bundle is not in the build manifest');
-const routeFile = `/app/apps/web/.next/server/${routeEntry}`;
+const serverRoot = '/app/apps/web/.next/server';
+const routeFile = path.posix.resolve(serverRoot, routeEntry);
+const relativeRouteFile = path.posix.relative(serverRoot, routeFile);
+if (
+  !relativeRouteFile ||
+  relativeRouteFile.startsWith('../') ||
+  path.posix.isAbsolute(relativeRouteFile)
+)
+  throw new Error('Production route bundle is not in the build manifest');
 report.routeBundleHash = createHash('sha256').update(readFileSync(routeFile)).digest('hex');
 const prerender = JSON.parse(readFileSync('/app/apps/web/.next/prerender-manifest.json', 'utf8'));
 report.prerender = {

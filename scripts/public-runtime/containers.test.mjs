@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import http from 'node:http';
@@ -296,6 +297,104 @@ test('http observations retain entry headers and document classification after m
     http.Server.prototype.emit = originalEmit;
     server.closeAllConnections();
     if (server.listening) await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+async function observerRouteResolution() {
+  const source = await readFile(new URL('./observer.mjs', import.meta.url), 'utf8');
+  const start = 'const routeManifest = JSON.parse(';
+  const end = 'const prerender = JSON.parse(';
+  assert.equal(source.split(start).length, 2);
+  assert.equal(source.split(end).length, 2);
+  return source.slice(source.indexOf(start), source.indexOf(end));
+}
+
+test('observer manifest resolution hashes normal, dynamic and catch-all production bundles', async () => {
+  const block = await observerRouteResolution();
+  const bytes = Buffer.from('compiled route fixture\n');
+  for (const [pattern, entry] of [
+    ['/', 'app/page.js'],
+    ['/docs', 'app/docs/page.js'],
+    ['/connect/[deviceType]', 'app/connect/[deviceType]/page.js'],
+    ['/connectors/mcp-directory/[...id]', 'app/connectors/mcp-directory/[...id]/page.js'],
+    ['/docs/[[...slug]]', 'app/docs/[[...slug]]/page.js'],
+    ['/module..name', 'app/module..name/page.js'],
+  ]) {
+    const calls = [];
+    const report = {};
+    runInNewContext(
+      block,
+      {
+        state: { pattern },
+        report,
+        createHash,
+        path,
+        readFileSync(filename, encoding) {
+          calls.push(filename);
+          if (filename === '/app/apps/web/.next/server/app-paths-manifest.json') {
+            assert.equal(encoding, 'utf8');
+            return JSON.stringify({ [`${pattern === '/' ? '' : pattern}/page`]: entry });
+          }
+          assert.equal(filename, `/app/apps/web/.next/server/${entry}`);
+          assert.equal(encoding, undefined);
+          return bytes;
+        },
+      },
+      { timeout: 1000 },
+    );
+    assert.deepEqual(calls, [
+      '/app/apps/web/.next/server/app-paths-manifest.json',
+      `/app/apps/web/.next/server/${entry}`,
+    ]);
+    assert.equal(report.routeBundleHash, createHash('sha256').update(bytes).digest('hex'));
+  }
+});
+
+test('observer manifest resolution refuses escaping or invalid entries before any bundle read', async () => {
+  const block = await observerRouteResolution();
+  for (const entry of [
+    undefined,
+    null,
+    42,
+    {},
+    [],
+    '',
+    '.',
+    '..',
+    '../outside.js',
+    'app/../page.js',
+    'app/nested/../../page.js',
+    '/outside/page.js',
+    '//outside/page.js',
+    'C:/outside/page.js',
+    'C:\\outside\\page.js',
+    'app\\..\\page.js',
+    'app/\0page.js',
+    'a'.repeat(4097),
+  ]) {
+    const calls = [];
+    const report = {};
+    assert.throws(
+      () =>
+        runInNewContext(
+          block,
+          {
+            state: { pattern: '/fixture' },
+            report,
+            createHash,
+            path,
+            readFileSync(filename) {
+              calls.push(filename);
+              assert.equal(filename, '/app/apps/web/.next/server/app-paths-manifest.json');
+              return JSON.stringify({ '/fixture/page': entry });
+            },
+          },
+          { timeout: 1000 },
+        ),
+      /Production route bundle is not in the build manifest/,
+    );
+    assert.deepEqual(calls, ['/app/apps/web/.next/server/app-paths-manifest.json']);
+    assert.equal(report.routeBundleHash, undefined);
   }
 });
 
