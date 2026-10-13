@@ -83,16 +83,40 @@ export class PublicRuntimeContainers {
   }
 
   async docker(args, options = {}) {
+    const { includeStderr = false, ...executionOptions } = options;
     const result = await execute('docker', args, {
       timeout: 600_000,
       maxBuffer: 32 * 1024 * 1024,
-      ...options,
+      ...executionOptions,
     });
-    return result.stdout.trim();
+    return (includeStderr ? `${result.stdout}\n${result.stderr}` : result.stdout).trim();
   }
 
   async inspect(name) {
     return JSON.parse(await this.docker(['inspect', name]))[0];
+  }
+
+  async readinessError(name, message) {
+    const owned = this.names.get(name);
+    if (!owned) throw new Error('Refusing startup diagnostics for an unowned container');
+    const current = await this.inspect(owned.id);
+    if (
+      current.Id !== owned.id ||
+      current.Image !== owned.image ||
+      current.Config?.Labels?.[PROOF_LABEL] !== this.runId
+    )
+      throw new Error('Container ownership changed before startup diagnostics');
+    let logs;
+    try {
+      logs = await this.docker(['logs', '--tail', '80', owned.id], {
+        includeStderr: true,
+        timeout: 10_000,
+        maxBuffer: 128 * 1024,
+      });
+    } catch {
+      logs = 'Startup logs unavailable';
+    }
+    return new Error(`${message} (exit ${current.State.ExitCode}):\n${logs.slice(-32 * 1024)}`);
   }
 
   async persistOwnership() {
@@ -279,11 +303,15 @@ export class PublicRuntimeContainers {
         break;
       } catch {
         if (!(await this.inspect(this.pgName)).State.Running)
-          throw new Error('Isolated PostgreSQL stopped before readiness');
+          throw await this.readinessError(
+            this.pgName,
+            'Isolated PostgreSQL stopped before readiness',
+          );
       }
       await delay(500);
     }
-    if (!ready) throw new Error('Isolated PostgreSQL readiness timed out');
+    if (!ready)
+      throw await this.readinessError(this.pgName, 'Isolated PostgreSQL readiness timed out');
     await this.docker([
       'exec',
       '--user',

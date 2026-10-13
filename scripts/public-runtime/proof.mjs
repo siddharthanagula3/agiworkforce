@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 export const PROOF_VERSION = 1;
 export const PROOF_LABEL = 'agi.public-runtime.run';
 export const DATABASE_PREFIX = 'agi_public_proof_';
-export const DATABASE_SOCKET = '/run/agi-proof-db';
+export const DATABASE_SOCKET = '/var/run/postgresql';
 export const HTTP_SOCKET = '/run/agi-proof-http/http.sock';
 export const CONTROL_SOCKET = '/run/agi-proof-http/control.sock';
 export function resolveProofOrigin(value = 'http://127.0.0.1:3000') {

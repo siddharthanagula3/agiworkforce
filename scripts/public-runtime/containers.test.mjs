@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import { PublicRuntimeContainers } from './containers.mjs';
 import { assertNoUnrecordedResources, restoreOwnership } from './cleanup.mjs';
-import { digest, PROOF_LABEL } from './proof.mjs';
+import { DATABASE_SOCKET, digest, PROOF_LABEL } from './proof.mjs';
 
 function harness() {
   const value = Object.create(PublicRuntimeContainers.prototype);
@@ -17,6 +20,102 @@ function harness() {
   });
   return value;
 }
+
+test('the isolated database uses the official image bootstrap socket directory', () => {
+  assert.equal(DATABASE_SOCKET, '/var/run/postgresql');
+});
+
+test('startup diagnostics read bounded stdout and stderr from the recorded owner', async () => {
+  const value = harness();
+  value.names.set('database', { id: 'original', image: value.postgresImageId });
+  value.inspect = async (id) => {
+    assert.equal(id, 'original');
+    return {
+      Id: id,
+      Image: value.postgresImageId,
+      Config: { Labels: { [PROOF_LABEL]: value.runId } },
+      State: { ExitCode: 1 },
+    };
+  };
+  const calls = [];
+  value.docker = async (args, options) => {
+    calls.push({ args, options });
+    return 'x'.repeat(40 * 1024) + '\nbootstrap stderr';
+  };
+  const error = await value.readinessError('database', 'Database stopped');
+  assert.match(error.message, /^Database stopped \(exit 1\):/);
+  assert.ok(error.message.endsWith('bootstrap stderr'));
+  assert.ok(error.message.length < 33 * 1024);
+  assert.deepEqual(calls, [
+    {
+      args: ['logs', '--tail', '80', 'original'],
+      options: { includeStderr: true, timeout: 10_000, maxBuffer: 128 * 1024 },
+    },
+  ]);
+});
+
+test('startup diagnostics refuse unowned and replaced containers without reading their logs', async () => {
+  const value = harness();
+  const calls = [];
+  value.docker = async (args) => {
+    calls.push(args);
+    return '';
+  };
+  await assert.rejects(value.readinessError('unknown', 'stopped'), /unowned/);
+  value.names.set('database', { id: 'original', image: value.postgresImageId });
+  for (const change of [
+    { Id: 'replacement' },
+    { Image: 'replacement-image' },
+    { Config: { Labels: {} } },
+  ]) {
+    value.inspect = async () => ({
+      Id: 'original',
+      Image: value.postgresImageId,
+      Config: { Labels: { [PROOF_LABEL]: value.runId } },
+      ...change,
+    });
+    await assert.rejects(value.readinessError('database', 'stopped'), /ownership changed/);
+  }
+  assert.deepEqual(calls, []);
+});
+
+test('unavailable diagnostics retain the failing readiness result', async () => {
+  const value = harness();
+  value.names.set('database', { id: 'original', image: value.postgresImageId });
+  value.inspect = async () => ({
+    Id: 'original',
+    Image: value.postgresImageId,
+    Config: { Labels: { [PROOF_LABEL]: value.runId } },
+    State: { ExitCode: 1 },
+  });
+  value.docker = async () => {
+    throw new Error('logging failed');
+  };
+  const error = await value.readinessError('database', 'Database stopped');
+  assert.equal(error.message, 'Database stopped (exit 1):\nStartup logs unavailable');
+});
+
+test('docker log collection includes both pipes while ordinary commands retain stdout only', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'agi-proof-docker-output-'));
+  try {
+    await writeFile(
+      path.join(directory, 'docker'),
+      '#!/bin/sh\nprintf "stdout\\n"\nprintf "stderr\\n" >&2\n',
+      {
+        mode: 0o700,
+      },
+    );
+    const value = harness();
+    const options = { env: { PATH: directory } };
+    assert.equal(await value.docker(['logs'], options), 'stdout');
+    assert.equal(
+      await value.docker(['logs'], { ...options, includeStderr: true }),
+      'stdout\n\nstderr',
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test('a failed name collision never makes a foreign container eligible for cleanup', async () => {
   const value = harness();
