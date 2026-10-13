@@ -76,9 +76,10 @@ async function openAuth(
   await holdMockDevBrowser(page, String(test.info().project.use.baseURL));
   await mockAuthProvider(page, provider);
   await page.goto(route, { waitUntil: 'load' });
-  await expect(page.getByTestId('auth-layout')).toBeVisible();
   const submit = page.getByRole('button', { name: 'Continue', exact: true });
   await expect(submit).toBeEnabled();
+  await expect(page.getByTestId('auth-layout')).toHaveCount(1);
+  await expect(page.getByTestId('auth-layout')).toBeVisible();
   if (route === '/signup') {
     await expect(ageField(page)).toHaveValue('');
     for (const provider of await page.getByTestId('auth-layout').getByRole('button').all()) {

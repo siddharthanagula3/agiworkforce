@@ -16,8 +16,9 @@ const TARGET_VIEWPORTS = [
 async function openAuth(page: Page, route: string): Promise<void> {
   await mockAuthProvider(page);
   await page.goto(route, { waitUntil: 'load' });
-  await expect(page.getByTestId('auth-layout')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+  await expect(page.getByTestId('auth-layout')).toHaveCount(1);
+  await expect(page.getByTestId('auth-layout')).toBeVisible();
   if (route === '/signup') {
     await expect(page.getByTestId('auth-age-field').getByRole('textbox')).toHaveValue('');
   }
@@ -67,20 +68,59 @@ async function waitForCookieBanner(page: Page): Promise<void> {
 // Scrolled to the end, a control the banner still covers cannot be reached
 // without answering the banner first: scrolling back up only moves it lower.
 async function controlsUnderCookieBanner(page: Page): Promise<string[]> {
-  return page.getByTestId('auth-layout').evaluate((layout) => {
-    window.scrollTo(0, document.documentElement.scrollHeight);
-    const covered: string[] = [];
-    for (const control of layout.querySelectorAll<HTMLElement>('button, a[href], summary, input')) {
-      if (control.closest('[aria-hidden="true"]')) continue;
-      const box = control.getBoundingClientRect();
-      if (box.width === 0 || box.height === 0) continue;
-      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-      if (!hit?.closest('[aria-label="Cookie consent"]')) continue;
-      covered.push(
-        control.getAttribute('aria-label') || control.textContent?.trim() || control.tagName,
+  await page.evaluate(() => document.fonts.ready);
+  await waitForCookieBanner(page);
+  return page.getByTestId('auth-layout').evaluate(async (layout) => {
+    const banner = document.querySelector('[role="region"][aria-label="Cookie consent"]');
+    if (!banner) throw new Error('Cookie consent banner is missing');
+    let previous = '';
+    let consecutive = 0;
+    for (let attempt = 0; attempt < 32; attempt += 1) {
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
       );
+      if (
+        !layout.isConnected ||
+        document.querySelectorAll('[data-testid="auth-layout"]').length !== 1
+      )
+        throw new Error('Auth layout changed during cookie clearance measurement');
+      const controls = Array.from(
+        layout.querySelectorAll<HTMLElement>('button, a[href], summary, input'),
+      )
+        .filter(
+          (control) =>
+            !control.closest('[aria-hidden="true"]') &&
+            control.checkVisibility({ visibilityProperty: true }),
+        )
+        .map((control) => ({ control, box: control.getBoundingClientRect() }));
+      const signature = JSON.stringify({
+        scroll: [scrollX, scrollY],
+        viewport: [innerWidth, innerHeight],
+        document: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
+        banner: banner.getBoundingClientRect().toJSON(),
+        opacity: getComputedStyle(banner).opacity,
+        controls: controls.map(({ box }) => box.toJSON()),
+        fonts: document.fonts.status,
+      });
+      consecutive = signature === previous ? consecutive + 1 : 0;
+      previous = signature;
+      if (consecutive < 2) continue;
+      if (document.fonts.status !== 'loaded' || getComputedStyle(banner).opacity !== '1') continue;
+      const maximum = Math.max(0, document.documentElement.scrollHeight - innerHeight);
+      if (Math.abs(scrollY - maximum) > 1) continue;
+      return controls
+        .filter(({ box }) => {
+          if (box.width === 0 || box.height === 0) return false;
+          const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+          return hit?.closest('[aria-label="Cookie consent"]') === banner;
+        })
+        .map(
+          ({ control }) =>
+            control.getAttribute('aria-label') || control.textContent?.trim() || control.tagName,
+        );
     }
-    return covered;
+    throw new Error('Cookie clearance geometry did not settle within 32 native frame samples');
   });
 }
 
@@ -100,6 +140,53 @@ async function expectSeriousViolations(page: Page, label: string): Promise<void>
     label,
   ).toEqual([]);
 }
+
+test('cookie clearance distinguishes closed details from visible covered controls', async ({
+  page,
+}) => {
+  for (const state of ['closed', 'visible control', 'opened'] as const) {
+    await test.step(state, async () => {
+      await page.setContent(`<!doctype html>
+        <style>
+          html { scroll-behavior: smooth }
+          body { margin: 0; min-height: 1800px }
+          main { position: fixed; top: calc(100vh - 220px); left: 16px }
+          summary { height: 44px }
+          details div { display: flex; flex-direction: column }
+          p { height: 100px; margin: 0 }
+          a, button { display: inline-flex; width: 160px; height: 44px }
+          button { position: fixed; bottom: 20px; left: 200px }
+          [role="region"] { position: fixed; inset: auto 0 0; height: 100px; background: white; z-index: 2 }
+        </style>
+        <main data-testid="auth-layout">
+          <details open><summary>Details</summary><div><p>Detail fixture</p><a href="#detail">Detail link</a></div></details>
+          ${state === 'visible control' ? '<button>Visible covered control</button>' : ''}
+        </main>
+        <aside role="region" aria-label="Cookie consent">Cookie banner fixture</aside>`);
+      const link = page.locator('details a');
+      await expect(link).toBeVisible();
+      if (state !== 'opened') await page.locator('summary').click();
+      const visibility = await link.evaluate((element) => ({
+        painted: element.checkVisibility({ visibilityProperty: true }),
+        width: element.getBoundingClientRect().width,
+        height: element.getBoundingClientRect().height,
+      }));
+      expect(visibility.width).toBeGreaterThan(0);
+      expect(visibility.height).toBeGreaterThan(0);
+      expect(visibility.painted).toBe(state === 'opened');
+      expect(await controlsUnderCookieBanner(page)).toEqual(
+        state === 'closed'
+          ? []
+          : state === 'opened'
+            ? ['Detail link']
+            : ['Visible covered control'],
+      );
+      expect(
+        await page.evaluate(() => document.documentElement.scrollHeight - innerHeight - scrollY),
+      ).toBeLessThanOrEqual(1);
+    });
+  }
+});
 
 test.describe('auth accessibility', () => {
   for (const route of ROUTES) {
@@ -177,6 +264,14 @@ test.describe('auth accessibility', () => {
         await waitForCookieBanner(page);
 
         expect(await controlsUnderCookieBanner(page)).toEqual([]);
+        const details = page.getByTestId('auth-data-use-notice').locator('summary');
+        if (await details.count()) {
+          await details.click();
+          await expect(
+            page.getByRole('link', { name: 'Data Use Guidelines', exact: true }),
+          ).toBeVisible();
+          expect(await controlsUnderCookieBanner(page)).toEqual([]);
+        }
       });
     }
 
