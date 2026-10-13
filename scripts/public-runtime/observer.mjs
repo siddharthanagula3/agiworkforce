@@ -7,7 +7,7 @@ import http from 'node:http';
 import childProcess from 'node:child_process';
 import workerThreads from 'node:worker_threads';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { performance } from 'node:perf_hooks';
 import { observeProcessShutdown } from './shutdown.mjs';
@@ -254,10 +254,15 @@ const control = net.createServer((socket) => {
       report.coverageCanaryObserved = scripts.some(
         (script) => script.url.endsWith('/module-canary.mjs') && executed(script),
       );
-      report.routeBundleExecuted = scripts.some(
-        (script) =>
-          [routeFile, pathToFileURL(routeFile).href].includes(script.url) && executed(script),
-      );
+      report.routeBundleExecuted = scripts.some((script) => {
+        let filename;
+        try {
+          filename = script.url.startsWith('file:') ? fileURLToPath(script.url) : script.url;
+        } catch {
+          return false;
+        }
+        return filename === routeFile && executed(script);
+      });
       record('snapshot-render-start', {
         elapsedMilliseconds: performance.now() - snapshotStarted,
       });

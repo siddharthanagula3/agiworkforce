@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -297,6 +298,71 @@ test('http observations retain entry headers and document classification after m
     http.Server.prototype.emit = originalEmit;
     server.closeAllConnections();
     if (server.listening) await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+async function observerRouteExecution() {
+  const source = await readFile(new URL('./observer.mjs', import.meta.url), 'utf8');
+  const start = 'const executed = (script) =>';
+  const end = "record('snapshot-render-start'";
+  assert.equal(source.split(start).length, 2);
+  assert.equal(source.split(end).length, 2);
+  return source.slice(source.indexOf(start), source.indexOf(end));
+}
+
+test('observer route execution matches native literal, encoded and absolute file identities', async () => {
+  const block = await observerRouteExecution();
+  for (const routeFile of [
+    '/app/apps/web/.next/server/app/docs/page.js',
+    '/app/apps/web/.next/server/app/connect/[deviceType]/page.js',
+    '/app/apps/web/.next/server/app/connectors/mcp-directory/[...id]/page.js',
+    '/app/apps/web/.next/server/app/docs/[[...slug]]/page.js',
+  ]) {
+    for (const url of [routeFile, `file://${routeFile}`, pathToFileURL(routeFile).href]) {
+      const report = {};
+      runInNewContext(
+        block,
+        {
+          report,
+          routeFile,
+          fileURLToPath,
+          pathToFileURL,
+          scripts: [{ url, functions: [{ ranges: [{ count: 1 }] }] }],
+        },
+        { timeout: 1000 },
+      );
+      assert.equal(report.routeBundleExecuted, true, url);
+    }
+  }
+});
+
+test('observer route execution rejects zero coverage, different files and malformed file URLs', async () => {
+  const block = await observerRouteExecution();
+  const routeFile = '/app/apps/web/.next/server/app/connectors/mcp-directory/[...id]/page.js';
+  const positive = [{ ranges: [{ count: 1 }] }];
+  for (const scripts of [
+    [],
+    [{ url: `file://${routeFile}`, functions: [{ ranges: [{ count: 0 }] }] }],
+    [{ url: `file://${routeFile}`, functions: [] }],
+    [{ url: `file://${routeFile}.other`, functions: positive }],
+    [{ url: `file:///unrelated${routeFile}`, functions: positive }],
+    [{ url: `https://example.invalid${routeFile}`, functions: positive }],
+    [{ url: 'app/connectors/mcp-directory/[...id]/page.js', functions: positive }],
+    [{ url: `file://foreign.invalid${routeFile}`, functions: positive }],
+    [{ url: 'file:///app/apps/web/.next/server/app/%ZZ/page.js', functions: positive }],
+    [{ url: 'file:///app/apps/web/.next/server/app/%2F/page.js', functions: positive }],
+    [
+      { url: 'file:///app/apps/web/.next/server/app/other/page.js', functions: positive },
+      { url: pathToFileURL(routeFile).href, functions: [{ ranges: [{ count: 0 }] }] },
+    ],
+  ]) {
+    const report = {};
+    runInNewContext(
+      block,
+      { report, routeFile, fileURLToPath, pathToFileURL, scripts },
+      { timeout: 1000 },
+    );
+    assert.equal(report.routeBundleExecuted, false, JSON.stringify(scripts));
   }
 });
 
