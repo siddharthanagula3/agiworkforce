@@ -12,7 +12,7 @@ import { promisify } from 'node:util';
 import { runInNewContext } from 'node:vm';
 import { PublicRuntimeContainers } from './containers.mjs';
 import { assertNoUnrecordedResources, restoreOwnership } from './cleanup.mjs';
-import { DATABASE_PREFIX, DATABASE_SOCKET, digest, PROOF_LABEL } from './proof.mjs';
+import { DATABASE_PREFIX, DATABASE_SOCKET, digest, PROOF_LABEL, PROOF_ORIGIN } from './proof.mjs';
 
 function harness() {
   const value = Object.create(PublicRuntimeContainers.prototype);
@@ -27,6 +27,552 @@ function harness() {
   });
   return value;
 }
+
+async function networkHarness(t) {
+  const root = await mkdtemp(path.join(tmpdir(), 'agi-proof-network-'));
+  const value = harness();
+  Object.assign(value, {
+    root,
+    revision: 'b'.repeat(40),
+    image: 'fixture-app',
+    postgresImage: 'fixture-postgres',
+    imageId: `sha256:${'c'.repeat(64)}`,
+    postgresImageId: `sha256:${'d'.repeat(64)}`,
+    fixtures: {},
+    database: `${DATABASE_PREFIX}${value.runId}`,
+    prefix: `agi-public-${value.runId}`,
+    lifecycleFile: path.join(root, 'lifecycle.json'),
+    index: 0,
+    activeCase: null,
+    handleBindings: new WeakMap(),
+    configurePeer: async () => {},
+  });
+  t.after(async () => {
+    if (value.directory) await rm(value.directory, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
+  });
+  const containers = new Map();
+  const volumes = new Map();
+  const calls = [];
+  const engine = { containers, volumes, calls, onExec: null, onInspect: null };
+  const find = (id) =>
+    [...containers.values()].find((entry) => entry.Id === id || entry.Name === `/${id}`);
+  const all = (args, flag) => args.flatMap((arg, index) => (arg === flag ? [args[index + 1]] : []));
+  const one = (args, flag, fallback) => all(args, flag)[0] ?? fallback;
+  const bytes = (text) =>
+    text ? Number.parseInt(text, 10) * (text.endsWith('g') ? 1024 ** 3 : 1024 ** 2) : 0;
+  let created = 0;
+  value.docker = async (args) => {
+    calls.push([...args]);
+    if (args[0] === 'image') {
+      return JSON.stringify([
+        {
+          Id: args[2] === value.image ? value.imageId : value.postgresImageId,
+          Config: {
+            Labels: { 'org.agi.public-proof.revision': value.revision },
+            Env: ['NODE_ENV=production'],
+          },
+        },
+      ]);
+    }
+    if (args[0] === 'volume') {
+      const name = args.at(-1);
+      if (args[1] === 'ls') return [...volumes.keys()].join('\n');
+      if (args[1] === 'create') {
+        volumes.set(name, {
+          Name: name,
+          Labels: { [PROOF_LABEL]: value.runId },
+          Driver: 'local',
+          Options: {},
+        });
+        return name;
+      }
+      if (args[1] === 'inspect') {
+        if (!volumes.has(name)) throw new Error('No such volume');
+        return JSON.stringify([volumes.get(name)]);
+      }
+      if (args[1] === 'rm') {
+        if (
+          [...containers.values()].some((entry) =>
+            entry.Mounts.some((mount) => mount.Type === 'volume' && mount.Name === name),
+          )
+        )
+          throw new Error('Volume is in use');
+        volumes.delete(name);
+        return name;
+      }
+    }
+    if (args[0] === 'run') {
+      const imageIndex = args.findIndex((arg) =>
+        [value.imageId, value.postgresImageId].includes(arg),
+      );
+      assert.ok(imageIndex > 0);
+      const flags = args.slice(0, imageIndex);
+      const name = one(flags, '--name');
+      assert.ok(!containers.has(name));
+      const id = (++created).toString(16).padStart(64, '0');
+      const networkMode = one(flags, '--network', 'default');
+      const joined = networkMode.startsWith('container:') ? find(networkMode.slice(10)) : null;
+      if (networkMode.startsWith('container:')) assert.ok(joined);
+      const ports = Object.fromEntries(
+        all(flags, '--publish').map((binding) => {
+          const [host, port, destination] = binding.split(':');
+          return [`${destination}/tcp`, [{ HostIp: host, HostPort: port }]];
+        }),
+      );
+      const entry = {
+        Id: id,
+        Name: `/${name}`,
+        Image: args[imageIndex],
+        RestartCount: 0,
+        Config: {
+          Labels: { [PROOF_LABEL]: value.runId },
+          Env: ['NODE_ENV=production', ...all(flags, '--env')],
+          User: one(flags, '--user', ''),
+          OpenStdin: flags.includes('--interactive'),
+          Cmd: args.slice(imageIndex + 1),
+          Healthcheck: {
+            Test: flags.includes('--no-healthcheck') ? ['NONE'] : ['CMD', 'inherited-healthcheck'],
+          },
+        },
+        HostConfig: {
+          NetworkMode: networkMode,
+          ReadonlyRootfs: flags.includes('--read-only'),
+          Privileged: flags.includes('--privileged'),
+          PidMode: '',
+          CapDrop: all(flags, '--cap-drop'),
+          CapAdd: all(flags, '--cap-add'),
+          SecurityOpt: all(flags, '--security-opt'),
+          Memory: bytes(one(flags, '--memory')),
+          MemorySwap: bytes(one(flags, '--memory-swap')),
+          PidsLimit: Number(one(flags, '--pids-limit', '0')),
+          PortBindings: ports,
+          PublishAllPorts: false,
+          RestartPolicy: { Name: one(flags, '--restart', 'no'), MaximumRetryCount: 0 },
+        },
+        NetworkSettings: {
+          SandboxID: joined ? '' : id,
+          Ports: joined ? {} : ports,
+          Networks:
+            networkMode === 'bridge' || networkMode === 'default'
+              ? { bridge: { EndpointID: id } }
+              : {},
+        },
+        Mounts: all(flags, '--mount').map((mount) => {
+          const fields = Object.fromEntries(mount.split(',').map((part) => part.split('=')));
+          return {
+            Type: fields.type,
+            Source: fields.source,
+            ...(fields.type === 'volume' ? { Name: fields.source } : {}),
+            Destination: fields.destination,
+            RW: !('readonly' in fields),
+          };
+        }),
+        State: {
+          Running: true,
+          Paused: false,
+          Restarting: false,
+          OOMKilled: false,
+          Error: '',
+          StartedAt: '2026-10-14T00:00:00.000000001Z',
+          ExitCode: 0,
+        },
+        namespace: joined?.namespace ?? `net:[${1000 + created}]`,
+      };
+      containers.set(name, entry);
+      return id;
+    }
+    if (args[0] === 'inspect') {
+      const entry = find(args[1]);
+      if (!entry) throw new Error('No such container');
+      engine.onInspect?.(entry);
+      return JSON.stringify([entry]);
+    }
+    if (args[0] === 'wait') return '0';
+    if (args[0] === 'logs') {
+      const entry = find(args.at(-1));
+      assert.ok(entry);
+      return entry.Name.endsWith('-build-identity')
+        ? 'fixture-build'
+        : JSON.stringify({
+            fixtureDigest: digest(value.fixtures),
+            migrationDigest: 'e'.repeat(64),
+          });
+    }
+    if (args[0] === 'exec') {
+      const entry = find(args[1]);
+      if (entry) {
+        engine.onExec?.(entry, args);
+        if (args.at(-1).includes("readlinkSync('/proc/self/ns/net')")) return entry.namespace;
+        if (args.slice(2).join(' ') === 'cat /proc/1/comm') return 'postgres';
+      }
+      return '';
+    }
+    if (args[0] === 'stop') {
+      const entry = find(args.at(-1));
+      assert.ok(entry);
+      entry.State.Running = false;
+      entry.State.ExitCode = 143;
+      return entry.Id;
+    }
+    if (args[0] === 'cp') {
+      const entry = find(args[1].split(':')[0]);
+      const input = entry.Mounts.find((mount) => mount.Destination === '/proof-input');
+      const state = JSON.parse(await readFile(path.join(input.Source, 'state.json'), 'utf8'));
+      assert.ok(args[1].endsWith(':/proof-output/shutdown.jsonl'));
+      await writeFile(
+        args[2],
+        [
+          { sequence: 0, kind: 'observer-start', runId: value.runId, stateId: state.stateId },
+          { sequence: 1, kind: 'shutdown-signal', signal: 'SIGTERM' },
+          { sequence: 2, kind: 'observer-exit', code: 143, signal: 'SIGTERM' },
+        ]
+          .map((event) => JSON.stringify(event))
+          .join('\n'),
+      );
+      return '';
+    }
+    if (args[0] === 'rm') {
+      const entry = find(args.at(-1));
+      assert.ok(entry);
+      containers.delete(entry.Name.slice(1));
+      return entry.Id;
+    }
+    if (args[0] === 'ps') {
+      const filter = one(args, '--filter', '');
+      return [...containers.values()]
+        .filter((entry) => !filter.startsWith('id=') || entry.Id === filter.slice(3))
+        .map((entry) => (filter.startsWith('id=') ? entry.Id : entry.Name.slice(1)))
+        .join('\n');
+    }
+    throw new Error(`Unexpected Docker fixture operation: ${args[0]}`);
+  };
+  return { value, engine };
+}
+
+function relayNetworkHolder(engine) {
+  const holders = [...engine.containers.values()].filter(
+    (entry) => entry.HostConfig.NetworkMode === 'bridge',
+  );
+  assert.equal(holders.length, 1, 'Expected one persistent relay network holder');
+  return holders[0];
+}
+
+test('persistent relay network is created before PostgreSQL and reused across fresh isolated cases', async (t) => {
+  const { value, engine } = await networkHarness(t);
+  await value.initialize();
+  const holder = relayNetworkHolder(engine);
+  const launches = engine.calls.filter((args) => args[0] === 'run');
+  assert.equal(launches[0][launches[0].indexOf('--name') + 1], holder.Name.slice(1));
+  assert.equal(holder.Config.User, '1000:1000');
+  assert.equal(holder.Config.OpenStdin, true);
+  assert.deepEqual(holder.Config.Cmd, ['node', '-e', 'process.stdin.resume()']);
+  assert.deepEqual(holder.Mounts, []);
+  assert.deepEqual(holder.Config.Env, ['NODE_ENV=production']);
+  assert.deepEqual(holder.Config.Healthcheck.Test, ['NONE']);
+  assert.equal(holder.HostConfig.ReadonlyRootfs, true);
+  assert.deepEqual(holder.HostConfig.CapDrop, ['ALL']);
+  assert.deepEqual(holder.HostConfig.CapAdd, []);
+  assert.deepEqual(holder.HostConfig.SecurityOpt, ['no-new-privileges']);
+  assert.equal(holder.HostConfig.Memory, 256 * 1024 * 1024);
+  assert.equal(holder.HostConfig.PidsLimit, 32);
+  assert.deepEqual(holder.HostConfig.PortBindings, {
+    '3000/tcp': [{ HostIp: '127.0.0.1', HostPort: new URL(PROOF_ORIGIN).port }],
+  });
+  const handles = [];
+  for (let index = 0; index < 2; index++) {
+    const handle = await value.startCase(
+      { path: '/fixture', stateId: `state-${index}` },
+      { visual: true },
+    );
+    handles.push(handle);
+    const relay = engine.containers.get(handle.relayName);
+    assert.equal(relay.HostConfig.NetworkMode, `container:${holder.Id}`);
+    assert.deepEqual(relay.HostConfig.PortBindings, {});
+    assert.equal(relay.NetworkSettings.SandboxID, '');
+    assert.deepEqual(relay.Mounts, [
+      {
+        Type: 'volume',
+        Name: handle.httpVolume,
+        Source: handle.httpVolume,
+        Destination: '/run/agi-proof-http',
+        RW: false,
+      },
+      {
+        Type: 'bind',
+        Source: path.join(value.root, 'scripts'),
+        Destination: '/harness/scripts',
+        RW: false,
+      },
+    ]);
+    assert.equal(engine.containers.get(handle.appName).HostConfig.NetworkMode, 'none');
+    assert.equal(engine.containers.get(value.pgName).HostConfig.NetworkMode, 'none');
+    assert.equal(handle.transport.namespace, holder.namespace);
+    await value.finishVisual(handle);
+    assert.ok(engine.containers.has(holder.Name.slice(1)));
+    assert.ok(!engine.containers.has(handle.relayName));
+    assert.ok(!engine.volumes.has(handle.httpVolume));
+  }
+  assert.notEqual(handles[0].httpVolume, handles[1].httpVolume);
+  assert.notEqual(handles[0].outputVolume, handles[1].outputVolume);
+  assert.notEqual(handles[0].relayName, handles[1].relayName);
+  for (const args of engine.calls.filter((args) => args[0] === 'run')) {
+    const name = args[args.indexOf('--name') + 1];
+    if (name !== holder.Name.slice(1) && !handles.some((handle) => name === handle.relayName))
+      assert.equal(args[args.indexOf('--network') + 1], 'none');
+  }
+  assert.equal(
+    engine.calls.filter((args) => args[0] === 'run' && args.includes('--publish')).length,
+    1,
+  );
+  await value.close();
+  assert.equal(engine.containers.size, 0);
+  assert.equal(engine.volumes.size, 0);
+  assert.equal(value.names.size, 0);
+  assert.equal(value.volumes.size, 0);
+  await assert.rejects(readFile(value.lifecycleFile), { code: 'ENOENT' });
+});
+
+test('persistent relay network refuses changed holder identity, security, publication and namespace', async (t) => {
+  const changes = [
+    (entry) => {
+      entry.Id = 'f'.repeat(64);
+    },
+    (entry) => {
+      entry.Image = 'foreign-image';
+    },
+    (entry) => {
+      entry.Config.Labels[PROOF_LABEL] = 'foreign';
+    },
+    (entry) => {
+      entry.Config.User = '0';
+    },
+    (entry) => {
+      entry.Config.Cmd = ['node', '-e', 'process.stdin.resume(); console.log(1)'];
+    },
+    (entry) => {
+      entry.Config.OpenStdin = false;
+    },
+    (entry) => {
+      entry.Config.Healthcheck.Test = ['CMD', 'health'];
+    },
+    (entry) => {
+      entry.Config.Env.push('UNOWNED_FIXTURE=value');
+    },
+    (entry) => {
+      entry.HostConfig.ReadonlyRootfs = false;
+    },
+    (entry) => {
+      entry.HostConfig.Privileged = true;
+    },
+    (entry) => {
+      entry.HostConfig.PidMode = 'host';
+    },
+    (entry) => {
+      entry.HostConfig.Devices = [{ PathOnHost: '/dev/fixture' }];
+    },
+    (entry) => {
+      entry.HostConfig.CapAdd = ['NET_ADMIN'];
+    },
+    (entry) => {
+      entry.HostConfig.SecurityOpt = [];
+    },
+    (entry) => {
+      entry.HostConfig.Memory = 0;
+    },
+    (entry) => {
+      entry.HostConfig.MemorySwap = -1;
+    },
+    (entry) => {
+      entry.HostConfig.PidsLimit = -1;
+    },
+    (entry) => {
+      entry.HostConfig.RestartPolicy.Name = 'always';
+    },
+    (entry) => {
+      entry.HostConfig.PublishAllPorts = true;
+    },
+    (entry) => {
+      entry.HostConfig.NetworkMode = 'host';
+    },
+    (entry) => {
+      entry.HostConfig.PortBindings['3000/tcp'][0].HostIp = '0.0.0.0';
+    },
+    (entry) => {
+      entry.NetworkSettings.SandboxID = 'f'.repeat(64);
+    },
+    (entry) => {
+      delete entry.NetworkSettings.SandboxID;
+    },
+    (entry) => {
+      entry.NetworkSettings.Networks.bridge.EndpointID = 'f'.repeat(64);
+    },
+    (entry) => {
+      entry.NetworkSettings.Networks.extra = {};
+    },
+    (entry) => {
+      entry.State.Running = false;
+    },
+    (entry) => {
+      delete entry.State.Running;
+    },
+    (entry) => {
+      entry.State.Paused = true;
+    },
+    (entry) => {
+      entry.State.OOMKilled = true;
+    },
+    (entry) => {
+      entry.State.Error = 'fixture-engine-error';
+    },
+    (entry) => {
+      entry.State.Restarting = true;
+    },
+    (entry) => {
+      entry.State.StartedAt = '2026-10-14T01:00:00Z';
+    },
+    (entry) => {
+      entry.RestartCount = 1;
+    },
+    (entry) => {
+      entry.Mounts.push({ Type: 'bind', Source: '/fixture', Destination: '/unowned', RW: false });
+    },
+    (entry) => {
+      entry.namespace = 'net:[replacement]';
+    },
+    (entry) => {
+      entry.namespace = 'net:[98765]';
+    },
+  ];
+  for (const change of changes) {
+    const { value, engine } = await networkHarness(t);
+    await value.initialize();
+    change(relayNetworkHolder(engine));
+    await assert.rejects(
+      value.startCase({ path: '/fixture' }),
+      /relay network|relay container|No such container/,
+    );
+    assert.ok(![...engine.containers.keys()].some((name) => /-relay-\d+$/.test(name)));
+  }
+});
+
+test('persistent relay network detects holder churn after joining and stopped relays despite successful TCP', async (t) => {
+  for (const mode of [
+    'holder-restarted',
+    'holder-namespace',
+    'holder-after-probe-check',
+    'relay-stopped',
+    'relay-restarted',
+    'relay-command',
+    'relay-restart-policy',
+    'relay-publish',
+    'relay-mode',
+    'relay-namespace',
+    'relay-mount',
+  ]) {
+    const { value, engine } = await networkHarness(t);
+    await value.initialize();
+    const holder = relayNetworkHolder(engine);
+    let probed = false;
+    engine.onExec = (entry, args) => {
+      if (!/-relay-\d+$/.test(entry.Name)) return;
+      if (mode === 'holder-after-probe-check' && probed && args.at(-1).includes('readlinkSync')) {
+        holder.namespace = 'net:[98765]';
+        return;
+      }
+      if (!args.at(-1).includes('.connect(3000,')) return;
+      probed = true;
+      if (mode === 'holder-restarted') holder.State.StartedAt = '2026-10-14T01:00:00Z';
+      if (mode === 'holder-namespace') holder.namespace = 'net:[98765]';
+      if (mode === 'relay-stopped') entry.State.Running = false;
+      if (mode === 'relay-restarted') entry.State.StartedAt = '2026-10-14T01:00:00Z';
+      if (mode === 'relay-command') entry.Config.Cmd = ['node', '-e', 'process.stdin.resume()'];
+      if (mode === 'relay-restart-policy') entry.HostConfig.RestartPolicy.Name = 'always';
+      if (mode === 'relay-publish')
+        entry.HostConfig.PortBindings = { '3000/tcp': [{ HostIp: '127.0.0.1', HostPort: '3000' }] };
+      if (mode === 'relay-mode') entry.HostConfig.NetworkMode = 'bridge';
+      if (mode === 'relay-namespace') entry.namespace = 'net:[98765]';
+      if (mode === 'relay-mount') entry.Mounts[0].Name = 'previous-case-socket';
+    };
+    await assert.rejects(value.startCase({ path: '/fixture' }), /relay network|relay container/);
+  }
+});
+
+test('persistent relay network is required even when the owned application is ready', async (t) => {
+  const { value, engine } = await networkHarness(t);
+  await value.initialize();
+  const holder = relayNetworkHolder(engine);
+  engine.containers.delete(holder.Name.slice(1));
+  await assert.rejects(value.startCase({ path: '/fixture' }), /No such container/);
+  assert.ok(![...engine.containers.keys()].some((name) => /-relay-\d+$/.test(name)));
+});
+
+test('persistent relay network cleanup recovers exact owners and refuses foreign holders or relays', async (t) => {
+  for (const replaced of ['none', 'relay-image', 'holder-image', 'holder-label']) {
+    const { value, engine } = await networkHarness(t);
+    await value.initialize();
+    const handle = await value.startCase({ path: '/fixture', stateId: 'interrupted' });
+    const holder = relayNetworkHolder(engine);
+    const relay = engine.containers.get(handle.relayName);
+    const recovered = harness();
+    recovered.revision = value.revision;
+    recovered.prefix = 'different-recovery-instance';
+    recovered.docker = value.docker;
+    restoreOwnership(recovered, JSON.parse(await readFile(value.lifecycleFile, 'utf8')));
+    if (replaced === 'relay-image') relay.Image = 'foreign-image';
+    if (replaced === 'holder-image') holder.Image = 'foreign-image';
+    if (replaced === 'holder-label') holder.Config.Labels[PROOF_LABEL] = 'foreign-run';
+    if (replaced !== 'none') {
+      await assert.rejects(recovered.close(), /teardown is incomplete/);
+      assert.ok(engine.containers.has(holder.Name.slice(1)));
+      const removed = engine.calls.filter((args) => args[0] === 'rm').map((args) => args.at(-1));
+      assert.ok(!removed.includes(holder.Id));
+      if (replaced === 'relay-image') {
+        assert.ok(engine.containers.has(handle.relayName));
+        assert.ok(engine.volumes.has(handle.httpVolume));
+        assert.ok(!removed.includes(relay.Id));
+      } else {
+        assert.ok(!engine.containers.has(handle.relayName));
+        assert.ok(removed.includes(relay.Id));
+      }
+      relay.Image = value.imageId;
+      holder.Image = value.imageId;
+      holder.Config.Labels[PROOF_LABEL] = value.runId;
+    }
+    await recovered.close();
+    const removed = engine.calls.filter((args) => args[0] === 'rm').map((args) => args.at(-1));
+    assert.ok(removed.indexOf(relay.Id) < removed.indexOf(holder.Id));
+    assert.equal(engine.containers.size, 0);
+    assert.equal(engine.volumes.size, 0);
+  }
+});
+
+test('persistent relay network rejects a remaining old relay and rechecks identity before evidence', async (t) => {
+  for (const method of ['startCase', 'finishCase', 'finishVisual']) {
+    const { value, engine } = await networkHarness(t);
+    await value.initialize();
+    const handle = await value.startCase(
+      { path: '/fixture', stateId: 'first' },
+      { visual: method === 'finishVisual' },
+    );
+    const holder = relayNetworkHolder(engine);
+    if (method === 'startCase') {
+      value.activeCase = null;
+      await assert.rejects(value.startCase({ path: '/next' }), /previous.*relay|relay.*remaining/);
+    } else {
+      holder.RestartCount = 1;
+      await assert.rejects(value[method](handle, {}, {}), /relay network/);
+      assert.equal(engine.calls.filter((args) => args[0] === 'stop').length, 0);
+    }
+    const relayId = engine.containers.get(handle.relayName).Id;
+    holder.RestartCount = 0;
+    await value.close();
+    const removed = engine.calls.filter((args) => args[0] === 'rm').map((args) => args.at(-1));
+    assert.ok(removed.indexOf(relayId) < removed.indexOf(holder.Id));
+    assert.equal(engine.containers.size, 0);
+    assert.equal(engine.volumes.size, 0);
+  }
+});
 
 async function startupHarness(t, state) {
   const directory = await mkdtemp(path.join(tmpdir(), 'agi-proof-startup-'));
@@ -855,88 +1401,61 @@ test('controlled stops require a live owned container and send an explicit termi
   }
 });
 
-test('visual teardown rejects crashes and foreign lifecycle evidence before resource removal', async () => {
-  const directory = await mkdtemp(path.join(tmpdir(), 'agi-proof-visual-shutdown-'));
-  try {
-    for (const mode of [
-      'complete',
-      'oom',
-      'running',
-      'error',
-      'missing-state',
-      'wrong-exit',
-      'missing-exit',
-      'foreign-state',
-      'execution-case',
-    ]) {
-      const value = harness();
-      const state = {
-        stateId: 'visual-state',
-        runId: value.runId,
-        visual: mode !== 'execution-case',
-      };
-      const handle = {
-        index: 0,
-        state,
-        appName: 'app',
-        relayName: 'relay',
-        mounts: [],
-        caseDir: directory,
-        database: 'owned',
-      };
-      value.activeCase = 0;
-      value.handleBindings = new WeakMap([[handle, digest(state)]]);
-      const stopped = {
-        Image: value.imageId,
-        Config: {
-          Labels: { [PROOF_LABEL]: value.runId },
-          User: '1000:1000',
-          Healthcheck: { Test: ['NONE'] },
-        },
-        HostConfig: {
-          NetworkMode: 'none',
-          ReadonlyRootfs: true,
-          CapDrop: ['ALL'],
-          SecurityOpt: ['no-new-privileges'],
-        },
-        Mounts: [],
-        State: { Running: false, OOMKilled: false, Error: '', ExitCode: 143 },
-      };
-      const events = [
-        { sequence: 0, kind: 'observer-start', runId: value.runId, stateId: state.stateId },
-        { sequence: 1, kind: 'shutdown-signal', signal: 'SIGTERM' },
-        { sequence: 2, kind: 'observer-exit', code: 143, signal: 'SIGTERM' },
-      ];
-      if (mode === 'oom') stopped.State.OOMKilled = true;
-      if (mode === 'running') stopped.State.Running = true;
-      if (mode === 'error') stopped.State.Error = 'runtime error';
-      if (mode === 'missing-state') delete stopped.State.OOMKilled;
-      if (mode === 'wrong-exit') stopped.State.ExitCode = 137;
-      if (mode === 'missing-exit') events.pop();
-      if (mode === 'foreign-state') events[0].stateId = 'foreign';
-      const removed = [];
-      value.stopContainer = async () => stopped;
-      value.docker = async (args) => {
-        assert.equal(args[0], 'cp');
-        assert.equal(args[1], 'app:/proof-output/shutdown.jsonl');
-        await writeFile(args[2], events.map((event) => JSON.stringify(event)).join('\n') + '\n');
-      };
-      value.configurePeer = async () => removed.push('peer');
-      value.removeContainer = async (name) => removed.push(name);
-      value.databaseCommand = async () => removed.push('database');
-      value.removeCaseVolumes = async () => removed.push('volumes');
-      if (mode === 'complete') {
-        await value.finishVisual(handle);
-        assert.deepEqual(removed, ['peer', 'relay', 'app', 'database', 'volumes']);
-        assert.equal(value.activeCase, null);
-      } else {
-        await assert.rejects(value.finishVisual(handle), /teardown|observation|snapshot/);
-        assert.deepEqual(removed, []);
-        assert.equal(value.activeCase, 0);
-      }
+test('visual teardown rejects crashes and foreign lifecycle evidence before resource removal', async (t) => {
+  for (const mode of [
+    'complete',
+    'oom',
+    'running',
+    'error',
+    'missing-state',
+    'wrong-exit',
+    'missing-exit',
+    'foreign-state',
+    'execution-case',
+  ]) {
+    const { value, engine } = await networkHarness(t);
+    await value.initialize();
+    const handle = await value.startCase(
+      { path: '/visual', stateId: 'visual-state' },
+      { visual: mode !== 'execution-case' },
+    );
+    const state = handle.state;
+    const stopped = structuredClone(engine.containers.get(handle.appName));
+    stopped.State = { Running: false, OOMKilled: false, Error: '', ExitCode: 143 };
+    const events = [
+      { sequence: 0, kind: 'observer-start', runId: value.runId, stateId: state.stateId },
+      { sequence: 1, kind: 'shutdown-signal', signal: 'SIGTERM' },
+      { sequence: 2, kind: 'observer-exit', code: 143, signal: 'SIGTERM' },
+    ];
+    if (mode === 'oom') stopped.State.OOMKilled = true;
+    if (mode === 'running') stopped.State.Running = true;
+    if (mode === 'error') stopped.State.Error = 'runtime error';
+    if (mode === 'missing-state') delete stopped.State.OOMKilled;
+    if (mode === 'wrong-exit') stopped.State.ExitCode = 137;
+    if (mode === 'missing-exit') events.pop();
+    if (mode === 'foreign-state') events[0].stateId = 'foreign';
+    const removed = [];
+    value.stopContainer = async () => stopped;
+    const docker = value.docker;
+    value.docker = async (args) => {
+      if (args[0] !== 'cp') return docker(args);
+      assert.equal(args[1], `${handle.appName}:/proof-output/shutdown.jsonl`);
+      await writeFile(args[2], events.map((event) => JSON.stringify(event)).join('\n') + '\n');
+    };
+    value.configurePeer = async () => removed.push('peer');
+    value.removeContainer = async (name) =>
+      removed.push(name === handle.relayName ? 'relay' : 'app');
+    value.databaseCommand = async () => removed.push('database');
+    value.removeCaseVolumes = async () => removed.push('volumes');
+    if (mode === 'complete') {
+      await value.finishVisual(handle);
+      assert.deepEqual(removed, ['peer', 'relay', 'app', 'database', 'volumes']);
+      assert.equal(value.activeCase, null);
+    } else {
+      await assert.rejects(value.finishVisual(handle), /teardown|observation|snapshot/);
+      assert.deepEqual(removed, []);
+      assert.equal(value.activeCase, 0);
     }
-  } finally {
-    await rm(directory, { recursive: true, force: true });
   }
 });
 

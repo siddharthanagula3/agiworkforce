@@ -31,6 +31,9 @@ const execute = promisify(execFile);
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const APP_ROOT = '/app/apps/web';
 const REVISION_LABEL = 'org.agi.public-proof.revision';
+const RELAY_MEMORY_BYTES = 256 * 1024 * 1024;
+const RELAY_COMMAND = Object.freeze(['node', '/harness/scripts/public-runtime/relay.mjs']);
+const RELAY_NETWORK_COMMAND = Object.freeze(['node', '-e', 'process.stdin.resume()']);
 
 export class PublicRuntimeContainers {
   /**
@@ -79,6 +82,8 @@ export class PublicRuntimeContainers {
     this.proofs = [];
     this.proofBindings = new WeakMap();
     this.handleBindings = new WeakMap();
+    /** @type {Readonly<{name: string, id: string, imageId: string, sandboxId: string, endpointId: string, startedAt: string, namespace: string, portsDigest: string, environmentDigest: string}> | null} */
+    this.relayNetwork = null;
     this.index = 0;
     this.activeCase = null;
   }
@@ -227,6 +232,207 @@ export class PublicRuntimeContainers {
     return name;
   }
 
+  assertRelayIsolation(current, { name, networkMode, mounts, portsDigest, environmentDigest }) {
+    const owned = this.names.get(name);
+    if (
+      !owned ||
+      !/^[a-f0-9]{64}$/.test(owned.id) ||
+      current.Id !== owned.id ||
+      current.Image !== this.imageId ||
+      current.Image !== owned.image ||
+      current.Config?.Labels?.[PROOF_LABEL] !== this.runId ||
+      current.Config?.User !== '1000:1000' ||
+      JSON.stringify(current.Config?.Healthcheck?.Test) !== JSON.stringify(['NONE']) ||
+      !Array.isArray(current.Config?.Env) ||
+      digest(current.Config.Env) !== environmentDigest ||
+      current.HostConfig?.NetworkMode !== networkMode ||
+      current.HostConfig.ReadonlyRootfs !== true ||
+      current.HostConfig.Privileged !== false ||
+      current.HostConfig.PidMode !== '' ||
+      (current.HostConfig.Devices ?? []).length !== 0 ||
+      (current.HostConfig.DeviceRequests ?? []).length !== 0 ||
+      JSON.stringify(current.HostConfig.CapDrop) !== JSON.stringify(['ALL']) ||
+      (current.HostConfig.CapAdd ?? []).length !== 0 ||
+      JSON.stringify(current.HostConfig.SecurityOpt) !== JSON.stringify(['no-new-privileges']) ||
+      current.HostConfig.Memory !== RELAY_MEMORY_BYTES ||
+      current.HostConfig.PidsLimit !== 32 ||
+      current.HostConfig.PublishAllPorts !== false ||
+      current.HostConfig.RestartPolicy?.Name !== 'no' ||
+      digest(current.HostConfig.PortBindings ?? {}) !== portsDigest ||
+      JSON.stringify(current.Config.Cmd) !==
+        JSON.stringify(networkMode === 'bridge' ? RELAY_NETWORK_COMMAND : RELAY_COMMAND) ||
+      current.RestartCount !== 0 ||
+      current.State?.Running !== true ||
+      current.State.Paused !== false ||
+      current.State.Restarting !== false ||
+      current.State.OOMKilled !== false ||
+      current.State.Error !== '' ||
+      !Number.isFinite(Date.parse(current.State.StartedAt)) ||
+      Date.parse(current.State.StartedAt) <= 0
+    )
+      throw new Error('Public relay network container identity or isolation changed');
+    if (
+      !Array.isArray(current.Mounts) ||
+      current.Mounts.length !== mounts.length ||
+      mounts.some(
+        (expected) =>
+          !current.Mounts.some(
+            (mount) =>
+              mount.Type === expected.type &&
+              (mount.Name ?? mount.Source) === expected.source &&
+              mount.Destination === expected.destination &&
+              mount.RW === false,
+          ),
+      )
+    )
+      throw new Error('Public relay container has an unverified filesystem mount');
+  }
+
+  async relayNamespace(id) {
+    const namespace = await this.docker(
+      [
+        'exec',
+        id,
+        'node',
+        '-e',
+        "process.stdout.write(require('node:fs').readlinkSync('/proc/self/ns/net'))",
+      ],
+      { timeout: 10_000, maxBuffer: 1024 },
+    );
+    if (!/^net:\[\d+\]$/.test(namespace))
+      throw new Error('Public relay network namespace is unavailable');
+    return namespace;
+  }
+
+  async initializeRelayNetwork(imageEnvironment) {
+    if (this.relayNetwork) throw new Error('Public relay network is already initialized');
+    const name = await this.run(`${this.prefix}-relay-network`, [
+      '--network',
+      'bridge',
+      '--memory',
+      '256m',
+      '--memory-swap',
+      '256m',
+      '--pids-limit',
+      '32',
+      '--read-only',
+      '--cap-drop',
+      'ALL',
+      '--security-opt',
+      'no-new-privileges',
+      '--user',
+      '1000:1000',
+      '--restart',
+      'no',
+      '--interactive',
+      '--publish',
+      `127.0.0.1:${new URL(PROOF_ORIGIN).port}:3000`,
+      this.imageId,
+      ...RELAY_NETWORK_COMMAND,
+    ]);
+    const owned = this.names.get(name);
+    const current = await this.inspect(owned.id);
+    const portsDigest = digest({
+      '3000/tcp': [{ HostIp: '127.0.0.1', HostPort: new URL(PROOF_ORIGIN).port }],
+    });
+    const environmentDigest = digest(imageEnvironment);
+    this.assertRelayIsolation(current, {
+      name,
+      networkMode: 'bridge',
+      mounts: [],
+      portsDigest,
+      environmentDigest,
+    });
+    const binding = {
+      name,
+      id: owned.id,
+      imageId: this.imageId,
+      sandboxId: current.NetworkSettings?.SandboxID,
+      endpointId: current.NetworkSettings?.Networks?.bridge?.EndpointID,
+      startedAt: current.State.StartedAt,
+      namespace: await this.relayNamespace(owned.id),
+      portsDigest,
+      environmentDigest,
+    };
+    Object.defineProperty(this, 'relayNetwork', {
+      value: Object.freeze(binding),
+      writable: false,
+      configurable: false,
+    });
+    await this.assertRelayNetwork();
+  }
+
+  async assertRelayNetwork(relayName, httpVolume, expected) {
+    const binding = this.relayNetwork;
+    if (!binding) throw new Error('Public relay network was not initialized');
+    const holder = await this.inspect(binding.id);
+    this.assertRelayIsolation(holder, {
+      name: binding.name,
+      networkMode: 'bridge',
+      mounts: [],
+      portsDigest: binding.portsDigest,
+      environmentDigest: binding.environmentDigest,
+    });
+    if (
+      holder.Id !== binding.id ||
+      holder.Image !== binding.imageId ||
+      holder.HostConfig.MemorySwap !== RELAY_MEMORY_BYTES ||
+      holder.Config.OpenStdin !== true ||
+      !/^[a-f0-9]{64}$/.test(binding.sandboxId ?? '') ||
+      holder.NetworkSettings?.SandboxID !== binding.sandboxId ||
+      !/^[a-f0-9]{64}$/.test(binding.endpointId ?? '') ||
+      holder.NetworkSettings?.Networks?.bridge?.EndpointID !== binding.endpointId ||
+      JSON.stringify(Object.keys(holder.NetworkSettings?.Networks ?? {})) !==
+        JSON.stringify(['bridge']) ||
+      digest(holder.NetworkSettings?.Ports ?? {}) !== binding.portsDigest ||
+      !Number.isFinite(Date.parse(binding.startedAt)) ||
+      Date.parse(binding.startedAt) <= 0 ||
+      holder.State.StartedAt !== binding.startedAt ||
+      (await this.relayNamespace(binding.id)) !== binding.namespace
+    )
+      throw new Error('Public relay network holder identity changed');
+    let relayId = null;
+    let relayStartedAt = null;
+    if (relayName) {
+      const owned = this.names.get(relayName);
+      if (!owned) throw new Error('Public relay network case has no recorded relay');
+      const relay = await this.inspect(owned.id);
+      this.assertRelayIsolation(relay, {
+        name: relayName,
+        networkMode: `container:${binding.id}`,
+        mounts: [
+          { type: 'volume', source: httpVolume, destination: '/run/agi-proof-http' },
+          {
+            type: 'bind',
+            source: path.join(this.root, 'scripts'),
+            destination: '/harness/scripts',
+          },
+        ],
+        portsDigest: digest({}),
+        environmentDigest: binding.environmentDigest,
+      });
+      if ((await this.relayNamespace(owned.id)) !== binding.namespace)
+        throw new Error('Public relay network case joined a different namespace');
+      relayId = owned.id;
+      relayStartedAt = relay.State.StartedAt;
+    }
+    const transport = {
+      holderId: binding.id,
+      holderImageId: binding.imageId,
+      sandboxId: binding.sandboxId,
+      endpointId: binding.endpointId,
+      startedAt: binding.startedAt,
+      holderRestartCount: holder.RestartCount,
+      namespace: binding.namespace,
+      relayId,
+      relayStartedAt,
+      relayRestartCount: relayId ? 0 : null,
+    };
+    if (expected && digest(expected) !== digest(transport))
+      throw new Error('Public relay network case identity changed');
+    return Object.freeze(transport);
+  }
+
   async initialize() {
     this.directory = await mkdtemp(path.join(tmpdir(), 'agi-public-runtime-'));
     this.input = path.join(this.directory, 'input');
@@ -241,6 +447,7 @@ export class PublicRuntimeContainers {
     this.imageId = image.Id;
     this.postgresImageId = (await this.inspectImage(this.postgresImage)).Id;
     await this.persistOwnership();
+    await this.initializeRelayNetwork(image.Config?.Env ?? []);
     this.socketVolume = await this.volume(`${this.prefix}-db-socket`);
     const socketPermissions = `${this.prefix}-socket-permissions`;
     try {
@@ -502,6 +709,12 @@ export class PublicRuntimeContainers {
   async startCase(route, { visual = false } = {}) {
     if (this.index >= 512) throw new Error('Public runtime case budget exceeded');
     if (this.activeCase !== null) throw new Error('Runtime cases must not overlap');
+    if (
+      [...this.names.keys()].some(
+        (name) => name.startsWith(`${this.prefix}-relay-`) && name !== this.relayNetwork?.name,
+      )
+    )
+      throw new Error('A previous public case relay is still remaining');
     const index = this.index++;
     this.activeCase = index;
     const database = `${this.database}_${index}`;
@@ -660,7 +873,10 @@ export class PublicRuntimeContainers {
         appName,
         `Cold public server readiness timed out; case ${startupCase}`,
       );
+    await this.assertRelayNetwork();
     const relayName = await this.run(`${this.prefix}-relay-${index}`, [
+      '--network',
+      `container:${this.relayNetwork.id}`,
       '--memory',
       '256m',
       '--pids-limit',
@@ -672,19 +888,16 @@ export class PublicRuntimeContainers {
       'no-new-privileges',
       '--user',
       '1000:1000',
-      '--publish',
-      `127.0.0.1:${new URL(PROOF_ORIGIN).port}:3000`,
+      '--restart',
+      'no',
       '--mount',
       `type=volume,source=${httpVolume},destination=/run/agi-proof-http,readonly`,
       '--mount',
       `type=bind,source=${path.join(this.root, 'scripts')},destination=/harness/scripts,readonly`,
       this.imageId,
-      'node',
-      '/harness/scripts/public-runtime/relay.mjs',
+      ...RELAY_COMMAND,
     ]);
-    const relay = await this.inspect(relayName);
-    if (JSON.stringify(relay.Config?.Healthcheck?.Test) !== JSON.stringify(['NONE']))
-      throw new Error('Relay inherited an unobserved healthcheck');
+    const joinedTransport = await this.assertRelayNetwork(relayName, httpVolume);
     let relayReady = false;
     for (let attempt = 0; attempt < 30; attempt++) {
       try {
@@ -702,6 +915,7 @@ export class PublicRuntimeContainers {
       }
     }
     if (!relayReady) throw new Error('The isolated HTTP relay did not become ready');
+    const transport = await this.assertRelayNetwork(relayName, httpVolume, joinedTransport);
     const handle = Object.freeze({
       state,
       appName,
@@ -713,8 +927,10 @@ export class PublicRuntimeContainers {
       outputVolume,
       index,
       origin: PROOF_ORIGIN,
+      transport,
     });
     this.handleBindings.set(handle, digest(state));
+    await this.assertRelayNetwork(relayName, httpVolume, transport);
     return handle;
   }
 
@@ -847,6 +1063,11 @@ export class PublicRuntimeContainers {
   async finishCase(handle, render, browserObservation) {
     this.assertCase(handle);
     if (handle.state.visual) throw new Error('Visual cases cannot produce execution receipts');
+    const transport = await this.assertRelayNetwork(
+      handle.relayName,
+      handle.httpVolume,
+      handle.transport,
+    );
     const snapshot = JSON.parse(
       await this.docker([
         'exec',
@@ -965,6 +1186,7 @@ export class PublicRuntimeContainers {
       teardownComplete: false,
       sourceState: handle.state,
       databaseRole: handle.state.databaseRole,
+      transport,
       scope:
         'Bounded public read execution in an isolated case database with SELECT-only application authority; does not verify RLS enforcement or arbitrary transitive routine safety.',
     };
@@ -976,6 +1198,7 @@ export class PublicRuntimeContainers {
       browserHttpRequests: browserObservation.httpRequests,
       eventsJsonl,
       postgresJsonl,
+      transport,
     };
     const serialized = JSON.stringify(receipt);
     if (Buffer.byteLength(serialized) > 256 * 1024 * 1024)
@@ -996,6 +1219,7 @@ export class PublicRuntimeContainers {
       },
     };
     validateRawReceipt(receipt, proof, authorityQueries(this.runId));
+    await this.assertRelayNetwork(handle.relayName, handle.httpVolume, transport);
     await mkdir(this.evidenceDirectory, { recursive: true });
     await writeFile(path.join(this.evidenceDirectory, `${handle.state.stateId}.json.gz`), archive);
     await this.removeContainer(handle.relayName);
@@ -1022,6 +1246,7 @@ export class PublicRuntimeContainers {
   async finishVisual(handle) {
     this.assertCase(handle);
     if (!handle.state.visual) throw new Error('Execution cases require a measured snapshot');
+    await this.assertRelayNetwork(handle.relayName, handle.httpVolume, handle.transport);
     const stopped = await this.stopContainer(handle.appName);
     if (
       stopped.State.Running !== false ||
@@ -1042,6 +1267,7 @@ export class PublicRuntimeContainers {
       !isControlledShutdown(events, stopped.State.ExitCode)
     )
       throw new Error('Visual server shutdown observation is incomplete');
+    await this.assertRelayNetwork(handle.relayName, handle.httpVolume, handle.transport);
     await this.configurePeer();
     await this.removeContainer(handle.relayName);
     await this.removeContainer(handle.appName);
@@ -1100,6 +1326,7 @@ export class PublicRuntimeContainers {
       application: application.message,
       relay: relay.message,
       eventsTail,
+      initialTransport: handle.transport,
       limits: ['Bounded failure diagnostics, not a complete runtime receipt or passing proof.'],
     };
   }
@@ -1126,6 +1353,12 @@ export class PublicRuntimeContainers {
 
   async removeContainer(name) {
     if (!this.names.has(name)) return;
+    const relayPrefix = `agi-public-${this.runId}-relay-`;
+    if (
+      name === `${relayPrefix}network` &&
+      [...this.names.keys()].some((entry) => entry.startsWith(relayPrefix) && entry !== name)
+    )
+      throw new Error('Public relay network holder still has an owned case relay');
     const owned = this.names.get(name);
     let current;
     try {
