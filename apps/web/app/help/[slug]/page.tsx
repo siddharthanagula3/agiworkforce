@@ -59,12 +59,14 @@ export default async function HelpArticlePage({ params }: ArticleProps) {
   return (
     <DocsShell toc={toc}>
       <article className="break-words">
-        <ol className="dx-crumb" aria-label="Breadcrumb">
-          <li>
-            <Link href={DOCS_HOME_PATH}>Documentation</Link>
-          </li>
-          {group ? <li>{group.label}</li> : null}
-        </ol>
+        <nav aria-label="Breadcrumb">
+          <ol className="dx-crumb">
+            <li>
+              <Link href={DOCS_HOME_PATH}>Documentation</Link>
+            </li>
+            {group ? <li>{group.label}</li> : null}
+          </ol>
+        </nav>
         <div className="dx-head">
           <h1 className="dx-title" id="help-article-title">
             {article.title}

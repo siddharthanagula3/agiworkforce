@@ -46,12 +46,14 @@ export default function ByokEnvDocsPage() {
   return (
     <DocsShell toc={SECTIONS}>
       <article className="break-words">
-        <ol className="dx-crumb" aria-label="Breadcrumb">
-          <li>
-            <Link href={DOCS_HOME_PATH}>Documentation</Link>
-          </li>
-          <li>Provider keys</li>
-        </ol>
+        <nav aria-label="Breadcrumb">
+          <ol className="dx-crumb">
+            <li>
+              <Link href={DOCS_HOME_PATH}>Documentation</Link>
+            </li>
+            <li>Provider keys</li>
+          </ol>
+        </nav>
         <div className="dx-head">
           <h1 className="dx-title" id="agi-docs-byok-env-title">
             Provider-key configuration

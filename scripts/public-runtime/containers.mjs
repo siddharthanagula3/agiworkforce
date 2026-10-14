@@ -86,6 +86,12 @@ export class PublicRuntimeContainers {
     this.relayNetwork = null;
     this.index = 0;
     this.activeCase = null;
+    this.producerPid = process.pid;
+    this.closing = false;
+    /** @type {Promise<void> | null} */
+    this.closePromise = null;
+    this.resourceTail = Promise.resolve();
+    this.ownershipTail = Promise.resolve();
   }
 
   async docker(args, options = {}) {
@@ -165,22 +171,49 @@ export class PublicRuntimeContainers {
   }
 
   async persistOwnership() {
+    const write = (this.ownershipTail ?? Promise.resolve()).then(() => this.writeOwnership());
+    this.ownershipTail = write.catch(() => {});
+    await write;
+  }
+
+  async writeOwnership() {
     if (!this.lifecycleFile) return;
     await mkdir(path.dirname(this.lifecycleFile), { recursive: true });
-    const temporary = `${this.lifecycleFile}.pending`;
-    await writeFile(
-      temporary,
-      JSON.stringify({
-        revision: this.revision,
-        runId: this.runId,
-        containers: [...this.names],
-        volumes: [...this.volumes],
-      }),
+    const temporary = `${this.lifecycleFile}.${randomBytes(12).toString('hex')}.pending`;
+    try {
+      await writeFile(
+        temporary,
+        JSON.stringify({
+          revision: this.revision,
+          runId: this.runId,
+          producerPid: this.producerPid ?? process.pid,
+          containers: [...this.names],
+          volumes: [...this.volumes],
+        }),
+        { flag: 'wx', mode: 0o600 },
+      );
+      await rename(temporary, this.lifecycleFile);
+    } finally {
+      await rm(temporary, { force: true });
+    }
+  }
+
+  /** @template T @param {() => Promise<T>} operation @returns {Promise<T>} */
+  async resourceMutation(operation) {
+    if (this.closing) throw new Error('Public runtime resources are closing');
+    const mutation = (this.resourceTail ?? Promise.resolve()).then(operation);
+    this.resourceTail = mutation.then(
+      () => {},
+      () => {},
     );
-    await rename(temporary, this.lifecycleFile);
+    return mutation;
   }
 
   async volume(name) {
+    return this.resourceMutation(() => this.createVolume(name));
+  }
+
+  async createVolume(name) {
     const before = await this.docker(['volume', 'ls', '--format', '{{.Name}}']);
     if (before.split('\n').includes(name))
       throw new Error('Refusing to reuse an existing proof volume');
@@ -200,6 +233,10 @@ export class PublicRuntimeContainers {
   }
 
   async run(name, args) {
+    return this.resourceMutation(() => this.createContainer(name, args));
+  }
+
+  async createContainer(name, args) {
     const image = args.includes(this.imageId) ? this.imageId : this.postgresImageId;
     await this.persistOwnership();
     try {
@@ -1352,6 +1389,10 @@ export class PublicRuntimeContainers {
   }
 
   async removeContainer(name) {
+    return this.resourceMutation(() => this.removeOwnedContainer(name));
+  }
+
+  async removeOwnedContainer(name) {
     if (!this.names.has(name)) return;
     const relayPrefix = `agi-public-${this.runId}-relay-`;
     if (
@@ -1390,6 +1431,10 @@ export class PublicRuntimeContainers {
   }
 
   async removeVolume(name) {
+    return this.resourceMutation(() => this.removeOwnedVolume(name));
+  }
+
+  async removeOwnedVolume(name) {
     if (!this.volumes.has(name)) return;
     let current;
     try {
@@ -1414,17 +1459,31 @@ export class PublicRuntimeContainers {
   }
 
   async close() {
+    if (this.closePromise) return this.closePromise;
+    this.closing = true;
+    this.closePromise = (async () => {
+      await this.resourceTail;
+      await this.ownershipTail;
+      await this.closeOwnedResources();
+    })().catch((error) => {
+      this.closePromise = null;
+      throw error;
+    });
+    return this.closePromise;
+  }
+
+  async closeOwnedResources() {
     const errors = [];
     for (const name of [...this.names.keys()].reverse()) {
       try {
-        await this.removeContainer(name);
+        await this.removeOwnedContainer(name);
       } catch (error) {
         errors.push(error);
       }
     }
     for (const volume of [...this.volumes]) {
       try {
-        await this.removeVolume(volume);
+        await this.removeOwnedVolume(volume);
       } catch (error) {
         errors.push(error);
       }

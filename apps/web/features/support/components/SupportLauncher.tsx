@@ -15,7 +15,7 @@ export const SupportLauncher = forwardRef<
       className={styles['launcher']}
       aria-haspopup="dialog"
       aria-expanded={open}
-      aria-controls={panelId}
+      aria-controls={open ? panelId : undefined}
       aria-label={open ? 'Close product support' : 'Open product support'}
       onClick={onToggle}
     >

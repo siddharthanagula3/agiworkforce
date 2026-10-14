@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import http from 'node:http';
@@ -11,13 +12,15 @@ import test from 'node:test';
 import { promisify } from 'node:util';
 import { runInNewContext } from 'node:vm';
 import { PublicRuntimeContainers } from './containers.mjs';
-import { assertNoUnrecordedResources, restoreOwnership } from './cleanup.mjs';
+import * as cleanup from './cleanup.mjs';
+const { assertNoUnrecordedResources, restoreOwnership } = cleanup;
 import { DATABASE_PREFIX, DATABASE_SOCKET, digest, PROOF_LABEL, PROOF_ORIGIN } from './proof.mjs';
 
 function harness() {
   const value = Object.create(PublicRuntimeContainers.prototype);
   Object.assign(value, {
     runId: 'a'.repeat(24),
+    producerPid: process.pid,
     imageId: 'app-image',
     postgresImageId: 'pg-image',
     names: new Map(),
@@ -27,6 +30,262 @@ function harness() {
   });
   return value;
 }
+
+test('concurrent lifecycle writes preserve the ownership ledger and leave no temporary files', async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'agi-proof-ledger-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const value = harness();
+  value.revision = 'b'.repeat(40);
+  value.lifecycleFile = path.join(directory, `${value.runId}.json`);
+  const name = `agi-public-${value.runId}-app-0`;
+  const owner = { id: 'c'.repeat(64), image: `sha256:${'d'.repeat(64)}` };
+  value.names.set(name, owner);
+  const writes = await Promise.allSettled(
+    Array.from({ length: 32 }, () => value.persistOwnership()),
+  );
+  assert.equal(writes.filter((result) => result.status === 'fulfilled').length, 32);
+  const record = JSON.parse(await readFile(value.lifecycleFile, 'utf8'));
+  const recovered = harness();
+  recovered.revision = value.revision;
+  restoreOwnership(recovered, record);
+  assert.deepEqual([...recovered.names], [[name, owner]]);
+  assert.deepEqual(await readdir(directory), [`${value.runId}.json`]);
+});
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+test('ledger writes serialize and snapshot the latest owners when each write begins', async () => {
+  const value = harness();
+  const entered = deferred();
+  const release = deferred();
+  const records = [];
+  let active = 0;
+  value.writeOwnership = async () => {
+    assert.equal(++active, 1);
+    records.push([...value.names.keys()]);
+    if (records.length === 1) {
+      entered.resolve();
+      await release.promise;
+    }
+    active--;
+  };
+  assert.equal(typeof PublicRuntimeContainers.prototype.writeOwnership, 'function');
+  const first = value.persistOwnership();
+  await entered.promise;
+  const second = value.persistOwnership();
+  value.names.set('latest', {});
+  release.resolve();
+  await Promise.all([first, second]);
+  assert.deepEqual(records, [[], ['latest']]);
+});
+
+test('close drains a pending creation once and refuses new resource mutations', async (t) => {
+  const value = harness();
+  const entered = deferred();
+  const release = deferred();
+  const removed = [];
+  let present = false;
+  value.docker = async (args) => {
+    if (args[0] === 'run') {
+      entered.resolve();
+      await release.promise;
+      present = true;
+      return 'c'.repeat(64);
+    }
+    if (args[0] === 'inspect')
+      return JSON.stringify([
+        {
+          Id: 'c'.repeat(64),
+          Image: value.imageId,
+          Name: '/late',
+          Config: { Labels: { [PROOF_LABEL]: value.runId } },
+        },
+      ]);
+    if (args[0] === 'rm') {
+      removed.push(args.at(-1));
+      present = false;
+      return '';
+    }
+    if (args[0] === 'ps') return present ? 'late' : '';
+    if (args[0] === 'volume') return '';
+    throw new Error(`Unexpected Docker operation: ${args[0]}`);
+  };
+  t.after(() => release.resolve());
+  const creation = value.run('late', [value.imageId]);
+  await entered.promise;
+  const firstClose = value.close();
+  const secondClose = value.close();
+  let closed = false;
+  firstClose.then(
+    () => {
+      closed = true;
+    },
+    () => {
+      closed = true;
+    },
+  );
+  try {
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(closed, false, 'close must wait for the already-started creation');
+    await assert.rejects(value.run('too-late', [value.imageId]), /closing/);
+    await assert.rejects(value.volume('too-late'), /closing/);
+    assert.deepEqual(removed, []);
+  } finally {
+    release.resolve();
+    await Promise.all([creation, firstClose, secondClose]);
+  }
+  assert.deepEqual(removed, ['c'.repeat(64)]);
+  assert.equal(value.names.size, 0);
+});
+
+test(
+  'fallback cleanup refuses a live producer and reads its final ledger only after native exit',
+  { timeout: 10_000 },
+  async (t) => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'agi-proof-producer-'));
+    const value = harness();
+    value.revision = 'b'.repeat(40);
+    const ledger = path.join(directory, `${value.runId}.json`);
+    const finalName = `agi-public-${value.runId}-app-1`;
+    const owner = { id: 'c'.repeat(64), image: `sha256:${'d'.repeat(64)}` };
+    const child = spawn(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        String.raw`
+    import { writeFile } from 'node:fs/promises';
+    const [ledger, revision, runId, name, owner] = process.argv.slice(1);
+    const record = { revision, runId, producerPid: process.pid, containers: [], volumes: [] };
+    await writeFile(ledger, JSON.stringify(record));
+    process.stdout.write('ready\n');
+    process.stdin.once('data', async () => {
+      record.containers.push([name, JSON.parse(owner)]);
+      await writeFile(ledger, JSON.stringify(record));
+      process.stdin.destroy();
+    });
+    process.stdin.resume();
+  `,
+        ledger,
+        value.revision,
+        value.runId,
+        finalName,
+        JSON.stringify(owner),
+      ],
+      { stdio: ['pipe', 'pipe', 'pipe'] },
+    );
+    const exited = once(child, 'exit');
+    t.after(async () => {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+      await exited;
+      await rm(directory, { recursive: true, force: true });
+    });
+    assert.equal(String((await once(child.stdout, 'data'))[0]), 'ready\n');
+    const calls = [];
+    value.docker = async (args) => {
+      calls.push(args);
+      throw new Error('Unexpected Docker call');
+    };
+    await assert.rejects(cleanup.cleanupLedger(value, ledger, { timeoutMs: 0 }), /producer.*alive/);
+    assert.deepEqual(calls, []);
+    const pending = cleanup.cleanupLedger(value, ledger, { timeoutMs: 5_000 });
+    value.close = async () => {
+      calls.push(['close', [...value.names]]);
+    };
+    child.stdin.write('finish');
+    await pending;
+    assert.deepEqual(await exited, [0, null]);
+    assert.deepEqual(calls, [['close', [[finalName, owner]]]]);
+    await writeFile(
+      ledger,
+      JSON.stringify({
+        revision: value.revision,
+        runId: value.runId,
+        producerPid: child.pid,
+        containers: [[finalName, owner]],
+        volumes: [],
+      }),
+    );
+    value.close = PublicRuntimeContainers.prototype.close;
+    const deletionCalls = [];
+    value.docker = async (args) => {
+      deletionCalls.push(args);
+      if (args[0] === 'inspect')
+        return JSON.stringify([
+          {
+            Id: owner.id,
+            Image: 'foreign-image',
+            Config: { Labels: { [PROOF_LABEL]: value.runId } },
+          },
+        ]);
+      if (args[0] === 'ps') return owner.id;
+      if (args[0] === 'volume') return '';
+      throw new Error('Unexpected mutation');
+    };
+    await assert.rejects(cleanup.cleanupLedger(value, ledger, { timeoutMs: 0 }), (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.match(error.errors[0].message, /unverified ownership/);
+      return true;
+    });
+    assert.ok(deletionCalls.every((args) => !args.includes('rm')));
+  },
+);
+
+test('fallback cleanup requires valid producer identity and refuses live or unknown liveness', async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'agi-proof-owner-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const value = harness();
+  value.revision = 'b'.repeat(40);
+  const ledger = path.join(directory, `${value.runId}.json`);
+  const calls = [];
+  value.docker = async (args) => {
+    calls.push(args);
+    return '';
+  };
+  for (const producerPid of [undefined, null, 0, -1, '123', 1.5, process.pid]) {
+    await writeFile(
+      ledger,
+      JSON.stringify({
+        revision: value.revision,
+        runId: value.runId,
+        producerPid,
+        containers: [],
+        volumes: [],
+      }),
+    );
+    await assert.rejects(cleanup.cleanupLedger(value, ledger, { timeoutMs: 0 }), /producer/);
+  }
+  await writeFile(
+    ledger,
+    JSON.stringify({
+      revision: value.revision,
+      runId: value.runId,
+      producerPid: process.pid,
+      containers: [],
+      volumes: [],
+    }),
+  );
+  const probe = t.mock.method(process, 'kill', (pid, signal) => {
+    assert.equal(pid, process.pid);
+    assert.equal(signal, 0);
+    throw Object.assign(new Error('denied'), { code: 'EPERM' });
+  });
+  try {
+    await assert.rejects(
+      cleanup.cleanupLedger(value, ledger, { timeoutMs: 0 }),
+      /liveness is unknown/,
+    );
+  } finally {
+    probe.mock.restore();
+  }
+  assert.deepEqual(calls, []);
+});
 
 async function networkHarness(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'agi-proof-network-'));
@@ -1511,6 +1770,7 @@ test('interrupted cleanup restores exact owners and rejects changed revisions or
   const record = {
     revision: value.revision,
     runId: value.runId,
+    producerPid: process.pid,
     containers: [
       [
         `agi-public-${value.runId}-app-0`,

@@ -75,7 +75,7 @@ describe('SupportWidgetMount', () => {
     const launcher = screen.getByRole('button', { name: /open product support/i });
     expect(launcher).toHaveAttribute('aria-haspopup', 'dialog');
     expect(launcher).toHaveAttribute('aria-expanded', 'false');
-    expect(launcher.getAttribute('aria-controls')).toBeTruthy();
+    expect(launcher).not.toHaveAttribute('aria-controls');
   });
 
   it('opens a dialog whose id matches aria-controls, and Escape returns focus to the launcher', async () => {
@@ -83,11 +83,12 @@ describe('SupportWidgetMount', () => {
     render(<SupportWidgetMount />);
 
     const launcher = screen.getByRole('button', { name: /open product support/i });
-    const panelId = launcher.getAttribute('aria-controls');
     await user.click(launcher);
 
     const dialog = await screen.findByRole('dialog', { name: /product support/i });
-    expect(dialog).toHaveAttribute('id', panelId);
+    expect(dialog.id).not.toBe('');
+    expect(launcher).toHaveAttribute('aria-controls', dialog.id);
+    expect(document.getElementById(launcher.getAttribute('aria-controls')!)).toBe(dialog);
 
     await user.keyboard('{Escape}');
     await waitFor(() => {
@@ -96,6 +97,7 @@ describe('SupportWidgetMount', () => {
     expect(document.activeElement).toBe(
       screen.getByRole('button', { name: /open product support/i }),
     );
+    expect(launcher).not.toHaveAttribute('aria-controls');
   });
 
   it('works signed-out: answers with citations, shows no account facts and no action controls', async () => {
