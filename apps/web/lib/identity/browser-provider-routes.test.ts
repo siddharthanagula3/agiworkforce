@@ -40,6 +40,7 @@ describe('browser identity provider routes', () => {
     expect(needsBrowserIdentityProvider('/pluginshop')).toBe(false);
     expect(needsBrowserIdentityProvider('/pricing-history')).toBe(false);
     expect(needsBrowserIdentityProvider('/refund-policy-history')).toBe(false);
+    expect(needsBrowserIdentityProvider('/shared-artifact-history')).toBe(false);
     expect(needsBrowserIdentityProvider('/slack/linkage')).toBe(false);
     expect(needsBrowserIdentityProvider('/slack')).toBe(false);
   });
@@ -50,5 +51,15 @@ describe('browser identity provider routes', () => {
 
   it('mounts identity for the rendered refund request route behind a rewrite', () => {
     expect(routeNeedsBrowserIdentity('/', ['(public)', 'refund-policy'])).toBe(true);
+  });
+
+  it('mounts identity for a published artifact viewer that reads the session', () => {
+    const path = `/shared-artifact/${'a'.repeat(24)}`;
+    expect(needsBrowserIdentityProvider(path)).toBe(true);
+    expect(needsBrowserIdentityProvider(`${path}/?view=source#main-content`)).toBe(true);
+  });
+
+  it('mounts identity for the rendered published artifact route behind a rewrite', () => {
+    expect(routeNeedsBrowserIdentity('/', ['shared-artifact', 'a'.repeat(24)])).toBe(true);
   });
 });
