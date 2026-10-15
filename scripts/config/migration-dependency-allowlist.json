@@ -1,10 +1,4 @@
 {
   "schemaVersion": 1,
-  "entries": [
-    {
-      "file": "apps/web/lib/services/mobile-iap-notification-service.ts",
-      "migration": 361,
-      "reason": "0361 adds mobile_iap_accounts.renewal_state_signed_at. The store purchase release applies 0361 and 0362 to production before the web deployment that reads the column; store purchases stay off (MOBILE_IAP_ENABLED unset) until then."
-    }
-  ]
+  "entries": []
 }

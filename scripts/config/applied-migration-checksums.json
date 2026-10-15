@@ -358,5 +358,8 @@
   "0357_user_skill_description_limit.sql": "debaedb2e85e66e2f9c25424dad5847eb1e408eec587531da2cd0fa8f091d287",
   "0358_shared_project_editor_needs_share_permission.sql": "c99ac8f10f9c511b3e47d00046b2045e95186c4d9ae48e9f964d394e5c57f236",
   "0359_settlement_recovery_binds_job_owner.sql": "46969f882409b32f2d6c479eb01e3f79ef88e8e07574f760639f8d781c719327",
-  "0360_team_premium_seats.sql": "d013b29ade6868e1dce4b306e78d675b6af74fdae7aff737b1b6925d60eda415"
+  "0360_team_premium_seats.sql": "d013b29ade6868e1dce4b306e78d675b6af74fdae7aff737b1b6925d60eda415",
+  "0361_mobile_iap_renewal_state_order.sql": "98262bc877c4beb134c680b967962b33cfcb3d90fe4d1ef5ea20de182978fd2c",
+  "0362_store_refund_and_pause_states.sql": "bb9a6baa1bffecd22a55bb0e01f1d0c52ad74d1f2102c334b992b78caf09282c",
+  "0363_beta_invite_update_time.sql": "4ad54c38977aab2f5089ac06ed4a53d603b88254cd9524e49c6c0c55e5854b43"
 }

@@ -72,8 +72,14 @@ LICENSE
 /libs
 
 # Development Scripts
+# apps/web/e2e/lib imports scripts/public-runtime, and next build type-checks
+# it, so a remote build needs that folder and the one module it reaches.
 .husky
-/scripts
+/scripts/*
+!/scripts/public-runtime
+!/scripts/lib
+/scripts/lib/*
+!/scripts/lib/neon-migrations.mjs
 .lintstagedrc.json
 
 # Rust/Cargo (Not needed for web deployment)
