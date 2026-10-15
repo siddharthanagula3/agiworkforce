@@ -44,7 +44,8 @@ vi.mock(
 
 const mockLoadUserConnectorToolCatalog = vi.fn();
 const mockConnectorsAllowed = vi.fn();
-vi.mock('@/lib/connectors/connector-capability', () => ({
+vi.mock('@/lib/connectors/connector-capability', async (importOriginal) => ({
+  ...(await importOriginal<ConnectorCapabilityModule>()),
   connectorsAllowedWithoutRequest: (...args: unknown[]) => mockConnectorsAllowed(...args),
 }));
 vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
@@ -123,6 +124,8 @@ import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapte
 import { executeScheduledAgent } from './scheduled-agent-executor';
 import type { ScheduleTask } from './schedule-service';
 import { createWorkspaceMemberDatabaseFake } from '@/test/database-adapter-fake';
+
+type ConnectorCapabilityModule = typeof import('@/lib/connectors/connector-capability');
 
 function requireCatalogModel(predicate: (model: ModelMetadata) => boolean): ModelMetadata {
   const model = listCanonicalModels().find(predicate);

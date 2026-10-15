@@ -5,10 +5,15 @@ import { Menu } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@agiworkforce/ui/sheet';
 import { ActiveNavLink } from './ActiveNavLink';
-import { CHAT_ROOT_HREF, CONTACT_SALES_HREF, NAV_GROUPS, WEB_ENTRY_HREF } from './nav';
+import {
+  CHAT_ROOT_HREF,
+  CONTACT_SALES_HREF,
+  NAV_GROUPS,
+  SIGN_IN_HREF,
+  WEB_ENTRY_HREF,
+} from './nav';
 
 const ICON_SIZE = 20;
-const SIGN_IN_HREF = '/login';
 
 export function MarketingMobileNav({ signedIn = false }: { signedIn?: boolean } = {}) {
   const pathname = usePathname() ?? '';

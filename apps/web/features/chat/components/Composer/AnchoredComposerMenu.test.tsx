@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 
 const MENU_LABEL = 'Suggestions';
@@ -119,5 +119,38 @@ describe('AnchoredComposerMenu tab out', () => {
 
     expect(onRequestClose).not.toHaveBeenCalled();
     expect(input).toHaveFocus();
+  });
+});
+
+describe('AnchoredComposerMenu width', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('spans its anchor when asked to, so a full-width list keeps the composer width', async () => {
+    function WidthHarness() {
+      const anchorRef = useRef<HTMLDivElement>(null);
+      return (
+        <div>
+          <div ref={anchorRef} data-testid="anchor" />
+          <AnchoredComposerMenu anchorRef={anchorRef} open label={MENU_LABEL} matchAnchorWidth>
+            <button type="button">{FIRST_ITEM_LABEL}</button>
+          </AnchoredComposerMenu>
+        </div>
+      );
+    }
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.dataset['testid'] === 'anchor'
+        ? ({ top: 600, bottom: 660, left: 24, right: 744, width: 720, height: 60 } as DOMRect)
+        : ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 } as DOMRect);
+    });
+
+    render(<WidthHarness />);
+
+    const panel = await screen.findByRole('dialog', { name: MENU_LABEL });
+    await waitFor(() => expect(panel.style.width).toBe('720px'));
+    expect(panel.style.left).toBe('24px');
   });
 });

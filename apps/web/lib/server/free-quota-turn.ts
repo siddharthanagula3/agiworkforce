@@ -2,20 +2,24 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 import { NextResponse, after, type NextRequest } from 'next/server';
+import { z } from 'zod';
+import { MEMORY_COMMAND_KINDS } from '@agiworkforce/agent-core';
+import { isNamedProviderConsentCurrent, type NamedProviderConsent } from '@agiworkforce/compliance';
 import type { KeyValueStore } from '@agiworkforce/key-value';
 import { stripSystemPromptCacheBoundary } from '@agiworkforce/provider-protocol';
 import { runQwenQuotaProbe, streamQwenQuotaChat } from '@agiworkforce/providers-factory';
 import {
+  FREE_QUOTA_CHAT_DAILY_USE_KIND,
   freeOfferingContentText,
   type FreeLimit,
   type FreeLimitReason,
   type FreeOfferingMessage,
   type FreeOfferingRequest,
+  type FreeQuotaDailyUseKind,
 } from '@agiworkforce/cloud-contracts';
 import {
   getModelMetadataById,
   getPlanMaxAttachmentsPerMessage,
-  getProviderOffering,
   getProviderOfferingMediaRequestUnits,
   getProviderOfferingQuotaUnit,
   MANAGED_MEMORY_CITATIONS_HEADER,
@@ -29,10 +33,22 @@ import { freeQuotaSystemMessages } from '@/lib/server/free-quota-system-messages
 import { readActiveStudyInstruction } from '@/features/study/server/study-session-store';
 import type { UserScopedDb } from '@/lib/server/rls-db';
 import {
+  PAST_CHAT_CITATIONS_HEADER,
   PROJECT_FILE_CITATIONS_HEADER,
-  toMemoryCitationsHeaderValue,
   toProjectSourcesHeaderValue,
+  toMemoryCitationsHeaderValue,
+  toPastChatSourcesHeaderValue,
 } from '@/lib/chat-project-sources';
+import {
+  SECRET_REDACTION_COUNT_HEADER,
+  toSecretRedactionCountHeaderValue,
+} from '@/lib/chat-secret-redaction-notice';
+import { freeModelProviderNotice } from '@/lib/named-provider-consent';
+import { loadNamedProviderConsent } from '@/lib/server/named-provider-consent';
+import {
+  MEMORY_COMMAND_TURN_STATUSES,
+  memoryCommandTurnNote,
+} from '@/lib/services/memory-commands';
 import { moderateGeneratedMedia, moderateManagedPrompt } from '@/lib/moderation';
 import { enforceManagedContentSafetyPreference } from '@/lib/services/managed-content-safety-service';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
@@ -49,11 +65,7 @@ import {
   resolveZeroDataRetentionPolicy,
   evaluateActiveWorkspacePolicy,
 } from '@/lib/services/organization-policy-gate';
-import { applySecretHandlingToTexts } from '@/app/api/llm/v1/chat/completions/lib/secret-handling-gate';
-import {
-  freeOfferingRequiresCodeExecution,
-  freeOfferingRequiresWebAccess,
-} from '@/features/models/lib/free-offering-request';
+import { applySecretHandlingToTurnTexts } from '@/app/api/llm/v1/chat/completions/lib/secret-handling-turn-gate';
 import { loadFreePools, type FreeQuotaInventory } from '@/lib/server/free-pools';
 import {
   freeQuotaContextFor,
@@ -63,10 +75,12 @@ import {
 } from '@/lib/server/free-quota-catalogue';
 import { expireFreeQuotaCatalogue } from '@/lib/server/free-quota-catalogue-cache';
 import {
+  DAILY_USE_REQUEST_UNITS,
   classifyFreeQuotaRefusal,
   claimFreeQuotaTurn,
   freeQuotaDayResetsAtMs,
   freeQuotaEndsOn,
+  minimumTurnUnits,
   readFreeQuotaDailyUse,
   recordFreeQuotaHold,
   recordFreeQuotaSuspension,
@@ -74,6 +88,7 @@ import {
   reserveFreeQuotaAllowance,
   reserveFreeQuotaDailyUse,
   settleFreeQuotaAllowance,
+  settleFreeQuotaDailyUse,
   type AllowanceReservation,
   type DailyUseReservation,
   type FreeQuotaDecision,
@@ -90,7 +105,14 @@ import { bytesFromUrl } from '@/lib/server/media-storage';
 import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
 import { buildAiGeneratedProvenance } from '@/lib/compliance/ai-act';
 import { SSE_RESPONSE_HEADERS } from '@/app/api/llm/v1/chat/completions/lib/sse-heartbeat';
-import { buildCapabilityPreamble } from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
+import {
+  buildTextOnlyPreamble,
+  type TextOnlyChatSetup,
+  type TextOnlyPreambleInput,
+} from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
+import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
+import { readSurfaceHint } from '@/lib/free-chat-surface-policy';
+import { promptVariantsForSubject } from '@/lib/prompts/prompt-variants';
 import { validatePromotionalChatStream } from '@/features/models/lib/promotional-chat-stream';
 import { persistAssistantTurn } from '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence';
 import { freeModelLabel } from '@/features/chat/lib/freeLimitRecovery';
@@ -99,6 +121,24 @@ import {
   hydrateChatAttachments,
 } from '@/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration';
 import { isChatImageMimeType } from '@/lib/chat-attachment-policy';
+
+const MemoryCommandSchema = z.object({
+  kind: z.enum(MEMORY_COMMAND_KINDS),
+  status: z.enum(MEMORY_COMMAND_TURN_STATUSES),
+});
+
+export type FreeQuotaTurnRequest = FreeOfferingRequest & {
+  memory_command?: z.infer<typeof MemoryCommandSchema>;
+};
+
+export function readFreeQuotaMemoryCommand(
+  body: unknown,
+): Pick<FreeQuotaTurnRequest, 'memory_command'> {
+  const reported = MemoryCommandSchema.safeParse(
+    body && typeof body === 'object' ? (body as { memory_command?: unknown }).memory_command : null,
+  );
+  return reported.success ? { memory_command: reported.data } : {};
+}
 
 type ChatMessage = FreeOfferingMessage;
 type ChatPart =
@@ -168,14 +208,19 @@ function generatedNothing(kind: FreeQuotaRefusal): boolean {
 
 type CopyContext = FreeQuotaFailureContext;
 
-function refuse(failure: FreeQuotaFailure, context: CopyContext, freeLimit?: FreeLimit) {
+function refuse(
+  failure: FreeQuotaFailure,
+  context: CopyContext,
+  detail: { freeLimit?: FreeLimit; providerId?: string } = {},
+) {
   const body = freeQuotaFailure(failure, context);
   return NextResponse.json(
     {
       error: {
         message: body.message,
         code: body.code,
-        ...(freeLimit ? { free_limit: freeLimit } : {}),
+        ...(detail.freeLimit ? { free_limit: detail.freeLimit } : {}),
+        ...(detail.providerId ? { provider_id: detail.providerId } : {}),
       },
     },
     { status: body.status, headers: { 'Cache-Control': 'private, no-store' } },
@@ -258,6 +303,7 @@ interface TurnLedger {
   apiKey: string;
   offeringKey: string;
   allowance: AllowanceReservation;
+  chatShare: DailyUseReservation | null;
   expireCatalogue: () => void;
 }
 
@@ -305,7 +351,7 @@ function expireCatalogueAfterResponse(): DeferredCatalogueExpiry {
 }
 
 async function recordRefusal(
-  ledger: Omit<TurnLedger, 'allowance'>,
+  ledger: Omit<TurnLedger, 'allowance' | 'chatShare'>,
   refusal: { kind: FreeQuotaRefusal; signal: string },
 ): Promise<void> {
   const nowMs = Date.now();
@@ -351,6 +397,23 @@ async function recordRefusal(
   }
 }
 
+// The share is settled only where the model's allowance was, and to the same
+// figure. Whatever a turn still holds in the allowance it also holds in the
+// account's share, so failed or stopped turns cannot empty a model for everyone
+// while the account's own share reads unused.
+async function settleChatShare(ledger: TurnLedger, consumedUnits: number | null): Promise<void> {
+  const share = ledger.chatShare;
+  if (!share || consumedUnits === null) return;
+  try {
+    await settleFreeQuotaDailyUse(ledger.store, share, consumedUnits);
+  } catch (error) {
+    logger.error(
+      { error, offering: ledger.offeringKey },
+      "[free-quota] the account's daily chat share could not be settled; the reservation stands",
+    );
+  }
+}
+
 async function settleTurn(ledger: TurnLedger, settlement: TurnSettlement): Promise<void> {
   try {
     if (settlement.refusal) await recordRefusal(ledger, settlement.refusal);
@@ -360,7 +423,9 @@ async function settleTurn(ledger: TurnLedger, settlement: TurnSettlement): Promi
       { error, offering: ledger.offeringKey },
       '[free-quota] shared allowance settlement failed; the reservation stands',
     );
+    return;
   }
+  await settleChatShare(ledger, settlement.consumedUnits);
 }
 
 function meteredChatStream(
@@ -608,38 +673,26 @@ export interface FreeAutoTurn {
   providerRequestSignal?: () => AbortSignal;
 }
 
-export function freeQuotaCapabilityPreamble(timeZone?: string | null) {
-  return buildCapabilityPreamble({
-    tools: [],
-    ...(timeZone ? { timeZone } : {}),
-    artifacts: true,
-    artifactRuntime: false,
-  });
+export function freeQuotaCapabilityPreamble(
+  timeZone?: string | null,
+  input: Omit<TextOnlyPreambleInput, 'timeZone' | 'artifacts'> = {},
+) {
+  return buildTextOnlyPreamble({ ...input, artifacts: true, ...(timeZone ? { timeZone } : {}) });
 }
 
 export async function serveFreeQuotaTurn(
   request: NextRequest,
   scoped: UserScopedDb,
-  body: FreeOfferingRequest,
+  body: FreeQuotaTurnRequest,
   freeAuto?: FreeAutoTurn,
 ): Promise<Response> {
-  const { inventory, limitedMediaOffer } = loadFreePools();
+  const { inventory, limitedMediaOffer, freeChatDailyShare } = loadFreePools();
   const baseCopy = baseCopyFor(inventory);
   if (!inventory) return refuse('unavailable', baseCopy);
-  if (freeOfferingRequiresWebAccess(body)) {
+  if (body.web_search === true || body.web_fetch === true) {
     return policyRefusal(
       'This promotional model cannot search the web or open pages in Chat. Choose a search-capable Free model, such as Free Auto, and send your request again. No model request was sent.',
       'free_quota_search_unsupported',
-      400,
-    );
-  }
-  if (
-    getProviderOffering(body.model)?.quotaProbeProtocol === 'chat' &&
-    freeOfferingRequiresCodeExecution(body)
-  ) {
-    return policyRefusal(
-      'This promotional model cannot run code in the sandbox. Choose Free Auto and send your request again. No model request was sent.',
-      'free_quota_code_unsupported',
       400,
     );
   }
@@ -700,9 +753,11 @@ export async function serveFreeQuotaTurn(
       failure,
       { ...copy, alternativeName },
       {
-        model: entry.offeringKey,
-        reason,
-        ...(alternative && alternativeName ? { alternative_model: alternative } : {}),
+        freeLimit: {
+          model: entry.offeringKey,
+          reason,
+          ...(alternative && alternativeName ? { alternative_model: alternative } : {}),
+        },
       },
     );
   };
@@ -721,35 +776,91 @@ export async function serveFreeQuotaTurn(
   const store = context.store;
   if (!store) return refuse('unavailable', copy);
 
-  const dailyLimit =
+  const chatTurn = offering.quotaProbeProtocol === 'chat';
+  const providerNotice = freeModelProviderNotice(offering.provider);
+  if (!providerNotice) {
+    logger.error(
+      { offering: entry.offeringKey, provider: offering.provider },
+      '[free-quota] no provider notice exists for this model, so nobody can have agreed to it; refused before any provider request',
+    );
+    return refuse('unavailable', copy);
+  }
+  let consent: NamedProviderConsent | null;
+  try {
+    consent = await loadNamedProviderConsent(scoped.db, scoped.userId, providerNotice.providerId);
+  } catch (error) {
+    logger.error(
+      { error, userId: scoped.userId, offering: entry.offeringKey },
+      '[free-quota] the provider agreement could not be read; refused before any provider request',
+    );
+    return refuse('unavailable', copy);
+  }
+  if (!isNamedProviderConsentCurrent(consent, providerNotice)) {
+    logger.info(
+      { userId: scoped.userId, offering: entry.offeringKey, provider: providerNotice.providerId },
+      '[free-quota] no current provider agreement; refused before any provider request',
+    );
+    return refuse(
+      'provider_consent',
+      {
+        ...copy,
+        providerName: providerNotice.providerName,
+        alternativeName: chatTurn ? copy.alternativeName : null,
+      },
+      { providerId: providerNotice.providerId },
+    );
+  }
+
+  if (chatTurn && !freeChatDailyShare) {
+    logger.error(
+      { offering: entry.offeringKey },
+      "[free-quota] no daily chat share is configured; refused so one account cannot spend a model's whole allowance",
+    );
+    return refuse('unavailable', copy);
+  }
+  const dailyLimit: { userId: string; category: FreeQuotaDailyUseKind; cap: number } | null =
     admission.terms === 'limited'
       ? { userId: scoped.userId, category: admission.category, cap: admission.dailyCap }
-      : null;
+      : chatTurn && freeChatDailyShare
+        ? {
+            userId: scoped.userId,
+            category: FREE_QUOTA_CHAT_DAILY_USE_KIND,
+            cap: freeChatDailyShare.tokensPerUser,
+          }
+        : null;
   const refuseDailyLimit = ({ category, cap }: NonNullable<typeof dailyLimit>) => {
     const resetsAtMs = freeQuotaDayResetsAtMs(context.nowMs);
+    const alternative = category === FREE_QUOTA_CHAT_DAILY_USE_KIND ? FREE_TRIAL_MODEL : null;
+    const alternativeName = alternative ? freeModelLabel(alternative) : null;
     logger.info(
       { userId: scoped.userId, offering: entry.offeringKey, category },
       '[free-quota] daily free limit reached; refused before any provider request',
     );
     return refuse(
       'daily_limit',
-      { ...copy, alternativeName: null, dailyLimit: { category, cap, resetsAtMs } },
+      { ...copy, alternativeName, dailyLimit: { category, cap, resetsAtMs } },
       {
-        model: entry.offeringKey,
-        reason: 'daily_limit_reached',
-        resets_at: new Date(resetsAtMs).toISOString(),
+        freeLimit: {
+          model: entry.offeringKey,
+          reason: 'daily_limit_reached',
+          resets_at: new Date(resetsAtMs).toISOString(),
+          ...(alternative && alternativeName ? { alternative_model: alternative } : {}),
+        },
       },
     );
   };
+  let usedToday = 0;
   if (dailyLimit) {
-    let usedToday: number;
     try {
       usedToday = await readFreeQuotaDailyUse(store, { ...dailyLimit, nowMs: context.nowMs });
     } catch (error) {
       logger.error({ error, offering: entry.offeringKey }, '[free-quota] daily use unreadable');
       return refuse('unavailable', copy);
     }
-    if (usedToday >= dailyLimit.cap) return refuseDailyLimit(dailyLimit);
+    const smallestUse = chatTurn
+      ? minimumTurnUnits(offering, context.policy)
+      : DAILY_USE_REQUEST_UNITS;
+    if (usedToday + smallestUse > dailyLimit.cap) return refuseDailyLimit(dailyLimit);
   }
 
   const [conversation] = await scoped.db.query<{
@@ -808,7 +919,7 @@ export async function serveFreeQuotaTurn(
     );
   }
 
-  const secrets = await applySecretHandlingToTexts(scoped.userId, texts);
+  const secrets = await applySecretHandlingToTurnTexts(scoped.userId, request, texts);
   if (secrets.action === 'blocked') {
     return policyRefusal(
       'Remove sensitive credentials from this conversation before sending.',
@@ -884,8 +995,10 @@ export async function serveFreeQuotaTurn(
     .digest('hex')
     .slice(0, TURN_ID_LENGTH);
   let memoryCitationsHeader: string | null = null;
+  let contextSecretMatchCount = 0;
+  let pastChatSourcesHeader: string | null = null;
   let projectSources: ProjectFileCitation[] = [];
-  if (offering.quotaProbeProtocol === 'chat') {
+  if (chatTurn) {
     const query = latestUserPrompt ? freeOfferingContentText(latestUserPrompt.content) : '';
     const [personalContext, studyInstruction] = await Promise.all([
       resolveFreeOfferingPersonalContext(scoped.db, {
@@ -915,16 +1028,84 @@ export async function serveFreeQuotaTurn(
         409,
       );
     }
-    const preamble = freeQuotaCapabilityPreamble(body.client_timezone);
+    const promptVariants = await promptVariantsForSubject(
+      buildFlagSubject(request, {
+        userId: scoped.userId,
+        workspaceId: scoped.organizationId,
+        role: null,
+        plan: planTier,
+        surface: readSurfaceHint(request) ?? 'web',
+      }),
+    );
+    const setup: TextOnlyChatSetup = {
+      temporaryChat: conversation.is_temporary === true,
+      personalContext:
+        body.personalization === false
+          ? 'off_for_chat'
+          : body.memory_enabled === false
+            ? 'memory_off_for_chat'
+            : 'read_only',
+      inProject: Boolean(conversation.project_id),
+      ...(personalContext.projectBlocks.length > 0
+        ? {
+            projectContext:
+              personalContext.projectCitations.length > 0
+                ? ('with_files' as const)
+                : ('without_files' as const),
+          }
+        : {}),
+    };
+    const preamble = freeQuotaCapabilityPreamble(body.client_timezone, {
+      servingModel: { kind: 'unattributed', name: offering.displayName },
+      promptSelection: { variants: promptVariants },
+      setup,
+    });
+    const memoryCommandNote =
+      body.memory_command && latestUserPrompt
+        ? memoryCommandTurnNote(
+            freeOfferingContentText(latestUserPrompt.content),
+            body.memory_command,
+          )
+        : null;
+    const contextBlocks: Parameters<typeof freeQuotaSystemMessages>[0]['blocks'] = [
+      { layer: 'developer', text: memoryCommandNote ?? '' },
+      ...personalContext.projectBlocks,
+      ...personalContext.blocks,
+    ];
+    const contextTexts = [studyInstruction ?? '', ...contextBlocks.map((block) => block.text)];
+    const contextSecrets = await applySecretHandlingToTurnTexts(
+      scoped.userId,
+      request,
+      contextTexts,
+    );
+    if (contextSecrets.action === 'blocked') {
+      return policyRefusal(
+        'Remove sensitive credentials from this conversation before sending.',
+        'secrets_blocked',
+        403,
+      );
+    }
+    if (contextSecrets.texts.length !== contextTexts.length) {
+      return policyRefusal(
+        'Project and personal context could not be verified. No model request was sent.',
+        'context_secret_handling_unavailable',
+        503,
+      );
+    }
+    contextSecretMatchCount = contextSecrets.action === 'redacted' ? contextSecrets.matchCount : 0;
     messages.unshift(
       ...freeQuotaSystemMessages({
         preamble: preamble ? stripSystemPromptCacheBoundary(preamble) : '',
-        studyInstruction,
-        personal: [...personalContext.projectBlocks, ...personalContext.blocks],
+        studyInstruction: contextSecrets.texts[0]!,
+        blocks: contextBlocks.map((block, index) => ({
+          ...block,
+          text: contextSecrets.texts[index + 1]!,
+        })),
       }),
     );
     memoryCitationsHeader = toMemoryCitationsHeaderValue(personalContext.memoryCitations);
     projectSources = [...personalContext.projectCitations];
+    pastChatSourcesHeader = toPastChatSourcesHeaderValue(personalContext.pastChatSources);
   }
   const projectSourcesHeader = toProjectSourcesHeaderValue(projectSources);
 
@@ -961,7 +1142,7 @@ export async function serveFreeQuotaTurn(
   if (!claimed) return refuse('duplicate', copy);
 
   let dailyUse: DailyUseReservation | null = null;
-  if (dailyLimit) {
+  if (dailyLimit && !chatTurn) {
     try {
       dailyUse = await reserveFreeQuotaDailyUse(store, { ...dailyLimit, nowMs: context.nowMs });
     } catch (error) {
@@ -986,14 +1167,46 @@ export async function serveFreeQuotaTurn(
   const multiplier = offering.quotaThinkingRequired ? THINKING_BUDGET_MULTIPLIER : 1;
   const inputUnits = turnUnits(entry.offeringKey, offering, policy, messages, 0);
   const remainingUnits = decision.usable - decision.used;
-  const replyTokens = Math.min(
+  const poolReplyTokens = Math.min(
     policy.chatMaxOutputTokens,
     body.max_tokens ?? policy.chatMaxOutputTokens,
     Math.floor((remainingUnits - inputUnits) / multiplier),
   );
-  if (offering.quotaProbeProtocol === 'chat' && replyTokens < MINIMUM_REPLY_TOKENS) {
+  if (chatTurn && poolReplyTokens < MINIMUM_REPLY_TOKENS) {
     await releaseDailyUse();
     return refuse('too_long', copy);
+  }
+  let replyTokens = poolReplyTokens;
+  if (chatTurn && dailyLimit) {
+    if (inputUnits + MINIMUM_REPLY_TOKENS * multiplier > dailyLimit.cap) {
+      return refuse('share_too_long', {
+        ...copy,
+        dailyLimit: {
+          category: dailyLimit.category,
+          cap: dailyLimit.cap,
+          resetsAtMs: freeQuotaDayResetsAtMs(context.nowMs),
+        },
+      });
+    }
+    replyTokens = Math.min(
+      poolReplyTokens,
+      Math.floor((dailyLimit.cap - usedToday - inputUnits) / multiplier),
+    );
+    if (replyTokens < MINIMUM_REPLY_TOKENS) return refuseDailyLimit(dailyLimit);
+  }
+  const reservedUnits = turnUnits(entry.offeringKey, offering, policy, messages, replyTokens);
+  if (chatTurn && dailyLimit) {
+    try {
+      dailyUse = await reserveFreeQuotaDailyUse(store, {
+        ...dailyLimit,
+        nowMs: context.nowMs,
+        units: reservedUnits,
+      });
+    } catch (error) {
+      logger.error({ error, offering: entry.offeringKey }, '[free-quota] daily use unwritable');
+      return refuse('unavailable', copy);
+    }
+    if (!dailyUse) return refuseDailyLimit(dailyLimit);
   }
   let allowance: AllowanceReservation | null;
   try {
@@ -1002,7 +1215,7 @@ export async function serveFreeQuotaTurn(
       observedOn: inventory.observedOn,
       offeringKey: entry.offeringKey,
       expiresOn: endsOn,
-      units: turnUnits(entry.offeringKey, offering, policy, messages, replyTokens),
+      units: reservedUnits,
       usable: decision.usable,
       nowMs,
     });
@@ -1021,8 +1234,13 @@ export async function serveFreeQuotaTurn(
     apiKey: context.apiKey,
     offeringKey: entry.offeringKey,
     allowance,
+    chatShare: chatTurn ? dailyUse : null,
     expireCatalogue: expireCatalogueNow,
   };
+  const redactionCount =
+    (secrets.action === 'redacted' ? secrets.matchCount : 0) + contextSecretMatchCount;
+  const secretRedactionHeader =
+    redactionCount > 0 ? toSecretRedactionCountHeaderValue(redactionCount) : null;
   const headers = {
     ...SSE_RESPONSE_HEADERS,
     'Cache-Control': 'private, no-store',
@@ -1031,9 +1249,11 @@ export async function serveFreeQuotaTurn(
     'X-AGI-Route-Lane': 'free',
     ...(memoryCitationsHeader ? { [MANAGED_MEMORY_CITATIONS_HEADER]: memoryCitationsHeader } : {}),
     ...(projectSourcesHeader ? { [PROJECT_FILE_CITATIONS_HEADER]: projectSourcesHeader } : {}),
+    ...(pastChatSourcesHeader ? { [PAST_CHAT_CITATIONS_HEADER]: pastChatSourcesHeader } : {}),
+    ...(secretRedactionHeader ? { [SECRET_REDACTION_COUNT_HEADER]: secretRedactionHeader } : {}),
   };
 
-  if (offering.quotaProbeProtocol === 'chat') {
+  if (chatTurn) {
     let upstream: Response;
     try {
       upstream = await streamQwenQuotaChat(

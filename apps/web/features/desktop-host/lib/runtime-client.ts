@@ -2,11 +2,13 @@
 
 import {
   BROWSER_SIGN_IN_START,
+  DEVELOPER_COMMAND_NEEDS_UPDATE,
   DEVICE_REGISTRY_PROFILE_COMMAND,
   DISPATCH_TASK_REPORT,
   DISPATCH_TASK_RUNNER_READY,
   DesktopRuntimeError,
   assertLocalTurnCarriesNoAttachments,
+  developerApprovalAllows,
   getHostBridge,
   type ApplicationOpenResult,
   type BackgroundActivity,
@@ -15,10 +17,12 @@ import {
   type BrowserPairingState,
   type ClipboardSnapshot,
   type ComputerUseStatus,
+  type DesktopCapability,
   type DesktopPermissionsReview,
   type DeviceRegistryProfile,
   type DispatchTaskReport,
   type PermissionDecision,
+  type PermissionScope,
   type SystemPermissionKind,
   type RemoteControlStartRequest,
   type RemoteControlState,
@@ -33,23 +37,39 @@ import {
   type LocalModelSettings,
   type LocalModelSnapshot,
   type DeveloperApprovalAnswer,
+  type DeveloperClientCapability,
+  type DeveloperMcpApprovalReview,
+  type DeveloperMcpServerAwaitingApproval,
   type DeveloperRuntimeModels,
   type DeveloperRuntimeStatus,
   type LocalDeveloperSession,
   type DeveloperSessionEvent,
   type DeveloperSessionList,
+  type DeveloperSessionStartRequest,
   type DeveloperSessionTranscript,
+  type DeveloperThreadDeleteRequest,
+  type DeveloperThreadForkRequest,
+  type DeveloperThreadCompactRequest,
   type DeveloperTurnRequest,
+  type DeveloperTurnSteer,
+  type DeveloperUserInputAnswer,
   type LocalBranchPush,
   type LocalBranches,
   type ShellPolicy,
   type ShellRunResult,
+  type StartedDeveloperSession,
   type WorkingTreeChanges,
   type WorkspaceRoot,
   type WorkspaceRootKind,
 } from '@agiworkforce/local-runtime-contract';
 import type { BrowserPageSummary, BrowserTabSummary } from '@agiworkforce/types';
-import type { MemoryAddResponse, PluginSummary, SkillSummary } from '@agiworkforce/types/protocol';
+import type {
+  MemoryAddResponse,
+  PluginSummary,
+  SkillSummary,
+  ThreadCompactResponse,
+  ThreadDeleteResponse,
+} from '@agiworkforce/types/protocol';
 
 const NO_HOST_MESSAGE = 'Local access is only available in the AGI Cloud desktop app.';
 
@@ -70,8 +90,11 @@ async function invoke<T>(command: string, args?: Record<string, unknown>): Promi
   if (!host) throw new DesktopHostUnavailable();
 
   const response = await host.invokeRuntime<T>(command, args);
-  if (!response.ok) throw new DesktopRuntimeError(response.error);
-  return response.value;
+  if (response.ok) return response.value;
+  if (response.error.code === 'unknown-command' && command.startsWith('developer_')) {
+    throw new DesktopRuntimeError({ ...response.error, message: DEVELOPER_COMMAND_NEEDS_UPDATE });
+  }
+  throw new DesktopRuntimeError(response.error);
 }
 
 export function listWorkspaceRoots(): Promise<WorkspaceRoot[]> {
@@ -112,6 +135,26 @@ export function revokeWorkspaceRoot(rootId: string): Promise<boolean> {
 
 export function revealWorkspaceRoot(rootId: string): Promise<boolean> {
   return invoke<boolean>('workspace_reveal', { rootId });
+}
+
+/** Withdraw one answer, so the next use asks again. */
+export function revokePermission(
+  capability: DesktopCapability,
+  scope: PermissionScope,
+): Promise<DesktopPermissionsReview> {
+  return revokeDesktopPermission({ capability, scope });
+}
+
+/**
+ * A folder was approved outside this page, by a drop on the window, so any
+ * list of approved folders it shows is out of date.
+ */
+export function onWorkspaceChanged(listener: () => void): () => void {
+  const host = getHostBridge();
+  if (!host) return () => undefined;
+  return host.onRuntimeEvent((event) => {
+    if (event.kind === 'workspace-changed') listener();
+  });
 }
 
 export function listWorkspaceFiles(rootId: string, path: string): Promise<FileEntry[]> {
@@ -549,32 +592,149 @@ export function listDeveloperSessions(): Promise<DeveloperSessionList> {
   return invoke<DeveloperSessionList>('developer_session_list');
 }
 
+/**
+ * Ask the user, in the shell's own dialog, to let the agent run in a folder.
+ * A folder without that answer lists no sessions, because the CLI that reads
+ * them is not started there.
+ */
+export function allowDeveloperSessions(rootId: string): Promise<boolean> {
+  return invoke<boolean>('developer_sessions_allow', { rootId });
+}
+
+/**
+ * Ask the shell to put one project MCP server's launch to the user. The page
+ * names the server and nothing else: what it would run is read, shown and
+ * answered in the shell's own dialog, which a page cannot draw or click.
+ */
+export function reviewDeveloperMcpServer(
+  rootId: string,
+  server: DeveloperMcpServerAwaitingApproval,
+): Promise<DeveloperMcpApprovalReview> {
+  return invoke<DeveloperMcpApprovalReview>('developer_mcp_approval_review', {
+    rootId,
+    name: server.name,
+    scope: server.scope,
+  });
+}
+
+/** This page shows the agent's questions, so the shell leaves them for it to answer. */
+const PAGE_CLIENT_CAPABILITIES: DeveloperClientCapability[] = ['user_input'];
+
 export function readDeveloperSession(
   rootId: string,
   threadId: string,
 ): Promise<DeveloperSessionTranscript> {
-  return invoke<DeveloperSessionTranscript>('developer_session_read', { rootId, threadId });
-}
-
-export function resumeDeveloperSession(
-  rootId: string,
-  threadId: string,
-): Promise<LocalDeveloperSession> {
-  return invoke<LocalDeveloperSession>('developer_session_resume', { rootId, threadId });
-}
-
-export function startDeveloperSession(
-  rootId: string,
-  model?: string,
-): Promise<LocalDeveloperSession> {
-  return invoke<LocalDeveloperSession>('developer_session_start', {
+  return invoke<DeveloperSessionTranscript>('developer_session_read', {
     rootId,
-    ...(model ? { model } : {}),
+    threadId,
+    clientCapabilities: PAGE_CLIENT_CAPABILITIES,
   });
 }
 
+/** Start a session in the folder itself or, with a placement, in a new worktree of it. */
+export function startDeveloperSession(
+  rootId: string,
+  model?: string,
+  placement: Pick<DeveloperSessionStartRequest, 'environment' | 'worktreeStart'> = {},
+): Promise<StartedDeveloperSession> {
+  return invoke<StartedDeveloperSession>('developer_session_start', {
+    rootId,
+    ...(model ? { model } : {}),
+    ...(placement.environment ? { environment: placement.environment } : {}),
+    ...(placement.worktreeStart ? { worktreeStart: placement.worktreeStart } : {}),
+  });
+}
+
+/**
+ * Delete a session. A shell or CLI that predates the fuller answer returns
+ * only `acknowledged`, so every list is read as possibly absent.
+ */
+export async function deleteDeveloperThread(
+  request: DeveloperThreadDeleteRequest,
+): Promise<ThreadDeleteResponse> {
+  const response = await invoke<Partial<ThreadDeleteResponse>>('developer_thread_delete', {
+    rootId: request.rootId,
+    threadId: request.threadId,
+    ...(request.discardWorktreeArchives ? { discardWorktreeArchives: true } : {}),
+  });
+  return {
+    acknowledged: response.acknowledged === true,
+    keptWorktreeArchives: response.keptWorktreeArchives ?? [],
+    removedWorktreeArchives: response.removedWorktreeArchives ?? [],
+    releasedWorktrees: response.releasedWorktrees ?? [],
+  };
+}
+
+/**
+ * Summarize what the model reads of a session, from one turn on or the older
+ * part of all of it. The session still shows every message; the summarized
+ * turns can no longer be rewound to.
+ */
+export function compactDeveloperThread(
+  request: DeveloperThreadCompactRequest,
+): Promise<ThreadCompactResponse> {
+  return invoke<ThreadCompactResponse>('developer_thread_compact', {
+    rootId: request.rootId,
+    threadId: request.threadId,
+    ...(request.fromTurnId ? { fromTurnId: request.fromTurnId } : {}),
+  });
+}
+
+const SUMMARY_INTERRUPT_TURN_ID = 'summary';
+
+/**
+ * Stop the summary running for a session. A summary has no turn of its own,
+ * so the interrupt names a placeholder, which the CLI ignores for a session
+ * it is summarizing. The session is left exactly as it was.
+ */
+export function cancelDeveloperThreadSummary(rootId: string, threadId: string): Promise<boolean> {
+  return invoke<boolean>('developer_turn_interrupt', {
+    rootId,
+    threadId,
+    turnId: SUMMARY_INTERRUPT_TURN_ID,
+  });
+}
+
+/** A new session carrying the conversation through one turn; the source is left as it is. */
+export function forkDeveloperThread(
+  request: DeveloperThreadForkRequest,
+): Promise<LocalDeveloperSession> {
+  return invoke<LocalDeveloperSession>('developer_thread_fork', {
+    rootId: request.rootId,
+    threadId: request.threadId,
+    throughTurnId: request.throughTurnId,
+  });
+}
+
+/**
+ * Put a session away: it leaves every list, and its conversation and
+ * checkpoints stay on this computer.
+ */
+export function archiveDeveloperThread(rootId: string, threadId: string): Promise<boolean> {
+  return invoke<boolean>('developer_thread_archive', { rootId, threadId });
+}
+
+/** Take a session from the program writing it, so turns sent from here run. */
+export function takeOverDeveloperThread(
+  rootId: string,
+  threadId: string,
+): Promise<LocalDeveloperSession> {
+  return invoke<LocalDeveloperSession>('developer_thread_takeover', { rootId, threadId });
+}
+
 export function startDeveloperTurn(request: DeveloperTurnRequest): Promise<{ turnId: string }> {
-  return invoke<{ turnId: string }>('developer_turn_start', { ...request });
+  return invoke<{ turnId: string }>('developer_turn_start', {
+    ...request,
+    clientCapabilities: PAGE_CLIENT_CAPABILITIES,
+  });
+}
+
+export function steerDeveloperTurn(request: DeveloperTurnSteer): Promise<{ turnId: string }> {
+  return invoke<{ turnId: string }>('developer_turn_steer', { ...request });
+}
+
+export function answerDeveloperUserInput(answer: DeveloperUserInputAnswer): Promise<boolean> {
+  return invoke<boolean>('developer_user_input_answer', { ...answer });
 }
 
 export function addDeveloperMemory(
@@ -641,8 +801,15 @@ export function interruptDeveloperTurn(
   return invoke<boolean>('developer_turn_interrupt', { rootId, threadId, turnId });
 }
 
+/**
+ * `approved` is what shells installed before the five decisions read; the
+ * current dispatcher ignores it and reads `decision`.
+ */
 export function answerDeveloperApproval(answer: DeveloperApprovalAnswer): Promise<boolean> {
-  return invoke<boolean>('developer_approval_answer', { ...answer });
+  return invoke<boolean>('developer_approval_answer', {
+    ...answer,
+    approved: developerApprovalAllows(answer.decision),
+  });
 }
 
 /**

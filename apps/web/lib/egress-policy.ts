@@ -55,7 +55,7 @@ const IPV4_LITERAL = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 function isInternalIpv4(oct: number[]): boolean {
   if (oct.length !== 4) return true;
   if (oct.some((o) => o < 0 || o > 255 || Number.isNaN(o))) return true;
-  const [a, b] = oct as [number, number, number, number];
+  const [a, b, c] = oct as [number, number, number, number];
   if (a === 10) return true;
   if (a === 127) return true;
   if (a === 172 && b >= 16 && b <= 31) return true;
@@ -63,7 +63,55 @@ function isInternalIpv4(oct: number[]): boolean {
   if (a === 169 && b === 254) return true;
   if (a === 100 && b >= 64 && b <= 127) return true;
   if (a === 0) return true;
+  if (a === 192 && b === 0 && (c === 0 || c === 2)) return true;
+  if (a === 198 && (b === 18 || b === 19)) return true;
+  if (a === 198 && b === 51 && c === 100) return true;
+  if (a === 203 && b === 0 && c === 113) return true;
   if (a >= 224) return true;
+  return false;
+}
+
+function ipv6Segments(address: string): number[] | null {
+  const text = address.split('%')[0]!.toLowerCase();
+  const dotted = /^(.*:)(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(text);
+  let groups = text;
+  if (dotted) {
+    const [o1, o2, o3, o4] = dotted.slice(2, 6).map((s) => Number(s)) as [
+      number,
+      number,
+      number,
+      number,
+    ];
+    if (o1 > 255 || o2 > 255 || o3 > 255 || o4 > 255) return null;
+    groups = `${dotted[1]}${((o1 << 8) | o2).toString(16)}:${((o3 << 8) | o4).toString(16)}`;
+  }
+
+  const halves = groups.split('::');
+  if (halves.length > 2) return null;
+  const parse = (part: string): number[] =>
+    part === ''
+      ? []
+      : part.split(':').map((group) => (/^[0-9a-f]{1,4}$/.test(group) ? parseInt(group, 16) : NaN));
+  const left = parse(halves[0]!);
+  const right = halves.length === 2 ? parse(halves[1]!) : [];
+  if ([...left, ...right].some((segment) => Number.isNaN(segment))) return null;
+  if (halves.length === 1) return left.length === 8 ? left : null;
+  const gap = 8 - left.length - right.length;
+  if (gap < 1) return null;
+  return [...left, ...new Array<number>(gap).fill(0), ...right];
+}
+
+// 6to4 and Teredo carry an IPv4 destination inside the address, so a relay would
+// deliver the request to whatever it names. No public service is reached only
+// through either, so both prefixes are refused whole, as the desktop judge does.
+function isSpecialPurposeIpv6(segments: number[]): boolean {
+  const [s0, s1, s2, s3] = segments as [number, number, number, number];
+  if ((s0 & 0xff00) === 0xff00) return true;
+  if ((s0 & 0xffc0) === 0xfec0) return true;
+  if (s0 === 0x2002) return true;
+  if (s0 === 0x2001 && s1 === 0x0000) return true;
+  if (s0 === 0x2001 && s1 === 0x0db8) return true;
+  if (s0 === 0x0100 && s1 === 0 && s2 === 0 && s3 === 0) return true;
   return false;
 }
 
@@ -105,6 +153,8 @@ export function isInternalHostname(hostname: string): boolean {
     if (/^fc[0-9a-f]{2}:/i.test(unbracketed)) return true;
     if (/^fd[0-9a-f]{2}:/i.test(unbracketed)) return true;
     if (/^fe[89ab][0-9a-f]:/i.test(unbracketed)) return true;
+    const segments = ipv6Segments(unbracketed);
+    if (segments && isSpecialPurposeIpv6(segments)) return true;
     const embedded = extractEmbeddedIpv4(unbracketed);
     if (embedded && isInternalIpv4(embedded)) return true;
     return false;

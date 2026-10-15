@@ -22,7 +22,7 @@ import {
 import {
   FreeQuotaAttestedOfferingsSchema,
   type FreeQuotaAttestationStanding,
-  type FreeQuotaMediaCategory,
+  type FreeQuotaDailyUseKind,
 } from '@agiworkforce/cloud-contracts';
 import type { FreeQuotaStatus } from '@/features/models/lib/free-quota-types';
 import type { FreeQuotaObservation } from '@/lib/server/free-pools';
@@ -143,7 +143,7 @@ function utcDay(nowMs: number): string {
   return new Date(nowMs).toISOString().slice(0, 10);
 }
 
-function dailyUseKey(userId: string, category: FreeQuotaMediaCategory, nowMs: number): string {
+function dailyUseKey(userId: string, category: FreeQuotaDailyUseKind, nowMs: number): string {
   const scope = createHash('sha256').update(userId).digest('hex').slice(0, TURN_SCOPE_LENGTH);
   return `${STATE_PREFIX}:daily:${category}:${scope}:${utcDay(nowMs)}`;
 }
@@ -480,7 +480,10 @@ export async function settleFreeQuotaAllowance(
 
 export interface DailyUseReservation {
   key: string;
+  units: number;
 }
+
+export const DAILY_USE_REQUEST_UNITS = 1;
 
 export function freeQuotaDayResetsAtMs(nowMs: number): number {
   return Date.parse(`${utcDay(nowMs)}T00:00:00Z`) + SECONDS_PER_DAY * MS_PER_SECOND;
@@ -488,7 +491,7 @@ export function freeQuotaDayResetsAtMs(nowMs: number): number {
 
 export async function readFreeQuotaDailyUse(
   store: KeyValueStore,
-  input: { userId: string; category: FreeQuotaMediaCategory; nowMs: number },
+  input: { userId: string; category: FreeQuotaDailyUseKind; nowMs: number },
 ): Promise<number> {
   const stored = await store.get<unknown>(dailyUseKey(input.userId, input.category, input.nowMs));
   const used = Number(stored ?? 0);
@@ -497,10 +500,20 @@ export async function readFreeQuotaDailyUse(
 
 export async function reserveFreeQuotaDailyUse(
   store: KeyValueStore,
-  input: { userId: string; category: FreeQuotaMediaCategory; cap: number; nowMs: number },
+  input: {
+    userId: string;
+    category: FreeQuotaDailyUseKind;
+    cap: number;
+    nowMs: number;
+    units?: number;
+  },
 ): Promise<DailyUseReservation | null> {
   const key = dailyUseKey(input.userId, input.category, input.nowMs);
-  const total = await store.increment(key, 1);
+  const units = Math.max(
+    DAILY_USE_REQUEST_UNITS,
+    Math.ceil(input.units ?? DAILY_USE_REQUEST_UNITS),
+  );
+  const total = await store.increment(key, units);
   try {
     await store.expire(
       key,
@@ -508,21 +521,31 @@ export async function reserveFreeQuotaDailyUse(
         DAILY_USE_RETENTION_SLACK_SECONDS,
     );
   } catch (error) {
-    await store.increment(key, -1).catch(() => undefined);
+    await store.increment(key, -units).catch(() => undefined);
     throw error;
   }
   if (total > input.cap) {
-    await store.increment(key, -1);
+    await store.increment(key, -units);
     return null;
   }
-  return { key };
+  return { key, units };
 }
 
 export async function releaseFreeQuotaDailyUse(
   store: KeyValueStore,
   reservation: DailyUseReservation,
 ): Promise<void> {
-  await store.increment(reservation.key, -1);
+  await store.increment(reservation.key, -reservation.units);
+}
+
+export async function settleFreeQuotaDailyUse(
+  store: KeyValueStore,
+  reservation: DailyUseReservation,
+  consumedUnits: number,
+): Promise<void> {
+  if (!Number.isFinite(consumedUnits)) return;
+  const delta = Math.ceil(Math.max(0, consumedUnits)) - reservation.units;
+  if (delta !== 0) await store.increment(reservation.key, delta);
 }
 
 export type FreeQuotaRefusal =

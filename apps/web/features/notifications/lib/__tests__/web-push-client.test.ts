@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn(), addCsrfHeaders: vi.fn() }));
 
@@ -71,6 +72,16 @@ describe('support detection', () => {
   it('reports support only when worker, push and notification APIs are all present', () => {
     installBrowser({});
     expect(isWebPushSupported()).toBe(true);
+  });
+
+  it('reports no support in the desktop shell, whose Push API has no push service behind it', () => {
+    installBrowser({});
+    window.agiHost = hostBridgeStub();
+    try {
+      expect(isWebPushSupported()).toBe(false);
+    } finally {
+      delete window.agiHost;
+    }
   });
 });
 

@@ -48,6 +48,10 @@ import {
 } from './cloud-agent-workflow-input';
 import { areDurableInitialTurnsEnabled } from './durable-initial-turns';
 import type { ConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import {
+  connectorToolNames,
+  createCloudAgentToolPermissionGate,
+} from './cloud-agent-tool-permission-gate';
 
 const CLOUD_AGENT_ENQUEUE_SPAN = 'workflow.enqueue';
 const CLOUD_AGENT_QUEUE_NAME = 'cloud-agent-turn';
@@ -294,6 +298,14 @@ export async function runCloudAgentTurn(
  */
 function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStream<Uint8Array> {
   const { processed } = input;
+  const permissionGate = createCloudAgentToolPermissionGate(input.db, {
+    userId: input.userId,
+    organizationId: processed.organizationId ?? null,
+    connectorToolNames: connectorToolNames(input.mcpTools),
+    conversationId: processed.conversationId,
+    temporary: processed.conversationIsTemporary === true,
+    disabledConnectorIds: processed.chatRequest.disabled_connector_ids,
+  });
   const usage = createObservedProviderUsage();
   let pauseCheckpointSaved = false;
   // The tool loop can rotate to a managed-failover candidate mid-run; keep the
@@ -310,6 +322,7 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
     approvalMode: input.approvalMode,
     ...(input.toolApprovalPolicy ? { toolApprovalPolicy: input.toolApprovalPolicy } : {}),
     ...(input.connectorPermissions ? { connectorPermissions: input.connectorPermissions } : {}),
+    sessionGrantRefusal: (name, risk) => permissionGate.refusalFor(name, risk),
     userId: input.userId,
     ...(input.hasConnectorTools
       ? { connectorExecutor: makeUserConnectorExecutor(input.userId, processed.organizationId) }
@@ -364,6 +377,7 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
           processed.chatRequest,
           processed.callerToolFields,
           processed.turnAttachments,
+          processed.modelSelection,
         ),
         messages: checkpoint.messages,
         events: checkpoint.events,
@@ -382,6 +396,7 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
           processed.chatRequest,
           processed.callerToolFields,
           processed.turnAttachments,
+          processed.modelSelection,
         ),
         messages: checkpoint.messages,
         pendingToolCalls: checkpoint.pendingToolCalls,
@@ -401,6 +416,7 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
           processed.chatRequest,
           processed.callerToolFields,
           processed.turnAttachments,
+          processed.modelSelection,
         ),
         messages: checkpoint.messages,
         pendingToolCalls: checkpoint.pendingToolCalls,
@@ -422,6 +438,7 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
           processed.chatRequest,
           processed.callerToolFields,
           processed.turnAttachments,
+          processed.modelSelection,
         ),
         messages: checkpoint.messages,
         pendingToolCalls: checkpoint.pendingToolCalls,

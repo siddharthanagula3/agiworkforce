@@ -30,6 +30,10 @@ function hashState(state: string): string {
 }
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readPrimaryEmailState: vi.fn(async () => ({ confirmed: true, email: 'person@example.com' })),
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));

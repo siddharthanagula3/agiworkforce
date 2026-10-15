@@ -13,7 +13,10 @@ import {
   type ManagedMemoryRecord,
 } from '@agiworkforce/types';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { assertMemoryWriteAllowed } from '@/lib/services/memory-write-service';
+import {
+  assertMemoryWriteAllowed,
+  memoryRefusalResponse,
+} from '@/lib/services/memory-write-service';
 import {
   DELETED_MEMORY_ASSIGNMENTS,
   memoryWriteAdmission,
@@ -111,8 +114,9 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
       category: null,
       source: 'web',
       organizationId: organizationId ?? null,
+      userRequested: true,
     });
-    if (!admission.eligible) throw createError.forbidden(admission.message).asUserSafe();
+    if (!admission.eligible) return memoryRefusalResponse(admission.message);
     params.push(content);
     assignments.push(`content = $${params.length}`);
   }

@@ -1,10 +1,31 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { HOST_MENU_SHORTCUTS } from '@agiworkforce/local-runtime-contract';
+import { findShortcutConflicts, type ShortcutChord } from '@agiworkforce/unified-chat';
 
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 
 import { KEYBOARD_SHORTCUT_DOCS, useKeyboardShortcuts } from './use-keyboard-shortcuts';
+
+const APP_DOCS = KEYBOARD_SHORTCUT_DOCS.filter((doc) => doc.scope === 'app');
+
+/** An Electron accelerator as the chord the page would see, were it delivered. */
+function acceleratorChord(accelerator: string): ShortcutChord {
+  const parts = accelerator.split('+');
+  const key = parts.pop() ?? '';
+  const modifiers = parts.map((part) => part.toLowerCase());
+  const mod = modifiers.some((part) =>
+    ['commandorcontrol', 'cmdorctrl', 'command', 'control'].includes(part),
+  );
+  return {
+    key: key === 'Plus' ? '+' : key,
+    ctrl: mod,
+    meta: mod,
+    shift: modifiers.includes('shift'),
+    alt: modifiers.includes('alt') || modifiers.includes('option'),
+  };
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -46,7 +67,7 @@ function renderWithSpies() {
 
 describe('KEYBOARD_SHORTCUT_DOCS', () => {
   it('documents every shortcut the hook binds', () => {
-    expect(KEYBOARD_SHORTCUT_DOCS.map((doc) => doc.description)).toEqual([
+    expect(APP_DOCS.map((doc) => doc.description)).toEqual([
       'Open search',
       'Show keyboard shortcuts',
       'New conversation',
@@ -82,21 +103,31 @@ describe('KEYBOARD_SHORTCUT_DOCS', () => {
 
   // The matcher takes the first doc whose chord matches, so a second doc on the
   // same chord is a binding the shortcuts dialog advertises and nothing runs.
-  it('gives every shortcut a chord of its own', () => {
-    const chord = (doc: (typeof KEYBOARD_SHORTCUT_DOCS)[number]) =>
-      [
-        doc.ctrl || doc.meta ? 'mod' : '',
-        doc.shift ? 'shift' : '',
-        doc.alt ? 'alt' : '',
-        doc.key.toLowerCase(),
-      ].join('+');
-    const chords = KEYBOARD_SHORTCUT_DOCS.map(chord);
-    const duplicated = chords.filter((value, index) => chords.indexOf(value) !== index);
+  // A desktop menu accelerator is consumed by the shell before the page sees
+  // it, and the command palette captures Cmd/Ctrl+K on `document`.
+  it('has no conflicting chord, with the page or with what claims keys before it', () => {
+    const reserved = [
+      ...HOST_MENU_SHORTCUTS.map((shortcut) => ({
+        id: shortcut.id,
+        ...acceleratorChord(shortcut.accelerator),
+      })),
+      { id: 'command-palette', key: 'K', ctrl: true, meta: true },
+    ];
 
-    expect(duplicated).toEqual([]);
-    expect(new Set(KEYBOARD_SHORTCUT_DOCS.map((doc) => doc.id)).size).toBe(
-      KEYBOARD_SHORTCUT_DOCS.length,
+    expect(findShortcutConflicts(KEYBOARD_SHORTCUT_DOCS, reserved)).toEqual([]);
+  });
+
+  it('lists the composer keys alongside the app keys', () => {
+    const composerIds = KEYBOARD_SHORTCUT_DOCS.filter((doc) => doc.scope === 'composer').map(
+      (doc) => doc.id,
     );
+    expect(composerIds).toEqual([
+      'composer-send',
+      'composer-new-line',
+      'composer-follow-up-invert',
+      'composer-stop',
+      'composer-edit-last',
+    ]);
   });
 });
 
@@ -120,7 +151,7 @@ describe('useKeyboardShortcuts bindings', () => {
 
   it('every documented shortcut actually fires something', () => {
     const { handlers } = renderWithSpies();
-    const pressed = KEYBOARD_SHORTCUT_DOCS.map((doc) => {
+    const pressed = APP_DOCS.map((doc) => {
       press(doc.key.length === 1 ? doc.key.toLowerCase() : doc.key, {
         meta: Boolean(doc.meta || doc.ctrl),
         shift: Boolean(doc.shift),
@@ -128,9 +159,9 @@ describe('useKeyboardShortcuts bindings', () => {
       return doc.description;
     });
 
-    expect(pressed).toHaveLength(KEYBOARD_SHORTCUT_DOCS.length);
+    expect(pressed).toHaveLength(APP_DOCS.length);
     const totalCalls = Object.values(handlers).reduce((sum, spy) => sum + spy.mock.calls.length, 0);
-    expect(totalCalls).toBe(KEYBOARD_SHORTCUT_DOCS.length);
+    expect(totalCalls).toBe(APP_DOCS.length);
   });
 
   it('does not steal Escape while the user is typing', () => {

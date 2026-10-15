@@ -25,6 +25,7 @@ export const maxDuration = 30;
 function toPublicHealthCheck(healthCheck: HealthCheckResult) {
   const { configuration = [], dependencies = [], ...rest } = healthCheck;
   const missingCount = rest.checks.environment.missingCount;
+  const stripeMessage = rest.checks.stripe.message;
   const tally = (observation: DependencyObservation) =>
     dependencies.filter((entry) => entry.observation === observation).length;
 
@@ -32,6 +33,10 @@ function toPublicHealthCheck(healthCheck: HealthCheckResult) {
     ...rest,
     checks: {
       ...rest.checks,
+      stripe: {
+        status: rest.checks.stripe.status,
+        ...(stripeMessage === undefined ? {} : { message: stripeMessage }),
+      },
       environment: {
         status: rest.checks.environment.status,
         ...(missingCount === undefined ? {} : { missingCount }),

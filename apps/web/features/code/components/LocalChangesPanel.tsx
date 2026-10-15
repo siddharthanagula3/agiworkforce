@@ -12,7 +12,7 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { CODE_COPY, changeStateLabel } from '../code-surface';
 import { diffByPath } from '../code-diff';
 import { LOCAL_CODE_COPY } from '../local-code';
-import { DiffBody } from './CodeChangesPanel';
+import { DiffBody } from './CodeDiffFile';
 import { LocalFileEditor } from './LocalFileEditor';
 import { LocalPullRequest } from './LocalPullRequest';
 import { LocalTerminal } from './LocalTerminal';

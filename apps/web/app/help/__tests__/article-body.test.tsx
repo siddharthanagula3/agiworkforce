@@ -22,7 +22,7 @@ describe('help article body', () => {
       { text: 'Shortcut', scope: 'col' },
       { text: 'What it does', scope: 'col' },
     ]);
-    expect(container.querySelectorAll('tbody tr')).toHaveLength(8);
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(13);
     expect(container.textContent).not.toContain('| --');
 
     const region = container.querySelector('table')?.parentElement;

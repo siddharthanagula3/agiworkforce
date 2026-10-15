@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react';
 import type { HostUpdateAvailability } from '@agiworkforce/local-runtime-contract';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useDesktopHost } from '../lib/host';
+import { installUpdate } from '../lib/update-install';
 
 const LABEL = 'App version';
 const CHECK_LABEL = 'Check for updates';
@@ -54,16 +55,24 @@ const buttonStyle: CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
+function formatCheckedAt(iso: string): string | null {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
 export function DesktopUpdateRow() {
   const host = useDesktopHost();
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<HostUpdateAvailability | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [installStatus, setInstallStatus] = useState<string | null>(null);
 
   const onCheck = useCallback(async () => {
     if (!host) return;
     setChecking(true);
     setError(null);
+    setInstallStatus(null);
     try {
       setResult(await host.checkForUpdate());
     } catch (cause) {
@@ -74,11 +83,27 @@ export function DesktopUpdateRow() {
     }
   }, [host]);
 
+  const onInstall = useCallback(
+    async (restart: boolean) => {
+      if (!host) return;
+      setError(null);
+      setInstallStatus(null);
+      const feedback = await installUpdate(host, restart);
+      if (feedback?.kind === 'error') setError(feedback.message);
+      if (feedback?.kind === 'status') setInstallStatus(feedback.message);
+    },
+    [host],
+  );
+
   if (!host) return null;
 
   const updateAvailable = result?.available === true;
-  const readyToInstall = updateAvailable && result.readyToInstall === true;
-  const downloading = updateAvailable && !readyToInstall && result.installsAutomatically === true;
+  const readyToInstall = updateAvailable && result?.readyToInstall === true;
+  const downloading =
+    updateAvailable &&
+    !readyToInstall &&
+    (result?.downloading === true || result?.installsAutomatically === true);
+  const lastChecked = result?.checkedAt ? formatCheckedAt(result.checkedAt) : null;
 
   return (
     <div style={rowStyle}>
@@ -91,13 +116,17 @@ export function DesktopUpdateRow() {
           <p role="alert" style={errorStyle}>
             {error}
           </p>
+        ) : installStatus ? (
+          <p role="status" style={hintStyle}>
+            {installStatus}
+          </p>
         ) : readyToInstall ? (
           <p role="status" style={hintStyle}>
-            {`Version ${result.version} is ready to install.`}
+            {`Version ${result?.version} is ready. Restart AGI Cloud to finish updating.`}
           </p>
         ) : downloading ? (
           <p role="status" style={hintStyle}>
-            {`Version ${result.version} is downloading. You will be told when it is ready.`}
+            {`Version ${result?.version} is downloading. You will be told when it is ready.`}
           </p>
         ) : updateAvailable ? (
           <p role="status" style={hintStyle}>
@@ -108,6 +137,7 @@ export function DesktopUpdateRow() {
             {UP_TO_DATE}
           </p>
         ) : null}
+        {lastChecked ? <p style={hintStyle}>{`Last checked ${lastChecked}`}</p> : null}
       </div>
       <div style={{ display: 'flex', flexShrink: 0, gap: 'var(--space-2)' }}>
         <button
@@ -119,7 +149,11 @@ export function DesktopUpdateRow() {
           {checking ? CHECKING_LABEL : CHECK_LABEL}
         </button>
         {updateAvailable && !downloading ? (
-          <button type="button" style={buttonStyle} onClick={() => void host.openUpdateInstaller()}>
+          <button
+            type="button"
+            style={buttonStyle}
+            onClick={() => void onInstall(readyToInstall && host.restartToUpdate !== undefined)}
+          >
             {readyToInstall ? RESTART_LABEL : INSTALL_LABEL}
           </button>
         ) : null}

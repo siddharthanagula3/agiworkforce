@@ -20,6 +20,7 @@ vi.mock('@/lib/model-tiers', () => ({
 
 const mockResolveProviderFromModel = vi.fn();
 vi.mock('@/lib/services/provider-adapter-service', () => ({
+  serverProviderHasEndpointOverride: () => false,
   resolveProviderFromModel: (...args: unknown[]) => mockResolveProviderFromModel(...args),
   listAvailableManagedProviderIds: () => new Set<string>(),
 }));

@@ -1,7 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+import { getDefaultAutoRoutingProfile } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/services/cloud-agent-run-service');
 type ScanModule1 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule2 = typeof import('../lib/request-processor');
+
+const PRIORITY_REQUESTS = {
+  priority: {
+    method: 'elicitation/create',
+    params: {
+      mode: 'form',
+      message: 'Which priority?',
+      requestedSchema: {
+        type: 'object',
+        properties: { priority: { type: 'string', enum: ['low', 'high'] } },
+        required: ['priority'],
+      },
+    },
+  },
+};
+const PRIORITY_ANSWER = { priority: { action: 'accept', content: { priority: 'high' } } };
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const CHECKPOINT_ID = '0190a000-0000-7000-8000-000000000002';
@@ -29,7 +47,8 @@ vi.mock('@/lib/managed-compute-gate', () => ({
 }));
 
 const mockProcessRequest = vi.fn();
-vi.mock('../lib/request-processor', () => ({
+vi.mock('../lib/request-processor', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule2>()),
   processRequest: (...args: unknown[]) => mockProcessRequest(...args),
   toManagedSkillFromUserSkill: vi.fn(),
   resolveNativeSearchMaxUses: () => 3,
@@ -93,6 +112,9 @@ import {
   CloudAgentApprovalCheckpointNotFoundError,
   CloudAgentApprovalCheckpointExpiredError,
 } from '@/lib/services/cloud-agent-run-service';
+import { buildApprovalCheckpointRequest } from '../lib/approval-checkpoint-request';
+import type { ModelSelection } from '../lib/capability-preamble';
+import type { ChatCompletionRequest } from '../lib/request-processor';
 import { POST } from './route';
 
 const suspendedMessages = [
@@ -141,13 +163,13 @@ const claimedCheckpoint = {
     resolvedAt: null,
     createdAt: '2026-07-18T00:00:00.000Z',
     updatedAt: '2026-07-18T00:00:00.000Z',
-    inputRequests: { call_1: { priority: { type: 'string' } } },
+    inputRequests: { call_1: PRIORITY_REQUESTS },
     requestState: { call_1: { requestState: 'token-1', round: 0 } },
   },
   resumptions: [
     {
       toolCallId: 'call_1',
-      inputResponses: { priority: 'high' },
+      inputResponses: PRIORITY_ANSWER,
       requestState: 'token-1',
       round: 1,
     },
@@ -170,7 +192,7 @@ function makeRequest(body: unknown): NextRequest {
 function resumeBody(toolCallId = 'call_1') {
   return {
     run_id: RUN_ID,
-    tool_inputs: [{ tool_call_id: toolCallId, input_responses: { priority: 'high' } }],
+    tool_inputs: [{ tool_call_id: toolCallId, input_responses: PRIORITY_ANSWER }],
   };
 }
 
@@ -238,6 +260,89 @@ describe('POST /api/llm/v1/chat/completions/resume-input, durable MRTR boundary'
     );
   });
 
+  it.each([
+    [
+      'a value outside the enum',
+      { priority: { action: 'accept', content: { priority: 'urgent' } } },
+    ],
+    [
+      'a field the server did not ask for',
+      {
+        priority: { action: 'accept', content: { priority: 'high', token: 'x' } },
+      },
+    ],
+    ['a missing required field', { priority: { action: 'accept', content: {} } }],
+    ['an answer key the server did not ask', { other: { action: 'cancel' } }],
+  ])('refuses %s before any turn work and releases the lease', async (_case, answer) => {
+    checkpointMocks.claim.mockResolvedValue({
+      ...claimedCheckpoint,
+      resumptions: [{ ...claimedCheckpoint.resumptions[0]!, inputResponses: answer }],
+    });
+    const response = await POST(
+      makeRequest({
+        run_id: RUN_ID,
+        tool_inputs: [{ tool_call_id: 'call_1', input_responses: answer }],
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(checkpointMocks.release).toHaveBeenCalledTimes(1);
+    expect(mockProcessRequest).not.toHaveBeenCalled();
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+  });
+
+  it.each(['decline', 'cancel'] as const)(
+    'threads an explicit %s through to the server',
+    async (action) => {
+      const answer = { priority: { action } };
+      checkpointMocks.claim.mockResolvedValue({
+        ...claimedCheckpoint,
+        resumptions: [{ ...claimedCheckpoint.resumptions[0]!, inputResponses: answer }],
+      });
+      const response = await POST(
+        makeRequest({
+          run_id: RUN_ID,
+          tool_inputs: [{ tool_call_id: 'call_1', input_responses: answer }],
+        }),
+      );
+      expect(response.status).toBe(200);
+      const continuation = workflowMocks.start.mock.calls[0]?.[0] as {
+        continuation: { resume: { inputResponses: Array<{ inputResponses: unknown }> } };
+      };
+      expect(continuation.continuation.resume.inputResponses[0]?.inputResponses).toEqual(answer);
+    },
+  );
+
+  it('refuses an input request that is not a renderable elicitation', async () => {
+    checkpointMocks.claim.mockResolvedValue({
+      ...claimedCheckpoint,
+      checkpoint: {
+        ...claimedCheckpoint.checkpoint,
+        inputRequests: { call_1: { priority: { method: 'sampling/createMessage', params: {} } } },
+      },
+    });
+    const response = await POST(makeRequest(resumeBody()));
+    expect(response.status).toBe(400);
+    expect(checkpointMocks.release).toHaveBeenCalledTimes(1);
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+  });
+
+  it('keeps current Google-data routing refusal ahead of provider execution', async () => {
+    mockProcessRequest.mockResolvedValue({
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: { code: 'no_training_model_unavailable' },
+        },
+        { status: 503 },
+      ),
+    });
+    const response = await POST(makeRequest(resumeBody()));
+    expect(response.status).toBe(503);
+    expect(checkpointMocks.release).toHaveBeenCalledOnce();
+    expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+  });
+
   it('rejects a malformed body before claiming a checkpoint', async () => {
     const response = await POST(makeRequest({ tool_inputs: [] }));
 
@@ -291,7 +396,7 @@ describe('POST /api/llm/v1/chat/completions/resume-input, durable MRTR boundary'
       db,
       expect.objectContaining({
         runId: RUN_ID,
-        inputs: [{ toolCallId: 'call_1', inputResponses: { priority: 'high' } }],
+        inputs: [{ toolCallId: 'call_1', inputResponses: PRIORITY_ANSWER }],
         leaseSeconds: 86_400,
       }),
     );
@@ -310,7 +415,7 @@ describe('POST /api/llm/v1/chat/completions/resume-input, durable MRTR boundary'
             inputResponses: [
               {
                 toolCallId: 'call_1',
-                inputResponses: { priority: 'high' },
+                inputResponses: PRIORITY_ANSWER,
                 requestState: 'token-1',
                 round: 1,
               },
@@ -323,6 +428,33 @@ describe('POST /api/llm/v1/chat/completions/resume-input, durable MRTR boundary'
     expect(response.headers.get('X-AGI-Agent-Run-Id')).toBe(RUN_ID);
     expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBe('wrun_input_1');
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('resume-input');
+  });
+
+  it('resumes the run under the model selection its transcript was rendered for', async () => {
+    const autoSelection: ModelSelection = {
+      kind: 'picked',
+      modelId: getDefaultAutoRoutingProfile().id,
+    };
+    checkpointMocks.claim.mockResolvedValue({
+      ...claimedCheckpoint,
+      checkpoint: {
+        ...claimedCheckpoint.checkpoint,
+        request: buildApprovalCheckpointRequest(
+          claimedCheckpoint.checkpoint.request as unknown as ChatCompletionRequest,
+          {},
+          [],
+          autoSelection,
+        ),
+      },
+    });
+
+    await (await POST(makeRequest(resumeBody()))).text();
+
+    expect(workflowMocks.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        processed: expect.objectContaining({ modelSelection: autoSelection }),
+      }),
+    );
   });
 
   it('releases the checkpoint lease when current request validation cannot proceed', async () => {

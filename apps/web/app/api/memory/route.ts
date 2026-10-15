@@ -14,8 +14,12 @@ import {
   type ManagedMemoryWriteResponse,
 } from '@agiworkforce/types';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { assertMemoryWriteAllowed } from '@/lib/services/memory-write-service';
 import {
+  assertMemoryWriteAllowed,
+  memoryRefusalResponse,
+} from '@/lib/services/memory-write-service';
+import {
+  AUTO_MEMORY_SOURCE,
   DELETED_MEMORY_ASSIGNMENTS,
   MemoryIneligibleError,
   activeMemoryPredicate,
@@ -154,13 +158,12 @@ async function handleCreateMemory(request: NextRequest) {
       projectId,
       organizationId: organizationId ?? null,
       expiresAt: expiry.expiresAt ?? null,
+      userRequested: source !== AUTO_MEMORY_SOURCE,
     });
     if (!written) throw new Error('No row returned');
     row = written;
   } catch (error) {
-    if (error instanceof MemoryIneligibleError) {
-      throw createError.forbidden(error.message).asUserSafe();
-    }
+    if (error instanceof MemoryIneligibleError) return memoryRefusalResponse(error.message);
     logger.error({ error, userId }, 'Failed to create memory');
     throw createError.internal('Failed to create memory');
   }

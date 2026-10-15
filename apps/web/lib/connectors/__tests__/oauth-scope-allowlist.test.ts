@@ -10,6 +10,7 @@ import { grantCoversScopes, grantRequiresReconsent, scopeEscalation } from '../s
 const GMAIL_CEILING = CONNECTOR_OAUTH_SCOPE_CEILINGS['gmail'] as readonly string[];
 const GMAIL_SEND = GMAIL_CEILING.find((scope) => scope.endsWith('gmail.send')) as string;
 const GMAIL_READ = GMAIL_CEILING.find((scope) => scope.endsWith('gmail.readonly')) as string;
+const GMAIL_COMPOSE = 'https://www.googleapis.com/auth/gmail.compose';
 
 describe('scopeEscalation', () => {
   it('reports nothing when the grant already covers the request', () => {
@@ -21,6 +22,12 @@ describe('scopeEscalation', () => {
     const result = scopeEscalation('gmail', [GMAIL_READ], [GMAIL_READ, GMAIL_SEND]);
     expect(result.escalated).toBe(true);
     expect(result.added).toEqual([GMAIL_SEND]);
+  });
+
+  it('requires explicit consent for draft access beyond a read and send grant', () => {
+    expect(
+      scopeEscalation('gmail', [GMAIL_READ, GMAIL_SEND], [GMAIL_READ, GMAIL_COMPOSE, GMAIL_SEND]),
+    ).toEqual({ escalated: true, added: [GMAIL_COMPOSE], refused: [] });
   });
 
   it('does not read a spelling change as an escalation', () => {
@@ -55,6 +62,67 @@ describe('grantRequiresReconsent', () => {
         declaredScopes: [GMAIL_READ, GMAIL_SEND],
       }),
     ).toBe(true);
+  });
+
+  it('requires re-consent for an existing Gmail grant without compose access', () => {
+    expect(
+      grantRequiresReconsent({
+        connectorId: 'gmail',
+        grantedScopes: [GMAIL_READ, GMAIL_SEND],
+        declaredScopes: [GMAIL_READ, GMAIL_COMPOSE, GMAIL_SEND],
+      }),
+    ).toBe(true);
+    expect(grantCoversScopes([GMAIL_READ, GMAIL_SEND], [GMAIL_COMPOSE])).toBe(false);
+  });
+
+  it('requires re-consent before reading existing Drive file contents', () => {
+    const grantedScopes = [
+      'https://www.googleapis.com/auth/drive.file',
+      'https://www.googleapis.com/auth/drive.metadata.readonly',
+    ];
+    const existingFileRead = 'https://www.googleapis.com/auth/drive.readonly';
+    expect(
+      scopeEscalation('google-drive', grantedScopes, [...grantedScopes, existingFileRead]),
+    ).toEqual({ escalated: true, added: [existingFileRead], refused: [] });
+    expect(grantCoversScopes(grantedScopes, [existingFileRead])).toBe(false);
+  });
+
+  it('requires re-consent before listing calendars with an events-only grant', () => {
+    const events = 'https://www.googleapis.com/auth/calendar.events';
+    const calendarListRead = 'https://www.googleapis.com/auth/calendar.calendarlist.readonly';
+    expect(scopeEscalation('google-calendar', [events], [events, calendarListRead])).toEqual({
+      escalated: true,
+      added: [calendarListRead],
+      refused: [],
+    });
+    expect(
+      grantRequiresReconsent({
+        connectorId: 'google-calendar',
+        grantedScopes: [events],
+        declaredScopes: [events, calendarListRead],
+      }),
+    ).toBe(true);
+    expect(grantCoversScopes([events], [calendarListRead])).toBe(false);
+  });
+
+  it('requires explicit consent to add People directory and profile access', () => {
+    const contactsRead = 'https://www.googleapis.com/auth/contacts.readonly';
+    const directoryRead = 'https://www.googleapis.com/auth/directory.readonly';
+    const profileRead = 'https://www.googleapis.com/auth/userinfo.profile';
+    const declaredScopes = [contactsRead, directoryRead, profileRead];
+    expect(scopeEscalation('google-contacts', [contactsRead], declaredScopes)).toEqual({
+      escalated: true,
+      added: [directoryRead, profileRead],
+      refused: [],
+    });
+    expect(
+      grantRequiresReconsent({
+        connectorId: 'google-contacts',
+        grantedScopes: [contactsRead],
+        declaredScopes,
+      }),
+    ).toBe(true);
+    expect(grantCoversScopes([contactsRead], [directoryRead, profileRead])).toBe(false);
   });
 
   it('leaves an unchanged connector alone', () => {

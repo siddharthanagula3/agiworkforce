@@ -33,6 +33,10 @@ const ENV_KEYS = [
   'CONNECTOR_OAUTH_GMAIL_CLIENT_SECRET',
   'CONNECTOR_OAUTH_GOOGLE_DRIVE_CLIENT_ID',
   'CONNECTOR_OAUTH_GOOGLE_DRIVE_CLIENT_SECRET',
+  'CONNECTOR_OAUTH_GOOGLE_CALENDAR_CLIENT_ID',
+  'CONNECTOR_OAUTH_GOOGLE_CALENDAR_CLIENT_SECRET',
+  'CONNECTOR_OAUTH_GOOGLE_CONTACTS_CLIENT_ID',
+  'CONNECTOR_OAUTH_GOOGLE_CONTACTS_CLIENT_SECRET',
   'CONNECTOR_OAUTH_NOTION_CLIENT_ID',
   'CONNECTOR_OAUTH_NOTION_CLIENT_SECRET',
   'CONNECTOR_OAUTH_AIRTABLE_CLIENT_ID',
@@ -124,14 +128,106 @@ describe('connector OAuth scope ceiling, operator descriptors cannot exceed it',
     ]);
   });
 
-  it('refuses the unrestricted Drive scope while keeping drive.file', () => {
+  it('requests Gmail draft access while excluding mailbox modification and full access', () => {
+    const permitted = [
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/gmail.compose',
+      'https://www.googleapis.com/auth/gmail.send',
+    ];
+    configure('gmail', [
+      ...permitted,
+      'https://www.googleapis.com/auth/gmail.modify',
+      'https://mail.google.com/',
+    ]);
+    const provider = getConnectorOAuthProvider('gmail')!;
+    expect(provider.scopes).toEqual(permitted);
+    const url = new URL(
+      buildAuthorizationUrl({
+        provider,
+        redirectUri: REDIRECT_URI,
+        state: 'a'.repeat(64),
+        codeChallenge: 'challenge-value',
+        resource: 'https://mcp.example.com/mcp',
+      }),
+    );
+    expect(url.searchParams.get('scope')?.split(' ')).toEqual(permitted);
+  });
+
+  it('refuses unrestricted Drive access while permitting existing-file reads and per-file writes', () => {
     configure('google-drive', [
       'https://www.googleapis.com/auth/drive',
       'https://www.googleapis.com/auth/drive.file',
+      'https://www.googleapis.com/auth/drive.readonly',
     ]);
     expect(getConnectorOAuthProvider('google-drive')?.scopes).toEqual([
       'https://www.googleapis.com/auth/drive.file',
+      'https://www.googleapis.com/auth/drive.readonly',
     ]);
+  });
+
+  it.each([
+    {
+      connectorId: 'gmail',
+      scopes: [
+        'https://www.googleapis.com/auth/gmail.readonly',
+        'https://www.googleapis.com/auth/gmail.compose',
+      ],
+    },
+    {
+      connectorId: 'google-drive',
+      scopes: [
+        'https://www.googleapis.com/auth/drive.readonly',
+        'https://www.googleapis.com/auth/drive.file',
+      ],
+    },
+    {
+      connectorId: 'google-calendar',
+      scopes: [
+        'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+        'https://www.googleapis.com/auth/calendar.events',
+      ],
+    },
+    {
+      connectorId: 'google-contacts',
+      scopes: [
+        'https://www.googleapis.com/auth/contacts.readonly',
+        'https://www.googleapis.com/auth/directory.readonly',
+        'https://www.googleapis.com/auth/userinfo.profile',
+      ],
+    },
+  ])('preserves the product-only MCP request for $connectorId', ({ connectorId, scopes }) => {
+    configure(connectorId, scopes);
+    const provider = getConnectorOAuthProvider(connectorId)!;
+    expect(provider.scopes).toEqual(scopes);
+    const url = new URL(
+      buildAuthorizationUrl({
+        provider,
+        redirectUri: REDIRECT_URI,
+        state: 'a'.repeat(64),
+        codeChallenge: 'challenge-value',
+        resource: 'https://mcp.example.com/mcp',
+      }),
+    );
+    expect(url.searchParams.get('scope')?.split(' ')).toEqual(scopes);
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('refuses the read-write People scope for the read-only contacts connector', () => {
+    const permitted = [
+      'https://www.googleapis.com/auth/contacts.readonly',
+      'https://www.googleapis.com/auth/directory.readonly',
+      'https://www.googleapis.com/auth/userinfo.profile',
+    ];
+    configure('google-contacts', [...permitted, 'https://www.googleapis.com/auth/contacts']);
+    expect(isConnectorScopeCeilingEnforced('google-contacts')).toBe(true);
+    expect(getConnectorOAuthProvider('google-contacts')?.scopes).toEqual(permitted);
+    expect(logger.warn).toHaveBeenCalledWith(
+      {
+        connectorId: 'google-contacts',
+        dropped: ['https://www.googleapis.com/auth/contacts'],
+      },
+      expect.stringContaining('above the documented ceiling'),
+    );
   });
 
   it('requests no scope at all for a provider whose OAuth has no scope parameter', () => {

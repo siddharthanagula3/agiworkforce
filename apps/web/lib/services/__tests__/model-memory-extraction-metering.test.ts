@@ -46,12 +46,13 @@ vi.mock('@agiworkforce/agent-core', async (importOriginal) => {
           input: { systemPrompt: string; message: string },
           signal: AbortSignal,
         ) => Promise<string>;
+        systemPrompt?: string;
         onFallback?: (reason: string) => void;
       },
     ) => {
       try {
         const content = await options.runner(
-          { systemPrompt: 'extract', message },
+          { systemPrompt: options.systemPrompt ?? 'extract', message },
           new AbortController().signal,
         );
         return { facts: [content] };
@@ -68,8 +69,14 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
   drainToLlmResponse: (...args: unknown[]) => drainToLlmResponseMock(...args),
 }));
 
+const streamedRequests: unknown[] = [];
 vi.mock('@/lib/services/provider-adapter-service', () => ({
-  buildServerProviderAdapter: () => ({ stream: () => (async function* () {})() }),
+  buildServerProviderAdapter: () => ({
+    stream: (request: unknown) => {
+      streamedRequests.push(request);
+      return (async function* () {})();
+    },
+  }),
   toGenericUpstreamError: (provider: string) => new Error(`upstream ${provider}`),
   buildProtocolRouteAdapter: vi.fn(),
 }));
@@ -112,12 +119,17 @@ function input(overrides: Record<string, unknown> = {}) {
     organizationId: null,
     planTier: 'pro',
     requestId: 'request-1',
+    promptVariants: {
+      'product.memory_fact_extraction': 3,
+      'product.memory_fact_extraction_all_topics': 2,
+    },
     ...overrides,
   } as Parameters<typeof extractAutoMemoryFactsWithModel>[0];
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  streamedRequests.length = 0;
   runnerResult.mockReset();
   drainToLlmResponseMock.mockResolvedValue({
     content: 'User lives in Berlin',
@@ -143,6 +155,39 @@ describe('extractAutoMemoryFactsWithModel metering', () => {
     expect(finalizeMock).toHaveBeenCalledTimes(1);
     expect(finalizeMock.mock.calls[0]?.[0]).toMatchObject({ outcome: 'completed' });
     expect(facts).toEqual(['User lives in Berlin']);
+  });
+
+  it('sends the extraction prompt the opt-in and the turn select', async () => {
+    await extractAutoMemoryFactsWithModel(input());
+    await extractAutoMemoryFactsWithModel(
+      input({ includeSensitiveTopics: true, requestId: 'request-2' }),
+    );
+
+    expect(JSON.stringify(streamedRequests[0])).toContain('Leave out any fact about the user');
+    expect(JSON.stringify(streamedRequests[1])).not.toContain('Leave out any fact about the user');
+    for (const request of streamedRequests) {
+      expect(JSON.stringify(request)).toContain('criminal history or immigration status');
+    }
+  });
+
+  it('reserves nothing for an account with the opt-in while the served prompt never names what memory never keeps', async () => {
+    expect(
+      await extractAutoMemoryFactsWithModel(
+        input({ promptVariants: {}, includeSensitiveTopics: true }),
+      ),
+    ).toEqual(['pattern fact']);
+
+    expect(reserveMock).not.toHaveBeenCalled();
+    expect(streamedRequests).toHaveLength(0);
+  });
+
+  it('reserves nothing for an account without the opt-in while the served prompt reads every topic', async () => {
+    expect(await extractAutoMemoryFactsWithModel(input({ promptVariants: {} }))).toEqual([
+      'pattern fact',
+    ]);
+
+    expect(reserveMock).not.toHaveBeenCalled();
+    expect(streamedRequests).toHaveLength(0);
   });
 
   it('skips extraction and keeps the pattern facts when the reservation is refused', async () => {

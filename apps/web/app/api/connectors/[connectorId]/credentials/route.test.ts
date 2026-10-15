@@ -24,6 +24,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readPrimaryEmailState: vi.fn(async () => ({ confirmed: true, email: 'person@example.com' })),
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/cors', () => ({

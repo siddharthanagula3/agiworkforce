@@ -20,6 +20,14 @@
     "tool.url_fetch_description@2": "sha256:175a76ffef35f5d33b45e9d07e5ce7dc3af6b561a6e1a181dfd365a49117d958",
     "tool.places_search_description@1": "sha256:3843724a46bc0b0b2ede1f94449536f2c0dc1a4e9d9f890f181386809b596310",
     "safety.untrusted_context@1": "sha256:2815c21a690488aec90f38edf052e48118cc1e2e14ae818f13e485d29e56b79b",
-    "routing.response_assessment@1": "sha256:f6b217787691935c40ade1d63710294208784d54e7dd08349d4129cd86cd818e"
+    "routing.response_assessment@1": "sha256:f6b217787691935c40ade1d63710294208784d54e7dd08349d4129cd86cd818e",
+    "chat.system@8": "sha256:00e136cd0eb14e456150b2bd7319796aea839f73136f0d4e5b416e4c352ebb63",
+    "chat.system@9": "sha256:d138172c1df221237c919b398ab157ef28ac713ed9f2c91902b3fe3f5d333ed4",
+    "chat.system@10": "sha256:2f9e40fb7d0a5f0c19613332094ebb78fec57c33d860e46298d04ad4605a06d1",
+    "voice.live_instructions@2": "sha256:f22d059d91ea638c2dd4f8796b6cdb847123b4daf377b75f3907f04a43587d24",
+    "product.memory_fact_extraction@2": "sha256:e05c18702281e0fe823a907439bd38f47b1fe09216021b14e66f6d35d4e46387",
+    "product.memory_fact_extraction@3": "sha256:8de084d7cb0662b6ef9353948e24f7ce5619deab672fb1921ed0d1d59c61bbb2",
+    "product.memory_fact_extraction_all_topics@1": "sha256:efe64ca58c9d7222a007ef00467865646b4cd5cc0773549f36045c1c004d7a85",
+    "product.memory_fact_extraction_all_topics@2": "sha256:30f06130c863619bae754415ec25d528c9b5d7895d845c3326bfab39ab44cead"
   }
 }

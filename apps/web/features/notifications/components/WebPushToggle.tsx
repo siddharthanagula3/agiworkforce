@@ -9,11 +9,14 @@ import {
   readNotificationPermission,
   registerNotificationWorker,
 } from '../lib/web-push-client';
+import { isDesktopHost } from '@/features/desktop-host/lib/host';
 
-type ToggleState = 'unsupported' | 'blocked' | 'off' | 'on';
+type ToggleState = 'unsupported' | 'desktop' | 'blocked' | 'off' | 'on';
 
 const STATE_DESCRIPTION: Record<ToggleState, string> = {
   unsupported: 'This browser cannot receive notifications.',
+  desktop:
+    'The desktop app notifies you through macOS, so there is nothing to turn on here. Choose what it tells you about in General desktop settings, under Agent notifications.',
   blocked: 'Notifications are blocked for this site in your browser settings.',
   off: 'Get told when a run finishes, fails, or needs your approval.',
   on: 'This browser will be notified when a run finishes.',
@@ -32,6 +35,10 @@ export function useWebPushToggle(): WebPushToggleState {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (isDesktopHost()) {
+      setState('desktop');
+      return undefined;
+    }
     if (!isWebPushSupported()) return undefined;
 
     let active = true;

@@ -1,5 +1,11 @@
 import { getAuthToken } from '@shared/lib/get-auth-token';
+import { queryClient, queryKeys } from '@shared/stores/query-client';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import {
+  continueInBrowser,
+  type BrowserHandoffOutcome,
+} from '@/features/desktop-host/lib/browser-handoff';
 import { loadStripe } from '@stripe/stripe-js/pure';
 import {
   getBillingPlanPricing,
@@ -12,25 +18,40 @@ import {
   apiErrorMessage as extractErrorMessage,
 } from '../lib/api-error';
 import { rememberPendingCheckout } from '../lib/pending-checkout';
-import { getHostBridge } from '@agiworkforce/local-runtime-contract';
+import { WAITLIST_ACCESS_REQUIRED_CODE } from '@/lib/validations/upgrade-waitlist';
 
-export type PaymentPageOpening = 'window' | 'browser';
+export class UpgradeAccessRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UpgradeAccessRequiredError';
+  }
+}
+
+const HOSTED_BILLING_DETAIL = {
+  checkout:
+    'Checkout opened in your browser. Pay there, then come back: this window reads your plan again when you return.',
+  portal:
+    'The billing portal opened in your browser. Make your changes there, then come back: this window reads your plan again when you return.',
+  topUp:
+    'Top-up checkout opened in your browser. Pay there, then come back: this window reads your balance again when you return.',
+} as const;
+
+async function rereadPlan(): Promise<void> {
+  await Promise.all([
+    useBillingStore.getState().refreshUser(),
+    queryClient.invalidateQueries({ queryKey: queryKeys.billing.all() }),
+  ]);
+}
 
 /**
- * Stripe's hosted pages open in this tab on the web. The desktop window sends
- * any page off the product to the system browser, which left the button
- * spinning and the plan stale; it now opens them there on purpose and reads the
- * account again when the user comes back.
+ * Stripe's pages are not hosted in the desktop window, so the shell opens them
+ * in the browser and this window waits. In a browser the page itself goes.
  */
-function openPaymentPage(url: string, onReturn?: () => void): PaymentPageOpening {
-  const host = getHostBridge();
-  if (host?.shell !== 'electron') {
-    window.location.href = url;
-    return 'window';
-  }
-  void host.openExternal(url);
-  if (onReturn) window.addEventListener('focus', () => onReturn(), { once: true });
-  return 'browser';
+function goToHostedBilling(
+  url: string,
+  page: keyof typeof HOSTED_BILLING_DETAIL,
+): BrowserHandoffOutcome {
+  return continueInBrowser(url, { detail: HOSTED_BILLING_DETAIL[page], refresh: rereadPlan });
 }
 
 function seatsForPlan(plan: SelfServePaidPlanTier, seats: number | undefined): number | undefined {
@@ -140,8 +161,7 @@ export async function fetchSavedPaymentMethods(): Promise<SavedPaymentMethod[]> 
 export async function openBillingPortal(
   returnPath?: string,
   flow?: 'cancel',
-  onReturn?: () => void,
-): Promise<PaymentPageOpening> {
+): Promise<BrowserHandoffOutcome> {
   const authToken = await getAuthToken();
   if (!authToken) {
     throw new Error('User not authenticated. Please log in to access billing.');
@@ -164,7 +184,7 @@ export async function openBillingPortal(
 
   const { url } = await response.json();
 
-  return openPaymentPage(url, onReturn);
+  return goToHostedBilling(url, 'portal');
 }
 
 export function isStripeConfigured(): boolean {
@@ -181,25 +201,31 @@ export function getStripeConfig() {
   };
 }
 
-export async function upgradeToProPlan(data: { userId: string; userEmail: string }): Promise<void> {
+export async function upgradeToProPlan(data: {
+  userId: string;
+  userEmail: string;
+}): Promise<BrowserHandoffOutcome> {
   return upgradeToPlan({ ...data, plan: 'pro' });
 }
 
-export async function upgradeToMaxPlan(data: { userId: string; userEmail: string }): Promise<void> {
+export async function upgradeToMaxPlan(data: {
+  userId: string;
+  userEmail: string;
+}): Promise<BrowserHandoffOutcome> {
   return upgradeToPlan({ ...data, plan: 'max' });
 }
 
 export async function upgradeToMax15xPlan(data: {
   userId: string;
   userEmail: string;
-}): Promise<void> {
+}): Promise<BrowserHandoffOutcome> {
   return upgradeToPlan({ ...data, plan: 'max_15x' });
 }
 
 export async function upgradeToBasicPlan(data: {
   userId: string;
   userEmail: string;
-}): Promise<void> {
+}): Promise<BrowserHandoffOutcome> {
   return upgradeToPlan({ ...data, plan: 'basic' });
 }
 
@@ -210,7 +236,7 @@ async function upgradeToPlan(data: {
   billingPeriod?: 'monthly' | 'yearly';
   seats?: number;
   premiumSeats?: number;
-}): Promise<void> {
+}): Promise<BrowserHandoffOutcome> {
   void data.userId;
   void data.userEmail;
   const authToken = await getAuthToken();
@@ -238,29 +264,28 @@ async function upgradeToPlan(data: {
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(
-      extractErrorMessage(
-        error,
-        `Failed to create ${getBillingPlanPricing(data.plan).label} subscription`,
-      ),
+    const message = extractErrorMessage(
+      error,
+      `Failed to create ${getBillingPlanPricing(data.plan).label} subscription`,
     );
+    if (extractErrorCode(error) === WAITLIST_ACCESS_REQUIRED_CODE) {
+      throw new UpgradeAccessRequiredError(message);
+    }
+    throw new Error(message);
   }
 
   const { url, sessionId } = (await response.json()) as { url?: string; sessionId?: unknown };
 
-  if (url) {
-    if (typeof sessionId === 'string') rememberPendingCheckout(sessionId, data.plan);
-    openPaymentPage(url);
-  } else {
-    throw new Error('No checkout URL received from server');
-  }
+  if (!url) throw new Error('No checkout URL received from server');
+  if (typeof sessionId === 'string') rememberPendingCheckout(sessionId, data.plan);
+  return goToHostedBilling(url, 'checkout');
 }
 
 export async function startPlanCheckout(data: {
   plan: SelfServePaidPlanTier;
   billingInterval?: 'monthly' | 'yearly';
   seats?: number;
-}): Promise<void> {
+}): Promise<BrowserHandoffOutcome> {
   return upgradeToPlan({
     userId: '',
     userEmail: '',
@@ -270,7 +295,7 @@ export async function startPlanCheckout(data: {
   });
 }
 
-export async function startTopUpCheckout(amountUsd: number): Promise<void> {
+export async function startTopUpCheckout(amountUsd: number): Promise<BrowserHandoffOutcome> {
   const authToken = await getAuthToken();
   if (!authToken) throw new Error('User not authenticated. Please log in to buy a top-up.');
 
@@ -293,14 +318,14 @@ export async function startTopUpCheckout(amountUsd: number): Promise<void> {
   if (typeof result.url !== 'string' || !result.url.startsWith('https://')) {
     throw new Error('Top-up checkout returned an invalid payment URL.');
   }
-  window.location.href = result.url;
+  return goToHostedBilling(result.url, 'topUp');
 }
 
 export async function upgradeToTeamPlan(data: {
   seats: number;
   premiumSeats?: number;
   billingPeriod?: 'monthly' | 'yearly';
-}): Promise<void> {
+}): Promise<BrowserHandoffOutcome> {
   return upgradeToPlan({
     userId: '',
     userEmail: '',

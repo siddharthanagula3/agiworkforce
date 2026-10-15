@@ -197,11 +197,15 @@ export function UpgradeConfirmDialog({
     setError(null);
     try {
       if (checkoutRequired) {
-        await startPlanCheckout({
+        const outcome = await startPlanCheckout({
           plan: request.plan,
           billingInterval: request.billingInterval,
           ...(request.seats === undefined ? {} : { seats: request.seats }),
         });
+        if (outcome === 'handed-off') {
+          setConfirming(false);
+          onCancel();
+        }
         return;
       }
       if (!amountDue) throw new Error('Preview the upgrade price before confirming.');

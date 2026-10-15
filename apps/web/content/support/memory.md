@@ -4,7 +4,7 @@ title: What AGI remembers, and how to change it
 path: /features/memory
 category: chat
 tags: memory, remember, forget, persistent memory, past chats, memory settings, forget everything, import memory, project memory
-updated: 2026-10-06
+updated: 2026-10-15
 scope: public
 ---
 
@@ -18,8 +18,21 @@ Settings, Memory includes these controls, each doing a different thing:
 - **Search past chats**: "Let AGI look up excerpts from your other
   conversations when answering." This reads your history at answer time rather
   than storing facts. It is never used in temporary chats.
+- **Include sensitive topics in memory**: off by default. While it is off, AGI
+  is designed to keep your health, race or ethnicity, religious beliefs,
+  politics, sexual orientation, gender identity or union membership only when
+  you say "Remember that" in a chat on the web, desktop, mobile or Chrome, or
+  add them yourself in Settings, Memory. In the CLI, add one with
+  `agi memory add`. Memories saved earlier stay until you delete them.
 - **Allow memory generation from tool-assisted chats**: whether memories may be
   created from chats that used tools, connectors, code or web search.
+
+## What memory is designed not to keep
+
+AGI is designed not to save some details, even if you ask, and refuses them
+when it recognises them: passwords, keys and tokens, payment card and bank
+account details, government ID numbers, biometric identifiers, street addresses
+and map coordinates, criminal history and immigration status.
 
 ## Clearing memory
 

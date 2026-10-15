@@ -56,6 +56,12 @@ const NAMESPACE_CONSUMERS: Readonly<Record<string, NamespaceConsumer>> = {
   // fallback for the rare case that attribute carries no signal. Fixed
   // 2026-08-24, see WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01.
   privacy: { file: 'lib/sentry-shared.ts', token: 'agi.privacy.shareTelemetry' },
+  // The free quota route reads it before any request reaches the named
+  // provider, so a withdrawal in Settings refuses the very next turn.
+  provider_consent: {
+    file: 'lib/server/named-provider-consent.ts',
+    token: 'NAMED_PROVIDER_CONSENT_NAMESPACE',
+  },
   safety: { file: 'lib/services/managed-content-safety-service.ts' },
   security: { file: 'lib/server/device-signin-policy.ts' },
 };

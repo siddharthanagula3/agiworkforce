@@ -19,7 +19,11 @@ import {
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 
 import { ADAPTER_PROVIDERS } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
-import { buildCapabilityPreamble } from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
+import {
+  buildCapabilityPreamble,
+  servingModelFor,
+  type ServingModel,
+} from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
 import {
   resolveManagedUsageLeaseSeconds,
   type ChatCompletionRequest,
@@ -93,7 +97,7 @@ import type { SlackAssistantSurface } from './slack-events';
 import type { SlackRunMode } from './slack-runs';
 
 const SLACK_ANSWER_DIRECTIVE =
-  'You are AGI Workforce, answering inside Slack. Reply to the latest message in the ' +
+  'This conversation is in Slack. Reply to the latest message in the ' +
   'conversation. Write for Slack: lead with the answer, keep it concise, and use short ' +
   'paragraphs, lists and standard Markdown. Never mention or notify people or channels. ' +
   'Nobody can approve anything in Slack itself, so if a step needs approval, the account ' +
@@ -212,6 +216,7 @@ function systemMessage(input: {
   surface: SlackAssistantSurface;
   mode: SlackRunMode;
   plan: ScheduledToolPlan;
+  servingModel: ServingModel | null;
   timeZone: string | null;
   memoryPrompt: string | null;
   channelContext: string | null;
@@ -227,6 +232,8 @@ function systemMessage(input: {
         input.mode === 'task' ? SLACK_TASK_DIRECTIVE : null,
         buildCapabilityPreamble({
           tools: input.plan.tools,
+          surface: 'slack',
+          servingModel: input.servingModel,
           timeZone: input.timeZone ?? undefined,
           artifactRuntime: false,
         }),
@@ -517,6 +524,7 @@ export async function runSlackAssistantTurn(input: SlackTurnInput): Promise<Slac
           surface: input.surface,
           mode: input.mode,
           plan,
+          servingModel: servingModelFor(route.modelKey, { kind: 'assigned' }),
           timeZone: input.timeZone,
           memoryPrompt,
           channelContext: screened.channelContext,

@@ -14,11 +14,12 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { queryKeys } from '@shared/stores/query-client';
+import { queryClient, queryKeys } from '@shared/stores/query-client';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { logger } from '@shared/lib/logger';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { continueInBrowser } from '@/features/desktop-host/lib/browser-handoff';
 import {
   normalizeUsagePercentage,
   normalizeBillingPlanTier,
@@ -491,7 +492,11 @@ export function useUpdatePaymentMethod(): UseMutationResult<
       }
 
       const { url } = (await response.json()) as { url: string };
-      window.location.href = url;
+      continueInBrowser(url, {
+        detail:
+          'The billing portal opened in your browser. Update your payment method there, then come back: this window reads it again when you return.',
+        refresh: () => queryClient.invalidateQueries({ queryKey: queryKeys.billing.all() }),
+      });
     },
     onError: (error: Error) => {
       logger.error('Failed to open billing portal for payment method update:', error);

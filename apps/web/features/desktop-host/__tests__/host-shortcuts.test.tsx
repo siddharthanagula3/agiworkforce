@@ -6,7 +6,9 @@ import {
   type HostBridge,
   type HostPreferencesState,
 } from '@agiworkforce/local-runtime-contract';
+import { CHAT_SHORTCUTS, findShortcutConflicts } from '@agiworkforce/unified-chat';
 import { useHostShortcuts } from '../hooks/use-host-shortcuts';
+import { CODE_AGENT_MODE_CYCLE_ROW, CODE_AGENT_MODE_CYCLE_SHORTCUT } from '../lib/code-shortcuts';
 
 function preferences(overrides: Partial<HostPreferencesState['preferences']> = {}) {
   return {
@@ -81,6 +83,30 @@ describe('useHostShortcuts', () => {
     }
     expect(screen.getByTestId('host-new-chat').textContent).toBe('New chat ⌘N');
     expect(screen.getByTestId('host-close-window').textContent).toBe('Close window ⌘W');
+  });
+
+  it('lists the coding-session permissions chord with the shell, where coding sessions exist', async () => {
+    installHost({});
+    render(<Harness />);
+
+    expect((await screen.findByTestId(CODE_AGENT_MODE_CYCLE_ROW.id)).textContent).toBe(
+      'In a coding session, switch permissions between Ask, Auto and Plan ⌘⇧M',
+    );
+  });
+
+  it('keeps that chord out of a browser and clear of every chat shortcut', () => {
+    installHost(null);
+    render(<Harness />);
+
+    expect(screen.queryByTestId(CODE_AGENT_MODE_CYCLE_ROW.id)).toBeNull();
+    expect(CHAT_SHORTCUTS.map((shortcut) => shortcut.id)).not.toContain(
+      CODE_AGENT_MODE_CYCLE_ROW.id,
+    );
+    expect(
+      findShortcutConflicts(CHAT_SHORTCUTS, [
+        { id: CODE_AGENT_MODE_CYCLE_ROW.id, ...CODE_AGENT_MODE_CYCLE_SHORTCUT },
+      ]),
+    ).toEqual([]);
   });
 
   it('adds the configurable global chords the user actually set', async () => {

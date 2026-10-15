@@ -251,6 +251,24 @@ describe('loadLiveVoiceContext', () => {
     expect(stub.calls.some((call) => call.sql.includes('from user_memories'))).toBe(false);
   });
 
+  it('withholds account memory when memory is off for the chat', async () => {
+    const stub = stubDb(
+      defaultHandler({
+        settings: [{ capabilities: { memory: true } }],
+        memories: [{ content: 'Prefers metric units.', category: null, pinned: false }],
+      }),
+    );
+
+    const bundle = await loadLiveVoiceContext(stub.db, {
+      userId: 'user-1',
+      conversationId: CONVERSATION_ID,
+      memoryEnabled: false,
+    });
+
+    expect(bundle.memoryPrompt).toBeNull();
+    expect(stub.calls.some((call) => call.sql.includes('from user_memories'))).toBe(false);
+  });
+
   it('withholds account memory when the account has memory turned off', async () => {
     const stub = stubDb(
       defaultHandler({
@@ -266,6 +284,84 @@ describe('loadLiveVoiceContext', () => {
 
     expect(bundle.memoryPrompt).toBeNull();
     expect(stub.calls.some((call) => call.sql.includes('from user_memories'))).toBe(false);
+  });
+
+  describe("the project's other chats", () => {
+    const SIBLING_EXCERPT = 'My hotel budget is 300 dollars a night.';
+
+    function projectStub(options: { temporary?: boolean; searchPastChats: boolean }) {
+      return stubDb((sql) => {
+        if (sql.includes('sibling_candidates')) {
+          return [
+            {
+              id: '44444444-4444-4444-8444-444444444444',
+              title: 'Hotel budget',
+              updated_at: '2026-10-01T00:00:00.000Z',
+              role: 'user',
+              content: SIBLING_EXCERPT,
+              created_at: '2026-10-01T00:00:00.000Z',
+            },
+          ];
+        }
+        if (sql.includes('from web_conversations')) {
+          return [
+            conversationRow({ project_id: PROJECT_ID, is_temporary: options.temporary === true }),
+          ];
+        }
+        if (sql.includes("settings -> 'capabilities'")) {
+          return [{ capabilities: { memory: true, searchPastChats: options.searchPastChats } }];
+        }
+        if (sql.includes('from user_projects')) {
+          return [
+            {
+              id: PROJECT_ID,
+              name: 'Trip',
+              description: null,
+              instructions: 'Plan in euros.',
+              organization_id: null,
+            },
+          ];
+        }
+        return [];
+      });
+    }
+
+    async function projectPrompt(stub: Stub, memoryEnabled?: boolean): Promise<string> {
+      const bundle = await loadLiveVoiceContext(stub.db, {
+        userId: 'user-1',
+        conversationId: CONVERSATION_ID,
+        organizationId: null,
+        ...(memoryEnabled === undefined ? {} : { memoryEnabled }),
+      });
+      expect(bundle.projectPrompt).toContain('Plan in euros.');
+      return bundle.projectPrompt ?? '';
+    }
+
+    it('reach the delegated turn when the account searches past chats', async () => {
+      await expect(projectPrompt(projectStub({ searchPastChats: true }))).resolves.toContain(
+        SIBLING_EXCERPT,
+      );
+    });
+
+    it('stay out when the account has search past chats off', async () => {
+      const stub = projectStub({ searchPastChats: false });
+
+      await expect(projectPrompt(stub)).resolves.not.toContain(SIBLING_EXCERPT);
+      expect(stub.calls.some((call) => call.sql.includes('sibling_candidates'))).toBe(false);
+    });
+
+    it('stay out when memory is off for the chat', async () => {
+      const stub = projectStub({ searchPastChats: true });
+
+      await expect(projectPrompt(stub, false)).resolves.not.toContain(SIBLING_EXCERPT);
+      expect(stub.calls.some((call) => call.sql.includes('sibling_candidates'))).toBe(false);
+    });
+
+    it('stay out of a temporary conversation', async () => {
+      await expect(
+        projectPrompt(projectStub({ temporary: true, searchPastChats: true })),
+      ).resolves.not.toContain(SIBLING_EXCERPT);
+    });
   });
 
   it('degrades a failing source instead of failing the session', async () => {

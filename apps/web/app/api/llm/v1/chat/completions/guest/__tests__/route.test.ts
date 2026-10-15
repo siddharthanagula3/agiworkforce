@@ -67,7 +67,8 @@ vi.mock('@/lib/moderation', () => ({
   recordModerationEvent: vi.fn(),
   moderateManagedPrompt: (...args: unknown[]) => mocks.moderate(...args),
 }));
-vi.mock('@/lib/guest-chat/guest-chat-service', () => ({
+vi.mock('@/lib/guest-chat/guest-chat-service', async (importOriginal) => ({
+  ...(await importOriginal<GuestChatServiceModule>()),
   guestSpendKey: vi.fn(),
   guestChatModel: () => ({
     modelKey: 'free-default',
@@ -95,6 +96,8 @@ vi.mock('@/lib/guest-chat/guest-chat-service', () => ({
 import { GUEST_CHAT_CONFIG } from '@/lib/guest-chat/config';
 import { GUEST_CHAT_PATH } from '@/lib/guest-chat/contract';
 import { GET, POST } from '../route';
+
+type GuestChatServiceModule = typeof import('@/lib/guest-chat/guest-chat-service');
 
 const URL_BASE = `https://agiworkforce.test${GUEST_CHAT_PATH}`;
 

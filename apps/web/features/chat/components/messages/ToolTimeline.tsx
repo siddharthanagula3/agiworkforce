@@ -3,9 +3,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef, memo, type ReactNode } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
-  Ban,
   BookOpen,
-  Check,
   ChevronRight,
   CircleCheck,
   FilePen,
@@ -14,7 +12,6 @@ import {
   FolderOpen,
   GitBranch,
   Globe,
-  HelpCircle,
   Plug,
   Search,
   TerminalSquare,
@@ -28,18 +25,18 @@ import {
   parseQualifiedMcpToolName,
   describeMcpTool,
 } from '@/features/connectors/lib/mcp-tool-name';
-import { TOOL_APPROVAL_ACTION_LABELS, runStatusLabel } from '@agiworkforce/types';
-import {
-  useToolPermissionsStore,
-  type PermissionLevel,
-} from '@/features/connectors/stores/tool-permissions-store';
+import { runStatusLabel } from '@agiworkforce/types';
 import {
   readConnectorConnectRequest,
   type ConnectorConnectRequest,
 } from '../../lib/connector-connect-required';
 import { ConnectorConnectCard } from '../ConnectorConnectCard';
 import { PluginDraftCard } from '../PluginDraftCard';
-import { CHAT_CODE_RUN_TOOL_NAME, readPluginDraftToolResult } from '@agiworkforce/cloud-contracts';
+import {
+  CHAT_CODE_RUN_TOOL_NAME,
+  readPluginDraftToolResult,
+  type ToolApprovalReview,
+} from '@agiworkforce/cloud-contracts';
 import { isDesktopHost } from '@/features/desktop-host';
 import { CodeRunAgain } from './CodeRunAgain';
 
@@ -179,6 +176,7 @@ export interface ToolEntry {
   /** Which machine a device step is waiting on. */
   deviceName?: string;
   requiresApproval?: boolean;
+  approvalReview?: ToolApprovalReview;
   /** Recorded decision. False means the user denied the call and it never ran. */
   approved?: boolean;
   args?: string;
@@ -209,6 +207,7 @@ interface ToolTimelineProps {
   onResend?: (toolCallId: string) => void;
   onRetryTurn?: () => void;
   renderInputRequest?: (tool: ToolEntry) => ReactNode;
+  renderApprovalRequest?: (toolCallId: string) => ReactNode;
   codeRunConversationId?: string;
 }
 
@@ -435,6 +434,7 @@ function TimelineStepRow({
   onResend,
   onRetryTurn,
   renderInputRequest,
+  renderApprovalRequest,
   codeRunConversationId,
 }: {
   tool: ToolEntry;
@@ -447,6 +447,7 @@ function TimelineStepRow({
   onResend?: (toolCallId: string) => void;
   onRetryTurn?: () => void;
   renderInputRequest?: (tool: ToolEntry) => ReactNode;
+  renderApprovalRequest?: (toolCallId: string) => ReactNode;
   codeRunConversationId?: string;
 }) {
   const mcpTool = parseQualifiedMcpToolName(tool.name);
@@ -475,7 +476,10 @@ function TimelineStepRow({
   const displayToolCall: ToolCall = connectRequest
     ? { ...withoutRawOutput(toolCall), name: humanLabel }
     : { ...toolCall, name: humanLabel };
-  const showPermissionPicker = mcpTool != null && tool.status === 'awaiting_approval' && !expired;
+  const approvalRequest =
+    tool.status === 'awaiting_approval' && tool.toolCallId
+      ? renderApprovalRequest?.(tool.toolCallId)
+      : null;
 
   return (
     <div className="flex flex-col gap-0.5">
@@ -494,18 +498,19 @@ function TimelineStepRow({
             a plain label instead of the ToolCallCard's (empty) expand box to
             avoid a hollow container under "Web search". */}
         <div className="flex-1 min-w-0">
-          {isWebSearch ? (
-            <span className="text-sm text-foreground">{humanLabel}</span>
-          ) : (
-            <ToolCallCard
-              toolCall={displayToolCall}
-              showParameters={showParameters}
-              onApprove={onApprove}
-              onReject={onReject}
-              expired={expired}
-              onResend={onResend}
-            />
-          )}
+          {approvalRequest ??
+            (isWebSearch ? (
+              <span className="text-sm text-foreground">{humanLabel}</span>
+            ) : (
+              <ToolCallCard
+                toolCall={displayToolCall}
+                showParameters={showParameters}
+                onApprove={onApprove}
+                onReject={onReject}
+                expired={expired}
+                onResend={onResend}
+              />
+            ))}
         </div>
       </div>
       {/* Filename chip: BELOW the label row, indented to align with the label text */}
@@ -553,75 +558,6 @@ function TimelineStepRow({
       {tool.status === 'awaiting_input' && renderInputRequest ? (
         <div className="ps-7 mt-1.5">{renderInputRequest(tool)}</div>
       ) : null}
-      {showPermissionPicker && mcpTool && (
-        <div className="ps-7 mt-1">
-          <ToolPermissionQuickPicker
-            serverId={mcpTool.serverId}
-            toolName={mcpTool.toolName}
-            toolCallId={tool.toolCallId}
-            onApprove={onApprove}
-            onReject={onReject}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-const PERMISSION_QUICK_PICKS: { level: PermissionLevel; label: string; icon: IconComponent }[] = [
-  { level: 'allow', label: TOOL_APPROVAL_ACTION_LABELS.alwaysAllow, icon: Check },
-  { level: 'ask', label: TOOL_APPROVAL_ACTION_LABELS.ask, icon: HelpCircle },
-  { level: 'deny', label: TOOL_APPROVAL_ACTION_LABELS.deny, icon: Ban },
-];
-
-function ToolPermissionQuickPicker({
-  serverId,
-  toolName,
-  toolCallId,
-  onApprove,
-  onReject,
-}: {
-  serverId: string;
-  toolName: string;
-  toolCallId?: string;
-  onApprove?: (toolCallId: string) => void;
-  onReject?: (toolCallId: string) => void;
-}) {
-  const setToolPermission = useToolPermissionsStore((s) => s.setToolPermission);
-  const current = useToolPermissionsStore((s) => s.getToolPermission(serverId, toolName));
-
-  const handlePick = (level: PermissionLevel) => {
-    setToolPermission(serverId, toolName, level);
-    if (!toolCallId) return;
-    if (level === 'allow') onApprove?.(toolCallId);
-    if (level === 'deny') onReject?.(toolCallId);
-  };
-
-  return (
-    <div
-      className="flex flex-wrap items-center gap-1"
-      role="group"
-      aria-label={`Remember permission for ${toolName}`}
-    >
-      <span className="text-caption text-muted-foreground">Remember:</span>
-      {PERMISSION_QUICK_PICKS.map(({ level, label, icon: Icon }) => (
-        <button
-          key={level}
-          type="button"
-          onClick={() => handlePick(level)}
-          aria-pressed={current === level}
-          title={label}
-          className={cn(
-            'flex h-6 items-center gap-1 rounded-md border px-1.5 text-caption font-medium transition-colors',
-            current === level
-              ? 'border-primary/50 bg-primary/10 text-primary'
-              : 'border-border/40 text-muted-foreground hover:border-border/70 hover:text-foreground',
-          )}
-        >
-          <Icon className="h-2.5 w-2.5" aria-hidden="true" />
-          <span>{label}</span>
-        </button>
-      ))}
     </div>
   );
 }
@@ -678,6 +614,7 @@ function ToolTimeline({
   onResend,
   onRetryTurn,
   renderInputRequest,
+  renderApprovalRequest,
   codeRunConversationId,
 }: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -876,6 +813,7 @@ function ToolTimeline({
                                 onResend={onResend}
                                 onRetryTurn={onRetryTurn}
                                 renderInputRequest={renderInputRequest}
+                                renderApprovalRequest={renderApprovalRequest}
                                 codeRunConversationId={codeRunConversationId}
                               />
                             );
@@ -927,6 +865,7 @@ function ToolTimeline({
                           onResend={onResend}
                           onRetryTurn={onRetryTurn}
                           renderInputRequest={renderInputRequest}
+                          renderApprovalRequest={renderApprovalRequest}
                           codeRunConversationId={codeRunConversationId}
                         />
                       );
@@ -961,6 +900,7 @@ const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
   if (prev.expired !== next.expired || prev.onResend !== next.onResend) return false;
   if (prev.onRetryTurn !== next.onRetryTurn) return false;
   if (prev.renderInputRequest !== next.renderInputRequest) return false;
+  if (prev.renderApprovalRequest !== next.renderApprovalRequest) return false;
   if (prev.codeRunConversationId !== next.codeRunConversationId) return false;
   if (prev.tools.length !== next.tools.length) return false;
 
@@ -978,6 +918,8 @@ const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
       p.error !== n.error ||
       p.result !== n.result ||
       p.requiresApproval !== n.requiresApproval ||
+      p.approvalReview !== n.approvalReview ||
+      p.parameters !== n.parameters ||
       p.approved !== n.approved ||
       p.toolCallId !== n.toolCallId ||
       p.inputRequests !== n.inputRequests

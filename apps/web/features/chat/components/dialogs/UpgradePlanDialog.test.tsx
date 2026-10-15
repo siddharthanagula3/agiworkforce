@@ -52,17 +52,48 @@ vi.mock('@agiworkforce/ui', async (importOriginal) => {
       children,
       disabled,
       onClick,
+      'aria-label': ariaLabel,
     }: {
       children?: React.ReactNode;
       disabled?: boolean;
       onClick?: () => void;
+      'aria-label'?: string;
     }) => (
-      <button type="button" disabled={disabled} onClick={onClick}>
+      <button type="button" disabled={disabled} onClick={onClick} aria-label={ariaLabel}>
         {children}
       </button>
     ),
   };
 });
+
+const waitlistState = vi.hoisted(() => ({
+  status: null as null | {
+    joinedPlans: string[];
+    upgradeGateEnabled: boolean;
+    accessGranted: boolean;
+  },
+  checking: false,
+  enabled: [] as boolean[],
+}));
+
+vi.mock('@features/billing/hooks/use-upgrade-waitlist', () => ({
+  resolveUpgradeWaitlistStatus: vi.fn(),
+  useUpgradeWaitlistStatus: ({ enabled }: { enabled?: boolean } = {}) => {
+    waitlistState.enabled.push(enabled ?? true);
+    return {
+      status: waitlistState.status,
+      checking: waitlistState.checking,
+      recordJoined: vi.fn(),
+      recordAccessGranted: vi.fn(),
+    };
+  },
+}));
+
+vi.mock('@shared/components/ServiceNotices', () => ({
+  ServiceNotices: ({ scope }: { scope: string }) => (
+    <div data-testid="service-notices" data-scope={scope} />
+  ),
+}));
 
 import { LOCALIZED_PRICING_PATH } from '@features/billing/lib/localized-pricing';
 import {
@@ -159,7 +190,16 @@ async function showAllPlans() {
   await waitFor(() => expect(screen.queryByText('Loading checkout availability…')).toBeNull());
 }
 
+async function pricingSettled() {
+  await waitFor(() => expect(screen.queryByText('Loading checkout availability…')).toBeNull());
+}
+
+const STAGED_UPGRADES = /Paid upgrades are opening in stages/;
+
 beforeEach(() => {
+  waitlistState.status = { joinedPlans: [], upgradeGateEnabled: false, accessGranted: true };
+  waitlistState.checking = false;
+  waitlistState.enabled = [];
   fetchState.pricing = localizedCatalog();
   fetchState.pricingOk = true;
   fetchState.mediaOffer = NO_MEDIA_OFFER;
@@ -235,7 +275,12 @@ describe('UpgradePlanDialog tells the pricing page story', () => {
     for (const plan of ['basic', 'max', 'pro', 'max_15x'] as const) {
       fireEvent.click(screen.getByRole('button', { name: planCtaLabel(plan, t()) }));
     }
-    expect(onUpgrade.mock.calls).toEqual([['basic'], ['max'], ['pro'], ['max_15x']]);
+    expect(onUpgrade.mock.calls).toEqual([
+      ['basic', 'checkout'],
+      ['max', 'checkout'],
+      ['pro', 'checkout'],
+      ['max_15x', 'checkout'],
+    ]);
   });
 
   it('shows Team and Enterprise the way the business tab does', async () => {
@@ -370,5 +415,157 @@ describe('UpgradePlanDialog tells the pricing page story', () => {
     expect(screen.queryByRole('button', { name: 'See all plans' })).toBeNull();
     expect(card('Free').queryByRole('button')).toBeNull();
     expect(screen.getByRole('button', { name: planCtaLabel('pro', t()) })).toBeEnabled();
+  });
+});
+
+describe('UpgradePlanDialog while paid upgrades open in stages', () => {
+  function stageUpgrades(joinedPlans: string[] = []) {
+    waitlistState.status = { joinedPlans, upgradeGateEnabled: true, accessGranted: false };
+  }
+
+  it('carries billing service notices, where a billing outage is scoped', async () => {
+    renderDialog({ waitlistApplies: true });
+    await pricingSettled();
+
+    expect(screen.getByTestId('service-notices')).toHaveAttribute('data-scope', 'billing');
+  });
+
+  it('keeps billing trouble off a dialog that only offers the waitlist, which never reaches billing', async () => {
+    stageUpgrades();
+    renderDialog({ waitlistApplies: true });
+    await pricingSettled();
+
+    expect(
+      screen.getByRole('button', { name: t()('joinPlanWaitlistCta', { plan: 'Basic' }) }),
+    ).toBeVisible();
+    expect(screen.queryByTestId('service-notices')).toBeNull();
+  });
+
+  it('keeps the current plan card at full contrast and marks it by its label', async () => {
+    renderDialog({ waitlistApplies: true });
+    await pricingSettled();
+
+    const free = screen
+      .getByRole('heading', { name: 'Free' })
+      .closest<HTMLElement>('.rounded-2xl')!;
+    expect(free.className).not.toMatch(/(^|\s)opacity-/);
+    expect(within(free).getByRole('button', { name: 'Your current plan' })).toBeDisabled();
+  });
+
+  it('offers no action on the Free card before the plan is known', async () => {
+    stageUpgrades();
+    const { onUpgrade } = renderDialog({ currentTier: undefined, waitlistApplies: true });
+    await pricingSettled();
+
+    expect(card('Free').queryByRole('button')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: t()('joinPlanWaitlistCta', { plan: 'Basic' }) }),
+    ).toBeEnabled();
+    expect(onUpgrade).not.toHaveBeenCalled();
+  });
+
+  it.each(['local-only', 'byok'])(
+    'shows the Free card as the current plan of a %s account',
+    async (tier) => {
+      stageUpgrades();
+      const { onUpgrade } = renderDialog({ currentTier: tier, waitlistApplies: true });
+      await pricingSettled();
+
+      expect(card('Free').getByRole('button', { name: 'Your current plan' })).toBeDisabled();
+      fireEvent.click(
+        screen.getByRole('button', { name: t()('joinPlanWaitlistCta', { plan: 'Basic' }) }),
+      );
+
+      expect(onUpgrade.mock.calls).toEqual([['basic', 'join-waitlist']]);
+    },
+  );
+
+  it('joins the waitlist instead of offering checkout while paid upgrades are staged', async () => {
+    stageUpgrades();
+    const { onUpgrade } = renderDialog({ waitlistApplies: true });
+    await pricingSettled();
+
+    expect(screen.getByText(STAGED_UPGRADES)).toBeVisible();
+    expect(screen.queryByRole('button', { name: planCtaLabel('basic', t()) })).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: t()('joinPlanWaitlistCta', { plan: 'Basic' }) }),
+    );
+
+    expect(onUpgrade).toHaveBeenCalledWith('basic', 'join-waitlist');
+  });
+
+  it('shows a plan the account already joined as on the waitlist, with the access code still reachable', async () => {
+    stageUpgrades(['basic']);
+    const { onUpgrade } = renderDialog({ waitlistApplies: true });
+    await pricingSettled();
+
+    const basic = card('Basic');
+    expect(basic.getByText(t()('onPlanWaitlistNote'))).toBeVisible();
+    expect(
+      basic.queryByRole('button', { name: t()('joinPlanWaitlistCta', { plan: 'Basic' }) }),
+    ).toBeNull();
+    fireEvent.click(
+      basic.getByRole('button', { name: t()('enterAccessCodeForPlan', { plan: 'Basic' }) }),
+    );
+
+    expect(onUpgrade).toHaveBeenCalledWith('basic', 'open-waitlist');
+  });
+
+  it('offers checkout to an account that holds access', async () => {
+    waitlistState.status = {
+      joinedPlans: ['basic'],
+      upgradeGateEnabled: true,
+      accessGranted: true,
+    };
+    const { onUpgrade } = renderDialog({ waitlistApplies: true });
+
+    const checkout = await screen.findByRole('button', { name: planCtaLabel('basic', t()) });
+    await waitFor(() => expect(checkout).toBeEnabled());
+    expect(screen.queryByText(STAGED_UPGRADES)).toBeNull();
+    fireEvent.click(checkout);
+
+    expect(onUpgrade).toHaveBeenCalledWith('basic', 'checkout');
+  });
+
+  it('holds the paid plan buttons while upgrade access is being read', async () => {
+    waitlistState.status = null;
+    waitlistState.checking = true;
+    const { onUpgrade } = renderDialog({ waitlistApplies: true });
+    await pricingSettled();
+
+    const pending = screen.getByRole('button', { name: 'Checking upgrade access for Basic' });
+    expect(pending).toBeDisabled();
+    fireEvent.click(pending);
+    expect(onUpgrade).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('button', { name: t()('joinPlanWaitlistCta', { plan: 'Basic' }) }),
+    ).toBeNull();
+    expect(screen.queryByRole('button', { name: planCtaLabel('basic', t()) })).toBeNull();
+    expect(screen.queryByTestId('service-notices')).toBeNull();
+    expect(waitlistState.enabled).toContain(true);
+  });
+
+  it('offers the waitlist join when upgrade access cannot be read, as the order screen and pricing do', async () => {
+    waitlistState.status = null;
+    const { onUpgrade } = renderDialog({ waitlistApplies: true });
+    await pricingSettled();
+
+    expect(screen.getByText(STAGED_UPGRADES)).toBeVisible();
+    expect(screen.queryByRole('button', { name: planCtaLabel('basic', t()) })).toBeNull();
+    expect(screen.queryByTestId('service-notices')).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: t()('joinPlanWaitlistCta', { plan: 'Basic' }) }),
+    );
+
+    expect(onUpgrade.mock.calls).toEqual([['basic', 'join-waitlist']]);
+  });
+
+  it('never asks a paying subscriber about the waitlist', async () => {
+    stageUpgrades();
+    renderDialog({ currentTier: 'pro', waitlistApplies: false });
+
+    expect(await screen.findByRole('button', { name: planCtaLabel('max', t()) })).toBeVisible();
+    expect(screen.queryByText(STAGED_UPGRADES)).toBeNull();
+    expect(waitlistState.enabled).not.toContain(true);
   });
 });

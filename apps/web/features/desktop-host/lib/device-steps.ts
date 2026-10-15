@@ -127,18 +127,26 @@ function describeBackgroundOutput(result: BackgroundShellOutput): string {
   return parts.join('\n\n');
 }
 
+/**
+ * The task a screen step belongs to. The desktop app asks its user once per
+ * task before the agent may use the screen, and runs no screen step that
+ * names none.
+ */
+type ScreenTask = { runId: string } | Record<string, never>;
+
 async function captureFor(
   tool: 'device_screenshot' | 'device_zoom',
   input: Record<string, unknown>,
+  task: ScreenTask,
 ): Promise<DeviceStepOutcome> {
-  const capture = await invokeDeviceCommand<ScreenCaptureResult>(
-    deviceStepCommand(tool),
-    tool === 'device_zoom'
+  const capture = await invokeDeviceCommand<ScreenCaptureResult>(deviceStepCommand(tool), {
+    ...(tool === 'device_zoom'
       ? { region: input['region'] }
       : typeof input['display'] === 'number'
         ? { display: input['display'] }
-        : {},
-  );
+        : {}),
+    ...task,
+  });
   const displays =
     tool === 'device_screenshot' && capture.displays && capture.displayId !== undefined
       ? describeDeviceDisplays(capture.displays, capture.displayId)
@@ -258,15 +266,21 @@ async function runBrowserStep(
   }
 }
 
-async function runStep(tool: ActionStepTool, input: Record<string, unknown>): Promise<string> {
+async function runStep(
+  tool: ActionStepTool,
+  input: Record<string, unknown>,
+  task: ScreenTask,
+): Promise<string> {
   const command = deviceStepCommand(tool);
+  const invokeScreenStep = (args: Record<string, unknown>) =>
+    invokeDeviceCommand<unknown>(command, { ...args, ...task });
   switch (tool) {
     case 'device_move': {
-      const moved = await invokeDeviceCommand<unknown>(command, { x: input['x'], y: input['y'] });
+      const moved = await invokeScreenStep({ x: input['x'], y: input['y'] });
       return `Moved the pointer to ${String(input['x'])}, ${String(input['y'])}.${frontNote(frontOf(moved))}`;
     }
     case 'device_click': {
-      const clicked = await invokeDeviceCommand<unknown>(command, {
+      const clicked = await invokeScreenStep({
         x: input['x'],
         y: input['y'],
         button: input['button'],
@@ -276,7 +290,7 @@ async function runStep(tool: ActionStepTool, input: Record<string, unknown>): Pr
       return `Clicked at ${String(input['x'])}, ${String(input['y'])}.${frontNote(frontOf(clicked))} Take a screenshot to see what changed.`;
     }
     case 'device_drag': {
-      const dragged = await invokeDeviceCommand<unknown>(command, {
+      const dragged = await invokeScreenStep({
         x: input['x'],
         y: input['y'],
         toX: input['toX'],
@@ -286,7 +300,7 @@ async function runStep(tool: ActionStepTool, input: Record<string, unknown>): Pr
       return `Dragged to ${String(input['toX'])}, ${String(input['toY'])}.${frontNote(frontOf(dragged))} Take a screenshot to see what changed.`;
     }
     case 'device_scroll': {
-      const scrolled = await invokeDeviceCommand<unknown>(command, {
+      const scrolled = await invokeScreenStep({
         x: input['x'],
         y: input['y'],
         deltaX: input['deltaX'],
@@ -295,14 +309,14 @@ async function runStep(tool: ActionStepTool, input: Record<string, unknown>): Pr
       return `Scrolled.${frontNote(frontOf(scrolled))} Take a screenshot to see what is on screen now.`;
     }
     case 'device_type': {
-      const typed = await invokeDeviceCommand<unknown>(command, {
+      const typed = await invokeScreenStep({
         text: input['text'],
         ...reviewOf(input),
       });
       return `Typed the text into whatever had keyboard focus.${frontNote(frontOf(typed))} Take a screenshot to check it landed where you meant.`;
     }
     case 'device_key': {
-      const pressed = await invokeDeviceCommand<unknown>(command, {
+      const pressed = await invokeScreenStep({
         key: input['key'],
         modifiers: input['modifiers'],
         ...reviewOf(input),
@@ -310,7 +324,7 @@ async function runStep(tool: ActionStepTool, input: Record<string, unknown>): Pr
       return `Pressed the key.${frontNote(frontOf(pressed))} Take a screenshot to see what changed.`;
     }
     case 'device_wait':
-      await invokeDeviceCommand<true>(command, { ms: input['ms'] });
+      await invokeScreenStep({ ms: input['ms'] });
       return 'Waited. Take a screenshot to see the screen now.';
     case 'device_read_file': {
       const file = await invokeDeviceCommand<FileTextContent>(command, {
@@ -409,17 +423,20 @@ async function runStep(tool: ActionStepTool, input: Record<string, unknown>): Pr
 export async function executeDeviceStep(
   tool: string,
   input: Record<string, unknown>,
+  taskId?: string,
 ): Promise<DeviceStepOutcome> {
   if (!isDeviceStepTool(tool) || isPhoneStepTool(tool)) {
     return { content: `"${tool}" is not a step this device runs.`, isError: true };
   }
-  if (isScreenDeviceStep(tool)) noteComputerUseConversation();
+  const screenStep = isScreenDeviceStep(tool);
+  if (screenStep) noteComputerUseConversation();
+  const task: ScreenTask = screenStep && taskId ? { runId: taskId } : {};
   try {
     if (tool === 'device_screenshot' || tool === 'device_zoom') {
-      return await captureFor(tool, input);
+      return await captureFor(tool, input, task);
     }
     if (isBrowserStepTool(tool)) return await runBrowserStep(tool, input);
-    return { content: cap(await runStep(tool, input)), isError: false };
+    return { content: cap(await runStep(tool, input, task)), isError: false };
   } catch (error) {
     if (error instanceof DesktopRuntimeError) {
       return { content: cap(error.message), isError: true };

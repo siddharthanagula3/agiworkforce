@@ -394,6 +394,7 @@ describe('cloud agent workflow input', () => {
       origin: 'connector',
       serverLabel: 'GitHub',
       inputSchema: { type: 'object', properties: { number: { type: 'number' } } },
+      annotations: { readOnlyHint: true },
       googleUserData: true,
     };
     const fullResume: Required<ResumeApproval> = {

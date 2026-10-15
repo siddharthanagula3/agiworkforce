@@ -28,6 +28,7 @@ import type { PastChatCitation } from '@/lib/past-chat-citation';
 import { buildCustomInstructionsPreamble } from '@/lib/server/user-identity';
 import {
   DISABLED_MANAGED_MEMORY_POLICY,
+  disabledPastChatToggles,
   formatManagedMemorySystemPrompt,
   loadManagedMemoryPolicy,
   loadOrganizationContextPolicy,
@@ -85,10 +86,15 @@ function classWithdrawn(manifest: ContextManifest, sourceClass: ContextSourceCla
 function admittedProjectContext(
   context: LoadedProjectContext,
   manifest: ContextManifest,
+  includeChats: boolean,
 ): { blocks: ProjectContextBlock[]; citations: ProjectFileCitation[] } {
   const rendered = renderProjectContextBlocks(context);
   const blocks = fitProjectContextBlocks(
-    rendered.blocks.filter((block) => !classWithdrawn(manifest, block.sourceClass)),
+    rendered.blocks.filter(
+      (block) =>
+        !classWithdrawn(manifest, block.sourceClass) &&
+        (includeChats || block.sourceClass !== 'project_sibling_chat'),
+    ),
     MAX_PROJECT_CONTEXT_CHARS,
   );
   const knowledgeSent = blocks.some((block) => block.sourceClass === 'project_knowledge_file');
@@ -116,12 +122,10 @@ export async function resolveInteractiveTurnContext(
     input.policy.enabled &&
     !input.temporaryChat &&
     accountMemoryRequested(input.surface, input.memoryEnabled);
-  const includePastChats =
-    input.policy.searchPastChats &&
-    !input.temporaryChat &&
-    input.surface !== 'api' &&
-    input.memoryEnabled !== false &&
-    input.query.length > 0;
+  const pastChatsSwitchedOn =
+    input.policy.searchPastChats && input.surface !== 'api' && input.memoryEnabled !== false;
+  const pastChatsAllowed = pastChatsSwitchedOn && !input.temporaryChat;
+  const includePastChats = pastChatsAllowed && input.query.length > 0;
   if (!includeMemory && !includePastChats && !input.projectContext) {
     return {
       projectBlocks: [],
@@ -166,6 +170,7 @@ export async function resolveInteractiveTurnContext(
     ...(memoryLoader ? [memoryLoader] : []),
   ];
 
+  const contextPolicy = await loadOrganizationContextPolicy(db, input.organizationId);
   const resolution = await resolveContext({
     turnId: input.turnId,
     actor: {
@@ -173,9 +178,10 @@ export async function resolveInteractiveTurnContext(
       organizationId: input.organizationId,
       projectId: input.projectId,
     },
-    policy: await loadOrganizationContextPolicy(db, input.organizationId),
+    policy: contextPolicy,
     loaders,
     temporaryChat: input.temporaryChat,
+    disabledToggles: disabledPastChatToggles(pastChatsSwitchedOn, contextPolicy),
     onLoaderError: (sourceClass, error) => {
       logger.warn(
         { error, userId: input.userId, turnId: input.turnId, sourceClass },
@@ -213,7 +219,7 @@ export async function resolveInteractiveTurnContext(
     : [];
   const recallDegraded = pastChatLoader?.degraded() === true;
   const project = input.projectContext
-    ? admittedProjectContext(input.projectContext, resolution.manifest)
+    ? admittedProjectContext(input.projectContext, resolution.manifest, pastChatsAllowed)
     : { blocks: [], citations: [] };
 
   return {
@@ -233,6 +239,7 @@ interface PersonalContextParts {
   readonly memory: string | null;
   readonly pastChats: string | null;
   readonly memoryCitations: readonly ManagedMemoryCitation[];
+  readonly pastChatSources: readonly PastChatCitation[];
   readonly projectBlocks: readonly ProjectContextBlock[];
   readonly projectCitations: readonly ProjectFileCitation[];
 }
@@ -244,6 +251,7 @@ export type FreeOfferingPersonalContext =
       readonly projectBlocks: readonly ProjectContextBlock[];
       readonly projectCitations: readonly ProjectFileCitation[];
       readonly memoryCitations: readonly ManagedMemoryCitation[];
+      readonly pastChatSources: readonly PastChatCitation[];
     }
   | { readonly status: 'project_unavailable' }
   | { readonly status: 'project_load_failed' };
@@ -312,6 +320,7 @@ async function resolvePersonalContextParts(
     memory: context?.memoryPrompt || null,
     pastChats: context?.pastChatPrompt || null,
     memoryCitations: context?.memoryPrompt ? context.memoryCitations : [],
+    pastChatSources: context?.pastChatPrompt ? context.pastChatSources : [],
     projectBlocks: context?.projectBlocks ?? [],
     projectCitations: context?.projectCitations ?? [],
   };
@@ -359,6 +368,7 @@ export async function resolveFreeOfferingPersonalContext(
       projectBlocks: [],
       projectCitations: [],
       memoryCitations: [],
+      pastChatSources: [],
     };
   }
   let parts: PersonalContextParts;
@@ -376,7 +386,9 @@ export async function resolveFreeOfferingPersonalContext(
     return { status: 'project_load_failed' };
   }
   const project = { projectBlocks: parts.projectBlocks, projectCitations: parts.projectCitations };
-  if (!personalized) return { status: 'ready', blocks: [], ...project, memoryCitations: [] };
+  if (!personalized) {
+    return { status: 'ready', blocks: [], ...project, memoryCitations: [], pastChatSources: [] };
+  }
   const blocks: InstructionBlock[] = [];
   if (parts.instructions !== null) blocks.push({ layer: 'personalized', text: parts.instructions });
   if (parts.memory !== null) {
@@ -385,7 +397,13 @@ export async function resolveFreeOfferingPersonalContext(
   if (parts.pastChats !== null) {
     blocks.push({ layer: instructionLayerForContextClass('past_chat'), text: parts.pastChats });
   }
-  return { status: 'ready', blocks, ...project, memoryCitations: parts.memoryCitations };
+  return {
+    status: 'ready',
+    blocks,
+    ...project,
+    memoryCitations: parts.memoryCitations,
+    pastChatSources: parts.pastChatSources,
+  };
 }
 
 export async function resolveLocalTurnPersonalContext(

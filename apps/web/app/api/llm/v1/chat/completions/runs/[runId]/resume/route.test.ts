@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+import { getDefaultAutoRoutingProfile } from '@agiworkforce/types';
 type ScanModule0 = typeof import('../../../lib/request-processor');
 type ScanModule1 = typeof import('../../../lib/tool-loop');
 type ScanModule2 = typeof import('@/lib/user-connector-tools');
@@ -104,6 +105,9 @@ import {
   CloudAgentApprovalCheckpointConflictError,
   CloudAgentApprovalCheckpointNotFoundError,
 } from '@/lib/services/cloud-agent-run-service';
+import { buildApprovalCheckpointRequest } from '../../../lib/approval-checkpoint-request';
+import type { ModelSelection } from '../../../lib/capability-preamble';
+import type { ChatCompletionRequest } from '../../../lib/request-processor';
 import { POST } from './route';
 
 const pausedMessages = [
@@ -246,6 +250,33 @@ describe('POST /api/llm/v1/chat/completions/runs/[runId]/resume', () => {
     );
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('resume-paused');
     expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBe('wrun_pause_1');
+  });
+
+  it('resumes the run under the model selection its transcript was rendered for', async () => {
+    const autoSelection: ModelSelection = {
+      kind: 'picked',
+      modelId: getDefaultAutoRoutingProfile().id,
+    };
+    runMocks.claim.mockResolvedValue({
+      ...claim,
+      checkpoint: {
+        ...claim.checkpoint,
+        request: buildApprovalCheckpointRequest(
+          claim.checkpoint.request as unknown as ChatCompletionRequest,
+          {},
+          [],
+          autoSelection,
+        ),
+      },
+    });
+
+    await (await POST(makeRequest({}), context)).text();
+
+    expect(workflowMocks.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        processed: expect.objectContaining({ modelSelection: autoSelection }),
+      }),
+    );
   });
 
   it('returns the pause to the user when the turn cannot be validated', async () => {

@@ -151,8 +151,10 @@ describe('AuthNewPasswordStep', () => {
   });
 
   it('reports a rejected password inline', () => {
-    renderStep({ fieldError: 'That password is too common.' });
+    const refusal =
+      'Password has been found in an online data breach. For account safety, please use a different password.';
+    renderStep({ fieldError: refusal });
 
-    expect(screen.getByRole('alert')).toHaveTextContent('That password is too common.');
+    expect(screen.getByRole('alert')).toHaveTextContent(refusal);
   });
 });

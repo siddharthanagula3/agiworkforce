@@ -75,17 +75,21 @@ vi.mock('@/lib/security-audit', () => ({
   sanitizeAuditDetail: vi.fn(),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
-vi.mock('@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions', () => ({
-  scopeConnectorPermissionsToTurn: vi.fn(),
-  EMPTY_CONNECTOR_TOOL_PERMISSIONS: vi.fn(),
-  LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS: vi.fn(),
-  connectorToolPermissionsFromEntries: vi.fn(),
-  isLockedDown: vi.fn(),
-  withDisabledConnectorIds: vi.fn(),
-  withWorkspaceToolRules: vi.fn(),
-  withoutStandingApprovals: vi.fn(),
-  loadConnectorToolPermissions: mocks.loadConnectorToolPermissions,
-}));
+vi.mock(
+  '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions',
+  async (importOriginal) => ({
+    ...(await importOriginal<ConnectorToolPermissionsModule>()),
+    scopeConnectorPermissionsToTurn: vi.fn(),
+    EMPTY_CONNECTOR_TOOL_PERMISSIONS: vi.fn(),
+    LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS: vi.fn(),
+    connectorToolPermissionsFromEntries: vi.fn(),
+    isLockedDown: vi.fn(),
+    withDisabledConnectorIds: vi.fn(),
+    withWorkspaceToolRules: vi.fn(),
+    withoutStandingApprovals: vi.fn(),
+    loadConnectorToolPermissions: mocks.loadConnectorToolPermissions,
+  }),
+);
 vi.mock('@/lib/user-connector-tools', () => ({
   ConnectorCredentialError: class ConnectorCredentialError extends Error {},
   MAX_CONNECTOR_TOOLS_PER_USER: 32,
@@ -119,6 +123,9 @@ vi.mock('@/lib/connectors/mcp-state-store', () => ({
 import { createError } from '@/lib/errors';
 import { POST } from '../route';
 
+type ConnectorToolPermissionsModule =
+  typeof import('@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions');
+
 const CONNECTOR = 'notion';
 const connection = {
   connectorId: CONNECTOR,
@@ -127,6 +134,7 @@ const connection = {
     readResource: mocks.readResource,
     getPrompt: mocks.getPrompt,
     tasks: { get: mocks.taskGet, update: vi.fn(), cancel: vi.fn() },
+    catalog: { tools: [] },
   },
 };
 
@@ -283,11 +291,12 @@ describe('POST /api/connectors/[connectorId]/mcp', () => {
       'user-1',
       CONNECTOR,
       expect.any(Function),
+      { organizationId: 'org-1' },
     );
     expect(mocks.callTool).toHaveBeenCalledWith(
       'create_page',
       { title: 'Notes' },
-      { allowInputRequired: true },
+      { signal: expect.any(AbortSignal), allowInputRequired: true },
     );
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -303,7 +312,9 @@ describe('POST /api/connectors/[connectorId]/mcp', () => {
     const response = await call({ operation: 'readResource', uri: 'notion://page/1' });
 
     expect(response.status).toBe(200);
-    expect(mocks.readResource).toHaveBeenCalledWith('notion://page/1');
+    expect(mocks.readResource).toHaveBeenCalledWith('notion://page/1', {
+      signal: expect.any(AbortSignal),
+    });
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: 'data_accessed' }),
     );

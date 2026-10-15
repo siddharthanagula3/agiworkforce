@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   isDestructiveToolMetadata,
   isParallelSafeTool,
+  policyAutoApprovesTool,
   PLATFORM_TOOL_METADATA,
   resolveToolMetadata,
   toContractToolDefinition,
   UNKNOWN_TOOL_METADATA,
+  resolveConnectorToolMetadata,
+  toolExternalDelivery,
 } from '../tool-metadata';
 import { isToolActionClass, TOOL_ACTION_CLASSES } from '@agiworkforce/types';
 
@@ -87,5 +90,45 @@ describe('web tool metadata declares through the shared contract', () => {
     expect(definition.actionClass).toBe(UNKNOWN_TOOL_METADATA.actionClass);
     expect(definition.acceptsUntrustedContent).toBe(true);
     expect(definition.createsEgressPath).toBe(true);
+  });
+
+  it('permits only declared Gmail reads under read-only approval policy', () => {
+    for (const tool of [
+      'search_threads',
+      'get_thread',
+      'get_message',
+      'list_drafts',
+      'list_labels',
+    ]) {
+      const name = `mcp__gmail__${tool}`;
+      expect(resolveConnectorToolMetadata('gmail', tool).actionClass).toBe('read');
+      expect(policyAutoApprovesTool('auto_approve_read_only', name)).toBe(true);
+      expect(isParallelSafeTool(name)).toBe(true);
+    }
+    expect(policyAutoApprovesTool('ask_every_time', 'mcp__gmail__get_message')).toBe(false);
+    expect(policyAutoApprovesTool('auto_approve_read_only', 'mcp__gmail__send_email')).toBe(false);
+    expect(policyAutoApprovesTool('auto_approve_read_only', 'mcp__gmail__label_message')).toBe(
+      false,
+    );
+  });
+
+  it('requires approval and refuses blind retry for Gmail draft creation', () => {
+    const definition = toContractToolDefinition(
+      {
+        qualifiedName: 'mcp__gmail__create_draft',
+        serverId: 'gmail',
+        toolName: 'create_draft',
+        description: 'Create a Gmail draft',
+        origin: 'connector',
+        inputSchema: { type: 'object' },
+      },
+      'connector',
+    );
+    expect(definition.auth).toEqual({ kind: 'connector_grant', connectorId: 'gmail', scopes: [] });
+    expect(toolExternalDelivery(definition.name)).toBe('draft');
+    expect(definition.retrySafety).toBe('at_most_once');
+    expect(isParallelSafeTool(definition.name)).toBe(false);
+    expect(policyAutoApprovesTool('auto_approve_read_only', definition.name)).toBe(false);
+    expect(policyAutoApprovesTool('autonomous', definition.name)).toBe(false);
   });
 });

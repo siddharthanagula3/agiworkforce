@@ -15,7 +15,11 @@ vi.mock('@clerk/nextjs', () => ({
 }));
 vi.mock('@agiworkforce/local-runtime-contract', () => ({ getHostBridge: () => null }));
 
-import { usePrimaryEmailConfirmation } from '../client';
+import {
+  UNCONFIRMED_EMAIL_CONNECT_MESSAGE,
+  useConnectedAccounts,
+  usePrimaryEmailConfirmation,
+} from '../client';
 
 function session(id: string) {
   return { id, revoke: vi.fn(async () => undefined) };
@@ -33,14 +37,18 @@ function accountWithAddress(status: string) {
     session('session-earlier'),
     session('session-other'),
   ];
+  const createExternalAccount = vi.fn(async () => ({
+    verification: { externalVerificationRedirectURL: new URL('https://accounts.example/oauth') },
+  }));
   mocks.user = {
     id: 'user-1',
     primaryEmailAddress: address,
     externalAccounts: [],
     getSessions: vi.fn(async () => sessions),
+    createExternalAccount,
     reload: vi.fn(async () => undefined),
   };
-  return { address, sessions };
+  return { address, sessions, createExternalAccount };
 }
 
 beforeEach(() => {
@@ -80,5 +88,33 @@ describe('confirming the primary address of the signed-in account', () => {
 
     await expect(act(() => result.current.endOtherSessions())).rejects.toThrow('could not be read');
     for (const candidate of sessions) expect(candidate.revoke).not.toHaveBeenCalled();
+  });
+});
+
+describe('linking another way to sign in', () => {
+  it('refuses while the account email has never been confirmed', async () => {
+    const { createExternalAccount } = accountWithAddress('unverified');
+    const { result } = renderHook(() => useConnectedAccounts());
+
+    await expect(
+      result.current.connect('google', 'https://agiworkforce.com/settings'),
+    ).rejects.toThrow(UNCONFIRMED_EMAIL_CONNECT_MESSAGE);
+    expect(createExternalAccount).not.toHaveBeenCalled();
+  });
+
+  it('starts the provider once the account email is confirmed', async () => {
+    const { createExternalAccount } = accountWithAddress('verified');
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    const { result } = renderHook(() => useConnectedAccounts());
+
+    await act(() => result.current.connect('google', 'https://agiworkforce.com/settings'));
+
+    expect(createExternalAccount).toHaveBeenCalledWith({
+      strategy: 'oauth_google',
+      redirectUrl: 'https://agiworkforce.com/settings',
+    });
+    expect(assign).toHaveBeenCalledWith('https://accounts.example/oauth');
+    vi.unstubAllGlobals();
   });
 });

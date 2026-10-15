@@ -36,6 +36,8 @@ function checks(): HealthCheckResult['checks'] {
     search: ok,
     vector: ok,
     cache: ok,
+    email: ok,
+    identity: ok,
   };
 }
 

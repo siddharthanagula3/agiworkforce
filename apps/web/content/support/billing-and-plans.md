@@ -4,7 +4,7 @@ title: Plans, upgrading, and cancelling
 path: /pricing
 category: billing
 tags: billing, plan, upgrade, downgrade, waitlist, access code, cancel, cancel subscription, invoice, receipt, payment method, card, billing portal, app store, google play, seats, renewal
-updated: 2026-10-12
+updated: 2026-10-15
 scope: public
 ---
 
@@ -19,10 +19,16 @@ where the card and the subscription itself are changed.
 **Upgrade plan** lists the plans available to you. On the {{PLAN.free}} plan
 choosing one goes to checkout when paid upgrades are open to your account; while
 they are not, it opens the upgrade waitlist instead: join the waitlist, or enter an
-access code to continue to checkout. While upgrades are not open, checkout is
-refused to an account that has not redeemed a code. On a plan you already pay
-for the access step does not apply, and an upgrade shows what it will cost and
-waits for you to confirm before anything is charged.
+access code to continue to checkout. Your place on a plan's waitlist is kept with
+your account, so the website and the desktop app show it wherever you sign in.
+When paid upgrades open, everyone on a waitlist gets a notice in Notifications,
+and the confirmation you see after joining says whether we also email you.
+Joining does not start a subscription, and when upgrades open for your account,
+choosing the plan again takes you to checkout. Once an account has redeemed an
+access code, choosing a plan opens checkout directly. While upgrades are not
+open, checkout is refused to an account that has not redeemed a code. On a plan
+you already pay for the access step does not apply, and an upgrade shows what it
+will cost and waits for you to confirm before anything is charged.
 
 An upgrade takes effect straight away and starts a new billing period that day:
 you pay the new plan's price, minus a credit for the unused time on your current

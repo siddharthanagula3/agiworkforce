@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 import {
   FREE_ALLOWANCE_EXHAUSTED_CODE,
+  FREE_QUOTA_DAILY_LIMIT_CODE,
   FREE_QUOTA_FALLBACK_REQUEST_KEY,
   FreeLimitSchema,
   FreeOfferingRequestSchema,
@@ -11,6 +12,7 @@ import {
   normalizePromotionalChatHistory,
   type FreeLimit,
 } from '@agiworkforce/cloud-contracts';
+import { CHINESE_HQ_PROVIDER_NOT_OPTED_IN_CODE } from '@agiworkforce/compliance';
 import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import { getDefaultModelFor, getProviderOffering } from '@agiworkforce/types';
 import {
@@ -36,6 +38,22 @@ const FALLBACK_REASON_BY_REFUSAL: Readonly<Record<string, FallbackReasonCode>> =
   [FREE_ALLOWANCE_EXHAUSTED_CODE]: 'free_limit_reached',
   [FREE_CAPACITY_UNAVAILABLE_CODE]: 'free_capacity_unavailable',
 };
+
+// Refusals that hold for every free quota model this account could be sent to
+// next, so another one is never offered in their place.
+const ACCOUNT_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  FREE_QUOTA_DAILY_LIMIT_CODE,
+  CHINESE_HQ_PROVIDER_NOT_OPTED_IN_CODE,
+]);
+
+async function refusedForTheAccount(refusal: Response): Promise<boolean> {
+  const body = (await refusal
+    .clone()
+    .json()
+    .catch(() => null)) as { error?: { code?: unknown } } | null;
+  const code = body?.error?.code;
+  return typeof code === 'string' && ACCOUNT_REFUSAL_CODES.has(code);
+}
 
 const ReplayedFreeAutoTurnSchema = z.looseObject({
   model: z.string(),
@@ -393,7 +411,7 @@ export async function serveFreeQuotaFallback(input: {
         ...(assistantParentId ? { assistantParentId } : {}),
       },
     );
-    if (!served.ok) return await decline(model);
+    if (!served.ok) return (await refusedForTheAccount(served)) ? null : await decline(model);
     served.headers.set(FALLBACK_REASON_HEADER, reason);
     logger.info(
       { userId: input.userId, reason, model },

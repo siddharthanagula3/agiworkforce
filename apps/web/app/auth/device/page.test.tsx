@@ -141,6 +141,10 @@ describe('/auth/device page', () => {
       'href',
       '/login?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234',
     );
+    expect(screen.getByRole('link', { name: 'Create account' })).toHaveAttribute(
+      'href',
+      '/signup?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234',
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -216,6 +220,10 @@ describe('/auth/device page', () => {
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
       'href',
       '/login?surface=desktop&redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234%26surface%3Ddesktop',
+    );
+    expect(screen.getByRole('link', { name: 'Create account' })).toHaveAttribute(
+      'href',
+      '/signup?surface=desktop&redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234%26surface%3Ddesktop',
     );
   });
 

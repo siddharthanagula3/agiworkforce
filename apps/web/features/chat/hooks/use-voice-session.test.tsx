@@ -39,6 +39,7 @@ import {
   type LiveVoiceSessionOptions,
 } from '@features/chat/lib/live-voice-session';
 import { INITIAL_VOICE_SESSION_STATE, VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
+import { useChatStore } from '@shared/stores/web-chat-store';
 
 const SETTLEMENT = { ceilingSeconds: 600 };
 
@@ -164,6 +165,24 @@ describe('useVoiceSession', () => {
     });
     expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.listening);
     await waitFor(() => expect(result.current.deviceName).toBe('Built-in Microphone'));
+  });
+
+  it('starts the session with the memory switch of the chat it continues', async () => {
+    useChatStore.setState({ memoryDisabledByConversation: { 'conv-1': true } });
+    try {
+      const { result } = mount();
+      await act(async () => {
+        result.current.enter();
+      });
+      await waitFor(() => expect(live.start).toHaveBeenCalledTimes(1));
+
+      expect(live.start.mock.calls[0]?.[0]).toMatchObject({
+        conversationId: 'conv-1',
+        memoryEnabled: false,
+      });
+    } finally {
+      useChatStore.setState({ memoryDisabledByConversation: {} });
+    }
   });
 
   it('renegotiates the open session when the language or pace changes mid-conversation', async () => {

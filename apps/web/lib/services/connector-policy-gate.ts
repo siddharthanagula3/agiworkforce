@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
 
+import { readPrimaryEmailState, UNCONFIRMED_EMAIL_MESSAGE } from '@/lib/auth/email-confirmation';
 import { connectorsAllowedWithoutRequest } from '@/lib/connectors/connector-capability';
 import { logger } from '@/lib/logger';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
@@ -96,6 +97,27 @@ async function evaluateWorkspacePolicy(
   }
 }
 
+async function unconfirmedEmailRefusal(userId: string): Promise<ConnectorPolicyGateResult | null> {
+  try {
+    if ((await readPrimaryEmailState(userId)).confirmed) return null;
+  } catch (error) {
+    logger.error({ error, userId }, '[connector-policy] account email unreadable');
+    return {
+      allowed: false,
+      code: 'connectors_unavailable',
+      reason: 'Your account could not be checked, so nothing was connected. Try again.',
+      organizationId: null,
+    };
+  }
+  logger.info({ userId }, '[connector-policy] refused a connection for an unconfirmed email');
+  return {
+    allowed: false,
+    code: 'email_unconfirmed',
+    reason: UNCONFIRMED_EMAIL_MESSAGE,
+    organizationId: null,
+  };
+}
+
 export async function evaluateConnectorPolicyForUser(
   params: WorkspacePolicyAsk & {
     connectorId: string | null;
@@ -111,6 +133,10 @@ export async function evaluateConnectorPolicyForUser(
       reason: CONNECTORS_COMING_SOON_MESSAGE,
       organizationId: params.organizationId ?? null,
     };
+  }
+  if (params.userId) {
+    const refusal = await unconfirmedEmailRefusal(params.userId);
+    if (refusal) return refusal;
   }
   let organizationId: string | null = params.organizationId ?? null;
   if (params.organizationId === undefined && params.userId) {

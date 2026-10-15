@@ -71,6 +71,7 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 import { useMounted } from '@shared/hooks/useMounted';
 import { formatBytes } from '@shared/utils/format';
 import {
+  UpgradeAccessRequiredError,
   upgradeToBasicPlan,
   upgradeToProPlan,
   upgradeToMaxPlan,
@@ -86,10 +87,14 @@ import { UpgradeWaitlistDialog } from '@features/billing/components/UpgradeWaitl
 import { DowngradeReviewDialog } from '@features/billing/components/DowngradeReviewDialog';
 import { fetchPlanChangeState } from '@features/billing/services/billing-account';
 import {
-  isUpgradeWaitlistRequired,
+  upgradeNeedsWaitlist,
   type UpgradeWaitlistRequest,
 } from '@features/billing/services/upgrade-waitlist';
 import { useBillingData } from '@features/billing/hooks/use-billing-queries';
+import {
+  useUpgradeWaitlistStatus,
+  resolveUpgradeWaitlistStatus,
+} from '@features/billing/hooks/use-upgrade-waitlist';
 import { useLocalizedPricing } from '@features/billing/hooks/use-localized-pricing';
 import { useFreeMediaOffer } from '@features/billing/hooks/use-free-media-offer';
 import {
@@ -128,8 +133,10 @@ import {
   billingOwnerPlanChangeMessage,
 } from '@features/billing/lib/subscription-owner-presentation';
 import { Header } from '@shared/components/layout/Header';
+import { ServiceNotices } from '@shared/components/ServiceNotices';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Reveal } from '@/features/marketing/components/Reveal';
+import { WEB_ENTRY_HREF, webEntryHref } from '@/features/marketing/components/system/nav';
 import { toUserMessage } from '@/lib/user-error-message';
 
 type CheckoutPlan = SelfServePaidPlanTier;
@@ -278,6 +285,7 @@ export default function PricingPage() {
   const [portalPending, setPortalPending] = useState(false);
   const [upgradeConfirm, setUpgradeConfirm] = useState<UpgradeConfirmRequest | null>(null);
   const [waitlistRequest, setWaitlistRequest] = useState<UpgradeWaitlistRequest | null>(null);
+  const [joinWaitlistOnOpen, setJoinWaitlistOnOpen] = useState(false);
   const [downgradePlan, setDowngradePlan] = useState<SelfServeIndividualPlanTier | null>(null);
   // Team is billed per seat. Start at the contract minimum of two seats; the
   // buyer picks the real count and the total below updates from it.
@@ -416,6 +424,21 @@ export default function PricingPage() {
           'USD',
           priceLocale,
         );
+  const { status: upgradeAccess } = useUpgradeWaitlistStatus({
+    enabled: Boolean(user) && !hasActivePaidPlan,
+  });
+  const upgradesWaitlisted =
+    Boolean(user) &&
+    !hasActivePaidPlan &&
+    upgradeAccess !== null &&
+    upgradeNeedsWaitlist(upgradeAccess);
+  const planActionsReachBilling =
+    Boolean(user) &&
+    (hasActivePaidPlan ||
+      paymentOverdue ||
+      (upgradeAccess !== null && !upgradeNeedsWaitlist(upgradeAccess)));
+  const waitlistSelectionDisabled =
+    pendingPlan !== null || !authInitialized || (Boolean(user) && billingLoading);
   const paidPlanSelectionDisabled =
     pendingPlan !== null ||
     !authInitialized ||
@@ -423,6 +446,8 @@ export default function PricingPage() {
     (Boolean(user) && hasActivePaidPlan && !billingPolicyReady) ||
     !CHECKOUT_ENABLED ||
     (Boolean(user) && !hasActivePaidPlan && pricingStatus !== 'ready');
+  const showsCheckoutAvailability =
+    Boolean(user) && !hasActivePaidPlan && !paymentOverdue && !upgradesWaitlisted;
 
   function selectedInterval(plan: CheckoutPlan): BillingInterval {
     return isPerSeatBillingPlan(plan) ? teamInterval : 'monthly';
@@ -434,7 +459,7 @@ export default function PricingPage() {
   }
 
   const unavailableCheckoutPlans: CheckoutPlan[] =
-    user && !hasActivePaidPlan && !paymentOverdue && pricingStatus === 'ready'
+    showsCheckoutAvailability && pricingStatus === 'ready'
       ? SELF_SERVE_PAID_PLAN_TIERS.filter((plan) => !isPlanCheckoutReady(plan))
       : [];
 
@@ -551,25 +576,61 @@ export default function PricingPage() {
         </Link>
       );
     }
+    const selectionDisabled = upgradesWaitlisted
+      ? waitlistSelectionDisabled
+      : paidPlanSelectionDisabled || !isPlanCheckoutReady(plan);
+    const planLabel = BILLING_PLAN_PRICING[plan].label;
+    if (upgradesWaitlisted && upgradeAccess?.joinedPlans.includes(plan)) {
+      return (
+        <>
+          <p className="agi-tier-cta-note">{t('onPlanWaitlistNote')}</p>
+          <button
+            type="button"
+            className="agi-tier-cta agi-tier-cta--ghost"
+            aria-label={t('enterAccessCodeForPlan', { plan: planLabel })}
+            disabled={selectionDisabled}
+            onClick={() => void handleUpgrade(plan)}
+          >
+            {t('enterAccessCodeCta')}
+          </button>
+        </>
+      );
+    }
     return (
       <button
         type="button"
         className="agi-tier-cta"
-        disabled={paidPlanSelectionDisabled || !isPlanCheckoutReady(plan)}
-        onClick={() => void handleUpgrade(plan)}
+        disabled={selectionDisabled}
+        onClick={() => void handleUpgrade(plan, upgradesWaitlisted)}
       >
-        {upgradeLabel}
+        {upgradesWaitlisted ? t('joinPlanWaitlistCta', { plan: planLabel }) : upgradeLabel}
       </button>
     );
   }
 
-  async function handleUpgrade(plan: CheckoutPlan) {
+  async function handleUpgrade(plan: CheckoutPlan, joinWaitlist = false) {
     if (!user) {
       const returnTo = isPerSeatBillingPlan(plan)
         ? `/pricing?seats=${teamSeats}#pricing-team-title`
         : '/pricing';
-      router.push(`/login?redirectTo=${encodeURIComponent(returnTo)}`);
+      router.push(webEntryHref(returnTo));
       return;
+    }
+
+    const request: UpgradeWaitlistRequest = {
+      plan,
+      billingInterval: selectedInterval(plan),
+      ...(isPerSeatBillingPlan(plan) ? { seats: teamSeats, premiumSeats: teamPremiumSeats } : {}),
+    };
+    if (!hasActivePaidPlan) {
+      setPendingPlan(plan);
+      const needsWaitlist = upgradeNeedsWaitlist(await resolveUpgradeWaitlistStatus(user.id));
+      setPendingPlan(null);
+      if (needsWaitlist) {
+        setJoinWaitlistOnOpen(joinWaitlist);
+        setWaitlistRequest(request);
+        return;
+      }
     }
 
     if (!CHECKOUT_ENABLED) {
@@ -608,20 +669,15 @@ export default function PricingPage() {
       return;
     }
 
-    const request: UpgradeWaitlistRequest = {
-      plan,
-      billingInterval: selectedInterval(plan),
-      ...(isPerSeatBillingPlan(plan) ? { seats: teamSeats, premiumSeats: teamPremiumSeats } : {}),
-    };
     setPendingPlan(plan);
-    if (await isUpgradeWaitlistRequired()) {
-      setPendingPlan(null);
-      setWaitlistRequest(request);
-      return;
-    }
     try {
       await startInitialCheckout(request);
     } catch (error) {
+      if (error instanceof UpgradeAccessRequiredError) {
+        setJoinWaitlistOnOpen(false);
+        setWaitlistRequest(request);
+        return;
+      }
       toast.error(toUserMessage(error, 'Failed to start checkout.'));
     }
   }
@@ -657,7 +713,7 @@ export default function PricingPage() {
     }
   }
 
-  const freeHref = user ? '/' : '/login?redirectTo=%2F';
+  const freeHref = user ? '/' : WEB_ENTRY_HREF;
 
   const usageExplainer = pricingUsageExplainer(t);
 
@@ -830,6 +886,14 @@ export default function PricingPage() {
             >
               {CHECKOUT_DISABLED_NOTICE}
             </p>
+          ) : null}
+          {planActionsReachBilling ? (
+            <div
+              className="flex flex-col gap-2 empty:hidden"
+              style={{ marginTop: 'var(--space-4)' }}
+            >
+              <ServiceNotices scope="billing" />
+            </div>
           ) : null}
         </section>
 
@@ -1068,7 +1132,7 @@ export default function PricingPage() {
               before you change plans.
             </p>
           ) : null}
-          {user && !hasActivePaidPlan && !paymentOverdue && pricingStatus === 'loading' ? (
+          {showsCheckoutAvailability && pricingStatus === 'loading' ? (
             <p
               role="status"
               className="agi-fl-section-lede"
@@ -1077,7 +1141,7 @@ export default function PricingPage() {
               {CHECKOUT_AVAILABILITY_LOADING_NOTICE}
             </p>
           ) : null}
-          {user && !hasActivePaidPlan && !paymentOverdue && pricingStatus === 'error' ? (
+          {showsCheckoutAvailability && pricingStatus === 'error' ? (
             <p role="alert" className="agi-fl-section-lede" style={{ marginTop: 'var(--space-4)' }}>
               {CHECKOUT_AVAILABILITY_ERROR_NOTICE}
             </p>
@@ -1275,6 +1339,7 @@ export default function PricingPage() {
       />
       <UpgradeWaitlistDialog
         request={waitlistRequest}
+        joinOnOpen={joinWaitlistOnOpen}
         onClose={() => setWaitlistRequest(null)}
         onAccessGranted={startInitialCheckout}
       />

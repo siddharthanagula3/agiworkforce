@@ -10,6 +10,7 @@ import {
   Section,
   Stack,
   Transcript,
+  WEB_ENTRY_HREF,
   type TranscriptLine,
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
@@ -186,7 +187,7 @@ export default function CustomersPage() {
           em="puts a name on this page."
           lede={`Nobody has given us that permission yet, so there are no logos here, no testimonials, and no anonymised "a leading bank". What stands in their place is three situations built entirely out of what the CLI does in the repository, with the part AGI declines to do written next to the part it does. ${CLI_AVAILABILITY_NOTE}`}
           ctas={[
-            { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
+            { href: WEB_ENTRY_HREF, label: 'Try AGI Web' },
             { href: '/pricing', label: 'See what a plan includes', variant: 'secondary' },
           ]}
           visual={

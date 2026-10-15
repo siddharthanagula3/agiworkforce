@@ -40,7 +40,6 @@ vi.mock('@/lib/client/csrf', () => ({
     'x-csrf-token': 'csrf',
   })),
 }));
-vi.mock('qrcode', () => ({ default: { toString: vi.fn(async () => '<svg></svg>') } }));
 
 const { RemoteControlSection } = await import('../components/RemoteControlSection');
 
@@ -58,7 +57,7 @@ afterEach(() => {
 });
 
 describe('Remote Control in the desktop shell', () => {
-  it('creates a pairing, hands the desktop token to the shell and shows the QR code', async () => {
+  it('creates a pairing, hands the desktop token to the shell and leaves the QR code to it', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -73,7 +72,6 @@ describe('Remote Control in the desktop shell', () => {
       ...IDLE_REMOTE_CONTROL_STATE,
       status: 'waiting',
       pairingCode: 'ABCD1234WXYZ',
-      qrPayload: `agiw3:ABCD1234WXYZ:${'ab'.repeat(32)}`,
     });
 
     render(<RemoteControlSection />);
@@ -89,8 +87,9 @@ describe('Remote Control in the desktop shell', () => {
       pairToken: 'desktop-token',
       expiresAt: 1_900_000_000_000,
     });
-    expect(await screen.findByRole('img', { name: 'Pairing QR code' })).toBeVisible();
+    expect(await screen.findByText(/Scan the code in the pairing window/u)).toBeVisible();
     expect(screen.getByLabelText('Pairing code')).toHaveTextContent('ABCD1234WXYZ');
+    expect(screen.queryByRole('img')).toBeNull();
   });
 
   it('follows the shell when the phone connects and lets the user disconnect it', async () => {
@@ -119,6 +118,22 @@ describe('Remote Control in the desktop shell', () => {
     await userEvent.click(within(confirmation).getByRole('button', { name: 'Disconnect phone' }));
     await waitFor(() => expect(stopRemoteControl).toHaveBeenCalled());
     expect(await screen.findByRole('button', { name: 'Pair a phone' })).toBeVisible();
+  });
+
+  it('says the allowed phone can reconnect once it leaves, not to scan a closed window', async () => {
+    readRemoteControl.mockResolvedValue({
+      ...IDLE_REMOTE_CONTROL_STATE,
+      status: 'waiting',
+      pairingCode: 'ABCD1234WXYZ',
+      reconnectable: true,
+    });
+
+    render(<RemoteControlSection />);
+
+    expect(await screen.findByText(/reconnects on its own/u)).toBeVisible();
+    expect(screen.queryByText(/pairing window/u)).toBeNull();
+    expect(screen.queryByLabelText('Pairing code')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Stop Remote Control' })).toBeVisible();
   });
 
   it('says why pairing did not start', async () => {

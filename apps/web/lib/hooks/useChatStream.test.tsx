@@ -431,6 +431,164 @@ describe('useChatStream', () => {
     expect(body[FREE_QUOTA_FALLBACK_REQUEST_KEY]).toBe(true);
   });
 
+  describe('saving a Free Auto reply another free model wrote', () => {
+    const conversation = { ...TEMP_CONVERSATION, id: 'conv-free-fallback', isTemporary: false };
+    const [fallbackKey] = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.provider === 'qwen' && offering.quotaProbeProtocol === 'chat',
+    )!;
+    const FALLBACK_HEADERS = {
+      'X-AGI-Fallback-Reason': 'free_limit_reached',
+      'X-AGI-Resolved-Model': fallbackKey,
+    };
+    const frame = (delta: Record<string, unknown>) =>
+      `data: ${JSON.stringify({ choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`;
+
+    function serve(
+      body: string,
+      options: { headers?: Record<string, string>; stopAfterBody?: boolean } = {},
+    ) {
+      const saves: Array<Record<string, unknown>> = [];
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url.includes('/messages')) {
+          const saved = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+          saves.push(saved);
+          return new Response(JSON.stringify({ message: { id: saved['id'] } }), { status: 200 });
+        }
+        if (url.includes('/completions')) {
+          const encoder = new TextEncoder();
+          let pulls = 0;
+          const stream = new ReadableStream<Uint8Array>({
+            pull(controller) {
+              pulls += 1;
+              if (pulls === 1) {
+                controller.enqueue(encoder.encode(body));
+                return;
+              }
+              if (options.stopAfterBody) {
+                controller.error(new DOMException('The user aborted a request.', 'AbortError'));
+                return;
+              }
+              controller.close();
+            },
+          });
+          return new Response(stream, { status: 200, headers: new Headers(options.headers) });
+        }
+        return new Response('{}', { status: 200 });
+      });
+      return () => saves.filter((saved) => saved['role'] === 'assistant');
+    }
+
+    const savedMetadata = (saved: Record<string, unknown>) =>
+      saved['metadata'] as Record<string, unknown> | undefined;
+
+    async function send() {
+      useChatStore.setState({
+        activeConversationId: conversation.id,
+        conversations: [conversation],
+      });
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('Hello', {
+          conversationId: conversation.id,
+          model: getDefaultModelFor('free', 'chat'),
+        });
+      });
+    }
+
+    it('saves the notice with the reply, so a reload or another device still shows it', async () => {
+      const assistantSaves = serve(
+        `${frame({ content: 'Answered by a free model.' })}data: [DONE]\n\n`,
+        { headers: FALLBACK_HEADERS },
+      );
+
+      await send();
+
+      await vi.waitFor(() => expect(assistantSaves()).not.toHaveLength(0));
+      for (const saved of assistantSaves()) {
+        expect(saved['content']).toBe('Answered by a free model.');
+        expect(savedMetadata(saved)?.['fallbackReason']).toBe('free_limit_reached');
+      }
+    });
+
+    it('keeps the notice on every save of a reply the reader stopped', async () => {
+      const assistantSaves = serve(frame({ content: 'Half an answer' }), {
+        headers: FALLBACK_HEADERS,
+        stopAfterBody: true,
+      });
+
+      await send();
+
+      await vi.waitFor(() =>
+        expect(
+          assistantSaves().some((saved) => savedMetadata(saved)?.['finishReason'] === 'stopped'),
+        ).toBe(true),
+      );
+      for (const saved of assistantSaves()) {
+        expect(savedMetadata(saved)?.['fallbackReason']).toBe('free_limit_reached');
+      }
+    });
+
+    it('saves no notice when the free model wrote no text', async () => {
+      const assistantSaves = serve(
+        `${frame({
+          x_stream_error: {
+            message: 'The free provider could not complete this answer.',
+            code: 'free_model_stream_failed',
+            retryable: false,
+          },
+        })}data: [DONE]\n\n`,
+        { headers: FALLBACK_HEADERS },
+      );
+
+      await send();
+
+      await vi.waitFor(() => expect(assistantSaves()).not.toHaveLength(0));
+      for (const saved of assistantSaves()) {
+        expect(savedMetadata(saved)?.['streamError']).toMatchObject({
+          code: 'free_model_stream_failed',
+        });
+        expect(savedMetadata(saved)).not.toHaveProperty('fallbackReason');
+      }
+    });
+
+    it('keeps the saved notice when the reader continues the reply', async () => {
+      const assistantMessageId = '0190a000-0000-7000-8000-0000000000fa';
+      useChatStore.setState({
+        activeConversationId: conversation.id,
+        conversations: [conversation],
+        messages: [
+          {
+            id: 'user-1',
+            role: 'user',
+            content: 'Hello',
+            createdAt: '2026-10-02T00:00:00.000Z',
+          },
+          {
+            id: assistantMessageId,
+            role: 'assistant',
+            content: 'Half an answer',
+            createdAt: '2026-10-02T00:00:01.000Z',
+            model: fallbackKey,
+            metadata: { finishReason: 'stopped', fallbackReason: 'free_limit_reached' },
+          },
+        ],
+      });
+      const assistantSaves = serve(`${frame({ content: ' and the rest.' })}data: [DONE]\n\n`);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.continueGeneration(assistantMessageId);
+      });
+
+      await vi.waitFor(() => expect(assistantSaves()).not.toHaveLength(0));
+      for (const saved of assistantSaves()) {
+        expect(saved['content']).toBe('Half an answer and the rest.');
+        expect(savedMetadata(saved)?.['fallbackReason']).toBe('free_limit_reached');
+      }
+    });
+  });
+
   it('shows the free limit card, without reading the free catalogue, when Free Auto is refused', async () => {
     const freeRouter = getDefaultModelFor('free', 'chat');
     vi.mocked(fetch).mockResolvedValueOnce(

@@ -15,6 +15,13 @@ const CONFIGURED_MODEL = 'qa-provider/qa-default';
 import {
   EMPTY_LOCAL_TURN,
   detectTestCommand,
+  localApprovalDecisions,
+  localFileChangeLabel,
+  localSessionMarker,
+  localTurnChanges,
+  nextSessionMarker,
+  nextCycledAgentMode,
+  rememberableAgentMode,
   localModelChoices,
   localFailureAction,
   localFolderChoice,
@@ -68,6 +75,7 @@ const runtime: DeveloperRuntimeModels = {
   hostModels: [],
   defaultModelId: CONFIGURED_MODEL,
   defaultAgentMode: null,
+  defaultReasoningEffort: null,
   managedSignedIn: false,
 };
 
@@ -153,6 +161,7 @@ describe('local code surface', () => {
         hostModels: [],
         defaultModelId: OTHER_MODEL,
         defaultAgentMode: null,
+        defaultReasoningEffort: null,
         managedSignedIn: true,
       },
       [{ ...session, model: OTHER_MODEL }],
@@ -381,6 +390,7 @@ describe('local code surface', () => {
     const items = localTranscriptItems([{ role: 'user', text: 'earlier' }], {
       turnId: 'turn-1',
       prompt: 'Reply with exactly: desktop leg ok',
+      steered: [],
       reply: 'desktop leg ok',
       tools: [
         {
@@ -445,11 +455,7 @@ describe('local code surface', () => {
       output: 'built\nCreated dist/index.js',
     });
     expect(steps.steps[1]?.label).toBe('Queued · write_file');
-    expect(steps.steps[2]).toMatchObject({
-      toolName: 'turn_diff',
-      label: 'Changed 1 file',
-      output: '--- a/x\n+++ b/x\n+one',
-    });
+    expect(steps.steps).toHaveLength(2);
   });
 
   it('renders a failed turn as the sentence, not the CLI line', () => {
@@ -600,6 +606,7 @@ describe('the model a new local session starts on', () => {
       hostModels: [host(topTierId), host(cheapId)],
       defaultModelId: topTierId,
       defaultAgentMode: null,
+      defaultReasoningEffort: null,
       managedSignedIn: false,
     };
 
@@ -617,6 +624,7 @@ describe('the model a new local session starts on', () => {
       hostModels: [host(topTierId), host(cheapId)],
       defaultModelId: topTierId,
       defaultAgentMode: null,
+      defaultReasoningEffort: null,
       managedSignedIn: false,
     };
 
@@ -629,6 +637,7 @@ describe('the model a new local session starts on', () => {
       hostModels: [host(topTierId), host(cheapId)],
       defaultModelId: cheapId,
       defaultAgentMode: null,
+      defaultReasoningEffort: null,
       managedSignedIn: false,
     };
 
@@ -643,6 +652,7 @@ describe('the model a new local session starts on', () => {
           hostModels: [],
           defaultModelId: null,
           defaultAgentMode: null,
+          defaultReasoningEffort: null,
           managedSignedIn: false,
         },
         [],
@@ -676,5 +686,190 @@ describe('the test command a folder declares', () => {
     expect(detectTestCommand(['go.mod'], null)).toBe('go test ./...');
     expect(detectTestCommand(['pyproject.toml'], null)).toBe('pytest');
     expect(detectTestCommand(['README.md'], null)).toBeNull();
+  });
+});
+
+describe('local approvals', () => {
+  const approval = {
+    turnId: 'turn-1',
+    requestId: 'ask-1',
+    kind: 'Exec',
+    summary: 'Run tests',
+    detail: '',
+    command: 'cargo test -p agiworkforce-cli',
+    riskLevel: 'medium' as const,
+    reversible: false,
+    proposedCommandPrefix: ['cargo', 'test'],
+  };
+
+  it('offers a command rule only when the CLI proposed one', () => {
+    const { proposedCommandPrefix: _none, ...unproposed } = approval;
+    expect(localApprovalDecisions(unproposed)).toEqual([
+      'approve_once',
+      'approve_for_session',
+      'deny',
+      'deny_and_stop',
+    ]);
+    expect(localApprovalDecisions({ ...approval, proposedCommandPrefix: [] })).not.toContain(
+      'always_allow_command',
+    );
+  });
+
+  it('lists every decision for a proposed rule, and no rule for anything else', () => {
+    expect(localApprovalDecisions(approval)).toEqual([
+      'approve_once',
+      'approve_for_session',
+      'always_allow_command',
+      'deny',
+      'deny_and_stop',
+    ]);
+    const { proposedCommandPrefix: _rule, ...fileWrite } = approval;
+    expect(localApprovalDecisions({ ...fileWrite, kind: 'FileWrite', command: null })).toEqual([
+      'approve_once',
+      'approve_for_session',
+      'deny',
+      'deny_and_stop',
+    ]);
+  });
+});
+
+describe('local steering', () => {
+  it('shows what was added to a running turn after the work so far', () => {
+    const items = localTranscriptItems([], {
+      ...EMPTY_LOCAL_TURN,
+      turnId: 'turn-1',
+      prompt: 'fix it',
+      steered: ['use the other file', ''],
+    });
+
+    expect(items.map((item) => (item.kind === 'task' ? item.text : item.kind))).toEqual([
+      'fix it',
+      'use the other file',
+    ]);
+  });
+});
+
+describe('local turn options', () => {
+  it('remembers every posture but bypass', () => {
+    expect(rememberableAgentMode('plan')).toBe('plan');
+    expect(rememberableAgentMode('auto')).toBe('auto');
+    expect(rememberableAgentMode('bypass')).toBeNull();
+    expect(rememberableAgentMode('yolo')).toBeNull();
+    expect(rememberableAgentMode(null)).toBeNull();
+  });
+
+  it('cycles Ask, Auto and Plan and never steps into bypass', () => {
+    expect(nextCycledAgentMode('ask')).toBe('auto');
+    expect(nextCycledAgentMode('auto')).toBe('plan');
+    expect(nextCycledAgentMode('plan')).toBe('ask');
+    expect(nextCycledAgentMode('bypass')).toBe('ask');
+  });
+});
+
+describe('local turn changes', () => {
+  it('keeps what each file underwent next to the diff', () => {
+    const changes = localTurnChanges({ unifiedDiff: 'diff', paths: ['a.ts', 'b.ts'] }, [
+      {
+        toolCallId: 'call-1',
+        name: 'write_file',
+        summary: 'write',
+        output: '',
+        isError: false,
+        state: 'finished',
+        command: null,
+        files: [{ path: 'a.ts', change: 'created' }],
+      },
+    ]);
+
+    expect(localFileChangeLabel(changes, 'a.ts')).toBe('Created');
+    expect(localFileChangeLabel(changes, 'b.ts')).toBe('Edited');
+  });
+});
+
+describe('local session markers', () => {
+  const session: LocalDeveloperSession = {
+    id: 'thread-1',
+    rootId: 'root-1',
+    title: 't',
+    cwd: '/work',
+    model: null,
+    provider: null,
+    trustMode: 'local',
+    status: 'idle',
+    createdAt: '',
+    updatedAt: '',
+    origin: 'desktop',
+  };
+  const ids = { threadId: 'thread-1', turnId: 'turn-1' };
+
+  it('follows a turn from running to waiting to its end', () => {
+    expect(nextSessionMarker(null, { type: 'turn-started', ...ids })).toBe('running');
+    expect(
+      nextSessionMarker('running', {
+        type: 'approval-requested',
+        ...ids,
+        requestId: 'ask-1',
+        kind: 'Exec',
+        summary: '',
+        detail: '',
+        command: null,
+        riskLevel: null,
+        reversible: null,
+      }),
+    ).toBe('needs-approval');
+    expect(
+      nextSessionMarker('needs-approval', {
+        type: 'approval-answered',
+        ...ids,
+        requestId: 'ask-1',
+        decision: 'approve_once',
+        approved: true,
+      }),
+    ).toBe('running');
+    const finished = {
+      type: 'turn-finished' as const,
+      ...ids,
+      response: '',
+      failure: null,
+      inputTokens: 0,
+      outputTokens: 0,
+    };
+    expect(nextSessionMarker('running', { ...finished, outcome: 'failed' })).toBe('failed');
+    expect(nextSessionMarker('running', { ...finished, outcome: 'completed' })).toBeNull();
+    expect(nextSessionMarker('running', { ...finished, outcome: 'interrupted' })).toBeNull();
+  });
+
+  it('marks a session that waits on an answer, and clears it once answered', () => {
+    expect(
+      nextSessionMarker('running', {
+        type: 'user-input-requested',
+        ...ids,
+        requestId: 'q-1',
+        question: 'Which branch?',
+      }),
+    ).toBe('needs-input');
+    expect(
+      nextSessionMarker('needs-input', {
+        type: 'user-input-answered',
+        ...ids,
+        requestId: 'q-1',
+        cancelled: true,
+      }),
+    ).toBe('running');
+  });
+
+  it('marks a turn it joined part way as running, and leaves a known state alone', () => {
+    const delta = { type: 'output-delta' as const, ...ids, delta: 'x' };
+    expect(nextSessionMarker(null, delta)).toBe('running');
+    expect(nextSessionMarker('needs-approval', delta)).toBeUndefined();
+  });
+
+  it('prefers what the runtime said since load over what the CLI listed', () => {
+    expect(localSessionMarker({ ...session, status: 'awaiting_approval' }, undefined)).toBe(
+      'needs-approval',
+    );
+    expect(localSessionMarker({ ...session, status: 'running' }, null)).toBeNull();
+    expect(localSessionMarker(session, 'failed')).toBe('failed');
+    expect(localSessionMarker(session, undefined)).toBeNull();
   });
 });

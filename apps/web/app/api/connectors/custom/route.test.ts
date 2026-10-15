@@ -7,6 +7,8 @@ vi.mock('@agiworkforce/types', async (importOriginal) => ({
 }));
 
 type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
+type DirectoryTargetsModule = typeof import('@/lib/connectors/mcp-directory-targets');
+type McpRuntimeCacheModule = typeof import('@/lib/connectors/mcp-runtime-cache');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -19,6 +21,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readPrimaryEmailState: vi.fn(async () => ({ confirmed: true, email: 'person@example.com' })),
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/api-auth', () => ({
@@ -57,7 +63,8 @@ vi.mock('@/lib/user-connector-tools', () => ({
   evictCustomConnectorCaches: vi.fn(),
   getUserCustomConnectorSummaries: (...args: unknown[]) => mocks.summaries(...args),
 }));
-vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
+vi.mock('@/lib/connectors/mcp-directory-targets', async (importOriginal) => ({
+  ...(await importOriginal<DirectoryTargetsModule>()),
   isDirectoryServerId: vi.fn(() => false),
   normalizeRemoteUrl: vi.fn((url: string) => url),
   resolveDirectoryTarget: vi.fn(async () => null),
@@ -87,7 +94,8 @@ vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
 vi.mock('@/lib/connectors/mcp-client-metadata', () => ({
   resolveClientRedirectUri: vi.fn(() => null),
 }));
-vi.mock('@/lib/connectors/mcp-runtime-cache', () => ({
+vi.mock('@/lib/connectors/mcp-runtime-cache', async (importOriginal) => ({
+  ...(await importOriginal<McpRuntimeCacheModule>()),
   getMcpStatelessRuntime: vi.fn(async () => ({})),
   mcpAuthorizationContext: {
     userOauthConnector: (userId: string, connectorId: string) =>

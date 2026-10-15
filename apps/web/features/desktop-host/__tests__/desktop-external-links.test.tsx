@@ -31,6 +31,7 @@ function Harness({ host }: { host: HostBridge | null }) {
       <a href="/brand-assets.zip" download>
         Brand assets
       </a>
+      <a href="/api/projects/p-1/export">Export</a>
       <a href="#main-content">Skip to content</a>
       <a href="https://status.example.com/">Status</a>
     </>
@@ -101,6 +102,32 @@ describe('desktop external links', () => {
     clickLink(container, 'Skip to content');
 
     expect(host.openExternal).not.toHaveBeenCalled();
+  });
+
+  it('saves a file from this site in the window, where the session is, not the browser', () => {
+    const host = fakeHost();
+    const { container } = render(<Harness host={host} />);
+    const saved: { href: string; download: string | null }[] = [];
+    const record = (event: Event) => {
+      const target = event.target;
+      if (target instanceof HTMLAnchorElement && target.hasAttribute('download')) {
+        saved.push({ href: target.href, download: target.getAttribute('download') });
+        event.preventDefault();
+      }
+    };
+    document.addEventListener('click', record, true);
+
+    try {
+      expect(clickLink(container, 'Export')).toBe(true);
+    } finally {
+      document.removeEventListener('click', record, true);
+    }
+
+    expect(host.openExternal).not.toHaveBeenCalled();
+    expect(saved).toEqual([
+      { href: `${window.location.origin}/api/projects/p-1/export`, download: '' },
+    ]);
+    expect(document.querySelector('a[download][hidden]')).toBeNull();
   });
 
   it('leaves a cross-origin link to the shell navigation policy', () => {

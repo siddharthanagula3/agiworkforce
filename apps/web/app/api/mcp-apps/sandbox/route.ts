@@ -56,7 +56,7 @@ function buildCsp(csp?: McpUiResourceCsp): string {
   const bases = sources(csp?.baseUriDomains, ['https']);
   return [
     "default-src 'none'",
-    `script-src 'unsafe-inline' 'unsafe-eval' blob: data: ${resources}`.trim(),
+    `script-src 'unsafe-inline' blob: data: ${resources}`.trim(),
     `style-src 'unsafe-inline' blob: data: ${resources}`.trim(),
     `img-src data: blob: ${resources}`.trim(),
     `font-src data: blob: ${resources}`.trim(),

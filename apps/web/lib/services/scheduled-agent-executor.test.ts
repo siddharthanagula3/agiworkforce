@@ -3,6 +3,7 @@ type ScanModule0 = typeof import('@agiworkforce/routing');
 type ScanModule1 = typeof import('@agiworkforce/types');
 type ScanModule2 = typeof import('@/lib/services/llm-cost-calculator');
 type ScanModule3 = typeof import('@agiworkforce/provider-protocol');
+type ScanModule4 = typeof import('@/app/api/llm/v1/chat/completions/lib/capability-preamble');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@agiworkforce/routing', async (importOriginal) => {
@@ -68,6 +69,10 @@ vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
   drainToLlmResponse: vi.fn(),
 }));
+vi.mock('@/app/api/llm/v1/chat/completions/lib/capability-preamble', async (importOriginal) => {
+  const actual = await importOriginal<ScanModule4>();
+  return { ...actual, buildCapabilityPreamble: vi.fn(actual.buildCapabilityPreamble) };
+});
 vi.mock('@agiworkforce/provider-protocol', async (importOriginal) => {
   const actual = await importOriginal<ScanModule3>();
   return {
@@ -77,7 +82,11 @@ vi.mock('@agiworkforce/provider-protocol', async (importOriginal) => {
 });
 
 import { resolveAutoRoute } from '@agiworkforce/routing';
-import { getSlotForModel } from '@agiworkforce/types';
+import { getDefaultModelFor, getSlotForModel } from '@agiworkforce/types';
+import {
+  buildCapabilityPreamble,
+  servingModelFor,
+} from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import {
@@ -298,6 +307,38 @@ describe('scheduled managed agent executor', () => {
       provider: 'openai',
       billingStatus: 'succeeded',
     });
+  });
+
+  it('tells the preamble which model the route serves and the selection that chose it', async () => {
+    const model = getDefaultModelFor('pro', 'chat');
+    vi.mocked(resolveAutoRoute).mockReturnValueOnce({
+      status: 'selected',
+      requestedSelection: 'auto-balanced',
+      requestedProfile: 'balanced',
+      effectiveProfile: 'balanced',
+      taskType: 'general',
+      modelKey: model,
+      provider: 'openai',
+      providerModelId: 'provider-model-id',
+      routeId: 'route-1',
+      harnessId: 'managed/chat',
+      fallbacks: [],
+      reason: 'preferred_slot',
+    });
+
+    await executeScheduledAgent(
+      { ...task, sources: { project: false, memory: false, web: false } },
+      new AbortController().signal,
+      'run-model',
+      executionScope,
+    );
+
+    const servingModel = servingModelFor(model, {
+      kind: 'picked',
+      modelId: task.model ?? '',
+    });
+    expect(servingModel).toMatchObject({ kind: 'model', choice: { kind: 'auto' } });
+    expect(buildCapabilityPreamble).toHaveBeenCalledWith(expect.objectContaining({ servingModel }));
   });
 
   it('keeps a run started by a Gmail event on providers that do not train on inputs', async () => {

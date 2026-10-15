@@ -17,6 +17,7 @@ export type SendEmailResult =
       delivered: false;
       reason: SendEmailFailureReason;
       detail: string;
+      status?: number;
     };
 
 export interface SendEmailInput {
@@ -27,6 +28,7 @@ export interface SendEmailInput {
   replyTo?: string;
   idempotencyKey?: string;
   userId?: string | null;
+  headers?: Readonly<Record<string, string>>;
 }
 
 export interface TransactionalEmailInput extends SendEmailInput {
@@ -53,7 +55,10 @@ async function postOnce(
   apiKey: string,
   payload: Record<string, unknown>,
   idempotencyKey?: string,
-): Promise<{ ok: true; id: string | null } | { ok: false; retryable: boolean; detail: string }> {
+): Promise<
+  | { ok: true; id: string | null }
+  | { ok: false; retryable: boolean; detail: string; status?: number }
+> {
   if (emailBlockedOnThisDeployment()) {
     return {
       ok: false,
@@ -79,6 +84,7 @@ async function postOnce(
         ok: false,
         retryable: isRetryable(response.status),
         detail: `${response.status} ${detail.slice(0, 500)}`.trim(),
+        status: response.status,
       };
     }
 
@@ -150,6 +156,7 @@ async function postTransactionalEmail(input: TransactionalEmailInput): Promise<S
     text: input.text,
     html: input.html,
     ...(isValidEmail(input.replyTo) ? { reply_to: [input.replyTo] } : {}),
+    ...(input.headers ? { headers: input.headers } : {}),
   };
 
   let last = await postOnce(apiKey, payload, idempotencyKey);
@@ -165,7 +172,12 @@ async function postTransactionalEmail(input: TransactionalEmailInput): Promise<S
     : /^\d{3}\s/u.test(last.detail)
       ? 'rejected'
       : 'network';
-  return { delivered: false, reason, detail: last.detail.slice(0, 500) };
+  return {
+    delivered: false,
+    reason,
+    detail: last.detail.slice(0, 500),
+    ...(last.status === undefined ? {} : { status: last.status }),
+  };
 }
 
 export type BulkRecipientOutcome = {

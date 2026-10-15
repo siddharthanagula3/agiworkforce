@@ -20,7 +20,11 @@ import { logger } from '@/lib/logger';
 import { loadFreePools, type LimitedMediaOffer } from '@/lib/server/free-pools';
 import { loadFreeQuotaPolicy } from '@/lib/server/free-quota-catalogue';
 import type { UserScopedDb } from '@/lib/server/rls-db';
-import { freeQuotaFixtureNow, servableFreeQuotaOfferings } from '@/test/free-quota-fixtures';
+import {
+  acceptedProviderConsent,
+  freeQuotaFixtureNow,
+  servableFreeQuotaOfferings,
+} from '@/test/free-quota-fixtures';
 import { StatementScanPostgres } from '@/lib/services/__tests__/statement-scan-postgres';
 import { composeStudyInstruction } from '@/features/study/lib/study-session';
 type ScanModule0 = typeof import('next/server');
@@ -48,7 +52,12 @@ const mocks = vi.hoisted(() => ({
   moderateMedia: vi.fn(),
   expireCatalogue: vi.fn(),
   after: vi.fn(),
+  consent: vi.fn(),
   limitedOffer: undefined as LimitedMediaOffer | undefined,
+}));
+
+vi.mock('@/lib/server/named-provider-consent', () => ({
+  loadNamedProviderConsent: mocks.consent,
 }));
 
 vi.mock('next/server', async (importOriginal) => ({
@@ -98,6 +107,8 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate', async (imp
     texts,
   })),
 }));
+const PROJECT_TURN_SHARE_TOKENS = 1_000_000;
+
 vi.mock('@/lib/server/free-pools', async (importOriginal) => {
   const actual = await importOriginal<ScanModule10>();
   return {
@@ -108,6 +119,10 @@ vi.mock('@/lib/server/free-pools', async (importOriginal) => {
       return {
         ...document,
         limitedMediaOffer: mocks.limitedOffer,
+        freeChatDailyShare: document.freeChatDailyShare && {
+          ...document.freeChatDailyShare,
+          tokensPerUser: PROJECT_TURN_SHARE_TOKENS,
+        },
         inventory: {
           ...inventory,
           termsReview: {
@@ -266,6 +281,11 @@ beforeEach(async () => {
   mocks.store = createMemoryKeyValueStore();
   mocks.query.mockResolvedValue([{ id: 'conversation', data_region: null }]);
   mocks.plan.mockResolvedValue('free');
+  mocks.consent
+    .mockReset()
+    .mockImplementation(async (_db, _userId, providerId) =>
+      acceptedProviderConsent(providerId, Date.now()),
+    );
   mocks.moderateMedia.mockResolvedValue({ allowed: true, contentSha256: 'a'.repeat(64) });
   mocks.persist.mockResolvedValue({
     ok: true,
@@ -741,7 +761,7 @@ describe('a chat inside a project on a free model', () => {
         ];
       }
       if (fixture.memories && sql.includes("settings -> 'capabilities'")) {
-        return [{ capabilities: { memory: true } }];
+        return [{ capabilities: { memory: true, searchPastChats: true } }];
       }
       if (fixture.memories && sql.includes('from user_memories')) return fixture.memories;
       if (fixture.memorySettingsUnreadable && sql.includes("settings -> 'memory'")) {

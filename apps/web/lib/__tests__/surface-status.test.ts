@@ -126,20 +126,17 @@ describe('the action offered for a surface', () => {
   });
 
   it('points at download sections that exist', () => {
-    const sections = {
-      desktop: 'app/download/DesktopDownloadAvailability.tsx',
-      cli: 'app/download/CliDownloadAvailability.tsx',
-    } as const;
-    for (const [surface, file] of Object.entries(sections) as [InstallableSurfaceId, string][]) {
+    const downloadPage = readFileSync(join(WEB_ROOT, 'app/download/DownloadSurfaces.tsx'), 'utf8');
+    for (const surface of ['desktop', 'cli'] as InstallableSurfaceId[]) {
       const anchor = surfaceCta(surface, ONLY_WEB_RELEASED).href.split('#')[1];
       expect(anchor).toBeTruthy();
-      expect(readFileSync(join(WEB_ROOT, file), 'utf8')).toContain(`id="${anchor}"`);
+      expect(downloadPage).toContain(`${surface}: '${anchor}'`);
     }
   });
 
   it('sends a notify-list visitor to the form that takes the address, not the top of the page', () => {
     expect(NOTIFY_CTA).toEqual({ label: 'Get notified', href: `/download#${NOTIFY_FORM_ID}` });
-    expect(readFileSync(join(WEB_ROOT, 'app/download/page.tsx'), 'utf8')).toContain(
+    expect(readFileSync(join(WEB_ROOT, 'app/download/DownloadSurfaces.tsx'), 'utf8')).toContain(
       'id={NOTIFY_FORM_ID}',
     );
     const notifyList = INSTALLABLE_SURFACES.filter(

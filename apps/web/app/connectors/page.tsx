@@ -27,7 +27,7 @@ export default async function ConnectorsRoute() {
     <SignedOutSurface
       eyebrow="Connectors"
       heading="Connectors bring your own tools into a thread"
-      signInHref="/login?redirectTo=%2Fconnectors"
+      redirectTo="/connectors"
       signInLabel={SIGN_IN_LABEL}
       secondary={{ href: '/connectors/mcp-directory', label: 'Browse the MCP directory' }}
     >

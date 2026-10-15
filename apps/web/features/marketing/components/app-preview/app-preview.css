@@ -293,6 +293,21 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
   padding: calc(var(--u) * 28) calc(var(--u) * 32) calc(var(--u) * 20);
 }
 
+[data-design='agi'] .agi-app-main[data-view='new-chat'] {
+  justify-content: center;
+  gap: calc(var(--u) * 24);
+}
+
+[data-design='agi'] .agi-app-greeting {
+  font-family: var(--chat-font-display);
+  font-size: calc(var(--u) * 28);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--chat-text-primary);
+  text-align: center;
+}
+
 [data-design='agi'] .agi-app-thread {
   display: flex;
   flex: 1 1 auto;

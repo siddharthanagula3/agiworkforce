@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 
 const mocks = vi.hoisted(() => ({
   disableWebPush: vi.fn(),
@@ -36,6 +37,19 @@ beforeEach(() => {
 });
 
 describe('WebPushToggle', () => {
+  it('says the desktop app notifies through macOS, and offers nothing to switch on', async () => {
+    window.agiHost = hostBridgeStub();
+    try {
+      render(<WebPushToggle />);
+
+      expect(await screen.findByText(/notifies you through macOS/)).toBeInTheDocument();
+      expect(screen.getByRole('switch', SWITCH)).toBeDisabled();
+      expect(mocks.registerNotificationWorker).not.toHaveBeenCalled();
+    } finally {
+      delete window.agiHost;
+    }
+  });
+
   it('reads off when the browser holds no subscription', async () => {
     render(<WebPushToggle />);
 

@@ -74,6 +74,7 @@ export interface AnchoredComposerMenuProps {
   autoFocusFirstItem?: boolean;
   /** Escape and Tab-out close the popup through this. */
   onRequestClose?: () => void;
+  matchAnchorWidth?: boolean;
   children: React.ReactNode;
 }
 
@@ -82,6 +83,7 @@ interface Position {
   bottom?: number;
   top?: number;
   maxHeight: number;
+  width?: number;
 }
 
 export function AnchoredComposerMenu({
@@ -93,6 +95,7 @@ export function AnchoredComposerMenu({
   label,
   autoFocusFirstItem = true,
   onRequestClose,
+  matchAnchorWidth = false,
   children,
 }: AnchoredComposerMenuProps) {
   const internalRef = useRef<HTMLDivElement>(null);
@@ -125,27 +128,30 @@ export function AnchoredComposerMenu({
     const placeAbove =
       naturalHeight <= spaceAbove || spaceAbove >= spaceBelow || spaceAbove >= MIN_USABLE_SPACE_PX;
 
-    const width = content.offsetWidth;
+    const width = matchAnchorWidth ? anchorRect.width : content.offsetWidth;
     let left = align === 'end' ? anchorRect.right - width : anchorRect.left;
     left = Math.min(
       Math.max(left, VIEWPORT_PADDING_PX),
       Math.max(VIEWPORT_PADDING_PX, viewportWidth - width - VIEWPORT_PADDING_PX),
     );
 
+    const sized = matchAnchorWidth ? { width } : {};
     setPosition(
       placeAbove
         ? {
             left,
             bottom: viewportHeight - anchorRect.top + ANCHOR_OFFSET_PX,
             maxHeight: Math.max(MIN_USABLE_SPACE_PX, spaceAbove),
+            ...sized,
           }
         : {
             left,
             top: anchorRect.bottom + ANCHOR_OFFSET_PX,
             maxHeight: Math.max(MIN_USABLE_SPACE_PX, spaceBelow),
+            ...sized,
           },
     );
-  }, [align, anchorRef]);
+  }, [align, anchorRef, matchAnchorWidth]);
 
   useLayoutEffect(() => {
     if (!open || !mounted) {
@@ -257,6 +263,7 @@ export function AnchoredComposerMenu({
         ...(position?.bottom !== undefined ? { bottom: position.bottom } : {}),
         ...(position?.top !== undefined ? { top: position.top } : {}),
         maxHeight: position?.maxHeight,
+        ...(position?.width !== undefined ? { width: position.width } : {}),
         visibility: position ? 'visible' : 'hidden',
       }}
       className={cn(

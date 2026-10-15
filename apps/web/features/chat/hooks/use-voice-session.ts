@@ -13,6 +13,7 @@ import {
   type VoiceRejoinOffer,
 } from '@features/chat/stores/voice-session-store';
 import { usePrefersReducedMotion } from '@features/support/hooks/usePrefersReducedMotion';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import {
   isVoiceSessionActive,
   reportClientFailure,
@@ -457,10 +458,12 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
   // records is bound to exactly one conversation rather than to none.
   controller.starting ??= ensureConversation()
     .catch(() => null)
+    .then((ensured) => ensured ?? controller.sink?.conversationId ?? null)
     .then((conversationId) =>
       LiveVoiceSession.start({
         voice: settings.voice,
-        conversationId: conversationId ?? controller.sink?.conversationId ?? null,
+        conversationId,
+        memoryEnabled: useChatStore.getState().getMemoryEnabled(conversationId),
         language: settings.language,
         pace: settings.pace,
         reasoning: settings.reasoning,

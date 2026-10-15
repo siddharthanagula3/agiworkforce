@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '../cowork-folder-store';
 
 function resetStore() {
@@ -35,6 +36,15 @@ describe('supportsDirectoryPicker()', () => {
       configurable: true,
     });
     expect(supportsDirectoryPicker()).toBe(true);
+  });
+
+  it('returns false in the desktop shell, which approves folders itself', () => {
+    Object.defineProperty(globalThis, 'window', {
+      value: { ...globalThis.window, showDirectoryPicker: vi.fn(), agiHost: hostBridgeStub() },
+      writable: true,
+      configurable: true,
+    });
+    expect(supportsDirectoryPicker()).toBe(false);
   });
 });
 

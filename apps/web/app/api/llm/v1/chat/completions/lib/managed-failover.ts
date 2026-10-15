@@ -79,6 +79,7 @@ import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-op
 import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import { nativeSearchToolName } from '@/lib/web-search/required-search';
 import { isGatewayBackedHarness, type FailoverRoute } from './failover-plan';
+import { retargetServingModel, servingModelFor, type ModelSelection } from './capability-preamble';
 import type { ProcessedRequest } from './request-processor';
 import { buildThinkingConfig, fastTierFor, resolveRequestEffort } from './request-processor';
 
@@ -315,6 +316,23 @@ function toolStateBindsProvider(
   return !context || context.step > FIRST_PROVIDER_STEP;
 }
 
+export function retargetMessagesToModel<T extends { role: string; content: unknown }>(
+  messages: T[],
+  renderedFor: {
+    readonly chatRequest: Pick<ProcessedRequest['chatRequest'], 'model'>;
+    readonly modelSelection?: ModelSelection | undefined;
+  },
+  model: string,
+): T[] {
+  const selection = renderedFor.modelSelection;
+  if (!selection || renderedFor.chatRequest.model === model) return messages;
+  return retargetServingModel(
+    messages,
+    servingModelFor(renderedFor.chatRequest.model, selection),
+    servingModelFor(model, selection),
+  );
+}
+
 export function buildFailoverAttemptView(
   processed: ProcessedRequest,
   model: string,
@@ -343,6 +361,7 @@ export function buildFailoverAttemptView(
     chatRequest: { ...processed.chatRequest, model },
     llmRequest: {
       ...processed.llmRequest,
+      messages: retargetMessagesToModel(processed.llmRequest.messages, processed, model),
       model,
       effort,
       thinking: thinking ?? undefined,

@@ -1,21 +1,33 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  DEVELOPER_COMMAND_NEEDS_UPDATE,
   DesktopRuntimeError,
   type DesktopRuntimeEvent,
   type HostBridge,
 } from '@agiworkforce/local-runtime-contract';
 import {
   DesktopHostUnavailable,
+  answerDeveloperApproval,
+  answerDeveloperUserInput,
   cancelLocalCommand,
   clipboardAttachments,
+  deleteDeveloperThread,
+  forkDeveloperThread,
+  cancelDeveloperThreadSummary,
+  compactDeveloperThread,
   openWorkspaceInEditor,
   openWorkspacePath,
   pickWorkspaceRoot,
+  readDeveloperSession,
   readHostClipboard,
   readLocalCommandPolicy,
   revealWorkspacePath,
+  startDeveloperSession,
+  startDeveloperTurn,
   startLocalChat,
   startLocalCommand,
+  steerDeveloperTurn,
+  stopComputerUse,
   writeLocalCommandPolicy,
 } from '../lib/runtime-client';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
@@ -310,5 +322,265 @@ describe('local chat client', () => {
       () => undefined,
     );
     await expect(run.result).resolves.toMatchObject({ text: 'hi' });
+  });
+});
+
+describe('developer session client', () => {
+  it('steers the running turn through its own command', async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    installHost(async (command, args) => {
+      calls.push({ command, args });
+      return ok({ turnId: 'turn-1' });
+    });
+
+    const result = await steerDeveloperTurn({
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      text: 'use the other file',
+    });
+
+    expect(result).toEqual({ turnId: 'turn-1' });
+    expect(calls).toEqual([
+      {
+        command: 'developer_turn_steer',
+        args: {
+          rootId: 'root-1',
+          threadId: 'thread-1',
+          turnId: 'turn-1',
+          text: 'use the other file',
+        },
+      },
+    ]);
+  });
+
+  // A shell cancels the agent's questions at once unless the page says it can
+  // show them, so the page that renders them says so on every read and turn.
+  it('tells the shell this page answers the agent questions', async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    installHost(async (command, args) => {
+      calls.push({ command, args });
+      return ok(command === 'developer_turn_start' ? { turnId: 'turn-1' } : {});
+    });
+
+    await readDeveloperSession('root-1', 'thread-1');
+    await startDeveloperTurn({ rootId: 'root-1', threadId: 'thread-1', text: 'go' });
+
+    expect(calls).toEqual([
+      {
+        command: 'developer_session_read',
+        args: { rootId: 'root-1', threadId: 'thread-1', clientCapabilities: ['user_input'] },
+      },
+      {
+        command: 'developer_turn_start',
+        args: {
+          rootId: 'root-1',
+          threadId: 'thread-1',
+          text: 'go',
+          clientCapabilities: ['user_input'],
+        },
+      },
+    ]);
+  });
+
+  it('answers or cancels a question the agent asked', async () => {
+    const calls: Array<Record<string, unknown> | undefined> = [];
+    installHost(async (_command, args) => {
+      calls.push(args);
+      return ok(true);
+    });
+    const ids = { rootId: 'root-1', threadId: 'thread-1', turnId: 'turn-1', requestId: 'q-1' };
+
+    await answerDeveloperUserInput({ ...ids, answer: 'main' });
+    await answerDeveloperUserInput({ ...ids, answer: null });
+
+    expect(calls).toEqual([
+      { ...ids, answer: 'main' },
+      { ...ids, answer: null },
+    ]);
+  });
+});
+
+describe('developer sessions on a shell installed before the page', () => {
+  const ids = { rootId: 'root-1', threadId: 'thread-1', turnId: 'turn-1', requestId: 'ap-1' };
+
+  it('sends the approved flag an older shell reads beside the decision', async () => {
+    const calls: Array<Record<string, unknown> | undefined> = [];
+    installHost(async (_command, args) => {
+      calls.push(args);
+      return ok(true);
+    });
+
+    await answerDeveloperApproval({ ...ids, decision: 'approve_for_session' });
+    await answerDeveloperApproval({ ...ids, decision: 'deny_and_stop' });
+
+    expect(calls).toEqual([
+      { ...ids, decision: 'approve_for_session', approved: true },
+      { ...ids, decision: 'deny_and_stop', approved: false },
+    ]);
+  });
+
+  it('starts a session in the folder or in a worktree through one command', async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    installHost(async (command, args) => {
+      calls.push({ command, args });
+      return ok({ id: 'thread-1' });
+    });
+
+    await startDeveloperSession('root-1', 'qa/model');
+    await startDeveloperSession('root-1', undefined, {
+      environment: 'worktree',
+      worktreeStart: 'working_tree',
+    });
+
+    expect(calls).toEqual([
+      { command: 'developer_session_start', args: { rootId: 'root-1', model: 'qa/model' } },
+      {
+        command: 'developer_session_start',
+        args: { rootId: 'root-1', environment: 'worktree', worktreeStart: 'working_tree' },
+      },
+    ]);
+  });
+
+  it('says to update the app rather than repeating an unknown command', async () => {
+    installHost(async (command) => ({
+      ok: false as const,
+      error: { code: 'unknown-command' as const, message: `no command "${command}"` },
+    }));
+
+    await expect(
+      steerDeveloperTurn({
+        rootId: 'root-1',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        text: 'use the other file',
+      }),
+    ).rejects.toMatchObject({ code: 'unknown-command', message: DEVELOPER_COMMAND_NEEDS_UPDATE });
+  });
+});
+
+describe('summarizing a developer session', () => {
+  it('sends the turn to summarize from only when there is one', async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    installHost(async (command, args) => {
+      calls.push({ command, args });
+      return ok({ threadId: 'thread-1', compacted: false });
+    });
+
+    await compactDeveloperThread({ rootId: 'root-1', threadId: 'thread-1' });
+    await compactDeveloperThread({ rootId: 'root-1', threadId: 'thread-1', fromTurnId: 'turn-2' });
+
+    expect(calls).toEqual([
+      { command: 'developer_thread_compact', args: { rootId: 'root-1', threadId: 'thread-1' } },
+      {
+        command: 'developer_thread_compact',
+        args: { rootId: 'root-1', threadId: 'thread-1', fromTurnId: 'turn-2' },
+      },
+    ]);
+  });
+});
+
+describe('cancelling a summary of a developer session', () => {
+  it('interrupts the session, since a summary has no turn of its own to name', async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    installHost(async (command, args) => {
+      calls.push({ command, args });
+      return ok(true);
+    });
+
+    await expect(cancelDeveloperThreadSummary('root-1', 'thread-1')).resolves.toBe(true);
+
+    expect(calls).toEqual([
+      {
+        command: 'developer_turn_interrupt',
+        args: { rootId: 'root-1', threadId: 'thread-1', turnId: 'summary' },
+      },
+    ]);
+  });
+});
+
+describe('branching a developer session', () => {
+  it('names the turn the branch runs through', async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    installHost(async (command, args) => {
+      calls.push({ command, args });
+      return ok({ id: 'thread-2', rootId: 'root-1' });
+    });
+
+    const forked = await forkDeveloperThread({
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      throughTurnId: 'turn-3',
+    });
+
+    expect(calls).toEqual([
+      {
+        command: 'developer_thread_fork',
+        args: { rootId: 'root-1', threadId: 'thread-1', throughTurnId: 'turn-3' },
+      },
+    ]);
+    expect(forked).toEqual({ id: 'thread-2', rootId: 'root-1' });
+  });
+});
+
+describe('deleting a developer session', () => {
+  it('keeps worktree archives unless asked, and sends the discard only when asked', async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    installHost(async (command, args) => {
+      calls.push({ command, args });
+      return ok({
+        acknowledged: true,
+        keptWorktreeArchives: ['refs/agi/archive/a1'],
+        removedWorktreeArchives: [],
+        releasedWorktrees: ['a1b2c3d4'],
+      });
+    });
+
+    const outcome = await deleteDeveloperThread({ rootId: 'root-1', threadId: 'thread-1' });
+    await deleteDeveloperThread({
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      discardWorktreeArchives: true,
+    });
+
+    expect(calls).toEqual([
+      { command: 'developer_thread_delete', args: { rootId: 'root-1', threadId: 'thread-1' } },
+      {
+        command: 'developer_thread_delete',
+        args: { rootId: 'root-1', threadId: 'thread-1', discardWorktreeArchives: true },
+      },
+    ]);
+    expect(outcome).toEqual({
+      acknowledged: true,
+      keptWorktreeArchives: ['refs/agi/archive/a1'],
+      removedWorktreeArchives: [],
+      releasedWorktrees: ['a1b2c3d4'],
+    });
+  });
+
+  it('reads an older shell that answers acknowledged alone as nothing kept or released', async () => {
+    installHost(async () => ok({ acknowledged: true }));
+
+    await expect(
+      deleteDeveloperThread({ rootId: 'root-1', threadId: 'thread-1' }),
+    ).resolves.toEqual({
+      acknowledged: true,
+      keptWorktreeArchives: [],
+      removedWorktreeArchives: [],
+      releasedWorktrees: [],
+    });
+  });
+});
+
+describe('computer use client', () => {
+  it('stops computer use through the shell command, with no arguments', async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    installHost(async (command, args) => {
+      calls.push({ command, args });
+      return ok({ stopped: true });
+    });
+
+    await expect(stopComputerUse()).resolves.toEqual({ stopped: true });
+    expect(calls.map((call) => call.command)).toEqual(['computer_stop']);
   });
 });

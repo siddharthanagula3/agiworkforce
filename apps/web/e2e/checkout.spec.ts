@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('signup gates the purchase', () => {
-  test('a paid CTA sends a signed-out visitor to sign in, and comes back to pricing', async ({
+  test('a paid CTA sends a signed-out visitor to sign up, and signing in from there still returns to pricing', async ({
     page,
   }) => {
     await page.goto('/pricing');
@@ -16,7 +16,16 @@ test.describe('signup gates the purchase', () => {
     // there is no document-typed navigation response to assert on, Next
     // fetches the destination as an RSC payload instead. The real evidence
     // that the CTA sent the visitor somewhere real is the URL and the
-    // rendered login page itself, same as public-auth-clean.spec.ts checks.
+    // rendered sign-up page itself, same as public-auth-clean.spec.ts checks.
+    await expect(page).toHaveURL(/\/signup\?redirectTo=%2Fpricing/);
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('heading', { name: 'Create your account' })).toBeVisible();
+
+    const logIn = page.getByRole('link', { name: 'Log in', exact: true });
+    await expect(logIn).toHaveAttribute('href', '/login?redirectTo=%2Fpricing');
+
+    await logIn.click();
+
     await expect(page).toHaveURL(/\/login\?redirectTo=%2Fpricing/);
     await page.waitForLoadState('networkidle');
     await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();

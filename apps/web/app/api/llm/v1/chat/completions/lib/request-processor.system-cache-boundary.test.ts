@@ -24,10 +24,14 @@ function splitStaticDynamic(
 describe('composeManagedSystemPreamble', () => {
   it('keeps the stable prefix byte-identical across two turns even when the timestamp, skills, and memories all differ', () => {
     const turnOnePreamble = buildCapabilityPreamble({
+      servingModel: null,
+      surface: 'web',
       now: new Date('2026-07-25T12:03:00.000Z'),
       tools: [{ type: 'function', function: { name: 'web_search' } }],
     });
     const turnTwoPreamble = buildCapabilityPreamble({
+      servingModel: null,
+      surface: 'web',
       now: new Date('2026-07-25T13:57:00.000Z'),
       tools: [{ type: 'function', function: { name: 'web_search' } }],
     });
@@ -51,6 +55,8 @@ describe('composeManagedSystemPreamble', () => {
 
   it('puts the timestamp, matched skill, and recalled memory after the boundary', () => {
     const capabilityPreamble = buildCapabilityPreamble({
+      servingModel: null,
+      surface: 'web',
       now: new Date('2026-07-25T12:03:00.000Z'),
       tools: [],
     });
@@ -71,6 +77,8 @@ describe('composeManagedSystemPreamble', () => {
 
   it('folds custom instructions into the stable side, ahead of the boundary', () => {
     const capabilityPreamble = buildCapabilityPreamble({
+      servingModel: null,
+      surface: 'web',
       now: new Date('2026-07-25T12:03:00.000Z'),
       tools: [],
     });

@@ -15,7 +15,10 @@ vi.mock('@features/chat/services/installed-plugins', () => ({
   ],
 }));
 
+const composer = document.createElement('div');
+
 const baseProps = {
+  anchorRef: { current: composer },
   query: '',
   onSelect: vi.fn(),
   onClose: vi.fn(),
@@ -23,6 +26,22 @@ const baseProps = {
   imageCommandAvailable: true,
   codeCommandAvailable: true,
 };
+
+describe('SlashCommandMenu layering', () => {
+  it('opens on the popover layer outside the composer, so nothing the composer sits under covers it', async () => {
+    const { container } = render(
+      <CapabilityProvider platform="web">
+        <SlashCommandMenu {...baseProps} />
+      </CapabilityProvider>,
+    );
+
+    const list = await screen.findByRole('listbox', { name: 'Slash command suggestions' });
+    const panel = list.closest<HTMLElement>('[role="dialog"]');
+    expect(container.contains(list)).toBe(false);
+    expect(panel?.parentElement).toBe(document.body);
+    expect(panel?.className).toContain('z-[var(--z-popover)]');
+  });
+});
 
 describe('SlashCommandMenu media admission', () => {
   it('omits /image when the host or deployment cannot execute it', () => {

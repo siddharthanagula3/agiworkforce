@@ -92,8 +92,13 @@ import {
 } from '../code-surface';
 import {
   LOCAL_CODE_COPY,
+  LOCAL_PLACEMENT_HEADING,
+  LOCAL_PLACEMENT_HINTS,
+  LOCAL_PLACEMENT_LABELS,
+  LOCAL_PLACEMENTS,
   type LocalFolderChoice,
   type LocalModelChoice,
+  type LocalPlacement,
   type LocalProviderSetup,
 } from '../local-code';
 import { LocalModelChip } from './LocalModelChip';
@@ -146,15 +151,20 @@ export const EMPTY_CODE_DRAFT: CodeDraft = {
 
 export interface CodeLocalState {
   supported: boolean;
+  /** The shell can start a session in a new worktree, so the placement choice is offered. */
+  worktrees: boolean;
   folders: LocalFolderChoice[];
   models: LocalModelChoice[];
   setups: LocalProviderSetup[];
   modelId: string;
   modelUnreachable: boolean;
   adding: boolean;
+  /** Where a new local session runs: the folder itself or a new worktree of it. */
+  placement: LocalPlacement;
   onAddFolder: () => void;
   onModelChange: (modelId: string) => void;
   onBranchSwitched: () => void;
+  onPlacementChange: (placement: LocalPlacement) => void;
 }
 
 export function draftRepositoryLabel(draft: CodeDraft): string {
@@ -380,6 +390,32 @@ function EnvironmentChip({
                 </span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              {local.worktrees && (
+                <>
+                  <DropdownMenuLabel>{LOCAL_PLACEMENT_HEADING}</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={local.placement}
+                    onValueChange={(value) => {
+                      const placement = LOCAL_PLACEMENTS.find((candidate) => candidate === value);
+                      if (placement) local.onPlacementChange(placement);
+                    }}
+                  >
+                    {LOCAL_PLACEMENTS.map((placement) => (
+                      <DropdownMenuRadioItem key={placement} value={placement}>
+                        <span className={styles['menuRowLabel']}>
+                          <span className={styles['optionLabel']}>
+                            {LOCAL_PLACEMENT_LABELS[placement]}
+                          </span>
+                          <span className={styles['optionCopy']}>
+                            {LOCAL_PLACEMENT_HINTS[placement]}
+                          </span>
+                        </span>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuSeparator />
+                </>
+              )}
             </>
           )}
 

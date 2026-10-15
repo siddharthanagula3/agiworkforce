@@ -185,7 +185,9 @@ import {
   useToolInputResolver,
   isApprovalTurnLive,
   isInputTurnLive,
+  type ToolApprovalDecision,
 } from '@/lib/hooks/useChatStream';
+import { ToolApprovalCard } from '../approvals/ToolApprovalCard';
 import { ConnectorInputRequestForm } from '@/features/connectors/components/ConnectorInputRequestForm';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
@@ -982,8 +984,38 @@ const MessageBubbleComponent = function MessageBubble({
   // meaningful when a resolver context exists at all -- a standalone render
   // with no provider isn't "expired", it just never had approval wired.
   const approvalTurnExpired = Boolean(resolveToolApproval) && !isApprovalTurnLive(message.id);
+  const handleToolDecision = useCallback(
+    (toolCallId: string, decision: ToolApprovalDecision) => {
+      void resolveToolApproval?.(message.id, toolCallId, decision);
+    },
+    [message.id, resolveToolApproval],
+  );
+  const renderApprovalRequest = useCallback(
+    (toolCallId: string) => {
+      if (!resolveToolApproval || approvalTurnExpired) return null;
+      const tool = message.metadata?.tools?.find(
+        (candidate) => candidate.toolCallId === toolCallId,
+      );
+      if (!tool?.approvalReview) return null;
+      const described = describeMcpTool(tool.name);
+      return (
+        <ToolApprovalCard
+          toolCallId={toolCallId}
+          label={described?.label ?? tool.name}
+          connectorName={described?.serverLabel}
+          toolLabel={described?.toolLabel}
+          parameters={tool.parameters}
+          review={tool.approvalReview}
+          decided={tool.approved !== undefined || tool.status !== 'awaiting_approval'}
+          onDecide={handleToolDecision}
+        />
+      );
+    },
+    [approvalTurnExpired, handleToolDecision, message.metadata?.tools, resolveToolApproval],
+  );
   const approvalHandlers = resolveToolApproval
     ? {
+        renderApprovalRequest,
         onApprove: handleApproveTool,
         onReject: handleRejectTool,
         expired: approvalTurnExpired,
@@ -2010,11 +2042,21 @@ const MessageBubbleComponent = function MessageBubble({
       const entry = activityTimeline?.entries.find(
         (candidate) => candidate.kind === 'tool' && candidate.toolCallId === toolCallId,
       );
+      const reviewed = message.metadata?.tools?.find(
+        (tool) => tool.toolCallId === toolCallId,
+      )?.approvalReview;
+      if (reviewed) return;
       if (chatConversationId && entry?.kind === 'tool')
         allowForChat(chatConversationId, entry.name);
       handleApproveTool(toolCallId);
     },
-    [activityTimeline, allowForChat, chatConversationId, handleApproveTool],
+    [
+      activityTimeline,
+      allowForChat,
+      chatConversationId,
+      handleApproveTool,
+      message.metadata?.tools,
+    ],
   );
   const approvedForChatRef = useRef(new Set<string>());
   useEffect(() => {
@@ -2026,6 +2068,9 @@ const MessageBubbleComponent = function MessageBubble({
         entry.inputRequest !== undefined ||
         entry.approval?.decision !== undefined ||
         entry.approval?.riskLevel === 'high' ||
+        message.metadata?.tools?.some(
+          (tool) => tool.toolCallId === entry.toolCallId && tool.approvalReview !== undefined,
+        ) ||
         !toolsAllowedForChat.includes(entry.name) ||
         approvedForChatRef.current.has(entry.toolCallId)
       ) {
@@ -2040,6 +2085,7 @@ const MessageBubbleComponent = function MessageBubble({
     handleApproveTool,
     resolveToolApproval,
     toolsAllowedForChat,
+    message.metadata?.tools,
   ]);
   /**
    * A turn the user stopped before its first token has no words and no media.
@@ -2339,6 +2385,7 @@ const MessageBubbleComponent = function MessageBubble({
               {...(turnFailureActions ? { failureActions: turnFailureActions } : {})}
               screenshotFor={screenshotForToolCall}
               renderInputRequest={renderActivityInputRequest}
+              renderApprovalRequest={renderApprovalRequest}
               renderConnectorMark={renderConnectorStepMark}
               {...connectRetryHandler}
             />
@@ -3789,6 +3836,9 @@ function toolEntriesEqual(prev?: ToolEntry[], next?: ToolEntry[]): boolean {
       a.name !== b.name ||
       a.status !== b.status ||
       a.requiresApproval !== b.requiresApproval ||
+      a.approvalReview !== b.approvalReview ||
+      a.approved !== b.approved ||
+      a.parameters !== b.parameters ||
       a.durationMs !== b.durationMs ||
       a.args !== b.args ||
       a.error !== b.error ||

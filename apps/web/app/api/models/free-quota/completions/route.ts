@@ -8,6 +8,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import {
+  readFreeQuotaMemoryCommand,
   refuseFreeQuotaKeptOutConversation,
   refuseUnsupportedFreeQuotaPrompt,
   serveFreeQuotaTurn,
@@ -24,12 +25,16 @@ async function handlePost(request: NextRequest): Promise<Response> {
   await assertAccountActive(scoped.userId);
   const limit = await withRateLimit(request, 'llm-completion', `user:${scoped.userId}`);
   if (limit) return limit;
-  const parsed = FreeOfferingRequestSchema.safeParse(await request.json().catch(() => null));
+  const body: unknown = await request.json().catch(() => null);
+  const parsed = FreeOfferingRequestSchema.safeParse(body);
   if (!parsed.success) return refuseUnsupportedFreeQuotaPrompt();
   if (await conversationKeepsOutOfTraining(scoped.db, scoped.userId, parsed.data.conversation_id)) {
     return refuseFreeQuotaKeptOutConversation();
   }
-  return serveFreeQuotaTurn(request, scoped, parsed.data);
+  return serveFreeQuotaTurn(request, scoped, {
+    ...parsed.data,
+    ...readFreeQuotaMemoryCommand(body),
+  });
 }
 
 export const POST = withErrorHandler(handlePost);

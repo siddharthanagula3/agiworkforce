@@ -6,9 +6,11 @@ import {
   NOTEBOOK_TEMPLATE_ID,
   type CloudCodeSession,
 } from '@agiworkforce/types';
-import type {
-  DeveloperSessionGroup,
-  LocalDeveloperSession,
+import {
+  DEVELOPER_RUNTIME_CAPABILITIES,
+  DesktopRuntimeError,
+  type DeveloperSessionGroup,
+  type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
 import { useUIStore } from '@shared/stores/layout-store';
 import { getModelMetadata } from '@shared/config/llm';
@@ -20,6 +22,7 @@ import {
 } from '@shared/types/toolApprovalPolicy';
 import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { CloudCodePage } from './CloudCodePage';
+import { forgetLocalSession } from './local-session-memory';
 import {
   CloudCodeApiError,
   type CloudCodeAgentTurn,
@@ -104,6 +107,7 @@ const readDeveloperSession = vi.fn(async () => ({
   session: localSession,
   messages: [],
   truncated: false,
+  activeTurn: null,
 }));
 const pickWorkspaceRoot = vi.fn(async () => ({ rootId: 'root-added' }));
 let localHostModels: { id: string; provider: string; reachable: boolean; unreachable: null }[] = [];
@@ -113,6 +117,18 @@ const listDeveloperModels = vi.fn(async () => ({
   defaultModelId: null,
 }));
 
+const WORKTREE_ROOT_ID = 'root-recent::worktree::0a1b2c3d';
+const deleteLocalWorktree = vi.fn();
+vi.mock('./services/local-review-client', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listLocalCheckpoints: vi.fn(async () => ({ threadId: 'thread-1', available: true, turns: [] })),
+  deleteLocalWorktree: (...args: unknown[]) => deleteLocalWorktree(...args),
+}));
+
+const deleteDeveloperThread = vi.fn();
+const archiveDeveloperThread = vi.fn();
+const allowDeveloperSessions = vi.fn();
+const reviewDeveloperMcpServer = vi.fn();
 vi.mock('@/features/desktop-host', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   readDeveloperSessionChanges: vi.fn(async () => ({
@@ -143,8 +159,18 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
     </a>
   ),
   useDesktopHost: () => host,
+  archiveDeveloperThread: (...args: unknown[]) => archiveDeveloperThread(...args),
+  allowDeveloperSessions: (...args: unknown[]) => allowDeveloperSessions(...args),
+  onWorkspaceChanged: () => () => undefined,
+  deleteDeveloperThread: (...args: unknown[]) => deleteDeveloperThread(...args),
+  forkDeveloperThread: vi.fn(),
+  CODE_AGENT_MODE_CYCLE_SHORTCUT: { key: 'M', ctrl: true, meta: true, shift: true },
+  compactDeveloperThread: vi.fn(),
+  cancelDeveloperThreadSummary: vi.fn(),
   answerDeveloperApproval: vi.fn(async () => true),
+  answerDeveloperUserInput: vi.fn(async () => true),
   interruptDeveloperTurn: vi.fn(async () => true),
+  listWorkspaceFiles: vi.fn(async () => []),
   listDeveloperModels: (...args: unknown[]) => listDeveloperModels(...(args as [])),
   listDeveloperSessions: () => listDeveloperSessions(),
   listLocalBranches: vi.fn(async () => null),
@@ -153,12 +179,18 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
   openWorkspaceInEditor: vi.fn(async () => true),
   pickWorkspaceRoot: () => pickWorkspaceRoot(),
   readDeveloperSession: () => readDeveloperSession(),
+  reviewDeveloperMcpServer: (...args: unknown[]) => reviewDeveloperMcpServer(...args),
   startDeveloperSession: (rootId: string, model?: string) => startDeveloperSession(rootId, model),
   startDeveloperTurn: (...args: unknown[]) => startDeveloperTurn(...(args as [])),
+  steerDeveloperTurn: vi.fn(async () => ({ turnId: 'turn-1' })),
+  useDeveloperCapabilities: () => new Set(DEVELOPER_RUNTIME_CAPABILITIES),
 }));
 
 beforeEach(() => {
   host = null;
+  for (const rootId of ['root-recent', 'root-older', WORKTREE_ROOT_ID]) {
+    for (const threadId of ['thread-1', 'thread-2']) forgetLocalSession(rootId, threadId);
+  }
   localGroups = [];
   localHostModels = [];
   listDeveloperSessions.mockClear();
@@ -2410,6 +2442,325 @@ describe('the environment the composer starts a session in', () => {
 
     expect(await screen.findByRole('button', { name: 'Local · qa-project' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Select repository' })).not.toBeInTheDocument();
+  });
+
+  it('opens the local session a link names, on a cold load', async () => {
+    replace.mockClear();
+    host = {};
+    localGroups = [folder({ rootId: 'root-recent', sessions: [localSession] })];
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Quote the readme' }),
+      ).toBeInTheDocument();
+      expect(replace).not.toHaveBeenCalledWith('/code');
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('keeps what was typed in a local session for when it is opened again', async () => {
+    const user = userEvent.setup();
+    host = {};
+    const other = { ...localSession, id: 'thread-2', title: 'Fix the build' };
+    localGroups = [folder({ rootId: 'root-recent', sessions: [localSession, other] })];
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+      await screen.findByRole('heading', { level: 1, name: 'Quote the readme' });
+      const box = () =>
+        within(screen.getByTestId('local-code-composer')).getByRole('textbox') as HTMLElement;
+      await user.type(box(), 'half a thought');
+
+      await user.click(screen.getByRole('button', { name: /Fix the build/u }));
+      await screen.findByRole('heading', { level: 1, name: 'Fix the build' });
+      expect(box()).toHaveValue('');
+
+      await user.click(screen.getByRole('button', { name: /Quote the readme/u }));
+      await screen.findByRole('heading', { level: 1, name: 'Quote the readme' });
+      expect(box()).toHaveValue('half a thought');
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('shows where the removed work is kept after a worktree session closes', async () => {
+    const user = userEvent.setup();
+    host = {};
+    const inWorktree = { ...localSession, rootId: WORKTREE_ROOT_ID };
+    localGroups = [
+      folder({ sessions: [] }),
+      folder({
+        rootId: WORKTREE_ROOT_ID,
+        name: 'qa-project · worktree 0a1b2c3d',
+        branch: null,
+        sessions: [inWorktree],
+        worktree: {
+          id: '0a1b2c3d',
+          rootId: 'root-recent',
+          path: '/home/qa/.agiworkforce/worktrees/qa/0a1b2c3d/checkout',
+          label: null,
+          start: { kind: 'ref', name: 'HEAD' },
+          baseCommit: 'abc',
+          createdAt: '2026-10-10T10:00:00Z',
+          threadId: 'thread-1',
+          pinned: false,
+          active: true,
+          missing: false,
+          setupScript: null,
+          setupExitCode: null,
+          setupRanAt: null,
+        },
+      }),
+    ];
+    deleteLocalWorktree.mockResolvedValueOnce({
+      snapshotRef: 'refs/agiworkforce/worktree-archive/thread-1/0a1b2c3d',
+    });
+    window.history.replaceState(
+      {},
+      '',
+      `/code?local=${encodeURIComponent(WORKTREE_ROOT_ID)}&thread=thread-1`,
+    );
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      await user.click(await screen.findByRole('button', { name: 'Review changes' }));
+      await user.click(await screen.findByRole('button', { name: 'Remove worktree' }));
+      await user.click(
+        within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }),
+      );
+
+      const notice = await screen.findByTestId('local-worktree-removed');
+      expect(notice).toHaveTextContent(
+        'Everything it held is kept in refs/agiworkforce/worktree-archive/thread-1/0a1b2c3d.',
+      );
+      expect(screen.queryByTestId('local-review-pane')).not.toBeInTheDocument();
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('starts each local session with its own empty message box', async () => {
+    const user = userEvent.setup();
+    host = {};
+    const other = { ...localSession, id: 'thread-2', title: 'Fix the build' };
+    localGroups = [folder({ rootId: 'root-recent', sessions: [localSession, other] })];
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+      await screen.findByRole('heading', { level: 1, name: 'Quote the readme' });
+      const box = () =>
+        within(screen.getByTestId('local-code-composer')).getByRole('textbox') as HTMLElement;
+      await user.type(box(), 'only for the first session');
+
+      await user.click(screen.getByRole('button', { name: /Fix the build/u }));
+
+      await screen.findByRole('heading', { level: 1, name: 'Fix the build' });
+      expect(box()).toHaveValue('');
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('deletes a local session, says what was kept, and discards archives only on a second ask', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder({ rootId: 'root-recent', sessions: [localSession] })];
+    deleteDeveloperThread
+      .mockResolvedValueOnce({
+        acknowledged: true,
+        keptWorktreeArchives: ['refs/agi/archive/a1', 'refs/agi/archive/b2'],
+        removedWorktreeArchives: [],
+        releasedWorktrees: ['a1b2c3d4'],
+      })
+      .mockResolvedValueOnce({
+        acknowledged: true,
+        keptWorktreeArchives: [],
+        removedWorktreeArchives: ['refs/agi/archive/a1', 'refs/agi/archive/b2'],
+        releasedWorktrees: [],
+      });
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      await user.click(await screen.findByRole('button', { name: 'Delete session' }));
+      await user.click(
+        within(await screen.findByRole('alertdialog')).getByRole('button', {
+          name: 'Delete session',
+        }),
+      );
+
+      const notice = await screen.findByTestId('local-session-deleted');
+      expect(notice).toHaveTextContent('Session deleted.');
+      expect(notice).toHaveTextContent('The worktree it used is free for another session.');
+      expect(notice).toHaveTextContent('2 worktree archives with uncommitted work were kept.');
+      expect(deleteDeveloperThread).toHaveBeenCalledTimes(1);
+      expect(deleteDeveloperThread).toHaveBeenLastCalledWith({
+        rootId: 'root-recent',
+        threadId: 'thread-1',
+      });
+
+      await user.click(within(notice).getByRole('button', { name: 'Delete them too' }));
+      const dialog = await screen.findByRole('alertdialog');
+      expect(dialog).toHaveTextContent('uncommitted work in them cannot be recovered');
+      expect(deleteDeveloperThread).toHaveBeenCalledTimes(1);
+
+      await user.click(within(dialog).getByRole('button', { name: 'Delete archives' }));
+      await waitFor(() =>
+        expect(deleteDeveloperThread).toHaveBeenLastCalledWith({
+          rootId: 'root-recent',
+          threadId: 'thread-1',
+          discardWorktreeArchives: true,
+        }),
+      );
+      expect(await screen.findByText(/2 worktree archives were deleted\./u)).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId('local-session-deleted')).queryByRole('button', {
+          name: 'Delete them too',
+        }),
+      ).not.toBeInTheDocument();
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('asks to run commands in a folder whose sessions are withheld, then lists them', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder({ sessions: [], sessionsWithheld: true })];
+    allowDeveloperSessions.mockImplementationOnce(async () => {
+      localGroups = [folder()];
+      return true;
+    });
+    render(<CloudCodePage api={createApi()} />);
+
+    const rail = within(await screen.findByTestId('local-code-section'));
+    expect(
+      await rail.findByText('Allow running commands in this folder to see its sessions.'),
+    ).toBeInTheDocument();
+    expect(listDeveloperModels).not.toHaveBeenCalled();
+    await user.click(rail.getByRole('button', { name: 'Allow running commands' }));
+
+    expect(allowDeveloperSessions).toHaveBeenCalledWith('root-recent');
+    await waitFor(() => expect(listDeveloperModels).toHaveBeenCalledWith('root-recent', {}));
+    expect(await rail.findByText('Quote the readme')).toBeInTheDocument();
+    expect(rail.queryByText(/to see its sessions/)).not.toBeInTheDocument();
+  });
+
+  it('says a refusal lasts, and treats a dismissed prompt as nothing decided', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder({ sessions: [], sessionsWithheld: true })];
+    allowDeveloperSessions
+      .mockRejectedValueOnce(
+        new DesktopRuntimeError({ code: 'cancelled', message: 'Nothing was allowed.' }),
+      )
+      .mockRejectedValueOnce(
+        new DesktopRuntimeError({
+          code: 'permission-denied',
+          message: 'Permission to shell execute in qa-project was not granted.',
+        }),
+      );
+    render(<CloudCodePage api={createApi()} />);
+    const rail = within(await screen.findByTestId('local-code-section'));
+
+    await user.click(await rail.findByRole('button', { name: 'Allow running commands' }));
+    await waitFor(() => expect(allowDeveloperSessions).toHaveBeenCalledTimes(1));
+    expect(rail.queryByRole('alert')).not.toBeInTheDocument();
+
+    await user.click(rail.getByRole('button', { name: 'Allow running commands' }));
+    expect(await rail.findByRole('alert')).toHaveTextContent(
+      'Running commands in this folder was refused.',
+    );
+  });
+
+  it('opens the shell review for a project MCP server that waits, then drops the row once it is allowed', async () => {
+    const user = userEvent.setup();
+    host = {};
+    const github = { name: 'github', scope: 'project' as const };
+    localGroups = [folder({ mcpAwaitingApproval: [github] })];
+    reviewDeveloperMcpServer.mockImplementationOnce(async () => {
+      localGroups = [folder()];
+      return { outcome: 'approved' };
+    });
+    render(<CloudCodePage api={createApi()} />);
+    const rail = within(await screen.findByTestId('local-code-section'));
+
+    expect(await rail.findByText(/The MCP server github has not started\./u)).toBeInTheDocument();
+    await user.click(rail.getByRole('button', { name: 'Review github…' }));
+
+    expect(reviewDeveloperMcpServer).toHaveBeenCalledWith('root-recent', github);
+    await waitFor(() =>
+      expect(rail.queryByText(/The MCP server github has not started\./u)).not.toBeInTheDocument(),
+    );
+    expect(rail.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('keeps the row and says why when a review is declined or the CLI refuses it', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder({ mcpAwaitingApproval: [{ name: 'github', scope: 'project' }] })];
+    reviewDeveloperMcpServer.mockResolvedValueOnce({ outcome: 'declined' }).mockResolvedValueOnce({
+      outcome: 'refused',
+      message: "MCP server 'github' is no longer declared by this project",
+    });
+    render(<CloudCodePage api={createApi()} />);
+    const rail = within(await screen.findByTestId('local-code-section'));
+
+    await user.click(await rail.findByRole('button', { name: 'Review github…' }));
+    await waitFor(() => expect(reviewDeveloperMcpServer).toHaveBeenCalledTimes(1));
+    expect(await rail.findByRole('button', { name: 'Review github…' })).toBeEnabled();
+    expect(rail.queryByRole('alert')).not.toBeInTheDocument();
+
+    await user.click(rail.getByRole('button', { name: 'Review github…' }));
+    expect(await rail.findByRole('alert')).toHaveTextContent('no longer declared by this project');
+  });
+
+  it('archives a local session, closes it, and says how to bring it back', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder({ rootId: 'root-recent', sessions: [localSession] })];
+    archiveDeveloperThread.mockResolvedValueOnce(true);
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      await user.click(await screen.findByRole('button', { name: 'Archive session' }));
+      await user.click(
+        within(await screen.findByRole('alertdialog')).getByRole('button', {
+          name: 'Archive session',
+        }),
+      );
+
+      const notice = await screen.findByTestId('local-session-archived');
+      expect(notice).toHaveTextContent('Session archived.');
+      expect(notice).toHaveTextContent('agi session unarchive thread-1');
+      expect(archiveDeveloperThread).toHaveBeenCalledWith('root-recent', 'thread-1');
+
+      await user.click(within(notice).getByRole('button', { name: 'Dismiss' }));
+      expect(screen.queryByTestId('local-session-archived')).not.toBeInTheDocument();
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('says a linked local session is gone instead of opening something else', async () => {
+    replace.mockClear();
+    host = {};
+    localGroups = [folder({ rootId: 'root-recent', sessions: [localSession] })];
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-gone');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      expect(
+        await screen.findByText('That coding session is not on this device any more.'),
+      ).toBeInTheDocument();
+      expect(replace).toHaveBeenCalledWith('/code');
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
   });
 
   it('stays on cloud in the shell when no folder is open to AGI', async () => {

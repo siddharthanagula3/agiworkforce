@@ -10,6 +10,42 @@ const paymentMocks = vi.hoisted(() => ({
   openBillingPortal: vi.fn(async () => {}),
 }));
 
+const waitlistState = vi.hoisted(() => ({
+  status: null as null | {
+    joinedPlans: string[];
+    upgradeGateEnabled: boolean;
+    accessGranted: boolean;
+  },
+  checking: false,
+}));
+
+vi.mock('../hooks/use-upgrade-waitlist', () => ({
+  resolveUpgradeWaitlistStatus: vi.fn(),
+  useUpgradeWaitlistStatus: () => ({
+    status: waitlistState.status,
+    checking: waitlistState.checking,
+    recordJoined: vi.fn(),
+    recordAccessGranted: vi.fn(),
+  }),
+}));
+
+vi.mock('./UpgradeWaitlistDialog', () => ({
+  UpgradeWaitlistDialog: () => null,
+  UpgradeWaitlistPanel: ({
+    request,
+    onAccessGranted,
+  }: {
+    request: { plan: string; billingInterval: string };
+    onAccessGranted: (request: { plan: string; billingInterval: string }) => Promise<void>;
+  }) => (
+    <section aria-label={`${request.plan} upgrade waitlist`}>
+      <button type="button" onClick={() => void onAccessGranted(request)}>
+        Redeem code
+      </button>
+    </section>
+  ),
+}));
+
 vi.mock('@shared/stores/authentication-store', () => ({
   useAuthStore: (selector: (s: unknown) => unknown) =>
     selector({ initialized: true, isAuthenticated: true, user: { id: 'user-1' } }),
@@ -20,8 +56,64 @@ vi.mock('../services/stripe-payments', async () => {
   return { ...actual, ...paymentMocks };
 });
 
+vi.mock('@shared/components/ServiceNotices', () => ({
+  ServiceNotices: ({ scope }: { scope: string }) => (
+    <div data-testid="service-notices" data-scope={scope} />
+  ),
+}));
+
 import * as actualErrors from '../services/stripe-payments';
+import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 import { UpgradeOrderPanel } from './UpgradeOrderPanel';
+
+const PRO_SUBSCRIBER: SubscriptionPlan = {
+  tier: 'pro',
+  display_name: 'Pro',
+  status: 'active',
+  current_period_end: null,
+  plan_name: 'Pro',
+  subscription_source: 'stripe',
+};
+
+const FREE_ACCOUNT: SubscriptionPlan = {
+  tier: 'free',
+  display_name: 'Free',
+  status: 'none',
+  current_period_end: null,
+  plan_name: 'Free',
+};
+
+function holdAccount(subscription: SubscriptionPlan) {
+  useBillingStore.setState({
+    subscription,
+    initialized: true,
+    isLoading: false,
+    error: null,
+    unauthenticated: false,
+  });
+}
+
+function servePlanPrices(basicMonthly: { amountMinor: number; currency: string }) {
+  vi.spyOn(global, 'fetch').mockImplementation(async (input) => {
+    if (!String(input).includes('/api/pricing/localized')) {
+      return new Promise<Response>(() => undefined);
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        country: 'US',
+        requestedCurrency: basicMonthly.currency,
+        plans: {
+          basic: { monthly: { ...basicMonthly, localized: true, checkoutReady: true } },
+          pro: {},
+          max: {},
+          max_15x: {},
+          team: {},
+        },
+      }),
+    } as Response;
+  });
+}
 
 const PRORATED_PREVIEW = {
   amountDueNowCents: 8_596,
@@ -51,6 +143,9 @@ function renderPanel() {
 describe('UpgradeOrderPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    waitlistState.status = null;
+    waitlistState.checking = false;
+    holdAccount(PRO_SUBSCRIBER);
     paymentMocks.previewUpgrade.mockResolvedValue(PRORATED_PREVIEW);
     paymentMocks.upgradePlanMidCycle.mockResolvedValue({ activation: 'webhook_pending' });
     paymentMocks.fetchSavedPaymentMethods.mockResolvedValue([
@@ -86,6 +181,12 @@ describe('UpgradeOrderPanel', () => {
         previewToken: 'signed-preview-token',
       }),
     );
+  });
+
+  it('carries billing service notices above the order, where a billing outage is scoped', async () => {
+    renderPanel();
+
+    expect(await screen.findByTestId('service-notices')).toHaveAttribute('data-scope', 'billing');
   });
 
   it('names the payment method that will be charged rather than "your saved card"', async () => {
@@ -243,6 +344,8 @@ describe('UpgradeOrderPanel', () => {
       );
       paymentMocks.previewUpgrade.mockRejectedValue(checkoutRequired);
       paymentMocks.fetchSavedPaymentMethods.mockResolvedValue([]);
+      waitlistState.status = { joinedPlans: [], upgradeGateEnabled: true, accessGranted: true };
+      holdAccount(FREE_ACCOUNT);
     });
 
     it('does not call the plan price a total, because tax is added at checkout', async () => {
@@ -282,6 +385,199 @@ describe('UpgradeOrderPanel', () => {
       );
       expect(paymentMocks.upgradePlanMidCycle).not.toHaveBeenCalled();
     });
+  });
+
+  describe('starting a plan from free while paid upgrades are staged', () => {
+    beforeEach(() => {
+      paymentMocks.previewUpgrade.mockRejectedValue(
+        new actualErrors.CheckoutRequiredError(
+          'Starting this paid plan requires Stripe Checkout.',
+          700,
+          'usd',
+        ),
+      );
+      paymentMocks.fetchSavedPaymentMethods.mockResolvedValue([]);
+      waitlistState.status = { joinedPlans: [], upgradeGateEnabled: true, accessGranted: false };
+      holdAccount(FREE_ACCOUNT);
+      servePlanPrices({ amountMinor: 700, currency: 'usd' });
+    });
+
+    it('offers the upgrade waitlist instead of a checkout the server would refuse', async () => {
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
+
+      expect(await screen.findByRole('region', { name: 'basic upgrade waitlist' })).toBeVisible();
+      expect(await screen.findByText('$7/month + tax')).toBeVisible();
+      expect(screen.queryByRole('button', { name: /subscribe to/i })).toBeNull();
+      expect(screen.queryByRole('checkbox')).toBeNull();
+    });
+
+    it('prices the waitlisted plan in the currency the visitor would be charged', async () => {
+      servePlanPrices({ amountMinor: 39_900, currency: 'inr' });
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
+
+      const order = await screen.findByRole('region', { name: 'Order details' });
+      expect(await within(order).findByText('₹399/month + tax')).toBeVisible();
+      expect(within(order).queryByText(/\$7/)).toBeNull();
+      expect(paymentMocks.previewUpgrade).not.toHaveBeenCalled();
+    });
+
+    it('promises no subscription or checkout while the account can only join the waitlist', async () => {
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
+
+      await screen.findByRole('region', { name: 'basic upgrade waitlist' });
+      expect(screen.queryByText(/auto renew/i)).toBeNull();
+      expect(screen.queryByText(/tax is calculated at checkout/i)).toBeNull();
+      expect(screen.queryByText(/you will then be charged/i)).toBeNull();
+    });
+
+    it('holds back a referral trial it cannot start until upgrade access arrives', async () => {
+      paymentMocks.previewUpgrade.mockRejectedValue(
+        new actualErrors.CheckoutRequiredError(
+          'Starting this paid plan requires Stripe Checkout.',
+          0,
+          'usd',
+          { days: 14, convertsAt: '2026-10-16T12:00:00.000Z', amountCents: 700 },
+        ),
+      );
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
+
+      const order = await screen.findByRole('region', { name: 'Order details' });
+      expect(await within(order).findByText('$7/month + tax')).toBeVisible();
+      expect(screen.queryByText(/free trial/i)).toBeNull();
+      expect(screen.queryByText(/due today/i)).toBeNull();
+      expect(screen.queryByText(/you will then be charged/i)).toBeNull();
+      expect(screen.queryByText(/auto renew/i)).toBeNull();
+    });
+
+    it('keeps billing trouble off an order that only offers the waitlist', async () => {
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
+
+      expect(await screen.findByRole('region', { name: 'basic upgrade waitlist' })).toBeVisible();
+      expect(screen.queryByTestId('service-notices')).toBeNull();
+    });
+
+    it('keeps the waitlist when upgrade access cannot be read', async () => {
+      waitlistState.status = null;
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
+
+      expect(await screen.findByRole('region', { name: 'basic upgrade waitlist' })).toBeVisible();
+      expect(screen.queryByRole('button', { name: /subscribe to/i })).toBeNull();
+    });
+
+    it('offers the waitlist and the catalog price while the Stripe preview is still pending', async () => {
+      paymentMocks.previewUpgrade.mockReturnValue(new Promise(() => undefined));
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
+
+      expect(await screen.findByRole('region', { name: 'basic upgrade waitlist' })).toBeVisible();
+      expect(await screen.findByText('$7/month + tax')).toBeVisible();
+      expect(screen.queryByText(/You agree that AGI Workforce will charge/)).toBeNull();
+      expect(screen.queryByRole('button', { name: /subscribe to/i })).toBeNull();
+      expect(screen.queryByRole('region', { name: 'Payment method' })).toBeNull();
+      expect(screen.getByRole('region', { name: 'Order details' })).toHaveAttribute(
+        'aria-busy',
+        'false',
+      );
+      expect(paymentMocks.previewUpgrade).not.toHaveBeenCalled();
+    });
+
+    it('still offers the waitlist when Stripe pricing fails, with no billing trouble shown', async () => {
+      paymentMocks.previewUpgrade.mockRejectedValue(
+        new Error('Checkout pricing is not configured for basic monthly in your region.'),
+      );
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
+
+      expect(await screen.findByRole('region', { name: 'basic upgrade waitlist' })).toBeVisible();
+      expect(screen.queryByText(/Checkout pricing is not configured/)).toBeNull();
+      expect(screen.queryByText(/You agree that AGI Workforce will charge/)).toBeNull();
+      expect(screen.queryByTestId('service-notices')).toBeNull();
+      expect(paymentMocks.previewUpgrade).not.toHaveBeenCalled();
+      expect(paymentMocks.fetchSavedPaymentMethods).not.toHaveBeenCalled();
+    });
+
+    it('holds every charge control back while upgrade access is being read', async () => {
+      waitlistState.status = null;
+      waitlistState.checking = true;
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
+
+      const order = screen.getByRole('region', { name: 'Order details' });
+      expect(order).toHaveAttribute('aria-busy', 'true');
+      expect(screen.queryByRole('region', { name: 'basic upgrade waitlist' })).toBeNull();
+      expect(screen.queryByText(/You agree that AGI Workforce will charge/)).toBeNull();
+      expect(screen.queryByRole('button', { name: /subscribe to/i })).toBeNull();
+      expect(screen.queryByRole('region', { name: 'Payment method' })).toBeNull();
+      expect(paymentMocks.previewUpgrade).not.toHaveBeenCalled();
+    });
+
+    it('offers a retry instead of loading forever when the billing account cannot be read', async () => {
+      const refreshUser = vi.fn(async () => undefined);
+      useBillingStore.setState({
+        subscription: null,
+        initialized: true,
+        isLoading: false,
+        error: '/api/me returned 503',
+        unauthenticated: false,
+        refreshUser,
+      });
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
+
+      const order = screen.getByRole('region', { name: 'Order details' });
+      expect(within(order).getByRole('alert')).toHaveTextContent(
+        'We couldn’t load your billing account. Nothing has been charged.',
+      );
+      expect(order).toHaveAttribute('aria-busy', 'false');
+      expect(screen.queryByText('Loading your account…')).toBeNull();
+      expect(screen.queryByRole('button', { name: /subscribe to/i })).toBeNull();
+      expect(paymentMocks.previewUpgrade).not.toHaveBeenCalled();
+
+      fireEvent.click(within(order).getByRole('button', { name: 'Try again' }));
+      expect(refreshUser).toHaveBeenCalledTimes(1);
+    });
+
+    it('asks for sign-in instead of loading forever when the session has expired', async () => {
+      useBillingStore.setState({
+        subscription: null,
+        initialized: true,
+        isLoading: false,
+        error: null,
+        unauthenticated: true,
+      });
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
+
+      const order = screen.getByRole('region', { name: 'Order details' });
+      expect(within(order).getByRole('alert')).toHaveTextContent(
+        'Your session expired before we could read your plan. Nothing has been charged.',
+      );
+      expect(within(order).getByRole('link', { name: 'Sign in again' })).toHaveAttribute(
+        'href',
+        '/login?redirectTo=%2Fupgrade%2Fbasic',
+      );
+      expect(screen.queryByText('Loading your account…')).toBeNull();
+    });
+
+    it('opens the order for checkout once an access code is redeemed', async () => {
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Redeem code' }));
+      const subscribe = await screen.findByRole('button', { name: /subscribe to/i });
+      fireEvent.click(screen.getByRole('checkbox'));
+      await waitFor(() => expect(subscribe).toBeEnabled());
+      fireEvent.click(subscribe);
+
+      await waitFor(() =>
+        expect(paymentMocks.startPlanCheckout).toHaveBeenCalledWith({
+          plan: 'basic',
+          billingInterval: 'monthly',
+        }),
+      );
+    });
+  });
+
+  it('never sends a paying subscriber to the waitlist for a mid-cycle upgrade', async () => {
+    waitlistState.status = { joinedPlans: [], upgradeGateEnabled: true, accessGranted: false };
+    renderPanel();
+
+    expect(await screen.findByRole('button', { name: /subscribe to/i })).toBeVisible();
+    expect(screen.queryByRole('region', { name: /upgrade waitlist/ })).toBeNull();
   });
 
   it('states what recurs after today, not just the prorated total', async () => {

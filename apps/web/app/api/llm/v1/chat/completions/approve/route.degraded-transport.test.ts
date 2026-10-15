@@ -260,7 +260,11 @@ function toolLoopOptions(): Record<string, unknown> {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
-  db.query.mockResolvedValue([]);
+  db.query.mockImplementation(async (sql: string) =>
+    sql.includes('gmail_data_quarantined')
+      ? [{ conversation_id: CONVERSATION_ID, gmail_data_quarantined: false }]
+      : [],
+  );
   gateMocks.authGate.mockResolvedValue({
     ok: true,
     userId: 'user-1',
@@ -489,9 +493,11 @@ describe('every authorization gate still refuses on the degraded transport', () 
     // Keyed on the SQL rather than call order: resolving permissions also reads
     // user_settings for lockdown, so a positional mock feeds the wrong query.
     db.query.mockImplementation(async (sql: string) =>
-      sql.includes('connector_tool_permissions')
-        ? [{ connector_id: 'github', tool_name: 'get_pull_request_diff', level: 'blocked' }]
-        : [],
+      sql.includes('gmail_data_quarantined')
+        ? [{ conversation_id: CONVERSATION_ID, gmail_data_quarantined: false }]
+        : sql.includes('connector_tool_permissions')
+          ? [{ connector_id: 'github', tool_name: 'get_pull_request_diff', level: 'blocked' }]
+          : [],
     );
 
     await (await POST(makeRequest(resumeBody))).text();

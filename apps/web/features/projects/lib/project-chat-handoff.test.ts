@@ -52,6 +52,7 @@ const meta: Required<ComposerSendMeta> = {
   disabledConnectorIds: ['connector-2'],
   connectorToolsEnabled: true,
   memoryEnabled: false,
+  queuedFollowUp: true,
   modelOverrideId: Object.entries(getProviderOfferings()).find(
     ([, offering]) => offering.quotaProbeProtocol === 'image-sync',
   )![0],

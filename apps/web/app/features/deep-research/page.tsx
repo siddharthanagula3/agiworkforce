@@ -12,6 +12,7 @@ import {
   Prose,
   Section,
   Stack,
+  webEntryHref,
 } from '@/features/marketing/components/system';
 import { PAID_UPGRADE_ACCESS_NOTE } from '@/lib/billing/paid-upgrade-copy';
 
@@ -52,7 +53,7 @@ export default function DeepResearchPage() {
                 Deep research
               </h1>
               <ButtonRow>
-                <Button href="/login?redirectTo=%2Fchat">Open chat</Button>
+                <Button href={webEntryHref('/chat')}>Open chat</Button>
                 <Button href="/pricing#pricing-compare-title" variant="secondary">
                   See plans
                 </Button>

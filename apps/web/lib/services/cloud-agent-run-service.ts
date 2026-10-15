@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   AGENT_EVENT_SCHEMA_VERSION,
+  ToolApprovalReviewWireSchema,
   AgentEventEnvelopeSchema,
   AgentTaskStateSchema,
   CloudAgentRunSchema,
@@ -201,6 +202,9 @@ const PendingToolCallSchema = z.object({
   id: z.string().min(1).max(256),
   qualifiedName: z.string().min(1).max(512),
   args: z.record(z.string(), z.unknown()),
+  approvalScopes: ToolApprovalReviewWireSchema.shape.approval_scopes
+    .refine((scopes) => scopes.includes('once') && new Set(scopes).size === scopes.length)
+    .optional(),
 });
 
 const CheckpointStateSchema = z.enum(['pending', 'resuming', 'resolved', 'failed']);

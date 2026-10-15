@@ -93,13 +93,22 @@ const PERMISSION_LEVELS: {
   },
 ];
 
+const CRITICAL_ALWAYS_ASKS_COPY = 'Always asks: destructive';
+const CRITICAL_ALLOW_REASON =
+  'This tool can delete or send data that cannot be recovered, so it asks every time.';
+
+function shownLevel(level: PermissionLevel, critical: boolean): PermissionLevel {
+  return critical && level === 'allow' ? 'ask' : level;
+}
+
 interface ToolRowProps {
   connectorId: string;
   toolName: string;
+  critical: boolean;
   category?: ConnectorToolCategory;
 }
 
-function ToolRow({ connectorId, toolName, category }: ToolRowProps) {
+function ToolRow({ connectorId, toolName, critical, category }: ToolRowProps) {
   const setToolPermission = useToolPermissionsStore((s) => s.setToolPermission);
   const current = useToolPermissionsStore(
     (s) =>
@@ -108,10 +117,16 @@ function ToolRow({ connectorId, toolName, category }: ToolRowProps) {
       DEFAULT_PERMISSION_LEVEL,
   );
   const saving = useToolPermissionsStore((s) => s.saving[connectorId]?.includes(toolName) ?? false);
+  const shown = shownLevel(current, critical);
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/50 px-3 py-2.5">
-      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{toolName}</span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm text-foreground">{toolName}</span>
+        {critical ? (
+          <span className="text-xs text-muted-foreground">{CRITICAL_ALWAYS_ASKS_COPY}</span>
+        ) : null}
+      </span>
       <div
         className="flex items-center gap-1"
         role="group"
@@ -119,22 +134,26 @@ function ToolRow({ connectorId, toolName, category }: ToolRowProps) {
         aria-busy={saving}
       >
         {saving ? <Spinner size="sm" className="h-3 w-3" aria-label={SAVING_LABEL} /> : null}
-        {PERMISSION_LEVELS.map(({ level, label, icon, activeClass }) => (
-          <button
-            key={level}
-            type="button"
-            onClick={() => setToolPermission(connectorId, toolName, level)}
-            aria-pressed={current === level}
-            title={label}
-            className={cn(
-              'flex h-7 min-w-7 items-center justify-center gap-1 rounded-md border px-2 text-xs font-medium transition-all duration-quick',
-              current === level ? activeClass : INACTIVE_CLASS,
-            )}
-          >
-            {icon}
-            <span className="hidden sm:inline">{label}</span>
-          </button>
-        ))}
+        {PERMISSION_LEVELS.map(({ level, label, icon, activeClass }) => {
+          const refused = critical && level === 'allow';
+          return (
+            <button
+              key={level}
+              type="button"
+              onClick={() => setToolPermission(connectorId, toolName, level)}
+              aria-pressed={shown === level}
+              disabled={refused}
+              title={refused ? CRITICAL_ALLOW_REASON : label}
+              className={cn(
+                'flex h-7 min-w-7 items-center justify-center gap-1 rounded-md border px-2 text-xs font-medium transition-all duration-quick disabled:cursor-not-allowed disabled:opacity-50',
+                shown === level ? activeClass : INACTIVE_CLASS,
+              )}
+            >
+              {icon}
+              <span className="hidden sm:inline">{label}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -146,14 +165,27 @@ interface ToolCategory {
   tools: readonly string[];
 }
 
-function CategoryRow({ connectorId, category }: { connectorId: string; category: ToolCategory }) {
+function CategoryRow({
+  connectorId,
+  category,
+  criticalTools,
+}: {
+  connectorId: string;
+  category: ToolCategory;
+  criticalTools: ReadonlySet<string>;
+}) {
   const setToolsPermission = useToolPermissionsStore((s) => s.setToolsPermission);
   const permissions = useToolPermissionsStore((s) => s.permissions[connectorId]);
   const groupLevel = permissions?.[connectorCategoryToolName(category.id)];
-  const levels = category.tools.map(
-    (name) => permissions?.[name] ?? groupLevel ?? DEFAULT_PERMISSION_LEVEL,
+  const levels = category.tools.map((name) =>
+    shownLevel(
+      permissions?.[name] ?? groupLevel ?? DEFAULT_PERMISSION_LEVEL,
+      criticalTools.has(name),
+    ),
   );
   const shared = levels.every((level) => level === levels[0]) ? levels[0] : null;
+  const toolsFor = (level: PermissionLevel) =>
+    level === 'allow' ? category.tools.filter((name) => !criticalTools.has(name)) : category.tools;
 
   return (
     <div className="flex items-center justify-between gap-3 px-1 pt-2">
@@ -169,7 +201,7 @@ function CategoryRow({ connectorId, category }: { connectorId: string; category:
           <button
             key={level}
             type="button"
-            onClick={() => setToolsPermission(connectorId, category.tools, level, category.id)}
+            onClick={() => setToolsPermission(connectorId, toolsFor(level), level, category.id)}
             aria-pressed={shared === level}
             aria-label={`${label} all ${category.label.toLowerCase()}`}
             title={`${label} all ${category.label.toLowerCase()}`}
@@ -225,6 +257,9 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
 
   const tools: readonly string[] =
     catalog?.tools.map((tool) => tool.name) ?? getDeclaredConnectorActions(connector.id);
+  const criticalTools: ReadonlySet<string> = new Set(
+    catalog?.tools.filter((tool) => tool.riskTier === 'critical').map((tool) => tool.name) ?? [],
+  );
   const categories: readonly ToolCategory[] = catalog
     ? [
         {
@@ -305,12 +340,17 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
                 {categories.length > 0
                   ? categories.map((category) => (
                       <div key={category.label} className="space-y-1.5">
-                        <CategoryRow connectorId={permissionConnectorId} category={category} />
+                        <CategoryRow
+                          connectorId={permissionConnectorId}
+                          category={category}
+                          criticalTools={criticalTools}
+                        />
                         {category.tools.map((toolName) => (
                           <ToolRow
                             key={toolName}
                             connectorId={permissionConnectorId}
                             toolName={toolName}
+                            critical={criticalTools.has(toolName)}
                             category={category.id}
                           />
                         ))}
@@ -321,6 +361,7 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
                         key={toolName}
                         connectorId={permissionConnectorId}
                         toolName={toolName}
+                        critical={criticalTools.has(toolName)}
                       />
                     ))}
               </div>

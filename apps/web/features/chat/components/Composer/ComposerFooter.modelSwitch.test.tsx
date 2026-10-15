@@ -3,7 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { getModelMetadataById } from '@agiworkforce/types';
 import { ComposerFooter } from './ComposerFooter';
-import { contextBudgetTokens } from './model-compatibility';
+import { contextBudgetTokens, estimateMessageTokens } from './model-compatibility';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -86,9 +86,18 @@ beforeAll(async () => {
   anchor = offered[offered.length - 1]!;
 });
 
-/** Long enough that the smallest offered window cannot hold it. */
+const PROBE_CHARS = 10_000;
+
+function tokensPerChar(model: AIModel): number {
+  const probe = { id: 'probe', role: 'user', content: 'x'.repeat(PROBE_CHARS), createdAt: '' };
+  return estimateMessageTokens(probe as never, model.id) / PROBE_CHARS;
+}
+
+/** Just long enough that the smallest offered window cannot hold it while the largest can. */
 function overflowingTurn(): Record<string, unknown> {
-  return { id: 'm1', role: 'user', content: 'x'.repeat(target.budget * 6), createdAt: '' };
+  const chars = Math.ceil(target.budget / tokensPerChar(target.model)) + PROBE_CHARS;
+  expect(chars * tokensPerChar(anchor.model)).toBeLessThan(anchor.budget);
+  return { id: 'm1', role: 'user', content: 'x'.repeat(chars), createdAt: '' };
 }
 
 beforeEach(() => {

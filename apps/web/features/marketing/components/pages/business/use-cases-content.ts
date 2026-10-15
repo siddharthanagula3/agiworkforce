@@ -1,5 +1,6 @@
 import type { LedgerRow } from '@/features/marketing/components/system';
 import type { FactItem, PageCta } from '@/features/marketing/components/pages/surfaces/shared';
+import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
 import { CLI_KEYS_OUTSIDE_CATALOG_NOTE } from '@/lib/byok-providers';
 import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
 import {
@@ -120,7 +121,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
     eyebrow: 'Use case · sales teams',
     title: 'Know the account. Own the context.',
     lede: `Research, outreach drafts, deal-room briefings, and pipeline triage. Provider choice through your own keys is part of the CLI, with a visible label on every route. ${BYOK_SURFACES.availability}`,
-    ctas: [{ href: '/login?redirectTo=%2F', label: 'Try AGI Web' }, BYOK_EXPLAINER_CTA],
+    ctas: [{ href: WEB_ENTRY_HREF, label: 'Try AGI Web' }, BYOK_EXPLAINER_CTA],
     visual: {
       light: '/product/hero-thread-light.png',
       dark: '/product/hero-thread-dark.png',
@@ -172,7 +173,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
     closeTitle: 'Brief better, route deliberately.',
     closeBody: `Bring your own keys in the CLI and keep account context under your control while the team works. ${BYOK_SURFACES.availability}`,
     closeCtas: [
-      { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
+      { href: WEB_ENTRY_HREF, label: 'Try AGI Web' },
       BYOK_EXPLAINER_CTA,
       { href: '/apps', label: 'Browse apps & connectors', variant: 'secondary' },
     ],

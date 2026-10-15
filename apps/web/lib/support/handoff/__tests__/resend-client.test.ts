@@ -112,6 +112,39 @@ describe('sendSupportEmail', () => {
     expect(body.reply_to).toBeUndefined();
   });
 
+  it('hands custom headers such as List-Unsubscribe to the provider', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'msg-1' }),
+      text: async () => '',
+    });
+
+    await sendSupportEmail({
+      ...input(),
+      headers: { 'List-Unsubscribe': '<mailto:contact@agiworkforce.com?subject=Unsubscribe>' },
+    });
+
+    const body = JSON.parse(String((fetchMock.mock.calls[0]![1] as { body: string }).body));
+    expect(body.headers).toEqual({
+      'List-Unsubscribe': '<mailto:contact@agiworkforce.com?subject=Unsubscribe>',
+    });
+  });
+
+  it('sends no headers field when the caller sets none', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'msg-1' }),
+      text: async () => '',
+    });
+
+    await sendSupportEmail(input());
+
+    const body = JSON.parse(String((fetchMock.mock.calls[0]![1] as { body: string }).body));
+    expect(body).not.toHaveProperty('headers');
+  });
+
   it('retries ONCE on a 5xx, then reports rejection instead of throwing', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
@@ -140,6 +173,21 @@ describe('sendSupportEmail', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(result.delivered).toBe(false);
+  });
+
+  it('names the provider status of a refused send, so a caller can tell the sender from the recipient', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({}),
+      text: async () => 'invalid parameter',
+    });
+
+    await expect(sendSupportEmail(input())).resolves.toMatchObject({
+      delivered: false,
+      reason: 'rejected',
+      status: 422,
+    });
   });
 
   it('returns a typed failure, never throws, when the network blows up', async () => {

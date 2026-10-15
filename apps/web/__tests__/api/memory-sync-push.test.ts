@@ -93,6 +93,143 @@ describe('POST /api/memory/sync, delta push', () => {
     expect(sql).not.toContain('on conflict (id) do nothing');
   });
 
+  it('admits a sensitive fact a device user wrote and refuses one a device learned by itself', async () => {
+    const written = '0190a000-0000-7000-8000-000000000abc';
+    const learned = '0190a000-0000-7000-8000-000000000abd';
+
+    const res = await POST(
+      postReq({
+        protocolVersion: 2,
+        memories: [
+          {
+            id: written,
+            content: 'User is a practicing Catholic',
+            source: 'mobile',
+            baseVersion: '0',
+          },
+          { id: learned, content: 'User has type 2 diabetes', source: 'auto', baseVersion: '0' },
+        ],
+      }),
+    );
+
+    const body = await res.json();
+    expect(body.rejected).toEqual([
+      expect.objectContaining({ id: learned, reason: 'sensitive_topic_not_opted_in' }),
+    ]);
+    const call = queryMock.mock.calls.find((c) =>
+      String(c[0]).includes('insert into user_memories'),
+    );
+    const admitted = JSON.parse(String((call![1] as unknown[])[1])) as Array<{ id: string }>;
+    expect(admitted.map((memory) => memory.id)).toEqual([written]);
+  });
+
+  it('admits a sensitive fact the CLI adds with agi memory add', async () => {
+    const added = '0190a000-0000-7000-8000-000000000abe';
+
+    const res = await POST(
+      postReq({
+        protocolVersion: 2,
+        memories: [
+          {
+            id: added,
+            content: 'User is a practicing Catholic',
+            source: 'cli',
+            baseVersion: '0',
+          },
+        ],
+      }),
+    );
+
+    const body = await res.json();
+    expect(body.rejected ?? []).toEqual([]);
+    const call = queryMock.mock.calls.find((c) =>
+      String(c[0]).includes('insert into user_memories'),
+    );
+    const admitted = JSON.parse(String((call![1] as unknown[])[1])) as Array<{ id: string }>;
+    expect(admitted.map((memory) => memory.id)).toEqual([added]);
+  });
+
+  function storedRows(rows: Array<{ id: string; content: string }>) {
+    queryMock.mockImplementation(async (sql: unknown) => {
+      if (String(sql).includes('id = any($2::uuid[])')) return rows;
+      return (
+        answerMemoryPolicyQuery(sql) ?? [
+          { kind: 'applied', id: rows[0]?.id, server_version: '50', current: null },
+        ]
+      );
+    });
+  }
+
+  function admittedIds(): string[] {
+    const call = queryMock.mock.calls.find((c) => String(c[0]).includes('update user_memories'));
+    return (JSON.parse(String((call![1] as unknown[])[1])) as Array<{ id: string }>).map(
+      (memory) => memory.id,
+    );
+  }
+
+  it('applies a pin of a stored memory as the user acting on it, whatever the memory says', async () => {
+    const learned = '0190a000-0000-7000-8000-000000000b01';
+    const older = '0190a000-0000-7000-8000-000000000b02';
+    storedRows([
+      { id: learned, content: 'User has ADHD' },
+      { id: older, content: 'User was arrested in 2019' },
+    ]);
+
+    const res = await POST(
+      postReq({
+        protocolVersion: 2,
+        memories: [
+          {
+            id: learned,
+            content: 'User has ADHD',
+            source: 'auto',
+            pinned: true,
+            baseVersion: '42',
+          },
+          {
+            id: older,
+            content: 'User was arrested in 2019',
+            source: 'auto',
+            pinned: true,
+            baseVersion: '17',
+          },
+        ],
+      }),
+    );
+
+    expect((await res.json()).rejected).toEqual([]);
+    expect(admittedIds()).toEqual([learned, older]);
+  });
+
+  it("admits the user's edit of a learned memory as their own words, and still refuses never-stored content", async () => {
+    const edited = '0190a000-0000-7000-8000-000000000b03';
+    const leaked = '0190a000-0000-7000-8000-000000000b04';
+    storedRows([
+      { id: edited, content: 'User has ADHD' },
+      { id: leaked, content: 'User likes tea' },
+    ]);
+
+    const res = await POST(
+      postReq({
+        protocolVersion: 2,
+        memories: [
+          {
+            id: edited,
+            content: 'User has ADHD and takes Adderall',
+            source: 'auto',
+            baseVersion: '42',
+          },
+          { id: leaked, content: 'User SSN is 123-45-6789', source: 'auto', baseVersion: '43' },
+        ],
+      }),
+    );
+
+    expect((await res.json()).rejected).toEqual([
+      expect.objectContaining({ id: leaked, reason: 'prohibited_content_category' }),
+    ]);
+    expect(admittedIds()).toEqual([edited]);
+  });
+
   it('falls back to the legacy { synced, conflicts } trigger when no memories are sent', async () => {
     queryMock.mockResolvedValueOnce([{ count: 3 }]);
     const res = await POST(postReq({}));

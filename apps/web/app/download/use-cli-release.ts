@@ -1,10 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Eyebrow, Prose, Section } from '@/features/marketing/components/system';
 
-const PLATFORM_LABELS: Record<string, string> = {
+export const CLI_PLATFORM_LABELS: Record<string, string> = {
   'darwin-arm64': 'macOS · Apple silicon',
   'darwin-x64': 'macOS · Intel',
   'linux-x64': 'Linux · x64',
@@ -19,7 +17,7 @@ interface CliDownload {
   downloadUrl: string;
 }
 
-type CliAvailability =
+export type CliAvailability =
   | { state: 'loading' }
   | { state: 'available'; version: string; downloads: CliDownload[] }
   | { state: 'empty' }
@@ -58,7 +56,7 @@ function parseCliAvailability(
     const assetName = record['assetName'];
     if (
       typeof platform !== 'string' ||
-      !(platform in PLATFORM_LABELS) ||
+      !(platform in CLI_PLATFORM_LABELS) ||
       typeof assetName !== 'string' ||
       !isTrustedReleaseUrl(record['downloadUrl'])
     ) {
@@ -70,7 +68,7 @@ function parseCliAvailability(
   return downloads.length > 0 ? { version, downloads } : null;
 }
 
-export function CliDownloadAvailability() {
+export function useCliRelease(): { availability: CliAvailability; retry: () => void } {
   const [availability, setAvailability] = useState<CliAvailability>({ state: 'loading' });
   const requestId = useRef(0);
 
@@ -104,87 +102,5 @@ export function CliDownloadAvailability() {
     return () => controller.abort();
   }, [checkRelease]);
 
-  return (
-    <Section id="cli-downloads" labelledBy="cli-downloads-title" rule>
-      <Eyebrow>CLI availability</Eyebrow>
-      <h2 id="cli-downloads-title" className="agi-ds-h2">
-        CLI archive availability
-      </h2>
-      <Prose>
-        The agi binary ships as platform archives on the CLI release channel. A download appears
-        only for the platforms the release API confirms are published.
-      </Prose>
-
-      {availability.state === 'loading' && (
-        <div
-          role="status"
-          aria-label="Checking CLI downloads"
-          aria-live="polite"
-          aria-busy="true"
-          className="agi-ds-card mt-6 p-4 text-sm"
-        >
-          Checking the CLI release channel…
-        </div>
-      )}
-
-      {availability.state === 'available' && (
-        <div className="mt-6">
-          <p className="mb-4 text-sm agi-ds-muted">agi CLI · version {availability.version}</p>
-          <ul className="agi-ds-ledger agi-ds-availability" aria-label="CLI archives">
-            {availability.downloads.map((download) => (
-              <li key={download.platform} className="agi-ds-ledger-row">
-                <span className="agi-ds-ledger-label">
-                  {PLATFORM_LABELS[download.platform] ?? download.platform}
-                </span>
-                <span className="agi-ds-ledger-value">
-                  <a
-                    href={download.downloadUrl}
-                    className="agi-ds-btn"
-                    data-variant="primary"
-                    rel="noreferrer"
-                  >
-                    Download {download.assetName}
-                  </a>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {availability.state === 'empty' && (
-        <div
-          role="status"
-          aria-label="CLI downloads unavailable"
-          aria-live="polite"
-          className="agi-ds-card mt-6 p-4"
-        >
-          <p className="text-sm">No published CLI archive is available right now.</p>
-          <Link href="/cli" className="agi-ds-btn mt-4" data-variant="secondary">
-            Read about the CLI
-          </Link>
-        </div>
-      )}
-
-      {availability.state === 'error' && (
-        <div
-          role="status"
-          aria-label="CLI download check failed"
-          aria-live="polite"
-          className="agi-ds-card mt-6 p-4"
-          data-tone="danger"
-        >
-          <p className="text-sm">We could not verify the CLI archives.</p>
-          <button
-            type="button"
-            className="agi-ds-btn mt-4"
-            data-variant="primary"
-            onClick={() => void checkRelease()}
-          >
-            Retry release check
-          </button>
-        </div>
-      )}
-    </Section>
-  );
+  return { availability, retry: () => void checkRelease() };
 }

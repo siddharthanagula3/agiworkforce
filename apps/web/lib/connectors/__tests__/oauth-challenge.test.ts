@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+  Client,
+  InsufficientScopeError,
+  StreamableHTTPClientTransport,
+} from '@modelcontextprotocol/client';
 
 vi.mock('server-only', () => ({}));
 
@@ -47,6 +52,41 @@ describe('WWW-Authenticate parsing (RFC 6750 §3 / RFC 9728 §5.1)', () => {
 });
 
 describe('detectConnectorAuthChallenge', () => {
+  it('classifies the actual SDK scope challenge after its error message is fenced', async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response('{}', {
+          status: 403,
+          headers: {
+            'WWW-Authenticate':
+              'Bearer error="insufficient_scope", scope="write:issues", resource_metadata="https://a.test/metadata"',
+          },
+        }),
+    );
+    const client = new Client({ name: 'challenge-test', version: '1.0.0' });
+    const transport = new StreamableHTTPClientTransport(new URL('https://a.test/mcp'), { fetch });
+    let rejection: unknown;
+    try {
+      await client.connect(transport);
+    } catch (error) {
+      rejection = error;
+    } finally {
+      await client.close();
+    }
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(rejection).toBeInstanceOf(InsufficientScopeError);
+    expect(rejection).not.toHaveProperty('code');
+    expect(rejection).not.toHaveProperty('status');
+    Object.defineProperty(rejection, 'message', { value: 'Fenced untrusted transport error' });
+    expect(detectConnectorAuthChallenge(rejection)).toEqual({
+      status: 403,
+      requiredScope: 'write:issues',
+      resourceMetadataUrl: 'https://a.test/metadata',
+      wwwAuthenticate: null,
+    });
+  });
+
   it('classifies the MCP SDK 401 transport error', () => {
     const error = Object.assign(new Error('Streamable HTTP error: Error POSTing to endpoint: {}'), {
       code: 401,
@@ -84,6 +124,19 @@ describe('detectConnectorAuthChallenge', () => {
     const challenge = detectConnectorAuthChallenge(stepUp);
     expect(challenge?.status).toBe(403);
     expect(challenge?.requiredScope).toBe('write:issues');
+  });
+
+  it('requires a real SDK scope error with a nonempty requested scope', () => {
+    expect(
+      detectConnectorAuthChallenge({
+        name: 'InsufficientScopeError',
+        requiredScope: 'write:issues',
+      }),
+    ).toBeNull();
+    expect(detectConnectorAuthChallenge(new InsufficientScopeError({}))).toBeNull();
+    expect(
+      detectConnectorAuthChallenge(new InsufficientScopeError({ requiredScope: '   ' })),
+    ).toBeNull();
   });
 
   it('does not mistake tool OUTPUT that mentions 401 for an auth challenge', () => {

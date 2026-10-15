@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { formatRelativeTime } from '@shared/utils/format';
 import { ScheduleCard } from './ScheduleCard';
@@ -180,5 +180,23 @@ describe('ScheduleCard failure presentation', () => {
 
     expect(screen.getByText(/something went wrong on our side/i)).toBeInTheDocument();
     expect(screen.queryByText(/deadbeef|upstream exploded/i)).toBeNull();
+  });
+});
+
+describe('ScheduleCard actions menu', () => {
+  const CLIPPING_OVERFLOW = /^overflow-(?:[xy]-)?(?:hidden|clip|auto|scroll)$/;
+
+  it('opens its menu inside no box that clips it, so a phone shows every action', () => {
+    renderCard(baseSchedule);
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Weekly digest' }));
+    const menu = screen.getByRole('menu', { name: 'Actions for Weekly digest' });
+    const clipping: string[] = [];
+    for (let node = menu.parentElement; node; node = node.parentElement) {
+      const classes = [...node.classList].filter((name) => CLIPPING_OVERFLOW.test(name));
+      if (classes.length > 0) clipping.push(`${node.tagName.toLowerCase()} ${classes.join(' ')}`);
+    }
+
+    expect(clipping).toEqual([]);
   });
 });

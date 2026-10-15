@@ -13,6 +13,9 @@ vi.mock('../../components/ProductAnalyticsConsentRow', () => ({
 vi.mock('../../components/MarketingEmailConsentRow', () => ({
   MarketingEmailConsentRow: () => null,
 }));
+vi.mock('../../components/NamedProviderConsentRows', () => ({
+  NamedProviderConsentRows: () => null,
+}));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));

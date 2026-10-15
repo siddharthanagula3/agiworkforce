@@ -531,6 +531,98 @@
       ]
     },
     {
+      "id": "memory-sensitive-topics-off-by-default",
+      "doc": "memory",
+      "section": "Memory switches",
+      "kind": "prose",
+      "sentence": "**Include sensitive topics in memory**: off by default.",
+      "implementation": [
+        "apps/web/features/settings/hooks/use-capabilities-preferences.ts",
+        "apps/web/lib/services/managed-memory-context-service.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/MemorySection.test.tsx",
+          "name": "offers Include sensitive topics in memory, off by default and saved to capabilities"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/memory-eligibility-gate.test.ts",
+          "name": "treats an unread member policy as the opt-in being off"
+        }
+      ]
+    },
+    {
+      "id": "memory-sensitive-topics-kept-only-on-request",
+      "doc": "memory",
+      "section": "Memory switches",
+      "kind": "prose",
+      "sentence": "While it is off, AGI is designed to keep your health, race or ethnicity, religious beliefs, politics, sexual orientation, gender identity or union membership only when you say \"Remember that\" in a chat on the web, desktop, mobile or Chrome, or add them yourself in Settings, Memory.",
+      "implementation": [
+        "apps/web/lib/services/managed-memory-context-service.ts",
+        "apps/web/lib/services/managed-auto-memory-service.ts",
+        "apps/web/lib/services/memory-commands.ts",
+        "apps/web/app/api/memory/sync/route.ts",
+        "packages/contracts/context/src/memory-content-policy.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/memory-eligibility-gate.test.ts",
+          "name": "keeps a learned fact about a sensitive topic out while the opt-in is off"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/memory-eligibility-gate.test.ts",
+          "name": "keeps the pattern extractor's rewrite of a sensitive statement out while the opt-in is off"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/memory-commands.test.ts",
+          "name": "stores a sensitive fact the user asked to remember while the opt-in is off"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/api/memory.test.ts",
+          "name": "saves a sensitive fact the user typed in, without the sensitive-topic opt-in"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/managed-auto-memory-model-extraction.test.ts",
+          "name": "learns what a %s turn asks to remember only as an automatic memory, behind every gate"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/api/memory-sync-push.test.ts",
+          "name": "admits a sensitive fact the CLI adds with agi memory add"
+        }
+      ]
+    },
+    {
+      "id": "memory-never-saved-categories",
+      "doc": "memory",
+      "section": "What memory is designed not to keep",
+      "kind": "prose",
+      "sentence": "AGI is designed not to save some details, even if you ask, and refuses them when it recognises them: passwords, keys and tokens, payment card and bank account details, government ID numbers, biometric identifiers, street addresses and map coordinates, criminal history and immigration status.",
+      "implementation": [
+        "packages/contracts/context/src/memory-content-policy.ts",
+        "apps/web/lib/services/managed-memory-context-service.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/context/src/__tests__/memory-content-policy.test.ts",
+          "name": "refuses a stated value in every category"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/memory-eligibility-gate.test.ts",
+          "name": "never opens a category memory refuses outright, whatever the opt-in or the request"
+        }
+      ]
+    },
+    {
       "id": "memory-clear-entry-confirms",
       "doc": "memory",
       "section": "Clearing memory",
@@ -2164,7 +2256,7 @@
       "implementation": [
         "apps/web/features/billing/hooks/use-upgrade-plan-flow.tsx",
         "apps/web/features/billing/components/UpgradeWaitlistDialog.tsx",
-        "apps/web/features/billing/services/upgrade-waitlist.ts#isUpgradeWaitlistRequired"
+        "apps/web/features/billing/services/upgrade-waitlist.ts#upgradeNeedsWaitlist"
       ],
       "proof": [
         {
@@ -2174,8 +2266,13 @@
         },
         {
           "kind": "test",
+          "file": "apps/web/features/billing/hooks/use-upgrade-plan-flow.test.tsx",
+          "name": "joins the waitlist the plan card names, in the shared waitlist dialog"
+        },
+        {
+          "kind": "test",
           "file": "apps/web/features/billing/components/UpgradeWaitlistDialog.test.tsx",
-          "name": "joins the selected plan waitlist without opening checkout"
+          "name": "joins the selected plan waitlist and confirms how the account will hear, without opening checkout"
         },
         {
           "kind": "test",
@@ -2186,6 +2283,89 @@
           "kind": "copy",
           "file": "apps/web/features/billing/components/UpgradeWaitlistDialog.tsx",
           "text": "Paid upgrades are opening in stages. Join the waitlist, or continue now with an access"
+        }
+      ]
+    },
+    {
+      "id": "billing-waitlist-place-follows-the-account",
+      "doc": "billing-and-plans",
+      "section": "Upgrading",
+      "kind": "prose",
+      "sentence": "Your place on a plan's waitlist is kept with your account, so the website and the desktop app show it wherever you sign in.",
+      "implementation": [
+        "apps/web/app/api/waitlist/route.ts",
+        "apps/web/features/billing/hooks/use-upgrade-waitlist.ts#useUpgradeWaitlistStatus",
+        "apps/web/features/billing/components/UpgradeWaitlistDialog.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/waitlist/route.test.ts",
+          "name": "tells a gated account the gate is on and which plans it already joined"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/billing/components/UpgradeWaitlistDialog.test.tsx",
+          "name": "opens on the place the server already holds, so a reload or another device still shows it"
+        }
+      ]
+    },
+    {
+      "id": "billing-waitlist-told-when-upgrades-open",
+      "doc": "billing-and-plans",
+      "section": "Upgrading",
+      "kind": "prose",
+      "sentence": "When paid upgrades open, everyone on a waitlist gets a notice in Notifications, and the confirmation you see after joining says whether we also email you.",
+      "implementation": [
+        "apps/web/lib/services/upgrade-waitlist-notice-service.ts#notifyUpgradeWaitlist",
+        "apps/web/app/api/cron/notify-upgrade-waitlist/route.ts",
+        "apps/web/app/api/waitlist/route.ts",
+        "apps/web/features/billing/components/UpgradeWaitlistDialog.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/upgrade-waitlist-notice-service.test.ts",
+          "name": "tells each account in the app first, then emails it once, naming the plans it joined"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/upgrade-waitlist-notice-service.test.ts",
+          "name": "tells accounts in the app when no email sender is configured, and asks for nothing else"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/billing/components/UpgradeWaitlistDialog.test.tsx",
+          "name": "promises a notice in Notifications, not an email, when no email will go out"
+        }
+      ]
+    },
+    {
+      "id": "billing-waitlist-join-starts-nothing",
+      "doc": "billing-and-plans",
+      "section": "Upgrading",
+      "kind": "prose",
+      "sentence": "Joining does not start a subscription, and when upgrades open for your account, choosing the plan again takes you to checkout.",
+      "implementation": [
+        "apps/web/features/billing/components/UpgradeWaitlistDialog.tsx",
+        "apps/web/features/billing/hooks/use-upgrade-plan-flow.tsx",
+        "apps/web/features/billing/services/upgrade-waitlist.ts#upgradeNeedsWaitlist"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/billing/components/UpgradeWaitlistDialog.test.tsx",
+          "name": "joins the selected plan waitlist and confirms how the account will hear, without opening checkout"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/pricing/page.test.tsx",
+          "name": "goes straight to checkout with no waitlist or access code once upgrades are open"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/billing/hooks/use-upgrade-plan-flow.test.tsx",
+          "name": "sends an account that redeemed an access code straight to checkout"
         }
       ]
     },
@@ -3093,6 +3273,7 @@
         "apps/web/lib/surface-status.ts#SURFACE_STATUS",
         "apps/web/app/chrome-extension/page.tsx",
         "apps/web/app/download/page.tsx",
+        "apps/web/app/download/DownloadSurfaces.tsx",
         "apps/extension/manifest.json"
       ],
       "proof": [
@@ -3113,13 +3294,13 @@
         },
         {
           "kind": "copy",
-          "file": "apps/web/app/download/page.tsx",
-          "text": "Leave an address and we will write when a platform opens."
+          "file": "apps/web/app/download/DownloadSurfaces.tsx",
+          "text": "<Section id={NOTIFY_FORM_ID}"
         },
         {
           "kind": "copy",
           "file": "apps/extension/manifest.json",
-          "text": "\"name\": \"AGI Browser Companion\""
+          "text": "\"name\": \"agiworkforce\""
         },
         {
           "kind": "test",
@@ -3961,17 +4142,17 @@
       ]
     },
     {
-      "id": "password-common-check-refuses",
+      "id": "password-provider-refusal-keeps-current",
       "doc": "account-security",
       "section": "Password",
       "kind": "prose",
-      "sentence": "A password that fails the common-password check is refused with \"That password is too common.\" A forgotten password is reset from the sign-in screen with **Forgot password?**.",
-      "implementation": ["apps/web/features/auth/AuthNewPasswordStep.tsx"],
+      "sentence": "A new password the identity provider refuses, such as one found in a data breach, is refused with the reason it gives, and the current password keeps working.",
+      "implementation": ["apps/web/app/api/settings/password/route.ts#isIdentityRequestRejected"],
       "proof": [
         {
-          "kind": "copy",
-          "file": "apps/web/features/auth/__tests__/AuthNewPasswordStep.test.tsx",
-          "text": "That password is too common."
+          "kind": "test",
+          "file": "apps/web/app/api/settings/password/__tests__/route.test.ts",
+          "name": "maps an identity rejection to a 400"
         }
       ]
     },
@@ -4961,7 +5142,7 @@
       "doc": "keyboard-shortcuts",
       "section": "The list",
       "kind": "rows",
-      "rows": 8,
+      "rows": 13,
       "implementation": [
         "apps/web/features/chat/hooks/use-keyboard-shortcuts.ts#KEYBOARD_SHORTCUT_DOCS"
       ],
@@ -5633,7 +5814,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/billing/components/UpgradeWaitlistDialog.test.tsx",
-          "name": "joins the selected plan waitlist without opening checkout"
+          "name": "joins the selected plan waitlist and confirms how the account will hear, without opening checkout"
         }
       ]
     },
@@ -5819,6 +6000,101 @@
       ]
     },
     {
+      "id": "signup-provider-account-asks-age-and-terms-first",
+      "doc": "signing-up",
+      "section": "Create the account",
+      "kind": "prose",
+      "sentence": "When a provider button on the sign-in page, such as **Continue with Google**, creates a new account, the account's first screen asks for your age and for you to accept the terms, and the account cannot be used until the terms are ticked and an eligible age is entered.",
+      "implementation": [
+        "apps/web/app/login/complete/page.tsx#confirmAge={firstAcceptance}",
+        "apps/web/app/signup/TermsGate.tsx#AuthAgeConfirmation",
+        "apps/web/lib/server/require-current-terms.ts#requireCurrentTermsAcceptance",
+        "apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts#termsRefusal"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/signup/terms-acceptance-gate.test.tsx",
+          "name": "drops it when a provider sign-in starts, so an account that sign-in creates is asked its age"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/login/complete/page.test.tsx",
+          "name": "asks an account that never accepted the terms for its age on the same first screen"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/signup/TermsGate.test.tsx",
+          "name": "asks for the terms and the age on the first screen and goes on only with the terms ticked and an eligible age"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/require-current-terms.test.ts",
+          "name": "sends missing or outdated accounts through fresh acceptance and back to their route"
+        }
+      ]
+    },
+    {
+      "id": "signup-code-before-password",
+      "doc": "signing-up",
+      "section": "Create the account",
+      "kind": "prose",
+      "sentence": "The code always comes before the password: the sign-up page asks for a password only after the code proves the address is yours.",
+      "implementation": [
+        "apps/web/features/auth/identityAuthAdapter.tsx#resolveSignUpState",
+        "apps/web/features/auth/identityAuthAdapter.tsx#submitNewPassword"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/identityAuthAdapter.test.tsx",
+          "name": "proves the address with the emailed code before the password can complete the account"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/identityAuthAdapter.test.tsx",
+          "name": "will not set a password on a sign-up whose address is still unproven"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/AuthScreens.contract.test.tsx",
+          "name": "proves the address with the code, then collects the password the provider requires"
+        }
+      ]
+    },
+    {
+      "id": "signup-password-rule-stated-first",
+      "doc": "signing-up",
+      "section": "Create the account",
+      "kind": "prose",
+      "sentence": "The password screen states its rule before you type: use at least 8 characters, and a password that is easy to guess or found in a data breach is refused.",
+      "implementation": [
+        "apps/web/features/auth/AuthNewPasswordStep.tsx#RULE_COPY",
+        "apps/web/features/auth/authContract.ts#AUTH_PASSWORD_MIN_LENGTH"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/AuthNewPasswordStep.test.tsx",
+          "name": "states the password rule before the first attempt and ties it to the field"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/auth/AuthNewPasswordStep.tsx",
+          "text": "Passwords that are easy to guess or found in a data breach are not accepted."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/auth/authContract.ts",
+          "text": "AUTH_PASSWORD_MIN_LENGTH = 8"
+        },
+        {
+          "kind": "guard",
+          "file": "scripts/check-clerk-bot-protection.mjs"
+        }
+      ]
+    },
+    {
       "id": "signup-free-plan-open-by-default",
       "doc": "signing-up",
       "section": "What you can do immediately",
@@ -5896,6 +6172,46 @@
           "kind": "copy",
           "file": "apps/web/features/auth/AuthSwitchLine.tsx",
           "text": "label: 'Sign up instead.'"
+        }
+      ]
+    },
+    {
+      "id": "signup-refused-password-reason-on-field",
+      "doc": "signing-up",
+      "section": "If sign-up does not complete",
+      "kind": "prose",
+      "sentence": "A refused password keeps you on the password screen with the reason under the field.",
+      "implementation": [
+        "apps/web/features/auth/identityAuthAdapter.tsx#submitNewPassword",
+        "apps/web/features/auth/AuthNewPasswordStep.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/identityAuthAdapter.test.tsx",
+          "name": "keeps a password the provider refuses on the field, with the rule it broke"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/AuthNewPasswordStep.test.tsx",
+          "name": "reports a rejected password inline"
+        }
+      ]
+    },
+    {
+      "id": "signup-weak-password-suggestions",
+      "doc": "signing-up",
+      "section": "If sign-up does not complete",
+      "kind": "prose",
+      "sentence": "A password refused as too weak also lists suggestions for a stronger one.",
+      "implementation": [
+        "packages/client/client-runtime/src/authErrorTaxonomy.ts#strengthSuggestionsOf"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/auth/__tests__/identityAuthAdapter.test.tsx",
+          "name": "tells the person how to make a password the provider calls too weak stronger"
         }
       ]
     },

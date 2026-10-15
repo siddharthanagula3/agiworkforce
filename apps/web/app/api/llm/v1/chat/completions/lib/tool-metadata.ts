@@ -42,6 +42,7 @@
  */
 
 import { deviceStepCapability, isDeviceStepTool } from '@agiworkforce/local-runtime-contract';
+import { TOOL_APPROVAL_RISK_TIERS } from '@agiworkforce/cloud-contracts';
 import { CONNECTOR_RECONNECT_TOOL_NAME, parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
@@ -71,7 +72,7 @@ export type ToolCallReason = ToolApprovalReason;
  * four declared properties unless a tool names its own tier, which is what
  * `external_delivery: 'send'` on money and mail needs.
  */
-export const TOOL_RISK_TIERS = ['low', 'medium', 'high', 'critical'] as const;
+export const TOOL_RISK_TIERS = TOOL_APPROVAL_RISK_TIERS;
 export type ToolRiskTier = (typeof TOOL_RISK_TIERS)[number];
 
 export type ToolExternalDelivery = 'draft' | 'send';
@@ -662,7 +663,30 @@ const GITHUB_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.free
   },
 });
 
+const GMAIL_READ_METADATA: ToolMetadata = Object.freeze({
+  actionClass: 'read',
+  reversible: true,
+  acceptsUntrustedContent: true,
+  createsEgressPath: false,
+  declared: true,
+  retrySafety: 'idempotent',
+});
+
 const GMAIL_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
+  search_threads: GMAIL_READ_METADATA,
+  get_thread: GMAIL_READ_METADATA,
+  get_message: GMAIL_READ_METADATA,
+  list_drafts: GMAIL_READ_METADATA,
+  list_labels: GMAIL_READ_METADATA,
+  create_draft: {
+    actionClass: 'write',
+    reversible: false,
+    acceptsUntrustedContent: true,
+    createsEgressPath: true,
+    declared: true,
+    externalDelivery: 'draft',
+    retrySafety: 'at_most_once',
+  },
   send_draft: {
     actionClass: 'external_send',
     reversible: false,
@@ -826,7 +850,29 @@ export const UNKNOWN_TOOL_METADATA: ToolMetadata = Object.freeze({
   declared: false,
 });
 
-export function resolveToolMetadata(name: string): ToolMetadata {
+/**
+ * MCP tool annotations are hints a server writes about itself, and the
+ * specification requires clients to treat them as untrusted. They only ever
+ * move an undeclared tool toward asking, never away from it, and a statically
+ * declared tool ignores them. An undeclared tool already resolves to an
+ * irreversible write with an egress path, so a missing `readOnlyHint` or an
+ * `openWorldHint` cannot tighten it further; `destructiveHint` raises it to a
+ * delete, and `readOnlyHint: true` changes nothing.
+ */
+const UNDECLARED_DESTRUCTIVE_TOOL_METADATA: ToolMetadata = Object.freeze({
+  ...UNKNOWN_TOOL_METADATA,
+  actionClass: 'delete',
+});
+
+export type ToolAnnotations = Readonly<Record<string, unknown>>;
+
+function undeclaredToolMetadata(annotations: ToolAnnotations | undefined): ToolMetadata {
+  return annotations?.['destructiveHint'] === true
+    ? UNDECLARED_DESTRUCTIVE_TOOL_METADATA
+    : UNKNOWN_TOOL_METADATA;
+}
+
+export function resolveToolMetadata(name: string, annotations?: ToolAnnotations): ToolMetadata {
   const platform = PLATFORM_TOOL_METADATA[name];
   if (platform) return platform;
 
@@ -838,14 +884,18 @@ export function resolveToolMetadata(name: string): ToolMetadata {
     const connector = CONNECTOR_TOOL_METADATA[parsed.serverId]?.[parsed.toolName];
     if (connector) return connector;
   }
-  return UNKNOWN_TOOL_METADATA;
+  return undeclaredToolMetadata(annotations);
 }
 
-export function resolveConnectorToolMetadata(connectorId: string, toolName: string): ToolMetadata {
+export function resolveConnectorToolMetadata(
+  connectorId: string,
+  toolName: string,
+  annotations?: ToolAnnotations,
+): ToolMetadata {
   return (
     CONNECTOR_TOOL_METADATA[connectorId]?.[toolName] ??
     PLATFORM_TOOL_METADATA[toolName] ??
-    UNKNOWN_TOOL_METADATA
+    undeclaredToolMetadata(annotations)
   );
 }
 
@@ -857,8 +907,19 @@ function deriveRiskTier(metadata: ToolMetadata): ToolRiskTier {
   return metadata.reversible ? 'medium' : 'high';
 }
 
-export function toolRiskTier(name: string): ToolRiskTier {
-  const metadata = resolveToolMetadata(name);
+export function toolRiskTier(name: string, annotations?: ToolAnnotations): ToolRiskTier {
+  return riskTierOf(resolveToolMetadata(name, annotations));
+}
+
+export function connectorToolRiskTier(
+  connectorId: string,
+  toolName: string,
+  annotations?: ToolAnnotations,
+): ToolRiskTier {
+  return riskTierOf(resolveConnectorToolMetadata(connectorId, toolName, annotations));
+}
+
+function riskTierOf(metadata: ToolMetadata): ToolRiskTier {
   const derived = deriveRiskTier(metadata);
   if (!metadata.riskTier) return derived;
   return TOOL_RISK_TIERS.indexOf(metadata.riskTier) > TOOL_RISK_TIERS.indexOf(derived)
@@ -866,8 +927,8 @@ export function toolRiskTier(name: string): ToolRiskTier {
     : derived;
 }
 
-export function toolRetrySafety(name: string): ToolRetrySafety {
-  const metadata = resolveToolMetadata(name);
+export function toolRetrySafety(name: string, annotations?: ToolAnnotations): ToolRetrySafety {
+  const metadata = resolveToolMetadata(name, annotations);
   if (metadata.retrySafety) return metadata.retrySafety;
   if (metadata.actionClass === 'read') return 'idempotent';
   if (metadata.actionClass === 'delete' || metadata.actionClass === 'external_send') {
@@ -897,8 +958,14 @@ export function isDestructiveToolMetadata(metadata: ToolMetadata): boolean {
   return isDestructiveTool(metadata);
 }
 
-export function isDestructiveConnectorTool(connectorId: string, toolName: string): boolean {
-  return isDestructiveToolMetadata(resolveConnectorToolMetadata(connectorId, toolName));
+export function isDestructiveConnectorTool(
+  connectorId: string,
+  toolName: string,
+  annotations?: ToolAnnotations,
+): boolean {
+  return isDestructiveToolMetadata(
+    resolveConnectorToolMetadata(connectorId, toolName, annotations),
+  );
 }
 
 /**
@@ -944,7 +1011,7 @@ export function toContractToolDefinition(
   def: WebMcpToolDef,
   category: ToolDefinition['category'],
 ): ToolDefinition {
-  const metadata = resolveToolMetadata(def.qualifiedName);
+  const metadata = resolveToolMetadata(def.qualifiedName, def.annotations);
   return {
     name: def.qualifiedName,
     description: def.description,
@@ -955,7 +1022,7 @@ export function toContractToolDefinition(
     reversible: metadata.reversible,
     acceptsUntrustedContent: metadata.acceptsUntrustedContent,
     createsEgressPath: metadata.createsEgressPath,
-    retrySafety: toolRetrySafety(def.qualifiedName),
+    retrySafety: toolRetrySafety(def.qualifiedName, def.annotations),
     declared: metadata.declared,
   };
 }

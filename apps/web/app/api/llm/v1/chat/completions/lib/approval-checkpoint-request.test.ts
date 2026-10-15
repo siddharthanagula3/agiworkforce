@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { getDefaultAutoRoutingProfile, getDefaultModelFor } from '@agiworkforce/types';
 
 import {
   buildApprovalCheckpointRequest,
   checkpointRequestForResume,
+  restoreCheckpointedTurn,
 } from './approval-checkpoint-request';
-import type { ChatCompletionRequest } from './request-processor';
+import type { ModelSelection } from './capability-preamble';
+import type { ChatCompletionRequest, ProcessedRequest } from './request-processor';
 
 const internalTool = {
   type: 'function' as const,
@@ -74,5 +77,66 @@ describe('checkpointRequestForResume', () => {
     const request = { tools: [callerTool], tool_choice: 'auto' };
 
     expect(checkpointRequestForResume(request, false)).toBe(request);
+  });
+});
+
+describe('the model selection a checkpoint keeps', () => {
+  const routedModel = getDefaultModelFor('pro', 'chat');
+  const autoSelection: ModelSelection = {
+    kind: 'picked',
+    modelId: getDefaultAutoRoutingProfile().id,
+  };
+  const chatRequest = {
+    model: routedModel,
+    messages: [],
+    stream: true,
+    web_search: true,
+  } as unknown as ChatCompletionRequest;
+  const transcript = [
+    { role: 'system' as const, content: 'rendered for the routed model' },
+    { role: 'user' as const, content: 'Which model are you?' },
+  ];
+
+  function resumed(): ProcessedRequest {
+    return {
+      chatRequest: { model: routedModel, messages: [], stream: true },
+      llmRequest: { model: routedModel, messages: [], max_tokens: 4096 },
+      modelSelection: { kind: 'picked', modelId: routedModel },
+    } as unknown as ProcessedRequest;
+  }
+
+  it('stays out of the request a resume replays', () => {
+    const replayed = checkpointRequestForResume(
+      buildApprovalCheckpointRequest(chatRequest, {}, [], autoSelection),
+      false,
+    );
+
+    expect(replayed).toEqual(
+      checkpointRequestForResume(buildApprovalCheckpointRequest(chatRequest), false),
+    );
+  });
+
+  it('becomes the resumed turn selection, so a later failover rewrites the right wording', () => {
+    const processed = resumed();
+
+    restoreCheckpointedTurn(processed, {
+      request: buildApprovalCheckpointRequest(chatRequest, {}, [], autoSelection),
+      messages: transcript,
+    });
+
+    expect(processed.modelSelection).toEqual(autoSelection);
+    expect(processed.llmRequest.messages).toEqual(transcript);
+  });
+
+  it('leaves a turn saved before checkpoints kept a selection on the selection it resolved', () => {
+    const processed = resumed();
+
+    restoreCheckpointedTurn(processed, {
+      request: buildApprovalCheckpointRequest(chatRequest),
+      messages: transcript,
+    });
+
+    expect(processed.modelSelection).toEqual({ kind: 'picked', modelId: routedModel });
+    expect(processed.llmRequest.messages).toEqual(transcript);
   });
 });

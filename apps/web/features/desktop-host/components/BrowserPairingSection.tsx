@@ -19,14 +19,16 @@ const NO_EXTENSION =
   'Nothing has asked to pair yet. Install the AGI Workforce extension in Chrome, then start pairing from its side panel.';
 const HOST_MISSING =
   'The browser host is not registered, so Chrome cannot reach this app. Register it again below.';
+const BRIDGE_NOT_LISTENING =
+  'The local pairing bridge is not listening, so Chrome cannot reach this app. Quit and reopen AGI Cloud.';
 const LOAD_FAILED = 'The pairing state could not be read.';
 const INSTALL_FAILED = 'The browser host was not registered.';
 const UNPAIR_FAILED = 'The browser was not unpaired.';
 
 const BUTTON_CLASS =
   'min-h-[32px] rounded-md border border-border/60 px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60';
-const CODE_CLASS =
-  'inline-flex min-h-[36px] items-center rounded-md border border-border/60 bg-muted/40 px-3 font-mono text-base tracking-[0.35em] text-foreground';
+const CODE_SHOWN_BY_APP =
+  'The code is in a dialog AGI Cloud opened on this Mac. It is never shown on this page.';
 
 function messageFor(error: unknown, fallback: string): string | null {
   if (error instanceof DesktopRuntimeError) {
@@ -122,9 +124,9 @@ export function BrowserPairingSection() {
       {state?.pendingRequest ? (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-foreground">{HOW_TO_PAIR}</p>
-          <span className={CODE_CLASS} aria-label="Pairing code">
-            {state.pendingRequest.code}
-          </span>
+          <p className="text-xs text-muted-foreground" aria-live="polite">
+            {CODE_SHOWN_BY_APP}
+          </p>
         </div>
       ) : null}
 
@@ -158,9 +160,8 @@ export function BrowserPairingSection() {
       ) : null}
 
       {state && !state.bridgeListening ? (
-        <p className="text-xs text-muted-foreground">
-          The local pairing bridge is not listening, so Chrome cannot reach this app. Quit and
-          reopen AGI Cloud.
+        <p role="status" className="text-xs text-muted-foreground">
+          {state.unavailableReason ?? BRIDGE_NOT_LISTENING}
         </p>
       ) : null}
 

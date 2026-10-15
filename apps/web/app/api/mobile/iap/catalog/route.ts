@@ -15,11 +15,11 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { requireCurrentUserId } from '@/lib/server/neon-chat';
 import {
-  WAITLIST_ACCESS_REQUIRED_CODE,
   billingUpgradesOpenFor,
   hasBillingWaitlistAccess,
   hasPaidBillingHistory,
 } from '@/lib/server/billing-waitlist-access';
+import { WAITLIST_ACCESS_REQUIRED_CODE } from '@/lib/validations/upgrade-waitlist';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import {
   resolveSubscriptionOwnerHandoff,

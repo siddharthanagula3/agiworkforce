@@ -27,6 +27,12 @@ import { Spinner } from '@agiworkforce/ui';
 import type { McpAppCardBody } from '@agiworkforce/types';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { logger } from '@shared/lib/logger';
+
+export const MCP_APP_RESOURCE_MAX_BYTES = 2 * 1024 * 1024;
+export const MCP_APP_TOO_LARGE_MESSAGE = "This app's content is too large to display.";
+export const MCP_APP_SANDBOX_UNAVAILABLE_MESSAGE =
+  "This app can't be displayed here, so the tool's result is shown instead.";
 
 interface AppPayload {
   id: string;
@@ -50,6 +56,47 @@ interface AppResource {
 interface PendingApproval {
   name: string;
   resolve: (approved: boolean) => void;
+}
+
+interface PlainResultFallback {
+  notice: string;
+  text: string;
+}
+
+class McpAppFallback extends Error {
+  constructor(
+    readonly reason: 'sandbox_origin_unavailable' | 'resource_too_large',
+    readonly notice: string,
+  ) {
+    super(notice);
+  }
+}
+
+function dedicatedSandboxUrl(): URL | null {
+  const configuredOrigin = process.env['NEXT_PUBLIC_MCP_APP_SANDBOX_ORIGIN'];
+  const sandboxUrl = new URL('/api/mcp-apps/sandbox', configuredOrigin || window.location.origin);
+  if (sandboxUrl.origin !== window.location.origin) return sandboxUrl;
+  // MCP Apps requires the sandbox proxy on an origin distinct from the host, so
+  // a production build renders the plain result rather than degrade silently.
+  return process.env.NODE_ENV === 'production' ? null : sandboxUrl;
+}
+
+function plainResultText(result: AppPayload['toolResult']): string {
+  const text = result.content
+    .map((block) =>
+      block !== null &&
+      typeof block === 'object' &&
+      (block as Record<string, unknown>)['type'] === 'text' &&
+      typeof (block as Record<string, unknown>)['text'] === 'string'
+        ? ((block as Record<string, unknown>)['text'] as string)
+        : null,
+    )
+    .filter((value): value is string => value !== null)
+    .join('\n\n');
+  if (text) return text;
+  return result.structuredContent === undefined
+    ? ''
+    : JSON.stringify(result.structuredContent, null, 2);
 }
 
 function base64Url(value: string): string {
@@ -102,13 +149,18 @@ function extractAppResource(value: unknown, expectedUri: string): AppResource {
   if (!content || content['mimeType'] !== RESOURCE_MIME_TYPE) {
     throw new Error('The MCP App resource did not return the required HTML MIME type');
   }
-  const html =
+  const byteLength =
     typeof content['text'] === 'string'
-      ? content['text']
+      ? new TextEncoder().encode(content['text']).byteLength
       : typeof content['blob'] === 'string'
-        ? atob(content['blob'])
+        ? Math.floor((content['blob'].length * 3) / 4)
         : null;
-  if (html === null) throw new Error('The MCP App resource has no HTML body');
+  if (byteLength === null) throw new Error('The MCP App resource has no HTML body');
+  if (byteLength > MCP_APP_RESOURCE_MAX_BYTES) {
+    throw new McpAppFallback('resource_too_large', MCP_APP_TOO_LARGE_MESSAGE);
+  }
+  const html =
+    typeof content['text'] === 'string' ? content['text'] : atob(content['blob'] as string);
   const metadata =
     content['_meta'] !== null && typeof content['_meta'] === 'object'
       ? (content['_meta'] as Record<string, unknown>)['ui']
@@ -128,8 +180,9 @@ function extractAppResource(value: unknown, expectedUri: string): AppResource {
 export function McpAppCard({ body }: { body: McpAppCardBody }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const bridgeRef = useRef<AppBridge | null>(null);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error' | 'fallback'>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [fallback, setFallback] = useState<PlainResultFallback | null>(null);
   const [height, setHeight] = useState(360);
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
 
@@ -142,19 +195,28 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
       new Promise((resolve) => setPendingApproval({ name, resolve }));
 
     const initialize = async () => {
+      let payload: AppPayload | null = null;
       try {
         const payloadResponse = await fetch(`/api/mcp-apps/payload/${body.payloadId}`, {
           credentials: 'include',
           cache: 'no-store',
         });
         if (!payloadResponse.ok) throw new Error('This MCP App result expired or is unavailable');
-        const payload = (await payloadResponse.json()) as AppPayload;
+        const appPayload = (await payloadResponse.json()) as AppPayload;
         if (
-          payload.connectorId !== body.connectorId ||
-          payload.resourceUri !== body.resourceUri ||
-          payload.toolName !== body.toolName
+          appPayload.connectorId !== body.connectorId ||
+          appPayload.resourceUri !== body.resourceUri ||
+          appPayload.toolName !== body.toolName
         ) {
           throw new Error('MCP App payload identity mismatch');
+        }
+        payload = appPayload;
+        const sandboxUrl = dedicatedSandboxUrl();
+        if (!sandboxUrl) {
+          throw new McpAppFallback(
+            'sandbox_origin_unavailable',
+            MCP_APP_SANDBOX_UNAVAILABLE_MESSAGE,
+          );
         }
         const resourceEnvelope = await mcpOperation(body.connectorId, {
           operation: 'readResource',
@@ -230,8 +292,8 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
           }
         };
         bridge.oninitialized = () => {
-          void bridge.sendToolInput({ arguments: payload.toolInput });
-          void bridge.sendToolResult(payload.toolResult as never);
+          void bridge.sendToolInput({ arguments: appPayload.toolInput });
+          void bridge.sendToolResult(appPayload.toolResult as never);
           setStatus('ready');
         };
 
@@ -248,11 +310,6 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
             resolve();
           };
           window.addEventListener('message', listener);
-          const configuredOrigin = process.env['NEXT_PUBLIC_MCP_APP_SANDBOX_ORIGIN'];
-          const sandboxUrl = new URL(
-            '/api/mcp-apps/sandbox',
-            configuredOrigin || window.location.origin,
-          );
           if (resource.csp)
             sandboxUrl.searchParams.set('csp', base64Url(JSON.stringify(resource.csp)));
           const dedicatedOrigin = sandboxUrl.origin !== window.location.origin;
@@ -276,10 +333,19 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
           ...(resource.permissions ? { permissions: resource.permissions } : {}),
         });
       } catch (reason) {
-        if (!disposed) {
-          setStatus('error');
-          setError(toUserMessage(reason, 'MCP App failed to load'));
+        if (disposed) return;
+        if (reason instanceof McpAppFallback && payload) {
+          logger.error('[mcp-app] rendering the plain tool result instead of the app', {
+            reason: reason.reason,
+            connectorId: body.connectorId,
+            toolName: body.toolName,
+          });
+          setFallback({ notice: reason.notice, text: plainResultText(payload.toolResult) });
+          setStatus('fallback');
+          return;
         }
+        setStatus('error');
+        setError(toUserMessage(reason, 'MCP App failed to load'));
       }
     };
     void initialize();
@@ -308,10 +374,23 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
           <span>{error ?? 'MCP App failed to load'}</span>
         </div>
       ) : null}
+      {status === 'fallback' && fallback ? (
+        <div className="px-4 py-3 text-sm">
+          <div className="flex gap-2 text-muted-foreground">
+            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{fallback.notice}</span>
+          </div>
+          {fallback.text ? (
+            <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words font-mono text-sm text-foreground">
+              {fallback.text}
+            </pre>
+          ) : null}
+        </div>
+      ) : null}
       <iframe
         ref={iframeRef}
         title={`${body.toolName} interactive result`}
-        className={status === 'error' ? 'hidden' : 'block w-full border-0'}
+        className={status === 'error' || status === 'fallback' ? 'hidden' : 'block w-full border-0'}
         style={{ height }}
         referrerPolicy="no-referrer"
       />

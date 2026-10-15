@@ -277,6 +277,15 @@ describe("a workspace's project instruction outranks the account's own preferenc
 });
 
 describe('the three trust levels a project carries are three blocks, not one', () => {
+  beforeEach(() => {
+    mocks.loadPolicy.mockResolvedValue({
+      enabled: false,
+      generateFromHistory: false,
+      allowToolAssistedGeneration: false,
+      searchPastChats: true,
+    });
+  });
+
   it('orders the instruction, then the recalled sibling chat, then the knowledge file', async () => {
     const joined = await assembledSystemText('project-precedence-3');
 

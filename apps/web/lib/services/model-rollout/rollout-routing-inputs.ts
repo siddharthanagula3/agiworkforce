@@ -14,7 +14,7 @@ import {
   type FlagSubjectFacts,
 } from '@/lib/feature-flags/flag-evaluation-service';
 import { ROUTING_FLAG_PREFIX, routingFlagInputs } from '@/lib/feature-flags/routing-flags';
-import { PROMPT_FLAG_PREFIX, promptVariantsFromFlags } from '@/lib/prompts/prompt-flags';
+import { promptVariantsForSubject } from '@/lib/prompts/prompt-variants';
 import { logger } from '@/lib/logger';
 import { managedCloudDataRegion } from '@/lib/server/data-region';
 import {
@@ -71,14 +71,14 @@ export async function resolveWebCloudRolloutInputs(input: {
 }): Promise<WebCloudRolloutInputs> {
   const nowMs = input.nowMs ?? Date.now();
   const subject = buildFlagSubject(input.request, input.subject);
-  const [evaluations, promptEvaluations, shadowRequestsToday] = await Promise.all([
+  const [evaluations, promptVariants, shadowRequestsToday] = await Promise.all([
     evaluateFlagsForSubject(subject, { keyPrefix: ROUTING_FLAG_PREFIX }, nowMs),
-    evaluateFlagsForSubject(subject, { keyPrefix: PROMPT_FLAG_PREFIX }, nowMs),
+    promptVariantsForSubject(subject, nowMs),
     readShadowRequestsToday(nowMs),
   ]);
   return {
     ...routingFlagInputs(evaluations),
-    promptVariants: promptVariantsFromFlags(promptEvaluations),
+    promptVariants,
     region: managedCloudDataRegion(),
     requestId: input.conversationId || input.requestId,
     capabilitiesInUse: capabilitiesInUseForRequest(input.signals),

@@ -46,14 +46,16 @@ function clamp(value: string, max: number): string {
   return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed;
 }
 
-export async function recordNotification(
+export type NotificationWrite = 'inserted' | 'duplicate' | 'invalid';
+
+export async function insertNotification(
   db: DatabaseAdapter,
   input: NotificationInput,
-): Promise<{ recorded: boolean }> {
+): Promise<NotificationWrite> {
   const userId = input.userId?.trim();
   const title = clamp(input.title ?? '', MAX_TITLE_CHARS);
   const message = clamp(input.message ?? '', MAX_MESSAGE_CHARS);
-  if (!userId || !title) return { recorded: false };
+  if (!userId || !title) return 'invalid';
 
   const target =
     input.target && notificationTargetHref(input.target.kind, input.target.id)
@@ -61,28 +63,35 @@ export async function recordNotification(
       : null;
   const dedupeKey = input.dedupeKey?.trim().slice(0, MAX_DEDUPE_KEY_CHARS) || null;
 
+  const rows = await db.query<{ id: string }>(
+    `insert into public.notifications
+       (user_id, category, type, title, message, target_kind, target_id, dedupe_key)
+     values ($1, $2, $3, $4, $5, $6, $7, $8)
+     on conflict (user_id, dedupe_key) where dedupe_key is not null do nothing
+     returning id`,
+    [
+      userId,
+      input.category,
+      input.severity,
+      title,
+      message,
+      target?.kind ?? null,
+      target?.id ?? null,
+      dedupeKey,
+    ],
+  );
+  return rows.length > 0 ? 'inserted' : 'duplicate';
+}
+
+export async function recordNotification(
+  db: DatabaseAdapter,
+  input: NotificationInput,
+): Promise<{ recorded: boolean }> {
   try {
-    const rows = await db.query<{ id: string }>(
-      `insert into public.notifications
-         (user_id, category, type, title, message, target_kind, target_id, dedupe_key)
-       values ($1, $2, $3, $4, $5, $6, $7, $8)
-       on conflict (user_id, dedupe_key) where dedupe_key is not null do nothing
-       returning id`,
-      [
-        userId,
-        input.category,
-        input.severity,
-        title,
-        message,
-        target?.kind ?? null,
-        target?.id ?? null,
-        dedupeKey,
-      ],
-    );
-    return { recorded: rows.length > 0 };
+    return { recorded: (await insertNotification(db, input)) === 'inserted' };
   } catch (error) {
     logger.warn(
-      { error, userId, category: input.category },
+      { error, userId: input.userId, category: input.category },
       '[notifications] in-app notification could not be recorded',
     );
     return { recorded: false };

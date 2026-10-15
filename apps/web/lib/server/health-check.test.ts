@@ -26,6 +26,16 @@ vi.mock('@/lib/price-tier-mapping', () => ({
   getConfiguredStripePriceIds: vi.fn(() => []),
   isGrandfatheredPriceId: vi.fn(() => false),
 }));
+vi.mock('@/lib/server/identity', () => ({
+  getIdentityAuthorizedParties: vi.fn(),
+  getIdentityProvider: () => ({
+    canVerifySessionTokens: () => Boolean(process.env['CLERK_SECRET_KEY']),
+    checkReachable: async () => undefined,
+  }),
+  getIdentityUser: vi.fn(),
+  getRequestIdentity: vi.fn(),
+  verifyIdentitySessionToken: vi.fn(),
+}));
 
 import {
   createUpstashKeyValueStore,
@@ -385,10 +395,13 @@ describe('runHealthChecks dependency enumeration', () => {
   });
 
   it('says unobserved for a dependency no check here probes, rather than ok', async () => {
+    process.env['RESEND_API_KEY'] = 're_test_key';
+
     const result = await runHealthChecks();
 
-    const identity = (result.dependencies ?? []).find((entry) => entry.id === 'identity');
-    expect(identity).toMatchObject({ criticality: 'core', observation: 'unobserved' });
+    const email = (result.dependencies ?? []).find((entry) => entry.id === 'transactional_email');
+    expect(email).toMatchObject({ criticality: 'degradable', observation: 'unobserved' });
+    delete process.env['RESEND_API_KEY'];
   });
 
   it('separates a dependency that is not configured from one that is failing', async () => {

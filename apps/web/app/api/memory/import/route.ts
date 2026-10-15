@@ -128,6 +128,7 @@ async function handleCommit(request: NextRequest, body: ImportRequestBody) {
         category: null,
         source: sourceValue,
         organizationId: organizationId ?? null,
+        userRequested: true,
       },
       { policies },
     );

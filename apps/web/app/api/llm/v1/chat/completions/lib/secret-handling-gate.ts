@@ -3,21 +3,19 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import type { SecretHandlingMode } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
-import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
-import {
-  redactAuditedSecrets,
-  scanForSecrets,
-  type SecretDetection,
-} from '@/lib/security/secrets-audit';
-import { isHighConfidenceSecretName } from '@/lib/security/secret-patterns';
+import { redactAuditedSecrets, scanForSecrets } from '@/lib/security/secrets-audit';
 import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
 import type { ProcessedRequest } from './request-processor';
+import {
+  MESSAGE_SCAN_BOUNDARY,
+  partitionByConfidence,
+  recordSecretDetection,
+  type SecretHandlingAction,
+} from './secret-detection';
 
 type ChatMessage = ProcessedRequest['llmRequest']['messages'][number];
-
-const MESSAGE_SCAN_BOUNDARY = ' AGI-CHAT-SECRET-SCAN-BOUNDARY ';
 
 interface MessageTextSpan {
   messageIndex: number;
@@ -72,7 +70,7 @@ function applyRedactedSpans(
 }
 
 export interface SecretHandlingOutcome {
-  action: 'clean' | 'warned' | 'redacted' | 'blocked';
+  action: SecretHandlingAction;
   patternNames: string[];
   matchCount: number;
   notice: string | null;
@@ -86,18 +84,6 @@ function actionForMode(mode: SecretHandlingMode): 'warned' | 'redacted' | 'block
 
 export function buildSecretRedactionNotice(count: number): string {
   return describeSecretRedactionNotice(count) ?? '';
-}
-
-function partitionByConfidence(detections: readonly SecretDetection[]): {
-  high: SecretDetection[];
-  low: SecretDetection[];
-} {
-  const high: SecretDetection[] = [];
-  const low: SecretDetection[] = [];
-  for (const detection of detections) {
-    (isHighConfidenceSecretName(detection.name) ? high : low).push(detection);
-  }
-  return { high, low };
 }
 
 /**
@@ -185,21 +171,13 @@ export async function applySecretHandlingToRequest(
     }
   }
 
-  await recordAuditEvent({
+  await recordSecretDetection({
     userId,
     organizationId,
-    eventType: 'secret_detected',
     request,
-    outcome: action === 'blocked' ? 'denied' : 'success',
-    severity: action === 'blocked' ? 'warning' : 'info',
-    detail: {
-      resourceType: 'chat_completion',
-      source: patternNames.join(','),
-      count: relevantDetections.length,
-      status: action,
-    },
-  }).catch((error) => {
-    logger.error({ error, userId }, '[secret-handling] audit event could not be recorded');
+    action,
+    patternNames,
+    matchCount: relevantDetections.length,
   });
 
   return { action, patternNames, matchCount: relevantDetections.length, notice };

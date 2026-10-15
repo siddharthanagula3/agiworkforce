@@ -178,6 +178,8 @@ async function pageProbeFailure(cause: string): Promise<NextResponse> {
         search: NOT_MEASURED,
         vector: NOT_MEASURED,
         cache: NOT_MEASURED,
+        email: NOT_MEASURED,
+        identity: NOT_MEASURED,
       },
     },
     [`health-probe (${cause})`],

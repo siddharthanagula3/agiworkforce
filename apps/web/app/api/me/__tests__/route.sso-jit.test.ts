@@ -52,8 +52,14 @@ vi.mock('@/lib/services/subscription-service', () => ({
 
 import { GET } from '../route';
 
-function identityUser(enterpriseAccounts: unknown[]) {
-  return { id: 'user-1', fullName: 'Ada', primaryEmail: 'ada@acme.test', enterpriseAccounts };
+function identityUser(enterpriseAccounts: unknown[], primaryEmailVerification = 'verified') {
+  return {
+    id: 'user-1',
+    fullName: 'Ada',
+    primaryEmail: 'ada@acme.test',
+    primaryEmailVerification,
+    enterpriseAccounts,
+  };
 }
 
 describe('GET /api/me single sign-on provisioning', () => {
@@ -129,5 +135,47 @@ describe('GET /api/me single sign-on provisioning', () => {
     const res = await GET(new NextRequest('http://localhost:3000/api/me'));
 
     expect(res.status).toBe(200);
+  });
+});
+
+describe('GET /api/me directory membership linking', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'ada@acme.test' });
+  });
+
+  it.each(['unverified', 'unknown'])(
+    'links no pending directory membership when the primary email is %s',
+    async (verification) => {
+      mockGetIdentityUser.mockResolvedValue(identityUser([], verification));
+
+      const res = await GET(new NextRequest('http://localhost:3000/api/me'));
+
+      expect(res.status).toBe(200);
+      expect(mockLinkPendingScimUsers).not.toHaveBeenCalled();
+    },
+  );
+
+  it('links no pending directory membership when the identity record cannot be read', async () => {
+    mockGetIdentityUser.mockRejectedValue(new Error('identity provider unavailable'));
+
+    const res = await GET(new NextRequest('http://localhost:3000/api/me'));
+
+    expect(res.status).toBe(200);
+    expect(mockLinkPendingScimUsers).not.toHaveBeenCalled();
+  });
+
+  it('links through the verified primary email, never the address a session token carries', async () => {
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'someone@bigcorp.test' });
+    mockGetIdentityUser.mockResolvedValue(identityUser([]));
+
+    await GET(new NextRequest('http://localhost:3000/api/me'));
+
+    expect(mockLinkPendingScimUsers).toHaveBeenCalledTimes(1);
+    expect(mockLinkPendingScimUsers).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      'ada@acme.test',
+    );
   });
 });

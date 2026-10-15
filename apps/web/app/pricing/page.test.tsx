@@ -50,7 +50,14 @@ const stripeMocks = vi.hoisted(() => ({
   openBillingPortal: vi.fn(async () => {}),
 }));
 
-const waitlistMocks = vi.hoisted(() => ({ required: vi.fn(async () => true) }));
+const waitlistMocks = vi.hoisted(() => ({
+  resolveStatus: vi.fn(),
+  status: null as null | {
+    joinedPlans: string[];
+    upgradeGateEnabled: boolean;
+    accessGranted: boolean;
+  },
+}));
 
 const routerMocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -69,7 +76,6 @@ const billingMocks = vi.hoisted(() => {
 });
 
 type ReactI18nextModule = typeof import('react-i18next');
-type UpgradeWaitlistModule = typeof import('@features/billing/services/upgrade-waitlist');
 
 vi.mock('next/navigation', () => ({ useRouter: () => routerMocks }));
 vi.mock('react-i18next', async (importOriginal) => {
@@ -130,6 +136,12 @@ vi.mock('react-i18next', async (importOriginal) => {
         if (key === 'usageSameAsPerSeat') {
           return `Same usage as ${String(values?.['baseline'])} for every seat`;
         }
+        if (key === 'joinPlanWaitlistCta') return `Join the ${String(values?.['plan'])} waitlist`;
+        if (key === 'onPlanWaitlistNote') return 'You’re on the waitlist';
+        if (key === 'enterAccessCodeCta') return 'Enter access code';
+        if (key === 'enterAccessCodeForPlan') {
+          return `Enter access code for ${String(values?.['plan'])}`;
+        }
         return key;
       },
     }),
@@ -141,7 +153,8 @@ vi.mock('sonner', () => ({
 vi.mock('@shared/stores/authentication-store', () => ({
   useAuthStore: (selector: (state: unknown) => unknown) => selector(testState.auth),
 }));
-vi.mock('@features/billing/services/stripe-payments', () => ({
+vi.mock('@features/billing/services/stripe-payments', async (importOriginal) => ({
+  ...(await importOriginal<StripePaymentsModule>()),
   ...stripeMocks,
 }));
 // The real hook re-renders on refetch; a plain object literal would not, and the
@@ -160,6 +173,11 @@ vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (state: unknown) => unknown) => selector(testState.account),
 }));
 vi.mock('@shared/components/layout/Header', () => ({ Header: () => <div /> }));
+vi.mock('@shared/components/ServiceNotices', () => ({
+  ServiceNotices: ({ scope }: { scope: string }) => (
+    <div data-testid="service-notices" data-scope={scope} />
+  ),
+}));
 vi.mock('@/features/marketing/components/MarketingFooter', () => ({
   MarketingFooter: () => <div />,
 }));
@@ -173,16 +191,23 @@ vi.mock('@features/billing/components/DowngradeReviewDialog', () => ({
   DowngradeReviewDialog: ({ open, initialPlan }: { open: boolean; initialPlan: string | null }) =>
     open ? <div>{`Downgrade review for ${initialPlan}`}</div> : null,
 }));
-vi.mock('@features/billing/services/upgrade-waitlist', async (importOriginal) => ({
-  ...(await importOriginal<UpgradeWaitlistModule>()),
-  isUpgradeWaitlistRequired: () => waitlistMocks.required(),
+vi.mock('@features/billing/hooks/use-upgrade-waitlist', () => ({
+  resolveUpgradeWaitlistStatus: waitlistMocks.resolveStatus,
+  useUpgradeWaitlistStatus: () => ({
+    status: waitlistMocks.status,
+    checking: false,
+    recordJoined: () => undefined,
+    recordAccessGranted: () => undefined,
+  }),
 }));
 vi.mock('@features/billing/components/UpgradeWaitlistDialog', () => ({
   UpgradeWaitlistDialog: ({
     request,
+    joinOnOpen,
     onAccessGranted,
   }: {
     request: { plan: string; billingInterval: string; seats?: number } | null;
+    joinOnOpen?: boolean;
     onAccessGranted: (request: {
       plan: string;
       billingInterval: string;
@@ -190,15 +215,19 @@ vi.mock('@features/billing/components/UpgradeWaitlistDialog', () => ({
     }) => Promise<void>;
   }) =>
     request ? (
-      <div>
+      <div data-testid="waitlist-dialog" data-join-on-open={String(joinOnOpen ?? false)}>
         <span>{`Waitlist for ${request.plan}`}</span>
         <button onClick={() => void onAccessGranted(request)}>Continue with code</button>
       </div>
     ) : null,
+  UpgradeWaitlistPanel: () => null,
 }));
 
 import { toast } from 'sonner';
+import { UpgradeAccessRequiredError } from '@features/billing/services/stripe-payments';
 import PricingPage from './page';
+
+type StripePaymentsModule = typeof import('@features/billing/services/stripe-payments');
 
 /**
  * Team and Enterprise moved behind an audience tab on 2026-08-08 so the page
@@ -398,7 +427,12 @@ describe('PricingPage', () => {
     testState.account.isLoading = false;
     testState.account.error = null;
     vi.spyOn(global, 'fetch').mockImplementation(() => new Promise<Response>(() => undefined));
-    waitlistMocks.required.mockResolvedValue(true);
+    waitlistMocks.resolveStatus.mockResolvedValue({
+      joinedPlans: [],
+      upgradeGateEnabled: true,
+      accessGranted: false,
+    });
+    waitlistMocks.status = null;
   });
 
   it('does not flash purchase controls before account identity is known', () => {
@@ -547,12 +581,16 @@ describe('PricingPage', () => {
     fireEvent.click(teamCta);
 
     expect(await screen.findByText('Waitlist for team')).toBeVisible();
-    expect(waitlistMocks.required).toHaveBeenCalledTimes(1);
+    expect(waitlistMocks.resolveStatus).toHaveBeenCalledTimes(1);
     expect(stripeMocks.upgradeToTeamPlan).not.toHaveBeenCalled();
   });
 
   it('goes straight to checkout with no waitlist or access code once upgrades are open', async () => {
-    waitlistMocks.required.mockResolvedValue(false);
+    waitlistMocks.resolveStatus.mockResolvedValue({
+      joinedPlans: [],
+      upgradeGateEnabled: false,
+      accessGranted: false,
+    });
     testState.auth.user = { id: 'user-1', email: 'user@example.com' };
     mockPricingFetch(TEAM_BOTH_CADENCES);
 
@@ -576,7 +614,11 @@ describe('PricingPage', () => {
   });
 
   it('reports a checkout that fails to start instead of falling back to the waitlist', async () => {
-    waitlistMocks.required.mockResolvedValue(false);
+    waitlistMocks.resolveStatus.mockResolvedValue({
+      joinedPlans: [],
+      upgradeGateEnabled: false,
+      accessGranted: false,
+    });
     stripeMocks.upgradeToTeamPlan.mockRejectedValueOnce(new Error('Checkout is unavailable.'));
     testState.auth.user = { id: 'user-1', email: 'user@example.com' };
     mockPricingFetch(TEAM_BOTH_CADENCES);
@@ -593,6 +635,296 @@ describe('PricingPage', () => {
     await waitFor(() => expect(teamCta).toBeEnabled());
   });
 
+  function serveBasicCheckoutPricing() {
+    vi.mocked(global.fetch).mockImplementation(async (input) => {
+      if (String(input).includes('/api/pricing/localized')) {
+        return {
+          ok: true,
+          json: async () => ({
+            country: 'US',
+            requestedCurrency: 'usd',
+            plans: {
+              basic: {
+                monthly: {
+                  amountMinor: 700,
+                  currency: 'usd',
+                  localized: false,
+                  checkoutReady: true,
+                },
+              },
+              pro: {},
+              max: {},
+              max_15x: {},
+              team: {},
+            },
+          }),
+        } as Response;
+      }
+      return new Promise<Response>(() => undefined);
+    });
+  }
+
+  it('sends an account that already holds upgrade access straight to checkout', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    waitlistMocks.resolveStatus.mockResolvedValue({
+      joinedPlans: ['basic'],
+      upgradeGateEnabled: true,
+      accessGranted: true,
+    });
+    serveBasicCheckoutPricing();
+
+    render(<PricingPage />);
+
+    const basicCta = await screen.findByRole('button', { name: 'basicCta' });
+    await waitFor(() => expect(basicCta).toBeEnabled());
+    fireEvent.click(basicCta);
+
+    await waitFor(() =>
+      expect(stripeMocks.upgradeToBasicPlan).toHaveBeenCalledWith({
+        userId: 'user-1',
+        userEmail: 'user@example.com',
+      }),
+    );
+    expect(screen.queryByText('Waitlist for basic')).toBeNull();
+  });
+
+  it('opens the waitlist without joining when checkout says upgrade access is required', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    waitlistMocks.resolveStatus.mockResolvedValue({
+      joinedPlans: [],
+      upgradeGateEnabled: true,
+      accessGranted: true,
+    });
+    stripeMocks.upgradeToBasicPlan.mockRejectedValueOnce(
+      new UpgradeAccessRequiredError(
+        'Paid upgrades are opening in stages. Join the waitlist or enter an access code to continue.',
+      ),
+    );
+    serveBasicCheckoutPricing();
+
+    render(<PricingPage />);
+
+    const basicCta = await screen.findByRole('button', { name: 'basicCta' });
+    await waitFor(() => expect(basicCta).toBeEnabled());
+    fireEvent.click(basicCta);
+
+    expect(await screen.findByText('Waitlist for basic')).toBeVisible();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('starts one checkout when the button is pressed twice while upgrade access is read', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    let answerStatus: (status: {
+      joinedPlans: string[];
+      upgradeGateEnabled: boolean;
+      accessGranted: boolean;
+    }) => void = () => undefined;
+    waitlistMocks.resolveStatus.mockReturnValue(
+      new Promise((resolve) => {
+        answerStatus = resolve;
+      }),
+    );
+    serveBasicCheckoutPricing();
+
+    render(<PricingPage />);
+
+    const basicCta = await screen.findByRole('button', { name: 'basicCta' });
+    await waitFor(() => expect(basicCta).toBeEnabled());
+    fireEvent.click(basicCta);
+    fireEvent.click(basicCta);
+    expect(basicCta).toBeDisabled();
+    answerStatus({ joinedPlans: [], upgradeGateEnabled: true, accessGranted: true });
+
+    await waitFor(() => expect(stripeMocks.upgradeToBasicPlan).toHaveBeenCalled());
+    expect(stripeMocks.upgradeToBasicPlan).toHaveBeenCalledTimes(1);
+    expect(waitlistMocks.resolveStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands the plan buttons back when the waitlist opens instead of checkout', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    serveBasicCheckoutPricing();
+
+    render(<PricingPage />);
+
+    const basicCta = await screen.findByRole('button', { name: 'basicCta' });
+    await waitFor(() => expect(basicCta).toBeEnabled());
+    fireEvent.click(basicCta);
+
+    expect(await screen.findByText('Waitlist for basic')).toBeVisible();
+    expect(basicCta).toBeEnabled();
+    expect(stripeMocks.upgradeToBasicPlan).not.toHaveBeenCalled();
+  });
+
+  it('labels each paid plan as a waitlist join for an account that can only join, and joins on press', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    const staged = { joinedPlans: [], upgradeGateEnabled: true, accessGranted: false };
+    waitlistMocks.status = staged;
+    waitlistMocks.resolveStatus.mockResolvedValue(staged);
+    serveBasicCheckoutPricing();
+
+    render(<PricingPage />);
+
+    const join = await screen.findByRole('button', { name: 'Join the Basic waitlist' });
+    expect(screen.getByRole('button', { name: 'Join the Pro waitlist' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'basicCta' })).toBeNull();
+    await waitFor(() => expect(join).toBeEnabled());
+    fireEvent.click(join);
+
+    expect(await screen.findByTestId('waitlist-dialog')).toHaveAttribute(
+      'data-join-on-open',
+      'true',
+    );
+    expect(screen.getByText('Waitlist for basic')).toBeVisible();
+    expect(stripeMocks.upgradeToBasicPlan).not.toHaveBeenCalled();
+  });
+
+  it('shows a plan the account already joined as on the waitlist, with the access code reachable', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    const joined = { joinedPlans: ['basic'], upgradeGateEnabled: true, accessGranted: false };
+    waitlistMocks.status = joined;
+    waitlistMocks.resolveStatus.mockResolvedValue(joined);
+    serveBasicCheckoutPricing();
+
+    render(<PricingPage />);
+
+    expect(await screen.findByText('You’re on the waitlist')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Join the Basic waitlist' })).toBeNull();
+    const enterCode = screen.getByRole('button', { name: 'Enter access code for Basic' });
+    await waitFor(() => expect(enterCode).toBeEnabled());
+    fireEvent.click(enterCode);
+
+    expect(await screen.findByTestId('waitlist-dialog')).toHaveAttribute(
+      'data-join-on-open',
+      'false',
+    );
+  });
+
+  it('lets an account that can only join the waitlist join it while checkout pricing cannot be verified', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    const staged = { joinedPlans: [], upgradeGateEnabled: true, accessGranted: false };
+    waitlistMocks.status = staged;
+    waitlistMocks.resolveStatus.mockResolvedValue(staged);
+    vi.mocked(global.fetch).mockRejectedValueOnce(new Error('network unavailable'));
+
+    render(<PricingPage />);
+
+    const join = screen.getByRole('button', { name: 'Join the Basic waitlist' });
+    await waitFor(() => expect(join).toBeEnabled());
+    fireEvent.click(join);
+
+    expect(await screen.findByTestId('waitlist-dialog')).toHaveAttribute(
+      'data-join-on-open',
+      'true',
+    );
+    expect(screen.queryByText(/checkout availability/i)).toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('lets an account that can only join the waitlist join a plan its region cannot buy yet', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    const joined = { joinedPlans: ['pro'], upgradeGateEnabled: true, accessGranted: false };
+    waitlistMocks.status = joined;
+    waitlistMocks.resolveStatus.mockResolvedValue(joined);
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        country: 'IN',
+        requestedCurrency: 'inr',
+        plans: {
+          basic: {
+            monthly: {
+              amountMinor: 39_900,
+              currency: 'inr',
+              localized: true,
+              checkoutReady: false,
+            },
+          },
+          pro: {
+            monthly: {
+              amountMinor: 199_900,
+              currency: 'inr',
+              localized: true,
+              checkoutReady: false,
+            },
+          },
+          max: {},
+          max_15x: {},
+          team: {},
+        },
+      }),
+    } as Response);
+
+    render(<PricingPage />);
+
+    await waitFor(() => expect(screen.getAllByText('₹399').length).toBeGreaterThan(0));
+    const join = screen.getByRole('button', { name: 'Join the Basic waitlist' });
+    const enterCode = screen.getByRole('button', { name: 'Enter access code for Pro' });
+    await waitFor(() => expect(join).toBeEnabled());
+    expect(enterCode).toBeEnabled();
+    expect(screen.queryByText(/not available in your region/)).toBeNull();
+    fireEvent.click(join);
+
+    expect(await screen.findByTestId('waitlist-dialog')).toHaveAttribute(
+      'data-join-on-open',
+      'true',
+    );
+    expect(screen.getByText('Waitlist for basic')).toBeVisible();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('carries billing notices for a subscriber whose plan buttons change billing', () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    testState.billing = { plan: 'pro', status: 'active' };
+    testState.account.subscription = {
+      tier: 'pro',
+      status: 'active',
+      subscription_source: 'stripe',
+    };
+
+    render(<PricingPage />);
+
+    expect(screen.getByTestId('service-notices')).toHaveAttribute('data-scope', 'billing');
+  });
+
+  it('carries billing notices for an account whose plan buttons open checkout', () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    waitlistMocks.status = { joinedPlans: [], upgradeGateEnabled: true, accessGranted: true };
+
+    render(<PricingPage />);
+
+    expect(screen.getByTestId('service-notices')).toHaveAttribute('data-scope', 'billing');
+  });
+
+  it('keeps billing notices off where the plan buttons only join the waitlist or sign in', () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    waitlistMocks.status = { joinedPlans: [], upgradeGateEnabled: true, accessGranted: false };
+
+    const view = render(<PricingPage />);
+
+    expect(screen.queryByTestId('service-notices')).toBeNull();
+
+    view.unmount();
+    testState.auth.user = null;
+    waitlistMocks.status = null;
+    render(<PricingPage />);
+
+    expect(screen.queryByTestId('service-notices')).toBeNull();
+  });
+
+  it('keeps the purchase label for an account that holds upgrade access', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    const granted = { joinedPlans: ['basic'], upgradeGateEnabled: true, accessGranted: true };
+    waitlistMocks.status = granted;
+    waitlistMocks.resolveStatus.mockResolvedValue(granted);
+    serveBasicCheckoutPricing();
+
+    render(<PricingPage />);
+
+    expect(await screen.findByRole('button', { name: 'basicCta' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /waitlist/ })).toBeNull();
+    expect(screen.queryByText('You’re on the waitlist')).toBeNull();
+  });
+
   it('preserves the chosen Team seats through signed-out authentication', async () => {
     render(<PricingPage />);
 
@@ -602,7 +934,7 @@ describe('PricingPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'teamCta' }));
 
     expect(routerMocks.push).toHaveBeenCalledWith(
-      '/login?redirectTo=%2Fpricing%3Fseats%3D3%23pricing-team-title',
+      '/signup?redirectTo=%2Fpricing%3Fseats%3D3%23pricing-team-title',
     );
   });
 

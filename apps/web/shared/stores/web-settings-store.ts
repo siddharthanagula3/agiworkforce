@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import type { FollowUpQueueMode } from '@agiworkforce/unified-chat';
 
 export type ChatTextSize = 'small' | 'default' | 'large';
 
@@ -57,6 +58,12 @@ interface SettingsState {
   newChatsTemporary: boolean;
   /** Composer microphone dictation. Read by the composer's dictation entry point. */
   dictationEnabled: boolean;
+  /**
+   * A follow-up sent while a cloud chat reply runs. Steer stops the reply, so
+   * queue is the default and Enter never interrupts a reply unasked.
+   */
+  /** A follow-up sent while a local coding agent works; steer joins the running turn. */
+  codeFollowUpQueueMode: FollowUpQueueMode;
   codeBlockWrap: boolean;
   followUpSuggestionsEnabled: boolean;
   followUpBehavior: FollowUpBehavior;
@@ -73,6 +80,7 @@ interface SettingsState {
   setNavItemVisible: (id: string, visible: boolean) => void;
   setNewChatsTemporary: (temporary: boolean) => void;
   setDictationEnabled: (enabled: boolean) => void;
+  setCodeFollowUpQueueMode: (mode: FollowUpQueueMode) => void;
   setCodeBlockWrap: (wrap: boolean) => void;
   setFollowUpSuggestionsEnabled: (enabled: boolean) => void;
   setFollowUpBehavior: (behavior: FollowUpBehavior) => void;
@@ -94,6 +102,7 @@ export const useSettingsStore = create<SettingsState>()(
       hiddenNavIds: [],
       newChatsTemporary: false,
       dictationEnabled: true,
+      codeFollowUpQueueMode: 'steer',
       codeBlockWrap: false,
       followUpSuggestionsEnabled: true,
       followUpBehavior: 'queue',
@@ -116,6 +125,7 @@ export const useSettingsStore = create<SettingsState>()(
       restoreShortcutDefaults: () => set({ disabledShortcutIds: [] }),
       setNewChatsTemporary: (temporary) => set({ newChatsTemporary: temporary }),
       setDictationEnabled: (enabled) => set({ dictationEnabled: enabled }),
+      setCodeFollowUpQueueMode: (codeFollowUpQueueMode) => set({ codeFollowUpQueueMode }),
       setNavItemVisible: (id, visible) =>
         set((s) => ({
           hiddenNavIds: visible

@@ -232,10 +232,10 @@ describe('Q-8 · the Chrome debugger sentence matches the extension permissions 
   it('claims the same two grants cover reading the page, because one gate serves all of them', () => {
     const GATE = readExtension('src/features/browser-tools/tabAuthority.ts');
     const SITE_POLICY = readExtension('src/features/site-policy/store.ts');
-    expect(GATE).toContain("assertSiteAccess(url, 'automation'");
+    expect(GATE).toContain('assertSiteAccess(url, capability');
     expect(SITE_POLICY).toContain('SITE_ALLOWLIST_STORAGE_KEY');
     expect(SITE_POLICY).toContain('evaluateSitePolicy(await loadSitePolicyInput()');
-    expect(GATE).toContain('hasBrowserControlConsent(origin)');
+    expect(GATE).toContain('hasBrowserControlConsent(authorized.origin)');
     for (const caller of [
       'src/features/browser-tools/pageWatch.ts',
       'src/features/browser-tools/downloads.ts',

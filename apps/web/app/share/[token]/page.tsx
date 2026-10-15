@@ -5,6 +5,7 @@ import type { Metadata } from 'next';
 import { SharedSessionViewer } from '@/features/chat/components/share/SharedSessionViewer';
 import type { SharedSession } from '@/features/chat/components/share/SharedSessionViewer';
 import { ReportContentLink } from '@/app/copyright/report/ReportContentLink';
+import { getRequestIdentity } from '@/lib/server/identity';
 import {
   SHARE_TOKEN_REGEX,
   getOrgReadableSessionByToken,
@@ -44,6 +45,14 @@ async function readSessionForViewer(
       ? await readSharedSessionSharerName(getNeonDb(), session.ownerUserId).catch(() => null)
       : null;
   return { session, sharedBy };
+}
+
+async function viewerIsSignedIn(): Promise<boolean> {
+  try {
+    return Boolean((await getRequestIdentity()).subject);
+  } catch {
+    return false;
+  }
 }
 
 function toViewerSession(session: OrgReadableSession, sharedBy: string | null): SharedSession {
@@ -96,7 +105,11 @@ export default async function SharedSessionPage({ params }: Props) {
 
   return (
     <>
-      <SharedSessionViewer session={toViewerSession(read.session, read.sharedBy)} token={token} />
+      <SharedSessionViewer
+        session={toViewerSession(read.session, read.sharedBy)}
+        token={token}
+        signedIn={await viewerIsSignedIn()}
+      />
       <ReportContentLink publicPath={`/share/${token}`} />
     </>
   );

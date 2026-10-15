@@ -182,6 +182,9 @@ describe('cloud agent run service', () => {
 
     expect(run.id).toBe(RUN_ROW.id);
     expect(run.originSurface).toBe('web');
+    const createSql = vi.mocked(db.query).mock.calls[0]![0];
+    expect(createSql).toMatch(/values\s*\(\$1, \$2, \$3, \$4, \$5, 'running', \$6, \$7\)/i);
+    expect(createSql).toMatch(/on conflict\s*\(user_id, request_id\)\s*do nothing/i);
     expect(db.query).toHaveBeenCalledWith(
       expect.stringMatching(/insert into public\.cloud_agent_runs/i),
       [
@@ -808,65 +811,106 @@ describe('cloud agent run service', () => {
     );
   });
 
-  it('versions and stores a server-owned approval checkpoint under the run lock', async () => {
-    vi.mocked(db.query)
-      .mockResolvedValueOnce([{ id: RUN_ROW.id }])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ next_version: 1 }])
-      .mockResolvedValueOnce([CHECKPOINT_ROW])
-      .mockResolvedValueOnce(APPROVAL_EVENTS.map(({ sequence }) => ({ sequence })))
-      .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input', last_event_sequence: 5 }])
-      .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input' }]);
-
-    const checkpoint = await saveCloudAgentApprovalCheckpoint(db, {
-      userId: 'user-1',
-      runId: RUN_ROW.id,
-      sessionId: RUN_ROW.conversation_id!,
-      turnId: RUN_ROW.request_id,
-      nextEventSequence: 6,
-      completedSteps: 1,
-      request: CHECKPOINT_ROW.request,
-      messages: CHECKPOINT_ROW.messages,
-      pendingToolCalls: CHECKPOINT_ROW.pending_tool_calls,
-      events: APPROVAL_EVENTS,
+  it.each([
+    { scopes: [] },
+    { scopes: ['session'] },
+    { scopes: ['once', 'once'] },
+    { scopes: ['once', 'forever'] },
+  ])('rejects invalid persisted approval scopes before DB access ($scopes)', async ({ scopes }) => {
+    await expect(
+      saveCloudAgentApprovalCheckpoint(db, {
+        userId: 'user-1',
+        runId: RUN_ROW.id,
+        sessionId: RUN_ROW.conversation_id,
+        turnId: RUN_ROW.request_id,
+        nextEventSequence: 6,
+        completedSteps: 1,
+        request: CHECKPOINT_ROW.request,
+        messages: CHECKPOINT_ROW.messages,
+        pendingToolCalls: CHECKPOINT_ROW.pending_tool_calls.map((call) => ({
+          ...call,
+          approvalScopes: scopes,
+        })),
+        events: APPROVAL_EVENTS,
+      }),
+    ).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          path: expect.arrayContaining(['approvalScopes']),
+        }),
+      ]),
     });
-
-    expect(checkpoint.id).toBe(CHECKPOINT_ROW.id);
-    expect(checkpoint.pendingToolCalls).toEqual(CHECKPOINT_ROW.pending_tool_calls);
-    expect(db.transaction).toHaveBeenCalledOnce();
-    expect(db.query).toHaveBeenNthCalledWith(
-      1,
-      expect.stringMatching(/cloud_agent_runs[\s\S]*for update/i),
-      [RUN_ROW.id, 'user-1'],
-    );
-    expect(db.query).toHaveBeenNthCalledWith(
-      2,
-      expect.stringMatching(
-        /state = 'resolved'[\s\S]*lease_expires_at = null[\s\S]*state = 'resuming'/i,
-      ),
-      [RUN_ROW.id, 'user-1'],
-    );
-    expect(db.query).toHaveBeenNthCalledWith(
-      7,
-      expect.stringMatching(/state = 'awaiting_input'/i),
-      [RUN_ROW.id, 'user-1', TERMINAL_STATE_VALUES],
-    );
-    // All three checkpoint events land in ONE insert, not one transaction each.
-    expect(db.query).toHaveBeenNthCalledWith(
-      5,
-      expect.stringMatching(/insert into public\.cloud_agent_events/i),
-      [
-        RUN_ROW.id,
-        'user-1',
-        ...APPROVAL_EVENTS.flatMap((event) => [
-          event.sequence,
-          event.emittedAtMs,
-          event.event.type,
-          event,
-        ]),
-      ],
-    );
+    expect(db.transaction).not.toHaveBeenCalled();
+    expect(db.query).not.toHaveBeenCalled();
   });
+
+  it.each([{ scopes: undefined }, { scopes: ['once', 'session'] }])(
+    'versions and stores a server-owned approval checkpoint under the run lock ($scopes)',
+    async ({ scopes }) => {
+      const pendingCalls = CHECKPOINT_ROW.pending_tool_calls.map((call) => ({
+        ...call,
+        ...(scopes ? { approvalScopes: scopes } : {}),
+      }));
+      vi.mocked(db.query)
+        .mockResolvedValueOnce([{ id: RUN_ROW.id }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ next_version: 1 }])
+        .mockResolvedValueOnce([{ ...CHECKPOINT_ROW, pending_tool_calls: pendingCalls }])
+        .mockResolvedValueOnce(APPROVAL_EVENTS.map(({ sequence }) => ({ sequence })))
+        .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input', last_event_sequence: 5 }])
+        .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input' }]);
+
+      const checkpoint = await saveCloudAgentApprovalCheckpoint(db, {
+        userId: 'user-1',
+        runId: RUN_ROW.id,
+        sessionId: RUN_ROW.conversation_id!,
+        turnId: RUN_ROW.request_id,
+        nextEventSequence: 6,
+        completedSteps: 1,
+        request: CHECKPOINT_ROW.request,
+        messages: CHECKPOINT_ROW.messages,
+        pendingToolCalls: pendingCalls,
+        events: APPROVAL_EVENTS,
+      });
+
+      expect(checkpoint.id).toBe(CHECKPOINT_ROW.id);
+      expect(checkpoint.pendingToolCalls).toEqual(pendingCalls);
+      expect(JSON.parse(String(vi.mocked(db.query).mock.calls[3]?.[1]?.[9]))).toEqual(pendingCalls);
+      expect(db.transaction).toHaveBeenCalledOnce();
+      expect(db.query).toHaveBeenNthCalledWith(
+        1,
+        expect.stringMatching(/cloud_agent_runs[\s\S]*for update/i),
+        [RUN_ROW.id, 'user-1'],
+      );
+      expect(db.query).toHaveBeenNthCalledWith(
+        2,
+        expect.stringMatching(
+          /state = 'resolved'[\s\S]*lease_expires_at = null[\s\S]*state = 'resuming'/i,
+        ),
+        [RUN_ROW.id, 'user-1'],
+      );
+      expect(db.query).toHaveBeenNthCalledWith(
+        7,
+        expect.stringMatching(/state = 'awaiting_input'/i),
+        [RUN_ROW.id, 'user-1', TERMINAL_STATE_VALUES],
+      );
+      // All three checkpoint events land in ONE insert, not one transaction each.
+      expect(db.query).toHaveBeenNthCalledWith(
+        5,
+        expect.stringMatching(/insert into public\.cloud_agent_events/i),
+        [
+          RUN_ROW.id,
+          'user-1',
+          ...APPROVAL_EVENTS.flatMap((event) => [
+            event.sequence,
+            event.emittedAtMs,
+            event.event.type,
+            event,
+          ]),
+        ],
+      );
+    },
+  );
 
   it('rejects an incomplete approval boundary before opening a transaction', async () => {
     await expect(

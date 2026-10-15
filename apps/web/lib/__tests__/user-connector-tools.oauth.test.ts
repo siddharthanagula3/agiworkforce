@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isSelfServiceConnector } from '@/lib/connectors/mcp-endpoints';
+import { CONNECTOR_CAPABILITIES } from '@/lib/connectors/catalog';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
   ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
@@ -70,10 +71,13 @@ const PROVIDER = {
 };
 
 const mockConfiguredIds = vi.fn(() => new Set<string>(['linear']));
+const mockProviderOverrides = new Map<string, typeof PROVIDER>();
 vi.mock('@/lib/connectors/oauth-registry', () => ({
   isConnectorOAuthConfigured: vi.fn(() => true),
   getConnectorOAuthProvider: (id: string) =>
-    mockConfiguredIds().has(id) ? { ...PROVIDER, connectorId: id } : null,
+    mockConfiguredIds().has(id)
+      ? (mockProviderOverrides.get(id) ?? { ...PROVIDER, connectorId: id })
+      : null,
   getOAuthConfiguredConnectorIds: () => mockConfiguredIds(),
   isConnectorOAuthSupported: (id: string) =>
     mockConfiguredIds().has(id) || isSelfServiceConnector(id),
@@ -144,7 +148,9 @@ function catalogWith(serverName: string, toolName: string) {
 beforeEach(async () => {
   await evictConnectorOAuthCaches('user-1', 'linear');
   await evictConnectorOAuthCaches('user-1', 'airtable');
+  await evictConnectorOAuthCaches('user-1', 'google-contacts');
   vi.clearAllMocks();
+  mockProviderOverrides.clear();
   __resetConnectorMcpMapCacheForTests();
   delete process.env['CONNECTOR_MCP_SERVERS_JSON'];
   mockConfiguredIds.mockReturnValue(new Set(['linear']));
@@ -199,6 +205,80 @@ describe('OAuth connector catalog gating', () => {
       MCP_EGRESS_POLICY,
       { resolveRuntime: expect.any(Function) },
     );
+  });
+
+  it('discovers and dispatches the Google Contacts People provider with mocked grants and transport', async () => {
+    const connectorId = 'google-contacts';
+    const provider = {
+      ...PROVIDER,
+      connectorId,
+      displayName: 'Google Contacts',
+      mcpUrl: 'https://people.googleapis.com/mcp/v1',
+      scopes: [
+        'https://www.googleapis.com/auth/contacts.readonly',
+        'https://www.googleapis.com/auth/directory.readonly',
+        'https://www.googleapis.com/auth/userinfo.profile',
+      ],
+    };
+    expect(CONNECTOR_CAPABILITIES[connectorId]).toBeDefined();
+    mockConfiguredIds.mockReturnValue(new Set([connectorId]));
+    mockProviderOverrides.set(connectorId, provider);
+    mockGrantSummaries.mockResolvedValue([]);
+    expect(await loadUserConnectorToolDefs('user-1')).toEqual([]);
+    expect(mockResolveAccessToken).not.toHaveBeenCalled();
+    expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
+
+    mockGrantSummaries.mockResolvedValue([{ connectorId }]);
+    mockResolveAccessToken.mockResolvedValue({
+      status: 'ready',
+      accessToken: 'people-test-token',
+      tokenType: 'Bearer',
+      accountKey: 'workspace',
+      grantedScopes: provider.scopes,
+    });
+    mockBuildMcpToolCatalog.mockResolvedValue(catalogWith(connectorId, 'search_contacts'));
+    const definitions = await loadUserConnectorToolDefs('user-1');
+    expect(definitions.map((definition) => definition.qualifiedName)).toEqual([
+      'mcp__google-contacts__search_contacts',
+    ]);
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalledWith(
+      {
+        [connectorId]: expect.objectContaining({
+          url: provider.mcpUrl,
+          transport: 'streamable-http',
+          headers: { Authorization: 'Bearer people-test-token' },
+        }),
+      },
+      MCP_EGRESS_POLICY,
+      { resolveRuntime: expect.any(Function) },
+    );
+
+    const callTool = vi.fn().mockResolvedValue({
+      content: [{ type: 'text', text: 'Contact search completed' }],
+    });
+    const close = vi.fn().mockResolvedValue(undefined);
+    mockConnectMcpServer.mockResolvedValue({ callTool, close });
+    const args = { query: 'example contact' };
+    const result = await makeUserConnectorExecutor('user-1')(connectorId, 'search_contacts', args);
+    expect(result).toEqual({
+      handled: true,
+      content: 'Contact search completed',
+      isError: false,
+    });
+    expect(mockResolveAccessToken).toHaveBeenCalledWith('user-1', connectorId);
+    expect(mockConnectMcpServer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        serverName: connectorId,
+        egressPolicy: MCP_EGRESS_POLICY,
+        config: expect.objectContaining({
+          url: provider.mcpUrl,
+          transport: 'streamable-http',
+          headers: { Authorization: 'Bearer people-test-token' },
+        }),
+      }),
+    );
+    expect(callTool).toHaveBeenCalledWith('search_contacts', args);
+    expect(close).toHaveBeenCalledOnce();
   });
 
   it('offers tools for a self-service connector without an operator OAuth registration', async () => {

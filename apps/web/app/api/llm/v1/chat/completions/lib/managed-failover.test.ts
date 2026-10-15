@@ -1,6 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
   GATEWAY_BACKED_HARNESS_IDS,
+  getDefaultAutoRoutingProfile,
+  getModelRegistryFacts,
   listCanonicalModels,
   REGISTRY_HARNESS_IDS,
 } from '@agiworkforce/types';
@@ -49,6 +51,12 @@ import {
   FIRST_PROVIDER_STEP,
 } from './managed-failover';
 import { EmptyProviderResponseError } from '@agiworkforce/provider-runtime';
+import { CHAT_SYSTEM_PROMPT_ID } from '@/lib/prompts/chat-system-prompt';
+import {
+  buildCapabilityPreamble,
+  retargetServingModel,
+  servingModelFor,
+} from './capability-preamble';
 import type { ProcessedRequest } from './request-processor';
 
 const FIRST_STEP = 1;
@@ -677,6 +685,103 @@ describe('attempt view (attribution + single reservation)', () => {
     expect(buildFailoverAttemptView(processed, 'fast-capable', 'anthropic').llmRequest.speed).toBe(
       undefined,
     );
+  });
+
+  it('names the model the rotation landed on, not the one that failed', () => {
+    const [failed, rescuer] = listCanonicalModels().filter(
+      (model) => getModelRegistryFacts(model.id)?.isRouter !== true,
+    );
+    if (!failed || !rescuer) throw new Error('the catalog holds fewer than two concrete models');
+    const selection = { kind: 'picked' as const, modelId: getDefaultAutoRoutingProfile().id };
+    const preamble = String(
+      buildCapabilityPreamble({
+        tools: [],
+        surface: 'web',
+        promptSelection: { variants: { [CHAT_SYSTEM_PROMPT_ID]: 8 } },
+        servingModel: servingModelFor(failed.id, selection),
+      }),
+    );
+    const processed = makeProcessed({
+      modelSelection: selection,
+      chatRequest: {
+        model: failed.id,
+        messages: [{ role: 'user', content: 'Which model are you?' }],
+      } as unknown as ProcessedRequest['chatRequest'],
+      llmRequest: {
+        model: failed.id,
+        messages: [
+          { role: 'system', content: preamble },
+          { role: 'user', content: 'Which model are you?' },
+        ],
+        max_tokens: 100,
+      } as unknown as ProcessedRequest['llmRequest'],
+    });
+
+    const system = String(
+      buildFailoverAttemptView(processed, rescuer.id, 'openai').llmRequest.messages[0]?.content,
+    );
+
+    expect(system).toContain(`This turn runs on ${rescuer.name}`);
+    expect(system).toContain(`say ${rescuer.name} by`);
+    expect(system).not.toContain(`This turn runs on ${failed.name}`);
+    expect(processed.llmRequest.messages[0]?.content).toBe(preamble);
+  });
+
+  it('stops naming the failed model when the rotation lands on one the catalog cannot name', () => {
+    const [failed] = listCanonicalModels().filter(
+      (model) => getModelRegistryFacts(model.id)?.isRouter !== true,
+    );
+    if (!failed) throw new Error('the catalog holds no concrete model');
+    const selection = { kind: 'picked' as const, modelId: failed.id };
+    const preamble = String(
+      buildCapabilityPreamble({
+        tools: [],
+        surface: 'web',
+        promptSelection: { variants: { [CHAT_SYSTEM_PROMPT_ID]: 8 } },
+        servingModel: servingModelFor(failed.id, selection),
+      }),
+    );
+    const processed = makeProcessed({
+      modelSelection: selection,
+      chatRequest: {
+        model: failed.id,
+        messages: [{ role: 'user', content: 'Which model are you?' }],
+      } as unknown as ProcessedRequest['chatRequest'],
+      llmRequest: {
+        model: failed.id,
+        messages: [{ role: 'system', content: preamble }],
+        max_tokens: 100,
+      } as unknown as ProcessedRequest['llmRequest'],
+    });
+
+    const system = String(
+      buildFailoverAttemptView(processed, 'model-outside-the-catalog', 'openai').llmRequest
+        .messages[0]?.content,
+    );
+
+    expect(system).not.toContain(`This turn runs on ${failed.name}`);
+    expect(system).not.toContain(`say ${failed.name} by`);
+    expect(system).toContain('Which model serves this turn is not stated here.');
+  });
+
+  it('writes a replacement model name literally, whatever characters it holds', () => {
+    const preamble = String(
+      buildCapabilityPreamble({
+        tools: [],
+        surface: 'web',
+        promptSelection: { variants: { [CHAT_SYSTEM_PROMPT_ID]: 8 } },
+        servingModel: { kind: 'unattributed', name: 'First Free Model' },
+      }),
+    );
+
+    const [message] = retargetServingModel(
+      [{ role: 'system', content: preamble }],
+      { kind: 'unattributed', name: 'First Free Model' },
+      { kind: 'unattributed', name: "Second $& Model $'" },
+    );
+
+    expect(String(message?.content)).toContain("This turn runs on Second $& Model $'.");
+    expect(String(message?.content)).not.toContain('First Free Model');
   });
 
   it('counts each rotation as one retry and leaves the un-rotated request unknown', () => {

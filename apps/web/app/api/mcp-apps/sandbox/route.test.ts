@@ -99,6 +99,21 @@ describe('GET /api/mcp-apps/sandbox is a stateless relay document', () => {
     expect(csp.get('default-src')).toBe("'none'");
   });
 
+  // MCP Apps' McpUiResourceCsp has no field that requests eval, and the spec's
+  // default policy omits it, so no declaration a resource can make enables it.
+  it('never allows eval, whatever the resource declares', () => {
+    const query = `?csp=${encode({
+      resourceDomains: ['https://cdn.example.com'],
+      unsafeEval: true,
+      scriptSrc: ["'unsafe-eval'"],
+    })}`;
+
+    expect(directives(GET(request())).get('script-src')).not.toContain('unsafe-eval');
+    expect(directives(GET(request(query))).get('script-src')).toBe(
+      "'unsafe-inline' blob: data: https://cdn.example.com",
+    );
+  });
+
   it('ignores an oversized or unparseable csp parameter', () => {
     expect(directives(GET(request(`?csp=${'a'.repeat(9000)}`))).get('connect-src')).toBe("'none'");
     expect(directives(GET(request('?csp=not-base64-json'))).get('connect-src')).toBe("'none'");

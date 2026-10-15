@@ -138,6 +138,7 @@ import {
 import {
   FIRST_PROVIDER_STEP,
   isFreePostToolSameRouteRetryEligible,
+  retargetMessagesToModel,
   type FailoverStepContext,
 } from './managed-failover';
 import {
@@ -197,7 +198,11 @@ import {
   DEVICE_SCREENSHOT_MESSAGE_PREFIX,
   MAX_DEVICE_STEPS_PER_PAUSE,
   cloudAgentRunSteerProgressId,
+  type ToolApprovalReviewWire,
+  type ToolApprovalScope,
+  type ToolApprovalRiskTier,
 } from '@agiworkforce/cloud-contracts';
+import { readConnectorInputPrompts } from '@agiworkforce/client-runtime';
 import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
 import type { E2BUnavailableCause } from '@/lib/e2b/unavailability';
 import {
@@ -331,6 +336,9 @@ import {
   PLATFORM_TOOL_METADATA,
   toolAcceptsUntrustedContent,
   toolCreatesEgressPath,
+  toolRiskTier,
+  resolveToolMetadata,
+  isDestructiveToolMetadata,
 } from './tool-metadata';
 import {
   batchIntroducesUntrustedContent,
@@ -343,6 +351,7 @@ import {
 import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
   LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS,
+  type ConnectorToolPermissionLevel,
   type ConnectorToolPermissions,
 } from './connector-tool-permissions';
 import { persistRoutingDecisionOutcome } from '@/lib/services/model-rollout/routing-decision-trace-service';
@@ -546,6 +555,7 @@ export interface ToolLoopApprovalCheckpoint {
     id: string;
     qualifiedName: string;
     args: Record<string, unknown>;
+    approvalScopes: ToolApprovalScope[];
   }>;
 }
 
@@ -770,6 +780,10 @@ export interface ToolLoopOptions {
   resumedFromPause?: ResumeFromPause;
   signal?: AbortSignal;
   connectorPermissions?: ConnectorToolPermissions;
+  sessionGrantRefusal?: (
+    qualifiedName: string,
+    risk: ToolApprovalRiskTier,
+  ) => Promise<ToolLoopToolResult | null>;
   toolApprovalPolicy?: ToolApprovalPolicy;
   failover?: ToolLoopFailoverPlan;
 }
@@ -1117,6 +1131,7 @@ function toolApprovalRequestEvent(
   toolName: string,
   args: Record<string, unknown>,
   responseModel: string,
+  review: ToolApprovalReviewWire,
 ): SseLine {
   return sseData({
     choices: [
@@ -1126,6 +1141,7 @@ function toolApprovalRequestEvent(
             tool_call_id: toolId,
             name: toolName,
             args,
+            ...review,
           },
         },
         index: 0,
@@ -1228,14 +1244,18 @@ const MAX_INPUT_REQUEST_ENTRIES = 32;
 const MAX_INPUT_REQUESTS_SERIALIZED_BYTES = 16_000;
 
 // Remote `input_required` definitions are UNTRUSTED. Only a JSON object of a
-// bounded field count and serialized size is safe to persist, stream, and later
-// render as a form; anything else settles the call rather than pausing on it.
+// bounded field count and serialized size, whose every entry is a form or link
+// elicitation the shared connector input reader can render, is safe to persist,
+// stream, and render; anything else settles the call rather than pausing on a
+// request no card can answer.
 function boundedInputRequests(raw: unknown): Record<string, unknown> | null {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const record = raw as Record<string, unknown>;
   const entryCount = Object.keys(record).length;
   if (entryCount < 1 || entryCount > MAX_INPUT_REQUEST_ENTRIES) return null;
   if (JSON.stringify(record).length > MAX_INPUT_REQUESTS_SERIALIZED_BYTES) return null;
+  if (readConnectorInputPrompts(record).some((prompt) => prompt.mode === 'unsupported'))
+    return null;
   return record;
 }
 
@@ -3623,6 +3643,49 @@ export async function* runToolLoop(
     : (options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS);
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
 
+  // A critical tool asks every time even when an allow is saved for it; only a
+  // grant made for this conversation, after its own confirmation and for no lower
+  // risk than the tool carries now, lets it run.
+  function decisionTimeLevel(qualifiedName: string): ConnectorToolPermissionLevel | undefined {
+    if (connectorPermissions.isDenied(qualifiedName)) return 'deny';
+    const level = connectorPermissions.levelFor(qualifiedName);
+    const risk = toolRiskTier(
+      qualifiedName,
+      mcpTools.find((tool) => tool.qualifiedName === qualifiedName)?.annotations,
+    );
+    if (connectorPermissions.isSessionGranted?.(qualifiedName)) {
+      return connectorPermissions.isSessionGranted(qualifiedName, risk) ? level : 'ask';
+    }
+    return level === 'allow' && risk === 'critical' ? 'ask' : level;
+  }
+
+  // A grant for the conversation or for always only changes anything for a
+  // connector tool the gate would otherwise ask about; under the lethal-trifecta
+  // escalation a saved allow still asks, so offering one there would mislead. A
+  // critical tool asks every time whatever is saved, so it is never offered always.
+  function toolApprovalReview(qualifiedName: string, gate: ToolCallGate): ToolApprovalReviewWire {
+    const annotations = mcpTools.find((tool) => tool.qualifiedName === qualifiedName)?.annotations;
+    const risk = toolRiskTier(qualifiedName, annotations);
+    const rememberable =
+      parseQualifiedToolName(qualifiedName) !== null &&
+      mcpTools.some(
+        (tool) => tool.qualifiedName === qualifiedName && tool.origin === 'connector',
+      ) &&
+      gate.reason !== 'lethal_trifecta' &&
+      processed.conversationIsTemporary !== true &&
+      connectorPermissions.canRememberApproval?.(qualifiedName) === true &&
+      connectorPermissions.sessionGrantsAvailable === true;
+    return {
+      risk_tier: risk,
+      destructive: isDestructiveToolMetadata(resolveToolMetadata(qualifiedName, annotations)),
+      approval_scopes: [
+        'once',
+        ...(rememberable ? ['session' as const] : []),
+        ...(rememberable && risk !== 'critical' ? ['always' as const] : []),
+      ],
+    };
+  }
+
   const privateContextPresent = hasPrivateContext(processed, messages);
   const sensitiveSourceAvailable = sensitiveSourceReachable({
     privateContextPresent,
@@ -3638,7 +3701,7 @@ export async function* runToolLoop(
     return resolveToolCallGate(
       {
         qualifiedName: toolCall.qualifiedName,
-        savedLevel: connectorPermissions.levelFor(toolCall.qualifiedName),
+        savedLevel: decisionTimeLevel(toolCall.qualifiedName),
         batchIntroducesUntrustedContent: batchIntroducesUntrustedContent(toolCall.id, batch),
       },
       {
@@ -3696,6 +3759,14 @@ export async function* runToolLoop(
       const attemptProcessed = servingProcessed;
       const attemptRequest: ProcessedRequest['llmRequest'] = {
         ...stepRequest,
+        messages:
+          attemptProcessed === processed
+            ? stepRequest.messages
+            : retargetMessagesToModel(
+                stepRequest.messages,
+                processed,
+                attemptProcessed.chatRequest.model,
+              ),
         model: attemptProcessed.llmRequest.model,
         effort: attemptProcessed.llmRequest.effort,
         thinking: attemptProcessed.llmRequest.thinking,
@@ -4831,6 +4902,23 @@ export async function* runToolLoop(
       }
       const searchCallOrdinal = webSearchCallsUsed;
       const executeUntraced = async (): Promise<ToolLoopToolResult> => {
+        if (connectorPermissions.isSessionGranted?.(tc.qualifiedName)) {
+          if (!options.sessionGrantRefusal)
+            return {
+              content:
+                'This conversation permission cannot be confirmed, so the tool was not executed.',
+              isError: true,
+              unavailable: true,
+            };
+          const refusal = await options.sessionGrantRefusal(
+            tc.qualifiedName,
+            toolRiskTier(
+              tc.qualifiedName,
+              mcpTools.find((tool) => tool.qualifiedName === tc.qualifiedName)?.annotations,
+            ),
+          );
+          if (refusal) return refusal;
+        }
         const callSpend = freeTrialSpend ? scopeFreeTrialToolSpend(freeTrialSpend) : undefined;
         let searchAdmission: SearchAdmission | null = null;
         if (isWebSearchTool(tc.qualifiedName)) {
@@ -5035,7 +5123,7 @@ export async function* runToolLoop(
         }
         const rawFailText = boundedRequests
           ? inputRequiredFailSafeMessage(tc.qualifiedName)
-          : `Tool "${tc.qualifiedName}" asked for additional input, but its request exceeded the safe size limit and was not presented. The call was not completed.`;
+          : `Tool "${tc.qualifiedName}" asked for additional input, but its request was too large or was not a form or link this app can show, so it was not presented. The call was not completed.`;
         const failText = await applyToolResultSecretPolicy(
           options.userId,
           tc.qualifiedName,
@@ -6689,7 +6777,13 @@ export async function* runToolLoop(
         for (const { tc, gate } of approvalCalls) {
           approvalChunks.push(
             encoder.encode(
-              toolApprovalRequestEvent(tc.id, tc.qualifiedName, tc.args, responseModel),
+              toolApprovalRequestEvent(
+                tc.id,
+                tc.qualifiedName,
+                tc.args,
+                responseModel,
+                toolApprovalReview(tc.qualifiedName, gate),
+              ),
             ),
           );
           const category = canonicalToolCategory(tc.qualifiedName, mcpTools);
@@ -6733,9 +6827,10 @@ export async function* runToolLoop(
           completedSteps: step,
           events: approvalEvents,
           messages: messages.map((message) => ({ ...message })),
-          pendingToolCalls: approvalCalls.map(({ tc: call }) => ({
+          pendingToolCalls: approvalCalls.map(({ tc: call, gate }) => ({
             ...call,
             args: { ...call.args },
+            approvalScopes: toolApprovalReview(call.qualifiedName, gate).approval_scopes,
           })),
         });
 

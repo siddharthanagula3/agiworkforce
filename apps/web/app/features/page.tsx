@@ -11,6 +11,7 @@ import {
   ScrollFeatures,
   Section,
   Stack,
+  WEB_ENTRY_HREF,
   type ScrollFeature,
 } from '@/features/marketing/components/system';
 import { WebWindow } from '@/features/marketing/components/DeviceMockups';
@@ -183,7 +184,7 @@ export default function FeaturesPage() {
                 Conversation is the front door. This is what sits behind it.
               </h1>
               <ButtonRow>
-                <Button href="/login?redirectTo=%2F">Try AGI Web</Button>
+                <Button href={WEB_ENTRY_HREF}>Try AGI Web</Button>
                 <Button href={CLI_CTA.href} variant="secondary">
                   {CLI_CTA.label}
                 </Button>
@@ -276,7 +277,7 @@ export default function FeaturesPage() {
                     'Projects, memory, artifacts and web search from the first day',
                     'Every reply names the model that answered it',
                   ],
-                  cta: { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
+                  cta: { href: WEB_ENTRY_HREF, label: 'Try AGI Web' },
                 },
                 {
                   title: 'Bring your team',

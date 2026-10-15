@@ -134,3 +134,5 @@ export const POLICY_ROUTE_ALIASES: Readonly<Record<string, string>> = {
 export const MANAGED_CLOUD_STATUS = 'public alpha';
 
 export const PUBLIC_WEB_LAUNCH_DATE = '2026-10-08';
+
+export const UNSUBSCRIBE_SUBJECT = 'Unsubscribe';

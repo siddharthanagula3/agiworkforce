@@ -128,6 +128,7 @@ const OPERATIONAL_RECORD = [
   'connector_oauth_authorizations',
   'connector_oauth_grants',
   'connector_tool_permissions',
+  'connector_tool_session_grants',
   'consent_records',
   'credit_idempotency_keys',
   'credit_settlement_jobs',

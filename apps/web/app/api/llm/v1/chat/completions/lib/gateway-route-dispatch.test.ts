@@ -5,6 +5,7 @@ import type { GatewayRoute, ProviderAdapter } from '@agiworkforce/types';
 import {
   CHAT_SYSTEM_PROMPT_ID,
   CHAT_SYSTEM_PROMPT_PINNED_VERSION,
+  CHAT_SYSTEM_PROMPT_VERSIONS,
 } from '@/lib/prompts/chat-system-prompt';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type { SurfaceCredential } from './request-surface';
@@ -48,6 +49,7 @@ vi.mock('@/lib/services/gateway-routing', () => ({
 }));
 
 vi.mock('@/lib/services/provider-adapter-service', () => ({
+  serverProviderHasEndpointOverride: () => false,
   buildProtocolRouteAdapter: () => gatewayAdapter,
   buildServerProviderAdapter: () => gatewayAdapter,
   listAvailableManagedProviderIds: () => new Set<string>(),
@@ -159,8 +161,8 @@ describe('gateway-route dispatch', () => {
 
 /**
  * Every client reaches the same server endpoint, so the instruction it gets must
- * be the same pinned prompt version. Fixtures for all five surfaces, because a
- * surface-local prompt is exactly the drift this pins down.
+ * be the same prompt version. Only the Settings guidance may differ, and only
+ * between surfaces whose Settings differ, which is the drift this pins down.
  */
 describe('client surfaces resolve one pinned chat system prompt', () => {
   const CLIENT_FIXTURES: ReadonlyArray<{
@@ -198,6 +200,12 @@ describe('client surfaces resolve one pinned chat system prompt', () => {
 
   const NOW = new Date('2026-07-25T12:00:00.000Z');
   const TOOLS = [{ type: 'function', function: { name: 'web_search' } }];
+  const SERVABLE_VERSIONS = [
+    ...new Set([
+      CHAT_SYSTEM_PROMPT_PINNED_VERSION,
+      Math.max(...CHAT_SYSTEM_PROMPT_VERSIONS.map((entry) => entry.version)),
+    ]),
+  ];
 
   async function surfaceModules() {
     vi.resetModules();
@@ -221,20 +229,39 @@ describe('client surfaces resolve one pinned chat system prompt', () => {
     }
   });
 
-  it('serves every one of them the same prompt stamp and the same preamble text', async () => {
-    const { preamble } = await surfaceModules();
-    const stamps = new Set<string>();
-    const texts = new Set<string>();
+  it.each(SERVABLE_VERSIONS)(
+    'serves every one of them chat.system@%i under one stamp, with one text per Settings guidance',
+    async (version) => {
+      const { preamble } = await surfaceModules();
+      const promptSelection = { variants: { [CHAT_SYSTEM_PROMPT_ID]: version } };
+      const stamps = new Set<string>();
+      const textsByGuidance = new Map<string, Set<string>>();
 
-    for (const fixture of CLIENT_FIXTURES) {
-      expect(fixture.surface).not.toBe('api');
-      stamps.add(preamble.capabilityPreambleStamp());
-      texts.add(String(preamble.buildCapabilityPreamble({ tools: TOOLS, now: NOW })));
-    }
+      for (const fixture of CLIENT_FIXTURES) {
+        if (fixture.surface === 'api') throw new Error('the API surface builds no chat preamble');
+        stamps.add(preamble.capabilityPreambleStamp(promptSelection));
+        const guidance = preamble.settingsGuidanceFor(fixture.surface);
+        const texts = textsByGuidance.get(guidance) ?? new Set<string>();
+        texts.add(
+          String(
+            preamble.buildCapabilityPreamble({
+              servingModel: null,
+              surface: fixture.surface,
+              tools: TOOLS,
+              now: NOW,
+              promptSelection,
+            }),
+          ),
+        );
+        textsByGuidance.set(guidance, texts);
+      }
 
-    expect([...stamps]).toEqual([`${CHAT_SYSTEM_PROMPT_ID}@${CHAT_SYSTEM_PROMPT_PINNED_VERSION}`]);
-    expect(texts.size).toBe(1);
-  });
+      expect([...stamps]).toEqual([`${CHAT_SYSTEM_PROMPT_ID}@${version}`]);
+      for (const [guidance, texts] of textsByGuidance) {
+        expect(texts.size, `${guidance} guidance surfaces`).toBe(1);
+      }
+    },
+  );
 
   it('serves a pinned version even when a stale variant names one that was withdrawn', async () => {
     const { preamble } = await surfaceModules();

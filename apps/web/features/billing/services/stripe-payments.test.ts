@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const stripeJsMocks = vi.hoisted(() => ({
   confirmPayment: vi.fn(),
@@ -11,8 +11,12 @@ vi.mock('@stripe/stripe-js/pure', () => ({
   loadStripe: (...args: unknown[]) => stripeJsMocks.loadStripe(...args),
 }));
 
+import { finishBrowserHandoff } from '@/features/desktop-host/lib/browser-handoff';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 import {
+  UpgradeAccessRequiredError,
   fetchSavedPaymentMethods,
+  openBillingPortal,
   previewUpgrade,
   startPlanCheckout,
   startTopUpCheckout,
@@ -70,6 +74,38 @@ describe('stripe payments', () => {
       plan: 'max_15x',
       billingInterval: 'monthly',
     });
+  });
+
+  it('names a checkout refused for missing upgrade access, so the caller can offer the waitlist', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({
+        error: {
+          code: 'waitlist_access_required',
+          message:
+            'Paid upgrades are opening in stages. Join the waitlist or enter an access code to continue.',
+        },
+      }),
+    } as Response);
+
+    const refusal = upgradeToBasicPlan({ userId: 'user_1', userEmail: 'user@example.com' });
+
+    await expect(refusal).rejects.toBeInstanceOf(UpgradeAccessRequiredError);
+    await expect(refusal).rejects.toThrow('Paid upgrades are opening in stages.');
+  });
+
+  it('keeps any other checkout refusal a plain error', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ error: { code: 'forbidden', message: 'Checkout is not allowed.' } }),
+    } as Response);
+
+    const refusal = upgradeToBasicPlan({ userId: 'user_1', userEmail: 'user@example.com' });
+
+    await expect(refusal).rejects.toThrow('Checkout is not allowed.');
+    await expect(refusal).rejects.not.toBeInstanceOf(UpgradeAccessRequiredError);
   });
 
   it('sends a fresh checkout idempotency key with every plan checkout', async () => {
@@ -217,6 +253,54 @@ describe('stripe payments', () => {
       billingInterval: 'monthly',
     });
     expect(window.location.href).toBe('https://checkout.example/max-15x');
+  });
+
+  it('says the page went to checkout when it runs in a browser', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: 'https://checkout.example/pro' }),
+    } as Response);
+
+    await expect(startPlanCheckout({ plan: 'pro' })).resolves.toBe('navigated');
+  });
+
+  describe('in the desktop shell', () => {
+    const openExternal = vi.fn(async () => undefined);
+
+    beforeEach(() => {
+      openExternal.mockClear();
+      window.agiHost = hostBridgeStub({ openExternal });
+    });
+
+    afterEach(() => {
+      finishBrowserHandoff();
+      delete window.agiHost;
+    });
+
+    it('opens checkout in the browser on purpose and leaves this page where it is', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({ url: 'https://checkout.example/pro' }),
+      } as Response);
+
+      await expect(startPlanCheckout({ plan: 'pro' })).resolves.toBe('handed-off');
+
+      expect(openExternal).toHaveBeenCalledWith('https://checkout.example/pro');
+      expect(window.location.href).toBe('');
+    });
+
+    it('sends the portal and a top-up to the browser the same way', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({ url: 'https://billing.example/session' }),
+      } as Response);
+
+      await expect(openBillingPortal()).resolves.toBe('handed-off');
+      await expect(startTopUpCheckout(10)).resolves.toBe('handed-off');
+
+      expect(openExternal).toHaveBeenCalledTimes(2);
+      expect(window.location.href).toBe('');
+    });
   });
 
   it('starts a top-up checkout with only the selected whole-dollar amount', async () => {

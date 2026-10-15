@@ -4,6 +4,7 @@ import {
   explicitForgetHandler,
   explicitRememberHandler,
   parseExplicitMemoryCommand,
+  passiveMemoryText,
   type ExplicitForgetOutcome,
   type ExplicitMemoryCommand,
   type ExplicitMemoryPorts,
@@ -39,10 +40,23 @@ const LABELLED_MEMORY_COMMAND_SURFACES: ReadonlySet<CloudChatSurface> = new Set<
   'mobile',
   'desktop',
   'chrome',
+  'vscode',
+  'cli',
 ]);
 
 export function memoryCommandSource(surface: CloudChatSurface | null): string {
   return surface && LABELLED_MEMORY_COMMAND_SURFACES.has(surface) ? surface : MEMORY_COMMAND_SOURCE;
+}
+
+export function memoryLearningText(
+  message: string,
+  surface: CloudChatSurface,
+  memoryCommand: { kind: MemoryCommandKind } | undefined,
+): string {
+  return passiveMemoryText(
+    message,
+    MEMORY_COMMAND_CLIENT_SURFACES.has(surface) || memoryCommand?.kind === 'remember',
+  );
 }
 
 /** A search that matched everything would offer to delete everything. */
@@ -57,6 +71,7 @@ export interface MemoryCommandScope {
   /** A temporary chat may still forget; it may never teach Memory anything. */
   temporaryChat?: boolean;
   source?: string;
+  userRequested?: boolean;
 }
 
 const MEMORY_OFF_REASONS: ReadonlySet<MemoryIneligibilityReason> = new Set([
@@ -111,6 +126,7 @@ export function createMemoryCommandPorts(
         organizationId: scope.organizationId,
         projectId: scope.projectId ?? null,
         temporaryChat: scope.temporaryChat === true,
+        userRequested: scope.userRequested === true,
       });
       if (decision.eligible) return { eligible: true };
       return {
@@ -129,6 +145,7 @@ export function createMemoryCommandPorts(
           source: scope.source ?? MEMORY_COMMAND_SOURCE,
           organizationId: scope.organizationId,
           projectId: scope.projectId ?? null,
+          userRequested: scope.userRequested === true,
         });
         if (!row) return { stored: false, alreadyKnown: false };
         return { stored: row.outcome === 'inserted', alreadyKnown: row.outcome === 'merged' };
@@ -204,7 +221,7 @@ export async function runMemoryCommand(
   const command = parseExplicitMemoryCommand(input.message);
   if (!command) return null;
 
-  const ports = createMemoryCommandPorts(db, scope);
+  const ports = createMemoryCommandPorts(db, { ...scope, userRequested: true });
   if (command.kind === 'remember') {
     const outcome = await explicitRememberHandler(command, ports);
     logger.info(

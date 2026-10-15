@@ -4,9 +4,13 @@ import { useSession } from '@/lib/identity/client';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Button, ButtonRow, Eyebrow, Prose, Stack } from '@/features/marketing/components/system';
+import {
+  CREATE_ACCOUNT_LABEL,
+  webEntryHref,
+  webSignInHref,
+} from '@/features/marketing/components/system/nav';
 
 const RETURN_PATH = '/auth/chrome-extension';
-const SIGN_IN_PATH = `/login?redirectTo=${encodeURIComponent(RETURN_PATH)}`;
 
 export default function ChromeExtensionAuthCompletePage() {
   const { isLoaded, isSignedIn } = useSession();
@@ -56,7 +60,10 @@ export default function ChromeExtensionAuthCompletePage() {
                   with the extension.
                 </p>
                 <ButtonRow>
-                  <Button href={SIGN_IN_PATH}>Sign in to AGI Cloud</Button>
+                  <Button href={webSignInHref(RETURN_PATH)}>Sign in to AGI Cloud</Button>
+                  <Button href={webEntryHref(RETURN_PATH)} variant="secondary">
+                    {CREATE_ACCOUNT_LABEL}
+                  </Button>
                 </ButtonRow>
               </Stack>
             )}

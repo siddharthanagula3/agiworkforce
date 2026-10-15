@@ -4,6 +4,11 @@ import type { ReactNode } from 'react';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { PageHero, type PageCta } from '@/features/marketing/components/pages/surfaces/shared';
+import {
+  CREATE_ACCOUNT_LABEL,
+  webEntryHref,
+  webSignInHref,
+} from '@/features/marketing/components/system/nav';
 
 export interface SignedOutSurfaceProps {
   /** Small label above the heading, e.g. "Skills". */
@@ -11,8 +16,7 @@ export interface SignedOutSurfaceProps {
   heading: string;
   /** One paragraph saying what the surface is and why it needs an account. */
   children: ReactNode;
-  /** Where to send the visitor to sign in, already encoded. */
-  signInHref: string;
+  redirectTo: string;
   signInLabel: string;
   secondary?: { href: string; label: string };
   after?: ReactNode;
@@ -30,12 +34,15 @@ export function SignedOutSurface({
   eyebrow,
   heading,
   children,
-  signInHref,
+  redirectTo,
   signInLabel,
   secondary,
   after,
 }: SignedOutSurfaceProps) {
-  const ctas: PageCta[] = [{ href: signInHref, label: signInLabel }];
+  const ctas: PageCta[] = [
+    { href: webSignInHref(redirectTo), label: signInLabel },
+    { href: webEntryHref(redirectTo), label: CREATE_ACCOUNT_LABEL, variant: 'secondary' },
+  ];
   if (secondary) {
     ctas.push({ href: secondary.href, label: secondary.label, variant: 'secondary' });
   }

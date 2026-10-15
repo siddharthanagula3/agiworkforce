@@ -7,6 +7,7 @@ vi.mock('@agiworkforce/types', async (importOriginal) => ({
 type ScanModule0 = typeof import('@/lib/connectors/oauth-store');
 type ScanModule1 = typeof import('@/lib/connectors/mcp-directory-targets');
 type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
+type McpRuntimeCacheModule = typeof import('@/lib/connectors/mcp-runtime-cache');
 
 vi.mock('server-only', () => ({}));
 
@@ -81,7 +82,8 @@ vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
   withLockedConnectorOAuthGrant: vi.fn(),
 }));
 
-vi.mock('@/lib/connectors/mcp-runtime-cache', () => ({
+vi.mock('@/lib/connectors/mcp-runtime-cache', async (importOriginal) => ({
+  ...(await importOriginal<McpRuntimeCacheModule>()),
   getMcpStatelessRuntime: vi.fn(async () => ({})),
   mcpAuthorizationContext: {
     userOauthConnector: (userId: string, connectorId: string) =>

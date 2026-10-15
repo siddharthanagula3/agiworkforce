@@ -53,6 +53,7 @@ import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useManagedCloudProjects, useProjectStore } from '@/features/projects';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
+import { ProductNoticeHost } from '@shared/components/ProductNoticeHost';
 import { SidebarBrandRow } from '@shared/components/layout/SidebarBrandRow';
 import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
 import { useShellLayout } from '@shared/components/layout/app-shell-layout';
@@ -640,6 +641,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   // content out from under it.
   return (
     <div className="fixed inset-x-0 top-0 bottom-[var(--agi-consent-inset,0px)] flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]">
+      <ProductNoticeHost />
       {/* Destructive-action confirm (delete conversation / delete project). */}
       {destructiveConfirmDialog}
       {upgradeDialogs}

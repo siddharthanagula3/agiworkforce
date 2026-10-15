@@ -19,6 +19,11 @@ import {
 import { pseudonymizeEmail as hashEmail } from '@/lib/server/email-pseudonym';
 import { BillingIntervalSchema, unsoldBillingIntervalMessage } from '@/lib/validations/checkout';
 import { hasBillingWaitlistAccess } from '@/lib/server/billing-waitlist-access';
+import {
+  readProfileEmail,
+  isBillingNoticeEmailConfigured,
+} from '@/lib/services/billing-notice-service';
+import type { UpgradeWaitlistStatus } from '@/lib/validations/upgrade-waitlist';
 
 type WaitlistPlan = SelfServePaidPlanTier;
 
@@ -48,7 +53,16 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     logger.error({ error, userId }, 'Failed to read paid upgrade access; reporting the gate as on');
   }
 
-  return NextResponse.json({ joinedPlans, upgradeGateEnabled: !upgradeAllowed });
+  const noticeEmail = isBillingNoticeEmailConfigured()
+    ? await readProfileEmail(ownRows, userId)
+    : null;
+  const status: UpgradeWaitlistStatus = {
+    joinedPlans,
+    upgradeGateEnabled: !upgradeAllowed,
+    accessGranted: upgradeAllowed,
+    noticeEmail,
+  };
+  return NextResponse.json(status);
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {

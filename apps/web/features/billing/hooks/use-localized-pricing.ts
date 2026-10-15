@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import {
-  LOCALIZED_PRICING_PATH,
-  localizedPricingCatalogSchema,
   type LocalizedPricingCatalog,
   type LocalizedPricingStatus,
 } from '@features/billing/lib/localized-pricing';
+import { readLocalizedPricing } from '../services/localized-pricing';
 
 export interface LocalizedPricingState {
   localizedPricing: LocalizedPricingCatalog | null;
@@ -23,15 +22,9 @@ export function useLocalizedPricing(enabled = true): LocalizedPricingState {
   useEffect(() => {
     if (!enabled) return;
     const controller = new AbortController();
-    void fetch(LOCALIZED_PRICING_PATH, { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('Localized pricing is unavailable');
-        return response.json();
-      })
-      .then((value: unknown) => {
-        const parsed = localizedPricingCatalogSchema.safeParse(value);
-        if (!parsed.success) throw new Error('Localized pricing response is invalid');
-        setLocalizedPricing(parsed.data);
+    void readLocalizedPricing(controller.signal)
+      .then((catalog) => {
+        setLocalizedPricing(catalog);
         setPricingStatus('ready');
       })
       .catch((error: unknown) => {

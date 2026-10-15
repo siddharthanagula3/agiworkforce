@@ -136,6 +136,23 @@ describe('InlinePaywallCard · free limit variant', () => {
     expect(props.onUpgrade).toHaveBeenCalledOnce();
   });
 
+  it('offers the switch to Free Auto when the daily chat share is used', () => {
+    const props = makeProps(
+      {
+        reason: 'daily_limit_reached',
+        alternativeModel: { id: 'fixture-free-auto', name: 'Free Auto' },
+      },
+      'Resets in 3 hr',
+    );
+    render(<InlinePaywallCard {...props} />);
+
+    expect(screen.getByRole('heading')).toHaveTextContent("Today's free limit reached");
+    expect(screen.getByText('Resets in 3 hr')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to Free Auto' }));
+
+    expect(props.freeLimit.onSwitchModel).toHaveBeenCalledWith('fixture-free-auto');
+  });
+
   it('still renders a saved card whose reason this build does not know', () => {
     const reason = 'account_window_used' as FreeLimitRecovery['reason'];
     render(<InlinePaywallCard {...makeProps({ reason })} />);

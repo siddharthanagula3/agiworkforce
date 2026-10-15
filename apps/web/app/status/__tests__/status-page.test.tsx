@@ -20,7 +20,7 @@ vi.mock('@/lib/server/slo/attainment', async (importOriginal) => ({
 
 import StatusPage, { dynamic, metadata } from '../page';
 import { STALE_AFTER_SECONDS } from '../signal-view';
-import type { HealthCheckResult } from '@/lib/server/health-check';
+import { NOT_CONFIGURED, type HealthCheckResult } from '@/lib/server/health-check';
 import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
 import { STATUS_MIRROR_URL_ENV } from '@/lib/server/incident/out-of-band';
 import { contactMailto } from '@/lib/legal-constants';
@@ -43,6 +43,8 @@ const CHECK_LABELS = [
   'Voice routing',
   'Search',
   'Semantic search',
+  'Sign-in',
+  'Account email',
 ];
 
 function passing(): HealthCheckResult {
@@ -60,6 +62,8 @@ function passing(): HealthCheckResult {
       search: ok,
       vector: ok,
       cache: ok,
+      email: ok,
+      identity: ok,
     },
   };
 }
@@ -153,6 +157,8 @@ describe('/status', () => {
       'Work',
       'Voice routing',
       'Search',
+      'Account email',
+      'Sign-in',
     ]) {
       expect(rowValue(signal, label)).toContain('Passing');
     }
@@ -160,6 +166,7 @@ describe('/status', () => {
     expect(screen.getByText(/model inference and a user chat turn were not tested/i)).toBeVisible();
     expect(signal).not.toHaveTextContent('Operational');
     expect(summary()).not.toHaveTextContent('Operational');
+    expect(document.body).not.toHaveTextContent('Authentication (Clerk)');
   });
 
   it('prints the time the run happened once, in the summary, not on every row', async () => {
@@ -223,6 +230,19 @@ describe('/status', () => {
     expect(summary()).toHaveTextContent('Failing: Semantic search.');
     expect(rowValue(signal, 'Semantic search')).toContain('Failing (embedding index missing)');
     expect(rowValue(signal, 'Search')).toContain('Passing');
+  });
+
+  it('shows an optional sender that is not set up as configuration, not as a failing check', async () => {
+    const unconfigured = passing();
+    unconfigured.checks.email = { status: 'healthy', message: NOT_CONFIGURED };
+    healthChecks.mockResolvedValue(unconfigured);
+
+    const signal = await renderStatus();
+
+    expect(rowValue(signal, 'Account email')).toContain('Not configured');
+    expect(rowValue(signal, 'Account email')).not.toContain('Passing');
+    expect(stateSentence()).toBe('Checks passing');
+    expect(summary()).toHaveTextContent('Failing: none.');
   });
 
   it('says the check could not run, and shows no component rows, when the health run throws', async () => {

@@ -17,6 +17,7 @@ import {
 import { ArtifactConnectorConsent } from './ArtifactConnectorConsent';
 import { usePublishedArtifactRuntime } from './usePublishedArtifactRuntime';
 import { copySharedArtifactToChat } from '@/features/chat/lib/copy-shared-artifact';
+import { webEntryHref, webSignInHref } from '@/features/marketing/components/system/nav';
 import { toUserMessage } from '@/lib/user-error-message';
 
 /**
@@ -86,6 +87,7 @@ export function PublishedArtifactView({
 
   const publishedLabel = formatDate(publishedAt);
   const heading = title || t('artifactPublish.untitled', 'Published artifact');
+  const returnPath = token ? `/shared-artifact/${token}` : '/chat';
 
   const saveCopy = async () => {
     setCopying(true);
@@ -93,8 +95,7 @@ export function PublishedArtifactView({
     try {
       const result = await copySharedArtifactToChat({ title: heading, kind, language, content });
       if (result.kind === 'sign-in') {
-        const returnTo = token ? `/shared-artifact/${token}` : '/chat';
-        router.push(`/login?redirectTo=${encodeURIComponent(returnTo)}`);
+        router.push(webEntryHref(returnPath));
         return;
       }
       router.push(`/chat/${encodeURIComponent(result.conversationId)}`);
@@ -168,10 +169,18 @@ export function PublishedArtifactView({
           className="flex flex-wrap items-center gap-3 rounded-lg border border-border/40 bg-muted/40 px-4 py-3 text-sm text-foreground"
         >
           <p className="min-w-0 flex-1">
-            {t('artifactPublish.runtimeSignIn', "Sign in to use this app's AI and saved data.")}
+            {t(
+              'artifactPublish.runtimeSignIn',
+              "Create an account or sign in to use this app's AI and saved data.",
+            )}
           </p>
           <Button asChild size="sm">
-            <a href={`/login?redirectTo=${encodeURIComponent(`/shared-artifact/${token}`)}`}>
+            <a href={webEntryHref(returnPath)}>
+              {t('artifactPublish.runtimeSignUpAction', 'Create an account')}
+            </a>
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <a href={webSignInHref(returnPath)}>
               {t('artifactPublish.runtimeSignInAction', 'Sign in')}
             </a>
           </Button>

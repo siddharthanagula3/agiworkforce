@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { Stripe } from '@/lib/stripe-types';
 import {
   getDefaultModelFor,
   getModelMetadataById,
@@ -21,11 +22,14 @@ import {
   type FailureKind,
 } from '@/lib/observability/metrics';
 import { dependencySignal } from '@/lib/observability/signal-coverage';
+import { getIdentityProvider, type WebIdentityProvider } from '@/lib/server/identity';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { logger } from '@/lib/logger';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import { getConfiguredStripePriceIds, isGrandfatheredPriceId } from '@/lib/price-tier-mapping';
+import { getPricePointForPriceId } from '@/lib/pricing';
+import { isNotificationEmailConfigured } from '@/lib/services/notification-email-service';
 import { listAvailableManagedProviderIds } from '@/lib/services/provider-adapter-service';
 import { getProviderAvailabilityMap } from '@/lib/services/provider-availability-service';
 import { readJobQueueStats } from '@/lib/jobs/job-service';
@@ -37,6 +41,8 @@ import {
 } from '@/lib/server/render-cache';
 
 const HEALTH_PROBE_ERROR_TYPE = 'health_probe';
+
+export const NOT_CONFIGURED = 'not configured';
 
 export interface CapabilityCheck {
   status: 'healthy' | 'unhealthy';
@@ -76,6 +82,7 @@ export interface HealthCheckResult {
     stripe: {
       status: 'healthy' | 'unhealthy';
       message?: string;
+      blocksBilling?: boolean;
     };
     environment: {
       status: 'healthy' | 'unhealthy';
@@ -89,6 +96,8 @@ export interface HealthCheckResult {
     search: CapabilityCheck;
     vector: CapabilityCheck;
     cache: CapabilityCheck;
+    email: CapabilityCheck;
+    identity: CapabilityCheck;
   };
   /**
    * One entry per PRODUCTION_DEPENDENCIES member, in registry order. Absent
@@ -117,6 +126,9 @@ const CACHE_PROBE_KEY = 'health:probe';
  * second is not serving a request either.
  */
 const CACHE_PROBE_TIMEOUT_MS = 1_000;
+
+const IDENTITY_PROBE_TIMEOUT_MS = 2_000;
+const IDENTITY_PROBE_ATTEMPTS = 2;
 
 function unhealthy(message: string): CapabilityCheck {
   return { status: 'unhealthy', message };
@@ -147,6 +159,12 @@ async function checkRoutedCapability(kind: DefaultModelKind): Promise<Capability
     logger.error({ error, kind }, 'Capability health check failed');
     return unhealthy('unavailable');
   }
+}
+
+function checkAccountEmail(): CapabilityCheck {
+  return isNotificationEmailConfigured()
+    ? { status: 'healthy' }
+    : { status: 'healthy', message: NOT_CONFIGURED };
 }
 
 async function checkWorkQueues(): Promise<CapabilityCheck> {
@@ -241,12 +259,97 @@ async function checkCache(): Promise<CapabilityCheck> {
     const store = getKeyValueStore();
     // Nothing to probe: a missing store is the environment check's finding in
     // production, and a dev or CI runtime without one is not an outage.
-    if (!store) return { status: 'healthy', message: 'not configured' };
+    if (!store) return { status: 'healthy', message: NOT_CONFIGURED };
     await withProbeTimeout(store.get<string>(CACHE_PROBE_KEY), CACHE_PROBE_TIMEOUT_MS);
     return { status: 'healthy' };
   } catch (error) {
     logger.error({ error }, 'Cache health check failed');
     return unhealthy('unavailable');
+  }
+}
+
+async function reachIdentity(identity: WebIdentityProvider): Promise<void> {
+  let missed: unknown;
+  for (let attempt = 1; attempt <= IDENTITY_PROBE_ATTEMPTS; attempt += 1) {
+    try {
+      await withProbeTimeout(identity.checkReachable(), IDENTITY_PROBE_TIMEOUT_MS);
+      return;
+    } catch (error) {
+      missed = error;
+      if (attempt < IDENTITY_PROBE_ATTEMPTS) {
+        logger.warn({ error, attempt }, 'Identity health probe missed; probing once more');
+      }
+    }
+  }
+  throw missed;
+}
+
+async function checkIdentity(): Promise<CapabilityCheck> {
+  try {
+    const identity = getIdentityProvider();
+    if (!identity.canVerifySessionTokens()) return { status: 'healthy', message: NOT_CONFIGURED };
+    await reachIdentity(identity);
+    return { status: 'healthy' };
+  } catch (error) {
+    logger.error({ error }, 'Identity health check failed');
+    return unhealthy('unavailable');
+  }
+}
+
+function isSellableRecurringPrice(price: Stripe.Price | null, priceId: string): boolean {
+  return (
+    price !== null &&
+    (price.active || isGrandfatheredPriceId(priceId)) &&
+    price.type === 'recurring' &&
+    Boolean(price.recurring)
+  );
+}
+
+async function checkStripe(): Promise<HealthCheckResult['checks']['stripe']> {
+  let step = 'client';
+  try {
+    const stripe = getStripeClientOrNull();
+    if (!stripe) {
+      logger.error({ step }, 'Stripe health check failed');
+      return { status: 'unhealthy', message: 'unavailable' };
+    }
+    step = 'products.list';
+    await stripe.products.list({ limit: 1 });
+    step = 'prices.retrieve';
+    const configuredPriceIds = getConfiguredStripePriceIds();
+    const retrievals = await Promise.allSettled(
+      configuredPriceIds.map((priceId) => stripe.prices.retrieve(priceId)),
+    );
+    const retrievalFailure = retrievals.find(
+      (retrieval): retrieval is PromiseRejectedResult => retrieval.status === 'rejected',
+    );
+    if (!retrievalFailure) step = 'price.usable';
+    const unusablePriceIds = configuredPriceIds.filter((priceId, index) => {
+      const retrieval = retrievals[index];
+      const price = retrieval?.status === 'fulfilled' ? retrieval.value : null;
+      return !isSellableRecurringPrice(price, priceId);
+    });
+    if (unusablePriceIds.length === 0) return { status: 'healthy' };
+    const unusableOnSale = unusablePriceIds.filter(
+      (priceId) => getPricePointForPriceId(priceId) !== null,
+    );
+    logger.error(
+      {
+        step,
+        ...(retrievalFailure ? { error: retrievalFailure.reason } : {}),
+        unusablePriceIds,
+        unusableOnSaleCount: unusableOnSale.length,
+      },
+      'Stripe health check failed',
+    );
+    return {
+      status: 'unhealthy',
+      message: 'unavailable',
+      blocksBilling: unusableOnSale.length > 0,
+    };
+  } catch (error) {
+    logger.error({ error, step }, 'Stripe health check failed');
+    return { status: 'unhealthy', message: 'unavailable', blocksBilling: true };
   }
 }
 
@@ -262,6 +365,7 @@ export const DEPENDENCY_LIVE_CHECKS: Readonly<
 > = {
   database: ['database'],
   key_value: ['cache'],
+  identity: ['identity'],
   billing: ['stripe'],
   context_engine: ['search', 'vector'],
   model_providers: ['chat'],
@@ -313,6 +417,8 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
     search: { status: 'unhealthy' },
     vector: { status: 'unhealthy' },
     cache: { status: 'unhealthy' },
+    email: { status: 'unhealthy' },
+    identity: { status: 'unhealthy' },
   };
 
   const readiness = resolveDependencyReadiness();
@@ -351,54 +457,19 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
   checks.vector = retrieval.vector;
   checks.cache = await checkCache();
 
-  let stripeStep = 'client';
-  try {
-    const stripe = getStripeClientOrNull();
+  checks.stripe = await checkStripe();
 
-    if (stripe) {
-      stripeStep = 'products.list';
-      await stripe.products.list({ limit: 1 });
-
-      stripeStep = 'prices.retrieve';
-      const configuredPriceIds = getConfiguredStripePriceIds();
-      const configuredPrices = await Promise.all(
-        configuredPriceIds.map(async (priceId) => ({
-          priceId,
-          price: await stripe.prices.retrieve(priceId),
-        })),
-      );
-      stripeStep = 'price.usable';
-      const unusablePriceCount = configuredPrices.filter(
-        ({ priceId, price }) =>
-          price.type !== 'recurring' ||
-          !price.recurring ||
-          (!price.active && !isGrandfatheredPriceId(priceId)),
-      ).length;
-      if (unusablePriceCount > 0) {
-        throw new Error(
-          `${unusablePriceCount} configured Stripe Price(s) are not usable recurring Prices`,
-        );
-      }
-
-      checks.stripe.status = 'healthy';
-    } else {
-      checks.stripe.message = 'unavailable';
-      logger.error({ step: stripeStep }, 'Stripe health check failed');
-    }
-  } catch (error) {
-    checks.stripe.status = 'unhealthy';
-    checks.stripe.message = 'unavailable';
-    logger.error({ error, step: stripeStep }, 'Stripe health check failed');
-  }
-
-  const [chat, work, voice] = await Promise.all([
+  const [chat, work, voice, identity] = await Promise.all([
     checkRoutedCapability('chat'),
     checkWorkQueues(),
     checkRoutedCapability('voice'),
+    checkIdentity(),
   ]);
   checks.chat = chat;
   checks.work = work;
   checks.voice = voice;
+  checks.identity = identity;
+  checks.email = checkAccountEmail();
 
   // The cache sits with the database rather than with the degradable checks
   // because the product's own answer to losing it is to fail closed: rate
@@ -410,9 +481,15 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
     checks.environment.status === 'healthy' &&
     checks.cache.status === 'healthy';
 
-  const nonCoreHealthy = [checks.stripe, chat, work, voice, checks.search, checks.vector].every(
-    (check) => check.status === 'healthy',
-  );
+  const nonCoreHealthy = [
+    checks.stripe,
+    chat,
+    work,
+    voice,
+    checks.search,
+    checks.vector,
+    identity,
+  ].every((check) => check.status === 'healthy');
 
   const status: HealthCheckResult['status'] = !coreHealthy
     ? 'unhealthy'

@@ -34,6 +34,7 @@ import { SaveStatusLine } from '../components/SaveStatusLine';
 import { UsOnlyRoutingPanel } from '../components/UsOnlyRoutingPanel';
 import { ProductAnalyticsConsentRow } from '../components/ProductAnalyticsConsentRow';
 import { MarketingEmailConsentRow } from '../components/MarketingEmailConsentRow';
+import { NamedProviderConsentRows } from '../components/NamedProviderConsentRows';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 import { BYOK_SURFACES } from '@/lib/marketing-constants';
 
@@ -614,6 +615,7 @@ export function PrivacySection() {
         ))}
         <ProductAnalyticsConsentRow />
         <MarketingEmailConsentRow />
+        <NamedProviderConsentRows />
       </div>
 
       <UsOnlyRoutingPanel />

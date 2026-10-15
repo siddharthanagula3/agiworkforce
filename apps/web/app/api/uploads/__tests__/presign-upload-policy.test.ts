@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const {
@@ -107,7 +107,46 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => vi.unstubAllEnvs());
+
 describe('POST /api/uploads/presign · type policy', () => {
+  it.each(['development', 'production'])(
+    'routes authenticated Chrome extension uploads through the existing proxy in %s',
+    async (environment) => {
+      vi.stubEnv('VERCEL_ENV', environment);
+      const origin =
+        environment === 'production' ? 'https://agiworkforce.com' : 'http://localhost:3000';
+      const request = presignRequest(
+        { kind: 'chat-attachment', fileName: 'fixture.txt', mimeType: 'text/plain', byteCount: 73 },
+        origin,
+      );
+      request.headers.set('Origin', 'chrome-extension://ldfbegeiejcnnmfjlapffgoolhfkamjk');
+      const response = await POST(request);
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body.uploadUrl).toMatch(
+        new RegExp(
+          `^${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/api/uploads/chat-attachment/put\\?key=`,
+        ),
+      );
+      expect(mockGetPresignedPrivateUploadUrl).not.toHaveBeenCalled();
+      expect(mockGetClerkAuthUser).toHaveBeenCalled();
+    },
+  );
+
+  it('preserves direct storage for ordinary web origins in production', async () => {
+    vi.stubEnv('VERCEL_ENV', 'production');
+    const request = presignRequest(
+      { kind: 'chat-attachment', fileName: 'fixture.txt', mimeType: 'text/plain', byteCount: 73 },
+      'https://agiworkforce.com',
+    );
+    request.headers.set('Origin', 'https://agiworkforce.com');
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+    expect((await response.json()).uploadUrl).toBe('https://r2.test/private-signed');
+    expect(mockGetPresignedPrivateUploadUrl).toHaveBeenCalledOnce();
+  });
+
   it.each(ALL_KINDS)('refuses to sign an SVG upload for kind=%s', async (kind) => {
     const response = await POST(
       presignRequest({

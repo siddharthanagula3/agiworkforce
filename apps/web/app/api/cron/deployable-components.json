@@ -390,6 +390,24 @@
       ]
     },
     {
+      "name": "notify-upgrade-waitlist",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; an account is recorded as told only once its email is handed to the provider, so an account the run did not reach, or whose email failed, is picked up on the next tick.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-02",
+          "change": "Added: emails each upgrade waitlist account once when paid upgrades open."
+        }
+      ]
+    },
+    {
       "name": "page-security-anomalies",
       "role": "observability",
       "version": "1.0.0",

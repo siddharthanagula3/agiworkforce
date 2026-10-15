@@ -12,6 +12,19 @@ function processed(autoMemoryFacts: string[]): ProcessedRequest {
 }
 
 describe('recordManagedAutoMemoryTurn', () => {
+  it('does not learn or persist derived Gmail facts', async () => {
+    const query = vi.fn();
+    const request = processed(['gmail-sentinel']);
+    request.googleUserData = true;
+    await recordManagedAutoMemoryTurn({
+      db: { query },
+      userId: 'user-1',
+      processed: request,
+      outcome: 'completed',
+    });
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it('persists prepared facts only for a completed turn', async () => {
     const query = asQuery(
       vi.fn(

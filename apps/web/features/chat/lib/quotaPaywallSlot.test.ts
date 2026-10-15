@@ -306,6 +306,42 @@ describe('resolveQuotaPaywallSlot · a reached daily free limit', () => {
     expect(video?.showResetTime).toBe(true);
   });
 
+  it('offers Free Auto, the reset and the next plan when the daily chat share is used', () => {
+    const chatOffering = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.provider === 'qwen' && offering.quotaProbeProtocol === 'chat',
+    )![0];
+    const freeAuto = getDefaultModelFor(normalizeBillingPlanTier(null), 'chat');
+    const chatMessage = "You have used today's free chat share.";
+
+    const slot = resolveQuotaPaywallSlot({
+      code: 'free_quota_daily_limit',
+      message: chatMessage,
+      planTier: 'free',
+      subscriptionSource: null,
+      freeLimit: {
+        model: chatOffering,
+        reason: 'daily_limit_reached',
+        resets_at: resetsAt,
+        alternative_model: freeAuto,
+      },
+    });
+
+    expect(slot).toMatchObject({
+      reason: chatMessage,
+      showUpgradeCta: true,
+      requiredTier: SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER[0],
+      showResetTime: true,
+      resetAt: resetsAt,
+      suggestStandardModel: false,
+      freeLimit: {
+        modelId: chatOffering,
+        reason: 'daily_limit_reached',
+        alternativeModel: { id: freeAuto, name: getModelMetadataById(freeAuto)!.name },
+      },
+    });
+    expect(isAccountWideUsageBlock(slot!)).toBe(false);
+  });
+
   it('still builds the card from the code alone when the typed limit is missing', () => {
     const slot = resolveQuotaPaywallSlot({
       code: 'free_quota_daily_limit',

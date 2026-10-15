@@ -37,6 +37,12 @@ vi.mock('@/lib/services/provider-availability-service', () => ({
   getProviderAvailabilityMap: mocks.getProviderAvailabilityMap,
 }));
 vi.mock('@/lib/jobs/job-service', () => ({ readJobQueueStats: mocks.readJobQueueStats }));
+vi.mock('@/lib/server/identity', () => ({
+  getIdentityProvider: () => ({
+    canVerifySessionTokens: () => Boolean(process.env['CLERK_SECRET_KEY']),
+    checkReachable: async () => undefined,
+  }),
+}));
 
 import { createMemoryKeyValueStore } from '@agiworkforce/key-value';
 

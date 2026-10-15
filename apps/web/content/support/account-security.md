@@ -4,7 +4,7 @@ title: Passkeys, two-factor and active sessions
 path: /security
 category: account
 tags: passkey, two factor, 2fa, mfa, totp, authenticator, backup codes, recovery codes, advanced account security, security key, recovery key, change password, forgot password, sessions, log out all devices, revoke session, api keys
-updated: 2026-10-12
+updated: 2026-10-15
 scope: public
 ---
 
@@ -75,9 +75,10 @@ The same page changes your password. Changing it requires your current password,
 and a code from your authenticator app as well when two-factor authentication is
 on. An account that signs in without a password can add one after confirming it
 is you. Every other device signed in to the account is signed out when the
-password changes. A password that fails the common-password check is refused
-with "That password is too common." A forgotten password is reset from the
-sign-in screen with **Forgot password?**.
+password changes. A new password the identity provider refuses, such as one
+found in a data breach, is refused with the reason it gives, and the current
+password keeps working. A forgotten password is reset from the sign-in screen
+with **Forgot password?**.
 
 ## Email address
 

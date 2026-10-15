@@ -3,6 +3,7 @@ import { render } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import { GREETING_TIME_BANDS } from '@agiworkforce/utils/greeting';
 import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 import { APP_NAV_DESTINATIONS } from '@/shared/components/layout/app-nav-items';
 import {
@@ -159,6 +160,20 @@ describe('cloud-only surfaces never show a Local or own-key route', () => {
   it.each(cloudSurfaces)('%s contains no Local, BYOK or own-key wording', (_name, make) => {
     const text = render(make()).container.textContent ?? '';
     expect(text).not.toMatch(/\bLocal\b|BYOK|Your key|Ollama/u);
+  });
+
+  it.each([
+    ['web', () => <WebWindow view="new-chat" />],
+    ['desktop', () => <DesktopWindow view="new-chat" />],
+  ])('the %s new chat view draws the real greeting over the composer and no thread', (_k, make) => {
+    const root = render(make()).container;
+    const main = root.querySelector('.agi-app-main[data-view="new-chat"]');
+    expect(main?.querySelector('.agi-app-greeting')?.textContent).toBe(
+      GREETING_TIME_BANDS.afternoon.variants[0],
+    );
+    expect(main?.querySelector('.agi-app-composer .agi-app-model')?.textContent).toContain('Auto');
+    expect(main?.querySelector('.agi-app-thread')).toBeNull();
+    expect(root.querySelector('.agi-app-session[data-active]')).toBeNull();
   });
 
   it('the Local and Cloud switch is drawn only when a caller asks for it', () => {

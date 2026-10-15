@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { longestTrailingTagPrefix } from './trailing-tag-prefix';
+import { longestTrailingTagPrefix } from '@agiworkforce/provider-protocol/thinking-tag-splitter';
 
 const TAG = '<thinking>';
 

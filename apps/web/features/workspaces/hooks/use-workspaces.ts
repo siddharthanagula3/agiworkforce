@@ -1,7 +1,11 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
-import { PERSONAL_WORKSPACE_SELECTOR, type WorkspaceSummary } from '@agiworkforce/types';
+import { PERSONAL_WORKSPACE_SELECTOR } from '@agiworkforce/types';
+import {
+  MANAGED_CLOUD_WORKSPACES_PATH,
+  type ManagedCloudAccountWorkspaces,
+} from '@agiworkforce/cloud-contracts';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -9,12 +13,7 @@ import { finalizeWorkspaceSwitch } from '@/features/workspaces/lib/workspace-cac
 
 export const WORKSPACES_QUERY_KEY = ['workspaces'] as const;
 
-export interface AccountWorkspaces {
-  workspaces: WorkspaceSummary[];
-  activeWorkspaceId: string | null;
-  activeOrganizationId: string | null;
-  scope: 'personal' | 'organization';
-}
+export type AccountWorkspaces = ManagedCloudAccountWorkspaces;
 
 async function readApiError(res: Response, fallback: string): Promise<Error> {
   let raw = '';
@@ -58,7 +57,7 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
 export function useAccountWorkspaces(): UseQueryResult<AccountWorkspaces, Error> {
   return useQuery({
     queryKey: WORKSPACES_QUERY_KEY,
-    queryFn: () => requestJson<AccountWorkspaces>('/api/settings/workspaces'),
+    queryFn: () => requestJson<AccountWorkspaces>(MANAGED_CLOUD_WORKSPACES_PATH),
     staleTime: 60 * 1000,
     meta: { errorMessage: 'Failed to load workspaces' },
   });
@@ -68,7 +67,7 @@ export function useSelectWorkspace() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (workspaceId: string | null) =>
-      requestJson<{ activeOrganizationId: string | null }>('/api/settings/workspaces', {
+      requestJson<{ activeOrganizationId: string | null }>(MANAGED_CLOUD_WORKSPACES_PATH, {
         method: 'PUT',
         body: JSON.stringify({ workspaceId: workspaceId ?? PERSONAL_WORKSPACE_SELECTOR }),
       }),

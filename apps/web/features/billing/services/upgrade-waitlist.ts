@@ -1,5 +1,13 @@
 import type { BillingInterval, SelfServePaidPlanTier } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { httpStatusMessage } from '@/lib/user-error-message';
+import { TimeoutPresets } from '@shared/lib/error-utils';
+import {
+  UpgradeWaitlistStatusSchema,
+  type UpgradeWaitlistStatus,
+} from '@/lib/validations/upgrade-waitlist';
+
+export type { UpgradeWaitlistStatus };
 
 export interface UpgradeWaitlistRequest {
   plan: SelfServePaidPlanTier;
@@ -7,6 +15,10 @@ export interface UpgradeWaitlistRequest {
   seats?: number;
   premiumSeats?: number;
 }
+
+const STATUS_UNAVAILABLE_MESSAGE = 'Upgrade access could not be checked.';
+const JOIN_FAILED_MESSAGE = 'Could not join the waitlist.';
+const REQUEST_TIMEOUT_STATUS = 408;
 
 function apiErrorMessage(body: unknown, fallback: string): string {
   if (!body || typeof body !== 'object') return fallback;
@@ -17,19 +29,22 @@ function apiErrorMessage(body: unknown, fallback: string): string {
   return typeof message === 'string' && message ? message : fallback;
 }
 
-export async function isUpgradeWaitlistRequired(): Promise<boolean> {
-  try {
-    const response = await fetch('/api/waitlist', { cache: 'no-store' });
-    if (!response.ok) return true;
-    const body: unknown = await response.json();
-    return (
-      !body ||
-      typeof body !== 'object' ||
-      (body as { upgradeGateEnabled?: unknown }).upgradeGateEnabled !== false
-    );
-  } catch {
-    return true;
+export async function readUpgradeWaitlistStatus(): Promise<UpgradeWaitlistStatus> {
+  const response = await fetch('/api/waitlist', { cache: 'no-store' });
+  if (!response.ok) {
+    throw Object.assign(new Error(STATUS_UNAVAILABLE_MESSAGE), { status: response.status });
   }
+  const parsed = UpgradeWaitlistStatusSchema.safeParse(await response.json());
+  if (!parsed.success) throw new Error(STATUS_UNAVAILABLE_MESSAGE);
+  return parsed.data;
+}
+
+export function upgradeNeedsWaitlist(status: UpgradeWaitlistStatus | null): boolean {
+  return status === null || (status.upgradeGateEnabled && !status.accessGranted);
+}
+
+function timedOut(reason: unknown): boolean {
+  return reason instanceof DOMException && reason.name === 'TimeoutError';
 }
 
 export async function joinUpgradeWaitlist(request: UpgradeWaitlistRequest): Promise<void> {
@@ -41,11 +56,16 @@ export async function joinUpgradeWaitlist(request: UpgradeWaitlistRequest): Prom
       billingInterval: request.billingInterval,
       source: 'billing-upgrade',
     }),
+    signal: AbortSignal.timeout(TimeoutPresets.FAST),
+  }).catch((reason: unknown) => {
+    if (!timedOut(reason)) throw reason;
+    throw Object.assign(
+      new Error(httpStatusMessage(REQUEST_TIMEOUT_STATUS) ?? JOIN_FAILED_MESSAGE),
+      { status: REQUEST_TIMEOUT_STATUS },
+    );
   });
   if (response.ok) return;
-  throw new Error(
-    apiErrorMessage(await response.json().catch(() => null), 'Could not join the waitlist.'),
-  );
+  throw new Error(apiErrorMessage(await response.json().catch(() => null), JOIN_FAILED_MESSAGE));
 }
 
 export async function redeemUpgradeAccessCode(code: string): Promise<void> {

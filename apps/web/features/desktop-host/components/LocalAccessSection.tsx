@@ -6,24 +6,32 @@ import {
   DesktopRuntimeError,
   EMPTY_SHELL_POLICY,
   LOCAL_MODEL_SERVERS,
+  permissionKey,
+  type DesktopCapability,
   type LocalModelServerId,
   type LocalModelSettings,
+  type PermissionDecision,
   type ShellPolicy,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
 import { Spinner, useConfirmAction, useUiTranslation } from '@agiworkforce/ui';
 import { useDesktopHost, useLocalModeHost } from '../lib/host';
 import {
+  readDesktopPermissions,
   listWorkspaceRoots,
+  onWorkspaceChanged,
   pickWorkspaceRoot,
   readLocalCommandPolicy,
   readLocalModelSettings,
   revealWorkspaceRoot,
+  revokePermission,
   revokeWorkspaceRoot,
   writeLocalCommandPolicy,
   writeLocalModelSettings,
 } from '../lib/runtime-client';
+import { useDeveloperCapabilities } from '../hooks/use-developer-capabilities';
 import { useLocalModels } from '../hooks/use-local-models';
+import { LocalWorktreeSettings } from '@/features/code/components/LocalWorktreeSettings';
 
 const HEADING = 'Local access';
 const FOLDERS_HEADING = 'Folders';
@@ -42,8 +50,57 @@ const EMPTY_COPY =
 const LOAD_FAILED = 'Approved folders could not be read.';
 const ADD_FAILED = 'That folder was not approved.';
 const REVOKE_FAILED = 'That folder was not removed.';
+const REVEAL_FAILED = 'That folder could not be shown in Finder.';
 const ADD_LABEL = 'Add a folder';
 const ADD_BUSY_LABEL = 'Choosing…';
+
+const PERMISSIONS_HEADING = 'Permissions';
+const PERMISSIONS_INTRO =
+  'Answers you gave when AGI Cloud asked to do something on this Mac. Withdraw one and you are asked again the next time it comes up.';
+const PERMISSIONS_EMPTY = 'No standing answers. AGI Cloud asks before each of these.';
+const PERMISSIONS_LOAD_FAILED = 'Permissions could not be read.';
+const PERMISSION_REVOKE_FAILED = 'That permission was not withdrawn.';
+const WITHDRAW_LABEL = 'Withdraw';
+const THIS_MAC = 'This Mac';
+
+const CAPABILITY_TITLES: Record<DesktopCapability, string> = {
+  'filesystem.read': 'Read files',
+  'filesystem.write': 'Create and change files',
+  'shell.execute': 'Run commands and coding sessions',
+  'git.read': 'Read repository history and changes',
+  'git.write': 'Stage, revert and apply changes',
+  'git.destructive': 'Discard changes and rewrite history',
+  'browser.site': 'Use the paired browser',
+  'browser.cdp': 'Read page internals in the paired browser',
+  'computer.use': 'Read the screen and control the mouse and keyboard',
+  'application.control': 'Open files in other apps',
+  'screen.capture': 'Capture the screen',
+  'clipboard.read': 'Read the clipboard',
+  microphone: 'Use the microphone',
+  'local.inference': 'Run models on this Mac',
+  'host.remote': 'Remote Control from a paired phone',
+};
+
+function permissionStanding(decision: PermissionDecision): string {
+  const always = decision.duration === 'always';
+  if (decision.state === 'granted') {
+    return always ? 'Always allowed' : 'Allowed until you quit AGI Cloud';
+  }
+  return always ? 'Always refused' : 'Refused until you quit AGI Cloud';
+}
+
+function permissionSubject(decision: PermissionDecision): string {
+  return decision.scope.target ?? THIS_MAC;
+}
+
+function grantsSessionHistory(decision: PermissionDecision, root: WorkspaceRoot): boolean {
+  return (
+    decision.state === 'granted' &&
+    decision.scope.kind === 'workspace' &&
+    decision.scope.target === root.path &&
+    (decision.capability === 'shell.execute' || decision.capability === 'filesystem.read')
+  );
+}
 
 const BUTTON_CLASS =
   'min-h-[32px] rounded-md border border-border/60 px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60';
@@ -77,8 +134,12 @@ function messageFor(error: unknown, fallback: string): string | null {
 }
 
 function LocalModelsPanel() {
-  const { plural } = useUiTranslation('settings');
   const localHost = useLocalModeHost();
+  return localHost ? <LocalModeModelsPanel /> : null;
+}
+
+function LocalModeModelsPanel() {
+  const { plural } = useUiTranslation('settings');
   const models = useLocalModels(true);
   const [settings, setSettings] = useState<LocalModelSettings | null>(null);
   const [drafts, setDrafts] = useState<Partial<Record<LocalModelServerId, string>>>({});
@@ -109,8 +170,6 @@ function LocalModelsPanel() {
     },
     [models],
   );
-
-  if (!localHost) return null;
 
   return (
     <div className="flex flex-col gap-3 border-t border-border/40 pt-4">
@@ -188,13 +247,34 @@ function LocalModelsPanel() {
 
 export function LocalAccessSection() {
   const host = useDesktopHost();
+  const [cliAnswers, setCliAnswers] = useState(0);
+  const onCliAnswered = useCallback(() => setCliAnswers((count) => count + 1), []);
+  const worktrees = useDeveloperCapabilities(cliAnswers).has('worktrees');
   const [roots, setRoots] = useState<WorkspaceRoot[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [policy, setPolicy] = useState<ShellPolicy>(EMPTY_SHELL_POLICY);
   const [draft, setDraft] = useState('');
+  const [permissions, setPermissions] = useState<PermissionDecision[] | null | undefined>(
+    undefined,
+  );
+  const [permissionError, setPermissionError] = useState<string | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
+
+  const refreshPermissions = useCallback(async () => {
+    try {
+      setPermissions((await readDesktopPermissions()).decisions);
+      setPermissionError(null);
+    } catch (cause) {
+      if (cause instanceof DesktopRuntimeError && cause.code === 'unknown-command') {
+        setPermissions(null);
+        return;
+      }
+      setPermissions([]);
+      setPermissionError(messageFor(cause, PERMISSIONS_LOAD_FAILED));
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -205,25 +285,41 @@ export function LocalAccessSection() {
     } finally {
       setLoading(false);
     }
-  }, []);
+    await refreshPermissions();
+  }, [refreshPermissions]);
 
   useEffect(() => {
     if (!host) {
       setLoading(false);
-      return;
+      return undefined;
     }
     void refresh();
     readLocalCommandPolicy()
       .then(setPolicy)
       .catch((cause: unknown) => setError(messageFor(cause, POLICY_LOAD_FAILED)));
+    return onWorkspaceChanged(() => void refresh());
   }, [host, refresh]);
 
-  const savePolicy = useCallback(async (next: ShellPolicy) => {
+  const onWithdraw = useCallback(
+    async (decision: PermissionDecision) => {
+      try {
+        await revokePermission(decision.capability, decision.scope);
+        await refreshPermissions();
+      } catch (cause) {
+        setPermissionError(messageFor(cause, PERMISSION_REVOKE_FAILED));
+      }
+    },
+    [refreshPermissions],
+  );
+
+  const savePolicy = useCallback(async (next: ShellPolicy): Promise<boolean> => {
     try {
       setPolicy(await writeLocalCommandPolicy(next));
       setError(null);
+      return true;
     } catch (cause) {
       setError(messageFor(cause, POLICY_SAVE_FAILED));
+      return false;
     }
   }, []);
 
@@ -237,7 +333,9 @@ export function LocalAccessSection() {
         list === 'allow'
           ? { allow: [...policy.allow, program], deny: without(policy.deny) }
           : { allow: without(policy.allow), deny: [...policy.deny, program] },
-      );
+      ).then((saved) => {
+        if (!saved) setDraft((current) => (current === '' ? program : current));
+      });
     },
     [draft, policy, savePolicy],
   );
@@ -290,6 +388,15 @@ export function LocalAccessSection() {
 
   if (!host) return null;
 
+  const worktreeRoot =
+    permissions === undefined
+      ? undefined
+      : permissions === null
+        ? roots[0]
+        : roots.find((root) =>
+            permissions.some((decision) => grantsSessionHistory(decision, root)),
+          );
+
   return (
     <section className="flex flex-col gap-4">
       {confirmDialog}
@@ -327,7 +434,11 @@ export function LocalAccessSection() {
                 <button
                   type="button"
                   className={BUTTON_CLASS}
-                  onClick={() => void revealWorkspaceRoot(root.id)}
+                  onClick={() => {
+                    revealWorkspaceRoot(root.id).catch((cause: unknown) =>
+                      setError(messageFor(cause, REVEAL_FAILED)),
+                    );
+                  }}
                 >
                   Reveal
                 </button>
@@ -345,6 +456,18 @@ export function LocalAccessSection() {
           {busy ? ADD_BUSY_LABEL : ADD_LABEL}
         </button>
       </div>
+
+      {worktrees && worktreeRoot !== undefined && (
+        <div className="border-t border-border/40 pt-4">
+          <LocalWorktreeSettings
+            rootId={worktreeRoot.id}
+            headingClassName={SUB_HEADING_CLASS}
+            fieldClassName={FIELD_CLASS}
+            buttonClassName={BUTTON_CLASS}
+            onCliAnswered={onCliAnswered}
+          />
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 border-t border-border/40 pt-4">
         <div>
@@ -428,6 +551,57 @@ export function LocalAccessSection() {
 
         <p className="text-xs text-muted-foreground">{COMMANDS_FOOTNOTE}</p>
       </div>
+
+      {permissions === null ? null : (
+        <div className="flex flex-col gap-3 border-t border-border/40 pt-4">
+          <div>
+            <h4 className={SUB_HEADING_CLASS}>{PERMISSIONS_HEADING}</h4>
+            <p className="mt-1 text-xs text-muted-foreground">{PERMISSIONS_INTRO}</p>
+          </div>
+
+          {permissionError ? (
+            <p role="alert" className="text-xs text-danger">
+              {permissionError}
+            </p>
+          ) : null}
+
+          {permissions === undefined ? (
+            <Spinner aria-label="Loading permissions" />
+          ) : permissions.length === 0 ? (
+            permissionError ? null : (
+              <p className="text-xs text-muted-foreground">{PERMISSIONS_EMPTY}</p>
+            )
+          ) : (
+            <ul className="flex list-none flex-col gap-2 p-0">
+              {permissions.map((decision) => {
+                const title = CAPABILITY_TITLES[decision.capability];
+                const subject = permissionSubject(decision);
+                return (
+                  <li
+                    key={permissionKey(decision.capability, decision.scope)}
+                    className="flex items-center justify-between gap-4 rounded-lg border border-border/40 p-4"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">{title}</p>
+                      <p className="break-words text-xs text-muted-foreground">
+                        {subject} · {permissionStanding(decision)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`${BUTTON_CLASS} shrink-0`}
+                      aria-label={`${WITHDRAW_LABEL}: ${title}, ${subject}`}
+                      onClick={() => void onWithdraw(decision)}
+                    >
+                      {WITHDRAW_LABEL}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
 
       <LocalModelsPanel />
     </section>

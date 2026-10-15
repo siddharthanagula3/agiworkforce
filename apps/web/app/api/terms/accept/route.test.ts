@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   latestConsent: vi.fn(),
   track: vi.fn(),
   referral: vi.fn(),
+  email: vi.fn(),
 }));
 
 vi.mock('@/lib/error-handler', async (importOriginal) => ({
@@ -30,6 +31,10 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
 vi.mock('@/lib/server/product-analytics', async (importOriginal) => ({
   ...(await importOriginal()),
   trackProductAnalyticsEvent: (...args: unknown[]) => mocks.track(...args),
+}));
+vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readPrimaryEmailState: (...args: unknown[]) => mocks.email(...args),
 }));
 vi.mock('@/lib/server/consent-records', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -72,6 +77,7 @@ describe('native Terms acceptance API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.csrf.mockResolvedValue(null);
+    mocks.email.mockResolvedValue({ confirmed: true, email: 'person@example.com' });
   });
 
   it('reports the current version and account-specific acceptance without caching', async () => {
@@ -111,6 +117,24 @@ describe('native Terms acceptance API', () => {
     expect(mocks.record).toHaveBeenCalledWith('person-a', 'mobile-auth');
   });
 
+  it('refuses an account whose email address was never confirmed, writing nothing', async () => {
+    mocks.email.mockResolvedValue({ confirmed: false, email: 'victim@corp.example' });
+
+    await expect(
+      POST(
+        new NextRequest('https://agiworkforce.com/api/terms/accept', {
+          method: 'POST',
+          body: JSON.stringify({ surface: 'web-signup', version: 'current-policy' }),
+        }),
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      message: expect.stringContaining('Confirm your email'),
+    });
+    expect(mocks.email).toHaveBeenCalledWith('person-a');
+    expect(mocks.record).not.toHaveBeenCalled();
+  });
+
   it('rejects a stale version before writing acceptance', async () => {
     const response = await POST(
       new NextRequest('https://agiworkforce.com/api/terms/accept', {
@@ -128,6 +152,7 @@ describe('marketing email asked with the terms', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.csrf.mockResolvedValue(null);
+    mocks.email.mockResolvedValue({ confirmed: true, email: 'person@example.com' });
     mocks.record.mockResolvedValue({
       version: 'current-policy',
       acceptedAt: '2026-10-04T00:00:00Z',

@@ -6,6 +6,7 @@ import {
   sessionRowActionFailureMessage,
 } from './sidebar-session-actions';
 import { WebAppShell } from './WebAppShell';
+import { ProductNoticeStack } from '@shared/components/ProductNotice';
 
 /**
  * WEB-APPSHELL-MOBILE-SIDEBAR-01, at narrow viewports the shell must not
@@ -572,6 +573,23 @@ describe('WebAppShell responsive navigation', () => {
     );
 
     expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-list-error', LIST_FAILURE);
+  });
+
+  it('hosts product notices inside the shell, where its own panels and dialogs cover them', () => {
+    render(
+      <>
+        <ProductNoticeStack>
+          <p>Incident</p>
+        </ProductNoticeStack>
+        <WebAppShell>
+          <main>content</main>
+        </WebAppShell>
+      </>,
+    );
+
+    const shellRoot = document.getElementById('main-content')?.closest('div.fixed');
+    expect(shellRoot).toBeTruthy();
+    expect(shellRoot).toContainElement(screen.getByText('Incident'));
   });
 
   // Scroll chaining out of the content region moves the fixed shell wrapper

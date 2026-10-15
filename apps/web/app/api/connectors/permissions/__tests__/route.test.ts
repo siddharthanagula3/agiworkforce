@@ -11,9 +11,15 @@ const { mockGetUserScopedDb, mockQuery, mockExecute, mockCsrf } = vi.hoisted(() 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<SecurityAuditModule>()),
+  recordAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
 
 import { GET, PUT, DELETE } from '../route';
 import { createError } from '@/lib/errors';
+
+type SecurityAuditModule = typeof import('@/lib/security-audit');
 
 function req(body?: unknown, search = ''): NextRequest {
   return new NextRequest(`http://localhost:3000/api/connectors/permissions${search}`, {
@@ -36,9 +42,14 @@ describe('/api/connectors/permissions', () => {
     mockGetUserScopedDb.mockResolvedValue({
       db: { query: mockQuery, execute: mockExecute },
       userId: 'user-owner',
+      organizationId: 'org-active',
     });
     mockCsrf.mockResolvedValue(null);
-    mockQuery.mockResolvedValue([]);
+    mockQuery.mockImplementation(async (sql: string, params: unknown[]) =>
+      sql.includes('insert into public.connector_tool_permissions')
+        ? (params[2] as string[]).map((tool_name) => ({ tool_name }))
+        : [],
+    );
     mockExecute.mockResolvedValue(1);
   });
 
@@ -50,7 +61,9 @@ describe('/api/connectors/permissions', () => {
     const res = await GET(req());
     expect(res.status).toBe(200);
     expect(mockGetUserScopedDb).toHaveBeenCalledTimes(1);
-    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    const [sql, params] = mockQuery.mock.calls.find(([sql]) =>
+      String(sql).includes('connector_tool_permissions'),
+    ) as [string, unknown[]];
     expect(sql).toContain('from public.connector_tool_permissions');
     expect(sql).toContain('where user_id = $1');
     expect(params[0]).toBe('user-owner');
@@ -64,7 +77,9 @@ describe('/api/connectors/permissions', () => {
   it('PUT upserts owner-scoped with the wire→table vocabulary mapping', async () => {
     const res = await PUT(req({ connectorId: 'github', toolName: 'create_issue', level: 'deny' }));
     expect(res.status).toBe(200);
-    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    const [sql, params] = mockQuery.mock.calls.find(([sql]) =>
+      String(sql).includes('connector_tool_permissions'),
+    ) as [string, unknown[]];
     expect(sql).toContain('insert into public.connector_tool_permissions');
     expect(sql).toContain('on conflict (user_id, connector_id, tool_name)');
     expect(params[0]).toBe('user-owner');
@@ -76,13 +91,15 @@ describe('/api/connectors/permissions', () => {
       req({
         connectorId: 'github',
         toolName: 'post_issue_comment',
-        level: 'allow',
+        level: 'ask',
         destructive: false,
       }),
     );
     expect(res.status).toBe(200);
     expect((await res.json()) as { destructive: boolean }).toMatchObject({ destructive: true });
-    const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    const [, params] = mockQuery.mock.calls.find(([sql]) =>
+      String(sql).includes('connector_tool_permissions'),
+    ) as [string, unknown[]];
     expect(params[4]).toEqual([true]);
 
     mockQuery.mockClear();
@@ -94,14 +111,63 @@ describe('/api/connectors/permissions', () => {
         destructive: true,
       }),
     );
-    const [, readParams] = mockQuery.mock.calls[0] as [string, unknown[]];
+    const [, readParams] = mockQuery.mock.calls.find(([sql]) =>
+      String(sql).includes('connector_tool_permissions'),
+    ) as [string, unknown[]];
     expect(readParams[4]).toEqual([false]);
+  });
+
+  it('PUT refuses a standing allow for a critical tool with 422 and never touches the DB', async () => {
+    const res = await PUT(
+      req({ connectorId: 'github', toolName: 'post_issue_comment', level: 'allow' }),
+    );
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ error: { code: 'critical_tool_always_asks' } });
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('PUT saves a standing allow for an undeclared remote tool, which is high rather than critical', async () => {
+    const res = await PUT(req({ connectorId: 'custom-abc', toolName: 'do_thing', level: 'allow' }));
+    expect(res.status).toBe(200);
+    const [, params] = mockQuery.mock.calls.find(([sql]) =>
+      String(sql).includes('connector_tool_permissions'),
+    ) as [string, unknown[]];
+    expect(params[3]).toBe('always-allow');
+  });
+
+  it('PUT still saves ask and deny for a critical tool', async () => {
+    for (const level of ['ask', 'deny'] as const) {
+      const res = await PUT(req({ connectorId: 'github', toolName: 'post_issue_comment', level }));
+      expect(res.status).toBe(200);
+    }
   });
 
   it('PUT 400s an invalid level and never touches the DB', async () => {
     const res = await PUT(req({ connectorId: 'github', toolName: 'x', level: 'nonsense' }));
     expect(res.status).toBe(400);
     expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('PUT revokes the active workspace conversation grants before changing standing permission', async () => {
+    await PUT(req({ connectorId: 'github', toolName: 'get_pull_request_diff', level: 'ask' }));
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('delete from public.connector_tool_session_grants');
+    expect(sql).toContain('grant_row.user_id = $1');
+    expect(sql).toContain('conversation.user_id = grant_row.user_id');
+    expect(sql).toContain('conversation.organization_id is not distinct from $3');
+    expect(params).toEqual(['user-owner', 'github', 'org-active', 'get_pull_request_diff']);
+    expect(String(mockQuery.mock.calls[1]?.[0])).toContain(
+      'insert into public.connector_tool_permissions',
+    );
+  });
+
+  it('fails closed when grant revocation cannot be confirmed', async () => {
+    mockQuery.mockRejectedValue(new Error('grant storage unavailable'));
+    const response = await PUT(
+      req({ connectorId: 'github', toolName: 'get_pull_request_diff', level: 'ask' }),
+    );
+    expect(response.status).toBeGreaterThanOrEqual(500);
+    expect(mockQuery).toHaveBeenCalledTimes(1);
   });
 
   it('DELETE revokes one tool verdict, owner-scoped (CON-5)', async () => {

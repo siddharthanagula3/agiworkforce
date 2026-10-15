@@ -4,7 +4,12 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+vi.mock('@agiworkforce/context', async (importOriginal) => {
+  const actual = await importOriginal<ContextModule>();
+  return { ...actual, prohibitedMemoryCategory: vi.fn(actual.prohibitedMemoryCategory) };
+});
 
+import { extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
 import {
   PROHIBITED_MEMORY_CATEGORIES,
   prohibitedMemoryCategory,
@@ -18,12 +23,18 @@ import {
   loadManagedMemoryContext,
   loadOrganizationMemoryPolicy,
   memoryEligibilityGate,
+  readOrganizationMemoryPolicy,
   memoryRetentionClass,
+  memoryWriteAdmission,
+  persistManagedAutoMemoryFacts,
   writeConsolidatedMemory,
   type ConsolidatedMemoryWrite,
   type ManagedMemoryPolicy,
   type OrganizationMemoryPolicy,
 } from '../managed-memory-context-service';
+import { answerMemoryPolicyQuery, asQuery } from './memory-policy-stub';
+
+type ContextModule = typeof import('@agiworkforce/context');
 
 const ORG = '0190a000-0000-7000-8000-00000000b001';
 const PROJECT = '0190a000-0000-7000-8000-00000000b002';
@@ -33,9 +44,10 @@ const SAMPLE_PROHIBITED: { readonly [K in ProhibitedMemoryCategory]: string } = 
   credential: `User's password is ${'correct-horse-battery'}`,
   payment_instrument: 'User pays with card 4111 1111 1111 1111',
   government_identifier: 'User SSN is 123-45-6789',
-  health: 'User was diagnosed with type 1 diabetes',
   biometric: 'User unlocks the laptop with a fingerprint',
   precise_location: 'User lives at 221 Baker Street',
+  criminal_history: 'User has a criminal record',
+  immigration_status: 'User is undocumented',
 };
 
 function write(overrides: Partial<ConsolidatedMemoryWrite> = {}): ConsolidatedMemoryWrite {
@@ -191,6 +203,264 @@ describe('the prohibited-content screen', () => {
   });
 });
 
+describe('the sensitive-topic opt-in', () => {
+  const SENSITIVE = 'User is a practicing Catholic';
+  const MODEL_IDENTITY_SENTENCES = [
+    'User is a software engineer and a devout Muslim',
+    'User is a 29-year-old Black woman working in tech',
+    'User is a teacher and a proud Democrat',
+  ];
+
+  async function learnedWith(candidate: string, includeSensitiveTopics: boolean) {
+    const query = asQuery(
+      vi.fn(
+        async (sql: string, _params?: unknown[]) =>
+          answerMemoryPolicyQuery(sql, { includeSensitiveTopics }) ?? [
+            { outcome: 'inserted', id: 'm1' },
+          ],
+      ),
+    );
+    await persistManagedAutoMemoryFacts({ query } as never, {
+      userId: 'u1',
+      candidates: [candidate],
+    });
+    return query.mock.calls.some(([sql]) => sql.includes('insert into user_memories'));
+  }
+
+  it('keeps a learned fact about a sensitive topic out while the opt-in is off', () => {
+    const decision = memoryEligibilityGate({
+      write: write({ content: SENSITIVE, source: 'auto' }),
+      organizationPolicy: UNGOVERNED_MEMORY_POLICY,
+      userPolicy: MEMORY_ON,
+    });
+
+    expect(decision).toMatchObject({ eligible: false, reason: 'sensitive_topic_not_opted_in' });
+    expect(decision.eligible ? '' : decision.message).toContain(
+      'Include sensitive topics in memory',
+    );
+  });
+
+  it('keeps the same fact once the user turns on Include sensitive topics in memory', () => {
+    expect(
+      memoryEligibilityGate({
+        write: write({ content: SENSITIVE, source: 'auto' }),
+        organizationPolicy: UNGOVERNED_MEMORY_POLICY,
+        userPolicy: { ...MEMORY_ON, includeSensitiveTopics: true },
+      }),
+    ).toMatchObject({ eligible: true });
+  });
+
+  it('keeps a diagnosis the user asked to remember, and learns one only once the opt-in is on', () => {
+    const diagnosis = 'User was diagnosed with type 2 diabetes';
+    const gate = (overrides: Partial<ConsolidatedMemoryWrite>, userPolicy: ManagedMemoryPolicy) =>
+      memoryEligibilityGate({
+        write: write({ content: diagnosis, ...overrides }),
+        organizationPolicy: UNGOVERNED_MEMORY_POLICY,
+        userPolicy,
+      });
+
+    expect(gate({ userRequested: true }, MEMORY_ON)).toMatchObject({ eligible: true });
+    expect(gate({ source: 'auto' }, { ...MEMORY_ON, includeSensitiveTopics: true })).toMatchObject({
+      eligible: true,
+    });
+    expect(gate({ source: 'auto' }, MEMORY_ON)).toMatchObject({
+      eligible: false,
+      reason: 'sensitive_topic_not_opted_in',
+    });
+  });
+
+  it("keeps the pattern extractor's rewrite of a sensitive statement out while the opt-in is off", () => {
+    for (const message of [
+      "I'm a Teamster.",
+      "I'm a member of the UAW.",
+      "I'm a Trump supporter.",
+      "I'm a lifelong Bernie supporter.",
+      'I love going to mass every Sunday.',
+      "I'm a breast cancer survivor.",
+      "I'm a veteran with PTSD.",
+      "I'm a mom with ADHD.",
+      "I'm a nurse with lupus.",
+      "I'm a cancer patient.",
+      'Note that I have a history of depression.',
+      'For future reference, I have chronic back pain.',
+      "I'm a deaf developer.",
+      'I love Bernie.',
+      'I like Obama.',
+      'I hate Republicans.',
+      'I love the Labour Party.',
+      'I love Jesus.',
+      "I'm an ex-Mormon.",
+      "I'm a Black woman in tech.",
+      "I'm a 34 year old gay man living in Austin.",
+      "I'm a nurse and a lesbian.",
+      "I'm a dad of three and a practicing Catholic.",
+      "I'm a 29-year-old Black woman working in tech.",
+      "I'm a teacher and a proud Democrat.",
+      "I'm a Black software engineer in Atlanta.",
+      "I'm a Black business owner.",
+      "I'm a Desi software developer.",
+      "I'm a schizophrenic.",
+      "I'm a mom of two with lupus.",
+      "I'm a transplant recipient.",
+      "I'm an ADHD adult.",
+      "I'm a guy in my 40s with depression.",
+      "Note that I'm in AA.",
+      "I'm a worship leader at my church.",
+      'I work as a pastor at Grace Church.',
+      "I'm a union electrician.",
+      "I'm a Labour councillor.",
+      "I'm an animal rights activist.",
+      "I'm a member of the NAACP.",
+      "I'm a man married to a man.",
+      "I'm a dad to two kids with my husband.",
+      "I'm a veteran with a TBI.",
+      "I'm a new mom recovering from a C-section.",
+      "I'm a T1D.",
+      "I'm a woman of trans experience.",
+      "I'm a practising member of the Church of England.",
+      "I'm a believer in God.",
+      "I'm from a Muslim family.",
+      'I like reading the Quran.',
+      "I'm a second generation Nigerian immigrant.",
+      "I'm a big fan of AOC.",
+      'I prefer Democrats.',
+      'I like conservative politics.',
+      "I'm a Brexiteer.",
+      "I'm a member of the KKK.",
+      'Note that my partner and I are both women.',
+    ]) {
+      const [learned] = extractCandidateMemoryFacts(message);
+      expect(learned, message).toBeDefined();
+      expect(
+        memoryEligibilityGate({
+          write: write({ content: learned!, source: 'auto' }),
+          organizationPolicy: UNGOVERNED_MEMORY_POLICY,
+          userPolicy: MEMORY_ON,
+        }),
+        learned,
+      ).toMatchObject({ eligible: false, reason: 'sensitive_topic_not_opted_in' });
+    }
+  });
+
+  it("keeps the model extractor's identity sentences out while the opt-in is off", () => {
+    for (const learned of MODEL_IDENTITY_SENTENCES) {
+      expect(
+        memoryEligibilityGate({
+          write: write({ content: learned, source: 'auto' }),
+          organizationPolicy: UNGOVERNED_MEMORY_POLICY,
+          userPolicy: MEMORY_ON,
+        }),
+        learned,
+      ).toMatchObject({ eligible: false, reason: 'sensitive_topic_not_opted_in' });
+    }
+  });
+
+  it('persists none of those sentences through the learning path until the user opts in', async () => {
+    const candidates = [
+      ...extractCandidateMemoryFacts("I'm a 34 year old gay man living in Austin."),
+      ...extractCandidateMemoryFacts("I'm a nurse and a lesbian."),
+      ...extractCandidateMemoryFacts("I'm a dad of three and a practicing Catholic."),
+      ...MODEL_IDENTITY_SENTENCES,
+    ];
+    expect(candidates).toHaveLength(6);
+
+    for (const candidate of candidates) {
+      expect(await learnedWith(candidate, false), `${candidate} with the opt-in off`).toBe(false);
+      expect(await learnedWith(candidate, true), `${candidate} with the opt-in on`).toBe(true);
+    }
+  });
+
+  it('persists none of the health, faith and politics facts the word lists missed until the user opts in', async () => {
+    const candidates = [
+      ...extractCandidateMemoryFacts(
+        "I'm a rape survivor and I need help writing my victim impact statement.",
+      ),
+      'User has a brain tumor',
+      'User attempted suicide last year',
+      'User is a DSA member',
+      'User is addicted to opioids',
+      'User is a pastor',
+      'User supports Black Lives Matter',
+    ];
+    expect(candidates).toHaveLength(7);
+
+    for (const candidate of candidates) {
+      expect(await learnedWith(candidate, false), `${candidate} with the opt-in off`).toBe(false);
+      expect(await learnedWith(candidate, true), `${candidate} with the opt-in on`).toBe(true);
+    }
+  });
+
+  it('keeps a sensitive fact the user asked to remember, with the opt-in off', () => {
+    expect(
+      memoryEligibilityGate({
+        write: write({ content: SENSITIVE, userRequested: true }),
+        organizationPolicy: UNGOVERNED_MEMORY_POLICY,
+        userPolicy: MEMORY_ON,
+      }),
+    ).toMatchObject({ eligible: true });
+  });
+
+  it('treats an unread member policy as the opt-in being off', () => {
+    expect(
+      memoryEligibilityGate({
+        write: write({ content: SENSITIVE }),
+        organizationPolicy: UNGOVERNED_MEMORY_POLICY,
+      }),
+    ).toMatchObject({ eligible: false, reason: 'sensitive_topic_not_opted_in' });
+  });
+
+  it('never opens a category memory refuses outright, whatever the opt-in or the request', () => {
+    expect(
+      memoryEligibilityGate({
+        write: write({ content: SAMPLE_PROHIBITED.criminal_history, userRequested: true }),
+        organizationPolicy: UNGOVERNED_MEMORY_POLICY,
+        userPolicy: { ...MEMORY_ON, includeSensitiveTopics: true },
+      }),
+    ).toMatchObject({ eligible: false, reason: 'prohibited_content_category' });
+  });
+
+  it('reads the opt-in itself when the caller hands it no policies', async () => {
+    const insertWith = (capabilities: Record<string, boolean>) =>
+      vi.fn(async (sql: string) =>
+        sql.includes("settings -> 'capabilities'")
+          ? [{ capabilities }]
+          : [{ outcome: 'inserted', id: 'm1' }],
+      );
+    const learned = write({ content: SENSITIVE, source: 'auto' });
+
+    const optedOut = insertWith({ memory: true });
+    await expect(
+      writeConsolidatedMemory({ query: optedOut } as never, learned),
+    ).rejects.toMatchObject({ reason: 'sensitive_topic_not_opted_in' });
+    expect(optedOut.mock.calls.some(([sql]) => sql.includes('into user_memories'))).toBe(false);
+
+    const optedIn = insertWith({ memory: true, includeSensitiveTopics: true });
+    await expect(
+      writeConsolidatedMemory({ query: optedIn } as never, learned),
+    ).resolves.toMatchObject({ outcome: 'inserted' });
+  });
+});
+
+describe('memoryWriteAdmission', () => {
+  it('screens the content once, whether or not the caller hands it the policies', async () => {
+    const screen = vi.mocked(prohibitedMemoryCategory);
+    const query = vi.fn(async (sql: string) =>
+      sql.includes("settings -> 'capabilities'") ? [{ capabilities: { memory: true } }] : [],
+    );
+
+    for (const options of [
+      { policies: { organization: UNGOVERNED_MEMORY_POLICY, user: MEMORY_ON } },
+      {},
+    ]) {
+      screen.mockClear();
+      await expect(
+        memoryWriteAdmission({ query } as never, write(), options),
+      ).resolves.toMatchObject({ eligible: true });
+      expect(screen).toHaveBeenCalledTimes(1);
+    }
+  });
+});
+
 describe('the write funnel is fail closed', () => {
   it('resolves the member switch itself when the caller hands it no policies', async () => {
     const query = vi.fn(async (sql: string) =>
@@ -279,6 +549,44 @@ describe('loadOrganizationMemoryPolicy', () => {
       UNGOVERNED_MEMORY_POLICY,
     );
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it('still closes memory when the policy read fails', async () => {
+    const query = vi.fn(async () => {
+      throw new Error('connection reset');
+    });
+    await expect(loadOrganizationMemoryPolicy({ query } as never, ORG)).resolves.toEqual(
+      CLOSED_ORGANIZATION_MEMORY_POLICY,
+    );
+  });
+});
+
+describe('readOrganizationMemoryPolicy', () => {
+  it('reports a failed read as unreadable, not as a workspace that closed memory', async () => {
+    const query = vi.fn(async () => {
+      throw new Error('connection reset');
+    });
+    await expect(readOrganizationMemoryPolicy({ query } as never, ORG)).resolves.toEqual({
+      readable: false,
+    });
+  });
+
+  it('reads a workspace with no policy row as one that closed memory', async () => {
+    const query = vi.fn(async () => []);
+    await expect(readOrganizationMemoryPolicy({ query } as never, ORG)).resolves.toEqual({
+      readable: true,
+      policy: CLOSED_ORGANIZATION_MEMORY_POLICY,
+    });
+  });
+
+  it('reads the workspace switch when there is a row', async () => {
+    const query = vi.fn(async () => [
+      { allow_memory: true, retention_days: 30, retention_enforced: true },
+    ]);
+    await expect(readOrganizationMemoryPolicy({ query } as never, ORG)).resolves.toEqual({
+      readable: true,
+      policy: { allowMemory: true, retentionDays: 30, retentionEnforced: true },
+    });
   });
 });
 

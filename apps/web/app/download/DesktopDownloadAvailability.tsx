@@ -1,30 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Eyebrow, Prose, Section } from '@/features/marketing/components/system';
-import { detectMacArchitecture, type DetectedArchitecture } from './detect-architecture';
-
-const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
-
-type Architectures = { arm64: boolean; x64: boolean };
-
-type Availability =
-  | { state: 'loading' }
-  | { state: 'available'; version: string; architectures: Architectures }
-  | { state: 'empty' }
-  | { state: 'error' };
-
-interface InstallerChecksum {
-  name: string;
-  architecture: 'arm64' | 'x64' | null;
-  sha256: string;
-}
-
-const ARCHITECTURE_LABELS: Record<'arm64' | 'x64', string> = {
-  arm64: 'Apple silicon',
-  x64: 'Intel Mac',
-};
+import { Eyebrow, Prose, Section, WEB_ENTRY_HREF } from '@/features/marketing/components/system';
+import type { DetectedArchitecture, MacArchitecture } from './detect-architecture';
+import { ARCHITECTURE_LABELS, macDownloadHref, useDesktopRelease } from './use-desktop-release';
 
 const INSTALL_STEPS: readonly string[] = [
   'Download the installer for your Mac. The buttons above appear only for an architecture this release actually publishes.',
@@ -45,55 +24,10 @@ const UNAVAILABLE_PLATFORMS: readonly { platform: string; detail: string }[] = [
   },
 ];
 
-function isDesktopManifest(
-  value: unknown,
-): value is { version: string; architectures: Architectures } {
-  if (!value || typeof value !== 'object') return false;
-  const manifest = value as Record<string, unknown>;
-  const architectures = manifest['architectures'];
-  const platforms = manifest['platforms'];
-  const arm64 = (architectures as Record<string, unknown> | undefined)?.['arm64'];
-  const x64 = (architectures as Record<string, unknown> | undefined)?.['x64'];
-  return (
-    typeof manifest['version'] === 'string' &&
-    manifest['version'].trim() !== '' &&
-    platforms !== null &&
-    typeof platforms === 'object' &&
-    (platforms as Record<string, unknown>)['mac'] === true &&
-    architectures !== null &&
-    typeof architectures === 'object' &&
-    typeof arm64 === 'boolean' &&
-    typeof x64 === 'boolean' &&
-    (arm64 || x64)
-  );
-}
-
-function parseChecksums(value: unknown): InstallerChecksum[] {
-  if (!value || typeof value !== 'object') return [];
-  const installers = (value as Record<string, unknown>)['installers'];
-  if (!Array.isArray(installers)) return [];
-  const parsed: InstallerChecksum[] = [];
-  for (const entry of installers) {
-    if (!entry || typeof entry !== 'object') continue;
-    const record = entry as Record<string, unknown>;
-    const name = record['name'];
-    const sha256 = record['sha256'];
-    const architecture = record['architecture'];
-    if (typeof name !== 'string' || typeof sha256 !== 'string') continue;
-    if (!/^[0-9a-f]{64}$/.test(sha256)) continue;
-    parsed.push({
-      name,
-      architecture: architecture === 'arm64' || architecture === 'x64' ? architecture : null,
-      sha256,
-    });
-  }
-  return parsed;
-}
-
 function Alternatives() {
   return (
     <p className="agi-ds-availability-links">
-      <Link href={WEB_CHAT_ENTRY_HREF} className="agi-ds-link">
+      <Link href={WEB_ENTRY_HREF} className="agi-ds-link">
         Use AGI Web
       </Link>
       <Link href="/cli" className="agi-ds-link">
@@ -107,13 +41,13 @@ function DownloadButton({
   architecture,
   detected,
 }: {
-  architecture: 'arm64' | 'x64';
+  architecture: MacArchitecture;
   detected: DetectedArchitecture;
 }) {
   const recommended = detected === architecture;
   return (
     <a
-      href={`/api/download?platform=mac&arch=${architecture}`}
+      href={macDownloadHref(architecture)}
       className="agi-ds-btn"
       data-variant={recommended ? 'primary' : 'secondary'}
       aria-describedby={recommended ? 'desktop-arch-detected' : undefined}
@@ -125,82 +59,7 @@ function DownloadButton({
 }
 
 export function DesktopDownloadAvailability() {
-  const [availability, setAvailability] = useState<Availability>({ state: 'loading' });
-  const [checksums, setChecksums] = useState<InstallerChecksum[]>([]);
-  const [detected, setDetected] = useState<DetectedArchitecture>('unknown');
-  const requestId = useRef(0);
-
-  const checkRelease = useCallback(async (signal?: AbortSignal) => {
-    const currentRequest = ++requestId.current;
-    setAvailability({ state: 'loading' });
-
-    try {
-      const response = await fetch('/api/releases/desktop-cloud/latest', {
-        cache: 'no-store',
-        signal,
-      });
-
-      if (currentRequest !== requestId.current) return;
-      if (response.status === 404) {
-        setAvailability({ state: 'empty' });
-        return;
-      }
-      if (!response.ok) throw new Error(`Release lookup failed with status ${response.status}`);
-
-      const manifest: unknown = await response.json();
-      if (currentRequest !== requestId.current) return;
-      if (!isDesktopManifest(manifest)) {
-        throw new Error('Release lookup returned an invalid desktop manifest');
-      }
-
-      setAvailability({
-        state: 'available',
-        version: manifest.version,
-        architectures: manifest.architectures,
-      });
-    } catch {
-      if (signal?.aborted || currentRequest !== requestId.current) return;
-      setAvailability({ state: 'error' });
-    }
-  }, []);
-
-  const checkChecksums = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const response = await fetch('/api/download/checksums', { cache: 'no-store', signal });
-      setChecksums(response.ok ? parseChecksums(await response.json()) : []);
-    } catch {
-      setChecksums([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void checkRelease(controller.signal);
-    void checkChecksums(controller.signal);
-    return () => controller.abort();
-  }, [checkRelease, checkChecksums]);
-
-  useEffect(() => {
-    let live = true;
-    void detectMacArchitecture(typeof navigator === 'undefined' ? undefined : navigator, () =>
-      typeof document === 'undefined' ? null : document.createElement('canvas'),
-    ).then((architecture) => {
-      if (live) setDetected(architecture);
-    });
-    return () => {
-      live = false;
-    };
-  }, []);
-
-  const offered =
-    availability.state === 'available'
-      ? (['arm64', 'x64'] as const).filter(
-          (architecture) => availability.architectures[architecture],
-        )
-      : [];
-  const shownChecksums = checksums.filter(
-    (checksum) => checksum.architecture === null || offered.includes(checksum.architecture),
-  );
+  const { availability, offered, checksums: shownChecksums, detected, retry } = useDesktopRelease();
 
   return (
     <Section id="desktop-downloads" labelledBy="desktop-downloads-title" rule>
@@ -264,12 +123,7 @@ export function DesktopDownloadAvailability() {
             {availability.state === 'error' && (
               <span role="alert" className="agi-ds-availability-state">
                 We could not verify the AGI Desktop installer.
-                <button
-                  type="button"
-                  className="agi-ds-btn"
-                  data-variant="primary"
-                  onClick={() => void checkRelease()}
-                >
+                <button type="button" className="agi-ds-btn" data-variant="primary" onClick={retry}>
                   Retry release check
                 </button>
                 <Alternatives />

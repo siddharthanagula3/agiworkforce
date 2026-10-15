@@ -29,6 +29,7 @@ import { landingAnnouncement } from '@/features/marketing/components/landing-ann
 import { RELEASES } from '@/lib/changelog-entries';
 import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
+import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
 import {
   approximateCount,
   BYOK_SURFACES,
@@ -39,7 +40,6 @@ import {
   surfaceCta,
 } from '@/lib/marketing-constants';
 
-const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 const CONNECTORS_NOTE = connectorsReleased() ? '' : ` ${CONNECTORS_COMING_SOON_MESSAGE}`;
 const LATEST_ENTRY_COUNT = 3;
 const LATEST_ENTRIES = RELEASES.slice(0, LATEST_ENTRY_COUNT).map((release) => ({
@@ -62,7 +62,7 @@ export function MarketingLanding({
           eyebrow="the AI application suite"
           titleLines={[]}
           em=""
-          ctas={[{ href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' }, surfaceCta('desktop')]}
+          ctas={[{ href: WEB_ENTRY_HREF, label: 'Try AGI Web' }, surfaceCta('desktop')]}
           modeRibbon={[]}
           visual={<MobileHeroVisual />}
           announcement={landingAnnouncement(freeMediaOffer, {
@@ -365,7 +365,7 @@ export function MarketingLanding({
                 'Every reply names the model that answered it',
                 'The same account carries to Desktop, the CLI and the extensions once they are released',
               ],
-              cta: { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
+              cta: { href: WEB_ENTRY_HREF, label: 'Try AGI Web' },
             },
             {
               title: 'Bring your organisation',

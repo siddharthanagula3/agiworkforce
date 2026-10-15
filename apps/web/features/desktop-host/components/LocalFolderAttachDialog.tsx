@@ -14,6 +14,7 @@ import {
   findWorkspaceFilesByName,
   listWorkspaceFiles,
   listWorkspaceRoots,
+  onWorkspaceChanged,
   openWorkspacePath,
   pickWorkspaceRoot,
   readWorkspaceFile,
@@ -134,6 +135,20 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
       })
       .catch((cause: unknown) => setError(messageFor(cause, LOAD_FAILED)))
       .finally(() => setLoading(false));
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    return onWorkspaceChanged(() => {
+      listWorkspaceRoots()
+        .then((next) => {
+          setRoots(next);
+          setActiveRoot(
+            (current) => next.find((root) => root.id === current?.id) ?? next[0] ?? null,
+          );
+        })
+        .catch((cause: unknown) => setError(messageFor(cause, LOAD_FAILED)));
+    });
   }, [open]);
 
   useEffect(() => {

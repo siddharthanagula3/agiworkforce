@@ -23,6 +23,9 @@ import {
   Button,
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
+import { ServiceNotices } from '@shared/components/ServiceNotices';
+import { useUpgradeWaitlistStatus } from '@features/billing/hooks/use-upgrade-waitlist';
+import { upgradeNeedsWaitlist } from '@features/billing/services/upgrade-waitlist';
 import type { SelectablePaidPlan } from '@features/billing/lib/plan-display';
 import { useLocalizedPricing } from '@features/billing/hooks/use-localized-pricing';
 import { useFreeMediaOffer } from '@features/billing/hooks/use-free-media-offer';
@@ -60,13 +63,16 @@ import {
 import type { FreeQuotaMediaOffer } from '@agiworkforce/cloud-contracts';
 
 export type UpgradeTarget = SelectablePaidPlan;
+export type UpgradeAction = 'checkout' | 'join-waitlist' | 'open-waitlist';
+type UpgradeAccess = 'checking' | 'checkout' | 'waitlist';
 
 interface UpgradePlanDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentTier?: string;
   targetTier?: UpgradeTarget | null;
-  onUpgrade: (plan: UpgradeTarget) => void;
+  waitlistApplies?: boolean;
+  onUpgrade: (plan: UpgradeTarget, action: UpgradeAction) => void;
 }
 
 type Audience = 'individual' | 'business';
@@ -191,11 +197,21 @@ interface PlanCardViewProps {
   plan: PlanCardModel;
   relationship: Relationship;
   checkoutBlocked: boolean;
+  upgradeAccess: UpgradeAccess;
+  waitlisted: boolean;
   t: PricingT;
-  onUpgrade: (plan: UpgradeTarget) => void;
+  onUpgrade: (plan: UpgradeTarget, action: UpgradeAction) => void;
 }
 
-function PlanCardAction({ plan, relationship, checkoutBlocked, t, onUpgrade }: PlanCardViewProps) {
+function PlanCardAction({
+  plan,
+  relationship,
+  checkoutBlocked,
+  upgradeAccess,
+  waitlisted,
+  t,
+  onUpgrade,
+}: PlanCardViewProps) {
   if (isTeamPlanTier(plan.id) && (relationship === 'current' || relationship === 'upgrade')) {
     return (
       <a
@@ -229,11 +245,39 @@ function PlanCardAction({ plan, relationship, checkoutBlocked, t, onUpgrade }: P
   }
   if (relationship === 'upgrade' && !isFreeBillingPlanTier(plan.id) && !isBusinessPlan(plan.id)) {
     const target = plan.id;
+    if (upgradeAccess === 'checking') {
+      return (
+        <Button
+          className="h-9 w-full rounded-xl text-sm"
+          disabled
+          aria-label={`Checking upgrade access for ${plan.name}`}
+        >
+          Checking access
+        </Button>
+      );
+    }
+    if (upgradeAccess === 'waitlist') {
+      return (
+        <div className="flex flex-col gap-2">
+          {waitlisted ? (
+            <p className="text-center text-sm text-foreground">{t('onPlanWaitlistNote')}</p>
+          ) : null}
+          <Button
+            className="h-9 w-full rounded-xl text-sm"
+            variant={waitlisted ? 'outline' : 'default'}
+            aria-label={waitlisted ? t('enterAccessCodeForPlan', { plan: plan.name }) : undefined}
+            onClick={() => onUpgrade(target, waitlisted ? 'open-waitlist' : 'join-waitlist')}
+          >
+            {waitlisted ? t('enterAccessCodeCta') : t('joinPlanWaitlistCta', { plan: plan.name })}
+          </Button>
+        </div>
+      );
+    }
     return (
       <Button
         className="h-9 w-full rounded-xl text-sm"
         disabled={checkoutBlocked}
-        onClick={() => onUpgrade(target)}
+        onClick={() => onUpgrade(target, 'checkout')}
       >
         {planCtaLabel(target, t)}
       </Button>
@@ -311,6 +355,7 @@ export function UpgradePlanDialog({
   // "Upgrade to Basic, $7/month" button.
   currentTier: reportedTier,
   targetTier = null,
+  waitlistApplies = false,
   onUpgrade,
 }: UpgradePlanDialogProps) {
   const { t } = useTranslation('pricing');
@@ -320,11 +365,24 @@ export function UpgradePlanDialog({
   const freeMediaOffer = useFreeMediaOffer(open);
   const plans = localizedPricing?.plans;
 
-  const currentTier = isBillingPlanTier(reportedTier)
-    ? subscriptionPlanTierOf(reportedTier)
-    : reportedTier;
+  const currentTier = isFreeOfChargePlanTier(reportedTier)
+    ? 'free'
+    : isBillingPlanTier(reportedTier)
+      ? subscriptionPlanTierOf(reportedTier)
+      : reportedTier;
   const tierKnown = typeof currentTier === 'string' && currentTier.length > 0;
   const hasPaidPlan = tierKnown && !isFreeOfChargePlanTier(currentTier);
+  const { status: waitlistStatus, checking: checkingAccess } = useUpgradeWaitlistStatus({
+    enabled: open && waitlistApplies,
+  });
+  const upgradeAccess: UpgradeAccess = !waitlistApplies
+    ? 'checkout'
+    : !waitlistStatus && checkingAccess
+      ? 'checking'
+      : upgradeNeedsWaitlist(waitlistStatus)
+        ? 'waitlist'
+        : 'checkout';
+  const waitlistedPlans = waitlistStatus?.joinedPlans ?? [];
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -366,7 +424,8 @@ export function UpgradePlanDialog({
         !PAID_INDIVIDUAL_PLANS.some(
           (paidPlan) => paidPlan === plan && planCheckoutReady(plans, paidPlan, 'monthly'),
         )));
-  const notices = checkoutNotices(hasPaidPlan, pricingStatus, plans);
+  const notices =
+    upgradeAccess === 'checkout' ? checkoutNotices(hasPaidPlan, pricingStatus, plans) : [];
   const focusedPlanLabel = targetTier ? BILLING_PLAN_PRICING[targetTier].label : null;
   const title = focusedPlanLabel ? `Upgrade to ${focusedPlanLabel}` : 'Upgrade your plan';
 
@@ -420,6 +479,17 @@ export function UpgradePlanDialog({
             </div>
           ) : null}
 
+          {upgradeAccess === 'waitlist' ? (
+            <p className="mb-3 text-sm text-muted-foreground">
+              Paid upgrades are opening in stages: join a plan’s waitlist, or use an access code if
+              you have one.
+            </p>
+          ) : null}
+          {upgradeAccess === 'checkout' ? (
+            <div className="mb-6 flex flex-col gap-2 empty:hidden">
+              <ServiceNotices scope="billing" />
+            </div>
+          ) : null}
           {notices.map((notice) => (
             <p key={notice} role="status" className="mb-3 text-sm text-muted-foreground">
               {notice}
@@ -442,6 +512,8 @@ export function UpgradePlanDialog({
                 plan={plan}
                 relationship={planRelationship(tierKnown ? currentTier : undefined, plan.id)}
                 checkoutBlocked={checkoutBlocked(plan.id)}
+                upgradeAccess={upgradeAccess}
+                waitlisted={waitlistedPlans.some((joined) => joined === plan.id)}
                 t={t}
                 onUpgrade={onUpgrade}
               />

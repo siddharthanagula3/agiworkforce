@@ -1,6 +1,20 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+vi.mock('@features/billing/hooks/use-upgrade-waitlist', () => ({
+  resolveUpgradeWaitlistStatus: vi.fn(),
+  useUpgradeWaitlistStatus: () => ({
+    status: null,
+    recordJoined: vi.fn(),
+    recordAccessGranted: vi.fn(),
+  }),
+}));
+vi.mock('@shared/components/ServiceNotices', () => ({
+  ServiceNotices: ({ scope }: { scope: string }) => (
+    <div data-testid="service-notices" data-scope={scope} />
+  ),
+}));
+
 import { UpgradePlanDialog } from './UpgradePlanDialog';
 
 const REM_PER_STEP = 0.25;
@@ -29,7 +43,13 @@ function reservedRightGutterRem(from: HTMLElement, root: HTMLElement): number {
 describe('UpgradePlanDialog header, close control has its own space', () => {
   it('reserves at least the close button footprint to the right of the heading', () => {
     render(
-      <UpgradePlanDialog open onOpenChange={vi.fn()} currentTier="free" onUpgrade={vi.fn()} />,
+      <UpgradePlanDialog
+        open
+        onOpenChange={vi.fn()}
+        currentTier="free"
+        waitlistApplies
+        onUpgrade={vi.fn()}
+      />,
     );
 
     const dialog = screen.getByRole('dialog');

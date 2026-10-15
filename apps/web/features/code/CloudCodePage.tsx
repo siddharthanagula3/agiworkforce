@@ -65,20 +65,33 @@ import {
   sessionContextChip,
   type CodeSessionFilters,
 } from './code-surface';
-import type { LocalDeveloperSession } from '@agiworkforce/local-runtime-contract';
 import {
+  localSessionFromSearch,
+  localSessionPath,
+  type LocalDeveloperSession,
+} from '@agiworkforce/local-runtime-contract';
+import type { ThreadDeleteResponse } from '@agiworkforce/types/protocol';
+import { deleteDeveloperThread } from '@/features/desktop-host';
+import {
+  LOCAL_CODE_COPY,
+  localDiscardArchivesConsequence,
   localFolderChoice,
   localFolderChoices,
   localModelChoices,
   localModelSetup,
-  LOCAL_CODE_COPY,
   localProviderSetups,
+  localSessionArchivedLine,
+  localSessionDeletedLine,
+  localWorktreeRemovedLine,
   preferredLocalRootId,
   startingModelId,
+  type LocalPlacement,
 } from './local-code';
 import { useLocalSessions } from './hooks/use-local-sessions';
+import { forgetLocalSession } from './local-session-memory';
 import { LocalSessionsSection } from './components/LocalSessionsSection';
 import { LocalSessionPanel } from './components/LocalSessionPanel';
+import { LocalListNotice } from './components/LocalListNotice';
 import { CodeRail } from './components/CodeRail';
 import {
   CodeComposer,
@@ -178,12 +191,23 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   const [localEditorDirty, setLocalEditorDirty] = useState(false);
   const [localSession, setLocalSession] = useState<LocalDeveloperSession | null>(null);
   const [localPrompt, setLocalPrompt] = useState('');
+  const [localPlacement, setLocalPlacement] = useState<LocalPlacement>('local');
+  const [localDeletion, setLocalDeletion] = useState<{
+    rootId: string;
+    threadId: string;
+    outcome: ThreadDeleteResponse;
+  } | null>(null);
+  const [localArchivedThread, setLocalArchivedThread] = useState<string | null>(null);
+  const [localWorktreeRemovedRef, setLocalWorktreeRemovedRef] = useState<string | null>(null);
   const local = useLocalSessions();
   const environmentChosen = useRef(false);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const railTriggerRef = useRef<HTMLButtonElement>(null);
   const hiddenProbeRef = useRef(false);
   const routeSessionRef = useRef<string | null>(sessionId ?? null);
+  const routeLocalRef = useRef<{ rootId: string; threadId: string } | null>(
+    typeof window === 'undefined' || pane ? null : localSessionFromSearch(window.location.search),
+  );
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   const router = useRouter();
@@ -595,21 +619,105 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     [api, busy, canCreate, draft, replaceSession, router],
   );
 
+  useEffect(() => {
+    const wanted = routeLocalRef.current;
+    if (wanted === null || local.loading) return;
+    routeLocalRef.current = null;
+    const found = local.groups
+      .find((group) => group.rootId === wanted.rootId)
+      ?.sessions.find((session) => session.id === wanted.threadId);
+    if (found) {
+      setLocalSession(found);
+      return;
+    }
+    setRouteNotice(LOCAL_CODE_COPY.sessionNotFound);
+    routerRef.current.replace(CODE_ROUTES.root);
+  }, [local.loading, local.groups]);
+
+  const openLocalSession = useCallback((session: LocalDeveloperSession) => {
+    setLocalSession(session);
+    setRouteNotice(null);
+    if (!paneRef.current) routerRef.current.replace(localSessionPath(session.rootId, session.id));
+  }, []);
+
+  const closeLocalSession = useCallback(() => {
+    setLocalEditorDirty(false);
+    setLocalSession(null);
+    if (!paneRef.current) routerRef.current.replace(CODE_ROUTES.root);
+  }, []);
+
+  const localSessionDeleted = useCallback(
+    (session: LocalDeveloperSession, outcome: ThreadDeleteResponse) => {
+      setLocalDeletion({ rootId: session.rootId, threadId: session.id, outcome });
+      local.dismissCleanupFailures(session.id);
+      local.refresh();
+      closeLocalSession();
+      forgetLocalSession(session.rootId, session.id);
+    },
+    [closeLocalSession, local],
+  );
+
+  const localSessionArchived = useCallback(
+    (session: LocalDeveloperSession) => {
+      setLocalArchivedThread(session.id);
+      local.dismissCleanupFailures(session.id);
+      local.refresh();
+      closeLocalSession();
+    },
+    [closeLocalSession, local],
+  );
+
+  const requestDiscardArchives = useCallback(() => {
+    const deletion = localDeletion;
+    if (!deletion) return;
+    const kept = deletion.outcome.keptWorktreeArchives;
+    confirm({
+      title: LOCAL_CODE_COPY.deleteArchivesTitle,
+      description: localDiscardArchivesConsequence(kept.length),
+      confirmLabel: LOCAL_CODE_COPY.deleteArchivesConfirm,
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          const discarded = await deleteDeveloperThread({
+            rootId: deletion.rootId,
+            threadId: deletion.threadId,
+            discardWorktreeArchives: true,
+          });
+          setLocalDeletion({
+            ...deletion,
+            outcome: {
+              ...deletion.outcome,
+              keptWorktreeArchives: kept.filter(
+                (archive) => !discarded.removedWorktreeArchives.includes(archive),
+              ),
+              removedWorktreeArchives: [
+                ...deletion.outcome.removedWorktreeArchives,
+                ...discarded.removedWorktreeArchives,
+              ],
+            },
+          });
+        } catch (discardError) {
+          setError(toUserMessage(discardError, LOCAL_CODE_COPY.deleteFailed));
+        }
+      },
+    });
+  }, [confirm, localDeletion]);
+
   const startLocalSession = useCallback(
     async (rootId: string, text: string, model: string) => {
       setBusy(true);
       try {
-        const started = await local.startSession(rootId, model || undefined);
+        const started = await local.startSession(rootId, model || undefined, localPlacement);
         if (!started) return;
         setTask('');
         setLocalPrompt(text);
-        setLocalSession(started);
+        openLocalSession(started);
         setRailDrawerOpen(false);
       } finally {
         setBusy(false);
       }
     },
-    [local],
+    [local, openLocalSession, localPlacement],
   );
 
   const handleSubmit = useCallback(
@@ -919,7 +1027,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     onNewSession: openHome,
     onSelectSession: (id: string, options?: { split: boolean }) =>
       leaveLocalEdits(() => {
-        setLocalSession(null);
+        if (localSession) closeLocalSession();
         if (panes.select(id, options?.split === true)) return;
         openSession(id);
       }),
@@ -931,12 +1039,13 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         error={local.error}
         unavailable={local.unavailable}
         selectedId={localSession?.id ?? null}
+        activity={local.activity}
         onSelect={(session) => {
           if (session.id === localSession?.id) return;
           leaveLocalEdits(() => {
             setRailDrawerOpen(false);
             setLocalPrompt('');
-            setLocalSession(session);
+            openLocalSession(session);
           });
         }}
         onNewSession={(rootId) =>
@@ -945,13 +1054,19 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
               if (session) {
                 setRailDrawerOpen(false);
                 setLocalPrompt('');
-                setLocalSession(session);
+                openLocalSession(session);
               }
             });
           })
         }
         onAddFolder={() => void local.addFolder('folder')}
         onAddRepository={() => void local.addFolder('repository')}
+        allowing={local.allowing}
+        allowRefusals={local.allowRefusals}
+        onAllowSessions={(rootId) => void local.allowSessions(rootId)}
+        reviewingMcp={local.reviewingMcp}
+        mcpRefusals={local.mcpRefusals}
+        onReviewMcpServer={(rootId, server) => void local.reviewMcpServer(rootId, server)}
       />
     ) : null,
   };
@@ -962,15 +1077,18 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   const localDraftBlocked = isLocalDraft ? (draftFolder?.unavailable ?? null) : null;
   const composerLocal: CodeLocalState = {
     supported: local.supported,
+    worktrees: local.worktrees,
     folders: localFolderChoices(local.groups),
     models: localChoices,
     setups: localProviderSetups(draftRuntime),
     modelId: localModelId,
     modelUnreachable: localModelSetup(draftRuntime, localModelId) !== null,
     adding: local.adding,
+    placement: local.worktrees ? localPlacement : 'local',
     onAddFolder: () => void local.addFolder(),
     onModelChange: (modelId) => handleDraftChange({ localModelId: modelId }),
     onBranchSwitched: local.refresh,
+    onPlacementChange: setLocalPlacement,
   };
 
   const unavailableNotice = availability
@@ -1018,6 +1136,65 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         <div className={`${styles['notice']} ${styles['noticeError']}`} role="alert">
           <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
           <span>{local.error}</span>
+        </div>
+      )}
+      {localDeletion && !selectedSession && (
+        <LocalListNotice
+          line={localSessionDeletedLine(localDeletion.outcome)}
+          summary={LOCAL_CODE_COPY.keptArchivesList}
+          items={localDeletion.outcome.keptWorktreeArchives}
+          testId="local-session-deleted"
+          actions={
+            <>
+              {localDeletion.outcome.keptWorktreeArchives.length > 0 && (
+                <button
+                  type="button"
+                  className={styles['secondaryButton']}
+                  onClick={requestDiscardArchives}
+                >
+                  {LOCAL_CODE_COPY.deleteArchives}
+                </button>
+              )}
+              <button
+                type="button"
+                className={styles['secondaryButton']}
+                onClick={() => setLocalDeletion(null)}
+              >
+                <X size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+                {CODE_COPY.dismiss}
+              </button>
+            </>
+          }
+        />
+      )}
+      {localWorktreeRemovedRef !== null && !selectedSession && (
+        <div className={styles['notice']} role="status" data-testid="local-worktree-removed">
+          <span>{localWorktreeRemovedLine(localWorktreeRemovedRef)}</span>
+          <span className={styles['noticeActions']}>
+            <button
+              type="button"
+              className={styles['secondaryButton']}
+              onClick={() => setLocalWorktreeRemovedRef(null)}
+            >
+              <X size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+              {CODE_COPY.dismiss}
+            </button>
+          </span>
+        </div>
+      )}
+      {localArchivedThread !== null && !selectedSession && (
+        <div className={styles['notice']} role="status" data-testid="local-session-archived">
+          <span>{localSessionArchivedLine(localArchivedThread)}</span>
+          <span className={styles['noticeActions']}>
+            <button
+              type="button"
+              className={styles['secondaryButton']}
+              onClick={() => setLocalArchivedThread(null)}
+            >
+              <X size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+              {CODE_COPY.dismiss}
+            </button>
+          </span>
         </div>
       )}
       {routeNotice && (
@@ -1132,14 +1309,28 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         >
           {localSession && localGroup ? (
             <LocalSessionPanel
-              key={localSession.id}
+              key={`${localSession.rootId}:${localSession.id}`}
               session={localSession}
               group={localGroup}
               runtimeModels={local.modelsFor(localGroup.rootId)}
+              modelsStale={local.modelsStale(localGroup.rootId)}
               verbose={verbose}
               initialPrompt={localPrompt}
               onPromptSent={() => setLocalPrompt('')}
-              onClose={() => leaveLocalEdits(() => setLocalSession(null))}
+              onSessionsChanged={local.refresh}
+              cleanupFailures={local.cleanupFailures[localSession.id]}
+              onDismissCleanupFailures={() => local.dismissCleanupFailures(localSession.id)}
+              onDeleted={(outcome) => localSessionDeleted(localSession, outcome)}
+              onArchived={() => localSessionArchived(localSession)}
+              onWorktreeRemoved={(snapshotRef) => {
+                setLocalWorktreeRemovedRef(snapshotRef);
+                forgetLocalSession(localSession.rootId, localSession.id);
+              }}
+              onForked={(forked) => {
+                local.refresh();
+                leaveLocalEdits(() => openLocalSession(forked));
+              }}
+              onClose={() => leaveLocalEdits(closeLocalSession)}
               onEditorDirtyChange={setLocalEditorDirty}
             />
           ) : (

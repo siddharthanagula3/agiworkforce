@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const listWorkspaceRoots = vi.fn();
@@ -8,9 +8,17 @@ const pickWorkspaceRoot = vi.fn();
 const readWorkspaceFile = vi.fn();
 const openWorkspacePath = vi.fn();
 const revealWorkspacePath = vi.fn();
+let workspaceChanged: (() => void) | null = null;
+const onWorkspaceChanged = (listener: () => void) => {
+  workspaceChanged = listener;
+  return () => {
+    workspaceChanged = null;
+  };
+};
 
 vi.mock('../lib/runtime-client', () => ({
   listWorkspaceRoots,
+  onWorkspaceChanged,
   listWorkspaceFiles,
   pickWorkspaceRoot,
   readWorkspaceFile,
@@ -45,6 +53,16 @@ beforeEach(() => {
 });
 
 describe('LocalFolderAttachDialog row actions', () => {
+  it('rereads the approved folders when one is dropped on the window while it is open', async () => {
+    render(<LocalFolderAttachDialog open onClose={vi.fn()} onAttach={vi.fn()} />);
+    await screen.findByRole('button', { name: 'Open notes.md with the default app' });
+    expect(listWorkspaceRoots).toHaveBeenCalledTimes(1);
+
+    act(() => workspaceChanged?.());
+
+    await waitFor(() => expect(listWorkspaceRoots).toHaveBeenCalledTimes(2));
+  });
+
   it('opens a row with the default app', async () => {
     const user = userEvent.setup();
     render(<LocalFolderAttachDialog open onClose={vi.fn()} onAttach={vi.fn()} />);

@@ -365,13 +365,10 @@ describe('ToolTimeline · manual approval', () => {
     expect(prompt.getByRole('button', { name: 'Deny' })).toBeInTheDocument();
   });
 
-  it('offers the remembered permission levels in the same vocabulary', () => {
+  it('offers no standing grant inline; a scoped allow goes through the reviewed approval card', () => {
     render(<ToolTimeline tools={[awaitingTool]} onApprove={() => {}} onReject={() => {}} />);
-    const remember = within(screen.getByRole('group', { name: /remember permission/i }));
-    expect(remember.getByRole('button', { name: 'Always allow' })).toBeInTheDocument();
-    expect(remember.getByRole('button', { name: 'Ask' })).toBeInTheDocument();
-    expect(remember.getByRole('button', { name: 'Deny' })).toBeInTheDocument();
-    expect(remember.queryByRole('button', { name: 'Block' })).toBeNull();
+    expect(screen.queryByRole('group', { name: /remember permission/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Always allow' })).toBeNull();
   });
 
   it('never labels a tool awaiting approval as running, and does not claim the timeline is busy', () => {

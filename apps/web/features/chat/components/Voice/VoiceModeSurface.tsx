@@ -14,6 +14,7 @@ import {
 } from '@features/chat/stores/voice-session-store';
 import { VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
 import { liveVoiceOutputRef } from '@features/chat/hooks/use-voice-session';
+import { useDesktopHost } from '@/features/desktop-host/lib/host';
 import { useVisualSession } from '@/lib/visual/use-visual-session';
 import { VOICE_ATTACHMENT_ACCEPT } from '@features/chat/lib/voice-attachments';
 import { ToolTimeline, type ToolEntry } from '../messages/ToolTimeline';
@@ -177,6 +178,9 @@ export function VoiceModeSurface({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [exit]);
 
+  // The desktop shell grants the microphone and nothing else: it carries no
+  // camera entitlement or usage string, so a camera request there always fails.
+  const cameraAvailable = useDesktopHost() === null;
   const visual = useVisualSession({
     source: 'camera',
     voiceActive: status !== VOICE_SESSION_STATUS.exited,
@@ -460,7 +464,7 @@ export function VoiceModeSurface({
       {sendingChip}
       {captionsOpen ? <VoiceCaptions lines={captions} /> : null}
 
-      {onVisualFrame ? (
+      {onVisualFrame && cameraAvailable ? (
         <div className="flex flex-col items-center gap-2">
           <button
             type="button"

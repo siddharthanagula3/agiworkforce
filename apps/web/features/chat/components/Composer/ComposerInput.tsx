@@ -105,6 +105,8 @@ export interface ComposerInputProps {
   onPasteCode: (paste: ComposerCodePaste) => void;
   onDropFiles: (files: readonly File[]) => void;
   onSubmit: () => void;
+  /** Cmd/Ctrl+Shift+Enter in the editor arm; the textarea arm reads it in `onKeyDown`. */
+  onAlternateSubmit: () => void;
   onFocusChange: (focused: boolean) => void;
   placeholder: string | undefined;
   disabled: boolean;
@@ -175,6 +177,7 @@ function ComposerRichEditor({
   onPasteCode,
   onDropFiles,
   onSubmit,
+  onAlternateSubmit,
   onFocusChange,
   placeholder,
   disabled,
@@ -233,6 +236,7 @@ function ComposerRichEditor({
       mention={mention}
       onTextChange={onTextChange}
       onSubmit={onSubmit}
+      onAlternateSubmit={onAlternateSubmit}
       onFocusChange={onFocusChange}
       onPasteDecision={onPasteDecision}
       onPasteCode={onPasteCode}

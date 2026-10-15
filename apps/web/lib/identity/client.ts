@@ -282,6 +282,11 @@ export interface IdentityConnectedAccountsState {
   disconnect: (accountId: string) => Promise<void>;
 }
 
+const VERIFIED_EMAIL_STATUS = 'verified';
+
+export const UNCONFIRMED_EMAIL_CONNECT_MESSAGE =
+  'Confirm your email address before you connect another way to sign in.';
+
 const CONNECT_STRATEGIES = {
   google: 'oauth_google',
   github: 'oauth_github',
@@ -304,6 +309,9 @@ export function useConnectedAccounts(): IdentityConnectedAccountsState {
   const connect = useCallback(
     async (provider: AuthProviderId, returnUrl: string) => {
       if (!user) throw new Error('Sign in again to connect an account.');
+      if (user.primaryEmailAddress?.verification?.status !== VERIFIED_EMAIL_STATUS) {
+        throw new Error(UNCONFIRMED_EMAIL_CONNECT_MESSAGE);
+      }
       const account = await user.createExternalAccount({
         strategy: CONNECT_STRATEGIES[provider],
         redirectUrl: returnUrl,

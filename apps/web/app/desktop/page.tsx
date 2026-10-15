@@ -12,9 +12,8 @@ import {
 import { LedgerSection } from '@/features/marketing/components/LandingSections';
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
+import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
 import { DesktopDownloadAvailability } from '../download/DesktopDownloadAvailability';
-
-const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 
 const ACCOUNT_CARRIES = connectorsReleased()
   ? 'Chats, projects, memory and connectors are the ones you have on the web.'
@@ -44,7 +43,7 @@ export default function DesktopPage() {
                 <Link href="#desktop-downloads" className="agi-fl-cta agi-fl-cta--primary">
                   Check installer availability
                 </Link>
-                <Link href={WEB_CHAT_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--secondary">
+                <Link href={WEB_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--secondary">
                   Use AGI Web
                 </Link>
                 <WaitlistTrigger
@@ -185,7 +184,7 @@ export default function DesktopPage() {
           body="A download control appears only once the release API verifies a signed build for your architecture, so this page reflects what is published rather than what is built. The availability section above reports what that check finds for macOS right now. Windows and Linux installers are not published."
           ctas={[
             { href: '#desktop-downloads', label: 'Check installer availability' },
-            { href: WEB_CHAT_ENTRY_HREF, label: 'Use AGI Web' },
+            { href: WEB_ENTRY_HREF, label: 'Use AGI Web' },
             { label: 'Discuss Enterprise access', waitlist: true },
           ]}
           stamp="macOS · verification required before download"

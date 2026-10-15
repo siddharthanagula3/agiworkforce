@@ -63,6 +63,10 @@ function loadWebMcpConfig(): WebMcpEntry[] {
   return _configCache;
 }
 
+export function isOperatorMcpServer(serverId: string): boolean {
+  return loadWebMcpConfig().some((server) => server.id === serverId);
+}
+
 function entryToConfig(entry: WebMcpEntry): McpServerConfig {
   return {
     url: entry.transport.url,
@@ -210,6 +214,8 @@ export interface WebMcpToolDef {
   origin?: 'operator' | 'connector';
   serverLabel?: string;
   inputSchema: Record<string, unknown>;
+  /** The server's own MCP tool annotations: untrusted hints that only ever raise the risk tier. */
+  annotations?: Record<string, unknown>;
   /** Served from a Google API host, so its results are Google user data. */
   googleUserData?: true;
 }
@@ -224,6 +230,7 @@ export function catalogToToolDefs(catalog: McpToolCatalog): WebMcpToolDef[] {
     description: t.description ?? t.fallbackDescription,
     origin: 'operator',
     inputSchema: t.inputSchema,
+    ...(t.annotations ? { annotations: t.annotations } : {}),
   }));
 }
 

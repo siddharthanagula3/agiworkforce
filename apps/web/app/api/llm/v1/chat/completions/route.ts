@@ -107,10 +107,15 @@ class DurableStreamStalledError extends Error {
 import { CloudAgentWorkflowBillingUnavailableError } from '@/lib/workflows/cloud-agent-workflow-input';
 import { areDurableInitialTurnsEnabled } from '@/lib/workflows/durable-initial-turns';
 import {
+  connectorToolNames,
+  createCloudAgentToolPermissionGate,
+} from '@/lib/workflows/cloud-agent-tool-permission-gate';
+import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
   loadConnectorToolPermissions,
   scopeConnectorPermissionsToTurn,
 } from './lib/connector-tool-permissions';
+import { managedConversationGrantScope } from './lib/connector-tool-session-grants';
 import { admitConversationTurn } from './lib/conversation-turn-admission';
 import { hostedToolRunsUnasked, loadTurnToolPermissions } from './lib/tool-approval-policy';
 import { DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
@@ -569,7 +574,15 @@ async function dispatchChatCompletions(
       const researchConnectors = scopeResearchConnectors(
         processed,
         await timePhase(CHAT_TURN_PHASE.toolPermissions, () =>
-          loadConnectorToolPermissions(requestDb, userId, processed.organizationId ?? null),
+          loadConnectorToolPermissions(
+            requestDb,
+            userId,
+            processed.organizationId ?? null,
+            managedConversationGrantScope(
+              processed.conversationId,
+              processed.conversationIsTemporary === true,
+            ),
+          ),
         ),
       );
       const researchConnectorPermissions = researchConnectors.permissions;
@@ -788,7 +801,7 @@ async function dispatchChatCompletions(
       getModelMetadataById(processed.chatRequest.model)?.capabilities?.tools ?? true;
     const userConnectorToolsEnabled =
       processed.chatRequest.connector_tools_enabled !== false &&
-      (await connectorsAllowedForTurn(request, userId, processed));
+      (processed.connectorsAllowed ?? (await connectorsAllowedForTurn(request, userId, processed)));
     const operatorTools = modelSupportsTools
       ? await timePhase(CHAT_TURN_PHASE.toolCatalog, () => loadMcpToolDefs())
       : [];
@@ -812,6 +825,8 @@ async function dispatchChatCompletions(
       connectorPermissionsRequired || toolApprovalPolicyRequired
         ? await timePhase(CHAT_TURN_PHASE.toolPermissions, async () => {
             return loadTurnToolPermissions(requestDb, userId, {
+              conversationId: processed.conversationId,
+              temporary: processed.conversationIsTemporary === true,
               organizationId: processed.organizationId ?? null,
               modelSupportsTools,
               connectorPermissionsRequired,
@@ -1083,6 +1098,14 @@ async function dispatchChatCompletions(
         onResilienceObservation: recordResilienceObservation,
         ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
       });
+      const permissionGate = createCloudAgentToolPermissionGate(requestDb, {
+        userId,
+        organizationId: processed.organizationId ?? null,
+        connectorToolNames: connectorToolNames(mcpTools),
+        conversationId: processed.conversationId,
+        temporary: processed.conversationIsTemporary === true,
+        disabledConnectorIds: processed.chatRequest.disabled_connector_ids,
+      });
       const toolLoopGen = runToolLoop(processed, {
         mcpTools,
         approvalMode: loopInputs.approvalMode,
@@ -1092,6 +1115,7 @@ async function dispatchChatCompletions(
         // AUDIT-FIX CON-1: server-side enforcement of the user's saved verdicts,
         // layered with this turn's per-conversation connector opt-out.
         connectorPermissions: turnConnectorPermissions,
+        sessionGrantRefusal: (name, risk) => permissionGate.refusalFor(name, risk),
         toolApprovalPolicy,
         // AUDIT-FIX BUG-1: a client cancel aborts the in-flight provider call
         // instead of billing a full agentic turn nobody sees.
@@ -1123,6 +1147,7 @@ async function dispatchChatCompletions(
               processed.chatRequest,
               processed.callerToolFields,
               processed.turnAttachments,
+              processed.modelSelection,
             ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
@@ -1147,6 +1172,7 @@ async function dispatchChatCompletions(
               processed.chatRequest,
               processed.callerToolFields,
               processed.turnAttachments,
+              processed.modelSelection,
             ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
@@ -1168,6 +1194,7 @@ async function dispatchChatCompletions(
               processed.chatRequest,
               processed.callerToolFields,
               processed.turnAttachments,
+              processed.modelSelection,
             ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,

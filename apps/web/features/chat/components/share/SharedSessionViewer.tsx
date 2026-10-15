@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { ModelBadge } from '@agiworkforce/ui';
 import { getManagedModelPresentationLabel } from '@agiworkforce/unified-chat';
+import { webEntryHref, webSignInHref } from '@/features/marketing/components/system/nav';
 
 interface ToolCall {
   tool_name: string;
@@ -35,15 +36,42 @@ export interface SharedSession {
   created_at: string;
 }
 
-export function SharedSessionViewer({ session, token }: { session: SharedSession; token: string }) {
+export function SharedSessionViewer({
+  session,
+  token,
+  signedIn,
+}: {
+  session: SharedSession;
+  token: string;
+  signedIn: boolean;
+}) {
+  const sharePath = `/share/${token}`;
+  const continuePath = `/chat/from-share/${token}`;
+
   return (
     <main id="main-content" className="min-h-screen bg-background text-foreground">
       {/* Top banner */}
       <div className="border-b border-border bg-primary/10 px-4 py-3 text-center text-sm text-foreground">
-        Read-only shared session.{' '}
-        <a href="/signup" className="font-medium underline underline-offset-2 hover:text-primary">
-          Sign in to create your own
-        </a>
+        Read-only shared session.
+        {signedIn ? null : (
+          <>
+            {' '}
+            <a
+              href={webEntryHref(sharePath)}
+              className="font-medium underline underline-offset-2 hover:text-primary"
+            >
+              Create an account
+            </a>{' '}
+            or{' '}
+            <a
+              href={webSignInHref(sharePath)}
+              className="font-medium underline underline-offset-2 hover:text-primary"
+            >
+              sign in
+            </a>{' '}
+            to start your own.
+          </>
+        )}
       </div>
 
       {/* Header */}
@@ -67,7 +95,7 @@ export function SharedSessionViewer({ session, token }: { session: SharedSession
             </div>
           </div>
           <Link
-            href={`/chat/from-share/${token}`}
+            href={signedIn ? continuePath : webEntryHref(continuePath)}
             prefetch={false}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >

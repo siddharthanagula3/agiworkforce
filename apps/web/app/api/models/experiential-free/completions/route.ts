@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
+import { stripSystemPromptCacheBoundary } from '@agiworkforce/provider-protocol';
 import { assertAccountActive } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -31,6 +32,9 @@ import {
 } from '@/lib/services/organization-policy-gate';
 import { applySecretHandlingToTexts } from '@/app/api/llm/v1/chat/completions/lib/secret-handling-gate';
 import { SSE_RESPONSE_HEADERS } from '@/app/api/llm/v1/chat/completions/lib/sse-heartbeat';
+import { buildTextOnlyPreamble } from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
+import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
+import { promptVariantsForSubject } from '@/lib/prompts/prompt-variants';
 import { logger } from '@/lib/logger';
 import {
   conversationHoldsGoogleUserData,
@@ -108,8 +112,12 @@ async function handlePost(request: NextRequest): Promise<Response> {
     return refusal(503, 'free_quota_unavailable', 'This free promotion is not available now.');
   }
 
-  const [conversation] = await scoped.db.query<{ id: string; data_region: string | null }>(
-    'select c.id, o.data_region from web_conversations c left join organizations o on o.id = c.organization_id where c.id = $1 and c.user_id = $2 and c.organization_id is not distinct from $3 and c.deleted_at is null',
+  const [conversation] = await scoped.db.query<{
+    id: string;
+    data_region: string | null;
+    is_temporary: boolean | null;
+  }>(
+    'select c.id, o.data_region, c.is_temporary from web_conversations c left join organizations o on o.id = c.organization_id where c.id = $1 and c.user_id = $2 and c.organization_id is not distinct from $3 and c.deleted_at is null',
     [body.conversation_id, scoped.userId, scoped.organizationId],
   );
   if (!conversation) return refusal(404, 'conversation_not_found', 'Conversation not found.');
@@ -188,10 +196,28 @@ async function handlePost(request: NextRequest): Promise<Response> {
   if (secrets.action === 'blocked') {
     return refusal(403, 'secrets_blocked', 'Remove sensitive credentials before sending.');
   }
-  const messages = body.messages.map((message, index) => ({
-    ...message,
-    content: secrets.texts[index]!,
-  }));
+  const promptVariants = await promptVariantsForSubject(
+    buildFlagSubject(request, {
+      userId: scoped.userId,
+      workspaceId: scoped.organizationId,
+      role: null,
+      plan: planTier,
+      surface: 'web',
+    }),
+  );
+  const preamble = buildTextOnlyPreamble({
+    servingModel: { kind: 'unattributed', name: selected.offering.displayName },
+    promptSelection: { variants: promptVariants },
+    setup: { temporaryChat: conversation.is_temporary === true, personalContext: 'not_used' },
+    ...(body.client_timezone ? { timeZone: body.client_timezone } : {}),
+  });
+  const messages = [
+    { role: 'system' as const, content: stripSystemPromptCacheBoundary(preamble) },
+    ...body.messages.map((message, index) => ({
+      ...message,
+      content: secrets.texts[index]!,
+    })),
+  ];
   const egress = await buildProviderEgressGateResponse({
     mode: 'managed',
     surface: 'web',

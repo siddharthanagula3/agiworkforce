@@ -45,6 +45,13 @@ import { ImageMaskDialog, type ImageMaskResult } from './ImageMaskDialog';
 import { ComposerFooter } from './ComposerFooter';
 import { freeQuotaSelection, promotionalChatToolConflict } from '../../lib/free-quota-selection';
 import { useFreeModelPromotion } from '@features/chat/hooks/use-free-model-promotion';
+import {
+  freeModelAttachmentKind,
+  freeModelHandoffReason,
+  freeQuotaChatOffering,
+} from '../../lib/free-model-handoff';
+import { freeModelTurnNotes } from '../../lib/free-model-turn-notes';
+import { FreeModelTurnNotes } from './FreeModelTurnNotes';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { DragDropOverlay } from './DragDropOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
@@ -109,6 +116,7 @@ import {
 import { useModelStore } from '@shared/stores/model-store';
 import {
   getAllowedAutoModesForTier,
+  getBestAutoModeForTier,
   getModelMetadata,
   getSelectableModels,
   isModelAllowedForTier,
@@ -150,13 +158,25 @@ import {
 } from '@/lib/runtime/memory-capability';
 import {
   BUILT_IN_SLASH_COMMANDS,
+  COMPOSER_FOLLOW_UP_INVERT_SHORTCUT,
   decideComposerPaste,
   matchMentionQuery,
+  matchesShortcut,
   pastedCodeFence,
+  resolveFollowUpState,
   useCapability,
   useCapabilityDecision,
   useOnlineStatus,
 } from '@agiworkforce/unified-chat';
+import { safePlatform } from '@shared/utils/browser-utils';
+import { openModelPicker } from '@features/chat/lib/model-picker-trigger';
+import {
+  availableChatSlashCommands,
+  CHAT_SLASH_DONE,
+  type AvailableChatSlashCommand,
+  type ChatSlashActions,
+  type ChatStatusLine,
+} from '@features/chat/lib/chat-slash-commands';
 import { isImeComposingKey } from '@agiworkforce/unified-chat/composer-editor';
 import type {
   ComposerAttachmentPasteDecision,
@@ -270,6 +290,7 @@ interface QueuedFollowUp {
   preview: string;
   toolsLabel: string | null;
   steerId?: string;
+  invertFollowUp: boolean;
 }
 
 const WORK_MODE_LABELS: Record<ComposerWorkMode, string> = {
@@ -381,6 +402,9 @@ export interface ComposerSendMeta {
   memoryEnabled?: boolean;
   /** Exact promotional media offering for this turn; never applied to text chat by default. */
   modelOverrideId?: string;
+  /** Delivered from the follow-up queue: the composer no longer holds this text, so a host that
+   * holds the send back owes it to the reader. */
+  queuedFollowUp?: boolean;
 }
 
 export interface ComposerAttachmentUploadAttempt {
@@ -462,6 +486,12 @@ interface ChatComposerProps {
   sendPreviewPresentation?: SendPreviewPresentation;
   /** Opens the upgrade plan dialog from locked model/usage upgrade affordances. */
   onUpgradeRequest?: () => void;
+  /**
+   * Conversation actions the slash menu may run. A command is listed only when
+   * its action is supplied here; `/model` is added by the composer itself while
+   * its model picker is on screen.
+   */
+  chatSlashActions?: ChatSlashActions;
   /** The workspace has not turned fast mode on for this account. */
   fastModeDisabledByWorkspace?: boolean;
   /** Persists a model switch for the active conversation before it becomes current. */
@@ -688,6 +718,7 @@ type SlashCommandOutcome =
       enableThinking?: boolean;
       /** The command asked for a search outright, not merely for the tool to be offered. */
       searchRequested?: boolean;
+      codeExecutionRequested?: boolean;
     };
 
 /**
@@ -766,6 +797,7 @@ const ChatComposerNewComponent = ({
   projectId = null,
   onSetTemporaryChat,
   suppressAutoFocus = false,
+  chatSlashActions,
 }: ChatComposerProps) => {
   const online = useOnlineStatus();
   const isTurnActive = isLoading || isGenerating;
@@ -801,6 +833,7 @@ const ChatComposerNewComponent = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [localNotice, setLocalNotice] = useState<string | null>(null);
+  const [statusLines, setStatusLines] = useState<readonly ChatStatusLine[] | null>(null);
   const [pastedTextUndo, setPastedTextUndo] = useState<{ fileName: string; text: string } | null>(
     null,
   );
@@ -1375,6 +1408,8 @@ const ChatComposerNewComponent = ({
   const promotionalTextOnlyChat = selectedFreeOffering?.quotaProbeProtocol === 'chat';
   const promotionalVisionChat =
     promotionalTextOnlyChat && selectedFreeOffering?.quotaChatImageInput === true;
+  const handsOverToAuto = freeQuotaChatOffering(composerSelectedModelId) !== null;
+  const restrictedFreeChat = promotionalTextOnlyChat && !handsOverToAuto;
   const freeQuotaMediaSelected = freeQuotaSelected && !promotionalTextOnlyChat;
   const trialExhausted = !freeQuotaSelected && isFreeTrial && (freeTrial?.limitReached ?? false);
   useEffect(() => {
@@ -1405,7 +1440,10 @@ const ChatComposerNewComponent = ({
   const selectedModelCaps = selectedModelMeta?.capabilities;
   const modelSupportsVision = selectedModelCaps?.vision ?? false;
   const modelCanAcceptImages =
-    isAutoModeModelId(composerSelectedModelId) || modelSupportsVision || promotionalVisionChat;
+    isAutoModeModelId(composerSelectedModelId) ||
+    modelSupportsVision ||
+    promotionalVisionChat ||
+    handsOverToAuto;
   /**
    * AUDIT-FIX CMP-27: the conflict check used to be `type.startsWith('image/')`
    * only, while the file input accepts the FULL chat-attachment allowlist. A
@@ -1425,7 +1463,7 @@ const ChatComposerNewComponent = ({
   const promotionalAttachmentConflict =
     !imageMode &&
     !videoMode &&
-    promotionalTextOnlyChat &&
+    restrictedFreeChat &&
     attachments.some((file) => !promotionalVisionChat || !isChatImageMimeType(file.type));
   const hasAttachmentConflict =
     promotionalAttachmentConflict ||
@@ -1444,7 +1482,7 @@ const ChatComposerNewComponent = ({
   const attachmentsUnavailable =
     videoMode ||
     (imageMode && !imageModelSupportsEdit) ||
-    (promotionalTextOnlyChat && !promotionalVisionChat);
+    (restrictedFreeChat && !promotionalVisionChat);
   const mediaAttachmentConflict = videoMode && attachments.length > 0;
   const localSelection = useLocalModelSelection((state) => state.selected);
   const { leaveLocalModel, dialog: leaveLocalModelDialog } = useLeaveLocalModel();
@@ -1474,9 +1512,12 @@ const ChatComposerNewComponent = ({
           modelSupportsTools: selectedModelCaps?.tools,
           genericBackendConfigured: genericWebSearchConfigured,
         }));
+  const autoSearchConfigured = canUseWebSearch && genericWebSearchConfigured;
   const researchAvailableForModel =
-    !promotionalTextOnlyChat &&
-    (isAutoSelected || modelSupportsResearch(selectedModelCaps, selectedModelMeta?.contextWindow));
+    !restrictedFreeChat &&
+    (isAutoSelected ||
+      handsOverToAuto ||
+      modelSupportsResearch(selectedModelCaps, selectedModelMeta?.contextWindow));
   const researchDecision = useCapabilityDecision('canUseDeepResearch');
   const researchNeedsUpgrade = isFreeTrial || researchDecision?.reason === 'requires_upgrade';
   const researchAllowed =
@@ -1501,7 +1542,8 @@ const ChatComposerNewComponent = ({
       (selectedModelCaps?.codeExecution ?? false) ||
       ((selectedModelCaps?.tools ?? false) && deploymentCodeExecution));
   const modelSupportsOfficeCreation =
-    !promotionalTextOnlyChat && (isAutoSelected || (selectedModelCaps?.tools ?? false));
+    !restrictedFreeChat &&
+    (isAutoSelected || handsOverToAuto || (selectedModelCaps?.tools ?? false));
   const promotionalToolConflict = promotionalChatToolConflict(
     mediaModeActive ? null : composerSelectedModelId,
     message,
@@ -1513,6 +1555,19 @@ const ChatComposerNewComponent = ({
       ),
     },
   );
+  const draftCommand = handsOverToAuto ? splitSlashCommand(message)?.token.toLowerCase() : null;
+  const handoffSearchRequested = draftCommand === 'search' && autoSearchConfigured;
+  const handoffReason = mediaModeActive
+    ? null
+    : freeModelHandoffReason(composerSelectedModelId, {
+        searchRequested: handoffSearchRequested,
+        research: researchEnabled,
+        codeExecution: codeExecutionEnabled || draftCommand === 'code',
+        officeCreation: officeCreationEnabled,
+        skillName: selectedSkillName,
+        mcpContext: selectedMcpContext,
+        attachments: attachments.map(freeModelAttachmentKind),
+      });
   const explicitSearchRequest =
     hasExplicitWebSearchIntent(message) || hasExplicitWebFetchIntent(message);
   const { promotion: freeModelPromotion } = useFreeModelPromotion(
@@ -1522,9 +1577,9 @@ const ChatComposerNewComponent = ({
     freeModelPromotion !== null && freeModelPromotion.modelId === composerSelectedModelId;
   const checkFreeSearchAllowance =
     isFreeBillingPlanTier(entitlementTier) &&
-    explicitSearchRequest &&
     !promotedModelSelected &&
-    (modelSupportsSearch || promotionalToolConflict === 'web_search');
+    ((explicitSearchRequest && (modelSupportsSearch || promotionalToolConflict === 'web_search')) ||
+      handoffReason === 'free_model_web_search');
   const { allowance: searchAllowance, retry: retrySearchAllowance } = useSearchAllowance(
     checkFreeSearchAllowance,
     billingUserId,
@@ -1729,6 +1784,7 @@ const ChatComposerNewComponent = ({
    * the input is `w-full` inside it.
    */
   const composerRowRef = useRef<HTMLDivElement>(null);
+  const composerCardRef = useRef<HTMLDivElement>(null);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [composerExpandable, setComposerExpandable] = useState(false);
   const [composerWrapsLines, setComposerWrapsLines] = useState(false);
@@ -2036,7 +2092,7 @@ const ChatComposerNewComponent = ({
         addFiles(images);
         return;
       }
-      if (promotionalTextOnlyChat) {
+      if (restrictedFreeChat) {
         if (!promotionalVisionChat) {
           setLocalNotice('This free model accepts text only. Choose Free Auto to attach files.');
           return;
@@ -2059,7 +2115,7 @@ const ChatComposerNewComponent = ({
       setLocalNotice(null);
       addFiles(files);
     },
-    [addFiles, imageMode, plural, promotionalTextOnlyChat, promotionalVisionChat, videoMode],
+    [addFiles, imageMode, plural, restrictedFreeChat, promotionalVisionChat, videoMode],
   );
 
   const handleFileDrop = useCallback(
@@ -2871,6 +2927,9 @@ const ChatComposerNewComponent = ({
 
       switch (commandId) {
         case 'search':
+          if (handsOverToAuto && autoSearchConfigured) {
+            return { status: 'applied', content: argument, toggles: {}, searchRequested: true };
+          }
           if (!modelSupportsSearch) {
             return {
               status: 'unavailable',
@@ -2919,6 +2978,14 @@ const ChatComposerNewComponent = ({
           }
           return { status: 'applied', content: argument, toggles: { imageMode: true } };
         case 'code':
+          if (handsOverToAuto) {
+            return {
+              status: 'applied',
+              content: argument,
+              toggles: {},
+              codeExecutionRequested: true,
+            };
+          }
           if (!modelSupportsCodeExecution) {
             return {
               status: 'unavailable',
@@ -2936,6 +3003,8 @@ const ChatComposerNewComponent = ({
     },
     [
       customCommands,
+      handsOverToAuto,
+      autoSearchConfigured,
       modelSupportsSearch,
       modelSupportsThinkingCap,
       modelSupportsCodeExecution,
@@ -2960,9 +3029,60 @@ const ChatComposerNewComponent = ({
     [setComposerToggles, setThinkingEnabled],
   );
 
+  const chatCommands = useMemo(
+    () =>
+      availableChatSlashCommands({
+        ...chatSlashActions,
+        ...(!imageMode && !videoMode
+          ? {
+              model: {
+                run: () =>
+                  openModelPicker()
+                    ? CHAT_SLASH_DONE
+                    : { kind: 'notice', message: 'The model picker is not available right now.' },
+              },
+            }
+          : {}),
+      }),
+    [chatSlashActions, imageMode, videoMode],
+  );
+
+  const pendingChatCommand = useMemo(() => {
+    const parsed = splitSlashCommand(message);
+    if (!parsed) return null;
+    const token = parsed.token.toLowerCase();
+    const command = chatCommands.find((candidate) => candidate.id === token);
+    return command ? { command, argument: parsed.argument } : null;
+  }, [message, chatCommands]);
+
+  const runChatCommand = useCallback(
+    (command: AvailableChatSlashCommand, argument: string) => {
+      const outcome = command.action.run(argument);
+      if (outcome.kind === 'notice') {
+        setLocalNotice(outcome.message);
+        return;
+      }
+      setLocalNotice(null);
+      setStatusLines(outcome.kind === 'status' ? outcome.lines : null);
+      writeComposerMessage('');
+    },
+    [writeComposerMessage],
+  );
+
   const handleSlashSelect = useCallback(
     (commandId: string) => {
       setShowSlashMenu(false);
+      const chatCommand = chatCommands.find((command) => command.id === commandId);
+      if (chatCommand) {
+        const argument = stripSlashCommandToken(messageRef.current);
+        if (chatCommand.takesArgument && !argument) {
+          writeComposerMessage(`${chatCommand.label} `);
+          setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
+          return;
+        }
+        runChatCommand(chatCommand, argument);
+        return;
+      }
       const outcome = resolveSlashCommand(commandId, stripSlashCommandToken(messageRef.current));
       if (outcome.status === 'unavailable') {
         // AUDIT-FIX CMP-8: a command that will not run must not clear the input.
@@ -2970,10 +3090,25 @@ const ChatComposerNewComponent = ({
         return;
       }
       setLocalNotice(null);
-      writeComposerMessage(commitSlashCommand(outcome));
+      const body = commitSlashCommand(outcome);
+      // A free model has no switch for these commands to turn on, so the
+      // command stays in the draft and is applied when the message is sent.
+      writeComposerMessage(
+        handsOverToAuto && (outcome.searchRequested || outcome.codeExecutionRequested)
+          ? `/${commandId} ${body}`
+          : body,
+      );
       setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
     },
-    [resolveSlashCommand, commitSlashCommand, writeComposerMessage, focusComposer],
+    [
+      chatCommands,
+      runChatCommand,
+      resolveSlashCommand,
+      commitSlashCommand,
+      writeComposerMessage,
+      focusComposer,
+      handsOverToAuto,
+    ],
   );
 
   const handleSkillSelect = useCallback(
@@ -3072,6 +3207,7 @@ const ChatComposerNewComponent = ({
   );
 
   const pendingSlashCommand = useMemo(() => {
+    if (pendingChatCommand) return null;
     const parsed = splitSlashCommand(message);
     if (!parsed) return null;
     const token = parsed.token.toLowerCase();
@@ -3086,7 +3222,7 @@ const ChatComposerNewComponent = ({
       return { commandId: custom.id, label: `/${custom.name}`, argument: parsed.argument };
     }
     return null;
-  }, [message, customCommands]);
+  }, [message, customCommands, pendingChatCommand]);
   const pendingSlashOutcome = useMemo(
     () =>
       pendingSlashCommand
@@ -3095,428 +3231,469 @@ const ChatComposerNewComponent = ({
     [pendingSlashCommand, resolveSlashCommand],
   );
 
-  const handleSubmit = useCallback(() => {
-    if (!message.trim() && attachments.length === 0) return;
-    if (online === false) {
-      setLocalNotice(SEND_REASON.offline);
-      return;
-    }
-    if (disabled) return;
-    if (hasAttachmentConflict) return;
-    if (promotionalToolConflict) return;
-    if (searchAllowanceBlocksSend) return;
-    if (localAttachmentConflict) return;
-    if (localProjectConflict) return;
-    if (attachmentPreparing) {
-      deferredSendRef.current = true;
-      return;
-    }
-    if (trialExhausted) {
-      onUpgradeRequest?.();
-      return;
-    }
-    if (usageBlock) {
-      usageBlock.onRecover?.();
-      return;
-    }
-
-    /**
-     * AUDIT-FIX CMP-9: apply a typed command at SEND time.
-     *
-     * `/search latest AI news` is the form the registry itself documents in
-     * every `example`, but the slash menu closed on the first space and nothing
-     * else parsed the line, so the whole string was sent as literal text and
-     * the command never ran. Resolving here means the typed form and the menu
-     * form go through exactly the same capability checks.
-     */
-    let outgoingContent = message;
-    let sendSearchRequested = false;
-    let sendWebSearchEnabled = webSearchEnabled;
-    let sendCodeExecutionEnabled = codeExecutionEnabled;
-    let sendThinkingEnabled = thinkingEnabled;
-    let sendImageMode = imageMode;
-    let artifactInstruction: string | undefined;
-    if (pendingSlashCommand) {
-      const outcome = resolveSlashCommand(
-        pendingSlashCommand.commandId,
-        pendingSlashCommand.argument,
-      );
-      if (outcome.status === 'unavailable') {
-        setLocalNotice(outcome.notice);
+  const submitMessage = useCallback(
+    (invertFollowUp: boolean) => {
+      if (!message.trim() && attachments.length === 0) return;
+      if (pendingChatCommand) {
+        runChatCommand(pendingChatCommand.command, pendingChatCommand.argument);
         return;
       }
-      outgoingContent = commitSlashCommand(outcome);
-      sendWebSearchEnabled = outcome.toggles.webSearchEnabled ?? sendWebSearchEnabled;
-      sendSearchRequested = outcome.searchRequested === true;
-      sendCodeExecutionEnabled = outcome.toggles.codeExecutionEnabled ?? sendCodeExecutionEnabled;
-      sendImageMode = outcome.toggles.imageMode ?? sendImageMode;
-      sendThinkingEnabled = outcome.enableThinking === true || sendThinkingEnabled;
-      if (!outgoingContent.trim() && attachments.length === 0) {
-        // The command was applied (its toggle is now on and visible in the "+"
-        // badge); there is simply nothing to send yet.
-        writeComposerMessage(outgoingContent);
+      if (online === false) {
+        setLocalNotice(SEND_REASON.offline);
         return;
       }
-    }
+      if (disabled) return;
+      if (hasAttachmentConflict) return;
+      if (promotionalToolConflict) return;
+      if (searchAllowanceBlocksSend) return;
+      if (localAttachmentConflict) return;
+      if (localProjectConflict) return;
+      if (attachmentPreparing) {
+        deferredSendRef.current = true;
+        return;
+      }
+      if (trialExhausted) {
+        onUpgradeRequest?.();
+        return;
+      }
+      if (usageBlock) {
+        usageBlock.onRecover?.();
+        return;
+      }
 
-    if (!secretWarningAcknowledgedRef.current && containsSecrets(outgoingContent)) {
-      secretWarningAcknowledgedRef.current = true;
-      setLocalNotice(
-        'This message looks like it contains an API key or credential. Send again to continue, or edit it first.',
-      );
-      return;
-    }
+      /**
+       * AUDIT-FIX CMP-9: apply a typed command at SEND time.
+       *
+       * `/search latest AI news` is the form the registry itself documents in
+       * every `example`, but the slash menu closed on the first space and nothing
+       * else parsed the line, so the whole string was sent as literal text and
+       * the command never ran. Resolving here means the typed form and the menu
+       * form go through exactly the same capability checks.
+       */
+      let outgoingContent = message;
+      let sendSearchRequested = false;
+      let sendWebSearchEnabled = webSearchEnabled;
+      let sendCodeExecutionEnabled = codeExecutionEnabled;
+      let sendThinkingEnabled = thinkingEnabled;
+      let sendImageMode = imageMode;
+      let artifactInstruction: string | undefined;
+      if (pendingSlashCommand) {
+        const outcome = resolveSlashCommand(
+          pendingSlashCommand.commandId,
+          pendingSlashCommand.argument,
+        );
+        if (outcome.status === 'unavailable') {
+          setLocalNotice(outcome.notice);
+          return;
+        }
+        outgoingContent = commitSlashCommand(outcome);
+        sendWebSearchEnabled = outcome.toggles.webSearchEnabled ?? sendWebSearchEnabled;
+        sendSearchRequested = outcome.searchRequested === true;
+        sendCodeExecutionEnabled =
+          outcome.codeExecutionRequested === true ||
+          (outcome.toggles.codeExecutionEnabled ?? sendCodeExecutionEnabled);
+        sendImageMode = outcome.toggles.imageMode ?? sendImageMode;
+        sendThinkingEnabled = outcome.enableThinking === true || sendThinkingEnabled;
+        if (!outgoingContent.trim() && attachments.length === 0) {
+          // On a free model these commands leave no switch on: clearing the
+          // draft would drop the command with nothing to show it was typed.
+          if (handsOverToAuto && (outcome.searchRequested || outcome.codeExecutionRequested)) {
+            setLocalNotice(
+              `Type what you want after /${pendingSlashCommand.commandId}, then send. The command applies to that one message.`,
+            );
+            return;
+          }
+          // The command was applied (its toggle is now on and visible in the "+"
+          // badge); there is simply nothing to send yet.
+          writeComposerMessage(outgoingContent);
+          return;
+        }
+      }
 
-    if (freeQuotaMediaSelected) sendImageMode = false;
+      if (!secretWarningAcknowledgedRef.current && containsSecrets(outgoingContent)) {
+        secretWarningAcknowledgedRef.current = true;
+        setLocalNotice(
+          'This message looks like it contains an API key or credential. Send again to continue, or edit it first.',
+        );
+        return;
+      }
 
-    const sendPromotionalMedia = (prompt: string, modelId: string) => {
+      if (freeQuotaMediaSelected) sendImageMode = false;
+
+      if (
+        !sendImageMode &&
+        !videoMode &&
+        freeModelHandoffReason(composerSelectedModelId, {
+          searchRequested: sendSearchRequested,
+          research: researchEnabled,
+          codeExecution: sendCodeExecutionEnabled,
+          officeCreation: officeCreationEnabled,
+          skillName: selectedSkillName,
+          mcpContext: selectedMcpContext,
+          attachments: attachments.map(freeModelAttachmentKind),
+        })
+      ) {
+        sendWebSearchEnabled = autoSearchConfigured;
+      }
+
+      const sendPromotionalMedia = (prompt: string, modelId: string) => {
+        setSendPendingFlag(true);
+        const result = onSend(prompt, undefined, undefined, {
+          workMode: 'chat',
+          projectId: pickerActiveProjectId,
+          modelOverrideId: modelId,
+          webSearchEnabled: false,
+          codeExecutionEnabled: false,
+        });
+        if (result === SEND_GUARD_BLOCKED) return;
+        if (result === false) {
+          setSendPendingFlag(false);
+          return;
+        }
+        clearComposerState();
+      };
+
+      if (sendImageMode && outgoingContent.trim()) {
+        // A diagram, chart or vector is structured text the Artifacts system
+        // renders exactly; a raster model draws an unreadable picture of one.
+        const visualRoute = routeVisualRequest({
+          prompt: outgoingContent.trim(),
+          hasSourceImage: attachments.length > 0,
+        });
+        if (visualRoute.destination === 'artifact') {
+          artifactInstruction = visualRoute.target.directive;
+          sendImageMode = false;
+        }
+      }
+
+      if (sendImageMode) {
+        if (isTurnActive) return;
+        const prompt = outgoingContent.trim();
+        if (!prompt) return;
+        if (selectedImageIsPromotional) {
+          if (attachments.length > 0) {
+            setLocalNotice(
+              'This promotional image model creates a new image from text. Remove the attached files, or choose an editing model.',
+            );
+            return;
+          }
+          sendPromotionalMedia(prompt, imageModelId);
+          return;
+        }
+        if (imageAccess.label !== 'included') {
+          setLocalNotice('No free image model is available right now. Try again in a moment.');
+          return;
+        }
+        if (!onGenerateImage) {
+          setLocalNotice('Image generation is not available from this composer.');
+          return;
+        }
+        if (
+          !mediaModelsReady ||
+          !imageModelId ||
+          mediaAdmissionFor(imageModelId)?.state !== 'enabled'
+        ) {
+          setLocalNotice(
+            mediaAvailabilityStatus === 'error'
+              ? (mediaAvailabilityError ?? 'Could not check image model availability.')
+              : 'No image model is currently available in this deployment.',
+          );
+          return;
+        }
+        const sourceFile = attachments[0];
+        if (sourceFile && !imageModelSupportsEdit) {
+          setLocalNotice(
+            'This image model cannot edit an attached picture. Choose a model that supports editing, or remove the attachment.',
+          );
+          return;
+        }
+        if (!sourceFile) {
+          onGenerateImage(prompt, {
+            aspectRatio: effectiveImageAspectRatio,
+            modelId: imageModelId,
+            ...(imageTransparentBackground && imageModelSupportsEdit
+              ? { transparentBackground: true }
+              : {}),
+          });
+          clearComposerState();
+          return;
+        }
+        // The files are read after the composer clears: a `File` handle stays
+        // valid once the state holding it is gone, and holding the composer open
+        // through a multi-megabyte read would make the send feel stuck.
+        const maskFile = effectiveImageOperation === 'inpaint' ? attachments[1] : undefined;
+        const referenceFiles = effectiveImageOperation === 'edit' ? attachments.slice(1) : [];
+        if (referenceFiles.length > MANAGED_MEDIA_MAX_IMAGE_REFERENCES) {
+          setLocalNotice(
+            `Attach up to ${MANAGED_MEDIA_MAX_IMAGE_REFERENCES + 1} images: the first is edited and the others guide it.`,
+          );
+          return;
+        }
+        const operation = effectiveImageOperation;
+        const transparentBackground = imageTransparentBackground;
+        const aspectRatio = effectiveImageAspectRatio;
+        const modelId = imageModelId;
+        clearComposerState();
+        void (async () => {
+          try {
+            const [sourceImageBase64, maskImageBase64, referenceImagesBase64] = await Promise.all([
+              readImageFileAsBase64(sourceFile),
+              maskFile ? readImageFileAsBase64(maskFile) : Promise.resolve(undefined),
+              Promise.all(referenceFiles.map(readReferenceImageAsBase64)),
+            ]);
+            onGenerateImage(prompt, {
+              aspectRatio,
+              modelId,
+              edit: {
+                operation,
+                sourceImageBase64,
+                ...(maskImageBase64 ? { maskImageBase64 } : {}),
+                ...(referenceImagesBase64.length > 0 ? { referenceImagesBase64 } : {}),
+                ...(transparentBackground ? { transparentBackground: true } : {}),
+              },
+            });
+          } catch {
+            setLocalNotice('That image could not be read. Attach it again and retry.');
+          }
+        })();
+        return;
+      }
+
+      // Video generation mode: same delegation contract as image. The task runs
+      // for a minute or more behind a status poll, so it is deliberately not part
+      // of the streaming turn and is not queued.
+      if (videoMode && !freeQuotaMediaSelected) {
+        if (isTurnActive) return;
+        // AUDIT-FIX MEDIA-VIDEO-01: same contract as image above. The video
+        // request schema has no reference-image field at all, so an attachment
+        // here has nowhere to go and must not be swallowed by the send.
+        if (attachments.length > 0) {
+          setLocalNotice(
+            'Video generation works from your prompt only. Remove the attached files, or leave video mode to send them to the chat model.',
+          );
+          return;
+        }
+        const prompt = outgoingContent.trim();
+        if (!prompt) return;
+        if (selectedVideoIsPromotional) {
+          sendPromotionalMedia(prompt, videoModelId);
+          return;
+        }
+        if (videoAccess.label !== 'included') {
+          setLocalNotice('No free video model is available right now. Try again in a moment.');
+          return;
+        }
+        if (!onGenerateVideo) {
+          setLocalNotice('Video generation is not available from this composer.');
+          return;
+        }
+        if (
+          !mediaModelsReady ||
+          !videoModelId ||
+          mediaAdmissionFor(videoModelId)?.state !== 'enabled'
+        ) {
+          setLocalNotice(
+            mediaAvailabilityStatus === 'error'
+              ? (mediaAvailabilityError ?? 'Could not check video model availability.')
+              : 'No video model is currently available in this deployment.',
+          );
+          return;
+        }
+        // Carry the picked model so the picker is a real control: the route at
+        // /api/media/video/generate already validates a caller-supplied model
+        // (modelType must be 'video', must be live, provider must be executable)
+        // and falls back to the catalog's video_generation slot when omitted.
+        // Send the DERIVED tuple, not the raw state: a model switch can leave an
+        // unsupported ratio/quality staged, and the derived values are the ones
+        // the pills are showing.
+        onGenerateVideo(prompt, {
+          ...(videoModelId ? { modelId: videoModelId } : {}),
+          aspectRatio: effectiveVideoAspectRatio,
+          resolution: effectiveVideoResolution,
+          ...(effectiveVideoDurationSecs !== undefined
+            ? { durationSecs: effectiveVideoDurationSecs }
+            : {}),
+        });
+        clearComposerState();
+        return;
+      }
+
+      /**
+       * A file this draft refused never reached the request, but the sentence
+       * that asked about it still does. Naming the refusal in the turn is what
+       * stops the model inventing contents for a file it was never sent, and it
+       * is the record the reader keeps once the composer notice is cleared. Added
+       * here rather than at the top so an image or video prompt, which refuses
+       * attachments outright and returns above, never carries one.
+       */
+      const refusalNotes = chatDraftRefusalNotes(refusedAttachments);
+      if (refusalNotes.length > 0)
+        outgoingContent = [outgoingContent, ...refusalNotes].join('\n\n');
+
+      const sendArgs: Parameters<typeof onSend> = [
+        outgoingContent,
+        attachments.length > 0 ? attachments : undefined,
+        selectedSkillName ?? undefined,
+        {
+          workMode: canUseAgiWork ? workMode : 'chat',
+          projectId: pickerActiveProjectId,
+          webSearchEnabled: sendWebSearchEnabled,
+          ...(sendSearchRequested ? { searchRequested: true } : {}),
+          thinkingEnabled:
+            sendThinkingEnabled &&
+            (isAutoModeModelId(composerSelectedModelId) || modelSupportsThinkingCap),
+          codeExecutionEnabled: sendCodeExecutionEnabled,
+          officeCreationEnabled,
+          ...(officeCreationEnabled && officeOutputFormat ? { officeOutputFormat } : {}),
+          researchEnabled,
+          // AUDIT-FIX CMP-6/CMP-7: ONE style value reaches the server. The old
+          // `styleMode` hint was always dropped in favour of `styleInstruction`
+          // (see useChatStream), so sending it was pure noise; the instruction is
+          // now composed from the single style store plus the new length axis and
+          // is never empty, so out-of-the-box turns finally carry real guidance.
+          styleInstruction: getStyleInstruction(responseStyle, activeCustomStyleId, responseLength),
+          artifactInstruction,
+          skillName: selectedSkillName ?? undefined,
+          mcpContext: selectedMcpContext ?? undefined,
+          disabledConnectorIds: disabledConnectorIds.length > 0 ? disabledConnectorIds : undefined,
+          connectorToolsEnabled:
+            connectorsLoading || connectorsError
+              ? undefined
+              : connectedConnectorOptions.some(
+                  (connector) => !disabledConnectorIds.includes(connector.toolId),
+                ),
+          memoryEnabled: memoryEnabledForChat,
+          // CAP-048: attach the structured goal on an AGI Work send. The objective
+          // is the composed message; the optional scope fields ride alongside.
+          agiWorkGoal:
+            canUseAgiWork && workMode === 'agiwork'
+              ? buildAgiWorkGoalInput(outgoingContent, {
+                  constraints: agiWorkConstraints,
+                  deliverable: agiWorkDeliverable,
+                  excludedTools: agiWorkExcludedTools,
+                })
+              : undefined,
+        },
+      ];
+
+      if (isTurnActive) {
+        // AUDIT-FIX STR-8/BUG-15: capture the TARGET conversation alongside the
+        // arguments so the flush can prove it is still delivering to the chat the
+        // message was written for.
+        const editingId = editingQueuedIdRef.current;
+        editingQueuedIdRef.current = null;
+        const queued: QueuedFollowUp = {
+          id: editingId ?? globalThis.crypto.randomUUID(),
+          conversationId: conversationId ?? null,
+          args: sendArgs,
+          preview: outgoingContent.trim() || 'Attachment',
+          // AUDIT-FIX CMP-16: publish the queued turn's tools immediately; the sync
+          // effect above only fires on a subsequent toggle change.
+          toolsLabel: activeToolLabels.length > 0 ? activeToolLabels.join(' · ') : null,
+          invertFollowUp,
+        };
+        setQueuedFollowUps((current) => {
+          const index = editingId ? current.findIndex((item) => item.id === editingId) : -1;
+          if (index === -1) return [...current, queued];
+          const next = [...current];
+          next[index] = queued;
+          return next;
+        });
+        clearComposerState();
+        return;
+      }
+
       setSendPendingFlag(true);
-      const result = onSend(prompt, undefined, undefined, {
-        workMode: 'chat',
-        projectId: pickerActiveProjectId,
-        modelOverrideId: modelId,
-        webSearchEnabled: false,
-        codeExecutionEnabled: false,
-      });
+      const result = onSend(...sendArgs);
+
       if (result === SEND_GUARD_BLOCKED) return;
       if (result === false) {
         setSendPendingFlag(false);
         return;
       }
       clearComposerState();
-    };
-
-    if (sendImageMode && outgoingContent.trim()) {
-      // A diagram, chart or vector is structured text the Artifacts system
-      // renders exactly; a raster model draws an unreadable picture of one.
-      const visualRoute = routeVisualRequest({
-        prompt: outgoingContent.trim(),
-        hasSourceImage: attachments.length > 0,
-      });
-      if (visualRoute.destination === 'artifact') {
-        artifactInstruction = visualRoute.target.directive;
-        sendImageMode = false;
-      }
-    }
-
-    if (sendImageMode) {
-      if (isTurnActive) return;
-      const prompt = outgoingContent.trim();
-      if (!prompt) return;
-      if (selectedImageIsPromotional) {
-        if (attachments.length > 0) {
-          setLocalNotice(
-            'This promotional image model creates a new image from text. Remove the attached files, or choose an editing model.',
-          );
-          return;
-        }
-        sendPromotionalMedia(prompt, imageModelId);
-        return;
-      }
-      if (imageAccess.label !== 'included') {
-        setLocalNotice('No free image model is available right now. Try again in a moment.');
-        return;
-      }
-      if (!onGenerateImage) {
-        setLocalNotice('Image generation is not available from this composer.');
-        return;
-      }
-      if (
-        !mediaModelsReady ||
-        !imageModelId ||
-        mediaAdmissionFor(imageModelId)?.state !== 'enabled'
-      ) {
-        setLocalNotice(
-          mediaAvailabilityStatus === 'error'
-            ? (mediaAvailabilityError ?? 'Could not check image model availability.')
-            : 'No image model is currently available in this deployment.',
-        );
-        return;
-      }
-      const sourceFile = attachments[0];
-      if (sourceFile && !imageModelSupportsEdit) {
-        setLocalNotice(
-          'This image model cannot edit an attached picture. Choose a model that supports editing, or remove the attachment.',
-        );
-        return;
-      }
-      if (!sourceFile) {
-        onGenerateImage(prompt, {
-          aspectRatio: effectiveImageAspectRatio,
-          modelId: imageModelId,
-          ...(imageTransparentBackground && imageModelSupportsEdit
-            ? { transparentBackground: true }
-            : {}),
-        });
-        clearComposerState();
-        return;
-      }
-      // The files are read after the composer clears: a `File` handle stays
-      // valid once the state holding it is gone, and holding the composer open
-      // through a multi-megabyte read would make the send feel stuck.
-      const maskFile = effectiveImageOperation === 'inpaint' ? attachments[1] : undefined;
-      const referenceFiles = effectiveImageOperation === 'edit' ? attachments.slice(1) : [];
-      if (referenceFiles.length > MANAGED_MEDIA_MAX_IMAGE_REFERENCES) {
-        setLocalNotice(
-          `Attach up to ${MANAGED_MEDIA_MAX_IMAGE_REFERENCES + 1} images: the first is edited and the others guide it.`,
-        );
-        return;
-      }
-      const operation = effectiveImageOperation;
-      const transparentBackground = imageTransparentBackground;
-      const aspectRatio = effectiveImageAspectRatio;
-      const modelId = imageModelId;
-      clearComposerState();
-      void (async () => {
-        try {
-          const [sourceImageBase64, maskImageBase64, referenceImagesBase64] = await Promise.all([
-            readImageFileAsBase64(sourceFile),
-            maskFile ? readImageFileAsBase64(maskFile) : Promise.resolve(undefined),
-            Promise.all(referenceFiles.map(readReferenceImageAsBase64)),
-          ]);
-          onGenerateImage(prompt, {
-            aspectRatio,
-            modelId,
-            edit: {
-              operation,
-              sourceImageBase64,
-              ...(maskImageBase64 ? { maskImageBase64 } : {}),
-              ...(referenceImagesBase64.length > 0 ? { referenceImagesBase64 } : {}),
-              ...(transparentBackground ? { transparentBackground: true } : {}),
-            },
-          });
-        } catch {
-          setLocalNotice('That image could not be read. Attach it again and retry.');
-        }
-      })();
-      return;
-    }
-
-    // Video generation mode: same delegation contract as image. The task runs
-    // for a minute or more behind a status poll, so it is deliberately not part
-    // of the streaming turn and is not queued.
-    if (videoMode && !freeQuotaMediaSelected) {
-      if (isTurnActive) return;
-      // AUDIT-FIX MEDIA-VIDEO-01: same contract as image above. The video
-      // request schema has no reference-image field at all, so an attachment
-      // here has nowhere to go and must not be swallowed by the send.
-      if (attachments.length > 0) {
-        setLocalNotice(
-          'Video generation works from your prompt only. Remove the attached files, or leave video mode to send them to the chat model.',
-        );
-        return;
-      }
-      const prompt = outgoingContent.trim();
-      if (!prompt) return;
-      if (selectedVideoIsPromotional) {
-        sendPromotionalMedia(prompt, videoModelId);
-        return;
-      }
-      if (videoAccess.label !== 'included') {
-        setLocalNotice('No free video model is available right now. Try again in a moment.');
-        return;
-      }
-      if (!onGenerateVideo) {
-        setLocalNotice('Video generation is not available from this composer.');
-        return;
-      }
-      if (
-        !mediaModelsReady ||
-        !videoModelId ||
-        mediaAdmissionFor(videoModelId)?.state !== 'enabled'
-      ) {
-        setLocalNotice(
-          mediaAvailabilityStatus === 'error'
-            ? (mediaAvailabilityError ?? 'Could not check video model availability.')
-            : 'No video model is currently available in this deployment.',
-        );
-        return;
-      }
-      // Carry the picked model so the picker is a real control: the route at
-      // /api/media/video/generate already validates a caller-supplied model
-      // (modelType must be 'video', must be live, provider must be executable)
-      // and falls back to the catalog's video_generation slot when omitted.
-      // Send the DERIVED tuple, not the raw state: a model switch can leave an
-      // unsupported ratio/quality staged, and the derived values are the ones
-      // the pills are showing.
-      onGenerateVideo(prompt, {
-        ...(videoModelId ? { modelId: videoModelId } : {}),
-        aspectRatio: effectiveVideoAspectRatio,
-        resolution: effectiveVideoResolution,
-        ...(effectiveVideoDurationSecs !== undefined
-          ? { durationSecs: effectiveVideoDurationSecs }
-          : {}),
-      });
-      clearComposerState();
-      return;
-    }
-
-    /**
-     * A file this draft refused never reached the request, but the sentence
-     * that asked about it still does. Naming the refusal in the turn is what
-     * stops the model inventing contents for a file it was never sent, and it
-     * is the record the reader keeps once the composer notice is cleared. Added
-     * here rather than at the top so an image or video prompt, which refuses
-     * attachments outright and returns above, never carries one.
-     */
-    const refusalNotes = chatDraftRefusalNotes(refusedAttachments);
-    if (refusalNotes.length > 0) outgoingContent = [outgoingContent, ...refusalNotes].join('\n\n');
-
-    const sendArgs: Parameters<typeof onSend> = [
-      outgoingContent,
-      attachments.length > 0 ? attachments : undefined,
-      selectedSkillName ?? undefined,
-      {
-        workMode: canUseAgiWork ? workMode : 'chat',
-        projectId: pickerActiveProjectId,
-        webSearchEnabled: sendWebSearchEnabled,
-        ...(sendSearchRequested ? { searchRequested: true } : {}),
-        thinkingEnabled:
-          sendThinkingEnabled &&
-          (isAutoModeModelId(composerSelectedModelId) || modelSupportsThinkingCap),
-        codeExecutionEnabled: sendCodeExecutionEnabled,
-        officeCreationEnabled,
-        ...(officeCreationEnabled && officeOutputFormat ? { officeOutputFormat } : {}),
-        researchEnabled,
-        // AUDIT-FIX CMP-6/CMP-7: ONE style value reaches the server. The old
-        // `styleMode` hint was always dropped in favour of `styleInstruction`
-        // (see useChatStream), so sending it was pure noise; the instruction is
-        // now composed from the single style store plus the new length axis and
-        // is never empty, so out-of-the-box turns finally carry real guidance.
-        styleInstruction: getStyleInstruction(responseStyle, activeCustomStyleId, responseLength),
-        artifactInstruction,
-        skillName: selectedSkillName ?? undefined,
-        mcpContext: selectedMcpContext ?? undefined,
-        disabledConnectorIds: disabledConnectorIds.length > 0 ? disabledConnectorIds : undefined,
-        connectorToolsEnabled:
-          connectorsLoading || connectorsError
-            ? undefined
-            : connectedConnectorOptions.some(
-                (connector) => !disabledConnectorIds.includes(connector.toolId),
-              ),
-        memoryEnabled: memoryEnabledForChat,
-        // CAP-048: attach the structured goal on an AGI Work send. The objective
-        // is the composed message; the optional scope fields ride alongside.
-        agiWorkGoal:
-          canUseAgiWork && workMode === 'agiwork'
-            ? buildAgiWorkGoalInput(outgoingContent, {
-                constraints: agiWorkConstraints,
-                deliverable: agiWorkDeliverable,
-                excludedTools: agiWorkExcludedTools,
-              })
-            : undefined,
-      },
-    ];
-
-    if (isTurnActive) {
-      // AUDIT-FIX STR-8/BUG-15: capture the TARGET conversation alongside the
-      // arguments so the flush can prove it is still delivering to the chat the
-      // message was written for.
-      const editingId = editingQueuedIdRef.current;
-      editingQueuedIdRef.current = null;
-      const queued: QueuedFollowUp = {
-        id: editingId ?? globalThis.crypto.randomUUID(),
-        conversationId: conversationId ?? null,
-        args: sendArgs,
-        preview: outgoingContent.trim() || 'Attachment',
-        // AUDIT-FIX CMP-16: publish the queued turn's tools immediately; the sync
-        // effect above only fires on a subsequent toggle change.
-        toolsLabel: activeToolLabels.length > 0 ? activeToolLabels.join(' · ') : null,
-      };
-      setQueuedFollowUps((current) => {
-        const index = editingId ? current.findIndex((item) => item.id === editingId) : -1;
-        if (index === -1) return [...current, queued];
-        const next = [...current];
-        next[index] = queued;
-        return next;
-      });
-      clearComposerState();
-      return;
-    }
-
-    setSendPendingFlag(true);
-    const result = onSend(...sendArgs);
-
-    if (result === SEND_GUARD_BLOCKED) return;
-    if (result === false) {
-      setSendPendingFlag(false);
-      return;
-    }
-    clearComposerState();
-  }, [
-    message,
-    attachments,
-    refusedAttachments,
-    effectiveImageOperation,
-    imageModelSupportsEdit,
-    imageTransparentBackground,
-    selectedSkillName,
-    selectedMcpContext,
-    disabledConnectorIds,
-    connectedConnectorOptions,
-    connectorsLoading,
-    connectorsError,
-    memoryEnabledForChat,
-    isTurnActive,
-    disabled,
-    hasAttachmentConflict,
-    promotionalToolConflict,
-    searchAllowanceBlocksSend,
-    localAttachmentConflict,
-    localProjectConflict,
-    attachmentPreparing,
-    trialExhausted,
-    freeQuotaMediaSelected,
-    imageAccess.label,
-    videoAccess.label,
-    onUpgradeRequest,
-    imageMode,
-    selectedImageIsPromotional,
-    effectiveImageAspectRatio,
-    imageModelId,
-    mediaAdmissionFor,
-    mediaAvailabilityError,
-    mediaAvailabilityStatus,
-    mediaModelsReady,
-    onGenerateImage,
-    videoMode,
-    selectedVideoIsPromotional,
-    videoModelId,
-    effectiveVideoAspectRatio,
-    effectiveVideoResolution,
-    effectiveVideoDurationSecs,
-    onGenerateVideo,
-    conversationId,
-    workMode,
-    canUseAgiWork,
-    pickerActiveProjectId,
-    pendingSlashCommand,
-    resolveSlashCommand,
-    commitSlashCommand,
-    // Ambient search plus research/style settings are read directly in the
-    // body; keeping them here prevents the send callback from closing over a
-    // stale capability projection.
-    webSearchEnabled,
-    researchEnabled,
-    responseStyle,
-    responseLength,
-    activeCustomStyleId,
-    thinkingEnabled,
-    composerSelectedModelId,
-    modelSupportsThinkingCap,
-    codeExecutionEnabled,
-    officeCreationEnabled,
-    officeOutputFormat,
-    agiWorkConstraints,
-    agiWorkDeliverable,
-    agiWorkExcludedTools,
-    onSend,
-    clearComposerState,
-    writeComposerMessage,
-    activeToolLabels,
-    usageBlock,
-    online,
-  ]);
+    },
+    [
+      message,
+      attachments,
+      refusedAttachments,
+      effectiveImageOperation,
+      imageModelSupportsEdit,
+      imageTransparentBackground,
+      selectedSkillName,
+      selectedMcpContext,
+      disabledConnectorIds,
+      connectedConnectorOptions,
+      connectorsLoading,
+      connectorsError,
+      memoryEnabledForChat,
+      isTurnActive,
+      disabled,
+      hasAttachmentConflict,
+      promotionalToolConflict,
+      searchAllowanceBlocksSend,
+      localAttachmentConflict,
+      localProjectConflict,
+      attachmentPreparing,
+      trialExhausted,
+      freeQuotaMediaSelected,
+      imageAccess.label,
+      videoAccess.label,
+      onUpgradeRequest,
+      imageMode,
+      selectedImageIsPromotional,
+      effectiveImageAspectRatio,
+      imageModelId,
+      mediaAdmissionFor,
+      mediaAvailabilityError,
+      mediaAvailabilityStatus,
+      mediaModelsReady,
+      onGenerateImage,
+      videoMode,
+      selectedVideoIsPromotional,
+      videoModelId,
+      effectiveVideoAspectRatio,
+      effectiveVideoResolution,
+      effectiveVideoDurationSecs,
+      onGenerateVideo,
+      conversationId,
+      workMode,
+      canUseAgiWork,
+      pickerActiveProjectId,
+      pendingSlashCommand,
+      resolveSlashCommand,
+      commitSlashCommand,
+      // Ambient search plus research/style settings are read directly in the
+      // body; keeping them here prevents the send callback from closing over a
+      // stale capability projection.
+      webSearchEnabled,
+      autoSearchConfigured,
+      handsOverToAuto,
+      researchEnabled,
+      responseStyle,
+      responseLength,
+      activeCustomStyleId,
+      thinkingEnabled,
+      composerSelectedModelId,
+      modelSupportsThinkingCap,
+      codeExecutionEnabled,
+      officeCreationEnabled,
+      officeOutputFormat,
+      agiWorkConstraints,
+      agiWorkDeliverable,
+      agiWorkExcludedTools,
+      onSend,
+      clearComposerState,
+      writeComposerMessage,
+      activeToolLabels,
+      usageBlock,
+      online,
+      pendingChatCommand,
+      runChatCommand,
+    ],
+  );
+  const handleSubmit = useCallback(() => submitMessage(false), [submitMessage]);
+  const handleSubmitInverted = useCallback(() => submitMessage(true), [submitMessage]);
 
   useEffect(() => {
     if (!dictationSendRef.current) return;
@@ -3766,7 +3943,15 @@ const ChatComposerNewComponent = ({
       const remaining = deliverable.slice(1);
       setQueuedFollowUps(remaining);
       queuedFollowUpsRef.current = remaining;
-      if (next) onSend(...next.args);
+      if (next) {
+        const [queuedContent, queuedFiles, queuedSkill, queuedMeta] = next.args;
+        onSend(
+          queuedContent,
+          queuedFiles,
+          queuedSkill,
+          queuedMeta ? { ...queuedMeta, queuedFollowUp: true } : queuedMeta,
+        );
+      }
       for (const pending of stranded) {
         {
           // AUDIT-FIX STR-8/BUG-15: this edge was produced by navigating away,
@@ -3878,9 +4063,14 @@ const ChatComposerNewComponent = ({
 
   const autoSteeredIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (followUpBehavior !== 'steer') return;
     for (const queued of queuedFollowUps) {
-      if (autoSteeredIdsRef.current.has(queued.id) || !canSteerQueued(queued)) continue;
+      if (autoSteeredIdsRef.current.has(queued.id)) continue;
+      const state = resolveFollowUpState(
+        followUpBehavior,
+        queued.invertFollowUp,
+        canSteerQueued(queued),
+      );
+      if (state !== 'steering') continue;
       autoSteeredIdsRef.current.add(queued.id);
       void steerQueuedMessage(queued.id);
     }
@@ -4003,6 +4193,16 @@ const ChatComposerNewComponent = ({
         return;
       }
 
+      if (
+        !composing &&
+        !showSlashMenu &&
+        matchesShortcut(e, COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, safePlatform.isMac())
+      ) {
+        e.preventDefault();
+        handleSubmitInverted();
+        return;
+      }
+
       // Plain Enter sends; Shift+Enter inserts a newline (the ChatGPT/Claude chat
       // convention). Cmd/Ctrl+Enter also sends. Never submit while a picker owns
       // Enter (slash) or mid-IME-composition (e.g. CJK candidates).
@@ -4030,6 +4230,7 @@ const ChatComposerNewComponent = ({
     },
     [
       handleSubmit,
+      handleSubmitInverted,
       handleStop,
       isTurnActive,
       message,
@@ -4094,6 +4295,45 @@ const ChatComposerNewComponent = ({
   const charCounterExceeded = messageLength >= COMPOSER_MAX_CHARS;
 
   const sendButtonMode = isTurnActive ? 'stop' : 'send';
+
+  const savedConversationProjectId = useChatStore((s) => {
+    const saved = conversationId
+      ? s.conversations.find((conversation) => conversation.id === conversationId)
+      : undefined;
+    return saved ? (saved.projectId ?? null) : undefined;
+  });
+  const turnProjectId =
+    savedConversationProjectId === undefined ? newChatProjectId : savedConversationProjectId;
+  const earlierAttachments = useChatStore(
+    (s) =>
+      handsOverToAuto &&
+      Boolean(conversationId) &&
+      s.activeConversationId === conversationId &&
+      s.messages.some((entry) => (entry.attachments?.length ?? 0) > 0),
+  );
+  const freeModelNotes = useMemo(
+    () =>
+      freeModelTurnNotes({
+        modelId: mediaModeActive ? null : composerSelectedModelId,
+        handoffReason,
+        autoModelName: getModelMetadata(getBestAutoModeForTier(subscriptionTier))?.name ?? 'Auto',
+        inProject: Boolean(turnProjectId),
+        earlierAttachments,
+        connectorsOn: connectedConnectorOptions.some(
+          (connector) => !disabledConnectorIds.includes(connector.toolId),
+        ),
+      }),
+    [
+      mediaModeActive,
+      composerSelectedModelId,
+      handoffReason,
+      subscriptionTier,
+      turnProjectId,
+      earlierAttachments,
+      connectedConnectorOptions,
+      disabledConnectorIds,
+    ],
+  );
 
   const sendDisabledReason = useMemo(() => {
     if (online === false) return SEND_REASON.offline;
@@ -4174,6 +4414,41 @@ const ChatComposerNewComponent = ({
       {leaveLocalModelDialog}
 
       {endTemporaryChatDialog}
+
+      {statusLines && (
+        <div
+          role="status"
+          data-testid="composer-status-panel"
+          className="mb-2 flex items-start gap-3 rounded-xl border border-border bg-muted/60 px-3 py-2 text-xs text-muted-foreground"
+        >
+          <dl className="grid min-w-0 flex-1 grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+            {statusLines.map((line) => (
+              <React.Fragment key={line.label}>
+                <dt>{line.label}</dt>
+                <dd className="min-w-0 truncate text-foreground">{line.value}</dd>
+              </React.Fragment>
+            ))}
+          </dl>
+          <button
+            type="button"
+            className="shrink-0 font-medium text-foreground underline underline-offset-2 transition-colors hover:no-underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => {
+              setStatusLines(null);
+              openSettings('usage');
+            }}
+          >
+            Usage details
+          </button>
+          <button
+            type="button"
+            aria-label="Close status"
+            className="shrink-0 text-muted-foreground transition-colors hover:text-foreground focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => setStatusLines(null)}
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      )}
 
       {localNotice && (
         <div
@@ -4574,6 +4849,8 @@ const ChatComposerNewComponent = ({
           </div>
         )}
 
+      <FreeModelTurnNotes notes={freeModelNotes} />
+
       {promotionalToolConflict &&
         !hasAttachmentConflict &&
         !(
@@ -4695,6 +4972,7 @@ const ChatComposerNewComponent = ({
           state (rest, empty, focus): a shadow only ever appears on focus. */}
       <div
         id="chat-composer"
+        ref={composerCardRef}
         onFocusCapture={() => void preloadTranscriptMarkdown()}
         onPointerDown={() => void preloadTranscriptMarkdown()}
         className={cn(
@@ -4708,6 +4986,7 @@ const ChatComposerNewComponent = ({
         {showSlashMenu && (
           <SlashCommandMenu
             ref={slashMenuRef}
+            anchorRef={composerCardRef}
             query={slashQuery}
             onSelect={handleSlashSelect}
             onSkillSelect={handleSkillSelect}
@@ -4715,7 +4994,8 @@ const ChatComposerNewComponent = ({
             imageCommandAvailable={
               hostCanGenerateImage && mediaModelsReady && availableImageModels.length > 0
             }
-            codeCommandAvailable={modelSupportsCodeExecution}
+            codeCommandAvailable={modelSupportsCodeExecution || handsOverToAuto}
+            chatCommands={chatCommands}
             onClose={() => setShowSlashMenu(false)}
           />
         )}
@@ -5001,6 +5281,7 @@ const ChatComposerNewComponent = ({
                 onPasteCode={handleEditorPasteCode}
                 onDropFiles={handleEditorDropFiles}
                 onSubmit={handleSubmit}
+                onAlternateSubmit={handleSubmitInverted}
                 onFocusChange={setIsFocused}
                 existingFileNames={attachmentNames}
                 mention={composerMention}
@@ -5165,7 +5446,7 @@ const ChatComposerNewComponent = ({
                     mediaModeActive={mediaModeActive}
                     attachmentsUnavailable={attachmentsUnavailable}
                     attachmentUnavailableTitle={
-                      promotionalTextOnlyChat && !promotionalVisionChat
+                      restrictedFreeChat && !promotionalVisionChat
                         ? 'This free model accepts text only. Choose Free Auto to attach files.'
                         : undefined
                     }
@@ -6080,6 +6361,15 @@ const ChatComposerNewComponent = ({
 
           {/* AUDIT-FIX CMP-9: a typed command is applied on send, so say so
               before the user presses Enter. */}
+          {pendingChatCommand && (
+            <p className="px-2 text-caption text-muted-foreground" role="status">
+              <span className="font-medium text-foreground">
+                {pendingChatCommand.command.label}
+              </span>{' '}
+              runs on send
+              {pendingChatCommand.argument ? ` with: ${pendingChatCommand.argument}` : ''}
+            </p>
+          )}
           {pendingSlashCommand && pendingSlashOutcome && (
             <p className="px-2 text-caption text-muted-foreground" role="status">
               {pendingSlashOutcome.status === 'unavailable' ? (
@@ -6101,7 +6391,7 @@ const ChatComposerNewComponent = ({
           type="file"
           multiple
           accept={getAcceptAttribute()}
-          disabled={composerDisabled || (promotionalTextOnlyChat && !promotionalVisionChat)}
+          disabled={composerDisabled || (restrictedFreeChat && !promotionalVisionChat)}
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
@@ -6444,7 +6734,8 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     // (the toggle is local-only), but once one exists its presence decides
     // whether the "Temporary chat" control can save, so it must defeat
     // memoisation.
-    prev.onSetTemporaryChat === next.onSetTemporaryChat
+    prev.onSetTemporaryChat === next.onSetTemporaryChat &&
+    prev.chatSlashActions === next.chatSlashActions
   );
 });
 

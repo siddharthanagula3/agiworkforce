@@ -9,6 +9,7 @@ import {
 } from '@agiworkforce/unified-chat';
 import { LIVE_SESSION_MESSAGE } from '@features/chat/lib/live-voice-session';
 import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 type ScanModule0 = typeof import('@/lib/visual/use-visual-session');
 
 const controller = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
@@ -370,6 +371,17 @@ describe('VoiceModeSurface live camera', () => {
     renderSurface();
 
     expect(screen.queryByTestId('voice-camera-toggle')).toBeNull();
+  });
+
+  it('offers no camera control in the desktop shell, which grants only the microphone', () => {
+    window.agiHost = hostBridgeStub();
+    try {
+      renderSurface({ onVisualFrame: () => undefined });
+
+      expect(screen.queryByTestId('voice-camera-toggle')).toBeNull();
+    } finally {
+      delete window.agiHost;
+    }
   });
 
   it('offers the control, unpressed and without a preview, until the camera is shared', () => {

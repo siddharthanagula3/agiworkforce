@@ -36,7 +36,10 @@ import {
 } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import { extractAssistantTextDelta } from '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence';
-import { buildCapabilityPreamble } from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
+import {
+  buildCapabilityPreamble,
+  servingModelFor,
+} from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
 import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
   loadConnectorToolPermissions,
@@ -75,6 +78,7 @@ import {
   type LoadedProjectContext,
 } from '@/lib/services/project-context-service';
 import {
+  disabledPastChatToggles,
   formatManagedMemorySystemPrompt,
   loadManagedMemoryPolicy,
   loadOrganizationContextPolicy,
@@ -443,6 +447,7 @@ async function resolveScheduledContext(input: {
       ...(input.includeMemory ? [memoryLoader] : []),
       ...(recentChatsLoader ? [recentChatsLoader] : []),
     ],
+    disabledToggles: disabledPastChatToggles(memoryPolicy.searchPastChats, contextPolicy),
     store: createPostgresContextManifestStore(scope.db),
     onLoaderError: (sourceClass, error) => {
       logger.warn(
@@ -483,7 +488,11 @@ async function resolveScheduledContext(input: {
   return {
     projectPrompt:
       input.projectContext && projectIncluded
-        ? formatProjectSystemPrompt(input.projectContext)
+        ? formatProjectSystemPrompt(
+            memoryPolicy.searchPastChats
+              ? input.projectContext
+              : { ...input.projectContext, siblingChats: [] },
+          )
         : null,
     memoryPrompt: memories.length > 0 ? formatManagedMemorySystemPrompt(memories) : null,
     recentChatsPrompt,
@@ -721,6 +730,10 @@ async function scheduledRunReachesGoogleUserData(
   );
 }
 
+function scheduledModelSelection(task: ScheduleTask): string {
+  return task.model ?? 'auto';
+}
+
 async function selectScheduledRoute(
   scope: { db: NonNullable<Parameters<typeof sideCallRoutingRequest>[0]>; userId: string },
   task: ScheduleTask,
@@ -730,7 +743,7 @@ async function selectScheduledRoute(
 ): Promise<ScheduledRunRoute> {
   return selectUnattendedRoute(
     scope,
-    task.model ?? 'auto',
+    scheduledModelSelection(task),
     taskType,
     subscriptionTier,
     googleUserData,
@@ -936,7 +949,15 @@ async function runScheduledAgent(
       resolved.projectPrompt,
       resolved.memoryPrompt,
       resolved.recentChatsPrompt,
-      buildCapabilityPreamble({ tools: plan.tools, timeZone: task.timezone }),
+      buildCapabilityPreamble({
+        tools: plan.tools,
+        surface: 'scheduled',
+        servingModel: servingModelFor(route.modelKey, {
+          kind: 'picked',
+          modelId: scheduledModelSelection(task),
+        }),
+        timeZone: task.timezone,
+      }),
       withheldToolsDirective(plan),
       SCHEDULED_TASK_DIRECTIVE,
     ]

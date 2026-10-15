@@ -811,6 +811,63 @@ describe('POST /api/voice/live/sessions', () => {
     expect(sent.session.delegation.responses.instructions).toContain('When does the rollout land?');
   });
 
+  it('keeps saved memories out of a call whose chat has memory switched off', async () => {
+    const conversationId = '11111111-1111-4111-8111-111111111111';
+    mocks.userScopedDb.mockResolvedValue({
+      db: {
+        query: vi.fn(async (sql: string) => {
+          if (sql.includes('to_regclass')) return [{ ready: true }];
+          if (sql.includes('insert into public.voice_sessions')) return [{ id: 'vs_4' }];
+          if (sql.includes('from web_conversations')) {
+            return [
+              {
+                id: conversationId,
+                project_id: null,
+                is_temporary: false,
+                active_leaf_message_id: null,
+              },
+            ];
+          }
+          if (sql.includes("settings -> 'capabilities'")) {
+            return [{ capabilities: { memory: true } }];
+          }
+          if (sql.includes('from user_memories')) {
+            return [{ content: 'Prefers metric units.', category: 'preference', pinned: true }];
+          }
+          return [];
+        }),
+      },
+      userId: 'user-1',
+      organizationId: null,
+    });
+    mocks.fetch.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            session: { id: 'live_4' },
+            transport: { type: 'webrtc', sdp: 'answer' },
+          }),
+          { status: 201 },
+        ),
+    );
+
+    const instructionsFor = async (body: Record<string, unknown>) => {
+      mocks.fetch.mockClear();
+      const response = await POST(request({ sdp: OFFER, conversationId, ...body }));
+      expect(response.status).toBe(201);
+      const [, init] = mocks.fetch.mock.calls[0] as [string, RequestInit];
+      const sent = JSON.parse(String(init.body)) as {
+        session: { instructions: string; delegation: { responses: { instructions: string } } };
+      };
+      return `${sent.session.instructions}\n${sent.session.delegation.responses.instructions}`;
+    };
+
+    await expect(instructionsFor({})).resolves.toContain('Prefers metric units.');
+    await expect(instructionsFor({ memoryEnabled: false })).resolves.not.toContain(
+      'Prefers metric units.',
+    );
+  });
+
   it('starts the session without prior context when the context read fails', async () => {
     mocks.userScopedDb.mockResolvedValue({
       db: {

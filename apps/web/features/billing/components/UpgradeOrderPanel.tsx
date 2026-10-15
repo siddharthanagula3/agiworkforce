@@ -4,7 +4,13 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@agiworkforce/ui';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { getPublishedMonthlyPriceUsd, type SelfServeIndividualPlanTier } from '@agiworkforce/types';
+import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
+import { isBillingPolicyReady } from '@shared/stores/billing-policy';
+import {
+  getPublishedMonthlyPriceUsd,
+  isFreeOfChargePlanTier,
+  type SelfServeIndividualPlanTier,
+} from '@agiworkforce/types';
 import {
   CheckoutRequiredError,
   fetchSavedPaymentMethods,
@@ -19,8 +25,48 @@ import {
 } from '../services/stripe-payments';
 import { getBillingPlanDisplay, formatCatalogPrice } from '../lib/plan-display';
 import { UpgradePromotionCode } from './UpgradePromotionCode';
-import { formatBillingDate, formatBillingMoney } from '../lib/billing-format';
+import { formatBillingDate, formatBillingMoney, formatRecurringMoney } from '../lib/billing-format';
+import type { LocalizedPriceEntry } from '@agiworkforce/cloud-contracts';
+import { readLocalizedPricing } from '../services/localized-pricing';
 import { toUserMessage } from '@/lib/user-error-message';
+import { ServiceNotices } from '@shared/components/ServiceNotices';
+import { useUpgradeWaitlistStatus } from '../hooks/use-upgrade-waitlist';
+import { upgradeNeedsWaitlist, type UpgradeWaitlistStatus } from '../services/upgrade-waitlist';
+import { UpgradeWaitlistPanel } from './UpgradeWaitlistDialog';
+
+type OrderAccess = 'checking' | 'unavailable' | 'signed-out' | 'waitlist' | 'order';
+
+interface OrderAccessInputs {
+  sessionReady: boolean;
+  billingReady: boolean;
+  billingSettled: boolean;
+  billingSignedOut: boolean;
+  paidPlan: boolean;
+  accessCodeRedeemed: boolean;
+  waitlistStatus: UpgradeWaitlistStatus | null;
+  checkingAccess: boolean;
+}
+
+function holdsActivePaidPlan(subscription: SubscriptionPlan | null): boolean {
+  return (
+    subscription !== null &&
+    !isFreeOfChargePlanTier(subscription.tier) &&
+    ['active', 'trialing'].includes(subscription.status)
+  );
+}
+
+function resolveOrderAccess(inputs: OrderAccessInputs): OrderAccess {
+  if (!inputs.sessionReady) return 'checking';
+  if (!inputs.billingReady) {
+    if (!inputs.billingSettled) return 'checking';
+    return inputs.billingSignedOut ? 'signed-out' : 'unavailable';
+  }
+  if (inputs.paidPlan || inputs.accessCodeRedeemed) return 'order';
+  if (inputs.waitlistStatus) {
+    return upgradeNeedsWaitlist(inputs.waitlistStatus) ? 'waitlist' : 'order';
+  }
+  return inputs.checkingAccess ? 'checking' : 'waitlist';
+}
 
 export interface UpgradeOrderPanelProps {
   plan: SelfServeIndividualPlanTier;
@@ -85,13 +131,35 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
    */
   const authInitialized = useAuthStore((s) => s.initialized);
   const signedIn = useAuthStore((s) => s.isAuthenticated);
+  const billingReady = useBillingStore(isBillingPolicyReady);
+  const billingSettled = useBillingStore((s) => s.initialized && !s.isLoading);
+  const billingSignedOut = useBillingStore((s) => s.unauthenticated);
+  const refreshBillingAccount = useBillingStore((s) => s.refreshUser);
+  const paidPlan = useBillingStore((s) => holdsActivePaidPlan(s.subscription));
+  const { status: waitlistStatus, checking: checkingAccess } = useUpgradeWaitlistStatus({
+    enabled: billingReady && !paidPlan,
+  });
+  const [accessCodeRedeemed, setAccessCodeRedeemed] = useState(false);
+  const [waitlistPrice, setWaitlistPrice] = useState<LocalizedPriceEntry | null>(null);
+
+  const access = resolveOrderAccess({
+    sessionReady: authInitialized,
+    billingReady,
+    billingSettled,
+    billingSignedOut,
+    paidPlan,
+    accessCodeRedeemed,
+    waitlistStatus,
+    checkingAccess,
+  });
+  const ordering = access === 'order' && signedIn;
 
   const display = getBillingPlanDisplay(plan);
   const planLabel = display.pricing.label;
   const recurringUsd = getPublishedMonthlyPriceUsd(plan);
 
   useEffect(() => {
-    if (!authInitialized || !signedIn) return;
+    if (!ordering) return;
     let cancelled = false;
     setPreviewing(true);
     setError(null);
@@ -130,10 +198,20 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
     return () => {
       cancelled = true;
     };
-  }, [plan, authInitialized, signedIn, previewKey]);
+  }, [plan, ordering, previewKey]);
 
   useEffect(() => {
-    if (!authInitialized || !signedIn) return;
+    if (access !== 'waitlist') return;
+    const controller = new AbortController();
+    setWaitlistPrice(null);
+    readLocalizedPricing(controller.signal)
+      .then((catalog) => setWaitlistPrice(catalog.plans[plan].monthly ?? null))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [access, plan]);
+
+  useEffect(() => {
+    if (!ordering) return;
     let cancelled = false;
     setPaymentMethodError(null);
     fetchSavedPaymentMethods()
@@ -151,7 +229,7 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
     return () => {
       cancelled = true;
     };
-  }, [authInitialized, signedIn]);
+  }, [ordering]);
 
   const changePaymentMethod = useCallback(async () => {
     try {
@@ -196,7 +274,8 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
     setError(null);
     try {
       if (checkoutRequired) {
-        await startPlanCheckout({ plan, billingInterval: 'monthly' });
+        const outcome = await startPlanCheckout({ plan, billingInterval: 'monthly' });
+        if (outcome === 'handed-off') setConfirming(false);
         return;
       }
       if (!amountDue) throw new Error('Preview the upgrade price before subscribing.');
@@ -219,16 +298,47 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
 
   return (
     <div className="flex flex-col gap-4">
+      {access === 'order' ? <ServiceNotices scope="billing" /> : null}
       <section
         aria-label="Order details"
-        aria-busy={waitingForSession || previewing}
+        aria-busy={access === 'checking' || (access === 'order' && previewing)}
         aria-live="polite"
         className="rounded-2xl border border-border bg-card p-5 text-sm"
       >
         <h2 className="mb-4 text-h4">Order details</h2>
 
-        {waitingForSession ? (
+        {access === 'checking' ? (
           <p className="text-muted-foreground">Loading your account…</p>
+        ) : access === 'signed-out' ? (
+          <div className="flex flex-col items-start gap-3">
+            <p role="alert" className="text-danger-text">
+              Your session expired before we could read your plan. Nothing has been charged.
+            </p>
+            <Link
+              href={`/login?redirectTo=${encodeURIComponent(returnPath)}`}
+              className="font-medium underline underline-offset-2"
+            >
+              Sign in again
+            </Link>
+          </div>
+        ) : access === 'unavailable' ? (
+          <div className="flex flex-col items-start gap-3">
+            <p role="alert" className="text-danger-text">
+              We couldn’t load your billing account. Nothing has been charged.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => void refreshBillingAccount()}>
+              Try again
+            </Button>
+          </div>
+        ) : access === 'waitlist' ? (
+          <dl className="flex justify-between gap-4 font-semibold">
+            <dt>{planLabel}</dt>
+            {waitlistPrice ? (
+              <dd className="tabular-nums">
+                {`${formatRecurringMoney(waitlistPrice.amountMinor, waitlistPrice.currency, 'monthly')} + tax`}
+              </dd>
+            ) : null}
+          </dl>
         ) : previewing ? (
           <p className="text-muted-foreground">Calculating your prorated cost…</p>
         ) : checkoutRequired?.trial ? (
@@ -338,125 +448,139 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
         )}
       </section>
 
-      {!previewing && amountDue && !checkoutRequired ? (
-        <UpgradePromotionCode
-          inputId="upgrade-promotion-code"
-          promotion={promotion}
-          pending={promotionPending}
-          error={promotionError}
-          onApply={(code) => void applyPromotion(code)}
-          onRemove={removePromotion}
-        />
-      ) : null}
+      {access === 'order' ? (
+        <>
+          {!previewing && amountDue && !checkoutRequired ? (
+            <UpgradePromotionCode
+              inputId="upgrade-promotion-code"
+              promotion={promotion}
+              pending={promotionPending}
+              error={promotionError}
+              onApply={(code) => void applyPromotion(code)}
+              onRemove={removePromotion}
+            />
+          ) : null}
 
-      {!previewing && replacesScheduledChange ? (
-        <p className="text-sm text-muted-foreground">
-          Upgrading cancels the plan change you scheduled for your renewal.
-        </p>
-      ) : null}
+          {!previewing && replacesScheduledChange ? (
+            <p className="text-sm text-muted-foreground">
+              Upgrading cancels the plan change you scheduled for your renewal.
+            </p>
+          ) : null}
 
-      {!previewing && grandfatheredNotice && !checkoutRequired ? (
-        <p className="text-sm text-muted-foreground">{grandfatheredNotice}</p>
-      ) : null}
+          {!previewing && grandfatheredNotice && !checkoutRequired ? (
+            <p className="text-sm text-muted-foreground">{grandfatheredNotice}</p>
+          ) : null}
 
-      {!previewing && (charge || amountDue || checkoutRequired) ? (
-        <p className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
-          {checkoutRequired?.trial
-            ? `Your free trial ends on ${formatRenewalDate(checkoutRequired.trial.convertsAt)}. You will then be charged ${formatMoney(checkoutRequired.trial.amountCents, checkoutRequired.currency)}/month + tax until you cancel. Cancel before ${formatRenewalDate(checkoutRequired.trial.convertsAt)} in Settings > Billing and you won't be charged.`
-            : charge?.renewsAt
-              ? `Your subscription will auto renew on ${formatRenewalDate(charge.renewsAt)}. You will be charged ${formatCatalogPrice(recurringUsd)}/month + tax.`
-              : `Your subscription will auto renew at ${formatCatalogPrice(recurringUsd)}/month + tax.`}
-        </p>
-      ) : null}
+          {!previewing && (charge || amountDue || checkoutRequired) ? (
+            <p className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
+              {checkoutRequired?.trial
+                ? `Your free trial ends on ${formatRenewalDate(checkoutRequired.trial.convertsAt)}. You will then be charged ${formatMoney(checkoutRequired.trial.amountCents, checkoutRequired.currency)}/month + tax until you cancel. Cancel before ${formatRenewalDate(checkoutRequired.trial.convertsAt)} in Settings > Billing and you won't be charged.`
+                : charge?.renewsAt
+                  ? `Your subscription will auto renew on ${formatRenewalDate(charge.renewsAt)}. You will be charged ${formatCatalogPrice(recurringUsd)}/month + tax.`
+                  : `Your subscription will auto renew at ${formatCatalogPrice(recurringUsd)}/month + tax.`}
+            </p>
+          ) : null}
 
-      {/*
-        Named, not assumed. The previous flow charged whatever Stripe had on file
-        without ever showing it, so the only way to find out which card was billed
-        was the receipt afterwards.
-      */}
-      {checkoutRequired ? null : (
-        <section
-          aria-label="Payment method"
-          className="rounded-2xl border border-border bg-card p-4"
-        >
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-h5">Payment method</h2>
-              {paymentMethodError ? (
-                <p role="alert" className="mt-1 text-sm text-danger">
-                  {paymentMethodError}
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {!paymentMethodsLoaded
-                    ? 'Loading…'
-                    : paymentMethod
-                      ? describePaymentMethod(paymentMethod)
-                      : 'No payment method on file'}
-                </p>
-              )}
-            </div>
-            <Button variant="outline" size="sm" onClick={() => void changePaymentMethod()}>
-              {paymentMethodsLoaded && !paymentMethod && !paymentMethodError ? 'Add' : 'Change'}
-            </Button>
-          </div>
-        </section>
-      )}
+          {/*
+            Named, not assumed. The previous flow charged whatever Stripe had on file
+            without ever showing it, so the only way to find out which card was billed
+            was the receipt afterwards.
+          */}
+          {checkoutRequired ? null : (
+            <section
+              aria-label="Payment method"
+              className="rounded-2xl border border-border bg-card p-4"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-h5">Payment method</h2>
+                  {paymentMethodError ? (
+                    <p role="alert" className="mt-1 text-sm text-danger">
+                      {paymentMethodError}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {!paymentMethodsLoaded
+                        ? 'Loading…'
+                        : paymentMethod
+                          ? describePaymentMethod(paymentMethod)
+                          : 'No payment method on file'}
+                    </p>
+                  )}
+                </div>
+                <Button variant="outline" size="sm" onClick={() => void changePaymentMethod()}>
+                  {paymentMethodsLoaded && !paymentMethod && !paymentMethodError ? 'Add' : 'Change'}
+                </Button>
+              </div>
+            </section>
+          )}
 
-      {error ? (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
+          {error ? (
+            <p role="alert" className="text-sm text-danger">
+              {error}
+            </p>
+          ) : null}
 
-      {/*
-        A recurring charge needs assent to the recurrence, not just to the number
-        above it. Gating the button on this is what makes the agreement a
-        deliberate act rather than a line of small print.
-      */}
-      <label className="flex items-start gap-3 text-sm">
-        <input
-          type="checkbox"
-          checked={agreed}
-          onChange={(event) => setAgreed(event.target.checked)}
-          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-        />
-        <span>
-          You agree that AGI Workforce will charge{' '}
-          {checkoutRequired ? 'the payment method you provide at checkout' : 'your payment method'}{' '}
-          {checkoutRequired?.trial
-            ? `${formatMoney(checkoutRequired.trial.amountCents, checkoutRequired.currency)} plus tax on ${formatRenewalDate(checkoutRequired.trial.convertsAt)}, when your free trial ends, and on a recurring monthly basis after that`
-            : 'in the amount above now and on a recurring monthly basis'}{' '}
-          until you cancel in accordance with our{' '}
-          <Link
-            href="/terms"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2"
+          {/*
+            A recurring charge needs assent to the recurrence, not just to the number
+            above it. Gating the button on this is what makes the agreement a
+            deliberate act rather than a line of small print.
+          */}
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(event) => setAgreed(event.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+            />
+            <span>
+              You agree that AGI Workforce will charge{' '}
+              {checkoutRequired
+                ? 'the payment method you provide at checkout'
+                : 'your payment method'}{' '}
+              {checkoutRequired?.trial
+                ? `${formatMoney(checkoutRequired.trial.amountCents, checkoutRequired.currency)} plus tax on ${formatRenewalDate(checkoutRequired.trial.convertsAt)}, when your free trial ends, and on a recurring monthly basis after that`
+                : 'in the amount above now and on a recurring monthly basis'}{' '}
+              until you cancel in accordance with our{' '}
+              <Link
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2"
+              >
+                terms
+              </Link>
+              . You can cancel at any time in your account settings.
+            </span>
+          </label>
+
+          <Button
+            size="lg"
+            onClick={() => void handleSubscribe()}
+            disabled={
+              waitingForSession ||
+              previewing ||
+              confirming ||
+              !agreed ||
+              (!amountDue && !checkoutRequired)
+            }
           >
-            terms
-          </Link>
-          . You can cancel at any time in your account settings.
-        </span>
-      </label>
+            {confirming
+              ? 'Subscribing…'
+              : checkoutRequired?.trial
+                ? 'Start free trial'
+                : `Subscribe to ${planLabel}`}
+          </Button>
+        </>
+      ) : null}
 
-      <Button
-        size="lg"
-        onClick={() => void handleSubscribe()}
-        disabled={
-          waitingForSession ||
-          previewing ||
-          confirming ||
-          !agreed ||
-          (!amountDue && !checkoutRequired)
-        }
-      >
-        {confirming
-          ? 'Subscribing…'
-          : checkoutRequired?.trial
-            ? 'Start free trial'
-            : `Subscribe to ${planLabel}`}
-      </Button>
+      {access === 'waitlist' ? (
+        <UpgradeWaitlistPanel
+          key={plan}
+          request={{ plan, billingInterval: 'monthly' }}
+          onAccessGranted={async () => setAccessCodeRedeemed(true)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -28,6 +28,7 @@ describe('SharedSessionViewer page landmark', () => {
             ],
             total_messages: 2,
           }}
+          signedIn
           token="tok123"
         />
       </>,
@@ -67,6 +68,7 @@ describe('SharedSessionViewer attachments', () => {
           total_messages: 1,
         }}
         token="tok123"
+        signedIn={false}
       />,
     );
 
@@ -84,6 +86,7 @@ describe('SharedSessionViewer attachments', () => {
           total_messages: 1,
         }}
         token="tok123"
+        signedIn={false}
       />,
     );
 
@@ -95,7 +98,11 @@ describe('SharedSessionViewer model identity', () => {
   it('names the model through the shared ModelBadge', () => {
     const modelId = 'fixture-shared-model';
     const { container } = render(
-      <SharedSessionViewer session={{ ...BASE_SESSION, model_id: modelId }} token="tok123" />,
+      <SharedSessionViewer
+        session={{ ...BASE_SESSION, model_id: modelId }}
+        token="tok123"
+        signedIn={false}
+      />,
     );
 
     const badge = container.querySelector('[data-model-badge]');
@@ -104,8 +111,40 @@ describe('SharedSessionViewer model identity', () => {
   });
 
   it('renders no model badge when the snapshot has no model', () => {
-    const { container } = render(<SharedSessionViewer session={BASE_SESSION} token="tok123" />);
+    const { container } = render(
+      <SharedSessionViewer session={BASE_SESSION} token="tok123" signedIn={false} />,
+    );
 
     expect(container.querySelector('[data-model-badge]')).toBeNull();
+  });
+});
+
+describe('SharedSessionViewer account entry', () => {
+  it('starts a signed-out viewer who opens the chat on sign-up and brings them back to it', () => {
+    render(<SharedSessionViewer session={BASE_SESSION} token="tok123" signedIn={false} />);
+
+    expect(screen.getByRole('link', { name: 'Open in AGI' })).toHaveAttribute(
+      'href',
+      '/signup?redirectTo=%2Fchat%2Ffrom-share%2Ftok123',
+    );
+    expect(screen.getByRole('link', { name: 'Create an account' })).toHaveAttribute(
+      'href',
+      '/signup?redirectTo=%2Fshare%2Ftok123',
+    );
+    expect(screen.getByRole('link', { name: 'sign in' })).toHaveAttribute(
+      'href',
+      '/login?redirectTo=%2Fshare%2Ftok123',
+    );
+  });
+
+  it('opens the chat straight away for a signed-in viewer and offers no account links', () => {
+    render(<SharedSessionViewer session={BASE_SESSION} token="tok123" signedIn />);
+
+    expect(screen.getByRole('link', { name: 'Open in AGI' })).toHaveAttribute(
+      'href',
+      '/chat/from-share/tok123',
+    );
+    expect(screen.queryByRole('link', { name: 'Create an account' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'sign in' })).toBeNull();
   });
 });

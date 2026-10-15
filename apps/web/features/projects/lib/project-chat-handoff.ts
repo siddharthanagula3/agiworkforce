@@ -39,6 +39,7 @@ const ProjectChatHandoffSchema = z.object({
     connectorToolsEnabled: z.boolean().optional(),
     memoryEnabled: z.boolean().optional(),
     modelOverrideId: z.string().min(1).max(200).optional(),
+    queuedFollowUp: z.boolean().optional(),
     mcpContext: z
       .object({
         prompt: z

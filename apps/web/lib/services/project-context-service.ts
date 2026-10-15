@@ -201,6 +201,7 @@ export async function loadProjectContext(
     currentConversationId?: string;
     currentUserQuery?: string;
     semanticRetrieval?: boolean;
+    includeChats?: boolean;
   },
 ): Promise<LoadedProjectContext | null> {
   const [project] = await db.query<{
@@ -248,20 +249,24 @@ export async function loadProjectContext(
     if (!isKnowledgeFileSchemaUnavailable(error)) throw error;
   }
 
-  const siblingRows = await db.query<{
-    id: string;
-    title: string | null;
-    updated_at: string;
-    role: 'user' | 'assistant' | null;
-    content: string | null;
-    created_at: string | null;
-  }>(
-    `with sibling_candidates as (
+  const siblingRows =
+    params.includeChats === false
+      ? []
+      : await db.query<{
+          id: string;
+          title: string | null;
+          updated_at: string;
+          role: 'user' | 'assistant' | null;
+          content: string | null;
+          created_at: string | null;
+        }>(
+          `with sibling_candidates as (
        select c.id, c.title, c.updated_at
          from web_conversations c
         where c.project_id = $1
           and c.user_id = $2
           and c.deleted_at is null
+          and c.google_user_data_at is null
           and c.is_temporary = false
           and coalesce(c.archived, false) = false
           ${params.currentConversationId ? 'and c.id <> $3' : ''}
@@ -285,10 +290,10 @@ export async function loadProjectContext(
           limit 6
        ) m on true
       order by c.updated_at desc, m.created_at asc`,
-    params.currentConversationId
-      ? [params.projectId, params.userId, params.currentConversationId]
-      : [params.projectId, params.userId],
-  );
+          params.currentConversationId
+            ? [params.projectId, params.userId, params.currentConversationId]
+            : [params.projectId, params.userId],
+        );
 
   const queryTerms = extractQueryTerms(params.currentUserQuery);
   const candidates = new Map<
@@ -559,6 +564,12 @@ export function projectContextLoaders(context: LoadedProjectContext): ContextSou
           return text ? [{ source, text }] : [];
         }),
   }));
+}
+
+export function withoutProjectChats<T extends { readonly sourceClass: ContextSourceClass }>(
+  items: readonly T[],
+): T[] {
+  return items.filter((item) => item.sourceClass !== 'project_sibling_chat');
 }
 
 export function fitProjectContextBlocks(

@@ -62,7 +62,15 @@ import { DEFAULT_RESEARCH_DELIVERABLE, type ResearchStep } from '@agiworkforce/t
 import { createResearchDomainPolicy } from './research-sources';
 import { saveResearchReport } from '@/lib/services/research-report-service';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { requireProviderDefaultModel } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getModelRegistryFacts,
+  listCanonicalModels,
+  requireProviderDefaultModel,
+} from '@agiworkforce/types';
+import { CHAT_SYSTEM_PROMPT_ID } from '@/lib/prompts/chat-system-prompt';
+import { buildCapabilityPreamble, servingModelFor } from './capability-preamble';
+import { buildFailoverAttemptView } from './managed-failover';
 import type { ProcessedRequest } from './request-processor';
 
 // buildToolLoopStream(provider, processed, stepRequest, responseModel) -- the
@@ -1780,5 +1788,69 @@ describe('the deliverable spec shapes the report', () => {
     const directives = synthesisRequest.messages.at(-1)?.content ?? '';
     expect(directives).toContain('executive summary');
     expect(directives).toContain('markdown table');
+  });
+});
+
+describe('a research run after a managed failover to another model', () => {
+  it('tells every later turn the model that now answers, not the one that failed', async () => {
+    const failed = getModelMetadataById(GOOGLE_CHAT_MODEL);
+    const rescuer = listCanonicalModels().find(
+      (model) =>
+        model.id !== GOOGLE_CHAT_MODEL && getModelRegistryFacts(model.id)?.isRouter !== true,
+    );
+    if (!failed || !rescuer) throw new Error('the catalog holds fewer than two concrete models');
+    const selection = { kind: 'picked' as const, modelId: failed.id };
+    const base = makeProcessed();
+    const processed = {
+      ...base,
+      modelSelection: selection,
+      llmRequest: {
+        ...base.llmRequest,
+        messages: [
+          {
+            role: 'system',
+            content: String(
+              buildCapabilityPreamble({
+                now: new Date('2026-10-02T12:00:00.000Z'),
+                tools: [],
+                surface: 'web',
+                promptSelection: { variants: { [CHAT_SYSTEM_PROMPT_ID]: 8 } },
+                servingModel: servingModelFor(failed.id, selection),
+              }),
+            ),
+          },
+          { role: 'user', content: 'research the topic' },
+        ],
+      },
+    } as unknown as ProcessedRequest;
+    streamRequestMock
+      .mockRejectedValueOnce(Object.assign(new Error('overloaded'), { status: 529 }))
+      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(sseStream([contentEvent(`notes\n${READY_MARKER}`), finishEvent()]))
+      .mockResolvedValueOnce(sseStream([contentEvent('Final report [1]'), finishEvent()]));
+    const next = vi.fn(() => ({
+      model: rescuer.id,
+      provider: 'openai',
+      processed: buildFailoverAttemptView(processed, rescuer.id, 'openai'),
+    }));
+
+    await collectRun(runResearchLoop(processed, BILLING, { maxIterations: 3, failover: { next } }));
+
+    const systemOf = (call: number): string =>
+      (
+        streamRequestMock.mock.calls[call]?.[2] as {
+          messages: Array<{ role: string; content: unknown }>;
+        }
+      ).messages
+        .filter((message) => message.role === 'system')
+        .map((message) => String(message.content))
+        .join('\n\n');
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(streamRequestMock).toHaveBeenCalledTimes(4);
+    expect(systemOf(0)).toContain(`This turn runs on ${failed.name}`);
+    for (const call of [1, 2, 3]) {
+      expect(systemOf(call)).toContain(`This turn runs on ${rescuer.name}`);
+      expect(systemOf(call)).not.toContain(`This turn runs on ${failed.name}`);
+    }
   });
 });

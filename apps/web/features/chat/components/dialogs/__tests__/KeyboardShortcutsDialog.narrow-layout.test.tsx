@@ -54,7 +54,7 @@ describe('KeyboardShortcutsDialog at a narrow width', () => {
   it('lets a row drop its keys and switch under the label instead of widening the dialog', () => {
     renderDialog();
 
-    for (const doc of KEYBOARD_SHORTCUT_DOCS) {
+    for (const doc of KEYBOARD_SHORTCUT_DOCS.filter((entry) => entry.scope === 'app')) {
       const toggle = screen.getByRole('switch', { name: doc.description });
       const row = screen.getByText(doc.description).parentElement;
       const controls = toggle.parentElement;

@@ -19,6 +19,14 @@ const mocks = vi.hoisted(() => ({
 
 const db = { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() };
 
+beforeEach(() => {
+  db.query.mockImplementation(async (sql: string) =>
+    sql.includes('gmail_data_quarantined')
+      ? [{ conversation_id: null, gmail_data_quarantined: false }]
+      : [],
+  );
+});
+
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/deadline-policy', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),

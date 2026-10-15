@@ -24,6 +24,10 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readPrimaryEmailState: vi.fn(async () => ({ confirmed: true, email: 'person@example.com' })),
+}));
 vi.mock('@/lib/api-auth', () => ({
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a),

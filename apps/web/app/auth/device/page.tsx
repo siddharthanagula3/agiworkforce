@@ -10,6 +10,7 @@ import { SuccessState } from '@shared/components/SuccessState';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Eyebrow, Prose, Stack } from '@/features/marketing/components/system';
 import { toUserMessage } from '@/lib/user-error-message';
+import { buildLoginUrl, buildSignupUrl, type AuthRouteContext } from '@/features/auth/authRoutes';
 import {
   DeviceAuthorizationLookupResponseSchema,
   type DeviceAuthorizationLookupResponse,
@@ -68,9 +69,14 @@ function DeviceForm() {
   if (isDesktopSurface) redirectParams.set('surface', 'desktop');
   const redirectQuery = redirectParams.toString();
   const redirectPath = `/auth/device${redirectQuery ? `?${redirectQuery}` : ''}`;
-  const signInHref = isDesktopSurface
-    ? `/login?surface=desktop&redirectTo=${encodeURIComponent(redirectPath)}`
-    : `/login?redirectTo=${encodeURIComponent(redirectPath)}`;
+  const accountRoute: AuthRouteContext = {
+    redirectTo: redirectPath,
+    desktopSurface: isDesktopSurface,
+    authRetry: false,
+    requestedRedirect: true,
+  };
+  const signInHref = buildLoginUrl(accountRoute);
+  const signUpHref = buildSignupUrl(accountRoute);
   const accountEmail = user?.email ?? user?.emails[0] ?? null;
   const accountName =
     user?.fullName ||
@@ -229,6 +235,10 @@ function DeviceForm() {
             {t('auth:device.signInFirst')}{' '}
             <Link href={signInHref} className="agi-ds-link">
               {t('common:navSignIn')}
+            </Link>
+            {' · '}
+            <Link href={signUpHref} className="agi-ds-link">
+              {t('auth:createAccount')}
             </Link>
           </div>
         ) : null}

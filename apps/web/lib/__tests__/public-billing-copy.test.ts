@@ -1,5 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import {
   BILLING_PLAN_PRICING,
@@ -23,6 +24,85 @@ function escapeForRegExp(value: string): string {
 const MOBILE_PICKER_MODEL_TYPES = ['chat', 'reasoning', 'multimodal', 'search', 'code'] as const;
 
 describe('public billing truth', () => {
+  it('has no retired Max plan name in current production copy', () => {
+    const repoRoot = resolve(webRoot, '../..');
+    const retiredName = /\bMax\s+15x\b/iu;
+    const roots = [
+      'apps/web/app',
+      'apps/web/features',
+      'apps/web/lib',
+      'apps/web/shared',
+      'apps/desktop/src',
+      'apps/mobile/src',
+      'apps/mobile/app',
+      'apps/extension/src',
+      'apps/extension-vscode/src',
+      'packages/contracts/types/src',
+    ];
+    const failures: string[] = [];
+    const scan = (directory: string): void => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = resolve(directory, entry.name);
+        if (entry.isDirectory()) {
+          if (
+            !['__tests__', '__mocks__', '__fixtures__', 'generated', 'tests', 'fixtures'].includes(
+              entry.name,
+            )
+          )
+            scan(path);
+          continue;
+        }
+        if (!/\.[cm]?[jt]sx?$/u.test(entry.name) || /\.(?:test|spec|bench)\./u.test(entry.name))
+          continue;
+        const source = ts.createSourceFile(
+          path,
+          readFileSync(path, 'utf8'),
+          ts.ScriptTarget.Latest,
+          true,
+        );
+        const inspect = (node: ts.Node): void => {
+          if (
+            (ts.isStringLiteral(node) ||
+              ts.isNoSubstitutionTemplateLiteral(node) ||
+              ts.isJsxText(node)) &&
+            retiredName.test(node.text)
+          )
+            failures.push(path);
+          if (
+            ts.isTemplateExpression(node) &&
+            [node.head.text, ...node.templateSpans.map((span) => span.literal.text)].some((text) =>
+              retiredName.test(text),
+            )
+          )
+            failures.push(path);
+          ts.forEachChild(node, inspect);
+        };
+        inspect(source);
+      }
+    };
+    for (const root of roots) scan(resolve(repoRoot, root));
+    expect([...new Set(failures)]).toEqual([]);
+    const native = readFileSync(resolve(repoRoot, 'apps/cli/src/tier_cache.rs'), 'utf8');
+    expect(native.match(/UserTier::Max15x\s*=>\s*"([^"]+)"/u)?.[1]).toBe(
+      BILLING_PLAN_PRICING.max_15x.label,
+    );
+  }, 60_000);
+
+  it('names no retired Max plan in any pricing locale', () => {
+    const localeRoot = resolve(webRoot, '../../packages/ui/i18n/locales');
+    for (const locale of readdirSync(localeRoot, { withFileTypes: true }).filter((entry) =>
+      entry.isDirectory(),
+    )) {
+      const pricing = JSON.parse(
+        readFileSync(resolve(localeRoot, locale.name, 'pricing.json'), 'utf8'),
+      ) as Record<string, string>;
+      expect(
+        Object.values(pricing).some((text) => /\bMax\s+15x\b/iu.test(text)),
+        locale.name,
+      ).toBe(false);
+    }
+  });
+
   it('does not publish the retired Hobby plan or waitlist-only paid tiers', () => {
     const publicSources = [
       'app/refund-policy/page.tsx',

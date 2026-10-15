@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 const SIGNED_OUT = { subject: null, isSignedIn: false };
 const SIGNED_IN = { subject: 'user_1', isSignedIn: true };
 const SIGN_IN_HREF = '/login?redirectTo=%2Fskills';
+const SIGN_UP_HREF = '/signup?redirectTo=%2Fskills';
 
 vi.mock('next-themes', () => ({ useTheme: () => ({ theme: 'dark', setTheme: vi.fn() }) }));
 
@@ -85,6 +86,17 @@ describe('/skills is decided on the server', () => {
     );
     expect(body.querySelector('[data-testid="settings-redirect"]')).toBeNull();
     expect(mocks.logger.error).not.toHaveBeenCalled();
+  });
+
+  it('offers a new visitor an account beside the sign-in, returning here', async () => {
+    mocks.identity.mockResolvedValue(SIGNED_OUT);
+
+    const body = await firstResponse();
+
+    const signIn = body.querySelector(`a[href="${SIGN_IN_HREF}"]`);
+    const signUp = body.querySelector(`a[href="${SIGN_UP_HREF}"]`);
+    expect(signUp?.textContent).toBe('Create an account');
+    expect(signUp?.parentElement).toBe(signIn?.parentElement);
   });
 
   it('lists the built-in skills a visitor can expect before signing in', async () => {

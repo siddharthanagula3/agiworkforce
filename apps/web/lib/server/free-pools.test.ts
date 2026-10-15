@@ -311,6 +311,55 @@ describe('the limited free media offer configuration', () => {
   });
 });
 
+describe("each account's daily share of free chat, as configured", () => {
+  const pools = loadFreePools();
+
+  function withShare(freeChatDailyShare: unknown) {
+    return parseFreePoolsDocument({ ...pools, freeChatDailyShare });
+  }
+
+  it('ships 120,000 tokens per account, twelve percent of a one million token allowance', () => {
+    const chatLimits = new Set(
+      pools
+        .inventory!.entries.filter(
+          (entry) => getProviderOffering(entry.offeringKey)?.category === 'chat',
+        )
+        .map((entry) => entry.limit),
+    );
+
+    expect(pools.freeChatDailyShare).toEqual({ tokensPerUser: 120_000 });
+    expect([...chatLimits]).toEqual([1_000_000]);
+    expect(pools.freeChatDailyShare!.tokensPerUser / 1_000_000).toBe(0.12);
+  });
+
+  it('refuses a file that lists free quota models with no share, so removing the key cannot remove the protection', () => {
+    const { freeChatDailyShare: _share, ...withoutShare } = pools;
+
+    expect(() => parseFreePoolsDocument(withoutShare)).toThrow(/freeChatDailyShare/);
+  });
+
+  it('asks for no share where there is no inventory to protect', () => {
+    expect(parseFreePoolsDocument(document([entry()])).freeChatDailyShare).toBeUndefined();
+  });
+
+  it('rejects a share that is zero, negative, fractional, missing or misnamed', () => {
+    for (const share of [
+      { tokensPerUser: 0 },
+      { tokensPerUser: -1 },
+      { tokensPerUser: 1.5 },
+      { tokensPerUser: '30000' },
+      {},
+      { tokensPerAccount: 30_000 },
+      { tokensPerUser: 30_000, enabled: false },
+    ]) {
+      expect(() => withShare(share), JSON.stringify(share)).toThrow();
+    }
+    expect(withShare({ tokensPerUser: 50_000 }).freeChatDailyShare).toEqual({
+      tokensPerUser: 50_000,
+    });
+  });
+});
+
 describe('the terms review standing', () => {
   const DAY_MS = 24 * HOUR_MS;
   const LEAD_MS = 3 * DAY_MS;

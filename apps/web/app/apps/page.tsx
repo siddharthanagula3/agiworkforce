@@ -85,7 +85,7 @@ export default async function AppsPage() {
     <SignedOutSurface
       eyebrow="Apps"
       heading="Apps are packs you install into AGI"
-      signInHref="/login?redirectTo=%2Fapps"
+      redirectTo="/apps"
       signInLabel="Sign in to install apps"
       secondary={{ href: '/features/plugins', label: 'How apps and plugins work' }}
       after={<AppsCatalogue catalog={await loadPluginCatalog()} />}

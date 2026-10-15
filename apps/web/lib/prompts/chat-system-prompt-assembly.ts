@@ -11,13 +11,13 @@ import { chatSystemPromptSection, type ChatSystemPromptSections } from './chat-s
  * existed.
  */
 
-const TOOL_SECTION_PREFIX = 'tool.';
+export const TOOL_SECTION_PREFIX = 'tool.';
 
 const CAPABILITY_SECTION_PREFIX = 'product_capability.';
 
 const ARTIFACTS_CAPABILITY = 'artifacts';
 
-const CODE_EXECUTION_TOOL_NAMES = ['execute_code', 'code_execution', 'code_interpreter'];
+export const CODE_EXECUTION_TOOL_NAMES = ['execute_code', 'code_execution', 'code_interpreter'];
 
 const FILE_CREATION_TOOL_NAMES = [
   'execute_code',

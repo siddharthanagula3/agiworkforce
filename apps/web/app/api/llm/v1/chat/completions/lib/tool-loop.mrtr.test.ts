@@ -120,8 +120,25 @@ function agentEvents(output: string): AgentEventEnvelope[] {
     });
 }
 
+function inputRequests(field: string) {
+  return {
+    [field]: {
+      method: 'elicitation/create',
+      params: {
+        mode: 'form',
+        message: `Choose ${field}`,
+        requestedSchema: {
+          type: 'object',
+          properties: { [field]: { type: 'string' } },
+          required: [field],
+        },
+      },
+    },
+  };
+}
+
 const INPUT_REQUIRED = {
-  inputRequests: { priority: { type: 'string' } },
+  inputRequests: inputRequests('priority'),
   requestState: 'token-1',
 };
 
@@ -200,7 +217,7 @@ describe('runToolLoop, MRTR input_required suspend', () => {
       toolCallId: 'call_1',
       connectorId: 'custom-abc123',
       toolName: 'create_task',
-      inputRequests: { priority: { type: 'string' } },
+      inputRequests: INPUT_REQUIRED.inputRequests,
       requestState: 'token-1',
       round: 0,
     });
@@ -227,11 +244,45 @@ describe('runToolLoop, MRTR input_required suspend', () => {
     expect(checkpoint.pendingToolCalls).toEqual([
       { id: 'call_1', qualifiedName: CONNECTOR_TOOL, args: { title: 'ship it' } },
     ]);
-    expect(checkpoint.inputRequests).toEqual({ call_1: { priority: { type: 'string' } } });
+    expect(checkpoint.inputRequests).toEqual({ call_1: INPUT_REQUIRED.inputRequests });
     expect(checkpoint.requestState).toEqual({ call_1: { requestState: 'token-1', round: 0 } });
     expect(checkpoint.messages.some((m) => m.role === 'tool' && m.tool_call_id === 'call_1')).toBe(
       false,
     );
+  });
+
+  it('settles unsupported remote input instead of creating an unanswerable checkpoint', async () => {
+    mockBuildToolLoopStream
+      .mockResolvedValueOnce(toolCallStep())
+      .mockResolvedValueOnce(
+        sseStreamFrom([chunk({ content: 'Done without it.' }), chunk({}, 'stop')]),
+      );
+    const connectorExecutor = vi.fn(async () => ({
+      handled: true,
+      content: 'Needs input',
+      isError: true,
+      inputRequired: { inputRequests: { bad: { method: 'sampling/createMessage', params: {} } } },
+    }));
+    const onInputCheckpoint = vi.fn();
+    const output = await drain(
+      runToolLoop(makeProcessed(), {
+        approvalMode: 'auto',
+        userId: 'user-1',
+        mcpTools: [connectorToolDef],
+        connectorExecutor,
+        onInputCheckpoint,
+      }),
+    );
+    expect(connectorExecutor).toHaveBeenCalledOnce();
+    expect(onInputCheckpoint).not.toHaveBeenCalled();
+    expect(output).not.toContain('x_tool_input_request');
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(2);
+    const contRequest = mockBuildToolLoopStream.mock.calls[1]?.[2] as {
+      messages: Array<{ role: string; content: string; tool_call_id?: string }>;
+    };
+    expect(
+      contRequest.messages.find((m) => m.role === 'tool' && m.tool_call_id === 'call_1')?.content,
+    ).toMatch(/not a form or link/);
   });
 
   it('fails safe on an unattended run: settles the call as an error and never pauses', async () => {
@@ -354,7 +405,7 @@ describe('runToolLoop, MRTR input resume', () => {
       handled: true,
       content: 'still needs input',
       isError: true,
-      inputRequired: { inputRequests: { due: { type: 'string' } }, requestState: 'token-2' },
+      inputRequired: { inputRequests: inputRequests('due'), requestState: 'token-2' },
     }));
 
     await drain(

@@ -7,7 +7,12 @@ import {
   resolveEffectiveToolApprovalPolicy,
   type ToolApprovalPolicy,
 } from '@shared/types/toolApprovalPolicy';
-import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import { catalogToToolDefs, type WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import {
+  connectorToolPermissionsFromEntries,
+  withSessionGrants,
+  type ConnectorToolPermissions,
+} from './connector-tool-permissions';
 
 const provider = vi.hoisted(() => ({ stream: vi.fn() }));
 vi.mock('./tool-loop-anthropic', () => ({
@@ -19,7 +24,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
   pauseE2BSession: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { runToolLoop } from './tool-loop';
+import { runToolLoop, type ToolLoopApprovalCheckpoint, type ToolLoopOptions } from './tool-loop';
 import { classifyToolLoopInputs } from './tool-loop-routing';
 import type { ProcessedRequest } from './request-processor';
 
@@ -223,5 +228,236 @@ describe('tool approval permission matrix', () => {
     expect(
       classifyToolLoopInputs([], [{ function: { name: 'web_search' } }], 'autonomous').approvalMode,
     ).toBe('auto');
+  });
+});
+
+const DECLARED_READ: WebMcpToolDef = {
+  qualifiedName: 'mcp__github__get_pull_request_diff',
+  serverId: 'github',
+  toolName: 'get_pull_request_diff',
+  description: 'Declared read',
+  origin: 'connector',
+  inputSchema: { type: 'object', properties: {} },
+};
+
+async function approvalRequest(
+  name: string,
+  tools: WebMcpToolDef[],
+  connectorPermissions?: ConnectorToolPermissions,
+  sessionGrantRefusal?: ToolLoopOptions['sessionGrantRefusal'],
+): Promise<{
+  request: Record<string, unknown> | undefined;
+  executions: number;
+  output: string;
+  checkpoint: ToolLoopApprovalCheckpoint | undefined;
+}> {
+  provider.stream.mockReset();
+  provider.stream.mockResolvedValueOnce(toolCallStream(name, {}));
+  provider.stream.mockResolvedValueOnce(
+    stream([{ choices: [{ delta: {}, finish_reason: 'stop', index: 0 }], model: 'fixture-model' }]),
+  );
+  let checkpoint: ToolLoopApprovalCheckpoint | undefined;
+  const connectorExecutor = vi.fn(async () => ({ handled: true, content: 'ok', isError: false }));
+  const output = await collect(
+    runToolLoop(makeProcessed(), {
+      approvalMode: 'manual',
+      mcpTools: tools,
+      toolApprovalPolicy: 'ask_every_time',
+      connectorExecutor,
+      sessionGrantRefusal,
+      onApprovalCheckpoint: async (value) => {
+        checkpoint = value;
+      },
+      ...(connectorPermissions ? { connectorPermissions } : {}),
+    }),
+  );
+  for (const line of output.split('\n')) {
+    if (!line.startsWith('data: {')) continue;
+    const delta = (
+      JSON.parse(line.slice('data: '.length)) as {
+        choices?: Array<{ delta?: { x_tool_approval_request?: Record<string, unknown> } }>;
+      }
+    ).choices?.[0]?.delta?.x_tool_approval_request;
+    if (delta)
+      return {
+        request: delta,
+        executions: connectorExecutor.mock.calls.length,
+        output,
+        checkpoint,
+      };
+  }
+  return {
+    request: undefined,
+    executions: connectorExecutor.mock.calls.length,
+    output,
+    checkpoint,
+  };
+}
+
+const availablePermissions = {
+  ...connectorToolPermissionsFromEntries([]),
+  sessionGrantsAvailable: true,
+};
+
+describe('runToolLoop, approval review on x_tool_approval_request', () => {
+  beforeEach(() => provider.stream.mockReset());
+
+  it('offers every scope for an undeclared connector tool, which is high rather than critical', async () => {
+    expect(
+      (await approvalRequest(CONNECTOR_TOOL.qualifiedName, [CONNECTOR_TOOL], availablePermissions))
+        .request,
+    ).toMatchObject({
+      risk_tier: 'high',
+      destructive: true,
+      approval_scopes: ['once', 'session', 'always'],
+    });
+  });
+
+  it('carries a catalog destructiveHint to the approval as critical, with no standing allow', async () => {
+    const [annotated] = catalogToToolDefs({
+      version: 1,
+      generatedAt: 0,
+      servers: {},
+      tools: [
+        {
+          serverName: 'fixtureserver',
+          safeServerName: 'fixtureserver',
+          toolName: 'purge_records',
+          inputSchema: { type: 'object', properties: {} },
+          annotations: { destructiveHint: true },
+          visibility: 'both',
+          fallbackDescription: 'Purges records',
+        },
+      ],
+      resources: [],
+      resourceTemplates: [],
+      prompts: [],
+      apps: [],
+    });
+    expect(annotated?.annotations).toEqual({ destructiveHint: true });
+    expect(
+      (
+        await approvalRequest(
+          annotated!.qualifiedName,
+          [{ ...annotated!, origin: 'connector' }],
+          availablePermissions,
+        )
+      ).request,
+    ).toMatchObject({
+      risk_tier: 'critical',
+      destructive: true,
+      approval_scopes: ['once', 'session'],
+    });
+  });
+
+  it('asks for a critical tool every time even when an allow is saved for it', async () => {
+    const critical = { ...CONNECTOR_TOOL, annotations: { destructiveHint: true } };
+    const permissions = connectorToolPermissionsFromEntries([
+      { connectorId: critical.serverId, toolName: critical.toolName, level: 'allow' },
+    ]);
+    const criticalResult = await approvalRequest(critical.qualifiedName, [critical], permissions);
+    expect(criticalResult.request).toBeDefined();
+    expect(criticalResult.executions).toBe(0);
+    const allowed = await approvalRequest(
+      CONNECTOR_TOOL.qualifiedName,
+      [CONNECTOR_TOOL],
+      permissions,
+    );
+    expect(allowed.request).toBeUndefined();
+    expect(allowed.executions).toBe(1);
+  });
+
+  it('lets a critical tool run within a conversation it was allowed for', async () => {
+    const critical = { ...CONNECTOR_TOOL, annotations: { destructiveHint: true } };
+    const permissions = withSessionGrants(
+      connectorToolPermissionsFromEntries([]),
+      new Map([[`${critical.serverId} ${critical.toolName}`, 'critical']]),
+    );
+    const freshCheck = vi.fn(async () => null);
+    const result = await approvalRequest(
+      critical.qualifiedName,
+      [critical],
+      permissions,
+      freshCheck,
+    );
+    expect(result.request).toBeUndefined();
+    expect(result.executions).toBe(1);
+    expect(freshCheck).toHaveBeenCalledWith(critical.qualifiedName, 'critical');
+  });
+
+  it('offers every scope for a declared non-destructive connector tool', async () => {
+    expect(
+      (await approvalRequest(DECLARED_READ.qualifiedName, [DECLARED_READ], availablePermissions))
+        .request,
+    ).toMatchObject({
+      risk_tier: 'low',
+      destructive: false,
+      approval_scopes: ['once', 'session', 'always'],
+    });
+  });
+
+  it('persists exactly the scopes emitted to the client in its server checkpoint', async () => {
+    for (const permissions of [undefined, availablePermissions]) {
+      const result = await approvalRequest(
+        CONNECTOR_TOOL.qualifiedName,
+        [CONNECTOR_TOOL],
+        permissions,
+      );
+      expect(result.checkpoint?.pendingToolCalls).toEqual([
+        {
+          id: 'fixture-matrix-call',
+          qualifiedName: CONNECTOR_TOOL.qualifiedName,
+          args: {},
+          approvalScopes: result.request?.['approval_scopes'],
+        },
+      ]);
+    }
+  });
+
+  it('offers only once when scoped storage availability is not confirmed', async () => {
+    const result = await approvalRequest(CONNECTOR_TOOL.qualifiedName, [CONNECTOR_TOOL]);
+    expect(result.request).toMatchObject({ approval_scopes: ['once'] });
+    expect(result.executions).toBe(0);
+  });
+
+  it('does not invoke a tool when its conversation grant was revoked before dispatch', async () => {
+    const permissions = withSessionGrants(
+      connectorToolPermissionsFromEntries([]),
+      new Map([[`${CONNECTOR_TOOL.serverId} ${CONNECTOR_TOOL.toolName}`, 'high']]),
+    );
+    const freshCheck = vi.fn(async () => ({
+      content: 'Grant revoked',
+      isError: true,
+      unavailable: true,
+    }));
+    const result = await approvalRequest(
+      CONNECTOR_TOOL.qualifiedName,
+      [CONNECTOR_TOOL],
+      permissions,
+      freshCheck,
+    );
+    expect(result.executions).toBe(0);
+    expect(freshCheck).toHaveBeenCalledWith(CONNECTOR_TOOL.qualifiedName, 'high');
+    expect(result.output).toContain('Grant revoked');
+  });
+
+  it('does not invoke a session-granted tool without the fresh dispatch check', async () => {
+    const permissions = withSessionGrants(
+      connectorToolPermissionsFromEntries([]),
+      new Map([[`${CONNECTOR_TOOL.serverId} ${CONNECTOR_TOOL.toolName}`, 'high']]),
+    );
+    const result = await approvalRequest(
+      CONNECTOR_TOOL.qualifiedName,
+      [CONNECTOR_TOOL],
+      permissions,
+    );
+    expect(result.executions).toBe(0);
+    expect(result.output).toContain('cannot be confirmed');
+  });
+
+  it('offers only this call for a platform tool, which has no connector verdict to remember', async () => {
+    expect((await approvalRequest('write_file', [])).request).toMatchObject({
+      approval_scopes: ['once'],
+    });
   });
 });

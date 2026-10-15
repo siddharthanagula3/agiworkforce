@@ -8,6 +8,7 @@ import {
   NO_HOST_SHORTCUT,
   describeAccelerator,
 } from '@agiworkforce/local-runtime-contract';
+import { CODE_AGENT_MODE_CYCLE_ROW } from '../lib/code-shortcuts';
 import { useDesktopHost } from '../lib/host';
 
 export interface HostShortcutRow {
@@ -21,6 +22,7 @@ const CONFIGURABLE_DESCRIPTIONS: Record<(typeof HOST_SHORTCUT_KEYS)[number], str
   screenshot: 'Screenshot to chat',
   windowShot: 'Window to chat',
   voice: 'Dictate',
+  stop: 'Stop agents',
 };
 
 /**
@@ -46,7 +48,7 @@ export function useHostShortcuts(): readonly HostShortcutRow[] {
     }
 
     let live = true;
-    const fixed = HOST_MENU_SHORTCUTS.map((shortcut) => ({
+    const fixed = [...HOST_MENU_SHORTCUTS, CODE_AGENT_MODE_CYCLE_ROW].map((shortcut) => ({
       id: shortcut.id,
       description: shortcut.description,
       chord: describeAccelerator(shortcut.accelerator, host.platform),

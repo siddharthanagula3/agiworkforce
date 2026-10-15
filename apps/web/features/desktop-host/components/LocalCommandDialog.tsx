@@ -8,9 +8,11 @@ import {
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
 import { Spinner, useDialogKeyboard } from '@agiworkforce/ui';
+import { isImeComposingKey } from '@agiworkforce/unified-chat/composer-editor';
 import {
   cancelLocalCommand,
   listWorkspaceRoots,
+  onWorkspaceChanged,
   pickWorkspaceRoot,
   startLocalCommand,
 } from '../lib/runtime-client';
@@ -21,6 +23,7 @@ const INTRO =
 const NO_ROOTS_COPY =
   'No folders are approved yet. Choose one first; a command only ever runs inside a folder you picked.';
 const RUN_FAILED = 'That command did not run.';
+const STOP_FAILED = 'That command could not be stopped from here. It ends at its time limit.';
 const LOAD_FAILED = 'Approved folders could not be read.';
 
 const BUTTON_CLASS =
@@ -110,18 +113,23 @@ export function LocalCommandDialog({ open, onClose, onAttach }: LocalCommandDial
   const runIdRef = useRef<string | null>(null);
   runIdRef.current = runId;
 
-  useEffect(() => {
-    if (!open) return;
+  const loadRoots = useCallback(() => {
     setLoading(true);
     listWorkspaceRoots()
       .then((next) => {
         setRoots(next);
-        setActiveRoot((current) => current ?? next[0] ?? null);
+        setActiveRoot((current) => next.find((root) => root.id === current?.id) ?? next[0] ?? null);
         setError(null);
       })
       .catch((cause: unknown) => setError(messageFor(cause, LOAD_FAILED)))
       .finally(() => setLoading(false));
-  }, [open]);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    loadRoots();
+    return onWorkspaceChanged(loadRoots);
+  }, [open, loadRoots]);
 
   useEffect(() => {
     const pane = outputRef.current;
@@ -130,9 +138,17 @@ export function LocalCommandDialog({ open, onClose, onAttach }: LocalCommandDial
 
   const close = useCallback(() => {
     const active = runIdRef.current;
-    if (active) void cancelLocalCommand(active);
+    if (active) void cancelLocalCommand(active).catch(() => undefined);
     onClose();
   }, [onClose]);
+
+  useEffect(
+    () => () => {
+      const active = runIdRef.current;
+      if (active) void cancelLocalCommand(active).catch(() => undefined);
+    },
+    [],
+  );
 
   useDialogKeyboard({ open, onClose: close, panelRef });
 
@@ -180,7 +196,8 @@ export function LocalCommandDialog({ open, onClose, onAttach }: LocalCommandDial
   }, [activeRoot, command, folder, runId]);
 
   const onStop = useCallback(() => {
-    if (runId) void cancelLocalCommand(runId);
+    if (!runId) return;
+    cancelLocalCommand(runId).catch((cause: unknown) => setError(messageFor(cause, STOP_FAILED)));
   }, [runId]);
 
   const onAddToChat = useCallback(() => {
@@ -276,7 +293,7 @@ export function LocalCommandDialog({ open, onClose, onAttach }: LocalCommandDial
                 disabled={runId !== null}
                 onChange={(event) => setCommand(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') void onRun();
+                  if (event.key === 'Enter' && !isImeComposingKey(event.nativeEvent)) void onRun();
                 }}
               />
             </label>

@@ -53,7 +53,17 @@ describe('moving the chat system prompt pin under existing conversations', () =>
     (route) => {
       const source = readFileSync(path.join(COMPLETIONS_DIR, route), 'utf8');
 
-      expect(source).toContain('processed.llmRequest.messages = claim.checkpoint.messages;');
+      expect(source).toContain('restoreCheckpointedTurn(processed, claim.checkpoint);');
     },
   );
+
+  it('restores the stored messages, retargeting only when the checkpoint names the model it ran on', () => {
+    const source = readFileSync(
+      path.join(COMPLETIONS_DIR, 'lib/approval-checkpoint-request.ts'),
+      'utf8',
+    );
+
+    expect(source).toContain('processed.llmRequest.messages = checkpoint.messages;');
+    expect(source).toContain('retargetMessagesToModel(\n    checkpoint.messages,');
+  });
 });

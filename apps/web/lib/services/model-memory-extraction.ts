@@ -1,15 +1,12 @@
 import 'server-only';
 
 /**
- * Model-backed auto-memory extraction, behind a kill-switch that is OFF.
+ * Model-backed auto-memory extraction, on unless `AGI_MODEL_MEMORY_EXTRACTION`
+ * turns it off (D-2026-09-15-02).
  *
  * The pattern extractor in `@agiworkforce/agent-core` only finds the phrasings
  * it was written for, so "I just moved to Berlin" is lost. Reading the turn
- * with a model finds it, but that is one extra provider call per eligible turn
- * and the per-turn spend is a founder decision, not an engineering one. So the
- * capability is built and wired and stays dark until `AGI_MODEL_MEMORY_EXTRACTION`
- * is set: with the flag unset this module is never entered and memory behaves
- * exactly as it does today.
+ * with a model finds it, at one extra provider call per eligible turn.
  *
  * The call is made on the cheapest managed utility route, the same primitive
  * the conversation titler uses, so it never rides the requester's paid model
@@ -39,10 +36,19 @@ import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-rout
 import { logger } from '@/lib/logger';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
+import {
+  leavesOutNeverKeptMemoryDetails,
+  leavesOutSensitiveMemoryTopics,
+} from '@/lib/prompts/prompt-manifest';
+import { resolvePrompt, type ResolvedPrompt } from '@/lib/prompts/prompt-registry';
 
 export const MODEL_MEMORY_EXTRACTION_ENV = 'AGI_MODEL_MEMORY_EXTRACTION';
 
 export const MEMORY_EXTRACTION_QUOTA_FEATURE = 'memory_extraction';
+
+const MEMORY_FACT_EXTRACTION_PROMPT_ID = 'product.memory_fact_extraction';
+
+const MEMORY_FACT_EXTRACTION_ALL_TOPICS_PROMPT_ID = 'product.memory_fact_extraction_all_topics';
 
 const MEMORY_EXTRACTION_NAMESPACE = 'memory-extraction';
 
@@ -79,12 +85,30 @@ export interface ModelAutoMemoryExtractionInput {
   organizationId: string | null;
   planTier: string;
   forceNoTraining?: boolean;
+  includeSensitiveTopics?: boolean;
+  promptVariants?: Readonly<Record<string, number>>;
   /**
    * The turn this extraction reads. It is the chat request's own idempotency
    * key, so a retried or resumed turn reaches the same reservation instead of
    * being charged for the extraction a second time.
    */
   requestId: string;
+}
+
+export function memoryFactExtractionPrompt(input: {
+  includeSensitiveTopics?: boolean;
+  promptVariants?: Readonly<Record<string, number>>;
+}): ResolvedPrompt | null {
+  const prompt = resolvePrompt(
+    input.includeSensitiveTopics
+      ? MEMORY_FACT_EXTRACTION_ALL_TOPICS_PROMPT_ID
+      : MEMORY_FACT_EXTRACTION_PROMPT_ID,
+    { variants: input.promptVariants },
+  );
+  const leavesOut =
+    leavesOutNeverKeptMemoryDetails(prompt) &&
+    (input.includeSensitiveTopics === true || leavesOutSensitiveMemoryTopics(prompt));
+  return leavesOut ? prompt : null;
 }
 
 function patternFacts(message: string): string[] {
@@ -101,7 +125,8 @@ export async function extractAutoMemoryFactsWithModel(
 ): Promise<string[]> {
   // Checked here as well as inside agent-core so that an unworthwhile turn does
   // not even resolve a route or touch the registry.
-  if (!isMemoryExtractionWorthwhile(input.message)) return patternFacts(input.message);
+  const prompt = memoryFactExtractionPrompt(input);
+  if (!prompt || !isMemoryExtractionWorthwhile(input.message)) return patternFacts(input.message);
 
   const routing = await sideCallRoutingRequest(
     input.db,
@@ -168,6 +193,7 @@ export async function extractAutoMemoryFactsWithModel(
   let settled = false;
   try {
     const result = await extractMemoryFactsWithModel(input.message, {
+      systemPrompt: prompt.text,
       timeoutMs: EXTRACTION_TIMEOUT_MS,
       maxFacts: MAX_AUTO_MEMORY_FACTS,
       onFallback: (reason) => {

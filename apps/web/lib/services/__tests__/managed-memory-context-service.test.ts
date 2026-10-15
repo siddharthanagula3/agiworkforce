@@ -82,6 +82,7 @@ describe('loadManagedMemoryPolicy', () => {
       generateFromHistory: false,
       allowToolAssistedGeneration: false,
       searchPastChats: false,
+      includeSensitiveTopics: false,
     });
 
     const enabledQuery = vi.fn().mockResolvedValue([
@@ -99,6 +100,7 @@ describe('loadManagedMemoryPolicy', () => {
       generateFromHistory: true,
       allowToolAssistedGeneration: true,
       searchPastChats: false,
+      includeSensitiveTopics: false,
     });
 
     const generationDisabledQuery = vi.fn().mockResolvedValue([
@@ -116,7 +118,21 @@ describe('loadManagedMemoryPolicy', () => {
       generateFromHistory: false,
       allowToolAssistedGeneration: false,
       searchPastChats: false,
+      includeSensitiveTopics: false,
     });
+  });
+
+  it('includes sensitive topics only when the member turned that on explicitly', async () => {
+    for (const [stored, expected] of [
+      [{ memory: true }, false],
+      [{ memory: true, includeSensitiveTopics: 'yes' }, false],
+      [{ memory: true, includeSensitiveTopics: true }, true],
+    ] as const) {
+      const query = vi.fn().mockResolvedValue([{ capabilities: stored }]);
+      await expect(loadManagedMemoryPolicy({ query }, { userId: 'user-1' })).resolves.toMatchObject(
+        { includeSensitiveTopics: expected },
+      );
+    }
   });
 
   it('keeps a user with no organization on the per-user switch alone', async () => {
@@ -142,6 +158,7 @@ describe('loadManagedMemoryPolicy', () => {
       generateFromHistory: false,
       allowToolAssistedGeneration: false,
       searchPastChats: false,
+      includeSensitiveTopics: false,
     });
     expect(query).toHaveBeenCalledTimes(1);
   });
@@ -167,6 +184,7 @@ describe('loadManagedMemoryPolicy', () => {
       generateFromHistory: true,
       allowToolAssistedGeneration: true,
       searchPastChats: false,
+      includeSensitiveTopics: false,
     });
   });
 
@@ -190,6 +208,36 @@ describe('loadManagedMemoryPolicy', () => {
     ).resolves.toMatchObject({ searchPastChats: false });
   });
 
+  it('takes a workspace policy the caller already read instead of reading it again', async () => {
+    const query = vi.fn().mockResolvedValue([{ capabilities: { memory: true } }]);
+
+    await expect(
+      loadManagedMemoryPolicy(
+        { query },
+        {
+          userId: 'user-1',
+          organizationId: 'org-1',
+          organizationPolicy: { allowMemory: true, retentionDays: null, retentionEnforced: false },
+        },
+      ),
+    ).resolves.toMatchObject({ enabled: true });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0]?.[0]).toMatch(/from user_settings/);
+
+    query.mockClear();
+    await expect(
+      loadManagedMemoryPolicy(
+        { query },
+        {
+          userId: 'user-1',
+          organizationId: 'org-1',
+          organizationPolicy: { allowMemory: false, retentionDays: null, retentionEnforced: false },
+        },
+      ),
+    ).resolves.toMatchObject({ enabled: false });
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it('fails closed and logs once when the organization policy read errors', async () => {
     const query = vi.fn().mockImplementation(async (sql: string) => {
       if (/organization_admin_policies/.test(sql)) throw new Error('connection reset');
@@ -203,6 +251,7 @@ describe('loadManagedMemoryPolicy', () => {
       generateFromHistory: false,
       allowToolAssistedGeneration: false,
       searchPastChats: false,
+      includeSensitiveTopics: false,
     });
     expect(query).toHaveBeenCalledTimes(1);
   });
@@ -314,6 +363,29 @@ describe('persistManagedAutoMemoryFacts', () => {
     expect(firstRun[0]?.[5]).toBe('preference');
     expect(firstRun[0]?.[6]).toBe('auto');
     expect(firstRun.map((params) => params[1])).toEqual(secondRun.map((params) => params[1]));
+  });
+
+  function writtenWithSource(query: ReturnType<typeof vi.fn>): Array<[unknown, unknown]> {
+    return query.mock.calls
+      .filter((call) => String(call[0]).includes('insert into user_memories'))
+      .map((call) => [(call[1] as unknown[])[4], (call[1] as unknown[])[6]]);
+  }
+
+  it('keeps a learned sensitive fact out of memory while the opt-in is off', async () => {
+    const query = asQuery(
+      vi.fn(
+        async (sql: string, _params?: unknown[]) =>
+          answerMemoryPolicyQuery(sql) ?? [{ outcome: 'inserted', id: 'memory-1' }],
+      ),
+    );
+
+    const result = await persistManagedAutoMemoryFacts(
+      { query },
+      { userId: 'user-1', candidates: ['User prefers Rust', 'User is gay'] },
+    );
+
+    expect(result).toEqual({ extracted: 2, inserted: 1, excluded: 1 });
+    expect(writtenWithSource(query)).toEqual([['User prefers Rust', 'auto']]);
   });
 
   it('does not query the database when no facts were extracted', async () => {

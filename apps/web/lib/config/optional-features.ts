@@ -139,7 +139,8 @@ export const OPTIONAL_FEATURES: readonly OptionalFeature[] = [
     id: 'auth_mfa_email_fallback',
     label: 'Emailed code as a second factor',
     requires: [all('AGI_AUTH_MFA_EMAIL_FALLBACK')],
-    whenDisabled: 'an emailed second factor is refused even when the identity vendor offers it',
+    whenDisabled:
+      'an emailed code is not offered to an account that has a stronger second factor; new-device verification by email still works',
     productionExpectation: 'optional',
   },
   {

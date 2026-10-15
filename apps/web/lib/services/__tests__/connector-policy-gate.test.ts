@@ -13,12 +13,14 @@ const {
   loggerInfo,
   loggerError,
   connectorsAllowed,
+  readPrimaryEmailState,
 } = vi.hoisted(() => ({
   resolveActiveOrganizationId: vi.fn(),
   readConnectorPolicy: vi.fn(),
   loggerInfo: vi.fn(),
   loggerError: vi.fn(),
   connectorsAllowed: vi.fn(async () => true),
+  readPrimaryEmailState: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -26,6 +28,10 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: loggerInfo, warn: vi.fn(), error: loggerError, debug: vi.fn() },
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({ resolveActiveOrganizationId }));
+vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
+  ...(await importOriginal<EmailConfirmationModule>()),
+  readPrimaryEmailState,
+}));
 vi.mock('@/lib/services/connector-policy-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   readConnectorPolicy,
@@ -45,6 +51,8 @@ import {
   evaluateConnectorPolicyForUser,
   evaluatePluginPolicyForUser,
 } from '../connector-policy-gate';
+
+type EmailConfirmationModule = typeof import('@/lib/auth/email-confirmation');
 
 type TypesModule = typeof import('@agiworkforce/types');
 
@@ -68,6 +76,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   resolveActiveOrganizationId.mockResolvedValue(ORG);
   readConnectorPolicy.mockResolvedValue(policy());
+  readPrimaryEmailState.mockResolvedValue({ confirmed: true, email: 'person@example.com' });
 });
 
 /**
@@ -190,6 +199,38 @@ describe('evaluateConnectorPolicyForUser', () => {
       evaluateConnectorPolicyForUser({ db, userId: USER, connectorId: 'github' }),
     ).resolves.toMatchObject({ allowed: false, code: 'connectors_unavailable' });
     expect(readConnectorPolicy).not.toHaveBeenCalled();
+  });
+
+  it('refuses an account whose email address was never confirmed before anything else', async () => {
+    readPrimaryEmailState.mockResolvedValue({ confirmed: false, email: 'victim@corp.example' });
+
+    const decision = await evaluateConnectorPolicyForUser({
+      db,
+      userId: USER,
+      organizationId: null,
+      connectorId: 'github',
+    });
+
+    expect(decision).toMatchObject({ allowed: false, code: 'email_unconfirmed' });
+    expect(decision.reason).toContain('Confirm your email address');
+    expect(readPrimaryEmailState).toHaveBeenCalledWith(USER);
+    expect(connectorsAllowed).not.toHaveBeenCalled();
+    expect(resolveActiveOrganizationId).not.toHaveBeenCalled();
+  });
+
+  it('refuses a connection when the account email cannot be read', async () => {
+    readPrimaryEmailState.mockRejectedValue(new Error('identity provider unreachable'));
+
+    const decision = await evaluateConnectorPolicyForUser({
+      db,
+      userId: USER,
+      organizationId: null,
+      connectorId: 'github',
+    });
+
+    expect(decision).toMatchObject({ allowed: false, code: 'connectors_unavailable' });
+    expect(loggerError).toHaveBeenCalled();
+    expect(connectorsAllowed).not.toHaveBeenCalled();
   });
 
   it('does not resolve a workspace without a user', async () => {

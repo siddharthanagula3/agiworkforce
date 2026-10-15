@@ -109,6 +109,20 @@ describe('the desktop settings section', () => {
     expect(await screen.findByText('Using agi 1.7.1 from ~/.cargo/bin/agi')).toBeInTheDocument();
   });
 
+  it.each([
+    ['bundled', 'Bundled with the app', '/Applications/AGI Cloud.app/Contents/Resources/agi'],
+    ['custom', 'Custom path', '/opt/agi/bin/agi'],
+    ['path', 'From PATH', '/usr/local/bin/agi'],
+  ] as const)('says where a %s CLI came from', async (source, label, cliPath) => {
+    installHost({}, { ...RESOLVED_CLI, source, path: cliPath });
+
+    render(<DesktopSettingsSection />);
+
+    expect(
+      await screen.findByText(`${label}. Using agi 1.7.1 from ${cliPath}`),
+    ).toBeInTheDocument();
+  });
+
   it('says the CLI is missing, and what to do about it', async () => {
     installHost({}, MISSING_CLI);
 
@@ -170,6 +184,29 @@ describe('the desktop settings section', () => {
     expect(within(select).getByRole('option', { name: 'No shortcut' })).toBeInTheDocument();
   });
 
+  it('never offers no shortcut for Stop Agents, which the shell refuses', async () => {
+    installHost();
+    render(<DesktopSettingsSection />);
+
+    const select = await screen.findByLabelText('Stop agents shortcut');
+    const values = [...select.querySelectorAll('option')].map((option) => option.value);
+
+    expect(values).toEqual([...HOST_SHORTCUT_CHOICES.stop]);
+    expect(within(select).queryByRole('option', { name: 'No shortcut' })).not.toBeInTheDocument();
+  });
+
+  it('says a setting was not saved, not that it could not be read, when the write fails', async () => {
+    const { writePreferences } = installHost();
+    writePreferences.mockRejectedValueOnce(new Error(''));
+    render(<DesktopSettingsSection />);
+
+    const startup = await screen.findByLabelText('Run on startup');
+    await waitFor(() => expect(startup).toBeEnabled());
+    await userEvent.click(startup);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('That setting was not saved.');
+  });
+
   it('writes a switch through the bridge and keeps what comes back', async () => {
     const { writePreferences } = installHost();
     render(<DesktopSettingsSection />);
@@ -210,6 +247,98 @@ describe('the desktop settings section', () => {
 
     expect(await screen.findByText('Already used by another app.')).toBeInTheDocument();
     expect(screen.getByText('Already used by another AGI Cloud shortcut.')).toBeInTheDocument();
+  });
+
+  // The shell asks the user natively before it saves a new CLI path, so what
+  // comes back may be the old path, and the status is only worth reading once
+  // that answer is in.
+  it('keeps the path the shell kept, and resolves the CLI only after it answered', async () => {
+    const { writePreferences } = installHost();
+    let answer: (state: HostPreferencesState) => void = () => undefined;
+    writePreferences.mockImplementationOnce(
+      () =>
+        new Promise<HostPreferencesState>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    const invokeRuntime = (
+      window as unknown as { agiHost: { invokeRuntime: ReturnType<typeof vi.fn> } }
+    ).agiHost.invokeRuntime;
+    const cliReads = () =>
+      invokeRuntime.mock.calls.filter(([command]) => command === 'developer_runtime_status').length;
+    render(<DesktopSettingsSection />);
+
+    const field = await screen.findByLabelText('AGI CLI path');
+    await waitFor(() => expect(field).toBeEnabled());
+    await waitFor(() => expect(cliReads()).toBe(1));
+    await userEvent.type(field, '/tmp/not-the-cli');
+    await userEvent.tab();
+
+    expect(writePreferences).toHaveBeenCalledWith({ cliPath: '/tmp/not-the-cli' });
+    expect(cliReads()).toBe(1);
+
+    answer(DEFAULT_STATE);
+
+    await waitFor(() => expect(cliReads()).toBe(2));
+    expect(screen.getByLabelText('AGI CLI path')).toHaveValue('');
+  });
+
+  it('offers the stop shortcut and agent notifications only when the shell reports them', async () => {
+    installHost();
+    render(<DesktopSettingsSection />);
+
+    await screen.findByLabelText('Quick Ask shortcut');
+    expect(screen.queryByLabelText('Stop agents shortcut')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Agent notifications')).not.toBeInTheDocument();
+  });
+
+  it('writes the stop shortcut through the bridge', async () => {
+    const { writePreferences } = installHost({
+      preferences: {
+        ...DEFAULT_STATE.preferences,
+        stopShortcut: HOST_SHORTCUT_CHOICES.stop[0] as string,
+      },
+      shortcutStatus: { stop: 'registered' },
+    });
+    render(<DesktopSettingsSection />);
+
+    const select = await screen.findByLabelText('Stop agents shortcut');
+    await waitFor(() => expect(select).toBeEnabled());
+    await userEvent.selectOptions(select, HOST_SHORTCUT_CHOICES.stop[1] as string);
+
+    expect(writePreferences).toHaveBeenCalledWith({ stopShortcut: HOST_SHORTCUT_CHOICES.stop[1] });
+  });
+
+  it('writes when, which kinds and whether agent notifications make a sound', async () => {
+    const { writePreferences } = installHost({
+      preferences: {
+        ...DEFAULT_STATE.preferences,
+        agentNotifications: { when: 'unfocused', muted: [], sound: true },
+      },
+    });
+    render(<DesktopSettingsSection />);
+
+    const mode = await screen.findByLabelText('Agent notifications');
+    expect(mode).toHaveDisplayValue('Only when AGI Cloud is in the background');
+
+    expect(screen.getByLabelText('Questions')).toBeChecked();
+    await userEvent.click(screen.getByLabelText('Finished turns'));
+    expect(writePreferences).toHaveBeenLastCalledWith({
+      agentNotifications: { when: 'unfocused', muted: ['turn-complete'], sound: true },
+    });
+    await waitFor(() => expect(screen.getByLabelText('Finished turns')).not.toBeChecked());
+
+    await userEvent.click(screen.getByLabelText('Notification sound'));
+    expect(writePreferences).toHaveBeenLastCalledWith({
+      agentNotifications: { when: 'unfocused', muted: ['turn-complete'], sound: false },
+    });
+
+    await userEvent.selectOptions(screen.getByLabelText('Agent notifications'), 'never');
+    expect(writePreferences).toHaveBeenLastCalledWith({
+      agentNotifications: { when: 'never', muted: ['turn-complete'], sound: false },
+    });
+    await waitFor(() => expect(screen.getByLabelText('Approval requests')).toBeDisabled());
+    expect(screen.getByLabelText('Questions')).toBeDisabled();
   });
 
   it('shows nothing extra when every shortcut registered', async () => {

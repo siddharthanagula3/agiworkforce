@@ -66,6 +66,11 @@ const ROUTED_CAPABILITY = functionBody(PROBE_SOURCE, 'checkRoutedCapability');
 const WORK_QUEUES = functionBody(PROBE_SOURCE, 'checkWorkQueues');
 const RETRIEVAL = functionBody(PROBE_SOURCE, 'checkRetrieval');
 const CACHE = functionBody(PROBE_SOURCE, 'checkCache');
+const STRIPE = functionBody(PROBE_SOURCE, 'checkStripe');
+const SELLABLE_PRICE = functionBody(PROBE_SOURCE, 'isSellableRecurringPrice');
+const IDENTITY = functionBody(PROBE_SOURCE, 'checkIdentity');
+const REACH_IDENTITY = functionBody(PROBE_SOURCE, 'reachIdentity');
+const ACCOUNT_EMAIL = functionBody(PROBE_SOURCE, 'checkAccountEmail');
 
 interface ProbeBinding {
   copy: readonly string[];
@@ -74,6 +79,7 @@ interface ProbeBinding {
 }
 
 const MODEL_CALL = /\b(fetch|streamRequest|streamText|generateText|completions)\b/;
+const IDENTITY_CALL_BEYOND_PROBE = /\bidentity\.(?!canVerifySessionTokens\b|checkReachable\b)\w+/;
 
 const BINDINGS: Record<string, ProbeBinding> = {
   environment: {
@@ -123,10 +129,16 @@ const BINDINGS: Record<string, ProbeBinding> = {
         contains: [
           'store.get<string>(CACHE_PROBE_KEY)',
           'CACHE_PROBE_TIMEOUT_MS',
-          "{ status: 'healthy', message: 'not configured' }",
+          "{ status: 'healthy', message: NOT_CONFIGURED }",
         ],
       },
-      { in: PROBE_SOURCE, contains: ['const CACHE_PROBE_TIMEOUT_MS = 1_000;'] },
+      {
+        in: PROBE_SOURCE,
+        contains: [
+          'const CACHE_PROBE_TIMEOUT_MS = 1_000;',
+          "export const NOT_CONFIGURED = 'not configured';",
+        ],
+      },
       { in: RUN_HEALTH_CHECKS, contains: ['checks.cache = await checkCache()'] },
     ],
     absent: [
@@ -143,18 +155,19 @@ const BINDINGS: Record<string, ProbeBinding> = {
     ],
     probe: [
       {
-        in: RUN_HEALTH_CHECKS,
+        in: STRIPE,
         contains: [
           'stripe.products.list',
           'stripe.prices.retrieve(priceId)',
-          '!price.active && !isGrandfatheredPriceId(priceId)',
-          'checks.stripe.status',
+          '!isSellableRecurringPrice(',
         ],
       },
+      { in: SELLABLE_PRICE, contains: ['price.active || isGrandfatheredPriceId(priceId)'] },
+      { in: RUN_HEALTH_CHECKS, contains: ['checks.stripe = await checkStripe()'] },
     ],
     absent: [
       {
-        in: RUN_HEALTH_CHECKS,
+        in: STRIPE,
         pattern: /stripe\.\w+\.(create|update|del|cancel|confirm|capture)\b/,
       },
     ],
@@ -218,6 +231,46 @@ const BINDINGS: Record<string, ProbeBinding> = {
       { in: RUN_HEALTH_CHECKS, contains: ['checks.search = retrieval.search'] },
     ],
     absent: [{ in: RETRIEVAL, pattern: /\bfrom\s+(public\.)?retrieval_/i }],
+  },
+  identity: {
+    copy: [
+      'The identity provider answers with the signing keys every session is verified against',
+      'a missed answer is asked once more before this row fails',
+      'It does not sign anyone in',
+    ],
+    probe: [
+      {
+        in: IDENTITY,
+        contains: ['identity.canVerifySessionTokens()', 'await reachIdentity(identity)'],
+      },
+      {
+        in: REACH_IDENTITY,
+        contains: ['identity.checkReachable()', 'IDENTITY_PROBE_ATTEMPTS'],
+      },
+      { in: PROBE_SOURCE, contains: ['const IDENTITY_PROBE_ATTEMPTS = 2;'] },
+      { in: RUN_HEALTH_CHECKS, contains: ['checkIdentity()', 'checks.identity = identity'] },
+    ],
+    absent: [
+      { in: IDENTITY, pattern: IDENTITY_CALL_BEYOND_PROBE },
+      { in: REACH_IDENTITY, pattern: IDENTITY_CALL_BEYOND_PROBE },
+    ],
+  },
+  email: {
+    copy: [
+      'A sender for account email is configured',
+      'It sends no message and does not check that one reaches an inbox',
+    ],
+    probe: [
+      {
+        in: ACCOUNT_EMAIL,
+        contains: [
+          'isNotificationEmailConfigured()',
+          "{ status: 'healthy', message: NOT_CONFIGURED }",
+        ],
+      },
+      { in: RUN_HEALTH_CHECKS, contains: ['checks.email = checkAccountEmail()'] },
+    ],
+    absent: [{ in: ACCOUNT_EMAIL, pattern: /\bsend\w*\(/ }],
   },
   vector: {
     copy: [

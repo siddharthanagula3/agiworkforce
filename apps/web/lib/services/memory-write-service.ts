@@ -1,7 +1,10 @@
 import 'server-only';
 
+import { NextResponse } from 'next/server';
+import { ERROR_CODE_TO_HTTP_STATUS, ErrorCode } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { getRequestId } from '@/lib/observability/trace-context';
 import {
   loadMemoryExclusions,
   matchedMemoryExclusion,
@@ -20,6 +23,13 @@ export interface MemoryWritePartition<T> {
 
 export function excludedMemoryMessage(term: string): string {
   return `Not saved. This memory contains "${term}", which you asked AGI never to remember.`;
+}
+
+export function memoryRefusalResponse(message: string): NextResponse {
+  return NextResponse.json(
+    { error: { code: ErrorCode.FORBIDDEN, message }, requestId: getRequestId() ?? undefined },
+    { status: ERROR_CODE_TO_HTTP_STATUS[ErrorCode.FORBIDDEN] },
+  );
 }
 
 async function readExclusions(db: ManagedMemoryContextDb, userId: string): Promise<string[]> {

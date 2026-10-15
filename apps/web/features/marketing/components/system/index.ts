@@ -30,4 +30,4 @@ export { StickyLedger } from './StickyLedger';
 export { SurfaceStatus, type SurfaceStatusProps } from './SurfaceStatus';
 export { ThemeToggle } from './ThemeToggle';
 export { Transcript, type TranscriptLine } from './Transcript';
-export { FOOTER_COLUMNS, FOOTER_LEGAL, WEB_ENTRY_HREF } from './nav';
+export { FOOTER_COLUMNS, FOOTER_LEGAL, WEB_ENTRY_HREF, webEntryHref } from './nav';

@@ -29,6 +29,7 @@ import type {
   CloudAgentWorkMode,
   CloudToolApprovalProjection,
   ManagedCloudAgentRunReference,
+  ToolApprovalReview,
 } from '@agiworkforce/cloud-contracts';
 import type {
   InteractiveCard,
@@ -37,6 +38,7 @@ import type {
   ResearchStep,
 } from '@agiworkforce/types';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
+import type { FreeModelHandoffReasonCode } from '@/lib/chat-fallback-reason';
 import type { ChatOutputFormat } from '@/lib/chat-output-format';
 import type { AgentEventSource, CloudWorkMode, ManagedMemoryCitations } from '@agiworkforce/types';
 import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
@@ -329,6 +331,12 @@ export interface MessageMetadata {
   webSearchAskedInText?: boolean;
   /** Safe replay metadata used to regenerate a turn without storing raw skill bodies. */
   sendReplay?: SendReplayMetadata;
+  /**
+   * On a user message: the explicit choice that sent it to Auto while a free
+   * model was selected. Regenerate and edit read it, because the replay options
+   * above do not record that a search was asked for outright.
+   */
+  freeModelHandoff?: FreeModelHandoffReasonCode;
   /** Durable owner-scoped attachment descriptors; raw bytes stay in object storage. */
   attachments?: Attachment[];
   mcpContext?: {
@@ -502,6 +510,8 @@ export interface MessageToolEntry {
   approved?: boolean;
   /** Raw tool_call_id from the model, used for the approval round-trip. */
   toolCallId?: string;
+  /** The server's risk review of a call awaiting approval, and the scopes it may be granted for. */
+  approvalReview?: ToolApprovalReview;
   /** JSON-serialized args from the model, for display in the approval card. */
   rawArgs?: Record<string, unknown>;
   /** Tool result content after execution. */

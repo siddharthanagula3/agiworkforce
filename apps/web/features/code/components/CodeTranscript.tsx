@@ -312,6 +312,13 @@ export interface CodeTranscriptBodyProps extends Omit<
   header?: React.ReactNode;
   /** A one-line status between the transcript and the working row. */
   pending?: string | null;
+  /** Offered on a task that began a turn the session can rewind to. */
+  onRewindTask?: (turnId: string) => void;
+  rewindLabel?: string;
+  /** Offered on the same tasks: a new session carrying the conversation through that turn. */
+  onForkTask?: (turnId: string) => void;
+  forkLabel?: string;
+  forkDescription?: string;
 }
 
 export function CodeTranscriptBody({
@@ -324,7 +331,14 @@ export function CodeTranscriptBody({
   onRetryTask,
   header,
   pending,
+  onRewindTask,
+  rewindLabel,
+  onForkTask,
+  forkLabel,
+  forkDescription,
 }: CodeTranscriptBodyProps) {
+  const canRewind = Boolean(onRewindTask && rewindLabel);
+  const canFork = Boolean(onForkTask && forkLabel);
   const lastReplyId = [...items].reverse().find((item) => item.kind === 'reply')?.id ?? null;
 
   return (
@@ -336,10 +350,45 @@ export function CodeTranscriptBody({
           return <CommandGroup key={item.id} entries={item.entries} verbose={verbose} />;
         }
         if (item.kind === 'task') {
+          const rewindTurnId = item.rewindTurnId;
+          const modeLine = item.mode === 'plan' && (
+            <p className={styles['taskMode']}>{CODE_COPY.planMode}</p>
+          );
+          if (rewindTurnId === undefined || (!canRewind && !canFork)) {
+            return (
+              <Fragment key={item.id}>
+                {modeLine}
+                <p className={styles['task']}>{item.text}</p>
+              </Fragment>
+            );
+          }
           return (
             <Fragment key={item.id}>
-              {item.mode === 'plan' && <p className={styles['taskMode']}>{CODE_COPY.planMode}</p>}
-              <p className={styles['task']}>{item.text}</p>
+              {modeLine}
+              <div className={styles['taskRow']}>
+                <p className={styles['task']}>{item.text}</p>
+                <div className={styles['taskActions']}>
+                  {canFork && (
+                    <button
+                      type="button"
+                      className={styles['taskAction']}
+                      title={forkDescription}
+                      onClick={() => onForkTask?.(rewindTurnId)}
+                    >
+                      {forkLabel}
+                    </button>
+                  )}
+                  {canRewind && (
+                    <button
+                      type="button"
+                      className={styles['taskAction']}
+                      onClick={() => onRewindTask?.(rewindTurnId)}
+                    >
+                      {rewindLabel}
+                    </button>
+                  )}
+                </div>
+              </div>
             </Fragment>
           );
         }

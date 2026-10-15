@@ -7,6 +7,7 @@ import {
   Prose,
   Section,
   Stack,
+  webEntryHref,
 } from '@/features/marketing/components/system';
 import { Header } from '@shared/components/layout/Header';
 import { ArtifactsWindow } from '@/features/marketing/components/FeatureScenes';
@@ -242,7 +243,7 @@ export default function ArtifactsFeaturePage() {
                 read its source. Copy the selected text version or download a supported format.
               </p>
               <ButtonRow>
-                <Button href="/login?redirectTo=%2Fchat">Open a chat</Button>
+                <Button href={webEntryHref('/chat')}>Open a chat</Button>
               </ButtonRow>
             </div>
           </div>

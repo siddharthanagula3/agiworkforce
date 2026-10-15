@@ -50,6 +50,10 @@ describe('VerifyDeviceClient', () => {
       'href',
       '/login?redirectTo=%2Fverify%3Fcode%3DABCD1234ABCD1234',
     );
+    expect(screen.getByRole('link', { name: 'Create an account' })).toHaveAttribute(
+      'href',
+      '/signup?redirectTo=%2Fverify%3Fcode%3DABCD1234ABCD1234',
+    );
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });

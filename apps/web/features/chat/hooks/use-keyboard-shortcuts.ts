@@ -1,103 +1,29 @@
 import { useEffect, useCallback } from 'react';
 import { safePlatform } from '@shared/utils/browser-utils';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
-import { OPEN_SEARCH_SHORTCUT } from '@agiworkforce/ui';
+import {
+  CHAT_SHORTCUTS,
+  findShortcut,
+  formatShortcutKeys,
+  matchesShortcut,
+  type ShortcutDefinition,
+} from '@agiworkforce/unified-chat';
 
 // A fresh [] each render changes the identity every time and defeats the
 // memoization below, which is what the exhaustive-deps warning was pointing at.
 const EMPTY_SHORTCUT_IDS: string[] = [];
 
-export interface KeyboardShortcut {
-  id: string;
-  key: string;
-  ctrl?: boolean;
-  meta?: boolean;
-  shift?: boolean;
-  alt?: boolean;
-  /** Whether the shortcut also runs while focus is in a text field or editor. */
-  firesInEditable?: boolean;
+export type KeyboardShortcutDoc = ShortcutDefinition;
+
+export interface KeyboardShortcut extends KeyboardShortcutDoc {
   action: () => void;
-  description: string;
-  category: 'navigation' | 'conversation' | 'message' | 'ui';
 }
 
-export type KeyboardShortcutDoc = Omit<KeyboardShortcut, 'action'> & { id: string };
+/** Every binding the help dialog lists, from the one shared registry. */
+export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = CHAT_SHORTCUTS;
 
-export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
-  {
-    ...OPEN_SEARCH_SHORTCUT,
-    id: 'open-search',
-    firesInEditable: true,
-    description: 'Open search',
-    category: 'navigation',
-  },
-  {
-    key: '/',
-    ctrl: true,
-    meta: true,
-    id: 'show-shortcuts',
-    firesInEditable: true,
-    description: 'Show keyboard shortcuts',
-    category: 'ui',
-  },
-  {
-    // Cmd/Ctrl+N is a browser-reserved new-window accelerator; the page never
-    // sees the keydown, so it cannot be bound to anything. Both ChatGPT and
-    // Claude bind new-chat to Shift+Cmd/Ctrl+O for the same reason.
-    key: 'O',
-    ctrl: true,
-    meta: true,
-    shift: true,
-    id: 'new-conversation',
-    firesInEditable: true,
-    description: 'New conversation',
-    category: 'conversation',
-  },
-  {
-    key: 'B',
-    ctrl: true,
-    meta: true,
-    id: 'toggle-sidebar',
-    description: 'Toggle sidebar',
-    category: 'ui',
-  },
-  {
-    key: 'Escape',
-    id: 'focus-composer',
-    description: 'Focus message composer',
-    category: 'navigation',
-  },
-  {
-    key: 'C',
-    ctrl: true,
-    meta: true,
-    shift: true,
-    id: 'copy-last-message',
-    firesInEditable: true,
-    description: 'Copy last message',
-    category: 'message',
-  },
-  {
-    key: 'R',
-    ctrl: true,
-    meta: true,
-    shift: true,
-    id: 'regenerate-last-message',
-    firesInEditable: true,
-    description: 'Regenerate last message',
-    category: 'message',
-  },
-  {
-    key: 'A',
-    ctrl: true,
-    meta: true,
-    shift: true,
-    id: 'toggle-artifacts',
-    firesInEditable: true,
-    description: 'Toggle artifacts panel',
-    category: 'ui',
-  },
-];
+/** The bindings this hook matches on the window; composer bindings live in the composer. */
+const APP_SHORTCUTS = CHAT_SHORTCUTS.filter((doc) => doc.scope === 'app');
 
 const NON_TEXT_INPUT_TYPES: ReadonlySet<string> = new Set([
   'button',
@@ -131,17 +57,10 @@ function shortcutYieldsToFocus(
 }
 
 export function findShortcutDoc(id: string): KeyboardShortcutDoc | undefined {
-  return KEYBOARD_SHORTCUT_DOCS.find((doc) => doc.id === id);
+  return findShortcut(id);
 }
 
-export function formatShortcutKeys(shortcut: KeyboardShortcutDoc, isMac: boolean): string[] {
-  const keys: string[] = [];
-  if (shortcut.ctrl || shortcut.meta) keys.push(isMac ? '⌘' : 'Ctrl');
-  if (shortcut.shift) keys.push(isMac ? '⇧' : 'Shift');
-  if (shortcut.alt) keys.push(isMac ? '⌥' : 'Alt');
-  keys.push(shortcut.key);
-  return keys;
-}
+export { formatShortcutKeys };
 
 interface UseKeyboardShortcutsOptions {
   onNewChat?: () => void;
@@ -175,16 +94,9 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       if (!enabled) return;
 
       const isMac = safePlatform.isMac();
-      const modifierKey = isMac ? event.metaKey : event.ctrlKey;
-      // Shift makes the browser report the shifted character ('C', not 'c'), so
-      // every Shift binding below has to compare against the unshifted letter.
-      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
 
-      // Driven by KEYBOARD_SHORTCUT_DOCS rather than a parallel hardcoded list.
-      // The two used to be separate, so the Settings list described bindings
-      // this matcher did not read, and a disable switch over that list would
-      // have been decorative. One source now decides both what is shown and
-      // what fires.
+      // Driven by the shared registry rather than a parallel hardcoded list, so
+      // the Settings list, the disable switches and this matcher cannot disagree.
       const handlerFor: Record<string, (() => void) | undefined> = {
         'open-search': onSearch,
         'show-shortcuts': onShowShortcuts,
@@ -196,21 +108,16 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         'toggle-artifacts': onToggleArtifacts,
       };
 
-      const matched = KEYBOARD_SHORTCUT_DOCS.filter((doc) => !disabledIds.includes(doc.id))
-        .map((doc): readonly [boolean, (() => void) | undefined] => {
-          const wantsModifier = Boolean(doc.ctrl || doc.meta);
-          const modifierOk = wantsModifier ? modifierKey : !modifierKey;
-          const shiftOk = Boolean(doc.shift) === event.shiftKey;
-          const altOk = Boolean(doc.alt) === event.altKey;
-          const keyOk = doc.key.length === 1 ? key === doc.key.toLowerCase() : key === doc.key;
-          const contextOk = !shortcutYieldsToFocus(event, doc);
-          return [modifierOk && shiftOk && altOk && keyOk && contextOk, handlerFor[doc.id]];
-        })
-        .find(([isMatch]) => isMatch);
+      const matched = APP_SHORTCUTS.find(
+        (doc) =>
+          !disabledIds.includes(doc.id) &&
+          !shortcutYieldsToFocus(event, doc) &&
+          matchesShortcut(event, doc, isMac),
+      );
 
       // Swallowing the browser default for a shortcut this mount does not
       // implement would break the key for whoever does; only claim what we run.
-      const run = matched?.[1];
+      const run = matched ? handlerFor[matched.id] : undefined;
       if (!run) return;
       event.preventDefault();
       run();
@@ -246,7 +153,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
     'regenerate-last-message': onRegenerateLastMessage,
     'toggle-artifacts': onToggleArtifacts,
   };
-  const shortcuts: KeyboardShortcut[] = KEYBOARD_SHORTCUT_DOCS.map((doc) => ({
+  const shortcuts: KeyboardShortcut[] = APP_SHORTCUTS.map((doc) => ({
     ...doc,
     action: () => handlers[doc.id]?.(),
   }));

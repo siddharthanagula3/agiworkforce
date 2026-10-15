@@ -1,9 +1,26 @@
 import type React from 'react';
-import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PublishedArtifactView } from './PublishedArtifactView';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const routerPush = vi.hoisted(() => vi.fn());
+const copySharedArtifactToChat = vi.hoisted(() => vi.fn());
+const runtimeState = vi.hoisted(() => ({ signInNeeded: false }));
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: routerPush }) }));
+
+vi.mock('@/features/chat/lib/copy-shared-artifact', () => ({ copySharedArtifactToChat }));
+
+vi.mock('./usePublishedArtifactRuntime', () => ({
+  usePublishedArtifactRuntime: () => ({
+    host: undefined,
+    signInNeeded: runtimeState.signInNeeded,
+    askingForAi: null,
+    answerAiRequest: vi.fn(),
+    grantedConnectorSets: [],
+    reviewConnectors: vi.fn(),
+  }),
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -74,7 +91,40 @@ const BASE = {
   publishedAt: '2026-08-05T00:00:00.000Z',
 };
 
+const TOKEN = 'tok_shared';
+
 describe('PublishedArtifactView', () => {
+  beforeEach(() => {
+    routerPush.mockReset();
+    copySharedArtifactToChat.mockReset();
+    runtimeState.signInNeeded = false;
+  });
+
+  it('starts a signed-out visitor who saves a copy on sign-up and brings them back', async () => {
+    copySharedArtifactToChat.mockResolvedValue({ kind: 'sign-in' });
+    render(<PublishedArtifactView {...BASE} kind="markdown" content="# Title" token={TOKEN} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save a copy to my chats' }));
+
+    await waitFor(() =>
+      expect(routerPush).toHaveBeenCalledWith(`/signup?redirectTo=%2Fshared-artifact%2F${TOKEN}`),
+    );
+  });
+
+  it('offers an account beside sign-in when the app needs AI, as Claude asks a viewer to sign up', () => {
+    runtimeState.signInNeeded = true;
+    render(<PublishedArtifactView {...BASE} kind="html" content="<h1>hi</h1>" token={TOKEN} />);
+
+    expect(screen.getByRole('link', { name: 'Create an account' })).toHaveAttribute(
+      'href',
+      `/signup?redirectTo=%2Fshared-artifact%2F${TOKEN}`,
+    );
+    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+      'href',
+      `/login?redirectTo=%2Fshared-artifact%2F${TOKEN}`,
+    );
+  });
+
   it('offers a way into the product from the provenance line', () => {
     render(<PublishedArtifactView {...BASE} kind="markdown" content="# Title" />);
     expect(screen.getByRole('link', { name: 'Shared from AGI' })).toHaveAttribute('href', '/');

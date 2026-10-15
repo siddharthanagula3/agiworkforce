@@ -17,6 +17,7 @@ import {
   type ToolApprovalPolicy,
 } from '@shared/types/toolApprovalPolicy';
 import { policyAutoApprovesTool } from './tool-metadata';
+import { managedConversationGrantScope } from './connector-tool-session-grants';
 // Owned by tool-metadata.ts, which is not server-only, so the tool-loop
 // routing can ask the same question without importing this module's database
 // read. Re-exported here because the callers that want both live together.
@@ -97,6 +98,8 @@ export async function loadTurnToolPermissions(
     modelSupportsTools: boolean;
     connectorPermissionsRequired?: boolean;
     toolApprovalPolicyRequired?: boolean;
+    conversationId?: string | null;
+    temporary?: boolean;
   },
 ): Promise<{
   connectorPermissions: ConnectorToolPermissions;
@@ -104,7 +107,12 @@ export async function loadTurnToolPermissions(
 }> {
   const [connectorPermissions, toolApprovalPolicy] = await Promise.all([
     options.modelSupportsTools && options.connectorPermissionsRequired !== false
-      ? loadConnectorToolPermissions(db, userId, options.organizationId)
+      ? loadConnectorToolPermissions(
+          db,
+          userId,
+          options.organizationId,
+          managedConversationGrantScope(options.conversationId, options.temporary === true),
+        )
       : Promise.resolve(EMPTY_CONNECTOR_TOOL_PERMISSIONS),
     options.toolApprovalPolicyRequired === false
       ? Promise.resolve(DEFAULT_TOOL_APPROVAL_POLICY)

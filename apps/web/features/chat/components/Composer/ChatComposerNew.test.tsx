@@ -20,6 +20,7 @@ import {
 } from '@agiworkforce/types';
 import {
   getAllowedAutoModesForTier,
+  getBestAutoModeForTier,
   getSelectableModels,
   isAutoModeModelId,
 } from '@shared/config/llm';
@@ -723,8 +724,8 @@ describe('ChatComposerNew', () => {
     expect(screen.getByRole('button', { name: 'Remove example.txt' })).toBeInTheDocument();
   });
 
-  it.each(['qwen', 'experientiallabs'])(
-    'offers an explicit Free Auto switch before submitting a web-search turn on %s',
+  it.each(['experientiallabs'])(
+    'offers an explicit Free Auto switch before submitting a web-search turn on %s, whose route still refuses it',
     async (provider) => {
       useBillingStore.setState({ subscription: FREE_SUBSCRIPTION });
       const promotional = Object.entries(getProviderOfferings()).find(
@@ -758,7 +759,7 @@ describe('ChatComposerNew', () => {
     },
   );
 
-  it('does not offer Free Auto as a search recovery when the Free search allowance is exhausted', async () => {
+  it('does not offer Free Auto as a search recovery on the Experiential Labs route when the Free search allowance is exhausted', async () => {
     let resolveCheck!: (response: Response) => void;
     vi.stubGlobal(
       'fetch',
@@ -766,7 +767,8 @@ describe('ChatComposerNew', () => {
     );
     useBillingStore.setState({ subscription: FREE_SUBSCRIPTION });
     const promotional = Object.entries(getProviderOfferings()).find(
-      ([, offering]) => offering.provider === 'qwen' && offering.quotaProbeProtocol === 'chat',
+      ([, offering]) =>
+        offering.provider === 'experientiallabs' && offering.quotaProbeProtocol === 'chat',
     );
     expect(promotional).toBeDefined();
     act(() => useModelStore.getState().setSelectedModelId(promotional![0]));
@@ -879,10 +881,11 @@ describe('ChatComposerNew', () => {
     expect(textbox).toHaveValue('Search the web for the IANA page.');
   });
 
-  it('keeps the pinned free model and code draft when switching models cannot be saved', async () => {
+  it('keeps the pinned Experiential Labs model and code draft when switching models cannot be saved', async () => {
     useBillingStore.setState({ subscription: FREE_SUBSCRIPTION });
     const promotional = Object.entries(getProviderOfferings()).find(
-      ([, offering]) => offering.provider === 'qwen' && offering.quotaProbeProtocol === 'chat',
+      ([, offering]) =>
+        offering.provider === 'experientiallabs' && offering.quotaProbeProtocol === 'chat',
     );
     expect(promotional).toBeDefined();
     act(() => useModelStore.getState().setSelectedModelId(promotional![0]));
@@ -899,6 +902,325 @@ describe('ChatComposerNew', () => {
     expect(useModelStore.getState().selectedModelId).toBe(promotional![0]);
     expect(textbox).toHaveValue('Run Python to calculate 17 * 19.');
     expect(onSend).not.toHaveBeenCalled();
+  });
+
+  describe('a free quota chat model', () => {
+    const freeQuotaOfferings = Object.entries(getProviderOfferings()).filter(
+      ([, offering]) =>
+        offering.provider === 'qwen' &&
+        offering.quotaProbeProtocol === 'chat' &&
+        offering.identityStatus === 'exact',
+    );
+    const [textModel, textOffering] = freeQuotaOfferings.find(
+      ([, offering]) => offering.quotaChatImageInput !== true && !offering.quotaThinkingRequired,
+    )!;
+    const [visionModel] = freeQuotaOfferings.find(
+      ([, offering]) => offering.quotaChatImageInput === true,
+    )!;
+    const freeAutoName = getModelMetadataById(getBestAutoModeForTier('free'))!.name;
+
+    function selectFreeModel(modelId = textModel, flags: { search: boolean } = { search: true }) {
+      useBillingStore.setState({
+        subscription: FREE_SUBSCRIPTION,
+        featureFlags: { advanced_model_access: false, generic_web_search: flags.search },
+      });
+      act(() => useModelStore.getState().setSelectedModelId(modelId));
+    }
+
+    function renderFreeModel(props: Partial<Parameters<typeof ChatComposerNew>[0]> = {}) {
+      const onSend = vi.fn();
+      const onModelChange = vi.fn(async () => true);
+      const view = render(
+        <ChatComposerNew onSend={onSend} onModelChange={onModelChange} {...props} />,
+      );
+      return { onSend, onModelChange, ...view };
+    }
+
+    it.each([
+      'What is the latest version of React?',
+      'Search the web for the official IANA Example Domains page.',
+      'Summarize https://www.iana.org/help/example-domains.',
+      'Write a Python script to parse a CSV.',
+      'Run Python to calculate 17 * 19.',
+    ])('sends "%s" with no warning, no search check and no model change', async (question) => {
+      const check = vi.fn();
+      vi.stubGlobal('fetch', check);
+      selectFreeModel();
+      const { onSend, onModelChange } = renderFreeModel();
+      const textbox = screen.getByRole('textbox', { name: /message input/i });
+      fireEvent.change(textbox, { target: { value: question } });
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.queryByText('Checking Free web-search availability…')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('free-model-turn-notes')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+      expect(onSend).toHaveBeenCalledOnce();
+      const [content, , , meta] = onSend.mock.calls[0]!;
+      expect(content).toBe(question);
+      expect(meta).toMatchObject({ webSearchEnabled: false, codeExecutionEnabled: false });
+      expect(meta).not.toHaveProperty('searchRequested');
+      expect(check).not.toHaveBeenCalled();
+      expect(onModelChange).not.toHaveBeenCalled();
+      expect(useModelStore.getState().selectedModelId).toBe(textModel);
+    });
+
+    it('sends a typed /search as a requested search and says Free Auto will answer it', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({ status: 'available', used: 1, limit: 20, windowDays: 30 }),
+            ),
+        ),
+      );
+      selectFreeModel();
+      const { onSend, onModelChange } = renderFreeModel();
+      fireEvent.change(screen.getByRole('textbox', { name: /message input/i }), {
+        target: { value: '/search IANA example domains' },
+      });
+
+      expect(screen.getByTestId('free-model-turn-note-handoff')).toHaveTextContent(
+        `${freeAutoName} will answer this message because it asks for a web search. ${textOffering.displayName} stays selected.`,
+      );
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled(),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+      expect(onSend).toHaveBeenCalledWith(
+        'IANA example domains',
+        undefined,
+        undefined,
+        expect.objectContaining({ searchRequested: true, webSearchEnabled: true }),
+      );
+      expect(onModelChange).not.toHaveBeenCalled();
+      expect(useModelStore.getState().selectedModelId).toBe(textModel);
+    });
+
+    it('holds a typed /search while the Free search allowance is used up, as it would with Free Auto picked', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({ status: 'exhausted', used: 20, limit: 20, windowDays: 30 }),
+            ),
+        ),
+      );
+      selectFreeModel();
+      const { onSend } = renderFreeModel();
+      const textbox = screen.getByRole('textbox', { name: /message input/i });
+      fireEvent.change(textbox, { target: { value: '/search IANA example domains' } });
+
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('20 web searches'));
+      expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+
+      fireEvent.change(textbox, { target: { value: 'IANA example domains' } });
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled(),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+      expect(onSend).toHaveBeenCalledOnce();
+    });
+
+    it('says /search is unavailable, and sends nothing, on an account with no web search', () => {
+      selectFreeModel(textModel, { search: false });
+      const { onSend } = renderFreeModel();
+      const textbox = screen.getByRole('textbox', { name: /message input/i });
+      fireEvent.change(textbox, { target: { value: '/search IANA example domains' } });
+
+      expect(screen.queryByTestId('free-model-turn-notes')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+      expect(onSend).not.toHaveBeenCalled();
+      expect(
+        screen.getAllByText(/\/search needs a model that can search the web/).length,
+      ).toBeGreaterThan(0);
+      expect(textbox).toHaveValue('/search IANA example domains');
+    });
+
+    it('offers attachments and sends a file, saying Free Auto will answer it', async () => {
+      selectFreeModel();
+      const { onSend, container } = renderFreeModel();
+      const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+      expect(input).not.toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+      expect(screen.getByRole('button', { name: /Add photos & files/ })).toBeEnabled();
+
+      const pdf = new File(['%PDF-1.4'], 'report.pdf', { type: 'application/pdf' });
+      fireEvent.change(input, { target: { files: [pdf] } });
+      await userEvent.type(screen.getByRole('textbox', { name: /message input/i }), 'Summarize it');
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByTestId('free-model-turn-note-handoff')).toHaveTextContent(
+        `${freeAutoName} will answer this message because it has a file this free model cannot read.`,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+      await waitFor(() =>
+        expect(onSend).toHaveBeenCalledWith('Summarize it', [pdf], undefined, expect.any(Object)),
+      );
+    });
+
+    it('lets a free model that reads images keep an image, with no hand-over', () => {
+      selectFreeModel(visionModel);
+      const { container } = renderFreeModel();
+      fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
+        target: { files: [onePixelPng('diagram.png')] },
+      });
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('free-model-turn-note-handoff')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled();
+    });
+
+    it('runs a typed /code for that one message, says Free Auto will answer it, and leaves no switch on', () => {
+      selectFreeModel();
+      const { onSend } = renderFreeModel();
+      const textbox = screen.getByRole('textbox', { name: /message input/i });
+      fireEvent.change(textbox, { target: { value: '/code Plot these numbers.' } });
+
+      expect(screen.getByTestId('free-model-turn-note-handoff')).toHaveTextContent(
+        `${freeAutoName} will answer this message because it asks to run code.`,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+      fireEvent.change(textbox, { target: { value: 'And now explain the plot.' } });
+      expect(screen.queryByTestId('free-model-turn-notes')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+      expect(
+        onSend.mock.calls.map(([content, , , meta]) => [content, meta.codeExecutionEnabled]),
+      ).toEqual([
+        ['Plot these numbers.', true],
+        ['And now explain the plot.', false],
+      ]);
+    });
+
+    it('keeps the Office output row available, where Experiential Labs models have it shut', () => {
+      selectFreeModel();
+      renderFreeModel();
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+
+      expect(screen.getByRole('button', { name: /^output/i })).toBeEnabled();
+    });
+
+    it.each(['search', 'code'])(
+      'keeps a typed /%s with nothing after it in the draft and asks for the request, since no switch shows it was typed',
+      async (command) => {
+        vi.stubGlobal(
+          'fetch',
+          vi.fn(
+            async () =>
+              new Response(
+                JSON.stringify({ status: 'available', used: 1, limit: 20, windowDays: 30 }),
+              ),
+          ),
+        );
+        selectFreeModel();
+        const { onSend } = renderFreeModel();
+        const textbox = screen.getByRole('textbox', { name: /message input/i });
+        fireEvent.change(textbox, { target: { value: `/${command} ` } });
+
+        await waitFor(() =>
+          expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled(),
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+        expect(onSend).not.toHaveBeenCalled();
+        expect(textbox).toHaveValue(`/${command} `);
+        expect(
+          screen.getAllByText(
+            `Type what you want after /${command}, then send. The command applies to that one message.`,
+          ).length,
+        ).toBeGreaterThan(0);
+      },
+    );
+
+    it('says files on earlier messages are not read, and stops saying it for a message Auto will answer', () => {
+      const conversationId = 'conversation-with-a-file';
+      selectFreeModel();
+      useChatStore.setState({
+        activeConversationId: conversationId,
+        messages: [
+          {
+            id: 'earlier-user-message',
+            role: 'user',
+            content: 'Summarize this report.',
+            createdAt: '2026-10-05T09:00:00.000Z',
+            attachments: [
+              { id: 'attachment-1', type: 'file', name: 'report.pdf', mimeType: 'application/pdf' },
+            ],
+          },
+        ],
+      });
+      try {
+        renderFreeModel({ conversationId });
+        const textbox = screen.getByRole('textbox', { name: /message input/i });
+        fireEvent.change(textbox, { target: { value: 'What does section 2 say?' } });
+
+        expect(screen.getByTestId('free-model-turn-note-attachments')).toHaveTextContent(
+          `Free models do not read the files or images on earlier messages in this chat. Attach one again with your message, or choose ${freeAutoName} to keep working with them.`,
+        );
+
+        fireEvent.change(textbox, { target: { value: '/code Count the rows in it.' } });
+        expect(screen.getByTestId('free-model-turn-note-handoff')).toBeInTheDocument();
+        expect(screen.queryByTestId('free-model-turn-note-attachments')).not.toBeInTheDocument();
+      } finally {
+        useChatStore.setState({ activeConversationId: null, messages: [] });
+      }
+    });
+
+    it('says nothing about earlier files in a chat that has none', () => {
+      selectFreeModel();
+      renderFreeModel();
+
+      expect(screen.queryByTestId('free-model-turn-note-attachments')).not.toBeInTheDocument();
+    });
+
+    it('says what of a project is sent, without denying its past-chat excerpts', () => {
+      selectFreeModel();
+      renderFreeModel({
+        projectPicker: {
+          projects: [{ id: 'project-1', name: 'Orbital survey' }],
+          activeProjectId: 'project-1',
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        },
+      });
+
+      expect(screen.getByTestId('free-model-turn-note-project')).toHaveTextContent(
+        "Free models can use this project's instructions and relevant file excerpts. Excerpts from its other chats are sent only when Search past chats is on in Settings, Memory.",
+      );
+    });
+
+    it('says connected apps that are switched on are not used, and stops saying it once they are off', () => {
+      chatComposerMocks.connectors.connectedIds = new Set(['gmail']);
+      selectFreeModel();
+      const { unmount } = renderFreeModel();
+
+      expect(screen.getByTestId('free-model-turn-note-connectors')).toHaveTextContent(
+        'Free models do not use connected apps, so the ones switched on here are not used for this message.',
+      );
+      unmount();
+
+      chatComposerMocks.connectors.connectedIds = new Set();
+      renderFreeModel();
+      expect(screen.queryByTestId('free-model-turn-note-connectors')).not.toBeInTheDocument();
+    });
+
+    it('shows none of these lines with Auto selected', () => {
+      chatComposerMocks.connectors.connectedIds = new Set(['gmail']);
+      useBillingStore.setState({ subscription: FREE_SUBSCRIPTION });
+      act(() =>
+        useModelStore.getState().setSelectedModelId(getAllowedAutoModesForTier('free')[0]!),
+      );
+      render(<ChatComposerNew onSend={vi.fn()} />);
+
+      expect(screen.queryByTestId('free-model-turn-notes')).not.toBeInTheDocument();
+    });
   });
 
   it('offers explicit recovery choices when an image conflicts with the selected model', async () => {

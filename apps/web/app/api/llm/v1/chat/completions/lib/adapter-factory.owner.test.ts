@@ -30,6 +30,7 @@ const buildServerProviderAdapter = vi.fn(
 );
 
 vi.mock('@/lib/services/provider-adapter-service', () => ({
+  serverProviderHasEndpointOverride: () => false,
   buildServerProviderAdapter: (providerId: string, options?: AdapterBuildOptions) =>
     options === undefined
       ? buildServerProviderAdapter(providerId)

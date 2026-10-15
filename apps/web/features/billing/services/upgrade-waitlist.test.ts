@@ -8,9 +8,10 @@ vi.mock('@/lib/client/csrf', () => ({
 }));
 
 import {
-  isUpgradeWaitlistRequired,
   joinUpgradeWaitlist,
+  readUpgradeWaitlistStatus,
   redeemUpgradeAccessCode,
+  upgradeNeedsWaitlist,
 } from './upgrade-waitlist';
 
 describe('upgrade waitlist client', () => {
@@ -34,6 +35,17 @@ describe('upgrade waitlist client', () => {
         }),
       }),
     );
+  });
+
+  it('stops waiting for a join the server does not answer and says so', async () => {
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockRejectedValue(new DOMException('signal timed out', 'TimeoutError'));
+
+    await expect(joinUpgradeWaitlist({ plan: 'pro', billingInterval: 'monthly' })).rejects.toThrow(
+      'The server took too long to answer. Try again.',
+    );
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('redeems an access code through the authenticated billing gate', async () => {
@@ -61,18 +73,48 @@ describe('upgrade waitlist client', () => {
     );
   });
 
-  it('opens checkout directly only when the server explicitly disables the gate', async () => {
+  it('reads the joined plans and the access this account holds from the server', async () => {
+    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        joinedPlans: ['basic', 'enterprise'],
+        upgradeGateEnabled: true,
+        accessGranted: false,
+      }),
+    } as Response);
+
+    await expect(readUpgradeWaitlistStatus()).resolves.toEqual({
+      joinedPlans: ['basic'],
+      upgradeGateEnabled: true,
+      accessGranted: false,
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/waitlist', { cache: 'no-store' });
+  });
+
+  it('refuses a status it cannot read instead of guessing at access', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({ upgradeGateEnabled: false }),
     } as Response);
 
-    await expect(isUpgradeWaitlistRequired()).resolves.toBe(false);
+    await expect(readUpgradeWaitlistStatus()).rejects.toThrow(
+      'Upgrade access could not be checked.',
+    );
   });
 
-  it('keeps the gate when its status cannot be verified', async () => {
-    vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Offline'));
+  it('sends a gated account without access to the waitlist, and everyone else to checkout', () => {
+    expect(
+      upgradeNeedsWaitlist({ joinedPlans: [], upgradeGateEnabled: true, accessGranted: false }),
+    ).toBe(true);
+    expect(
+      upgradeNeedsWaitlist({ joinedPlans: [], upgradeGateEnabled: true, accessGranted: true }),
+    ).toBe(false);
+    expect(
+      upgradeNeedsWaitlist({ joinedPlans: [], upgradeGateEnabled: false, accessGranted: true }),
+    ).toBe(false);
+  });
 
-    await expect(isUpgradeWaitlistRequired()).resolves.toBe(true);
+  it('keeps the gate when access cannot be verified', () => {
+    expect(upgradeNeedsWaitlist(null)).toBe(true);
   });
 });

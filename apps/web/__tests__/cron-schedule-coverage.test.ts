@@ -106,6 +106,7 @@ describe('cron routes and vercel.json schedules agree', () => {
     '/api/cron/run-auto-reloads',
     '/api/cron/remind-trials',
     '/api/cron/expire-code-trials',
+    '/api/cron/notify-upgrade-waitlist',
   ]);
   const MONITORING_CRONS = new Set([
     '/api/cron/health-probe',

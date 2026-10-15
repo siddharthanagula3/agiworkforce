@@ -13,6 +13,7 @@ export function promotionalChatToolConflict(
     needsTools?: boolean;
   } = {},
 ): PromotionalChatToolConflict | null {
+  if (!id || !isExperientialFreeOffering(id)) return null;
   if (freeQuotaSelection(id)?.quotaProbeProtocol !== 'chat') return null;
   if (
     requested.webSearchEnabled ||

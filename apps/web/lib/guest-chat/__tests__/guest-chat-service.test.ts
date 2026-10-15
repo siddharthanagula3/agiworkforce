@@ -9,18 +9,32 @@ vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
 }));
 
 import { modelRegistry } from '@agiworkforce/model-registry';
-import { getDefaultModelFor } from '@agiworkforce/types';
+import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
+import { getDefaultModelFor, getModelMetadataById } from '@agiworkforce/types';
+
+import {
+  CHAT_SYSTEM_PROMPT_ID,
+  CHAT_SYSTEM_PROMPT_PINNED_VERSION,
+  CHAT_SYSTEM_PROMPT_VERSIONS,
+  chatSystemPromptSection,
+  chatSystemPromptSections,
+} from '@/lib/prompts/chat-system-prompt';
 
 import { readGuestChatConfig } from '../config';
 import {
   buildGuestChatRequest,
   estimateGuestTurnMicrousd,
   guestChatModel,
+  guestChatSystemPrompt,
   guestSpendKey,
   reserveGuestSpend,
   settleGuestSpend,
   streamGuestChat,
 } from '../guest-chat-service';
+
+const NAMES_AGI = /\bYou are AGI,/u;
+const AGI_CLARIFIER = 'AGI is your name, not a claim to be artificial general intelligence.';
+const NOW = new Date('2026-10-02T12:00:00.000Z');
 
 async function* chunks(...items: unknown[]) {
   for (const item of items) yield item;
@@ -52,6 +66,46 @@ describe('guest chat', () => {
     expect(request.maxOutputTokens).toBe(config.maxOutputTokens);
     expect(request.system).toContain('AGI Workforce');
     expect(request.messages).toHaveLength(3);
+  });
+
+  it('sends the pinned prompt with its identity rules, the missing tools and the time', () => {
+    const sections = chatSystemPromptSections(CHAT_SYSTEM_PROMPT_PINNED_VERSION);
+    const identity = chatSystemPromptSection(sections, 'identity');
+    const system = String(
+      buildGuestChatRequest(
+        guestChatModel(),
+        [{ role: 'user', content: 'Are you artificial general intelligence?' }],
+        readGuestChatConfig({}),
+      ).system,
+    );
+
+    expect(system).toContain(identity);
+    expect(system).toContain(chatSystemPromptSection(sections, 'no_tools'));
+    expect(system).toContain('The current UTC date and time is');
+    expect(system).not.toContain(SYSTEM_PROMPT_CACHE_BOUNDARY.trim());
+    expect(system.includes(AGI_CLARIFIER)).toBe(NAMES_AGI.test(identity));
+  });
+
+  it.each(
+    CHAT_SYSTEM_PROMPT_VERSIONS.filter(({ sections }) =>
+      NAMES_AGI.test(sections['identity'] ?? ''),
+    ).map(({ version }) => version),
+  )('says AGI is a name and names the model the app picked at version %i', (version) => {
+    const model = guestChatModel();
+    const metadata = getModelMetadataById(model.modelKey);
+    if (!metadata) throw new Error('the guest model is not in the catalog');
+
+    const system = guestChatSystemPrompt(model, {
+      promptSelection: { variants: { [CHAT_SYSTEM_PROMPT_ID]: version } },
+      now: NOW,
+    });
+
+    expect(system).toContain(AGI_CLARIFIER);
+    expect(system).toContain('never claim to be human');
+    expect(system).toContain("never present yourself as another AI company's assistant");
+    expect(system).toContain(metadata.name);
+    expect(system).not.toContain('Which model serves this turn is not stated here');
+    expect(system).not.toContain('which the user selected');
   });
 
   it('streams OpenAI chunks, ends with DONE and reports the usage', async () => {

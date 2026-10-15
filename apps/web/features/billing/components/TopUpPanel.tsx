@@ -104,7 +104,7 @@ export function TopUpPanel({ tier, canBuy }: { tier: string; canBuy: boolean }) 
     setPending(true);
     setError(null);
     try {
-      await startTopUpCheckout(quote.amountUsd);
+      if ((await startTopUpCheckout(quote.amountUsd)) === 'handed-off') setPending(false);
     } catch (cause) {
       setError(toUserMessage(cause, 'Could not start checkout for these credits.'));
       setPending(false);

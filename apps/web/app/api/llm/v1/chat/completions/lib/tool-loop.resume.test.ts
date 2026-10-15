@@ -227,6 +227,7 @@ describe('runToolLoop, manual approval suspend', () => {
           id: 'call_1',
           qualifiedName: GITHUB_TOOL,
           args: { owner: 'acme', repo: 'app', pull_number: 7 },
+          approvalScopes: ['once'],
         },
       ],
     });

@@ -6,7 +6,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
-const { recordNotification } = await import('../notification-service');
+const { insertNotification, recordNotification } = await import('../notification-service');
 
 const query = vi.fn();
 const db = { query, execute: vi.fn() } as unknown as DatabaseAdapter;
@@ -97,6 +97,35 @@ describe('recordNotification', () => {
         message: '',
       }),
     ).resolves.toEqual({ recorded: false });
+    expect(query).not.toHaveBeenCalled();
+  });
+});
+
+describe('insertNotification', () => {
+  const notice = {
+    userId: 'user-1',
+    category: 'billing' as const,
+    severity: 'info' as const,
+    title: 'Paid upgrades are open',
+    message: 'You can upgrade now.',
+    dedupeKey: 'upgrade-waitlist-open:user-1',
+  };
+
+  it('tells a new row from one an earlier write already left', async () => {
+    query.mockResolvedValueOnce([{ id: 'row-1' }]).mockResolvedValueOnce([]);
+
+    await expect(insertNotification(db, notice)).resolves.toBe('inserted');
+    await expect(insertNotification(db, notice)).resolves.toBe('duplicate');
+  });
+
+  it('lets a refused write reach the caller instead of reporting it as written', async () => {
+    query.mockRejectedValue(new Error('statement timeout'));
+
+    await expect(insertNotification(db, notice)).rejects.toThrow('statement timeout');
+  });
+
+  it('writes nothing for a row with no owner', async () => {
+    await expect(insertNotification(db, { ...notice, userId: ' ' })).resolves.toBe('invalid');
     expect(query).not.toHaveBeenCalled();
   });
 });

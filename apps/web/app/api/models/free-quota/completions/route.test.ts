@@ -23,13 +23,21 @@ import { freeQuotaCapabilityPreamble } from '@/lib/server/free-quota-turn';
 import { logger } from '@/lib/logger';
 import { loadFreePools, type LimitedMediaOffer } from '@/lib/server/free-pools';
 import {
+  CHAT_SYSTEM_PROMPT_ID,
   CHAT_SYSTEM_PROMPT_PINNED_VERSION,
   chatSystemPromptSection,
   chatSystemPromptSections,
 } from '@/lib/prompts/chat-system-prompt';
+import { promptFlagKey, promptFlagVariant } from '@/lib/prompts/prompt-flags';
+import { PLATFORM_ADMIN_ENV_VAR } from '@/features/admin/lib/platform-admin-access';
+import type { FlagEvaluation } from '@/lib/feature-flags/evaluate-flags';
 import { loadFreeQuotaPolicy } from '@/lib/server/free-quota-catalogue';
 import { readyFreeMediaOffer } from '@/features/models/lib/free-media-offer';
-import { freeQuotaFixtureNow, servableFreeQuotaOfferings } from '@/test/free-quota-fixtures';
+import {
+  acceptedProviderConsent,
+  freeQuotaFixtureNow,
+  servableFreeQuotaOfferings,
+} from '@/test/free-quota-fixtures';
 type ScanModule0 = typeof import('@/lib/csrf');
 type ScanModule1 = typeof import('@/lib/api-auth');
 type ScanModule2 = typeof import('@/lib/rate-limit');
@@ -48,6 +56,7 @@ type ScanModule13 = typeof import('@/app/api/llm/v1/chat/completions/lib/secret-
 type ScanModule14 = typeof import('@/lib/services/free-trial-service');
 type ScanModule15 = typeof import('@/lib/server/free-pools');
 type ScanModule16 = typeof import('@/lib/server/free-quota-catalogue-cache');
+type ScanModule17 = typeof import('@/lib/feature-flags/flag-evaluation-service');
 
 const mocks = vi.hoisted(() => ({
   store: null as unknown as MemoryKeyValueStore,
@@ -67,9 +76,14 @@ const mocks = vi.hoisted(() => ({
   persistUser: vi.fn(),
   moderateMedia: vi.fn(),
   hydrate: vi.fn(),
+  consent: vi.fn(),
+  flags: vi.fn(),
   limitedOffer: undefined as LimitedMediaOffer | undefined,
 }));
 
+vi.mock('@/lib/server/named-provider-consent', () => ({
+  loadNamedProviderConsent: mocks.consent,
+}));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   requireCsrfToken: vi.fn(async () => null),
@@ -182,6 +196,10 @@ vi.mock('@/lib/server/free-pools', async (importOriginal) => {
     },
   };
 });
+vi.mock('@/lib/feature-flags/flag-evaluation-service', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule17>()),
+  evaluateFlagsForSubject: mocks.flags,
+}));
 vi.mock('@agiworkforce/providers-factory', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   const guarded = Object.fromEntries(
@@ -221,6 +239,30 @@ const videoModel = servable.find(
 )!.key;
 const MEDIA_ASSET_ID = 'a2d14f7e-0b3d-40c7-952d-987e841033c5';
 const PROVIDER_ARTIFACT_URL = 'https://provider.example/generated/poster.png';
+
+const IDENTITY_VERSION = 8;
+
+function identityVersionFlag(): Record<string, FlagEvaluation> {
+  const key = promptFlagKey(CHAT_SYSTEM_PROMPT_ID);
+  return {
+    [key]: {
+      key,
+      variant: promptFlagVariant(IDENTITY_VERSION),
+      enabled: true,
+      reason: 'rule',
+      ruleId: 'internal-staff',
+      version: 1,
+    },
+  };
+}
+
+async function sentSystemPrompt(patch: Record<string, unknown> = {}): Promise<string> {
+  mocks.stream.mockResolvedValue(sse('[DONE]'));
+  await (await post(patch)).text();
+  const [system] = mocks.stream.mock.calls[0]![3].messages as { role: string; content: string }[];
+  expect(system!.role).toBe('system');
+  return system!.content;
+}
 
 function sse(...events: string[]): Response {
   return new Response(events.map((event) => `data: ${event}\n\n`).join(''), {
@@ -272,6 +314,7 @@ beforeEach(async () => {
   mocks.privacy.mockResolvedValue({ allowed: true });
   mocks.retention.mockResolvedValue({ required: false });
   mocks.plan.mockResolvedValue('free');
+  mocks.flags.mockResolvedValue({});
   mocks.egress.mockResolvedValue(null);
   mocks.download.mockResolvedValue({
     data: Buffer.from('generated-image'),
@@ -316,6 +359,11 @@ beforeEach(async () => {
   }));
   mocks.settle.mockResolvedValue(undefined);
   mocks.limitedOffer = undefined;
+  mocks.consent
+    .mockReset()
+    .mockImplementation(async (_db, _userId, providerId) =>
+      acceptedProviderConsent(providerId, Date.now()),
+    );
   await attest();
 });
 
@@ -346,6 +394,51 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect(system!.content).toContain('(Europe/London)');
     expect(system!.content).not.toContain(SYSTEM_PROMPT_CACHE_BOUNDARY.trim());
     expect(rest.at(-1)).toEqual({ role: 'user', content: 'Hello' });
+  });
+
+  it('names AGI and the offering in the compact prompt when a flag serves the identity version to staff', async () => {
+    vi.stubEnv(PLATFORM_ADMIN_ENV_VAR, 'fixture-user');
+    mocks.flags.mockResolvedValue(identityVersionFlag());
+    const sections = chatSystemPromptSections(IDENTITY_VERSION);
+
+    const system = await sentSystemPrompt();
+
+    expect(system).toContain(chatSystemPromptSection(sections, 'identity'));
+    expect(system).toContain(chatSystemPromptSection(sections, 'identity_rules'));
+    expect(system).toContain(`This turn runs on ${modelName}.`);
+    expect(system).toContain(chatSystemPromptSection(sections, 'memory_read_only'));
+    expect(system).toContain(chatSystemPromptSection(sections, 'apps_not_used'));
+    expect(system).not.toContain('Which model serves this turn is not stated here');
+    for (const key of ['artifact_runtime', 'settings_help_web', 'account_help_web']) {
+      expect(system, key).not.toContain(chatSystemPromptSection(sections, key));
+    }
+  });
+
+  it('tells the model what the chat switched off', async () => {
+    vi.stubEnv(PLATFORM_ADMIN_ENV_VAR, 'fixture-user');
+    mocks.flags.mockResolvedValue(identityVersionFlag());
+    mocks.query.mockResolvedValue([{ id: 'conversation', data_region: null, is_temporary: true }]);
+    const sections = chatSystemPromptSections(IDENTITY_VERSION);
+
+    const system = await sentSystemPrompt({ personalization: false });
+
+    expect(system).toContain(chatSystemPromptSection(sections, 'personalization_off'));
+    expect(system).toContain('- This is a temporary chat.');
+    expect(system).not.toContain(chatSystemPromptSection(sections, 'memory_read_only'));
+  });
+
+  it('serves a customer the pinned prompt when a flag selects a version kept on internal', async () => {
+    mocks.flags.mockResolvedValue(identityVersionFlag());
+
+    const system = await sentSystemPrompt();
+
+    expect(system).toContain(
+      chatSystemPromptSection(
+        chatSystemPromptSections(CHAT_SYSTEM_PROMPT_PINNED_VERSION),
+        'identity',
+      ),
+    );
+    expect(system).not.toContain(`This turn runs on ${modelName}.`);
   });
 
   it('persists a threaded user turn before requesting free inference', async () => {
@@ -1056,47 +1149,92 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect(mocks.stream.mock.calls[0]![2].maxOutputTokens).toBeLessThanOrEqual(3_000);
   });
 
-  it('refuses tools and attachments before any provider call', async () => {
-    const search = await post({ web_search: true });
-    expect(search.status).toBe(400);
-    expect((await search.json()).error.code).toBe('free_quota_search_unsupported');
+  it('refuses an explicit search or page flag, and an empty message, before any provider call', async () => {
+    for (const flag of [{ web_search: true }, { web_fetch: true }]) {
+      const refused = await post(flag);
+      expect(refused.status, JSON.stringify(flag)).toBe(400);
+      expect((await refused.json()).error.code).toBe('free_quota_search_unsupported');
+    }
     expect((await post({ messages: [{ role: 'user', content: [] }] })).status).toBe(400);
     expect(mocks.stream).not.toHaveBeenCalled();
   });
 
-  it('does not send an explicit web-search request to a text-only free offering', async () => {
-    const response = await post({
-      messages: [
-        { role: 'user', content: 'Search the web for the official IANA page and cite it.' },
-      ],
-    });
-    expect(response.status).toBe(400);
-    expect((await response.json()).error).toMatchObject({
-      code: 'free_quota_search_unsupported',
-      message: expect.stringContaining('search-capable Free model'),
-    });
-    expect(mocks.stream).not.toHaveBeenCalled();
+  it.each([
+    'What is the latest version of React?',
+    'Search the web for the official IANA page and cite it.',
+    'Summarize https://www.iana.org/help/example-domains.',
+    'Write a Python script to parse a CSV.',
+    'Run Python to calculate 17 * 19.',
+  ])('sends "%s" to the selected free model, whatever its wording looks like', async (question) => {
+    mocks.stream.mockResolvedValue(
+      sse(
+        JSON.stringify({ choices: [{ index: 0, delta: { content: 'An answer.' } }] }),
+        JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }),
+        '[DONE]',
+      ),
+    );
+
+    const response = await post({ messages: [{ role: 'user', content: question }] });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('An answer.');
+    expect(response.headers.get('X-AGI-Resolved-Model')).toBe(model);
+    expect(mocks.stream).toHaveBeenCalledTimes(1);
+    const [servedModel, , , provider] = mocks.stream.mock.calls[0]!;
+    const sent = provider.messages as { role: string; content: string }[];
+    expect(servedModel).toBe(model);
+    expect(sent.at(-1)).toEqual({ role: 'user', content: question });
+    expect(sent[0]!.content).toContain(
+      chatSystemPromptSection(
+        chatSystemPromptSections(CHAT_SYSTEM_PROMPT_PINNED_VERSION),
+        'no_tools',
+      ),
+    );
+    expect(mocks.otherProvider).not.toHaveBeenCalled();
   });
 
-  it('refuses an explicit URL-fetch request before the promotional provider call', async () => {
+  it('accepts the report of a typed memory command and briefs the model on it', async () => {
+    mocks.stream.mockResolvedValue(sse('[DONE]'));
+    const remember = 'Remember that I prefer metric units';
+
     const response = await post({
-      messages: [{ role: 'user', content: 'Summarize https://www.iana.org/help/example-domains.' }],
+      messages: [{ role: 'user', content: remember }],
+      memory_command: { kind: 'remember', status: 'stored' },
     });
-    expect(response.status).toBe(400);
-    expect((await response.json()).error.code).toBe('free_quota_search_unsupported');
-    expect(mocks.stream).not.toHaveBeenCalled();
+    await response.text();
+
+    expect(response.status).toBe(200);
+    const sent = mocks.stream.mock.calls[0]![3].messages as { role: string; content: string }[];
+    expect(sent.filter((message) => message.role === 'system')).toContainEqual({
+      role: 'system',
+      content: expect.stringContaining('It was saved to memory.'),
+    });
+    expect(sent.at(-1)).toEqual({ role: 'user', content: remember });
   });
 
-  it('does not let a text-only free offering fabricate a requested code-execution result', async () => {
-    const response = await post({
-      messages: [{ role: 'user', content: 'Run Python to calculate 17 * 19.' }],
-    });
-    expect(response.status).toBe(400);
-    expect((await response.json()).error).toMatchObject({
-      code: 'free_quota_code_unsupported',
-      message: expect.stringContaining('Free Auto'),
+  it('refuses a model run by a named provider until the account has agreed, and serves once it has', async () => {
+    mocks.consent.mockResolvedValue(null);
+
+    const refused = await post();
+
+    expect(refused.status).toBe(403);
+    expect((await refused.json()).error).toMatchObject({
+      code: 'cn_hq_provider_not_opted_in',
+      provider_id: 'qwen',
+      message: expect.stringContaining('Alibaba Qwen (China)'),
     });
     expect(mocks.stream).not.toHaveBeenCalled();
+    expect(mocks.persistUser).not.toHaveBeenCalled();
+
+    mocks.consent.mockImplementation(async (_db, _userId, providerId) =>
+      acceptedProviderConsent(providerId, Date.now()),
+    );
+    mocks.stream.mockResolvedValue(sse('[DONE]'));
+    const served = await post({}, 'after-agreeing');
+    await served.text();
+
+    expect(served.status).toBe(200);
+    expect(mocks.stream).toHaveBeenCalledTimes(1);
   });
 
   it('respects a workspace data region', async () => {

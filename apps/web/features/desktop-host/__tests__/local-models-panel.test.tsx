@@ -18,6 +18,17 @@ const readLocalModelSettings = vi.fn();
 const writeLocalModelSettings = vi.fn();
 const readLocalModelSnapshot = vi.fn();
 const listLocalModels = vi.fn();
+const readDeveloperRuntimeStatus = vi.fn();
+const readDesktopPermissions = vi.fn();
+function reviewOf(decisions: unknown[]) {
+  return {
+    decisions: decisions.map((decision) => ({
+      description: 'Reviewed answer',
+      ...(decision as object),
+    })),
+    system: {},
+  };
+}
 
 vi.mock('../lib/runtime-client', () => ({
   listWorkspaceRoots,
@@ -30,6 +41,10 @@ vi.mock('../lib/runtime-client', () => ({
   writeLocalModelSettings,
   readLocalModelSnapshot,
   listLocalModels,
+  readDeveloperRuntimeStatus,
+  readDesktopPermissions,
+  revokePermission: vi.fn(),
+  onWorkspaceChanged: () => () => undefined,
 }));
 
 const { LocalAccessSection } = await import('../components/LocalAccessSection');
@@ -71,6 +86,8 @@ beforeEach(() => {
   readLocalModelSettings.mockResolvedValue(SETTINGS);
   writeLocalModelSettings.mockImplementation(async (settings: unknown) => settings);
   listLocalModels.mockResolvedValue([]);
+  readDeveloperRuntimeStatus.mockResolvedValue({ capabilities: [] });
+  readDesktopPermissions.mockResolvedValue(reviewOf([]));
   readLocalModelSnapshot.mockResolvedValue({
     granted: false,
     servers: [

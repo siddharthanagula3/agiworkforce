@@ -4,6 +4,10 @@ import { randomUUID } from 'node:crypto';
 
 import { NextRequest, NextResponse, after } from 'next/server';
 import { ToolInputResumeRequestSchema } from '@agiworkforce/cloud-contracts';
+import {
+  readConnectorInputPrompts,
+  validateConnectorInputResponses,
+} from '@agiworkforce/client-runtime';
 import { isFreeBillingPlanTier } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import {
@@ -52,6 +56,7 @@ import {
   type ConnectorToolPermissions,
   scopeConnectorPermissionsToTurn,
 } from '../lib/connector-tool-permissions';
+import { managedConversationGrantScope } from '../lib/connector-tool-session-grants';
 import { hostedToolRunsUnasked, loadToolApprovalPolicy } from '../lib/tool-approval-policy';
 import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
@@ -62,7 +67,7 @@ import {
 } from '@/lib/security/secrets-audit';
 import {
   checkpointRequestForResume,
-  checkpointTurnAttachments,
+  restoreCheckpointedTurn,
 } from '../lib/approval-checkpoint-request';
 
 const SECRET_IN_RESUME_MESSAGE =
@@ -232,6 +237,23 @@ async function handleToolInputResume(
     throw error;
   }
 
+  const validatedResumptions = [];
+  for (const resumption of claim.resumptions) {
+    const requests = claim.checkpoint.inputRequests[resumption.toolCallId];
+    const validation =
+      requests &&
+      validateConnectorInputResponses(
+        readConnectorInputPrompts(requests),
+        resumption.inputResponses,
+      );
+    if (!validation?.ok) {
+      await releaseClaim(db, userId, claim);
+      return jsonError(validation ? validation.reason : 'The requested input is unavailable.', 400);
+    }
+    validatedResumptions.push({ ...resumption, inputResponses: validation.responses });
+  }
+  claim = { ...claim, resumptions: validatedResumptions };
+
   // The resumed step runs under the same workspace controls as the turn it
   // continues: without them, a feature the administrator switched off, such as
   // computer use, came back on every resume.
@@ -255,14 +277,21 @@ async function handleToolInputResume(
   }
   const processed: ProcessedRequest = processResult;
 
-  processed.llmRequest.messages = claim.checkpoint.messages;
-  processed.turnAttachments = checkpointTurnAttachments(claim.checkpoint.request);
+  restoreCheckpointedTurn(processed, claim.checkpoint);
 
   const discovery: { mcpTools: WebMcpToolDef[]; permissions: ConnectorToolPermissions } =
     await (async () => {
       try {
         const permissions = scopeConnectorPermissionsToTurn(
-          await loadConnectorToolPermissions(db, userId, processed.organizationId ?? null),
+          await loadConnectorToolPermissions(
+            db,
+            userId,
+            processed.organizationId ?? null,
+            managedConversationGrantScope(
+              processed.conversationId,
+              processed.conversationIsTemporary === true,
+            ),
+          ),
           {
             temporary: processed.conversationIsTemporary === true,
             disabledConnectorIds: processed.chatRequest.disabled_connector_ids,

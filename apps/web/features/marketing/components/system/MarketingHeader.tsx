@@ -8,7 +8,13 @@ import { Container } from './Container';
 import { NavGroup } from './NavGroup';
 import { ActiveNavLink } from './ActiveNavLink';
 import { HeaderScrollState } from './HeaderScrollState';
-import { CHAT_ROOT_HREF, CONTACT_SALES_HREF, NAV_GROUPS, WEB_ENTRY_HREF } from './nav';
+import {
+  CHAT_ROOT_HREF,
+  CONTACT_SALES_HREF,
+  NAV_GROUPS,
+  SIGN_IN_HREF,
+  WEB_ENTRY_HREF,
+} from './nav';
 
 const MARK_SIZE = 18;
 
@@ -63,7 +69,7 @@ export function MarketingHeader({
               <Button href={CHAT_ROOT_HREF}>Open AGI</Button>
             ) : (
               <>
-                <Link href="/login" className="agi-ds-navlink">
+                <Link href={SIGN_IN_HREF} className="agi-ds-navlink">
                   Sign in
                 </Link>
                 <Button href={WEB_ENTRY_HREF}>Try AGI Web</Button>

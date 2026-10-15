@@ -8,9 +8,31 @@ import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
 import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
 import { readPersistedRouteLane, readRouteLane } from '@/features/chat/lib/routeLane';
 import { putActiveLeafMessageId } from '@/features/chat/lib/activeLeafSelection';
+import {
+  CHAT_SLASH_DONE,
+  chatStatusLines,
+  type ChatSlashActions,
+  type ChatStatusInput,
+} from '@/features/chat/lib/chat-slash-commands';
 import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
 import { NEW_CHAT_PATH, QUICK_ASK_PATH } from '../lib/new-chat-entry';
 import { freeQuotaSelection } from '../lib/free-quota-selection';
+import {
+  freeModelAttachmentKind,
+  freeModelHandoffReplay,
+  freeQuotaChatOffering,
+  routeFreeModelTurn,
+} from '../lib/free-model-handoff';
+import type { NamedProviderNotice } from '@agiworkforce/compliance';
+import { NamedProviderNoticeDialog } from '@/features/models/components/NamedProviderNoticeDialog';
+import { useNamedProviderConsents } from '@/features/models/hooks/use-named-provider-consent';
+import {
+  NAMED_PROVIDER_CONSENT_REQUIRED_EVENT,
+  freeModelNoticeFor,
+  freeModelNotices,
+  saveNamedProviderConsent,
+  type NamedProviderConsentRequiredDetail,
+} from '@/features/models/lib/named-provider-consent-client';
 import { resolveLimitedFreeMedia } from '../lib/free-media-choice';
 import { regenerateModelOptions as selectableRegenerateModelOptions } from '../lib/regenerate-model-options';
 import { pickFreePoolModel } from '../lib/eligible-model';
@@ -210,6 +232,7 @@ import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { NewChatConnectorSuggestions } from '../components/NewChat/NewChatConnectorSuggestions';
 import { useNewChatDefaultModel } from '../hooks/use-new-chat-default-model';
 import { SidebarBrandRow } from '@shared/components/layout/SidebarBrandRow';
+import { ProductNoticeHost } from '@shared/components/ProductNoticeHost';
 import { APP_NAV_DESTINATIONS, buildAppNavItems } from '@shared/components/layout/app-nav-items';
 import { CODE_ROUTES } from '@/features/code/code-surface';
 import { VoiceModeSurface, VOICE_SURFACE_VARIANT } from '../components/Voice/VoiceModeSurface';
@@ -421,6 +444,7 @@ type SendMeta = {
   memoryEnabled?: boolean;
   /** Exact promotional media offering selected for this generation turn. */
   modelOverrideId?: string;
+  queuedFollowUp?: boolean;
 };
 
 type AttachmentUploadAttempt = ComposerAttachmentUploadAttempt & {
@@ -532,6 +556,26 @@ async function fetchServerConversationTitle(
   const data = (await response.json()) as { conversation?: { title?: string | null } };
   return data.conversation?.title?.trim() || null;
 }
+
+type PendingProviderNotice = {
+  notice: NamedProviderNotice;
+  // Absent when the server refused a turn that was already made. A send taken
+  // from the follow-up queue is no longer in the composer, so declining the
+  // notice has to hand its text back or it exists nowhere.
+  send: {
+    content: string;
+    attachments?: File[];
+    meta?: SendMeta;
+    conversationId: string | null;
+    keptInComposer: boolean;
+  } | null;
+  offersAuto: boolean;
+};
+
+const HELD_QUEUED_MESSAGE_RETURNED_TOAST =
+  'Your queued message was not sent. Its text is back in the message box.';
+const HELD_QUEUED_ATTACHMENTS_DROPPED_TOAST =
+  'Your queued message was not sent. Its text is back in the message box, and its attachments were not kept: attach them again to send it.';
 
 type PendingByokHandoff = {
   sourceConversationId: string;
@@ -1323,6 +1367,25 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const [isUserTyping, setIsUserTyping] = useState(false);
   const [bareChatSessionId, setBareChatSessionId] = useState<string | null>(null);
   const [pendingByokHandoff, setPendingByokHandoff] = useState<PendingByokHandoff | null>(null);
+  const [pendingProviderNotice, setPendingProviderNotice] = useState<PendingProviderNotice | null>(
+    null,
+  );
+  const freeModelProviderNotices = useMemo(() => freeModelNotices(), []);
+  const { statusOf: providerConsentStatusOf } = useNamedProviderConsents(freeModelProviderNotices);
+  useEffect(() => {
+    const onRequired = (event: Event) => {
+      const { providerId, modelId } = (event as CustomEvent<NamedProviderConsentRequiredDetail>)
+        .detail;
+      const notice = freeModelProviderNotices.find((entry) => entry.providerId === providerId);
+      if (!notice) return;
+      setPendingProviderNotice(
+        (current) =>
+          current ?? { notice, send: null, offersAuto: freeQuotaChatOffering(modelId) !== null },
+      );
+    };
+    window.addEventListener(NAMED_PROVIDER_CONSENT_REQUIRED_EVENT, onRequired);
+    return () => window.removeEventListener(NAMED_PROVIDER_CONSENT_REQUIRED_EVENT, onRequired);
+  }, [freeModelProviderNotices]);
   const [selectedHandoffContextIds, setSelectedHandoffContextIds] = useState<string[]>([]);
   const [handoffPreview, setHandoffPreview] = useState<WebLocalToByokPreview | null>(null);
   const [handoffError, setHandoffError] = useState<string | null>(null);
@@ -3759,6 +3822,35 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           ? resolvedMeta!.modelOverrideId!
           : activeModelId;
 
+      const servingModelId = routeFreeModelTurn({
+        model: targetModelId,
+        planTier: subscriptionTier,
+        choices: {
+          searchRequested: resolvedMeta?.searchRequested,
+          research: resolvedMeta?.researchEnabled,
+          codeExecution: resolvedMeta?.codeExecutionEnabled,
+          officeCreation: resolvedMeta?.officeCreationEnabled,
+          skillName: resolvedMeta?.skillName,
+          mcpContext: resolvedMeta?.mcpContext,
+          attachments: attachments?.map(freeModelAttachmentKind),
+        },
+      }).model;
+      const providerNotice = freeModelNoticeFor(servingModelId);
+      if (providerNotice && providerConsentStatusOf(providerNotice.providerId) === 'missing') {
+        setPendingProviderNotice({
+          notice: providerNotice,
+          send: {
+            content: outgoingContent,
+            attachments,
+            meta: resolvedMeta,
+            conversationId: displayedConversationId ?? null,
+            keptInComposer: resolvedMeta?.queuedFollowUp !== true,
+          },
+          offersAuto: freeQuotaChatOffering(servingModelId) !== null,
+        });
+        return false;
+      }
+
       // Natural-language image requests use the existing media harness even
       // when the user has not manually toggled Image mode. This interception
       // must happen before the chat-completions route because media models use
@@ -3900,8 +3992,41 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       subscriptionTier,
       handleGenerateImage,
       sendContent,
+      providerConsentStatusOf,
     ],
   );
+
+  const handleAcceptProviderNotice = useCallback(async () => {
+    const pending = pendingProviderNotice;
+    if (!pending) return;
+    await saveNamedProviderConsent(pending.notice, true);
+    setPendingProviderNotice(null);
+    if (!pending.send) return;
+    if (pending.send.keptInComposer) setComposerClearSignal((value) => value + 1);
+    void sendContent(pending.send.content, {
+      attachments: pending.send.attachments,
+      meta: pending.send.meta,
+    });
+  }, [pendingProviderNotice, sendContent]);
+
+  const handleDeclineProviderNotice = useCallback(() => {
+    const held = pendingProviderNotice?.send;
+    setPendingProviderNotice(null);
+    if (!held || held.keptInComposer) return;
+    parkUnsentDraft(held.conversationId, held.content);
+    toast.error(
+      held.attachments?.length
+        ? HELD_QUEUED_ATTACHMENTS_DROPPED_TOAST
+        : HELD_QUEUED_MESSAGE_RETURNED_TOAST,
+    );
+  }, [pendingProviderNotice]);
+
+  const handleUseAutoInsteadOfProvider = useCallback(() => {
+    handleDeclineProviderNotice();
+    void handleConversationModelChange(getBestAutoModeForTier(subscriptionTier)).then((saved) => {
+      if (!saved) toast.error('Could not save this conversation’s model. Try again.');
+    });
+  }, [handleConversationModelChange, handleDeclineProviderNotice, subscriptionTier]);
 
   useEffect(() => {
     sendTypedImageRef.current = (content, skillId, meta) =>
@@ -4684,6 +4809,82 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [displayedConversationId, router],
   );
 
+  const chatStatusInputRef = useRef<ChatStatusInput>({
+    modelName: null,
+    planTier: null,
+    usage: null,
+  });
+  chatStatusInputRef.current = {
+    modelName: localModelSelection?.name ?? selectedModel?.name ?? null,
+    planTier: billingPolicyReady ? subscriptionTier : null,
+    usage: managedUsageSummary,
+  };
+  const chatSlashActions = useMemo<ChatSlashActions>(() => {
+    const persisted =
+      displayedConversationId && displayedConversation && !temporaryChatActive
+        ? displayedConversation
+        : null;
+    return {
+      new: {
+        run: () => {
+          handleNewChat();
+          return CHAT_SLASH_DONE;
+        },
+      },
+      status: {
+        run: () => ({ kind: 'status', lines: chatStatusLines(chatStatusInputRef.current) }),
+      },
+      ...(persisted
+        ? {
+            rename: {
+              run: (title: string) => {
+                if (!title) {
+                  return { kind: 'notice', message: 'Type the new name after /rename.' };
+                }
+                void handleRenameSession(persisted.id, title);
+                return CHAT_SLASH_DONE;
+              },
+            },
+            archive: {
+              ...(persisted.isArchived
+                ? { description: 'Restore this chat from the archive' }
+                : {}),
+              run: () => {
+                handleArchiveSession(persisted.id);
+                return CHAT_SLASH_DONE;
+              },
+            },
+            pin: {
+              ...(persisted.isPinned ? { description: 'Unpin this chat' } : {}),
+              run: () => {
+                handlePinSession(persisted.id);
+                return CHAT_SLASH_DONE;
+              },
+            },
+            ...(hasMessages
+              ? {
+                  share: {
+                    run: () => {
+                      setShareDialogOpen(true);
+                      return CHAT_SLASH_DONE;
+                    },
+                  },
+                }
+              : {}),
+          }
+        : {}),
+    };
+  }, [
+    displayedConversationId,
+    displayedConversation,
+    temporaryChatActive,
+    hasMessages,
+    handleNewChat,
+    handleRenameSession,
+    handleArchiveSession,
+    handlePinSession,
+  ]);
+
   const planMessageEdit = useCallback(
     (id: string): { message: Message; plan: PendingEditRollback } | null => {
       if (!displayedConversationId || isStreaming) return null;
@@ -4769,7 +4970,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         setChatError(replayDecision.message, conversationId);
         return;
       }
-      const replayOptions = replayToSendOptions(replayDecision.replay);
+      const replayOptions = {
+        ...replayToSendOptions(replayDecision.replay),
+        ...freeModelHandoffReplay(planned.message.metadata),
+      };
 
       if (variantsEnabled) {
         useChatStore.getState().ensureLocalThreadParents(conversationId);
@@ -4961,7 +5165,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         return;
       }
 
-      const replayOptions = replayToSendOptions(replayDecision.replay);
+      const replayOptions = {
+        ...replayToSendOptions(replayDecision.replay),
+        ...freeModelHandoffReplay(userMsg.metadata),
+      };
 
       if (userRetryIndex >= 0 && !conversations.some((c) => c.id === displayedConversationId)) {
         const conversationId = displayedConversationId;
@@ -6150,6 +6357,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       data-voice-mode={voiceModeActive ? 'true' : undefined}
       className="fixed inset-x-0 top-0 bottom-[var(--agi-consent-inset,0px)] flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]"
     >
+      <ProductNoticeHost />
       {/* Dialogs lifted from ChatSidebar to the page level */}
       {/* Destructive-action confirm (delete conversation / delete project). One
           instance for the page; `confirmDestructive` fills in the copy. */}
@@ -6568,6 +6776,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         onGenerateImage={handleGenerateImage}
                         onGenerateVideo={handleGenerateVideo}
                         projectPicker={composerProjectPicker}
+                        chatSlashActions={chatSlashActions}
                         onSetTemporaryChat={handleSetTemporaryChat}
                         freeTrial={{
                           enabled: isWebsiteFreeTrial,
@@ -6701,6 +6910,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         onGenerateImage={handleGenerateImage}
                         onGenerateVideo={handleGenerateVideo}
                         projectPicker={composerProjectPicker}
+                        chatSlashActions={chatSlashActions}
                         onSetTemporaryChat={handleSetTemporaryChat}
                         freeTrial={{
                           enabled: isWebsiteFreeTrial,
@@ -6824,6 +7034,18 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           }}
         />
       )}
+      <NamedProviderNoticeDialog
+        notice={pendingProviderNotice?.notice ?? null}
+        alternativeName={
+          availableModels.find((model) => model.id === getBestAutoModeForTier(subscriptionTier))
+            ?.name
+        }
+        onAccept={handleAcceptProviderNotice}
+        onUseAlternative={
+          pendingProviderNotice?.offersAuto ? handleUseAutoInsteadOfProvider : undefined
+        }
+        onClose={handleDeclineProviderNotice}
+      />
       {pendingByokHandoff && (
         <LocalByokHandoffDialog
           open={Boolean(pendingByokHandoff)}

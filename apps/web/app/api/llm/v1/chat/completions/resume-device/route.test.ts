@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+import { getDefaultAutoRoutingProfile } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/logger');
 type ScanModule1 = typeof import('../lib/auth-gate');
 type ScanModule2 = typeof import('../lib/turn-slot');
@@ -120,6 +121,9 @@ import {
   CloudAgentDeviceStepResultError,
 } from '@/lib/services/cloud-agent-run-service';
 import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
+import { buildApprovalCheckpointRequest } from '../lib/approval-checkpoint-request';
+import type { ModelSelection } from '../lib/capability-preamble';
+import type { ChatCompletionRequest } from '../lib/request-processor';
 import { POST } from './route';
 
 const pausedMessages = [
@@ -335,6 +339,31 @@ describe('POST /api/llm/v1/chat/completions/resume-device', () => {
     expect(response.headers.get('X-AGI-Agent-Transport')).toBe('durable');
     expect(mocks.finalize).not.toHaveBeenCalled();
     expect(mocks.release).not.toHaveBeenCalled();
+  });
+
+  it('resumes the run under the model selection its transcript was rendered for', async () => {
+    const autoSelection: ModelSelection = {
+      kind: 'picked',
+      modelId: getDefaultAutoRoutingProfile().id,
+    };
+    mocks.claim.mockResolvedValue(
+      claimed(
+        buildApprovalCheckpointRequest(
+          claimed().checkpoint.request as unknown as ChatCompletionRequest,
+          {},
+          [],
+          autoSelection,
+        ),
+      ),
+    );
+
+    await (await POST(resume(resumeBody()))).text();
+
+    expect(mocks.runTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        processed: expect.objectContaining({ modelSelection: autoSelection }),
+      }),
+    );
   });
 
   it('advertises no workflow run for a turn that fell back to the request', async () => {

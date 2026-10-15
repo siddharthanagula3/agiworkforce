@@ -78,6 +78,7 @@ import {
   type ToolCallGate,
 } from './tool-call-gate';
 import { classifyToolLoopInputs } from './tool-loop-routing';
+import { retargetMessagesToModel } from './managed-failover';
 import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
   LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS,
@@ -2198,6 +2199,14 @@ export async function* runResearchLoop(
             attempt,
             {
               ...stepRequest,
+              messages:
+                attempt === processed
+                  ? stepRequest.messages
+                  : retargetMessagesToModel(
+                      stepRequest.messages,
+                      processed,
+                      attempt.chatRequest.model,
+                    ),
               model: attempt.llmRequest.model,
               effort: attempt.llmRequest.effort,
               thinking: attempt.llmRequest.thinking,

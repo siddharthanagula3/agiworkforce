@@ -3,7 +3,10 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 
 import { NextRequest, NextResponse, after } from 'next/server';
-import { ToolApprovalResumeRequestSchema } from '@agiworkforce/cloud-contracts';
+import {
+  ToolApprovalResumeRequestSchema,
+  isApprovingToolDecision,
+} from '@agiworkforce/cloud-contracts';
 import { isFreeBillingPlanTier } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import {
@@ -52,14 +55,20 @@ import {
   loadConnectorToolPermissions,
   type ConnectorToolPermissions,
   scopeConnectorPermissionsToTurn,
+  saveScopedConnectorToolApprovals,
+  ConnectorToolPermissionChangedError,
 } from '../lib/connector-tool-permissions';
+import {
+  managedConversationGrantScope,
+  planScopedToolApprovals,
+} from '../lib/connector-tool-session-grants';
 import { hostedToolRunsUnasked, loadToolApprovalPolicy } from '../lib/tool-approval-policy';
 import { applySecretHandlingToTexts } from '../lib/secret-handling-gate';
 import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import {
   checkpointRequestForResume,
-  checkpointTurnAttachments,
+  restoreCheckpointedTurn,
 } from '../lib/approval-checkpoint-request';
 
 const SECRET_IN_GUIDANCE_MESSAGE =
@@ -68,9 +77,9 @@ const SECRET_IN_GUIDANCE_MESSAGE =
 // Same tool loop as route.ts, same limit; a literal because Next reads it statically.
 export const maxDuration = 300;
 
-function jsonError(message: string, status: number): NextResponse {
+function jsonError(message: string, status: number, code = 'tool_approval_invalid'): NextResponse {
   return NextResponse.json(
-    { error: { message, type: 'invalid_request_error', code: 'tool_approval_invalid' } },
+    { error: { message, type: 'invalid_request_error', code } },
     { status, headers: getSecurityHeaders() },
   );
 }
@@ -203,7 +212,7 @@ async function handleToolApproval(
       runId: resumeFields.run_id,
       approvals: resumeFields.tool_approvals.map((approval) => ({
         toolCallId: approval.tool_call_id,
-        decision: approval.decision,
+        decision: isApprovingToolDecision(approval.decision) ? 'approved' : 'rejected',
       })),
       leaseSeconds: 86_400,
     });
@@ -211,6 +220,16 @@ async function handleToolApproval(
     const response = checkpointError(error);
     if (response) return response;
     throw error;
+  }
+
+  const staticScopePlan = planScopedToolApprovals(
+    resumeFields.tool_approvals.filter((approval) => approval.decision === 'approved-always'),
+    claim.checkpoint.pendingToolCalls,
+    null,
+  );
+  if (!staticScopePlan.ok) {
+    await releaseClaim(db, userId, claim);
+    return jsonError(staticScopePlan.message, 400, 'tool_approval_scope_refused');
   }
 
   // The resumed step runs under the same workspace controls as the turn it
@@ -236,14 +255,21 @@ async function handleToolApproval(
   }
   const processed: ProcessedRequest = processResult;
 
-  processed.llmRequest.messages = claim.checkpoint.messages;
-  processed.turnAttachments = checkpointTurnAttachments(claim.checkpoint.request);
+  restoreCheckpointedTurn(processed, claim.checkpoint);
 
   const discovery: { mcpTools: WebMcpToolDef[]; permissions: ConnectorToolPermissions } =
     await (async () => {
       try {
         const permissions = scopeConnectorPermissionsToTurn(
-          await loadConnectorToolPermissions(db, userId, processed.organizationId ?? null),
+          await loadConnectorToolPermissions(
+            db,
+            userId,
+            processed.organizationId ?? null,
+            managedConversationGrantScope(
+              processed.conversationId,
+              processed.conversationIsTemporary === true,
+            ),
+          ),
           {
             temporary: processed.conversationIsTemporary === true,
             disabledConnectorIds: processed.chatRequest.disabled_connector_ids,
@@ -291,6 +317,129 @@ async function handleToolApproval(
       }
     })();
 
+  const { mcpTools } = discovery;
+  let connectorPermissions = discovery.permissions;
+  const conversationScope = managedConversationGrantScope(
+    processed.conversationId,
+    processed.conversationIsTemporary === true,
+  );
+  const scopedPlan = planScopedToolApprovals(
+    resumeFields.tool_approvals,
+    claim.checkpoint.pendingToolCalls,
+    conversationScope?.conversationId ?? null,
+    (qualifiedName) => mcpTools.find((tool) => tool.qualifiedName === qualifiedName)?.annotations,
+  );
+  async function rejectScopedDecision(message: string, status: number): Promise<NextResponse> {
+    if (processed.managedUsage)
+      await finalizeManagedUsageRequest({
+        ...processed.managedUsage,
+        outcome: 'failed',
+        actualCostCents: 0,
+        usage: { reason: 'scoped_tool_permission_refused' },
+      }).catch(() => undefined);
+    await releaseClaim(db, userId, claim);
+    return jsonError(message, status, 'tool_approval_scope_refused');
+  }
+  if (!scopedPlan.ok) return rejectScopedDecision(scopedPlan.message, 400);
+  for (const approval of scopedPlan.scoped) {
+    const call = claim.checkpoint.pendingToolCalls.find(
+      (pending) => pending.id === approval.toolCallId,
+    );
+    const offered = mcpTools.find((tool) => tool.qualifiedName === call?.qualifiedName);
+    if (
+      !call ||
+      !call.approvalScopes?.includes(approval.scope) ||
+      offered?.origin !== 'connector' ||
+      connectorPermissions.canRememberApproval?.(call.qualifiedName) !== true ||
+      connectorPermissions.sessionGrantsAvailable !== true
+    ) {
+      return rejectScopedDecision(
+        'This tool must be approved once under the current conversation and workspace policy.',
+        400,
+      );
+    }
+  }
+  if (scopedPlan.scoped.length > 0) {
+    if (!conversationScope)
+      return rejectScopedDecision('This permission needs a saved conversation.', 400);
+    try {
+      await saveScopedConnectorToolApprovals(db, {
+        ...conversationScope,
+        userId,
+        organizationId: processed.organizationId ?? null,
+        approvals: scopedPlan.scoped,
+        annotationsFor: (connectorId, toolName) =>
+          mcpTools.find((tool) => tool.serverId === connectorId && tool.toolName === toolName)
+            ?.annotations,
+      });
+    } catch (error) {
+      logger.warn(
+        { error, userId, runId: claim.checkpoint.runId },
+        'Scoped tool permission could not be saved',
+      );
+      if (error instanceof ConnectorToolPermissionChangedError)
+        return rejectScopedDecision(error.message, 409);
+      return rejectScopedDecision(
+        'This conversation permission could not be saved. Approve this call once instead.',
+        503,
+      );
+    }
+    await Promise.all(
+      scopedPlan.scoped
+        .filter((approval) => approval.scope === 'always')
+        .map((approval) =>
+          recordAuditEvent({
+            userId,
+            organizationId: processed.organizationId ?? null,
+            request,
+            eventType: 'connector_setting_changed',
+            detail: {
+              resourceType: 'connector',
+              resourceId: approval.connectorId,
+              connectorId: approval.connectorId,
+              resourceName: approval.toolName,
+              status: 'allow',
+            },
+          }),
+        ),
+    );
+    try {
+      connectorPermissions = scopeConnectorPermissionsToTurn(
+        await loadConnectorToolPermissions(
+          db,
+          userId,
+          processed.organizationId ?? null,
+          conversationScope,
+        ),
+        {
+          temporary: processed.conversationIsTemporary === true,
+          disabledConnectorIds: processed.chatRequest.disabled_connector_ids,
+        },
+      );
+      for (const approval of scopedPlan.scoped) {
+        const name = claim.checkpoint.pendingToolCalls.find(
+          (call) => call.id === approval.toolCallId,
+        )!.qualifiedName;
+        const confirmed =
+          approval.scope === 'session'
+            ? connectorPermissions.isSessionGranted?.(name, approval.riskTier) === true
+            : connectorPermissions.levelFor(name) === 'allow' &&
+              connectorPermissions.canRememberApproval?.(name) === true;
+        if (!confirmed)
+          return rejectScopedDecision(
+            'The permissions were saved, but current policy no longer confirms them. Review the call again.',
+            409,
+          );
+      }
+    } catch (error) {
+      logger.warn({ error, userId }, 'Saved tool permission could not be rechecked');
+      return rejectScopedDecision(
+        'The permissions were saved, but current policy could not be rechecked. Try again when permissions are available.',
+        503,
+      );
+    }
+  }
+
   if (processed.managedUsage) {
     try {
       await markManagedUsageProviderStarted(processed.managedUsage);
@@ -323,8 +472,6 @@ async function handleToolApproval(
       );
     }
   }
-
-  const { mcpTools, permissions: connectorPermissions } = discovery;
 
   const blockedToolCallIds = new Set(
     claim.checkpoint.pendingToolCalls

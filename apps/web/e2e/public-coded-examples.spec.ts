@@ -40,7 +40,6 @@ const routes = [
     transcripts: ['Two commands quoted from the scenarios on this page'],
   },
   { path: '/features/plugins', code: [], transcripts: ['A plugin install in the AGI CLI'] },
-  { path: '/download', code: [], transcripts: ['Example output from verifying a CLI archive'] },
 ] as const;
 const root = path.resolve(__dirname, '../../..');
 const sourceOwners = [

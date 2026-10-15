@@ -148,7 +148,7 @@ describe('CRIT-008 route graph', () => {
     expect([...appsTargets]).not.toContain('/integrations');
 
     const appsSource = readFileSync(join(APP_DIR, 'apps', 'page.tsx'), 'utf8');
-    expect(appsSource).toContain('/login?redirectTo=%2Fapps');
+    expect(appsSource).toContain('redirectTo="/apps"');
     expect(appsSource).not.toMatch(/router\.(replace|push)\(/u);
   });
 });

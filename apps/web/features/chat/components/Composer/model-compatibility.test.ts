@@ -77,12 +77,15 @@ describe('evaluateModelCompatibility', () => {
     ]);
   });
 
-  it('warns about any staged file before switching to a text-only free promotion', () => {
-    const promotional = Object.entries(getProviderOfferings()).find(
-      ([, offering]) => offering.quotaProbeProtocol === 'chat' && !offering.quotaChatImageInput,
+  it('warns that a staged file blocks the Experiential Labs route, which still refuses it', () => {
+    const experiential = Object.entries(getProviderOfferings()).find(
+      ([, offering]) =>
+        offering.provider === 'experientiallabs' &&
+        offering.quotaProbeProtocol === 'chat' &&
+        !offering.quotaChatImageInput,
     );
-    expect(promotional).toBeDefined();
-    const result = evaluateModelCompatibility(promotional![0], request({ hasAttachments: true }));
+    expect(experiential).toBeDefined();
+    const result = evaluateModelCompatibility(experiential![0], request({ hasAttachments: true }));
     expect(result.findings).toEqual([
       {
         code: 'no_attachments',
@@ -91,26 +94,52 @@ describe('evaluateModelCompatibility', () => {
     ]);
   });
 
-  it('accepts images but rejects other files for a vision-capable free promotion', () => {
-    const promotional = Object.entries(getProviderOfferings()).find(
-      ([, offering]) => offering.quotaProbeProtocol === 'chat' && offering.quotaChatImageInput,
+  it('says Free Auto answers what a text-only free quota model cannot read or run', () => {
+    const textOnly = Object.entries(getProviderOfferings()).find(
+      ([, offering]) =>
+        offering.provider === 'qwen' &&
+        offering.quotaProbeProtocol === 'chat' &&
+        !offering.quotaChatImageInput,
     );
-    expect(promotional).toBeDefined();
+    expect(textOnly).toBeDefined();
     expect(
-      evaluateModelCompatibility(
-        promotional![0],
-        request({ hasImages: true, hasAttachments: true }),
-      ).findings,
+      evaluateModelCompatibility(textOnly![0], request({ hasAttachments: true, needsTools: true }))
+        .findings,
+    ).toEqual([
+      {
+        code: 'no_attachments',
+        message:
+          'This free model reads text only. Free Auto answers a message that carries attached files.',
+      },
+      {
+        code: 'no_tools',
+        message: 'This free model has no tools. Free Auto answers a message that uses them.',
+      },
+    ]);
+  });
+
+  it('accepts images for a free quota model that reads them, and says Free Auto answers other files', () => {
+    const vision = Object.entries(getProviderOfferings()).find(
+      ([, offering]) =>
+        offering.provider === 'qwen' &&
+        offering.quotaProbeProtocol === 'chat' &&
+        offering.quotaChatImageInput,
+    );
+    expect(vision).toBeDefined();
+    expect(
+      evaluateModelCompatibility(vision![0], request({ hasImages: true, hasAttachments: true }))
+        .findings,
     ).toEqual([]);
     expect(
       evaluateModelCompatibility(
-        promotional![0],
+        vision![0],
         request({ hasImages: true, hasAttachments: true, hasNonImageAttachments: true }),
       ).findings,
     ).toEqual([
       {
         code: 'no_attachments',
-        message: 'This free model accepts images only. Remove other files or use Free Auto.',
+        message:
+          'This free model reads images only. Free Auto answers a message that carries other files.',
       },
     ]);
   });

@@ -13,6 +13,8 @@ import {
   prohibitedMemoryCategory,
   prohibitedMemoryMessage,
   provenanceRecord,
+  sensitiveMemoryMessage,
+  sensitiveMemoryTopic,
   type ContextSource,
   type ContextSourceClass,
   type ProvenanceRecord,
@@ -26,6 +28,8 @@ import {
 } from '@agiworkforce/context-engine';
 import type { PrivacyMode } from '@agiworkforce/types';
 import { fenceUntrustedMemoryContent } from '@agiworkforce/utils';
+import { UNKNOWN_SURFACE, workspaceKindFor } from '@/lib/observability/denials';
+import { recordDenial } from '@/lib/observability/metrics';
 import { withSpan } from '@/lib/observability/span';
 import { logger } from '@/lib/logger';
 import type { ChatCompletionRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
@@ -49,6 +53,7 @@ export interface ManagedMemoryPolicy {
   generateFromHistory: boolean;
   allowToolAssistedGeneration: boolean;
   searchPastChats: boolean;
+  includeSensitiveTopics?: boolean;
 }
 
 export const DISABLED_MANAGED_MEMORY_POLICY: ManagedMemoryPolicy = {
@@ -56,6 +61,7 @@ export const DISABLED_MANAGED_MEMORY_POLICY: ManagedMemoryPolicy = {
   generateFromHistory: false,
   allowToolAssistedGeneration: false,
   searchPastChats: false,
+  includeSensitiveTopics: false,
 };
 
 const MAX_MEMORIES = 30;
@@ -102,11 +108,23 @@ export const UNGOVERNED_MEMORY_POLICY: OrganizationMemoryPolicy = {
   retentionEnforced: false,
 };
 
+export type OrganizationMemoryPolicyRead =
+  | { readonly readable: true; readonly policy: OrganizationMemoryPolicy }
+  | { readonly readable: false };
+
 export async function loadOrganizationMemoryPolicy(
   db: ManagedMemoryContextDb,
   organizationId: string | null | undefined,
 ): Promise<OrganizationMemoryPolicy> {
-  if (!organizationId) return UNGOVERNED_MEMORY_POLICY;
+  const read = await readOrganizationMemoryPolicy(db, organizationId);
+  return read.readable ? read.policy : CLOSED_ORGANIZATION_MEMORY_POLICY;
+}
+
+export async function readOrganizationMemoryPolicy(
+  db: ManagedMemoryContextDb,
+  organizationId: string | null | undefined,
+): Promise<OrganizationMemoryPolicyRead> {
+  if (!organizationId) return { readable: true, policy: UNGOVERNED_MEMORY_POLICY };
   try {
     const [row] = await db.query<{
       allow_memory: boolean;
@@ -119,21 +137,24 @@ export async function loadOrganizationMemoryPolicy(
         limit 1`,
       [organizationId],
     );
-    if (!row) return CLOSED_ORGANIZATION_MEMORY_POLICY;
+    if (!row) return { readable: true, policy: CLOSED_ORGANIZATION_MEMORY_POLICY };
     return {
-      allowMemory: row.allow_memory === true,
-      retentionDays:
-        typeof row.retention_days === 'number' && row.retention_days > 0
-          ? row.retention_days
-          : null,
-      retentionEnforced: row.retention_enforced === true,
+      readable: true,
+      policy: {
+        allowMemory: row.allow_memory === true,
+        retentionDays:
+          typeof row.retention_days === 'number' && row.retention_days > 0
+            ? row.retention_days
+            : null,
+        retentionEnforced: row.retention_enforced === true,
+      },
     };
   } catch (error) {
     logger.error(
       { error, organizationId },
       '[managed-memory] organization policy read failed; memory disabled for this organization',
     );
-    return CLOSED_ORGANIZATION_MEMORY_POLICY;
+    return { readable: false };
   }
 }
 
@@ -182,6 +203,17 @@ export async function loadOrganizationContextPolicy(
   }
 }
 
+export function disabledPastChatToggles(
+  pastChatsSwitchedOn: boolean,
+  organization: OrganizationContextPolicy,
+): string[] {
+  const toggle = contextSourceClassPolicy('project_sibling_chat').enabledBy;
+  if (pastChatsSwitchedOn || !organization.allowPastChats || toggle.kind !== 'user_setting') {
+    return [];
+  }
+  return [toggle.key];
+}
+
 export async function organizationMemoryGate(
   db: ManagedMemoryContextDb,
   organizationId: string | null | undefined,
@@ -192,11 +224,15 @@ export async function organizationMemoryGate(
 
 export async function loadManagedMemoryPolicy(
   db: ManagedMemoryContextDb,
-  params: { userId: string; organizationId?: string | null },
+  params: {
+    userId: string;
+    organizationId?: string | null;
+    organizationPolicy?: OrganizationMemoryPolicy;
+  },
 ): Promise<ManagedMemoryPolicy> {
-  if (params.organizationId && !(await organizationAllowsMemory(db, params.organizationId))) {
-    return DISABLED_MANAGED_MEMORY_POLICY;
-  }
+  const organization =
+    params.organizationPolicy ?? (await loadOrganizationMemoryPolicy(db, params.organizationId));
+  if (!organization.allowMemory) return DISABLED_MANAGED_MEMORY_POLICY;
   return readUserMemoryCapabilities(db, params.userId);
 }
 
@@ -225,6 +261,7 @@ export async function readUserMemoryCapabilities(
       capabilities['memory'] === true && capabilities['generateFromHistory'] !== false,
     allowToolAssistedGeneration: capabilities['allowToolAssistedGeneration'] === true,
     searchPastChats: capabilities['searchPastChats'] === true,
+    includeSensitiveTopics: capabilities['includeSensitiveTopics'] === true,
   };
 }
 
@@ -414,6 +451,7 @@ export interface ConsolidatedMemoryWrite {
   sourceTurnId?: string | null;
   /** Set when an unattended run produced the fact. */
   agentId?: string | null;
+  userRequested?: boolean;
 }
 
 /**
@@ -482,12 +520,18 @@ export const MEMORY_INELIGIBILITY_REASONS = [
   'prohibited_content_category',
   'temporary_chat',
   'user_memory_disabled',
+  'sensitive_topic_not_opted_in',
   'organization_memory_disabled',
   'source_class_cannot_generate_memory',
   'trust_mode_outside_managed_storage',
 ] as const;
 
 export type MemoryIneligibilityReason = (typeof MEMORY_INELIGIBILITY_REASONS)[number];
+
+const CONTENT_REFUSAL_REASONS: ReadonlySet<MemoryIneligibilityReason> = new Set([
+  'prohibited_content_category',
+  'sensitive_topic_not_opted_in',
+]);
 
 export class MemoryIneligibleError extends Error {
   readonly reason: MemoryIneligibilityReason;
@@ -530,21 +574,24 @@ export function memoryContentRefusal(
   return null;
 }
 
+interface MemoryPolicyInput {
+  write: ConsolidatedMemoryWrite;
+  organizationPolicy: OrganizationMemoryPolicy;
+  userPolicy?: ManagedMemoryPolicy;
+  nowMs?: number;
+}
+
 /**
  * The one place a fact is judged fit to enter managed memory, across all three
  * axes the product governs: who the workspace lets remember, what kind of
  * context the fact came from, and which trust boundary produced it.
  */
-export function memoryEligibilityGate(input: {
-  write: ConsolidatedMemoryWrite;
-  organizationPolicy: OrganizationMemoryPolicy;
-  userPolicy?: ManagedMemoryPolicy;
-  nowMs?: number;
-}): MemoryEligibilityDecision {
-  const { write, organizationPolicy } = input;
+export function memoryEligibilityGate(input: MemoryPolicyInput): MemoryEligibilityDecision {
+  return memoryContentRefusal(input.write) ?? memoryPolicyDecision(input);
+}
 
-  const refusedOnSight = memoryContentRefusal(write);
-  if (refusedOnSight) return refusedOnSight;
+function memoryPolicyDecision(input: MemoryPolicyInput): MemoryEligibilityDecision {
+  const { write, organizationPolicy } = input;
 
   if (!organizationPolicy.allowMemory) {
     return {
@@ -559,6 +606,18 @@ export function memoryEligibilityGate(input: {
       eligible: false,
       reason: 'user_memory_disabled',
       message: 'Memory is turned off in your settings, so I did not save that.',
+    };
+  }
+
+  const sensitiveTopic =
+    write.userRequested === true || input.userPolicy?.includeSensitiveTopics === true
+      ? null
+      : sensitiveMemoryTopic(write.content);
+  if (sensitiveTopic) {
+    return {
+      eligible: false,
+      reason: 'sensitive_topic_not_opted_in',
+      message: sensitiveMemoryMessage(sensitiveTopic),
     };
   }
 
@@ -659,7 +718,7 @@ export async function memoryWriteAdmission(
       userId: write.userId,
       organizationId: write.organizationId ?? null,
     }));
-  return memoryEligibilityGate({
+  return memoryPolicyDecision({
     write,
     organizationPolicy: policies.organization,
     userPolicy: policies.user,
@@ -673,10 +732,19 @@ export async function writeConsolidatedMemory(
 ): Promise<ConsolidatedMemoryRow | null> {
   const decision = await memoryWriteAdmission(db, write, options);
   if (!decision.eligible) {
-    logger.warn(
-      { userId: write.userId, reason: decision.reason },
-      '[managed-memory] write refused by the eligibility gate',
-    );
+    if (CONTENT_REFUSAL_REASONS.has(decision.reason)) {
+      recordDenial({
+        layer: 'policy',
+        reason: decision.reason,
+        surface: UNKNOWN_SURFACE,
+        workspaceKind: workspaceKindFor(write.organizationId),
+      });
+    } else {
+      logger.warn(
+        { userId: write.userId, reason: decision.reason },
+        '[managed-memory] write refused by the eligibility gate',
+      );
+    }
     throw new MemoryIneligibleError(decision.reason, decision.message);
   }
 

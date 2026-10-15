@@ -51,10 +51,11 @@ import {
   loadConnectorToolPermissions,
   scopeConnectorPermissionsToTurn,
 } from '../../../lib/connector-tool-permissions';
+import { managedConversationGrantScope } from '../../../lib/connector-tool-session-grants';
 import { hostedToolRunsUnasked, loadToolApprovalPolicy } from '../../../lib/tool-approval-policy';
 import {
   checkpointRequestForResume,
-  checkpointTurnAttachments,
+  restoreCheckpointedTurn,
 } from '../../../lib/approval-checkpoint-request';
 import { applySecretHandlingToTexts } from '../../../lib/secret-handling-gate';
 import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
@@ -214,13 +215,20 @@ async function handlePausedRunResume(
     return processResult.response;
   }
   const processed = processResult;
-  processed.llmRequest.messages = claim.checkpoint.messages;
-  processed.turnAttachments = checkpointTurnAttachments(claim.checkpoint.request);
+  restoreCheckpointedTurn(processed, claim.checkpoint);
 
   let discovery;
   try {
     const permissions = scopeConnectorPermissionsToTurn(
-      await loadConnectorToolPermissions(db, userId, processed.organizationId ?? null),
+      await loadConnectorToolPermissions(
+        db,
+        userId,
+        processed.organizationId ?? null,
+        managedConversationGrantScope(
+          processed.conversationId,
+          processed.conversationIsTemporary === true,
+        ),
+      ),
       {
         temporary: processed.conversationIsTemporary === true,
         disabledConnectorIds: processed.chatRequest.disabled_connector_ids,

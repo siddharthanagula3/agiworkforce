@@ -9,6 +9,7 @@ import {
   SidePanelPreview,
   TerminalAppPreview,
   WebAppPreview,
+  type AppPreviewView,
   type TerminalRouteMode,
   type TerminalView,
 } from './app-preview/AppPreviews';
@@ -29,12 +30,16 @@ export interface TerminalWindowProps extends DeviceWindowProps {
   view?: TerminalView;
 }
 
-export function DesktopWindow({ className }: DeviceWindowProps) {
-  return <DesktopAppPreview className={className} />;
+export interface AppWindowProps extends DeviceWindowProps {
+  view?: AppPreviewView;
 }
 
-export function WebWindow({ className }: DeviceWindowProps) {
-  return <WebAppPreview className={className} />;
+export function DesktopWindow({ className, view }: AppWindowProps) {
+  return <DesktopAppPreview className={className} view={view} />;
+}
+
+export function WebWindow({ className, view }: AppWindowProps) {
+  return <WebAppPreview className={className} view={view} />;
 }
 
 export function ChromeWindow({ className }: DeviceWindowProps) {

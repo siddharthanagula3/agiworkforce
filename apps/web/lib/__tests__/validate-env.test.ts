@@ -641,6 +641,73 @@ describe('validateSandboxOriginConfigured · boot check', () => {
   });
 });
 
+import { validateMcpAppSandboxOrigin } from '../validate-env';
+
+describe('validateMcpAppSandboxOrigin · boot check', () => {
+  let savedEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    savedEnv = { ...process.env };
+    delete process.env['NEXT_PUBLIC_MCP_APP_SANDBOX_ORIGIN'];
+    delete process.env['VERCEL_ENV'];
+    delete process.env['NEXT_PHASE'];
+    process.env['NEXT_PUBLIC_APP_URL'] = 'https://app.example.com';
+  });
+
+  afterEach(() => {
+    for (const key of Object.keys(process.env)) {
+      if (!(key in savedEnv)) delete process.env[key];
+    }
+    Object.assign(process.env, savedEnv);
+  });
+
+  it('warns in production that MCP Apps render as plain results while unset', () => {
+    process.env['VERCEL_ENV'] = 'production';
+
+    const result = validateMcpAppSandboxOrigin();
+
+    expect(result.valid).toBe(true);
+    expect(result.warnings).toEqual([
+      expect.stringContaining('NEXT_PUBLIC_MCP_APP_SANDBOX_ORIGIN is not set'),
+    ]);
+  });
+
+  it('refuses the app origin as the sandbox origin', () => {
+    process.env['VERCEL_ENV'] = 'production';
+    process.env['NEXT_PUBLIC_MCP_APP_SANDBOX_ORIGIN'] = 'https://app.example.com/';
+
+    const result = validateMcpAppSandboxOrigin();
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual([expect.stringContaining('is the app origin')]);
+  });
+
+  it('refuses a plain http sandbox origin in production', () => {
+    process.env['VERCEL_ENV'] = 'production';
+    process.env['NEXT_PUBLIC_MCP_APP_SANDBOX_ORIGIN'] = 'http://apps.example.net';
+
+    expect(validateMcpAppSandboxOrigin().errors).toEqual([
+      expect.stringContaining('must use https in production'),
+    ]);
+  });
+
+  it('accepts a dedicated https origin', () => {
+    process.env['VERCEL_ENV'] = 'production';
+    process.env['NEXT_PUBLIC_MCP_APP_SANDBOX_ORIGIN'] = 'https://apps.example-sandbox.net';
+
+    expect(validateMcpAppSandboxOrigin()).toEqual({ valid: true, errors: [], warnings: [] });
+  });
+
+  it('reaches the boot aggregate', () => {
+    process.env['VERCEL_ENV'] = 'production';
+    process.env['NEXT_PUBLIC_MCP_APP_SANDBOX_ORIGIN'] = 'https://app.example.com';
+
+    expect(validateEnvironment().errors).toEqual(
+      expect.arrayContaining([expect.stringContaining('is the app origin')]),
+    );
+  });
+});
+
 describe('OAuth callback isolation and the config key registry', () => {
   let savedEnv: NodeJS.ProcessEnv;
 

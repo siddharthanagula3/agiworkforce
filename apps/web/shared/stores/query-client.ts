@@ -180,6 +180,7 @@ export const queryKeys = {
     plan: (userId: string) => ['billing', 'plan', userId] as const,
     invoices: () => ['billing', 'invoices'] as const,
     paymentMethods: () => ['billing', 'payment-methods'] as const,
+    upgradeWaitlist: (userId: string) => ['billing', 'upgrade-waitlist', userId] as const,
   },
 
   settings: {

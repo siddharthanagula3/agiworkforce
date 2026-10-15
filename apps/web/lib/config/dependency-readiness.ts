@@ -116,9 +116,7 @@ export const PRODUCTION_DEPENDENCIES: readonly ProductionDependency[] = [
     owner: 'identity',
     requires: [all('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'CLERK_SECRET_KEY')],
     criticality: 'core',
-    liveProbe: null,
-    liveProbeGap:
-      'no server-side reachability probe exists; a vendor outage surfaces as failing sign-ins',
+    liveProbe: 'api/health',
     region: 'multi-region',
     dataClass: 'customer-metadata',
     availability: 'the vendor plan is the only commitment; the product claims none of its own',

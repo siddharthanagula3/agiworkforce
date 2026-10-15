@@ -7,6 +7,28 @@ const billingMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/features/billing/services/stripe-payments', () => billingMocks);
+vi.mock('@shared/components/ServiceNotices', () => ({
+  ServiceNotices: ({ scope }: { scope: string }) => (
+    <div data-testid="service-notices" data-scope={scope} />
+  ),
+}));
+
+const upgradeWaitlist = vi.hoisted(() => ({
+  status: null as null | {
+    joinedPlans: string[];
+    upgradeGateEnabled: boolean;
+    accessGranted: boolean;
+  },
+}));
+
+vi.mock('@/features/billing/hooks/use-upgrade-waitlist', () => ({
+  resolveUpgradeWaitlistStatus: vi.fn(),
+  useUpgradeWaitlistStatus: () => ({
+    status: upgradeWaitlist.status,
+    recordJoined: vi.fn(),
+    recordAccessGranted: vi.fn(),
+  }),
+}));
 
 interface MockSubscription {
   tier: string;
@@ -58,6 +80,7 @@ beforeEach(() => {
   mockBillingInitialized = true;
   mockBillingLoading = false;
   mockBillingError = null;
+  upgradeWaitlist.status = { joinedPlans: [], upgradeGateEnabled: true, accessGranted: false };
 });
 
 afterEach(() => {
@@ -75,6 +98,44 @@ describe('BillingSection', () => {
 
     expect(screen.getByText('Loading your billing account…')).toBeTruthy();
     expect(screen.queryByText('Free plan')).toBeNull();
+  });
+
+  it('shows billing service notices on the billing page, where a billing outage is scoped', () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    render(<BillingSection />);
+
+    expect(screen.getByTestId('service-notices')).toHaveAttribute('data-scope', 'billing');
+  });
+
+  it('keeps billing trouble off a Free account whose only upgrade is the waitlist', () => {
+    mockSubscription = {
+      tier: 'free',
+      display_name: 'Free',
+      status: 'active',
+      current_period_end: null,
+    };
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    render(<BillingSection />);
+
+    expect(screen.getByText('Free plan')).toBeVisible();
+    expect(screen.queryByTestId('service-notices')).toBeNull();
+  });
+
+  it('shows billing trouble to a Free account that can go to checkout', () => {
+    mockSubscription = {
+      tier: 'free',
+      display_name: 'Free',
+      status: 'active',
+      current_period_end: null,
+    };
+    upgradeWaitlist.status = { joinedPlans: [], upgradeGateEnabled: true, accessGranted: true };
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    render(<BillingSection />);
+
+    expect(screen.getByTestId('service-notices')).toHaveAttribute('data-scope', 'billing');
   });
 
   it('shows public relative usage copy without private ledger values', async () => {
@@ -458,18 +519,14 @@ describe('BillingSection', () => {
 
     const failure = await screen.findByText('Could not open billing portal.');
     expect(failure.closest('[role="alert"]')).not.toBeNull();
-    expect(billingMocks.openBillingPortal).toHaveBeenCalledWith(
-      undefined,
-      'cancel',
-      expect.any(Function),
-    );
+    expect(billingMocks.openBillingPortal).toHaveBeenCalledWith(undefined, 'cancel');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel plan' })).toBeEnabled());
     expect(screen.getByRole('button', { name: 'Manage billing' })).toBeEnabled();
   });
 
   it('hands the controls back when the desktop opens the portal in the browser', async () => {
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
-    billingMocks.openBillingPortal.mockResolvedValueOnce('browser');
+    billingMocks.openBillingPortal.mockResolvedValueOnce('handed-off');
 
     render(<BillingSection />);
     fireEvent.click(screen.getByRole('button', { name: 'Manage billing' }));

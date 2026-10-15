@@ -3,6 +3,9 @@
 import { useEffect } from 'react';
 import type { HostBridge } from '@agiworkforce/local-runtime-contract';
 import { isAuthPath, isProductPath } from '@agiworkforce/types/product-routes';
+import { downloadInWindow } from '../lib/in-window-download';
+
+const API_PATH_PREFIX = '/api/';
 
 /**
  * Sends a click on a link out of the product to the user's browser.
@@ -16,6 +19,10 @@ import { isAuthPath, isProductPath } from '@agiworkforce/types/product-routes';
  * Only plain left clicks on same-origin links are taken. A modifier click, a
  * new-window target and a download are the user asking for something else, and
  * a cross-origin link already reaches the shell as a navigation it decides on.
+ *
+ * A link to one of this site's own API routes is a file the signed-in session
+ * is being asked for, such as a project export. The browser holds no session
+ * for it, so it is saved from this window instead of being sent there.
  */
 export function useDesktopExternalLinks(host: HostBridge | null): void {
   useEffect(() => {
@@ -45,6 +52,10 @@ export function useDesktopExternalLinks(host: HostBridge | null): void {
       if (isProductPath(url.pathname) || isAuthPath(url.pathname)) return;
 
       event.preventDefault();
+      if (url.pathname.startsWith(API_PATH_PREFIX)) {
+        downloadInWindow(url.href);
+        return;
+      }
       void host.openExternal(url.href);
     };
 

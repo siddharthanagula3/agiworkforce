@@ -1,5 +1,6 @@
-
 import 'server-only';
+
+import { InsufficientScopeError } from '@modelcontextprotocol/client';
 
 export function parseChallengeParam(header: string, key: string): string | null {
   const needle = `${key}=`;
@@ -45,11 +46,13 @@ function readNumericField(error: Record<string, unknown>, field: string): number
 export function detectConnectorAuthChallenge(error: unknown): ConnectorAuthChallenge | null {
   if (!error || typeof error !== 'object') return null;
   const record = error as Record<string, unknown>;
+  const isScopeError = error instanceof InsufficientScopeError;
 
-  const status =
-    readNumericField(record, 'code') ??
-    readNumericField(record, 'status') ??
-    readNumericField(record, 'statusCode');
+  const status = isScopeError
+    ? 403
+    : (readNumericField(record, 'code') ??
+      readNumericField(record, 'status') ??
+      readNumericField(record, 'statusCode'));
 
   const isUnauthorizedError = record['name'] === 'UnauthorizedError';
   if (status !== 401 && status !== 403 && !isUnauthorizedError) return null;
@@ -59,14 +62,21 @@ export function detectConnectorAuthChallenge(error: unknown): ConnectorAuthChall
       ? (record['wwwAuthenticate'] as string)
       : extractChallengeFromMessage(record['message']);
 
-  const requiredScope = parseInsufficientScope(header);
+  const requiredScope = isScopeError
+    ? typeof error.requiredScope === 'string'
+      ? error.requiredScope.trim() || null
+      : null
+    : parseInsufficientScope(header);
 
   if (status === 403 && !requiredScope) return null;
 
   return {
     status: status === 403 ? 403 : 401,
     wwwAuthenticate: header,
-    resourceMetadataUrl: parseResourceMetadataUrl(header),
+    resourceMetadataUrl:
+      isScopeError && error.resourceMetadataUrl
+        ? error.resourceMetadataUrl.href
+        : parseResourceMetadataUrl(header),
     requiredScope,
   };
 }

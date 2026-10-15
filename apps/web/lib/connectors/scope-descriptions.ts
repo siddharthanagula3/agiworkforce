@@ -42,7 +42,14 @@ const SCOPE_DESCRIPTIONS: Readonly<Record<string, ScopeDescription>> = {
   'gmail.send': { sentence: 'Sends email from your Gmail account.', access: WRITE },
 
   'calendar.readonly': { sentence: 'Reads your calendar events.', access: READ },
-  'calendar.events': { sentence: 'Creates and edits your calendar events.', access: WRITE },
+  'calendar.calendarlist.readonly': {
+    sentence: 'Reads the list of Google calendars you subscribe to.',
+    access: READ,
+  },
+  'calendar.events': {
+    sentence: 'Reads, creates, edits and deletes events on your Google calendars.',
+    access: WRITE,
+  },
 
   'drive.file': {
     sentence: 'Reads and writes files this app created or you opened with it.',

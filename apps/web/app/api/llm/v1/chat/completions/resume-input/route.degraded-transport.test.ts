@@ -14,6 +14,22 @@ type ScanModule2 = typeof import('@/lib/services/managed-usage-request-service')
  * And every authorization gate must still refuse while it is degraded.
  */
 
+const PRIORITY_REQUESTS = {
+  priority: {
+    method: 'elicitation/create',
+    params: {
+      mode: 'form',
+      message: 'Which priority?',
+      requestedSchema: {
+        type: 'object',
+        properties: { priority: { type: 'string', enum: ['low', 'high'] } },
+        required: ['priority'],
+      },
+    },
+  },
+};
+const PRIORITY_ANSWER = { priority: { action: 'accept', content: { priority: 'high' } } };
+
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const CHECKPOINT_ID = '0190a000-0000-7000-8000-000000000002';
 const LEASE_TOKEN = '0190a000-0000-7000-8000-000000000003';
@@ -160,13 +176,13 @@ const claimedCheckpoint = {
     resolvedAt: null,
     createdAt: '2026-07-18T00:00:00.000Z',
     updatedAt: '2026-07-18T00:00:00.000Z',
-    inputRequests: { call_1: { priority: { type: 'string' } } },
+    inputRequests: { call_1: PRIORITY_REQUESTS },
     requestState: { call_1: { requestState: 'token-1', round: 0 } },
   },
   resumptions: [
     {
       toolCallId: 'call_1',
-      inputResponses: { priority: 'high' },
+      inputResponses: PRIORITY_ANSWER,
       requestState: 'token-1',
       round: 1,
     },
@@ -232,7 +248,7 @@ function makeRequest(body: unknown): NextRequest {
 
 const resumeBody = {
   run_id: RUN_ID,
-  tool_inputs: [{ tool_call_id: 'call_1', input_responses: { priority: 'high' } }],
+  tool_inputs: [{ tool_call_id: 'call_1', input_responses: PRIORITY_ANSWER }],
 };
 
 function inlineStream(): ReadableStream<Uint8Array> {
@@ -251,7 +267,11 @@ function toolLoopOptions(): Record<string, unknown> {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
-  db.query.mockResolvedValue([]);
+  db.query.mockImplementation(async (sql: string) =>
+    sql.includes('gmail_data_quarantined')
+      ? [{ conversation_id: CONVERSATION_ID, gmail_data_quarantined: false }]
+      : [],
+  );
   gateMocks.authGate.mockResolvedValue({
     ok: true,
     userId: 'user-1',
@@ -294,7 +314,7 @@ describe('resume-input completes inline when the durable platform is unavailable
         inputResponses: [
           {
             toolCallId: 'call_1',
-            inputResponses: { priority: 'high' },
+            inputResponses: PRIORITY_ANSWER,
             requestState: 'token-1',
             round: 1,
           },

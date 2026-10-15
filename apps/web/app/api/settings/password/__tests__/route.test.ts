@@ -208,6 +208,9 @@ describe('POST /api/settings/password', () => {
     );
     const response = await POST(request({ currentPassword: 'old', newPassword: 'longenough' }));
     expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { message: 'Password has been found in a breach' },
+    });
     expect(mocks.revoke).not.toHaveBeenCalled();
   });
 

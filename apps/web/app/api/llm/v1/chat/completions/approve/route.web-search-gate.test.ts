@@ -161,7 +161,11 @@ describe('approve route, provider-native search under an approval policy', () =>
   beforeEach(() => {
     vi.clearAllMocks();
     policyMocks.load.mockResolvedValue('ask_every_time');
-    db.query.mockResolvedValue([]);
+    db.query.mockImplementation(async (sql: string) =>
+      sql.includes('gmail_data_quarantined')
+        ? [{ conversation_id: CONVERSATION_ID, gmail_data_quarantined: false }]
+        : [],
+    );
     mockRunAuthGate.mockResolvedValue({
       ok: true,
       userId: 'user-1',

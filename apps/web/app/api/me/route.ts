@@ -180,8 +180,12 @@ async function handleGetMe(request: NextRequest) {
       );
     }
 
-    if (resolvedEmail) {
-      const scimLink = await linkPendingScimUsersAtSignIn(getNeonDb(), userId, resolvedEmail);
+    if (verifiedProfileEmail) {
+      const scimLink = await linkPendingScimUsersAtSignIn(
+        getNeonDb(),
+        userId,
+        verifiedProfileEmail,
+      );
       if (scimLink.failed > 0) {
         logger.error(
           { userId, failed: scimLink.failed },

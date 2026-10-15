@@ -18,7 +18,11 @@ import {
 } from '@/lib/free-quota-authorization';
 import { loadFreePools, type FreeAutoRoute } from '@/lib/server/free-pools';
 import { loadFreeQuotaPolicy } from '@/lib/server/free-quota-catalogue';
-import { freeQuotaFixtureNow, servableFreeQuotaOfferings } from '@/test/free-quota-fixtures';
+import {
+  acceptedProviderConsent,
+  freeQuotaFixtureNow,
+  servableFreeQuotaOfferings,
+} from '@/test/free-quota-fixtures';
 type ScanModule0 = typeof import('@/lib/server/key-value');
 type ScanModule1 = typeof import('@/lib/services/entitlement-resolution');
 type ScanModule2 = typeof import('@/lib/managed-compute-gate');
@@ -41,6 +45,7 @@ const mocks = vi.hoisted(() => ({
   otherProvider: vi.fn(),
   plan: vi.fn(),
   persistUser: vi.fn(),
+  consent: vi.fn(),
   hydrate: vi.fn(),
   persistAnswer: vi.fn(),
   moderate: vi.fn(),
@@ -50,6 +55,9 @@ const mocks = vi.hoisted(() => ({
   conversationKeptToItsRoute: vi.fn(async (..._args: unknown[]) => false),
 }));
 
+vi.mock('@/lib/server/named-provider-consent', () => ({
+  loadNamedProviderConsent: mocks.consent,
+}));
 vi.mock('@/lib/services/health-space-service', () => ({
   conversationKeepsOutOfTraining: (...args: unknown[]) => mocks.conversationKeptToItsRoute(...args),
 }));
@@ -301,6 +309,11 @@ function expectLaneUntouched() {
 
 beforeEach(async () => {
   vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
+  mocks.consent
+    .mockReset()
+    .mockImplementation(async (_db, _userId, providerId) =>
+      acceptedProviderConsent(providerId, Date.now()),
+    );
   vi.stubEnv('NODE_ENV', 'production');
   vi.stubEnv('QWEN_API_KEY', API_KEY);
   mocks.store = createMemoryKeyValueStore();

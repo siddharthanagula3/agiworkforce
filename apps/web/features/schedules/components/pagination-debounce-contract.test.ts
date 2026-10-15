@@ -30,7 +30,7 @@ const SCHEDULE_PAGINATION_SITES = [
 
 const DEBOUNCE_SITES = [
   'apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx',
-  'apps/desktop/src/features/chat/CommandPalette.tsx',
+  'apps/desktop/src/features/chat/useLocalChatSearch.ts',
   'apps/desktop/src/features/skill-marketplace/SkillSearchBar.tsx',
   'apps/desktop/src/features/code/FileTree.tsx',
   'apps/desktop/src/features/mcp/MCPBundleBrowser.tsx',

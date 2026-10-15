@@ -192,6 +192,21 @@ describe('LiveVoiceSession', () => {
     expect(cb.onStarted).toHaveBeenCalledTimes(1);
   });
 
+  it('tells the server when memory is off for the chat', async () => {
+    await LiveVoiceSession.start({
+      voice: 'marin',
+      conversationId: 'conv-1',
+      memoryEnabled: false,
+      callbacks: callbacks(),
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      conversationId: 'conv-1',
+      memoryEnabled: false,
+    });
+  });
+
   it('keeps a turn open through brief overlap and finalizes it once the other side has taken over', async () => {
     vi.useFakeTimers();
     try {

@@ -21,6 +21,7 @@ import { SAVE_MEMORY_TOOL_NAME } from '@/lib/server/tools/memory-tools';
 import {
   GOOGLE_USER_DATA_MEMORY_REFUSAL,
   GOOGLE_USER_DATA_UNROUTED_MESSAGE,
+  GOOGLE_USER_DATA_TOOL_UNRECORDED_MESSAGE,
 } from '@/lib/connectors/google-user-data';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { executeOfferedToolCall } from './tool-loop';
@@ -118,6 +119,33 @@ describe('Google connector calls', () => {
       expect(connectorExecutor).not.toHaveBeenCalled();
     },
   );
+
+  it('waits for durable Google provenance before invoking the connector', async () => {
+    let finish: ((rows: unknown[]) => void) | undefined;
+    mocks.query.mockImplementation((sql: string) =>
+      sql.includes('set google_user_data_at = now()')
+        ? new Promise((resolve) => {
+            finish = resolve;
+          })
+        : Promise.resolve([]),
+    );
+    const { result, connectorExecutor } = callTool(customGoogle.qualifiedName, CONVERSATION_ID);
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    expect(connectorExecutor).not.toHaveBeenCalled();
+    finish!([]);
+    await expect(result).resolves.toMatchObject({ isError: false });
+    expect(connectorExecutor).toHaveBeenCalledOnce();
+  });
+
+  it('withholds Google dispatch when the provenance write fails', async () => {
+    mocks.query.mockRejectedValue(new Error('Provenance write failed'));
+    const { result, connectorExecutor } = callTool(customGoogle.qualifiedName, CONVERSATION_ID);
+    await expect(result).resolves.toMatchObject({
+      isError: true,
+      content: GOOGLE_USER_DATA_TOOL_UNRECORDED_MESSAGE,
+    });
+    expect(connectorExecutor).not.toHaveBeenCalled();
+  });
 
   it('marks the conversation before a Google-hosted custom connector runs', async () => {
     mocks.query.mockResolvedValue([]);

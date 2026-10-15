@@ -61,6 +61,10 @@ vi.mock('@agiworkforce/types', async (importOriginal) => ({
   connectorsReleased: () => connectorRelease.released,
 }));
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readPrimaryEmailState: vi.fn(async () => ({ confirmed: true, email: 'person@example.com' })),
+}));
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
@@ -114,7 +118,8 @@ vi.mock('@/lib/connectors/oauth-setup', () => ({
   regionRequirement: vi.fn(() => null),
   describeConnectorSetup: (...args: unknown[]) => mocks.describeSetup(...args),
 }));
-vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
+vi.mock('@/lib/connectors/mcp-directory-targets', async (importOriginal) => ({
+  ...(await importOriginal<McpDirectoryTargetsModule>()),
   isDirectoryServerId: (ref: string) => ref.startsWith('dir-'),
   normalizeRemoteUrl: (url: string) => new URL(url).toString(),
   resolveDirectoryTarget: async (ref: string) => mocks.directoryTargets.get(ref) ?? null,
@@ -154,7 +159,8 @@ vi.mock('@/lib/connectors/oauth-registry', () => ({
   buildConnectorOAuthStartPath: (id: string) => `/api/connectors/oauth/start?connectorId=${id}`,
   getConnectorOAuthProvider: vi.fn(),
 }));
-vi.mock('@/lib/connectors/oauth-store', () => ({
+vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
+  ...(await importOriginal<OauthStoreModule>()),
   getUserConnectorOAuthGrantSummaries: (...args: unknown[]) => mocks.oauthGrants(...args),
   listPendingConnectorIds: (...args: unknown[]) => mocks.pendingConnectors(...args),
   listConnectorAccounts: vi.fn(async () => []),
@@ -218,6 +224,9 @@ function postRequest(connectorId: string): NextRequest {
 }
 
 import { getUserScopedDb } from '@/lib/server/rls-db';
+
+type McpDirectoryTargetsModule = typeof import('@/lib/connectors/mcp-directory-targets');
+type OauthStoreModule = typeof import('@/lib/connectors/oauth-store');
 
 type TypesModule = typeof import('@agiworkforce/types');
 

@@ -87,9 +87,17 @@ describe('GET /api/waitlist', () => {
     return new NextRequest('https://agiworkforce.com/api/waitlist');
   }
 
+  function serveOwnRows(email: string | null) {
+    mocks.ownRowsQuery.mockImplementation(async (sql: string) =>
+      sql.includes('from public.profiles') ? [{ email }] : [{ granted: false }],
+    );
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv('AGI_BILLING_WAITLIST_OPEN', '');
+    vi.stubEnv('RESEND_API_KEY', '');
+    vi.stubEnv('AGI_NOTIFICATIONS_FROM_EMAIL', '');
     mocks.query.mockResolvedValue([{ plan: 'pro' }, { plan: 'not-a-plan' }]);
     mocks.ownRowsQuery.mockResolvedValue([{ granted: false }]);
     mocks.upgradesOpen.mockResolvedValue(false);
@@ -103,6 +111,8 @@ describe('GET /api/waitlist', () => {
     await expect(response.json()).resolves.toEqual({
       joinedPlans: ['pro'],
       upgradeGateEnabled: true,
+      accessGranted: false,
+      noticeEmail: null,
     });
     expect(mocks.upgradesOpen).toHaveBeenCalledWith('user-1');
   });
@@ -112,7 +122,10 @@ describe('GET /api/waitlist', () => {
 
     const response = await GET(get());
 
-    await expect(response.json()).resolves.toMatchObject({ upgradeGateEnabled: false });
+    await expect(response.json()).resolves.toMatchObject({
+      upgradeGateEnabled: false,
+      accessGranted: true,
+    });
     expect(mocks.ownRowsQuery).toHaveBeenCalledWith(expect.stringContaining('beta_redemptions'), [
       'user-1',
     ]);
@@ -123,7 +136,10 @@ describe('GET /api/waitlist', () => {
 
     const response = await GET(get());
 
-    await expect(response.json()).resolves.toMatchObject({ upgradeGateEnabled: false });
+    await expect(response.json()).resolves.toMatchObject({
+      upgradeGateEnabled: false,
+      accessGranted: true,
+    });
     expect(mocks.ownRowsQuery).not.toHaveBeenCalled();
   });
 
@@ -132,7 +148,10 @@ describe('GET /api/waitlist', () => {
 
     const response = await GET(get());
 
-    await expect(response.json()).resolves.toMatchObject({ upgradeGateEnabled: false });
+    await expect(response.json()).resolves.toMatchObject({
+      upgradeGateEnabled: false,
+      accessGranted: true,
+    });
     expect(mocks.upgradesOpen).not.toHaveBeenCalled();
   });
 
@@ -143,5 +162,29 @@ describe('GET /api/waitlist', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ upgradeGateEnabled: true });
+  });
+
+  it('names the address the upgrades-open email goes to while a sender is configured', async () => {
+    vi.stubEnv('RESEND_API_KEY', 're_test_key');
+    vi.stubEnv('AGI_NOTIFICATIONS_FROM_EMAIL', 'notices@agiworkforce.com');
+    serveOwnRows('ada@example.com');
+
+    const response = await GET(get());
+
+    await expect(response.json()).resolves.toMatchObject({ noticeEmail: 'ada@example.com' });
+    expect(mocks.ownRowsQuery).toHaveBeenCalledWith(
+      expect.stringContaining('from public.profiles'),
+      ['user-1'],
+    );
+  });
+
+  it('promises no email when no sender is configured or the account has no address', async () => {
+    serveOwnRows('ada@example.com');
+    await expect((await GET(get())).json()).resolves.toMatchObject({ noticeEmail: null });
+
+    vi.stubEnv('RESEND_API_KEY', 're_test_key');
+    vi.stubEnv('AGI_NOTIFICATIONS_FROM_EMAIL', 'notices@agiworkforce.com');
+    serveOwnRows(null);
+    await expect((await GET(get())).json()).resolves.toMatchObject({ noticeEmail: null });
   });
 });

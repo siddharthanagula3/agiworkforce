@@ -1,3 +1,9 @@
+import {
+  composeFreeModelProviderNotice,
+  namedProviderConsentRecord,
+  type FreeModelNoticeProviderId,
+  type NamedProviderConsent,
+} from '@agiworkforce/compliance';
 import { getProviderOffering, type ProviderOffering } from '@agiworkforce/types';
 import { credentialSha256, decideFreeQuotaOffering } from '@/lib/free-quota-authorization';
 import { loadFreeQuotaPolicy } from '@/lib/server/free-quota-catalogue';
@@ -42,5 +48,17 @@ export function servableFreeQuotaOfferings(
       termsReviewed: true,
     });
     return decision.status === 'ready' ? [{ key: entry.offeringKey, offering }] : [];
+  });
+}
+
+export function acceptedProviderConsent(
+  providerId: FreeModelNoticeProviderId,
+  nowMs: number,
+): NamedProviderConsent {
+  return namedProviderConsentRecord({
+    notice: composeFreeModelProviderNotice(providerId),
+    accepted: true,
+    surface: 'web',
+    now: new Date(nowMs),
   });
 }

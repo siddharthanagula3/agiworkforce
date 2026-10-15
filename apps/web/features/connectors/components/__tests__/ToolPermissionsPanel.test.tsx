@@ -72,6 +72,39 @@ describe('ToolPermissionsPanel', () => {
     });
   });
 
+  it('disables Allow for a critical tool with the reason, and shows a saved allow as always asking', async () => {
+    capabilities.result = {
+      ...capabilities.result,
+      catalog: {
+        connectorId: CONNECTOR.id,
+        tools: [{ name: 'post_issue_comment', riskTier: 'critical' }],
+      },
+    };
+    useToolPermissionsStore.setState({
+      permissions: { github: { post_issue_comment: 'allow' } },
+      saving: {},
+      saveError: {},
+    });
+    render(<ToolPermissionsPanel connector={CONNECTOR} open onOpenChange={() => {}} />);
+
+    const allow = screen.getByRole('button', { name: 'Allow' });
+    expect(allow).toBeDisabled();
+    expect(allow).toHaveAttribute('title', expect.stringMatching(/asks every time/));
+    expect(allow).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Ask' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Always asks: destructive')).toBeInTheDocument();
+  });
+
+  it('keeps Allow available for a high-risk tool', () => {
+    capabilities.result = {
+      ...capabilities.result,
+      catalog: { connectorId: CONNECTOR.id, tools: [{ name: 'do_thing', riskTier: 'high' }] },
+    };
+    render(<ToolPermissionsPanel connector={CONNECTOR} open onOpenChange={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Allow' })).toBeEnabled();
+    expect(screen.queryByText('Always asks: destructive')).toBeNull();
+  });
+
   it('shows the failure notice and the enforced level when the server refuses the write', async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
     useToolPermissionsStore.setState({

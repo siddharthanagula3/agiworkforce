@@ -6,15 +6,26 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 const loadPermissions = vi.hoisted(() => vi.fn());
-vi.mock('@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions', () => ({
-  loadConnectorToolPermissions: loadPermissions,
-}));
+vi.mock(
+  '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions',
+  async (importOriginal) => ({
+    ...(await importOriginal<ConnectorToolPermissionsModule>()),
+    loadConnectorToolPermissions: loadPermissions,
+  }),
+);
 
+import {
+  connectorToolPermissionsFromEntries,
+  withSessionGrants,
+} from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   connectorToolNames,
   createCloudAgentToolPermissionGate,
 } from '../cloud-agent-tool-permission-gate';
+
+type ConnectorToolPermissionsModule =
+  typeof import('@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions');
 
 const GMAIL = 'mcp__gmail__send-email';
 const BROWSER = 'mcp__browser-automation__navigate';
@@ -135,5 +146,54 @@ describe('a fallback never bypasses a permission decision', () => {
     await created.refusalFor(GMAIL);
 
     expect(loadPermissions).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('conversation grants at dispatch', () => {
+  const SCOPED = 'mcp__github__get_pull_request_diff';
+  const granted = () =>
+    withSessionGrants(
+      connectorToolPermissionsFromEntries([]),
+      new Map([['github get_pull_request_diff', 'low']]),
+    );
+  const scopedGate = (overrides = {}) =>
+    createCloudAgentToolPermissionGate(db, {
+      userId: 'user-1',
+      organizationId: 'org-1',
+      conversationId: 'conversation-1',
+      connectorToolNames: new Set([SCOPED]),
+      ...overrides,
+    });
+
+  it('loads the trusted conversation and workspace for every invocation', async () => {
+    loadPermissions.mockResolvedValue(granted());
+    const gate = scopedGate();
+    await expect(gate.refusalFor(SCOPED, 'low')).resolves.toBeNull();
+    expect(loadPermissions).toHaveBeenCalledWith(db, 'user-1', 'org-1', {
+      conversationId: 'conversation-1',
+      trustBoundary: 'managed',
+    });
+    loadPermissions.mockResolvedValue(connectorToolPermissionsFromEntries([]));
+    await expect(gate.refusalFor(SCOPED, 'low')).resolves.toMatchObject({ unavailable: true });
+  });
+
+  it('refuses an annotation risk increase and temporary or disabled turns', async () => {
+    loadPermissions.mockResolvedValue(granted());
+    await expect(scopedGate().refusalFor(SCOPED, 'critical')).resolves.toMatchObject({
+      unavailable: true,
+    });
+    await expect(scopedGate({ temporary: true }).refusalFor(SCOPED, 'low')).resolves.toMatchObject({
+      unavailable: true,
+    });
+    await expect(
+      scopedGate({ disabledConnectorIds: ['github'] }).refusalFor(SCOPED, 'low'),
+    ).resolves.toMatchObject({ unavailable: true });
+  });
+
+  it('does not treat an unreadable grant as an allowance', async () => {
+    loadPermissions.mockRejectedValue(new Error('database unavailable'));
+    await expect(scopedGate().refusalFor(SCOPED, 'low')).resolves.toMatchObject({
+      unavailable: true,
+    });
   });
 });

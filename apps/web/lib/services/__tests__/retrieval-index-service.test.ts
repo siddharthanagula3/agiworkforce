@@ -314,3 +314,79 @@ describe('reserveDueRetrievalDocuments', () => {
     expect(statements[0]?.params).toEqual([RETRIEVAL_MAX_ATTEMPTS, 10]);
   });
 });
+
+describe('Google provenance at actual embedding dispatch', () => {
+  it.each(['conversation', 'artifact', 'research_report'])(
+    'reads current %s provenance after capturing source bytes',
+    async (sourceKind) => {
+      for (const unreadable of [false, true]) {
+        let captured = false;
+        let provenanceRead = false;
+        let provenanceReadBeforeCapture = false;
+        mocks.embed.mockClear();
+        mocks.embed.mockImplementation(
+          async ({ texts, forceNoTraining }: { texts: string[]; forceNoTraining: boolean }) => {
+            expect(captured).toBe(true);
+            expect(provenanceRead).toBe(true);
+            expect(forceNoTraining).toBe(true);
+            expect(texts.join(' ')).toContain('captured-source');
+            return {
+              vectors: texts.map(() => vector()),
+              model: 'embedding-model',
+              routeId: 'route',
+            };
+          },
+        );
+        const query = vi.fn(async (sql: string) => {
+          if (sql.includes("set status = 'indexing'"))
+            return [{ ...DOCUMENT, source_kind: sourceKind }];
+          if (sql.includes('google_user_data_at is not null as marked')) {
+            provenanceReadBeforeCapture ||= !captured;
+            provenanceRead = true;
+            if (unreadable) throw new Error('Provenance read unavailable');
+            return [{ marked: true, project_id: null }];
+          }
+          if (sql.includes('select conversation_id::text as conversation_id'))
+            return [{ conversation_id: 'source-conversation' }];
+          if (sql.includes('select title from web_conversations'))
+            return [{ title: 'captured-title' }];
+          if (sql.includes('from web_messages')) {
+            captured = true;
+            return [{ id: 'source-message', role: 'assistant', content: 'captured-source' }];
+          }
+          if (sql.includes('from web_artifacts a') || sql.includes('from research_reports r')) {
+            captured = true;
+            return [
+              {
+                title: 'captured-title',
+                content: 'captured-source',
+                query: 'query',
+                summary: 'summary',
+                artifact_type: 'text',
+                language: null,
+                conversation_id: 'source-conversation',
+              },
+            ];
+          }
+          return [];
+        });
+        const db = {
+          query,
+          execute: vi.fn(async () => 1),
+          transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
+            callback(db as unknown as DatabaseAdapter),
+          ),
+        };
+        await expect(
+          indexRetrievalDocument(db as unknown as DatabaseAdapter, DOCUMENT.id, 'run-1'),
+        ).resolves.toMatchObject({
+          kind: 'indexed',
+          semantic: true,
+        });
+        expect(mocks.embed).toHaveBeenCalled();
+        expect(provenanceReadBeforeCapture).toBe(false);
+        expect(query.mock.calls.some(([sql]) => sql.includes('gmail_data_present'))).toBe(false);
+      }
+    },
+  );
+});

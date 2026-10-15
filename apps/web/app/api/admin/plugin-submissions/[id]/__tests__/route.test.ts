@@ -83,7 +83,8 @@ vi.mock('@/lib/server/neon-db', () => ({
   getStripeWebhookDb: vi.fn(),
   getNeonDb: () => mocks.db,
 }));
-vi.mock('@/lib/services/notification-service', () => ({
+vi.mock('@/lib/services/notification-service', async (importOriginal) => ({
+  ...(await importOriginal<NotificationServiceModule>()),
   DEFAULT_FEED_LIMIT: 30,
   MAX_FEED_LIMIT: 100,
   listNotifications: vi.fn(),
@@ -108,6 +109,8 @@ vi.mock('@/lib/services/plugin-submission-service', () => ({
 
 import { createError } from '@/lib/errors';
 import { GET, POST } from '../route';
+
+type NotificationServiceModule = typeof import('@/lib/services/notification-service');
 
 const OPERATOR = 'operator_1';
 const SUBMISSION_ID = '5b0f1a8e-7c2d-4e1f-9a3b-2c4d5e6f7a8b';

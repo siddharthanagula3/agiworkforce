@@ -65,6 +65,21 @@ describe('follow-up queue holds more than one message (COMPOSER-005)', () => {
     expect(screen.queryAllByTestId('queued-followup')).toHaveLength(0);
   });
 
+  it('marks a delivered follow-up as queued, and a message sent from the draft as not, so a host that holds one back knows which the composer still has', async () => {
+    const onSend = vi.fn();
+    const { rerender } = render(<ChatComposerNew onSend={onSend} isLoading isGenerating />);
+
+    await queue('queued while a reply ran');
+    rerender(<ChatComposerNew onSend={onSend} isLoading={false} isGenerating={false} />);
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    await queue('sent from the draft');
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(2));
+
+    expect(onSend.mock.calls[0]?.[3]).toMatchObject({ queuedFollowUp: true });
+    expect(onSend.mock.calls[1]?.[0]).toBe('sent from the draft');
+    expect(onSend.mock.calls[1]?.[3]).not.toHaveProperty('queuedFollowUp');
+  });
+
   it('cancels one queued message without dropping the others', async () => {
     const onSend = vi.fn();
     render(<ChatComposerNew onSend={onSend} isLoading isGenerating />);

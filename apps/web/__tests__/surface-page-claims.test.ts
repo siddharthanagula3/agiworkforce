@@ -172,8 +172,10 @@ describe('/desktop separates what is built from what is published', () => {
     expect(page).not.toMatch(/not yet published|has not been published/iu);
     expect(page).not.toMatch(/macOS (?:build|app|installer) (?:is|has been) published/iu);
 
+    expect(collapsed('app/download/use-desktop-release.ts')).toMatch(
+      /fetch\('\/api\/releases\/desktop-cloud\/latest'/u,
+    );
     const live = collapsed('app/download/DesktopDownloadAvailability.tsx');
-    expect(live).toMatch(/fetch\('\/api\/releases\/desktop-cloud\/latest'/u);
     expect(live).toMatch(/No signed AGI Desktop installer is available right now/u);
   });
 
@@ -475,9 +477,9 @@ describe('a notify action lands on the form that takes the address', () => {
     );
     expect(existsSync(join(WEB_ROOT, 'app/download/notify-form.ts'))).toBe(false);
 
-    const download = collapsed('app/download/page.tsx');
-    expect(download).toMatch(/<section id=\{NOTIFY_FORM_ID\}/u);
-    expect(download).toMatch(/<PublicWaitlistForm source="other" ctaLabel="Get notified"/u);
+    const download = collapsed('app/download/DownloadSurfaces.tsx');
+    expect(download).toMatch(/<Section id=\{NOTIFY_FORM_ID\}/u);
+    expect(download).toMatch(/<PublicWaitlistForm source="other" ctaLabel=\{NOTIFY_CTA\.label\}/u);
   });
 
   it('scrolls /download to the section a link names once the page has replaced its loading state', () => {
@@ -574,12 +576,13 @@ describe('unreleased surface pages take their status label from the registry', (
     expect(page).not.toMatch(/eyebrow">\{SURFACE_STATUS\.cli\}|eyebrow=\{SURFACE_STATUS\.cli\}/u);
   });
 
-  it('says where the /download labels come from, and that the sections below check live', () => {
-    const page = collapsed('app/download/page.tsx');
-    expect(page).toMatch(/Every label here reads one status list we update by hand/u);
-    expect(page).toMatch(/check the stable channel live/u);
-    expect(fileText('lib/surface-status.ts')).toMatch(/export const SURFACE_STATUS = \{/u);
+  it('keeps the /download labels in the registry and prints no ledger prose about them', () => {
+    const page =
+      collapsed('app/download/page.tsx') + collapsed('app/download/DownloadSurfaces.tsx');
+    expect(page).not.toMatch(/Every label here reads one status list we update by hand/u);
+    expect(page).not.toMatch(/check the stable channel live/u);
     expect(page).not.toMatch(/same release registry as the footer/u);
+    expect(fileText('lib/surface-status.ts')).toMatch(/export const SURFACE_STATUS = \{/u);
   });
 });
 

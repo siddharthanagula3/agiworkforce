@@ -26,6 +26,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/model-tiers', () => ({ canAccessModel: vi.fn(() => true) }));
 vi.mock('@/lib/services/provider-adapter-service', () => ({
+  serverProviderHasEndpointOverride: () => false,
   resolveProviderFromModel: vi.fn(() => 'openai'),
   listAvailableManagedProviderIds: () => new Set<string>(),
 }));

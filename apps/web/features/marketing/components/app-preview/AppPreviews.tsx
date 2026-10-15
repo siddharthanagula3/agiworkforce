@@ -53,9 +53,14 @@ import {
   Wifi,
 } from 'lucide-react';
 import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import { greetingHeadline } from '@agiworkforce/utils/greeting';
 import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 import { AgiMark } from '@/shared/components/agi/AgiMark';
 import { APP_NAV_DESTINATIONS } from '@/shared/components/layout/app-nav-items';
+
+export type AppPreviewView = 'thread' | 'new-chat';
+
+const NEW_CHAT_GREETING = greetingHeadline('afternoon', 0);
 
 export type PreviewKind = 'web' | 'desktop' | 'chrome' | 'panel' | 'editor' | 'terminal' | 'phone';
 
@@ -132,11 +137,13 @@ export function AppSidebar({
   macChrome = false,
   modeSwitch = false,
   activeId = SIDEBAR_DESTINATIONS[0]?.id,
+  sessionActive = true,
 }: {
   chats: readonly string[];
   macChrome?: boolean;
   modeSwitch?: boolean;
   activeId?: string;
+  sessionActive?: boolean;
 }) {
   return (
     <aside className="agi-app-side">
@@ -183,7 +190,10 @@ export function AppSidebar({
           <span
             key={title}
             className="agi-app-session"
-            data-active={(index === 0 && activeId === SIDEBAR_DESTINATIONS[0]?.id) || undefined}
+            data-active={
+              (sessionActive && index === 0 && activeId === SIDEBAR_DESTINATIONS[0]?.id) ||
+              undefined
+            }
           >
             {title}
           </span>
@@ -314,6 +324,7 @@ function AppShell({
   className,
   chats,
   modeSwitch = false,
+  view,
   children,
 }: {
   kind: 'web' | 'desktop';
@@ -321,6 +332,7 @@ function AppShell({
   className?: string;
   chats: readonly string[];
   modeSwitch?: boolean;
+  view: AppPreviewView;
   children: ReactNode;
 }) {
   const macChrome = kind === 'desktop';
@@ -337,9 +349,14 @@ function AppShell({
         </div>
       )}
       <div className="agi-app-shell">
-        <AppSidebar chats={chats} macChrome={macChrome} modeSwitch={modeSwitch} />
-        <div className="agi-app-main">
-          {children}
+        <AppSidebar
+          chats={chats}
+          macChrome={macChrome}
+          modeSwitch={modeSwitch}
+          sessionActive={view === 'thread'}
+        />
+        <div className="agi-app-main" data-view={view}>
+          {view === 'new-chat' ? <p className="agi-app-greeting">{NEW_CHAT_GREETING}</p> : children}
           <AppComposer />
         </div>
       </div>
@@ -347,13 +364,20 @@ function AppShell({
   );
 }
 
-export function WebAppPreview({ className }: { className?: string }) {
+export function WebAppPreview({
+  className,
+  view = 'thread',
+}: {
+  className?: string;
+  view?: AppPreviewView;
+}) {
   return (
     <AppShell
       kind="web"
       label="Authored example of the AGI Web chat interface"
       className={className}
       chats={WEB_CHATS}
+      view={view}
     >
       <WebThread />
     </AppShell>
@@ -363,9 +387,11 @@ export function WebAppPreview({ className }: { className?: string }) {
 export function DesktopAppPreview({
   className,
   modeSwitch = false,
+  view = 'thread',
 }: {
   className?: string;
   modeSwitch?: boolean;
+  view?: AppPreviewView;
 }) {
   return (
     <AppShell
@@ -374,6 +400,7 @@ export function DesktopAppPreview({
       className={className}
       chats={DESKTOP_CHATS}
       modeSwitch={modeSwitch}
+      view={view}
     >
       <DesktopThread />
     </AppShell>

@@ -13,6 +13,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   extractAutoMemoryFactsWithModel,
   isModelMemoryExtractionEnabled,
+  memoryFactExtractionPrompt,
 } from './model-memory-extraction';
 import {
   persistManagedAutoMemoryFacts,
@@ -41,7 +42,11 @@ function modelExtractionApplies(processed: ProcessedRequest): boolean {
   return (
     isModelMemoryExtractionEnabled() &&
     Boolean(processed.autoMemorySourceText) &&
-    processed.zeroDataRetentionOnly !== true
+    processed.zeroDataRetentionOnly !== true &&
+    memoryFactExtractionPrompt({
+      includeSensitiveTopics: processed.autoMemoryIncludeSensitiveTopics === true,
+      promptVariants: processed.promptVariants,
+    }) !== null
   );
 }
 
@@ -179,6 +184,8 @@ export async function recordManagedAutoMemoryTurn(
           forceNoTraining:
             Boolean(params.processed.healthSpaceProjectId) ||
             params.processed.googleUserData === true,
+          includeSensitiveTopics: params.processed.autoMemoryIncludeSensitiveTopics === true,
+          promptVariants: params.processed.promptVariants,
           requestId: params.processed.requestId,
         });
       } catch (error) {

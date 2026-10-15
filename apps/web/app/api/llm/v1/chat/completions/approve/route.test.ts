@@ -44,8 +44,8 @@ vi.mock('../lib/request-processor', () => ({
 
 const mockRunToolLoop = vi.fn();
 const toolMocks = vi.hoisted(() => ({
-  loadOperatorTools: vi.fn(async () => []),
-  loadConnectorTools: vi.fn(async () => []),
+  loadOperatorTools: vi.fn(async (): Promise<unknown[]> => []),
+  loadConnectorTools: vi.fn(async (): Promise<unknown[]> => []),
 }));
 vi.mock('../lib/tool-loop', () => ({
   runToolLoop: (...args: unknown[]) => mockRunToolLoop(...args),
@@ -262,6 +262,73 @@ describe('POST /api/llm/v1/chat/completions/approve, durable checkpoint boundary
     );
   });
 
+  it('releases the checkpoint when the current processor refuses a resumed Google-data model route', async () => {
+    const refusal = NextResponse.json(
+      { error: { code: 'no_training_model_unavailable' } },
+      { status: 503 },
+    );
+    mockProcessRequest.mockResolvedValue({ ok: false, response: refusal });
+    const response = await POST(makeRequest(resumeBody()));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'no_training_model_unavailable' },
+    });
+    expect(checkpointMocks.release).toHaveBeenCalledOnce();
+    expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+  });
+
+  it('passes the checkpoint Google tool transcript through current request processing', async () => {
+    const messages = [
+      { role: 'user', content: 'Summarize my messages.' },
+      {
+        role: 'assistant',
+        tool_calls: [
+          {
+            id: 'google-call',
+            type: 'function',
+            function: {
+              name: 'mcp__gmail__search_threads',
+              arguments: '{}',
+            },
+          },
+        ],
+      },
+      { role: 'tool', tool_call_id: 'google-call', content: 'Google-source fixture' },
+    ];
+    checkpointMocks.claim.mockResolvedValue({
+      ...claimedCheckpoint,
+      checkpoint: {
+        ...claimedCheckpoint.checkpoint,
+        messages,
+      },
+    });
+    const response = await POST(makeRequest(resumeBody()));
+    expect(response.status).toBe(200);
+    await response.text();
+    const synthetic = mockProcessRequest.mock.calls[0]![0] as NextRequest;
+    expect((await synthetic.json()).messages).toEqual(messages);
+  });
+
+  it('preserves ordinary no-conversation approval continuity', async () => {
+    checkpointMocks.claim.mockResolvedValue({
+      ...claimedCheckpoint,
+      checkpoint: {
+        ...claimedCheckpoint.checkpoint,
+        request: { ...claimedCheckpoint.checkpoint.request, conversation_id: undefined },
+      },
+    });
+    mockProcessRequest.mockResolvedValue({ ...processedRequest(), conversationId: undefined });
+    const response = await POST(makeRequest(resumeBody()));
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(checkpointMocks.claim).toHaveBeenCalledOnce();
+    expect(mockProcessRequest).toHaveBeenCalledOnce();
+    expect(workflowMocks.start).toHaveBeenCalledOnce();
+    const synthetic = mockProcessRequest.mock.calls[0]![0] as NextRequest;
+    expect((await synthetic.json()).conversation_id).toBeUndefined();
+  });
+
   it('rejects a malformed body before claiming a checkpoint', async () => {
     const response = await POST(makeRequest({ tool_approvals: [] }));
 
@@ -352,6 +419,7 @@ describe('POST /api/llm/v1/chat/completions/approve, durable checkpoint boundary
       checkpoint: {
         ...claimedCheckpoint.checkpoint,
         request: {
+          conversation_id: CONVERSATION_ID,
           model: 'claude-test',
           stream: true,
           web_search: true,
@@ -622,5 +690,481 @@ describe('POST /api/llm/v1/chat/completions/approve, durable checkpoint boundary
         }),
       }),
     );
+  });
+});
+
+describe('POST /api/llm/v1/chat/completions/approve, approval scopes', () => {
+  const COMMENT_TOOL = 'mcp__github__post_issue_comment';
+  const READ_TOOL = 'mcp__github__get_pull_request_diff';
+  let sessionGrants: Array<unknown[]>;
+  let standingWrites: Array<unknown[]>;
+
+  function claimFor(qualifiedName: string) {
+    return {
+      ...claimedCheckpoint,
+      checkpoint: {
+        ...claimedCheckpoint.checkpoint,
+        pendingToolCalls: [
+          { id: 'call_1', qualifiedName, args: {}, approvalScopes: ['once', 'session', 'always'] },
+        ],
+      },
+    };
+  }
+
+  function scopedBody(decision: string) {
+    return { run_id: RUN_ID, tool_approvals: [{ tool_call_id: 'call_1', decision }] };
+  }
+
+  function turnPermissions() {
+    const turn = workflowMocks.start.mock.calls[0]?.[0] as {
+      connectorPermissions: {
+        levelFor(name: string): string | undefined;
+        isSessionGranted?(name: string): boolean;
+      };
+    };
+    return turn.connectorPermissions;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionGrants = [];
+    standingWrites = [];
+    toolMocks.loadOperatorTools.mockResolvedValue([]);
+    gateMocks.managedCompute.mockReturnValue(null);
+    gateMocks.orgPolicy.mockResolvedValue(null);
+    gateMocks.spendLimit.mockResolvedValue(null);
+    db.transaction.mockImplementation(async (operation: (tx: typeof db) => Promise<unknown>) =>
+      operation(db),
+    );
+    toolMocks.loadConnectorTools.mockResolvedValue(
+      [COMMENT_TOOL, READ_TOOL, 'mcp__custom-abc__do_thing'].map((qualifiedName) => {
+        const [, serverId, toolName] = qualifiedName.split('__');
+        return {
+          qualifiedName,
+          serverId,
+          toolName,
+          description: toolName,
+          origin: 'connector' as const,
+          inputSchema: { type: 'object', properties: {} },
+        };
+      }),
+    );
+    db.query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('delete from public.connector_tool_session_grants')) {
+        const existing = sessionGrants;
+        sessionGrants = existing.filter((row) =>
+          sql.includes('grant_row.conversation_id = $2')
+            ? !(
+                row[0] === params[0] &&
+                row[1] === params[1] &&
+                row[2] === params[2] &&
+                row[3] === params[3] &&
+                row[4] === params[4] &&
+                row[7] === params[5]
+              )
+            : !(
+                row[0] === params[0] &&
+                row[2] === params[1] &&
+                row[7] === params[2] &&
+                (params[3] === null || row[3] === params[3])
+              ),
+        );
+        return existing
+          .filter((row) => !sessionGrants.includes(row))
+          .map((_, index) => ({ id: `removed-${index}` }));
+      }
+      if (sql.includes('insert into public.connector_tool_session_grants')) {
+        sessionGrants.push(params);
+        return [{ id: 'grant-1' }];
+      }
+      if (sql.includes('from public.connector_tool_session_grants')) {
+        return sessionGrants
+          .filter(
+            (row) =>
+              row[0] === params[0] &&
+              row[1] === params[1] &&
+              row[4] === params[2] &&
+              row[7] === params[3],
+          )
+          .map((row) => ({ connector_id: row[2], tool_name: row[3], risk_tier: row[6] }));
+      }
+      if (sql.includes('insert into public.connector_tool_permissions')) {
+        standingWrites.push(params);
+        return (params[2] as string[]).map((tool_name) => ({ tool_name }));
+      }
+      if (sql.includes('from public.connector_tool_permissions'))
+        return standingWrites.flatMap((row) =>
+          (row[2] as string[]).map((tool_name) => ({
+            connector_id: row[1],
+            tool_name,
+            level: row[3],
+          })),
+        );
+      return [];
+    });
+    mockRunAuthGate.mockResolvedValue({
+      ok: true,
+      userId: 'user-1',
+      token: 'tok',
+      subscription: { plan_tier: 'pro' },
+    });
+    mockProcessRequest.mockResolvedValue(processedRequest());
+    workflowMocks.start.mockResolvedValue({
+      transport: 'durable',
+      workflowRunId: 'wrun_scope_1',
+      readable: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      }),
+    });
+  });
+
+  it('approves the call once and remembers nothing for a plain approval', async () => {
+    checkpointMocks.claim.mockResolvedValue(claimFor(COMMENT_TOOL));
+    const response = await POST(makeRequest(scopedBody('approved')));
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(sessionGrants).toEqual([]);
+    expect(standingWrites).toEqual([]);
+    expect(turnPermissions().levelFor(COMMENT_TOOL)).toBeUndefined();
+  });
+
+  it('records a conversation grant under Managed Cloud and allows the tool for the rest of the run', async () => {
+    checkpointMocks.claim.mockResolvedValue(claimFor(COMMENT_TOOL));
+    const response = await POST(makeRequest(scopedBody('approved-for-session')));
+    expect(response.status).toBe(200);
+    await response.text();
+
+    const claimArgs = checkpointMocks.claim.mock.calls[0]![1] as {
+      approvals: Array<{ decision: string }>;
+    };
+    expect(claimArgs.approvals).toEqual([{ toolCallId: 'call_1', decision: 'approved' }]);
+    expect(sessionGrants).toEqual([
+      [
+        'user-1',
+        CONVERSATION_ID,
+        'github',
+        'post_issue_comment',
+        'managed',
+        true,
+        'critical',
+        null,
+      ],
+    ]);
+    expect(standingWrites).toEqual([]);
+    expect(turnPermissions().levelFor(COMMENT_TOOL)).toBe('allow');
+  });
+
+  it('saves a standing allow for a declared non-destructive tool, never overwriting a block', async () => {
+    checkpointMocks.claim.mockResolvedValue(claimFor(READ_TOOL));
+    const response = await POST(makeRequest(scopedBody('approved-always')));
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(standingWrites).toHaveLength(1);
+    expect(standingWrites[0]!.slice(0, 6)).toEqual([
+      'user-1',
+      'github',
+      ['get_pull_request_diff'],
+      'always-allow',
+      [false],
+      true,
+    ]);
+    expect(sessionGrants).toEqual([]);
+  });
+
+  it('refuses to save a standing allow for a critical tool and releases the claim', async () => {
+    checkpointMocks.claim.mockResolvedValue(claimFor(COMMENT_TOOL));
+    const response = await POST(makeRequest(scopedBody('approved-always')));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'tool_approval_scope_refused' },
+    });
+    expect(checkpointMocks.release).toHaveBeenCalledOnce();
+    expect(standingWrites).toEqual([]);
+    expect(sessionGrants).toEqual([]);
+    expect(mockProcessRequest).not.toHaveBeenCalled();
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+  });
+
+  it('saves a standing allow for an undeclared remote tool, which is high rather than critical', async () => {
+    checkpointMocks.claim.mockResolvedValue(claimFor('mcp__custom-abc__do_thing'));
+    const response = await POST(makeRequest(scopedBody('approved-always')));
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(standingWrites).toHaveLength(1);
+    expect(standingWrites[0]!.slice(1, 5)).toEqual([
+      'custom-abc',
+      ['do_thing'],
+      'always-allow',
+      [true],
+    ]);
+  });
+
+  it('refuses a stale always selection when current annotations make the tool critical', async () => {
+    toolMocks.loadConnectorTools.mockResolvedValueOnce([
+      {
+        qualifiedName: 'mcp__custom-abc__do_thing',
+        serverId: 'custom-abc',
+        toolName: 'do_thing',
+        description: 'Deletes things',
+        origin: 'connector',
+        inputSchema: { type: 'object', properties: {} },
+        annotations: { destructiveHint: true },
+      },
+    ] as never);
+    checkpointMocks.claim.mockResolvedValue(claimFor('mcp__custom-abc__do_thing'));
+    const response = await POST(makeRequest(scopedBody('approved-always')));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: 'tool_approval_scope_refused' } });
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+    expect(standingWrites).toEqual([]);
+    const claimArgs = checkpointMocks.claim.mock.calls[0]![1] as {
+      approvals: Array<{ decision: string }>;
+    };
+    expect(claimArgs.approvals).toEqual([{ toolCallId: 'call_1', decision: 'approved' }]);
+  });
+
+  it('allows a critical tool for the conversation after its confirmation', async () => {
+    checkpointMocks.claim.mockResolvedValue(claimFor(COMMENT_TOOL));
+    const response = await POST(makeRequest(scopedBody('approved-for-session')));
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(sessionGrants).toHaveLength(1);
+    expect(turnPermissions().isSessionGranted?.(COMMENT_TOOL)).toBe(true);
+  });
+
+  it('rejects a remembered scope from a temporary chat instead of silently downgrading', async () => {
+    checkpointMocks.claim.mockResolvedValue(claimFor(READ_TOOL));
+    mockProcessRequest.mockResolvedValue({ ...processedRequest(), conversationIsTemporary: true });
+    const response = await POST(makeRequest(scopedBody('approved-always')));
+    expect(response.status).toBe(400);
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+    expect(standingWrites).toEqual([]);
+  });
+
+  it('rejects conversation scope for a temporary chat', async () => {
+    checkpointMocks.claim.mockResolvedValue(claimFor(COMMENT_TOOL));
+    mockProcessRequest.mockResolvedValue({ ...processedRequest(), conversationIsTemporary: true });
+    const response = await POST(makeRequest(scopedBody('approved-for-session')));
+    expect(response.status).toBe(400);
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+    expect(sessionGrants).toEqual([]);
+  });
+
+  it('does not carry a grant from another conversation into this run', async () => {
+    sessionGrants.push([
+      'user-1',
+      'another-conversation',
+      'github',
+      'post_issue_comment',
+      'managed',
+      true,
+      'critical',
+      null,
+    ]);
+    checkpointMocks.claim.mockResolvedValue(claimFor(COMMENT_TOOL));
+    const response = await POST(makeRequest(scopedBody('approved')));
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(turnPermissions().levelFor(COMMENT_TOOL)).toBeUndefined();
+  });
+
+  it('does not carry a grant made under another trust boundary into this run', async () => {
+    sessionGrants.push([
+      'user-1',
+      CONVERSATION_ID,
+      'github',
+      'post_issue_comment',
+      'byok',
+      true,
+      'critical',
+      null,
+    ]);
+    checkpointMocks.claim.mockResolvedValue(claimFor(COMMENT_TOOL));
+    const response = await POST(makeRequest(scopedBody('approved')));
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(turnPermissions().levelFor(COMMENT_TOOL)).toBeUndefined();
+  });
+
+  it.each([undefined, ['once']])(
+    'refuses a scoped decision absent from the server checkpoint (%j)',
+    async (approvalScopes) => {
+      const claim = claimFor(READ_TOOL);
+      checkpointMocks.claim.mockResolvedValue({
+        ...claim,
+        checkpoint: {
+          ...claim.checkpoint,
+          pendingToolCalls: [{ id: 'call_1', qualifiedName: READ_TOOL, args: {}, approvalScopes }],
+        },
+      });
+      const response = await POST(makeRequest(scopedBody('approved-for-session')));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        error: { code: 'tool_approval_scope_refused' },
+      });
+      expect(checkpointMocks.release).toHaveBeenCalledOnce();
+      expect(workflowMocks.start).not.toHaveBeenCalled();
+      expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+      expect(sessionGrants).toEqual([]);
+    },
+  );
+
+  it('rolls back a mixed scope batch when the later grant insert fails, before provider work', async () => {
+    const claim = claimFor(COMMENT_TOOL);
+    checkpointMocks.claim.mockResolvedValue({
+      ...claim,
+      checkpoint: {
+        ...claim.checkpoint,
+        pendingToolCalls: [
+          ...claim.checkpoint.pendingToolCalls,
+          {
+            id: 'call_2',
+            qualifiedName: READ_TOOL,
+            args: {},
+            approvalScopes: ['once', 'session', 'always'],
+          },
+        ],
+      },
+    });
+    const query = db.query.getMockImplementation()!;
+    db.query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('insert into public.connector_tool_session_grants'))
+        throw new Error('Grant insert failed');
+      return query(sql, params);
+    });
+    const nested = vi.fn(async () => {
+      throw new Error('Nested transaction');
+    });
+    db.transaction.mockImplementation(async (operation: (tx: unknown) => Promise<unknown>) => {
+      const beforeSession = [...sessionGrants];
+      const beforeStanding = [...standingWrites];
+      try {
+        return await operation({ query: db.query, transaction: nested });
+      } catch (error) {
+        sessionGrants = beforeSession;
+        standingWrites = beforeStanding;
+        throw error;
+      }
+    });
+    const response = await POST(
+      makeRequest({
+        run_id: RUN_ID,
+        tool_approvals: [
+          { tool_call_id: 'call_1', decision: 'approved-for-session' },
+          { tool_call_id: 'call_2', decision: 'approved-always' },
+        ],
+      }),
+    );
+    expect(response.status).toBe(503);
+    expect(db.transaction).toHaveBeenCalledOnce();
+    expect(nested).not.toHaveBeenCalled();
+    expect(
+      db.query.mock.calls.some(([sql]) =>
+        String(sql).includes('insert into public.connector_tool_permissions'),
+      ),
+    ).toBe(true);
+    expect(sessionGrants).toEqual([]);
+    expect(standingWrites).toEqual([]);
+    expect(checkpointMocks.release).toHaveBeenCalledOnce();
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+    expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+  });
+
+  it('states that permissions were saved if the post-commit confirmation becomes unavailable', async () => {
+    checkpointMocks.claim.mockResolvedValue(claimFor(COMMENT_TOOL));
+    const query = db.query.getMockImplementation()!;
+    db.query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (
+        sessionGrants.length > 0 &&
+        sql.includes('from public.connector_tool_session_grants') &&
+        !sql.includes('delete from')
+      )
+        throw new Error('Grant read unavailable after commit');
+      return query(sql, params);
+    });
+    const response = await POST(makeRequest(scopedBody('approved-for-session')));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: { message: expect.stringContaining('permissions were saved') },
+    });
+    expect(sessionGrants).toHaveLength(1);
+    expect(checkpointMocks.release).toHaveBeenCalledOnce();
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+    expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+  });
+
+  it('rejects a stale conversation-scope selection when its table is unavailable', async () => {
+    checkpointMocks.claim.mockResolvedValue(claimFor(READ_TOOL));
+    const query = db.query.getMockImplementation()!;
+    db.query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('from public.connector_tool_session_grants'))
+        throw Object.assign(new Error('grant table missing'), { code: '42P01' });
+      return query(sql, params);
+    });
+    const response = await POST(makeRequest(scopedBody('approved-for-session')));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: 'tool_approval_scope_refused' } });
+    expect(checkpointMocks.release).toHaveBeenCalledOnce();
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+    expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+    expect(sessionGrants).toEqual([]);
+  });
+
+  it('reports a failed scoped write instead of running as a silent once approval', async () => {
+    checkpointMocks.claim.mockResolvedValue(claimFor(READ_TOOL));
+    const query = db.query.getMockImplementation()!;
+    db.query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('insert into public.connector_tool_session_grants'))
+        throw new Error('grant write unavailable');
+      return query(sql, params);
+    });
+    const response = await POST(makeRequest(scopedBody('approved-for-session')));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: { message: expect.stringContaining('Approve this call once instead') },
+    });
+    expect(checkpointMocks.release).toHaveBeenCalledOnce();
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+    expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+    expect(sessionGrants).toEqual([]);
+  });
+
+  it('cannot remember an operator tool as a user connector permission', async () => {
+    checkpointMocks.claim.mockResolvedValue(claimFor(READ_TOOL));
+    toolMocks.loadConnectorTools.mockResolvedValue([]);
+    toolMocks.loadOperatorTools.mockResolvedValue([
+      {
+        qualifiedName: READ_TOOL,
+        serverId: 'github',
+        toolName: 'get_pull_request_diff',
+        origin: 'operator',
+        description: 'Operator fixture',
+        inputSchema: { type: 'object', properties: {} },
+      },
+    ]);
+    const response = await POST(makeRequest(scopedBody('approved-for-session')));
+    expect(response.status).toBe(400);
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+    expect(sessionGrants).toEqual([]);
+  });
+
+  it('refuses a scope outside the published decisions before claiming anything', async () => {
+    const response = await POST(makeRequest(scopedBody('approved-forever')));
+    expect(response.status).toBe(400);
+    expect(checkpointMocks.claim).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unauthenticated scoped approval before claiming anything', async () => {
+    mockRunAuthGate.mockResolvedValue({
+      ok: false,
+      response: NextResponse.json({ error: 'unauthorized' }, { status: 401 }),
+    });
+    const response = await POST(makeRequest(scopedBody('approved-for-session')));
+    expect(response.status).toBe(401);
+    expect(checkpointMocks.claim).not.toHaveBeenCalled();
+    expect(sessionGrants).toEqual([]);
   });
 });

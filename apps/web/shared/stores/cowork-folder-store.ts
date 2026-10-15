@@ -1,7 +1,13 @@
 import { create } from 'zustand';
+import { isDesktopHost } from '@/features/desktop-host/lib/host';
 
+/**
+ * False in the desktop shell, which refuses the browser's file-system
+ * permission. Folders there are approved through the shell itself and attached
+ * from "a local folder", so this picker would only ever fail.
+ */
 export function supportsDirectoryPicker(): boolean {
-  return typeof window !== 'undefined' && 'showDirectoryPicker' in window;
+  return typeof window !== 'undefined' && 'showDirectoryPicker' in window && !isDesktopHost();
 }
 
 declare global {

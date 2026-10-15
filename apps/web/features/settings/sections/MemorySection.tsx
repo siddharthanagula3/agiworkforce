@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
+import { SENSITIVE_MEMORY_SUBJECTS } from '@agiworkforce/context';
 import { MemoryEditor, useMemoryStore, selectMemoryCount } from '@agiworkforce/unified-chat';
 import { Switch, useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 
@@ -41,6 +42,8 @@ const MEMORY_SCOPE_EXPLANATION: ReadonlyArray<{ scope: string; meaning: string }
       'Read only in that project. A project set to use its own memory only never sees your account facts, so a project can hold a standing brief, the decisions and background a long project accumulates, without any of it leaking into an unrelated chat.',
   },
 ];
+
+const SENSITIVE_TOPICS_DESCRIPTION = `Let AGI remember your ${SENSITIVE_MEMORY_SUBJECTS} from chats. While this is off, AGI is designed to keep these only when you say "Remember that" in a chat on the web, desktop, mobile or Chrome, or add them here. Memories saved earlier stay until you delete them.`;
 
 const MEMORY_DISABLED_CONTRACT =
   'Turning persistent memory off stops both halves: nothing new is saved, and the memories you already have are no longer read into any answer. They are kept until you delete them.';
@@ -321,6 +324,17 @@ export function MemorySection() {
             checked={settings.searchPastChats}
             disabled={togglesDisabled}
             onCheckedChange={(value) => setBoolean('searchPastChats', value)}
+          />,
+        )}
+
+        {memoryRow(
+          'Include sensitive topics in memory',
+          SENSITIVE_TOPICS_DESCRIPTION,
+          <Switch
+            aria-label="Include sensitive topics in memory"
+            checked={settings.includeSensitiveTopics}
+            disabled={togglesDisabled || !settings.memory}
+            onCheckedChange={(value) => setBoolean('includeSensitiveTopics', value)}
           />,
         )}
 

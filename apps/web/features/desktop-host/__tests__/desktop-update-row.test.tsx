@@ -76,6 +76,108 @@ describe('DesktopUpdateRow', () => {
     expect(openUpdateInstaller).toHaveBeenCalledTimes(1);
   });
 
+  it('offers a restart once the shell has downloaded the update', async () => {
+    const openUpdateInstaller = vi.fn().mockResolvedValue(undefined);
+    const restartToUpdate = vi.fn().mockResolvedValue(undefined);
+    installHost({
+      restartToUpdate,
+      checkForUpdate: async () => ({
+        available: true,
+        currentVersion: '1.2.0',
+        version: '1.3.0',
+        downloadUrl: 'https://agiworkforce.com/api/download?platform=mac&app=cloud&arch=arm64',
+        readyToInstall: true,
+        checkedAt: '2026-10-10T12:00:00.000Z',
+      }),
+      openUpdateInstaller,
+    });
+    render(<DesktopUpdateRow />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Version 1.3.0 is ready.');
+    });
+    expect(screen.getByText(/^Last checked /u)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Download installer' })).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Restart to update' }));
+    expect(restartToUpdate).toHaveBeenCalledTimes(1);
+    expect(openUpdateInstaller).not.toHaveBeenCalled();
+  });
+
+  it('says so when the restart into the update fails, without the raw bridge error', async () => {
+    installHost({
+      restartToUpdate: vi
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            "Error invoking remote method 'agi:restart-to-update': Error: No downloaded update is ready to install.",
+          ),
+        ),
+      checkForUpdate: async () => ({
+        available: true,
+        currentVersion: '1.2.0',
+        version: '1.3.0',
+        downloadUrl: 'https://agiworkforce.com/api/download?platform=mac&app=cloud&arch=arm64',
+        readyToInstall: true,
+      }),
+    });
+    render(<DesktopUpdateRow />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Restart to update' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('AGI Cloud could not restart to install the update.');
+    expect(alert).not.toHaveTextContent('Error invoking remote method');
+    expect(screen.getByRole('button', { name: 'Restart to update' })).toBeEnabled();
+  });
+
+  it.each([
+    ['deferred', 'status', 'The update will install the next time AGI Cloud quits.'],
+    ['not-ready', 'alert', 'The update has not finished downloading.'],
+  ] as const)('says what happened when the restart is %s', async (outcome, role, text) => {
+    installHost({
+      restartToUpdate: vi.fn().mockResolvedValue(outcome),
+      checkForUpdate: async () => ({
+        available: true,
+        currentVersion: '1.2.0',
+        version: '1.3.0',
+        downloadUrl: 'https://agiworkforce.com/api/download?platform=mac&app=cloud&arch=arm64',
+        readyToInstall: true,
+      }),
+    });
+    render(<DesktopUpdateRow />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Restart to update' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole(role)).toHaveTextContent(text);
+    });
+  });
+
+  it('offers nothing to click while the update downloads', async () => {
+    installHost({
+      checkForUpdate: async () => ({
+        available: true,
+        currentVersion: '1.2.0',
+        version: '1.3.0',
+        downloadUrl: 'https://agiworkforce.com/api/download?platform=mac&app=cloud&arch=arm64',
+        downloading: true,
+      }),
+    });
+    render(<DesktopUpdateRow />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Version 1.3.0 is downloading.');
+    });
+    expect(screen.queryByRole('button', { name: 'Download installer' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Restart to update' })).toBeNull();
+    expect(screen.queryByText(/^Last checked /u)).toBeNull();
+  });
+
   it('reports a failed check without claiming the app is current', async () => {
     installHost({
       checkForUpdate: async () => {

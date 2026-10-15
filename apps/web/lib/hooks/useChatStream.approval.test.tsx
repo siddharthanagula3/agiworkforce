@@ -854,48 +854,51 @@ describe('useChatStream, tool approval → resume', () => {
     expect(approveCalls.length, 'exactly one resume POST despite two concurrent decisions').toBe(1);
   });
 
-  it('restores partial multi-tool decisions after reload and resumes once complete', async () => {
-    mockSseStream([
-      approvalEvent,
-      {
-        choices: [
-          {
-            delta: {
-              x_tool_approval_request: { tool_call_id: 'call_2', name: TOOL, args: {} },
+  it.each(['approved', 'approved-for-session', 'approved-always'] as const)(
+    'restores partial %s decisions after reload and resumes once complete',
+    async (decision) => {
+      mockSseStream([
+        approvalEvent,
+        {
+          choices: [
+            {
+              delta: {
+                x_tool_approval_request: { tool_call_id: 'call_2', name: TOOL, args: {} },
+              },
             },
-          },
+          ],
+        },
+      ]);
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('two tools', { conversationId: TEMP_CONVERSATION.id });
+      });
+      const assistantId = assistantMessage()!.id;
+
+      await act(async () => {
+        await result.current.resolveToolApproval(assistantId, 'call_1', decision);
+      });
+      __resetPendingTurnsForTests();
+      expect(isApprovalTurnLive(assistantId)).toBe(true);
+
+      mockSseStream([{ choices: [{ delta: { content: 'done' } }] }]);
+      await act(async () => {
+        await result.current.resolveToolApproval(assistantId, 'call_2', 'rejected');
+      });
+
+      const approveCall = vi
+        .mocked(fetch)
+        .mock.calls.find((call) => String(call[0]).includes('/approve'));
+      const body = JSON.parse((approveCall![1] as RequestInit).body as string);
+      expect(body).toEqual({
+        run_id: RUN_ID,
+        tool_approvals: [
+          { tool_call_id: 'call_1', decision },
+          { tool_call_id: 'call_2', decision: 'rejected' },
         ],
-      },
-    ]);
-    const { result } = renderHook(() => useChatStream());
-    await act(async () => {
-      await result.current.sendMessage('two tools', { conversationId: TEMP_CONVERSATION.id });
-    });
-    const assistantId = assistantMessage()!.id;
-
-    await act(async () => {
-      await result.current.resolveToolApproval(assistantId, 'call_1', 'approved');
-    });
-    __resetPendingTurnsForTests();
-    expect(isApprovalTurnLive(assistantId)).toBe(true);
-
-    mockSseStream([{ choices: [{ delta: { content: 'done' } }] }]);
-    await act(async () => {
-      await result.current.resolveToolApproval(assistantId, 'call_2', 'rejected');
-    });
-
-    const approveCall = vi
-      .mocked(fetch)
-      .mock.calls.find((call) => String(call[0]).includes('/approve'));
-    const body = JSON.parse((approveCall![1] as RequestInit).body as string);
-    expect(body).toEqual({
-      run_id: RUN_ID,
-      tool_approvals: [
-        { tool_call_id: 'call_1', decision: 'approved' },
-        { tool_call_id: 'call_2', decision: 'rejected' },
-      ],
-    });
-  });
+      });
+    },
+  );
 });
 
 describe('isApprovalTurnLive', () => {
@@ -972,4 +975,161 @@ describe('isApprovalTurnLive', () => {
     expect(assistantMessage()?.metadata?.cloudAgentRun?.runId).toBe(RUN_ID);
     expect(isApprovalTurnLive(assistantId)).toBe(true);
   });
+});
+
+describe('useChatStream, approval scopes and connector input', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+    useFreeTrialStore.getState().clearLimitReached();
+    __resetPendingTurnsForTests();
+    useChatStore.setState({
+      activeConversationId: TEMP_CONVERSATION.id,
+      conversations: [TEMP_CONVERSATION],
+    });
+    authMocks.getToken.mockResolvedValue('session-token');
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const reviewedApproval = {
+    choices: [
+      {
+        delta: {
+          x_tool_approval_request: {
+            ...approvalEvent.choices[0]!.delta.x_tool_approval_request,
+            risk_tier: 'low',
+            destructive: false,
+            approval_scopes: ['once', 'session', 'always'],
+          },
+        },
+      },
+    ],
+  };
+
+  const inputEvent = {
+    choices: [
+      {
+        delta: {
+          x_tool_input_request: {
+            tool_call_id: 'call_9',
+            name: 'mcp__custom-abc__create_task',
+            connector_id: 'custom-abc',
+            round: 0,
+            input_requests: {
+              priority: {
+                method: 'elicitation/create',
+                params: {
+                  mode: 'form',
+                  message: 'Which priority?',
+                  requestedSchema: {
+                    type: 'object',
+                    properties: { priority: { type: 'string', enum: ['low', 'high'] } },
+                    required: ['priority'],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    ],
+  };
+
+  it('keeps the server review on the awaiting entry and sends the chosen scope verbatim', async () => {
+    mockSseStream([reviewedApproval]);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('summarize PR 7', { conversationId: TEMP_CONVERSATION.id });
+    });
+    const entry = assistantMessage()?.metadata?.tools?.find((t) => t.toolCallId === 'call_1');
+    expect(entry?.approvalReview).toEqual({
+      riskTier: 'low',
+      destructive: false,
+      scopes: ['once', 'session', 'always'],
+    });
+
+    mockSseStream([{ choices: [{ delta: { content: 'Done.' } }] }]);
+    await act(async () => {
+      await result.current.resolveToolApproval(
+        assistantMessage()!.id,
+        'call_1',
+        'approved-for-session',
+      );
+    });
+    const approveCall = vi
+      .mocked(fetch)
+      .mock.calls.find((c) => String(c[0]).includes('/api/llm/v1/chat/completions/approve'));
+    expect(JSON.parse((approveCall![1] as RequestInit).body as string).tool_approvals).toEqual([
+      { tool_call_id: 'call_1', decision: 'approved-for-session' },
+    ]);
+    expect(assistantMessage()?.content).toContain('Done.');
+  });
+
+  it('pauses on a connector input request and resumes through resume-input with the answers', async () => {
+    mockSseStream([inputEvent]);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('make a task', { conversationId: TEMP_CONVERSATION.id });
+    });
+    const entry = assistantMessage()?.metadata?.tools?.find((t) => t.toolCallId === 'call_9');
+    expect(entry?.status).toBe('awaiting_input');
+    expect(entry?.inputRequests).toEqual(
+      inputEvent.choices[0]!.delta.x_tool_input_request.input_requests,
+    );
+    expect(vi.mocked(fetch).mock.calls).toHaveLength(1);
+
+    mockSseStream([{ choices: [{ delta: { content: 'Task created.' } }] }]);
+    const answers = { priority: { action: 'accept' as const, content: { priority: 'high' } } };
+    await act(async () => {
+      await result.current.resolveToolInput(assistantMessage()!.id, 'call_9', answers);
+    });
+    const resumeCall = vi
+      .mocked(fetch)
+      .mock.calls.find((c) => String(c[0]).includes('/api/llm/v1/chat/completions/resume-input'));
+    expect(resumeCall, 'resume request should target resume-input').toBeDefined();
+    expect(JSON.parse((resumeCall![1] as RequestInit).body as string)).toEqual({
+      run_id: RUN_ID,
+      tool_inputs: [{ tool_call_id: 'call_9', input_responses: answers }],
+    });
+    expect(assistantMessage()?.content).toContain('Task created.');
+  });
+
+  it.each([400, 410])(
+    'keeps retryable input open and expired input closed after HTTP %i',
+    async (status) => {
+      mockSseStream([inputEvent]);
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('make a task', { conversationId: TEMP_CONVERSATION.id });
+      });
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              message: 'This input request expired and can no longer be resumed.',
+              type: 'invalid_request_error',
+              code: 'tool_input_invalid',
+            },
+          }),
+          { status },
+        ),
+      );
+      await act(async () => {
+        await result.current.resolveToolInput(assistantMessage()!.id, 'call_9', {
+          priority: { action: 'cancel' },
+        });
+      });
+      const entry = assistantMessage()?.metadata?.tools?.find((t) => t.toolCallId === 'call_9');
+      expect(entry?.status).toBe(status === 410 ? 'failed' : 'awaiting_input');
+      expect(entry?.inputRequests).toEqual(
+        status === 410
+          ? undefined
+          : inputEvent.choices[0]!.delta.x_tool_input_request.input_requests,
+      );
+    },
+  );
 });

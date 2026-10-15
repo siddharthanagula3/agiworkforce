@@ -73,6 +73,17 @@ describe('/apps for a signed-out visitor', () => {
     expect(signIn?.getAttribute('href')).toBe('/login?redirectTo=%2Fapps');
   });
 
+  it('offers a new visitor an account beside the sign-in, returning here', async () => {
+    mocks.identity.mockResolvedValue({ subject: null, isSignedIn: false });
+
+    render(await AppsPage());
+
+    const signIn = screen.getByRole('link', { name: 'Sign in to install apps' });
+    const signUp = screen.getByRole('link', { name: 'Create an account' });
+    expect(signUp.getAttribute('href')).toBe('/signup?redirectTo=%2Fapps');
+    expect(signUp.parentElement).toBe(signIn.parentElement);
+  });
+
   it('offers the sign-in rather than performing it: the mounted page navigates nowhere', async () => {
     mocks.identity.mockResolvedValue({ subject: null, isSignedIn: false });
 

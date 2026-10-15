@@ -13,6 +13,12 @@ vi.mock('@/lib/rate-limit', async (importOriginal) => ({
   withRateLimit: withRateLimitMock,
 }));
 
+vi.mock('@clerk/nextjs', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useUser: () => ({ user: null, isLoaded: true }),
+  useClerk: () => ({ signOut: vi.fn() }),
+}));
+
 vi.stubGlobal('fetch', fetchMock);
 
 import {
@@ -22,8 +28,8 @@ import {
 import { DESKTOP_CLOUD_TAG_PREFIX } from '@/lib/releases/github-desktop-releases';
 import { GET as getLatestCliRelease } from '@/app/api/releases/cli/latest/route';
 import { GET as getLatestDesktopRelease } from '@/app/api/releases/desktop-cloud/latest/route';
-import { CliDownloadAvailability } from '../CliDownloadAvailability';
 import { DesktopDownloadAvailability } from '../DesktopDownloadAvailability';
+import DownloadPage from '../page';
 
 const GITHUB_RELEASES = 'https://api.github.com/repos/siddharthanagula3/agiworkforce/releases';
 const DOWNLOAD_ROOT = 'https://github.com/siddharthanagula3/agiworkforce/releases/download';
@@ -123,10 +129,10 @@ describe('what /download offers comes from the stable channel it says it reads',
   });
 
   it('links only the stable CLI archives, never a newer beta, nightly or candidate build', async () => {
-    render(<CliDownloadAvailability />);
+    const { container } = render(<DownloadPage />);
 
-    const region = await screen.findByRole('region', { name: 'CLI archive availability' });
-    expect(await within(region).findByText('agi CLI · version 1.9.0')).toBeInTheDocument();
+    const region = container.querySelector<HTMLElement>('[data-surface="cli"]')!;
+    expect(await within(region).findByText('Version 1.9.0')).toBeInTheDocument();
     const hrefs = within(region)
       .getAllByRole('link', { name: /^Download / })
       .map((link) => link.getAttribute('href') ?? '');
@@ -162,7 +168,7 @@ describe('platform labels on /download', () => {
         })),
       }),
     );
-    render(<CliDownloadAvailability />);
+    render(<DownloadPage />);
 
     const archives = await screen.findByRole('list', { name: 'CLI archives' });
     const rows = within(archives).getAllByRole('listitem');
@@ -173,8 +179,7 @@ describe('platform labels on /download', () => {
       const link = within(archives).getByRole('link', {
         name: `Download ${archiveName(platform)}`,
       });
-      const row = link.closest('li');
-      const label = row?.querySelector('.agi-ds-ledger-label')?.textContent ?? '';
+      const label = link.textContent ?? '';
       expect(label).toMatch(OS_NAMES[os]!);
       expect(label).toMatch(ARCHITECTURE_NAMES[architecture]!);
       expect(label).not.toContain(platform);

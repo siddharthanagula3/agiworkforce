@@ -2,6 +2,7 @@ import 'server-only';
 
 import { z } from 'zod';
 
+import { SENSITIVE_MEMORY_SUBJECTS } from '@agiworkforce/context';
 import {
   loadManagedMemoryContext,
   loadManagedMemoryPolicy,
@@ -40,8 +41,7 @@ export function memoryToolDefinitions() {
       type: 'function' as const,
       function: {
         name: SAVE_MEMORY_TOOL_NAME,
-        description:
-          'Save one durable fact about the user to their Memory when they ask you to remember something, or when they state a lasting preference or detail they would want used in later chats. Save a single self-contained sentence in the third person. Do not save secrets, passwords, one-off task details or anything the user asked you not to remember.',
+        description: `Save one durable fact about the user to their Memory when they ask you to remember something, or when they state a lasting preference or detail they would want used in later chats. Save a single self-contained sentence in the third person. Do not save secrets, passwords, one-off task details or anything the user asked you not to remember. Save a fact about ${SENSITIVE_MEMORY_SUBJECTS} only when the user asks you to remember it; Memory keeps it only while Include sensitive topics in memory is on, and when the tool refuses one, pass its reason on to the user.`,
         parameters: {
           type: 'object',
           properties: {

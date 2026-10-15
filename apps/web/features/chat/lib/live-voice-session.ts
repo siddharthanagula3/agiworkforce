@@ -195,6 +195,7 @@ export interface LiveVoiceSettings {
 export interface LiveVoiceSessionOptions {
   voice: string | null;
   conversationId: string | null;
+  memoryEnabled?: boolean;
   language?: string | null;
   pace?: number;
   reasoning?: LiveVoiceReasoning;
@@ -469,6 +470,7 @@ export class LiveVoiceSession {
           sdp,
           voice: options.voice,
           conversationId: options.conversationId,
+          ...(options.memoryEnabled === false ? { memoryEnabled: false } : {}),
           language: options.language ?? null,
           ...(options.pace === undefined ? {} : { pace: options.pace }),
           ...(options.reasoning ? { reasoning: options.reasoning } : {}),

@@ -10,6 +10,7 @@ import React, {
   useState,
 } from 'react';
 import {
+  Archive,
   Brain,
   CircleHelp,
   Code,
@@ -18,13 +19,23 @@ import {
   Globe,
   History,
   Image,
+  LayoutList,
   ListChecks,
   Minimize2,
   MonitorPlay,
+  Pencil,
+  Pin,
+  Share2,
+  SlidersHorizontal,
   Sparkles,
+  SquarePen,
   Terminal,
   Undo2,
 } from '@agiworkforce/icons';
+import type {
+  AvailableChatSlashCommand,
+  ChatSlashCommandId,
+} from '@features/chat/lib/chat-slash-commands';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import {
   loadInstalledPlugins,
@@ -32,12 +43,13 @@ import {
 } from '@features/chat/services/installed-plugins';
 import {
   BUILT_IN_SLASH_COMMANDS,
-  SlashCommandMenu as SharedSlashCommandMenu,
+  SlashCommandList,
   filterSlashCommandsByCapability,
   useCapabilities,
   type CommandSuggestion,
   type SlashCommandIconName,
 } from '@agiworkforce/unified-chat';
+import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 
 const SLASH_ICONS: Record<SlashCommandIconName, React.ElementType> = {
   Globe,
@@ -54,6 +66,16 @@ const SLASH_ICONS: Record<SlashCommandIconName, React.ElementType> = {
   History,
   ListChecks,
   CircleHelp,
+};
+
+const CHAT_COMMAND_ICONS: Record<ChatSlashCommandId, React.ElementType> = {
+  new: SquarePen,
+  rename: Pencil,
+  archive: Archive,
+  pin: Pin,
+  share: Share2,
+  model: SlidersHorizontal,
+  status: LayoutList,
 };
 
 interface SkillMeta {
@@ -104,6 +126,7 @@ export interface SlashCommandMenuHandle {
 }
 
 interface SlashCommandMenuProps {
+  anchorRef: React.RefObject<HTMLElement | null>;
   query: string;
   onSelect: (command: string) => void;
   onClose: () => void;
@@ -111,11 +134,16 @@ interface SlashCommandMenuProps {
   onSkillSelect?: (skillName: string) => void;
   imageCommandAvailable: boolean;
   codeCommandAvailable: boolean;
+  /** Conversation commands whose actions the host supplied; none by default. */
+  chatCommands?: readonly AvailableChatSlashCommand[];
 }
+
+const NO_CHAT_COMMANDS: readonly AvailableChatSlashCommand[] = [];
 
 export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandMenuProps>(
   function SlashCommandMenu(
     {
+      anchorRef,
       query,
       onSelect,
       onClose,
@@ -123,6 +151,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
       skills,
       imageCommandAvailable,
       codeCommandAvailable,
+      chatCommands = NO_CHAT_COMMANDS,
     },
     ref,
   ) {
@@ -159,6 +188,17 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
             icon: <Icon className="h-4 w-4 text-muted-foreground" />,
           };
         });
+
+      const chat = chatCommands.map((command): CommandSuggestion => {
+        const Icon = CHAT_COMMAND_ICONS[command.id];
+        return {
+          id: command.id,
+          command: command.label,
+          description: command.description,
+          example: command.example,
+          icon: <Icon className="h-4 w-4 text-muted-foreground" />,
+        };
+      });
 
       const custom = customCommands.map((command): CommandSuggestion => ({
         id: command.id,
@@ -210,7 +250,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
         .sort(byCommand);
 
       const groups: SuggestionGroup[] = [
-        { suggestions: [...builtIns, ...custom] },
+        { suggestions: [...builtIns, ...chat, ...custom] },
         { suggestions: own.sort(byCommand) },
         ...pluginGroups,
         { label: BUNDLED_GROUP_LABEL, suggestions: bundled },
@@ -225,6 +265,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
           : matches;
       });
     }, [
+      chatCommands,
       codeCommandAvailable,
       customCommands,
       imageCommandAvailable,
@@ -287,13 +328,21 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
     );
 
     return (
-      <SharedSlashCommandMenu
-        show
-        suggestions={suggestions}
-        selectedIndex={activeIndex}
-        onSelect={handleSelect}
-        onHover={setActiveIndex}
-      />
+      <AnchoredComposerMenu
+        anchorRef={anchorRef}
+        open={suggestions.length > 0}
+        label="Slash commands"
+        autoFocusFirstItem={false}
+        onRequestClose={onClose}
+        matchAnchorWidth
+      >
+        <SlashCommandList
+          suggestions={suggestions}
+          selectedIndex={activeIndex}
+          onSelect={handleSelect}
+          onHover={setActiveIndex}
+        />
+      </AnchoredComposerMenu>
     );
   },
 );

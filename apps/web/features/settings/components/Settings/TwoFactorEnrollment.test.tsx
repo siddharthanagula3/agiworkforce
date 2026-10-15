@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -271,37 +271,67 @@ describe('TwoFactorEnrollmentPanel · backup codes', () => {
     }
   });
 
-  it('prints the codes on a page of their own', async () => {
-    const printDocument = document.implementation.createHTMLDocument('print');
-    const print = vi.fn();
-    const open = vi.fn(() => ({ document: printDocument, print }) as unknown as Window);
+  // The desktop shell refuses every new window, so the codes are printed from
+  // a frame in this page: no pop-up is asked for, here or in a browser.
+  it('prints the codes from a hidden frame of their own, without opening a window', async () => {
+    const open = vi.fn(() => null);
     vi.stubGlobal('open', open);
-    const user = await reachBackupCodes();
+    const print = vi.fn();
+    const realWindow = Object.getOwnPropertyDescriptor(
+      HTMLIFrameElement.prototype,
+      'contentWindow',
+    )!.get!;
+    const frameWindow = vi
+      .spyOn(HTMLIFrameElement.prototype, 'contentWindow', 'get')
+      .mockImplementation(function (this: HTMLIFrameElement) {
+        const view = realWindow.call(this) as Window;
+        view.print = print;
+        view.focus = () => undefined;
+        return view;
+      });
+    try {
+      const user = await reachBackupCodes();
 
-    await user.click(screen.getByRole('button', { name: /Print codes/i }));
+      await user.click(screen.getByRole('button', { name: /Print codes/i }));
 
-    expect(open).toHaveBeenCalledOnce();
-    expect(printDocument.title).toBe('AGI Workforce backup codes');
-    expect([...printDocument.querySelectorAll('li')].map((item) => item.textContent)).toEqual(
-      BACKUP_CODES,
-    );
-    expect(print).toHaveBeenCalledOnce();
-    expect(screen.queryByText(/blocked the print window/i)).toBeNull();
+      expect(open).not.toHaveBeenCalled();
+      const frame = document.querySelector('iframe')!;
+      expect(frame).toHaveAttribute('aria-hidden', 'true');
+      expect(frame).toHaveAttribute('sandbox', 'allow-same-origin allow-modals');
+      const printed = frame.contentDocument!;
+      expect(printed.title).toBe('AGI Workforce backup codes');
+      expect([...printed.querySelectorAll('li')].map((item) => item.textContent)).toEqual(
+        BACKUP_CODES,
+      );
+      expect(print).toHaveBeenCalledOnce();
+      expect(screen.queryByText(/could not be sent to the printer/i)).toBeNull();
+
+      await act(async () => {
+        frame.contentWindow!.dispatchEvent(new Event('afterprint'));
+      });
+      expect(document.querySelector('iframe')).toBeNull();
+    } finally {
+      frameWindow.mockRestore();
+    }
   });
 
-  it('says so when the browser blocks the print window instead of doing nothing', async () => {
-    vi.stubGlobal(
-      'open',
-      vi.fn(() => null),
-    );
-    const user = await reachBackupCodes();
+  it('says so when the page cannot reach the printer instead of doing nothing', async () => {
+    const frameDocument = vi
+      .spyOn(HTMLIFrameElement.prototype, 'contentDocument', 'get')
+      .mockReturnValue(null);
+    try {
+      const user = await reachBackupCodes();
 
-    await user.click(screen.getByRole('button', { name: /Print codes/i }));
+      await user.click(screen.getByRole('button', { name: /Print codes/i }));
 
-    const notice = await screen.findByText(/blocked the print window/i);
-    expect(notice.closest('[role="alert"]')).toHaveTextContent(
-      /download or copy the codes instead/i,
-    );
+      const notice = await screen.findByText(/could not be sent to the printer/i);
+      expect(notice.closest('[role="alert"]')).toHaveTextContent(
+        /download or copy the codes instead/i,
+      );
+      expect(document.querySelector('iframe')).toBeNull();
+    } finally {
+      frameDocument.mockRestore();
+    }
   });
 
   it('regenerates backup codes only after the route has been satisfied with a proof', async () => {

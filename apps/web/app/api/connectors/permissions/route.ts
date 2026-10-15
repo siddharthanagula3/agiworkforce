@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   UpsertConnectorToolPermissionRequestSchema,
   connectorCategoryToolName,
-  isConnectorCategoryToolName,
   type ConnectorToolPermissionLevel,
   type DeleteConnectorToolPermissionsResponse,
   type ListConnectorToolPermissionsResponse,
@@ -17,15 +16,14 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { isDestructiveConnectorTool } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
+import {
+  CriticalStandingAllowError,
+  saveConnectorToolPermissions,
+} from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import { revokeConnectorSessionGrants } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-session-grants';
 
 export const runtime = 'nodejs';
 
-const WIRE_TO_DB = {
-  allow: 'always-allow',
-  ask: 'needs-approval',
-  deny: 'blocked',
-} as const satisfies Record<ConnectorToolPermissionLevel, string>;
 const DB_TO_WIRE: Record<string, ConnectorToolPermissionLevel> = {
   'always-allow': 'allow',
   'needs-approval': 'ask',
@@ -83,26 +81,28 @@ async function handleUpsert(request: NextRequest): Promise<NextResponse> {
       ? toolNames[0]!
       : `${toolNames.length} tools`;
 
-  // a destructiveness verdict is a safety property, not a caller preference.
-  const destructiveFlags = toolNames.map((name) =>
-    isConnectorCategoryToolName(name)
-      ? category === 'write'
-      : isDestructiveConnectorTool(connectorId, name),
-  );
-  const destructive = destructiveFlags.some(Boolean);
-
   const { db, userId, organizationId } = await getUserScopedDb(request);
-  await db.query(
-    `insert into public.connector_tool_permissions
-       (user_id, connector_id, tool_name, level, destructive, updated_at)
-     select $1, $2, tool.name, $4, tool.destructive, now()
-       from unnest($3::text[], $5::boolean[]) as tool(name, destructive)
-     on conflict (user_id, connector_id, tool_name)
-       do update set level = excluded.level,
-                     destructive = excluded.destructive,
-                     updated_at = now()`,
-    [userId, connectorId, toolNames, WIRE_TO_DB[level], destructiveFlags],
-  );
+  let destructive: boolean;
+  try {
+    const result = await saveConnectorToolPermissions(db, {
+      userId,
+      organizationId,
+      connectorId,
+      toolNames,
+      level,
+    });
+    if (!result.saved) throw createError.validation('The tool permission could not be saved.');
+    destructive = result.destructive;
+  } catch (error) {
+    if (error instanceof CriticalStandingAllowError)
+      return NextResponse.json(
+        {
+          error: { code: 'critical_tool_always_asks', message: error.message },
+        },
+        { status: 422 },
+      );
+    throw error;
+  }
   await recordAuditEvent({
     userId,
     organizationId,
@@ -140,6 +140,12 @@ async function handleDelete(request: NextRequest): Promise<NextResponse> {
   }
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
+  const revoked = await revokeConnectorSessionGrants(
+    db,
+    { userId, organizationId },
+    connectorId,
+    toolName,
+  );
   const removed = toolName
     ? await db.execute(
         `delete from public.connector_tool_permissions
@@ -163,13 +169,13 @@ async function handleDelete(request: NextRequest): Promise<NextResponse> {
       connectorId,
       ...(toolName ? { resourceName: toolName } : {}),
       status: 'permission_removed',
-      count: removed,
+      count: removed + revoked,
     },
   });
 
   return NextResponse.json({
     success: true,
-    removed,
+    removed: removed + revoked,
   } satisfies DeleteConnectorToolPermissionsResponse);
 }
 

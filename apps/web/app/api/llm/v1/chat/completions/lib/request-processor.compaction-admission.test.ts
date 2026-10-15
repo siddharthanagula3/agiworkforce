@@ -22,6 +22,12 @@ import { buildCompactionRoutingRequest } from './request-processor';
  * loses summary quality and never leaks the transcript.
  */
 describe('context compaction routes under the same admission as the turn', () => {
+  it('carries the no-training requirement used by Google-data turns independently of retention', () => {
+    const request = buildCompactionRoutingRequest({ noTrainingOnly: true });
+    expect(request).toMatchObject({ noTrainingOnly: true });
+    expect(request).not.toHaveProperty('zeroDataRetentionOnly');
+  });
+
   it('carries the zero-retention requirement', () => {
     expect(buildCompactionRoutingRequest({ zeroDataRetentionOnly: true })).toMatchObject({
       zeroDataRetentionOnly: true,

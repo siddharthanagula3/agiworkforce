@@ -17,6 +17,7 @@ import {
   Prose,
   Section,
   Stack,
+  WEB_ENTRY_HREF,
 } from '@/features/marketing/components/system';
 import { SURFACE_STATUS } from '@/lib/marketing-constants';
 
@@ -79,7 +80,7 @@ export default function AiChatFeaturePage() {
                 <em className="agi-lp-accent">The reply shows its work.</em>
               </h1>
               <ButtonRow>
-                <Button href="/login?redirectTo=%2F">Open AGI Web</Button>
+                <Button href={WEB_ENTRY_HREF}>Open AGI Web</Button>
                 <Button href="/desktop" variant="secondary">
                   See AGI Desktop
                 </Button>
@@ -185,7 +186,7 @@ export default function AiChatFeaturePage() {
                 {SURFACE_STATUS.desktop.toLowerCase()}.
               </p>
               <ButtonRow>
-                <Button href="/login?redirectTo=%2F">Open AGI Web</Button>
+                <Button href={WEB_ENTRY_HREF}>Open AGI Web</Button>
                 <Button href="/desktop" variant="secondary">
                   See AGI Desktop
                 </Button>

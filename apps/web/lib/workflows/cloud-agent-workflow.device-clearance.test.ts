@@ -21,7 +21,10 @@ const db = {
   dispose: vi.fn(),
 };
 
-vi.mock('workflow', () => ({ sleep: mocks.sleep }));
+vi.mock('workflow', async (importOriginal) => ({
+  ...(await importOriginal<WorkflowModule>()),
+  sleep: mocks.sleep,
+}));
 vi.mock('../device-steps/device-clearance-step', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
   return {
@@ -33,7 +36,10 @@ vi.mock('../device-steps/device-clearance-step', async (importOriginal) => {
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<NeonDbModule>()),
+  getNeonDb: () => db,
+}));
 vi.mock('./steps/close-cloud-agent-stream', () => ({
   closeCloudAgentWorkflowStream: mocks.closeStream,
 }));
@@ -44,7 +50,8 @@ vi.mock('./steps/work-plan-steps', () => ({
 }));
 
 const executeInvocation = vi.hoisted(() => vi.fn());
-vi.mock('./steps/execute-cloud-agent-invocation', () => ({
+vi.mock('./steps/execute-cloud-agent-invocation', async (importOriginal) => ({
+  ...(await importOriginal<ExecuteCloudAgentInvocationModule>()),
   executeCloudAgentWorkflowInvocation: executeInvocation,
 }));
 
@@ -52,7 +59,12 @@ import { cloudAgentWorkflow } from './cloud-agent-workflow';
 import { clearCloudAgentDevice } from '../device-steps/device-clearance-step';
 import type { CloudAgentWorkflowInput } from './cloud-agent-workflow-input';
 
+type WorkflowModule = typeof import('workflow');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type ExecuteCloudAgentInvocationModule = typeof import('./steps/execute-cloud-agent-invocation');
+
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
+
 const INSTALL_ID = 'install-abcdefgh';
 
 const DEVICE_HOST = {

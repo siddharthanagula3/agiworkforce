@@ -380,6 +380,35 @@ describe('Memory API', () => {
       );
     });
 
+    it('saves a sensitive fact the user typed in, without the sensitive-topic opt-in', async () => {
+      const request = new NextRequest('http://localhost/api/memory', {
+        method: 'POST',
+        body: JSON.stringify({ content: 'I have type 2 diabetes' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const response = await POST(request);
+      expect(response.status).toBe(201);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('insert into user_memories'),
+        expect.arrayContaining(['I have type 2 diabetes']),
+      );
+    });
+
+    it('refuses a sensitive fact posted as automatic while the opt-in is off', async () => {
+      const request = new NextRequest('http://localhost/api/memory', {
+        method: 'POST',
+        body: JSON.stringify({ content: 'User has type 2 diabetes', source: 'auto' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const response = await POST(request);
+      expect(response.status).toBe(403);
+      expect(
+        mockQuery.mock.calls.some(([sql]) => String(sql).includes('insert into user_memories')),
+      ).toBe(false);
+    });
+
     it('should store null category when category is not provided', async () => {
       mockQuery.mockResolvedValueOnce([{ ...mockMemoryRow, category: null }]);
 

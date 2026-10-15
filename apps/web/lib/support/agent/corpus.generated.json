@@ -2,7 +2,7 @@
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
   "documentCount": 45,
-  "chunkCount": 250,
+  "chunkCount": 251,
   "documents": [
     {
       "id": "account-security",
@@ -28,7 +28,7 @@
         "revoke session",
         "api keys"
       ],
-      "updated": "2026-10-12",
+      "updated": "2026-10-15",
       "source": "content/support/account-security.md",
       "chunks": [
         {
@@ -64,7 +64,7 @@
           "ordinal": 4,
           "heading": "Password",
           "headingPath": "Passkeys, two-factor and active sessions › Password",
-          "text": "The same page changes your password. Changing it requires your current password,\nand a code from your authenticator app as well when two-factor authentication is\non. An account that signs in without a password can add one after confirming it\nis you. Every other device signed in to the account is signed out when the\npassword changes. A password that fails the common-password check is refused\nwith \"That password is too common.\" A forgotten password is reset from the\nsign-in screen with **Forgot password?**."
+          "text": "The same page changes your password. Changing it requires your current password,\nand a code from your authenticator app as well when two-factor authentication is\non. An account that signs in without a password can add one after confirming it\nis you. Every other device signed in to the account is signed out when the\npassword changes. A new password the identity provider refuses, such as one\nfound in a data breach, is refused with the reason it gives, and the current\npassword keeps working. A forgotten password is reset from the sign-in screen\nwith **Forgot password?**."
         },
         {
           "id": "account-security#5",
@@ -302,7 +302,7 @@
         "seats",
         "renewal"
       ],
-      "updated": "2026-10-12",
+      "updated": "2026-10-15",
       "source": "content/support/billing-and-plans.md",
       "chunks": [
         {
@@ -317,7 +317,7 @@
           "ordinal": 1,
           "heading": "Upgrading",
           "headingPath": "Plans, upgrading, and cancelling › Upgrading",
-          "text": "**Upgrade plan** lists the plans available to you. On the {{PLAN.free}} plan\nchoosing one goes to checkout when paid upgrades are open to your account; while\nthey are not, it opens the upgrade waitlist instead: join the waitlist, or enter an\naccess code to continue to checkout. While upgrades are not open, checkout is\nrefused to an account that has not redeemed a code. On a plan you already pay\nfor the access step does not apply, and an upgrade shows what it will cost and\nwaits for you to confirm before anything is charged.\n\nAn upgrade takes effect straight away and starts a new billing period that day:\nyou pay the new plan's price, minus a credit for the unused time on your current\nplan, and your renewal date moves to the day you upgrade. Adding seats to a\n{{PLAN.team}} plan keeps the renewal date and charges only for the rest of the\ncurrent period.\n\nLocal mode and BYOK are free and need no plan at all. Managed cloud plans differ\nin usage capacity and in which features they include: projects, concurrent\nresponses, sandboxes and scheduled tasks all scale with the plan, as do custom\nMCP connections and connector tools. The pricing page carries the current\nprices, regional prices and per-plan limits, and adds the connector limits once\nconnectors are open. {{AVAILABILITY.connectors}}"
+          "text": "**Upgrade plan** lists the plans available to you. On the {{PLAN.free}} plan\nchoosing one goes to checkout when paid upgrades are open to your account; while\nthey are not, it opens the upgrade waitlist instead: join the waitlist, or enter an\naccess code to continue to checkout. Your place on a plan's waitlist is kept with\nyour account, so the website and the desktop app show it wherever you sign in.\nWhen paid upgrades open, everyone on a waitlist gets a notice in Notifications,\nand the confirmation you see after joining says whether we also email you.\nJoining does not start a subscription, and when upgrades open for your account,\nchoosing the plan again takes you to checkout. Once an account has redeemed an\naccess code, choosing a plan opens checkout directly. While upgrades are not\nopen, checkout is refused to an account that has not redeemed a code. On a plan\nyou already pay for the access step does not apply, and an upgrade shows what it\nwill cost and waits for you to confirm before anything is charged.\n\nAn upgrade takes effect straight away and starts a new billing period that day:\nyou pay the new plan's price, minus a credit for the unused time on your current\nplan, and your renewal date moves to the day you upgrade. Adding seats to a\n{{PLAN.team}} plan keeps the renewal date and charges only for the rest of the\ncurrent period.\n\nLocal mode and BYOK are free and need no plan at all. Managed cloud plans differ\nin usage capacity and in which features they include: projects, concurrent\nresponses, sandboxes and scheduled tasks all scale with the plan, as do custom\nMCP connections and connector tools. The pricing page carries the current\nprices, regional prices and per-plan limits, and adds the connector limits once\nconnectors are open. {{AVAILABILITY.connectors}}"
         },
         {
           "id": "billing-and-plans#2",
@@ -532,7 +532,7 @@
       "platforms": [
         "chrome"
       ],
-      "updated": "2026-10-12",
+      "updated": "2026-10-15",
       "source": "content/support/chrome-extension.md",
       "chunks": [
         {
@@ -540,7 +540,7 @@
           "ordinal": 0,
           "heading": "Availability",
           "headingPath": "The Chrome extension › Availability",
-          "text": "The Chrome extension, AGI Browser Companion, is {{STATUS.chrome}}. The\n[Chrome page](https://agiworkforce.com/chrome-extension) carries its status and\nthe [download page](https://agiworkforce.com/download) keeps a notify list.\nUntil it is released there is no Web Store listing to install from."
+          "text": "The Chrome extension, agiworkforce, is {{STATUS.chrome}}. The\n[Chrome page](https://agiworkforce.com/chrome-extension) carries its status and\nthe [download page](https://agiworkforce.com/download) keeps a notify list.\nUntil it is released there is no Web Store listing to install from."
         },
         {
           "id": "chrome-extension#1",
@@ -1392,7 +1392,7 @@
         "regenerate shortcut",
         "disable shortcut"
       ],
-      "updated": "2026-10-03",
+      "updated": "2026-10-15",
       "source": "content/support/keyboard-shortcuts.md",
       "chunks": [
         {
@@ -1400,7 +1400,7 @@
           "ordinal": 0,
           "heading": "The list",
           "headingPath": "Keyboard shortcuts › The list",
-          "text": "On macOS use Cmd where this says Ctrl.\n\n| Shortcut     | What it does            |\n| ------------ | ----------------------- |\n| Shift+Ctrl+F | Open search             |\n| Ctrl+/       | Show keyboard shortcuts |\n| Shift+Ctrl+O | New conversation        |\n| Ctrl+B       | Toggle sidebar          |\n| Escape       | Focus message composer  |\n| Shift+Ctrl+C | Copy last message       |\n| Shift+Ctrl+R | Regenerate last message |\n| Shift+Ctrl+A | Toggle artifacts panel  |"
+          "text": "On macOS use Cmd where this says Ctrl. The last five work in the message composer.\n\n| Shortcut         | What it does                                                           |\n| ---------------- | ---------------------------------------------------------------------- |\n| Shift+Ctrl+F     | Open search                                                            |\n| Ctrl+/           | Show keyboard shortcuts                                                |\n| Shift+Ctrl+O     | New conversation                                                       |\n| Ctrl+B           | Toggle sidebar                                                         |\n| Escape           | Focus message composer                                                 |\n| Shift+Ctrl+C     | Copy last message                                                      |\n| Shift+Ctrl+R     | Regenerate last message                                                |\n| Shift+Ctrl+A     | Toggle artifacts panel                                                 |\n| Enter            | Send message                                                           |\n| Shift+Enter      | New line                                                               |\n| Shift+Ctrl+Enter | While a reply runs, send this follow-up the other way (steer or queue) |\n| Escape           | Stop the response                                                      |\n| ↑                | Edit your last message (empty composer)                                |"
         },
         {
           "id": "keyboard-shortcuts#1",
@@ -1672,7 +1672,7 @@
         "import memory",
         "project memory"
       ],
-      "updated": "2026-10-06",
+      "updated": "2026-10-15",
       "source": "content/support/memory.md",
       "chunks": [
         {
@@ -1680,32 +1680,39 @@
           "ordinal": 0,
           "heading": "Memory switches",
           "headingPath": "What AGI remembers, and how to change it › Memory switches",
-          "text": "Settings, Memory includes these controls, each doing a different thing:\n\n- **Persistent memory**: \"Allow AGI to remember details across conversations.\"\n  With it off, persistent remembered facts are not included in chat context.\n  Search past chats has a separate switch.\n- **Search past chats**: \"Let AGI look up excerpts from your other\n  conversations when answering.\" This reads your history at answer time rather\n  than storing facts. It is never used in temporary chats.\n- **Allow memory generation from tool-assisted chats**: whether memories may be\n  created from chats that used tools, connectors, code or web search."
+          "text": "Settings, Memory includes these controls, each doing a different thing:\n\n- **Persistent memory**: \"Allow AGI to remember details across conversations.\"\n  With it off, persistent remembered facts are not included in chat context.\n  Search past chats has a separate switch.\n- **Search past chats**: \"Let AGI look up excerpts from your other\n  conversations when answering.\" This reads your history at answer time rather\n  than storing facts. It is never used in temporary chats.\n- **Include sensitive topics in memory**: off by default. While it is off, AGI\n  is designed to keep your health, race or ethnicity, religious beliefs,\n  politics, sexual orientation, gender identity or union membership only when\n  you say \"Remember that\" in a chat on the web, desktop, mobile or Chrome, or\n  add them yourself in Settings, Memory. In the CLI, add one with\n  `agi memory add`. Memories saved earlier stay until you delete them.\n- **Allow memory generation from tool-assisted chats**: whether memories may be\n  created from chats that used tools, connectors, code or web search."
         },
         {
           "id": "memory#1",
           "ordinal": 1,
+          "heading": "What memory is designed not to keep",
+          "headingPath": "What AGI remembers, and how to change it › What memory is designed not to keep",
+          "text": "AGI is designed not to save some details, even if you ask, and refuses them\nwhen it recognises them: passwords, keys and tokens, payment card and bank\naccount details, government ID numbers, biometric identifiers, street addresses\nand map coordinates, criminal history and immigration status."
+        },
+        {
+          "id": "memory#2",
+          "ordinal": 2,
           "heading": "Clearing memory",
           "headingPath": "What AGI remembers, and how to change it › Clearing memory",
           "text": "In Settings, Memory, choose **Clear all memories**, then confirm\n**Forget everything**. This acts on remembered facts in the current personal\nor workspace scope."
         },
         {
-          "id": "memory#2",
-          "ordinal": 2,
+          "id": "memory#3",
+          "ordinal": 3,
           "heading": "Memory inside a project",
           "headingPath": "What AGI remembers, and how to change it › Memory inside a project",
           "text": "For a project you own, the memory switch controls which remembered facts are\neligible. With \"Use memories from outside this project\" on, account-wide facts and this\nproject's facts can be included when memory is enabled for the chat. With it\noff, only this project's remembered facts are eligible. Search past chats has\nits own setting and follows the project's memory scope. Account instructions\nand style have separate project switches. Not every saved fact or passage is\nincluded in every reply."
         },
         {
-          "id": "memory#3",
-          "ordinal": 3,
+          "id": "memory#4",
+          "ordinal": 4,
           "heading": "When memory is unavailable in a chat",
           "headingPath": "What AGI remembers, and how to change it › When memory is unavailable in a chat",
           "text": "If Memory is unavailable in the composer, open Settings, Memory and check\n**Persistent memory**. The composer can also show the unavailable state while\nsettings are loading or after a settings-load error. Retry loading settings\nif a load error appears."
         },
         {
-          "id": "memory#4",
-          "ordinal": 4,
+          "id": "memory#5",
+          "ordinal": 5,
           "heading": "Temporary chats",
           "headingPath": "What AGI remembers, and how to change it › Temporary chats",
           "text": "A temporary chat neither reads memory nor writes to it. That is part of what\nmakes it temporary; see the temporary chats article."
@@ -2154,11 +2161,13 @@
         "github",
         "oauth",
         "verification code",
+        "password",
+        "age",
         "terms",
         "first message",
         "first chat"
       ],
-      "updated": "2026-10-12",
+      "updated": "2026-10-15",
       "source": "content/support/signing-up.md",
       "chunks": [
         {
@@ -2166,7 +2175,7 @@
           "ordinal": 0,
           "heading": "Create the account",
           "headingPath": "Create an account and send your first message › Create the account",
-          "text": "1. Open the sign-up page and enter the email address you want the account under.\n2. Choose how you sign up: **Continue with Google**, **Continue with GitHub**, or\n   an email address and a password.\n3. If you used email, confirm the code sent to your inbox. If the code has not\n   arrived, check the spam folder before requesting another.\n\nThe sign-up form asks for your age in a field labelled \"Your age\". You must be\nat least 13 to create an account, and if you are under 18 you need permission\nfrom a parent or guardian. The age is checked in your browser and is not stored\nor sent to us. There is no terms checkbox: under the button the form states \"By\ncreating an account, you agree to the Terms of Use and acknowledge the Privacy\nPolicy.\" One optional box, \"Email me product news, tips and offers.\", starts\nunticked."
+          "text": "1. Open the sign-up page and enter your age in **Your age**.\n2. Choose **Continue with Google** or **Continue with GitHub**, or enter the\n   email address you want the account under and press **Continue**.\n3. If you used email, enter the code sent to that address. If the code has not\n   arrived, check the spam folder before requesting another.\n4. If a **Create a password** screen follows, choose the password you will use\n   with that address to log in.\n\nThe sign-up form asks for your age in a field labelled \"Your age\". You must be\nat least 13 to create an account, and if you are under 18 you need permission\nfrom a parent or guardian. The age is checked in your browser and is not stored\nor sent to us. There is no terms checkbox: under the button the form states \"By\ncreating an account, you agree to the Terms of Use and acknowledge the Privacy\nPolicy.\" One optional box, \"Email me product news, tips and offers.\", starts\nunticked.\n\nWhen a provider button on the sign-in page, such as **Continue with Google**,\ncreates a new account, the account's first screen asks for your age and for you\nto accept the terms, and the account cannot be used until the terms are ticked\nand an eligible age is entered. The code always comes before the password: the\nsign-up page asks for a password only after the code proves the address is\nyours. The password screen states its rule before you type: use at least 8\ncharacters, and a password that is easy to guess or found in a data breach is\nrefused."
         },
         {
           "id": "signing-up#1",
@@ -2187,7 +2196,7 @@
           "ordinal": 3,
           "heading": "If sign-up does not complete",
           "headingPath": "Create an account and send your first message › If sign-up does not complete",
-          "text": "- \"No account uses this email. Sign up instead.\" on a sign-in screen means the\n  address has never been registered. Sign up rather than resetting a password.\n- \"That password is too common.\" means the password was rejected against a\n  common-password list. Choose a longer, less common one.\n- A sign-up that needs a detail the screen cannot collect ends with a message\n  that starts \"This sign-up also needs\" and tells you to contact support. Email\n  {{CONTACT.email}} to finish creating the account."
+          "text": "- \"No account uses this email. Sign up instead.\" on a sign-in screen means the\n  address has never been registered. Sign up rather than resetting a password.\n- \"This email already has an account. Log in instead.\" on the sign-up screen\n  means the address is registered already. Log in with it rather than signing\n  up again.\n- A refused password keeps you on the password screen with the reason under the\n  field. A password refused as too weak also lists suggestions for a stronger\n  one.\n- A sign-up that needs a detail the screen cannot collect ends with a message\n  that starts \"This sign-up also needs\" and tells you to contact support. Email\n  {{CONTACT.email}} to finish creating the account."
         }
       ]
     },

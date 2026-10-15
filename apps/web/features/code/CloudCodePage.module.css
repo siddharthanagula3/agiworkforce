@@ -150,6 +150,14 @@
   background: var(--chat-success);
 }
 
+.railAttentionDot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--chat-warning);
+}
+
 .menuRowLabel {
   display: block;
   min-width: 0;
@@ -586,6 +594,50 @@ svg + .menuRowLabel {
   overflow-wrap: anywhere;
 }
 
+.taskRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.taskActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.taskAction {
+  min-height: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--chat-radius-sm);
+  background: transparent;
+  color: var(--chat-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.taskRow:hover .taskAction,
+.taskAction:focus-visible {
+  opacity: 1;
+}
+
+.taskAction:hover {
+  background: var(--chat-surface-hover);
+  color: var(--chat-text-primary);
+}
+
+@media (hover: none) {
+  .taskAction {
+    min-height: 44px;
+    opacity: 1;
+  }
+}
+
 .reply {
   font-size: 16px;
   line-height: 26px;
@@ -828,6 +880,7 @@ svg + .menuRowLabel {
 
 .approvalActions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
 }
@@ -1055,6 +1108,7 @@ svg + .menuRowLabel {
 
 .controlRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 0 10px 10px 12px;
@@ -1178,6 +1232,17 @@ svg + .menuRowLabel {
   border-radius: var(--chat-radius-md);
   background: var(--chat-bg);
   cursor: pointer;
+}
+
+.optionButton {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.optionButton:hover {
+  background: var(--chat-surface-hover);
 }
 
 .optionSelected {
@@ -1778,6 +1843,75 @@ svg + .menuRowLabel {
 }
 
 /* ---------- narrow viewport ---------- */
+
+/* ---------- local review ---------- */
+
+.reviewSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reviewActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.reviewTurns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reviewTurn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--chat-border-subtle);
+  border-radius: var(--chat-radius-md);
+  background: transparent;
+  color: var(--chat-text-primary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.reviewTurn:hover {
+  background: var(--chat-surface-hover);
+}
+
+.reviewTurnActive {
+  border-color: var(--chat-border-strong);
+  background: var(--chat-surface-hover);
+}
+
+.reviewFileHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reviewFileHeader .fileRow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.reviewHunks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 24px;
+}
+
+.reviewHunk {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 
 @media (max-width: 900px) {
   .railDocked {

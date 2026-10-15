@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { getProviderOfferings } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/csrf');
@@ -14,6 +14,7 @@ type ScanModule8 = typeof import('@/lib/services/managed-content-safety-service'
 type ScanModule9 = typeof import('@/lib/managed-compute-gate');
 type ScanModule10 = typeof import('@/lib/services/organization-policy-gate');
 type ScanModule11 = typeof import('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate');
+type ScanModule12 = typeof import('@/lib/feature-flags/flag-evaluation-service');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   egress: vi.fn(),
   fetch: vi.fn(),
   persistUser: vi.fn(),
+  flags: vi.fn(),
 }));
 
 vi.mock('@/lib/csrf', async (importOriginal) => ({
@@ -91,8 +93,20 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate', async (imp
 vi.mock('@/app/api/chat/conversations/[id]/messages/lib/persist-message', () => ({
   persistConversationMessage: mocks.persistUser,
 }));
+vi.mock('@/lib/feature-flags/flag-evaluation-service', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule12>()),
+  evaluateFlagsForSubject: mocks.flags,
+}));
 
 const { POST } = await import('./route');
+const {
+  CHAT_SYSTEM_PROMPT_ID,
+  CHAT_SYSTEM_PROMPT_PINNED_VERSION,
+  chatSystemPromptSection,
+  chatSystemPromptSections,
+} = await import('@/lib/prompts/chat-system-prompt');
+const { promptFlagKey, promptFlagVariant } = await import('@/lib/prompts/prompt-flags');
+const { PLATFORM_ADMIN_ENV_VAR } = await import('@/features/admin/lib/platform-admin-access');
 const [key, offering] = Object.entries(getProviderOfferings()).find(
   ([, candidate]) => candidate.provider === 'experientiallabs' && candidate.category === 'chat',
 )!;
@@ -129,8 +143,20 @@ beforeEach(() => {
     ),
   );
   mocks.persistUser.mockReset().mockResolvedValue({ id: 'persisted-user' });
+  mocks.flags.mockReset().mockResolvedValue({});
   vi.stubGlobal('fetch', mocks.fetch);
+  vi.stubEnv(PLATFORM_ADMIN_ENV_VAR, 'fixture-user');
 });
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+function upstreamMessages(): { role: string; content: string }[] {
+  const [, init] = mocks.fetch.mock.calls[0] as [URL, RequestInit];
+  return (JSON.parse(init.body as string) as { messages: { role: string; content: string }[] })
+    .messages;
+}
 
 describe('Experiential Labs free-only chat route', () => {
   it('persists the user message before contacting the free provider', async () => {
@@ -185,6 +211,141 @@ describe('Experiential Labs free-only chat route', () => {
       stream: true,
       max_tokens: 1024,
     });
+  });
+
+  it('puts the chat system prompt ahead of the conversation sent to the free model', async () => {
+    const response = await request();
+
+    expect(response.status).toBe(200);
+    const [system, user] = upstreamMessages();
+    expect(system?.role).toBe('system');
+    expect(system?.content).toContain(
+      chatSystemPromptSection(
+        chatSystemPromptSections(CHAT_SYSTEM_PROMPT_PINNED_VERSION),
+        'identity',
+      ),
+    );
+    expect(user).toEqual({ role: 'user', content: 'Reply with OK' });
+  });
+
+  it('names the offering as the model when a prompt flag serves the identity version', async () => {
+    const flag = promptFlagKey(CHAT_SYSTEM_PROMPT_ID);
+    mocks.flags.mockResolvedValue({
+      [flag]: {
+        key: flag,
+        variant: promptFlagVariant(8),
+        enabled: true,
+        reason: 'rule',
+        ruleId: 'internal-staff',
+        version: 1,
+      },
+    });
+
+    const response = await request({ client_timezone: 'America/Chicago' });
+
+    expect(response.status).toBe(200);
+    const [system] = upstreamMessages();
+    expect(system?.content).toContain('You are AGI, the AI assistant in AGI Workforce');
+    expect(system?.content).toContain(`This turn runs on ${offering.displayName}.`);
+    expect(system?.content).toContain('(America/Chicago)');
+    expect(system?.content).not.toContain('Which model serves this turn is not stated here');
+  });
+
+  it('serves a customer the pinned prompt when the flag selects a version kept on internal', async () => {
+    vi.stubEnv(PLATFORM_ADMIN_ENV_VAR, '');
+    const flag = promptFlagKey(CHAT_SYSTEM_PROMPT_ID);
+    mocks.flags.mockResolvedValue({
+      [flag]: {
+        key: flag,
+        variant: promptFlagVariant(8),
+        enabled: true,
+        reason: 'user_override',
+        ruleId: null,
+        version: 1,
+      },
+    });
+
+    const response = await request();
+
+    expect(response.status).toBe(200);
+    const [system] = upstreamMessages();
+    expect(system?.content).toContain(
+      chatSystemPromptSection(
+        chatSystemPromptSections(CHAT_SYSTEM_PROMPT_PINNED_VERSION),
+        'identity',
+      ),
+    );
+  });
+
+  it('sends a text-only turn the compact prompt without artifacts or Settings guidance', async () => {
+    const flag = promptFlagKey(CHAT_SYSTEM_PROMPT_ID);
+    mocks.flags.mockResolvedValue({
+      [flag]: {
+        key: flag,
+        variant: promptFlagVariant(8),
+        enabled: true,
+        reason: 'rule',
+        ruleId: 'internal-staff',
+        version: 1,
+      },
+    });
+    const sections = chatSystemPromptSections(8);
+
+    const response = await request();
+
+    expect(response.status).toBe(200);
+    const [system] = upstreamMessages();
+    expect(system?.content).toContain(chatSystemPromptSection(sections, 'no_tools'));
+    expect(system?.content).toContain(chatSystemPromptSection(sections, 'disclosure'));
+    for (const key of ['artifact_runtime', 'settings_help_web', 'account_help_web']) {
+      expect(system?.content, key).not.toContain(chatSystemPromptSection(sections, key));
+    }
+  });
+
+  it('tells the model this route uses no memory, personalization or project knowledge', async () => {
+    const flag = promptFlagKey(CHAT_SYSTEM_PROMPT_ID);
+    mocks.flags.mockResolvedValue({
+      [flag]: {
+        key: flag,
+        variant: promptFlagVariant(8),
+        enabled: true,
+        reason: 'rule',
+        ruleId: 'internal-staff',
+        version: 1,
+      },
+    });
+    const sections = chatSystemPromptSections(8);
+
+    const response = await request();
+
+    expect(response.status).toBe(200);
+    const [system] = upstreamMessages();
+    expect(system?.content).toContain(
+      chatSystemPromptSection(sections, 'personal_context_not_used'),
+    );
+    expect(system?.content).toContain(chatSystemPromptSection(sections, 'apps_not_used'));
+    expect(system?.content).not.toContain('- This is a temporary chat.');
+  });
+
+  it('gives a temporary chat its promise on this route', async () => {
+    const flag = promptFlagKey(CHAT_SYSTEM_PROMPT_ID);
+    mocks.flags.mockResolvedValue({
+      [flag]: {
+        key: flag,
+        variant: promptFlagVariant(8),
+        enabled: true,
+        reason: 'rule',
+        ruleId: 'internal-staff',
+        version: 1,
+      },
+    });
+    mocks.query.mockResolvedValue([{ id: 'conversation', data_region: null, is_temporary: true }]);
+
+    const response = await request();
+
+    expect(response.status).toBe(200);
+    const [system] = upstreamMessages();
+    expect(system?.content).toContain('- This is a temporary chat.');
   });
 
   it('translates an empty free provider completion into a user-safe stream error', async () => {

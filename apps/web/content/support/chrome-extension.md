@@ -5,13 +5,13 @@ path: /chrome-extension
 category: surfaces
 tags: chrome, browser extension, browser companion, side panel, capture page, screenshot, tabs, browser automation, computer use
 platforms: chrome
-updated: 2026-10-12
+updated: 2026-10-15
 scope: public
 ---
 
 ## Availability
 
-The Chrome extension, AGI Browser Companion, is {{STATUS.chrome}}. The
+The Chrome extension, agiworkforce, is {{STATUS.chrome}}. The
 [Chrome page](https://agiworkforce.com/chrome-extension) carries its status and
 the [download page](https://agiworkforce.com/download) keeps a notify list.
 Until it is released there is no Web Store listing to install from.

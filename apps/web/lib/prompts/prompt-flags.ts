@@ -2,6 +2,12 @@ import type { FlagEvaluation } from '@/lib/feature-flags/evaluate-flags';
 
 import { PROMPT_IDS, isPromptId, type PromptId } from './prompt-manifest';
 import { promptVersions } from './prompt-registry';
+import {
+  promptReleaseAdmits,
+  promptReleaseChannel,
+  type PromptAudience,
+  type PromptReleaseChannel,
+} from './prompt-release';
 
 /**
  * A/B selection for a prompt, carried by the flag system rather than by a
@@ -39,6 +45,12 @@ export function promptVersionFromVariant(id: PromptId, variant: string): number 
   return promptVersions(id).includes(version) ? version : null;
 }
 
+export interface WithheldPromptVariant {
+  readonly key: string;
+  readonly variant: string;
+  readonly channel: PromptReleaseChannel | null;
+}
+
 /**
  * The version each prompt should serve for this subject, read from the flags
  * already evaluated for the request. Absent, disabled and stale flags leave a
@@ -46,15 +58,23 @@ export function promptVersionFromVariant(id: PromptId, variant: string): number 
  */
 export function promptVariantsFromFlags(
   evaluations: Readonly<Record<string, FlagEvaluation>>,
-): Record<string, number> {
+  audience: PromptAudience,
+): { variants: Record<string, number>; withheld: WithheldPromptVariant[] } {
   const variants: Record<string, number> = {};
+  const withheld: WithheldPromptVariant[] = [];
   for (const [key, evaluation] of Object.entries(evaluations)) {
     const id = promptIdFromFlagKey(key);
     if (id === null || !evaluation.enabled) continue;
     const version = promptVersionFromVariant(id, evaluation.variant);
-    if (version !== null) variants[id] = version;
+    if (version === null) continue;
+    const channel = promptReleaseChannel(id, version);
+    if (promptReleaseAdmits(channel, audience)) {
+      variants[id] = version;
+    } else {
+      withheld.push({ key, variant: evaluation.variant, channel });
+    }
   }
-  return variants;
+  return { variants, withheld };
 }
 
 export const PROMPT_FLAG_KEYS: readonly string[] = PROMPT_IDS.map(promptFlagKey);

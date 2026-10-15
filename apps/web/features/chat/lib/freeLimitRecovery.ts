@@ -50,6 +50,11 @@ const FREE_LIMIT_REASON_BY_CODE: Readonly<Record<string, FreeLimitReason>> = {
   [FREE_QUOTA_DAILY_LIMIT_CODE]: 'daily_limit_reached',
 };
 
+function isFreeMediaOffering(modelId: string): boolean {
+  const category = getProviderOffering(modelId)?.category;
+  return category !== undefined && isFreeMediaCategory(category);
+}
+
 function planIncludingFreeOffering(
   modelId: string,
   planTier: string | null | undefined,
@@ -94,7 +99,8 @@ export function resolveFreeLimitPaywallSlot(input: {
   const resetAt = limit.resets_at ?? input.resetAt;
   const byokHref = findRecoveryHref(input.recovery, BYOK_RECOVERY_ACTION);
   const dailyLimit = limit.reason === 'daily_limit_reached';
-  const nextTier = dailyLimit
+  const mediaDailyLimit = dailyLimit && isFreeMediaOffering(limit.model);
+  const nextTier = mediaDailyLimit
     ? planIncludingFreeOffering(limit.model, input.planTier)
     : getNextUpgradeTier(input.planTier);
   const freePlan = isFreeBillingPlanTier(normalizeBillingPlanTier(input.planTier));
@@ -103,7 +109,7 @@ export function resolveFreeLimitPaywallSlot(input: {
     requiredTier: nextTier ?? DEFAULT_REQUIRED_TIER,
     reason: input.message,
     recoveryAction: 'upgrade',
-    showUpgradeCta: (dailyLimit || freePlan) && nextTier !== null,
+    showUpgradeCta: (mediaDailyLimit || freePlan) && nextTier !== null,
     showResetTime: resetAt !== undefined,
     suggestStandardModel: !dailyLimit && !freePlan && alternativeModel === null,
     ...(resetAt ? { resetAt } : {}),

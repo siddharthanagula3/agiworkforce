@@ -814,6 +814,7 @@ function catalogToConnectorToolDefs(
       origin: 'connector',
       ...(serverLabel ? { serverLabel } : {}),
       inputSchema: t.inputSchema,
+      ...(t.annotations ? { annotations: t.annotations } : {}),
     }));
 }
 

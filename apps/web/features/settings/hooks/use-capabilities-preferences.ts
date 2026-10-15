@@ -15,6 +15,7 @@ export interface CapabilitiesSettings {
   generateFromHistory: boolean;
   allowToolAssistedGeneration: boolean;
   searchPastChats: boolean;
+  includeSensitiveTopics: boolean;
   cloudCodeExecution: boolean;
 }
 
@@ -27,6 +28,7 @@ export const DEFAULT_CAPABILITIES_SETTINGS: CapabilitiesSettings = {
   generateFromHistory: true,
   allowToolAssistedGeneration: false,
   searchPastChats: false,
+  includeSensitiveTopics: false,
   cloudCodeExecution: true,
 };
 

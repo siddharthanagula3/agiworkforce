@@ -7,6 +7,7 @@ export interface MemoryPolicyStubOptions {
   generateFromHistory?: boolean;
   allowToolAssistedGeneration?: boolean;
   searchPastChats?: boolean;
+  includeSensitiveTopics?: boolean;
   allowMemory?: boolean;
   retentionDays?: number | null;
   retentionEnforced?: boolean;
@@ -40,6 +41,7 @@ export function answerMemoryPolicyQuery(
           generateFromHistory: options.generateFromHistory ?? true,
           allowToolAssistedGeneration: options.allowToolAssistedGeneration ?? true,
           searchPastChats: options.searchPastChats ?? true,
+          includeSensitiveTopics: options.includeSensitiveTopics ?? false,
         },
       },
     ];

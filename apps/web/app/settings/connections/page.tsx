@@ -17,7 +17,7 @@ export default function ConnectionsSettingsPage() {
     <SignedOutSurface
       eyebrow="Connectors"
       heading="Your connections live in settings"
-      signInHref="/login?redirectTo=%2Fsettings%2Fconnections"
+      redirectTo="/settings/connections"
       signInLabel="Sign in to see your connections"
       secondary={{ href: '/connectors/mcp-directory', label: 'Browse the MCP directory' }}
     >

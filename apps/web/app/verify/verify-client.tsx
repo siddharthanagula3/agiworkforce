@@ -4,6 +4,11 @@ import Link from 'next/link';
 import { useSession } from '@/lib/identity/client';
 import { useState } from 'react';
 import { Button } from '@agiworkforce/ui';
+import {
+  CREATE_ACCOUNT_LABEL,
+  webEntryHref,
+  webSignInHref,
+} from '@/features/marketing/components/system/nav';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const SESSION_CHECK_FAILED = 'Your session could not be confirmed. Reload this page and try again.';
@@ -23,7 +28,7 @@ export function VerifyDeviceClient({ code }: { code: string }) {
   const { isLoaded, isSignedIn } = useSession();
   const [loading, setLoading] = useState<'approve' | 'deny' | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const signInHref = `/login?redirectTo=${encodeURIComponent(`/verify?code=${encodeURIComponent(code)}`)}`;
+  const returnPath = `/verify?code=${encodeURIComponent(code)}`;
 
   const submit = async (action: 'approve' | 'deny') => {
     if (!isLoaded) return;
@@ -99,12 +104,20 @@ export function VerifyDeviceClient({ code }: { code: string }) {
           Sign in before approving or denying this device request.
         </div>
         <Link
-          href={signInHref}
+          href={webSignInHref(returnPath)}
           className="agi-ds-btn"
           data-variant="primary"
           style={{ display: 'flex' }}
         >
           Sign in to continue
+        </Link>
+        <Link
+          href={webEntryHref(returnPath)}
+          className="agi-ds-btn"
+          data-variant="secondary"
+          style={{ display: 'flex' }}
+        >
+          {CREATE_ACCOUNT_LABEL}
         </Link>
       </div>
     );

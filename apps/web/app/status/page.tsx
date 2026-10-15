@@ -13,7 +13,11 @@ import {
   Stack,
 } from '@/features/marketing/components/system';
 import { FactGrid } from '@/features/marketing/components/pages/surfaces/shared';
-import { getCachedHealthChecks, type HealthCheckResult } from '../../lib/server/health-check';
+import {
+  getCachedHealthChecks,
+  NOT_CONFIGURED,
+  type HealthCheckResult,
+} from '../../lib/server/health-check';
 import { getCachedSloAttainment, type SloAttainment } from '@/lib/server/slo/attainment';
 import { declaredOnlySlos, formatObjective } from '@/lib/server/slo/catalogue';
 import { CAPABILITY_DEGRADATION } from '@/lib/server/slo/degradation';
@@ -121,6 +125,7 @@ interface CoveredCheck {
 }
 
 function componentState(check: HealthCheckResult['checks'][CheckKey]): string {
+  if ('message' in check && check.message === NOT_CONFIGURED) return 'Not configured';
   const reason = 'message' in check && check.message ? ` (${check.message})` : '';
   return `${COMPONENT_LABEL[check.status]}${reason}`;
 }
@@ -171,6 +176,16 @@ const COVERED: CoveredCheck[] = [
     label: 'Semantic search',
     what: 'The vector extension and the embedding index that semantic search over your own content reads are present in the database. The same catalogue query as the Search row answers it, and it never runs a query on your behalf.',
   },
+  {
+    key: 'identity',
+    label: 'Sign-in',
+    what: 'The identity provider answers with the signing keys every session is verified against, and a missed answer is asked once more before this row fails. A failure here means signing in and staying signed in may fail. It does not sign anyone in.',
+  },
+  {
+    key: 'email',
+    label: 'Account email',
+    what: 'A sender for account email is configured: scheduled task results, spend alerts and upgrade waitlist notices. Without one those still arrive in the app. It sends no message and does not check that one reaches an inbox.',
+  },
 ];
 
 function checkedLine(view: SignalView<CoveredCheck>): string {
@@ -201,7 +216,6 @@ function scopeLine(view: SignalView<CoveredCheck>): string {
 
 const NOT_COVERED = [
   'A completed model response or answer quality',
-  'Authentication (Clerk)',
   'Object storage (Cloudflare R2)',
   'The API gateway',
   'The rate limiter (Redis)',

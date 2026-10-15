@@ -14,6 +14,7 @@ import {
   recordTermsAcceptance,
 } from '@/lib/server/terms';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { readPrimaryEmailState, UNCONFIRMED_EMAIL_MESSAGE } from '@/lib/auth/email-confirmation';
 import {
   isConsentSurface,
   MARKETING_EMAIL_CONSENT_PURPOSE,
@@ -88,6 +89,10 @@ async function handleAcceptTerms(request: NextRequest) {
       },
       { status: 409 },
     );
+  }
+
+  if (!(await readPrimaryEmailState(userId)).confirmed) {
+    throw createError.forbidden(UNCONFIRMED_EMAIL_MESSAGE);
   }
 
   try {

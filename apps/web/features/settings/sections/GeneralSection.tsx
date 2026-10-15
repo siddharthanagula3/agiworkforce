@@ -36,6 +36,9 @@ import { CustomCommandsSettings } from '@/features/settings/components/CustomCom
 import { useCloudSettingsSyncStatus } from '@/features/settings/lib/cloud-settings-sync-status';
 import { KeyboardShortcutsDialog } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
 import { KEYBOARD_SHORTCUT_DOCS } from '@/features/chat/hooks/use-keyboard-shortcuts';
+import { COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, formatShortcutKeys } from '@agiworkforce/unified-chat';
+import { useDesktopHost } from '@/features/desktop-host';
+import { safePlatform } from '@shared/utils/browser-utils';
 import {
   fetchStoredPreferenceNamespace,
   refreshProfileConsumers,
@@ -975,6 +978,7 @@ export function GeneralSection() {
           <CodeBlockWrapRow />
           <FollowUpSuggestionsRow />
           <FollowUpBehaviorRow />
+          <CodeFollowUpModeRow />
 
           {/* Read-aloud voice */}
           <ReadAloudVoiceRow />
@@ -1468,6 +1472,38 @@ function FollowUpBehaviorRow() {
       >
         <option value="queue">Queue</option>
         <option value="steer">Steer</option>
+      </select>
+    </Row>
+  );
+}
+
+const CODE_FOLLOW_UP_LABEL = 'Follow-ups while a coding agent works';
+
+function CodeFollowUpModeRow() {
+  const host = useDesktopHost();
+  const codeFollowUpQueueMode = useSettingsStore((state) => state.codeFollowUpQueueMode);
+  const setCodeFollowUpQueueMode = useSettingsStore((state) => state.setCodeFollowUpQueueMode);
+  if (host === null) return null;
+  const invertKeys = formatShortcutKeys(
+    COMPOSER_FOLLOW_UP_INVERT_SHORTCUT,
+    safePlatform.isMac(),
+  ).join(' + ');
+
+  return (
+    <Row
+      label={CODE_FOLLOW_UP_LABEL}
+      hint={`Steer adds your message to the running turn, which reads it at its next step. Queue sends it when the turn ends. ${invertKeys} does the other one for a single message.`}
+    >
+      <select
+        value={codeFollowUpQueueMode}
+        onChange={(event) =>
+          setCodeFollowUpQueueMode(event.target.value === 'steer' ? 'steer' : 'queue')
+        }
+        aria-label={CODE_FOLLOW_UP_LABEL}
+        className={SELECT_CLASS}
+      >
+        <option value="steer">Steer</option>
+        <option value="queue">Queue</option>
       </select>
     </Row>
   );

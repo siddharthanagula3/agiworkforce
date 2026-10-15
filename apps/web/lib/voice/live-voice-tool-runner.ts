@@ -10,7 +10,10 @@ import {
   type LiveVoiceToolFile,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventToolCategory } from '@agiworkforce/types/protocol';
-import { loadConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import {
+  loadConnectorToolPermissions,
+  withoutStandingApprovals,
+} from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import { resolveToolCallGate } from '@/app/api/llm/v1/chat/completions/lib/tool-call-gate';
 import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
 import {
@@ -262,6 +265,20 @@ async function runSandboxTool(
   };
 }
 
+async function conversationIsTemporary(input: LiveVoiceToolCallInput): Promise<boolean> {
+  const [conversation] = await input.db.query<{ is_temporary: boolean }>(
+    `select is_temporary
+       from web_conversations
+      where id = $1::uuid
+        and user_id = $2
+        and organization_id is not distinct from $3::uuid
+        and deleted_at is null
+      limit 1`,
+    [input.conversationId, input.userId, input.organizationId],
+  );
+  return conversation?.is_temporary !== false;
+}
+
 async function auditCall(
   input: LiveVoiceToolCallInput,
   status: 'completed' | 'failed' | 'blocked',
@@ -293,10 +310,12 @@ export async function handleLiveVoiceToolCall(
   const args = parseArguments(call.arguments);
   if (!args) return { status: 'completed', output: MESSAGE.malformed, isError: true };
 
-  const [toolApprovalPolicy, permissions] = await Promise.all([
+  const [toolApprovalPolicy, savedPermissions, temporaryChat] = await Promise.all([
     loadToolApprovalPolicy(input.db, input.userId),
     loadConnectorToolPermissions(input.db, input.userId, input.organizationId),
+    conversationIsTemporary(input),
   ]);
+  const permissions = temporaryChat ? withoutStandingApprovals(savedPermissions) : savedPermissions;
   const approvalMode = input.offeredTools.some(
     (name) =>
       parseQualifiedToolName(name) !== null || !policyAutoApprovesTool(toolApprovalPolicy, name),

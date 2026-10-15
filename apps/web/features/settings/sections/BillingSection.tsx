@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { Switch, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useBillingStore } from '@shared/stores/web-auth-store';
-import { toast } from 'sonner';
 import { openBillingPortal } from '@/features/billing/services/stripe-payments';
 import {
   fetchPlanChangeState,
@@ -28,6 +27,8 @@ import { BillingPaymentHistory } from '@/features/billing/components/BillingPaym
 import { DowngradeReviewDialog } from '@/features/billing/components/DowngradeReviewDialog';
 import { TopUpPanel } from '@/features/billing/components/TopUpPanel';
 import { AutoReloadPanel } from '@/features/billing/components/AutoReloadPanel';
+import { useUpgradeWaitlistStatus } from '@/features/billing/hooks/use-upgrade-waitlist';
+import { upgradeNeedsWaitlist } from '@/features/billing/services/upgrade-waitlist';
 import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   getBillingPlanPricing,
@@ -45,6 +46,7 @@ import {
   formatCredits as formatCreditsShared,
 } from '@agiworkforce/types';
 import { AgiMark } from '@shared/components/agi/AgiMark';
+import { ServiceNotices } from '@shared/components/ServiceNotices';
 import { SettingsPageLink } from '../components/SettingsSectionLink';
 import { EnterpriseCollectionBanner } from '../components/EnterpriseCollectionBanner';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -291,13 +293,7 @@ export function BillingSection() {
     setPortalPending(true);
     setPortalError(null);
     try {
-      const opened = await openBillingPortal(undefined, flow, () => void refreshUser());
-      if (opened === 'browser') {
-        setPortalPending(false);
-        toast.info(
-          'The billing portal opened in your browser. Your plan updates here when you come back.',
-        );
-      }
+      if ((await openBillingPortal(undefined, flow)) === 'handed-off') setPortalPending(false);
     } catch (error) {
       setPortalError(toUserMessage(error, 'Could not open billing portal.'));
       setPortalPending(false);
@@ -372,6 +368,8 @@ export function BillingSection() {
         : null;
 
   const isFreeTier = isFreeBillingPlanTier(tier);
+  const { status: upgradeWaitlistStatus } = useUpgradeWaitlistStatus({ enabled: isFreeTier });
+  const offersOnlyUpgradeWaitlist = isFreeTier && upgradeNeedsWaitlist(upgradeWaitlistStatus);
 
   const billingSource = subscription?.subscription_source ?? null;
   const storeManagementUrl = billingSource ? (STORE_SUBSCRIPTION_URL[billingSource] ?? null) : null;
@@ -662,6 +660,8 @@ export function BillingSection() {
           <HelpArticleLink docId="billing-and-plans" label="How plans and billing work" />
         </div>
       </div>
+
+      {offersOnlyUpgradeWaitlist ? null : <ServiceNotices scope="billing" />}
 
       <EnterpriseCollectionBanner />
 

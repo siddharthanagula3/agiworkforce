@@ -31,26 +31,12 @@ import {
 } from '@agiworkforce/types';
 import type { CloudCodeChanges, CloudCodePullRequestStatus } from '@agiworkforce/cloud-contracts';
 import { CODE_COPY, CODE_LIMITS, changeStateLabel, continueInVsCodeHref } from '../code-surface';
-import { diffByPath, diffLineKind } from '../code-diff';
+import { diffByPath } from '../code-diff';
+import { DiffBody } from './CodeDiffFile';
 import styles from '../CloudCodePage.module.css';
 
 const GLYPH_SIZE = 15;
 const EXIT_CODE_OK = 0;
-
-export function DiffBody({ body }: { body: string }) {
-  return (
-    <pre className={styles['diff']}>
-      {body.split('\n').map((line, index) => (
-        <span
-          key={`${index}:${line}`}
-          className={`${styles['diffLine']} ${styles[`diffLine-${diffLineKind(line)}`]}`}
-        >
-          {line}
-        </span>
-      ))}
-    </pre>
-  );
-}
 
 function ChangedFile({
   path,

@@ -37,6 +37,7 @@ vi.mock('@agiworkforce/types', async (importOriginal) => ({
 }));
 
 vi.mock('@/lib/services/provider-adapter-service', () => ({
+  serverProviderHasEndpointOverride: () => false,
   buildProtocolRouteAdapter: (providerId: string, options?: unknown) =>
     buildProtocolRouteAdapter(providerId, options),
   buildServerProviderAdapter: () => protocolAdapter,

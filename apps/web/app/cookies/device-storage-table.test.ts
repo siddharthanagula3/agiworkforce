@@ -22,18 +22,30 @@ const SKIP_DIRS = new Set([
   'public',
 ]);
 
-// Keys the table names outright. The cell is a comma-separated list where one
-// row covers several keys of the same kind.
-function declaredKeys(): Set<string> {
+type StorageArea = 'Local storage' | 'Session storage';
+
+const STORE_OF_API: Readonly<Record<string, StorageArea>> = {
+  localStorage: 'Local storage',
+  sessionStorage: 'Session storage',
+};
+
+// Keys the table names outright, with the store each row says they live in.
+// The key cell is a comma-separated list where one row covers several keys of
+// the same kind.
+function declaredStores(): Map<string, string> {
   const page = readFileSync(join(webRoot, 'app/cookies/page.tsx'), 'utf8');
   const table = page.slice(page.indexOf('const STORAGE'), page.indexOf('function cookieRows'));
-  const keys = new Set<string>();
-  for (const match of table.matchAll(/^\s{4}key: '([^']+)',$/gm)) {
-    const cell = match[1];
-    if (!cell) continue;
-    for (const key of cell.split(',')) keys.add(key.trim());
+  const stores = new Map<string, string>();
+  for (const match of table.matchAll(/^\s{4}key: '([^']+)',\n\s{4}store: '([^']+)',$/gm)) {
+    const [, cell, store] = match;
+    if (!cell || !store) continue;
+    for (const key of cell.split(',')) stores.set(key.trim(), store);
   }
-  return keys;
+  return stores;
+}
+
+function declaredKeys(): Set<string> {
+  return new Set(declaredStores().keys());
 }
 
 function sourceFiles(): string[] {
@@ -76,18 +88,19 @@ function constantValues(files: readonly string[]): Map<string, string> {
 function writtenKeys(
   files: readonly string[],
   values: ReadonlyMap<string, string>,
-): { key: string; file: string }[] {
-  const written: { key: string; file: string }[] = [];
+): { key: string; file: string; store: StorageArea }[] {
+  const written: { key: string; file: string; store: StorageArea }[] = [];
   for (const file of files) {
     const source = readFileSync(file, 'utf8');
     for (const match of source.matchAll(
-      /(?:localStorage|sessionStorage)\s*\.setItem\(\s*([^,\n]+?)\s*,/g,
+      /(localStorage|sessionStorage)\s*\.setItem\(\s*([^,\n]+?)\s*,/g,
     )) {
-      const argument = match[1];
-      if (!argument) continue;
+      const [, api, argument] = match;
+      const store = api ? STORE_OF_API[api] : undefined;
+      if (!argument || !store) continue;
       const literal = /^'([^']+)'$/.exec(argument)?.[1];
       const key = literal ?? values.get(argument);
-      if (key) written.push({ key, file: file.slice(webRoot.length + 1) });
+      if (key) written.push({ key, file: file.slice(webRoot.length + 1), store });
     }
   }
   return written;
@@ -143,6 +156,18 @@ describe('the device-storage table on /cookies', () => {
       .map((entry) => `${entry.key} (${entry.file})`);
 
     expect([...new Set(undisclosed)].sort()).toEqual([]);
+  });
+
+  it('names the store a named key is actually written to', () => {
+    const declared = declaredStores();
+    const misfiled = written
+      .filter((entry) => declared.has(entry.key) && declared.get(entry.key) !== entry.store)
+      .map(
+        (entry) =>
+          `${entry.key}: table says ${declared.get(entry.key)}, ${entry.file} writes ${entry.store}`,
+      );
+
+    expect([...new Set(misfiled)].sort()).toEqual([]);
   });
 
   it('keeps the prefix claim true, so the sign-out sweep can find them all', () => {

@@ -4,6 +4,7 @@ import {
   getProviderOffering,
   providerOfferingDisplayName,
 } from '@agiworkforce/types';
+import { freeQuotaChatOffering } from '../../lib/free-model-handoff';
 
 export const CONTEXT_RESERVE_TOKENS = 2_048;
 export const MIN_CONTEXT_BUDGET_TOKENS = 1_024;
@@ -97,6 +98,7 @@ export function evaluateModelCompatibility(
 ): ModelCompatibilityResult {
   const offering = modelId ? getProviderOffering(modelId) : undefined;
   if (offering?.quotaProbeProtocol) {
+    const handsOver = freeQuotaChatOffering(modelId) !== null;
     return {
       modelId: modelId!,
       modelName: providerOfferingDisplayName(modelId!) ?? offering.displayName,
@@ -106,9 +108,13 @@ export function evaluateModelCompatibility(
           ? [
               {
                 code: 'no_attachments' as const,
-                message: offering.quotaChatImageInput
-                  ? 'This free model accepts images only. Remove other files or use Free Auto.'
-                  : 'This free model accepts text only. Remove attached files or use Free Auto.',
+                message: handsOver
+                  ? offering.quotaChatImageInput
+                    ? 'This free model reads images only. Free Auto answers a message that carries other files.'
+                    : 'This free model reads text only. Free Auto answers a message that carries attached files.'
+                  : offering.quotaChatImageInput
+                    ? 'This free model accepts images only. Remove other files or use Free Auto.'
+                    : 'This free model accepts text only. Remove attached files or use Free Auto.',
               },
             ]
           : []),
@@ -125,7 +131,9 @@ export function evaluateModelCompatibility(
           ? [
               {
                 code: 'no_tools' as const,
-                message: 'Turn off tools to use this free model.',
+                message: handsOver
+                  ? 'This free model has no tools. Free Auto answers a message that uses them.'
+                  : 'Turn off tools to use this free model.',
               },
             ]
           : []),

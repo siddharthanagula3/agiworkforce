@@ -26,7 +26,7 @@ vi.mock('@/lib/services/managed-memory-context-service', async (importOriginal) 
   };
 });
 
-const { runMemoryCommand } = await import('../memory-commands');
+const { memoryCommandSource, runMemoryCommand } = await import('../memory-commands');
 
 const SCOPE = { userId: 'user-1', organizationId: null };
 const OWN_MEMORY_PROJECT = '0190a000-0000-7000-8000-0000000000e1';
@@ -51,6 +51,16 @@ function db(rows: Record<string, unknown[]> = {}) {
     query: ReturnType<typeof vi.fn>;
   };
 }
+
+describe('memoryCommandSource', () => {
+  it('labels a command with the surface that ran it', () => {
+    for (const surface of ['mobile', 'desktop', 'chrome', 'vscode', 'cli'] as const) {
+      expect(memoryCommandSource(surface)).toBe(surface);
+    }
+    expect(memoryCommandSource('web')).toBe('web');
+    expect(memoryCommandSource(null)).toBe('web');
+  });
+});
 
 describe('runMemoryCommand', () => {
   beforeEach(() => {
@@ -84,6 +94,18 @@ describe('runMemoryCommand', () => {
     expect(mocks.writeConsolidatedMemory).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ content: 'I use TypeScript', source: 'web' }),
+    );
+  });
+
+  it('stores a sensitive fact the user asked to remember while the opt-in is off', async () => {
+    const result = await runMemoryCommand(db(), SCOPE, {
+      message: 'Remember that I am a practicing Catholic',
+    });
+
+    expect(result?.outcome.status).toBe('stored');
+    expect(mocks.writeConsolidatedMemory).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ content: 'I am a practicing Catholic', userRequested: true }),
     );
   });
 

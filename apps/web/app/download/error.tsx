@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
+import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { logger } from '@shared/lib/logger';
 
@@ -49,7 +50,7 @@ export default function DownloadError({
           Try again
         </button>
         <Link
-          href="/login?redirectTo=%2F"
+          href={WEB_ENTRY_HREF}
           className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-6 text-sm font-medium text-foreground hover:bg-muted transition-colors"
         >
           Use AGI Web

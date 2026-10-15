@@ -46,7 +46,7 @@ import {
 } from '@/lib/server/free-model-promotion';
 import { demoteLowConfidencePremiumSelection } from './route-selection';
 import { hostedToolRunsUnasked, loadToolApprovalPolicy } from './tool-approval-policy';
-import { isLockedDown } from './connector-tool-permissions';
+import { readLockdown } from './connector-tool-permissions';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
 import { stagedAttachmentPaths, type TurnAttachment } from '@/lib/e2b/attachment-staging';
@@ -127,15 +127,12 @@ import {
   hasExplicitWebSearchOptOut,
   webSearchNeedsGenericTool,
 } from '@agiworkforce/search';
-import {
-  MEMORY_COMMAND_KINDS,
-  extractCandidateMemoryFacts,
-  passiveMemoryText,
-} from '@agiworkforce/agent-core';
+import { MEMORY_COMMAND_KINDS, extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
 import {
   MEMORY_COMMAND_CLIENT_SURFACES,
   MEMORY_COMMAND_TURN_STATUSES,
   memoryCommandTurnNote,
+  memoryLearningText,
 } from '@/lib/services/memory-commands';
 import { isMemoryTool, memoryToolDefinitions } from '@/lib/server/tools/memory-tools';
 import { fileSearchToolDefinitions, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
@@ -301,6 +298,8 @@ import {
   productCapabilityFacts,
 } from '@/lib/prompts/product-capability-facts';
 import { promptStampsFor, resolvePromptText } from '@/lib/prompts/prompt-registry';
+import { CHAT_SYSTEM_PROMPT_ID } from '@/lib/prompts/chat-system-prompt';
+import type { PromptId } from '@/lib/prompts/prompt-manifest';
 import {
   orderInstructionBlocks,
   type InstructionBlock,
@@ -393,6 +392,7 @@ import {
   applyManagedMemoryContext,
   DISABLED_MANAGED_MEMORY_POLICY,
   loadManagedMemoryPolicy,
+  readOrganizationMemoryPolicy,
   type ManagedMemoryContextItem,
   type ManagedMemoryPolicy,
 } from '@/lib/services/managed-memory-context-service';
@@ -423,7 +423,13 @@ import {
   hasGenericFunctionTool,
   modelAcceptsForcedToolChoice,
 } from '@/lib/required-tool-call';
-import { buildCapabilityPreamble } from './capability-preamble';
+import {
+  buildCapabilityPreamble,
+  chatSystemPromptDescribesSetup,
+  servingModelFor,
+  type ChatSetup,
+  type ModelSelection,
+} from './capability-preamble';
 import {
   createManagedOfficeFileToolDefinition,
   MANAGED_OFFICE_FILE_TOOL_NAME,
@@ -444,6 +450,7 @@ import {
   enforceManagedContentSafetyPreference,
   ManagedContentSafetyPolicyError,
 } from '@/lib/services/managed-content-safety-service';
+import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
 import { loadSelectedMcpContext, McpContextError } from '@/lib/connectors/mcp-context-service';
 import { moderateManagedPrompt } from '@/lib/moderation';
 import { timePhase } from '@/lib/observability/phase-timer';
@@ -1260,6 +1267,8 @@ export type ProcessedRequest = {
    * second extractor.
    */
   autoMemorySourceText?: string;
+  autoMemoryIncludeSensitiveTopics?: boolean;
+  promptVariants?: Readonly<Record<string, number>>;
   /**
    * Private data reached this turn by a path the message shape does not show.
    *
@@ -1275,6 +1284,7 @@ export type ProcessedRequest = {
   untrustedContextPresent?: boolean;
   toolApprovalPolicy?: ToolApprovalPolicy;
   toolLockdown?: boolean;
+  connectorsAllowed?: boolean;
   toolExecutionObserved?: boolean;
   requestedModel: string;
   provider: string;
@@ -1286,6 +1296,7 @@ export type ProcessedRequest = {
   usedFallback: boolean;
   fallbackReason: string | undefined;
   originalModel: string;
+  modelSelection?: ModelSelection;
   /**
    * D-2026-09-05-06. The model Auto left, and why, when this turn escalated off
    * the conversation's pinned model. Null on every turn that did not move.
@@ -1663,6 +1674,100 @@ export function composeManagedSystemPreamble(input: {
     : stableBlock;
 }
 
+interface ManagedMemoryPolicyRead {
+  readonly readable: boolean;
+  readonly closedByWorkspace: boolean;
+  readonly policy: ManagedMemoryPolicy;
+}
+
+const UNREADABLE_MEMORY_POLICY: ManagedMemoryPolicyRead = {
+  readable: false,
+  closedByWorkspace: false,
+  policy: DISABLED_MANAGED_MEMORY_POLICY,
+};
+
+type CustomInstructionsRead =
+  { readonly readable: true; readonly text: string | null } | { readonly readable: false };
+
+function chatMemorySetup(input: {
+  read: ManagedMemoryPolicyRead;
+  memoryOnForChat: boolean;
+  contextAssembled: boolean;
+}): ChatSetup['memory'] {
+  if (!input.read.readable) return input.memoryOnForChat ? 'unavailable' : 'off_for_chat';
+  if (!input.read.policy.enabled) return input.read.closedByWorkspace ? 'off_by_workspace' : 'off';
+  if (!input.memoryOnForChat) return 'off_for_chat';
+  return input.contextAssembled ? 'on' : 'unavailable';
+}
+
+function chatConnectorsSetup(input: {
+  switchedOffForChat: boolean;
+  lockdown: boolean | null;
+  allowedForTurn: boolean | undefined;
+}): ChatSetup['connectors'] {
+  if (input.switchedOffForChat) return 'off';
+  if (input.lockdown === true) return 'locked_down';
+  return input.lockdown === null || input.allowedForTurn === false ? 'unavailable' : 'on';
+}
+
+function chatSetupFor(input: {
+  chatRequest: Pick<
+    ChatCompletionRequest,
+    'conversation_id' | 'memory_enabled' | 'personalization' | 'connector_tools_enabled'
+  >;
+  surface: CloudChatSurface;
+  temporaryChat: boolean;
+  memoryRead: ManagedMemoryPolicyRead;
+  contextAssembled: boolean;
+  projectId: string | null;
+  projectHasKnowledgeFiles: boolean;
+  projectChats: boolean;
+  customInstructions: CustomInstructionsRead;
+  toolsSupported: boolean;
+  connectorLockdown: boolean | null;
+  connectorsAllowed: boolean | undefined;
+  skillsAllowed: boolean;
+}): ChatSetup {
+  const { chatRequest, memoryRead } = input;
+  const memoryOnForChat = chatRequest.memory_enabled !== false;
+  return {
+    savedChat: Boolean(chatRequest.conversation_id) && !input.temporaryChat,
+    temporaryChat: input.temporaryChat,
+    memory: chatMemorySetup({
+      read: memoryRead,
+      memoryOnForChat,
+      contextAssembled: input.contextAssembled,
+    }),
+    pastChats: memoryRead.readable && memoryRead.policy.searchPastChats && memoryOnForChat,
+    project:
+      input.projectId === null
+        ? 'none'
+        : input.projectHasKnowledgeFiles
+          ? 'with_files'
+          : 'without_files',
+    projectChats: input.projectChats,
+    personalization:
+      chatRequest.personalization === false
+        ? 'off'
+        : !input.customInstructions.readable
+          ? 'unavailable'
+          : input.customInstructions.text
+            ? 'applied'
+            : 'none',
+    toolsSupported: input.toolsSupported,
+    connectors: chatConnectorsSetup({
+      switchedOffForChat: chatRequest.connector_tools_enabled === false,
+      lockdown: input.connectorLockdown,
+      allowedForTurn: input.connectorsAllowed,
+    }),
+    skills: SKILL_OFFER_EXCLUDED_SURFACES.has(input.surface)
+      ? 'none'
+      : input.skillsAllowed
+        ? 'on'
+        : 'off',
+  };
+}
+
 function lastUserMessageText(request: ChatCompletionRequest): string {
   for (let index = request.messages.length - 1; index >= 0; index -= 1) {
     const message = request.messages[index];
@@ -1778,10 +1883,12 @@ export function researchModeAllowed(
 export function turnPromptStamps(
   chatRequest: ChatCompletionRequest,
   promptVariants: Readonly<Record<string, number>>,
+  surface: CloudChatSurface,
 ): string[] {
-  return chatRequest.research === true
-    ? promptStampsFor([RESEARCH_SYSTEM_PROMPT_ID], { variants: promptVariants })
-    : [];
+  const promptIds: PromptId[] = [];
+  if (surface !== 'api') promptIds.push(CHAT_SYSTEM_PROMPT_ID);
+  if (chatRequest.research === true) promptIds.push(RESEARCH_SYSTEM_PROMPT_ID);
+  return promptStampsFor(promptIds, { variants: promptVariants });
 }
 
 export function applyResearchMode(
@@ -3003,12 +3110,19 @@ async function processAdmittedRequest(
   const managedRequestHash = fingerprintManagedUsageRequest(validationResult.data);
 
   const chatRequest = validationResult.data;
+  const pickedModel = chatRequest.model;
   if (chatRequest.personalization === false) chatRequest.memory_enabled = false;
   const callerToolFields: Pick<ChatCompletionRequest, 'tools' | 'tool_choice'> = {
     ...(chatRequest.tools !== undefined ? { tools: chatRequest.tools } : {}),
     ...(chatRequest.tool_choice !== undefined ? { tool_choice: chatRequest.tool_choice } : {}),
   };
   applyWorkspaceDefaultModel(chatRequest, workspaceControls);
+  const modelSelection: ModelSelection = {
+    kind: 'picked',
+    modelId: pickedModel,
+    ...(chatRequest.routing_profile ? { routingProfile: chatRequest.routing_profile } : {}),
+    ...(chatRequest.model !== pickedModel ? { workspaceDefaultModelId: chatRequest.model } : {}),
+  };
   const workModeEntitlementError = getWorkModeEntitlementError(
     chatRequest.work_mode,
     subscription.plan_tier,
@@ -3367,7 +3481,7 @@ async function processAdmittedRequest(
         studyInstruction: null,
       });
 
-  const customInstructionsPromise =
+  const customInstructionsPromise: Promise<CustomInstructionsRead> | null =
     chatSurface === 'api' || chatRequest.personalization === false
       ? null
       : Promise.all([scopedDbPromise, ownershipLeg])
@@ -3376,10 +3490,13 @@ async function processAdmittedRequest(
               projectId: owned.ok ? owned.projectId : null,
             }),
           )
-          .catch((error: unknown) => {
-            logger.warn({ error, userId }, 'Custom instructions read failed; sending none');
-            return null;
-          });
+          .then(
+            (text): CustomInstructionsRead => ({ readable: true, text }),
+            (error: unknown): CustomInstructionsRead => {
+              logger.warn({ error, userId }, 'Custom instructions read failed; sending none');
+              return { readable: false };
+            },
+          );
 
   const safetyLeg: Promise<{ ok: true } | ProcessFailure> = (async () => {
     const platform = moderateManagedPrompt({
@@ -3497,31 +3614,42 @@ async function processAdmittedRequest(
   const projectInstructionBlock =
     ownership.projectBlocks.find((block) => block.layer === 'project')?.text ?? null;
 
-  const memoryPolicyLeg: Promise<ManagedMemoryPolicy> = conversationIsTemporary
-    ? Promise.resolve(DISABLED_MANAGED_MEMORY_POLICY)
-    : (async () => {
+  const memoryPolicyLeg: Promise<ManagedMemoryPolicyRead> = conversationIsTemporary
+    ? Promise.resolve({
+        readable: true,
+        closedByWorkspace: false,
+        policy: DISABLED_MANAGED_MEMORY_POLICY,
+      })
+    : (async (): Promise<ManagedMemoryPolicyRead> => {
         const scoped = await scopedDbPromise;
         if (scoped.userId !== userId) {
           logger.error(
             { userId, scopedUserId: scoped.userId },
             'Managed memory owner mismatch; continuing without account memory',
           );
-          return DISABLED_MANAGED_MEMORY_POLICY;
+          return UNREADABLE_MEMORY_POLICY;
         }
-        return loadManagedMemoryPolicy(scoped.db, {
-          userId,
-          organizationId: scoped.organizationId,
-        });
-      })().catch((error: unknown) => {
+        const workspace = await readOrganizationMemoryPolicy(scoped.db, scoped.organizationId);
+        if (!workspace.readable) return UNREADABLE_MEMORY_POLICY;
+        return {
+          readable: true,
+          closedByWorkspace: !workspace.policy.allowMemory,
+          policy: await loadManagedMemoryPolicy(scoped.db, {
+            userId,
+            organizationId: scoped.organizationId,
+            organizationPolicy: workspace.policy,
+          }),
+        };
+      })().catch((error: unknown): ManagedMemoryPolicyRead => {
         logger.error(
           { error, userId, conversationId: chatRequest.conversation_id },
           'Managed memory load failed; continuing without account memory',
         );
-        return DISABLED_MANAGED_MEMORY_POLICY;
+        return UNREADABLE_MEMORY_POLICY;
       });
 
   const truncatedAttachments: string[] = [];
-  const [hydration, managedMemoryPolicy] = await timePhase(
+  const [hydration, managedMemoryPolicyRead] = await timePhase(
     CHAT_TURN_PHASE.attachmentsAndMemoryPolicy,
     () =>
       Promise.all([
@@ -3537,6 +3665,7 @@ async function processAdmittedRequest(
         memoryPolicyLeg,
       ]),
   );
+  const managedMemoryPolicy = managedMemoryPolicyRead.policy;
 
   const turnAttachments = hydration.ok ? hydration.attachments : [];
 
@@ -3610,7 +3739,8 @@ async function processAdmittedRequest(
   // The project instruction is stable for the conversation and joins the cached
   // preamble below. What the project merely supplies to read varies with the
   // question, so each remaining block is carried at its own layer instead.
-  for (const block of turnContext?.projectBlocks ?? []) {
+  const turnProjectBlocks = turnContext?.projectBlocks ?? [];
+  for (const block of turnProjectBlocks) {
     if (block.layer === 'project') continue;
     chatRequest.messages.unshift({ role: 'system', content: block.text });
     dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, block.layer);
@@ -3806,10 +3936,7 @@ async function processAdmittedRequest(
   }
   const lastUserMsg = lastUserIndex >= 0 ? chatRequest.messages[lastUserIndex] : undefined;
   const lastUserText = lastUserMsg ? extractTextContent(lastUserMsg.content) : '';
-  const passiveUserText = passiveMemoryText(
-    lastUserText,
-    MEMORY_COMMAND_CLIENT_SURFACES.has(chatSurface),
-  );
+  const passiveUserText = memoryLearningText(lastUserText, chatSurface, chatRequest.memory_command);
   const autoMemoryEligibility = {
     isTemporary: conversationIsTemporary,
     surface: chatSurface,
@@ -4179,7 +4306,7 @@ async function processAdmittedRequest(
     semanticResponseAssessment.trace,
   );
   const routingPromptIds = [
-    ...turnPromptStamps(chatRequest, rolloutInputs.promptVariants),
+    ...turnPromptStamps(chatRequest, rolloutInputs.promptVariants, chatSurface),
     ...(semanticResponseAssessment.trace.promptStamp
       ? [semanticResponseAssessment.trace.promptStamp]
       : []),
@@ -4613,11 +4740,17 @@ async function processAdmittedRequest(
   // so. Mirrors `codeExecutionUnavailable`, which already discloses exactly this
   // shape of degradation.
   const researchUnavailable = chatRequest.research === true && !researchMode;
+  let accountLockdownRead: Promise<boolean | null> | undefined;
+  const readAccountLockdown = (): Promise<boolean | null> =>
+    (accountLockdownRead ??= scopedDbPromise.then(({ db }) => readLockdown(db, userId)));
   const [toolApprovalPolicy, toolLockdown]: readonly [ToolApprovalPolicy | undefined, boolean] =
     chatRequest.web_search || chatRequest.web_fetch || chatRequest.code_execution
       ? await timePhase(CHAT_TURN_PHASE.toolPermissions, async () => {
           const { db } = await scopedDbPromise;
-          return Promise.all([loadToolApprovalPolicy(db, userId), isLockedDown(db, userId)]);
+          return Promise.all([
+            loadToolApprovalPolicy(db, userId),
+            readAccountLockdown().then((lockdown) => lockdown !== false),
+          ]);
         })
       : [undefined, false];
   const nativeToolPermitted = (gatedTwin: string): boolean =>
@@ -5683,6 +5816,7 @@ async function processAdmittedRequest(
     autoMemorySourceText = '';
   }
 
+  let connectorsAllowed: boolean | undefined;
   if (chatSurface !== 'api') {
     const memoryServesTurn =
       managedMemoryPolicy.enabled &&
@@ -5695,8 +5829,36 @@ async function processAdmittedRequest(
       surface: chatSurface,
       cloudExecutionDeploymentEnabled: e2bProvisioningReady(),
     });
+    const customInstructionsRead = await timePhase(
+      CHAT_TURN_PHASE.customInstructions,
+      () => customInstructionsPromise ?? Promise.resolve({ readable: true as const, text: null }),
+    );
+    const customInstructionsPreamble = customInstructionsRead.readable
+      ? customInstructionsRead.text
+      : null;
+    const promptSelection = { variants: rolloutInputs.promptVariants };
+    const toolsSupported = resolvedModelCaps?.tools !== false;
+    const describesConnectors =
+      toolsSupported &&
+      chatRequest.connector_tools_enabled !== false &&
+      chatSystemPromptDescribesSetup(promptSelection);
+    const [connectorLockdown, allowedForTurn]: readonly [boolean | null, boolean | undefined] =
+      describesConnectors
+        ? await Promise.all([
+            readAccountLockdown(),
+            scopedDbPromise.then(({ organizationId }) =>
+              connectorsAllowedForTurn(request, userId, {
+                organizationId,
+                subscriptionTier: subscription.plan_tier,
+                chatSurface,
+              }),
+            ),
+          ])
+        : [false, undefined];
+    connectorsAllowed = allowedForTurn;
     const capabilityPreamble = buildCapabilityPreamble({
       tools: resolvedTools,
+      surface: chatSurface,
       researchUnavailable,
       timeZone: chatRequest.client_timezone,
       codeExecutionUnavailable,
@@ -5705,12 +5867,27 @@ async function processAdmittedRequest(
       artifacts: true,
       artifactConnectors: productArtifactConnectors(subscription.plan_tier, productCapabilities),
       productCapabilities,
+      promptSelection,
+      servingModel: servingModelFor(chatRequest.model, modelSelection),
+      chatSetup: chatSetupFor({
+        chatRequest,
+        surface: chatSurface,
+        temporaryChat: conversationIsTemporary,
+        memoryRead: managedMemoryPolicyRead,
+        contextAssembled: turnContext !== null,
+        projectId: conversationProjectId,
+        projectHasKnowledgeFiles: ownership.projectHasKnowledgeFiles,
+        projectChats: turnProjectBlocks.some(
+          (block) => block.sourceClass === 'project_sibling_chat',
+        ),
+        customInstructions: customInstructionsRead,
+        toolsSupported,
+        connectorLockdown,
+        connectorsAllowed: allowedForTurn,
+        skillsAllowed: !workspaceControls || workspaceControls.featureAccess.skills,
+      }),
     });
 
-    const customInstructionsPreamble = await timePhase(
-      CHAT_TURN_PHASE.customInstructions,
-      () => customInstructionsPromise ?? Promise.resolve(null),
-    );
     const preamble = composeManagedSystemPreamble({
       capabilityPreamble,
       customInstructionsPreamble,
@@ -5983,11 +6160,14 @@ async function processAdmittedRequest(
     autoMemoryFacts,
     autoMemoryFactsRequireToolFreeTurn,
     ...(autoMemorySourceText ? { autoMemorySourceText } : {}),
+    autoMemoryIncludeSensitiveTopics: managedMemoryPolicy.includeSensitiveTopics === true,
+    promptVariants: rolloutInputs.promptVariants,
     ...(dynamicSystemBlocks.some((block) => block.layer === 'untrusted_context')
       ? { untrustedContextPresent: true }
       : {}),
     ...(toolApprovalPolicy ? { toolApprovalPolicy } : {}),
     ...(toolLockdown ? { toolLockdown: true } : {}),
+    ...(connectorsAllowed === undefined ? {} : { connectorsAllowed }),
     requestedModel,
     provider,
     estimatedCostMicrousd,
@@ -5998,6 +6178,7 @@ async function processAdmittedRequest(
     usedFallback,
     fallbackReason,
     originalModel,
+    modelSelection,
     ...(movedFromModel ? { movedFromModel } : {}),
     ...(movedFromModel && movedReason ? { movedReason } : {}),
     fallbackModels: failoverRoutes.map((route) => route.modelKey),

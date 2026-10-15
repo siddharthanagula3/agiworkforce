@@ -5,6 +5,7 @@ import { fenceUntrustedContent } from '@agiworkforce/utils';
 import { resolvePromptText } from '@/lib/prompts/prompt-registry';
 import { buildCustomInstructionsPreamble } from '@/lib/server/user-identity';
 import {
+  DISABLED_MANAGED_MEMORY_POLICY,
   formatManagedMemorySystemPrompt,
   loadManagedMemoryContext,
   loadManagedMemoryPolicy,
@@ -190,6 +191,7 @@ export async function loadLiveVoiceContext(
     userId: string;
     conversationId: string | null;
     organizationId?: string | null;
+    memoryEnabled?: boolean;
     onSourceFailure?: (source: LiveVoiceContextSource, error: unknown) => void;
   },
 ): Promise<LiveVoiceContextBundle> {
@@ -236,6 +238,17 @@ export async function loadLiveVoiceContext(
 
   const latestUserQuery = [...turns].reverse().find((turn) => turn.role === 'user')?.content;
 
+  const memoryPolicy =
+    isTemporary || params.memoryEnabled === false
+      ? DISABLED_MANAGED_MEMORY_POLICY
+      : await loadManagedMemoryPolicy(db, {
+          userId: params.userId,
+          organizationId: params.organizationId ?? null,
+        }).catch((error: unknown) => {
+          params.onSourceFailure?.('memory', error);
+          return DISABLED_MANAGED_MEMORY_POLICY;
+        });
+
   let projectBrief: string | null = null;
   let projectPrompt: string | null = null;
   if (projectId) {
@@ -245,6 +258,7 @@ export async function loadLiveVoiceContext(
         userId: params.userId,
         currentConversationId: conversation.id,
         ...(latestUserQuery ? { currentUserQuery: latestUserQuery } : {}),
+        includeChats: memoryPolicy.searchPastChats,
       });
       if (projectContext) {
         projectBrief = renderProjectBrief(projectContext);
@@ -256,26 +270,20 @@ export async function loadLiveVoiceContext(
   }
 
   let memoryPrompt: string | null = null;
-  if (!isTemporary) {
+  if (memoryPolicy.enabled) {
     try {
-      const policy = await loadManagedMemoryPolicy(db, {
-        userId: params.userId,
-        organizationId: params.organizationId ?? null,
-      });
-      if (policy.enabled) {
-        const [suppressedSources, scope] = await Promise.all([
-          loadSuppressedMemorySources(db, { userId: params.userId }),
-          loadProjectMemoryScope(db, { userId: params.userId, projectId }),
-        ]);
-        memoryPrompt = formatManagedMemorySystemPrompt(
-          await loadManagedMemoryContext(db, {
-            userId: params.userId,
-            organizationId: params.organizationId ?? null,
-            suppressedSources,
-            scope,
-          }),
-        );
-      }
+      const [suppressedSources, scope] = await Promise.all([
+        loadSuppressedMemorySources(db, { userId: params.userId }),
+        loadProjectMemoryScope(db, { userId: params.userId, projectId }),
+      ]);
+      memoryPrompt = formatManagedMemorySystemPrompt(
+        await loadManagedMemoryContext(db, {
+          userId: params.userId,
+          organizationId: params.organizationId ?? null,
+          suppressedSources,
+          scope,
+        }),
+      );
     } catch (error) {
       params.onSourceFailure?.('memory', error);
     }

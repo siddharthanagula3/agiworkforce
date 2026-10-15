@@ -59,6 +59,14 @@ describe('one application shell', () => {
     expect(projectNewChatHref('a b')).toBe('/chat?projectId=a%20b');
   });
 
+  it('hosts product notices inside each fixed shell root, under the shell panels and dialogs', () => {
+    for (const source of [appShell, chatShell]) {
+      expect(source).toMatch(
+        /className="fixed inset-x-0 top-0 bottom-\[var\(--agi-consent-inset,0px\)\][^"]*"\s*>\s*<ProductNoticeHost \/>/,
+      );
+    }
+  });
+
   it('sends Share from either shell to the selected conversation with its intent intact', () => {
     for (const source of [appShell, chatShell]) {
       expect(source).toContain('conversationShareHref(id)');

@@ -34,6 +34,12 @@ type Stage =
 const BACKUP_CODES_PRINT_TITLE = 'AGI Workforce backup codes';
 const BACKUP_CODES_PRINT_NOTE =
   'Each code works once, in place of a code from your authenticator app. Keep this page somewhere safe.';
+const BACKUP_CODES_PRINT_FAILED =
+  'The codes could not be sent to the printer. Download or copy the codes instead.';
+const PRINT_FRAME_CLASS = 'pointer-events-none fixed bottom-0 right-0 h-0 w-0 border-0';
+// No scripts run in the frame: this page writes it and asks it to print, which
+// needs the page's origin to reach the document and modals for the print dialog.
+const PRINT_FRAME_SANDBOX = 'allow-same-origin allow-modals';
 
 interface TwoFactorEnrollmentPanelProps {
   onStatusChange?: (status: TwoFactorStatus) => void;
@@ -92,6 +98,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
   const [acknowledged, setAcknowledged] = useState(false);
   const [copied, setCopied] = useState<'secret' | 'codes' | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
+  const printFrameRef = useRef<HTMLIFrameElement | null>(null);
 
   const { withStepUp, dialog: stepUpDialog } = useStepUp();
 
@@ -236,30 +243,53 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
     await refreshStatus();
   }, [refreshStatus, resetFlow]);
 
-  const printCodes = useCallback((codes: string[]) => {
-    const printWindow = window.open('', '_blank', 'width=480,height=640');
-    if (!printWindow) {
-      setPrintError(
-        'Your browser blocked the print window. Allow pop-ups for this site, or download or copy the codes instead.',
-      );
-      return;
-    }
-    setPrintError(null);
-    const doc = printWindow.document;
-    const heading = doc.createElement('h1');
-    heading.textContent = BACKUP_CODES_PRINT_TITLE;
-    const note = doc.createElement('p');
-    note.textContent = BACKUP_CODES_PRINT_NOTE;
-    const list = doc.createElement('ul');
-    for (const code of codes) {
-      const item = doc.createElement('li');
-      item.textContent = code;
-      list.append(item);
-    }
-    doc.title = BACKUP_CODES_PRINT_TITLE;
-    doc.body.append(heading, note, list);
-    printWindow.print();
+  const removePrintFrame = useCallback(() => {
+    printFrameRef.current?.remove();
+    printFrameRef.current = null;
   }, []);
+
+  useEffect(() => {
+    if (stage.name !== 'backup-codes') removePrintFrame();
+    return removePrintFrame;
+  }, [stage.name, removePrintFrame]);
+
+  const printCodes = useCallback(
+    (codes: string[]) => {
+      removePrintFrame();
+      const frame = document.createElement('iframe');
+      frame.setAttribute('sandbox', PRINT_FRAME_SANDBOX);
+      frame.title = BACKUP_CODES_PRINT_TITLE;
+      frame.setAttribute('aria-hidden', 'true');
+      frame.tabIndex = -1;
+      frame.className = PRINT_FRAME_CLASS;
+      document.body.append(frame);
+      const doc = frame.contentDocument;
+      const view = frame.contentWindow;
+      if (!doc || !view) {
+        frame.remove();
+        setPrintError(BACKUP_CODES_PRINT_FAILED);
+        return;
+      }
+      printFrameRef.current = frame;
+      setPrintError(null);
+      const heading = doc.createElement('h1');
+      heading.textContent = BACKUP_CODES_PRINT_TITLE;
+      const note = doc.createElement('p');
+      note.textContent = BACKUP_CODES_PRINT_NOTE;
+      const list = doc.createElement('ul');
+      for (const code of codes) {
+        const item = doc.createElement('li');
+        item.textContent = code;
+        list.append(item);
+      }
+      doc.title = BACKUP_CODES_PRINT_TITLE;
+      doc.body.append(heading, note, list);
+      view.addEventListener('afterprint', removePrintFrame, { once: true });
+      view.focus();
+      view.print();
+    },
+    [removePrintFrame],
+  );
 
   const downloadCodes = useCallback((codes: string[]) => {
     const blob = new Blob([`${codes.join('\n')}\n`], { type: 'text/plain' });

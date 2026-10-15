@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { LocalCommandOutput } from '../lib/runtime-client';
 
@@ -7,9 +7,17 @@ const listWorkspaceRoots = vi.fn();
 const pickWorkspaceRoot = vi.fn();
 const startLocalCommand = vi.fn();
 const cancelLocalCommand = vi.fn();
+let workspaceChanged: (() => void) | null = null;
+const onWorkspaceChanged = (listener: () => void) => {
+  workspaceChanged = listener;
+  return () => {
+    workspaceChanged = null;
+  };
+};
 
 vi.mock('../lib/runtime-client', () => ({
   listWorkspaceRoots,
+  onWorkspaceChanged,
   pickWorkspaceRoot,
   startLocalCommand,
   cancelLocalCommand,
@@ -53,6 +61,7 @@ function finished(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  cancelLocalCommand.mockResolvedValue(true);
   listWorkspaceRoots.mockResolvedValue([root]);
 });
 
@@ -68,6 +77,79 @@ describe('LocalCommandDialog', () => {
     render(<LocalCommandDialog open onClose={vi.fn()} onAttach={vi.fn()} />);
     expect(await screen.findByRole('button', { name: 'project' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
+  });
+
+  it('offers a folder approved by a drop on the window while it is open', async () => {
+    render(<LocalCommandDialog open onClose={vi.fn()} onAttach={vi.fn()} />);
+    expect(await screen.findByRole('button', { name: 'project' })).toBeInTheDocument();
+
+    listWorkspaceRoots.mockResolvedValue([
+      root,
+      { ...root, id: 'root-2', path: '/Users/me/dropped', name: 'dropped' },
+    ]);
+    act(() => workspaceChanged?.());
+
+    expect(await screen.findByRole('button', { name: 'dropped' })).toBeInTheDocument();
+  });
+
+  it('does not run on the Enter that confirms an IME word', async () => {
+    const user = userEvent.setup();
+    startLocalCommand.mockReturnValue({ runId: 'run-1', result: Promise.resolve(finished()) });
+    render(<LocalCommandDialog open onClose={vi.fn()} onAttach={vi.fn()} />);
+    const field = await screen.findByLabelText('Command');
+    await user.type(field, 'git commit -m');
+
+    fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(field, { key: 'Enter', keyCode: 229 });
+    expect(startLocalCommand).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(field, { key: 'Enter' });
+    await waitFor(() => expect(startLocalCommand).toHaveBeenCalledTimes(1));
+  });
+
+  it('says so when a running command could not be stopped', async () => {
+    const user = userEvent.setup();
+    startLocalCommand.mockReturnValue({ runId: 'run-1', result: new Promise(() => undefined) });
+    cancelLocalCommand.mockRejectedValue(new Error('gone'));
+    render(<LocalCommandDialog open onClose={vi.fn()} onAttach={vi.fn()} />);
+    await user.type(await screen.findByLabelText('Command'), 'sleep 60');
+    await user.click(screen.getByRole('button', { name: 'Run' }));
+
+    await user.click(await screen.findByRole('button', { name: 'Stop' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not be stopped');
+  });
+
+  it('stops a running command when the composer that owns the dialog goes away', async () => {
+    const user = userEvent.setup();
+    startLocalCommand.mockReturnValue({ runId: 'run-1', result: new Promise(() => undefined) });
+    cancelLocalCommand.mockResolvedValue(true);
+    const view = render(<LocalCommandDialog open onClose={vi.fn()} onAttach={vi.fn()} />);
+    await user.type(await screen.findByLabelText('Command'), 'sleep 60');
+    await user.click(screen.getByRole('button', { name: 'Run' }));
+    await screen.findByRole('button', { name: 'Stop' });
+
+    view.unmount();
+
+    expect(cancelLocalCommand).toHaveBeenCalledWith('run-1');
+  });
+
+  it('moves off a folder that is no longer approved when the list is reread', async () => {
+    const second = { ...root, id: 'root-2', path: '/Users/me/other', name: 'other' };
+    listWorkspaceRoots.mockResolvedValue([root, second]);
+    render(<LocalCommandDialog open onClose={vi.fn()} onAttach={vi.fn()} />);
+    expect(await screen.findByRole('button', { name: 'project' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    listWorkspaceRoots.mockResolvedValue([second]);
+    act(() => workspaceChanged?.());
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'other' })).toHaveAttribute('aria-pressed', 'true'),
+    );
+    expect(screen.queryByRole('button', { name: 'project' })).not.toBeInTheDocument();
   });
 
   it('tells the user to approve a folder before anything can run', async () => {

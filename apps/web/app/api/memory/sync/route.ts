@@ -18,8 +18,10 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { excludedMemoryMessage, partitionMemoryWrites } from '@/lib/services/memory-write-service';
 import {
+  AUTO_MEMORY_SOURCE,
   loadMemoryWritePolicies,
   memoryWriteAdmission,
+  type ManagedMemoryContextDb,
 } from '@/lib/services/managed-memory-context-service';
 import {
   activeMemoryPredicate,
@@ -179,9 +181,14 @@ async function handlePost(request: NextRequest) {
   // surface does. A push that only deletes is how a client obeys a switch that
   // was turned off, so it is never blocked here.
   const policies = await loadMemoryWritePolicies(db, { userId, organizationId });
+  const storedContent = await loadStoredMemoryContent(db, {
+    userId,
+    organizationId: organizationId ?? null,
+    ids: allowed.filter((memory) => updatesStoredMemory(memory)).map((memory) => memory.id),
+  });
   const admitted = [];
   for (const memory of allowed) {
-    if (memory.isDeleted === true) {
+    if (memory.isDeleted === true || storedContent.get(memory.id) === memory.content) {
       admitted.push(memory);
       continue;
     }
@@ -193,6 +200,8 @@ async function handlePost(request: NextRequest) {
         category: memory.category ?? null,
         source: memory.source ?? 'web',
         organizationId: organizationId ?? null,
+        userRequested:
+          updatesStoredMemory(memory) || memory.source?.trim().toLowerCase() !== AUTO_MEMORY_SOURCE,
       },
       { policies },
     );
@@ -300,6 +309,24 @@ async function handlePost(request: NextRequest) {
     logger.error({ error, userId }, 'Memory sync push failed');
     throw createError.internal('Failed to push memory changes');
   }
+}
+
+function updatesStoredMemory(memory: { baseVersion: string; isDeleted?: boolean }): boolean {
+  return memory.isDeleted !== true && !/^0+$/.test(memory.baseVersion);
+}
+
+async function loadStoredMemoryContent(
+  db: ManagedMemoryContextDb,
+  params: { userId: string; organizationId: string | null; ids: readonly string[] },
+): Promise<Map<string, string>> {
+  if (params.ids.length === 0) return new Map();
+  const rows = await db.query<{ id: string; content: string }>(
+    `select id::text as id, content
+       from user_memories
+      where user_id = $1 and id = any($2::uuid[]) and ${activeMemoryPredicate()} and ${workspaceMemoryPredicate(3)}`,
+    [params.userId, params.ids, params.organizationId],
+  );
+  return new Map(rows.map((row) => [row.id, row.content]));
 }
 
 function hasMemoriesKey(value: unknown): boolean {

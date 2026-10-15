@@ -153,7 +153,7 @@ describe('help articles follow the release registries', () => {
   });
 
   it.each([
-    ['chrome-extension', 'The Chrome extension, AGI Browser Companion, is {{STATUS.chrome}}.'],
+    ['chrome-extension', 'The Chrome extension, agiworkforce, is {{STATUS.chrome}}.'],
     [
       'troubleshooting',
       'The Chrome extension is {{STATUS.chrome}} and the VS Code extension is {{STATUS.vscode}}.',

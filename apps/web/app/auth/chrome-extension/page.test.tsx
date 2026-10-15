@@ -66,6 +66,16 @@ describe('/auth/chrome-extension page', () => {
     );
   });
 
+  it('offers a new extension user an account that returns to the completion page', () => {
+    authState.isSignedIn = false;
+    render(<ChromeExtensionAuthCompletePage />);
+
+    expect(screen.getByRole('link', { name: 'Create an account' })).toHaveAttribute(
+      'href',
+      '/signup?redirectTo=%2Fauth%2Fchrome-extension',
+    );
+  });
+
   it('shows a bounded loading state while Clerk initializes', () => {
     authState.isLoaded = false;
     authState.isSignedIn = false;

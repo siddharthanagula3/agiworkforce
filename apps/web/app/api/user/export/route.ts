@@ -1197,6 +1197,17 @@ const connectorToolPermissionExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const connectorToolSessionGrantExportSchema = z.object({
+  id: z.string(),
+  conversation_id: z.string(),
+  connector_id: z.string(),
+  tool_name: z.string(),
+  trust_boundary: z.string(),
+  destructive: z.boolean(),
+  risk_tier: z.string(),
+  created_at: timestampSchema,
+});
+
 const mcpTaskBindingExportSchema = z.object({
   connector_id: z.string(),
   task_id: z.string(),
@@ -1840,6 +1851,16 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           where user_id = $1
           order by connector_id asc, tool_name asc`,
     schema: connectorToolPermissionExportSchema,
+  },
+  {
+    section: 'connector_tool_session_grants',
+    table: 'connector_tool_session_grants',
+    sql: `select id, conversation_id, connector_id, tool_name, trust_boundary, destructive, risk_tier, created_at
+          from connector_tool_session_grants
+          where user_id = $1
+          order by created_at asc`,
+    schema: connectorToolSessionGrantExportSchema,
+    acrossWorkspaces: true,
   },
   {
     section: 'mcp_task_bindings',

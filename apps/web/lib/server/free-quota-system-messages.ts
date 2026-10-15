@@ -11,12 +11,12 @@ export interface FreeQuotaSystemMessage {
 export function freeQuotaSystemMessages(input: {
   preamble: string;
   studyInstruction?: string | null;
-  personal: readonly InstructionBlock[];
+  blocks: readonly InstructionBlock[];
 }): FreeQuotaSystemMessage[] {
   return orderInstructionBlocks([
     { layer: 'system', text: input.preamble },
     { layer: 'developer', text: input.studyInstruction ?? '' },
-    ...input.personal,
+    ...input.blocks,
   ])
     .filter((block) => block.text.length > 0)
     .map((block) => ({ role: 'system', content: block.text }));

@@ -11,6 +11,7 @@ import {
   Prose,
   Section,
   Stack,
+  WEB_ENTRY_HREF,
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { FounderBlock, NoteList } from '@/features/marketing/components/pages/company/shared';
@@ -197,7 +198,7 @@ export default function AboutPage() {
               {`Try AGI Web in the browser. The CLI runs local models and your own keys on your own hardware. ${CLI_AVAILABILITY_NOTE} Either way, you see where every request runs before it leaves your device.`}
             </Prose>
             <ButtonRow>
-              <Button href="/login?redirectTo=%2F">Try AGI Web</Button>
+              <Button href={WEB_ENTRY_HREF}>Try AGI Web</Button>
               <Button href={CLI_CTA.href} variant="secondary">
                 {CLI_CTA.label}
               </Button>

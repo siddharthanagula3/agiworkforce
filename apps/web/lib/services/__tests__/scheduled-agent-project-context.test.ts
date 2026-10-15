@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   getSubscription: vi.fn(),
   evaluateManagedComputeAccess: vi.fn(),
   resolveContext: vi.fn(),
+  memoryPolicy: { enabled: false } as Record<string, boolean>,
+  contextPolicy: {} as Record<string, boolean>,
 }));
 
 vi.mock('@/lib/services/project-context-service', async (importOriginal) => ({
@@ -62,15 +64,15 @@ vi.mock('@/lib/services/managed-compute-access', async (importOriginal) => ({
 
 vi.mock('@agiworkforce/context-engine', async (importOriginal) => ({
   ...(await importOriginal<ScanModule6>()),
-  createPostgresContextManifestStore: () => ({}),
+  createPostgresContextManifestStore: () => ({ write: async () => undefined }),
   resolveContext: mocks.resolveContext,
 }));
 
 vi.mock('@/lib/services/managed-memory-context-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule7>()),
   formatManagedMemorySystemPrompt: () => null,
-  loadManagedMemoryPolicy: async () => ({ enabled: false }),
-  loadOrganizationContextPolicy: async () => ({}),
+  loadManagedMemoryPolicy: async () => mocks.memoryPolicy,
+  loadOrganizationContextPolicy: async () => mocks.contextPolicy,
   loadProjectMemoryScope: async () => ({ projectId: null, usesGlobalMemory: true }),
   managedMemoryContextLoader: () => ({
     sourceClass: 'managed_memory',
@@ -95,6 +97,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+import { contextSource } from '@agiworkforce/context';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
 import {
   ScheduledProjectContextUnavailableError,
@@ -152,6 +155,8 @@ const ROUTED_MODEL = requireProviderDefaultModel('openai');
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.memoryPolicy = { enabled: false };
+  mocks.contextPolicy = {};
   mocks.resolveAutoRoute.mockReturnValue({
     status: 'selected',
     requestedSelection: 'auto',
@@ -266,5 +271,69 @@ describe('every other scheduled run is unchanged', () => {
     });
     expect(result.text).toBe('Here is the brief.');
     expect(mocks.reserveManagedUsageRequest).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a scheduled run on a project reads the project's other chats", () => {
+  const SIBLING_EXCERPT = 'We settled on credits at 50 per dollar.';
+
+  async function runOnProjectWithChats(searchPastChats: boolean) {
+    const engine = await vi.importActual<ScanModule6>('@agiworkforce/context-engine');
+    mocks.memoryPolicy = {
+      enabled: false,
+      generateFromHistory: false,
+      allowToolAssistedGeneration: false,
+      searchPastChats,
+    };
+    mocks.contextPolicy = { ...engine.OPEN_ORGANIZATION_CONTEXT_POLICY };
+    mocks.resolveContext.mockImplementation(engine.resolveContext);
+    mocks.loadProjectContext.mockResolvedValue({
+      projectId: PROJECT,
+      name: 'Launch',
+      description: null,
+      instructions: 'Answer tersely.',
+      knowledgeFiles: [],
+      siblingChats: [{ title: 'Pricing thread', preview: SIBLING_EXCERPT }],
+      sources: [
+        contextSource({
+          sourceClass: 'project_instruction',
+          locator: `user_projects/${PROJECT}`,
+          projectId: PROJECT,
+          ownerUserId: OWNER,
+        }),
+        contextSource({
+          sourceClass: 'project_sibling_chat',
+          locator: 'web_conversations/conversation-2',
+          projectId: PROJECT,
+          ownerUserId: OWNER,
+        }),
+      ],
+    });
+    const stream = vi.fn(() => new ReadableStream());
+    mocks.buildServerProviderAdapter.mockReturnValue({ stream });
+
+    await run(makeTask({ sources: { project: true, memory: false, web: false } }));
+
+    const resolution = (await mocks.resolveContext.mock.results[0]?.value) as Awaited<
+      ReturnType<ScanModule6['resolveContext']>
+    >;
+    return { sent: JSON.stringify(stream.mock.calls[0]), manifest: resolution.manifest };
+  }
+
+  it('sends them when the account searches past chats', async () => {
+    const { sent } = await runOnProjectWithChats(true);
+
+    expect(sent).toContain('Answer tersely.');
+    expect(sent).toContain(SIBLING_EXCERPT);
+  });
+
+  it('leaves them out, and records why, when the account has search past chats off', async () => {
+    const { sent, manifest } = await runOnProjectWithChats(false);
+
+    expect(sent).toContain('Answer tersely.');
+    expect(sent).not.toContain(SIBLING_EXCERPT);
+    expect(
+      manifest.entries.find((entry) => entry.sourceClass === 'project_sibling_chat'),
+    ).toMatchObject({ includedCount: 0, excluded: [{ reason: 'source_disabled', count: 1 }] });
   });
 });

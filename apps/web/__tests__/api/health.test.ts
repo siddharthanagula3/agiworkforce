@@ -37,6 +37,12 @@ vi.mock('@/lib/price-tier-mapping', () => ({
   getConfiguredStripePriceIds: vi.fn(() => ['price_configured']),
   isGrandfatheredPriceId: priceMocks.isGrandfathered,
 }));
+vi.mock('@/lib/server/identity', () => ({
+  getIdentityProvider: () => ({
+    canVerifySessionTokens: () => Boolean(process.env['CLERK_SECRET_KEY']),
+    checkReachable: async () => undefined,
+  }),
+}));
 
 vi.mock('stripe', () => ({
   default: class MockStripe {
@@ -101,6 +107,8 @@ describe('Health Check API', () => {
     process.env['STRIPE_SECRET_KEY'] = 'sk_test_123';
     priceMocks.isGrandfathered.mockReturnValue(false);
     stripeMocks.listProducts.mockResolvedValue({ data: [] });
+    process.env['RESEND_API_KEY'] = 're_test_key';
+    process.env['AGI_NOTIFICATIONS_FROM_EMAIL'] = 'notices@agiworkforce.com';
     stripeMocks.retrievePrice.mockResolvedValue({
       active: true,
       type: 'recurring',

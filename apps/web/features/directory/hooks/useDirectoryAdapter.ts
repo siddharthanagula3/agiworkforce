@@ -223,6 +223,8 @@ import {
   uninstallSkill,
 } from '../services/skills-directory';
 import { openConnectorAuthorization } from '@/features/connectors/lib/open-connector-authorization';
+import { isDesktopHost } from '@/features/desktop-host/lib/host';
+import { downloadInWindow } from '@/features/desktop-host/lib/in-window-download';
 
 function initialSkillSection(): DirectorySection {
   return { entries: [], manage: { rows: [], loading: true } };
@@ -1480,7 +1482,12 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
 
   const downloadSkillFile = useCallback((skillId: string, path: string) => {
     if (typeof window === 'undefined') return;
-    window.open(skillFileDownloadHref(skillId, path), '_blank', 'noopener,noreferrer');
+    const href = skillFileDownloadHref(skillId, path);
+    if (isDesktopHost()) {
+      downloadInWindow(href);
+      return;
+    }
+    window.open(href, '_blank', 'noopener,noreferrer');
   }, []);
 
   const openHref = useCallback((href: string) => {

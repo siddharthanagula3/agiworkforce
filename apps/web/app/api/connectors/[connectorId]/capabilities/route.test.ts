@@ -126,3 +126,23 @@ describe('GET /api/connectors/<ref>/capabilities when the token refresh failed f
     expect(response.status).toBe(404);
   });
 });
+
+describe('GET /api/connectors/<ref>/capabilities reports each tool risk tier', () => {
+  it('raises a destructiveHint tool to critical and leaves an unannotated one high', async () => {
+    const loaded = await mocks.loadCatalog();
+    const server = loaded.catalog.servers[CONNECTOR_REF];
+    server.tools = [
+      { ...server.tools[0], toolName: 'purge', annotations: { destructiveHint: true } },
+      { ...server.tools[0], toolName: 'list' },
+    ];
+    mocks.loadCatalog.mockResolvedValueOnce(loaded);
+
+    const body = (await (await GET(request(), context())).json()) as {
+      tools: { name: string; riskTier?: string }[];
+    };
+    expect(body.tools.map((tool) => [tool.name, tool.riskTier])).toEqual([
+      ['purge', 'critical'],
+      ['list', 'high'],
+    ]);
+  });
+});

@@ -1,7 +1,9 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X, type LucideIcon } from 'lucide-react';
+import { useProductNoticeHost } from './ProductNoticeHost';
 
 export type ProductNoticeTone = 'danger' | 'warning' | 'info';
 
@@ -12,11 +14,13 @@ const ICON_TONE: Readonly<Record<ProductNoticeTone, string>> = {
 };
 
 export function ProductNoticeStack({ children }: { children: ReactNode }) {
-  return (
-    <div className="pointer-events-none fixed inset-x-0 top-0 z-[var(--z-notification)] flex flex-col items-center gap-2 px-4 pt-14">
+  const host = useProductNoticeHost();
+  const stack = (
+    <div className="pointer-events-none fixed inset-x-0 top-0 z-[var(--z-banner)] flex flex-col items-center gap-2 px-4 pt-14">
       {children}
     </div>
   );
+  return host ? createPortal(stack, host) : stack;
 }
 
 interface ProductNoticeCardProps {

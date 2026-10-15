@@ -10,6 +10,7 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
+import { CREATE_ACCOUNT_LABEL, webEntryHref } from '@/features/marketing/components/system/nav';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { DIRECTORY_CATEGORIES } from '@/lib/connectors/directory/categorize';
 import { getSnapshotView } from '@/lib/connectors/directory/memory-cache';
@@ -56,6 +57,7 @@ const CUSTOM_CONNECTOR_NOTE = CONNECTORS_RELEASED
   ? 'Signed in, the custom connector dialog also accepts any remote HTTP or SSE MCP endpoint and your own token, and every tool a connector offers stays behind your per-tool permission.'
   : `${CONNECTORS_RELEASE_NOTE} When they open, the custom connector dialog accepts any remote HTTP or SSE MCP endpoint and your own token, and every tool a connector offers stays behind your per-tool permission.`;
 
+const SIGN_UP_HREF = webEntryHref('/connectors');
 const PAGE_SIZE = 60;
 const SEARCH_PARAM = 'q';
 const CATEGORY_PARAM = 'category';
@@ -130,6 +132,7 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
           lede={HERO_LEDE}
           ctas={[
             { href: SIGN_IN_HREF, label: CONNECT_LABEL },
+            { href: SIGN_UP_HREF, label: CREATE_ACCOUNT_LABEL, variant: 'secondary' },
             {
               href: 'https://modelcontextprotocol.io/registry/about',
               label: 'About the MCP registry',
@@ -289,6 +292,9 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
               </Prose>
               <ButtonRow>
                 <Button href={SIGN_IN_HREF}>{CONNECT_LABEL}</Button>
+                <Button href={SIGN_UP_HREF} variant="secondary">
+                  {CREATE_ACCOUNT_LABEL}
+                </Button>
                 <Button href={helpHref('connectors')} variant="secondary">
                   {helpEntryPoint('connectors').label}
                 </Button>

@@ -1,4 +1,3 @@
-import { readUpstashCredentials } from '@agiworkforce/key-value';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   BILLING_PLAN_PRODUCT_LIMITS,
@@ -7,18 +6,19 @@ import {
 } from '@agiworkforce/types';
 import { logger } from './logger';
 import { recordAdmittedRateLimit } from './rate-limit-headers';
-import { deployEnvironment } from './server/hosting';
+import {
+  hasSharedStoreCredentials,
+  isRateLimitProductionRuntime,
+  resolveRedisOutagePolicy,
+} from './redis-outage-policy';
 import { GUEST_CHAT_CONFIG } from './guest-chat/config';
 import { getKeyValueRateLimiter, getKeyValueStore } from './server/key-value';
 import { BLOCK_APPEAL_PATH, logRateLimitExceeded } from './security-audit';
 
-const hasRedisEnv = readUpstashCredentials() !== null;
-const deployEnv = deployEnvironment();
-const isNextBuildPhase = process.env['NEXT_PHASE'] === 'phase-production-build';
-const isProductionRuntime =
-  !isNextBuildPhase &&
-  deployEnv !== 'preview' &&
-  (deployEnv === 'production' || process.env['NODE_ENV'] === 'production');
+export { REDIS_OUTAGE_POLICY_ENV, resolveRedisOutagePolicy } from './redis-outage-policy';
+
+const hasRedisEnv = hasSharedStoreCredentials();
+const isProductionRuntime = isRateLimitProductionRuntime();
 
 if (isProductionRuntime && !hasRedisEnv) {
   throw new Error(
@@ -28,23 +28,6 @@ if (isProductionRuntime && !hasRedisEnv) {
       'limiting is ineffective across function instances. Set them on the ' +
       'agiworkforce project (Production + Preview) and redeploy.',
   );
-}
-
-export const REDIS_OUTAGE_POLICY_ENV = 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY';
-
-export type RedisOutagePolicy = 'fail-closed' | 'fail-open';
-
-export function resolveRedisOutagePolicy(): RedisOutagePolicy {
-  const configured = process.env[REDIS_OUTAGE_POLICY_ENV]?.trim().toLowerCase();
-  if (configured === 'fail-closed' || configured === 'fail-open') return configured;
-  if (configured) {
-    logger.error(
-      { [REDIS_OUTAGE_POLICY_ENV]: configured },
-      'Unrecognised Redis outage policy; enforcing fail-closed',
-    );
-    return 'fail-closed';
-  }
-  return hasRedisEnv || isProductionRuntime ? 'fail-closed' : 'fail-open';
 }
 
 const RATE_LIMIT_SCALE_ENV = 'AGI_RATE_LIMIT_SCALE';

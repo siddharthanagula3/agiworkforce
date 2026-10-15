@@ -6,6 +6,7 @@ import {
   prepareManagedAutoMemoryFacts,
 } from './request-processor';
 import type { ManagedMemoryPolicy } from '@/lib/services/managed-memory-context-service';
+import { loadProjectContext, type ProjectContextDb } from '@/lib/services/project-context-service';
 import { resolveInteractiveTurnContext } from '@/lib/services/turn-context-service';
 
 const PAST_CHAT_QUERY = 'What did I say my favourite mooring knot was?';
@@ -107,6 +108,104 @@ describe('resolveInteractiveTurnContext: account memory', () => {
     expect(query).not.toHaveBeenCalled();
     expect(context.memoryPrompt).toBeNull();
   });
+});
+
+describe("resolveInteractiveTurnContext: the project's other chats", () => {
+  const PROJECT_ID = 'project-1';
+  const PROJECT_INSTRUCTION = 'Plan every trip in euros.';
+  const SIBLING_EXCERPT = 'My hotel budget is 300 dollars a night.';
+  const QUESTION = 'What is my hotel budget?';
+
+  function projectDb(): ProjectContextDb {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('sibling_candidates')) {
+        return [
+          {
+            id: 'conversation-2',
+            title: 'Hotel budget',
+            updated_at: '2026-10-01T00:00:00.000Z',
+            role: 'user',
+            content: SIBLING_EXCERPT,
+            created_at: '2026-10-01T00:00:00.000Z',
+          },
+        ];
+      }
+      if (sql.includes('from user_projects')) {
+        return [
+          {
+            id: PROJECT_ID,
+            name: 'Trip',
+            description: null,
+            instructions: PROJECT_INSTRUCTION,
+            organization_id: null,
+          },
+        ];
+      }
+      return [];
+    });
+    return { query } as unknown as ProjectContextDb;
+  }
+
+  async function projectTurn(
+    overrides: Partial<Parameters<typeof resolveInteractiveTurnContext>[1]>,
+  ) {
+    const db = projectDb();
+    const projectContext = await loadProjectContext(db, {
+      projectId: PROJECT_ID,
+      userId: 'user-1',
+      currentConversationId: 'conversation-1',
+      currentUserQuery: QUESTION,
+    });
+    return resolveInteractiveTurnContext(
+      db,
+      turnContextInput({
+        projectId: PROJECT_ID,
+        conversationId: 'conversation-1',
+        query: QUESTION,
+        policy: RECALL_POLICY,
+        projectContext,
+        ...overrides,
+      }),
+    );
+  }
+
+  async function projectText(
+    overrides: Partial<Parameters<typeof resolveInteractiveTurnContext>[1]>,
+  ): Promise<string> {
+    const context = await projectTurn(overrides);
+    const text = context.projectBlocks.map((block) => block.text).join('\n\n');
+    expect(text).toContain(PROJECT_INSTRUCTION);
+    return text;
+  }
+
+  it('carries them when search past chats is on and memory is on for the chat', async () => {
+    await expect(projectText({})).resolves.toContain(SIBLING_EXCERPT);
+  });
+
+  it.each([
+    ['search past chats is off', { policy: MEMORY_ONLY_POLICY }],
+    ['memory is off for the chat', { memoryEnabled: false }],
+    ['the chat is temporary', { temporaryChat: true }],
+    ['the turn comes from the API', { surface: 'api' as const }],
+  ])('leaves them out when %s', async (_reason, overrides) => {
+    await expect(projectText(overrides)).resolves.not.toContain(SIBLING_EXCERPT);
+  });
+
+  it.each([
+    ['search past chats is off', { policy: MEMORY_ONLY_POLICY }, 'source_disabled'],
+    ['memory is off for the chat', { memoryEnabled: false }, 'source_disabled'],
+    ['the chat is temporary', { temporaryChat: true }, 'temporary_chat'],
+    ['the turn comes from the API', { surface: 'api' as const }, 'source_disabled'],
+  ])(
+    'records in the turn manifest why they were left out when %s',
+    async (_reason, overrides, reason) => {
+      const { manifest } = await projectTurn(overrides);
+
+      expect(
+        manifest?.entries.find((entry) => entry.sourceClass === 'project_sibling_chat'),
+      ).toMatchObject({ candidateCount: 1, includedCount: 0, excluded: [{ reason, count: 1 }] });
+    },
+  );
 });
 
 describe('resolveInteractiveTurnContext: past chats', () => {

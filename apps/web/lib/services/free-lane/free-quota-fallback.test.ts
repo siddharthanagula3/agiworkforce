@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 import { createMemoryKeyValueStore, type MemoryKeyValueStore } from '@agiworkforce/key-value';
 import {
   FREE_ALLOWANCE_EXHAUSTED_CODE,
+  FREE_QUOTA_CHAT_DAILY_USE_KIND,
   FREE_QUOTA_FALLBACK_REQUEST_KEY,
   FreeLimitSchema,
 } from '@agiworkforce/cloud-contracts';
@@ -12,10 +13,15 @@ import {
   credentialSha256,
   readFreeQuotaState,
   recordFreeQuotaHold,
+  reserveFreeQuotaDailyUse,
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
 import { loadFreePools } from '@/lib/server/free-pools';
-import { freeQuotaFixtureNow, servableFreeQuotaOfferings } from '@/test/free-quota-fixtures';
+import {
+  acceptedProviderConsent,
+  freeQuotaFixtureNow,
+  servableFreeQuotaOfferings,
+} from '@/test/free-quota-fixtures';
 type ScanModule0 = typeof import('@/lib/server/key-value');
 type ScanModule1 = typeof import('@/lib/services/entitlement-resolution');
 type ScanModule2 = typeof import('@/lib/managed-compute-gate');
@@ -27,6 +33,7 @@ type ScanModule7 = typeof import('@/lib/server/free-pools');
 type ScanModule8 =
   typeof import('@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence');
 type ScanModule9 = typeof import('@/lib/server/free-quota-catalogue-cache');
+type ScanModule10 = typeof import('@/lib/feature-flags/flag-evaluation-service');
 
 const mocks = vi.hoisted(() => ({
   store: null as unknown as MemoryKeyValueStore,
@@ -38,12 +45,21 @@ const mocks = vi.hoisted(() => ({
   persistUser: vi.fn(),
   hydrate: vi.fn(),
   persistAnswer: vi.fn(),
+  consent: vi.fn(),
   spendOnCapacityShortage: null as boolean | null,
+}));
+
+vi.mock('@/lib/server/named-provider-consent', () => ({
+  loadNamedProviderConsent: mocks.consent,
 }));
 
 vi.mock('@/lib/server/free-quota-catalogue-cache', async (importOriginal) => ({
   ...(await importOriginal<ScanModule9>()),
   expireFreeQuotaCatalogue: vi.fn(),
+}));
+vi.mock('@/lib/feature-flags/flag-evaluation-service', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule10>()),
+  evaluateFlagsForSubject: async () => ({}),
 }));
 vi.mock('@/lib/server/key-value', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
@@ -281,6 +297,11 @@ beforeEach(async () => {
   mocks.otherProvider.mockReset();
   mocks.persistUser.mockReset().mockResolvedValue({ id: USER_MESSAGE_ID });
   mocks.persistAnswer.mockReset().mockResolvedValue(undefined);
+  mocks.consent
+    .mockReset()
+    .mockImplementation(async (_db, _userId, providerId) =>
+      acceptedProviderConsent(providerId, Date.now()),
+    );
   mocks.spendOnCapacityShortage = null;
   mocks.hydrate.mockReset().mockImplementation(async (messages) => {
     const latest = messages.at(-1);
@@ -600,6 +621,39 @@ describe('Free Auto falls back to a ready free quota model on the server', () =>
       expect(mocks.stream).not.toHaveBeenCalled();
     },
   );
+
+  it('keeps the Free Auto refusal for a turn a free model handed over, which carries no request for another one', async () => {
+    const { [FREE_QUOTA_FALLBACK_REQUEST_KEY]: _handedOver, ...handedOver } = freeAutoBody();
+    mocks.stream.mockResolvedValue(sse('[DONE]'));
+
+    expect(await fallBack(refusal('free_allowance_exhausted'), handedOver)).toBeNull();
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it('keeps the Free Auto refusal, never the provider notice, when the account has not agreed to the provider', async () => {
+    mocks.consent.mockResolvedValue(null);
+
+    const declined = await fallBack(refusal('free_allowance_exhausted'));
+
+    expect(declined).toBeNull();
+    expect(mocks.stream).not.toHaveBeenCalled();
+    expect(mocks.persistAnswer).not.toHaveBeenCalled();
+  });
+
+  it('keeps the Free Auto refusal, with no other free model offered, once the account has used its daily chat share', async () => {
+    await reserveFreeQuotaDailyUse(mocks.store, {
+      userId: 'fixture-user',
+      category: FREE_QUOTA_CHAT_DAILY_USE_KIND,
+      cap: loadFreePools().freeChatDailyShare!.tokensPerUser,
+      units: loadFreePools().freeChatDailyShare!.tokensPerUser,
+      nowMs: Date.now(),
+    });
+
+    const declined = await fallBack(refusal('free_allowance_exhausted'));
+
+    expect(declined).toBeNull();
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
 
   it('keeps the Free Auto refusal when no free quota model is ready', async () => {
     mocks.store = createMemoryKeyValueStore();

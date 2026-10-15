@@ -2,7 +2,14 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Eyebrow, Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
+import {
+  Eyebrow,
+  Ledger,
+  Prose,
+  Section,
+  Stack,
+  WEB_ENTRY_HREF,
+} from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
@@ -66,7 +73,7 @@ const WHILE_YOU_WAIT = [
     meta: 'Try it now',
     title: 'Try AGI Web',
     body: 'Hosted chat with projects and artifacts, in the browser today.',
-    href: '/login?redirectTo=%2F',
+    href: WEB_ENTRY_HREF,
   },
   {
     meta: `Free · ${SURFACE_NAMES.cli} ${SURFACE_STATUS.cli.toLowerCase()}`,

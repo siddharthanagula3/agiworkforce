@@ -26,6 +26,19 @@ export function addModelEscalationHeaders(
  */
 export const UNSPECIFIED_SUBSTITUTION_REASON = 'model_substituted';
 
+export const FREE_MODEL_HANDOFF_REASON_CODES = [
+  'free_model_research',
+  'free_model_web_search',
+  'free_model_code_execution',
+  'free_model_office_file',
+  'free_model_skill',
+  'free_model_connected_app',
+  'free_model_file',
+  'free_model_image',
+] as const;
+
+export type FreeModelHandoffReasonCode = (typeof FREE_MODEL_HANDOFF_REASON_CODES)[number];
+
 export const FALLBACK_REASON_CODES = [
   'managed_failover',
   'openrouter_route_failover',
@@ -33,10 +46,50 @@ export const FALLBACK_REASON_CODES = [
   'research_unsupported_model',
   'free_limit_reached',
   'free_capacity_unavailable',
+  ...FREE_MODEL_HANDOFF_REASON_CODES,
   UNSPECIFIED_SUBSTITUTION_REASON,
 ] as const;
 
 export type FallbackReasonCode = (typeof FALLBACK_REASON_CODES)[number];
+
+const FREE_MODEL_HANDOFF_CAUSE: Readonly<Record<FreeModelHandoffReasonCode, string>> = {
+  free_model_research: 'Deep Research is not available on the free model you picked',
+  free_model_web_search: 'You asked for a web search, which the free model you picked cannot run',
+  free_model_code_execution: 'You asked to run code, which the free model you picked cannot do',
+  free_model_office_file:
+    'You asked for an Office file, which the free model you picked cannot create',
+  free_model_skill: 'This message used a skill, which the free model you picked cannot run',
+  free_model_connected_app:
+    'This message used a connected app, which the free model you picked cannot read',
+  free_model_file: 'The free model you picked cannot read the attached file',
+  free_model_image: 'The free model you picked cannot read images',
+};
+
+export function isFreeModelHandoffReason(code: unknown): code is FreeModelHandoffReasonCode {
+  return (
+    typeof code === 'string' &&
+    (FREE_MODEL_HANDOFF_REASON_CODES as readonly string[]).includes(code)
+  );
+}
+
+// A reply keeps one reason. The hand-over says who answered; a server reason
+// that the request itself was not carried out says what the person did not
+// get, and replacing it with the hand-over would leave that unsaid.
+export function handedOverTurnReason(
+  handoffReason: FreeModelHandoffReasonCode | undefined,
+  serverReason: string | undefined,
+): string | undefined {
+  if (!handoffReason) return serverReason;
+  const researchNotRun: FallbackReasonCode = 'research_unsupported_model';
+  return serverReason === researchNotRun ? serverReason : handoffReason;
+}
+
+function describeFreeModelHandoff(
+  code: FreeModelHandoffReasonCode,
+  servedBy: string | undefined,
+): string {
+  return `${FREE_MODEL_HANDOFF_CAUSE[code]}, so ${servedBy ?? 'Auto'} answered this message. The conversation's model was not changed.`;
+}
 
 export interface FallbackReasonSource {
   usedFallback?: boolean;
@@ -85,6 +138,7 @@ export function describeFallbackReason(
   const code = reason?.trim();
   if (!code) return null;
   const servedBy = modelLabel?.trim();
+  if (isFreeModelHandoffReason(code)) return describeFreeModelHandoff(code, servedBy || undefined);
   switch (code) {
     case 'managed_failover':
       return servedBy
@@ -128,6 +182,7 @@ export function fallbackStepLabel(
   const code = reason?.trim();
   if (!code) return null;
   const servedBy = modelLabel?.trim();
+  if (isFreeModelHandoffReason(code)) return `Handed to ${servedBy || 'Auto'} for this message`;
   switch (code) {
     case 'openrouter_route_failover':
       return servedBy ? `Switched to a backup route for ${servedBy}` : 'Switched to a backup route';

@@ -11,6 +11,7 @@ import {
   Prose,
   Section,
   Stack,
+  webEntryHref,
 } from '@/features/marketing/components/system';
 
 export const metadata = buildMetadata({
@@ -20,7 +21,7 @@ export const metadata = buildMetadata({
   path: '/features/projects',
 });
 
-const PROJECTS_ENTRY_HREF = '/login?redirectTo=%2Fchat%2Fprojects';
+const PROJECTS_ENTRY_HREF = webEntryHref('/chat/projects');
 
 const IDS = {
   hero: 'agi-features-projects-title',

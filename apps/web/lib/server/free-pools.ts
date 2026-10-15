@@ -221,14 +221,32 @@ export function limitedMediaDailyCap(
   return cap > 0 ? cap : null;
 }
 
-export const FreePoolsDocumentSchema = z.object({
-  schemaVersion: z.number().int().min(MIN_SCHEMA_VERSION),
-  workbook: z.string().min(MIN_IDENTIFIER_LENGTH),
-  notes: z.string().optional(),
-  entries: z.array(FreePoolEntrySchema),
-  inventory: FreeQuotaInventorySchema.optional(),
-  limitedMediaOffer: LimitedMediaOfferSchema.optional(),
+export const FreeChatDailyShareSchema = z.strictObject({
+  tokensPerUser: z.number().int().positive(),
 });
+
+export type FreeChatDailyShare = z.infer<typeof FreeChatDailyShareSchema>;
+
+export const FreePoolsDocumentSchema = z
+  .object({
+    schemaVersion: z.number().int().min(MIN_SCHEMA_VERSION),
+    workbook: z.string().min(MIN_IDENTIFIER_LENGTH),
+    notes: z.string().optional(),
+    entries: z.array(FreePoolEntrySchema),
+    inventory: FreeQuotaInventorySchema.optional(),
+    limitedMediaOffer: LimitedMediaOfferSchema.optional(),
+    freeChatDailyShare: FreeChatDailyShareSchema.optional(),
+  })
+  .superRefine((document, context) => {
+    if (document.inventory && !document.freeChatDailyShare) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['freeChatDailyShare'],
+        message:
+          'A free quota inventory needs freeChatDailyShare.tokensPerUser, or one account could spend a whole pool',
+      });
+    }
+  });
 
 export type FreePoolTerms = z.infer<typeof FreePoolTermsSchema>;
 export type FreePoolEntry = z.infer<typeof FreePoolEntrySchema>;

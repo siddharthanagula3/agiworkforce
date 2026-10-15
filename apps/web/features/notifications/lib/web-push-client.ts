@@ -1,4 +1,5 @@
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { isDesktopHost } from '@/features/desktop-host/lib/host';
 
 const SERVICE_WORKER_PATH = '/sw.js';
 const SUBSCRIPTION_ENDPOINT = '/api/web-push';
@@ -7,9 +8,15 @@ const CLAIMED_BY_ANOTHER_ACCOUNT_STATUS = 403;
 
 export type WebPushEnableResult = 'enabled' | 'denied' | 'unavailable';
 
+/**
+ * False in the desktop shell: it exposes the Push API with no push service
+ * behind it, so a subscription there always fails. The shell notifies through
+ * the operating system instead.
+ */
 export function isWebPushSupported(): boolean {
   return (
     typeof window !== 'undefined' &&
+    !isDesktopHost() &&
     'serviceWorker' in navigator &&
     'PushManager' in window &&
     'Notification' in window

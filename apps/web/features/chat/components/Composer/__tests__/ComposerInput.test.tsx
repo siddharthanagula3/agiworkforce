@@ -60,6 +60,7 @@ function props(overrides: Partial<ComposerInputProps> = {}): ComposerInputProps 
     onPasteCode: vi.fn(),
     onDropFiles: vi.fn(),
     onSubmit: vi.fn(),
+    onAlternateSubmit: vi.fn(),
     onFocusChange: vi.fn(),
     placeholder: PLACEHOLDER,
     disabled: false,

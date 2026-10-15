@@ -4,6 +4,7 @@ import type { KeyValueStore } from '@agiworkforce/key-value';
 import {
   OpenAIWireAssembler,
   openAIWireRequestToChatRequest,
+  stripSystemPromptCacheBoundary,
   toProviderApiModelId,
 } from '@agiworkforce/provider-protocol';
 import {
@@ -18,12 +19,12 @@ import {
 import { estimateTokens } from '@agiworkforce/routing';
 
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
-import { logger } from '@/lib/logger';
 import {
-  CHAT_SYSTEM_PROMPT_PINNED_VERSION,
-  chatSystemPromptSection,
-  chatSystemPromptSections,
-} from '@/lib/prompts/chat-system-prompt';
+  buildTextOnlyPreamble,
+  servingModelFor,
+} from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
+import { logger } from '@/lib/logger';
+import type { ResolvePromptOptions } from '@/lib/prompts/prompt-registry';
 import { openRouterFailoverSlugFor, openRouterSlugFor } from '@/lib/services/aggregator-routing';
 import { LLMCostCalculator, normalizeProviderId } from '@/lib/services/llm-cost-calculator';
 import {
@@ -90,6 +91,18 @@ export function guestChatModel(): GuestChatModel {
   };
 }
 
+export function guestChatSystemPrompt(
+  model: GuestChatModel,
+  options: { promptSelection?: ResolvePromptOptions; now?: Date } = {},
+): string {
+  return stripSystemPromptCacheBoundary(
+    buildTextOnlyPreamble({
+      servingModel: servingModelFor(model.modelKey, { kind: 'assigned' }),
+      ...options,
+    }),
+  );
+}
+
 export function buildGuestChatRequest(
   model: GuestChatModel,
   messages: GuestChatRequest['messages'],
@@ -103,10 +116,7 @@ export function buildGuestChatRequest(
   });
   return {
     ...request,
-    system: chatSystemPromptSection(
-      chatSystemPromptSections(CHAT_SYSTEM_PROMPT_PINNED_VERSION),
-      'identity',
-    ),
+    system: guestChatSystemPrompt(model),
     ...(model.zeroDataRetention ? { zeroDataRetentionOnly: true } : {}),
   };
 }

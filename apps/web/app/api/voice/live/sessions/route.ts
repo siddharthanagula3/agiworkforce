@@ -147,6 +147,7 @@ const CreateLiveSessionSchema = z.object({
     .enum(LIVE_VOICE_REASONING_LEVELS as [LiveVoiceReasoning, ...LiveVoiceReasoning[]])
     .optional(),
   surface: z.enum(['web', 'mobile', 'desktop']).optional(),
+  memoryEnabled: z.boolean().optional(),
   clientHandoffs: z
     .array(z.enum(LIVE_VOICE_CLIENT_HANDOFFS))
     .max(LIVE_VOICE_CLIENT_HANDOFFS.length)
@@ -483,6 +484,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       userId,
       conversationId,
       organizationId: scoped.organizationId,
+      memoryEnabled: body.memoryEnabled !== false,
       onSourceFailure: (source, error) => {
         logger.warn(
           { event: 'live_voice_context_source_failed', source, error, userId },

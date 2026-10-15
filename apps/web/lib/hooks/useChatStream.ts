@@ -86,6 +86,9 @@ import {
   parseGeneratedFilesDelta,
   reconcileManagedCloudPublicText,
   readPersistedCloudToolApproval,
+  isApprovingToolDecision,
+  readToolApprovalReview,
+  TOOL_APPROVAL_SCOPE_DECISIONS,
   readManagedCloudAgentRunHandle,
   managedCloudAgentRunPath,
   MANAGED_CLOUD_AGENT_RUN_ID_HEADER,
@@ -101,6 +104,7 @@ import {
   type ManagedCloudAgentRunReference,
   type ManagedCloudSaveMessageOptions,
   type ToolInputResumeRequest,
+  type ToolApprovalDecisionValue,
 } from '@agiworkforce/cloud-contracts';
 import {
   applyAgentActivityEvent,
@@ -124,8 +128,10 @@ import { addCsrfHeaders, getCsrfToken } from '@/lib/client/csrf';
 import {
   fallbackStepLabel,
   FALLBACK_REASON_HEADER,
+  handedOverTurnReason,
   MOVED_FROM_MODEL_HEADER,
   MOVED_REASON_HEADER,
+  type FreeModelHandoffReasonCode,
 } from '@/lib/chat-fallback-reason';
 import {
   IN_FLIGHT_TURN_RECHECK_MS,
@@ -154,7 +160,10 @@ import {
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { createFrameCoalescedAppender } from '@/lib/client/frame-coalesced-appender';
 import { startChatLatencyTrace, type ChatLatencyTrace } from '@/lib/client/chat-latency';
-import { longestTrailingTagPrefix } from '@/lib/streaming/trailing-tag-prefix';
+import {
+  ThinkingTagSplitter,
+  type ThinkingTagPart,
+} from '@agiworkforce/provider-protocol/thinking-tag-splitter';
 import { isFreeTrialErrorCode, useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import type {
   AgentEvent,
@@ -220,6 +229,13 @@ import {
   durableAttachmentDescriptors,
 } from '@/features/chat/lib/persisted-attachments';
 import { normalizePromotionalChatHistory } from '@/features/chat/lib/promotional-chat-request';
+import {
+  freeModelAttachmentKind,
+  freeQuotaChatOffering,
+  routeFreeModelTurn,
+} from '@/features/chat/lib/free-model-handoff';
+import { CHINESE_HQ_PROVIDER_NOT_OPTED_IN_CODE } from '@agiworkforce/compliance';
+import { announceNamedProviderConsentRequired } from '@/features/models/lib/named-provider-consent-client';
 import { beginStreamPhase, endStreamPhase } from '@/features/chat/stores/stream-phase-store';
 import { cancelCloudRunAndConfirm } from '@/features/chat/lib/cancel-cloud-run';
 import { summarizeMcpContext } from '@/features/chat/lib/mcp-context-summary';
@@ -314,7 +330,7 @@ const STYLE_SYSTEM_INSTRUCTIONS: Record<string, string> = {
   explanatory: 'Be thorough and educational. Explain concepts in detail with examples.',
 };
 
-export type ToolApprovalDecision = 'approved' | 'rejected';
+export type ToolApprovalDecision = ToolApprovalDecisionValue;
 
 export interface UseChatStreamReturn {
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<boolean>;
@@ -937,7 +953,16 @@ function restorePendingTurn(assistantMessageId: string): PendingTurn | null {
       })),
       decisions: new Map(
         persisted.projection.calls.flatMap((call) =>
-          call.approvalDecision ? [[call.toolCallId, call.approvalDecision] as const] : [],
+          call.approvalDecision
+            ? [
+                [
+                  call.toolCallId,
+                  call.approvalDecision === 'approved'
+                    ? TOOL_APPROVAL_SCOPE_DECISIONS[call.approvalScope ?? 'once']
+                    : 'rejected',
+                ] as const,
+              ]
+            : [],
         ),
       ),
       resolving: false,
@@ -1053,7 +1078,16 @@ function projectPendingTurn(turn: PendingTurn) {
         toolCallId: call.toolCallId,
         name: call.name,
         ...(input ? { input } : {}),
-        ...(approvalDecision ? { approvalDecision } : {}),
+        ...(approvalDecision
+          ? {
+              approvalDecision: isApprovingToolDecision(approvalDecision) ? 'approved' : 'rejected',
+              ...(approvalDecision === 'approved-for-session'
+                ? { approvalScope: 'session' }
+                : approvalDecision === 'approved-always'
+                  ? { approvalScope: 'always' }
+                  : {}),
+            }
+          : {}),
       };
     }),
   });
@@ -1430,6 +1464,12 @@ interface ConsumeStreamContext {
   assistantParentId?: string;
   onRunHandle?: (handle: ManagedCloudAgentRunHandle | null) => void;
   retriesEmptyTurn?: boolean;
+  /**
+   * Why a message sent with a free model selected went to Auto instead. The
+   * server answered the model it was asked for, so it sends no substitution
+   * header; this is the only record of the move and it is saved with the reply.
+   */
+  handoffReason?: FreeModelHandoffReasonCode;
 }
 
 /**
@@ -1668,7 +1708,7 @@ async function driveDeviceSteps(
     );
     const outcome =
       device && device.deviceId === step.deviceId
-        ? await executeDeviceStep(step.name, step.input)
+        ? await executeDeviceStep(step.name, step.input, ctx.runId)
         : {
             content: `This step is waiting on ${step.deviceName}. Open the AGI Cloud app on that machine.`,
             isError: true,
@@ -1758,7 +1798,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const runHandle = readManagedCloudAgentRunHandle(response);
   ctx.onRunHandle?.(runHandle);
   const updateMessage = store.updateMessage;
-  const streamFallbackReason = response.headers.get(FALLBACK_REASON_HEADER)?.trim();
+  const streamFallbackReason = handedOverTurnReason(
+    ctx.handoffReason,
+    response.headers.get(FALLBACK_REASON_HEADER)?.trim(),
+  );
   // D-2026-09-05-06. Persisted, like the substitution code above once its
   // reply has text: a continuity receipt the transcript forgets on reload would
   // leave the move unexplained the next time the conversation is opened.
@@ -2624,8 +2667,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const decoder = new TextDecoder();
   const frames = new ServerSentEventDecoder();
   let fullAssistantContent = ctx.seedContent ?? '';
-  let inThinkingBlock = false;
-  let contentBuffer = '';
+  const contentSplitter = new ThinkingTagSplitter();
   let unacknowledgedPublicText = '';
   let streamSequence: StreamSequenceState = INITIAL_STREAM_SEQUENCE_STATE;
   let deliveredCharacters = 0;
@@ -2679,58 +2721,27 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     latencyTrace?.observeAssistantText(fullAssistantContent);
   };
 
-  const flushContentBuffer = (isFinal = false) => {
-    while (true) {
-      const openIdx = contentBuffer.indexOf('<thinking>');
-      const closeIdx = contentBuffer.indexOf('</thinking>');
-
-      if (!inThinkingBlock && openIdx !== -1) {
-        const before = contentBuffer.slice(0, openIdx);
-        emitPublicText(before, isFinal);
-        inThinkingBlock = true;
-        openThinkingSegment();
-        contentBuffer = contentBuffer.slice(openIdx + '<thinking>'.length);
-        continue;
+  const consumeThinkingParts = (parts: readonly ThinkingTagPart[], isFinal = false): void => {
+    for (const part of parts) {
+      switch (part.type) {
+        case 'text':
+          emitPublicText(part.text, isFinal);
+          break;
+        case 'thinking':
+          appendThinkingText(part.text);
+          break;
+        case 'thinking-start':
+          openThinkingSegment();
+          break;
+        case 'thinking-end':
+          closeThinkingSegment();
+          break;
       }
-
-      if (inThinkingBlock && closeIdx !== -1) {
-        const thinkingPart = contentBuffer.slice(0, closeIdx);
-        if (thinkingPart) {
-          appendThinkingText(thinkingPart);
-        }
-        inThinkingBlock = false;
-        closeThinkingSegment();
-        contentBuffer = contentBuffer.slice(closeIdx + '</thinking>'.length);
-        continue;
-      }
-
-      if (isFinal) {
-        if (contentBuffer) {
-          if (inThinkingBlock) {
-            appendThinkingText(contentBuffer);
-          } else {
-            emitPublicText(contentBuffer, true);
-          }
-          contentBuffer = '';
-        }
-      } else {
-        const retained = longestTrailingTagPrefix(
-          contentBuffer,
-          inThinkingBlock ? '</thinking>' : '<thinking>',
-        );
-        const safe = contentBuffer.slice(0, contentBuffer.length - retained);
-        if (safe) {
-          if (inThinkingBlock) {
-            appendThinkingText(safe);
-          } else {
-            emitPublicText(safe, false);
-          }
-          contentBuffer = contentBuffer.slice(safe.length);
-        }
-      }
-      if (isFinal && seamPending && seamBuffer) emitPublicText('', true);
-      break;
     }
+  };
+  const flushContentBuffer = (isFinal = false) => {
+    consumeThinkingParts(contentSplitter.flush(isFinal), isFinal);
+    if (isFinal && seamPending && seamBuffer) emitPublicText('', true);
     if (isFinal) coalescedAppends.flush();
   };
 
@@ -2798,9 +2809,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   const settleStream = (): StreamOutcome => {
     flushContentBuffer(true);
-    if (inThinkingBlock) {
+    if (contentSplitter.closeThinking()) {
       closeThinkingSegment();
-      inThinkingBlock = false;
     }
     finishRunningTools();
     if (finishReason) {
@@ -2843,9 +2853,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     beginStreamPhase(assistantMessageId, 'reconnecting');
 
     flushContentBuffer(true);
-    if (inThinkingBlock) {
+    if (contentSplitter.closeThinking()) {
       closeThinkingSegment();
-      inThinkingBlock = false;
     }
 
     const client = createManagedCloudAgentRunClient({
@@ -2976,9 +2985,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           if (sequenceGapSeen) continue;
           latencyTrace?.markDone();
           flushContentBuffer(true);
-          if (inThinkingBlock) {
+          if (contentSplitter.closeThinking()) {
             closeThinkingSegment();
-            inThinkingBlock = false;
           }
           finishRunningTools();
           setSearching(assistantMessageId, false, conversationId);
@@ -3070,8 +3078,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           }
 
           if (chunk !== null) {
-            contentBuffer += chunk;
-            flushContentBuffer(false);
+            consumeThinkingParts(contentSplitter.push(chunk));
             syncWritingResponseOnce(chunk);
           }
 
@@ -3252,6 +3259,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 name,
                 status: 'awaiting_approval',
                 requiresApproval: true,
+                approvalReview: readToolApprovalReview(approvalReq),
                 toolCallId: tcId,
                 parameters: Object.keys(args).length > 0 ? args : undefined,
               });
@@ -3549,9 +3557,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       }
     }
     flushContentBuffer(true);
-    if (inThinkingBlock) {
+    if (contentSplitter.closeThinking()) {
       closeThinkingSegment();
-      inThinkingBlock = false;
     }
     throw terminalError;
   } finally {
@@ -3801,7 +3808,20 @@ export function useChatStream(
       // route, the managed ledger, or the conversation's cloud rows. The id
       // decides it, which is why a regenerate of a local answer stays local.
       const selectedLocalModel = readSelectedLocalModel();
-      const model = options.model || selectedLocalModel?.id || selectedModel;
+      const turnRoute = routeFreeModelTurn({
+        model: options.model || selectedLocalModel?.id || selectedModel,
+        planTier: useBillingStore.getState().subscription?.tier,
+        choices: {
+          searchRequested: options.searchRequested,
+          research: options.research,
+          codeExecution: options.codeExecution,
+          officeCreation: options.officeCreation,
+          skillName: options.skillName,
+          mcpContext: options.mcpContext,
+          attachments: options.attachments?.map(freeModelAttachmentKind),
+        },
+      });
+      const model = turnRoute.model;
       const localModel = resolveLocalModel(model, selectedLocalModel);
 
       if (localModel && options.attachments?.length) {
@@ -3827,11 +3847,12 @@ export function useChatStream(
       const persistedAttachments = durableAttachmentDescriptors(options.attachments);
       const mcpContext = summarizeMcpContext(options.mcpContext);
       const userMetadata: MessageMetadata | undefined =
-        sendReplay || persistedAttachments || mcpContext
+        sendReplay || persistedAttachments || mcpContext || turnRoute.handoffReason
           ? {
               ...(sendReplay ? { sendReplay } : {}),
               ...(persistedAttachments ? { attachments: persistedAttachments } : {}),
               ...(mcpContext ? { mcpContext } : {}),
+              ...(turnRoute.handoffReason ? { freeModelHandoff: turnRoute.handoffReason } : {}),
             }
           : undefined;
       const getAuthToken: AuthTokenProvider = async () => {
@@ -3921,7 +3942,7 @@ export function useChatStream(
         content: '',
         createdAt: new Date(assistantStartedAtMs).toISOString(),
         model,
-        requestedModel: model,
+        requestedModel: turnRoute.requestedModel,
         isStreaming: true,
         ...(assistantParentId ? { parentId: assistantParentId } : {}),
         metadata: {
@@ -4137,6 +4158,7 @@ export function useChatStream(
           const sendsEffortWithoutThinking =
             selectedModelMetadata?.reasoning?.control === 'effort_levels';
           const promotionalOffering = freeQuotaSelection(model);
+          const freeQuotaChatTurn = freeQuotaChatOffering(model) !== null;
           const promotionalMedia =
             promotionalOffering?.category === 'image' || promotionalOffering?.category === 'video';
           const requestMessages = promotionalMedia
@@ -4164,12 +4186,14 @@ export function useChatStream(
                   : undefined,
               stream: true,
               [INTERACTIVE_CARD_REQUEST_KEY]: WEB_INTERACTIVE_CARD_CAPABILITY,
-              [FREE_QUOTA_FALLBACK_REQUEST_KEY]: true,
+              [FREE_QUOTA_FALLBACK_REQUEST_KEY]: turnRoute.handoffReason ? undefined : true,
               temperature: options.temperature,
               max_tokens: options.maxTokens,
-              web_search: options.webSearch || options.research || undefined,
+              web_search: freeQuotaChatTurn
+                ? undefined
+                : options.webSearch || options.research || undefined,
               search_requested: options.searchRequested || undefined,
-              web_fetch: options.webFetch || undefined,
+              web_fetch: freeQuotaChatTurn ? undefined : options.webFetch || undefined,
               research: options.research || undefined,
               research_sources:
                 options.research && options.researchSources
@@ -4286,6 +4310,7 @@ export function useChatStream(
             isTemporaryConversation,
             getAuthToken,
             retriesEmptyTurn,
+            ...(turnRoute.handoffReason ? { handoffReason: turnRoute.handoffReason } : {}),
             ...(latencyTrace ? { latencyTrace } : {}),
             ...(assistantParentId ? { assistantParentId } : {}),
             onRunHandle: (handle) => {
@@ -4410,6 +4435,11 @@ export function useChatStream(
             termsAcceptancePageHref(`${window.location.pathname}${window.location.search}`),
           );
         }
+        const refusedProvider =
+          error instanceof ChatApiError && error.code === CHINESE_HQ_PROVIDER_NOT_OPTED_IN_CODE
+            ? freeQuotaSelection(model)?.provider
+            : undefined;
+        if (refusedProvider) announceNamedProviderConsentRequired(refusedProvider, model);
         await handleStreamError(error, {
           assistantMessageId,
           model,
@@ -4846,7 +4876,7 @@ export function useResolveToolApproval(
       updateToolEntry(
         assistantMessageId,
         toolCallId,
-        { approved: decision === 'approved', requiresApproval: true },
+        { approved: isApprovingToolDecision(decision), requiresApproval: true },
         turn.conversationId,
       );
 
@@ -4890,8 +4920,8 @@ export function useResolveToolApproval(
           assistantMessageId,
           call.toolCallId,
           {
-            approved: callDecision === 'approved',
-            status: callDecision === 'approved' ? 'running' : 'failed',
+            approved: isApprovingToolDecision(callDecision),
+            status: isApprovingToolDecision(callDecision) ? 'running' : 'failed',
             requiresApproval: false,
             ...(callDecision === 'rejected'
               ? {

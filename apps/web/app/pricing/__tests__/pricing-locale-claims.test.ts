@@ -242,3 +242,22 @@ describe('pricing locale bundles, enterprise capacity claims', () => {
     }
   });
 });
+
+describe('pricing locale bundles, accessible names', () => {
+  it('names the access code button with its visible label in every language, so speech input can say it', () => {
+    const bundles = pricingBundles().filter(([, bundle]) => 'enterAccessCodeForPlan' in bundle);
+    expect(bundles.map(([locale]) => locale)).toContain('en');
+
+    for (const [locale, bundle] of bundles) {
+      const visible = bundle['enterAccessCodeCta'] as string;
+      const accessibleName = (bundle['enterAccessCodeForPlan'] as string).replace(
+        '{{plan}}',
+        BILLING_PLAN_PRICING.basic.label,
+      );
+      expect(
+        accessibleName.startsWith(visible),
+        `${locale}/pricing.json enterAccessCodeForPlan "${accessibleName}" does not start with the visible label "${visible}"`,
+      ).toBe(true);
+    }
+  });
+});

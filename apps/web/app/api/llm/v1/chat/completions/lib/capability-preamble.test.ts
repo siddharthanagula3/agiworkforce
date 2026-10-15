@@ -25,7 +25,7 @@ describe('capability preamble', () => {
     ['OpenAI Responses', { type: 'web_search' }],
     ['Google grounding', { google_search: {} }],
   ])('describes automatic search for %s hosted-tool requests', (_provider, tool) => {
-    const preamble = buildCapabilityPreamble({ tools: [tool] });
+    const preamble = buildCapabilityPreamble({ servingModel: null, surface: 'web', tools: [tool] });
 
     expect(preamble).toContain('- web_search, search the live web and cite what you find');
     expect(preamble).toContain('Web search is available on this turn');
@@ -34,6 +34,8 @@ describe('capability preamble', () => {
 
   it('tells the model that automatic search and downloadable deliverables are available', () => {
     const preamble = buildCapabilityPreamble({
+      servingModel: null,
+      surface: 'web',
       now: new Date('2026-07-25T12:00:00.000Z'),
       tools: [
         { type: 'function', function: { name: 'web_search' } },
@@ -52,6 +54,8 @@ describe('capability preamble', () => {
 
   it('does not present the UTC calendar date as the user’s local date', () => {
     const preamble = buildCapabilityPreamble({
+      servingModel: null,
+      surface: 'web',
       now: new Date('2026-07-26T02:19:00.000Z'),
       timeZone: 'America/Chicago',
       tools: [{ type: 'function', function: { name: 'web_search' } }],
@@ -67,6 +71,8 @@ describe('capability preamble', () => {
 
   it('ignores an invalid browser time zone', () => {
     const preamble = buildCapabilityPreamble({
+      servingModel: null,
+      surface: 'web',
       now: new Date('2026-07-26T02:19:00.000Z'),
       timeZone: 'America/Not_Real',
       tools: [],
@@ -78,6 +84,8 @@ describe('capability preamble', () => {
 
   it('does not promise search, files, or a sandbox when the request has no tools', () => {
     const preamble = buildCapabilityPreamble({
+      servingModel: null,
+      surface: 'web',
       now: new Date('2026-07-25T12:00:00.000Z'),
       tools: [],
     });
@@ -89,6 +97,8 @@ describe('capability preamble', () => {
 
   it('does not promise file attachment for search-only turns', () => {
     const preamble = buildCapabilityPreamble({
+      servingModel: null,
+      surface: 'web',
       tools: [{ type: 'function', function: { name: 'web_search' } }],
     });
 
@@ -97,7 +107,13 @@ describe('capability preamble', () => {
   });
 
   it('asks a search turn for bracketed markers on every sourced claim, named outlet included', () => {
-    const preamble = String(buildCapabilityPreamble({ tools: [{ google_search: {} }] }));
+    const preamble = String(
+      buildCapabilityPreamble({
+        servingModel: null,
+        surface: 'web',
+        tools: [{ google_search: {} }],
+      }),
+    );
 
     expect(preamble).toContain('[1]');
     expect(preamble).toContain('naming an outlet in prose or italics is not a citation');
@@ -106,7 +122,11 @@ describe('capability preamble', () => {
 
   it('asks for no citation markers on a turn with neither search nor fetch', () => {
     const preamble = String(
-      buildCapabilityPreamble({ tools: [{ type: 'function', function: { name: 'write_file' } }] }),
+      buildCapabilityPreamble({
+        servingModel: null,
+        surface: 'web',
+        tools: [{ type: 'function', function: { name: 'write_file' } }],
+      }),
     );
 
     expect(preamble).not.toContain('[1]');
@@ -119,6 +139,8 @@ describe('capability preamble', () => {
     ).enum;
 
     const preamble = buildCapabilityPreamble({
+      servingModel: null,
+      surface: 'web',
       tools: [{ type: 'function', function: { name: 'create_office_file' } }],
     });
     const officeLine = (preamble ?? '')
@@ -137,6 +159,8 @@ describe('capability preamble', () => {
 
   it('discloses a "Run code" turn whose execution tool was dropped, even when other tools ran', () => {
     const preamble = buildCapabilityPreamble({
+      servingModel: null,
+      surface: 'web',
       tools: [{ type: 'function', function: { name: 'web_search' } }],
       codeExecutionUnavailable: true,
     });
@@ -153,7 +177,11 @@ describe('capability preamble', () => {
   ])(
     'never tells the model it cannot run code when %s attached a hosted execution tool',
     (_provider, tool, expectedName) => {
-      const preamble = buildCapabilityPreamble({ tools: [tool] });
+      const preamble = buildCapabilityPreamble({
+        servingModel: null,
+        surface: 'web',
+        tools: [tool],
+      });
 
       expect(extractToolNames([tool])).toEqual([expectedName]);
       expect(preamble).not.toContain('No tools are available on this turn');
@@ -164,6 +192,8 @@ describe('capability preamble', () => {
 
   it('does not claim code execution on a turn that only got search', () => {
     const preamble = buildCapabilityPreamble({
+      servingModel: null,
+      surface: 'web',
       tools: [{ type: 'function', function: { name: 'web_search' } }],
     });
 
@@ -172,6 +202,8 @@ describe('capability preamble', () => {
 
   it('stays silent about code execution when the turn actually got the tool', () => {
     const preamble = buildCapabilityPreamble({
+      servingModel: null,
+      surface: 'web',
       tools: [{ type: 'function', function: { name: 'execute_code' } }],
       codeExecutionUnavailable: false,
     });
@@ -182,6 +214,8 @@ describe('capability preamble', () => {
   describe('cache prefix stability', () => {
     it('puts the ever-changing timestamp after the cache boundary, not before it', () => {
       const preamble = buildCapabilityPreamble({
+        servingModel: null,
+        surface: 'web',
         now: new Date('2026-07-25T12:03:00.000Z'),
         tools: [{ type: 'function', function: { name: 'web_search' } }],
       });
@@ -194,6 +228,8 @@ describe('capability preamble', () => {
 
     it('rounds the timestamp down to the coarse granularity', () => {
       const preamble = buildCapabilityPreamble({
+        servingModel: null,
+        surface: 'web',
         now: new Date('2026-07-25T12:03:47.812Z'),
         tools: [],
       });
@@ -203,10 +239,14 @@ describe('capability preamble', () => {
 
     it('keeps the portion before the boundary byte-identical across two turns of one conversation', () => {
       const turnOne = buildCapabilityPreamble({
+        servingModel: null,
+        surface: 'web',
         now: new Date('2026-07-25T12:03:00.000Z'),
         tools: [{ type: 'function', function: { name: 'web_search' } }],
       });
       const turnTwo = buildCapabilityPreamble({
+        servingModel: null,
+        surface: 'web',
         now: new Date('2026-07-25T12:41:00.000Z'),
         tools: [{ type: 'function', function: { name: 'web_search' } }],
       });
@@ -229,6 +269,8 @@ describe('capability preamble', () => {
 
     it('names the path of every attachment the sandbox holds', () => {
       const preamble = buildCapabilityPreamble({
+        servingModel: null,
+        surface: 'web',
         tools: [executionTool],
         attachmentSandboxPaths: ['/home/user/sales.csv', '/home/user/notes.txt'],
       });
@@ -246,6 +288,8 @@ describe('capability preamble', () => {
      */
     it('stays silent when the turn routed to a provider-native interpreter', () => {
       const preamble = buildCapabilityPreamble({
+        servingModel: null,
+        surface: 'web',
         tools: [{ type: 'code_interpreter', container: { type: 'auto' } }],
         attachmentSandboxPaths: ['/home/user/sales.csv'],
       });
@@ -256,6 +300,8 @@ describe('capability preamble', () => {
 
     it('stays silent when the execution tool could not be attached at all', () => {
       const preamble = buildCapabilityPreamble({
+        servingModel: null,
+        surface: 'web',
         tools: [executionTool],
         codeExecutionUnavailable: true,
         attachmentSandboxPaths: ['/home/user/sales.csv'],
@@ -266,6 +312,8 @@ describe('capability preamble', () => {
 
     it('says nothing about staging on a turn with no attachments', () => {
       const preamble = buildCapabilityPreamble({
+        servingModel: null,
+        surface: 'web',
         tools: [executionTool],
         attachmentSandboxPaths: [],
       });

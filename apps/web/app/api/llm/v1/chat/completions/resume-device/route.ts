@@ -51,13 +51,14 @@ import {
   type ConnectorToolPermissions,
   scopeConnectorPermissionsToTurn,
 } from '../lib/connector-tool-permissions';
+import { managedConversationGrantScope } from '../lib/connector-tool-session-grants';
 import { hostedToolRunsUnasked, loadToolApprovalPolicy } from '../lib/tool-approval-policy';
 import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import { applySecretHandlingToTexts } from '../lib/secret-handling-gate';
 import {
   checkpointRequestForResume,
-  checkpointTurnAttachments,
+  restoreCheckpointedTurn,
 } from '../lib/approval-checkpoint-request';
 
 const SECRET_IN_RESULT_MESSAGE =
@@ -237,14 +238,21 @@ async function handleDeviceStepResume(request: NextRequest, authResult: AuthGate
   }
   const processed: ProcessedRequest = processResult;
 
-  processed.llmRequest.messages = claim.checkpoint.messages;
-  processed.turnAttachments = checkpointTurnAttachments(claim.checkpoint.request);
+  restoreCheckpointedTurn(processed, claim.checkpoint);
 
   const discovery: { mcpTools: WebMcpToolDef[]; permissions: ConnectorToolPermissions } =
     await (async () => {
       try {
         const permissions = scopeConnectorPermissionsToTurn(
-          await loadConnectorToolPermissions(db, userId, processed.organizationId ?? null),
+          await loadConnectorToolPermissions(
+            db,
+            userId,
+            processed.organizationId ?? null,
+            managedConversationGrantScope(
+              processed.conversationId,
+              processed.conversationIsTemporary === true,
+            ),
+          ),
           {
             temporary: processed.conversationIsTemporary === true,
             disabledConnectorIds: processed.chatRequest.disabled_connector_ids,

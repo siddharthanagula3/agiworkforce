@@ -1,14 +1,22 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { loadConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import {
+  loadConnectorToolPermissions,
+  scopeConnectorPermissionsToTurn,
+} from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import { managedConversationGrantScope } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-session-grants';
+import type { ToolApprovalRiskTier } from '@agiworkforce/cloud-contracts';
 import { toolExecutionChannel } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 import type { ToolLoopToolResult } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { isChannelPreferredOver } from '@/lib/connectors/catalog';
 import { logger } from '@/lib/logger';
 
 export interface CloudAgentToolPermissionGate {
-  refusalFor(qualifiedName: string): Promise<ToolLoopToolResult | null>;
+  refusalFor(
+    qualifiedName: string,
+    sessionGrantRisk?: ToolApprovalRiskTier,
+  ): Promise<ToolLoopToolResult | null>;
 }
 
 function blockedMidRunMessage(qualifiedName: string): string {
@@ -59,6 +67,9 @@ export function createCloudAgentToolPermissionGate(
     userId: string;
     organizationId: string | null;
     connectorToolNames: ReadonlySet<string>;
+    conversationId?: string | null;
+    temporary?: boolean;
+    disabledConnectorIds?: readonly string[];
   },
 ): CloudAgentToolPermissionGate {
   const offered = [...params.connectorToolNames];
@@ -76,9 +87,14 @@ export function createCloudAgentToolPermissionGate(
   }
 
   return {
-    async refusalFor(qualifiedName: string): Promise<ToolLoopToolResult | null> {
+    async refusalFor(
+      qualifiedName: string,
+      sessionGrantRisk?: ToolApprovalRiskTier,
+    ): Promise<ToolLoopToolResult | null> {
       const channel = toolExecutionChannel(qualifiedName);
       const isConnectorTool = params.connectorToolNames.has(qualifiedName);
+      if (!isConnectorTool && sessionGrantRisk !== undefined)
+        return refusal('This tool does not have a confirmed conversation permission.');
       if (!isConnectorTool && channel === 'connector') return null;
 
       if (channel !== 'connector') {
@@ -94,7 +110,20 @@ export function createCloudAgentToolPermissionGate(
 
       let permissions: Awaited<ReturnType<typeof loadConnectorToolPermissions>>;
       try {
-        permissions = await loadConnectorToolPermissions(db, params.userId, params.organizationId);
+        permissions = scopeConnectorPermissionsToTurn(
+          await loadConnectorToolPermissions(
+            db,
+            params.userId,
+            params.organizationId,
+            sessionGrantRisk === undefined
+              ? undefined
+              : managedConversationGrantScope(params.conversationId, params.temporary === true),
+          ),
+          {
+            temporary: params.temporary === true,
+            disabledConnectorIds: params.disabledConnectorIds,
+          },
+        );
       } catch (error) {
         logger.warn(
           { error, userId: params.userId, tool: qualifiedName },
@@ -109,6 +138,14 @@ export function createCloudAgentToolPermissionGate(
           '[cloud-agent] tool blocked since the run started; refusing the dispatch',
         );
         return refusal(blockedMidRunMessage(qualifiedName));
+      }
+      if (
+        sessionGrantRisk !== undefined &&
+        permissions.isSessionGranted?.(qualifiedName, sessionGrantRisk) !== true
+      ) {
+        return refusal(
+          'This conversation permission no longer applies, so the tool was not executed. Ask for approval again instead of retrying automatically.',
+        );
       }
       if (channel === 'connector') return null;
 

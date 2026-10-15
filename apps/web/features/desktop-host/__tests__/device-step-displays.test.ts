@@ -38,6 +38,31 @@ describe('device screenshots across displays', () => {
     expect(outcome.content).toContain('display 1 "Built-in" 1512x982 at 2x, primary');
   });
 
+  // The desktop app asks its user once per task before the agent may use
+  // the screen, and runs no screen step that names no task.
+  it('names the task on a screen step and on no file step', async () => {
+    invokeRuntime.mockResolvedValue({ ok: true, value: capture });
+    await executeDeviceStep('device_screenshot', { display: 4 }, 'run-7');
+    expect(invokeRuntime).toHaveBeenLastCalledWith('computer_screenshot', {
+      display: 4,
+      runId: 'run-7',
+    });
+
+    invokeRuntime.mockResolvedValue({ ok: true, value: true });
+    await executeDeviceStep('device_click', { x: 1, y: 2 }, 'run-7');
+    expect(invokeRuntime).toHaveBeenLastCalledWith(
+      'computer_click',
+      expect.objectContaining({ x: 1, y: 2, runId: 'run-7' }),
+    );
+
+    invokeRuntime.mockResolvedValue({ ok: true, value: { text: 'x', truncated: false } });
+    await executeDeviceStep('device_read_file', { rootId: 'r', path: 'a.txt' }, 'run-7');
+    expect(invokeRuntime).toHaveBeenLastCalledWith('file_read_text', {
+      rootId: 'r',
+      path: 'a.txt',
+    });
+  });
+
   it('sends no display when the step names none', async () => {
     invokeRuntime.mockResolvedValue({
       ok: true,

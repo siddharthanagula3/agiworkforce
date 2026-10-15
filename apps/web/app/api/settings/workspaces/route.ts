@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { PERSONAL_WORKSPACE_SELECTOR } from '@agiworkforce/types';
+import { ManagedCloudAccountWorkspacesSchema } from '@agiworkforce/cloud-contracts';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -39,12 +40,12 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
     : null;
 
   return NextResponse.json(
-    {
+    ManagedCloudAccountWorkspacesSchema.parse({
       workspaces,
       activeWorkspaceId: active?.id ?? null,
       activeOrganizationId: organizationId ?? null,
       scope: organizationId ? 'organization' : 'personal',
-    },
+    }),
     { headers: { 'Cache-Control': 'private, no-store' } },
   );
 }

@@ -5,8 +5,8 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { isFreeOfChargePlanTier } from '@agiworkforce/types';
 import { readBillingUpgradesOpen } from '@/lib/feature-flags/billing-upgrade-gate';
 import { getSubscriptionBillingOwnerPolicy } from '@/lib/server/subscription-billing-owner';
-
-export const WAITLIST_ACCESS_REQUIRED_CODE = 'waitlist_access_required';
+import { WAITLIST_ACCESS_REQUIRED_CODE } from '@/lib/validations/upgrade-waitlist';
+export { WAITLIST_ACCESS_REQUIRED_CODE } from '@/lib/validations/upgrade-waitlist';
 
 export const WAITLIST_ACCESS_REQUIRED_MESSAGE =
   'Paid upgrades are opening in stages. Join the waitlist or enter an access code to continue.';

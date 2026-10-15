@@ -15,6 +15,7 @@ import { Header } from '@shared/components/layout/Header';
 import { SuccessState } from '@shared/components/SuccessState';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Eyebrow, Prose, Stack } from '@/features/marketing/components/system';
+import { webEntryHref, webSignInHref } from '@/features/marketing/components/system/nav';
 import { useCurrentUser } from '@/lib/identity/client';
 import { toUserMessage } from '@/lib/user-error-message';
 
@@ -52,7 +53,8 @@ function SlackLinkForm() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 
   const redirectPath = `/slack/link?token=${encodeURIComponent(token)}`;
-  const signInHref = `/login?redirectTo=${encodeURIComponent(redirectPath)}`;
+  const signInHref = webSignInHref(redirectPath);
+  const signUpHref = webEntryHref(redirectPath);
   const accountLabel = user?.email ?? user?.emails[0] ?? user?.fullName ?? null;
 
   useEffect(() => {
@@ -164,7 +166,12 @@ function SlackLinkForm() {
             Sign in to the AGI Workforce account Slack should answer as.{' '}
             <Link href={signInHref} className="agi-ds-link">
               Sign in
+            </Link>{' '}
+            or{' '}
+            <Link href={signUpHref} className="agi-ds-link">
+              create an account
             </Link>
+            .
           </p>
         ) : null}
 

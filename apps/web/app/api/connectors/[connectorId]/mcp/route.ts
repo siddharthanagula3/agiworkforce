@@ -18,6 +18,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { withReachableMcpHandle } from '@/lib/connectors/reachable-mcp-handle';
 import { bindMcpTask, isMcpTaskBound } from '@/lib/connectors/mcp-state-store';
+import { connectorToolRiskTier } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 
 export const runtime = 'nodejs';
 
@@ -38,69 +39,90 @@ async function handlePost(
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const permissions = await loadConnectorToolPermissions(db, userId, organizationId ?? null);
-  const output = await withReachableMcpHandle(userId, connectorRef, async (connection) => {
-    const { handle } = connection;
-    switch (body.operation) {
-      case 'callTool': {
-        const level = permissions.levelForConnectorTool(connection.connectorId, body.name);
-        if (level === 'deny') throw createError.forbidden('This connector tool is denied');
-        if (level !== 'allow' && !body.approved) {
-          return { approvalRequired: true as const, connectorId: connection.connectorId };
-        }
-        const result = await handle.callTool(body.name, body.arguments, {
-          allowInputRequired: true,
-          ...(body.inputResponses ? { inputResponses: body.inputResponses } : {}),
-          ...(body.requestState ? { requestState: body.requestState } : {}),
-        });
-        if (
-          result.task &&
-          !(await bindMcpTask({
-            userId,
-            connectorId: connection.connectorId,
-            task: result.task,
-          }))
-        ) {
-          throw createError.serviceUnavailable('MCP Tasks storage is not available');
-        }
-        return { approvalRequired: false as const, connectorId: connection.connectorId, result };
-      }
-      case 'readResource':
-        return { connectorId: connection.connectorId, result: await handle.readResource(body.uri) };
-      case 'getPrompt':
-        return {
-          connectorId: connection.connectorId,
-          result: await handle.getPrompt(body.name, body.arguments, {
+  const output = await withReachableMcpHandle(
+    userId,
+    connectorRef,
+    async (connection) => {
+      const { handle } = connection;
+      switch (body.operation) {
+        case 'callTool': {
+          const level = permissions.levelForConnectorTool(connection.connectorId, body.name);
+          if (level === 'deny') throw createError.forbidden('This connector tool is denied');
+          const critical =
+            connectorToolRiskTier(
+              connection.connectorId,
+              body.name,
+              handle.catalog.tools.find((tool) => tool.toolName === body.name)?.annotations,
+            ) === 'critical';
+          if ((level !== 'allow' || critical) && !body.approved) {
+            return { approvalRequired: true as const, connectorId: connection.connectorId };
+          }
+          const result = await handle.callTool(body.name, body.arguments, {
+            signal: request.signal,
             allowInputRequired: true,
             ...(body.inputResponses ? { inputResponses: body.inputResponses } : {}),
             ...(body.requestState ? { requestState: body.requestState } : {}),
-          }),
-        };
-      case 'taskGet':
-        if (!handle.tasks) throw createError.validation('This server does not support MCP Tasks');
-        if (!(await isMcpTaskBound(userId, connection.connectorId, body.taskId))) {
-          throw createError.notFound('MCP task not found');
+          });
+          if (
+            result.task &&
+            !(await bindMcpTask({
+              userId,
+              connectorId: connection.connectorId,
+              task: result.task,
+            }))
+          ) {
+            throw createError.serviceUnavailable('MCP Tasks storage is not available');
+          }
+          return { approvalRequired: false as const, connectorId: connection.connectorId, result };
         }
-        return { connectorId: connection.connectorId, result: await handle.tasks.get(body.taskId) };
-      case 'taskUpdate':
-        if (!handle.tasks) throw createError.validation('This server does not support MCP Tasks');
-        if (!(await isMcpTaskBound(userId, connection.connectorId, body.taskId))) {
-          throw createError.notFound('MCP task not found');
-        }
-        return {
-          connectorId: connection.connectorId,
-          result: await handle.tasks.update(body.taskId, body.inputResponses),
-        };
-      case 'taskCancel':
-        if (!handle.tasks) throw createError.validation('This server does not support MCP Tasks');
-        if (!(await isMcpTaskBound(userId, connection.connectorId, body.taskId))) {
-          throw createError.notFound('MCP task not found');
-        }
-        return {
-          connectorId: connection.connectorId,
-          result: await handle.tasks.cancel(body.taskId),
-        };
-    }
-  });
+        case 'readResource':
+          return {
+            connectorId: connection.connectorId,
+            result: await handle.readResource(body.uri, { signal: request.signal }),
+          };
+        case 'getPrompt':
+          return {
+            connectorId: connection.connectorId,
+            result: await handle.getPrompt(body.name, body.arguments, {
+              signal: request.signal,
+              allowInputRequired: true,
+              ...(body.inputResponses ? { inputResponses: body.inputResponses } : {}),
+              ...(body.requestState ? { requestState: body.requestState } : {}),
+            }),
+          };
+        case 'taskGet':
+          if (!handle.tasks) throw createError.validation('This server does not support MCP Tasks');
+          if (!(await isMcpTaskBound(userId, connection.connectorId, body.taskId))) {
+            throw createError.notFound('MCP task not found');
+          }
+          return {
+            connectorId: connection.connectorId,
+            result: await handle.tasks.get(body.taskId, { signal: request.signal }),
+          };
+        case 'taskUpdate':
+          if (!handle.tasks) throw createError.validation('This server does not support MCP Tasks');
+          if (!(await isMcpTaskBound(userId, connection.connectorId, body.taskId))) {
+            throw createError.notFound('MCP task not found');
+          }
+          return {
+            connectorId: connection.connectorId,
+            result: await handle.tasks.update(body.taskId, body.inputResponses, {
+              signal: request.signal,
+            }),
+          };
+        case 'taskCancel':
+          if (!handle.tasks) throw createError.validation('This server does not support MCP Tasks');
+          if (!(await isMcpTaskBound(userId, connection.connectorId, body.taskId))) {
+            throw createError.notFound('MCP task not found');
+          }
+          return {
+            connectorId: connection.connectorId,
+            result: await handle.tasks.cancel(body.taskId, { signal: request.signal }),
+          };
+      }
+    },
+    { organizationId },
+  );
   if (!output) throw createError.notFound('Connected MCP connector not found');
   const readOperation = ['readResource', 'getPrompt', 'taskGet'].includes(body.operation);
   const approvalOnly = body.operation === 'callTool' && output.approvalRequired === true;

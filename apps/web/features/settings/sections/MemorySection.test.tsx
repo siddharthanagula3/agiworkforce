@@ -32,6 +32,7 @@ const TOGGLES = [
   'Persistent memory',
   'Save memories from chats',
   'Search past chats',
+  'Include sensitive topics in memory',
   'Allow memory generation from tool-assisted chats',
 ];
 
@@ -42,6 +43,7 @@ function capabilities(organizationMemoryAllowed: boolean) {
       generateFromHistory: true,
       allowToolAssistedGeneration: false,
       searchPastChats: true,
+      includeSensitiveTopics: false,
       cloudCodeExecution: true,
     },
     organizationMemoryAllowed,

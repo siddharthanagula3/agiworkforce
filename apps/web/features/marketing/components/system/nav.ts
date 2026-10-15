@@ -1,4 +1,25 @@
 import { SURFACE_STATUS } from '@/lib/surface-status';
+import {
+  AUTH_LOGIN_PATH,
+  buildLoginUrl,
+  buildSignupUrl,
+  type AuthRouteContext,
+} from '@/features/auth/authRoutes';
+
+function webAuthContext(redirectTo: string): AuthRouteContext {
+  return { redirectTo, desktopSurface: false, authRetry: false, requestedRedirect: true };
+}
+
+export function webEntryHref(redirectTo: string): string {
+  return buildSignupUrl(webAuthContext(redirectTo));
+}
+
+export function webSignInHref(redirectTo: string): string {
+  return buildLoginUrl(webAuthContext(redirectTo));
+}
+
+export const SIGN_IN_HREF = AUTH_LOGIN_PATH;
+export const CREATE_ACCOUNT_LABEL = 'Create an account';
 
 export const WEB_ENTRY_HREF = '/login?redirectTo=%2F';
 export const CHAT_ROOT_HREF = '/chat';

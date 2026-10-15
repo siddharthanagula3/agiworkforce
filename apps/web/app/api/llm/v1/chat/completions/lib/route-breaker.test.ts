@@ -7,6 +7,7 @@ vi.mock('@/lib/logger', () => ({
 
 const mockResolveProviderFromModel = vi.fn();
 vi.mock('@/lib/services/provider-adapter-service', () => ({
+  serverProviderHasEndpointOverride: () => false,
   resolveProviderFromModel: (...args: unknown[]) => mockResolveProviderFromModel(...args),
   buildServerProviderAdapter: vi.fn(),
   listAvailableManagedProviderIds: () => new Set<string>(),

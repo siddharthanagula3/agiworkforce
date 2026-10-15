@@ -22,31 +22,47 @@ const experientialOfferingKey = Object.entries(getProviderOfferings()).find(
 afterEach(() => vi.unstubAllEnvs());
 
 describe('free model selection to transport', () => {
-  it.each([qwenOfferingKey, experientialOfferingKey])(
-    'recognizes tool requests unsupported by the exact promotional route %s',
-    (offeringKey) => {
-      expect(promotionalChatToolConflict(offeringKey, 'Search the web for the IANA page.')).toBe(
-        'web_search',
-      );
-      expect(
-        promotionalChatToolConflict(
-          offeringKey,
-          'Summarize this URL: https://www.iana.org/help/example-domains',
-        ),
-      ).toBe('web_search');
-      expect(promotionalChatToolConflict(offeringKey, 'Run Python to calculate 17 * 19.')).toBe(
-        'code_execution',
-      );
-      expect(promotionalChatToolConflict(offeringKey, 'Do not search the web. Just say hi.')).toBe(
-        null,
-      );
-      expect(promotionalChatToolConflict(offeringKey, 'Say hi.')).toBe(null);
-      expect(promotionalChatToolConflict(offeringKey, 'Say hi.', { needsTools: true })).toBe(
-        'tools',
-      );
-      expect(promotionalChatToolConflict('auto', 'Search the web for IANA.')).toBe(null);
-    },
-  );
+  it('recognizes tool requests the Experiential Labs route still refuses', () => {
+    const offeringKey = experientialOfferingKey;
+    expect(promotionalChatToolConflict(offeringKey, 'Search the web for the IANA page.')).toBe(
+      'web_search',
+    );
+    expect(
+      promotionalChatToolConflict(
+        offeringKey,
+        'Summarize this URL: https://www.iana.org/help/example-domains',
+      ),
+    ).toBe('web_search');
+    expect(promotionalChatToolConflict(offeringKey, 'Run Python to calculate 17 * 19.')).toBe(
+      'code_execution',
+    );
+    expect(promotionalChatToolConflict(offeringKey, 'Do not search the web. Just say hi.')).toBe(
+      null,
+    );
+    expect(promotionalChatToolConflict(offeringKey, 'Say hi.')).toBe(null);
+    expect(promotionalChatToolConflict(offeringKey, 'Say hi.', { needsTools: true })).toBe('tools');
+    expect(promotionalChatToolConflict('auto', 'Search the web for IANA.')).toBe(null);
+  });
+
+  it.each([
+    'What is the latest version of React?',
+    'Search the web for the IANA page.',
+    'Summarize this URL: https://www.iana.org/help/example-domains',
+    'Write a Python script to parse a CSV.',
+    'Run Python to calculate 17 * 19.',
+  ])('never blocks a free quota model on the wording of "%s"', (draft) => {
+    expect(promotionalChatToolConflict(qwenOfferingKey, draft)).toBeNull();
+  });
+
+  it('never blocks a free quota model on a tool the person switched on, which is handed to Auto instead', () => {
+    expect(
+      promotionalChatToolConflict(qwenOfferingKey, 'Say hi.', {
+        webSearchEnabled: true,
+        codeExecutionEnabled: true,
+        needsTools: true,
+      }),
+    ).toBeNull();
+  });
 
   it.each([
     [qwenOfferingKey, '/api/models/free-quota/completions'],

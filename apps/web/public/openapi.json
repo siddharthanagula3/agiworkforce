@@ -5640,6 +5640,16 @@
               }
             }
           },
+          "422": {
+            "description": "The request cannot be processed; only saving a permission is refused this way",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limited",
             "content": {
@@ -5755,6 +5765,16 @@
               }
             }
           },
+          "422": {
+            "description": "A critical tool cannot be saved as always allowed; it asks every time",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limited",
             "content": {
@@ -5841,6 +5861,16 @@
           },
           "403": {
             "description": "A browser session sent no valid CSRF token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request cannot be processed; only saving a permission is refused this way",
             "content": {
               "application/json": {
                 "schema": {

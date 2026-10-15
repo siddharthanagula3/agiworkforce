@@ -8,8 +8,8 @@ import {
   agiCoolPalette,
   agiBrandScale,
   agiChatCssVars,
-  agiElevation,
   agiExtensionCssVars,
+  agiElevation,
   agiMobileAccentSwatches,
   agiMobileColors,
   agiMobileHighContrastColors,
@@ -854,6 +854,150 @@ describe('contrastRatio utility', () => {
     const r2 = contrastRatio('#e4e4e7', '#0f0f13');
     expect(r1).toBeCloseTo(r2, 10);
   });
+});
+
+describe('extension tokens follow foundation roles and actual backgrounds', () => {
+  const foundationColor = (block: string, name: string): string => {
+    const value = token(block, name);
+    if (/^#[0-9a-f]{6}$/i.test(value)) return value;
+    if (/^[\d.]+\s+[\d.]+%\s+[\d.]+%$/.test(value)) return tripleToHex(value);
+    const reference = value.match(/^var\((--[a-z0-9-]+)\)$/);
+    if (!reference) throw new Error(`Unsupported foundation color ${name}: ${value}`);
+    return foundationColor(foundationLight, reference[1]!);
+  };
+
+  const roles = [
+    ['--agi-ext-bg', '--surface-page'],
+    ['--agi-ext-surface', '--surface-elevated'],
+    ['--agi-ext-overlay', '--surface-elevated'],
+    ['--agi-ext-hover', '--surface-hover'],
+    ['--agi-ext-text', '--text-primary'],
+    ['--agi-ext-text-muted', '--text-secondary'],
+    ['--agi-ext-text-placeholder', '--text-muted'],
+    ['--agi-ext-logo-surface', '--logo-surface'],
+    ['--agi-ext-border', '--rule'],
+    ['--agi-ext-border-strong', '--rule-strong'],
+    ['--agi-ext-primary', '--action-primary'],
+    ['--agi-ext-on-primary', '--action-primary-foreground'],
+    ['--agi-ext-primary-hover', '--action-primary'],
+    ['--agi-ext-accent', '--accent-fill'],
+    ['--agi-ext-accent-text', '--accent-text'],
+    ['--agi-ext-accent-secondary', '--accent-fill'],
+    ['--agi-ext-focus', '--focus-ring'],
+    ['--agi-ext-brand', '--text-primary'],
+    ['--agi-ext-brand-alt', '--text-secondary'],
+    ['--agi-ext-on-accent', '--accent-on-fill'],
+    ['--agi-ext-danger', '--danger-fill'],
+    ['--agi-ext-danger-fill', '--danger-fill'],
+    ['--agi-ext-on-danger', '--danger-on-fill'],
+    ['--agi-ext-danger-bg', '--surface-subtle'],
+    ['--agi-ext-danger-border', '--danger-text'],
+    ['--agi-ext-success', '--success-text'],
+    ['--agi-ext-success-bg', '--surface-subtle'],
+    ['--agi-ext-success-border', '--success-text'],
+    ['--agi-ext-warning', '--warning-text'],
+    ['--agi-ext-warning-bg', '--surface-subtle'],
+    ['--agi-ext-warning-border', '--warning-text'],
+    ['--agi-ext-danger-text', '--danger-text'],
+    ['--agi-ext-success-text', '--success-text'],
+    ['--agi-ext-warning-text', '--warning-text'],
+    ['--agi-ext-info-text', '--info-text'],
+  ] as const;
+
+  for (const [mode, block] of [
+    ['light', foundationLight],
+    ['dark', foundationDark],
+  ] as const) {
+    const extension = agiExtensionCssVars[mode];
+    const surfaces = [
+      '--agi-ext-bg',
+      '--agi-ext-surface',
+      '--agi-ext-overlay',
+      '--agi-ext-hover',
+    ] as const;
+    const fields = ['--agi-ext-bg', '--agi-ext-surface', '--agi-ext-overlay'] as const;
+
+    for (const [name, role] of roles) {
+      it(`${mode} ${name} mirrors foundation ${role}`, () => {
+        expect(extension[name]).toBe(foundationColor(block, role));
+      });
+    }
+
+    it(`${mode} the control boundary uses its readable foundation role`, () => {
+      expect(extension['--agi-ext-border-control']).toBe(
+        foundationColor(block, mode === 'dark' ? '--text-muted' : '--rule-strong'),
+      );
+    });
+
+    for (const text of [
+      '--agi-ext-text',
+      '--agi-ext-text-muted',
+      '--agi-ext-text-placeholder',
+    ] as const) {
+      for (const surface of surfaces) {
+        it(`${mode} ${text} on ${surface} meets normal-text contrast`, () => {
+          expect(contrastRatio(extension[text], extension[surface])).toBeGreaterThanOrEqual(
+            WCAG_AA_NORMAL,
+          );
+        });
+      }
+    }
+
+    for (const surface of fields) {
+      for (const text of [
+        '--agi-ext-accent-text',
+        '--agi-ext-success',
+        '--agi-ext-warning',
+        '--agi-ext-danger-text',
+        '--agi-ext-success-text',
+        '--agi-ext-warning-text',
+        '--agi-ext-info-text',
+      ] as const) {
+        it(`${mode} ${text} on ${surface} meets normal-text contrast`, () => {
+          expect(contrastRatio(extension[text], extension[surface])).toBeGreaterThanOrEqual(
+            WCAG_AA_NORMAL,
+          );
+        });
+      }
+
+      for (const glyph of [
+        '--agi-ext-text-muted',
+        '--agi-ext-focus',
+        '--agi-ext-border-control',
+      ] as const) {
+        it(`${mode} ${glyph} on ${surface} meets control contrast`, () => {
+          expect(contrastRatio(extension[glyph], extension[surface])).toBeGreaterThanOrEqual(
+            WCAG_AA_LARGE,
+          );
+        });
+      }
+    }
+
+    for (const [fill, foreground] of [
+      ['--agi-ext-primary', '--agi-ext-on-primary'],
+      ['--agi-ext-primary-hover', '--agi-ext-on-primary'],
+      ['--agi-ext-accent', '--agi-ext-on-accent'],
+      ['--agi-ext-danger-fill', '--agi-ext-on-danger'],
+    ] as const) {
+      it(`${mode} ${foreground} on ${fill} meets normal-text contrast`, () => {
+        expect(contrastRatio(extension[foreground], extension[fill])).toBeGreaterThanOrEqual(
+          WCAG_AA_NORMAL,
+        );
+      });
+    }
+
+    for (const [text, background] of [
+      ['--agi-ext-danger-text', '--agi-ext-danger-bg'],
+      ['--agi-ext-success', '--agi-ext-success-bg'],
+      ['--agi-ext-warning', '--agi-ext-warning-bg'],
+    ] as const) {
+      it(`${mode} ${text} on its neutral status background meets normal-text contrast`, () => {
+        expect(contrastRatio(extension[text], extension[background])).toBeGreaterThanOrEqual(
+          WCAG_AA_NORMAL,
+        );
+      });
+    }
+  }
 });
 
 describe('design-token palettes consumed by extension, mobile and VS Code', () => {

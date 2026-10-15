@@ -58,6 +58,7 @@ function KeyboardShortcutsDialogImpl({
     conversation: 'Conversations',
     message: 'Messages',
     ui: 'User Interface',
+    composer: 'Message composer',
   };
 
   return (
@@ -108,14 +109,17 @@ function KeyboardShortcutsDialogImpl({
                         A shortcut the user switched off must stop firing, not
                         just look off. use-keyboard-shortcuts reads the same
                         disabledShortcutIds this writes, and the matcher is
-                        driven by KEYBOARD_SHORTCUT_DOCS, so the two cannot
-                        disagree.
+                        driven by the same registry, so the two cannot
+                        disagree. Composer keys are the field's own editing
+                        contract and have no off switch.
                       */}
-                      <Switch
-                        aria-label={shortcut.description}
-                        checked={!disabledIds.includes(shortcut.id)}
-                        onCheckedChange={(next) => setShortcutEnabled(shortcut.id, next)}
-                      />
+                      {shortcut.scope === 'app' ? (
+                        <Switch
+                          aria-label={shortcut.description}
+                          checked={!disabledIds.includes(shortcut.id)}
+                          onCheckedChange={(next) => setShortcutEnabled(shortcut.id, next)}
+                        />
+                      ) : null}
                     </div>
                   </div>
                 ))}

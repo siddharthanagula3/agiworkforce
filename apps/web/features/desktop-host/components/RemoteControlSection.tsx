@@ -19,6 +19,10 @@ const INTRO =
   'Pair your phone to follow AGI Code sessions running on this computer: approve steps, read diffs, test results and new files, and steer the next turn.';
 const HOW_TO_PAIR =
   'Open the AGI Workforce app on your phone, choose Pair with Desktop, and scan this code. The code works once and expires in a few minutes.';
+const PAIRING_WINDOW =
+  'Scan the code in the pairing window with the AGI Workforce app on your phone. Before the phone connects, this computer asks you to allow it.';
+const PHONE_CAN_RECONNECT =
+  'Your phone disconnected. It reconnects on its own while Remote Control is on. To pair a different phone, stop Remote Control and pair again.';
 const BROWSER_PAIRING =
   'To send tasks from a browser instead, copy a link and open it in a browser signed in to this account. The link works once, like the code.';
 const PAIR_FAILED = 'Pairing could not start.';
@@ -104,7 +108,8 @@ export function RemoteControlSection() {
     });
   }, [host]);
 
-  const qrPayload = state?.status === 'waiting' ? state.qrPayload : null;
+  const reconnectable = state?.reconnectable === true;
+  const qrPayload = state?.status === 'waiting' && !reconnectable ? state.qrPayload : null;
   useEffect(() => {
     setLinkCopied(false);
     if (!qrPayload) {
@@ -186,34 +191,42 @@ export function RemoteControlSection() {
 
       {status === 'waiting' ? (
         <div className="flex flex-col gap-2">
-          <p className="text-xs text-foreground">{HOW_TO_PAIR}</p>
-          {qrImage ? (
-            <img
-              src={qrImage}
-              alt="Pairing QR code"
-              width={200}
-              height={200}
-              className="h-[200px] w-[200px] rounded-md border border-border/60 bg-background"
-            />
-          ) : (
-            <Spinner aria-label="Drawing the pairing code" />
-          )}
-          {state?.pairingCode ? (
+          <p className="text-xs text-foreground">
+            {reconnectable ? PHONE_CAN_RECONNECT : qrPayload ? HOW_TO_PAIR : PAIRING_WINDOW}
+          </p>
+          {qrPayload ? (
+            qrImage ? (
+              <img
+                src={qrImage}
+                alt="Pairing QR code"
+                width={200}
+                height={200}
+                className="h-[200px] w-[200px] rounded-md border border-border/60 bg-background"
+              />
+            ) : (
+              <Spinner aria-label="Drawing the pairing code" />
+            )
+          ) : null}
+          {state?.pairingCode && !reconnectable ? (
             <span className={CODE_CLASS} aria-label="Pairing code">
               {state.pairingCode}
             </span>
           ) : null}
-          <p className="text-xs text-muted-foreground">{BROWSER_PAIRING}</p>
-          <div className="flex items-center gap-2">
-            <button type="button" className={BUTTON_CLASS} onClick={() => void onCopyLink()}>
-              Copy link for a browser
-            </button>
-            {linkCopied ? (
-              <span className="text-xs text-muted-foreground" role="status">
-                Link copied
-              </span>
-            ) : null}
-          </div>
+          {qrPayload ? (
+            <>
+              <p className="text-xs text-muted-foreground">{BROWSER_PAIRING}</p>
+              <div className="flex items-center gap-2">
+                <button type="button" className={BUTTON_CLASS} onClick={() => void onCopyLink()}>
+                  Copy link for a browser
+                </button>
+                {linkCopied ? (
+                  <span className="text-xs text-muted-foreground" role="status">
+                    Link copied
+                  </span>
+                ) : null}
+              </div>
+            </>
+          ) : null}
         </div>
       ) : null}
 
@@ -252,7 +265,7 @@ export function RemoteControlSection() {
             className={BUTTON_CLASS}
             disabled={busy}
             onClick={() =>
-              status === 'connected' || status === 'reconnecting'
+              status === 'connected' || status === 'reconnecting' || reconnectable
                 ? confirm({
                     title: `Disconnect ${state?.phoneName ?? 'your phone'}?`,
                     description: DISCONNECT_CONSEQUENCE,
@@ -264,7 +277,7 @@ export function RemoteControlSection() {
           >
             {status === 'connected'
               ? 'Disconnect phone'
-              : status === 'reconnecting'
+              : status === 'reconnecting' || reconnectable
                 ? 'Stop Remote Control'
                 : 'Cancel pairing'}
           </button>

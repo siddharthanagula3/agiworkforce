@@ -66,6 +66,48 @@ describe('MemorySection top-level settings entry', () => {
     );
   });
 
+  it('offers Include sensitive topics in memory, off by default and saved to capabilities', async () => {
+    fetchPreferenceNamespace.mockImplementation(async (_namespace: string, fallback: unknown) => ({
+      ...(fallback as Record<string, unknown>),
+      memory: true,
+    }));
+    const user = userEvent.setup();
+    render(<MemorySection />);
+
+    const toggle = await screen.findByRole('switch', {
+      name: 'Include sensitive topics in memory',
+    });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    expect(toggle).not.toBeChecked();
+    expect(
+      screen.getByText(
+        /only when you say "Remember that" in a chat on the web, desktop, mobile or Chrome, or add them here/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Memories saved earlier stay until you delete them/),
+    ).toBeInTheDocument();
+
+    await user.click(toggle);
+
+    await waitFor(() =>
+      expect(savePreferenceNamespace).toHaveBeenCalledWith(
+        'capabilities',
+        { includeSensitiveTopics: true },
+        { merge: true, expectedVersion: null },
+      ),
+    );
+  });
+
+  it('keeps Include sensitive topics in memory unavailable while memory is off', async () => {
+    render(<MemorySection />);
+
+    const toggle = await screen.findByRole('switch', {
+      name: 'Include sensitive topics in memory',
+    });
+    expect(toggle).toBeDisabled();
+  });
+
   it('keeps the acknowledged state and offers a retry when a save is rejected', async () => {
     savePreferenceNamespace.mockRejectedValueOnce(new Error('Network unreachable'));
     const user = userEvent.setup();

@@ -15,7 +15,10 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { loadUserConnectorCapabilityCatalog } from '@/lib/user-connector-tools';
 import { rethrowConnectorUnreachable } from '@/lib/connectors/reachable-mcp-handle';
 import { plainMcpServerText } from '@/lib/connectors/mcp-untrusted-text';
-import { resolveConnectorToolMetadata } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
+import {
+  connectorToolRiskTier,
+  resolveConnectorToolMetadata,
+} from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 
 export const runtime = 'nodejs';
 
@@ -88,6 +91,7 @@ async function handleGet(
         hasApp: Boolean(tool.app),
         readOnly:
           resolveConnectorToolMetadata(resolved.connectorId, tool.toolName).actionClass === 'read',
+        riskTier: connectorToolRiskTier(resolved.connectorId, tool.toolName, tool.annotations),
       })),
       resources: server.resources.map((resource) => ({
         uri: resource.uri,

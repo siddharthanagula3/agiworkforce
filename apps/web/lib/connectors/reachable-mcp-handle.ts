@@ -4,6 +4,7 @@ import { createError } from '@/lib/errors';
 import { ConnectorUnreachableError } from '@/lib/connectors/oauth-access';
 import {
   withUserConnectorMcpHandle,
+  type LoadUserConnectorToolOptions,
   type UserConnectorMcpHandle,
 } from '@/lib/user-connector-tools';
 
@@ -23,8 +24,10 @@ export function withReachableMcpHandle<T>(
   userId: string,
   connectorRef: string,
   operation: (connection: UserConnectorMcpHandle) => Promise<T>,
+  options: Pick<LoadUserConnectorToolOptions, 'organizationId'> = {},
 ): Promise<T | null> {
   return withUserConnectorMcpHandle(userId, connectorRef, operation, {
+    ...options,
     reportUnreachable: true,
   }).catch(rethrowConnectorUnreachable);
 }

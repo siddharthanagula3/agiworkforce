@@ -9,7 +9,7 @@ export function ProductNotices() {
   return (
     <ProductNoticeStack>
       <WorkspaceMfaNotice />
-      <ServiceNotices />
+      <ServiceNotices scope="product" />
       <ReleaseNotice />
     </ProductNoticeStack>
   );

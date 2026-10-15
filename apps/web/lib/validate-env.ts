@@ -447,6 +447,50 @@ export function validateSandboxOriginConfigured(): ValidationResult {
   return { valid: true, errors, warnings };
 }
 
+function appOriginOrNull(value: string | undefined): string | null {
+  try {
+    return value?.trim() ? new URL(value.trim()).origin : null;
+  } catch {
+    return null;
+  }
+}
+
+export function validateMcpAppSandboxOrigin(): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const configured = process.env['NEXT_PUBLIC_MCP_APP_SANDBOX_ORIGIN']?.trim();
+
+  if (!configured) {
+    if (isProductionRuntime()) {
+      warnings.push(
+        'NEXT_PUBLIC_MCP_APP_SANDBOX_ORIGIN is not set, so MCP App cards render the plain tool ' +
+          'result instead of the app. MCP Apps require a sandbox origin distinct from the app ' +
+          'origin; set it to that origin to turn them on.',
+      );
+    }
+    return { valid: true, errors, warnings };
+  }
+
+  let sandbox: URL;
+  try {
+    sandbox = new URL(configured);
+  } catch {
+    errors.push('NEXT_PUBLIC_MCP_APP_SANDBOX_ORIGIN is not a URL.');
+    return { valid: false, errors, warnings };
+  }
+  if (isProductionRuntime() && sandbox.protocol !== 'https:') {
+    errors.push('NEXT_PUBLIC_MCP_APP_SANDBOX_ORIGIN must use https in production.');
+  }
+  if (sandbox.origin === appOriginOrNull(process.env['NEXT_PUBLIC_APP_URL'])) {
+    errors.push(
+      'NEXT_PUBLIC_MCP_APP_SANDBOX_ORIGIN is the app origin, so a tool-authored MCP App would ' +
+        'share an origin with the page that embeds it. Point it at a dedicated origin.',
+    );
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
 export function validateGeneratedMediaStorage(): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -1866,6 +1910,7 @@ export function validateEnvironment(): ValidationResult {
     validateSecurityEscapeHatches(),
     validateEmailPseudonymPepper(),
     validateSandboxOriginConfigured(),
+    validateMcpAppSandboxOrigin(),
     validateGeneratedMediaStorage(),
     validateOAuthCallbackIsolation(),
     validateConfigKeyRegistry(),

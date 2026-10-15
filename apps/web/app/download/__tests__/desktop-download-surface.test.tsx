@@ -18,7 +18,8 @@ vi.mock('@/features/marketing/components/Reveal', () => ({
   Reveal: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-import DownloadPage from '../page';
+import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
+import { DesktopDownloadAvailability } from '../DesktopDownloadAvailability';
 import DesktopPage from '../../desktop/page';
 import DownloadLoading from '../loading';
 import DownloadError from '../error';
@@ -75,26 +76,9 @@ beforeEach(() => {
   respondWith(desktopManifest(), checksumManifest());
 });
 
-describe('public Desktop download surfaces', () => {
-  it('exposes the hero as one correctly spaced heading', () => {
-    render(<DownloadPage />);
-
-    const headings = screen.getAllByRole('heading', { level: 1 });
-    expect(headings).toHaveLength(1);
-    const heading = headings[0]!;
-    expect(heading).toBeVisible();
-
-    const lines = [...heading.querySelectorAll('.agi-fl-h1-line')].map((line) =>
-      (line.textContent ?? '').replace(/\s+/g, ' ').trim(),
-    );
-    const accessibleName = (heading.textContent ?? '').replace(/\s+/g, ' ').trim();
-    expect(accessibleName).toBe(lines.length ? lines.join(' ') : accessibleName);
-    expect(accessibleName).not.toMatch(/\s{2,}/);
-    expect(accessibleName.length).toBeGreaterThan(0);
-  });
-
+describe('the Desktop installer section on /desktop', () => {
   it('asks the desktop release API once and offers one signed installer per architecture', async () => {
-    render(<DownloadPage />);
+    render(<DesktopDownloadAvailability />);
 
     const region = await screen.findByRole('region', { name: 'Desktop installer availability' });
     expect(
@@ -113,7 +97,7 @@ describe('public Desktop download surfaces', () => {
 
   it('offers only the architecture the release actually carries', async () => {
     respondWith(desktopManifest({ arm64: true, x64: false }), checksumManifest());
-    render(<DownloadPage />);
+    render(<DesktopDownloadAvailability />);
 
     expect(
       await screen.findByRole('link', { name: 'Download for Apple silicon' }),
@@ -126,7 +110,7 @@ describe('public Desktop download surfaces', () => {
   });
 
   it('names Windows and Linux as unavailable rather than leaving them out', async () => {
-    render(<DownloadPage />);
+    render(<DesktopDownloadAvailability />);
 
     const region = await screen.findByRole('region', { name: 'Desktop installer availability' });
     for (const platform of ['Windows', 'Linux']) {
@@ -138,7 +122,7 @@ describe('public Desktop download surfaces', () => {
   });
 
   it('publishes a checksum per offered installer and numbered install steps', async () => {
-    render(<DownloadPage />);
+    render(<DesktopDownloadAvailability />);
 
     const checksums = await screen.findByRole('list', { name: 'Installer checksums' });
     expect(within(checksums).getByText(ARM64_SHA)).toBeInTheDocument();
@@ -153,7 +137,7 @@ describe('public Desktop download surfaces', () => {
 
   it('shows no checksum block when the release publishes none', async () => {
     respondWith(desktopManifest(), null);
-    render(<DownloadPage />);
+    render(<DesktopDownloadAvailability />);
 
     expect(
       await screen.findByRole('link', { name: 'Download for Apple silicon' }),
@@ -162,7 +146,7 @@ describe('public Desktop download surfaces', () => {
   });
 
   it('offers both installers and says so when the browser cannot name the processor', async () => {
-    render(<DownloadPage />);
+    render(<DesktopDownloadAvailability />);
 
     expect(
       await screen.findByRole('link', { name: 'Download for Apple silicon' }),
@@ -173,27 +157,16 @@ describe('public Desktop download surfaces', () => {
 
   it('shows an accessible empty state when no signed desktop release exists', async () => {
     respondWith(null, null);
-    render(<DownloadPage />);
+    render(<DesktopDownloadAvailability />);
 
     const status = await screen.findByRole('status', { name: 'AGI Desktop downloads unavailable' });
     expect(status).toHaveTextContent('No signed AGI Desktop installer is available right now.');
     expect(
       screen.getByRole('region', { name: 'Desktop installer availability' }),
     ).not.toHaveTextContent('AGI Desktop ships for macOS');
-    expect(
-      screen.getByRole('heading', {
-        name: 'We check the signature before you download.',
-        level: 1,
-      }),
-    ).toHaveClass('sr-only');
-    const verification = screen.getByRole('region', {
-      name: 'A build has to prove itself before it reaches this page.',
-    });
-    expect(verification).toHaveTextContent('Notarized and stapled before upload');
-    expect(verification).toHaveTextContent('CLI checksums carry a Sigstore signature');
     expect(within(status).getByRole('link', { name: 'Use AGI Web' })).toHaveAttribute(
       'href',
-      '/login?redirectTo=%2F',
+      WEB_ENTRY_HREF,
     );
     expect(within(status).getByRole('link', { name: 'See CLI availability' })).toHaveAttribute(
       'href',
@@ -213,7 +186,7 @@ describe('public Desktop download surfaces', () => {
         ? Promise.reject(new Error('network unavailable'))
         : Promise.resolve(Response.json(desktopManifest()));
     });
-    render(<DownloadPage />);
+    render(<DesktopDownloadAvailability />);
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('We could not verify the AGI Desktop installer.');
@@ -226,7 +199,7 @@ describe('public Desktop download surfaces', () => {
 
   it('announces the live availability check and uses theme-token colors', () => {
     fetchMock.mockReturnValueOnce(new Promise(() => {}));
-    render(<DownloadPage />);
+    render(<DesktopDownloadAvailability />);
 
     const status = screen.getByRole('status', { name: 'Checking AGI Desktop downloads' });
     expect(status).toHaveAttribute('aria-live', 'polite');
@@ -263,7 +236,7 @@ describe('public Desktop download surfaces', () => {
     expect(reset).toHaveBeenCalledOnce();
     expect(screen.getByRole('link', { name: 'Use AGI Web' })).toHaveAttribute(
       'href',
-      '/login?redirectTo=%2F',
+      WEB_ENTRY_HREF,
     );
     expect(screen.getByRole('link', { name: 'See CLI availability' })).toHaveAttribute(
       'href',

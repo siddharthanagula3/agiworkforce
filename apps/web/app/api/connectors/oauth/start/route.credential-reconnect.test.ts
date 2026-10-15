@@ -16,6 +16,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readPrimaryEmailState: vi.fn(async () => ({ confirmed: true, email: 'person@example.com' })),
+}));
 vi.mock('@/lib/api-auth', () => ({
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a),
@@ -41,7 +45,8 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
 vi.mock('@/lib/connectors/mcp-discovery', () => ({
   beginMcpAuthorization: (...a: unknown[]) => mocks.beginAuthorization(...a),
 }));
-vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
+vi.mock('@/lib/connectors/mcp-directory-targets', async (importOriginal) => ({
+  ...(await importOriginal<DirectoryTargetsModule>()),
   isDirectoryServerId: vi.fn(() => false),
   normalizeRemoteUrl: vi.fn((url: string) => url),
   resolveDirectoryTarget: vi.fn(async () => null),
@@ -57,6 +62,7 @@ vi.mock('@/lib/user-connector-tools', () => ({
 import { GET, OAUTH_START_STATUS_CREDENTIAL } from './route';
 
 type TypesModule = typeof import('@agiworkforce/types');
+type DirectoryTargetsModule = typeof import('@/lib/connectors/mcp-directory-targets');
 
 const SERVER_ID = 'custom-abc123def0';
 const DIRECTORY_ID = 'io.sentry/mcp';

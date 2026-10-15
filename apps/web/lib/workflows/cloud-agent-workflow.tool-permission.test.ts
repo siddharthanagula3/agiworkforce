@@ -66,6 +66,7 @@ vi.mock('@/lib/user-connector-tools', () => ({
   withUserConnectorMcpHandle: vi.fn(),
 }));
 
+import type { ConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import type { ToolLoopToolExecutor } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { executeCloudAgentWorkflowInvocation } from './steps/execute-cloud-agent-invocation';
 import type { CloudAgentWorkflowInput } from './cloud-agent-workflow-input';
@@ -159,6 +160,9 @@ async function runDispatch(qualifiedName: string) {
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  db.transaction.mockImplementation(async (operation: (tx: typeof db) => Promise<unknown>) =>
+    operation(db),
+  );
   mocks.runToolLoop.mockReturnValue(
     (async function* () {
       // The permission gate is read off the options the loop was constructed
@@ -231,5 +235,41 @@ describe('a tool blocked mid-run stops running for the rest of the durable run',
     expect(execute).not.toHaveBeenCalled();
     expect(result.isError).toBe(true);
     expect(result.unavailable).toBe(true);
+  });
+});
+
+describe('a durable run in a temporary chat', () => {
+  const READ_TOOL = 'mcp__gmail__read_attachments';
+
+  function permissionsHandedToLoop(): ConnectorToolPermissions {
+    const options = mocks.runToolLoop.mock.calls[0]![1] as {
+      connectorPermissions: ConnectorToolPermissions;
+    };
+    return options.connectorPermissions;
+  }
+
+  function inputFor(temporary: boolean): CloudAgentWorkflowInput {
+    const input = makeInput();
+    return {
+      ...input,
+      processed: { ...input.processed, conversationIsTemporary: temporary },
+      connectorPermissions: [],
+    };
+  }
+
+  it('asks before a connector call the account never decided on, as the turn start does', async () => {
+    storedPermissionLevel(null);
+    await executeCloudAgentWorkflowInvocation(inputFor(true));
+
+    expect(permissionsHandedToLoop().levelFor(READ_TOOL)).toBe('ask');
+    expect(permissionsHandedToLoop().levelFor(CONNECTOR_TOOL)).toBe('ask');
+    expect(permissionsHandedToLoop().levelFor(BUILT_IN_TOOL)).toBeUndefined();
+  });
+
+  it('leaves an ordinary chat on the verdicts it saved', async () => {
+    storedPermissionLevel(null);
+    await executeCloudAgentWorkflowInvocation(inputFor(false));
+
+    expect(permissionsHandedToLoop().levelFor(READ_TOOL)).toBeUndefined();
   });
 });

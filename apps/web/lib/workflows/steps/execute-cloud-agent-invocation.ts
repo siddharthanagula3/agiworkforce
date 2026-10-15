@@ -10,11 +10,11 @@ import { ADAPTER_PROVIDERS } from '@/app/api/llm/v1/chat/completions/lib/adapter
 import { buildApprovalCheckpointRequest } from '@/app/api/llm/v1/chat/completions/lib/approval-checkpoint-request';
 import type { ProviderStreamShape } from '@/app/api/llm/v1/chat/completions/lib/tool-loop-anthropic';
 import {
-  connectorToolPermissionsFromEntries,
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
   loadConnectorToolPermissions,
-  withoutStandingApprovals,
+  scopeConnectorPermissionsToTurn,
 } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import { managedConversationGrantScope } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-session-grants';
 import {
   runResearchLoop,
   usageOfFailedResearchTurn,
@@ -26,7 +26,10 @@ import {
 } from '@/app/api/llm/v1/chat/completions/lib/research-loop';
 import { buildResearchRunOptions } from '@/app/api/llm/v1/chat/completions/lib/research-run-options';
 import { DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
-import { createFailoverPlan } from '@/app/api/llm/v1/chat/completions/lib/managed-failover';
+import {
+  createFailoverPlan,
+  retargetMessagesToModel,
+} from '@/app/api/llm/v1/chat/completions/lib/managed-failover';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import {
   runToolLoop,
@@ -476,7 +479,17 @@ function researchContinuation(
       JSON.stringify({
         ...input,
         processed: continuationRequest(serving),
-        research: { ...input.research, checkpoint },
+        research: {
+          ...input.research,
+          checkpoint: {
+            ...checkpoint,
+            messages: retargetMessagesToModel(
+              checkpoint.messages,
+              input.processed,
+              serving.chatRequest.model,
+            ),
+          },
+        },
       }),
     ),
   );
@@ -510,7 +523,14 @@ function workflowContinuation(
         ...input,
         processed: {
           ...processed,
-          llmRequest: { ...processed.llmRequest, messages: checkpoint.messages },
+          llmRequest: {
+            ...processed.llmRequest,
+            messages: retargetMessagesToModel(
+              checkpoint.messages,
+              input.processed,
+              serving.chatRequest.model,
+            ),
+          },
         },
         continuation: {
           eventSessionId: checkpoint.sessionId,
@@ -542,6 +562,26 @@ export async function executeCloudAgentWorkflowInvocation(
   // rather than the managed per-step reservation -- durable is a transport
   // choice, not a licence to skip the tier's budget.
   const processed = rehydrateCloudAgentWorkflowRequest(input, managedUsageDb);
+  const reloadConnectorPermissions = async () =>
+    scopeConnectorPermissionsToTurn(
+      await loadConnectorToolPermissions(
+        managedUsageDb,
+        input.userId,
+        processed.organizationId ?? null,
+        managedConversationGrantScope(
+          processed.conversationId,
+          processed.conversationIsTemporary === true,
+        ),
+      ),
+      {
+        temporary: processed.conversationIsTemporary === true,
+        disabledConnectorIds: processed.chatRequest.disabled_connector_ids,
+      },
+    );
+  const currentConnectorPermissions =
+    input.connectorPermissions || input.mcpTools.some((tool) => tool.origin === 'connector')
+      ? await reloadConnectorPermissions()
+      : EMPTY_CONNECTOR_TOOL_PERMISSIONS;
   const billingLedgerKey = cloudAgentWorkflowBillingKey(input.billing);
   const connectorExecutor = input.mcpTools.some((tool) => tool.origin === 'connector')
     ? makeUserConnectorExecutor(input.userId, input.processed.organizationId ?? null)
@@ -550,6 +590,9 @@ export async function executeCloudAgentWorkflowInvocation(
     userId: input.userId,
     organizationId: input.processed.organizationId ?? null,
     connectorToolNames: connectorToolNames(input.mcpTools),
+    conversationId: processed.conversationId,
+    temporary: processed.conversationIsTemporary === true,
+    disabledConnectorIds: processed.chatRequest.disabled_connector_ids,
   });
   let nextInput: CloudAgentWorkflowInput | null = null;
   let approvalCheckpointSaved = false;
@@ -580,9 +623,7 @@ export async function executeCloudAgentWorkflowInvocation(
             db: managedUsageDb,
             connectorIds: research.connectorIds,
             fileSources: research.fileSources,
-            connectorPermissions: input.connectorPermissions
-              ? connectorToolPermissionsFromEntries(input.connectorPermissions)
-              : EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+            connectorPermissions: currentConnectorPermissions,
             toolApprovalPolicy: input.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY,
             signal: cancellation.signal,
             failover: {
@@ -596,16 +637,7 @@ export async function executeCloudAgentWorkflowInvocation(
             onReportStored: () => undefined,
           }),
           operations: researchOperations(db, input, billingLedgerKey),
-          reloadConnectorPermissions: async () => {
-            const permissions = await loadConnectorToolPermissions(
-              managedUsageDb,
-              input.userId,
-              input.processed.organizationId ?? null,
-            );
-            return processed.conversationIsTemporary
-              ? withoutStandingApprovals(permissions)
-              : permissions;
-          },
+          reloadConnectorPermissions,
           ...(research.checkpoint ? { resumeFrom: research.checkpoint } : {}),
           invocation: {
             startedAtMs: invocationStartedAt,
@@ -625,11 +657,8 @@ export async function executeCloudAgentWorkflowInvocation(
       mcpTools: input.mcpTools,
       approvalMode: input.approvalMode,
       toolApprovalPolicy: input.toolApprovalPolicy,
-      ...(input.connectorPermissions
-        ? {
-            connectorPermissions: connectorToolPermissionsFromEntries(input.connectorPermissions),
-          }
-        : {}),
+      connectorPermissions: currentConnectorPermissions,
+      sessionGrantRefusal: (name, risk) => toolPermissionGate.refusalFor(name, risk),
       userId: input.userId,
       connectorExecutor,
       signal: cancellation.signal,
@@ -716,6 +745,7 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.chatRequest,
             processed.callerToolFields,
             processed.turnAttachments,
+            processed.modelSelection,
           ),
           messages: checkpoint.messages,
           events: checkpoint.events,
@@ -734,6 +764,7 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.chatRequest,
             processed.callerToolFields,
             processed.turnAttachments,
+            processed.modelSelection,
           ),
           messages: checkpoint.messages,
           pendingToolCalls: checkpoint.pendingToolCalls,
@@ -753,6 +784,7 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.chatRequest,
             processed.callerToolFields,
             processed.turnAttachments,
+            processed.modelSelection,
           ),
           messages: checkpoint.messages,
           pendingToolCalls: checkpoint.pendingToolCalls,
@@ -774,6 +806,7 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.chatRequest,
             processed.callerToolFields,
             processed.turnAttachments,
+            processed.modelSelection,
           ),
           messages: checkpoint.messages,
           pendingToolCalls: checkpoint.pendingToolCalls,

@@ -202,7 +202,7 @@ export function ScheduleCard({
       as="article"
       id={scheduleCardElementId(schedule.id)}
       aria-labelledby={headingId}
-      className="overflow-hidden border-border/80 bg-card shadow-sm"
+      className="border-border/80 bg-card shadow-sm"
     >
       <CardContent className="p-0">
         <div className="flex flex-col gap-5 p-5 lg:flex-row lg:items-start lg:justify-between">
@@ -404,7 +404,7 @@ export function ScheduleCard({
                   ref={menuPanelRef}
                   role="menu"
                   aria-label={`Actions for ${schedule.name}`}
-                  className="absolute end-0 top-full z-[var(--z-content-sticky)] mt-1 min-w-[190px] rounded-lg border border-border bg-popover py-1 shadow-lg"
+                  className="absolute end-0 top-full z-[var(--z-dropdown)] mt-1 min-w-[190px] rounded-lg border border-border bg-popover py-1 shadow-lg"
                 >
                   <button
                     type="button"
@@ -481,7 +481,7 @@ export function ScheduleCard({
           <section
             id={`schedule-history-${schedule.id}`}
             aria-label={`Run History for ${schedule.name}`}
-            className="border-t border-border/70 bg-muted/20 p-5"
+            className="rounded-b-lg border-t border-border/70 bg-muted/20 p-5"
           >
             <div className="mb-3 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-foreground">Run History</h3>

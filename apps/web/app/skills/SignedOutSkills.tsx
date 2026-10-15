@@ -20,7 +20,7 @@ export function SignedOutSkills({ skills }: { skills: readonly PublicSkill[] | n
     <SignedOutSurface
       eyebrow="Skills"
       heading="Skills live in your workspace"
-      signInHref="/login?redirectTo=%2Fskills"
+      redirectTo="/skills"
       signInLabel="Sign in to use skills"
       secondary={{ href: '/features/plugins', label: 'What plugins can do' }}
       after={
