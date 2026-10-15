@@ -2180,7 +2180,10 @@ mod tests {
         ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             Ok(LLMResponse {
-                content: format!("echo: {}", request.messages[0].content),
+                content: format!(
+                    "echo: {}",
+                    request.messages.last().map_or("", |m| m.content.as_str())
+                ),
                 model: request.model.clone(),
                 cached: false,
                 tokens: Some(12),

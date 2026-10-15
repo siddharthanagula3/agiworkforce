@@ -53,14 +53,6 @@ while True:
     write_frame({"jsonrpc": "2.0", "id": rid, "result": result})
 "#;
 
-    /// Removes the temp server script even if the test panics.
-    struct ScriptCleanup(std::path::PathBuf);
-    impl Drop for ScriptCleanup {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_file(&self.0);
-        }
-    }
-
     fn python3_available() -> bool {
         std::process::Command::new("python3")
             .arg("--version")
@@ -79,17 +71,17 @@ while True:
         }
 
         // The transport's arg validation (kept desktop-side) rejects newlines,
-        // so the script goes through a temp file rather than `-c`.
-        let script_path = std::env::temp_dir().join(format!(
-            "agiworkforce-mcp-stdio-smoke-{}.py",
-            std::process::id()
-        ));
-        std::fs::write(&script_path, PY_SERVER).expect("write smoke server script");
-        let _cleanup = ScriptCleanup(script_path.clone());
+        // and the Linux sandbox mounts a private /tmp, so the script travels
+        // hex-encoded on one line rather than as a file in the temp folder.
+        let encoded: String = PY_SERVER
+            .bytes()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        let program = format!("exec(bytes.fromhex('{encoded}').decode())");
 
         let config = McpServerConfig {
             command: "python3".to_string(),
-            args: vec!["-u".to_string(), script_path.to_string_lossy().into_owned()],
+            args: vec!["-u".to_string(), "-c".to_string(), program],
             env: HashMap::new(),
             enabled: true,
             transport: None,

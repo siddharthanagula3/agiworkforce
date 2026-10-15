@@ -2364,7 +2364,7 @@ fn a_granted_filesystem_root_is_refused_and_named_as_one() {
 #[cfg(unix)]
 #[test]
 fn a_refused_alias_of_the_filesystem_root_claims_no_path() {
-    let alias = PathBuf::from("/tmp/..");
+    let alias = PathBuf::from("/usr/..");
     let refused = vec![(
         alias.clone(),
         crate::core::agi::executors::WHOLE_DRIVE_REFUSED.to_string(),
@@ -2374,7 +2374,7 @@ fn a_refused_alias_of_the_filesystem_root_claims_no_path() {
         "the alias is not spelled as a root"
     );
     assert!(
-        refused_root_holding(Path::new("/tmp/../Users/x"), &refused).is_none(),
+        refused_root_holding(Path::new("/usr/../Users/x"), &refused).is_none(),
         "a refused folder that resolves to / claims nothing as spelled"
     );
     assert!(

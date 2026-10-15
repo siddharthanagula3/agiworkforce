@@ -759,12 +759,25 @@ mod task_plan_request_tests {
 
     #[tokio::test]
     async fn with_no_model_to_plan_there_is_no_plan_and_the_reason_is_given() {
-        let planner = AGIPlanner::new(
-            Arc::new(RwLock::new(LLMRouter::new())),
-            Arc::new(ToolRegistry::new().expect("registry")),
-            Arc::new(KnowledgeBase::new(64).expect("knowledge base")),
-        )
-        .expect("planner");
+        let data = tempfile::tempdir().expect("app data folder");
+        let planner = {
+            let _env = crate::sys::utils::APP_DATA_DIR_ENV_LOCK
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let before = std::env::var_os("AGIWORKFORCE_APP_DATA_DIR");
+            std::env::set_var("AGIWORKFORCE_APP_DATA_DIR", data.path());
+            let planner = AGIPlanner::new(
+                Arc::new(RwLock::new(LLMRouter::new())),
+                Arc::new(ToolRegistry::new().expect("registry")),
+                Arc::new(KnowledgeBase::new(64).expect("knowledge base")),
+            )
+            .expect("planner");
+            match before {
+                Some(value) => std::env::set_var("AGIWORKFORCE_APP_DATA_DIR", value),
+                None => std::env::remove_var("AGIWORKFORCE_APP_DATA_DIR"),
+            }
+            planner
+        };
         let request = task_plan_request("Build a guide to the UI".to_string(), None, None);
         let preferences = RouterPreferences {
             provider: None,

@@ -2541,13 +2541,17 @@ mod tests {
     #[test]
     fn folder_request_rejects_traversal_and_unknown_capabilities() {
         let directory = tempfile::tempdir().expect("temp folder");
+        let directory = directory
+            .path()
+            .canonicalize()
+            .expect("canonical temp folder");
         let base = ToolConfirmationRequest {
             request_id: "folder-request-invalid".to_string(),
             tool_name: FOLDER_ACCESS_TOOL_NAME.to_string(),
             tool_description: "Allow file read".to_string(),
             parameters: serde_json::json!({
-                "paths": [directory.path().join("..").join("secret").to_string_lossy()],
-                "directories": [directory.path().to_string_lossy()],
+                "paths": [directory.join("..").join("secret").to_string_lossy()],
+                "directories": [directory.to_string_lossy()],
                 "capabilities": ["read"],
             }),
             risk_level: crate::sys::security::tool_guard::RiskLevel::High,
@@ -2562,7 +2566,7 @@ mod tests {
 
         let mut unsupported = base;
         unsupported.parameters["paths"] =
-            serde_json::json!([directory.path().join("file.txt").to_string_lossy()]);
+            serde_json::json!([directory.join("file.txt").to_string_lossy()]);
         unsupported.parameters["capabilities"] = serde_json::json!(["admin"]);
         assert!(validated_folder_roots(&unsupported)
             .expect_err("unknown capability must fail closed")

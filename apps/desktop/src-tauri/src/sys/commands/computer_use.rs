@@ -1532,13 +1532,16 @@ mod tests {
     /// the wiring itself: every command that can act on the desktop must open
     /// with the persisted-consent gate. Asserting the first statement, not just
     /// that the call appears somewhere, keeps the gate from drifting below the
-    /// action it is supposed to precede.
+    /// action it is supposed to precede. The capability switch may sit above
+    /// it: it only refuses, so nothing acts before consent either way.
     #[test]
     fn every_acting_computer_use_command_opens_with_the_consent_gate() {
         const SOURCE: &str = include_str!("computer_use.rs");
+        const CAPABILITY_REFUSAL: &str = "if let Some(off) =\n        crate::sys::commands::capabilities::capability_refusal(&app_handle, \"computer_use\").await\n    {\n        return Err(off);\n    }\n";
+        let source = SOURCE.replace(CAPABILITY_REFUSAL, "");
         for command in ["pub async fn computer_use_execute_opa_task("] {
             assert_eq!(
-                first_statement_of(SOURCE, command),
+                first_statement_of(&source, command),
                 "require_consent(&app_handle, &settings).await?;",
                 "{command} must refuse to act before it checks persisted computer-use consent"
             );

@@ -1863,6 +1863,46 @@ mod tests {
         BackgroundAgentManager::new(Arc::new(std::sync::Mutex::new(conn)), None)
     }
 
+    struct HeldProvider;
+
+    #[async_trait::async_trait]
+    impl crate::core::llm::LLMProvider for HeldProvider {
+        async fn send_message(
+            &self,
+            _request: &crate::core::llm::LLMRequest,
+        ) -> Result<crate::core::llm::LLMResponse, Box<dyn std::error::Error + Send + Sync>>
+        {
+            std::future::pending().await
+        }
+
+        fn is_configured(&self) -> bool {
+            true
+        }
+
+        fn name(&self) -> &str {
+            "held"
+        }
+    }
+
+    fn create_test_manager_with_live_runs() -> BackgroundAgentManager {
+        let mut router = LLMRouter::new();
+        router.set_provider(crate::core::llm::Provider::Ollama, Box::new(HeldProvider));
+        let manager = create_test_manager();
+        BackgroundAgentManager::new(manager.db_conn.clone(), Some(Arc::new(RwLock::new(router))))
+    }
+
+    async fn wait_until_running(manager: &BackgroundAgentManager, agent_id: &str) {
+        for _ in 0..200 {
+            let running = manager.handles.lock().await.contains_key(agent_id);
+            let status = manager.get_agent(agent_id).await.map(|agent| agent.status);
+            if running && status == Some(BackgroundAgentStatus::Running) {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("the run never started");
+    }
+
     #[test]
     fn agent_notices_go_through_the_notification_center() {
         let source = include_str!("background_agent.rs");
@@ -2810,11 +2850,36 @@ mod tests {
 
     #[tokio::test]
     async fn test_manager_cancel_agent() {
-        let manager = create_test_manager();
+        let manager = create_test_manager_with_live_runs();
         let context = BackgroundAgentContext::default();
 
         let agent_id = manager
             .push_to_background(
+                "conv_cancel".to_string(),
+                "Cancel me".to_string(),
+                context,
+                0,
+            )
+            .await
+            .unwrap();
+
+        wait_until_running(&manager, &agent_id).await;
+
+        // Cancel the agent
+        manager.cancel_agent(&agent_id).await.unwrap();
+
+        let agent = manager.get_agent(&agent_id).await.unwrap();
+        assert_eq!(agent.status, BackgroundAgentStatus::Cancelled);
+        assert!(agent.is_terminal());
+    }
+
+    #[tokio::test]
+    async fn test_manager_cancel_parked_agent() {
+        let manager = create_test_manager();
+        let context = BackgroundAgentContext::default();
+
+        let agent_id = manager
+            .push_awaiting_approval(
                 "conv_cancel".to_string(),
                 "Cancel me".to_string(),
                 context,
@@ -2862,7 +2927,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_manager_list_active_agents_excludes_cancelled() {
-        let manager = create_test_manager();
+        let manager = create_test_manager_with_live_runs();
 
         let id1 = manager
             .push_to_background(
@@ -2874,8 +2939,44 @@ mod tests {
             .await
             .unwrap();
 
-        let _id2 = manager
+        let id2 = manager
             .push_to_background(
+                "c2".to_string(),
+                "Task 2".to_string(),
+                BackgroundAgentContext::default(),
+                0,
+            )
+            .await
+            .unwrap();
+
+        wait_until_running(&manager, &id1).await;
+        wait_until_running(&manager, &id2).await;
+
+        // Cancel the first agent
+        manager.cancel_agent(&id1).await.unwrap();
+
+        let active = manager.list_active_agents().await;
+        // Only one should remain active
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].conversation_id, "c2");
+    }
+
+    #[tokio::test]
+    async fn test_manager_list_active_agents_excludes_cancelled_parked() {
+        let manager = create_test_manager();
+
+        let id1 = manager
+            .push_awaiting_approval(
+                "c1".to_string(),
+                "Task 1".to_string(),
+                BackgroundAgentContext::default(),
+                0,
+            )
+            .await
+            .unwrap();
+
+        let _id2 = manager
+            .push_awaiting_approval(
                 "c2".to_string(),
                 "Task 2".to_string(),
                 BackgroundAgentContext::default(),
