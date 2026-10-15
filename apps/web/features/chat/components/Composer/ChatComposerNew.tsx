@@ -2810,7 +2810,9 @@ const ChatComposerNewComponent = ({
       replaceMentionToken();
       void libraryItemToFile(file)
         .then((attachment) => handleFileDrop([attachment]))
-        .catch(() => setLocalNotice(COMPOSER_FILES_ATTACH_FAILED_COPY));
+        .catch((caught: unknown) =>
+          setLocalNotice(toUserMessage(caught, COMPOSER_FILES_ATTACH_FAILED_COPY)),
+        );
     },
     [replaceMentionToken, handleFileDrop],
   );

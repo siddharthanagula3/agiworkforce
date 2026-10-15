@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 import { ChatComposerNew, type ComposerProjectPicker } from './ChatComposerNew';
 
@@ -122,5 +122,77 @@ describe('composer @mention menu', () => {
     typeInComposer('mail me at founder@doc');
 
     expect(screen.queryByRole('option', { name: /Doc Writer/ })).toBeNull();
+  });
+});
+
+describe('attaching a library file named with @', () => {
+  const CAP_REASON =
+    'Free accounts can download 25 MB of files a day, and today’s allowance is used up. Download more after midnight UTC, or upgrade for a higher limit.';
+
+  beforeEach(() => {
+    useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  // Fails on 6fd29cc4b9: the mention path still showed "That file could not be
+  // added. Try again." for every refusal, the download cap included.
+  it('names the download cap and when it resets when the file read is refused', async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-14T19:00:00.000Z') });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (String(input).startsWith('/api/library')) {
+          return Response.json({
+            items: [
+              {
+                id: 'mug',
+                file_name: 'mug.pdf',
+                mime_type: 'application/pdf',
+                kind: 'file',
+                byte_count: 10,
+                uri: '/api/files/mug',
+                surface: 'file',
+                previewable: false,
+                origin: 'uploaded',
+                source_surface: null,
+                provider: null,
+                model: null,
+                prompt: null,
+                created_at: '2026-09-05T00:00:00.000Z',
+              },
+            ],
+            has_more: false,
+            next_offset: null,
+          });
+        }
+        if (String(input) === '/api/files/mug') {
+          return Response.json(
+            {
+              error: {
+                code: 'RATE_LIMIT_EXCEEDED',
+                message: CAP_REASON,
+                details: {
+                  code: 'free_daily_download_limit_reached',
+                  resetsAt: '2026-10-15T00:00:00.000Z',
+                },
+              },
+            },
+            { status: 429 },
+          );
+        }
+        return Response.json({});
+      }),
+    );
+    render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker()} />);
+
+    typeInComposer('@mug');
+    fireEvent.click(await screen.findByRole('option', { name: 'mug.pdf' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(`${CAP_REASON} Resets in 5 hours.`);
+    expect(screen.queryByText('That file could not be added. Try again.')).toBeNull();
   });
 });

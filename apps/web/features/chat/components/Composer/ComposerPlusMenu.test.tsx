@@ -693,3 +693,69 @@ describe('ComposerPlusMenu while connectors are coming soon', () => {
     expect(props.onOpenSettings).not.toHaveBeenCalled();
   });
 });
+
+describe('ComposerPlusMenu, adding a file from the library', () => {
+  const CAP_REASON =
+    'Free accounts can download 25 MB of files a day, and today’s allowance is used up. Download more after midnight UTC, or upgrade for a higher limit.';
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  // Fails on 6fd29cc4b9: this menu still swapped every refusal for
+  // "That file could not be added. Try again."
+  it('names the download cap and when it resets when the file read is refused', async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-14T19:00:00.000Z') });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (input.startsWith('/api/library')) {
+          return Response.json({
+            items: [
+              {
+                id: 'mug',
+                file_name: 'mug.pdf',
+                mime_type: 'application/pdf',
+                kind: 'file',
+                byte_count: 10,
+                uri: '/api/files/mug',
+                surface: 'file',
+                previewable: false,
+                origin: 'uploaded',
+                source_surface: null,
+                provider: null,
+                model: null,
+                prompt: null,
+                created_at: '2026-09-05T00:00:00.000Z',
+              },
+            ],
+            has_more: false,
+            next_offset: null,
+          });
+        }
+        return Response.json(
+          {
+            error: {
+              code: 'RATE_LIMIT_EXCEEDED',
+              message: CAP_REASON,
+              details: {
+                code: 'free_daily_download_limit_reached',
+                resetsAt: '2026-10-15T00:00:00.000Z',
+              },
+            },
+          },
+          { status: 429 },
+        );
+      }),
+    );
+    const { props } = renderMenu();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add from library' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Attach mug.pdf' }));
+
+    expect(await screen.findByText(`${CAP_REASON} Resets in 5 hours.`)).toBeInTheDocument();
+    expect(screen.queryByText('That file could not be added. Try again.')).not.toBeInTheDocument();
+    expect(props.onAttachLibraryFile).not.toHaveBeenCalled();
+  });
+});

@@ -65,6 +65,7 @@ import {
   CHAT_OUTPUT_FORMAT_LABEL,
   type ChatOutputFormat,
 } from '@/lib/chat-output-format';
+import { toUserMessage } from '@/lib/user-error-message';
 import {
   FREE_MEDIA_LIMITED_LABEL,
   freeMediaAccess,
@@ -848,8 +849,8 @@ function LibraryRows({ props }: { props: ComposerPlusMenuProps }) {
     try {
       props.onAttachLibraryFile(await libraryItemToFile(item));
       props.closeMenu();
-    } catch {
-      setAttachError(COMPOSER_FILES_ATTACH_FAILED_COPY);
+    } catch (caught) {
+      setAttachError(toUserMessage(caught, COMPOSER_FILES_ATTACH_FAILED_COPY));
     } finally {
       setAttachingId(null);
     }
