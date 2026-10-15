@@ -29,10 +29,12 @@ vi.mock('@agiworkforce/unified-chat', () => ({}));
 
 import { cleanupAllStores } from './authentication-store';
 import { authService } from '@shared/services/authentication-manager';
+import { FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY } from '@/features/chat/components/FreePlanTrainingNotice';
 
 describe('sign-out storage sweep', () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   it('removes the legacy APIClient bearer and refresh tokens', async () => {
@@ -51,6 +53,40 @@ describe('sign-out storage sweep', () => {
     await cleanupAllStores();
 
     expect(localStorage.getItem('theme-preference')).toBe('dark');
+  });
+
+  // Fails before TC-01: the agi. prefix swept the notice keys with everything
+  // else, so a dismissed notice came back after every sign-out.
+  it('keeps the notices this browser dismissed and still clears the account keys', async () => {
+    localStorage.setItem(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY, 'user_1');
+    localStorage.setItem('agi.notice.free-model-promotion.model-a.2026-10-25', 'user_1');
+    localStorage.setItem('agi-user-profile-store', '{"name":"Ada"}');
+    localStorage.setItem('agiworkforce-web-chat', '{"selectedModelId":"model-a"}');
+    localStorage.setItem('agi_last_activity', '1760000000000');
+    localStorage.setItem('agi.privacy.shareTelemetry', 'true');
+    sessionStorage.setItem('agi.project.pendingHandoff.v1', '{"content":"draft"}');
+
+    await cleanupAllStores();
+
+    expect(localStorage.getItem(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY)).toBe('user_1');
+    expect(localStorage.getItem('agi.notice.free-model-promotion.model-a.2026-10-25')).toBe(
+      'user_1',
+    );
+    expect(localStorage.getItem('agi-user-profile-store')).toBeNull();
+    expect(localStorage.getItem('agiworkforce-web-chat')).toBeNull();
+    expect(localStorage.getItem('agi_last_activity')).toBeNull();
+    expect(localStorage.getItem('agi.privacy.shareTelemetry')).toBeNull();
+    expect(sessionStorage.getItem('agi.project.pendingHandoff.v1')).toBeNull();
+  });
+
+  it('still clears a key that only starts like a notice', async () => {
+    localStorage.setItem('agi.notices', 'not a dismissal');
+    localStorage.setItem('agi-notice.free-plan-training', 'not a dismissal');
+
+    await cleanupAllStores();
+
+    expect(localStorage.getItem('agi.notices')).toBeNull();
+    expect(localStorage.getItem('agi-notice.free-plan-training')).toBeNull();
   });
 });
 

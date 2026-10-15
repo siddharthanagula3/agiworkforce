@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY } from '@/features/chat/components/FreePlanTrainingNotice';
 import { registerNotificationWorker } from '@/features/notifications/lib/web-push-client';
 import { useMemoryStore } from '@agiworkforce/unified-chat';
 import { cleanupAllStores, useAuthStore } from '@shared/stores/authentication-store';
@@ -195,5 +196,19 @@ describe('signing out', () => {
 
     expect(localStorage.getItem('auth_token')).toBeNull();
     expect(localStorage.getItem('refresh_token')).toBeNull();
+  });
+
+  // Fails before TC-01, when the sweep took the notice keys with the rest.
+  it('keeps a dismissed notice dismissed, as /cookies says, while the account keys go', async () => {
+    installBrowser();
+    localStorage.setItem(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY, 'user_1');
+    localStorage.setItem('agi-user-profile-store', '{"name":"Ada"}');
+    localStorage.setItem('agi_last_activity', '1760000000000');
+
+    await useAuthStore.getState().logout();
+
+    expect(localStorage.getItem(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY)).toBe('user_1');
+    expect(localStorage.getItem('agi-user-profile-store')).toBeNull();
+    expect(localStorage.getItem('agi_last_activity')).toBeNull();
   });
 });

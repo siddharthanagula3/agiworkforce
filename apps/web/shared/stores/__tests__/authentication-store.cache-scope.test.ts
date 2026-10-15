@@ -120,11 +120,26 @@ describe('applyCacheScope', () => {
     expect(resetConnectorCapabilities).toHaveBeenCalled();
   });
 
+  // Fails before TC-01: the account switch runs the sign-out sweep, which took
+  // the notice keys too. The stored value names the account that dismissed it,
+  // so the next account is still shown the notice once.
+  it('keeps the notices dismissed on this browser through an account switch', async () => {
+    await applyCacheScope({ accountId: 'user_1' });
+    localStorage.setItem('agi.notice.free-plan-training', 'user_1');
+
+    expect(await applyCacheScope({ accountId: 'user_2' })).toBe(true);
+
+    expect(localStorage.getItem('agi.notice.free-plan-training')).toBe('user_1');
+  });
+
   it('drops workspace content without clearing account model preferences', async () => {
     await applyCacheScope({ accountId: 'user_1', workspaceId: null });
     localStorage.setItem('agi-composer-draft:v1:conversation-a', 'personal draft');
     localStorage.setItem('agi-composer-draft:v2:tab-a:conversation-a', 'current draft');
-    sessionStorage.setItem('agi-composer-draft:document-owner', '{"current":"tab-a","previous":[]}');
+    sessionStorage.setItem(
+      'agi-composer-draft:document-owner',
+      '{"current":"tab-a","previous":[]}',
+    );
     localStorage.setItem('agi-model-picker-favourites', MODEL_PREFERENCES);
     localStorage.setItem('agi.sidebar.unreadConversationIds', '["conversation-a"]');
     localStorage.setItem('agi:steps-card:conversation-a:member-a', '{"expanded":true}');

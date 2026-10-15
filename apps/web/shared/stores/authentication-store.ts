@@ -152,7 +152,11 @@ const APP_STORAGE_KEY_PATTERNS: readonly RegExp[] = [
   /^refresh_token$/,
 ];
 
-function isAppOwnedStorageKey(key: string): boolean {
+// /cookies tells people a notice they dismissed stays dismissed after signing out.
+const KEPT_ON_SIGN_OUT_KEY_PATTERNS: readonly RegExp[] = [/^agi\.notice\./];
+
+function isClearedOnSignOut(key: string): boolean {
+  if (KEPT_ON_SIGN_OUT_KEY_PATTERNS.some((pattern) => pattern.test(key))) return false;
   return APP_STORAGE_KEY_PATTERNS.some((pattern) => pattern.test(key));
 }
 
@@ -162,7 +166,7 @@ function purgeAppOwnedStorage(area: Storage | undefined): number {
   try {
     for (let i = 0; i < area.length; i++) {
       const key = area.key(i);
-      if (key && isAppOwnedStorageKey(key)) doomed.push(key);
+      if (key && isClearedOnSignOut(key)) doomed.push(key);
     }
   } catch {
     return 0;
