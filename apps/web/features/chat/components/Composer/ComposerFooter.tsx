@@ -99,6 +99,7 @@ import {
 import { MODEL_SELECTOR_TRIGGER_ID } from '@features/chat/lib/model-picker-trigger';
 import { ProviderLogo } from './ProviderLogo';
 import { ModelCatalogue } from './ModelCatalogue';
+import { MODEL_MENU_WIDTH_CLASS } from './composer-menu';
 import { useModelCatalogue } from '@features/chat/lib/use-model-catalogue';
 import { useOverlayLayout } from '@features/chat/hooks/use-overlay-dialog';
 import { useModelFavourites } from '@features/chat/lib/use-model-favourites';
@@ -155,7 +156,6 @@ const PICKER_ICON_SIZE = 16;
 const PLAN_LOADING_LABEL = "Loading your plan's models…";
 const PLAN_RETRY_LABEL = "Could not load your plan's models. Try again";
 const PICKER_TRIGGER_ICON_SIZE = 12;
-const PICKER_PANEL_WIDTH_CLASS = 'w-80';
 const PICKER_CATALOGUE_WIDTH_CLASS =
   'w-[min(max(var(--picker-catalogue-width),20rem),48rem,calc(100vw-1rem))]';
 const PICKER_SHEET_CLASS = 'max-h-[85dvh] border-[var(--chat-border)] bg-background';
@@ -1733,7 +1733,7 @@ export function ComposerFooter({
                       } as CSSProperties
                     }
                     data-catalogue-open={catalogueOpen ? 'true' : 'false'}
-                    className={`flex overflow-y-hidden max-h-[min(34rem,var(--radix-popover-content-available-height))] ${catalogueOpen ? PICKER_CATALOGUE_WIDTH_CLASS : PICKER_PANEL_WIDTH_CLASS} flex-col rounded-lg border-[var(--chat-border)] p-0 data-[side=top]:max-h-[min(34rem,calc(var(--radix-popover-content-available-height)_-_var(--picker-flip-offset)))] data-[side=top]:-translate-y-[var(--picker-flip-offset)]`}
+                    className={`flex overflow-y-hidden max-h-[min(34rem,var(--radix-popover-content-available-height))] ${catalogueOpen ? PICKER_CATALOGUE_WIDTH_CLASS : MODEL_MENU_WIDTH_CLASS} flex-col rounded-lg border-[var(--chat-border)] p-0 data-[side=top]:max-h-[min(34rem,calc(var(--radix-popover-content-available-height)_-_var(--picker-flip-offset)))] data-[side=top]:-translate-y-[var(--picker-flip-offset)]`}
                     aria-label={PICKER_TITLE}
                     onKeyDownCapture={catalogueOpen ? handleCatalogueKeys : handlePickerTypeAhead}
                     onEscapeKeyDown={(event) => {

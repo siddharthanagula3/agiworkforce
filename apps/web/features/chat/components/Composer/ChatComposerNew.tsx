@@ -76,6 +76,7 @@ import {
 import { useLeaveLocalModel } from '@features/chat/hooks/use-leave-local-model';
 import { AttachmentPreview, type AttachmentUploadVisualStatus } from './AttachmentPreview';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
+import { MODEL_MENU_WIDTH_CLASS } from './composer-menu';
 import { VideoCostEstimate } from './VideoCostEstimate';
 import {
   ComposerPlusMenu,
@@ -362,7 +363,7 @@ const WORK_BAR_ITEM_CLASS =
   'flex h-7 shrink-0 items-center gap-1 rounded-full px-1.5 text-xs font-medium sm:h-8 sm:px-2 sm:text-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50';
 const WORK_BAR_ITEM_ACTIVE_CLASS = 'text-foreground';
 const WORK_BAR_GLYPH_CLASS = 'h-4 w-4 shrink-0';
-const MEDIA_MODEL_MENU_CLASS = 'w-80 max-w-[calc(100vw-1rem)] p-1';
+const MEDIA_MODEL_MENU_CLASS = `${MODEL_MENU_WIDTH_CLASS} p-1`;
 const MEDIA_MODEL_NAME_CLASS = 'block break-words';
 
 // One shared empty array for "this conversation has no disabled connectors",

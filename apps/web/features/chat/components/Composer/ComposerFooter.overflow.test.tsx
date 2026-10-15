@@ -151,4 +151,18 @@ describe('ComposerFooter inline, bottom row stays a single usable line', () => {
     expect(document.activeElement).toBe(trigger);
     expect(screen.queryByRole('tooltip')).toBeNull();
   });
+
+  // Fails on f8da370651: the text picker kept its own bare w-80, so at a narrow
+  // width it was the one model menu not held inside the viewport.
+  it('opens the model picker at the width the image and video model menus share', async () => {
+    useModelStore.setState({ selectedModelId: routerModel.id });
+    const user = userEvent.setup();
+    const { container } = renderFooter();
+
+    await user.click(container.querySelector('#model-selector') as HTMLElement);
+
+    const picker = await screen.findByRole('dialog', { name: 'Models' });
+    expect(picker).toHaveAttribute('data-catalogue-open', 'false');
+    expect(picker).toHaveClass('w-80', 'max-w-[calc(100vw-1rem)]');
+  });
 });
