@@ -483,7 +483,7 @@ impl ChangeTracker {
         working_dir: &std::path::Path,
     ) -> Result<Vec<PathBuf>, String> {
         let working_dir = working_dir.to_path_buf();
-        tauri::async_runtime::spawn_blocking(move || {
+        crate::sys::commands::git::read_work_tree("git status", move || {
             let repo = git2::Repository::open(&working_dir).map_err(|e| e.message().to_string())?;
             let mut opts = git2::StatusOptions::new();
             opts.include_untracked(true);
@@ -501,7 +501,6 @@ impl ChangeTracker {
             Ok(files)
         })
         .await
-        .map_err(|e| e.to_string())?
     }
 
     pub async fn get_snapshot(&self, task_id: &str) -> Option<GitSnapshot> {
@@ -677,7 +676,7 @@ impl ChangeTracker {
         // Restore each file from the snapshot
         let mut restored_paths: Vec<PathBuf> = Vec::new();
         for (path, content) in &checkpoint.file_snapshots {
-            tokio::fs::write(path, content)
+            crate::sys::utils::write_file_without_following_async(path.clone(), content.clone())
                 .await
                 .map_err(|e| format!("Failed to restore '{}': {}", path.display(), e))?;
             restored_paths.push(path.clone());

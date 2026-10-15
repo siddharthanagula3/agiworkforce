@@ -26,6 +26,11 @@ const NO_EXECUTABLE_ACTION: &str = "The step carried no action any driver could 
 const CONFIRMATION_DENIED: &str = "The user declined this step.";
 const CONFIRMATION_TIMED_OUT: &str = "The confirmation was not answered in time.";
 const INPUT_WAS_DELIVERED: &str = "the input was delivered to the target display";
+const NO_APP_IN_PLANNED_FRAME: &str =
+    "The frame this step was planned on does not say which app it showed, so nothing was sent.";
+const MAX_FOCUS_MOVES_PER_RUN_OF_STEPS: u32 = 3;
+const RAW_INPUT_NEEDS_APP_HANDLE: &str =
+    "Pointer and keyboard input need the desktop app handle to check the app in front.";
 const UNKNOWN_FOREGROUND: &str = "unknown";
 const COMPUTER_USE_CAPABILITY: &str = "automation";
 use tauri::AppHandle;
@@ -56,12 +61,16 @@ use super::app_permissions::AppPermissionManager;
 use super::approval;
 use super::safety::{ComputerUseSafetyLayer, SafetyConfig, SafetyDecision, SafetyReason};
 use super::session::{ComputerUseSession, SessionConfig};
+use super::target_app::TargetApp;
+use super::targeted_input::{
+    type_in_chunks, FrontAppChanged, RawInputRefusal, TypingSink, TypingStopped, TYPING_CHUNK_CHARS,
+};
 use super::types::{
     ComputerUseAction, ComputerUseTask, Coordinate, ElementBounds, HotkeyModifier, MouseButton,
     ScrollDirection, TaskOutcome, TaskProgress, WaitCondition,
 };
 use super::visual_reasoner::{VisualReasoner, VisualReasonerConfig};
-use super::window_manager::{WindowCoordinator, WindowManagerConfig};
+use super::window_manager::{WindowCoordinator, WindowEnumerator, WindowManagerConfig};
 
 /// Configuration for the Computer Use agent.
 #[derive(Debug, Clone)]
@@ -181,6 +190,116 @@ pub struct OpaLoopResult {
     pub state: ExecutionState,
     /// Task outcome.
     pub outcome: TaskOutcome,
+}
+
+/// The desktop and the model as `settle_front_app` needs them.
+struct RunStartSurface<'a> {
+    agent: &'a ComputerUseAgent,
+    handle: &'a AppHandle,
+}
+
+#[async_trait::async_trait]
+impl super::run_start::StartSurface for RunStartSurface<'_> {
+    async fn front(&self) -> super::run_start::FrontAppState {
+        super::targeted_input::front_app_state(self.handle).await
+    }
+
+    fn resolve(&self, name: &str) -> std::result::Result<super::target_app::TargetApp, String> {
+        super::target_app::resolve_target_app(name).or_else(|not_running| {
+            window_owner(name)
+                .ok_or(not_running)
+                .and_then(|owner| super::target_app::resolve_target_app(&owner))
+        })
+    }
+
+    async fn candidates(
+        &self,
+    ) -> std::result::Result<Vec<super::run_start::StartCandidate>, String> {
+        crate::sys::commands::computer_use::start_candidates(
+            self.handle,
+            super::target_app::running_target_apps()?,
+        )
+        .await
+    }
+
+    async fn choose(&self, prompt: &str) -> std::result::Result<String, String> {
+        self.agent
+            .call_llm(prompt, None)
+            .await
+            .map_err(|e| format!("The app to start in could not be chosen: {e}"))
+    }
+
+    async fn authorize(
+        &self,
+        app: &super::target_app::TargetApp,
+    ) -> std::result::Result<(), String> {
+        crate::sys::commands::computer_use::refuse_app(self.handle, app).await
+    }
+
+    async fn activate(
+        &self,
+        app: &super::target_app::TargetApp,
+    ) -> std::result::Result<(), String> {
+        let automation = crate::automation::shared_service(self.handle)?;
+        super::target_app::bring_to_front(&automation, app).await
+    }
+}
+
+/// The reason, when a step failed because another app took focus after the
+/// frame it was planned on, whether before the event or part-way through
+/// typing.
+fn front_app_moved(error: &anyhow::Error) -> Option<String> {
+    if let Some(changed) = error.downcast_ref::<FrontAppChanged>() {
+        return Some(changed.to_string());
+    }
+    error
+        .downcast_ref::<TypingStopped>()
+        .filter(|stopped| stopped.front_app_changed)
+        .map(|stopped| stopped.to_string())
+}
+
+/// Typing for the run loop: each chunk is preceded by the same check a click
+/// gets, against the app the plan was made for.
+struct GuardedTyping<'a> {
+    agent: &'a ComputerUseAgent,
+    planned_for: Option<&'a TargetApp>,
+    keyboard: KeyboardSimulator,
+    delay_ms: u64,
+}
+
+#[async_trait::async_trait]
+impl TypingSink for GuardedTyping<'_> {
+    async fn check_front_app(&mut self) -> std::result::Result<(), RawInputRefusal> {
+        self.agent.check_raw_input(self.planned_for, &[]).await
+    }
+
+    async fn send(&mut self, chunk: &str) -> std::result::Result<(), String> {
+        self.keyboard
+            .send_text_with_delay(chunk, self.delay_ms)
+            .await
+            .map_err(|e| e.to_string())
+    }
+}
+
+/// A capture that failed is worth another try; one refused because of the app
+/// in front is not, and ends the wait with that refusal.
+fn stop_on_refused_capture(error: anyhow::Error) -> Result<()> {
+    if error
+        .downcast_ref::<super::visual_reasoner::CaptureRefused>()
+        .is_some()
+    {
+        return Err(error);
+    }
+    Ok(())
+}
+
+/// The app that owns the first window whose title matches.
+fn window_owner(title: &str) -> Option<String> {
+    WindowEnumerator::find_by_title(title)
+        .ok()?
+        .into_iter()
+        .next()
+        .map(|window| window.process_name)
 }
 
 /// The refusal the user reads. `SafetyReason` is a tagged record built for the
@@ -349,6 +468,7 @@ impl ComputerUseAgent {
 
     /// Sets the app handle for event emission.
     pub fn with_app_handle(mut self, app_handle: AppHandle) -> Self {
+        self.visual_reasoner.set_app_handle(app_handle.clone());
         self.app_handle = Some(app_handle);
         self
     }
@@ -368,12 +488,7 @@ impl ComputerUseAgent {
     }
 
     fn automation_service(&self) -> Option<Arc<AutomationService>> {
-        use tauri::Manager;
-
-        self.app_handle
-            .as_ref()?
-            .try_state::<Option<Arc<AutomationService>>>()
-            .and_then(|state| state.inner().clone())
+        crate::automation::shared_service(self.app_handle.as_ref()?).ok()
     }
 
     /// Asks the router which executor drives this task before the loop starts,
@@ -394,14 +509,11 @@ impl ComputerUseAgent {
             crate::ui::events::emit_action_routed(app, &session.id, None, &decision);
         }
 
-        let (Some(call), Some(automation)) = (decision.call.as_ref(), automation) else {
+        let (Some(call), true) = (decision.call.as_ref(), automation.is_some()) else {
             return RoutedOutcome::Visual;
         };
 
-        match self
-            .dispatch_routed_call(call, automation, task, &session.id)
-            .await
-        {
+        match self.dispatch_routed_call(call, task).await {
             Ok(_) => RoutedOutcome::Completed,
             Err(DispatchError::Denied(reason)) => RoutedOutcome::Refused { reason },
             Err(DispatchError::Failed(_)) => RoutedOutcome::Visual,
@@ -441,17 +553,14 @@ impl ComputerUseAgent {
             StepExecution::Unavailable => return declined(),
         };
 
-        let Some(automation) = automation else {
+        if automation.is_none() {
             return match step.raw() {
                 Some(_) => StepOutcome::Raw,
                 None => declined(),
             };
-        };
+        }
 
-        match self
-            .dispatch_routed_call(call, automation, task, session_id)
-            .await
-        {
+        match self.dispatch_routed_call(call, task).await {
             Ok(result) => StepOutcome::Handled {
                 summary: routed_step_summary(&step.label(), &call.driver, &result),
             },
@@ -474,18 +583,15 @@ impl ComputerUseAgent {
     async fn dispatch_routed_call(
         &self,
         call: &RoutedCall,
-        automation: Arc<AutomationService>,
         task: &ComputerUseTask,
-        session_id: &str,
     ) -> Result<serde_json::Value, DispatchError> {
         let dispatch = TierDispatch::new(
             self.app_handle.clone(),
-            automation,
             Arc::clone(&self.llm_router),
             self.config.trust_mode,
         );
 
-        let outcome = dispatch.run(call, session_id, &task.description).await;
+        let outcome = dispatch.run(call, &task.id, &task.description).await;
 
         if let Err(DispatchError::Failed(detail)) = &outcome {
             tracing::warn!(
@@ -563,12 +669,20 @@ impl ComputerUseAgent {
 
         // Focus target application if specified
         if let Some(ref app_name) = task.target_application {
-            let activation = self.window_coordinator.activate_by_title(app_name).await;
-            if !activation.success {
-                tracing::warn!(
-                    "Could not activate target application: {:?}",
-                    activation.error
-                );
+            match window_owner(app_name) {
+                Some(owner) => {
+                    if let Err(reason) = self.ensure_app_may_be_raised(&owner).await {
+                        return self.complete_task(
+                            &mut session,
+                            state,
+                            CompletionReason::SafetyBlocked {
+                                reason: reason.to_string(),
+                            },
+                        );
+                    }
+                    self.window_coordinator.activate_by_title(app_name).await;
+                }
+                None => tracing::warn!("Could not activate target application: no window matches"),
             }
         }
 
@@ -587,6 +701,8 @@ impl ComputerUseAgent {
             }
             RoutedOutcome::Visual => {}
         }
+
+        let mut focus_moves = 0u32;
 
         // Main OPA loop
         loop {
@@ -619,6 +735,30 @@ impl ComputerUseAgent {
                 return self.complete_task(&mut session, state, CompletionReason::UserCancelled);
             }
 
+            if let Some(reason) = self.switched_off().await {
+                return self.complete_task(
+                    &mut session,
+                    state,
+                    CompletionReason::SafetyBlocked { reason },
+                );
+            }
+
+            // The app in front is settled before the screen is captured. A
+            // frame of an app this run may not touch, or of this app's own
+            // window, is never taken; with this app in front, as it is when a
+            // run starts and when a confirmation hands focus back, the run
+            // moves to the app it works in first.
+            if let Some(reason) = self
+                .settle_front_app_before_observing(&task, &session.id)
+                .await
+            {
+                return self.complete_task(
+                    &mut session,
+                    state,
+                    CompletionReason::SafetyBlocked { reason },
+                );
+            }
+
             // OBSERVE: Capture and analyze screen. The stamp is minted before
             // the capture, so its age is an upper bound on the picture's age.
             let observed_at = ObservationStamp::now();
@@ -631,6 +771,9 @@ impl ComputerUseAgent {
                     continue;
                 }
             };
+
+            // The plan made on this frame is for the app the frame shows.
+            let planned_for = observation.front_app.clone();
 
             // Check for prompt injection in screen content
             if let Some(reason) = self.safety_layer.scan_for_injection(&observation.analysis) {
@@ -834,13 +977,50 @@ impl ComputerUseAgent {
                     }
                 }
 
+                // The step was judged before routing and any confirmation
+                // wait, so the app in front is judged again before its frame.
+                if let Err(refusal) = self
+                    .visual_reasoner
+                    .ensure_front_app_may_be_captured()
+                    .await
+                {
+                    let reason = refusal.to_string();
+                    ticket.refused(reason.as_str());
+                    return self.complete_task(
+                        &mut session,
+                        state,
+                        CompletionReason::SafetyBlocked { reason },
+                    );
+                }
+
                 // Capture before screenshot
                 let before = session.capture_before(action)?;
 
                 // Execute the action
                 let action_start = Instant::now();
-                let result = self.execute_action(action).await;
+                let result = self.execute_action(action, planned_for.as_ref()).await;
                 let duration_ms = action_start.elapsed().as_millis() as u64;
+
+                // Another app took focus after the frame this plan was made
+                // on. The step is not replayed into the newcomer: the screen
+                // is observed and planned again, a bounded number of times.
+                if let Some(moved) = result.as_ref().err().and_then(front_app_moved) {
+                    ticket.refused(moved.as_str());
+                    focus_moves += 1;
+                    if focus_moves > MAX_FOCUS_MOVES_PER_RUN_OF_STEPS {
+                        return self.complete_task(
+                            &mut session,
+                            state,
+                            CompletionReason::SafetyBlocked {
+                                reason: format!(
+                                    "{moved} Focus kept moving away ({focus_moves} times in a row), so the step was ended. Keep the app in front and start again."
+                                ),
+                            },
+                        );
+                    }
+                    state.last_action = Some(moved);
+                    break;
+                }
 
                 // Record the action
                 let (success, error) = match &result {
@@ -853,9 +1033,15 @@ impl ComputerUseAgent {
                     Some(reason) => ticket.failed(reason.as_str()),
                 }
 
+                let after_frame = if session.config.capture_after_action {
+                    self.visual_reasoner.capture_frame_unless_refused().await?
+                } else {
+                    None
+                };
                 session.record_action(
                     action.clone(),
                     before,
+                    after_frame,
                     success,
                     error.clone(),
                     duration_ms,
@@ -864,6 +1050,7 @@ impl ComputerUseAgent {
                 state.last_action = Some(action.description());
 
                 if success {
+                    focus_moves = 0;
                     state.actions_executed += 1;
                     state.consecutive_failures = 0;
                 } else {
@@ -1022,24 +1209,28 @@ Only include actions you're confident will make progress."#,
 
     /// Calls the vision LLM with planning prompt.
     async fn call_vision_llm(&self, prompt: &str, image_base64: &str) -> Result<String> {
+        self.call_llm(prompt, Some(image_base64)).await
+    }
+
+    /// With no image this is the one planning call made before any capture:
+    /// the model sees the task and app names, and nothing from the screen.
+    async fn call_llm(&self, prompt: &str, image_base64: Option<&str>) -> Result<String> {
         let router = self.llm_router.read().await;
 
-        let image_bytes = general_purpose::STANDARD
-            .decode(image_base64)
-            .context("Failed to decode base64 image")?;
-
-        let multimodal_content = vec![
-            ContentPart::Text {
-                text: prompt.to_string(),
-            },
-            ContentPart::Image {
+        let mut multimodal_content = vec![ContentPart::Text {
+            text: prompt.to_string(),
+        }];
+        if let Some(image_base64) = image_base64 {
+            multimodal_content.push(ContentPart::Image {
                 image: ImageInput {
-                    data: image_bytes,
+                    data: general_purpose::STANDARD
+                        .decode(image_base64)
+                        .context("Failed to decode base64 image")?,
                     format: ImageFormat::Png,
                     detail: ImageDetail::High,
                 },
-            },
-        ];
+            });
+        }
 
         let request = LLMRequest {
             messages: vec![ChatMessage {
@@ -1067,7 +1258,7 @@ Only include actions you're confident will make progress."#,
             model: self.config.model.clone(),
             strategy: crate::core::llm::llm_router::RoutingStrategy::Auto,
             context: Some(crate::core::llm::llm_router::RouterContext {
-                requires_vision: true,
+                requires_vision: image_base64.is_some(),
                 ..Default::default()
             }),
             prefer_cloud_credits: false,
@@ -1381,9 +1572,144 @@ Only include actions you're confident will make progress."#,
         }
     }
 
+    async fn settle_front_app_before_observing(
+        &self,
+        task: &ComputerUseTask,
+        session_id: &str,
+    ) -> Option<String> {
+        let Some(handle) = self.app_handle.as_ref() else {
+            return self
+                .safety_layer
+                .check_app_permission()
+                .await
+                .map(|reason| describe_safety_block(&reason));
+        };
+        let surface = RunStartSurface {
+            agent: self,
+            handle,
+        };
+        let refusal = super::run_start::settle_front_app(
+            &surface,
+            &task.description,
+            task.target_application.as_deref(),
+        )
+        .await
+        .err()?;
+        // The approval request names the app in front, so it is raised only
+        // when that app, not this one, is what stopped the run.
+        let stopped_by_front_app = matches!(
+            super::targeted_input::front_app_state(handle).await,
+            super::run_start::FrontAppState::Refused(_)
+        );
+        if stopped_by_front_app {
+            if let Some(reason) = self.safety_layer.check_app_permission().await {
+                self.emit_safety_approval(
+                    session_id,
+                    &ComputerUseAction::Screenshot {
+                        region: None,
+                        save_path: None,
+                    },
+                    &SafetyDecision::block(reason),
+                );
+            }
+        }
+        Some(refusal)
+    }
+
+    /// Raises the window a step or the task names, once the app that owns it
+    /// has passed the refuse-list and the per-app registry. Raising is how an
+    /// app gets on screen for the next capture, so it is gated like input.
+    async fn raise_window(&self, title: &str) -> Result<()> {
+        let owner =
+            window_owner(title).ok_or_else(|| anyhow::anyhow!("No window matches '{title}'"))?;
+        self.ensure_app_may_be_raised(&owner).await?;
+        self.window_coordinator.activate_by_title(title).await;
+        Ok(())
+    }
+
+    async fn ensure_app_may_be_raised(&self, app_name: &str) -> Result<()> {
+        let handle = self
+            .app_handle
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!(RAW_INPUT_NEEDS_APP_HANDLE))?;
+        super::targeted_input::ensure_app_may_be_raised(handle, app_name)
+            .await
+            .map_err(|refusal| anyhow::anyhow!(refusal))
+    }
+
+    /// Sends a paced key sequence one stroke at a time, judging the app in
+    /// front before each: a sequence spans pauses long enough for another app
+    /// to take focus between two keys.
+    async fn send_paced_keystrokes(
+        &self,
+        planned_for: Option<&TargetApp>,
+        strokes: &[super::control::PickerKeystroke],
+    ) -> Result<()> {
+        for stroke in strokes {
+            self.guard_raw_input(planned_for, &[]).await?;
+            super::action_executor::run_keystrokes(std::slice::from_ref(stroke)).await?;
+        }
+        Ok(())
+    }
+
+    /// The last check before a raw event leaves this process. The per-app check
+    /// in the loop ran before routing and before any confirmation wait, so the
+    /// app in front is read and judged again here, and each point the event
+    /// touches must lie on that app's window rather than on a neighbour's or
+    /// on this app's own.
+    async fn guard_raw_input(
+        &self,
+        planned_for: Option<&TargetApp>,
+        points: &[(i32, i32)],
+    ) -> Result<()> {
+        self.check_raw_input(planned_for, points)
+            .await
+            .map_err(|refusal| match refusal {
+                RawInputRefusal::FrontAppChanged(changed) => anyhow::Error::new(changed),
+                RawInputRefusal::Refused(reason) => anyhow::anyhow!(reason),
+            })
+    }
+
+    async fn check_raw_input(
+        &self,
+        planned_for: Option<&TargetApp>,
+        points: &[(i32, i32)],
+    ) -> std::result::Result<(), RawInputRefusal> {
+        let handle = self
+            .app_handle
+            .as_ref()
+            .ok_or_else(|| RawInputRefusal::Refused(RAW_INPUT_NEEDS_APP_HANDLE.to_string()))?;
+        let planned_for = planned_for
+            .ok_or_else(|| RawInputRefusal::Refused(NO_APP_IN_PLANNED_FRAME.to_string()))?;
+        super::targeted_input::guard_front_app_input(handle, planned_for, points).await
+    }
+
     /// Executes a single action.
-    async fn execute_action(&self, action: &ComputerUseAction) -> Result<()> {
+    /// Why this run may not act, when Computer control was switched off in
+    /// Settings after it started. Asked before each observation and each
+    /// action, so a run stops at its next step.
+    async fn switched_off(&self) -> Option<String> {
+        let app = self.app_handle.as_ref()?;
+        crate::sys::commands::capabilities::capability_refusal(app, "computer_use").await
+    }
+
+    async fn execute_action(
+        &self,
+        action: &ComputerUseAction,
+        planned_for: Option<&TargetApp>,
+    ) -> Result<()> {
         super::control::ensure_agent_in_control()?;
+        if let Some(off) = self.switched_off().await {
+            return Err(anyhow::anyhow!(off));
+        }
+        let parameters: std::collections::HashMap<String, serde_json::Value> =
+            match serde_json::to_value(action) {
+                Ok(serde_json::Value::Object(fields)) => fields.into_iter().collect(),
+                _ => std::collections::HashMap::new(),
+            };
+        crate::ui::hooks::gate_tool_use("computer_use", parameters)
+            .await
+            .map_err(|refusal| anyhow::anyhow!(refusal))?;
         let primary_display = resolve_primary_display()?;
 
         match action {
@@ -1395,16 +1721,22 @@ Only include actions you're confident will make progress."#,
                     MouseButton::Middle => InputMouseButton::Middle,
                 };
                 let (input_x, input_y) = translate_capture_point(*x, *y, &primary_display);
+                self.guard_raw_input(planned_for, &[(input_x, input_y)])
+                    .await?;
                 mouse.click(input_x, input_y, btn)?;
             }
             ComputerUseAction::DoubleClick { x, y } => {
                 let mut mouse = MouseSimulator::new()?;
                 let (input_x, input_y) = translate_capture_point(*x, *y, &primary_display);
+                self.guard_raw_input(planned_for, &[(input_x, input_y)])
+                    .await?;
                 mouse.double_click(input_x, input_y).await?;
             }
             ComputerUseAction::TripleClick { x, y } => {
                 let mut mouse = MouseSimulator::new()?;
                 let (input_x, input_y) = translate_capture_point(*x, *y, &primary_display);
+                self.guard_raw_input(planned_for, &[(input_x, input_y)])
+                    .await?;
                 mouse.click(input_x, input_y, InputMouseButton::Left)?;
                 sleep(Duration::from_millis(50)).await;
                 mouse.click(input_x, input_y, InputMouseButton::Left)?;
@@ -1414,15 +1746,25 @@ Only include actions you're confident will make progress."#,
             ComputerUseAction::RightClick { x, y } => {
                 let mut mouse = MouseSimulator::new()?;
                 let (input_x, input_y) = translate_capture_point(*x, *y, &primary_display);
+                self.guard_raw_input(planned_for, &[(input_x, input_y)])
+                    .await?;
                 mouse.click(input_x, input_y, InputMouseButton::Right)?;
             }
             ComputerUseAction::Type { text, delay_ms } => {
-                let mut keyboard = KeyboardSimulator::new()?;
-                keyboard.send_text_with_delay(text, *delay_ms).await?;
+                let mut typing = GuardedTyping {
+                    agent: self,
+                    planned_for,
+                    keyboard: KeyboardSimulator::new()?,
+                    delay_ms: *delay_ms,
+                };
+                type_in_chunks(&mut typing, text, TYPING_CHUNK_CHARS)
+                    .await
+                    .map_err(anyhow::Error::new)?;
             }
             ComputerUseAction::KeyPress { key } => {
                 let mut keyboard = KeyboardSimulator::new()?;
-                if let Some(k) = self.parse_key(key) {
+                if let Some(k) = super::action_executor::parse_key(key) {
+                    self.guard_raw_input(planned_for, &[]).await?;
                     keyboard.tap_key(k)?;
                 }
             }
@@ -1438,7 +1780,8 @@ Only include actions you're confident will make progress."#,
                     })
                     .collect();
 
-                if let Some(k) = self.parse_key(key) {
+                if let Some(k) = super::action_executor::parse_key(key) {
+                    self.guard_raw_input(planned_for, &[]).await?;
                     keyboard.send_hotkey(&mods, k)?;
                 }
             }
@@ -1449,17 +1792,23 @@ Only include actions you're confident will make progress."#,
             } => {
                 let mut mouse = MouseSimulator::new()?;
 
-                if let Some(coord) = at {
-                    let translated = translate_capture_coordinate(*coord, &primary_display);
-                    mouse.move_to(translated.x, translated.y)?;
+                // The wheel acts on whatever is under the pointer, so a scroll
+                // with no point is judged where the pointer already rests.
+                let under_pointer = match at {
+                    Some(coord) => {
+                        let translated = translate_capture_coordinate(*coord, &primary_display);
+                        (translated.x, translated.y)
+                    }
+                    None => mouse.get_position()?,
+                };
+                self.guard_raw_input(planned_for, &[under_pointer]).await?;
+                if at.is_some() {
+                    mouse.move_to(under_pointer.0, under_pointer.1)?;
                 }
 
-                let scroll_amount = match direction {
-                    ScrollDirection::Up | ScrollDirection::Left => *amount,
-                    ScrollDirection::Down | ScrollDirection::Right => -*amount,
-                };
-
-                mouse.scroll(scroll_amount)?;
+                let (axis, scroll_amount) =
+                    super::action_executor::wheel_motion(*direction, *amount);
+                mouse.scroll_along(scroll_amount, axis)?;
             }
             ComputerUseAction::Drag {
                 from,
@@ -1469,6 +1818,11 @@ Only include actions you're confident will make progress."#,
                 let mut mouse = MouseSimulator::new()?;
                 let input_from = translate_capture_coordinate(*from, &primary_display);
                 let input_to = translate_capture_coordinate(*to, &primary_display);
+                self.guard_raw_input(
+                    planned_for,
+                    &[(input_from.x, input_from.y), (input_to.x, input_to.y)],
+                )
+                .await?;
                 mouse
                     .drag_and_drop(
                         input_from.x,
@@ -1482,6 +1836,8 @@ Only include actions you're confident will make progress."#,
             ComputerUseAction::MoveMouse { x, y, smooth } => {
                 let mut mouse = MouseSimulator::new()?;
                 let (input_x, input_y) = translate_capture_point(*x, *y, &primary_display);
+                self.guard_raw_input(planned_for, &[(input_x, input_y)])
+                    .await?;
                 if *smooth {
                     mouse.move_to_smooth(input_x, input_y, 200).await?;
                 } else {
@@ -1493,18 +1849,20 @@ Only include actions you're confident will make progress."#,
                     sleep(Duration::from_millis(*ms)).await;
                 }
                 WaitCondition::TextAppears { text, timeout_ms } => {
-                    let _ = self
-                        .wait_for_text(text, Duration::from_millis(*timeout_ms))
-                        .await;
+                    self.wait_for_text(text, Duration::from_millis(*timeout_ms))
+                        .await?;
                 }
                 WaitCondition::ScreenStable {
                     threshold_percent: _,
                     duration_ms,
                 } => {
-                    let _ = self
+                    if let Err(error) = self
                         .visual_reasoner
                         .wait_for_stable(Duration::from_millis(*duration_ms))
-                        .await;
+                        .await
+                    {
+                        stop_on_refused_capture(error)?;
+                    }
                 }
                 WaitCondition::WindowAppears {
                     title_contains,
@@ -1523,20 +1881,30 @@ Only include actions you're confident will make progress."#,
                 region: _,
                 save_path,
             } => {
-                let screenshot =
-                    crate::automation::screen::capture_display(super::control::target_display())?;
-                if let Some(path) = save_path {
-                    screenshot.pixels.save(path)?;
+                // The model does not choose where a capture lands: a requested
+                // save goes through the shared gate into the private folder.
+                if save_path.is_some() {
+                    self.visual_reasoner
+                        .ensure_front_app_may_be_captured()
+                        .await?;
+                    super::session::capture_to_disk("screenshot", || {
+                        Ok(crate::automation::screen::capture_display(
+                            super::control::target_display(),
+                        )?
+                        .pixels)
+                    })?;
                 }
             }
             ComputerUseAction::FocusWindow { title } => {
-                self.window_coordinator.activate_by_title(title).await;
+                self.raise_window(title).await?;
             }
             ComputerUseAction::LaunchApplication { name } => {
+                self.ensure_app_may_be_raised(name).await?;
                 self.window_coordinator.launch_application(name).await?;
             }
             ComputerUseAction::Copy => {
                 let mut keyboard = KeyboardSimulator::new()?;
+                self.guard_raw_input(planned_for, &[]).await?;
                 #[cfg(target_os = "macos")]
                 keyboard.send_hotkey(&[enigo::Key::Meta], enigo::Key::Unicode('c'))?;
                 #[cfg(not(target_os = "macos"))]
@@ -1544,6 +1912,7 @@ Only include actions you're confident will make progress."#,
             }
             ComputerUseAction::Paste => {
                 let mut keyboard = KeyboardSimulator::new()?;
+                self.guard_raw_input(planned_for, &[]).await?;
                 #[cfg(target_os = "macos")]
                 keyboard.send_hotkey(&[enigo::Key::Meta], enigo::Key::Unicode('v'))?;
                 #[cfg(not(target_os = "macos"))]
@@ -1551,6 +1920,7 @@ Only include actions you're confident will make progress."#,
             }
             ComputerUseAction::SelectAll => {
                 let mut keyboard = KeyboardSimulator::new()?;
+                self.guard_raw_input(planned_for, &[]).await?;
                 #[cfg(target_os = "macos")]
                 keyboard.send_hotkey(&[enigo::Key::Meta], enigo::Key::Unicode('a'))?;
                 #[cfg(not(target_os = "macos"))]
@@ -1558,6 +1928,7 @@ Only include actions you're confident will make progress."#,
             }
             ComputerUseAction::Undo => {
                 let mut keyboard = KeyboardSimulator::new()?;
+                self.guard_raw_input(planned_for, &[]).await?;
                 #[cfg(target_os = "macos")]
                 keyboard.send_hotkey(&[enigo::Key::Meta], enigo::Key::Unicode('z'))?;
                 #[cfg(not(target_os = "macos"))]
@@ -1565,6 +1936,7 @@ Only include actions you're confident will make progress."#,
             }
             ComputerUseAction::Redo => {
                 let mut keyboard = KeyboardSimulator::new()?;
+                self.guard_raw_input(planned_for, &[]).await?;
                 #[cfg(target_os = "macos")]
                 keyboard.send_hotkey(
                     &[enigo::Key::Meta, enigo::Key::Shift],
@@ -1578,7 +1950,9 @@ Only include actions you're confident will make progress."#,
                 zoom_level,
                 capture_screenshot: _,
             } => {
-                // Perform zoom operation using the zoom module
+                self.visual_reasoner
+                    .ensure_front_app_may_be_captured()
+                    .await?;
                 let zoom_action = super::zoom::ZoomAction::new(
                     super::zoom::Region::from_element_bounds(region),
                     super::zoom::ZoomLevel::from_factor(*zoom_level),
@@ -1599,55 +1973,25 @@ Only include actions you're confident will make progress."#,
             }
             ComputerUseAction::ChooseFile { path } => {
                 let path = super::control::validate_picker_path(path)?;
-                super::action_executor::run_keystrokes(&super::control::file_picker_keystrokes(
-                    super::control::FilePickerPlatform::current(),
-                    path,
-                ))
+                self.send_paced_keystrokes(
+                    planned_for,
+                    &super::control::file_picker_keystrokes(
+                        super::control::FilePickerPlatform::current(),
+                        path,
+                    ),
+                )
                 .await?;
             }
             ComputerUseAction::RespondToDialog { response } => {
-                super::action_executor::run_keystrokes(&super::control::dialog_keystrokes(
-                    *response,
-                ))
+                self.send_paced_keystrokes(
+                    planned_for,
+                    &super::control::dialog_keystrokes(*response),
+                )
                 .await?;
             }
         }
 
         Ok(())
-    }
-
-    /// Parses a key string to enigo Key.
-    fn parse_key(&self, key: &str) -> Option<enigo::Key> {
-        match key.to_lowercase().as_str() {
-            "enter" | "return" => Some(enigo::Key::Return),
-            "tab" => Some(enigo::Key::Tab),
-            "space" => Some(enigo::Key::Space),
-            "backspace" => Some(enigo::Key::Backspace),
-            "delete" => Some(enigo::Key::Delete),
-            "escape" | "esc" => Some(enigo::Key::Escape),
-            "up" | "uparrow" => Some(enigo::Key::UpArrow),
-            "down" | "downarrow" => Some(enigo::Key::DownArrow),
-            "left" | "leftarrow" => Some(enigo::Key::LeftArrow),
-            "right" | "rightarrow" => Some(enigo::Key::RightArrow),
-            "home" => Some(enigo::Key::Home),
-            "end" => Some(enigo::Key::End),
-            "pageup" => Some(enigo::Key::PageUp),
-            "pagedown" => Some(enigo::Key::PageDown),
-            "f1" => Some(enigo::Key::F1),
-            "f2" => Some(enigo::Key::F2),
-            "f3" => Some(enigo::Key::F3),
-            "f4" => Some(enigo::Key::F4),
-            "f5" => Some(enigo::Key::F5),
-            "f6" => Some(enigo::Key::F6),
-            "f7" => Some(enigo::Key::F7),
-            "f8" => Some(enigo::Key::F8),
-            "f9" => Some(enigo::Key::F9),
-            "f10" => Some(enigo::Key::F10),
-            "f11" => Some(enigo::Key::F11),
-            "f12" => Some(enigo::Key::F12),
-            s if s.len() == 1 => s.chars().next().map(enigo::Key::Unicode),
-            _ => None,
-        }
     }
 
     /// Waits for text to appear on screen.
@@ -1656,8 +2000,10 @@ Only include actions you're confident will make progress."#,
         let check_interval = Duration::from_millis(500);
 
         while start.elapsed() < timeout {
-            if let Ok(Some(_)) = self.visual_reasoner.find_text(text).await {
-                return Ok(true);
+            match self.visual_reasoner.find_text(text).await {
+                Ok(Some(_)) => return Ok(true),
+                Ok(None) => {}
+                Err(error) => stop_on_refused_capture(error)?,
             }
             sleep(check_interval).await;
         }

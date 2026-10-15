@@ -1,3 +1,4 @@
+use super::elicitation::ElicitationBroker;
 use super::logs::append_server_log;
 use super::oauth::{DesktopBrowser, DesktopTokenStore};
 use super::protocol::{JsonRpcResponse, RequestId};
@@ -12,6 +13,19 @@ use tokio::sync::{mpsc, oneshot};
 const HTTP_REQUEST_TIMEOUT_SECS: u64 = 30;
 
 const STDIO_REQUEST_TIMEOUT_SECS: u64 = 120;
+
+// The engine answers `elicitation/create` inside the request that raised it,
+// so a prompt has to close before that request times out or the server never
+// receives the user's answer.
+const ELICITATION_REPLY_MARGIN_SECS: u64 = 10;
+
+fn elicitation_timeout(request_timeout_secs: u64) -> std::time::Duration {
+    std::time::Duration::from_secs(
+        request_timeout_secs
+            .saturating_sub(ELICITATION_REPLY_MARGIN_SECS)
+            .max(1),
+    )
+}
 
 const SSE_STREAM_IDLE_TIMEOUT_SECS: u64 = 60;
 
@@ -39,10 +53,12 @@ pub struct StdioTransport {
     shutdown_signal: Arc<tokio::sync::Notify>,
     negotiated: NegotiatedServer,
     notifications: Notifications,
+    _scratch: Option<tempfile::TempDir>,
 }
 
 enum EngineCommand {
     Request {
+        ticket: u64,
         method: String,
         params: Option<serde_json::Value>,
         reply: oneshot::Sender<McpResult<JsonRpcResponse>>,
@@ -79,10 +95,15 @@ fn client_metadata_document_url() -> Option<String> {
     )
 }
 
-fn engine_hooks(server_name: &str, interactive: Arc<AtomicBool>) -> agiworkforce_mcp::ClientHooks {
+fn engine_hooks(
+    server_name: &str,
+    interactive: Arc<AtomicBool>,
+    elicitation: agiworkforce_mcp::SharedElicitationHandler,
+    before_respawn: Option<agiworkforce_mcp::RespawnCheck>,
+) -> agiworkforce_mcp::ClientHooks {
     agiworkforce_mcp::ClientHooks {
         token_store: Arc::new(DesktopTokenStore),
-        elicitation: Arc::new(agiworkforce_mcp::AutoDeclineHandler),
+        elicitation,
         browser: Arc::new(DesktopBrowser { interactive }),
         client_info: agiworkforce_mcp::ClientInfo {
             name: "AGI Workforce".to_string(),
@@ -95,7 +116,31 @@ fn engine_hooks(server_name: &str, interactive: Arc<AtomicBool>) -> agiworkforce
                 tracing::info!("[MCP Transport] [{}] {}", name, msg);
             })
         },
+        before_respawn,
     }
+}
+
+// The engine restarts a stopped local server from its saved launch when the
+// next call needs it. That restart passes the same launch approval as the
+// first start (`ApprovedLaunch::respawn_check`); a refusal fails the call and
+// is written to the server's log.
+fn logged_respawn_check(
+    server_name: &str,
+    check: Option<agiworkforce_mcp::RespawnCheck>,
+) -> Option<agiworkforce_mcp::RespawnCheck> {
+    let check = check?;
+    let name = server_name.to_string();
+    Some(Arc::new(move || {
+        check().inspect_err(|reason| {
+            append_server_log(&name, format!("[consent] Not restarted: {reason}"));
+        })
+    }))
+}
+
+enum RequestOutcome {
+    Answered(Result<Option<serde_json::Value>, agiworkforce_mcp::McpError>),
+    ShuttingDown,
+    Abandoned,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -108,6 +153,7 @@ fn spawn_engine_actor(
     is_shutdown: Arc<AtomicBool>,
     shutdown_signal: Arc<tokio::sync::Notify>,
     request_timeout: std::time::Duration,
+    in_flight: Arc<AtomicU64>,
 ) {
     tokio::spawn(async move {
         let mut liveness =
@@ -117,25 +163,39 @@ fn spawn_engine_actor(
         loop {
             tokio::select! {
                 cmd = rx.recv() => match cmd {
-                    Some(EngineCommand::Request { method, params, reply }) => {
+                    Some(EngineCommand::Request { ticket, method, params, mut reply }) => {
                         if is_shutdown.load(Ordering::SeqCst) {
                             let _ = reply.send(Err(McpError::ConnectionError(
                                 "Transport shutting down".to_string(),
                             )));
                             continue;
                         }
+                        if reply.is_closed() {
+                            continue;
+                        }
 
+                        in_flight.store(ticket, Ordering::SeqCst);
                         let outcome = {
                             let request = client.request(&method, params, request_timeout);
                             tokio::pin!(request);
                             tokio::select! {
-                                result = &mut request => Some(result),
-                                _ = shutdown_signal.notified() => None,
+                                result = &mut request => RequestOutcome::Answered(result),
+                                _ = shutdown_signal.notified() => RequestOutcome::ShuttingDown,
+                                _ = reply.closed() => RequestOutcome::Abandoned,
                             }
                         };
+                        in_flight.store(0, Ordering::SeqCst);
 
                         match outcome {
-                            Some(result) => {
+                            RequestOutcome::Abandoned => {
+                                tracing::warn!(
+                                    "[MCP Transport] '{}' request '{}' abandoned after its caller timed out",
+                                    server_name,
+                                    method
+                                );
+                                drain_engine_stderr(&server_name, &client);
+                            }
+                            RequestOutcome::Answered(result) => {
                                 drain_engine_stderr(&server_name, &client);
                                 let mapped = match result {
                                     Ok(value) => {
@@ -156,7 +216,7 @@ fn spawn_engine_actor(
                                 };
                                 let _ = reply.send(mapped);
                             }
-                            None => {
+                            RequestOutcome::ShuttingDown => {
                                 let _ = reply.send(Err(McpError::ConnectionError(
                                     "Transport shutting down".to_string(),
                                 )));
@@ -200,6 +260,7 @@ async fn send_engine_request(
     let (reply_tx, reply_rx) = oneshot::channel();
     if tx
         .send(EngineCommand::Request {
+            ticket: 0,
             method,
             params,
             reply: reply_tx,
@@ -500,6 +561,9 @@ impl StdioTransport {
         command: &str,
         args: &[String],
         env: &HashMap<String, String>,
+        allow_local_network: bool,
+        elicitation: agiworkforce_mcp::SharedElicitationHandler,
+        before_respawn: Option<agiworkforce_mcp::RespawnCheck>,
     ) -> McpResult<Self> {
         validate_mcp_command(command)?;
 
@@ -536,16 +600,46 @@ impl StdioTransport {
             .collect();
         engine_env.insert("PATH".to_string(), final_path);
 
+        let (spawn_command, spawn_args, scratch) =
+            if super::sandbox::launch_runs_unsandboxed(&server_name, command, args) {
+                tracing::warn!(
+                    "[MCP Transport] Server '{}' runs outside the OS sandbox by user choice",
+                    server_name
+                );
+                (resolved, args.to_vec(), None)
+            } else {
+                match super::sandbox::mcp_server_sandbox_program(
+                    &resolved,
+                    args,
+                    allow_local_network,
+                    &|name| engine_env.get(name).cloned(),
+                )
+                .map_err(|e| {
+                    McpError::InvalidConfig(format!(
+                        "MCP server '{server_name}' must run sandboxed: {e}"
+                    ))
+                })? {
+                    Some(wrapped) => (wrapped.program, wrapped.args, wrapped.scratch),
+                    None => (resolved, args.to_vec(), None),
+                }
+            };
+
         let engine_config = agiworkforce_mcp::TransportConfig::Stdio {
-            command: resolved,
-            args: args.to_vec(),
+            command: spawn_command,
+            args: spawn_args,
             env: engine_env,
+            cwd: None,
         };
         let mut client = agiworkforce_mcp::McpClient::connect(
             &server_name,
             engine_config,
             agiworkforce_mcp::McpTimeouts::default(),
-            engine_hooks(&server_name, Arc::new(AtomicBool::new(false))),
+            engine_hooks(
+                &server_name,
+                Arc::new(AtomicBool::new(false)),
+                elicitation,
+                logged_respawn_check(&server_name, before_respawn),
+            ),
         )
         .await
         .map_err(map_engine_error)?;
@@ -566,6 +660,7 @@ impl StdioTransport {
             is_shutdown.clone(),
             shutdown_signal.clone(),
             std::time::Duration::from_secs(STDIO_REQUEST_TIMEOUT_SECS),
+            Arc::new(AtomicU64::new(0)),
         );
 
         Ok(Self {
@@ -575,6 +670,7 @@ impl StdioTransport {
             shutdown_signal,
             negotiated,
             notifications,
+            _scratch: scratch,
         })
     }
 }
@@ -659,6 +755,10 @@ pub struct HttpSseTransport {
     is_shutdown: Arc<AtomicBool>,
     shutdown_signal: Arc<tokio::sync::Notify>,
     request_timeout_secs: u64,
+    engine_timeout_secs: u64,
+    in_flight: Arc<AtomicU64>,
+    next_ticket: AtomicU64,
+    elicitation: Arc<ElicitationBroker>,
     negotiated: NegotiatedServer,
     notifications: Notifications,
 }
@@ -823,6 +923,7 @@ impl HttpSseTransport {
         server_name: String,
         config: HttpSseConfig,
         interactive: bool,
+        elicitation: Arc<ElicitationBroker>,
     ) -> McpResult<Self> {
         tracing::info!(
             "[MCP HTTP Transport] Connecting to server '{}' at {}",
@@ -835,7 +936,12 @@ impl HttpSseTransport {
             &server_name,
             engine_config,
             timeouts,
-            engine_hooks(&server_name, Arc::clone(&browser_gate)),
+            engine_hooks(
+                &server_name,
+                Arc::clone(&browser_gate),
+                elicitation.handler(elicitation_timeout(STDIO_REQUEST_TIMEOUT_SECS)),
+                None,
+            ),
         )
         .await
         .map_err(map_engine_error)?;
@@ -848,6 +954,8 @@ impl HttpSseTransport {
         let is_shutdown = Arc::new(AtomicBool::new(false));
         let shutdown_signal = Arc::new(tokio::sync::Notify::new());
         let request_timeout_secs = config.timeout_secs;
+        let engine_timeout_secs = request_timeout_secs.max(STDIO_REQUEST_TIMEOUT_SECS);
+        let in_flight = Arc::new(AtomicU64::new(0));
 
         spawn_engine_actor(
             server_name.clone(),
@@ -857,7 +965,8 @@ impl HttpSseTransport {
             alive.clone(),
             is_shutdown.clone(),
             shutdown_signal.clone(),
-            std::time::Duration::from_secs(request_timeout_secs),
+            std::time::Duration::from_secs(engine_timeout_secs),
+            in_flight.clone(),
         );
 
         Ok(Self {
@@ -867,6 +976,10 @@ impl HttpSseTransport {
             is_shutdown,
             shutdown_signal,
             request_timeout_secs,
+            engine_timeout_secs,
+            in_flight,
+            next_ticket: AtomicU64::new(1),
+            elicitation,
             negotiated,
             notifications,
         })
@@ -885,15 +998,58 @@ impl McpTransport for HttpSseTransport {
                 "Transport is shutdown".to_string(),
             ));
         }
-        let timeout = std::time::Duration::from_secs(self.request_timeout_secs);
-        send_engine_request(&self.tx, method, params, timeout)
-            .await
-            .unwrap_or_else(|| {
-                Err(McpError::RequestTimeout(format!(
-                    "Request for '{}' timed out after {}s, server accepted request but did not respond in time",
-                    self.server_name, self.request_timeout_secs
-                )))
+        let ticket = self.next_ticket.fetch_add(1, Ordering::SeqCst);
+        let (reply_tx, mut reply_rx) = oneshot::channel();
+        self.tx
+            .send(EngineCommand::Request {
+                ticket,
+                method,
+                params,
+                reply: reply_tx,
             })
+            .map_err(|_| {
+                McpError::ConnectionError("Failed to send request: channel closed".to_string())
+            })?;
+
+        // The configured timeout counts only the server's own time: while a
+        // prompt this request raised is open, and for a full timeout after the
+        // user answers it, the deadline moves out, up to the engine's ceiling.
+        // A request still queued behind another keeps the configured timeout,
+        // and the actor drops it once this caller gives up.
+        let started = std::time::Instant::now();
+        let request_timeout = std::time::Duration::from_secs(self.request_timeout_secs);
+        let ceiling = started + std::time::Duration::from_secs(self.engine_timeout_secs);
+        loop {
+            match tokio::time::timeout(std::time::Duration::from_secs(1), &mut reply_rx).await {
+                Ok(Ok(result)) => return result,
+                Ok(Err(_)) => {
+                    return Err(McpError::ConnectionError(
+                        "Response channel closed".to_string(),
+                    ))
+                }
+                Err(_) => {
+                    let now = std::time::Instant::now();
+                    let running = self.in_flight.load(Ordering::SeqCst) == ticket;
+                    let deadline = if running && self.elicitation.has_pending(&self.server_name) {
+                        ceiling
+                    } else {
+                        match self.elicitation.last_activity(&self.server_name) {
+                            Some(at) if running && at > started => {
+                                (at + request_timeout).min(ceiling)
+                            }
+                            _ => started + request_timeout,
+                        }
+                    };
+                    if now >= deadline {
+                        return Err(McpError::RequestTimeout(format!(
+                            "Request for '{}' timed out after {}s, server accepted request but did not respond in time",
+                            self.server_name,
+                            now.duration_since(started).as_secs()
+                        )));
+                    }
+                }
+            }
+        }
     }
 
     fn is_alive(&self) -> bool {
@@ -926,15 +1082,30 @@ impl Transport {
         server_name: String,
         config: &super::config::McpServerConfig,
         interactive: bool,
+        elicitation: &Arc<ElicitationBroker>,
+        approved: &super::config::ApprovedLaunch,
     ) -> McpResult<Self> {
         match &config.transport {
             Some(TransportConfig::Http(http_config)) => Ok(Transport::HttpSse(
-                HttpSseTransport::new(server_name, http_config.as_ref().clone(), interactive)
-                    .await?,
+                HttpSseTransport::new(
+                    server_name,
+                    http_config.as_ref().clone(),
+                    interactive,
+                    Arc::clone(elicitation),
+                )
+                .await?,
             )),
             Some(TransportConfig::Stdio) | None => Ok(Transport::Stdio(
-                StdioTransport::new(server_name, &config.command, &config.args, &config.env)
-                    .await?,
+                StdioTransport::new(
+                    server_name,
+                    &config.command,
+                    &config.args,
+                    &config.env,
+                    config.allow_local_network,
+                    elicitation.handler(elicitation_timeout(STDIO_REQUEST_TIMEOUT_SECS)),
+                    approved.respawn_check(),
+                )
+                .await?,
             )),
         }
     }

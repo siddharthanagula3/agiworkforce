@@ -3009,6 +3009,7 @@ mod tests {
                             tool_use_id: "toolu_multi_abc".to_string(),
                             content: "file contents here".to_string(),
                             is_error: false,
+                            ..Default::default()
                         },
                     }]),
                 },
@@ -3146,6 +3147,7 @@ mod tests {
                             tool_use_id: "toolu_orphan_multi".to_string(),
                             content: "orphaned result".to_string(),
                             is_error: false,
+                            ..Default::default()
                         },
                     }]),
                 },

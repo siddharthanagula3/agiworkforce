@@ -9,33 +9,38 @@
 //!
 //! ```text
 //! ┌─ Tool Approval ─────────────────────────────────────────────────────────────┐
-//! │                                                                              │
-//! │  Allow write_file to modify:                                                 │
-//! │    src/main.rs  (+42 / -3 lines)                                             │
-//! │                                                                              │
+//! │  Apply this patch?                                                           │
+//! │    src/main.rs                                                               │
+//! │    src/lib.rs                                                                │
+//! │    @@ -1,3 +1,5 @@                                                           │
+//! │    +fn added() {}                                                            │
+//! │  lines 1-2 of 212 · scroll to the end before allowing                        │
 //! │  [ Yes ]  [ No ]  [ Allow Session ]  [ Always Allow ]  [ Deny All ]          │
-//! │    ↑                                                                         │
-//! │  ←/→ or h/l to move   Enter to confirm   Esc = No                           │
+//! │  [ Allow All ]                                                               │
+//! │  Run it this once. Tab adds a note for the agent.                            │
+//! │  ↑/↓ PgUp/PgDn Home/End scroll   ←/→ move   Enter confirm   Esc = No         │
 //! └──────────────────────────────────────────────────────────────────────────────┘
 //! ```
 //!
-//! Event-loop wiring (`TuiApp` slot) is a follow-up milestone (M-future).
-//! Until then the overlay is a pure state machine exercised under unit tests;
-//! `#[allow(dead_code)]` covers the public ratatui render path.
+//! The title, the question, the targets and the buttons are always drawn. The
+//! detail scrolls between them, and an answer that allows the call is taken
+//! only after the last row of the detail has been drawn.
 
 #![allow(dead_code)]
 
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
 use super::interactive::{InteractiveView, KeyAction, ViewAction};
+use super::scroll_gate::{draw_too_small, ScrollGate};
 use crate::terminal_text::sanitize_terminal_text;
+use crate::tui::approval_broker::ApprovalRequestKind;
 use crate::tui::terminal_palette::{
     ui_danger, ui_muted, ui_on_light, ui_surface_elevated, ui_warning,
 };
-use crate::tui::{display_width, pad_to_cols};
+use crate::tui::{display_width, pad_to_cols, truncate_cols};
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -68,6 +73,14 @@ impl ApprovalChoice {
             Self::DenyAll => 4,
             Self::AllowAll => 5,
         }
+    }
+
+    /// Whether this answer lets the tool call run.
+    pub fn approves(self) -> bool {
+        matches!(
+            self,
+            Self::Yes | Self::AllowSession | Self::AlwaysAllow | Self::AllowAll
+        )
     }
 
     /// Human-readable button label.
@@ -118,6 +131,68 @@ const CHOICES: [ApprovalChoice; 6] = [
 const DEFAULT_CURSOR: usize = 0;
 const _: () = assert!(matches!(CHOICES[DEFAULT_CURSOR], ApprovalChoice::Yes));
 
+const MAX_BOX_WIDTH: u16 = 82;
+/// The narrowest box that still holds the widest button and the shortest hint.
+const MIN_INNER_COLS: usize = 24;
+
+const HINTS: [&str; 2] = [
+    "  \u{2190}/\u{2192} move   Enter confirm   Tab note   Esc = No",
+    "  Enter confirm   Esc = No",
+];
+const SCROLL_HINTS: [&str; 3] = [
+    "  \u{2191}/\u{2193} PgUp/PgDn Home/End scroll   \u{2190}/\u{2192} move   Enter confirm   Esc = No",
+    "  \u{2191}/\u{2193} PgUp/PgDn scroll   \u{2190}/\u{2192} move   Esc = No",
+    "  \u{2191}/\u{2193} scroll   Esc = No",
+];
+const NOTE_HINT: &str = "  Enter answers with the note   Tab or Esc closes the note";
+
+/// What the request acts on, for the rows that stay in view while the detail
+/// scrolls.
+pub(crate) fn targets_for(kind: &ApprovalRequestKind) -> Vec<String> {
+    match kind {
+        ApprovalRequestKind::FileWrite { path }
+        | ApprovalRequestKind::FileEdit { path }
+        | ApprovalRequestKind::TrustDirectory { path } => vec![path.display().to_string()],
+        ApprovalRequestKind::Patch { files } => files
+            .iter()
+            .map(|file| file.display().to_string())
+            .collect(),
+        ApprovalRequestKind::Network { destination, .. } => vec![destination.clone()],
+        ApprovalRequestKind::Git { target, .. } => vec![target.clone()],
+        ApprovalRequestKind::GitPush {
+            remote,
+            branch,
+            force,
+        } => vec![format!(
+            "{remote} {branch}{}",
+            if *force { " (force)" } else { "" }
+        )],
+        ApprovalRequestKind::McpTool {
+            server_name,
+            tool_name,
+        } => vec![format!("{server_name}: {tool_name}")],
+        ApprovalRequestKind::ComputerUse { target, .. } => vec![target.clone()],
+        ApprovalRequestKind::WorkspacePolicy {
+            primary_argument, ..
+        } => vec![primary_argument.clone()],
+        _ => Vec::new(),
+    }
+}
+
+/// One draw of the prompt, sized for the area it was given.
+struct Arrangement {
+    box_width: u16,
+    box_height: u16,
+    padded: bool,
+    prompt: String,
+    targets: Vec<String>,
+    body: Vec<String>,
+    viewport: usize,
+    button_rows: Vec<Vec<usize>>,
+    note_line: Option<String>,
+    inner_cols: usize,
+}
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -140,6 +215,11 @@ pub struct ApprovalOverlayState {
     pub note_choice: Option<ApprovalChoice>,
     pub editing_note: bool,
     pub always_allow_unavailable: bool,
+    /// What the request acts on. Drawn above the detail and never scrolled away.
+    targets: Vec<String>,
+    scroll: ScrollGate,
+    /// An allowing answer was pressed before the end of the detail was drawn.
+    refused_unread: bool,
 }
 
 impl Default for ApprovalOverlayState {
@@ -154,6 +234,9 @@ impl Default for ApprovalOverlayState {
             note_choice: None,
             editing_note: false,
             always_allow_unavailable: false,
+            targets: Vec::new(),
+            scroll: ScrollGate::default(),
+            refused_unread: false,
         }
     }
 }
@@ -176,7 +259,21 @@ impl ApprovalOverlayState {
         self.note.clear();
         self.note_choice = None;
         self.editing_note = false;
+        self.always_allow_unavailable = false;
+        self.targets = Vec::new();
+        self.scroll.reset();
+        self.refused_unread = false;
         self.visible = true;
+    }
+
+    /// Name what the prompt now open acts on. These rows stay in view while
+    /// the detail scrolls; the ones that do not fit are listed in the detail.
+    pub fn set_targets(&mut self, targets: Vec<String>) {
+        self.targets = targets
+            .into_iter()
+            .map(|target| sanitize_terminal_text(&target).into_owned())
+            .filter(|target| !target.trim().is_empty())
+            .collect();
     }
 
     pub fn note(&self) -> Option<String> {
@@ -214,6 +311,10 @@ impl ApprovalOverlayState {
     }
 
     fn submit(&mut self, choice: ApprovalChoice) -> ViewAction {
+        if choice.approves() && !self.scroll.end_was_shown() {
+            self.refused_unread = true;
+            return ViewAction::Continue;
+        }
         self.cursor = choice.index();
         self.result = Some(choice);
         self.editing_note = false;
@@ -245,141 +346,6 @@ impl ApprovalOverlayState {
     /// True when the user has confirmed a choice.
     pub fn is_resolved(&self) -> bool {
         self.result.is_some()
-    }
-
-    /// Render the overlay into the given terminal frame area.
-    pub fn render_into(&self, frame: &mut ratatui::Frame, area: Rect) {
-        if !self.visible {
-            return;
-        }
-
-        // Centre a fixed-height box inside `area`. A detail longer than the
-        // box wraps rather than clipping, so the whole command is readable
-        // before it is approved.
-        let box_width = area.width.min(82);
-        let detail_cols = usize::from(box_width.saturating_sub(2 + 4)).max(8);
-        let detail: Vec<String> = self
-            .detail
-            .iter()
-            .flat_map(|d| wrap_cols(d, detail_cols))
-            .collect();
-        let detail_lines = detail.len() as u16;
-        let button_rows = self.button_rows(usize::from(box_width.saturating_sub(4)).max(8));
-        let note_line = self.note_line();
-        let inner_height = 2
-            + detail_lines.max(1)
-            + 1
-            + button_rows.len() as u16
-            + 1
-            + u16::from(note_line.is_some())
-            + 1
-            + 1;
-        let box_height = inner_height + 2;
-
-        let vert = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length((area.height.saturating_sub(box_height)) / 2),
-                Constraint::Length(box_height),
-                Constraint::Min(0),
-            ])
-            .split(area);
-
-        let horiz = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Length((area.width.saturating_sub(box_width)) / 2),
-                Constraint::Length(box_width),
-                Constraint::Min(0),
-            ])
-            .split(vert[1]);
-
-        let box_area = horiz[1];
-        frame.render_widget(Clear, box_area);
-
-        let block = Block::default()
-            .title(" Tool Approval ")
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(ui_warning()))
-            .style(Style::default().bg(ui_surface_elevated()));
-
-        let inner = block.inner(box_area);
-        frame.render_widget(block, box_area);
-
-        // Build text lines.
-        let mut lines: Vec<Line> = Vec::new();
-        lines.push(Line::from("")); // top padding
-
-        // Prompt line
-        lines.push(Line::from(vec![
-            Span::raw("  "),
-            Span::styled(
-                self.prompt.as_str(),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-        ]));
-
-        // Detail lines
-        if detail.is_empty() {
-            lines.push(Line::from(""));
-        } else {
-            for d in &detail {
-                lines.push(Line::from(vec![
-                    Span::raw("    "),
-                    Span::styled(d.as_str(), Style::default().fg(ui_muted())),
-                ]));
-            }
-        }
-
-        lines.push(Line::from("")); // spacer before buttons
-
-        for row in button_rows {
-            let mut spans: Vec<Span> = vec![Span::raw("  ")];
-            for index in row {
-                let choice = CHOICES[index];
-                let selected = index == self.cursor;
-                let destructive = choice == ApprovalChoice::DenyAll;
-                let style = match (selected, destructive) {
-                    (true, true) => Style::default()
-                        .fg(ui_on_light())
-                        .bg(ui_danger())
-                        .add_modifier(Modifier::BOLD),
-                    (true, false) => Style::default()
-                        .fg(ui_on_light())
-                        .bg(ui_warning())
-                        .add_modifier(Modifier::BOLD),
-                    (false, true) => Style::default().fg(ui_danger()),
-                    (false, false) => Style::default(),
-                };
-                spans.push(Span::styled(format!("[{}]", choice.label()), style));
-                spans.push(Span::raw("  "));
-            }
-            lines.push(Line::from(spans));
-        }
-
-        lines.push(Line::from(vec![Span::styled(
-            format!("  {}", CHOICES[self.cursor].description()),
-            Style::default().fg(ui_muted()),
-        )]));
-
-        if let Some(note_line) = note_line {
-            lines.push(Line::from(vec![Span::styled(
-                note_line,
-                Style::default().add_modifier(Modifier::BOLD),
-            )]));
-        }
-
-        lines.push(Line::from(vec![Span::styled(
-            if self.editing_note {
-                "  Enter answers with the note   Tab or Esc closes the note"
-            } else {
-                "  \u{2190}/\u{2192} move   Enter confirm   Tab note   Esc = No"
-            },
-            Style::default().fg(ui_muted()),
-        )]));
-
-        let para = Paragraph::new(lines);
-        frame.render_widget(para, inner);
     }
 
     fn button_rows(&self, max_cols: usize) -> Vec<Vec<usize>> {
@@ -417,6 +383,269 @@ impl ApprovalOverlayState {
         ))
     }
 
+    fn pinned_targets(&self, rows: usize, cols: usize) -> Vec<String> {
+        let total = self.targets.len();
+        let named = if total > rows {
+            rows.saturating_sub(1)
+        } else {
+            rows
+        };
+        let mut pinned: Vec<String> = self
+            .targets
+            .iter()
+            .take(named)
+            .map(|target| truncate_cols(target, cols))
+            .collect();
+        if named == 0 {
+            pinned.push(format!("{total} targets, all listed below"));
+        } else if total > named {
+            pinned.push(format!(
+                "and {} more, all {total} are listed below",
+                total - named
+            ));
+        }
+        pinned
+    }
+
+    /// Lay the prompt out for an area of `width` by `height`. `None` when
+    /// the area cannot hold the question, one row of the detail and the
+    /// buttons together.
+    fn arrange(&self, width: u16, height: u16) -> Option<Arrangement> {
+        let box_width = width.min(MAX_BOX_WIDTH);
+        let inner_cols = usize::from(box_width.saturating_sub(2));
+        let inner_rows = usize::from(height.saturating_sub(2));
+        if inner_cols < MIN_INNER_COLS {
+            return None;
+        }
+        let prompt_cols = inner_cols - 2;
+        let detail_cols = inner_cols - 4;
+        let wrap = |lines: &[String]| -> Vec<String> {
+            lines
+                .iter()
+                .flat_map(|line| wrap_cols(line, detail_cols))
+                .collect()
+        };
+
+        let button_rows = self.button_rows(inner_cols - 2);
+        let note_line = self.note_line();
+        let fixed_rows = 1 + button_rows.len() + 1 + usize::from(note_line.is_some()) + 1;
+        let prompt = truncate_cols(&self.prompt, prompt_cols);
+        let mut body: Vec<String> = Vec::new();
+        if display_width(&self.prompt) > prompt_cols {
+            body.extend(wrap_cols(&self.prompt, detail_cols));
+            body.push(String::new());
+        }
+        let detail = wrap(self.detail.as_slice());
+        let targets_fit_a_row = self
+            .targets
+            .iter()
+            .all(|target| display_width(target) <= detail_cols);
+
+        if targets_fit_a_row {
+            let blank_detail_row =
+                usize::from(self.targets.is_empty() && body.is_empty() && detail.is_empty());
+            let rows =
+                fixed_rows + 3 + self.targets.len() + body.len() + detail.len() + blank_detail_row;
+            if rows <= inner_rows {
+                body.extend(detail);
+                return Some(Arrangement {
+                    box_width,
+                    box_height: u16::try_from(rows + 2).ok()?,
+                    padded: true,
+                    prompt,
+                    targets: self.targets.clone(),
+                    viewport: body.len(),
+                    body,
+                    button_rows,
+                    note_line,
+                    inner_cols,
+                });
+            }
+        }
+
+        let available = inner_rows.checked_sub(fixed_rows)?;
+        let pinned_rows = if self.targets.is_empty() {
+            0
+        } else {
+            self.targets.len().min((available / 3).max(1))
+        };
+        let every_target_pinned = targets_fit_a_row && pinned_rows == self.targets.len();
+        let targets = if every_target_pinned {
+            self.targets.clone()
+        } else {
+            body.push(format!("Every target ({}):", self.targets.len()));
+            body.extend(wrap(self.targets.as_slice()));
+            body.push(String::new());
+            self.pinned_targets(pinned_rows, detail_cols)
+        };
+        body.extend(detail);
+
+        let room = available.checked_sub(pinned_rows)?;
+        let viewport = if body.len() <= room {
+            body.len()
+        } else {
+            room.checked_sub(1).filter(|rows| *rows > 0)?
+        };
+        let position_row = usize::from(body.len() > viewport);
+        let rows = fixed_rows + pinned_rows + viewport + position_row;
+        Some(Arrangement {
+            box_width,
+            box_height: u16::try_from(rows + 2).ok()?,
+            padded: false,
+            prompt,
+            targets,
+            body,
+            viewport,
+            button_rows,
+            note_line,
+            inner_cols,
+        })
+    }
+
+    /// Render the overlay into the given terminal frame area.
+    pub fn render_into(&self, frame: &mut ratatui::Frame, area: Rect) {
+        if !self.visible {
+            return;
+        }
+        let Some(shape) = self.arrange(area.width, area.height) else {
+            self.scroll.nothing_drawn();
+            draw_too_small(frame, area, "Tool Approval", "Esc to refuse");
+            return;
+        };
+        let window = self.scroll.window(shape.body.len(), shape.viewport);
+        let allowing_is_open = self.scroll.end_was_shown();
+
+        let box_area = Rect {
+            x: area.x + area.width.saturating_sub(shape.box_width) / 2,
+            y: area.y + area.height.saturating_sub(shape.box_height) / 2,
+            width: shape.box_width,
+            height: shape.box_height,
+        };
+        frame.render_widget(Clear, box_area);
+
+        let block = Block::default()
+            .title(" Tool Approval ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(ui_warning()))
+            .style(Style::default().bg(ui_surface_elevated()));
+
+        let inner = block.inner(box_area);
+        frame.render_widget(block, box_area);
+
+        let muted = Style::default().fg(ui_muted());
+        let mut lines: Vec<Line> = Vec::new();
+        if shape.padded {
+            lines.push(Line::from(""));
+        }
+
+        lines.push(Line::from(vec![
+            Span::raw("  "),
+            Span::styled(
+                shape.prompt.as_str(),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+        ]));
+
+        for target in &shape.targets {
+            lines.push(Line::from(vec![
+                Span::raw("    "),
+                Span::raw(target.as_str()),
+            ]));
+        }
+
+        if shape.padded && shape.targets.is_empty() && shape.body.is_empty() {
+            lines.push(Line::from(""));
+        }
+        for row in &shape.body[window] {
+            lines.push(Line::from(vec![
+                Span::raw("    "),
+                Span::styled(row.as_str(), muted),
+            ]));
+        }
+
+        if let Some(position) = self.scroll.position_label() {
+            let (text, style) = if allowing_is_open {
+                (format!("  {position}"), muted)
+            } else {
+                let style = if self.refused_unread {
+                    Style::default()
+                        .fg(ui_warning())
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    muted
+                };
+                (
+                    format!("  {position} \u{b7} scroll to the end before allowing"),
+                    style,
+                )
+            };
+            lines.push(Line::from(Span::styled(
+                truncate_cols(&text, shape.inner_cols),
+                style,
+            )));
+        }
+
+        if shape.padded {
+            lines.push(Line::from(""));
+        }
+
+        for row in &shape.button_rows {
+            let mut spans: Vec<Span> = vec![Span::raw("  ")];
+            for &index in row {
+                let choice = CHOICES[index];
+                let selected = index == self.cursor;
+                let destructive = choice == ApprovalChoice::DenyAll;
+                let style = match (selected, destructive) {
+                    (true, true) => Style::default()
+                        .fg(ui_on_light())
+                        .bg(ui_danger())
+                        .add_modifier(Modifier::BOLD),
+                    (true, false) => Style::default()
+                        .fg(ui_on_light())
+                        .bg(ui_warning())
+                        .add_modifier(Modifier::BOLD),
+                    (false, true) => Style::default().fg(ui_danger()),
+                    (false, false) if choice.approves() && !allowing_is_open => muted,
+                    (false, false) => Style::default(),
+                };
+                spans.push(Span::styled(format!("[{}]", choice.label()), style));
+                spans.push(Span::raw("  "));
+            }
+            lines.push(Line::from(spans));
+        }
+
+        lines.push(Line::from(vec![Span::styled(
+            format!("  {}", CHOICES[self.cursor].description()),
+            muted,
+        )]));
+
+        if let Some(note_line) = shape.note_line {
+            lines.push(Line::from(vec![Span::styled(
+                note_line,
+                Style::default().add_modifier(Modifier::BOLD),
+            )]));
+        }
+
+        let hint = if self.editing_note {
+            NOTE_HINT
+        } else {
+            let hints: &[&str] = if self.scroll.overflows() {
+                &SCROLL_HINTS
+            } else {
+                &HINTS
+            };
+            hints
+                .iter()
+                .copied()
+                .find(|hint| display_width(hint) <= shape.inner_cols)
+                .unwrap_or(hints[hints.len() - 1])
+        };
+        lines.push(Line::from(vec![Span::styled(hint, muted)]));
+
+        let para = Paragraph::new(lines);
+        frame.render_widget(para, inner);
+    }
+
     /// Text-only render used when ratatui frame is unavailable (REPL / tests).
     pub fn render_text(&self) -> String {
         if !self.visible {
@@ -432,8 +661,8 @@ impl ApprovalOverlayState {
             pad_to_cols(&format!("  {}", self.prompt), 78)
         ));
 
-        for d in &self.detail {
-            out.push_str(&format!("│{}│\n", pad_to_cols(&format!("    {d}"), 78)));
+        for line in self.targets.iter().chain(&self.detail) {
+            out.push_str(&format!("│{}│\n", pad_to_cols(&format!("    {line}"), 78)));
         }
 
         out.push_str(
@@ -510,6 +739,23 @@ impl InteractiveView for ApprovalOverlayState {
                 self.step(false, true);
                 ViewAction::Continue
             }
+            KeyAction::Up
+            | KeyAction::Down
+            | KeyAction::PageUp
+            | KeyAction::PageDown
+            | KeyAction::Home
+            | KeyAction::End => {
+                self.scroll.scroll_key(key);
+                ViewAction::Continue
+            }
+            KeyAction::Char('k') => {
+                self.scroll.scroll_key(KeyAction::Up);
+                ViewAction::Continue
+            }
+            KeyAction::Char('j') => {
+                self.scroll.scroll_key(KeyAction::Down);
+                ViewAction::Continue
+            }
             KeyAction::Enter => self.submit(CHOICES[self.cursor]),
             KeyAction::Esc => {
                 // Esc = No (deny this one call, don't stop the loop)
@@ -518,36 +764,15 @@ impl InteractiveView for ApprovalOverlayState {
                 ViewAction::Close
             }
             // y/n/s/a/d shortcuts
-            KeyAction::Char('y') | KeyAction::Char('Y') => {
-                self.cursor = ApprovalChoice::Yes.index();
-                self.result = Some(ApprovalChoice::Yes);
-                self.visible = false;
-                ViewAction::Submit(self.cursor)
-            }
-            KeyAction::Char('n') | KeyAction::Char('N') => {
-                self.cursor = ApprovalChoice::No.index();
-                self.result = Some(ApprovalChoice::No);
-                self.visible = false;
-                ViewAction::Submit(self.cursor)
-            }
+            KeyAction::Char('y') | KeyAction::Char('Y') => self.submit(ApprovalChoice::Yes),
+            KeyAction::Char('n') | KeyAction::Char('N') => self.submit(ApprovalChoice::No),
             KeyAction::Char('s') | KeyAction::Char('S') => {
-                self.cursor = ApprovalChoice::AllowSession.index();
-                self.result = Some(ApprovalChoice::AllowSession);
-                self.visible = false;
-                ViewAction::Submit(self.cursor)
+                self.submit(ApprovalChoice::AllowSession)
             }
             KeyAction::Char('a') | KeyAction::Char('A') if !self.always_allow_unavailable => {
-                self.cursor = ApprovalChoice::AlwaysAllow.index();
-                self.result = Some(ApprovalChoice::AlwaysAllow);
-                self.visible = false;
-                ViewAction::Submit(self.cursor)
+                self.submit(ApprovalChoice::AlwaysAllow)
             }
-            KeyAction::Char('d') | KeyAction::Char('D') => {
-                self.cursor = ApprovalChoice::DenyAll.index();
-                self.result = Some(ApprovalChoice::DenyAll);
-                self.visible = false;
-                ViewAction::Submit(self.cursor)
-            }
+            KeyAction::Char('d') | KeyAction::Char('D') => self.submit(ApprovalChoice::DenyAll),
             _ => ViewAction::Continue,
         }
     }
@@ -561,6 +786,7 @@ impl InteractiveView for ApprovalOverlayState {
     }
 }
 
+/// Break `text` into rows of at most `max_cols` columns, cutting nothing off.
 pub(crate) fn wrap_cols(text: &str, max_cols: usize) -> Vec<String> {
     let mut lines = Vec::new();
     let mut current = String::new();
@@ -591,13 +817,37 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
 
+    /// Opened and drawn once: an allowing key is taken only after a draw.
     fn open_overlay() -> ApprovalOverlayState {
         let mut s = ApprovalOverlayState::default();
         s.open(
             "Allow write_file to modify:",
             vec!["src/main.rs  (+42 / -3 lines)".to_string()],
         );
+        draw_overlay(&s, 88, 20);
         s
+    }
+
+    fn tall_overlay(lines: usize) -> ApprovalOverlayState {
+        let mut s = ApprovalOverlayState::default();
+        s.open(
+            "Apply this patch?",
+            (1..=lines).map(|n| format!("+ change line {n}")).collect(),
+        );
+        s
+    }
+
+    fn painted(state: &ApprovalOverlayState, width: u16, height: u16) -> String {
+        let terminal = draw_overlay(state, width, height);
+        let buffer = terminal.backend().buffer();
+        (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol().to_string())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     fn draw_overlay(
@@ -853,6 +1103,7 @@ mod tests {
             (KeyAction::Char('S'), ApprovalChoice::AllowSession),
             (KeyAction::Char('A'), ApprovalChoice::AlwaysAllow),
             (KeyAction::Char('D'), ApprovalChoice::DenyAll),
+            (KeyAction::Char('T'), ApprovalChoice::AllowAll),
         ] {
             let mut s = open_overlay();
             s.handle_key(key);
@@ -872,6 +1123,7 @@ mod tests {
         assert!(text.contains("Allow Session"));
         assert!(text.contains("Always Allow"));
         assert!(text.contains("Deny All"));
+        assert!(text.contains("Allow All"));
     }
 
     #[test]
@@ -928,6 +1180,319 @@ mod tests {
         assert!(!s.visible);
         assert!(s.result.is_none());
         assert!(!s.is_done()); // result required for is_done
+    }
+
+    #[test]
+    fn an_unavailable_always_allow_is_neither_shown_nor_reachable() {
+        let mut s = open_overlay();
+        s.always_allow_unavailable = true;
+
+        let text = s.render_text();
+        assert!(!text.contains("Always Allow"), "{text}");
+        assert!(text.contains("Deny All"));
+
+        assert_eq!(s.handle_key(KeyAction::Char('a')), ViewAction::Continue);
+        assert!(s.result.is_none());
+        assert!(s.visible);
+
+        for _ in 0..10 {
+            s.handle_key(KeyAction::Right);
+        }
+        assert_eq!(s.cursor, ApprovalChoice::AllowAll.index());
+        for _ in 0..2 {
+            s.handle_key(KeyAction::Left);
+        }
+        assert_eq!(
+            s.cursor,
+            ApprovalChoice::AllowSession.index(),
+            "the cursor steps over the button that is not offered"
+        );
+
+        let mut s = open_overlay();
+        s.always_allow_unavailable = true;
+        assert_eq!(s.handle_key(KeyAction::Char('d')), ViewAction::Submit(4));
+        assert_eq!(s.result, Some(ApprovalChoice::DenyAll));
+
+        s.open("Allow this command?", Vec::new());
+        assert!(
+            s.render_text().contains("Always Allow"),
+            "a new prompt offers it again"
+        );
+    }
+
+    #[test]
+    fn a_note_goes_with_the_answer_it_was_written_for() {
+        let mut s = open_overlay();
+        assert_eq!(s.handle_key(KeyAction::Tab), ViewAction::Continue);
+        assert!(s.editing_note);
+        s.insert_note_text("use the staging\u{1b} database");
+        assert_eq!(s.handle_key(KeyAction::Enter), ViewAction::Submit(0));
+        assert_eq!(s.result, Some(ApprovalChoice::Yes));
+        assert_eq!(s.note().as_deref(), Some("use the staging database"));
+    }
+
+    #[test]
+    fn a_prompt_taller_than_the_terminal_keeps_its_buttons_and_says_where_it_is() {
+        let state = tall_overlay(212);
+        let text = painted(&state, 90, 24);
+
+        assert!(text.contains("Tool Approval"), "{text}");
+        assert!(text.contains("Apply this patch?"), "{text}");
+        for label in [
+            "[ Yes ]",
+            "[ No ]",
+            "[ Allow Session ]",
+            "[ Always Allow ]",
+            "[ Deny All ]",
+            "[ Allow All ]",
+        ] {
+            assert!(text.contains(label), "{label} is not drawn: {text}");
+        }
+        assert!(text.contains("Esc = No"), "{text}");
+        assert!(text.contains("lines 1-16 of 212"), "{text}");
+        assert!(text.contains("+ change line 16"), "{text}");
+        assert!(!text.contains("+ change line 17"), "{text}");
+    }
+
+    #[test]
+    fn an_allowing_key_waits_until_the_end_of_the_detail_has_been_drawn() {
+        let mut state = tall_overlay(212);
+        painted(&state, 90, 24);
+        for key in [
+            KeyAction::Char('y'),
+            KeyAction::Char('s'),
+            KeyAction::Char('a'),
+            KeyAction::Char('t'),
+            KeyAction::Enter,
+        ] {
+            assert_eq!(state.handle_key(key), ViewAction::Continue, "{key:?}");
+            assert!(state.result.is_none() && state.visible, "{key:?}");
+        }
+        assert!(painted(&state, 90, 24).contains("scroll to the end before allowing"));
+
+        state.handle_key(KeyAction::End);
+        assert_eq!(
+            state.handle_key(KeyAction::Char('y')),
+            ViewAction::Continue,
+            "End moved the window, but no draw has shown the end yet"
+        );
+        let text = painted(&state, 90, 24);
+        assert!(text.contains("+ change line 212"), "{text}");
+        assert!(text.contains("lines 197-212 of 212"), "{text}");
+        assert!(!text.contains("scroll to the end"), "{text}");
+
+        assert_eq!(
+            state.handle_key(KeyAction::Char('y')),
+            ViewAction::Submit(0)
+        );
+        assert_eq!(state.result, Some(ApprovalChoice::Yes));
+    }
+
+    #[test]
+    fn the_end_shown_once_keeps_allowing_open_after_scrolling_back() {
+        let mut state = tall_overlay(212);
+        painted(&state, 90, 24);
+        state.handle_key(KeyAction::End);
+        painted(&state, 90, 24);
+        state.handle_key(KeyAction::Home);
+        painted(&state, 90, 24);
+        assert_eq!(
+            state.handle_key(KeyAction::Char('s')),
+            ViewAction::Submit(2)
+        );
+    }
+
+    #[test]
+    fn a_refusing_key_always_answers() {
+        for (key, expected) in [
+            (KeyAction::Char('n'), ApprovalChoice::No),
+            (KeyAction::Char('d'), ApprovalChoice::DenyAll),
+            (KeyAction::Esc, ApprovalChoice::No),
+        ] {
+            let mut state = tall_overlay(212);
+            painted(&state, 90, 24);
+            state.handle_key(key);
+            assert_eq!(state.result, Some(expected), "{key:?}");
+        }
+
+        let mut never_drawn = tall_overlay(3);
+        assert_eq!(
+            never_drawn.handle_key(KeyAction::Char('y')),
+            ViewAction::Continue,
+            "nothing has been shown yet"
+        );
+        assert_eq!(
+            never_drawn.handle_key(KeyAction::Char('n')),
+            ViewAction::Submit(1)
+        );
+    }
+
+    #[test]
+    fn arrows_pages_home_and_end_scroll_the_detail() {
+        let mut state = tall_overlay(212);
+        let position = |state: &ApprovalOverlayState| -> String {
+            let text = painted(state, 90, 24);
+            let start = text.find("lines ").expect("a position row");
+            text[start..]
+                .split(" of ")
+                .next()
+                .unwrap_or_default()
+                .to_string()
+        };
+        assert_eq!(position(&state), "lines 1-16");
+        state.handle_key(KeyAction::Down);
+        assert_eq!(position(&state), "lines 2-17");
+        state.handle_key(KeyAction::Char('j'));
+        assert_eq!(position(&state), "lines 3-18");
+        state.handle_key(KeyAction::Char('k'));
+        state.handle_key(KeyAction::Up);
+        assert_eq!(position(&state), "lines 1-16");
+        state.handle_key(KeyAction::PageDown);
+        assert_eq!(position(&state), "lines 16-31");
+        state.handle_key(KeyAction::PageUp);
+        assert_eq!(position(&state), "lines 1-16");
+        state.handle_key(KeyAction::End);
+        assert_eq!(position(&state), "lines 197-212");
+        state.handle_key(KeyAction::Home);
+        assert_eq!(position(&state), "lines 1-16");
+        assert!(state.result.is_none() && state.visible);
+    }
+
+    #[test]
+    fn targets_stay_in_view_while_the_detail_scrolls() {
+        let mut state = tall_overlay(212);
+        state.set_targets(vec!["src/main.rs".to_string(), "src/lib.rs".to_string()]);
+        for key in [None, Some(KeyAction::PageDown), Some(KeyAction::End)] {
+            if let Some(key) = key {
+                state.handle_key(key);
+            }
+            let text = painted(&state, 90, 24);
+            assert!(text.contains("src/main.rs"), "{key:?}: {text}");
+            assert!(text.contains("src/lib.rs"), "{key:?}: {text}");
+            assert!(text.contains("Apply this patch?"), "{key:?}: {text}");
+            assert!(text.contains("[ Yes ]"), "{key:?}: {text}");
+        }
+    }
+
+    #[test]
+    fn targets_that_do_not_fit_are_counted_above_and_listed_in_the_detail() {
+        let mut state = tall_overlay(3);
+        state.set_targets((1..=40).map(|n| format!("src/file_{n}.rs")).collect());
+
+        let text = painted(&state, 90, 24);
+        assert!(text.contains("src/file_4.rs"), "{text}");
+        assert!(
+            text.contains("and 36 more, all 40 are listed below"),
+            "{text}"
+        );
+        assert!(text.contains("Every target (40):"), "{text}");
+        assert!(!text.contains("src/file_40.rs"), "{text}");
+        assert_eq!(
+            state.handle_key(KeyAction::Char('y')),
+            ViewAction::Continue,
+            "the list has not been shown to its end"
+        );
+
+        state.handle_key(KeyAction::End);
+        let text = painted(&state, 90, 24);
+        assert!(text.contains("src/file_40.rs"), "{text}");
+        assert!(text.contains("+ change line 3"), "{text}");
+        assert_eq!(
+            state.handle_key(KeyAction::Char('y')),
+            ViewAction::Submit(0)
+        );
+    }
+
+    #[test]
+    fn set_targets_strips_terminal_escapes_and_drops_blank_names() {
+        let mut state = tall_overlay(1);
+        state.set_targets(vec!["src/\u{1b}[2Jmain.rs".to_string(), "  ".to_string()]);
+        assert_eq!(state.targets, vec!["src/main.rs".to_string()]);
+        assert!(state.render_text().contains("src/main.rs"));
+    }
+
+    #[test]
+    fn a_window_too_small_for_the_request_takes_no_allowing_answer() {
+        let mut state = tall_overlay(3);
+        let text = painted(&state, 90, 4);
+        assert!(text.contains("too small"), "{text}");
+        assert_eq!(state.handle_key(KeyAction::Char('y')), ViewAction::Continue);
+        assert_eq!(state.handle_key(KeyAction::Esc), ViewAction::Close);
+        assert_eq!(state.result, Some(ApprovalChoice::No));
+
+        let mut state = tall_overlay(3);
+        painted(&state, 90, 24);
+        painted(&state, 20, 24);
+        assert_eq!(
+            state.handle_key(KeyAction::Char('y')),
+            ViewAction::Continue,
+            "the latest draw could not hold the buttons"
+        );
+        painted(&state, 90, 24);
+        assert_eq!(
+            state.handle_key(KeyAction::Char('y')),
+            ViewAction::Submit(0)
+        );
+    }
+
+    #[test]
+    fn buttons_wrap_onto_more_rows_in_a_narrow_terminal() {
+        let state = open_overlay();
+        let text = painted(&state, 44, 20);
+        for label in [
+            "[ Yes ]",
+            "[ No ]",
+            "[ Allow Session ]",
+            "[ Always Allow ]",
+            "[ Deny All ]",
+            "[ Allow All ]",
+        ] {
+            assert!(text.contains(label), "{label} is not drawn: {text}");
+        }
+        assert_eq!(state.button_rows(40).len(), 3);
+        assert_eq!(state.button_rows(78).len(), 2);
+    }
+
+    #[test]
+    fn a_question_too_long_for_its_row_is_repeated_whole_in_the_detail() {
+        let mut state = ApprovalOverlayState::default();
+        state.open(
+            format!("{}TAIL_MARKER", "x".repeat(200)),
+            vec!["detail".to_string()],
+        );
+        let text = painted(&state, 90, 24);
+        assert!(text.contains('…'), "{text}");
+        assert!(text.contains("TAIL_MARKER"), "{text}");
+    }
+
+    #[test]
+    fn targets_name_what_each_kind_of_request_acts_on() {
+        use std::path::PathBuf;
+
+        assert_eq!(
+            targets_for(&ApprovalRequestKind::Patch {
+                files: vec![PathBuf::from("a.rs"), PathBuf::from("b.rs")],
+            }),
+            vec!["a.rs".to_string(), "b.rs".to_string()]
+        );
+        assert_eq!(
+            targets_for(&ApprovalRequestKind::FileWrite {
+                path: PathBuf::from("src/main.rs"),
+            }),
+            vec!["src/main.rs".to_string()]
+        );
+        assert_eq!(
+            targets_for(&ApprovalRequestKind::GitPush {
+                remote: "origin".to_string(),
+                branch: "main".to_string(),
+                force: true,
+            }),
+            vec!["origin main (force)".to_string()]
+        );
+        assert!(targets_for(&ApprovalRequestKind::Exec {
+            command: "ls".to_string(),
+        })
+        .is_empty());
     }
 
     #[test]

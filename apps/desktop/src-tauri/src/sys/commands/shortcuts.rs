@@ -95,6 +95,14 @@ impl ShortcutsState {
                 enabled: true,
                 is_global: true,
             },
+            Shortcut {
+                id: STOP_AGENTS_ACTION.to_string(),
+                key: STOP_AGENTS_DEFAULT_COMBO.to_string(),
+                description: "Stop desktop control and take the screen back".to_string(),
+                action: STOP_AGENTS_ACTION.to_string(),
+                enabled: true,
+                is_global: true,
+            },
             // Floating window mode - like ChatGPT companion
             Shortcut {
                 id: "floating_window".to_string(),
@@ -122,6 +130,13 @@ impl Default for ShortcutsState {
         Self::with_defaults()
     }
 }
+
+pub const STOP_AGENTS_ACTION: &str = "stop_agents";
+
+/// The chord Electron registers for the same action
+/// (`HOST_SHORTCUT_CHOICES.stop` in `packages/contracts/local-runtime`), so the
+/// emergency stop is the same on both desktops.
+pub const STOP_AGENTS_DEFAULT_COMBO: &str = "CommandOrControl+Alt+.";
 
 pub fn platform_default_quick_query_combo() -> &'static str {
     #[cfg(target_os = "macos")]
@@ -376,13 +391,19 @@ fn register_global_shortcut(app: &AppHandle, key: &str, action: String) -> Resul
         .parse()
         .map_err(|e| format!("Failed to parse shortcut '{}': {:?}", key, e))?;
 
-    let app_clone = app.clone();
     let action_clone = action.clone();
 
     app.global_shortcut()
         .on_shortcut(shortcut, move |_app, _shortcut, event| {
             if event.state == ShortcutState::Pressed {
                 tracing::info!("Global shortcut triggered: {}", action_clone);
+                // Taken here rather than in the webview, which may be hidden or
+                // throttled while an agent drives the screen. Every pointer and
+                // keyboard step checks it before running; the renderer then
+                // cancels the run itself.
+                if action_clone == STOP_AGENTS_ACTION {
+                    crate::automation::computer_use::control::take_over();
+                }
                 if let Err(e) = _app.emit("shortcut_action", &action_clone) {
                     tracing::error!("Failed to emit shortcut action: {}", e);
                 }
@@ -433,7 +454,6 @@ fn register_global_shortcut(app: &AppHandle, key: &str, action: String) -> Resul
         normalized_key,
         action
     );
-    let _ = app_clone.emit("shortcut_registered", action);
 
     Ok(())
 }
@@ -762,6 +782,21 @@ pub async fn shortcuts_unregister_global(key: String, app: AppHandle) -> Result<
 mod tests {
     use super::*;
 
+    /// `src/stores/shortcutStore.ts` adds whatever this event carries to its
+    /// list of shortcut records. The system-level registration used to emit
+    /// it too, with the bare action name, which landed in that list as a row.
+    #[test]
+    fn the_registered_event_only_ever_carries_a_shortcut_record() {
+        let event = concat!("emit(\"shortcut_", "registered\"");
+        let emits: Vec<&str> = include_str!("shortcuts.rs")
+            .lines()
+            .filter(|line| line.contains(event))
+            .collect();
+
+        assert_eq!(emits.len(), 1, "{emits:?}");
+        assert!(emits[0].contains(", shortcut)"), "{emits:?}");
+    }
+
     fn expected_primary_modifier() -> &'static str {
         #[cfg(target_os = "macos")]
         {
@@ -790,6 +825,22 @@ mod tests {
     fn normalizes_option_and_ctrl_aliases() {
         let combo = normalize_accelerator_for_platform("opt+ctrl+v");
         assert_eq!(combo, "Alt+Control+V");
+    }
+
+    #[test]
+    fn stop_agents_is_a_default_global_shortcut_on_the_electron_chord() {
+        let defaults = ShortcutsState::with_defaults();
+        let shortcuts = defaults.shortcuts.blocking_lock();
+        let stop = shortcuts
+            .get(STOP_AGENTS_ACTION)
+            .expect("stop shortcut is registered by default");
+        assert!(stop.is_global && stop.enabled);
+        assert_eq!(stop.action, STOP_AGENTS_ACTION);
+        assert_eq!(stop.key, "CommandOrControl+Alt+.");
+        assert_eq!(
+            normalize_accelerator_for_platform(&stop.key),
+            "CommandOrControl+Alt+."
+        );
     }
 
     #[test]

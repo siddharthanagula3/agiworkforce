@@ -29,7 +29,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
@@ -59,6 +59,7 @@ struct AgentTerminalLaunch {
     program: String,
     args: Vec<String>,
     sandboxed: bool,
+    warnings: Vec<String>,
     _sandbox_spec: Option<SandboxedCommandSpec>,
 }
 
@@ -424,64 +425,110 @@ impl TerminalExecutor {
         }
     }
 
-    /// Validate and canonicalize the working directory.
-    ///
-    /// # Arguments
-    ///
-    /// * `dir` - The directory path to validate
-    /// * `context` - The executor context for accessing allowed directories
-    ///
-    /// # Returns
-    ///
-    /// The canonicalized path if valid, or an error if access is denied.
-    fn validate_working_directory(
-        &self,
-        dir: &std::path::Path,
-        context: &ExecutorContext,
-    ) -> Result<PathBuf> {
-        // Canonicalize the path to resolve symlinks and prevent path traversal
-        let canonical_dir = std::fs::canonicalize(dir).map_err(|e| {
+    /// The folder an agent command may write and the folder it runs in. Only
+    /// a granted root is written, resolved through the system's own links;
+    /// the `cwd` the model names only sets where the command runs, and must
+    /// lie inside a granted root. Without one the command runs in the first
+    /// granted root, the project folder when one is open. The `cwd` is
+    /// compared with each root in its canonical spelling, and both folders
+    /// are returned in the root's walked spelling, which a shell accepts as
+    /// its working directory where a verbatim Windows path is refused.
+    fn agent_terminal_workspace(
+        cwd: Option<&Path>,
+        granted: &[PathBuf],
+    ) -> Result<(PathBuf, PathBuf)> {
+        let mut refused = Vec::new();
+        let roots: Vec<agiworkforce_sandbox_policy::host_path::ResolvedRoot> = granted
+            .iter()
+            .filter_map(|root| {
+                match std::path::absolute(root)
+                    .map_err(|error| error.to_string())
+                    .and_then(|root| {
+                        agiworkforce_sandbox_policy::host_path::resolve_root_spellings(&root)
+                    }) {
+                    Ok(root) => Some(root),
+                    Err(reason) => {
+                        refused.push(reason);
+                        None
+                    }
+                }
+            })
+            .filter(|root| {
+                root.canonical.is_dir()
+                    && crate::core::mcp::sandbox::is_safe_write_root(&root.canonical)
+            })
+            .collect();
+        let refusal = refused
+            .first()
+            .map(|reason| format!("; {reason}"))
+            .unwrap_or_default();
+
+        let Some(cwd) = cwd else {
+            let root = roots.into_iter().next().ok_or_else(|| {
+                anyhow!(
+                    "No project folder or allowed directory is open for agent commands{refusal}"
+                )
+            })?;
+            return Ok((root.walked.clone(), root.walked));
+        };
+        let working_dir = std::fs::canonicalize(cwd).map_err(|e| {
             anyhow!(
                 "Invalid or inaccessible working directory '{}': {}",
-                dir.display(),
+                cwd.display(),
                 e
             )
         })?;
-
-        // Verify it's actually a directory
-        if !canonical_dir.is_dir() {
+        if !working_dir.is_dir() {
             return Err(anyhow!(
                 "Working directory '{}' is not a valid directory",
-                dir.display()
+                cwd.display()
             ));
         }
+        let root = roots
+            .into_iter()
+            .filter(|root| working_dir.starts_with(&root.canonical))
+            .min_by_key(|root| root.canonical.components().count())
+            .ok_or_else(|| {
+                tracing::error!(
+                    "[TerminalExecutor] SECURITY: Working directory '{}' resolved to '{}' which is outside the granted folders",
+                    cwd.display(),
+                    working_dir.display()
+                );
+                anyhow!(
+                    "Access denied: working directory '{}' is outside the folders granted to the agent{refusal}",
+                    cwd.display()
+                )
+            })?;
+        let inside = working_dir.strip_prefix(&root.canonical)?;
+        Ok((root.walked.clone(), root.walked.join(inside)))
+    }
 
-        // Validate path is within allowed directories
-        let allowed_directories = context.get_allowed_directories();
-        let path_allowed = if allowed_directories.is_empty() {
-            tracing::warn!(
-                "[TerminalExecutor] No allowed_directories configured - terminal cwd unrestricted"
-            );
-            true
-        } else {
-            allowed_directories
-                .iter()
-                .any(|allowed_dir| canonical_dir.starts_with(allowed_dir))
+    /// The folders the user granted agent commands: the project folder, the
+    /// directories allowed in settings and the paths approved this session
+    /// for changes or for running commands, never one approved only to read.
+    async fn granted_roots(
+        context: &ExecutorContext,
+        allowed_directories: &[String],
+    ) -> Vec<PathBuf> {
+        let Some(app_handle) = context.app_handle.as_ref() else {
+            return Vec::new();
         };
-
-        if !path_allowed {
-            tracing::error!(
-                "[TerminalExecutor] SECURITY: Working directory '{}' resolved to '{}' which is outside allowed directories",
-                dir.display(),
-                canonical_dir.display()
-            );
-            return Err(anyhow!(
-                "Access denied: working directory '{}' is outside allowed directories",
-                dir.display()
+        use tauri::Manager;
+        let mut granted = Vec::new();
+        if let Some(project) =
+            app_handle.try_state::<crate::sys::commands::project_context::ProjectContextState>()
+        {
+            granted.extend(project.get_folder().await.map(PathBuf::from));
+        }
+        granted.extend(allowed_directories.iter().map(PathBuf::from));
+        if let Some(confirmation) =
+            app_handle.try_state::<crate::sys::commands::ToolConfirmationState>()
+        {
+            granted.extend(confirmation.get_session_allowed_paths_where(
+                crate::sys::commands::tool_confirmation::SessionFolderGrant::lets_commands_write,
             ));
         }
-
-        Ok(canonical_dir)
+        granted
     }
 
     /// Determine the shell command and argument based on platform and user preference.
@@ -541,12 +588,14 @@ impl TerminalExecutor {
                 program: spec.program.clone(),
                 args: spec.args.clone(),
                 sandboxed: true,
+                warnings: spec.warnings.clone(),
                 _sandbox_spec: Some(spec),
             }),
             None => Ok(AgentTerminalLaunch {
-                program: program.to_string(),
+                program: crate::core::mcp::sandbox::host_shell(program),
                 args: args.to_vec(),
                 sandboxed: false,
+                warnings: Vec::new(),
                 _sandbox_spec: None,
             }),
         }
@@ -627,19 +676,15 @@ impl TerminalExecutor {
         // SECURITY: Check blocklist/allowlist patterns
         self.validate_command(command, &security_mode)?;
 
-        // Get optional working directory
         let cwd = parameters
             .get("cwd")
             .and_then(|v| v.as_str())
             .filter(|s| !s.is_empty())
             .map(PathBuf::from);
-
-        // SECURITY: Validate working directory if provided
-        let canonical_cwd = if let Some(ref dir) = cwd {
-            Some(self.validate_working_directory(dir, context)?)
-        } else {
-            None
-        };
+        let (sandbox_preferences, allowed_directories) =
+            Self::load_terminal_sandbox_settings(context).await?;
+        let granted = Self::granted_roots(context, &allowed_directories).await;
+        let (write_root, working_dir) = Self::agent_terminal_workspace(cwd.as_deref(), &granted)?;
 
         // Get optional shell type
         let shell = parameters
@@ -669,7 +714,7 @@ impl TerminalExecutor {
             "[TerminalExecutor] Executing terminal command: shell={} timeout_ms={} cwd={:?} stream={}",
             shell_cmd,
             timeout_ms,
-            canonical_cwd,
+            working_dir,
             stream_output
         );
 
@@ -684,15 +729,10 @@ impl TerminalExecutor {
         }
 
         let shell_args = vec![shell_arg.to_string(), command.to_string()];
-        let cwd_string = canonical_cwd
-            .as_ref()
-            .map(|path| path.to_string_lossy().into_owned());
-        let (sandbox_preferences, allowed_directories) =
-            Self::load_terminal_sandbox_settings(context).await?;
         let launch = Self::build_agent_terminal_launch(
             shell_cmd,
             &shell_args,
-            cwd_string.as_deref(),
+            Some(write_root.to_string_lossy().as_ref()),
             &allowed_directories,
             &sandbox_preferences,
         )?;
@@ -708,10 +748,7 @@ impl TerminalExecutor {
         let mut cmd = Command::new(&launch.program);
         cmd.args(&launch.args);
 
-        // Set working directory if provided
-        if let Some(ref dir) = canonical_cwd {
-            cmd.current_dir(dir);
-        }
+        cmd.current_dir(&working_dir);
 
         // Capture stdout and stderr
         cmd.stdout(std::process::Stdio::piped());
@@ -719,6 +756,10 @@ impl TerminalExecutor {
 
         // Prevent the command from inheriting stdin (security measure)
         cmd.stdin(std::process::Stdio::null());
+
+        // A cancelled run, or quit, drops this future mid-wait; without this
+        // the command would keep running with nothing left to stop it.
+        cmd.kill_on_drop(true);
 
         // Execute with streaming or batch mode
         let result = if stream_output {
@@ -749,10 +790,7 @@ impl TerminalExecutor {
                         TerminalCommand {
                             id: uuid::Uuid::new_v4().to_string(),
                             command: command.to_string(),
-                            cwd: canonical_cwd
-                                .as_ref()
-                                .map(|p| p.to_string_lossy().to_string())
-                                .unwrap_or_else(|| ".".to_string()),
+                            cwd: working_dir.to_string_lossy().to_string(),
                             exit_code,
                             stdout: Some(stdout.clone()),
                             stderr: Some(stderr.clone()),
@@ -804,7 +842,8 @@ impl TerminalExecutor {
                     "timed_out": timed_out,
                     "shell": shell_cmd,
                     "sandboxed": launch.sandboxed,
-                    "cwd": canonical_cwd.as_ref().map(|p| p.to_string_lossy().to_string()),
+                    "sandbox_warnings": &launch.warnings,
+                    "cwd": working_dir.to_string_lossy().to_string(),
                     "execution_time_ms": execution_time_ms
                 }))
             }
@@ -819,10 +858,7 @@ impl TerminalExecutor {
                         TerminalCommand {
                             id: uuid::Uuid::new_v4().to_string(),
                             command: command.to_string(),
-                            cwd: canonical_cwd
-                                .as_ref()
-                                .map(|p| p.to_string_lossy().to_string())
-                                .unwrap_or_else(|| ".".to_string()),
+                            cwd: working_dir.to_string_lossy().to_string(),
                             exit_code: None,
                             stdout: None,
                             stderr: Some(e.to_string()),
@@ -1269,6 +1305,9 @@ mod tests {
 
     #[test]
     fn agent_terminal_launch_uses_configured_sandbox() {
+        let _env = crate::sys::utils::APP_DATA_DIR_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let cwd = std::env::current_dir().unwrap();
         let launch = TerminalExecutor::build_agent_terminal_launch(
             "bash",
@@ -1294,6 +1333,66 @@ mod tests {
     }
 
     #[test]
+    fn an_agent_command_writes_only_a_granted_root_and_runs_inside_one() {
+        let tree = tempfile::tempdir().unwrap();
+        let tree = tree.path().canonicalize().unwrap();
+        let project = tree.join("project");
+        let nested = project.join("src");
+        let outside = tree.join("outside");
+        for dir in [&nested, &outside] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        let granted = vec![project.clone()];
+
+        let (write_root, working_dir) =
+            TerminalExecutor::agent_terminal_workspace(Some(nested.as_path()), &granted).unwrap();
+        assert_eq!(write_root, project, "the cwd is never a write root itself");
+        assert_eq!(working_dir, nested);
+        assert_eq!(
+            TerminalExecutor::agent_terminal_workspace(None, &granted).unwrap(),
+            (project.clone(), project.clone())
+        );
+
+        for cwd in [
+            outside.clone(),
+            dirs::home_dir().unwrap(),
+            PathBuf::from("/"),
+        ] {
+            let error = TerminalExecutor::agent_terminal_workspace(Some(cwd.as_path()), &granted)
+                .expect_err("a cwd outside every granted root is refused")
+                .to_string();
+            assert!(error.contains("outside the folders granted"), "{error}");
+        }
+        assert!(
+            TerminalExecutor::agent_terminal_workspace(None, &[]).is_err(),
+            "with nothing granted there is no folder to write"
+        );
+        let home = dirs::home_dir().unwrap();
+        assert!(
+            TerminalExecutor::agent_terminal_workspace(Some(home.as_path()), &[home.clone()])
+                .is_err(),
+            "the home folder is never a write root"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_granted_root_behind_a_users_link_is_not_written() {
+        let tree = tempfile::tempdir().unwrap();
+        let tree = tree.path().canonicalize().unwrap();
+        let real = tree.join("real");
+        let link = tree.join("link");
+        std::fs::create_dir(&real).unwrap();
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        let error =
+            TerminalExecutor::agent_terminal_workspace(Some(real.as_path()), &[link.clone()])
+                .expect_err("a link a command could have made grants nothing")
+                .to_string();
+        assert!(error.contains("goes through a link"), "{error}");
+    }
+
+    #[test]
     fn agent_terminal_launch_preserves_shell_when_sandbox_is_disabled() {
         let launch = TerminalExecutor::build_agent_terminal_launch(
             "bash",
@@ -1305,7 +1404,11 @@ mod tests {
         .unwrap();
 
         assert!(!launch.sandboxed);
-        assert_eq!(launch.program, "bash");
+        assert_eq!(
+            launch.program,
+            crate::core::mcp::sandbox::host_shell("bash"),
+            "a host shell is named by absolute path where it can be"
+        );
         assert_eq!(launch.args, vec!["-c".to_string(), "pwd".to_string()]);
     }
 

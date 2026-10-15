@@ -13,6 +13,9 @@ const MCP_SERVER_USER_ID: &str = "mcp-server";
 const DEFAULT_BASH_TIMEOUT_SECS: u64 = 30;
 const MAX_BASH_TIMEOUT_SECS: u64 = 300;
 const DEFAULT_AGENT_TIMEOUT_SECS: u64 = 300;
+const RUN_TASK_TOOL: &str = "agi_run_task";
+const RUN_TASK_APPROVAL_PROMPT: &str =
+    "Another app on this computer asked AGI Workforce to run this agent task.";
 
 #[derive(Debug, Clone)]
 pub struct McpServerToolOutcome {
@@ -62,6 +65,12 @@ pub trait McpServerExecutor: Send + Sync {
         tool_name: &str,
         arguments: HashMap<String, Value>,
     ) -> Result<McpServerToolOutcome, String>;
+
+    /// Why a tool is off for now, when a capability switch in Settings says
+    /// so. A tool that is off is left out of `tools/list` and refused on call.
+    fn switched_off(&self, _tool_name: &str) -> Option<String> {
+        None
+    }
 }
 
 pub struct DesktopMcpServerExecutor {
@@ -185,7 +194,6 @@ impl DesktopMcpServerExecutor {
                 "Custom system prompts are disabled for external MCP agi_chat calls.".to_string(),
             ));
         }
-        let explicit_model_selection = model != "auto";
 
         let request = ChatSendMessageRequest {
             conversation_id: None,
@@ -195,13 +203,10 @@ impl DesktopMcpServerExecutor {
             model: Some(model),
             provider_override: None,
             model_override: None,
-            strategy: None,
             stream: Some(false),
             enable_tools: Some(false),
             tool_scope: None,
             conversation_mode: None,
-            workflow_hash: None,
-            task_metadata: None,
             focus_mode: None,
             research_task_id: None,
             attachments: None,
@@ -221,8 +226,8 @@ impl DesktopMcpServerExecutor {
             project_folder: None,
             model_capabilities: None,
             incognito: Some(true),
+            temporary_history: None,
             auto_inject_skills: Some(false),
-            is_explicit_model_selection: Some(explicit_model_selection),
         };
 
         let response = crate::sys::commands::chat_send_message(
@@ -321,7 +326,6 @@ impl DesktopMcpServerExecutor {
             model: Some("auto".to_string()),
             provider_override: None,
             model_override: None,
-            strategy: None,
             stream: Some(false),
             // The external MCP bridge has no typed, enforced mapping from its
             // free-form allowed-tool names to Desktop's native tool registry.
@@ -329,8 +333,6 @@ impl DesktopMcpServerExecutor {
             enable_tools: Some(false),
             tool_scope: None,
             conversation_mode: None,
-            workflow_hash: None,
-            task_metadata: None,
             focus_mode: None,
             research_task_id: None,
             attachments: None,
@@ -350,8 +352,8 @@ impl DesktopMcpServerExecutor {
             project_folder: None,
             model_capabilities: None,
             incognito: Some(true),
+            temporary_history: None,
             auto_inject_skills: Some(false),
-            is_explicit_model_selection: Some(false),
         };
 
         let response = crate::sys::commands::chat_send_message(
@@ -522,7 +524,7 @@ impl DesktopMcpServerExecutor {
         arguments: HashMap<String, Value>,
     ) -> Result<McpServerToolOutcome, String> {
         if let Some(outcome) = self
-            .validate_mcp_server_tool_policy("agi_run_task", &arguments)
+            .validate_mcp_server_tool_policy(RUN_TASK_TOOL, &arguments)
             .await
         {
             return Ok(outcome);
@@ -541,6 +543,17 @@ impl DesktopMcpServerExecutor {
             Ok(None) => 10,
             Err(outcome) => return Ok(outcome),
         };
+
+        if let Err(refusal) = crate::core::agi::executor::require_tool_approval(
+            &self.app_handle,
+            RUN_TASK_TOOL,
+            &json!({ "task": task, "max_steps": max_steps }),
+            Some(RUN_TASK_APPROVAL_PROMPT),
+        )
+        .await
+        {
+            return Ok(self.outcome_from_error(refusal.to_string()));
+        }
 
         let spawn_request = SpawnAgentRequest {
             description: task.clone(),
@@ -672,14 +685,32 @@ where
 
 #[async_trait]
 impl McpServerExecutor for DesktopMcpServerExecutor {
+    fn switched_off(&self, tool_name: &str) -> Option<String> {
+        crate::sys::commands::capabilities::capability_refusal_now(&self.app_handle, tool_name)
+    }
+
     async fn execute_tool(
         &self,
         tool_name: &str,
         arguments: HashMap<String, Value>,
     ) -> Result<McpServerToolOutcome, String> {
+        if let Some(off) = self.switched_off(tool_name) {
+            return Ok(McpServerToolOutcome::error(off, None));
+        }
+
+        // `agi_bash` ends in the terminal command, which runs the same gate
+        // under `terminal_execute`, the name a hook is written against.
+        if tool_name != "agi_bash" {
+            if let Err(refusal) =
+                crate::ui::hooks::gate_tool_use(tool_name, arguments.clone()).await
+            {
+                return Ok(McpServerToolOutcome::error(refusal, None));
+            }
+        }
+
         match tool_name {
             "agi_chat" => self.execute_chat(arguments).await,
-            "agi_run_task" => self.execute_run_task(arguments).await,
+            RUN_TASK_TOOL => self.execute_run_task(arguments).await,
             "agi_execute_skill" => self.execute_skill(arguments).await,
             "agi_bash" => self.execute_bash(arguments).await,
             "agi_research" => self.execute_research(arguments).await,
@@ -750,6 +781,120 @@ mod tests {
         assert!(started.load(Ordering::SeqCst));
         assert!(outcome.is_error);
         assert_eq!(outcome.text, "launched");
+    }
+
+    #[tokio::test]
+    async fn every_listed_server_tool_has_a_guard_policy() {
+        use crate::core::mcp::server::tools::McpServerToolRegistry;
+        use crate::sys::security::ToolExecutionGuard;
+
+        let guard = ToolExecutionGuard::new();
+        for tool in McpServerToolRegistry::list_tools(&[]) {
+            let name = tool["name"].as_str().expect("tool name");
+            let judged_as = if name == "agi_bash" {
+                "terminal_execute"
+            } else {
+                name
+            };
+            assert!(
+                guard.get_risk_level(judged_as).is_some(),
+                "'{name}' has no guard policy, so the guard refuses every call"
+            );
+        }
+
+        guard
+            .validate_tool_call("agi_chat", &json!({ "message": "hello" }))
+            .await
+            .expect("a chat with no tools is allowed");
+        guard
+            .validate_tool_call(
+                "agi_execute_skill",
+                &json!({ "skill_name": "summarize", "input": "text" }),
+            )
+            .await
+            .expect("a skill run with no tools is allowed");
+        guard
+            .validate_tool_call(
+                "agi_research",
+                &json!({ "query": "rust", "depth": "quick" }),
+            )
+            .await
+            .expect("web research is allowed");
+        guard
+            .validate_tool_call(super::RUN_TASK_TOOL, &json!({ "task": "tidy", "cwd": "/" }))
+            .await
+            .expect_err("an argument the tool does not declare is refused");
+    }
+
+    #[test]
+    fn only_the_agent_run_asks_and_no_standing_grant_answers_for_it() {
+        use crate::sys::commands::tool_confirmation::may_stand_on_a_prior_approval;
+        use crate::sys::security::ToolExecutionGuard;
+
+        let guard = ToolExecutionGuard::new();
+        for read_only in ["agi_chat", "agi_execute_skill", "agi_research"] {
+            assert!(
+                !guard.get_safety_tier(read_only).requires_user_action(),
+                "{read_only}"
+            );
+        }
+        assert!(guard
+            .get_safety_tier(super::RUN_TASK_TOOL)
+            .requires_user_action());
+        assert!(!may_stand_on_a_prior_approval(super::RUN_TASK_TOOL));
+    }
+
+    #[tokio::test]
+    async fn an_agent_run_reaches_the_dialog_even_in_autopilot() {
+        use crate::sys::commands::tool_confirmation::{AgentMode, ToolConfirmationState};
+        use tauri::Manager;
+
+        let app = tauri::test::mock_app();
+        let state = ToolConfirmationState::new();
+        state.set_agent_mode(AgentMode::Autopilot);
+        state.set_auto_approve_all(true);
+        state.approve_for_session(super::RUN_TASK_TOOL);
+        state.remember_choice(super::RUN_TASK_TOOL, true);
+        app.handle().manage(state);
+
+        let settled = tokio::time::timeout(
+            std::time::Duration::from_millis(250),
+            crate::core::agi::executor::require_tool_approval(
+                app.handle(),
+                super::RUN_TASK_TOOL,
+                &json!({ "task": "tidy the desktop", "max_steps": 10 }),
+                Some(super::RUN_TASK_APPROVAL_PROMPT),
+            ),
+        )
+        .await;
+
+        assert!(
+            settled.is_err(),
+            "auto-approve-all, a session approval and a stored allow must all be ignored"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_agent_run_is_refused_outright_in_safe_mode() {
+        use crate::sys::commands::tool_confirmation::{AgentMode, ToolConfirmationState};
+        use tauri::Manager;
+
+        let app = tauri::test::mock_app();
+        let state = ToolConfirmationState::new();
+        state.set_agent_mode(AgentMode::Safe);
+        app.handle().manage(state);
+
+        let refusal = crate::core::agi::executor::require_tool_approval(
+            app.handle(),
+            super::RUN_TASK_TOOL,
+            &json!({ "task": "tidy the desktop" }),
+            None,
+        )
+        .await
+        .expect_err("safe mode starts no agent")
+        .to_string();
+
+        assert!(refusal.contains("not permitted in safe mode"), "{refusal}");
     }
 
     #[test]

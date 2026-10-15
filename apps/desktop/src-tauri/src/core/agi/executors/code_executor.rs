@@ -785,7 +785,7 @@ impl CodeExecutor {
         context: &ExecutorContext,
         trust_mode: Option<agiworkforce_model_registry::TrustMode>,
     ) -> Option<String> {
-        use crate::core::llm::{ChatMessage, LLMRequest, RouterPreferences, RoutingStrategy};
+        use crate::core::llm::{ChatMessage, LLMRequest};
 
         // Limit code length for LLM analysis
         let code_preview = if code.len() > 4000 {
@@ -807,28 +807,9 @@ impl CodeExecutor {
             language, analysis_type, language, code_preview
         );
 
-        let fast_model = crate::core::llm::models_config::get_task_model(
-            &crate::core::llm::Provider::Anthropic,
-            "fast_completion",
-        )
-        .to_string();
-        let preferences = RouterPreferences {
-            provider: Some(crate::core::llm::Provider::Anthropic),
-            model: Some(fast_model.clone()),
-            strategy: RoutingStrategy::Auto,
-            context: None,
-            prefer_cloud_credits: false,
-            local_only: false,
-            managed_cloud_only: false,
-            // TRUST BOUNDARY (desktop-trust-boundary-01): threaded from the
-            // executing goal (`ExecutionContext.goal.trust_mode`); absent,
-            // `llm_router::effective_trust_mode` fails closed to Local, and
-            // the explicit `Provider::Anthropic` above is rejected outside a
-            // BYOK boundary.
-            trust_mode,
-        };
+        let preferences = Self::analysis_preferences(trust_mode);
 
-        let request = LLMRequest {
+        let mut request = LLMRequest {
             messages: vec![ChatMessage {
                 role: "user".to_string(),
                 content: prompt,
@@ -836,7 +817,7 @@ impl CodeExecutor {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: fast_model,
+            model: String::new(),
             temperature: Some(0.3),
             max_tokens: Some(500),
             stream: false,
@@ -849,8 +830,9 @@ impl CodeExecutor {
         let router = context.router.read().await;
         let candidates = router.candidates(&request, &preferences);
 
-        if !candidates.is_empty() {
-            match router.invoke_candidate(&candidates[0], &request).await {
+        if let Some(candidate) = candidates.first() {
+            request.model = candidate.model.clone();
+            match router.invoke_candidate(candidate, &request).await {
                 Ok(outcome) => {
                     drop(router);
                     Some(outcome.response.content)
@@ -865,6 +847,24 @@ impl CodeExecutor {
             drop(router);
             tracing::debug!("[CodeExecutor] No LLM candidates available for code analysis");
             None
+        }
+    }
+
+    /// No provider or model is pinned: the trust-aware Auto strategy picks a
+    /// provider inside the goal's boundary, and an absent trust mode fails
+    /// closed to Local in `llm_router::effective_trust_mode`.
+    fn analysis_preferences(
+        trust_mode: Option<agiworkforce_model_registry::TrustMode>,
+    ) -> crate::core::llm::RouterPreferences {
+        crate::core::llm::RouterPreferences {
+            provider: None,
+            model: None,
+            strategy: crate::core::llm::RoutingStrategy::Auto,
+            context: None,
+            prefer_cloud_credits: false,
+            local_only: false,
+            managed_cloud_only: false,
+            trust_mode,
         }
     }
 }
@@ -960,16 +960,13 @@ mod tests {
     fn create_test_context() -> ExecutorContext {
         ExecutorContext {
             app_handle: None,
-            automation: Arc::new(
-                crate::automation::AutomationService::new()
-                    .expect("Failed to create AutomationService for tests"),
-            ),
             router: Arc::new(tokio::sync::RwLock::new(crate::core::llm::LLMRouter::new())),
             tool_cache: Arc::new(crate::data::cache::ToolResultCache::new()),
             security_guard: Arc::new(crate::sys::security::ToolExecutionGuard::new()),
             change_tracker: None,
             session_id: "test_session".to_string(),
             tool_id: "test_tool".to_string(),
+            granted_directories: Vec::new(),
         }
     }
 

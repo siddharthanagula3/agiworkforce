@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "wdio",
+  "description": "WebdriverIO E2E bridge for the main window, plus the window resizing wdio/specs/layout-resize-matrix.spec.ts drives. Enabled only by tauri.conf.wdio.json; release builds list default and recorder-hud alone.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "wdio-webdriver:default",
+    "wdio:default",
+    "core:window:allow-set-size"
+  ]
+}

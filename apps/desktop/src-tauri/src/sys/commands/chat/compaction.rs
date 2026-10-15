@@ -167,6 +167,59 @@ pub(super) async fn compact_context(
     })
 }
 
+/// How much of the model's context window a conversation's saved history
+/// already fills. The window comes from the model catalog.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextUsageResponse {
+    pub tokens_used: usize,
+    pub context_window: usize,
+}
+
+/// Estimate the saved history's token count against `model`'s context window.
+/// Returns `None` when the catalog defines no window for the model.
+#[tauri::command]
+pub async fn chat_get_context_usage(
+    db: State<'_, AppDatabase>,
+    conversation_id: i64,
+    user_id: String,
+    model: Option<String>,
+) -> Result<Option<ContextUsageResponse>, String> {
+    if conversation_id <= 0 {
+        return Err(format!(
+            "Invalid conversation ID: {}. ID must be positive",
+            conversation_id
+        ));
+    }
+    let messages = {
+        let conn = db.connection()?;
+        repository::get_conversation(&conn, conversation_id, &user_id)
+            .map_err(|e| format!("Access denied or conversation not found: {e}"))?;
+        repository::list_messages(&conn, conversation_id)
+            .map_err(|e| format!("Failed to load messages: {e}"))?
+    };
+    let model = model.or_else(|| {
+        messages
+            .iter()
+            .rev()
+            .find_map(|message| message.model.clone())
+    });
+    let Some(context_window) = resolve_context_window(model.as_deref()) else {
+        return Ok(None);
+    };
+    let tokens_used = messages
+        .iter()
+        .map(|message| {
+            crate::core::llm::token_counter::TokenCounter::estimate_text_tokens(&message.content)
+                as usize
+        })
+        .sum();
+    Ok(Some(ContextUsageResponse {
+        tokens_used,
+        context_window,
+    }))
+}
+
 fn validate_compaction_focus(focus: Option<String>) -> Result<Option<String>, String> {
     let Some(focus) = focus else {
         return Ok(None);
@@ -227,14 +280,6 @@ pub(super) fn persist_compacted_context(
     )
     .map_err(|e| format!("Failed to mark conversation as updated: {e}"))?;
 
-    for message in old_messages {
-        tx.execute(
-            "DELETE FROM messages WHERE id = ?1 AND conversation_id = ?2",
-            rusqlite::params![message.id, conversation_id],
-        )
-        .map_err(|e| format!("Failed to remove compacted message {}: {e}", message.id))?;
-    }
-
     tx.execute(
         "INSERT INTO messages (
             conversation_id,
@@ -264,6 +309,15 @@ pub(super) fn persist_compacted_context(
         ],
     )
     .map_err(|e| format!("Failed to save compacted summary: {e}"))?;
+    let summary_id = tx.last_insert_rowid();
+
+    for message in old_messages {
+        tx.execute(
+            "UPDATE messages SET compacted_into = ?1 WHERE id = ?2 AND conversation_id = ?3",
+            rusqlite::params![summary_id, message.id, conversation_id],
+        )
+        .map_err(|e| format!("Failed to mark compacted message {}: {e}", message.id))?;
+    }
 
     tx.commit()
         .map_err(|e| format!("Failed to commit compacted context: {e}"))?;
@@ -359,6 +413,22 @@ mod tests {
                 "message-11",
             ]
         );
+
+        let transcript: Vec<String> = {
+            let conn = db.connection().expect("db connection");
+            crate::data::db::repository::list_messages_with_detail(&conn, conversation_id)
+                .expect("list transcript")
+                .into_iter()
+                .map(|detail| detail.message.content)
+                .collect()
+        };
+        assert_eq!(
+            transcript.len(),
+            13,
+            "the summarized messages stay in the transcript"
+        );
+        assert!(transcript.contains(&"message-0".to_string()));
+        assert!(transcript.contains(&"message-1".to_string()));
     }
 
     /// A million-token model must keep its recent turns. Under the old flat

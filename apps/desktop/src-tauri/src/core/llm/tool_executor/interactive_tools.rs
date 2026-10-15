@@ -1,8 +1,7 @@
 use super::*;
 
-use std::sync::LazyLock;
+use std::sync::{LazyLock, Mutex as StdMutex, MutexGuard};
 use tokio::sync::oneshot;
-use tokio::sync::Mutex as TokioMutex;
 
 /// Global map of pending question IDs to their oneshot response senders.
 ///
@@ -10,8 +9,17 @@ use tokio::sync::Mutex as TokioMutex;
 /// and the sender is stored here. The frontend receives the question via a
 /// Tauri event, collects the user's answer, and calls the `question_answer`
 /// Tauri command which resolves the pending sender.
-static PENDING_QUESTIONS: LazyLock<TokioMutex<HashMap<String, oneshot::Sender<Value>>>> =
-    LazyLock::new(|| TokioMutex::new(HashMap::new()));
+///
+/// A std mutex, never held across an await, so `PendingQuestionGuard::drop`
+/// can always take it.
+static PENDING_QUESTIONS: LazyLock<StdMutex<HashMap<String, oneshot::Sender<Value>>>> =
+    LazyLock::new(|| StdMutex::new(HashMap::new()));
+
+fn pending_questions() -> MutexGuard<'static, HashMap<String, oneshot::Sender<Value>>> {
+    PENDING_QUESTIONS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 impl ToolExecutor {
     /// Execute the `question` tool: emit a question event to the frontend and
@@ -70,10 +78,7 @@ impl ToolExecutor {
         let (tx, rx) = oneshot::channel();
 
         // Store sender in pending questions map
-        {
-            let mut pending = PENDING_QUESTIONS.lock().await;
-            pending.insert(question_id.clone(), tx);
-        }
+        pending_questions().insert(question_id.clone(), tx);
 
         // Emit question event to the frontend
         if let Some(ref app_handle) = self.app_handle {
@@ -87,8 +92,7 @@ impl ToolExecutor {
                 }),
             ) {
                 // Clean up the pending entry on emission failure
-                let mut pending = PENDING_QUESTIONS.lock().await;
-                pending.remove(&question_id);
+                pending_questions().remove(&question_id);
                 return Ok(ToolResult {
                     success: false,
                     data: json!({
@@ -100,8 +104,7 @@ impl ToolExecutor {
                 });
             }
         } else {
-            let mut pending = PENDING_QUESTIONS.lock().await;
-            pending.remove(&question_id);
+            pending_questions().remove(&question_id);
             return Ok(ToolResult {
                 success: false,
                 data: json!({
@@ -113,33 +116,35 @@ impl ToolExecutor {
             });
         }
 
-        // Wait for the user's response with a 60-second timeout
-        let answer = match tokio::time::timeout(std::time::Duration::from_secs(60), rx).await {
-            Ok(Ok(value)) => value,
-            Ok(Err(_)) => {
-                // Channel closed unexpectedly (sender dropped)
-                return Ok(ToolResult {
-                    success: false,
-                    data: json!({
-                        "success": false,
-                        "error": "Question channel closed unexpectedly"
-                    }),
-                    error: Some("Question channel closed unexpectedly".to_string()),
-                    metadata: HashMap::from([("tool_name".to_string(), json!("question"))]),
-                });
-            }
-            Err(_) => {
-                let mut pending = PENDING_QUESTIONS.lock().await;
-                pending.remove(&question_id);
-                return Ok(ToolResult {
-                    success: false,
-                    data: json!({
-                        "success": false,
-                        "error": "Question timed out after 60 seconds"
-                    }),
-                    error: Some("Question timed out after 60 seconds".to_string()),
-                    metadata: HashMap::from([("tool_name".to_string(), json!("question"))]),
-                });
+        let _pending = PendingQuestionGuard(question_id.clone());
+        let _waiting_on_user = crate::sys::commands::chat::state::UserWaitGuard::start();
+        let mut rx = rx;
+        let deadline = tokio::time::sleep(std::time::Duration::from_secs(
+            crate::sys::commands::chat::state::USER_ANSWER_TIMEOUT_SECS,
+        ));
+        tokio::pin!(deadline);
+        let mut stop_poll = tokio::time::interval(std::time::Duration::from_millis(200));
+        stop_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let answer = loop {
+            tokio::select! {
+                received = &mut rx => match received {
+                    Ok(value) => break value,
+                    Err(_) => return Ok(question_failure("Question channel closed unexpectedly")),
+                },
+                _ = &mut deadline => {
+                    return Ok(question_failure(&format!(
+                        "The user did not answer within {} minutes",
+                        crate::sys::commands::chat::state::USER_ANSWER_TIMEOUT_SECS / 60
+                    )));
+                }
+                _ = stop_poll.tick() => {
+                    let stopped = self.conversation_id.is_some_and(
+                        crate::sys::commands::chat::state::should_stop_for_conversation,
+                    );
+                    if stopped {
+                        return Ok(question_failure("The user stopped the reply before answering"));
+                    }
+                }
             }
         };
 
@@ -156,17 +161,56 @@ impl ToolExecutor {
     }
 }
 
+/// Removes a question from the pending map however its wait ends, including
+/// when the chat aborts the tool because the user stopped or cancelled it.
+struct PendingQuestionGuard(String);
+
+impl Drop for PendingQuestionGuard {
+    fn drop(&mut self) {
+        pending_questions().remove(&self.0);
+    }
+}
+
+fn question_failure(error: &str) -> ToolResult {
+    ToolResult {
+        success: false,
+        data: json!({ "success": false, "error": error }),
+        error: Some(error.to_string()),
+        metadata: HashMap::from([("tool_name".to_string(), json!("question"))]),
+    }
+}
+
 /// Called by the `question_answer` Tauri command when the user submits their answer.
 ///
 /// Resolves the pending oneshot channel for the given question ID, unblocking
 /// the `execute_question_tool` future that is waiting for the response.
 pub async fn submit_question_answer(id: String, answer: Value) -> Result<()> {
-    let mut pending = PENDING_QUESTIONS.lock().await;
-    if let Some(tx) = pending.remove(&id) {
+    let sender = pending_questions().remove(&id);
+    if let Some(tx) = sender {
         // send() returns Err if receiver was dropped, but we don't need to surface that
         let _ = tx.send(answer);
         Ok(())
     } else {
         Err(anyhow!("No pending question with id: {}", id))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn an_abandoned_question_leaves_the_pending_map() {
+        let (tx, _rx) = oneshot::channel();
+        pending_questions().insert("q-abandoned".to_string(), tx);
+
+        drop(PendingQuestionGuard("q-abandoned".to_string()));
+
+        assert!(!pending_questions().contains_key("q-abandoned"));
+        assert!(
+            submit_question_answer("q-abandoned".to_string(), json!("late"))
+                .await
+                .is_err()
+        );
     }
 }

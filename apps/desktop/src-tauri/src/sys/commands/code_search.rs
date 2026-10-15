@@ -233,7 +233,6 @@ fn is_likely_binary(path: &Path) -> bool {
 /// * `case_insensitive`, If true, search is case-insensitive.
 /// * `output_mode`, `"content"` (default), `"files_with_matches"`, or `"count"`.
 /// * `context_lines`, Number of lines to include before and after each match (content mode only).
-#[tauri::command]
 pub async fn grep_search(
     pattern: String,
     root: Option<String>,
@@ -494,7 +493,6 @@ fn grep_blocking(
 /// * `pattern`, Glob pattern relative to `root`.
 /// * `root`, Optional root directory. Defaults to project folder / cwd.
 /// * `limit`, Max results (default 200, max 1000).
-#[tauri::command]
 pub async fn glob_search(
     pattern: String,
     root: Option<String>,
@@ -644,7 +642,6 @@ fn glob_blocking(
 /// # Arguments
 /// * `path`, Absolute path to the file to format.
 /// * `project_root`, Optional project root (used to detect project-local formatters).
-#[tauri::command]
 pub async fn format_file(
     path: String,
     project_root: Option<String>,
@@ -677,27 +674,6 @@ pub async fn format_file(
     .map_err(|e| format!("Formatter task panicked: {}", e))?;
 
     result
-}
-
-/// Detect which formatter would be used for a given file extension.
-#[tauri::command]
-pub async fn format_detect(
-    path: String,
-    project_root: Option<String>,
-) -> Result<FormatterInfo, String> {
-    let file_path = PathBuf::from(&path);
-    let root = resolve_root(project_root);
-    let ext = file_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_lowercase();
-
-    let info = tokio::task::spawn_blocking(move || detect_formatter(&ext, &root))
-        .await
-        .map_err(|e| format!("Detect task panicked: {}", e))?;
-
-    Ok(info)
 }
 
 fn run_formatter(

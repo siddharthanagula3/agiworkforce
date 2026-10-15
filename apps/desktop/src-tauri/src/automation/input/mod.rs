@@ -7,6 +7,5 @@ mod mouse;
 mod tests;
 
 pub use clipboard::ClipboardManager;
-pub(crate) use enigo_lock::lock_enigo;
 pub use keyboard::KeyboardSimulator;
 pub use mouse::{MouseButton, MouseSimulator};

@@ -36,6 +36,10 @@ pub struct InstalledPluginEntry {
     pub installed_at: chrono::DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
+    /// [`crate::plugins::plugin_content_sha256`] of the plugin as a person
+    /// last agreed to it: when it was installed, and at each update they kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_sha256: Option<String>,
 }
 
 /// Registry of installed plugins, persisted as `plugins/installed.json`.
@@ -124,6 +128,7 @@ fn reconcile_with_disk(plugins_dir: &Path, registry: &mut InstalledPlugins) -> b
                 version: read_manifest_version(&path),
                 installed_at: Utc::now(),
                 signature: None,
+                content_sha256: crate::plugins::plugin_content_sha256(&path).ok(),
             },
         );
         changed = true;
@@ -341,6 +346,7 @@ impl Marketplace {
         // "0.0.0" (unknown) rather than a fake "1.0.0" makes a missing/invalid
         // manifest version visible instead of pretending every plugin is 1.0.0.
         let version = read_manifest_version(&install_path);
+        let _ = std::fs::remove_file(crate::plugins::pending_update_marker(&plugins_dir, &name));
 
         // Record in installed.json
         let mut reg = InstalledPlugins::load(&plugins_dir);
@@ -352,6 +358,7 @@ impl Marketplace {
                 version,
                 installed_at: Utc::now(),
                 signature: Some(signature_state.label()),
+                content_sha256: crate::plugins::plugin_content_sha256(&install_path).ok(),
             },
         );
         reg.save(&plugins_dir)?;
@@ -387,14 +394,18 @@ impl Marketplace {
 
         // Shallow clone. `--` terminates option parsing so neither the URL nor
         // the target path can be reinterpreted as a git option.
-        let output = std::process::Command::new("git")
+        let mut clone = agiworkforce_worktree::host_git();
+        clone
             .arg("clone")
             .arg("--depth")
             .arg("1")
             .arg("--")
             .arg(url)
-            .arg(&cache_target)
-            .output()
+            .arg(&cache_target);
+        let output = crate::platform::runtime::git::host_git_network_output(clone)
+            .map_err(|error| {
+                anyhow::anyhow!(crate::platform::runtime::git::host_git_failure(&error))
+            })
             .context("failed to run git clone, is git installed?")?;
 
         if !output.status.success() {
@@ -471,6 +482,8 @@ impl Marketplace {
             let _ = std::fs::remove_dir_all(&cache_path);
         }
 
+        let _ = std::fs::remove_file(crate::plugins::pending_update_marker(&plugins_dir, name));
+
         // Update registry
         registry.plugins.remove(name);
         registry.save(&plugins_dir)?;
@@ -496,13 +509,30 @@ impl Marketplace {
     // Update
     // -----------------------------------------------------------------------
 
-    /// Update all git-installed plugins by re-cloning from their repositories.
+    /// Update every git-installed plugin by pulling its repository.
     ///
-    /// Local-path plugins are skipped (no remote to pull from).
+    /// A pull that changed anything is kept only when the person at the
+    /// terminal agrees to it, after seeing the files it changed and every
+    /// hook, MCP server, skill, command and agent it adds or changes. A run
+    /// that cannot ask keeps nothing. From before the pull until that answer
+    /// the plugin is off ([`crate::plugins::pending_update_marker`]), so a
+    /// run that ends at the question never leaves an update in use. Local-path
+    /// plugins are skipped (no remote to pull from).
     pub async fn update_all(
         &self,
         home: &Path,
         signature: &crate::plugins::PluginSignaturePolicy,
+    ) -> Result<()> {
+        self.update_all_with(home, signature, &mut ask_to_keep_update)
+    }
+
+    /// [`Self::update_all`] with the decision supplied: `keep` is shown each
+    /// pulled update and answers whether it stays.
+    fn update_all_with(
+        &self,
+        home: &Path,
+        signature: &crate::plugins::PluginSignaturePolicy,
+        keep: &mut dyn FnMut(&PluginUpdateReview) -> bool,
     ) -> Result<()> {
         let plugins_dir = home.join("plugins");
         let mut registry = InstalledPlugins::load(&plugins_dir);
@@ -513,11 +543,11 @@ impl Marketplace {
         }
 
         let mut updated = 0u32;
+        let mut not_kept = 0u32;
         let mut skipped = 0u32;
-        // Collect (name, fresh_version) for plugins that pulled new commits so
-        // the recorded version is refreshed from the post-pull manifest rather
-        // than left stale.
-        let mut version_refresh: Vec<(String, String, String)> = Vec::new();
+        // What each kept update leaves on record: the version, the signature
+        // and the content digest the person agreed to.
+        let mut kept: Vec<(String, String, String, String)> = Vec::new();
 
         for (name, entry) in &registry.plugins {
             let install_path = PathBuf::from(&entry.install_path);
@@ -527,49 +557,176 @@ impl Marketplace {
                 skipped += 1;
                 continue;
             }
-            match update_plugin_checkout(&install_path, signature) {
-                Ok(PluginCheckoutUpdate::UpToDate) => eprintln!(
-                    "  {}, already up to date",
-                    crate::terminal_text::sanitize_terminal_text(name)
-                ),
-                Ok(PluginCheckoutUpdate::Updated {
-                    version,
-                    changed_files,
-                    signature,
-                }) => {
+
+            // An update an earlier run pulled and never decided is still on
+            // disk: the marker names the commit to go back to, and what the
+            // plugin held then is no longer there to compare with.
+            let marker = crate::plugins::pending_update_marker(&plugins_dir, name);
+            let undecided = marker.exists();
+            if !undecided {
+                if let Some(pinned) = pinned_at(&install_path) {
+                    eprintln!(
+                        "  {}, pinned to {}; install it again with --ref <tag> to move it",
+                        crate::terminal_text::sanitize_terminal_text(name),
+                        crate::terminal_text::sanitize_terminal_text(&pinned)
+                    );
+                    continue;
+                }
+            }
+            let approved_commit = if undecided {
+                std::fs::read_to_string(&marker)
+                    .ok()
+                    .map(|commit| commit.trim().to_string())
+                    .filter(|commit| is_commit_id(commit))
+            } else {
+                head_commit(&install_path)
+            };
+            let agreed_to = if undecided {
+                std::collections::BTreeSet::new()
+            } else {
+                let held_off = approved_commit
+                    .as_deref()
+                    .ok_or_else(|| "its current commit could not be read".to_string())
+                    .and_then(|commit| {
+                        std::fs::write(&marker, commit).map_err(|error| {
+                            format!("it could not be held off while updating: {error}")
+                        })
+                    });
+                if let Err(reason) = held_off {
+                    eprintln!(
+                        "  {}, not updated: {}",
+                        crate::terminal_text::sanitize_terminal_text(name),
+                        crate::terminal_text::sanitize_terminal_text(&reason)
+                    );
+                    continue;
+                }
+                crate::plugins::plugin_capabilities(&install_path)
+            };
+            let undo = |reason: &str| {
+                undo_update(
+                    name,
+                    &install_path,
+                    approved_commit.as_deref(),
+                    &marker,
+                    reason,
+                )
+            };
+            // A pull that changed nothing leaves nothing to decide, unless an
+            // earlier one did.
+            let nothing_pulled = || {
+                if !undecided {
+                    let _ = std::fs::remove_file(&marker);
+                }
+            };
+
+            // Try git pull in the install directory
+            let mut pull = agiworkforce_worktree::host_git();
+            pull.arg("-C")
+                .arg(&install_path)
+                .arg("pull")
+                .arg("--ff-only");
+            let output = crate::platform::runtime::git::host_git_network_output(pull);
+
+            match output {
+                Ok(o) if o.status.success() => {
+                    if !undecided && head_commit(&install_path) == approved_commit {
+                        nothing_pulled();
+                        eprintln!(
+                            "  {}, already up to date",
+                            crate::terminal_text::sanitize_terminal_text(name)
+                        );
+                        continue;
+                    }
+                    let signature_state =
+                        match crate::plugins::evaluate_plugin_signature(&install_path, signature) {
+                            Ok(state) => state,
+                            Err(error) => {
+                                undo(error.as_str());
+                                not_kept += 1;
+                                continue;
+                            }
+                        };
+                    let sha256 = match crate::plugins::plugin_content_sha256(&install_path) {
+                        Ok(sha256) => sha256,
+                        Err(error) => {
+                            undo(format!("its files could not be read: {error}").as_str());
+                            not_kept += 1;
+                            continue;
+                        }
+                    };
+                    let review = PluginUpdateReview {
+                        name: name.clone(),
+                        previous_version: entry.version.clone(),
+                        version: read_manifest_version(&install_path),
+                        signature: signature_state.label(),
+                        changed_files: approved_commit
+                            .as_deref()
+                            .map(|commit| changed_files_since(&install_path, commit))
+                            .unwrap_or_default(),
+                        unapproved: crate::plugins::unapproved_capabilities(
+                            &agreed_to,
+                            &crate::plugins::plugin_capabilities(&install_path),
+                        ),
+                        approved_sha256: entry.content_sha256.clone(),
+                        sha256,
+                    };
+                    if !keep(&review) {
+                        undo("it was not approved");
+                        not_kept += 1;
+                        continue;
+                    }
+                    let _ = std::fs::remove_file(&marker);
                     eprintln!(
                         "  {}",
                         crate::terminal_text::sanitize_terminal_text(&describe_plugin_update(
                             name,
-                            &entry.version,
-                            &version,
-                            &changed_files,
+                            &review.previous_version,
+                            &review.version,
+                            &[],
                         ))
                     );
-                    version_refresh.push((name.clone(), version, signature));
+                    kept.push((
+                        name.clone(),
+                        review.version,
+                        review.signature,
+                        review.sha256,
+                    ));
                     updated += 1;
                 }
-                Err(error) => eprintln!(
-                    "  {}, {}",
-                    crate::terminal_text::sanitize_terminal_text(name),
-                    crate::terminal_text::sanitize_terminal_text(&error)
-                ),
+                Ok(o) => {
+                    nothing_pulled();
+                    let stderr = String::from_utf8_lossy(&o.stderr);
+                    eprintln!(
+                        "  {}, update failed: {}",
+                        crate::terminal_text::sanitize_terminal_text(name),
+                        crate::terminal_text::sanitize_terminal_text(stderr.trim())
+                    );
+                }
+                Err(e) => {
+                    nothing_pulled();
+                    eprintln!(
+                        "  {}, git error: {}",
+                        crate::terminal_text::sanitize_terminal_text(name),
+                        crate::terminal_text::sanitize_terminal_text(&e.to_string())
+                    );
+                }
             }
         }
 
-        if !version_refresh.is_empty() {
-            for (name, fresh, signature_label) in version_refresh {
+        if !kept.is_empty() {
+            for (name, version, signature_label, sha256) in kept {
                 if let Some(entry) = registry.plugins.get_mut(&name) {
-                    entry.version = fresh;
+                    entry.version = version;
                     entry.signature = Some(signature_label);
+                    entry.content_sha256 = Some(sha256);
                 }
             }
             registry.save(&plugins_dir)?;
         }
 
         eprintln!(
-            "\n{} updated, {} skipped (local installs).",
-            updated, skipped
+            "\n{} updated, {} not kept, {} skipped (local installs).",
+            updated, not_kept, skipped
         );
         Ok(())
     }
@@ -592,32 +749,15 @@ pub fn update_plugin_checkout(
     install_path: &Path,
     signature: &crate::plugins::PluginSignaturePolicy,
 ) -> std::result::Result<PluginCheckoutUpdate, String> {
-    let on_branch = std::process::Command::new("git")
-        .arg("-C")
-        .arg(install_path)
-        .args(["symbolic-ref", "-q", "HEAD"])
-        .output()
-        .is_ok_and(|output| output.status.success());
-    if !on_branch {
-        let pinned = std::process::Command::new("git")
-            .arg("-C")
-            .arg(install_path)
-            .args(["describe", "--tags", "--always"])
-            .output()
-            .ok()
-            .filter(|output| output.status.success())
-            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
-            .unwrap_or_else(|| "a fixed version".to_string());
+    if let Some(pinned) = pinned_at(install_path) {
         return Err(format!(
             "pinned to {pinned}; install it again with --ref <tag> to move it"
         ));
     }
-    let before = git_head(install_path);
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(install_path)
-        .args(["pull", "--ff-only"])
-        .output()
+    let before = head_commit(install_path);
+    let mut pull = agiworkforce_worktree::host_git();
+    pull.arg("-C").arg(install_path).args(["pull", "--ff-only"]);
+    let output = crate::platform::runtime::git::host_git_network_output(pull)
         .map_err(|error| format!("git error: {error}"))?;
     if !output.status.success() {
         return Err(format!(
@@ -625,24 +765,28 @@ pub fn update_plugin_checkout(
             String::from_utf8_lossy(&output.stderr).trim()
         ));
     }
-    if before.is_some() && before == git_head(install_path) {
+    if before.is_some() && before == head_commit(install_path) {
         return Ok(PluginCheckoutUpdate::UpToDate);
     }
     match crate::plugins::evaluate_plugin_signature(install_path, signature) {
         Ok(state) => Ok(PluginCheckoutUpdate::Updated {
             version: read_manifest_version(install_path),
-            changed_files: changed_files_since_orig_head(install_path),
+            changed_files: changed_files_since(install_path, "ORIG_HEAD"),
             signature: state.label(),
         }),
         Err(error) => {
-            let rollback = std::process::Command::new("git")
+            let mut rollback = agiworkforce_worktree::host_git();
+            rollback
                 .arg("-C")
                 .arg(install_path)
-                .args(["reset", "--hard", "ORIG_HEAD"])
-                .output();
+                .args(["reset", "--hard", "ORIG_HEAD"]);
+            let rolled_back = matches!(
+                crate::platform::runtime::git::host_git_output(rollback),
+                Ok(ref out) if out.status.success()
+            );
             Err(format!(
                 "update refused ({error}){}",
-                if matches!(rollback, Ok(ref out) if out.status.success()) {
+                if rolled_back {
                     ", kept the previous version"
                 } else {
                     ", rollback failed: remove the plugin"
@@ -652,17 +796,154 @@ pub fn update_plugin_checkout(
     }
 }
 
-fn git_head(install_path: &Path) -> Option<String> {
-    let output = std::process::Command::new("git")
+fn pinned_at(install_path: &Path) -> Option<String> {
+    let mut on_branch = agiworkforce_worktree::host_git();
+    on_branch
         .arg("-C")
         .arg(install_path)
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .ok()?;
-    output
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .args(["symbolic-ref", "-q", "HEAD"]);
+    if crate::platform::runtime::git::host_git_output(on_branch)
+        .is_ok_and(|output| output.status.success())
+    {
+        return None;
+    }
+    let mut describe = agiworkforce_worktree::host_git();
+    describe
+        .arg("-C")
+        .arg(install_path)
+        .args(["describe", "--tags", "--always"]);
+    Some(
+        crate::platform::runtime::git::host_git_output(describe)
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+            .unwrap_or_else(|| "a fixed version".to_string()),
+    )
+}
+
+/// What a pulled update holds, for the person deciding whether it stays.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginUpdateReview {
+    pub name: String,
+    pub previous_version: String,
+    pub version: String,
+    pub signature: String,
+    pub changed_files: Vec<String>,
+    /// Every hook, MCP server, skill, command and agent the update adds or
+    /// changes, as [`crate::plugins::unapproved_capabilities`] names them.
+    pub unapproved: Vec<String>,
+    /// The content digest on record from the install or the last kept update.
+    pub approved_sha256: Option<String>,
+    pub sha256: String,
+}
+
+pub fn describe_plugin_review(review: &PluginUpdateReview) -> String {
+    let mut out = if review.previous_version == review.version {
+        format!(
+            "{}, update pulled (still v{}, {})",
+            review.name, review.version, review.signature
+        )
+    } else {
+        format!(
+            "{}, update pulled v{} -> v{} ({})",
+            review.name, review.previous_version, review.version, review.signature
+        )
+    };
+    if !review.changed_files.is_empty() {
+        out.push_str(&format!(
+            "\n      {} file(s) changed:",
+            review.changed_files.len()
+        ));
+        for change in &review.changed_files {
+            out.push_str("\n        ");
+            out.push_str(change);
+        }
+    }
+    if review.unapproved.is_empty() {
+        out.push_str("\n      It adds or changes no hook, MCP server, skill, command or agent.");
+    } else {
+        out.push_str("\n      Not agreed to yet, and not in use unless this update is kept:");
+        for capability in &review.unapproved {
+            out.push_str("\n        ");
+            out.push_str(capability);
+        }
+    }
+    out.push_str(&format!("\n      content sha256:{}", review.sha256));
+    if let Some(approved) = &review.approved_sha256 {
+        out.push_str(&format!(" (last agreed to: sha256:{approved})"));
+    }
+    out
+}
+
+fn ask_to_keep_update(review: &PluginUpdateReview) -> bool {
+    eprintln!(
+        "  {}",
+        crate::terminal_text::sanitize_terminal_text(&describe_plugin_review(review))
+    );
+    if !crate::interactive::can_prompt() {
+        eprintln!(
+            "      This run cannot ask, so the update is not kept. \
+             Run `agi marketplace update` in a terminal to review it."
+        );
+        return false;
+    }
+    dialoguer::Confirm::new()
+        .with_prompt(format!(
+            "Keep this update to {}?",
+            crate::terminal_text::sanitize_terminal_text(&review.name)
+        ))
+        .default(false)
+        .interact()
+        .unwrap_or(false)
+}
+
+/// Put a plugin back on the commit the person last agreed to and let it
+/// load again. When that cannot be done the marker stays, and with it the
+/// plugin stays off: what is on disk is something nobody agreed to.
+fn undo_update(
+    name: &str,
+    install_path: &Path,
+    approved_commit: Option<&str>,
+    marker: &Path,
+    reason: &str,
+) {
+    let put_back = approved_commit.is_some_and(|commit| {
+        let mut reset = agiworkforce_worktree::host_git();
+        reset
+            .arg("-C")
+            .arg(install_path)
+            .args(["reset", "--hard", commit]);
+        matches!(
+            crate::platform::runtime::git::host_git_output(reset),
+            Ok(ref out) if out.status.success()
+        )
+    });
+    let outcome = if put_back && std::fs::remove_file(marker).is_ok() {
+        ", kept the previous version"
+    } else {
+        ", and it could not be put back: the plugin stays off until it is updated or reinstalled"
+    };
+    eprintln!(
+        "  {}, update refused ({}){}",
+        crate::terminal_text::sanitize_terminal_text(name),
+        crate::terminal_text::sanitize_terminal_text(reason),
+        outcome
+    );
+}
+
+fn is_commit_id(text: &str) -> bool {
+    matches!(text.len(), 40 | 64) && text.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn head_commit(install_path: &Path) -> Option<String> {
+    let mut command = agiworkforce_worktree::host_git();
+    command
+        .arg("-C")
+        .arg(install_path)
+        .args(["rev-parse", "--verify", "HEAD"]);
+    let output = crate::platform::runtime::git::host_git_output(command).ok()?;
+    let commit = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    (output.status.success() && is_commit_id(&commit)).then_some(commit)
 }
 
 // ---------------------------------------------------------------------------
@@ -734,12 +1015,13 @@ pub fn format_search_results(plugins: &[MarketplacePlugin]) -> String {
 /// when the plugin has no manifest or omits a version. This is recorded in
 /// `installed.json` so `format_installed` and update/compatibility logic
 /// reflect the real version rather than a hardcoded placeholder.
-fn changed_files_since_orig_head(install_path: &Path) -> Vec<String> {
-    std::process::Command::new("git")
+fn changed_files_since(install_path: &Path, commit: &str) -> Vec<String> {
+    let mut command = agiworkforce_worktree::host_git();
+    command
         .arg("-C")
         .arg(install_path)
-        .args(["diff", "--name-status", "ORIG_HEAD", "HEAD"])
-        .output()
+        .args(["diff", "--name-status", commit, "HEAD"]);
+    crate::platform::runtime::git::host_git_output(command)
         .ok()
         .filter(|out| out.status.success())
         .map(|out| {
@@ -1116,6 +1398,7 @@ mod tests {
                 version: "1.2.0".to_string(),
                 installed_at: Utc::now(),
                 signature: None,
+                content_sha256: None,
             },
         );
         let reg = InstalledPlugins {
@@ -1275,6 +1558,13 @@ mod tests {
             Some("unsigned")
         );
         assert!(format_installed(&registry).contains("[unsigned]"));
+        assert_eq!(
+            registry.plugins["unsigned"].content_sha256,
+            crate::plugins::plugin_content_sha256(&home.path().join("plugins").join("unsigned"))
+                .ok(),
+            "the digest of what was installed is on record"
+        );
+        assert!(registry.plugins["unsigned"].content_sha256.is_some());
     }
 
     fn git(dir: &Path, args: &[&str]) {
@@ -1304,6 +1594,14 @@ mod tests {
     }
 
     fn cloned_plugin_with_pending_update() -> (tempfile::TempDir, tempfile::TempDir, PathBuf) {
+        cloned_plugin_with_update(r#"{"name":"tracked","version":"2.0.0"}"#)
+    }
+
+    /// A plugin cloned at version 1.0.0 whose origin has since committed
+    /// `next_manifest`.
+    fn cloned_plugin_with_update(
+        next_manifest: &str,
+    ) -> (tempfile::TempDir, tempfile::TempDir, PathBuf) {
         let origin = tempfile::tempdir().unwrap();
         git(origin.path(), &["init", "-q"]);
         write_manifest(origin.path(), "1.0.0");
@@ -1327,42 +1625,225 @@ mod tests {
                 version: "1.0.0".to_string(),
                 installed_at: Utc::now(),
                 signature: None,
+                content_sha256: None,
             },
         );
         registry.save(&plugins_dir).unwrap();
 
-        write_manifest(origin.path(), "2.0.0");
+        std::fs::write(
+            origin
+                .path()
+                .join(".agiworkforce-plugin")
+                .join("plugin.json"),
+            next_manifest,
+        )
+        .unwrap();
         git(origin.path(), &["commit", "-q", "-am", "v2"]);
         (origin, home, install_path)
     }
 
-    #[tokio::test]
-    async fn an_unsigned_update_rolls_back_only_when_signatures_are_required() {
+    #[test]
+    fn an_unsigned_update_rolls_back_when_signatures_are_required_without_asking() {
         let mp = Marketplace::with_url("http://127.0.0.1:1");
-
         let (_origin, home, install_path) = cloned_plugin_with_pending_update();
-        mp.update_all(
+        let mut asked = 0;
+        mp.update_all_with(
             home.path(),
             &crate::plugins::PluginSignaturePolicy {
                 require_signed: true,
                 ..Default::default()
             },
+            &mut |_| {
+                asked += 1;
+                true
+            },
         )
-        .await
         .unwrap();
+        assert_eq!(
+            asked, 0,
+            "a refused signature is never offered for approval"
+        );
         assert_eq!(read_manifest_version(&install_path), "1.0.0");
+    }
 
+    #[test]
+    fn a_pulled_update_stays_only_when_it_is_approved() {
+        let mp = Marketplace::with_url("http://127.0.0.1:1");
+        let policy = crate::plugins::PluginSignaturePolicy::default();
         let (_origin, home, install_path) = cloned_plugin_with_pending_update();
-        mp.update_all(
-            home.path(),
-            &crate::plugins::PluginSignaturePolicy::default(),
-        )
-        .await
+
+        let marker = crate::plugins::pending_update_marker(&home.path().join("plugins"), "tracked");
+        let mut shown: Vec<PluginUpdateReview> = Vec::new();
+        mp.update_all_with(home.path(), &policy, &mut |review| {
+            assert!(
+                marker.exists(),
+                "the plugin is held off while the question is open"
+            );
+            shown.push(review.clone());
+            false
+        })
         .unwrap();
+        assert_eq!(shown.len(), 1);
+        assert_eq!(
+            read_manifest_version(&install_path),
+            "1.0.0",
+            "an update nobody approved is put back"
+        );
+        assert!(!marker.exists(), "put back, it loads again");
+        let entry = &Marketplace::list_installed(home.path()).plugins["tracked"];
+        assert_eq!(entry.version, "1.0.0");
+        assert_eq!(entry.content_sha256, None, "nothing new is put on record");
+
+        mp.update_all_with(home.path(), &policy, &mut |_| true)
+            .unwrap();
         assert_eq!(read_manifest_version(&install_path), "2.0.0");
+        assert!(!marker.exists(), "kept, it loads again");
+
+        mp.update_all_with(home.path(), &policy, &mut |_| {
+            panic!("nothing new was pulled, so there is nothing to ask")
+        })
+        .unwrap();
+        assert!(!marker.exists());
         let entry = &Marketplace::list_installed(home.path()).plugins["tracked"];
         assert_eq!(entry.version, "2.0.0");
         assert_eq!(entry.signature.as_deref(), Some("unsigned"));
+        assert_eq!(
+            entry.content_sha256,
+            crate::plugins::plugin_content_sha256(&install_path).ok(),
+            "the digest on record is the one that was approved"
+        );
+        assert_eq!(
+            entry.content_sha256.as_deref(),
+            Some(shown[0].sha256.as_str())
+        );
+    }
+
+    #[test]
+    fn an_update_pulled_and_never_decided_is_asked_about_on_the_next_run() {
+        let mp = Marketplace::with_url("http://127.0.0.1:1");
+        let policy = crate::plugins::PluginSignaturePolicy::default();
+        let (_origin, home, install_path) = cloned_plugin_with_pending_update();
+        let marker = crate::plugins::pending_update_marker(&home.path().join("plugins"), "tracked");
+
+        // What a run that ended at the question leaves behind: the marker
+        // naming the approved commit, and the pulled update on disk.
+        let approved = head_commit(&install_path).expect("a commit");
+        std::fs::write(&marker, &approved).unwrap();
+        git(&install_path, &["pull", "-q", "--ff-only"]);
+        assert_eq!(read_manifest_version(&install_path), "2.0.0");
+
+        let mut asked = 0;
+        mp.update_all_with(home.path(), &policy, &mut |review| {
+            asked += 1;
+            assert_eq!(
+                review.changed_files,
+                vec!["M .agiworkforce-plugin/plugin.json".to_string()]
+            );
+            false
+        })
+        .unwrap();
+        assert_eq!(
+            asked, 1,
+            "there was nothing new to pull, yet nobody had decided"
+        );
+        assert_eq!(read_manifest_version(&install_path), "1.0.0");
+        assert_eq!(head_commit(&install_path), Some(approved));
+        assert!(!marker.exists());
+    }
+
+    #[test]
+    fn a_marker_that_names_no_commit_keeps_the_plugin_off_when_the_update_is_refused() {
+        let mp = Marketplace::with_url("http://127.0.0.1:1");
+        let (_origin, home, install_path) = cloned_plugin_with_pending_update();
+        let marker = crate::plugins::pending_update_marker(&home.path().join("plugins"), "tracked");
+        std::fs::write(&marker, "--hard-to-believe").unwrap();
+        git(&install_path, &["pull", "-q", "--ff-only"]);
+
+        mp.update_all_with(
+            home.path(),
+            &crate::plugins::PluginSignaturePolicy::default(),
+            &mut |_| false,
+        )
+        .unwrap();
+        assert!(
+            marker.exists(),
+            "with no commit to go back to, the plugin stays off"
+        );
+        assert!(is_commit_id(&"a".repeat(40)) && is_commit_id(&"0".repeat(64)));
+        assert!(!is_commit_id("--hard") && !is_commit_id(&"g".repeat(40)));
+    }
+
+    #[test]
+    fn the_review_names_the_hooks_and_servers_an_update_brings() {
+        let mp = Marketplace::with_url("http://127.0.0.1:1");
+        let (_origin, home, _install_path) = cloned_plugin_with_update(
+            r#"{
+                "name": "tracked",
+                "version": "2.0.0",
+                "hooks": {"PreToolUse": [{"command": "sh", "args": ["guard.sh"]}]},
+                "mcpServers": {"files": {"command": "node", "args": ["server.js"]}}
+            }"#,
+        );
+
+        let mut shown: Vec<PluginUpdateReview> = Vec::new();
+        mp.update_all_with(
+            home.path(),
+            &crate::plugins::PluginSignaturePolicy::default(),
+            &mut |review| {
+                shown.push(review.clone());
+                false
+            },
+        )
+        .unwrap();
+
+        let review = &shown[0];
+        assert_eq!(review.previous_version, "1.0.0");
+        assert_eq!(review.version, "2.0.0");
+        assert_eq!(
+            review.changed_files,
+            vec!["M .agiworkforce-plugin/plugin.json".to_string()]
+        );
+        assert_eq!(
+            review.unapproved,
+            vec![
+                "new MCP server files".to_string(),
+                "new hook under PreToolUse: sh guard.sh".to_string(),
+            ]
+        );
+        assert_eq!(review.sha256.len(), 64);
+        assert_eq!(review.approved_sha256, None);
+
+        let text = describe_plugin_review(review);
+        assert!(
+            text.starts_with("tracked, update pulled v1.0.0 -> v2.0.0 (unsigned)"),
+            "{text}"
+        );
+        assert!(
+            text.contains("new hook under PreToolUse: sh guard.sh"),
+            "{text}"
+        );
+        assert!(
+            text.contains(&format!("content sha256:{}", review.sha256)),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_review_with_nothing_new_to_agree_to_says_so_and_shows_both_digests() {
+        let text = describe_plugin_review(&PluginUpdateReview {
+            name: "acme".to_string(),
+            previous_version: "1.0.0".to_string(),
+            version: "1.0.0".to_string(),
+            signature: "signed by acme".to_string(),
+            changed_files: vec!["M README.md".to_string()],
+            unapproved: Vec::new(),
+            approved_sha256: Some("aa".to_string()),
+            sha256: "bb".to_string(),
+        });
+        assert_eq!(
+            text,
+            "acme, update pulled (still v1.0.0, signed by acme)\n      1 file(s) changed:\n        M README.md\n      It adds or changes no hook, MCP server, skill, command or agent.\n      content sha256:bb (last agreed to: sha256:aa)"
+        );
     }
 
     #[tokio::test]

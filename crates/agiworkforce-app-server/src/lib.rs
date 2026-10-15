@@ -15,8 +15,9 @@
 mod developer_sessions;
 
 pub use developer_sessions::{
-    run_developer_session_stdio, serve_developer_session_io, DeveloperConnectionTrust,
-    DeveloperSessionHost, DeveloperSessionHostError, DeveloperSessionProcessor,
+    method_effect, run_developer_session_stdio, runs_detached, serve_developer_session_io,
+    DeveloperConnectionTrust, DeveloperSessionHost, DeveloperSessionHostError,
+    DeveloperSessionProcessor, MethodEffect, TurnClient, METHOD_EFFECTS,
 };
 
 use agiworkforce_protocol::developer_session::{
@@ -58,19 +59,19 @@ pub trait ToolDispatch: Send + Sync {
 // Config
 // ---------------------------------------------------------------------------
 
+/// How the tools-only server is reached. It has no WebSocket form: that one
+/// answered every caller that held the token alike, with no record of how
+/// the connection had authenticated. A WebSocket client speaks the developer
+/// session protocol ([`run_developer_session_websocket`]), which does.
 #[derive(Debug, Clone, Default)]
 pub enum AppServerTransport {
     #[default]
     Stdio,
-    WebSocket {
-        addr: SocketAddr,
-    },
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct AppServerConfig {
     pub transport: AppServerTransport,
-    pub ws_security: WebSocketSecurity,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -220,48 +221,9 @@ pub async fn run_app_server(
     config: AppServerConfig,
     dispatch: Arc<dyn ToolDispatch>,
 ) -> Result<()> {
-    let AppServerConfig {
-        transport,
-        ws_security,
-        ..
-    } = config;
-    match transport {
+    match config.transport {
         AppServerTransport::Stdio => run_stdio(dispatch).await,
-        AppServerTransport::WebSocket { addr } => run_ws(addr, ws_security, dispatch).await,
     }
-}
-
-async fn run_ws(
-    addr: SocketAddr,
-    security: WebSocketSecurity,
-    dispatch: Arc<dyn ToolDispatch>,
-) -> Result<()> {
-    security.authorize_listen_address(addr)?;
-    let proc = Arc::new(Processor::new(dispatch));
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    let listen_addr = listener.local_addr()?;
-    let app = Router::new()
-        .route(
-            "/ws",
-            get({
-                let p = Arc::clone(&proc);
-                let security = security.clone();
-                move |ws: WebSocketUpgrade, headers: HeaderMap, uri: Uri| {
-                    let p = Arc::clone(&p);
-                    let security = security.clone();
-                    async move {
-                        match validate_ws_request(&headers, &uri, listen_addr, &security) {
-                            Ok(_) => ws.on_upgrade(move |s| handle_ws(s, p)).into_response(),
-                            Err(status) => status.into_response(),
-                        }
-                    }
-                }
-            }),
-        )
-        .route("/health", get(|| async { "ok" }));
-    eprintln!("App server on ws://{}", listen_addr);
-    axum::serve(listener, app).await?;
-    Ok(())
 }
 
 /// Run the full typed developer-session protocol over an authenticated
@@ -473,25 +435,6 @@ fn default_allowed_origins(addr: SocketAddr) -> Vec<String> {
     .into()
 }
 
-async fn handle_ws(mut socket: WebSocket, proc: Arc<Processor>) {
-    while let Some(Ok(msg)) = futures_util::StreamExt::next(&mut socket).await {
-        if let Message::Text(text) = msg {
-            let resp = match serde_json::from_str::<JsonRpcRequest>(&text) {
-                Ok(req) => proc.process(req).await,
-                Err(e) => JsonRpcResponse::err(None, -32700, format!("Parse error: {e}")),
-            };
-            if let Ok(j) = serde_json::to_string(&resp) {
-                if let Err(e) =
-                    futures_util::SinkExt::send(&mut socket, Message::Text(j.into())).await
-                {
-                    eprintln!("WebSocket send error: {e}");
-                    break;
-                }
-            }
-        }
-    }
-}
-
 async fn handle_developer_session_ws(
     socket: WebSocket,
     host: Arc<dyn DeveloperSessionHost>,
@@ -502,9 +445,17 @@ async fn handle_developer_session_ws(
     let mut notifications = processor.subscribe();
     let (mut sender, mut receiver) = futures_util::StreamExt::split(socket);
     let mut initialized = false;
+    let mut detached: tokio::task::JoinSet<AppServerResponse> = tokio::task::JoinSet::new();
 
     loop {
         tokio::select! {
+            Some(finished) = detached.join_next(), if !detached.is_empty() => {
+                if let Ok(response) = finished {
+                    if send_developer_ws_json(&mut sender, &response).await.is_err() {
+                        break;
+                    }
+                }
+            }
             incoming = futures_util::StreamExt::next(&mut receiver) => {
                 let Some(incoming) = incoming else {
                     break;
@@ -521,6 +472,16 @@ async fn handle_developer_session_ws(
                     Message::Text(text) => {
                         let (response, is_initialize, is_shutdown) =
                             match serde_json::from_str::<AppServerRequest>(text.as_str()) {
+                                Ok(request) if initialized && runs_detached(&request.method) => {
+                                    match developer_sessions::spawn_detached(
+                                        &mut detached,
+                                        processor.clone(),
+                                        request,
+                                    ) {
+                                        Some(refused) => (refused, false, false),
+                                        None => continue,
+                                    }
+                                }
                                 Ok(request) => {
                                     let is_initialize = request.method == developer_method::INITIALIZE;
                                     let is_shutdown = request.method == developer_method::SHUTDOWN;
@@ -539,7 +500,20 @@ async fn handle_developer_session_ws(
                         if is_initialize && response.error.is_none() {
                             initialized = true;
                         }
-                        if send_developer_ws_json(&mut sender, &response).await.is_err() {
+                        // The host waited for every admitted request before
+                        // acknowledging shutdown, so their answers go out first.
+                        let mut delivered = true;
+                        if is_shutdown && response.error.is_none() {
+                            while let Some(finished) = detached.join_next().await {
+                                if let Ok(earlier) = finished {
+                                    if send_developer_ws_json(&mut sender, &earlier).await.is_err() {
+                                        delivered = false;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if !delivered || send_developer_ws_json(&mut sender, &response).await.is_err() {
                             break;
                         }
                         if is_shutdown && response.error.is_none() {
@@ -599,6 +573,9 @@ async fn handle_developer_session_ws(
         }
     }
 
+    // A request still running belongs to the host now; its git is left to
+    // finish rather than cut off with the connection.
+    detached.detach_all();
     let _ = futures_util::SinkExt::close(&mut sender).await;
 }
 
@@ -901,28 +878,6 @@ mod tests {
         let mut opted_in = ws_security();
         opted_in.allow_public_listen = true;
         assert!(opted_in.authorize_listen_address(public).is_ok());
-    }
-
-    #[tokio::test]
-    async fn the_library_refuses_a_public_bind_whatever_the_caller_checked() {
-        let config = AppServerConfig {
-            transport: AppServerTransport::WebSocket {
-                addr: "0.0.0.0:0".parse().unwrap(),
-            },
-            ws_security: ws_security(),
-        };
-
-        let outcome = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            run_app_server(config, Arc::new(MockDispatch::new())),
-        )
-        .await
-        .expect("a public bind must be refused, not served");
-
-        assert!(outcome
-            .expect_err("public listen without opt-in")
-            .to_string()
-            .contains("non-loopback"));
     }
 
     #[tokio::test]

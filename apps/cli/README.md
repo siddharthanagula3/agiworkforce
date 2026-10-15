@@ -88,6 +88,67 @@ Without it, `run_command` refuses to execute and `agi doctor` reports
 `sandbox.os` as a warning with the install command. `--no-sandbox` runs
 unsandboxed and is the only supported way to proceed without the backend.
 
+### Sandbox defaults
+
+- Your own hooks, and stdio MCP servers named in a project's `.mcp.json` or
+  `mcp.json` or by a project's plugin, run sandboxed: they read anywhere but
+  write only to the workspace and a private scratch folder, which is removed
+  when the hook or server exits. A filesystem server's chosen folders are
+  writable too. Sandboxed MCP servers keep internet access but not services
+  on this computer; `"allowLocalNetwork": true` in a server's entry lets them
+  reach loopback addresses and local sockets.
+- Sandboxed hooks and servers share one package cache (npm, uv, pip,
+  corepack, pre-commit and `XDG_CACHE_HOME`) in your own private temp folder,
+  so `npx` and `uvx` download a package once rather than on every start. Only
+  sandboxed programs use it; your own `~/.npm` and other caches are never
+  written, and nothing outside the sandbox reads this one.
+- Stdio MCP servers in your own `~/.agiworkforce/.mcp.json` or `mcp.json`, or
+  from a plugin you installed, run unsandboxed and start in the CLI config
+  folder, not the project. `"sandbox": true` in the entry runs one sandboxed,
+  and `"cwd": "project"` starts it in the project folder instead.
+- A project's own MCP server, and any server from a project's plugin,
+  starts only once you approve its exact launch in that folder. A project's
+  own server starts in the project folder, sandboxed or not; a plugin's
+  server outside the sandbox starts in the CLI config folder.
+  `"sandbox": false` in a project server's entry, or at the top level of
+  `~/.agiworkforce/hooks.json`, runs it unsandboxed. For a project server
+  either setting, or `"cwd"`, changes the launch, so the CLI asks for
+  approval again.
+- An unsandboxed server that fails to start in the config folder says so:
+  give its entry absolute paths, or set `"cwd": "project"`.
+- A hook blocks the action by printing `{"decision": "block"}` or exiting
+  with code 2 (its stderr is the reason); any other non-zero exit is shown and
+  the action continues. A blocking hook that cannot run at all, because the
+  sandbox refused it or it could not start, blocks. One that runs out of time
+  is shown and the action continues, as in Claude Code. Every hook failure is
+  shown once a session, and a sandboxed hook or server that fails says it ran
+  in the sandbox and how to opt out.
+- Unsandboxed servers and hooks find programs only on a `PATH` without the
+  folders a sandboxed command can write, so a `npx` or `node` left in a
+  project's `.venv/bin` or `node_modules/.bin` never runs in their place.
+- On Windows there is no sandbox, so every server and hook runs with your full
+  user rights, and the approval prompt for a project server says so.
+- `AGIWORKFORCE_SANDBOX_MCP=0` and `AGIWORKFORCE_SANDBOX_HOOKS=0` (or `false`,
+  `off`, `no`) turn the sandbox off for all servers or hooks. Any other value
+  leaves it on. A managed sandbox policy overrides all of these.
+- In a trusted project a sandboxed command, and a hook, inherit the
+  environment the session was started with, tokens included, as in Codex CLI.
+  `AGIWORKFORCE_SANDBOX_FILTER_ENV=1` leaves out the variables whose names say
+  they hold a credential, such as `GITHUB_TOKEN`, and
+  `AGIWORKFORCE_SANDBOX_PASS_ENV=GITHUB_TOKEN,NPM_TOKEN` passes the ones you
+  name through that filter. `AGIWORKFORCE_SANDBOX_SCRUB_ENV=1` gives commands
+  only a short list (`PATH`, `HOME`, locale, terminal), which an untrusted
+  project and a managed policy get in any case.
+- Started in your home folder, `/`, or a folder above home, commands run in and
+  write to `~/.agiworkforce/agent-workspace` instead, and the first command
+  result says so.
+- Network git (clone, fetch, pull, push) never waits on a prompt. When your
+  effective `core.sshCommand`, includes and `includeIf` counted, is plain
+  `ssh`, it runs with `BatchMode=yes`; any other command you set is left as it
+  is. A key that needs a passphrase, or a host not yet in `known_hosts`, then
+  fails with a hint: load the key with `ssh-add`, or connect once from a
+  terminal.
+
 ### Add a custom provider
 
 Drop a `[providers.<name>]` block into `~/.agiworkforce/config.toml` to wire up

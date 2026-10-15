@@ -36,8 +36,6 @@ static CDP_COMMAND_ID: AtomicU64 = AtomicU64::new(1);
 #[serde(rename_all = "lowercase")]
 pub enum BrowserType {
     Chromium,
-    Firefox,
-    Webkit,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -315,7 +313,7 @@ impl Default for PlaywrightConfig {
 /// Set it to the absolute path of the browser *binary* (on macOS that is the
 /// file inside `Contents/MacOS`, not the `.app` bundle directory). It is read
 /// by [`executable_override`] and takes precedence over install-location
-/// discovery for both Chromium and Firefox.
+/// discovery.
 const BROWSER_EXECUTABLE_ENV: &str = "AGIWORKFORCE_BROWSER_EXECUTABLE";
 
 /// How long a freshly spawned browser gets to open its DevTools port.
@@ -591,49 +589,8 @@ fn discover_chromium() -> Result<String> {
     }
 }
 
-/// Locate Firefox for the current platform.
-///
-/// Same defect class as [`discover_chromium`]: this arm used to return the
-/// bare literal `"firefox"`, which is not on `PATH` on a stock macOS or
-/// Windows install.
-fn discover_firefox() -> Result<String> {
-    #[cfg(windows)]
-    let candidates: Vec<String> = [
-        r"C:\Program Files\Mozilla Firefox\firefox.exe",
-        r"C:\Program Files (x86)\Mozilla Firefox\firefox.exe",
-    ]
-    .iter()
-    .map(|p| (*p).to_string())
-    .collect();
-
-    #[cfg(target_os = "macos")]
-    let candidates: Vec<String> = ["/Applications/Firefox.app/Contents/MacOS/firefox"]
-        .iter()
-        .map(|p| (*p).to_string())
-        .chain(
-            std::env::var("HOME")
-                .map(|home| format!("{home}/Applications/Firefox.app/Contents/MacOS/firefox"))
-                .ok(),
-        )
-        .collect();
-
-    #[cfg(all(not(windows), not(target_os = "macos")))]
-    let candidates: Vec<String> = [
-        "/usr/bin/firefox",
-        "/usr/bin/firefox-esr",
-        "/snap/bin/firefox",
-        "/usr/local/bin/firefox",
-    ]
-    .iter()
-    .map(|p| (*p).to_string())
-    .collect();
-
-    resolve_browser_executable(&candidates, &["firefox", "firefox-esr"], "Firefox")
-}
-
 pub struct PlaywrightBridge {
     config: PlaywrightConfig,
-    process: Arc<Mutex<Option<Child>>>,
     browsers: Arc<Mutex<HashMap<String, BrowserHandle>>>,
     /// `Some(child)` for a browser this process started, `None` for one that
     /// was already running on the DevTools port and got adopted on reconnect.
@@ -646,7 +603,6 @@ impl PlaywrightBridge {
     pub async fn new() -> Result<Self> {
         Ok(Self {
             config: PlaywrightConfig::default(),
-            process: Arc::new(Mutex::new(None)),
             browsers: Arc::new(Mutex::new(HashMap::new())),
             browser_processes: Arc::new(Mutex::new(HashMap::new())),
         })
@@ -655,7 +611,6 @@ impl PlaywrightBridge {
     pub async fn with_config(config: PlaywrightConfig) -> Result<Self> {
         Ok(Self {
             config,
-            process: Arc::new(Mutex::new(None)),
 
             browsers: Arc::new(Mutex::new(HashMap::new())),
             browser_processes: Arc::new(Mutex::new(HashMap::new())),
@@ -668,37 +623,6 @@ impl PlaywrightBridge {
 
     pub fn cdp_port(&self) -> u16 {
         self.config.ws_port
-    }
-
-    pub async fn start_server(&self) -> Result<()> {
-        if self.endpoint().browser_ws_endpoint().await.is_ok() {
-            tracing::info!(
-                "CDP endpoint already available on port {}; reusing running browser automation process",
-                self.config.ws_port
-            );
-            return Ok(());
-        }
-
-        Err(Error::Other(
-            "Embedded Playwright server startup is not implemented in the desktop runtime. Use launch_browser() to start a browser process with CDP enabled.".to_string(),
-        ))
-    }
-
-    pub async fn stop_server(&self) -> Result<()> {
-        let mut process_guard = self.process.lock().await;
-
-        if let Some(mut child) = process_guard.take() {
-            tracing::info!("Stopping Playwright server");
-            child
-                .kill()
-                .map_err(|e| Error::Other(format!("Failed to kill Playwright process: {}", e)))?;
-            child
-                .wait()
-                .map_err(|e| Error::Other(format!("Failed to wait for process: {}", e)))?;
-            tracing::info!("Playwright server stopped");
-        }
-
-        Ok(())
     }
 
     /// Spawn `exe` and wait for it to open the configured DevTools port.
@@ -899,6 +823,28 @@ impl PlaywrightBridge {
         Ok(())
     }
 
+    /// Ends the browser processes this bridge started, for quit. A browser it
+    /// only attached to is left running.
+    pub async fn kill_launched_browsers(&self) -> usize {
+        let mut browsers = self.browsers.lock().await;
+        let mut processes = self.browser_processes.lock().await;
+        let launched: Vec<String> = processes
+            .iter()
+            .filter(|(_, child)| child.is_some())
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        for id in &launched {
+            if let Some(Some(mut child)) = processes.remove(id) {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+            browsers.remove(id);
+        }
+
+        launched.len()
+    }
+
     pub async fn list_browsers(&self) -> Result<Vec<BrowserHandle>> {
         let browsers = self.browsers.lock().await;
         Ok(browsers.values().cloned().collect())
@@ -991,22 +937,6 @@ impl PlaywrightBridge {
                 }
                 None => discover_chromium()?,
             },
-            BrowserType::Firefox => match executable_override()? {
-                Some(configured) => {
-                    tracing::info!(
-                        "Using browser executable from {}: {}",
-                        BROWSER_EXECUTABLE_ENV,
-                        configured
-                    );
-                    configured
-                }
-                None => discover_firefox()?,
-            },
-            BrowserType::Webkit => {
-                return Err(Error::Other(
-                    "WebKit browser not yet supported on this platform".to_string(),
-                ))
-            }
         };
 
         Ok((exe, args))

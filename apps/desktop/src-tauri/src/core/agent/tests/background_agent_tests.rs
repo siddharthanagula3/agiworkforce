@@ -12,7 +12,7 @@
 //  * `BackgroundAgent::new()`, factory method (no manager needed)
 //  * `BackgroundAgent::is_terminal()` / `can_resume()`, pure predicate methods
 //  * `BackgroundAgent` mutation methods: `start`, `complete`, `fail`, `cancel`,
-//    `pause`, `take_over`, `update_progress`
+//    `pause`, `update_progress`
 //  * Serde JSON round-trips for all public structs
 //  * `AgentCommand` enum construction
 //  * Module-level constants: `MAX_BACKGROUND_AGENTS`, `DEFAULT_AGENT_TIMEOUT_SECS`
@@ -239,6 +239,7 @@ mod tests {
             current_step_description: "Analysing dependencies".to_string(),
             percentage: 30,
             elapsed_secs: 45,
+            awaiting_approval: false,
         };
         assert_eq!(p.current_step, 3);
         assert_eq!(p.total_steps, 10);
@@ -264,6 +265,7 @@ mod tests {
             current_step_description: "Building index".to_string(),
             percentage: 25,
             elapsed_secs: 120,
+            awaiting_approval: false,
         };
         let json = serde_json::to_string(&p).expect("serialize AgentProgress");
         let back: AgentProgress = serde_json::from_str(&json).expect("deserialize AgentProgress");
@@ -372,6 +374,7 @@ mod tests {
             conversation_snapshot: vec![],
             active_mcp_servers: vec!["gmail".to_string()],
             custom_instructions: Some("Be concise.".to_string()),
+            boundary: None,
         };
         assert_eq!(ctx.working_directory.as_deref(), Some("/home/user/project"));
         assert_eq!(
@@ -397,6 +400,7 @@ mod tests {
             }],
             active_mcp_servers: vec!["notion".to_string(), "gmail".to_string()],
             custom_instructions: Some("Be verbose.".to_string()),
+            boundary: None,
         };
 
         let json = serde_json::to_string(&ctx).expect("serialize context");
@@ -754,28 +758,6 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // BackgroundAgent::take_over()
-    // ------------------------------------------------------------------
-
-    #[test]
-    fn test_take_over_sets_taken_over_and_completed_at() {
-        let mut agent = make_agent_with_status(BackgroundAgentStatus::Running);
-        agent.take_over();
-        assert_eq!(agent.status, BackgroundAgentStatus::TakenOver);
-        assert!(agent.completed_at.is_some());
-        assert!(agent.is_terminal());
-    }
-
-    #[test]
-    fn test_take_over_from_queued_also_works() {
-        // take_over() sets TakenOver unconditionally (no guard like pause()).
-        let mut agent = make_agent_with_status(BackgroundAgentStatus::Queued);
-        agent.take_over();
-        assert_eq!(agent.status, BackgroundAgentStatus::TakenOver);
-        assert!(agent.completed_at.is_some());
-    }
-
-    // ------------------------------------------------------------------
     // BackgroundAgent::update_progress()
     // ------------------------------------------------------------------
 
@@ -932,23 +914,6 @@ mod tests {
         assert!(agent.completed_at.is_some());
     }
 
-    #[test]
-    fn test_full_lifecycle_queued_to_taken_over() {
-        let mut agent = BackgroundAgent::new(
-            "conv-takeover".to_string(),
-            "User will resume to foreground".to_string(),
-            BackgroundAgentContext::default(),
-            2,
-        );
-
-        agent.start();
-        agent.take_over();
-
-        assert_eq!(agent.status, BackgroundAgentStatus::TakenOver);
-        assert!(agent.is_terminal());
-        assert!(agent.completed_at.is_some());
-    }
-
     // ------------------------------------------------------------------
     // BackgroundAgent, Serde JSON roundtrip
     // ------------------------------------------------------------------
@@ -964,6 +929,7 @@ mod tests {
                 conversation_snapshot: vec![],
                 active_mcp_servers: vec!["test-server".to_string()],
                 custom_instructions: None,
+                boundary: None,
             },
             7,
         );
@@ -1026,12 +992,6 @@ mod tests {
     fn test_agent_command_cancel_is_constructable() {
         let cmd = AgentCommand::Cancel;
         assert!(matches!(cmd, AgentCommand::Cancel));
-    }
-
-    #[test]
-    fn test_agent_command_take_over_is_constructable() {
-        let cmd = AgentCommand::TakeOver;
-        assert!(matches!(cmd, AgentCommand::TakeOver));
     }
 
     #[test]

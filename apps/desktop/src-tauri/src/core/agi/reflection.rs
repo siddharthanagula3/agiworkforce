@@ -1204,10 +1204,8 @@ mod tests {
     /// KnowledgeBase and LearningSystem open keyed databases under
     /// `app_data_dir()`. Without an override they open the developer's real
     /// application database, so the suite depended on that machine's state.
-    static APP_DATA_DIR_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
     fn isolated_app_data() -> std::sync::MutexGuard<'static, ()> {
-        let guard = APP_DATA_DIR_GUARD
+        let guard = crate::sys::utils::APP_DATA_DIR_ENV_LOCK
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let dir =

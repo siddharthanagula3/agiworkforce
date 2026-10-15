@@ -65,24 +65,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_file_metadata() {
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("test.txt");
-
-        fs::write(&file_path, "test content").unwrap();
-
-        let metadata = file_metadata(file_path.to_str().unwrap().to_string())
-            .await
-            .unwrap();
-
-        assert!(metadata.is_file);
-        assert!(!metadata.is_dir);
-        assert_eq!(metadata.size, 12);
-        assert!(metadata.created > 0);
-        assert!(metadata.modified > 0);
-    }
-
-    #[tokio::test]
     async fn test_dir_operations() {
         let dir = tempdir().unwrap();
         let test_dir = dir.path().join("test_dir");
@@ -116,23 +98,6 @@ mod tests {
 
         let op = FileOperation::Execute;
         assert_eq!(op.as_str(), "execute");
-    }
-
-    #[test]
-    fn test_file_metadata_serialization() {
-        let metadata = FileMetadata {
-            size: 1024,
-            is_file: true,
-            is_dir: false,
-            created: 1234567890,
-            modified: 1234567890,
-            readonly: false,
-        };
-
-        let json = serde_json::to_string(&metadata).unwrap();
-        assert!(json.contains("\"size\":1024"));
-        assert!(json.contains("\"is_file\":true"));
-        assert!(json.contains("\"is_dir\":false"));
     }
 
     #[test]

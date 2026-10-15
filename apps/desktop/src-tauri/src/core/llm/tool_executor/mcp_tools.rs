@@ -70,6 +70,27 @@ impl ToolExecutor {
             .ok_or_else(|| anyhow!("MCP state not available"))?;
         let (timeout_ms, server_args) = Self::split_mcp_control_args(args);
         let normalization_args = server_args.clone();
+
+        if let (Some(app), Ok((server_name, _))) = (
+            self.app_handle.as_ref(),
+            mcp_state.registry.resolve_tool_id(&tool_call.name),
+        ) {
+            if let Err(e) = mcp_state
+                .refresh_expiring_oauth_session(app, &server_name)
+                .await
+            {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": e.clone(), "success": false }),
+                    error: Some(e),
+                    metadata: HashMap::from([
+                        ("tool_name".to_string(), json!(tool_call.name)),
+                        ("tool_source".to_string(), json!("mcp")),
+                    ]),
+                });
+            }
+        }
+
         let started = Instant::now();
 
         tracing::info!(

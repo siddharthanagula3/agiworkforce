@@ -1,5 +1,8 @@
 use super::*;
+use crate::core::agent::background_agent::TRIGGER_RUN_PREFIX;
 use crate::core::agent::{BackgroundAgent, BackgroundAgentContext, BackgroundAgentManagerState};
+use crate::sys::commands::chat::{AppDatabase, ChatExecutionMode};
+use agiworkforce_model_registry::TrustMode;
 use tokio::time::{sleep, Duration};
 
 const MAX_BACKGROUND_AGENT_GOAL_CHARS: usize = 20_000;
@@ -8,7 +11,40 @@ const MAX_BACKGROUND_AGENT_ID_CHARS: usize = 256;
 const BACKGROUND_AGENT_POLL_INTERVAL_MS: u64 = 250;
 const MAX_BACKGROUND_AGENT_BLOCK_MS: u64 = 55_000;
 
+/// The boundary a stored conversation's execution mode names.
+fn boundary_of_stored_mode(stored: &str) -> Result<TrustMode> {
+    serde_json::from_value::<ChatExecutionMode>(Value::String(stored.to_string()))
+        .map(ChatExecutionMode::trust_mode)
+        .map_err(|_| {
+            anyhow!("The run was not started because this chat has an unknown mode: {stored}")
+        })
+}
+
 impl ToolExecutor {
+    /// The boundary of the chat this run is started from, read from its
+    /// stored conversation, so the run stays where the chat is. `None` when
+    /// the tool runs outside a stored conversation; the run then takes the
+    /// app's boundary. A mode that cannot be read starts nothing.
+    fn running_chat_boundary(&self, app: &tauri::AppHandle) -> Result<Option<TrustMode>> {
+        let Some(conversation_id) = self.conversation_id else {
+            return Ok(None);
+        };
+        let database = app.try_state::<AppDatabase>().ok_or_else(|| {
+            anyhow!("The run was not started because this chat's mode could not be read")
+        })?;
+        let conn = database.connection().map_err(|e| anyhow!("{}", e))?;
+        let stored: String = conn
+            .query_row(
+                "SELECT execution_mode FROM conversations WHERE id = ?1",
+                rusqlite::params![conversation_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| {
+                anyhow!("The run was not started because this chat's mode could not be read: {e}")
+            })?;
+        boundary_of_stored_mode(&stored).map(Some)
+    }
+
     pub(super) async fn execute_background_agent_start_tool(
         &self,
         args: &HashMap<String, Value>,
@@ -43,6 +79,12 @@ impl ToolExecutor {
         let conversation_id =
             optional_bounded_string(args, "conversation_id", MAX_BACKGROUND_AGENT_ID_CHARS)?
                 .unwrap_or_else(|| format!("tool:{action_id}"));
+        if conversation_id.starts_with(TRIGGER_RUN_PREFIX) {
+            return Err(anyhow!(
+                "conversation_id cannot start with '{TRIGGER_RUN_PREFIX}': that names a run an automation trigger started"
+            ));
+        }
+        let boundary = self.running_chat_boundary(app)?;
 
         let context = BackgroundAgentContext {
             working_directory,
@@ -50,6 +92,7 @@ impl ToolExecutor {
             conversation_snapshot: Vec::new(),
             active_mcp_servers: Vec::new(),
             custom_instructions,
+            boundary,
         };
 
         let manager = state.0.read().await;
@@ -269,4 +312,23 @@ fn sanitize_background_agent(agent: &BackgroundAgent) -> Value {
         "conversationSnapshotCount": agent.context.conversation_snapshot.len(),
         "hasCustomInstructions": agent.context.custom_instructions.is_some(),
     })
+}
+
+#[cfg(test)]
+mod boundary_tests {
+    use super::*;
+
+    #[test]
+    fn a_chat_mode_names_the_boundary_its_background_run_keeps() {
+        assert_eq!(
+            boundary_of_stored_mode("local_only").ok(),
+            Some(TrustMode::Local)
+        );
+        assert_eq!(
+            boundary_of_stored_mode("cloud_managed").ok(),
+            Some(TrustMode::ManagedCloud)
+        );
+        assert_eq!(boundary_of_stored_mode("byok").ok(), Some(TrustMode::Byok));
+        assert!(boundary_of_stored_mode("somewhere_else").is_err());
+    }
 }

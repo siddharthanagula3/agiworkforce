@@ -789,6 +789,7 @@ mod tests {
             },
             client_metadata_url: None,
             on_log: noop_log(),
+            before_respawn: None,
         };
         let (tx, _rx) = tokio::sync::mpsc::channel(1);
         HttpConn::connect(

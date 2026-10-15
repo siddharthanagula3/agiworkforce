@@ -3,6 +3,7 @@
 //! This module provides tool definitions and execution for chat messages,
 //! enabling the LLM to use tools like Claude Desktop/Code.
 
+use crate::automation::computer_use::TARGET_APP_PARAMETER;
 use crate::core::agi::tools::{ParameterType, Tool, ToolRegistry};
 use crate::core::llm::ToolDefinition;
 use crate::sys::commands::chat::prompt_context::escape_xml;
@@ -13,9 +14,51 @@ use serde_json::json;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-/// Excluded tools for chat schema generation.
-/// We intentionally hide legacy aliases to reduce duplicate tool choices.
-const CHAT_TOOL_SCHEMA_EXCLUSIONS: &[&str] = &["media_generate_image", "media_generate_video"];
+/// Registry tools withheld from chat schemas.
+const CHAT_TOOL_SCHEMA_EXCLUSIONS: &[&str] = &[
+    // Legacy aliases, hidden to avoid duplicate tool choices.
+    "media_generate_image",
+    "media_generate_video",
+    // Tool results reach the model as text only, so a screen capture would
+    // arrive as a file path the model cannot look at.
+    "ui_screenshot",
+];
+
+/// Desktop tools that act on one app the model names. Picking the app is
+/// implemented on macOS only, so elsewhere they are not offered at all.
+const TARGET_APP_TOOLS: &[&str] = &["ui_click", "ui_type"];
+
+const DATABASE_TOOLS_ARE_FOR_GOAL_RUNS: &str = "Database tools are not available in chat. Past conversations are reachable through conversation_search and recent_chats.";
+const REASONING_TOOL_IS_FOR_GOAL_RUNS: &str =
+    "llm_reason is not available in chat: reason in your own reply instead.";
+
+/// Registry tools a chat neither sees nor may call, with what the model is
+/// told when it names one anyway. Goal runs keep them: there the database
+/// tools reach a database the person connected, and `llm_reason` is how a plan
+/// asks a model. In chat the database tools ran the model's SQL on the app's
+/// own store, which holds every account's chats on every execution boundary.
+const NOT_OFFERED_IN_CHAT: &[(&str, &str)] = &[
+    ("db_query", DATABASE_TOOLS_ARE_FOR_GOAL_RUNS),
+    ("db_execute", DATABASE_TOOLS_ARE_FOR_GOAL_RUNS),
+    ("db_transaction_begin", DATABASE_TOOLS_ARE_FOR_GOAL_RUNS),
+    ("db_transaction_commit", DATABASE_TOOLS_ARE_FOR_GOAL_RUNS),
+    ("db_transaction_rollback", DATABASE_TOOLS_ARE_FOR_GOAL_RUNS),
+    ("llm_reason", REASONING_TOOL_IS_FOR_GOAL_RUNS),
+];
+
+pub(crate) fn not_offered_in_chat(tool_name: &str) -> Option<&'static str> {
+    NOT_OFFERED_IN_CHAT
+        .iter()
+        .find(|(tool, _)| *tool == tool_name)
+        .map(|(_, told)| *told)
+}
+
+fn withheld_from_chat(tool_name: &str) -> bool {
+    CHAT_TOOL_SCHEMA_EXCLUSIONS.contains(&tool_name)
+        || not_offered_in_chat(tool_name).is_some()
+        || (cfg!(not(target_os = "macos")) && TARGET_APP_TOOLS.contains(&tool_name))
+        || crate::core::llm::tool_executor::platform_unavailable_reason(tool_name).is_some()
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ChatToolExposure {
@@ -111,7 +154,7 @@ fn build_registry_tool_definitions(registry: &ToolRegistry) -> Vec<ToolDefinitio
     let mut tools: Vec<ToolDefinition> = registry
         .list_tools()
         .into_iter()
-        .filter(|tool| !CHAT_TOOL_SCHEMA_EXCLUSIONS.contains(&tool.id.as_str()))
+        .filter(|tool| !withheld_from_chat(&tool.id))
         .map(|tool| convert_tool_to_definition(&tool))
         .collect();
 
@@ -160,7 +203,11 @@ pub fn build_chat_tools_for_turn(
             tools.extend(build_registry_tool_definitions(&registry));
         } else {
             // Fallback: create basic tool definitions manually if registry creation fails
-            tools.extend(create_builtin_tool_definitions());
+            tools.extend(
+                create_builtin_tool_definitions()
+                    .into_iter()
+                    .filter(|tool| !withheld_from_chat(&tool.name)),
+            );
         }
     }
 
@@ -367,24 +414,17 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
             }),
             strict: None,
         },
-        // Screenshot
-        ToolDefinition {
-            name: "ui_screenshot".to_string(),
-            description: "Take a screenshot of the current screen. Use this when the user asks to see their screen or what's displayed.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {},
-                "required": []
-            }),
-            strict: None,
-        },
         // UI Click
         ToolDefinition {
             name: "ui_click".to_string(),
-            description: "Click on a desktop UI target by coordinates, native element_id, or visible text.".to_string(),
+            description: "Click in one named app. Name it in `app`; it is brought to the front first. Target a control by its visible text (preferred), by native element_id, or by screen coordinates that lie on that app's window.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
+                    "app": {
+                        "type": "string",
+                        "description": TARGET_APP_PARAMETER
+                    },
                     "target": {
                         "type": "object",
                         "description": "Target object: {\"coordinates\":{\"x\":number,\"y\":number}}, {\"x\":number,\"y\":number}, {\"element_id\":\"...\"}, or {\"text\":\"...\"}."
@@ -395,17 +435,21 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                         "default": "left"
                     }
                 },
-                "required": ["target"]
+                "required": ["app", "target"]
             }),
             strict: None,
         },
         // UI Type
         ToolDefinition {
             name: "ui_type".to_string(),
-            description: "Type text into a desktop UI target by coordinates, native element_id, or visible text.".to_string(),
+            description: "Type text into one named app. Name it in `app`; it is brought to the front first. Focus the field by its visible text (preferred), by native element_id, or by screen coordinates that lie on that app's window, then type.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
+                    "app": {
+                        "type": "string",
+                        "description": TARGET_APP_PARAMETER
+                    },
                     "target": {
                         "type": "object",
                         "description": "Target object: {\"coordinates\":{\"x\":number,\"y\":number}}, {\"x\":number,\"y\":number}, {\"element_id\":\"...\"}, or {\"text\":\"...\"}."
@@ -415,7 +459,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                         "description": "Text to type."
                     }
                 },
-                "required": ["target", "text"]
+                "required": ["app", "target", "text"]
             }),
             strict: None,
         },
@@ -1257,29 +1301,6 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
             strict: None,
         },
 
-        // ── format_file, auto-formatter ───────────────────────────────────────
-        ToolDefinition {
-            name: "format_file".to_string(),
-            description: "Run the code formatter appropriate for the file extension after \
-                writing or editing a file. Detects prettier, biome, rustfmt, ruff, black, \
-                gofmt, clang-format, shfmt, and more. Always call this after editing code.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Absolute path to the file to format"
-                    },
-                    "project_root": {
-                        "type": "string",
-                        "description": "Project root for detecting project-local formatters (optional)"
-                    }
-                },
-                "required": ["path"]
-            }),
-            strict: None,
-        },
-
         // ── test_run, run tests and get structured results ────────────────────
         ToolDefinition {
             name: "test_run".to_string(),
@@ -1632,14 +1653,62 @@ mod tests {
         assert!(!js_properties.contains_key("retry_delay_ms"));
         assert!(!js_properties.contains_key("await_promise"));
 
-        let ui_click = tools
+        if cfg!(target_os = "macos") {
+            let ui_click = tools
+                .iter()
+                .find(|tool| tool.name == "ui_click")
+                .expect("ui_click should be present");
+            assert!(ui_click.description.contains("coordinates"));
+            assert!(ui_click.description.contains("element_id"));
+            assert!(ui_click.description.contains("visible text"));
+            assert!(!ui_click.description.contains("image matching"));
+        }
+    }
+
+    /// The chat executor refuses a desktop action without a named app, so the
+    /// schema the model sees has to ask for one; where naming an app is not
+    /// implemented the tools are not offered rather than offered and refused.
+    #[test]
+    fn chat_desktop_tools_require_the_app_they_act_on() {
+        let tools = build_chat_tools(None, None);
+        for name in TARGET_APP_TOOLS {
+            let tool = tools.iter().find(|tool| tool.name == *name);
+            if cfg!(target_os = "macos") {
+                let tool = tool.unwrap_or_else(|| panic!("{name} should be offered on macOS"));
+                assert!(tool.parameters["properties"]["app"].is_object());
+                let required = tool.parameters["required"]
+                    .as_array()
+                    .expect("required array");
+                assert!(required.iter().any(|field| field == "app"));
+                assert!(required.iter().any(|field| field == "target"));
+            } else {
+                assert!(tool.is_none(), "{name} is offered where it cannot run");
+            }
+        }
+
+        let fallback = create_builtin_tool_definitions();
+        let click = fallback
             .iter()
             .find(|tool| tool.name == "ui_click")
-            .expect("ui_click should be present");
-        assert!(ui_click.description.contains("coordinates"));
-        assert!(ui_click.description.contains("element_id"));
-        assert!(ui_click.description.contains("visible text"));
-        assert!(!ui_click.description.contains("image matching"));
+            .expect("fallback ui_click");
+        assert_eq!(
+            click.parameters["required"]
+                .as_array()
+                .expect("required array")
+                .iter()
+                .filter(|field| *field == "app")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn chat_does_not_offer_a_screenshot_the_model_cannot_see() {
+        let tools = build_chat_tools(None, None);
+        assert!(tools.iter().all(|tool| tool.name != "ui_screenshot"));
+        assert!(create_builtin_tool_definitions()
+            .iter()
+            .all(|tool| tool.name != "ui_screenshot"));
     }
 
     #[test]
@@ -1787,8 +1856,6 @@ mod tests {
         let names: HashSet<&str> = tools.iter().map(|tool| tool.name.as_str()).collect();
 
         // Ensure cross-domain app tools are exposed to chat when available.
-        assert!(names.contains("email_send"));
-        assert!(names.contains("calendar_create_event"));
         assert!(names.contains("cloud_upload"));
         assert!(names.contains("productivity_create_task"));
     }
@@ -1815,6 +1882,174 @@ mod tests {
         assert!(
             multi_edit.parameters["properties"]["edits"]["items"].is_object(),
             "multi_edit.edits must include JSON Schema items"
+        );
+    }
+
+    fn advertised_chat_tools() -> Vec<ToolDefinition> {
+        let registry = create_tool_registry_for_schema().expect("tool registry");
+        let from_registry = build_registry_tool_definitions(&registry);
+        let from_fallback: Vec<ToolDefinition> = create_builtin_tool_definitions()
+            .into_iter()
+            .filter(|tool| !withheld_from_chat(&tool.name))
+            .collect();
+        assert!(!from_registry.is_empty() && !from_fallback.is_empty());
+        from_registry.into_iter().chain(from_fallback).collect()
+    }
+
+    #[test]
+    fn every_tool_the_chat_can_advertise_has_a_guard_policy() {
+        let guard = ToolExecutionGuard::new();
+        let unguarded: HashSet<String> = advertised_chat_tools()
+            .into_iter()
+            .map(|tool| tool.name)
+            .filter(|name| guard.get_risk_level(name).is_none())
+            .collect();
+
+        assert!(
+            unguarded.is_empty(),
+            "the guard refuses every call to a tool it has no policy for, so these \
+             advertised tools can never run: {unguarded:?}"
+        );
+    }
+
+    #[test]
+    fn every_parameter_a_policy_allows_is_one_the_tool_declares() {
+        let guard = ToolExecutionGuard::new();
+        let advertised = advertised_chat_tools();
+        let mut undeclared = Vec::new();
+
+        for tool in &advertised {
+            let declared_anywhere = |parameter: &str| {
+                advertised
+                    .iter()
+                    .filter(|other| other.name == tool.name)
+                    .any(|other| other.parameters["properties"].get(parameter).is_some())
+            };
+            for parameter in guard.allowed_parameters(&tool.name).unwrap_or_default() {
+                if !declared_anywhere(parameter.as_str()) {
+                    undeclared.push(format!("{}.{parameter}", tool.name));
+                }
+            }
+        }
+        undeclared.sort();
+        undeclared.dedup();
+
+        assert!(
+            undeclared.is_empty(),
+            "the guard lets through parameters no schema tells the model about: {undeclared:?}"
+        );
+    }
+
+    #[test]
+    fn chat_neither_offers_nor_lists_the_goal_run_database_and_reasoning_tools() {
+        let advertised = advertised_chat_tools();
+
+        for tool in [
+            "db_query",
+            "db_execute",
+            "db_transaction_begin",
+            "db_transaction_commit",
+            "db_transaction_rollback",
+            "llm_reason",
+        ] {
+            assert!(
+                advertised.iter().all(|offered| offered.name != tool),
+                "{tool}"
+            );
+            assert!(not_offered_in_chat(tool).is_some(), "{tool}");
+        }
+        assert!(not_offered_in_chat("conversation_search").is_none());
+        assert!(not_offered_in_chat("file_read").is_none());
+    }
+
+    const FIXTURE_SHA256: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    /// Parameters the executor fills in before it asks the guard, so a call
+    /// that omits them still reaches the guard with them.
+    const FILLED_BY_THE_EXECUTOR: &[(&str, &str)] = &[("file_list", "path")];
+
+    /// A value the guard's validator for this parameter accepts. Anything the
+    /// guard does not inspect gets a value of the type the schema declares.
+    fn argument_fixture(
+        tool: &str,
+        parameter: &str,
+        schema: &serde_json::Value,
+    ) -> serde_json::Value {
+        let granted_file = std::env::temp_dir()
+            .join("guard-schema-fixture.txt")
+            .to_string_lossy()
+            .into_owned();
+        match (tool, parameter) {
+            ("git_diff", "file_path") => json!("src/lib.rs"),
+            ("multi_edit", "edits") => json!([{
+                "path": granted_file,
+                "old_text": "a",
+                "new_text": "b",
+                "expected_sha256": FIXTURE_SHA256
+            }]),
+            ("coding_checkpoint_create", "paths") => json!([granted_file]),
+            ("ui_click" | "ui_type", "target") => json!({ "text": "Send" }),
+            (_, "url") => json!("https://8.8.8.8/data"),
+            (_, "expected_sha256") => json!(FIXTURE_SHA256),
+            (_, "command") => json!("echo ok"),
+            (_, "code") => json!("print(1)"),
+            (_, "script") => json!("return document.querySelector('h1').textContent"),
+            (_, "path" | "project_root") => json!(granted_file),
+            (_, name) if name.ends_with("_path") => json!(granted_file),
+            _ => match schema["type"].as_str() {
+                Some("integer" | "number") => json!(1),
+                Some("boolean") => json!(false),
+                Some("array") => json!([]),
+                Some("object") => json!({}),
+                _ => json!("fixture"),
+            },
+        }
+    }
+
+    fn schema_arguments(tool: &ToolDefinition, required_only: bool) -> serde_json::Value {
+        let required: HashSet<&str> = tool.parameters["required"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|name| name.as_str())
+            .collect();
+        let mut arguments = serde_json::Map::new();
+        if let Some(properties) = tool.parameters["properties"].as_object() {
+            for (name, schema) in properties {
+                let always_present = required.contains(name.as_str())
+                    || FILLED_BY_THE_EXECUTOR.contains(&(tool.name.as_str(), name.as_str()));
+                if required_only && !always_present {
+                    continue;
+                }
+                arguments.insert(name.clone(), argument_fixture(&tool.name, name, schema));
+            }
+        }
+        serde_json::Value::Object(arguments)
+    }
+
+    #[tokio::test]
+    async fn the_guard_accepts_every_advertised_tool_called_by_its_own_schema() {
+        let mut refused = Vec::new();
+        for tool in advertised_chat_tools() {
+            for (form, required_only) in [("required", true), ("declared", false)] {
+                let arguments = schema_arguments(&tool, required_only);
+                if let Err(error) = ToolExecutionGuard::new()
+                    .validate_tool_call(&tool.name, &arguments)
+                    .await
+                {
+                    refused.push(format!(
+                        "{} with its {form} parameters {arguments}: {error}",
+                        tool.name
+                    ));
+                }
+            }
+        }
+
+        assert!(
+            refused.is_empty(),
+            "the guard refuses a call built from the tool's own schema, so the \
+             tool fails for every user:\n{}",
+            refused.join("\n")
         );
     }
 }

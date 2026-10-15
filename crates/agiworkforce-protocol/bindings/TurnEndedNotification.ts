@@ -17,4 +17,10 @@ export type TurnEndedNotification = {
   error: string | null;
   failure: TurnFailure | null;
   managedRequestIds: Array<string>;
+  /**
+   * Follow-ups steered into the turn that it ended before delivering, the
+   * newest last. A client that sent them puts them back where the user can
+   * send them again.
+   */
+  unsentSteers?: number;
 };

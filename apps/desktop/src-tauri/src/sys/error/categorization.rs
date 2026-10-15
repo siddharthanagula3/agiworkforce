@@ -42,8 +42,6 @@ impl Categorizable for AGIError {
             AGIError::Other(_) => ErrorCategory::Unknown,
             AGIError::Database(_) => ErrorCategory::Transient,
             AGIError::CommandTimeout(_) => ErrorCategory::Transient,
-            AGIError::EmailSend(_) => ErrorCategory::Transient,
-            AGIError::EmailParse(_) => ErrorCategory::Permanent,
             AGIError::InvalidPath(_) => ErrorCategory::Permanent,
         }
     }

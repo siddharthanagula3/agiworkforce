@@ -27,13 +27,10 @@ use serde::Serialize;
 use tauri::Emitter;
 
 use crate::features::speech::dictation::{
-    start_os_hook, system_dictation_available, BeginError, DictationOutcome, DictationPhase,
-    DictationSnapshot, DictationSource, HotkeyChord, HotkeyEdge, SessionError,
-    DICTATION_COORDINATOR, DICTATION_EVENT_VERSION, GLOBAL_HOTKEY_HOOK,
+    start_os_hook, BeginError, DictationOutcome, DictationPhase, DictationSnapshot,
+    DictationSource, HotkeyChord, HotkeyEdge, SessionError, DICTATION_COORDINATOR,
+    DICTATION_EVENT_VERSION, GLOBAL_HOTKEY_HOOK,
 };
-
-pub const INJECTION_UNAVAILABLE: &str =
-    "system dictation is unavailable in this build; text injection is disabled";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -291,72 +288,4 @@ pub async fn voice_stop_global_ptt(app: tauri::AppHandle) -> Result<(), String> 
 
     tracing::info!("[dictation] global hotkey hook disabled");
     Ok(())
-}
-
-/// Inject `text` into the currently OS-focused window/field.
-///
-/// Uses `enigo` with the shared `lock_enigo` mutex so all synthetic input is
-/// serialised app-wide. This is a bare typing call with no target
-/// pinning/revalidation, secure-field refusal, or clipboard transaction (plan
-/// phase 4), so it fails closed on the same capability gate as global
-/// dictation: until `system_dictation_available()` is true no caller, present
-/// or future, can reach the injection path.
-///
-/// On macOS this requires the Accessibility permission ("control this computer").
-#[tauri::command]
-pub async fn voice_inject_text(text: String) -> Result<(), String> {
-    if !system_dictation_available() {
-        return Err(INJECTION_UNAVAILABLE.to_string());
-    }
-
-    if text.is_empty() {
-        return Ok(());
-    }
-
-    // Offload to a blocking thread, enigo interacts with OS input APIs that
-    // can block briefly, and we must not block the Tokio worker threads.
-    tokio::task::spawn_blocking(move || -> Result<(), String> {
-        use crate::automation::input::lock_enigo;
-        use enigo::{Enigo, Keyboard, Settings};
-
-        let _guard = lock_enigo().map_err(|e| format!("Failed to acquire enigo lock: {}", e))?;
-
-        let mut enigo = Enigo::new(&Settings::default())
-            .map_err(|e| format!("Failed to create Enigo instance: {:?}", e))?;
-
-        enigo
-            .text(&text)
-            .map_err(|e| format!("Failed to inject text: {:?}", e))?;
-
-        tracing::debug!("[dictation] injected {} chars via enigo", text.len());
-        Ok(())
-    })
-    .await
-    .map_err(|e| format!("voice_inject_text task panicked: {}", e))?
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn inject_text_refuses_empty_input_instead_of_reporting_success() {
-        assert!(
-            !system_dictation_available(),
-            "this test asserts the fail-closed branch; revisit it when injection ships"
-        );
-
-        let refusal = voice_inject_text(String::new())
-            .await
-            .expect_err("the capability gate must be checked before any other branch");
-        assert_eq!(refusal, INJECTION_UNAVAILABLE);
-    }
-
-    #[tokio::test]
-    async fn inject_text_refuses_before_reaching_the_os_input_path() {
-        let refusal = voice_inject_text("dictated words".to_string())
-            .await
-            .expect_err("injection must not reach enigo while dictation is unavailable");
-        assert_eq!(refusal, INJECTION_UNAVAILABLE);
-    }
 }

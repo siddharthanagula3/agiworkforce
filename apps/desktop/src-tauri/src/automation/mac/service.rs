@@ -1,17 +1,19 @@
 #![allow(unsafe_code)]
 use anyhow::{anyhow, Result};
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::ffi::c_void;
 use std::sync::Arc;
 
 use accessibility_sys::{
-    kAXChildrenAttribute, kAXDescriptionAttribute, kAXFocusedAttribute, kAXIdentifierAttribute,
-    kAXPressAction, kAXRaiseAction, kAXRoleAttribute, kAXTitleAttribute, kAXValueAttribute,
-    kAXWindowsAttribute, AXIsProcessTrusted, AXUIElementCopyAttributeValue,
-    AXUIElementCopyAttributeValues, AXUIElementCopyElementAtPosition, AXUIElementCreateApplication,
-    AXUIElementCreateSystemWide, AXUIElementGetAttributeValueCount, AXUIElementPerformAction,
-    AXUIElementRef, AXUIElementSetAttributeValue, AXValueGetValue,
+    kAXChildrenAttribute, kAXDescriptionAttribute, kAXErrorCannotComplete, kAXErrorSuccess,
+    kAXFocusedApplicationAttribute, kAXFocusedAttribute, kAXFocusedWindowAttribute,
+    kAXHelpAttribute, kAXIdentifierAttribute, kAXPlaceholderValueAttribute, kAXPressAction,
+    kAXRaiseAction, kAXRoleAttribute, kAXTitleAttribute, kAXValueAttribute, kAXWindowsAttribute,
+    AXIsProcessTrusted, AXUIElementCopyAttributeValue, AXUIElementCopyAttributeValues,
+    AXUIElementCopyElementAtPosition, AXUIElementCreateApplication, AXUIElementCreateSystemWide,
+    AXUIElementGetAttributeValueCount, AXUIElementGetPid, AXUIElementPerformAction, AXUIElementRef,
+    AXUIElementSetAttributeValue, AXValueGetValue,
 };
 use core_foundation::array::{CFArrayGetCount, CFArrayGetValueAtIndex};
 use core_foundation::base::{CFTypeRef, TCFType};
@@ -36,6 +38,20 @@ pub struct CGSize {
 
 const K_AXVALUE_CGPOINT_TYPE: u32 = 1;
 const K_AXVALUE_CGSIZE_TYPE: u32 = 2;
+
+/// Every cached element holds a retain on an accessibility object in another
+/// process, so the cache keeps the most recently registered ids only.
+const ELEMENT_CACHE_CAPACITY: usize = 1024;
+
+/// The attributes a control can be named by. A text field usually has no
+/// title, and is known by its value, placeholder or help text instead.
+const NAME_ATTRIBUTES: &[&str] = &[
+    kAXTitleAttribute,
+    kAXDescriptionAttribute,
+    kAXValueAttribute,
+    kAXPlaceholderValueAttribute,
+    kAXHelpAttribute,
+];
 
 /// Thread-safe wrapper for AXUIElementRef.
 ///
@@ -122,9 +138,32 @@ impl Drop for AXElement {
 unsafe impl Send for AXElement {}
 unsafe impl Sync for AXElement {}
 
+#[derive(Default)]
+struct ElementCache {
+    elements: HashMap<String, AXElement>,
+    recency: VecDeque<String>,
+}
+
+impl ElementCache {
+    fn insert(&mut self, id: String, element: AXElement) {
+        self.recency.retain(|cached| cached != &id);
+        self.recency.push_back(id.clone());
+        self.elements.insert(id, element);
+        while self.recency.len() > ELEMENT_CACHE_CAPACITY {
+            if let Some(evicted) = self.recency.pop_front() {
+                self.elements.remove(&evicted);
+            }
+        }
+    }
+
+    fn get(&self, id: &str) -> Option<&AXElement> {
+        self.elements.get(id)
+    }
+}
+
 pub struct MacAutomationService {
     system_wide: AXElement,
-    cache: Mutex<HashMap<String, AXElement>>,
+    cache: Mutex<ElementCache>,
 }
 
 impl MacAutomationService {
@@ -136,7 +175,7 @@ impl MacAutomationService {
             }
             Ok(Self {
                 system_wide: AXElement::new(system_wide_ref),
-                cache: Mutex::new(HashMap::new()),
+                cache: Mutex::new(ElementCache::default()),
             })
         }
     }
@@ -154,15 +193,11 @@ impl MacAutomationService {
     }
 
     pub fn get_element(&self, id: &str) -> Result<AXElement> {
-        let cache = self.cache.lock();
-        if let Some(el) = cache.get(id) {
-            el.with_element(|ptr| unsafe {
-                core_foundation::base::CFRetain(ptr as *const c_void);
-            });
-            Ok(el.clone())
-        } else {
-            Err(anyhow!("Element not found in cache: {}", id))
-        }
+        self.cache
+            .lock()
+            .get(id)
+            .cloned()
+            .ok_or_else(|| anyhow!("Element not found in cache: {id}"))
     }
 
     pub fn element_at_point(&self, x: f32, y: f32) -> Result<AXElement> {
@@ -198,13 +233,88 @@ impl MacAutomationService {
         })
     }
 
+    /// The frontmost app's focused window, or the app itself when it has no
+    /// window. The focused control is no root: a search under a text field
+    /// never reaches the buttons beside it.
+    fn search_root(&self) -> Result<AXElement> {
+        let app = self
+            .system_wide
+            .with_element(|system_wide_ptr| unsafe {
+                Self::copy_element_attribute(system_wide_ptr, kAXFocusedApplicationAttribute)
+            })
+            .ok_or_else(|| anyhow!("No application has keyboard focus"))?;
+        let window = app.with_element(|app_ptr| unsafe {
+            Self::copy_element_attribute(app_ptr, kAXFocusedWindowAttribute)
+        });
+        Ok(window.unwrap_or(app))
+    }
+
+    /// The process that has keyboard focus, read live from the accessibility
+    /// server rather than from AppKit's cached frontmost-app notification.
+    pub fn frontmost_pid(&self) -> Result<i32> {
+        let app = self
+            .system_wide
+            .with_element(|system_wide_ptr| unsafe {
+                Self::copy_element_attribute(system_wide_ptr, kAXFocusedApplicationAttribute)
+            })
+            .ok_or_else(|| anyhow!("No application has keyboard focus"))?;
+        app.with_element(|ptr| unsafe { Self::owning_pid(ptr) })
+    }
+
+    /// The process owning whatever is drawn at a screen point, in the same
+    /// top-left global coordinates the pointer is driven in.
+    pub fn pid_at_point(&self, x: f32, y: f32) -> Result<i32> {
+        self.element_at_point(x, y)?
+            .with_element(|ptr| unsafe { Self::owning_pid(ptr) })
+    }
+
+    pub fn element_pid(&self, element_id: &str) -> Result<i32> {
+        self.get_element(element_id)?
+            .with_element(|ptr| unsafe { Self::owning_pid(ptr) })
+    }
+
+    unsafe fn owning_pid(element: AXUIElementRef) -> Result<i32> {
+        let mut pid = 0;
+        let error = AXUIElementGetPid(element, &mut pid);
+        if error == kAXErrorSuccess && pid > 0 {
+            Ok(pid)
+        } else {
+            Err(anyhow!(
+                "Could not read the owning process: accessibility error {error}"
+            ))
+        }
+    }
+
+    unsafe fn copy_element_attribute(
+        element: AXUIElementRef,
+        attribute: &str,
+    ) -> Option<AXElement> {
+        let attr = CFString::new(attribute);
+        let mut value_ref: *const c_void = std::ptr::null();
+        let error =
+            AXUIElementCopyAttributeValue(element, attr.as_concrete_TypeRef(), &mut value_ref);
+        if error == kAXErrorSuccess && !value_ref.is_null() {
+            Some(AXElement::new(value_ref as AXUIElementRef))
+        } else {
+            None
+        }
+    }
+
     pub fn invoke(&self, element_id: &str) -> Result<()> {
         let element = self.get_element(element_id)?;
-        let action = CFString::new("AXPress");
-        element.with_element(|ptr| unsafe {
-            AXUIElementPerformAction(ptr, action.as_concrete_TypeRef());
+        let action = CFString::new(kAXPressAction);
+        let error = element.with_element(|ptr| unsafe {
+            AXUIElementPerformAction(ptr, action.as_concrete_TypeRef())
         });
-        Ok(())
+        match error {
+            error if error == kAXErrorSuccess => Ok(()),
+            // The app did not answer before the accessibility timeout, which is
+            // what a press that opens a modal looks like: it may have happened.
+            error if error == kAXErrorCannotComplete => Err(anyhow!(
+                "The app did not confirm pressing element {element_id}; the press may still have taken effect, so check the screen before pressing it again"
+            )),
+            error => Err(anyhow!("Failed to press element {element_id}: accessibility error {error}")),
+        }
     }
 
     pub fn bounding_rect(&self, element_id: &str) -> Result<Option<BoundingRectangle>> {
@@ -405,23 +515,15 @@ impl MacAutomationService {
     /// Check if an element matches the query criteria
     fn element_matches_query(&self, element: AXUIElementRef, query: &ElementQuery) -> bool {
         unsafe {
-            // Check name filter
             if let Some(ref name_filter) = query.name {
-                let name = self
-                    .get_string_attribute(element, kAXTitleAttribute)
-                    .ok()
-                    .flatten()
-                    .or_else(|| {
-                        self.get_string_attribute(element, kAXDescriptionAttribute)
-                            .ok()
-                            .flatten()
-                    });
-
-                if let Some(name) = name {
-                    if !name.to_lowercase().contains(&name_filter.to_lowercase()) {
-                        return false;
-                    }
-                } else {
+                let wanted = name_filter.to_lowercase();
+                let named = NAME_ATTRIBUTES.iter().any(|attribute| {
+                    self.get_string_attribute(element, attribute)
+                        .ok()
+                        .flatten()
+                        .is_some_and(|name| name.to_lowercase().contains(&wanted))
+                });
+                if !named {
                     return false;
                 }
             }
@@ -532,6 +634,9 @@ impl MacAutomationService {
 
         let max_results = query.max_results.unwrap_or(100);
         let mut results = Vec::new();
+        if max_results == 0 {
+            return Ok(results);
+        }
 
         // Determine the root element to search from
         let root_element = if let Some(ref parent_id) = parent_id {
@@ -549,8 +654,7 @@ impl MacAutomationService {
                 return Err(anyhow!("Window not found: {}", window_name));
             }
         } else {
-            // Use focused element as root
-            self.focused_element()?
+            self.search_root()?
         };
 
         // Perform breadth-first search through the element tree
@@ -567,10 +671,6 @@ impl MacAutomationService {
             for element in queue.iter().take(max_elements_per_level) {
                 // Check if this element matches the query
                 if self.element_matches_query(*element, query) {
-                    // Retain for registration
-                    unsafe {
-                        core_foundation::base::CFRetain(*element as *const c_void);
-                    }
                     if let Ok(info) = self.element_to_info(*element) {
                         results.push(info);
                         if results.len() >= max_results {
@@ -707,7 +807,6 @@ impl MacAutomationService {
                             if window_ref.is_null() {
                                 continue;
                             }
-                            core_foundation::base::CFRetain(window_ref as *const c_void);
 
                             if let Ok(info) = self.element_to_info(window_ref) {
                                 // Include app name for context

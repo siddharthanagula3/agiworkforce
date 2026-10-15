@@ -22,10 +22,23 @@
 //! ```
 //!
 //! The overlay is a pure state machine exercised under unit tests and by the
-//! TUI event loop.
+//! TUI event loop. The event loop draws it with [`ElicitationOverlayState::render_into`]:
+//! the message, the URL and the fields scroll above the buttons, which are
+//! always drawn, and Accept answers only after the last of them was drawn.
 
+use std::cell::Cell;
+use std::ops::Range;
+
+use ratatui::layout::Rect;
+use ratatui::style::{Modifier, Style};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+
+use super::approval_overlay::wrap_cols;
+use super::scroll_gate::{draw_too_small, ScrollGate};
 use crate::mcp::elicitation::{ElicitationMode, ElicitationRequest, ElicitationResponse};
 use crate::terminal_text::sanitize_terminal_text;
+use crate::tui::terminal_palette::{ui_muted, ui_on_light, ui_warning};
 use crate::tui::widgets::interactive::{InteractiveView, KeyAction, ViewAction};
 use crate::tui::{display_width, pad_to_cols, truncate_cols};
 
@@ -304,6 +317,12 @@ const BUTTON_ACCEPT: usize = 0;
 const BUTTON_DECLINE: usize = 1;
 const BUTTON_CANCEL: usize = 2;
 
+const MAX_BOX_WIDTH: u16 = 82;
+/// The narrowest box that still holds the three buttons on one row.
+const MIN_INNER_COLS: usize = 36;
+const HINT: &str = "  Tab/↑↓ move   ← → enum/bool   Enter activates   Esc = Cancel";
+const SCROLL_HINT: &str = "  PgUp/PgDn Home/End scroll   Tab/↑↓ move   Esc = Cancel";
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -328,6 +347,12 @@ pub struct ElicitationOverlayState {
     focus: Focus,
     /// Set once the user confirms; `None` while the overlay is active.
     pub result: Option<ElicitationResponse>,
+    scroll: ScrollGate,
+    /// The focus moved, or the focused field was edited, since the last
+    /// draw, so the next one scrolls to it. A request opens at its top.
+    reveal_focus: Cell<bool>,
+    /// Accept was pressed before the end of the request was drawn.
+    refused_unread: bool,
 }
 
 impl ElicitationOverlayState {
@@ -355,6 +380,9 @@ impl ElicitationOverlayState {
             Focus::Field(0)
         };
         self.result = None;
+        self.scroll.reset();
+        self.reveal_focus.set(false);
+        self.refused_unread = false;
         self.visible = true;
     }
 
@@ -378,6 +406,7 @@ impl ElicitationOverlayState {
 
     /// Advance Tab focus: fields first, then buttons, then wrap to first field.
     fn tab_forward(&mut self) {
+        self.reveal_focus.set(true);
         self.focus = match self.focus {
             Focus::Field(i) => {
                 if i + 1 < self.field_count() {
@@ -399,6 +428,7 @@ impl ElicitationOverlayState {
     }
 
     fn tab_backward(&mut self) {
+        self.reveal_focus.set(true);
         self.focus = match self.focus {
             Focus::Field(0) => Focus::Button(self.button_count() - 1),
             Focus::Field(i) => Focus::Field(i - 1),
@@ -423,6 +453,10 @@ impl ElicitationOverlayState {
     }
 
     fn resolve_button(&mut self, button_idx: usize) -> ViewAction {
+        if button_idx == BUTTON_ACCEPT && !self.scroll.end_was_shown() {
+            self.refused_unread = true;
+            return ViewAction::Continue;
+        }
         let response = match button_idx {
             BUTTON_ACCEPT if self.mode == ElicitationMode::Url => {
                 ElicitationResponse::accept_without_content()
@@ -439,6 +473,174 @@ impl ElicitationOverlayState {
         } else {
             ViewAction::Close
         }
+    }
+
+    fn field_row(&self, index: usize) -> String {
+        let field = &self.fields[index];
+        let prefix = if self.focus == Focus::Field(index) {
+            "> "
+        } else {
+            "  "
+        };
+        let suffix = match &field.kind {
+            FieldKind::Enum { .. } => "  ← / → to cycle",
+            FieldKind::MultiEnum { .. } => "  ← / → move, Space toggle",
+            FieldKind::Bool { .. } => "  Space to toggle",
+            FieldKind::Text { .. } if field.sensitive => "  hidden",
+            FieldKind::Text { .. } => "",
+        };
+        let req_mark = if field.required { "*" } else { " " };
+        format!(
+            "{}{}{} [{}]{}",
+            prefix,
+            req_mark,
+            field.name,
+            field.render_value(),
+            suffix
+        )
+    }
+
+    fn shown_url(&self) -> Option<&str> {
+        self.url
+            .as_deref()
+            .filter(|_| self.mode == ElicitationMode::Url)
+    }
+
+    /// Everything the request asks the user to read, wrapped to `cols`, and
+    /// the rows of the focused field among them.
+    fn body_rows(&self, cols: usize) -> (Vec<String>, Option<Range<usize>>) {
+        let mut rows: Vec<String> = Vec::new();
+        for line in self.message.lines() {
+            rows.extend(wrap_cols(line, cols));
+        }
+        if let Some(url) = self.shown_url() {
+            rows.push(String::new());
+            rows.extend(wrap_cols(url, cols));
+        }
+        let mut focused = None;
+        if !self.fields.is_empty() {
+            rows.push(String::new());
+            for index in 0..self.fields.len() {
+                let first = rows.len();
+                rows.extend(wrap_cols(&self.field_row(index), cols));
+                if self.focus == Focus::Field(index) {
+                    focused = Some(first..rows.len());
+                }
+            }
+        }
+        (rows, focused)
+    }
+
+    /// Draw the request inside `area`. The title and the buttons are always
+    /// drawn; the message, the URL and the fields scroll between them.
+    pub fn render_into(&self, frame: &mut ratatui::Frame, area: Rect) {
+        if !self.visible {
+            return;
+        }
+        let box_width = area.width.min(MAX_BOX_WIDTH);
+        let inner_cols = usize::from(box_width.saturating_sub(2));
+        let room = usize::from(area.height.saturating_sub(2)).saturating_sub(2);
+        let (body, focused_rows) = self.body_rows(inner_cols.saturating_sub(4));
+        let viewport = if body.len() <= room {
+            body.len()
+        } else {
+            room.saturating_sub(1)
+        };
+        let box_rows = viewport + usize::from(body.len() > viewport) + 4;
+        if inner_cols < MIN_INNER_COLS
+            || (viewport == 0 && !body.is_empty())
+            || box_rows > usize::from(area.height)
+        {
+            self.scroll.nothing_drawn();
+            draw_too_small(frame, area, "MCP Request", "Esc to cancel");
+            return;
+        }
+        if self.reveal_focus.replace(false) {
+            if let Some(rows) = focused_rows {
+                self.scroll.reveal(rows, viewport);
+            }
+        }
+        let window = self.scroll.window(body.len(), viewport);
+        let accept_is_open = self.scroll.end_was_shown();
+        let position = self.scroll.position_label();
+
+        let box_height = u16::try_from(box_rows).unwrap_or(area.height);
+        let box_area = Rect {
+            x: area.x + area.width.saturating_sub(box_width) / 2,
+            y: area.y + area.height.saturating_sub(box_height) / 2,
+            width: box_width,
+            height: box_height,
+        };
+        frame.render_widget(Clear, box_area);
+        let block = Block::default()
+            .title(truncate_cols(
+                &format!(" MCP Request: {} ", self.server_name),
+                inner_cols,
+            ))
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(ui_warning()));
+        let inner = block.inner(box_area);
+        frame.render_widget(block, box_area);
+
+        let muted = Style::default().fg(ui_muted());
+        let mut lines: Vec<Line> = Vec::new();
+        for row in &body[window] {
+            lines.push(Line::from(vec![Span::raw("  "), Span::raw(row.as_str())]));
+        }
+        if let Some(position) = position {
+            let (text, style) = if accept_is_open {
+                (format!("  {position}"), muted)
+            } else {
+                let style = if self.refused_unread {
+                    Style::default()
+                        .fg(ui_warning())
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    muted
+                };
+                (
+                    format!("  {position} \u{b7} scroll to the end before accepting"),
+                    style,
+                )
+            };
+            lines.push(Line::from(Span::styled(
+                truncate_cols(&text, inner_cols),
+                style,
+            )));
+        }
+
+        let mut buttons: Vec<Span> = vec![Span::raw("  ")];
+        for (index, label) in BUTTONS.iter().enumerate() {
+            if self.focus == Focus::Button(index) {
+                buttons.push(Span::styled(
+                    format!("[{}]", label.trim()),
+                    Style::default()
+                        .fg(ui_on_light())
+                        .bg(ui_warning())
+                        .add_modifier(Modifier::BOLD),
+                ));
+            } else {
+                let style = if index == BUTTON_ACCEPT && !accept_is_open {
+                    muted
+                } else {
+                    Style::default()
+                };
+                buttons.push(Span::styled(format!(" {} ", label.trim()), style));
+            }
+            buttons.push(Span::raw("  "));
+        }
+        lines.push(Line::from(buttons));
+
+        let hint = if self.scroll.overflows() {
+            SCROLL_HINT
+        } else {
+            HINT
+        };
+        lines.push(Line::from(Span::styled(
+            truncate_cols(hint, inner_cols),
+            muted,
+        )));
+        frame.render_widget(Paragraph::new(lines), inner);
     }
 
     /// Text-only render used when a ratatui frame is unavailable (tests / REPL).
@@ -468,30 +670,15 @@ impl ElicitationOverlayState {
         for line in self.message.lines() {
             out.push_str(&format!("│{}│\n", pad_to_cols(&format!("  {line}"), inner)));
         }
-        if let Some(url) = self
-            .url
-            .as_deref()
-            .filter(|_| self.mode == ElicitationMode::Url)
-        {
+        if let Some(url) = self.shown_url() {
             out.push_str(&format!("│{}│\n", pad_to_cols("", inner)));
             out.push_str(&format!("│{}│\n", pad_to_cols(&format!("  {url}"), inner)));
         }
         out.push_str(&format!("│{}│\n", pad_to_cols("", inner)));
 
         // Fields
-        for (i, field) in self.fields.iter().enumerate() {
-            let focused = self.focus == Focus::Field(i);
-            let prefix = if focused { "> " } else { "  " };
-            let suffix = match &field.kind {
-                FieldKind::Enum { .. } => "  ← / → to cycle",
-                FieldKind::MultiEnum { .. } => "  ← / → move, Space toggle",
-                FieldKind::Bool { .. } => "  Space to toggle",
-                FieldKind::Text { .. } if field.sensitive => "  hidden",
-                FieldKind::Text { .. } => "",
-            };
-            let val = field.render_value();
-            let req_mark = if field.required { "*" } else { " " };
-            let row = format!("{}{}{} [{}]{}", prefix, req_mark, field.name, val, suffix);
+        for index in 0..self.fields.len() {
+            let row = self.field_row(index);
             out.push_str(&format!("│{}│\n", pad_to_cols(&format!("  {row}"), inner)));
         }
 
@@ -515,13 +702,7 @@ impl ElicitationOverlayState {
         ));
 
         // Hint
-        out.push_str(&format!(
-            "│{}│\n",
-            pad_to_cols(
-                "  Tab/↑↓ move   ← → enum/bool   Enter activates   Esc = Cancel",
-                inner
-            )
-        ));
+        out.push_str(&format!("│{}│\n", pad_to_cols(HINT, inner)));
 
         // Bottom border
         out.push_str(&format!("└{}┘\n", "─".repeat(inner)));
@@ -542,6 +723,9 @@ impl Default for ElicitationOverlayState {
             fields: Vec::new(),
             focus: Focus::Button(BUTTON_DECLINE),
             result: None,
+            scroll: ScrollGate::default(),
+            reveal_focus: Cell::new(false),
+            refused_unread: false,
         }
     }
 }
@@ -556,6 +740,14 @@ impl InteractiveView for ElicitationOverlayState {
     }
 
     fn handle_key(&mut self, key: KeyAction) -> ViewAction {
+        if matches!(self.focus, Focus::Field(_))
+            && matches!(
+                key,
+                KeyAction::Left | KeyAction::Right | KeyAction::Char(_) | KeyAction::Backspace
+            )
+        {
+            self.reveal_focus.set(true);
+        }
         match key {
             // Navigation
             KeyAction::Tab | KeyAction::Down => {
@@ -648,6 +840,11 @@ impl InteractiveView for ElicitationOverlayState {
                 ViewAction::Continue
             }
 
+            KeyAction::PageUp | KeyAction::PageDown | KeyAction::Home | KeyAction::End => {
+                self.scroll.scroll_key(key);
+                ViewAction::Continue
+            }
+
             // Confirm
             KeyAction::Enter => {
                 match self.focus {
@@ -655,6 +852,7 @@ impl InteractiveView for ElicitationOverlayState {
                     Focus::Field(i) => {
                         // Never let Enter alone walk onto Accept: reaching it must
                         // cost a deliberate Tab/↑↓ navigation.
+                        self.reveal_focus.set(true);
                         self.focus = if i + 1 < self.field_count() {
                             Focus::Field(i + 1)
                         } else {
@@ -671,8 +869,6 @@ impl InteractiveView for ElicitationOverlayState {
                 self.visible = false;
                 ViewAction::Close
             }
-
-            _ => ViewAction::Continue,
         }
     }
 
@@ -735,6 +931,166 @@ mod tests {
         let mut s = ElicitationOverlayState::default();
         s.open("github", text_request());
         s
+    }
+
+    /// Draw the modal the way the event loop does and return what is on screen.
+    fn draw(state: &ElicitationOverlayState, width: u16, height: u16) -> String {
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height))
+                .expect("terminal");
+        let area = Rect::new(0, 0, width, height);
+        terminal
+            .draw(|frame| state.render_into(frame, area))
+            .expect("draw");
+        let buffer = terminal.backend().buffer();
+        (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol().to_string())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn long_request(lines: usize) -> ElicitationRequest {
+        ElicitationRequest {
+            message: (1..=lines)
+                .map(|n| format!("term {n}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            requested_schema: serde_json::json!({
+                "type": "object",
+                "properties": {"agree": {"type": "boolean"}}
+            }),
+            mode: ElicitationMode::Form,
+            url: None,
+            elicitation_id: None,
+        }
+    }
+
+    #[test]
+    fn a_request_taller_than_the_terminal_keeps_its_buttons_and_holds_accept() {
+        let mut s = ElicitationOverlayState::default();
+        s.open("github", long_request(100));
+
+        let text = draw(&s, 90, 20);
+        assert!(text.contains("MCP Request: github"), "{text}");
+        for label in ["Accept", "Decline", "Cancel", "Esc = Cancel"] {
+            assert!(text.contains(label), "{label} is not drawn: {text}");
+        }
+        assert!(text.contains("lines 1-15 of 102"), "{text}");
+        assert!(
+            text.contains("term 15") && !text.contains("term 16"),
+            "{text}"
+        );
+
+        s.focus = Focus::Button(BUTTON_ACCEPT);
+        assert_eq!(s.handle_key(KeyAction::Enter), ViewAction::Continue);
+        assert!(s.result.is_none() && s.visible);
+        assert!(draw(&s, 90, 20).contains("scroll to the end before accepting"));
+
+        s.handle_key(KeyAction::End);
+        let text = draw(&s, 90, 20);
+        assert!(text.contains("lines 88-102 of 102"), "{text}");
+        assert!(text.contains("agree"), "{text}");
+        assert_eq!(s.handle_key(KeyAction::Enter), ViewAction::Submit(0));
+        assert_eq!(s.result.as_ref().unwrap().action, ElicitationAction::Accept);
+    }
+
+    #[test]
+    fn accept_needs_a_draw_and_declining_never_does() {
+        let mut s = open_text_overlay();
+        s.focus = Focus::Button(BUTTON_ACCEPT);
+        assert_eq!(
+            s.handle_key(KeyAction::Enter),
+            ViewAction::Continue,
+            "nothing has been shown yet"
+        );
+        assert!(s.result.is_none());
+
+        s.focus = Focus::Button(BUTTON_DECLINE);
+        assert_eq!(s.handle_key(KeyAction::Enter), ViewAction::Close);
+
+        let mut s = ElicitationOverlayState::default();
+        s.open("github", long_request(100));
+        draw(&s, 90, 20);
+        assert_eq!(s.handle_key(KeyAction::Esc), ViewAction::Close);
+        assert_eq!(s.result.as_ref().unwrap().action, ElicitationAction::Cancel);
+    }
+
+    #[test]
+    fn a_long_url_is_drawn_whole_instead_of_cut_short() {
+        let url = format!(
+            "https://example.com/oauth?{}&state=TAIL_MARKER",
+            "scope=read%20write&".repeat(12)
+        );
+        let mut s = ElicitationOverlayState::default();
+        s.open(
+            "oauth",
+            ElicitationRequest {
+                message: "Authorize the server".into(),
+                requested_schema: serde_json::json!({}),
+                mode: ElicitationMode::Url,
+                url: Some(url),
+                elicitation_id: None,
+            },
+        );
+        let text = draw(&s, 90, 30);
+        assert!(text.contains("TAIL_MARKER"), "{text}");
+        assert!(!text.contains('…'), "{text}");
+    }
+
+    #[test]
+    fn moving_the_focus_scrolls_the_focused_field_into_view() {
+        let mut properties = serde_json::Map::new();
+        for n in 0..40 {
+            properties.insert(
+                format!("field_{n:02}"),
+                serde_json::json!({"type": "boolean"}),
+            );
+        }
+        let mut s = ElicitationOverlayState::default();
+        s.open(
+            "srv",
+            ElicitationRequest {
+                message: "Settings".into(),
+                requested_schema: serde_json::json!({"type": "object", "properties": properties}),
+                mode: ElicitationMode::Form,
+                url: None,
+                elicitation_id: None,
+            },
+        );
+
+        let text = draw(&s, 90, 20);
+        assert!(
+            text.contains("Settings"),
+            "a request opens at its top: {text}"
+        );
+        assert!(
+            text.contains("field_00") && !text.contains("field_30"),
+            "{text}"
+        );
+
+        for _ in 0..30 {
+            s.handle_key(KeyAction::Tab);
+        }
+        assert_eq!(s.focus, Focus::Field(30));
+        let text = draw(&s, 90, 20);
+        assert!(
+            text.contains("> field_30") || text.contains(">  field_30"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_window_too_small_for_the_buttons_holds_accept() {
+        let mut s = open_text_overlay();
+        let text = draw(&s, 90, 3);
+        assert!(text.contains("too small"), "{text}");
+        s.focus = Focus::Button(BUTTON_ACCEPT);
+        assert_eq!(s.handle_key(KeyAction::Enter), ViewAction::Continue);
+        assert_eq!(s.handle_key(KeyAction::Esc), ViewAction::Close);
     }
 
     #[test]
@@ -937,6 +1293,7 @@ mod tests {
     fn enter_on_accept_button_resolves_accept() {
         let mut s = open_text_overlay();
         s.focus = Focus::Button(BUTTON_ACCEPT);
+        draw(&s, 90, 30);
         let action = s.handle_key(KeyAction::Enter);
         assert_eq!(action, ViewAction::Submit(0));
         assert!(s.result.is_some());
@@ -977,6 +1334,7 @@ mod tests {
             s.handle_key(KeyAction::Char(c));
         }
         s.focus = Focus::Button(BUTTON_ACCEPT);
+        draw(&s, 90, 30);
         s.handle_key(KeyAction::Enter);
 
         let content = s.result.as_ref().unwrap().content.as_ref().unwrap();
@@ -1119,6 +1477,7 @@ mod tests {
         );
 
         s.focus = Focus::Button(BUTTON_ACCEPT);
+        draw(&s, 90, 30);
         s.handle_key(KeyAction::Enter);
 
         let content = s.result.as_ref().unwrap().content.as_ref().unwrap();
@@ -1145,6 +1504,7 @@ mod tests {
         assert!(s.fields.is_empty());
         assert!(s.render_text().contains("https://example.com/oauth"));
         s.focus = Focus::Button(BUTTON_ACCEPT);
+        draw(&s, 90, 30);
         s.handle_key(KeyAction::Enter);
 
         let response = s.result.as_ref().unwrap();
@@ -1279,6 +1639,7 @@ mod tests {
         assert!(rendered.contains("*******"));
 
         s.focus = Focus::Button(BUTTON_ACCEPT);
+        draw(&s, 90, 30);
         s.handle_key(KeyAction::Enter);
         let content = s.result.as_ref().unwrap().content.as_ref().unwrap();
         assert_eq!(content["passphrase_hint"], "hunter2");

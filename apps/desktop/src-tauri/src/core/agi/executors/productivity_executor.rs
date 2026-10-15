@@ -206,6 +206,25 @@ fn resolve_doc_path(output_path: &str) -> Result<PathBuf> {
     Ok(resolved)
 }
 
+/// `output_path` resolved, refused unless it lands in a folder granted for
+/// changes.
+async fn writable_doc_path(
+    output_path: &str,
+    context: &ExecutorContext,
+    operation: &str,
+) -> Result<PathBuf> {
+    let resolved = resolve_doc_path(output_path)?;
+    let granted = context.granted_folders().await?;
+    let target = granted.writable_new_path(&resolved, operation)?;
+    if target.to_str().is_none() {
+        return Err(anyhow!(
+            "The path '{}' is not valid UTF-8",
+            target.display()
+        ));
+    }
+    Ok(target)
+}
+
 fn created_document_value(
     path: &Path,
     format: &'static str,
@@ -424,6 +443,12 @@ async fn execute_document_read(
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow!("Missing 'file_path' parameter"))?;
 
+    let granted = context.granted_folders().await?;
+    let canonical = granted.readable_path(Path::new(file_path), "document_read")?;
+    let canonical = canonical
+        .to_str()
+        .ok_or_else(|| anyhow!("The path '{}' is not valid UTF-8", canonical.display()))?;
+
     let Some(ref app) = context.app_handle else {
         return Err(anyhow!("App handle not available for document operations"));
     };
@@ -434,7 +459,7 @@ async fn execute_document_read(
     let doc_state = app.state::<DocumentState>();
     let content = doc_state
         .manager
-        .read_document(file_path)
+        .read_document(canonical)
         .await
         .map_err(|e| anyhow!("Document read failed: {}", e))?;
 
@@ -495,6 +520,12 @@ async fn execute_document_search(
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow!("Missing 'query' parameter"))?;
 
+    let granted = context.granted_folders().await?;
+    let canonical = granted.readable_path(Path::new(file_path), "document_search")?;
+    let canonical = canonical
+        .to_str()
+        .ok_or_else(|| anyhow!("The path '{}' is not valid UTF-8", canonical.display()))?;
+
     let Some(ref app) = context.app_handle else {
         return Err(anyhow!("App handle not available for document operations"));
     };
@@ -505,7 +536,7 @@ async fn execute_document_search(
     let doc_state = app.state::<DocumentState>();
     let results = doc_state
         .manager
-        .search(file_path, query)
+        .search(canonical, query)
         .await
         .map_err(|e| anyhow!("Document search failed: {}", e))?;
 
@@ -539,7 +570,7 @@ async fn execute_document_search(
 /// - `paragraphs` (optional): Array of paragraph strings
 async fn execute_create_word(
     parameters: &HashMap<String, Value>,
-    _context: &ExecutorContext,
+    context: &ExecutorContext,
 ) -> Result<Value> {
     let output_path = parameters
         .get("output_path")
@@ -566,8 +597,7 @@ async fn execute_create_word(
         })
         .unwrap_or_default();
 
-    // Resolve output path (inline simplified version)
-    let resolved_path = resolve_doc_path(output_path)?;
+    let resolved_path = writable_doc_path(output_path, context, "document_create_word").await?;
 
     // Use the creator directly
     let creator = WordDocumentCreator::new();
@@ -592,7 +622,7 @@ async fn execute_create_word(
 /// - `content` (optional): Text content for the PDF
 async fn execute_create_pdf(
     parameters: &HashMap<String, Value>,
-    _context: &ExecutorContext,
+    context: &ExecutorContext,
 ) -> Result<Value> {
     let output_path = parameters
         .get("output_path")
@@ -619,7 +649,7 @@ async fn execute_create_pdf(
 
     // Use the creator directly
     let creator = PdfDocumentCreator::new();
-    let resolved_path = resolve_doc_path(output_path)?;
+    let resolved_path = writable_doc_path(output_path, context, "document_create_pdf").await?;
     creator.create_simple(&resolved_path.to_string_lossy(), title, None, paragraphs)?;
 
     tracing::info!(
@@ -642,7 +672,7 @@ async fn execute_create_pdf(
 /// - `rows` (optional): Array of row arrays (each row is an array of cell strings)
 async fn execute_create_excel(
     parameters: &HashMap<String, Value>,
-    _context: &ExecutorContext,
+    context: &ExecutorContext,
 ) -> Result<Value> {
     let output_path = parameters
         .get("output_path")
@@ -684,7 +714,7 @@ async fn execute_create_excel(
 
     // Use the creator directly
     let creator = ExcelDocumentCreator::new();
-    let resolved_path = resolve_doc_path(output_path)?;
+    let resolved_path = writable_doc_path(output_path, context, "document_create_excel").await?;
     creator.create_simple(&resolved_path.to_string_lossy(), &sheet_name, headers, rows)?;
 
     tracing::info!(
@@ -704,10 +734,6 @@ mod tests {
 
         ExecutorContext {
             app_handle: None,
-            automation: Arc::new(
-                crate::automation::AutomationService::new()
-                    .expect("Failed to create AutomationService for tests"),
-            ),
             router: Arc::new(tokio::sync::RwLock::new(
                 crate::core::llm::LLMRouter::default(),
             )),
@@ -716,6 +742,7 @@ mod tests {
             change_tracker: None,
             session_id: "test_session".to_string(),
             tool_id: "test_tool".to_string(),
+            granted_directories: Vec::new(),
         }
     }
 
@@ -940,11 +967,15 @@ mod tests {
     #[tokio::test]
     async fn test_execute_document_read_no_app_handle() {
         let executor = ProductivityExecutor;
-        let context = create_test_context();
+        let folder = tempfile::tempdir().unwrap();
+        let document = folder.path().join("doc.txt");
+        std::fs::write(&document, "text").unwrap();
+        let mut context = create_test_context();
+        context.granted_directories = vec![folder.path().to_path_buf()];
         let exec_context = create_test_execution_context();
 
         let mut params = HashMap::new();
-        params.insert("file_path".to_string(), json!("/path/to/doc.pdf"));
+        params.insert("file_path".to_string(), json!(document));
 
         let result = executor
             .execute("document_read", &params, &context, &exec_context)
@@ -955,6 +986,73 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("App handle not available"));
+    }
+
+    #[tokio::test]
+    async fn test_document_paths_refused_without_a_granted_folder() {
+        let executor = ProductivityExecutor;
+        let folder = tempfile::tempdir().unwrap();
+        let document = folder.path().join("doc.txt");
+        std::fs::write(&document, "text").unwrap();
+        let context = create_test_context();
+        let exec_context = create_test_execution_context();
+
+        let mut read = HashMap::new();
+        read.insert("file_path".to_string(), json!(document));
+        read.insert("query".to_string(), json!("text"));
+        for tool in ["document_read", "document_search"] {
+            let error = executor
+                .execute(tool, &read, &context, &exec_context)
+                .await
+                .unwrap_err()
+                .to_string();
+            assert!(
+                error.contains(super::super::NO_GRANTED_FOLDER),
+                "{tool}: {error}"
+            );
+        }
+
+        for (tool, name) in [
+            ("document_create_word", "out.docx"),
+            ("document_create_pdf", "out.pdf"),
+            ("document_create_excel", "out.xlsx"),
+        ] {
+            let output = folder.path().join(name);
+            let mut create = HashMap::new();
+            create.insert("output_path".to_string(), json!(output));
+            let error = executor
+                .execute(tool, &create, &context, &exec_context)
+                .await
+                .unwrap_err()
+                .to_string();
+            assert!(
+                error.contains(super::super::NO_GRANTED_FOLDER),
+                "{tool}: {error}"
+            );
+            assert!(!output.exists(), "{tool} wrote {}", output.display());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_document_create_refused_outside_the_granted_folder() {
+        let executor = ProductivityExecutor;
+        let granted = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let output = outside.path().join("out.pdf");
+        let mut context = create_test_context();
+        context.granted_directories = vec![granted.path().to_path_buf()];
+        let exec_context = create_test_execution_context();
+
+        let mut params = HashMap::new();
+        params.insert("output_path".to_string(), json!(output));
+        let error = executor
+            .execute("document_create_pdf", &params, &context, &exec_context)
+            .await
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("outside allowed directories"), "{error}");
+        assert!(!output.exists());
     }
 
     #[tokio::test]

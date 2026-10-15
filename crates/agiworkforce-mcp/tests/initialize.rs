@@ -46,6 +46,7 @@ async fn stdio_initialize_and_handshake() {
         command: env!("CARGO_BIN_EXE_mcp_sim_stdio").to_string(),
         args: vec!["normal".to_string()],
         env: HashMap::new(),
+        cwd: None,
     };
     let mut client = McpClient::connect(
         "stdio",

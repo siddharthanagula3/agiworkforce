@@ -1,47 +1,156 @@
 use super::*;
-use crate::automation::{
-    browser::PlaywrightBridge,
-    input::{lock_enigo, KeyboardSimulator, MouseSimulator},
-    AutomationService,
-};
-use crate::sys::security::command_validator::{validate_command, ValidationConfig};
+use crate::automation::browser::PlaywrightBridge;
+use crate::core::llm::tool_executor::{truncated_for_chat, FILE_READ_MAX_BYTES};
+use crate::sys::security::ToolExecutionGuard;
 
 use anyhow::Result;
-use enigo::Key;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::Mutex as TokioMutex;
 use tokio::time::timeout;
 
-/// Open a URL in the system default browser using the platform-appropriate command.
-/// Extracted from `Action::Navigate` handling to avoid triplicating the platform blocks.
+/// Agent tasks are planned by a model and run with nobody there to approve an
+/// action: every step meets the unattended tool rule before it is dispatched
+/// here. They name no app for the per-app gate to judge,
+/// so desktop input is left to computer use, which asks for consent and for
+/// each app before it acts.
+const AGENT_DESKTOP_INPUT_REFUSED: &str = "Agent tasks do not click, type, scroll or press keys on this computer. Use computer use for desktop control; it asks before it acts in each app.";
+
+/// Opens a URL in the default browser. The launcher receives the URL as one
+/// argument or one environment value on every platform and never as shell
+/// text, so `&`, `|` or `^` in a query string start nothing.
 fn open_url_with_platform(url: &str) -> Result<()> {
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(url)
-            .spawn()
-            .map_err(|e| anyhow::anyhow!("Failed to open browser: {}", e))?;
+    open::that_detached(url).map_err(|e| anyhow::anyhow!("Failed to open browser: {}", e))
+}
+
+/// A file step with its path made absolute against the project folder, by
+/// the resolver chat and goal runs use. The agent loop calls this once,
+/// before it checks the granted folders and before it runs the step, so both
+/// name the same file. Without a project folder a relative path is left as it
+/// is and refused.
+pub fn step_in_folder(action: &Action, project_folder: Option<&std::path::Path>) -> Action {
+    let absolute = |path: &str| ToolExecutionGuard::absolute_path_argument(path, project_folder);
+    match action {
+        Action::ReadFile { path } => Action::ReadFile {
+            path: absolute(path),
+        },
+        Action::WriteFile { path, content } => Action::WriteFile {
+            path: absolute(path),
+            content: content.clone(),
+        },
+        other => other.clone(),
     }
-    #[cfg(target_os = "linux")]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(url)
-            .spawn()
-            .map_err(|e| anyhow::anyhow!("Failed to open browser: {}", e))?;
+}
+
+/// [`step_in_folder`] for the project the person has open.
+pub async fn step_in_project(app_handle: Option<&tauri::AppHandle>, action: &Action) -> Action {
+    let project_folder = crate::core::agi::executor::run_project_folder(app_handle).await;
+    step_in_folder(action, project_folder.as_deref())
+}
+
+fn read_file_for_step(path: &std::path::Path) -> Result<String> {
+    let size = std::fs::metadata(path)?.len();
+    if size > FILE_READ_MAX_BYTES {
+        return Err(anyhow::anyhow!(
+            "{} is {} bytes; a step reads files up to {} bytes",
+            path.display(),
+            size,
+            FILE_READ_MAX_BYTES
+        ));
     }
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", url])
-            .spawn()
-            .map_err(|e| anyhow::anyhow!("Failed to open browser: {}", e))?;
+    Ok(truncated_for_chat(std::fs::read_to_string(path)?))
+}
+
+fn command_line(command: &str, args: &[String]) -> String {
+    if args.is_empty() {
+        command.to_string()
+    } else {
+        format!("{} {}", command, args.join(" "))
     }
-    Ok(())
+}
+
+/// What a `PreToolUse` hook is told about an agent action, under the tool
+/// name the chat tools use for the same thing where there is one, so a guard
+/// written for chat holds here too.
+fn hook_call(action: &Action) -> (String, HashMap<String, serde_json::Value>) {
+    let mut parameters: HashMap<String, serde_json::Value> = match serde_json::to_value(action) {
+        Ok(serde_json::Value::Object(fields)) => fields.into_iter().collect(),
+        _ => HashMap::new(),
+    };
+    let kind = parameters.remove("type");
+    let tool_name = match action {
+        Action::ExecuteCommand { command, args } => {
+            parameters.insert(
+                "command".to_string(),
+                serde_json::Value::String(command_line(command, args)),
+            );
+            "terminal_execute".to_string()
+        }
+        Action::ReadFile { .. } => "file_read".to_string(),
+        Action::WriteFile { .. } => "file_write".to_string(),
+        Action::Navigate { .. } => "browser_navigate".to_string(),
+        _ => kind
+            .as_ref()
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("agent_action")
+            .to_string(),
+    };
+    (tool_name, parameters)
+}
+
+/// The tool guard call an action answers to: the chat tool whose path, URL and
+/// command rules cover it, with only the parameters that tool's policy names.
+/// Waiting for an element and searching the screen for text read the screen
+/// through the vision service and take no path, URL or command, so the guard
+/// has no rule for them. Desktop input never runs here at all. A command runs
+/// as an argument vector, which [`guard_refusal`] judges as one.
+fn guard_call(action: &Action) -> Option<(&'static str, serde_json::Value)> {
+    match action {
+        Action::ReadFile { path } => Some(("file_read", serde_json::json!({ "path": path }))),
+        Action::WriteFile { path, content } => Some((
+            "file_write",
+            serde_json::json!({ "path": path, "content": content }),
+        )),
+        Action::Navigate { url } => Some(("browser_navigate", serde_json::json!({ "url": url }))),
+        Action::Screenshot { region } => {
+            Some(("ui_screenshot", serde_json::json!({ "region": region })))
+        }
+        Action::ExecuteCommand { .. }
+        | Action::WaitForElement { .. }
+        | Action::SearchText { .. }
+        | Action::Click { .. }
+        | Action::Type { .. }
+        | Action::Scroll { .. }
+        | Action::PressKey { .. } => None,
+    }
+}
+
+/// Why the tool guard refuses an action, if it does. The step spawns the
+/// program with its arguments and no shell, so the command is judged as that
+/// vector: a `;` in a commit message or an `&` in a URL is text, and a vector
+/// that names a shell is still judged as shell text.
+///
+/// Whether a file sits in a folder the user granted is decided by the agent
+/// loop before it dispatches the step, against the app's own grants. The
+/// guard here applies every other path rule; deciding grants again from a
+/// guard that holds none would refuse an Allowed Directory outside home.
+async fn guard_refusal(guard: &ToolExecutionGuard, action: &Action) -> Option<String> {
+    let judged = match action {
+        Action::ExecuteCommand { command, args } => guard.validate_argv(command, args),
+        other => match guard_call(other) {
+            Some((guarded_as, parameters)) => {
+                guard
+                    .validate_before_folder_consent(guarded_as, &parameters)
+                    .await
+            }
+            None => Ok(()),
+        },
+    };
+    judged.err().map(|refusal| refusal.to_string())
 }
 
 pub struct TaskExecutor {
-    automation: Arc<AutomationService>,
     /// Optional CDP-controlled browser bridge for navigating within the same
     /// browser instance that subsequent click/type actions will target.
     /// When `None`, navigation falls back to OS-level `open` (BUG-07 fallback).
@@ -49,14 +158,8 @@ pub struct TaskExecutor {
 }
 
 impl TaskExecutor {
-    pub fn new(
-        automation: Arc<AutomationService>,
-        browser_bridge: Option<Arc<TokioMutex<PlaywrightBridge>>>,
-    ) -> Result<Self> {
-        Ok(Self {
-            automation,
-            browser_bridge,
-        })
+    pub fn new(browser_bridge: Option<Arc<TokioMutex<PlaywrightBridge>>>) -> Result<Self> {
+        Ok(Self { browser_bridge })
     }
 
     pub async fn execute_step(
@@ -79,6 +182,32 @@ impl TaskExecutor {
                 success: false,
                 result: None,
                 error: Some(e.to_string()),
+                screenshot_path: None,
+                duration: start.elapsed(),
+            });
+        }
+
+        let (tool_name, parameters) = hook_call(&step.action);
+        if let Err(refusal) = crate::ui::hooks::gate_tool_use(&tool_name, parameters).await {
+            return Ok(StepResult {
+                step_id: step.id.clone(),
+                success: false,
+                result: None,
+                error: Some(refusal),
+                screenshot_path: None,
+                duration: start.elapsed(),
+            });
+        }
+
+        // A guard of its own for each step: the path, URL and command rules
+        // apply, and the per-minute limits tuned for chat turns do not start
+        // failing a plan that takes many screenshots.
+        if let Some(refusal) = guard_refusal(&ToolExecutionGuard::new(), &step.action).await {
+            return Ok(StepResult {
+                step_id: step.id.clone(),
+                success: false,
+                result: None,
+                error: Some(refusal),
                 screenshot_path: None,
                 duration: start.elapsed(),
             });
@@ -129,27 +258,13 @@ impl TaskExecutor {
                 let path = vision.capture_screenshot(region.clone()).await?;
                 Ok(format!("Screenshot saved to {}", path))
             }
-            Action::Click { target } => {
-                self.click_target(target, vision).await?;
-                Ok("Click performed".to_string())
-            }
-            Action::Type { target, text } => {
-                self.click_target(target, vision).await?;
-                let mut keyboard = KeyboardSimulator::new()?;
-                keyboard.send_text(text).await?;
-                Ok(format!("Typed: {}", text))
-            }
+            Action::Click { .. }
+            | Action::Type { .. }
+            | Action::Scroll { .. }
+            | Action::PressKey { .. } => Err(anyhow::anyhow!(AGENT_DESKTOP_INPUT_REFUSED)),
             Action::Navigate { url } => {
-                // BUG-07 fix: validate URL before navigation to prevent
-                // command injection and ensure the call is to a real web URL.
                 let parsed =
                     url::Url::parse(url).map_err(|_| anyhow::anyhow!("Invalid URL: {}", url))?;
-                if !matches!(parsed.scheme(), "http" | "https") {
-                    return Err(anyhow::anyhow!(
-                        "Blocked URL scheme '{}': only http/https are permitted",
-                        parsed.scheme()
-                    ));
-                }
                 let safe_url = parsed.as_str();
 
                 // Try CDP-controlled navigation first so subsequent actions
@@ -158,7 +273,11 @@ impl TaskExecutor {
                     let bridge_guard = bridge.lock().await;
                     match bridge_guard.navigate(safe_url).await {
                         Ok(()) => {
-                            tracing::info!("[Executor] Navigated via CDP: {}", safe_url);
+                            tracing::info!(
+                                "[Executor] Navigated via CDP: {}{}",
+                                parsed.origin().ascii_serialization(),
+                                parsed.path()
+                            );
                             return Ok(format!("Navigated (CDP): {}", safe_url));
                         }
                         Err(e) => {
@@ -191,19 +310,15 @@ impl TaskExecutor {
                 use tokio::process::Command;
                 use tokio::time::{timeout, Duration};
 
-                // BUG-02 fix: validate through CommandValidator before spawning
-                let full_command = if args.is_empty() {
-                    command.clone()
-                } else {
-                    format!("{} {}", command, args.join(" "))
-                };
-                validate_command(&full_command, &ValidationConfig::oneshot())
-                    .map_err(|e| anyhow::anyhow!("Command blocked by security validator: {}", e))?;
-
-                tracing::info!("Executing command: {} {:?}", command, args);
+                tracing::info!(
+                    "Executing command: {} with {} argument(s)",
+                    command,
+                    args.len()
+                );
 
                 let mut cmd = Command::new(command);
                 cmd.args(args);
+                cmd.kill_on_drop(true);
 
                 let result = timeout(Duration::from_secs(30), cmd.output()).await;
 
@@ -214,13 +329,20 @@ impl TaskExecutor {
                         let status = output.status;
 
                         if status.success() {
-                            tracing::debug!("Command succeeded: {}", stdout);
+                            tracing::debug!(
+                                "Command succeeded: {} byte(s) of output",
+                                stdout.len()
+                            );
                             Ok(format!(
                                 "Command executed successfully\nOutput: {}",
                                 stdout.trim()
                             ))
                         } else {
-                            tracing::warn!("Command failed with status {:?}: {}", status, stderr);
+                            tracing::warn!(
+                                "Command failed with status {:?}: {} byte(s) on stderr",
+                                status,
+                                stderr.len()
+                            );
                             Err(anyhow::anyhow!(
                                 "Command failed with status {:?}\nError: {}",
                                 status,
@@ -243,12 +365,7 @@ impl TaskExecutor {
             Action::ReadFile { path } => {
                 // BUG-01 fix: canonicalize and reject sensitive system paths
                 let canonical = Self::validate_file_path(path)?;
-                let content = std::fs::read_to_string(&canonical)?;
-                Ok(format!(
-                    "Read {} bytes from {}",
-                    content.len(),
-                    canonical.display()
-                ))
+                read_file_for_step(&canonical)
             }
             Action::WriteFile { path, content } => {
                 // BUG-01 fix: validate destination before writing
@@ -267,138 +384,6 @@ impl TaskExecutor {
                     elements.len(),
                     query
                 ))
-            }
-            Action::Scroll { direction, amount } => {
-                let delta = match direction {
-                    ScrollDirection::Up => *amount,
-                    ScrollDirection::Down => -(*amount),
-                    ScrollDirection::Left | ScrollDirection::Right => {
-                        return Err(anyhow::anyhow!(
-                            "Horizontal scroll ({:?}) is not yet supported",
-                            direction
-                        ));
-                    }
-                };
-                #[cfg(target_os = "macos")]
-                let perm_msg = "Mouse automation requires Input Monitoring permission. \
-                    Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring.";
-                #[cfg(not(target_os = "macos"))]
-                let perm_msg = "Mouse automation requires input automation permission. \
-                    Please grant the necessary permissions in your system settings.";
-
-                self.automation
-                    .mouse
-                    .lock()
-                    .await
-                    .as_mut()
-                    .ok_or_else(|| anyhow::anyhow!("{}", perm_msg))?
-                    .scroll(delta)?;
-                Ok(format!("Scrolled {:?} by {}", direction, amount))
-            }
-            Action::PressKey { keys } => {
-                tracing::info!("Pressing key combination: {:?}", keys);
-
-                let key_parts: Vec<String> = if keys.len() == 1 && keys[0].contains('+') {
-                    keys[0].split('+').map(|s| s.trim().to_string()).collect()
-                } else {
-                    keys.clone()
-                };
-
-                let mut modifiers = Vec::new();
-                let mut main_key = None;
-
-                for (i, part) in key_parts.iter().enumerate() {
-                    let is_last = i == key_parts.len() - 1;
-
-                    match part.to_lowercase().as_str() {
-                        "ctrl" | "control" => modifiers.push(Key::Control),
-                        "alt" => modifiers.push(Key::Alt),
-                        "shift" => modifiers.push(Key::Shift),
-                        "win" | "windows" | "super" | "meta" => modifiers.push(Key::Meta),
-                        key_str if is_last => {
-                            main_key = Some(self.parse_key_string(key_str)?);
-                        }
-                        _ => {
-                            return Err(anyhow::anyhow!("Unknown key or modifier: {}", part));
-                        }
-                    }
-                }
-
-                if main_key.is_none() && key_parts.len() == 1 {
-                    main_key = Some(self.parse_key_string(&key_parts[0])?);
-                }
-
-                let main_key = main_key.ok_or_else(|| anyhow::anyhow!("No main key specified"))?;
-
-                if modifiers.is_empty() {
-                    use enigo::{Enigo, Keyboard, Settings};
-                    let _enigo_lock = lock_enigo()?;
-                    let mut enigo =
-                        Enigo::new(&Settings::default()).map_err(|e| anyhow::anyhow!("{}", e))?;
-                    enigo
-                        .key(main_key, enigo::Direction::Click)
-                        .map_err(|e| anyhow::anyhow!("{}", e))?;
-                } else {
-                    use enigo::{Enigo, Keyboard, Settings};
-                    let _enigo_lock = lock_enigo()?;
-                    let mut enigo =
-                        Enigo::new(&Settings::default()).map_err(|e| anyhow::anyhow!("{}", e))?;
-
-                    for modifier in &modifiers {
-                        enigo
-                            .key(*modifier, enigo::Direction::Press)
-                            .map_err(|e| anyhow::anyhow!("{}", e))?;
-                    }
-
-                    enigo
-                        .key(main_key, enigo::Direction::Click)
-                        .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-                    for modifier in modifiers.iter().rev() {
-                        enigo
-                            .key(*modifier, enigo::Direction::Release)
-                            .map_err(|e| anyhow::anyhow!("{}", e))?;
-                    }
-                }
-
-                Ok(format!("Pressed key combination: {:?}", keys))
-            }
-        }
-    }
-
-    async fn click_target(&self, target: &ClickTarget, vision: &VisionAutomation) -> Result<()> {
-        match target {
-            ClickTarget::Coordinates { x, y } => {
-                let mut mouse = MouseSimulator::new()?;
-                mouse.move_to_smooth(*x, *y, 200).await?;
-                mouse.click(*x, *y, crate::automation::input::MouseButton::Left)?;
-                Ok(())
-            }
-            ClickTarget::UIAElement { element_id } => {
-                self.automation.native.set_focus(element_id)?;
-                self.automation.native.invoke(element_id)?;
-                Ok(())
-            }
-            ClickTarget::ImageMatch {
-                image_path,
-                threshold,
-            } => {
-                let (x, y) = vision.find_image(image_path, *threshold).await?;
-                let mut mouse = MouseSimulator::new()?;
-                mouse.move_to_smooth(x, y, 200).await?;
-                mouse.click(x, y, crate::automation::input::MouseButton::Left)?;
-                Ok(())
-            }
-            ClickTarget::TextMatch { text, fuzzy } => {
-                let matches = vision.find_text(text, *fuzzy).await?;
-                if let Some((x, y, _)) = matches.first() {
-                    let mut mouse = MouseSimulator::new()?;
-                    mouse.move_to_smooth(*x, *y, 200).await?;
-                    mouse.click(*x, *y, crate::automation::input::MouseButton::Left)?;
-                    Ok(())
-                } else {
-                    Err(anyhow::anyhow!("Text '{}' not found", text))
-                }
             }
         }
     }
@@ -520,64 +505,297 @@ impl TaskExecutor {
 
         Ok(())
     }
+}
 
-    fn parse_key_string(&self, key_str: &str) -> Result<Key> {
-        let key = match key_str.to_lowercase().as_str() {
-            "enter" | "return" => Key::Return,
-            "esc" | "escape" => Key::Escape,
-            "tab" => Key::Tab,
-            "space" | "spacebar" => Key::Space,
-            "backspace" | "back" => Key::Backspace,
-            "delete" | "del" => Key::Delete,
-            "home" => Key::Home,
-            "end" => Key::End,
-            "pageup" | "pgup" => Key::PageUp,
-            "pagedown" | "pgdn" => Key::PageDown,
-            // BUG-06 fix: Insert is only available on Windows/Linux in enigo 0.6;
-            // macOS has no hardware Insert key so return an error on that platform.
-            "insert" | "ins" => {
-                #[cfg(any(target_os = "windows", all(unix, not(target_os = "macos"))))]
-                {
-                    Key::Insert
-                }
-                #[cfg(not(any(target_os = "windows", all(unix, not(target_os = "macos")))))]
-                {
-                    return Err(anyhow::anyhow!(
-                        "Insert key is not supported on this platform"
-                    ));
-                }
-            }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-            "up" | "uparrow" => Key::UpArrow,
-            "down" | "downarrow" => Key::DownArrow,
-            "left" | "leftarrow" => Key::LeftArrow,
-            "right" | "rightarrow" => Key::RightArrow,
+    #[test]
+    fn a_shell_action_is_told_to_hooks_as_the_terminal_tool_with_its_whole_command_line() {
+        let (tool_name, parameters) = hook_call(&Action::ExecuteCommand {
+            command: "git".to_string(),
+            args: vec!["push".to_string(), "--force".to_string()],
+        });
 
-            "f1" => Key::F1,
-            "f2" => Key::F2,
-            "f3" => Key::F3,
-            "f4" => Key::F4,
-            "f5" => Key::F5,
-            "f6" => Key::F6,
-            "f7" => Key::F7,
-            "f8" => Key::F8,
-            "f9" => Key::F9,
-            "f10" => Key::F10,
-            "f11" => Key::F11,
-            "f12" => Key::F12,
+        assert_eq!(tool_name, "terminal_execute");
+        assert_eq!(parameters["command"], "git push --force");
+        assert!(!parameters.contains_key("type"));
+    }
 
-            s if s.len() == 1 => {
-                let c = s.chars().next().unwrap_or('?');
-                if c.is_ascii_alphanumeric() || c.is_ascii_punctuation() {
-                    Key::Unicode(c)
-                } else {
-                    return Err(anyhow::anyhow!("Unsupported key character: {}", c));
-                }
-            }
+    #[tokio::test]
+    async fn a_relative_file_step_is_read_inside_the_project_and_cannot_climb_out_of_it() {
+        let project = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir(project.path().join("notes")).expect("folder");
+        std::fs::write(project.path().join("notes").join("today.txt"), "ship it").expect("write");
+        let guard = ToolExecutionGuard::new();
 
-            _ => return Err(anyhow::anyhow!("Unknown key: {}", key_str)),
+        let relative = Action::ReadFile {
+            path: "notes/today.txt".to_string(),
         };
+        assert!(
+            guard_refusal(&guard, &relative).await.is_some(),
+            "the guard never guesses what a relative path is relative to"
+        );
 
-        Ok(key)
+        let resolved = step_in_folder(&relative, Some(project.path()));
+        let Action::ReadFile { path } = &resolved else {
+            panic!("a read step stays a read step");
+        };
+        assert_eq!(
+            std::path::Path::new(path),
+            project.path().join("notes").join("today.txt")
+        );
+        assert_eq!(guard_refusal(&guard, &resolved).await, None);
+        assert_eq!(
+            read_file_for_step(std::path::Path::new(path)).expect("read"),
+            "ship it"
+        );
+
+        for escaping in ["../outside.txt", "notes/../../outside.txt"] {
+            let write = step_in_folder(
+                &Action::WriteFile {
+                    path: escaping.to_string(),
+                    content: "x".to_string(),
+                },
+                Some(project.path()),
+            );
+            assert!(
+                guard_refusal(&guard, &write).await.is_some(),
+                "{escaping} leaves the project"
+            );
+        }
+
+        let already_absolute = Action::ReadFile {
+            path: "/elsewhere/a.txt".to_string(),
+        };
+        let Action::ReadFile { path } = step_in_folder(&already_absolute, Some(project.path()))
+        else {
+            panic!("a read step stays a read step");
+        };
+        assert_eq!(path, "/elsewhere/a.txt");
+        let Action::ReadFile { path } = step_in_folder(&relative, None) else {
+            panic!("a read step stays a read step");
+        };
+        assert_eq!(path, "notes/today.txt", "no folder, no guess");
+    }
+
+    #[test]
+    fn reading_a_file_returns_what_is_in_it_cut_to_the_chat_limit() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let short = dir.path().join("short.txt");
+        std::fs::write(&short, "first line\nsecond line").expect("write");
+        assert_eq!(
+            read_file_for_step(&short).expect("read"),
+            "first line\nsecond line"
+        );
+
+        let long = dir.path().join("long.txt");
+        std::fs::write(&long, "é".repeat(150_000)).expect("write");
+        let read = read_file_for_step(&long).expect("read");
+        assert!(read.starts_with("ééé"));
+        assert!(read.contains("[truncated to first 200000 chars out of 300000]"));
+        assert!(read.len() < 200_100);
+    }
+
+    #[test]
+    fn file_and_browser_actions_use_the_chat_tool_names() {
+        let (read, read_parameters) = hook_call(&Action::ReadFile {
+            path: "/etc/hosts".to_string(),
+        });
+        let (write, _) = hook_call(&Action::WriteFile {
+            path: "/tmp/a".to_string(),
+            content: "x".to_string(),
+        });
+        let (navigate, navigate_parameters) = hook_call(&Action::Navigate {
+            url: "https://example.com".to_string(),
+        });
+
+        assert_eq!(read, "file_read");
+        assert_eq!(read_parameters["path"], "/etc/hosts");
+        assert_eq!(write, "file_write");
+        assert_eq!(navigate, "browser_navigate");
+        assert_eq!(navigate_parameters["url"], "https://example.com");
+    }
+
+    #[test]
+    fn every_other_action_is_named_by_its_own_kind() {
+        let (tool_name, parameters) = hook_call(&Action::SearchText {
+            query: "invoice".to_string(),
+        });
+
+        assert_eq!(tool_name, "searchText");
+        assert_eq!(parameters["query"], "invoice");
+    }
+
+    fn step(action: Action) -> TaskStep {
+        TaskStep {
+            id: "step-1".to_string(),
+            action,
+            description: "guarded step".to_string(),
+            expected_result: None,
+            timeout: std::time::Duration::from_secs(5),
+            retry_on_failure: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_step_the_tool_guard_refuses_never_runs() {
+        let executor = TaskExecutor::new(None).expect("executor");
+        let vision = VisionAutomation::new().expect("vision");
+
+        for (action, refused_for) in [
+            (
+                Action::Navigate {
+                    url: "http://127.0.0.1:8080/admin".to_string(),
+                },
+                "Blocked domain",
+            ),
+            (
+                Action::Navigate {
+                    url: "file:///etc/passwd".to_string(),
+                },
+                "Insecure protocol",
+            ),
+            (
+                Action::ExecuteCommand {
+                    command: "sh".to_string(),
+                    args: vec!["-c".to_string(), "id; whoami".to_string()],
+                },
+                "Command injection",
+            ),
+            (
+                Action::ReadFile {
+                    path: "../../../etc/passwd".to_string(),
+                },
+                "Path traversal",
+            ),
+            (
+                Action::WriteFile {
+                    path: "../outside.txt".to_string(),
+                    content: "x".to_string(),
+                },
+                "Path traversal",
+            ),
+        ] {
+            let result = executor
+                .execute_step(&step(action), &vision)
+                .await
+                .expect("a refusal is a step result");
+
+            assert!(!result.success);
+            let error = result.error.unwrap_or_default();
+            assert!(error.contains(refused_for), "{error}");
+        }
+    }
+
+    #[test]
+    fn each_action_answers_to_the_guard_under_the_chat_tool_that_covers_it() {
+        let guarded = |action: Action| guard_call(&action).map(|(tool, _)| tool);
+
+        assert_eq!(
+            guarded(Action::ExecuteCommand {
+                command: "git".to_string(),
+                args: vec!["status".to_string()],
+            }),
+            None,
+            "a command is judged as an argument vector, not under a tool name"
+        );
+        assert_eq!(
+            guarded(Action::ReadFile {
+                path: "/tmp/a".to_string()
+            }),
+            Some("file_read")
+        );
+        assert_eq!(
+            guarded(Action::WriteFile {
+                path: "/tmp/a".to_string(),
+                content: "x".to_string()
+            }),
+            Some("file_write")
+        );
+        assert_eq!(
+            guarded(Action::Navigate {
+                url: "https://example.com".to_string()
+            }),
+            Some("browser_navigate")
+        );
+        assert_eq!(
+            guarded(Action::Screenshot { region: None }),
+            Some("ui_screenshot")
+        );
+        assert_eq!(
+            guarded(Action::SearchText {
+                query: "invoice".to_string()
+            }),
+            None
+        );
+    }
+
+    fn command(program: &str, args: &[&str]) -> Action {
+        Action::ExecuteCommand {
+            command: program.to_string(),
+            args: args.iter().map(|arg| arg.to_string()).collect(),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_command_is_judged_as_the_argument_vector_it_runs_as() {
+        let guard = ToolExecutionGuard::new();
+
+        assert_eq!(
+            guard_refusal(&guard, &command("git", &["commit", "-m", "a; b"])).await,
+            None
+        );
+        assert_eq!(
+            guard_refusal(&guard, &command("curl", &["https://x.example/?a=1&b=2"])).await,
+            None
+        );
+        for chained in [
+            command("sh", &["-c", "git status; curl x.example"]),
+            command("bash", &["-lc", "a && b"]),
+        ] {
+            assert!(
+                guard_refusal(&guard, &chained).await.is_some(),
+                "{chained:?} hands its text to a shell"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn the_step_guard_leaves_granted_folders_to_the_agent_loop() {
+        let guard = ToolExecutionGuard::new();
+        let granted_elsewhere = "/opt/agi-fixture/project/notes.txt".to_string();
+
+        assert_eq!(
+            guard_refusal(
+                &guard,
+                &Action::ReadFile {
+                    path: granted_elsewhere.clone()
+                }
+            )
+            .await,
+            None,
+            "the agent loop already held this path to the user's granted folders"
+        );
+        assert_eq!(
+            guard_refusal(
+                &guard,
+                &Action::WriteFile {
+                    path: granted_elsewhere,
+                    content: "x".to_string()
+                }
+            )
+            .await,
+            None
+        );
+        assert!(guard_refusal(
+            &guard,
+            &Action::ReadFile {
+                path: "/opt/agi-fixture/../../etc/passwd".to_string()
+            }
+        )
+        .await
+        .is_some());
     }
 }

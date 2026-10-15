@@ -1041,6 +1041,58 @@ mod contract_mapping_tests {
     }
 }
 
+const CATASTROPHIC_COMMAND_PATTERNS: &[&str] = &[
+    "rm -rf /",
+    "rm -rf ~",
+    "rm -rf /*",
+    "mkfs.",
+    "dd if=/dev/zero",
+    "dd if=/dev/random",
+    "> /dev/sda",
+    ":(){ :|:& };:",
+    "chmod -R 777 /",
+    "chown -R",
+    "curl | sh",
+    "curl | bash",
+    "wget -O - | sh",
+    "wget -O - | bash",
+];
+
+/// Programs that read an argument as shell text, so an argument vector naming
+/// one is judged as a shell command.
+const SHELL_PROGRAMS: &[&str] = &[
+    "sh",
+    "bash",
+    "zsh",
+    "dash",
+    "ksh",
+    "fish",
+    "csh",
+    "tcsh",
+    "cmd",
+    "powershell",
+    "pwsh",
+];
+
+const MAX_ARGV_COMMAND_LENGTH: usize = 65_536;
+
+/// Programs whose arguments are another command to run.
+const COMMAND_RUNNERS: &[&str] = &[
+    "xargs", "env", "busybox", "nohup", "nice", "timeout", "time", "watch", "sudo", "doas", "su",
+    "parallel", "setsid", "chroot",
+];
+
+/// `find` flags that run a command for each match.
+const FIND_RUN_FLAGS: &[&str] = &["-exec", "-execdir", "-ok", "-okdir"];
+
+/// Commands that only move, copy, remove or inspect the files named in their
+/// arguments. Shell-text patterns such as `mv /` refuse every full path, so
+/// these are judged by the path rule instead.
+const FILE_COMMANDS: &[&str] = &[
+    "mv", "cp", "rm", "ln", "chmod", "chown", "chgrp", "mkdir", "rmdir", "touch", "cat", "ls",
+    "head", "tail", "stat", "du", "wc",
+];
+
 #[derive(Debug, thiserror::Error)]
 pub enum SecurityError {
     #[error("Unauthorized tool: {0}")]
@@ -1075,6 +1127,25 @@ pub struct ToolExecutionGuard {
     allowed_tools: std::sync::RwLock<HashMap<String, ToolPolicy>>,
     rate_limiters: Arc<Mutex<HashMap<String, RateLimiter>>>,
     allowed_paths: std::sync::RwLock<Vec<PathBuf>>,
+    readable_paths: std::sync::RwLock<Vec<PathBuf>>,
+}
+
+/// What a tool does with a path it names. A folder granted for reading is in
+/// the read set only, so a tool that changes files is still refused there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PathUse {
+    Read,
+    Modify,
+}
+
+/// Whether a path must already sit in a granted folder. The chat executor
+/// asks for folder consent between two passes: the first holds a call to
+/// every rule except this one, so a call that will be refused anyway never
+/// prompts for a folder; the second, after consent, enforces it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FolderGrants {
+    Enforced,
+    DecidedByConsentNext,
 }
 
 impl ToolExecutionGuard {
@@ -1157,9 +1228,8 @@ impl ToolExecutionGuard {
                 max_rate_per_minute: 60,
                 requires_approval: true,
                 allowed_parameters: vec![
+                    "app".to_string(),
                     "target".to_string(),
-                    "x".to_string(),
-                    "y".to_string(),
                     "button".to_string(),
                 ],
                 risk_level: RiskLevel::Medium,
@@ -1172,9 +1242,9 @@ impl ToolExecutionGuard {
                 max_rate_per_minute: 60,
                 requires_approval: true,
                 allowed_parameters: vec![
+                    "app".to_string(),
                     "target".to_string(),
                     "text".to_string(),
-                    "delay_ms".to_string(),
                 ],
                 risk_level: RiskLevel::Medium,
             },
@@ -1185,7 +1255,7 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 60,
                 requires_approval: true,
-                allowed_parameters: vec!["target".to_string()],
+                allowed_parameters: vec!["app".to_string(), "target".to_string()],
                 risk_level: RiskLevel::Medium,
             },
         );
@@ -1195,7 +1265,7 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 60,
                 requires_approval: true,
-                allowed_parameters: vec!["target".to_string()],
+                allowed_parameters: vec!["app".to_string(), "target".to_string()],
                 risk_level: RiskLevel::Medium,
             },
         );
@@ -1205,7 +1275,7 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 60,
                 requires_approval: false,
-                allowed_parameters: vec!["target".to_string()],
+                allowed_parameters: vec!["app".to_string(), "target".to_string()],
                 risk_level: RiskLevel::Medium,
             },
         );
@@ -1215,7 +1285,7 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 120,
                 requires_approval: false,
-                allowed_parameters: vec!["target".to_string()],
+                allowed_parameters: vec!["app".to_string(), "target".to_string()],
                 risk_level: RiskLevel::Low,
             },
         );
@@ -1235,12 +1305,7 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 60,
                 requires_approval: true,
-                allowed_parameters: vec![
-                    "selector".to_string(),
-                    "x".to_string(),
-                    "y".to_string(),
-                    "tab_id".to_string(),
-                ],
+                allowed_parameters: vec!["selector".to_string(), "tab_id".to_string()],
                 risk_level: RiskLevel::High,
             },
         );
@@ -1523,8 +1588,8 @@ impl ToolExecutionGuard {
             "physical_scrape".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 20,
-                requires_approval: false,
-                allowed_parameters: vec!["url".to_string(), "selector".to_string()],
+                requires_approval: true,
+                allowed_parameters: vec!["url".to_string()],
                 risk_level: RiskLevel::Medium,
             },
         );
@@ -1584,12 +1649,61 @@ impl ToolExecutionGuard {
             },
         );
 
+        // The embedded MCP server's tools, called by another local app that
+        // holds the bearer token. `agi_bash` is judged as `terminal_execute`.
+        // The first three answer with text only: the server runs them with
+        // tools and agent mode off. `agi_run_task` starts an agent, so it is
+        // asked about on every call (`NEVER_REMEMBERABLE`).
+        allowed_tools.insert(
+            "agi_chat".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "message".to_string(),
+                    "model".to_string(),
+                    "system_prompt".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "agi_execute_skill".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: false,
+                allowed_parameters: vec!["skill_name".to_string(), "input".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "agi_research".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: false,
+                allowed_parameters: vec!["query".to_string(), "depth".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "agi_run_task".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec!["task".to_string(), "max_steps".to_string()],
+                risk_level: RiskLevel::High,
+            },
+        );
+
         allowed_tools.insert(
             "document_read".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 20,
                 requires_approval: false,
-                allowed_parameters: vec!["file_path".to_string(), "path".to_string()],
+                allowed_parameters: vec!["file_path".to_string()],
                 risk_level: RiskLevel::Low,
             },
         );
@@ -1629,11 +1743,7 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 20,
                 requires_approval: false,
-                allowed_parameters: vec![
-                    "file_path".to_string(),
-                    "path".to_string(),
-                    "query".to_string(),
-                ],
+                allowed_parameters: vec!["file_path".to_string(), "query".to_string()],
                 risk_level: RiskLevel::Low,
             },
         );
@@ -1714,7 +1824,7 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 20,
                 requires_approval: true,
-                allowed_parameters: vec!["query".to_string(), "params".to_string()],
+                allowed_parameters: vec!["connection_id".to_string(), "query".to_string()],
                 risk_level: RiskLevel::High,
             },
         );
@@ -1728,7 +1838,10 @@ impl ToolExecutionGuard {
                     "url".to_string(),
                     "method".to_string(),
                     "headers".to_string(),
+                    "query_params".to_string(),
                     "body".to_string(),
+                    "auth".to_string(),
+                    "timeout_ms".to_string(),
                 ],
                 risk_level: RiskLevel::Medium,
             },
@@ -1858,7 +1971,6 @@ impl ToolExecutionGuard {
                     "new_text".to_string(),
                     "replace_all".to_string(),
                     "expected_sha256".to_string(),
-                    "session_id".to_string(),
                 ],
                 risk_level: RiskLevel::Medium,
             },
@@ -1903,88 +2015,8 @@ impl ToolExecutionGuard {
                 allowed_parameters: vec![
                     "prompt".to_string(),
                     "duration_seconds".to_string(),
-                    "duration_secs".to_string(),
-                    "duration".to_string(),
                     "resolution".to_string(),
                     "provider".to_string(),
-                    "input_image_url".to_string(),
-                ],
-                risk_level: RiskLevel::Medium,
-            },
-        );
-
-        // Email operations
-        allowed_tools.insert(
-            "email_fetch".to_string(),
-            ToolPolicy {
-                max_rate_per_minute: 10,
-                requires_approval: false,
-                allowed_parameters: vec![
-                    "account_id".to_string(),
-                    "folder".to_string(),
-                    "limit".to_string(),
-                ],
-                risk_level: RiskLevel::Medium,
-            },
-        );
-
-        allowed_tools.insert(
-            "email_send".to_string(),
-            ToolPolicy {
-                max_rate_per_minute: 5,
-                requires_approval: true,
-                allowed_parameters: vec![
-                    "account_id".to_string(),
-                    "to".to_string(),
-                    "cc".to_string(),
-                    "bcc".to_string(),
-                    "reply_to".to_string(),
-                    "subject".to_string(),
-                    "body".to_string(),
-                    "body_text".to_string(),
-                    "body_html".to_string(),
-                ],
-                risk_level: RiskLevel::High,
-            },
-        );
-
-        // Calendar operations
-        allowed_tools.insert(
-            "calendar_list_events".to_string(),
-            ToolPolicy {
-                max_rate_per_minute: 20,
-                requires_approval: false,
-                allowed_parameters: vec![
-                    "account_id".to_string(),
-                    "calendar_id".to_string(),
-                    "start_time".to_string(),
-                    "end_time".to_string(),
-                    "max_results".to_string(),
-                    "show_deleted".to_string(),
-                    "request".to_string(),
-                ],
-                risk_level: RiskLevel::Low,
-            },
-        );
-
-        allowed_tools.insert(
-            "calendar_create_event".to_string(),
-            ToolPolicy {
-                max_rate_per_minute: 10,
-                requires_approval: true,
-                allowed_parameters: vec![
-                    "account_id".to_string(),
-                    "calendar_id".to_string(),
-                    "title".to_string(),
-                    "description".to_string(),
-                    "location".to_string(),
-                    "start_time".to_string(),
-                    "end_time".to_string(),
-                    "timezone".to_string(),
-                    "attendees".to_string(),
-                    "reminders".to_string(),
-                    "recurrence".to_string(),
-                    "event".to_string(),
                 ],
                 risk_level: RiskLevel::Medium,
             },
@@ -1995,7 +2027,7 @@ impl ToolExecutionGuard {
             "cloud_download".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 10,
-                requires_approval: false,
+                requires_approval: true,
                 allowed_parameters: vec![
                     "account_id".to_string(),
                     "remote_path".to_string(),
@@ -2026,7 +2058,6 @@ impl ToolExecutionGuard {
                 requires_approval: true,
                 allowed_parameters: vec![
                     "provider".to_string(),
-                    "task".to_string(),
                     "id".to_string(),
                     "title".to_string(),
                     "description".to_string(),
@@ -2170,8 +2201,6 @@ impl ToolExecutionGuard {
                     "name".to_string(),
                     "schedule".to_string(),
                     "task_description".to_string(),
-                    "action_type".to_string(),
-                    "action_data".to_string(),
                 ],
                 risk_level: RiskLevel::High,
             },
@@ -2182,7 +2211,7 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 10,
                 requires_approval: true,
-                allowed_parameters: vec!["job_id".to_string(), "task_id".to_string()],
+                allowed_parameters: vec!["task_id".to_string()],
                 risk_level: RiskLevel::Medium,
             },
         );
@@ -2218,7 +2247,7 @@ impl ToolExecutionGuard {
             "api_download".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 10,
-                requires_approval: false,
+                requires_approval: true,
                 allowed_parameters: vec![
                     "url".to_string(),
                     "save_path".to_string(),
@@ -2418,12 +2447,150 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 5,
                 requires_approval: true,
-                allowed_parameters: vec![
-                    "url".to_string(),
-                    "destination".to_string(),
-                    "branch".to_string(),
-                ],
+                allowed_parameters: vec!["url".to_string(), "destination".to_string()],
                 risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "conversation_search".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "query".to_string(),
+                    "limit".to_string(),
+                    "conversation_id".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "recent_chats".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec!["limit".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "todo_write".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec!["todos".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "tool_search".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "query".to_string(),
+                    "max_results".to_string(),
+                    "include_schemas".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "question".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "question".to_string(),
+                    "choices".to_string(),
+                    "multi_select".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "file_read_range".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "path".to_string(),
+                    "offset".to_string(),
+                    "limit".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_get_content".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec!["tab_id".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "test_run".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "project_root".to_string(),
+                    "runner".to_string(),
+                    "filter".to_string(),
+                    "timeout_secs".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "git_init".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec!["path".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "github_create_repo".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "name".to_string(),
+                    "description".to_string(),
+                    "private".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "browser_autofill_job_application".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "profile".to_string(),
+                    "options".to_string(),
+                    "resume_path".to_string(),
+                    "cover_letter_path".to_string(),
+                    "timeout_ms".to_string(),
+                    "tab_id".to_string(),
+                ],
+                risk_level: RiskLevel::High,
             },
         );
 
@@ -2439,6 +2606,7 @@ impl ToolExecutionGuard {
                 paths.push(PathBuf::from("/tmp"));
                 paths
             }),
+            readable_paths: std::sync::RwLock::new(Vec::new()),
         }
     }
 
@@ -2474,6 +2642,7 @@ impl ToolExecutionGuard {
     fn validate_mcp_tool_params(
         &self,
         parameters: &Value,
+        grants: FolderGrants,
     ) -> std::result::Result<(), SecurityError> {
         let obj = match parameters.as_object() {
             Some(o) => o,
@@ -2502,7 +2671,14 @@ impl ToolExecutionGuard {
                 || key_lower == "root"
                 || key_lower == "base"
             {
-                self.validate_file_path(val_str)?;
+                // A connector's parameter is only guessed to be a path from its
+                // name, and its server resolves a relative value against a
+                // folder this process cannot see.
+                if Self::names_a_place_on_disk(val_str) {
+                    self.validate_path(val_str, PathUse::Modify, grants)?;
+                } else {
+                    Self::refuse_path_traversal(val_str)?;
+                }
             }
 
             if key_lower.contains("url") || key_lower.contains("uri") || key_lower.contains("href")
@@ -2551,6 +2727,114 @@ impl ToolExecutionGuard {
         }
     }
 
+    /// The arguments of a tool that name a file or folder it will open, which
+    /// the rules below judge as paths. The executor makes exactly these
+    /// absolute before any gate reads them, so the guard and the tool see one
+    /// path. `git_diff`'s `file_path` is not here: it is relative to the
+    /// repository by contract.
+    pub fn path_arguments(tool_name: &str) -> &'static [&'static str] {
+        match tool_name {
+            "file_read" | "file_read_binary" | "file_read_range" | "file_write" | "file_delete"
+            | "file_list" | "apply_patch" | "edit_exact_replace" | "git_diff" | "git_log"
+            | "git_list_branches" | "git_init" => &["path"],
+            "document_read"
+            | "document_extract_text"
+            | "document_get_metadata"
+            | "document_detect_type"
+            | "document_search" => &["file_path"],
+            "document_edit_excel" => &["file_path", "output_path"],
+            "document_create_pdf" | "document_create_word" | "document_create_excel" => {
+                &["output_path"]
+            }
+            "test_run" => &["project_root"],
+            "browser_autofill_job_application" => &["resume_path", "cover_letter_path"],
+            "worktree_create" | "worktree_remove" | "worktree_list" => &["repo_path"],
+            name if name.starts_with("mcp__filesystem__") => &["path", "source", "destination"],
+            _ => &[],
+        }
+    }
+
+    /// The one file a path argument names: `~` is the home folder and a
+    /// relative path sits under `base`, the project or working folder of the
+    /// run. With no base a relative path is left as it is, and the guard
+    /// refuses it rather than guess.
+    pub fn absolute_path_argument(path: &str, base: Option<&std::path::Path>) -> String {
+        if path.trim().is_empty() {
+            return path.to_string();
+        }
+        if let Some(home) = dirs::home_dir() {
+            if path == "~" {
+                return home.to_string_lossy().into_owned();
+            }
+            if let Some(rest) = path.strip_prefix("~/") {
+                return home.join(rest).to_string_lossy().into_owned();
+            }
+        }
+        let stated = std::path::Path::new(path);
+        match base {
+            Some(base) if !stated.is_absolute() => base.join(stated).to_string_lossy().into_owned(),
+            _ => path.to_string(),
+        }
+    }
+
+    /// Makes every path argument this guard judges absolute, once, before
+    /// anything reads the call. Chat, goal runs and agent steps all resolve
+    /// here, so the hook, the approval, the guard and the tool name the same
+    /// file.
+    pub fn resolve_path_arguments(
+        tool_name: &str,
+        arguments: &mut HashMap<String, Value>,
+        base: Option<&std::path::Path>,
+    ) {
+        let absolute = |path: &mut String| *path = Self::absolute_path_argument(path, base);
+        for key in Self::path_arguments(tool_name) {
+            if let Some(Value::String(path)) = arguments.get_mut(*key) {
+                absolute(path);
+            }
+        }
+        match tool_name {
+            "multi_edit" => {
+                if let Some(Value::Array(edits)) = arguments.get_mut("edits") {
+                    for edit in edits {
+                        if let Some(Value::String(path)) = edit.get_mut("path") {
+                            absolute(path);
+                        }
+                    }
+                }
+            }
+            "coding_checkpoint_create" => {
+                if let Some(Value::Array(paths)) = arguments.get_mut("paths") {
+                    for path in paths {
+                        if let Value::String(path) = path {
+                            absolute(path);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Folders granted for reading only. Read tools accept a path under one of
+    /// these or under an allowed path; tools that change files, and the
+    /// filesystem MCP server, never do.
+    pub fn set_readable_paths(&self, paths: Vec<PathBuf>) {
+        let canonical_paths: Vec<PathBuf> = paths
+            .into_iter()
+            .map(|p| std::fs::canonicalize(&p).unwrap_or(p))
+            .collect();
+        if let Ok(mut guard) = self.readable_paths.write() {
+            *guard = canonical_paths;
+        }
+    }
+
+    pub fn get_readable_paths(&self) -> Vec<PathBuf> {
+        self.readable_paths
+            .read()
+            .map(|guard| guard.clone())
+            .unwrap_or_default()
+    }
+
     /// Get the current allowed paths (for debugging/inspection)
     pub fn get_allowed_paths(&self) -> Vec<PathBuf> {
         self.allowed_paths
@@ -2564,10 +2848,45 @@ impl ToolExecutionGuard {
         tool_name: &str,
         parameters: &Value,
     ) -> std::result::Result<(), SecurityError> {
-        debug!(
-            "Validating tool call: {} with params: {:?}",
-            tool_name, parameters
-        );
+        self.validate_call(tool_name, parameters, FolderGrants::Enforced, true)
+            .await
+    }
+
+    /// Every rule of [`Self::validate_tool_call`] except whether a path sits
+    /// in a granted folder, which folder consent decides next.
+    pub async fn validate_before_folder_consent(
+        &self,
+        tool_name: &str,
+        parameters: &Value,
+    ) -> std::result::Result<(), SecurityError> {
+        self.validate_call(
+            tool_name,
+            parameters,
+            FolderGrants::DecidedByConsentNext,
+            true,
+        )
+        .await
+    }
+
+    /// The second pass after folder consent: the full rule set, granted
+    /// folders included, without charging the rate limit a second time.
+    pub async fn validate_after_folder_consent(
+        &self,
+        tool_name: &str,
+        parameters: &Value,
+    ) -> std::result::Result<(), SecurityError> {
+        self.validate_call(tool_name, parameters, FolderGrants::Enforced, false)
+            .await
+    }
+
+    async fn validate_call(
+        &self,
+        tool_name: &str,
+        parameters: &Value,
+        grants: FolderGrants,
+        charge_rate_limit: bool,
+    ) -> std::result::Result<(), SecurityError> {
+        debug!("Validating tool call: {}", tool_name);
 
         let policy = {
             let guard = self.allowed_tools.read().map_err(|_| {
@@ -2579,11 +2898,13 @@ impl ToolExecutionGuard {
                 .ok_or_else(|| SecurityError::UnauthorizedTool(tool_name.to_string()))?
         };
 
-        self.check_rate_limit(tool_name, &policy).await?;
+        if charge_rate_limit {
+            self.check_rate_limit(tool_name, &policy).await?;
+        }
 
         // MCP tools get generic parameter validation (path, URL, command, SQL checks)
         if tool_name.starts_with("mcp__") {
-            self.validate_mcp_tool_params(parameters)?;
+            self.validate_mcp_tool_params(parameters, grants)?;
             debug!("MCP tool call validation passed for: {}", tool_name);
             return Ok(());
         }
@@ -2601,9 +2922,15 @@ impl ToolExecutionGuard {
         }
 
         match tool_name {
-            "file_read" | "file_read_binary" | "file_write" | "file_delete" | "file_list" => {
+            "file_read" | "file_read_binary" | "file_read_range" | "file_write" | "file_delete"
+            | "file_list" => {
+                let file_use = if matches!(tool_name, "file_write" | "file_delete") {
+                    PathUse::Modify
+                } else {
+                    PathUse::Read
+                };
                 if let Some(path) = parameters.get("path").and_then(|p| p.as_str()) {
-                    self.validate_file_path(path)?;
+                    self.validate_path(path, file_use, grants)?;
                 } else {
                     return Err(SecurityError::InvalidParameter(
                         "Missing or invalid 'path' parameter".to_string(),
@@ -2623,7 +2950,7 @@ impl ToolExecutionGuard {
                     .or_else(|| parameters.get("path"))
                     .and_then(|p| p.as_str())
                 {
-                    self.validate_file_path(path)?;
+                    self.validate_path(path, PathUse::Read, grants)?;
                 } else {
                     return Err(SecurityError::InvalidParameter(
                         "Missing or invalid 'file_path' parameter".to_string(),
@@ -2638,14 +2965,14 @@ impl ToolExecutionGuard {
                         "Missing or invalid 'file_path' parameter".to_string(),
                     ));
                 };
-                self.validate_file_path(file_path)?;
+                self.validate_path(file_path, PathUse::Read, grants)?;
                 if let Some(output) = parameters.get("output_path").and_then(|p| p.as_str()) {
-                    self.validate_file_path(output)?;
+                    self.validate_path(output, PathUse::Modify, grants)?;
                 }
             }
             "document_create_pdf" | "document_create_word" | "document_create_excel" => {
                 if let Some(path) = parameters.get("output_path").and_then(|p| p.as_str()) {
-                    self.validate_file_path(path)?;
+                    self.validate_path(path, PathUse::Modify, grants)?;
                 } else {
                     return Err(SecurityError::InvalidParameter(
                         "Missing or invalid 'output_path' parameter".to_string(),
@@ -2661,10 +2988,13 @@ impl ToolExecutionGuard {
                         "Missing or invalid 'url' parameter".to_string(),
                     ));
                 }
+                if tool_name == "api_call" {
+                    Self::validate_api_call_options(parameters)?;
+                }
             }
             "git_diff" => {
                 if let Some(path) = parameters.get("path").and_then(|p| p.as_str()) {
-                    self.validate_file_path(path)?;
+                    self.validate_path(path, PathUse::Read, grants)?;
                 }
                 if let Some(file_path) = parameters.get("file_path").and_then(|p| p.as_str()) {
                     self.validate_git_relative_path_arg(file_path)?;
@@ -2684,7 +3014,7 @@ impl ToolExecutionGuard {
             }
             "git_log" => {
                 if let Some(path) = parameters.get("path").and_then(|p| p.as_str()) {
-                    self.validate_file_path(path)?;
+                    self.validate_path(path, PathUse::Read, grants)?;
                 }
                 if let Some(limit) = parameters.get("limit") {
                     let Some(raw) = limit.as_u64() else {
@@ -2701,7 +3031,50 @@ impl ToolExecutionGuard {
             }
             "git_list_branches" => {
                 if let Some(path) = parameters.get("path").and_then(|p| p.as_str()) {
-                    self.validate_file_path(path)?;
+                    self.validate_path(path, PathUse::Read, grants)?;
+                }
+            }
+            "git_init" => {
+                let Some(path) = parameters.get("path").and_then(|p| p.as_str()) else {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'path' parameter".to_string(),
+                    ));
+                };
+                self.validate_path(path, PathUse::Modify, grants)?;
+            }
+            "github_create_repo" => {
+                let Some(name) = parameters.get("name").and_then(|n| n.as_str()) else {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'name' parameter".to_string(),
+                    ));
+                };
+                Self::validate_github_repo_name(name)?;
+            }
+            "test_run" => {
+                if let Some(project_root) = parameters.get("project_root").and_then(|p| p.as_str())
+                {
+                    self.validate_path(project_root, PathUse::Modify, grants)?;
+                }
+                match parameters.get("filter") {
+                    None | Some(Value::Null) => {}
+                    Some(Value::String(filter)) => Self::validate_test_filter(filter)?,
+                    Some(_) => {
+                        return Err(SecurityError::InvalidParameter(
+                            "filter must be a string".to_string(),
+                        ));
+                    }
+                }
+            }
+            "browser_autofill_job_application" => {
+                for key in ["resume_path", "cover_letter_path"] {
+                    if let Some(path) = parameters
+                        .get(key)
+                        .and_then(|p| p.as_str())
+                        .map(str::trim)
+                        .filter(|path| !path.is_empty())
+                    {
+                        self.validate_path(path, PathUse::Read, grants)?;
+                    }
                 }
             }
             "multi_edit" => {
@@ -2734,7 +3107,7 @@ impl ToolExecutionGuard {
                         }
                     }
                     if let Some(path) = edit.get("path").and_then(|p| p.as_str()) {
-                        self.validate_file_path(path)?;
+                        self.validate_path(path, PathUse::Modify, grants)?;
                     } else {
                         return Err(SecurityError::InvalidParameter(format!(
                             "Edit #{} missing or invalid 'path'",
@@ -2754,7 +3127,7 @@ impl ToolExecutionGuard {
             }
             "apply_patch" => {
                 if let Some(path) = parameters.get("path").and_then(|p| p.as_str()) {
-                    self.validate_file_path(path)?;
+                    self.validate_path(path, PathUse::Modify, grants)?;
                 } else {
                     return Err(SecurityError::InvalidParameter(
                         "Missing or invalid 'path' parameter".to_string(),
@@ -2764,7 +3137,7 @@ impl ToolExecutionGuard {
             }
             "edit_exact_replace" => {
                 if let Some(path) = parameters.get("path").and_then(|p| p.as_str()) {
-                    self.validate_file_path(path)?;
+                    self.validate_path(path, PathUse::Modify, grants)?;
                 } else {
                     return Err(SecurityError::InvalidParameter(
                         "Missing or invalid 'path' parameter".to_string(),
@@ -2782,7 +3155,7 @@ impl ToolExecutionGuard {
             }
             "worktree_create" | "worktree_remove" => {
                 if let Some(repo_path) = parameters.get("repo_path").and_then(|p| p.as_str()) {
-                    self.validate_file_path(repo_path)?;
+                    self.validate_path(repo_path, PathUse::Modify, grants)?;
                 }
 
                 if let Some(slug) = parameters.get("slug").and_then(|s| s.as_str()) {
@@ -2795,7 +3168,7 @@ impl ToolExecutionGuard {
             }
             "worktree_list" => {
                 if let Some(repo_path) = parameters.get("repo_path").and_then(|p| p.as_str()) {
-                    self.validate_file_path(repo_path)?;
+                    self.validate_path(repo_path, PathUse::Read, grants)?;
                 }
             }
             "undo_get_summary" => {
@@ -2878,7 +3251,7 @@ impl ToolExecutionGuard {
                             "paths must contain only strings".to_string(),
                         ));
                     };
-                    self.validate_file_path(path)?;
+                    self.validate_path(path, PathUse::Modify, grants)?;
                 }
             }
             "coding_checkpoint_rewind" => {
@@ -2945,6 +3318,76 @@ impl ToolExecutionGuard {
         }
 
         debug!("Tool call validation passed for: {}", tool_name);
+        Ok(())
+    }
+
+    fn validate_api_call_options(parameters: &Value) -> std::result::Result<(), SecurityError> {
+        const MAX_API_CALL_TIMEOUT_MS: u64 = 300_000;
+        for key in ["query_params", "auth"] {
+            if parameters
+                .get(key)
+                .is_some_and(|value| !value.is_object() && !value.is_null())
+            {
+                return Err(SecurityError::InvalidParameter(format!(
+                    "{key} must be an object"
+                )));
+            }
+        }
+        match parameters.get("timeout_ms") {
+            None | Some(Value::Null) => Ok(()),
+            Some(value)
+                if value
+                    .as_u64()
+                    .is_some_and(|ms| (1..=MAX_API_CALL_TIMEOUT_MS).contains(&ms)) =>
+            {
+                Ok(())
+            }
+            Some(_) => Err(SecurityError::InvalidParameter(format!(
+                "timeout_ms must be between 1 and {MAX_API_CALL_TIMEOUT_MS}"
+            ))),
+        }
+    }
+
+    /// `test_run` splices the filter into the runner's shell command line, so
+    /// it may hold nothing a shell or the runner would read as syntax.
+    fn validate_test_filter(filter: &str) -> std::result::Result<(), SecurityError> {
+        const MAX_TEST_FILTER_LEN: usize = 200;
+        let plain = |ch: char| ch.is_ascii_alphanumeric() || "_-.:/@=,+".contains(ch);
+        if filter.len() > MAX_TEST_FILTER_LEN
+            || filter.starts_with('-')
+            || !filter.chars().all(plain)
+        {
+            return Err(SecurityError::CommandInjection(
+                "test filter may hold only letters, digits and _ - . : / @ = , + and may not start with '-'"
+                    .to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// `gh repo create` receives the name as its own argument, where a leading
+    /// dash would be read as an option.
+    fn validate_github_repo_name(name: &str) -> std::result::Result<(), SecurityError> {
+        let segment_is_plain = |segment: &str| {
+            !segment.is_empty()
+                && !segment.starts_with('-')
+                && segment
+                    .chars()
+                    .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
+        };
+        let mut segments = name.split('/');
+        let valid = match (segments.next(), segments.next(), segments.next()) {
+            (Some(repository), None, _) => segment_is_plain(repository),
+            (Some(owner), Some(repository), None) => {
+                segment_is_plain(owner) && segment_is_plain(repository)
+            }
+            _ => false,
+        };
+        if !valid {
+            return Err(SecurityError::InvalidParameter(
+                "name must be a repository name, optionally prefixed with its owner".to_string(),
+            ));
+        }
         Ok(())
     }
 
@@ -3063,7 +3506,43 @@ impl ToolExecutionGuard {
         Ok(())
     }
 
-    fn validate_file_path(&self, path: &str) -> std::result::Result<(), SecurityError> {
+    fn names_a_place_on_disk(value: &str) -> bool {
+        let path = std::path::Path::new(value);
+        path.is_absolute() || path.has_root() || value == "~" || value.starts_with("~/")
+    }
+
+    fn refuse_path_traversal(path: &str) -> std::result::Result<(), SecurityError> {
+        // Decoded repeatedly so a doubly encoded `%252e%252e` is still seen.
+        let mut normalized_path = path.to_lowercase();
+        loop {
+            let decoded = normalized_path
+                .replace("%2e", ".")
+                .replace("%2f", "/")
+                .replace("%5c", "\\");
+            if decoded == normalized_path {
+                break;
+            }
+            normalized_path = decoded;
+        }
+        if normalized_path.contains("..") {
+            warn!("Path traversal detected: {}", path);
+            return Err(SecurityError::PathTraversal(path.to_string()));
+        }
+        if path.contains('\0') {
+            warn!("Null byte in path detected: {}", path);
+            return Err(SecurityError::PathTraversal(
+                "Null byte in path not allowed".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_path(
+        &self,
+        path: &str,
+        path_use: PathUse,
+        grants: FolderGrants,
+    ) -> std::result::Result<(), SecurityError> {
         debug!("Validating file path: {}", path);
 
         // Expand tilde ~ to home directory
@@ -3078,32 +3557,7 @@ impl ToolExecutionGuard {
             path.to_string()
         };
 
-        // SECSYS-004 fix: Check for path traversal patterns (including URL-encoded)
-        // FIX R-24: Case-insensitive normalization with iterative decoding to handle
-        // double-encoding (e.g. %252e%252e -> %2e%2e -> ..)
-        let mut normalized_path = expanded_path.to_lowercase();
-        loop {
-            let decoded = normalized_path
-                .replace("%2e", ".")
-                .replace("%2f", "/")
-                .replace("%5c", "\\");
-            if decoded == normalized_path {
-                break;
-            }
-            normalized_path = decoded;
-        }
-        if normalized_path.contains("..") {
-            warn!("Path traversal detected: {}", expanded_path);
-            return Err(SecurityError::PathTraversal(expanded_path.to_string()));
-        }
-
-        // SECSYS-004 fix: Block null bytes (path truncation attack)
-        if expanded_path.contains('\0') {
-            warn!("Null byte in path detected: {}", expanded_path);
-            return Err(SecurityError::PathTraversal(
-                "Null byte in path not allowed".to_string(),
-            ));
-        }
+        Self::refuse_path_traversal(&expanded_path)?;
 
         let path_buf = PathBuf::from(&expanded_path);
 
@@ -3165,42 +3619,25 @@ impl ToolExecutionGuard {
             }
         }
 
-        // AUDIT-003-005 fix: Canonicalize relative paths against CWD before validation
-        // instead of immediately returning Ok(()) which bypasses security checks
+        // The guard judges the path a tool will open, so it takes absolute
+        // paths only. Resolving a relative one here would mean guessing the
+        // folder: the executor resolves against the project, this process
+        // runs wherever it was launched from.
         if path_buf.is_relative() {
-            // Get current working directory and resolve the relative path
-            if let Ok(cwd) = std::env::current_dir() {
-                let absolute_path = cwd.join(&path_buf);
-                // Recursively validate the absolute path
-                // But first check for path traversal in the resolved path
-                if let Ok(canonical) = absolute_path.canonicalize() {
-                    let canonical_str = canonical.to_string_lossy();
-                    // Check if canonicalized path contains traversal or escapes allowed dirs
-                    if canonical_str.contains("..") {
-                        warn!(
-                            "Path traversal detected in resolved relative path: {}",
-                            expanded_path
-                        );
-                        return Err(SecurityError::PathTraversal(expanded_path.to_string()));
-                    }
-                    // Continue with absolute path validation below using the canonicalized path
-                    // For now, allow relative paths that resolve within the CWD
-                    if canonical.starts_with(&cwd) {
-                        return Ok(());
-                    }
-                    // If it resolves outside CWD, convert to absolute and continue validation
-                    // by falling through to the absolute path checks below
-                }
-            }
-            // If we can't determine CWD or canonicalize, fall through to absolute path checks
-            // which will handle it based on the path content
+            return Err(SecurityError::InvalidParameter(format!(
+                "Path '{}' is relative. Give the full path.",
+                expanded_path
+            )));
         }
 
-        let is_allowed = self
-            .allowed_paths
-            .read()
-            .map(|guard| guard.iter().any(|allowed| path_buf.starts_with(allowed)))
-            .unwrap_or(false);
+        let within = |granted: &std::sync::RwLock<Vec<PathBuf>>| {
+            granted
+                .read()
+                .map(|guard| guard.iter().any(|allowed| path_buf.starts_with(allowed)))
+                .unwrap_or(false)
+        };
+        let is_allowed = within(&self.allowed_paths)
+            || (path_use == PathUse::Read && within(&self.readable_paths));
 
         if !is_allowed {
             if let Some(home_dir) = dirs::home_dir() {
@@ -3237,9 +3674,10 @@ impl ToolExecutionGuard {
                         if drive == 'C' && !expanded_path.starts_with("C:\\Users\\") {
                             // Allow specific safe Windows paths
                             let safe_windows_paths = ["C:\\Temp\\", "C:\\temp\\"];
-                            if !safe_windows_paths
-                                .iter()
-                                .any(|p| expanded_path.starts_with(p))
+                            if grants == FolderGrants::Enforced
+                                && !safe_windows_paths
+                                    .iter()
+                                    .any(|p| expanded_path.starts_with(p))
                             {
                                 warn!("System drive path outside Users: {}", expanded_path);
                                 return Err(SecurityError::InvalidParameter(format!(
@@ -3250,6 +3688,10 @@ impl ToolExecutionGuard {
                         }
                     }
                 }
+            }
+
+            if grants == FolderGrants::DecidedByConsentNext {
+                return Ok(());
             }
 
             warn!("Path not in allowed directories: {}", expanded_path);
@@ -3357,8 +3799,17 @@ impl ToolExecutionGuard {
     /// the DNS rebinding RACE, not the static case: a resolver that answers
     /// public here and private when the connection is made still wins. Closing
     /// that needs connect-time address pinning or a network-level firewall rule.
+    /// A URL as a log may hold it: origin and path. The query, the fragment
+    /// and any user or password in the authority can carry a credential.
+    fn url_for_log(url: &str) -> String {
+        match url::Url::parse(url) {
+            Ok(parsed) => format!("{}{}", parsed.origin().ascii_serialization(), parsed.path()),
+            Err(_) => "<unparseable URL>".to_string(),
+        }
+    }
+
     fn validate_url(&self, url: &str) -> std::result::Result<(), SecurityError> {
-        debug!("Validating URL: {}", url);
+        debug!("Validating URL: {}", Self::url_for_log(url));
 
         match egress_policy::ensure_public_http_destination(url) {
             Ok(()) => Ok(()),
@@ -3395,32 +3846,180 @@ impl ToolExecutionGuard {
             }
         }
 
-        // Secondary defense-in-depth: explicit catastrophic substring patterns.
-        let dangerous_patterns = [
-            "rm -rf /",
-            "rm -rf ~",
-            "rm -rf /*",
-            "mkfs.",
-            "dd if=/dev/zero",
-            "dd if=/dev/random",
-            "> /dev/sda",
-            ":(){ :|:& };:",
-            "chmod -R 777 /",
-            "chown -R",
-            "curl | sh",
-            "curl | bash",
-            "wget -O - | sh",
-            "wget -O - | bash",
-        ];
+        Self::refuse_catastrophic_command(command)
+    }
 
+    /// Defense in depth behind the command validator: shapes that destroy a
+    /// disk or a home folder however the rest of the line reads.
+    fn refuse_catastrophic_command(command: &str) -> std::result::Result<(), SecurityError> {
         let cmd_lower = command.to_lowercase();
-        for pattern in dangerous_patterns {
+        for pattern in CATASTROPHIC_COMMAND_PATTERNS.iter().copied() {
             if cmd_lower.contains(pattern) {
                 warn!("Dangerous terminal command pattern detected: {}", pattern);
                 return Err(SecurityError::CommandInjection(pattern.to_string()));
             }
         }
 
+        Ok(())
+    }
+
+    /// Judges a command that runs as an argument vector, with no shell between
+    /// the caller and the program. A `;`, `&` or `|` inside an argument is
+    /// then data (a commit message, a query string), so the shell operator
+    /// rules do not apply; the blocklists still do. A vector that names a
+    /// shell anywhere hands its text to that shell after all, so it is judged
+    /// as shell text by the full terminal rule.
+    pub fn validate_argv(
+        &self,
+        program: &str,
+        args: &[String],
+    ) -> std::result::Result<(), SecurityError> {
+        use crate::sys::security::command_validator::matches_dangerous_pattern;
+
+        if program.trim().is_empty() {
+            return Err(SecurityError::InvalidParameter(
+                "Missing program to run".to_string(),
+            ));
+        }
+        let line = std::iter::once(program)
+            .chain(args.iter().map(String::as_str))
+            .collect::<Vec<_>>()
+            .join(" ");
+        if line.contains('\0') {
+            return Err(SecurityError::CommandInjection(
+                "null byte in command".to_string(),
+            ));
+        }
+        if line.len() > MAX_ARGV_COMMAND_LENGTH {
+            return Err(SecurityError::InvalidParameter(format!(
+                "Command is longer than {MAX_ARGV_COMMAND_LENGTH} bytes"
+            )));
+        }
+
+        let words: Vec<&str> = std::iter::once(program)
+            .chain(args.iter().map(String::as_str))
+            .collect();
+        let names: Vec<String> = words.iter().map(|word| Self::program_name(word)).collect();
+
+        if let Some(inline) = Self::inline_code(&names, &words) {
+            warn!("Refused a command that carries its own code: {}", inline);
+            return Err(SecurityError::CommandInjection(format!(
+                "{inline} runs code written on the command line"
+            )));
+        }
+
+        let hands_text_to_a_shell = names
+            .iter()
+            .any(|name| SHELL_PROGRAMS.contains(&name.as_str()));
+        let runs_another_command = names
+            .iter()
+            .any(|name| COMMAND_RUNNERS.contains(&name.as_str()))
+            || (names[0] == "find"
+                && args
+                    .iter()
+                    .any(|arg| FIND_RUN_FLAGS.contains(&arg.as_str())));
+        if hands_text_to_a_shell || runs_another_command {
+            return self.validate_terminal_command(&line);
+        }
+
+        if FILE_COMMANDS.contains(&names[0].as_str()) {
+            return self.validate_file_command_paths(args);
+        }
+
+        if let Some(pattern) = matches_dangerous_pattern(&line) {
+            warn!("Dangerous command pattern detected: {}", pattern);
+            return Err(SecurityError::CommandInjection(pattern.to_string()));
+        }
+        Self::refuse_catastrophic_command(&line)
+    }
+
+    /// A program's name as the lists here spell it: no folder, no `.exe`,
+    /// lower case.
+    fn program_name(word: &str) -> String {
+        let name = word
+            .rsplit(['/', '\\'])
+            .next()
+            .unwrap_or(word)
+            .to_ascii_lowercase();
+        name.strip_suffix(".exe").unwrap_or(&name).to_string()
+    }
+
+    /// The interpreter and flag, when an argument vector carries code for an
+    /// interpreter to run. No rule here can read that code, so it is refused.
+    fn inline_code(names: &[String], words: &[&str]) -> Option<String> {
+        for (index, name) in names.iter().enumerate() {
+            let later = &words[index + 1..];
+            let flags: &[&str] = if name.starts_with("python") || name.starts_with("pypy") {
+                &["-c"]
+            } else {
+                match name.as_str() {
+                    "node" | "nodejs" | "bun" | "deno" => {
+                        &["-e", "--eval", "-p", "--print", "eval"]
+                    }
+                    "perl" => &["-e", "-E"],
+                    "ruby" | "lua" | "osascript" => &["-e"],
+                    "php" => &["-r"],
+                    _ => &[],
+                }
+            };
+            if let Some(flag) = later.iter().find(|arg| flags.contains(arg)) {
+                return Some(format!("{name} {flag}"));
+            }
+            if matches!(name.as_str(), "awk" | "gawk" | "mawk" | "nawk")
+                && later.iter().any(|arg| arg.contains("system("))
+            {
+                return Some(format!("{name} system()"));
+            }
+            if name == "git"
+                && later.iter().any(|arg| {
+                    *arg == "-c"
+                        || arg.starts_with("--config-env")
+                        || arg.starts_with("--upload-pack")
+                        || arg.starts_with("--receive-pack")
+                        || arg.starts_with("--exec")
+                        || (arg.contains("alias.") && arg.contains('!'))
+                })
+            {
+                return Some("git with a command in its configuration".to_string());
+            }
+        }
+        None
+    }
+
+    /// A file command is judged by where its arguments point: every full path
+    /// meets the same path rule as a file tool, and none may be the whole
+    /// disk, the home folder or a folder above it.
+    fn validate_file_command_paths(
+        &self,
+        args: &[String],
+    ) -> std::result::Result<(), SecurityError> {
+        let home = dirs::home_dir();
+        for arg in args.iter().filter(|arg| !arg.starts_with('-')) {
+            if arg.split(['/', '\\']).any(|segment| segment == "..") {
+                return Err(SecurityError::PathTraversal(arg.clone()));
+            }
+            let expanded = match (&home, arg.as_str()) {
+                (Some(home), "~") => home.clone(),
+                (Some(home), path) if path.starts_with("~/") => home.join(&path[2..]),
+                _ => PathBuf::from(arg),
+            };
+            if !expanded.has_root() {
+                continue;
+            }
+            let covers_home = home
+                .as_ref()
+                .is_some_and(|home| home.starts_with(&expanded));
+            if expanded.parent().is_none() || covers_home {
+                return Err(SecurityError::CommandInjection(format!(
+                    "'{arg}' is the whole disk, the home folder or a folder above it"
+                )));
+            }
+            self.validate_path(
+                &expanded.to_string_lossy(),
+                PathUse::Modify,
+                FolderGrants::Enforced,
+            )?;
+        }
         Ok(())
     }
 
@@ -5865,6 +6464,14 @@ impl ToolExecutionGuard {
             .find_map(|word| denied.iter().find(|entry| **entry == word).copied())
     }
 
+    #[cfg(test)]
+    pub(crate) fn allowed_parameters(&self, tool_name: &str) -> Option<Vec<String>> {
+        self.allowed_tools
+            .read()
+            .ok()
+            .and_then(|guard| guard.get(tool_name).map(|p| p.allowed_parameters.clone()))
+    }
+
     pub fn get_risk_level(&self, tool_name: &str) -> Option<RiskLevel> {
         self.allowed_tools
             .read()
@@ -6457,12 +7064,34 @@ mod tests {
             .validate_tool_call(
                 "ui_click",
                 &serde_json::json!({
+                    "app": "Notes",
                     "target": { "coordinates": { "x": 10, "y": 20 } },
                     "button": "left"
                 }),
             )
             .await
-            .expect("ui_click target object should be allowed");
+            .expect("ui_click in a named app should be allowed");
+        guard
+            .validate_tool_call(
+                "ui_type",
+                &serde_json::json!({
+                    "app": "Notes",
+                    "target": { "text": "Title" },
+                    "text": "Groceries"
+                }),
+            )
+            .await
+            .expect("ui_type in a named app should be allowed");
+        assert!(
+            guard
+                .validate_tool_call(
+                    "ui_click",
+                    &serde_json::json!({ "app": "Notes", "x": 10, "y": 20 })
+                )
+                .await
+                .is_err(),
+            "coordinates belong inside target, where the executor reads them"
+        );
 
         guard
             .validate_tool_call(
@@ -6496,8 +7125,8 @@ mod tests {
             .expect("file_list pagination parameters should be allowed");
     }
 
-    /// `code_search` is dispatched by the tool executor and sits in
-    /// `READ_ONLY_TOOLS`, so a missing policy entry made it fail closed as
+    /// `code_search` is dispatched by the tool executor and runs in Safe and
+    /// Plan mode, so a missing policy entry made it fail closed as
     /// `UnauthorizedTool` in every agent mode, Safe included.
     #[tokio::test]
     async fn test_code_search_allowed_with_registry_parameters() {
@@ -6555,14 +7184,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_accessibility_verbs_accept_only_a_target() {
+    async fn the_accessibility_verbs_accept_only_a_target_in_a_named_app() {
         let guard = ToolExecutionGuard::new();
 
         for tool in ["ui_toggle", "ui_focus_window", "ui_scroll", "ui_read_value"] {
             guard
-                .validate_tool_call(tool, &json!({ "target": { "element_id": "ax-42" } }))
+                .validate_tool_call(
+                    tool,
+                    &json!({ "app": "Notes", "target": { "element_id": "ax-42" } }),
+                )
                 .await
-                .unwrap_or_else(|error| panic!("{tool} should accept a target: {error:?}"));
+                .unwrap_or_else(|error| {
+                    panic!("{tool} should accept a target in a named app: {error:?}")
+                });
 
             assert!(
                 guard
@@ -6617,33 +7251,6 @@ mod tests {
     #[tokio::test]
     async fn test_specialized_tool_contracts_match_current_registry_params() {
         let guard = ToolExecutionGuard::new();
-
-        guard
-            .validate_tool_call(
-                "email_send",
-                &serde_json::json!({
-                    "account_id": 1,
-                    "to": ["user@example.com"],
-                    "subject": "Demo",
-                    "body": "Hello"
-                }),
-            )
-            .await
-            .expect("email_send advertised params should be allowed");
-
-        guard
-            .validate_tool_call(
-                "calendar_create_event",
-                &serde_json::json!({
-                    "account_id": "calendar-account",
-                    "calendar_id": "primary",
-                    "title": "Demo",
-                    "start_time": "2026-06-04T15:00:00Z",
-                    "end_time": "2026-06-04T16:00:00Z"
-                }),
-            )
-            .await
-            .expect("calendar_create_event advertised params should be allowed");
 
         guard
             .validate_tool_call(
@@ -7261,7 +7868,7 @@ mod tests {
     ];
 
     /// Writes that name their rows through a column. Refusing these is a
-    /// product regression: the same rule set screens the chat `db_tools` path
+    /// product regression: the same rule set screens a goal run's `db_execute`
     /// and MCP `sql`/`query` parameters, where retention deletes are routine.
     const NARROWED_WRITES: &[&str] = &[
         "DELETE FROM items WHERE id BETWEEN 1 AND 10",
@@ -7936,6 +8543,534 @@ mod tests {
             assert!(
                 !state.is_session_approved(tool),
                 "'{tool}' must reach the dialog on every call: a session grant is a standing approval"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn reading_tools_the_chat_advertises_are_safe_with_their_declared_parameters() {
+        let guard = ToolExecutionGuard::new();
+        let file = std::env::temp_dir().join("notes.txt");
+
+        for (tool, parameters) in [
+            (
+                "conversation_search",
+                json!({ "query": "roadmap", "limit": 5, "conversation_id": 7 }),
+            ),
+            ("recent_chats", json!({ "limit": 5 })),
+            ("todo_write", json!({ "todos": [] })),
+            (
+                "tool_search",
+                json!({ "query": "edit", "max_results": 5, "include_schemas": true }),
+            ),
+            (
+                "question",
+                json!({ "question": "Which one?", "choices": ["a", "b"], "multi_select": false }),
+            ),
+            (
+                "file_read_range",
+                json!({ "path": file, "offset": 1, "limit": 10 }),
+            ),
+        ] {
+            guard
+                .validate_tool_call(tool, &parameters)
+                .await
+                .unwrap_or_else(|error| panic!("{tool} should be allowed: {error:?}"));
+            assert_eq!(guard.get_safety_tier(tool), ToolSafetyTier::Safe, "{tool}");
+            assert!(
+                guard
+                    .validate_tool_call(tool, &json!({ "command": "rm -rf /" }))
+                    .await
+                    .is_err(),
+                "{tool} must refuse a parameter its policy never named"
+            );
+        }
+
+        assert!(matches!(
+            guard
+                .validate_tool_call("file_read_range", &json!({ "path": "../../etc/passwd" }))
+                .await,
+            Err(SecurityError::PathTraversal(_))
+        ));
+        assert_eq!(
+            guard.get_safety_tier("browser_get_content"),
+            guard.get_safety_tier("browser_get_dom_snapshot"),
+            "both return the page's markup"
+        );
+    }
+
+    #[tokio::test]
+    async fn tools_that_run_commands_or_write_ask_first() {
+        let guard = ToolExecutionGuard::new();
+        let project = std::env::temp_dir().join("project");
+
+        for tool in [
+            "test_run",
+            "git_init",
+            "github_create_repo",
+            "browser_autofill_job_application",
+        ] {
+            assert!(guard.requires_approval(tool), "{tool}");
+            assert_eq!(
+                guard.get_safety_tier(tool),
+                ToolSafetyTier::RequiresConfirmation,
+                "{tool}"
+            );
+        }
+        assert_eq!(
+            guard.get_risk_level("test_run"),
+            guard.get_risk_level("terminal_execute")
+        );
+
+        guard
+            .validate_tool_call(
+                "test_run",
+                &json!({
+                    "project_root": project,
+                    "runner": "cargo",
+                    "filter": "search::tests::scope",
+                    "timeout_secs": 120
+                }),
+            )
+            .await
+            .expect("test_run with its declared parameters");
+        guard
+            .validate_tool_call("git_init", &json!({ "path": project }))
+            .await
+            .expect("git_init with a path");
+        assert!(guard
+            .validate_tool_call("git_init", &json!({}))
+            .await
+            .is_err());
+        assert!(guard
+            .validate_tool_call("git_init", &json!({ "path": "../outside" }))
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn a_test_filter_cannot_carry_a_second_command_or_an_option() {
+        for filter in [
+            "scope; rm -rf ~",
+            "scope && curl example.test",
+            "$(whoami)",
+            "`id`",
+            "a|b",
+            "--config=/tmp/evil.js",
+            "two words",
+        ] {
+            assert!(
+                matches!(
+                    ToolExecutionGuard::validate_test_filter(filter),
+                    Err(SecurityError::CommandInjection(_))
+                ),
+                "{filter}"
+            );
+        }
+        for filter in [
+            "",
+            "search::tests::scope",
+            "tests/unit/a.test.ts",
+            "Suite.case",
+        ] {
+            assert!(
+                ToolExecutionGuard::validate_test_filter(filter).is_ok(),
+                "{filter}"
+            );
+        }
+
+        let guard = ToolExecutionGuard::new();
+        assert!(matches!(
+            guard
+                .validate_tool_call("test_run", &json!({ "filter": "scope; rm -rf ~" }))
+                .await,
+            Err(SecurityError::CommandInjection(_))
+        ));
+        assert!(guard
+            .validate_tool_call("test_run", &json!({ "filter": 7 }))
+            .await
+            .is_err());
+        guard
+            .validate_tool_call("test_run", &json!({ "filter": null }))
+            .await
+            .expect("no filter");
+    }
+
+    #[tokio::test]
+    async fn a_repository_name_cannot_be_read_as_an_option() {
+        for name in ["notes", "acme/notes.app", "my_repo-2"] {
+            assert!(
+                ToolExecutionGuard::validate_github_repo_name(name).is_ok(),
+                "{name}"
+            );
+        }
+        for name in ["--template=evil/repo", "acme/-x", "a/b/c", "", "has space"] {
+            assert!(
+                ToolExecutionGuard::validate_github_repo_name(name).is_err(),
+                "{name:?}"
+            );
+        }
+
+        let guard = ToolExecutionGuard::new();
+        guard
+            .validate_tool_call(
+                "github_create_repo",
+                &json!({ "name": "acme/notes", "description": "Notes", "private": true }),
+            )
+            .await
+            .expect("a plain name with its declared parameters");
+        assert!(guard
+            .validate_tool_call("github_create_repo", &json!({ "name": "--public" }))
+            .await
+            .is_err());
+        assert!(guard
+            .validate_tool_call("github_create_repo", &json!({ "private": true }))
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn api_call_accepts_its_declared_options_and_bounds_them() {
+        let guard = ToolExecutionGuard::new();
+        let url = "https://8.8.8.8/items";
+
+        guard
+            .validate_tool_call(
+                "api_call",
+                &json!({
+                    "method": "GET",
+                    "url": url,
+                    "headers": { "Accept": "application/json" },
+                    "query_params": { "page": "2" },
+                    "auth": { "type": "bearer", "token": "fixture-token" },
+                    "timeout_ms": 5000
+                }),
+            )
+            .await
+            .expect("every option the schema declares");
+
+        for refused in [
+            json!({ "url": url, "timeout_ms": 0 }),
+            json!({ "url": url, "timeout_ms": 300_001 }),
+            json!({ "url": url, "timeout_ms": "soon" }),
+            json!({ "url": url, "auth": "bearer fixture-token" }),
+            json!({ "url": url, "query_params": ["page"] }),
+            json!({ "url": "http://127.0.0.1/items", "timeout_ms": 5000 }),
+            json!({ "url": url, "retries": 3 }),
+        ] {
+            assert!(
+                guard
+                    .validate_tool_call("api_call", &refused)
+                    .await
+                    .is_err(),
+                "{refused}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn fetching_a_page_the_model_chose_asks_first() {
+        let guard = ToolExecutionGuard::new();
+
+        for tool in [
+            "physical_scrape",
+            "api_call",
+            "api_download",
+            "api_upload",
+            "browser_navigate",
+            "git_clone",
+            "video_generate",
+        ] {
+            assert!(guard.requires_approval(tool), "{tool}");
+            assert!(
+                guard.get_safety_tier(tool).requires_user_action(),
+                "{tool} sends a request where the model points it"
+            );
+        }
+
+        guard
+            .validate_tool_call("physical_scrape", &json!({ "url": "https://8.8.8.8/page" }))
+            .await
+            .expect("a public page");
+        for refused in [
+            json!({ "url": "https://8.8.8.8/page", "selector": "main" }),
+            json!({ "url": "https://8.8.8.8/page", "wait_ms": 3000 }),
+            json!({ "url": "http://127.0.0.1/page" }),
+        ] {
+            assert!(
+                guard
+                    .validate_tool_call("physical_scrape", &refused)
+                    .await
+                    .is_err(),
+                "{refused}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_logged_url_keeps_its_origin_and_path_and_nothing_else() {
+        assert_eq!(
+            ToolExecutionGuard::url_for_log(
+                "https://user:secret@api.example.test:8443/v1/items?token=abc#frag"
+            ),
+            "https://api.example.test:8443/v1/items"
+        );
+        assert_eq!(
+            ToolExecutionGuard::url_for_log("not a url ?token=abc"),
+            "<unparseable URL>"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_folder_granted_for_reading_reads_and_does_not_write() {
+        let guard = ToolExecutionGuard::new();
+        let folder = "/opt/agi-fixture/project";
+        let file = "/opt/agi-fixture/project/notes.txt";
+
+        assert!(
+            guard
+                .validate_tool_call("file_read", &json!({ "path": file }))
+                .await
+                .is_err(),
+            "nothing is granted yet"
+        );
+
+        guard.set_readable_paths(vec![PathBuf::from(folder)]);
+        for (tool, parameters) in [
+            ("file_read", json!({ "path": file })),
+            ("file_read_range", json!({ "path": file, "offset": 1 })),
+            ("file_list", json!({ "path": folder })),
+            ("git_log", json!({ "path": folder })),
+            ("document_read", json!({ "file_path": file })),
+        ] {
+            guard
+                .validate_tool_call(tool, &parameters)
+                .await
+                .unwrap_or_else(|error| panic!("{tool} reads a granted folder: {error:?}"));
+        }
+        for (tool, parameters) in [
+            ("file_write", json!({ "path": file, "content": "x" })),
+            ("file_delete", json!({ "path": file })),
+            ("git_init", json!({ "path": folder })),
+            (
+                "mcp__filesystem__write_file",
+                json!({ "path": file, "content": "x" }),
+            ),
+        ] {
+            guard.register_mcp_tool(tool);
+            assert!(
+                guard.validate_tool_call(tool, &parameters).await.is_err(),
+                "{tool} changes files, and the folder was granted for reading only"
+            );
+        }
+
+        guard.set_allowed_paths(vec![PathBuf::from(folder)]);
+        guard
+            .validate_tool_call("file_write", &json!({ "path": file, "content": "x" }))
+            .await
+            .expect("a folder granted for changes takes a write");
+    }
+
+    #[tokio::test]
+    async fn the_pass_before_folder_consent_defers_only_the_granted_folder_rule() {
+        let guard = ToolExecutionGuard::new();
+        let file = "/opt/agi-fixture/project/notes.txt";
+
+        guard
+            .validate_before_folder_consent("file_read", &json!({ "path": file }))
+            .await
+            .expect("whether the folder is granted is for consent to decide");
+        for refused in [
+            json!({ "path": "../../etc/passwd" }),
+            json!({ "path": file, "command": "id" }),
+            json!({}),
+        ] {
+            assert!(
+                guard
+                    .validate_before_folder_consent("file_read", &refused)
+                    .await
+                    .is_err(),
+                "{refused}"
+            );
+        }
+        assert!(guard
+            .validate_before_folder_consent("unknown_tool", &json!({}))
+            .await
+            .is_err());
+        assert!(guard
+            .validate_before_folder_consent("api_call", &json!({ "url": "http://127.0.0.1/" }))
+            .await
+            .is_err());
+
+        assert!(
+            guard
+                .validate_after_folder_consent("file_read", &json!({ "path": file }))
+                .await
+                .is_err(),
+            "consent was not given, so the second pass refuses"
+        );
+        guard.set_readable_paths(vec![PathBuf::from("/opt/agi-fixture/project")]);
+        for _ in 0..40 {
+            guard
+                .validate_after_folder_consent("file_read", &json!({ "path": file }))
+                .await
+                .expect("the second pass charges no rate limit");
+        }
+    }
+
+    #[test]
+    fn an_argument_vector_is_judged_as_arguments_and_a_shell_as_a_shell() {
+        let guard = ToolExecutionGuard::new();
+        fn args(words: &[&str]) -> Vec<String> {
+            words.iter().map(|word| word.to_string()).collect()
+        }
+
+        guard
+            .validate_argv("git", &args(&["commit", "-m", "a; b"]))
+            .expect("a semicolon in a commit message is text");
+        guard
+            .validate_argv("curl", &args(&["https://x.example/?a=1&b=2"]))
+            .expect("an ampersand in a query string is text");
+
+        for (program, words) in [
+            ("sh", vec!["-c", "id; whoami"]),
+            ("/bin/bash", vec!["-c", "true && curl x.example"]),
+            ("env", vec!["FOO=1", "zsh", "-c", "a; b"]),
+            ("cmd.exe", vec!["/C", "dir & calc"]),
+            ("rm", vec!["-rf", "/"]),
+            ("", vec![]),
+        ] {
+            assert!(
+                guard.validate_argv(program, &args(&words)).is_err(),
+                "{program} {words:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_argument_vector_that_carries_code_or_runs_another_command_is_not_plain() {
+        let guard = ToolExecutionGuard::new();
+        fn args(words: &[&str]) -> Vec<String> {
+            words.iter().map(|word| word.to_string()).collect()
+        }
+
+        for (program, words) in [
+            ("python3", vec!["-I", "-c", "print(1)"]),
+            ("/usr/bin/python3.12", vec!["-c", "print(1)"]),
+            ("osascript", vec!["-e", "display dialog 1"]),
+            ("node", vec!["--eval", "1"]),
+            ("env", vec!["FOO=1", "perl", "-e", "1"]),
+            ("awk", vec!["BEGIN { system(1) }"]),
+            ("git", vec!["-c", "alias.x=!id", "x"]),
+        ] {
+            assert!(
+                matches!(
+                    guard.validate_argv(program, &args(&words)),
+                    Err(SecurityError::CommandInjection(_))
+                ),
+                "{program} {words:?}"
+            );
+        }
+
+        for (program, words) in [
+            ("find", vec![".", "-name", "x", "-exec", "rm", "{}", ";"]),
+            ("xargs", vec!["sh", "-c", "a; b"]),
+            ("busybox", vec!["sh", "-c", "a && b"]),
+        ] {
+            assert!(
+                guard.validate_argv(program, &args(&words)).is_err(),
+                "{program} {words:?} is judged as shell text"
+            );
+        }
+        guard
+            .validate_argv("env", &args(&["FOO=1", "git", "status"]))
+            .expect("a wrapper around a harmless command passes the shell rule");
+        guard
+            .validate_argv("find", &args(&[".", "-name", "notes.txt"]))
+            .expect("find with no command to run is a plain command");
+    }
+
+    #[test]
+    fn a_file_command_is_judged_by_where_its_paths_point() {
+        let guard = ToolExecutionGuard::new();
+        let Some(home) = dirs::home_dir() else {
+            return;
+        };
+        let in_home = |name: &str| home.join(name).to_string_lossy().into_owned();
+
+        guard
+            .validate_argv("mv", &[in_home("a.txt"), in_home("b.txt")])
+            .expect("moving a file inside the home folder is an ordinary command");
+        guard
+            .validate_argv("rm", &["-rf".to_string(), in_home("project/tmp")])
+            .expect("removing a folder inside the home folder is an ordinary command");
+        guard
+            .validate_argv("rm", &["notes.txt".to_string()])
+            .expect("a bare file name is left to the folder the command runs in");
+
+        for (program, words) in [
+            ("mv", vec!["/etc/hosts".to_string(), in_home("hosts")]),
+            ("rm", vec!["-rf".to_string(), "/".to_string()]),
+            ("rm", vec!["-rf".to_string(), "~/".to_string()]),
+            ("rm", vec!["-rf".to_string(), "~".to_string()]),
+            (
+                "chmod",
+                vec!["777".to_string(), home.to_string_lossy().into_owned()],
+            ),
+            ("cp", vec![in_home("a"), "../../outside".to_string()]),
+        ] {
+            assert!(
+                guard.validate_argv(program, &words).is_err(),
+                "{program} {words:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_relative_path_is_refused_rather_than_guessed() {
+        let guard = ToolExecutionGuard::new();
+
+        for path in ["etc/hosts", "src/a.ts", "notes.txt"] {
+            for result in [
+                guard
+                    .validate_tool_call("file_read", &json!({ "path": path }))
+                    .await,
+                guard
+                    .validate_before_folder_consent("file_read", &json!({ "path": path }))
+                    .await,
+            ] {
+                assert!(
+                    matches!(&result, Err(SecurityError::InvalidParameter(reason)) if reason.contains("relative")),
+                    "{path}: {result:?}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn a_connector_value_is_judged_as_a_path_only_when_it_names_a_place_on_disk() {
+        let guard = ToolExecutionGuard::new();
+        guard.register_mcp_tool("mcp__weather__forecast");
+
+        guard
+            .validate_tool_call(
+                "mcp__weather__forecast",
+                &json!({ "location": "Paris", "source": "metar", "input": "today" }),
+            )
+            .await
+            .expect("a word under a path-like name is not a path");
+
+        for refused in [
+            json!({ "file": "../../etc/passwd" }),
+            json!({ "location": "/etc/passwd" }),
+            json!({ "target": "/dev/disk0" }),
+        ] {
+            assert!(
+                guard
+                    .validate_tool_call("mcp__weather__forecast", &refused)
+                    .await
+                    .is_err(),
+                "{refused}"
             );
         }
     }

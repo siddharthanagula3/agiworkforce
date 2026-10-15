@@ -1,11 +1,6 @@
 use crate::sys::account::{current_managed_auth_boundary, get_access_token, get_api_base_url};
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::time::Instant;
-use tauri::Manager;
-
-const HISTORY_FILE: &str = "media_history.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeneratedImage {
@@ -84,24 +79,6 @@ pub struct MediaVideoResponse {
     pub latency_ms: u64,
     pub provider: String,
     pub model: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct MediaHistoryItem {
-    pub id: String,
-    #[serde(rename = "type")]
-    pub type_: String, // "image" or "video"
-    pub title: String,
-    pub prompt: String,
-    pub status: String, // "completed" or "processing"
-    pub src: Option<String>,
-    pub created_at: String, // ISO string
-}
-
-#[tauri::command]
-pub async fn media_get_history(app: tauri::AppHandle) -> Result<Vec<MediaHistoryItem>, String> {
-    load_history(&app).map_err(|e| format!("Failed to load history: {}", e))
 }
 
 const MANAGED_MEDIA_LOCAL_DENIAL: &str =
@@ -275,9 +252,8 @@ fn build_managed_media_video_payload(
     })
 }
 
-#[tauri::command]
 pub async fn media_generate_image(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     request: MediaImageRequest,
 ) -> Result<MediaImageResponse, String> {
     ensure_managed_media_boundary()?;
@@ -333,28 +309,6 @@ pub async fn media_generate_image(
         .map(|s| s.to_string());
     let cost_estimate = body.get("cost_estimate").and_then(|v| v.as_f64());
 
-    // Save to history
-    let mut history = load_history(&app).unwrap_or_default();
-    let now = Utc::now().to_rfc3339();
-
-    for img in &images {
-        history.push(MediaHistoryItem {
-            id: uuid::Uuid::new_v4().to_string(),
-            type_: "image".to_string(),
-            title: payload["prompt"]
-                .as_str()
-                .unwrap_or("")
-                .chars()
-                .take(30)
-                .collect::<String>(),
-            prompt: payload["prompt"].as_str().unwrap_or("").to_string(),
-            status: "completed".to_string(),
-            src: img.url.clone(),
-            created_at: now.clone(),
-        });
-    }
-    let _ = save_history(&app, &history);
-
     Ok(MediaImageResponse {
         images,
         provider: provider_str,
@@ -366,9 +320,8 @@ pub async fn media_generate_image(
     })
 }
 
-#[tauri::command]
 pub async fn media_generate_video(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     request: MediaVideoRequest,
 ) -> Result<MediaVideoResponse, String> {
     ensure_managed_media_boundary()?;
@@ -498,26 +451,6 @@ pub async fn media_generate_video(
 
     let latency_ms = started.elapsed().as_millis() as u64;
 
-    // Save to history
-    let mut history = load_history(&app).unwrap_or_default();
-    let now = Utc::now().to_rfc3339();
-
-    history.push(MediaHistoryItem {
-        id: task_id.clone(),
-        type_: "video".to_string(),
-        title: payload["prompt"]
-            .as_str()
-            .unwrap_or("")
-            .chars()
-            .take(30)
-            .collect::<String>(),
-        prompt: payload["prompt"].as_str().unwrap_or("").to_string(),
-        status: final_status.clone(),
-        src: video_url.clone(),
-        created_at: now,
-    });
-    let _ = save_history(&app, &history);
-
     Ok(MediaVideoResponse {
         id: task_id,
         status: final_status,
@@ -529,36 +462,6 @@ pub async fn media_generate_video(
         provider: resolved_provider,
         model: resolved_model,
     })
-}
-
-fn load_history(app: &tauri::AppHandle) -> anyhow::Result<Vec<MediaHistoryItem>> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| anyhow::anyhow!("Failed to get app data dir: {}", e))?;
-    let history_path = app_dir.join(HISTORY_FILE);
-
-    if !history_path.exists() {
-        return Ok(Vec::new());
-    }
-
-    let content = fs::read_to_string(history_path)?;
-    let history: Vec<MediaHistoryItem> = serde_json::from_str(&content)?;
-    Ok(history)
-}
-
-fn save_history(app: &tauri::AppHandle, history: &[MediaHistoryItem]) -> anyhow::Result<()> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| anyhow::anyhow!("Failed to get app data dir: {}", e))?;
-    if !app_dir.exists() {
-        fs::create_dir_all(&app_dir)?;
-    }
-    let history_path = app_dir.join(HISTORY_FILE);
-    let content = serde_json::to_string_pretty(history)?;
-    fs::write(history_path, content)?;
-    Ok(())
 }
 
 // plan_allows_video removed: plan tier validation is now performed server-side

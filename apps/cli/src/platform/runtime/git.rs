@@ -13,16 +13,240 @@ use agiworkforce_protocol::code_domain::{
     ChangeKind, CodeCapability, CodePermissionProfile, PermissionDecision, RepositoryId,
     RepositoryPolicy, RepositorySnapshot,
 };
+use agiworkforce_worktree::config_guard::ConfigUse;
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
-use tokio::process::Command;
 
 use crate::safety::push_consent::PushConsent;
 
 pub use super::worktree::{list_worktree_entries, parse_worktree_porcelain, WorktreeEntry};
 
-const GIT_OPERATION_TIMEOUT: Duration = Duration::from_secs(120);
-const GIT_NETWORK_TIMEOUT: Duration = Duration::from_secs(300);
+pub(crate) const GIT_OPERATION_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// How long a host git that holds its caller's thread may run.
+pub(crate) const HOST_GIT_BLOCKING_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The output of a host git that blocks this thread, killed at
+/// [`HOST_GIT_BLOCKING_TIMEOUT`]. A FIFO a sandboxed command left where git
+/// reads, such as `.gitattributes`, would otherwise hold the thread forever.
+pub(crate) fn host_git_output(
+    command: std::process::Command,
+) -> std::io::Result<std::process::Output> {
+    agiworkforce_worktree::host_git_output_blocking(command, HOST_GIT_BLOCKING_TIMEOUT)
+}
+
+/// [`host_git_output`] for a clone, fetch or pull, which may take as long
+/// as [`GIT_NETWORK_TIMEOUT`] and never waits on a prompt. There is no
+/// repository yet, or none whose configuration was checked, so ssh is
+/// configured from the user's own global configuration only.
+pub(crate) fn host_git_network_output(
+    mut command: std::process::Command,
+) -> std::io::Result<std::process::Output> {
+    for (name, value) in
+        non_interactive_network_env(|| agiworkforce_worktree::user_config_value("core.sshCommand"))
+    {
+        command.env(name, value);
+    }
+    agiworkforce_worktree::host_git_output_blocking(command, GIT_NETWORK_TIMEOUT)
+        .map(|mut output| {
+            if !output.status.success() {
+                output.stderr = with_batch_ssh_hint(&output.stderr).into_bytes();
+            }
+            output
+        })
+        .map_err(|error| {
+            if error.kind() == std::io::ErrorKind::TimedOut {
+                std::io::Error::new(std::io::ErrorKind::TimedOut, RemoteDidNotAnswer)
+            } else {
+                error
+            }
+        })
+}
+
+/// Why a clone, fetch, pull or push was stopped at its deadline. A network
+/// git waits on the remote, not on a file in the work tree, or on a custom
+/// `core.sshCommand` that asks on the terminal, which batch mode cannot
+/// reach and only [`GIT_NETWORK_TIMEOUT`] ends.
+#[derive(Debug)]
+struct RemoteDidNotAnswer;
+
+impl std::fmt::Display for RemoteDidNotAnswer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "the remote did not answer within {} minutes, so git was stopped. An ssh command \
+             of your own that asks for a passphrase or host key on the terminal waits that long; \
+             load the key with ssh-add, or connect once from a terminal",
+            GIT_NETWORK_TIMEOUT.as_secs() / 60
+        )
+    }
+}
+
+impl std::error::Error for RemoteDidNotAnswer {}
+
+/// The environment that keeps a network git from waiting on a terminal
+/// nobody is watching: git asks for no credentials there, ssh never starts
+/// an askpass program, and plain ssh runs in batch mode, failing instead of
+/// asking for a passphrase or a host key. Git's stdin is already null on
+/// both paths that use this. `configured` is the effective
+/// `core.sshCommand`, read on every call and only when the environment does
+/// not already decide.
+fn non_interactive_network_env(
+    configured: impl FnOnce() -> Option<String>,
+) -> Vec<(&'static str, String)> {
+    let mut env = vec![
+        ("GIT_TERMINAL_PROMPT", "0".to_string()),
+        ("SSH_ASKPASS_REQUIRE", "never".to_string()),
+    ];
+    if let Some(ssh) = batch_ssh_command(
+        std::env::var("GIT_SSH_COMMAND").ok(),
+        std::env::var_os("GIT_SSH").is_some(),
+        configured,
+    ) {
+        env.push(("GIT_SSH_COMMAND", ssh));
+    }
+    env
+}
+
+/// The ssh command for a network git, in `GIT_SSH_COMMAND`, which overrides
+/// `core.sshCommand`. The user's own command, from the environment or else
+/// their git configuration, keeps working: plain `ssh` gets
+/// `-o BatchMode=yes` appended, and anything else, or a `GIT_SSH` program,
+/// is left as it is, with no `GIT_SSH_COMMAND` set at all.
+fn batch_ssh_command(
+    environment: Option<String>,
+    git_ssh_set: bool,
+    configured: impl FnOnce() -> Option<String>,
+) -> Option<String> {
+    let current = match environment.filter(|command| !command.trim().is_empty()) {
+        Some(command) => Some(command),
+        None if git_ssh_set => return None,
+        None => configured().filter(|command| !command.trim().is_empty()),
+    };
+    match current {
+        None => Some("ssh -o BatchMode=yes".to_string()),
+        Some(command) if is_plain_ssh(&command) => {
+            Some(format!("{} -o BatchMode=yes", command.trim()))
+        }
+        Some(_) => None,
+    }
+}
+
+fn is_plain_ssh(command: &str) -> bool {
+    command
+        .split_whitespace()
+        .next()
+        .and_then(|program| Path::new(program).file_name())
+        .is_some_and(|name| name == "ssh" || name.eq_ignore_ascii_case("ssh.exe"))
+}
+
+/// What ssh says when batch mode stopped it short of a prompt.
+const BATCH_SSH_REFUSALS: [&str; 2] = [
+    "Permission denied (publickey",
+    "Host key verification failed",
+];
+
+/// A failed network git's stderr, with how to get past batch mode added when
+/// ssh refused for want of a prompt.
+fn with_batch_ssh_hint(stderr: &[u8]) -> String {
+    let text = String::from_utf8_lossy(stderr).into_owned();
+    if !BATCH_SSH_REFUSALS
+        .iter()
+        .any(|refusal| text.contains(refusal))
+    {
+        return text;
+    }
+    format!(
+        "{}\nnetwork git runs ssh without prompts; load the key with ssh-add, or connect once \
+         from a terminal",
+        text.trim_end()
+    )
+}
+
+/// The sentence to show when a host git could not start or did not finish.
+pub(crate) fn host_git_failure(error: &std::io::Error) -> String {
+    if let Some(remote) = error
+        .get_ref()
+        .and_then(|inner| inner.downcast_ref::<RemoteDidNotAnswer>())
+    {
+        return remote.to_string();
+    }
+    if error.kind() == std::io::ErrorKind::TimedOut {
+        "git did not finish in time and was stopped. A file git reads in this repository may \
+         be a pipe or device that never ends."
+            .to_string()
+    } else {
+        format!("Could not run git: {error}")
+    }
+}
+
+/// Hooks git runs on the host while an operation updates a ref, writes the
+/// index, makes a commit, rewrites history, checks out files, or starts its
+/// automatic garbage collection. Each operation names the ones it can reach.
+/// A fetch or pull runs with automatic maintenance off
+/// ([`GitOperation::host_settings`]), so neither reaches `pre-auto-gc`.
+const REF_HOOKS: &[&str] = &["reference-transaction"];
+const FETCH_HOOKS: &[&str] = &["reference-transaction"];
+const INDEX_HOOKS: &[&str] = &["post-index-change"];
+const REF_AND_INDEX_HOOKS: &[&str] = &["reference-transaction", "post-index-change"];
+const COMMIT_HOOKS: &[&str] = &[
+    "pre-commit",
+    "prepare-commit-msg",
+    "commit-msg",
+    "post-commit",
+    "reference-transaction",
+    "post-index-change",
+    "pre-auto-gc",
+];
+const REPLAY_HOOKS: &[&str] = &[
+    "pre-commit",
+    "prepare-commit-msg",
+    "commit-msg",
+    "post-commit",
+    "post-rewrite",
+    "reference-transaction",
+    "post-index-change",
+    "pre-auto-gc",
+];
+const MERGE_HOOKS: &[&str] = &[
+    "pre-merge-commit",
+    "prepare-commit-msg",
+    "commit-msg",
+    "post-merge",
+    "reference-transaction",
+    "post-index-change",
+    "pre-auto-gc",
+];
+const REBASE_HOOKS: &[&str] = &[
+    "pre-rebase",
+    "pre-commit",
+    "prepare-commit-msg",
+    "commit-msg",
+    "post-commit",
+    "post-rewrite",
+    "post-checkout",
+    "reference-transaction",
+    "post-index-change",
+    "pre-auto-gc",
+];
+const PULL_HOOKS: &[&str] = &[
+    "pre-merge-commit",
+    "pre-rebase",
+    "pre-commit",
+    "prepare-commit-msg",
+    "commit-msg",
+    "post-commit",
+    "post-merge",
+    "post-rewrite",
+    "post-checkout",
+    "reference-transaction",
+    "post-index-change",
+];
+/// What a push can run on this machine: the pre-push hook, and the update of
+/// the remote-tracking ref afterwards.
+pub const PUSH_HOOKS: &[&str] = &["pre-push", "reference-transaction"];
+
+pub(crate) const GIT_NETWORK_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// NUL-separated fields, body last and terminated, so a multi-line commit
 /// message cannot be mistaken for the file list that follows it.
@@ -217,13 +441,12 @@ pub fn diff_summary_for_command(arg: &str) -> String {
 /// [`GitApi::diff`] for the slash commands, which run on the terminal's own
 /// thread rather than inside the async runtime.
 pub fn diff_blocking(root: &Path, baseline: DiffBaseline) -> Result<BaselineDiff> {
-    let output = match std::process::Command::new("git")
-        .current_dir(root)
-        .args(diff_argv(&baseline, &[])?)
-        .output()
-    {
+    check_repository_config_blocking(root, ConfigUse::DIFF)?;
+    let mut command = agiworkforce_worktree::host_git();
+    command.current_dir(root).args(diff_argv(&baseline, &[])?);
+    let output = match host_git_output(command) {
         Ok(output) => output,
-        Err(error) => bail!("Could not run git: {error}"),
+        Err(error) => bail!("{}", host_git_failure(&error)),
     };
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr);
@@ -238,11 +461,24 @@ pub fn diff_blocking(root: &Path, baseline: DiffBaseline) -> Result<BaselineDiff
     ))
 }
 
+/// Status and diffs never look inside a submodule. Its `.git` file is in
+/// the work tree, so a sandboxed command can point it at a git directory
+/// whose filters git would then run on the host, and a `.gitmodules` the
+/// command wrote can override any configured `ignore`; only this flag wins
+/// over both. `dirty` still compares each submodule's recorded commit with
+/// the one its `HEAD` names, which runs nothing there, so a moved submodule
+/// pointer shows, stages and commits like any other change.
+const IGNORE_SUBMODULES: &str = "--ignore-submodules=dirty";
+
+/// A fetch, pull or push never recurses into submodules, for the same reason.
+const NO_RECURSE_SUBMODULES: &str = "--no-recurse-submodules";
+
 fn diff_argv(baseline: &DiffBaseline, paths: &[PathBuf]) -> Result<Vec<String>> {
     let mut argv = vec![
         "diff".to_string(),
         "--no-color".to_string(),
         "--no-ext-diff".to_string(),
+        IGNORE_SUBMODULES.to_string(),
     ];
     argv.extend(baseline.args()?);
     argv.push("--".to_string());
@@ -250,6 +486,69 @@ fn diff_argv(baseline: &DiffBaseline, paths: &[PathBuf]) -> Result<Vec<String>> 
         argv.extend(checked_paths(paths)?);
     }
     Ok(argv)
+}
+
+/// Where the CLI keeps each repository's recorded git settings and its
+/// private index locks: inside its config root, and named on its own in
+/// [`crate::sandbox::protected_paths_for`] so every sandbox keeps it
+/// read-only, even one whose workspace is inside the config root.
+pub(crate) fn git_state_dir() -> Option<PathBuf> {
+    crate::config::CliConfig::config_dir()
+        .ok()
+        .map(|dir| dir.join("git-state"))
+}
+
+/// Point the shared crate at [`git_state_dir`]. Every entry into host git
+/// calls this first; the first call in a process names the directory.
+pub(crate) fn use_git_state_dir() {
+    if let Some(dir) = git_state_dir() {
+        agiworkforce_worktree::set_host_state_dir(dir);
+    }
+}
+
+/// Record the code-running git settings of the repository at `dir`, unless
+/// one was recorded before. Called once at session start, before any
+/// sandboxed command runs, so what a command writes later is told apart
+/// from what was there. See [`agiworkforce_worktree::config_guard`].
+pub(crate) async fn record_config_baseline_at_start(dir: &Path) {
+    use_git_state_dir();
+    let runner = super::worktree::ProcessTreeRunner;
+    let recorded = match agiworkforce_worktree::checkpoint::Workspace::discover(&runner, dir).await
+    {
+        Ok(Some(workspace)) => {
+            agiworkforce_worktree::config_guard::ensure_baseline(&runner, &workspace).await
+        }
+        Ok(None) => Ok(()),
+        Err(error) => Err(error),
+    };
+    if let Err(error) = recorded {
+        tracing::warn!(folder = %dir.display(), %error, "repository git settings not recorded");
+    }
+}
+
+/// Refuse when `root`'s repository sets anything that would run code under
+/// host git and that it did not set when its settings were recorded, or,
+/// unless the user trusts the folder, anything in its work tree. See
+/// [`agiworkforce_worktree::config_guard`].
+pub(crate) async fn check_repository_config(root: &Path, uses: ConfigUse) -> Result<()> {
+    use_git_state_dir();
+    let runner = super::worktree::ProcessTreeRunner;
+    if crate::trust::restrictions_for(root).repository_config {
+        let trusted = agiworkforce_worktree::TrustedConfigRunner(&runner);
+        agiworkforce_worktree::config_guard::check_repository_config_at(&trusted, root, uses).await
+    } else {
+        agiworkforce_worktree::config_guard::check_repository_config_at(&runner, root, uses).await
+    }
+}
+
+/// [`check_repository_config`] for a caller off the async runtime.
+pub(crate) fn check_repository_config_blocking(root: &Path, uses: ConfigUse) -> Result<()> {
+    use_git_state_dir();
+    agiworkforce_worktree::config_guard::check_repository_config_blocking(
+        root,
+        uses,
+        crate::trust::restrictions_for(root).repository_config,
+    )
 }
 
 /// Everything this API can do, as values rather than command strings.
@@ -278,6 +577,11 @@ pub enum GitOperation {
     },
     Unstage {
         paths: Vec<PathBuf>,
+    },
+    /// Record what the index holds as a new commit on the current branch.
+    /// Nothing unstaged goes in, and the repository's commit hooks run.
+    Commit {
+        message: String,
     },
     BranchCreate {
         name: String,
@@ -364,6 +668,7 @@ impl GitOperation {
             Self::Status => "status",
             Self::Stage { .. } => "stage",
             Self::Unstage { .. } => "unstage",
+            Self::Commit { .. } => "commit",
             Self::BranchCreate { .. } => "branch create",
             Self::Merge { .. } => "merge",
             Self::Rebase { .. } => "rebase",
@@ -417,6 +722,114 @@ impl GitOperation {
         }
     }
 
+    /// The repository hooks this operation can run on the host, outside any
+    /// sandbox.
+    pub fn host_hooks(&self) -> &'static [&'static str] {
+        match self {
+            Self::Commit { .. } => COMMIT_HOOKS,
+            Self::Merge { .. } => MERGE_HOOKS,
+            Self::Rebase { .. } => REBASE_HOOKS,
+            Self::Pull { .. } => PULL_HOOKS,
+            Self::CherryPick { .. } | Self::Revert { .. } => REPLAY_HOOKS,
+            Self::Push { .. } => PUSH_HOOKS,
+            Self::Fetch { .. } => FETCH_HOOKS,
+            Self::BranchCreate { .. } | Self::BranchDelete { .. } => REF_HOOKS,
+            Self::Status | Self::Stage { .. } | Self::Unstage { .. } => INDEX_HOOKS,
+            Self::Reset { .. }
+            | Self::Stash(StashOperation::Push { .. })
+            | Self::Stash(StashOperation::Pop)
+            | Self::Stash(StashOperation::Drop { .. }) => REF_AND_INDEX_HOOKS,
+            Self::Show { .. }
+            | Self::ShowStage { .. }
+            | Self::BranchList { .. }
+            | Self::WorktreeList
+            | Self::HeadBranch
+            | Self::RevParse { .. }
+            | Self::RevList { .. }
+            | Self::Diff { .. }
+            | Self::Stash(StashOperation::List)
+            | Self::Clean { .. } => &[],
+        }
+    }
+
+    /// Which of the repository's code-running settings this operation would
+    /// obey, for [`check_repository_config`].
+    pub fn config_use(&self) -> ConfigUse {
+        match self {
+            Self::Show { .. } => ConfigUse::SHOW,
+            Self::Diff { .. } => ConfigUse::DIFF,
+            Self::Commit { .. } => ConfigUse::COMMIT,
+            Self::Status
+            | Self::Stage { .. }
+            | Self::Unstage { .. }
+            | Self::Stash(StashOperation::Push { .. })
+            | Self::Stash(StashOperation::Drop { .. })
+            | Self::Reset { .. }
+            | Self::Clean { .. } => ConfigUse::CONTENT,
+            Self::Merge { .. }
+            | Self::Rebase { .. }
+            | Self::CherryPick { .. }
+            | Self::Revert { .. }
+            | Self::Stash(StashOperation::Pop) => ConfigUse::MERGE,
+            Self::Pull { .. } => ConfigUse::PULL,
+            Self::Fetch { .. } => ConfigUse::NETWORK,
+            Self::Push { .. } => ConfigUse::PUSH,
+            Self::RevList { .. } | Self::Stash(StashOperation::List) => ConfigUse::LOG,
+            Self::BranchCreate { .. } | Self::BranchDelete { .. } => ConfigUse::REFS,
+            Self::ShowStage { .. }
+            | Self::BranchList { .. }
+            | Self::WorktreeList
+            | Self::HeadBranch
+            | Self::RevParse { .. } => ConfigUse::NONE,
+        }
+    }
+
+    /// Settings this operation runs with ahead of its own arguments. A fetch
+    /// or pull would start automatic maintenance, which runs `pre-auto-gc`,
+    /// a hook husky installs, so every fetch would ask about hooks; with it
+    /// off, they reach only the hooks [`Self::host_hooks`] names. Nothing
+    /// that talks to a remote may reach a repository on this machine: git
+    /// runs the other side's own hooks and settings for a local path, with
+    /// none of this side's hardening.
+    fn host_settings(&self) -> &'static [&'static str] {
+        match self {
+            Self::Fetch { .. } | Self::Pull { .. } => &[
+                "-c",
+                "gc.auto=0",
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "protocol.file.allow=never",
+            ],
+            Self::Push { .. } => &["-c", "protocol.file.allow=never"],
+            _ => &[],
+        }
+    }
+
+    /// The remote a fetch, pull or push names.
+    fn remote(&self) -> Option<&str> {
+        match self {
+            Self::Fetch { remote, .. } | Self::Pull { remote, .. } | Self::Push { remote, .. } => {
+                Some(remote.as_str())
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether git may run `git status` inside a submodule for this
+    /// operation, whatever it is told: a commit with nothing staged prints
+    /// the status, and a stash reads every submodule's. [`GitApi::commit`]
+    /// refuses an empty commit before git runs, so only a stash still does;
+    /// no setting short of naming every submodule stops it. Its submodules'
+    /// git directories are checked first, and one a sandboxed command swaps
+    /// between that check and the stash is not seen.
+    fn reads_submodule_status(&self) -> bool {
+        matches!(
+            self,
+            Self::Commit { .. } | Self::Stash(StashOperation::Push { .. })
+        )
+    }
+
     fn reaches_network(&self) -> bool {
         matches!(
             self,
@@ -431,6 +844,7 @@ impl GitOperation {
         match self {
             Self::Stage { .. }
             | Self::Unstage { .. }
+            | Self::Commit { .. }
             | Self::BranchCreate { .. }
             | Self::CherryPick { .. }
             | Self::Revert { .. }
@@ -474,6 +888,7 @@ impl GitOperation {
                     "show".into(),
                     "--no-color".into(),
                     "--name-only".into(),
+                    IGNORE_SUBMODULES.into(),
                     COMMIT_FORMAT.into(),
                     checked_ref(rev, "rev")?,
                 ]
@@ -513,7 +928,12 @@ impl GitOperation {
                 "--verify".into(),
                 checked_ref(spec, "spec")?,
             ],
-            Self::Status => vec!["status".into(), "--porcelain".into(), "--branch".into()],
+            Self::Status => vec![
+                "status".into(),
+                "--porcelain".into(),
+                "--branch".into(),
+                IGNORE_SUBMODULES.into(),
+            ],
             Self::Stage { paths } => {
                 let mut argv = vec!["add".into(), "--".into()];
                 argv.extend(checked_paths(paths)?);
@@ -524,6 +944,10 @@ impl GitOperation {
                 argv.extend(checked_paths(paths)?);
                 argv
             }
+            Self::Commit { message } => vec![
+                "commit".into(),
+                format!("--message={}", checked_message(message)?),
+            ],
             Self::BranchCreate { name, base } => {
                 let mut argv = vec!["branch".into(), checked_ref(name, "branch")?];
                 if let Some(base) = base {
@@ -567,13 +991,15 @@ impl GitOperation {
                 }
                 argv
             }
-            Self::Stash(StashOperation::Pop) => vec!["stash".into(), "pop".into()],
+            Self::Stash(StashOperation::Pop) => {
+                vec!["stash".into(), "pop".into(), "--quiet".into()]
+            }
             Self::Stash(StashOperation::List) => vec!["stash".into(), "list".into()],
             Self::Stash(StashOperation::Drop { index }) => {
                 vec!["stash".into(), "drop".into(), format!("stash@{{{index}}}")]
             }
             Self::Fetch { remote, prune } => {
-                let mut argv = vec!["fetch".into()];
+                let mut argv = vec!["fetch".into(), NO_RECURSE_SUBMODULES.into()];
                 if *prune {
                     argv.push("--prune".into());
                 }
@@ -581,7 +1007,12 @@ impl GitOperation {
                 argv
             }
             Self::Pull { remote, branch } => {
-                let mut argv = vec!["pull".into(), "--no-edit".into(), checked_remote(remote)?];
+                let mut argv = vec![
+                    "pull".into(),
+                    "--no-edit".into(),
+                    NO_RECURSE_SUBMODULES.into(),
+                    checked_remote(remote)?,
+                ];
                 if let Some(branch) = branch {
                     argv.push(checked_ref(branch, "branch")?);
                 }
@@ -593,7 +1024,7 @@ impl GitOperation {
                 set_upstream,
                 force,
             } => {
-                let mut argv = vec!["push".into()];
+                let mut argv = vec!["push".into(), NO_RECURSE_SUBMODULES.into()];
                 if *force == PushForce::WithLease {
                     argv.push("--force-with-lease".into());
                 }
@@ -618,9 +1049,12 @@ impl GitOperation {
                 argv
             }
             Self::Diff { baseline, paths } => diff_argv(baseline, paths)?,
-            Self::Reset { mode, rev } => {
-                vec!["reset".into(), mode.flag().into(), checked_ref(rev, "rev")?]
-            }
+            Self::Reset { mode, rev } => vec![
+                "reset".into(),
+                mode.flag().into(),
+                NO_RECURSE_SUBMODULES.into(),
+                checked_ref(rev, "rev")?,
+            ],
             Self::Clean {
                 directories,
                 ignored,
@@ -654,6 +1088,130 @@ fn checked_text(value: &str, field: &str) -> Result<String> {
     Ok(value.to_string())
 }
 
+/// A commit message keeps its line breaks, since a body is paragraphs, but
+/// nothing else a terminal or git would read as control.
+fn checked_message(value: &str) -> Result<String> {
+    if value.trim().is_empty() {
+        bail!("git commit message must not be empty");
+    }
+    if value
+        .chars()
+        .any(|ch| ch.is_control() && ch != '\n' && ch != '\t')
+    {
+        bail!("git commit message must not contain a control character other than a line break");
+    }
+    Ok(value.to_string())
+}
+
+/// A hook git would run: a file, and on Unix one with an execute bit. Git for
+/// Windows runs a hook file whatever its mode.
+fn is_runnable_hook(path: &Path) -> bool {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return false;
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        meta.is_file() && meta.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        meta.is_file()
+    }
+}
+
+/// The hook files an approval pins, sorted by path, each with its mode and
+/// content hash. A hooks directory outside `work_tree` holds only what git
+/// runs: every runnable file directly in it but a `.sample`. One inside the
+/// work tree, where a sandboxed command can write, is pinned whole: every
+/// regular file below it, since a hook can run any of them, and for a husky
+/// layout (the directory is `<x>/_` or holds an `h` launcher) the regular
+/// files directly in `<x>`, where the scripts its stubs run live. A missing
+/// directory holds none.
+fn hook_files(dir: &Path, work_tree: &Path) -> Result<Vec<HookFile>> {
+    let canonical =
+        |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let mut paths = Vec::new();
+    if canonical(dir).starts_with(canonical(work_tree)) {
+        regular_files_below(dir, &mut paths)?;
+        let husky = dir.file_name().is_some_and(|name| name == "_") || dir.join("h").is_file();
+        if let Some(parent) = dir.parent().filter(|_| husky) {
+            paths.extend(
+                read_dir_or_empty(parent)?.into_iter().filter(|path| {
+                    std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_file())
+                }),
+            );
+        }
+    } else {
+        paths.extend(read_dir_or_empty(dir)?.into_iter().filter(|path| {
+            path.extension()
+                .is_none_or(|extension| extension != "sample")
+                && is_runnable_hook(path)
+        }));
+    }
+    paths.sort();
+    paths.dedup();
+    paths.into_iter().map(hook_file).collect()
+}
+
+/// The entries directly in `dir`; none when it does not exist.
+fn read_dir_or_empty(dir: &Path) -> Result<Vec<PathBuf>> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+            ) =>
+        {
+            return Ok(Vec::new())
+        }
+        Err(error) => return Err(error).with_context(|| format!("read {}", dir.display())),
+    };
+    entries
+        .map(|entry| {
+            entry
+                .map(|entry| entry.path())
+                .with_context(|| format!("read {}", dir.display()))
+        })
+        .collect()
+}
+
+/// Every regular file below `dir`, without following a symlinked directory.
+fn regular_files_below(dir: &Path, found: &mut Vec<PathBuf>) -> Result<()> {
+    for path in read_dir_or_empty(dir)? {
+        let meta = std::fs::symlink_metadata(&path)
+            .with_context(|| format!("inspect {}", path.display()))?;
+        if meta.is_dir() {
+            regular_files_below(&path, found)?;
+        } else if meta.is_file() {
+            found.push(path);
+        }
+    }
+    Ok(())
+}
+
+fn hook_file(path: PathBuf) -> Result<HookFile> {
+    use sha2::{Digest, Sha256};
+
+    let content = std::fs::read(&path).with_context(|| format!("read {}", path.display()))?;
+    #[cfg(unix)]
+    let mode = {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(&path)
+            .with_context(|| format!("inspect {}", path.display()))?
+            .permissions()
+            .mode()
+    };
+    #[cfg(not(unix))]
+    let mode = 0;
+    Ok(HookFile {
+        path,
+        mode,
+        sha256: crate::hex::encode(&Sha256::digest(&content)),
+    })
+}
+
 fn checked_ref(value: &str, field: &str) -> Result<String> {
     let value = checked_text(value, field)?;
     if value.starts_with('-') {
@@ -675,16 +1233,32 @@ fn checked_paths(paths: &[PathBuf]) -> Result<Vec<String>> {
         .collect()
 }
 
+/// Why a remote that is not a configured name or a network URL is refused.
+const LOCAL_REMOTE_UNSUPPORTED: &str = "Local-path remotes aren't supported for agent git: git \
+     would run that repository's own hooks and settings on this machine, outside the sandbox. \
+     Use a configured remote, or an https, ssh or git URL.";
+
 /// A remote is a name or a URL. A URL goes through the one validator the
 /// product already has for a git source, which refuses an embedded credential
 /// and points at a credential helper or an SSH key: this API never carries a
-/// credential of its own.
+/// credential of its own, and refuses a `file://` one. Anything else must be
+/// a remote the repository configures, which [`GitApi::configured_remote`]
+/// checks before git runs; one spelled as a path never is.
 fn checked_remote(remote: &str) -> Result<String> {
     let remote = checked_ref(remote, "remote")?;
-    if remote.contains("://") || remote.starts_with("git@") {
+    if is_remote_url(&remote) {
         crate::marketplace::validate_git_clone_url(&remote)?;
+    } else if remote.starts_with(['.', '/', '~', '\\'])
+        || remote.contains(['\\', ':'])
+        || Path::new(&remote).is_absolute()
+    {
+        bail!("refusing git remote {remote:?}: {LOCAL_REMOTE_UNSUPPORTED}");
     }
     Ok(remote)
+}
+
+fn is_remote_url(remote: &str) -> bool {
+    remote.contains("://") || remote.starts_with("git@")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1048,40 +1622,239 @@ struct GitOutput {
     stderr: String,
 }
 
+/// One hook file as the user approved it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HookFile {
+    pub path: PathBuf,
+    /// The file's permission bits; always zero where there are none.
+    pub mode: u32,
+    pub sha256: String,
+}
+
+/// Everything git could run as a hook in one repository: every runnable file
+/// in its hooks directory, and every `hook.*` setting. An operation that keeps
+/// its hooks can reach any of them, so an approval names all of them, and
+/// the operation runs only while they are exactly what was approved.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HostHooks {
+    pub files: Vec<HookFile>,
+    pub configured: Vec<String>,
+}
+
+impl HostHooks {
+    /// Whether git would run any of these for one of `events`.
+    pub fn reaches(&self, events: &[&str]) -> bool {
+        self.files.iter().any(|file| {
+            file.path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| events.contains(&name))
+        }) || self.configured.iter().any(|entry| {
+            entry.split_once(' ').is_some_and(|(key, value)| {
+                key.ends_with(".event") && events.contains(&value.trim())
+            })
+        })
+    }
+
+    /// One line per hook, for the approval prompt.
+    pub fn describe(&self) -> Vec<String> {
+        self.files
+            .iter()
+            .map(|file| format!("{} (sha256 {})", file.path.display(), &file.sha256[..12]))
+            .chain(
+                self.configured
+                    .iter()
+                    .map(|entry| format!("configured {entry}")),
+            )
+            .collect()
+    }
+}
+
+/// Hooks for an operation. Off unless the user approved the exact set.
+#[derive(Debug, Clone, Default)]
+enum HookMode {
+    #[default]
+    Off,
+    Approved(HostHooks),
+}
+
 /// The typed Git API for one repository root.
 #[derive(Debug, Clone)]
 pub struct GitApi {
     root: PathBuf,
+    hooks: HookMode,
 }
 
 impl GitApi {
+    /// The API for `root`, with every hook off.
     pub fn at(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self {
+            root: root.into(),
+            hooks: HookMode::Off,
+        }
     }
 
     pub fn root(&self) -> &Path {
         &self.root
     }
 
+    /// This API with every hook turned off: hooks are looked for in an
+    /// empty place, so one planted after [`Self::host_hooks`] found none
+    /// cannot run. Hooks defined in configuration have no switch to turn
+    /// them off; only the repository's and the user's own configuration
+    /// define them, and [`check_repository_config`] refuses a repository
+    /// configuration a sandboxed command could have written.
+    pub fn with_hooks_disabled(&self) -> Self {
+        Self {
+            root: self.root.clone(),
+            hooks: HookMode::Off,
+        }
+    }
+
+    /// This API running the repository's hooks for an operation that can
+    /// reach them, while they are exactly `approved`: each run reads them
+    /// again first and refuses when any file, mode or setting differs.
+    pub fn with_approved_hooks(&self, approved: HostHooks) -> Self {
+        Self {
+            root: self.root.clone(),
+            hooks: HookMode::Approved(approved),
+        }
+    }
+
+    /// Refuse a remote that is neither a URL [`checked_remote`] passed nor a
+    /// remote this repository configures: git would read any other word as a
+    /// path to a repository on this machine.
+    async fn configured_remote(&self, remote: &str) -> Result<()> {
+        if is_remote_url(remote) {
+            return Ok(());
+        }
+        let mut command = agiworkforce_worktree::host_git_async();
+        command.current_dir(&self.root).arg("remote");
+        let output = crate::process_tree::output(command, None, Some(GIT_OPERATION_TIMEOUT))
+            .await
+            .context("invoke git remote")?;
+        if !output.status.success() {
+            bail!(
+                "git remote failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        if String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .any(|name| name.trim() == remote)
+        {
+            return Ok(());
+        }
+        bail!(
+            "refusing git remote {remote:?}: it is not a remote this repository configures. \
+             {LOCAL_REMOTE_UNSUPPORTED}"
+        )
+    }
+
+    /// The `core.sshCommand` git would use in this repository, whose
+    /// configuration [`check_repository_config`] has passed, with every file
+    /// it includes, conditionally or not. `None` when nothing sets it.
+    async fn configured_ssh_command(&self) -> Result<Option<String>> {
+        let mut command = agiworkforce_worktree::host_git_async();
+        command
+            .current_dir(&self.root)
+            .args(["config", "--get", "core.sshCommand"]);
+        let output = crate::process_tree::output(command, None, Some(HOST_GIT_BLOCKING_TIMEOUT))
+            .await
+            .map_err(|error| anyhow::anyhow!(host_git_failure(&error)))
+            .context("read core.sshCommand")?;
+        if output.status.code() == Some(1) {
+            return Ok(None);
+        }
+        if !output.status.success() {
+            bail!(
+                "git config --get core.sshCommand failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok((!value.is_empty()).then_some(value))
+    }
+
     async fn run(&self, operation: &GitOperation) -> Result<GitOutput> {
         let argv = operation.argv()?;
-        let mut command = Command::new("git");
-        command.current_dir(&self.root).args(&argv);
+        check_repository_config(&self.root, operation.config_use()).await?;
+        if let Some(remote) = operation.remote() {
+            self.configured_remote(remote).await?;
+        }
+        if operation.reads_submodule_status() {
+            let root = self.root.clone();
+            tokio::task::spawn_blocking(move || {
+                agiworkforce_worktree::config_guard::check_submodule_git_dirs_blocking(&root)
+            })
+            .await
+            .context("check the repository's submodules")??;
+        }
+        let mut command = match &self.hooks {
+            HookMode::Approved(approved) if !operation.host_hooks().is_empty() => {
+                let found = self.host_hooks().await?;
+                if found != *approved {
+                    let now = found.describe();
+                    bail!(
+                        "the repository's hooks changed after they were approved, so git {} did \
+                         not run. They are now: {}",
+                        operation.label(),
+                        if now.is_empty() {
+                            "none".to_string()
+                        } else {
+                            now.join(", ")
+                        }
+                    );
+                }
+                agiworkforce_worktree::host_git_keeping_hooks_async()
+            }
+            _ => agiworkforce_worktree::host_git_async(),
+        };
+        command.current_dir(&self.root);
+        command.args(operation.host_settings());
+        command.args(&argv);
         if operation.reaches_network() {
-            command.env("GIT_TERMINAL_PROMPT", "0");
+            let configured = self.configured_ssh_command().await?;
+            for (name, value) in non_interactive_network_env(|| configured) {
+                command.env(name, value);
+            }
         }
         let timeout = if operation.reaches_network() {
             GIT_NETWORK_TIMEOUT
         } else {
             GIT_OPERATION_TIMEOUT
         };
-        let output = crate::process_tree::output(command, None, Some(timeout))
-            .await
-            .with_context(|| format!("invoke git {}", operation.label()))?;
+        let output = match crate::process_tree::output(command, None, Some(timeout)).await {
+            Ok(output) => output,
+            Err(error)
+                if operation.reaches_network() && error.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                bail!("git {}: {}", operation.label(), RemoteDidNotAnswer)
+            }
+            Err(error) => {
+                return Err(anyhow::Error::new(error))
+                    .with_context(|| format!("invoke git {}", operation.label()))
+            }
+        };
+        if !output.status.success()
+            && String::from_utf8_lossy(&output.stderr).contains("transport 'file' not allowed")
+        {
+            bail!(
+                "git {} did not run: remote {:?} names a repository on this machine. {}",
+                operation.label(),
+                operation.remote().unwrap_or_default(),
+                LOCAL_REMOTE_UNSUPPORTED
+            );
+        }
+        let stderr = if operation.reaches_network() && !output.status.success() {
+            with_batch_ssh_hint(&output.stderr)
+        } else {
+            String::from_utf8_lossy(&output.stderr).into_owned()
+        };
         Ok(GitOutput {
             success: output.status.success(),
             stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+            stderr,
         })
     }
 
@@ -1245,6 +2018,72 @@ impl GitApi {
         Ok(StagedOutcome {
             paths: paths.to_vec(),
         })
+    }
+
+    /// Every hook git could run here, as git resolves them: runnable files in
+    /// the hooks directory, which `core.hooksPath` may put inside the working
+    /// tree where a sandboxed command can write, each with its mode and a
+    /// hash of its content, and every `hook.*` setting. Git never runs a
+    /// `.sample` file, so those are left out.
+    pub async fn host_hooks(&self) -> Result<HostHooks> {
+        let mut command = agiworkforce_worktree::host_git_keeping_hooks_async();
+        command
+            .current_dir(&self.root)
+            .args(["rev-parse", "--git-path", "hooks"]);
+        let output = crate::process_tree::output(command, None, Some(GIT_OPERATION_TIMEOUT))
+            .await
+            .context("invoke git rev-parse --git-path hooks")?;
+        if !output.status.success() {
+            bail!(
+                "git rev-parse --git-path hooks failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        let dir = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
+        let dir = if dir.is_absolute() {
+            dir
+        } else {
+            self.root.join(dir)
+        };
+        let work_tree = self.root.clone();
+        let files = tokio::task::spawn_blocking(move || hook_files(&dir, &work_tree))
+            .await
+            .context("read the hooks directory")??;
+
+        let mut command = agiworkforce_worktree::host_git_async();
+        command
+            .current_dir(&self.root)
+            .args(["config", "--get-regexp", r"^hook\."]);
+        let configured = crate::process_tree::output(command, None, Some(GIT_OPERATION_TIMEOUT))
+            .await
+            .context("invoke git config --get-regexp hook")?;
+        if !matches!(configured.status.code(), Some(0) | Some(1)) {
+            bail!(
+                "git config --get-regexp hook failed: {}",
+                String::from_utf8_lossy(&configured.stderr).trim()
+            );
+        }
+        let mut configured: Vec<String> = String::from_utf8_lossy(&configured.stdout)
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(str::to_string)
+            .collect();
+        configured.sort();
+        Ok(HostHooks { files, configured })
+    }
+
+    /// Commit what is staged, and only that. A hook that refuses stops the
+    /// commit exactly as it stops the user's own `git commit`.
+    pub async fn commit(&self, message: &str) -> Result<CommitDetail> {
+        if self.diff(DiffBaseline::Staged, &[]).await?.diff.is_empty() {
+            bail!("nothing is staged to commit; stage the paths with git_stage first");
+        }
+        self.run_checked(GitOperation::Commit {
+            message: message.to_string(),
+        })
+        .await?;
+        self.show("HEAD").await
     }
 
     pub async fn branch_create(&self, name: &str, base: Option<&str>) -> Result<BranchRef> {
@@ -1806,6 +2645,742 @@ mod tests {
     }
 
     #[test]
+    fn a_commit_records_the_message_whole_and_never_skips_hooks() {
+        let commit = GitOperation::Commit {
+            message: "Fix the parser\n\nThe tokenizer dropped -x flags.".into(),
+        };
+        assert_eq!(
+            commit.argv().unwrap(),
+            vec![
+                "commit",
+                "--message=Fix the parser\n\nThe tokenizer dropped -x flags."
+            ]
+        );
+        assert!(!commit.argv().unwrap().contains(&"--no-verify".to_string()));
+        assert!(!commit.argv().unwrap().contains(&"--all".to_string()));
+        assert!(!commit.bypasses_hooks());
+        assert!(commit.is_write());
+        assert!(!commit.is_destructive());
+        assert_eq!(commit.capabilities(), vec![CodeCapability::FileWrite]);
+        assert!(GitOperation::Commit {
+            message: "  ".into()
+        }
+        .argv()
+        .is_err());
+        assert!(GitOperation::Commit {
+            message: "subject\u{1b}[2J".into()
+        }
+        .argv()
+        .is_err());
+    }
+
+    #[tokio::test]
+    async fn a_commit_takes_only_what_is_staged_and_runs_the_hooks() {
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        let git = GitApi::at(dir.path());
+        assert!(git
+            .commit("nothing yet")
+            .await
+            .expect_err("an empty index is refused")
+            .to_string()
+            .contains("nothing is staged"));
+
+        git_run(dir.path(), &["config", "core.hooksPath", ".git/hooks"]);
+        let marker = dir.path().join("pre-commit-ran");
+        let hook = dir.path().join(".git/hooks/pre-commit");
+        std::fs::create_dir_all(hook.parent().unwrap()).unwrap();
+        std::fs::write(&hook, format!("#!/bin/sh\ntouch '{}'\n", marker.display())).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        std::fs::write(dir.path().join("staged.txt"), "staged\n").unwrap();
+        std::fs::write(dir.path().join("README.md"), "edited, not staged\n").unwrap();
+        git.stage(&[PathBuf::from("staged.txt")])
+            .await
+            .expect("stage");
+
+        let approved = git.with_approved_hooks(git.host_hooks().await.expect("hooks"));
+        let detail = approved.commit("Add staged.txt").await.expect("commit");
+
+        assert_eq!(detail.subject, "Add staged.txt");
+        assert_eq!(detail.files, vec![PathBuf::from("staged.txt")]);
+        #[cfg(unix)]
+        assert!(marker.exists(), "the pre-commit hook did not run");
+        let snapshot = git.status(RepositoryId::new("test")).await.expect("status");
+        assert_eq!(snapshot.staged().count(), 0);
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("README.md")).unwrap(),
+            "edited, not staged\n"
+        );
+    }
+
+    #[test]
+    fn every_operation_that_can_run_a_hook_names_the_hooks_it_reaches() {
+        assert!(GitOperation::Commit {
+            message: "m".into()
+        }
+        .host_hooks()
+        .contains(&"pre-commit"));
+        assert!(GitOperation::Merge {
+            rev: "feature".into(),
+            hooks: HookPolicy::Respect,
+        }
+        .host_hooks()
+        .contains(&"post-merge"));
+        assert!(GitOperation::Rebase {
+            onto: "main".into(),
+            hooks: HookPolicy::Respect,
+        }
+        .host_hooks()
+        .contains(&"post-checkout"));
+        assert!(GitOperation::Pull {
+            remote: "origin".into(),
+            branch: None,
+        }
+        .host_hooks()
+        .contains(&"post-merge"));
+        assert!(GitOperation::CherryPick { rev: "x".into() }
+            .host_hooks()
+            .contains(&"post-rewrite"));
+        assert!(GitOperation::Revert { rev: "x".into() }
+            .host_hooks()
+            .contains(&"commit-msg"));
+        assert_eq!(PUSH_HOOKS, &["pre-push", "reference-transaction"]);
+        assert_eq!(
+            GitOperation::Fetch {
+                remote: "origin".into(),
+                prune: false,
+            }
+            .host_hooks(),
+            FETCH_HOOKS,
+            "a fetch runs with automatic maintenance off, so it never reaches pre-auto-gc"
+        );
+        assert!(GitOperation::Show { rev: "HEAD".into() }
+            .host_hooks()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn hooks_off_means_a_hook_planted_after_the_check_does_not_run() {
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        git_run(dir.path(), &["config", "core.hooksPath", ".hooks"]);
+        let git = GitApi::at(dir.path());
+        assert!(!git.host_hooks().await.expect("hooks").reaches(COMMIT_HOOKS));
+
+        let marker = dir.path().join("planted-ran");
+        let hook = dir.path().join(".hooks/pre-commit");
+        std::fs::create_dir_all(hook.parent().unwrap()).unwrap();
+        std::fs::write(&hook, format!("#!/bin/sh\ntouch '{}'\n", marker.display())).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        std::fs::write(dir.path().join("new.txt"), "new\n").unwrap();
+        let quiet = git.with_hooks_disabled();
+        quiet
+            .stage(&[PathBuf::from("new.txt")])
+            .await
+            .expect("stage");
+        quiet.commit("Add new.txt").await.expect("commit");
+
+        assert!(!marker.exists(), "a hook planted after the check ran");
+        #[cfg(unix)]
+        {
+            let found = git.host_hooks().await.expect("hooks");
+            assert!(found.reaches(COMMIT_HOOKS));
+            assert_eq!(found.files.len(), 1);
+            assert!(found.files[0].path.ends_with(".hooks/pre-commit"));
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn an_approval_names_every_hook_and_a_hook_changed_after_it_refuses_the_run() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        git_run(dir.path(), &["config", "core.hooksPath", ".husky/_"]);
+        git_run(dir.path(), &["config", "hook.lint.command", "true"]);
+        git_run(dir.path(), &["config", "hook.lint.event", "post-commit"]);
+        let hooks = dir.path().join(".husky/_");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let marker = dir.path().join("post-index-change-ran");
+        for (name, body) in [
+            ("pre-commit", "#!/bin/sh\nexit 0\n".to_string()),
+            (
+                "post-index-change",
+                format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+            ),
+            ("pre-push.sample", "#!/bin/sh\nexit 0\n".to_string()),
+        ] {
+            let path = hooks.join(name);
+            std::fs::write(&path, body).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let git = GitApi::at(dir.path());
+
+        let found = git.host_hooks().await.expect("hooks");
+        let named = found.describe().join("\n");
+        assert!(named.contains("post-index-change"), "{named}");
+        assert!(named.contains("pre-commit"), "{named}");
+        assert!(
+            named.contains("configured hook.lint.event post-commit"),
+            "{named}"
+        );
+        assert!(
+            named.contains("pre-push.sample"),
+            "a hooks folder in the work tree is pinned whole: {named}"
+        );
+
+        std::fs::write(dir.path().join("new.txt"), "new\n").unwrap();
+        let configured = git
+            .with_approved_hooks(found)
+            .stage(&[PathBuf::from("new.txt")])
+            .await
+            .expect_err("a hook set in an untrusted folder's configuration is refused");
+        assert!(configured.to_string().contains("hook.lint"), "{configured}");
+        git_run(dir.path(), &["config", "--remove-section", "hook.lint"]);
+
+        let approved = git.with_approved_hooks(git.host_hooks().await.expect("hooks"));
+        std::fs::write(
+            hooks.join("post-index-change"),
+            format!("#!/bin/sh\ntouch '{}'; echo changed\n", marker.display()),
+        )
+        .unwrap();
+        let refused = approved
+            .stage(&[PathBuf::from("new.txt")])
+            .await
+            .expect_err("a hook changed since the approval");
+        assert!(refused
+            .to_string()
+            .contains("changed after they were approved"));
+        assert!(!marker.exists(), "a changed hook ran");
+
+        std::fs::set_permissions(
+            hooks.join("pre-commit"),
+            std::fs::Permissions::from_mode(0o700),
+        )
+        .unwrap();
+        let rehashed = git.host_hooks().await.expect("hooks");
+        let mode_changed = git.with_approved_hooks(rehashed.clone());
+        std::fs::set_permissions(
+            hooks.join("pre-commit"),
+            std::fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+        assert!(mode_changed
+            .stage(&[PathBuf::from("new.txt")])
+            .await
+            .is_err());
+
+        let current = git.with_approved_hooks(git.host_hooks().await.expect("hooks"));
+        current
+            .stage(&[PathBuf::from("new.txt")])
+            .await
+            .expect("hooks exactly as approved run");
+        assert!(marker.exists(), "the approved index hook did not run");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_husky_script_changed_after_the_approval_refuses_the_run() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        git_run(dir.path(), &["config", "core.hooksPath", ".husky/_"]);
+        let husky = dir.path().join(".husky");
+        std::fs::create_dir_all(husky.join("_")).unwrap();
+        let marker = dir.path().join("husky-script-ran");
+        let stub = husky.join("_/pre-commit");
+        std::fs::write(
+            &stub,
+            "#!/bin/sh\nexec \"$(dirname \"$0\")/../pre-commit\"\n",
+        )
+        .unwrap();
+        let script = husky.join("pre-commit");
+        std::fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
+        for path in [&stub, &script] {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        std::fs::write(dir.path().join("new.txt"), "new\n").unwrap();
+        let git = GitApi::at(dir.path());
+        git.stage(&[PathBuf::from("new.txt")]).await.expect("stage");
+
+        let found = git.host_hooks().await.expect("hooks");
+        assert!(
+            found
+                .files
+                .iter()
+                .any(|file| file.path.ends_with(".husky/pre-commit")),
+            "the script the stub runs is pinned: {:?}",
+            found.files
+        );
+        let approved = git.with_approved_hooks(found);
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+        )
+        .unwrap();
+
+        let refused = approved
+            .commit("Add new.txt")
+            .await
+            .expect_err("the husky script changed since the approval");
+        assert!(refused
+            .to_string()
+            .contains("changed after they were approved"));
+        assert!(!marker.exists(), "a changed husky script ran");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn an_operation_without_hooks_never_runs_one_even_from_a_writable_hooks_path() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        git_run(dir.path(), &["config", "core.hooksPath", ".husky/_"]);
+        let hook = dir.path().join(".husky/_/post-index-change");
+        std::fs::create_dir_all(hook.parent().unwrap()).unwrap();
+        let marker = dir.path().join("planted-ran");
+        std::fs::write(&hook, format!("#!/bin/sh\ntouch '{}'\n", marker.display())).unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(dir.path().join("README.md"), "touched\n").unwrap();
+
+        let git = GitApi::at(dir.path());
+        git.diff(DiffBaseline::Unstaged, &[]).await.expect("diff");
+        git.status(RepositoryId::new("test")).await.expect("status");
+        git.stage(&[PathBuf::from("README.md")])
+            .await
+            .expect("stage");
+
+        assert!(!marker.exists(), "a hook ran without an approval");
+    }
+
+    #[tokio::test]
+    async fn a_local_credential_helper_is_refused_only_where_git_would_run_it() {
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        git_run(
+            dir.path(),
+            &["config", "credential.helper", "!./planted.sh"],
+        );
+        git_run(
+            dir.path(),
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://example.invalid/repo.git",
+            ],
+        );
+        let git = GitApi::at(dir.path());
+
+        git.status(RepositoryId::new("test"))
+            .await
+            .expect("status never runs a credential helper");
+        let refused = git
+            .fetch("origin", false)
+            .await
+            .expect_err("a fetch would run the repository's credential helper");
+        assert!(
+            refused.to_string().contains("credential.helper"),
+            "{refused}"
+        );
+        assert_eq!(
+            GitOperation::Status.config_use(),
+            agiworkforce_worktree::config_guard::ConfigUse::CONTENT
+        );
+    }
+
+    #[tokio::test]
+    async fn a_filter_planted_in_the_repository_configuration_refuses_the_typed_api() {
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        let marker = dir.path().join("filter-ran");
+        git_run(
+            dir.path(),
+            &[
+                "config",
+                "filter.planted.clean",
+                &format!("touch '{}'; cat", marker.display()),
+            ],
+        );
+        std::fs::write(dir.path().join(".gitattributes"), "* filter=planted\n").unwrap();
+        std::fs::write(dir.path().join("README.md"), "touched\n").unwrap();
+
+        let refused = GitApi::at(dir.path())
+            .stage(&[PathBuf::from("README.md")])
+            .await
+            .expect_err("an untrusted folder's filter is refused");
+
+        assert!(
+            refused.to_string().contains("filter.planted.clean"),
+            "{refused}"
+        );
+        assert!(!marker.exists(), "a planted filter ran under host git");
+    }
+
+    #[test]
+    fn ref_writes_signatures_and_stash_restores_are_checked_for_what_they_obey() {
+        let branch = GitOperation::BranchCreate {
+            name: "topic".into(),
+            base: None,
+        };
+        assert_eq!(branch.config_use(), ConfigUse::REFS);
+        assert!(branch.config_use().obeys("hook.planted.command"));
+        assert_eq!(
+            GitOperation::BranchDelete {
+                name: "topic".into(),
+                force: false,
+            }
+            .config_use(),
+            ConfigUse::REFS
+        );
+        assert_eq!(
+            GitOperation::Stash(StashOperation::Pop).config_use(),
+            ConfigUse::MERGE
+        );
+        assert!(GitOperation::Commit {
+            message: "x".into()
+        }
+        .config_use()
+        .obeys("gpg.program"));
+        assert!(GitOperation::RevList {
+            branch: "main".into(),
+            exclude: Vec::new(),
+        }
+        .config_use()
+        .obeys("log.showsignature"));
+    }
+
+    #[test]
+    fn a_fetch_or_pull_runs_without_automatic_maintenance_or_its_hook() {
+        let fetch = GitOperation::Fetch {
+            remote: "origin".into(),
+            prune: false,
+        };
+        let pull = GitOperation::Pull {
+            remote: "origin".into(),
+            branch: None,
+        };
+        for operation in [&fetch, &pull] {
+            assert_eq!(
+                operation.host_settings(),
+                [
+                    "-c",
+                    "gc.auto=0",
+                    "-c",
+                    "maintenance.auto=false",
+                    "-c",
+                    "protocol.file.allow=never"
+                ]
+            );
+            assert!(!operation.host_hooks().contains(&"pre-auto-gc"));
+        }
+        assert!(!HostHooks {
+            files: Vec::new(),
+            configured: vec!["hook.husky.event pre-auto-gc".into()],
+        }
+        .reaches(fetch.host_hooks()));
+        assert!(GitOperation::Status.host_settings().is_empty());
+    }
+
+    #[test]
+    fn nothing_that_talks_to_a_remote_recurses_into_submodules_or_reaches_a_local_path() {
+        let push = GitOperation::Push {
+            remote: "origin".into(),
+            branch: "main".into(),
+            set_upstream: false,
+            force: PushForce::Never,
+        };
+        let fetch = GitOperation::Fetch {
+            remote: "origin".into(),
+            prune: true,
+        };
+        let pull = GitOperation::Pull {
+            remote: "origin".into(),
+            branch: None,
+        };
+        let reset = GitOperation::Reset {
+            mode: ResetMode::Hard,
+            rev: "HEAD".into(),
+        };
+        for operation in [&push, &fetch, &pull, &reset] {
+            assert!(
+                operation
+                    .argv()
+                    .unwrap()
+                    .contains(&"--no-recurse-submodules".to_string()),
+                "{operation:?}"
+            );
+        }
+        for operation in [&push, &fetch, &pull] {
+            assert!(operation
+                .host_settings()
+                .windows(2)
+                .any(|pair| pair == ["-c", "protocol.file.allow=never"]));
+            assert_eq!(operation.remote(), Some("origin"));
+        }
+        for reads in [
+            GitOperation::Status,
+            GitOperation::Show { rev: "HEAD".into() },
+            GitOperation::Diff {
+                baseline: DiffBaseline::Head,
+                paths: Vec::new(),
+            },
+        ] {
+            assert!(
+                reads
+                    .argv()
+                    .unwrap()
+                    .contains(&"--ignore-submodules=dirty".to_string()),
+                "{reads:?}"
+            );
+        }
+        assert!(agiworkforce_worktree::HOST_GIT_HARDENING_KEEPING_HOOKS
+            .contains(&"submodule.recurse=false"));
+    }
+
+    #[test]
+    fn a_remote_spelled_as_a_path_on_this_machine_is_refused() {
+        for remote in [
+            "./evil.git",
+            "../evil.git",
+            "/tmp/evil.git",
+            "~/evil.git",
+            "C:\\evil.git",
+            "host:evil.git",
+            "file:///tmp/evil.git",
+        ] {
+            assert!(
+                GitOperation::Fetch {
+                    remote: remote.into(),
+                    prune: false,
+                }
+                .argv()
+                .is_err(),
+                "{remote}"
+            );
+        }
+        for remote in [
+            "origin",
+            "upstream",
+            "https://example.invalid/repo.git",
+            "git@example.invalid:acme/repo.git",
+        ] {
+            assert!(
+                GitOperation::Fetch {
+                    remote: remote.into(),
+                    prune: false,
+                }
+                .argv()
+                .is_ok(),
+                "{remote}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_remote_that_is_a_repository_on_this_machine_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        git_run(dir.path(), &["init", "-q", "--bare", "evil.git"]);
+        let git = GitApi::at(dir.path());
+
+        let unnamed = git
+            .fetch("evil.git", false)
+            .await
+            .expect_err("a word no remote is configured as is read by git as a path");
+        assert!(
+            unnamed
+                .to_string()
+                .contains("not a remote this repository configures"),
+            "{unnamed}"
+        );
+
+        git_run(dir.path(), &["remote", "add", "origin", "evil.git"]);
+        let configured = git
+            .fetch("origin", false)
+            .await
+            .expect_err("a configured remote on this machine");
+        assert!(
+            configured
+                .to_string()
+                .contains("names a repository on this machine"),
+            "{configured}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_moved_submodule_pointer_shows_diffs_and_commits() {
+        let dir = tempfile::tempdir().unwrap();
+        let library = dir.path().join("library");
+        std::fs::create_dir(&library).unwrap();
+        init_repo(&library);
+        let work = dir.path().join("work");
+        std::fs::create_dir(&work).unwrap();
+        init_repo(&work);
+        git_run(
+            &work,
+            &[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "add",
+                "-q",
+                library.to_str().unwrap(),
+                "lib",
+            ],
+        );
+        git_run(&work, &["commit", "-q", "-m", "add lib"]);
+        git_run(
+            &work.join("lib"),
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "bump",
+            ],
+        );
+        let git = GitApi::at(&work);
+
+        let status = git.status(RepositoryId::new("test")).await.expect("status");
+        assert!(
+            status
+                .changes
+                .iter()
+                .any(|change| change.path == Path::new("lib")),
+            "{:?}",
+            status.changes
+        );
+        let unstaged = git.diff(DiffBaseline::Head, &[]).await.expect("diff");
+        assert!(
+            unstaged.text.contains("Subproject commit"),
+            "{}",
+            unstaged.text
+        );
+
+        git_run(&work, &["add", "lib"]);
+        let staged = git.diff(DiffBaseline::Staged, &[]).await.expect("diff");
+        assert!(staged.text.contains("Subproject commit"), "{}", staged.text);
+        let detail = git.commit("Move lib").await.expect("commit the pointer");
+        assert_eq!(detail.files, vec![PathBuf::from("lib")]);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_submodule_pointed_at_a_planted_git_directory_runs_none_of_its_filters() {
+        let dir = tempfile::tempdir().unwrap();
+        let library = dir.path().join("library");
+        std::fs::create_dir(&library).unwrap();
+        init_repo(&library);
+        let work = dir.path().join("work");
+        std::fs::create_dir(&work).unwrap();
+        init_repo(&work);
+        git_run(
+            &work,
+            &[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "add",
+                "-q",
+                library.to_str().unwrap(),
+                "lib",
+            ],
+        );
+        git_run(&work, &["commit", "-q", "-m", "add lib"]);
+        let marker = dir.path().join("filter-ran");
+        let planted = work.join("planted");
+        let copied = SyncCommand::new("cp")
+            .arg("-R")
+            .arg(work.join(".git/modules/lib"))
+            .arg(&planted)
+            .status()
+            .unwrap();
+        assert!(copied.success());
+        let planted_config = planted.join("config");
+        let planted_config = planted_config.to_str().unwrap();
+        git_run(
+            dir.path(),
+            &[
+                "config",
+                "--file",
+                planted_config,
+                "filter.planted.clean",
+                &format!("touch '{}'; cat", marker.display()),
+            ],
+        );
+        git_run(
+            dir.path(),
+            &[
+                "config",
+                "--file",
+                planted_config,
+                "core.worktree",
+                "../lib",
+            ],
+        );
+        std::fs::write(work.join("lib/.git"), "gitdir: ../planted\n").unwrap();
+        std::fs::write(work.join("lib/.gitattributes"), "* filter=planted\n").unwrap();
+        std::fs::write(work.join("lib/README.md"), "touched\n").unwrap();
+        std::fs::write(
+            work.join(".gitmodules"),
+            "[submodule \"lib\"]\n\tpath = lib\n\turl = ../library\n\tignore = none\n",
+        )
+        .unwrap();
+        let git = GitApi::at(&work);
+
+        git.status(RepositoryId::new("test"))
+            .await
+            .expect("status reads the superproject only");
+        git.diff(DiffBaseline::Head, &[]).await.expect("diff");
+        git.show("HEAD").await.expect("show");
+        assert!(
+            !marker.exists(),
+            "a planted submodule filter ran under host git"
+        );
+
+        let committed = git
+            .commit("nothing staged")
+            .await
+            .expect_err("nothing is staged");
+        assert!(committed.to_string().contains("nothing is staged"));
+        std::fs::write(work.join("README.md"), "edited\n").unwrap();
+        git.stage(&[PathBuf::from("README.md")])
+            .await
+            .expect("stage");
+        for refused in [
+            git.commit("edit").await.expect_err("commit"),
+            git.stash(StashOperation::Push {
+                message: None,
+                include_untracked: false,
+            })
+            .await
+            .expect_err("stash"),
+        ] {
+            assert!(refused.to_string().contains("planted"), "{refused}");
+        }
+        assert!(
+            !marker.exists(),
+            "a planted submodule filter ran under host git"
+        );
+    }
+
+    #[test]
     fn writes_reads_and_capabilities_are_classified_per_operation() {
         assert!(!GitOperation::Status.is_write());
         assert!(!GitOperation::WorktreeList.is_write());
@@ -2263,8 +3838,11 @@ mod tests {
         assert!(plan.summary().contains("1 commit(s)"));
     }
 
+    /// The remote here is a second repository on this machine, so the push
+    /// itself is refused once consent is given: git would run that
+    /// repository's own hooks outside the sandbox.
     #[tokio::test]
-    async fn a_push_sends_only_the_named_branch_and_only_its_own_commits() {
+    async fn a_push_names_only_its_own_branch_and_never_reaches_a_repository_on_this_machine() {
         let (_dir, work) = repo_with_remote();
         git_run(&work, &["checkout", "-q", "-b", "unrelated"]);
         std::fs::write(work.join("unrelated.txt"), "other\n").unwrap();
@@ -2291,18 +3869,27 @@ mod tests {
             "a push names the ref it sends: {argv:?}"
         );
 
+        assert!(argv.contains(&"--no-recurse-submodules".to_string()));
+
         let consent = consent_for(&plan).await;
-        git.push(
-            &plan.clone().approved(consent),
-            &CodePermissionProfile::full_access(),
-        )
-        .await
-        .expect("push");
+        let refused = git
+            .push(
+                &plan.clone().approved(consent),
+                &CodePermissionProfile::full_access(),
+            )
+            .await
+            .expect_err("a remote on this machine is refused");
+        assert!(
+            refused
+                .to_string()
+                .contains("Local-path remotes aren't supported"),
+            "{refused}"
+        );
 
         let remote = GitApi::at(work.parent().expect("parent").join("remote.git"));
         let branches = remote.branches(false).await.expect("remote branches");
         let names: Vec<&str> = branches.iter().map(|b| b.name.as_str()).collect();
-        assert!(names.contains(&"feature"), "{names:?}");
+        assert!(!names.contains(&"feature"), "{names:?}");
         assert!(!names.contains(&"unrelated"), "{names:?}");
     }
 
@@ -2375,9 +3962,17 @@ mod tests {
         );
 
         let consent = consent_for(&plan).await;
-        git.push(&plan.approved(consent), &granted)
+        let reached = git
+            .push(&plan.approved(consent), &granted)
             .await
-            .expect("the same push runs once the user has allowed it");
+            .expect_err("the remote is a repository on this machine");
+        assert!(
+            reached
+                .to_string()
+                .contains("names a repository on this machine"),
+            "once allowed, the same push reaches git, which refuses only the local remote: \
+             {reached}"
+        );
     }
 
     #[tokio::test]
@@ -2785,5 +4380,141 @@ mod tests {
             serde_json::from_str::<RepositorySnapshot>(&stored).expect("read back"),
             as_taken
         );
+    }
+}
+
+#[cfg(test)]
+mod network_prompt_tests {
+    use super::*;
+
+    #[test]
+    fn network_git_never_waits_on_a_prompt() {
+        let env = non_interactive_network_env(|| None);
+        assert!(env.contains(&("GIT_TERMINAL_PROMPT", "0".to_string())));
+        assert!(env.contains(&("SSH_ASKPASS_REQUIRE", "never".to_string())));
+    }
+
+    #[test]
+    fn a_configured_command_that_is_not_plain_ssh_sets_no_ssh_override() {
+        if std::env::var_os("GIT_SSH_COMMAND").is_some() || std::env::var_os("GIT_SSH").is_some() {
+            return;
+        }
+        let env = non_interactive_network_env(|| Some("ssh-agent-wrapper --profile work".into()));
+        assert!(env.iter().all(|(name, _)| *name != "GIT_SSH_COMMAND"));
+        let env = non_interactive_network_env(|| Some("ssh -F ~/.ssh/work_config".into()));
+        assert!(env.contains(&(
+            "GIT_SSH_COMMAND",
+            "ssh -F ~/.ssh/work_config -o BatchMode=yes".to_string()
+        )));
+    }
+
+    #[test]
+    fn an_empty_configured_command_is_plain_ssh() {
+        assert_eq!(
+            batch_ssh_command(None, false, || Some("  ".to_string())).as_deref(),
+            Some("ssh -o BatchMode=yes")
+        );
+        assert!(is_plain_ssh("ssh.exe -i key"));
+        assert!(is_plain_ssh("/usr/local/bin/ssh"));
+        assert!(!is_plain_ssh("sshpass -p x ssh"));
+    }
+
+    #[test]
+    fn a_batch_mode_refusal_says_how_to_get_past_it() {
+        let hinted = with_batch_ssh_hint(
+            b"git@github.com: Permission denied (publickey).\nfatal: Could not read from remote\n",
+        );
+        assert!(hinted.contains("load the key with ssh-add"));
+        assert!(with_batch_ssh_hint(b"Host key verification failed.\n").contains("ssh-add"));
+        assert_eq!(
+            with_batch_ssh_hint(b"fatal: repository not found\n"),
+            "fatal: repository not found\n"
+        );
+    }
+
+    fn git_in(dir: &Path, args: &[&str]) {
+        let status = std::process::Command::new("git")
+            .current_dir(dir)
+            .args(args)
+            .status()
+            .expect("git available");
+        assert!(status.success(), "git {args:?}");
+    }
+
+    #[tokio::test]
+    async fn the_repository_ssh_command_is_read_through_its_includes() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        git_in(dir.path(), &["init", "-q"]);
+        let included = dir.path().join("ssh.config");
+        std::fs::write(
+            &included,
+            "[core]\n\tsshCommand = plink -batch -load work\n",
+        )
+        .unwrap();
+        git_in(
+            dir.path(),
+            &[
+                "config",
+                "include.path",
+                included.to_str().expect("utf-8 path"),
+            ],
+        );
+        let configured = GitApi::at(dir.path())
+            .configured_ssh_command()
+            .await
+            .expect("read core.sshCommand");
+        assert_eq!(configured.as_deref(), Some("plink -batch -load work"));
+    }
+
+    #[tokio::test]
+    async fn a_repository_that_sets_no_ssh_command_is_not_an_error() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        git_in(dir.path(), &["init", "-q"]);
+        GitApi::at(dir.path())
+            .configured_ssh_command()
+            .await
+            .expect("an unset key is not an error");
+    }
+
+    #[test]
+    fn ssh_runs_in_batch_mode_and_a_users_own_command_is_respected() {
+        assert_eq!(
+            batch_ssh_command(None, false, || None).as_deref(),
+            Some("ssh -o BatchMode=yes")
+        );
+        assert_eq!(
+            batch_ssh_command(None, false, || Some("ssh -i ~/.ssh/work".to_string())).as_deref(),
+            Some("ssh -i ~/.ssh/work -o BatchMode=yes")
+        );
+        let configuration_unread =
+            || -> Option<String> { panic!("the environment wins over configuration") };
+        assert_eq!(
+            batch_ssh_command(
+                Some("/usr/bin/ssh -p 2222".to_string()),
+                false,
+                configuration_unread,
+            )
+            .as_deref(),
+            Some("/usr/bin/ssh -p 2222 -o BatchMode=yes")
+        );
+        assert_eq!(
+            batch_ssh_command(None, false, || Some("plink -batch".to_string())),
+            None,
+            "a command that is not plain ssh is left alone"
+        );
+        assert_eq!(batch_ssh_command(None, true, || None), None);
+    }
+
+    #[test]
+    fn a_network_timeout_says_the_remote_did_not_answer() {
+        let error = std::io::Error::new(std::io::ErrorKind::TimedOut, RemoteDidNotAnswer);
+        let message = host_git_failure(&error);
+        assert!(
+            message.contains("the remote did not answer within 5 minutes"),
+            "{message}"
+        );
+        assert!(message.contains("ssh-add"), "{message}");
+        let local = std::io::Error::new(std::io::ErrorKind::TimedOut, "pipe");
+        assert!(host_git_failure(&local).contains("pipe or device"));
     }
 }

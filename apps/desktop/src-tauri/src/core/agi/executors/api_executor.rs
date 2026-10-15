@@ -28,6 +28,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::path::Path;
 
 /// Executor for API operations.
 ///
@@ -161,20 +162,24 @@ impl ApiExecutor {
         parameters: &HashMap<String, Value>,
         context: &ExecutorContext,
     ) -> Result<Value> {
+        let requested = parameters
+            .get("file_path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing file_path parameter"))?;
+        let granted = context.granted_folders().await?;
+        let canonical = granted.readable_path(Path::new(requested), "api_upload")?;
+        let file_path = utf8_path(&canonical)?;
+
         let Some(ref app) = context.app_handle else {
             return Err(anyhow!(
                 "Unable to upload files right now. Please try again later."
             ));
         };
 
-        let file_path = parameters
-            .get("file_path")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown");
-
         context.emit_progress(&format!("Uploading file: {}...", file_path), Some(0.1));
 
-        let result = crate::core::agi::api_tools_impl::execute_api_upload(app, parameters).await;
+        let result =
+            crate::core::agi::api_tools_impl::execute_api_upload(app, parameters, file_path).await;
 
         match &result {
             Ok(response) => {
@@ -219,6 +224,14 @@ impl ApiExecutor {
         parameters: &HashMap<String, Value>,
         context: &ExecutorContext,
     ) -> Result<Value> {
+        let requested = parameters
+            .get("save_path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing save_path parameter"))?;
+        let granted = context.granted_folders().await?;
+        let canonical = granted.writable_new_path(Path::new(requested), "api_download")?;
+        let save_path = utf8_path(&canonical)?;
+
         let Some(ref app) = context.app_handle else {
             return Err(anyhow!(
                 "Unable to download files right now. Please try again later."
@@ -228,11 +241,14 @@ impl ApiExecutor {
         let url = parameters
             .get("url")
             .and_then(|v| v.as_str())
-            .unwrap_or("unknown");
+            .map(crate::sys::api::client::loggable_url)
+            .unwrap_or_else(|| "unknown".to_string());
 
         context.emit_progress(&format!("Downloading: {}...", url), Some(0.1));
 
-        let result = crate::core::agi::api_tools_impl::execute_api_download(app, parameters).await;
+        let result =
+            crate::core::agi::api_tools_impl::execute_api_download(app, parameters, save_path)
+                .await;
 
         match &result {
             Ok(response) => {
@@ -257,6 +273,11 @@ impl ApiExecutor {
 
         result
     }
+}
+
+fn utf8_path(path: &Path) -> Result<&str> {
+    path.to_str()
+        .ok_or_else(|| anyhow!("The path '{}' is not valid UTF-8", path.display()))
 }
 
 impl Default for ApiExecutor {
@@ -305,16 +326,13 @@ mod tests {
     fn create_test_context() -> ExecutorContext {
         ExecutorContext {
             app_handle: None,
-            automation: Arc::new(
-                crate::automation::AutomationService::new()
-                    .expect("Failed to create AutomationService for tests"),
-            ),
             router: Arc::new(tokio::sync::RwLock::new(crate::core::llm::LLMRouter::new())),
             tool_cache: Arc::new(crate::data::cache::ToolResultCache::new()),
             security_guard: Arc::new(crate::sys::security::ToolExecutionGuard::new()),
             change_tracker: None,
             session_id: "test_session".to_string(),
             tool_id: "test_tool".to_string(),
+            granted_directories: Vec::new(),
         }
     }
 
@@ -397,7 +415,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_api_upload_without_app_handle() {
-        let context = create_test_context();
+        let folder = tempfile::tempdir().unwrap();
+        let file = folder.path().join("file.txt");
+        std::fs::write(&file, "data").unwrap();
+        let mut context = create_test_context();
+        context.granted_directories = vec![folder.path().to_path_buf()];
         let executor = ApiExecutor::new();
         let mut params = HashMap::new();
         params.insert(
@@ -406,7 +428,7 @@ mod tests {
         );
         params.insert(
             "file_path".to_string(),
-            Value::String("/path/to/file.txt".to_string()),
+            Value::String(file.to_string_lossy().to_string()),
         );
 
         let exec_context = create_test_execution_context();
@@ -425,7 +447,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_api_download_without_app_handle() {
-        let context = create_test_context();
+        let folder = tempfile::tempdir().unwrap();
+        let mut context = create_test_context();
+        context.granted_directories = vec![folder.path().to_path_buf()];
         let executor = ApiExecutor::new();
         let mut params = HashMap::new();
         params.insert(
@@ -434,7 +458,7 @@ mod tests {
         );
         params.insert(
             "save_path".to_string(),
-            Value::String("/path/to/save.pdf".to_string()),
+            Value::String(folder.path().join("save.pdf").to_string_lossy().to_string()),
         );
 
         let exec_context = create_test_execution_context();
@@ -449,6 +473,49 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Unable to download files"));
+    }
+
+    #[tokio::test]
+    async fn test_api_file_paths_refused_without_a_granted_folder() {
+        let folder = tempfile::tempdir().unwrap();
+        let file = folder.path().join("file.txt");
+        std::fs::write(&file, "data").unwrap();
+        let saved = folder.path().join("save.pdf");
+        let context = create_test_context();
+        let executor = ApiExecutor::new();
+        let exec_context = create_test_execution_context();
+
+        let mut upload = HashMap::new();
+        upload.insert(
+            "url".to_string(),
+            Value::String("https://api.example.com/upload".to_string()),
+        );
+        upload.insert(
+            "file_path".to_string(),
+            Value::String(file.to_string_lossy().to_string()),
+        );
+        let mut download = HashMap::new();
+        download.insert(
+            "url".to_string(),
+            Value::String("https://example.com/file.pdf".to_string()),
+        );
+        download.insert(
+            "save_path".to_string(),
+            Value::String(saved.to_string_lossy().to_string()),
+        );
+
+        for (tool, params) in [("api_upload", &upload), ("api_download", &download)] {
+            let error = executor
+                .execute(tool, params, &context, &exec_context)
+                .await
+                .unwrap_err()
+                .to_string();
+            assert!(
+                error.contains(super::super::NO_GRANTED_FOLDER),
+                "{tool}: {error}"
+            );
+        }
+        assert!(!saved.exists());
     }
 
     #[tokio::test]

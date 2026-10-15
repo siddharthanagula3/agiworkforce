@@ -1,11 +1,8 @@
 pub mod action_router;
 pub mod audit;
 pub mod browser;
-pub mod codegen;
 pub mod computer_use;
-pub mod executor;
 pub mod input;
-pub mod inspector;
 #[cfg(all(test, windows))]
 mod integration_tests;
 #[cfg(target_os = "macos")]
@@ -14,19 +11,9 @@ pub(crate) mod os_lock;
 pub mod recorder;
 pub mod safety_patterns;
 pub mod screen;
-pub mod screen_watcher;
 pub mod types;
 #[cfg(target_os = "windows")]
 pub mod uia;
-
-#[cfg(target_os = "windows")]
-use uia::inspector_impl as platform_impl;
-
-#[cfg(target_os = "macos")]
-use mac::inspector_impl as platform_impl;
-
-#[cfg(any(windows, target_os = "macos"))]
-pub use platform_impl::InspectorService;
 
 use once_cell::sync::Lazy;
 
@@ -126,62 +113,6 @@ pub mod uia {
     }
 }
 
-#[cfg(not(any(windows, target_os = "macos")))]
-pub struct InspectorService;
-
-#[cfg(not(any(windows, target_os = "macos")))]
-impl InspectorService {
-    pub fn new() -> anyhow::Result<Self> {
-        Ok(Self)
-    }
-
-    pub fn inspect_element_at_point(
-        &self,
-        _x: i32,
-        _y: i32,
-    ) -> anyhow::Result<types::DetailedElementInfo> {
-        Err(anyhow::anyhow!("Inspector not available on this platform"))
-    }
-
-    pub fn inspect_element_by_selector(
-        &self,
-        _selector: &types::ElementSelector,
-    ) -> anyhow::Result<types::DetailedElementInfo> {
-        Err(anyhow::anyhow!("Inspector not available on this platform"))
-    }
-
-    pub fn inspect_element_by_id(
-        &self,
-        _element_id: &str,
-    ) -> anyhow::Result<types::DetailedElementInfo> {
-        Err(anyhow::anyhow!("Inspector not available on this platform"))
-    }
-
-    pub fn find_element_by_selector(
-        &self,
-        _selector: &types::ElementSelector,
-    ) -> anyhow::Result<Option<String>> {
-        Err(anyhow::anyhow!("Inspector not available on this platform"))
-    }
-
-    pub fn get_element_tree(
-        &self,
-        _element_id: &str,
-    ) -> anyhow::Result<(
-        Option<types::BasicElementInfo>,
-        Vec<types::BasicElementInfo>,
-    )> {
-        Err(anyhow::anyhow!("Inspector not available on this platform"))
-    }
-
-    pub fn generate_selector(
-        &self,
-        _element_id: &str,
-    ) -> anyhow::Result<Vec<types::ElementSelector>> {
-        Err(anyhow::anyhow!("Inspector not available on this platform"))
-    }
-}
-
 #[cfg(target_os = "windows")]
 pub type PlatformDriver = uia::UIAutomationService;
 
@@ -251,4 +182,49 @@ pub fn global_service() -> anyhow::Result<Arc<AutomationService>> {
     let service = Arc::new(AutomationService::new()?);
     *guard = Some(service.clone());
     Ok(service)
+}
+
+pub const ACCESSIBILITY_PERMISSION_MISSING: &str = "Desktop control needs the macOS Accessibility permission. Turn on AGI Workforce in System Settings > Privacy & Security > Accessibility, then try again.";
+
+/// The service startup manages, or, when Accessibility was granted after
+/// launch, the process-wide one built on first use, so a fresh grant works
+/// without a restart. On macOS the service is never built before the grant:
+/// constructing it raises the system's "control this computer" prompt.
+pub fn shared_service<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<Arc<AutomationService>, String> {
+    use tauri::Manager as _;
+
+    if let Some(service) = app
+        .try_state::<Option<Arc<AutomationService>>>()
+        .and_then(|state| state.inner().clone())
+    {
+        return Ok(service);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if !mac::service::MacAutomationService::check_accessibility_permissions() {
+            return Err(ACCESSIBILITY_PERMISSION_MISSING.to_string());
+        }
+    }
+
+    global_service().map_err(|e| format!("Desktop control could not start: {e}"))
+}
+
+#[cfg(test)]
+mod shared_service_tests {
+    use super::*;
+    use tauri::Manager as _;
+
+    #[test]
+    fn reuses_the_instance_startup_manages() {
+        let app = tauri::test::mock_app();
+        let managed = Arc::new(AutomationService::new().expect("automation service"));
+        app.handle().manage(Some(managed.clone()));
+
+        let shared = shared_service(app.handle()).expect("managed automation service");
+
+        assert!(Arc::ptr_eq(&shared, &managed));
+    }
 }

@@ -173,7 +173,7 @@ impl ToolExecutor {
             let resolved = self.resolve_path(raw_path);
 
             // Validate path access
-            match self.canonicalize_validated_path(&resolved).await {
+            match self.canonicalize_modifiable_path(&resolved).await {
                 Ok(canonical) => {
                     // Check file size
                     match fs::metadata(&canonical).await {
@@ -361,7 +361,9 @@ impl ToolExecutor {
                 content.replacen(edit.old_text.as_str(), edit.new_text.as_str(), 1)
             };
 
-            if let Err(e) = fs::write(&edit.path, &updated).await {
+            if let Err(e) =
+                write_validated_file(Path::new(&edit.path), updated.into_bytes(), false).await
+            {
                 // Rollback all previously written files
                 Self::rollback_files(&snapshots, &written_files).await;
                 let msg = format!("Edit #{}: failed to write '{}': {}", i, edit.path, e);
@@ -436,7 +438,7 @@ impl ToolExecutor {
         };
 
         let resolved = self.resolve_path(&raw_path);
-        let validated_path = match self.canonicalize_validated_path(&resolved).await {
+        let validated_path = match self.canonicalize_modifiable_path(&resolved).await {
             Ok(p) => p,
             Err(e) => {
                 let msg = format!("Path validation failed for '{}': {}", resolved, e);
@@ -553,7 +555,9 @@ impl ToolExecutor {
         }
 
         // Write the result
-        if let Err(e) = fs::write(&validated_path, &content).await {
+        if let Err(e) =
+            write_validated_file(&validated_path, content.into_bytes(), !file_exists).await
+        {
             let msg = format!("Failed to write patched file '{}': {}", path_string, e);
             return Ok(ToolResult {
                 success: false,
@@ -663,7 +667,7 @@ impl ToolExecutor {
 
         // Resolve and validate path
         let resolved = self.resolve_path(raw_path);
-        let validated_path = match self.canonicalize_validated_path(&resolved).await {
+        let validated_path = match self.canonicalize_modifiable_path(&resolved).await {
             Ok(p) => p,
             Err(e) => {
                 let msg = format!("Path validation failed for '{}': {}", resolved, e);
@@ -806,7 +810,9 @@ impl ToolExecutor {
         };
 
         // Write the updated file
-        if let Err(e) = fs::write(&validated_path, &after_content).await {
+        if let Err(e) =
+            write_validated_file(&validated_path, after_content.clone().into_bytes(), false).await
+        {
             let msg = format!("Failed to write '{}': {}", path_string, e);
             return Ok(ToolResult {
                 success: false,
@@ -821,11 +827,7 @@ impl ToolExecutor {
         // Record change in undo tracker + create named checkpoint
         if let Some(app_handle) = &self.app_handle {
             if let Some(undo_state) = app_handle.try_state::<UndoState>() {
-                let task_id = args
-                    .get("session_id")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| Uuid::new_v4().to_string());
+                let task_id = Uuid::new_v4().to_string();
 
                 undo_state
                     .change_tracker
@@ -885,7 +887,13 @@ impl ToolExecutor {
     ) {
         for path in written_files.keys() {
             if let Some(original_content) = snapshots.get(path) {
-                if let Err(e) = fs::write(path, original_content).await {
+                if let Err(e) = write_validated_file(
+                    Path::new(path),
+                    original_content.clone().into_bytes(),
+                    false,
+                )
+                .await
+                {
                     tracing::error!(
                         "[MultiEdit] Rollback failed for '{}': {}. Manual restore may be needed.",
                         path,

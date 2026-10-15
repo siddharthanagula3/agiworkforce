@@ -211,39 +211,6 @@ impl UndoManager {
         self.execute_undo(change).await
     }
 
-    /// Undo all changes for a task
-    pub async fn undo_task(&self, task_id: &str) -> Result<Vec<UndoResult>, String> {
-        let changes = self
-            .change_tracker
-            .get_revertible_changes(Some(task_id))
-            .await;
-
-        if changes.is_empty() {
-            return Err(format!("No revertible changes found for task {}", task_id));
-        }
-
-        let mut results = Vec::new();
-
-        // Undo in reverse order (newest first)
-        for change in changes.iter().rev() {
-            match self.execute_undo(change).await {
-                Ok(result) => results.push(result),
-                Err(e) => {
-                    // Continue with other undos but record the error
-                    results.push(UndoResult {
-                        success: false,
-                        change_id: change.id.clone(),
-                        change_type: format!("{:?}", change.change_type),
-                        path: change.path.as_ref().map(|p| p.display().to_string()),
-                        message: format!("Failed to undo: {}", e),
-                    });
-                }
-            }
-        }
-
-        Ok(results)
-    }
-
     /// Execute the actual undo operation
     async fn execute_undo(&self, change: &Change) -> Result<UndoResult, String> {
         let result = match &change.change_type {

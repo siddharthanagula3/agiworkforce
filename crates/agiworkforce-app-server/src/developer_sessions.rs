@@ -3,11 +3,14 @@ use agiworkforce_protocol::developer_session::{
     method, AccountLoginResponse, AccountLoginWaitParams, AccountLoginWaitResponse,
     AccountStatusParams, AccountStatusResponse, AccountTokenResponse, AcknowledgedResponse,
     AppServerCapabilities, AppServerClientInfo, AppServerNotification, AppServerRequest,
-    AppServerResponse, ApprovalResponseParams, ContextInstructionsParams,
-    ContextInstructionsResponse, DeveloperSessionHandoff, GitPullRequestParams,
-    GitPullRequestPlanParams, GitPullRequestPlanResponse, GitPullRequestResponse, HandoffAdmission,
-    HookAddParams, HookListResponse, HookRemoveParams, InitializeParams, InitializeResponse,
-    LocalModelListResponse, McpAddParams, McpLoginParams, McpLoginResponse,
+    AppServerResponse, ApprovalResponseParams, CheckpointDiffResponse, CheckpointListResponse,
+    CheckpointSectionsParams, CheckpointSectionsResponse, CheckpointTurnParams,
+    ContextInstructionsParams, ContextInstructionsResponse, DeveloperSessionHandoff,
+    GitPullRequestParams, GitPullRequestPlanParams, GitPullRequestPlanResponse,
+    GitPullRequestResponse, HandoffAdmission, HookAddParams, HookListResponse, HookRemoveParams,
+    InitializeParams, InitializeResponse, LocalModelListResponse, ManagedWorktreeCreateParams,
+    ManagedWorktreeListResponse, ManagedWorktreeSummary, McpAddParams, McpApprovalGrantParams,
+    McpApprovalReadParams, McpApprovalRequest, McpLoginParams, McpLoginResponse,
     McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
     McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
     PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
@@ -17,25 +20,33 @@ use agiworkforce_protocol::developer_session::{
     SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
     SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
     SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse,
-    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadCheckpointsResponse, ThreadCompactParams, ThreadCompactResponse, ThreadDeleteParams,
+    ThreadDeleteResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
     ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadSearchParams,
-    ThreadSearchResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
-    ThreadWriterConflictData, TrustListResponse, TrustRevokeParams, TurnInterruptParams,
-    TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary, WorktreeCreateParams,
-    WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
-    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
-    PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
-    THREAD_WRITER_CONFLICT_ERROR_CODE,
+    ThreadReconnectResponse, ThreadRevertParams, ThreadRevertResponse, ThreadRewindParams,
+    ThreadRewindResponse, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams,
+    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TrustListResponse,
+    TrustRevokeParams, TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnSteerParams,
+    TurnSummary, UserInputResponseParams, WorktreeApplyParams, WorktreeApplyResponse,
+    WorktreeArchive, WorktreeCreateParams, WorktreeCreateResponse, WorktreeIdParams,
+    WorktreeKeepParams, WorktreeKeepResponse, WorktreeListResponse, WorktreePinParams,
+    WorktreeRemoveParams, WorktreeSetupRunParams, WorktreeSummary,
+    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MCP_APPROVAL_STALE_ERROR_CODE,
+    MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
+    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
 use anyhow::Result;
 use async_trait::async_trait;
+use futures_util::FutureExt;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fmt;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::broadcast;
+use tokio::sync::{Semaphore, SemaphorePermit};
+use tokio::task::JoinSet;
 
 // v3 requires servers to enforce per-turn agent controls and workspace-scoped
 // context. Older servers silently discarded these security-sensitive fields.
@@ -74,9 +85,15 @@ pub trait DeveloperSessionHost: Send + Sync {
     /// `params.refresh` asks for a fresh answer rather than what the session
     /// already resolved: reachability costs a probe per local runtime and a
     /// credential lookup per route, so it is not recomputed per request.
+    ///
+    /// `trust` is the calling connection's. For one that did not prove
+    /// ownership the host answers from what it has already resolved and
+    /// probes no local runtime, looks up no credential and calls nothing
+    /// out, on a first call as on a later one.
     async fn list_local_models(
         &self,
         params: ModelListParams,
+        trust: DeveloperConnectionTrust,
     ) -> Result<LocalModelListResponse, DeveloperSessionHostError>;
 
     async fn resume_thread(
@@ -94,6 +111,17 @@ pub trait DeveloperSessionHost: Send + Sync {
         params: ThreadForkParams,
         client: AppServerClientInfo,
     ) -> Result<ThreadSummary, DeveloperSessionHostError>;
+
+    /// Summarize what the model reads of a thread, from `params.from_turn_id`
+    /// on or the older part of all of it. The transcript keeps every message;
+    /// the summarized turns can no longer be rewound to, so a user-facing
+    /// caller confirms first.
+    async fn compact_thread(
+        &self,
+        _params: ThreadCompactParams,
+    ) -> Result<ThreadCompactResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_COMPACT))
+    }
 
     /// The record another surface needs to carry this thread on: what is
     /// stored plus what only a running host knows. It never moves the thread
@@ -148,11 +176,12 @@ pub trait DeveloperSessionHost: Send + Sync {
     }
 
     /// Remove a thread and everything persisted with it. Irreversible, so a
-    /// user-facing caller confirms before sending it.
+    /// user-facing caller confirms before sending it. The archives of the
+    /// worktrees it owned stay unless `params.discard_worktree_archives`.
     async fn delete_thread(
         &self,
-        _params: ThreadIdParams,
-    ) -> Result<(), DeveloperSessionHostError> {
+        _params: ThreadDeleteParams,
+    ) -> Result<ThreadDeleteResponse, DeveloperSessionHostError> {
         Err(unsupported("thread/delete"))
     }
 
@@ -186,6 +215,16 @@ pub trait DeveloperSessionHost: Send + Sync {
         params: TurnStartParams,
     ) -> Result<TurnSummary, DeveloperSessionHostError>;
 
+    /// Start a turn on behalf of a client that declared what it can answer.
+    /// A host that cannot put questions to a client ignores the declaration.
+    async fn start_turn_for(
+        &self,
+        params: TurnStartParams,
+        _client: TurnClient,
+    ) -> Result<TurnSummary, DeveloperSessionHostError> {
+        self.start_turn(params).await
+    }
+
     async fn steer_turn(
         &self,
         params: TurnSteerParams,
@@ -200,6 +239,14 @@ pub trait DeveloperSessionHost: Send + Sync {
         &self,
         params: ApprovalResponseParams,
     ) -> Result<(), DeveloperSessionHostError>;
+
+    /// Answer or cancel a question the agent asked mid-turn.
+    async fn respond_to_user_input(
+        &self,
+        _params: UserInputResponseParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported(method::USER_INPUT_RESPOND))
+    }
 
     /// Report the signed-in account from the runtime's own credential store.
     ///
@@ -272,7 +319,14 @@ pub trait DeveloperSessionHost: Send + Sync {
         Err(unsupported("plugins/setEnabled"))
     }
 
-    async fn list_mcp_servers(&self) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+    /// The servers this host knows of. `trust` is the calling connection's:
+    /// for one that did not prove ownership the host reads no keychain to
+    /// say whether a server is signed in, and gives a server's address
+    /// without the user, password or query it carries.
+    async fn list_mcp_servers(
+        &self,
+        _trust: DeveloperConnectionTrust,
+    ) -> Result<McpServerListResponse, DeveloperSessionHostError> {
         Err(unsupported("mcp/list"))
     }
 
@@ -295,6 +349,20 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: McpServerParams,
     ) -> Result<McpServerToolsResponse, DeveloperSessionHostError> {
         Err(unsupported(method::MCP_TOOLS))
+    }
+
+    async fn read_mcp_approval(
+        &self,
+        _params: McpApprovalReadParams,
+    ) -> Result<McpApprovalRequest, DeveloperSessionHostError> {
+        Err(unsupported("mcp/approval/read"))
+    }
+
+    async fn grant_mcp_approval(
+        &self,
+        _params: McpApprovalGrantParams,
+    ) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+        Err(unsupported("mcp/approval/grant"))
     }
 
     async fn list_hooks(&self) -> Result<HookListResponse, DeveloperSessionHostError> {
@@ -492,6 +560,100 @@ pub trait DeveloperSessionHost: Send + Sync {
         Err(unsupported(method::GIT_PULL_REQUEST))
     }
 
+    /// Make a worktree of this host's repository for one new session. The
+    /// session itself runs in a host started inside the returned checkout.
+    async fn create_managed_worktree(
+        &self,
+        _params: ManagedWorktreeCreateParams,
+    ) -> Result<WorktreeCreateResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::MANAGED_WORKTREE_CREATE))
+    }
+
+    async fn list_managed_worktrees(
+        &self,
+    ) -> Result<ManagedWorktreeListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::MANAGED_WORKTREE_LIST))
+    }
+
+    /// Keep everything the worktree holds on a ref, then remove it. A caller
+    /// confirms first: the checkout and the session's place in it are gone.
+    async fn delete_worktree(
+        &self,
+        _params: WorktreeIdParams,
+    ) -> Result<WorktreeArchive, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKTREE_DELETE))
+    }
+
+    async fn pin_worktree(
+        &self,
+        _params: WorktreePinParams,
+    ) -> Result<ManagedWorktreeSummary, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKTREE_PIN))
+    }
+
+    /// Read, or with `params.keep` set, change how many of the newest
+    /// worktrees cleanup keeps.
+    async fn worktree_keep(
+        &self,
+        _params: WorktreeKeepParams,
+    ) -> Result<WorktreeKeepResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKTREE_KEEP))
+    }
+
+    async fn apply_worktree_to_local(
+        &self,
+        _params: WorktreeApplyParams,
+    ) -> Result<WorktreeApplyResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKTREE_APPLY_TO_LOCAL))
+    }
+
+    /// Start the approved setup script and return; its output arrives as
+    /// `worktree/managed/setup/log` and its end as `worktree/managed/setup/finished`.
+    async fn run_worktree_setup(
+        &self,
+        _params: WorktreeSetupRunParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported(method::WORKTREE_SETUP_RUN))
+    }
+
+    async fn list_turn_checkpoints(
+        &self,
+        _params: ThreadIdParams,
+    ) -> Result<CheckpointListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CHECKPOINT_LIST))
+    }
+
+    async fn checkpoint_diff(
+        &self,
+        _params: CheckpointTurnParams,
+    ) -> Result<CheckpointDiffResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CHECKPOINT_DIFF))
+    }
+
+    /// Undo chosen sections of a turn in the files. Irreversible for the
+    /// agent's lines, so a caller previews and confirms first.
+    async fn revert_checkpoint_sections(
+        &self,
+        _params: CheckpointSectionsParams,
+    ) -> Result<CheckpointSectionsResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CHECKPOINT_REVERT))
+    }
+
+    async fn stage_checkpoint_sections(
+        &self,
+        _params: CheckpointSectionsParams,
+    ) -> Result<CheckpointSectionsResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CHECKPOINT_STAGE))
+    }
+
+    /// Rewind the files and the conversation to just before a turn.
+    async fn revert_thread(
+        &self,
+        _params: ThreadRevertParams,
+    ) -> Result<ThreadRevertResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_REVERT))
+    }
+
     /// Stop accepting work, cancel every active host operation, and wait until
     /// owned resources are quiescent. A transport must not acknowledge
     /// `shutdown` before this resolves successfully.
@@ -523,6 +685,141 @@ fn unsupported(method: &str) -> DeveloperSessionHostError {
 pub enum DeveloperConnectionTrust {
     LoopbackOwner,
     Untrusted,
+}
+
+/// What calling a method does, which decides who may call it. A connection
+/// that did not prove ownership ([`DeveloperConnectionTrust::Untrusted`]) may
+/// call a method that only reads and nothing else: one rule in
+/// [`DeveloperSessionProcessor::process`], not a check a new method has to
+/// remember. A method missing from [`METHOD_EFFECTS`] is refused there too.
+///
+/// Such a connection still receives every notification the server sends,
+/// the text of each approval request among them, and reads every thread of
+/// the workspace, checkpoint diffs, the hooks and the account's email and
+/// credits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MethodEffect {
+    /// Reports state or negotiates the connection. Nothing a later call or a
+    /// later session sees is different afterwards.
+    ReadOnly,
+    /// Changes nothing either, and reports what is for the owner alone: the
+    /// arguments and URLs of a launch waiting to be approved, where a
+    /// credential may sit.
+    ReadsForOwner,
+    /// Changes a thread, a turn, files, a worktree, an account or the server
+    /// itself.
+    ChangesState,
+    /// Decides what may run without the owner being asked: an approval, a
+    /// consent, a credential, a setting or a switch that widens what runs.
+    GrantsTrust,
+    /// Sent by the server. Never a request a client makes.
+    Notification,
+}
+
+/// Every method in [`method`], classified once.
+pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
+    (method::INITIALIZE, MethodEffect::ReadOnly),
+    (method::INITIALIZED, MethodEffect::ReadOnly),
+    (method::THREAD_START, MethodEffect::ChangesState),
+    (method::THREAD_LIST, MethodEffect::ReadOnly),
+    (method::THREAD_READ, MethodEffect::ReadOnly),
+    (method::THREAD_RESUME, MethodEffect::ChangesState),
+    (method::THREAD_FORK, MethodEffect::ChangesState),
+    (method::THREAD_COMPACT, MethodEffect::ChangesState),
+    (method::THREAD_HANDOFF, MethodEffect::ChangesState),
+    (method::THREAD_HANDOFF_ACCEPT, MethodEffect::ChangesState),
+    (method::THREAD_ARCHIVE, MethodEffect::ChangesState),
+    (method::THREAD_DELETE, MethodEffect::ChangesState),
+    (method::THREAD_RECONNECT, MethodEffect::ReadOnly),
+    (method::THREAD_WRITER_RELEASE, MethodEffect::ChangesState),
+    (method::THREAD_WRITER_TAKEOVER, MethodEffect::ChangesState),
+    (method::MODEL_LIST, MethodEffect::ReadOnly),
+    (method::TURN_START, MethodEffect::ChangesState),
+    (method::TURN_STEER, MethodEffect::ChangesState),
+    (method::TURN_INTERRUPT, MethodEffect::ChangesState),
+    (method::TURN_AGENT_EVENT, MethodEffect::Notification),
+    (method::APPROVAL_RESPOND, MethodEffect::GrantsTrust),
+    (method::USER_INPUT_REQUESTED, MethodEffect::Notification),
+    (method::USER_INPUT_RESPOND, MethodEffect::ChangesState),
+    (method::TASK_STATE_CHANGED, MethodEffect::Notification),
+    (method::SHUTDOWN, MethodEffect::ChangesState),
+    (method::ACCOUNT_STATUS, MethodEffect::ReadOnly),
+    (method::ACCOUNT_LOGIN, MethodEffect::ChangesState),
+    (method::ACCOUNT_LOGIN_WAIT, MethodEffect::ChangesState),
+    (method::ACCOUNT_LOGOUT, MethodEffect::ChangesState),
+    (method::ACCOUNT_TOKEN, MethodEffect::GrantsTrust),
+    (method::CONTEXT_INSTRUCTIONS, MethodEffect::ReadOnly),
+    (method::SKILLS_LIST, MethodEffect::ReadOnly),
+    (method::SKILLS_SET_ENABLED, MethodEffect::GrantsTrust),
+    (method::SKILLS_CONSENT, MethodEffect::GrantsTrust),
+    (method::PLUGINS_LIST, MethodEffect::ReadOnly),
+    (method::PLUGINS_SET_ENABLED, MethodEffect::GrantsTrust),
+    (method::MCP_LIST, MethodEffect::ReadOnly),
+    (method::MCP_LOGIN, MethodEffect::ChangesState),
+    (method::MCP_APPROVAL_READ, MethodEffect::ReadsForOwner),
+    (method::MCP_APPROVAL_GRANT, MethodEffect::GrantsTrust),
+    (method::HOOKS_LIST, MethodEffect::ReadOnly),
+    (method::SETTINGS_READ, MethodEffect::ReadOnly),
+    (method::SETTINGS_WRITE, MethodEffect::GrantsTrust),
+    (method::COMMANDS_LIST, MethodEffect::ReadOnly),
+    (method::COMMANDS_RUN, MethodEffect::ChangesState),
+    (method::MANAGED_WORKTREE_CREATE, MethodEffect::ChangesState),
+    (method::MANAGED_WORKTREE_LIST, MethodEffect::ReadOnly),
+    (method::WORKTREE_DELETE, MethodEffect::ChangesState),
+    (method::WORKTREE_PIN, MethodEffect::ChangesState),
+    (method::WORKTREE_KEEP, MethodEffect::ChangesState),
+    (method::WORKTREE_APPLY_TO_LOCAL, MethodEffect::ChangesState),
+    (method::WORKTREE_SETUP_RUN, MethodEffect::GrantsTrust),
+    (method::WORKTREE_SETUP_LOG, MethodEffect::Notification),
+    (method::WORKTREE_SETUP_FINISHED, MethodEffect::Notification),
+    (method::CHECKPOINT_LIST, MethodEffect::ReadOnly),
+    (method::CHECKPOINT_DIFF, MethodEffect::ReadOnly),
+    (method::CHECKPOINT_REVERT, MethodEffect::ChangesState),
+    (method::CHECKPOINT_STAGE, MethodEffect::ChangesState),
+    (method::THREAD_REVERT, MethodEffect::ChangesState),
+    (method::THREAD_CHECKPOINTS, MethodEffect::ReadOnly),
+    (method::THREAD_SEARCH, MethodEffect::ReadOnly),
+    (method::WORKTREE_LIST, MethodEffect::ReadOnly),
+    (method::GIT_PULL_REQUEST_PLAN, MethodEffect::ReadOnly),
+    (method::PERMISSIONS_LIST, MethodEffect::ReadsForOwner),
+    (method::PERMISSIONS_RULES, MethodEffect::ReadsForOwner),
+    (method::PROVIDERS_LIST, MethodEffect::ReadsForOwner),
+    (method::TRUST_LIST, MethodEffect::ReadsForOwner),
+    (method::GIT_PULL_REQUEST, MethodEffect::ChangesState),
+    (method::MCP_INSPECT, MethodEffect::ChangesState),
+    (method::MCP_TEST, MethodEffect::ChangesState),
+    (method::MCP_TOOLS, MethodEffect::ChangesState),
+    (method::MEMORY_ADD, MethodEffect::ChangesState),
+    (method::THREAD_REWIND, MethodEffect::ChangesState),
+    (method::THREAD_UNARCHIVE, MethodEffect::ChangesState),
+    (method::WORKTREE_CREATE, MethodEffect::ChangesState),
+    (method::WORKTREE_REMOVE, MethodEffect::ChangesState),
+    (method::HOOKS_ADD, MethodEffect::GrantsTrust),
+    (method::HOOKS_REMOVE, MethodEffect::GrantsTrust),
+    (method::MCP_ADD, MethodEffect::GrantsTrust),
+    (method::MCP_REMOVE, MethodEffect::GrantsTrust),
+    (method::PERMISSIONS_ADD, MethodEffect::GrantsTrust),
+    (method::PERMISSIONS_REMOVE, MethodEffect::GrantsTrust),
+    (method::PLAN_DECIDE, MethodEffect::GrantsTrust),
+    (method::PLUGINS_INSTALL, MethodEffect::GrantsTrust),
+    (method::PLUGINS_REMOVE, MethodEffect::GrantsTrust),
+    (method::PLUGINS_UPDATE, MethodEffect::GrantsTrust),
+    (method::PROVIDERS_REMOVE_KEY, MethodEffect::GrantsTrust),
+    (method::PROVIDERS_SET_KEY, MethodEffect::GrantsTrust),
+    (method::SKILLS_INSTALL, MethodEffect::GrantsTrust),
+    (method::SKILLS_REMOVE, MethodEffect::GrantsTrust),
+    (method::TRUST_REVOKE, MethodEffect::GrantsTrust),
+    (method::MCP_AUTH_REQUIRED, MethodEffect::Notification),
+    (method::THREAD_PLAN, MethodEffect::Notification),
+];
+
+/// How `method` is classified, or `None` for one [`METHOD_EFFECTS`] does not
+/// hold.
+pub fn method_effect(method: &str) -> Option<MethodEffect> {
+    METHOD_EFFECTS
+        .iter()
+        .find(|(name, _)| *name == method)
+        .map(|(_, effect)| *effect)
 }
 
 /// Error categories that survive the local app-server boundary without
@@ -563,6 +860,24 @@ impl DeveloperSessionHostError {
         }
     }
 
+    /// The launch an approval named is no longer the one that would start,
+    /// so nothing was approved. `current` is that launch as it is now.
+    pub fn mcp_approval_stale(message: impl Into<String>, current: McpApprovalRequest) -> Self {
+        Self {
+            data: serde_json::to_value(current).ok(),
+            ..Self::new(MCP_APPROVAL_STALE_ERROR_CODE, message)
+        }
+    }
+
+    /// The project's own skills are no longer the ones a consent named, so
+    /// nothing was allowed. `current` is the list as it is now.
+    pub fn skills_consent_stale(message: impl Into<String>, current: SkillListResponse) -> Self {
+        Self {
+            data: serde_json::to_value(current).ok(),
+            ..Self::new(MCP_APPROVAL_STALE_ERROR_CODE, message)
+        }
+    }
+
     pub fn data(&self) -> Option<&serde_json::Value> {
         self.data.as_ref()
     }
@@ -592,10 +907,138 @@ impl fmt::Display for DeveloperSessionHostError {
 
 impl std::error::Error for DeveloperSessionHostError {}
 
+/// Methods whose host work runs git over a whole checkout, or waits on a
+/// model to summarize, and can take minutes. A transport runs each on its own task, so approvals, interrupts
+/// and notifications on the same connection are not held behind it. Every
+/// response still carries its request's id; one may arrive after responses to
+/// requests sent later.
+pub fn runs_detached(method: &str) -> bool {
+    matches!(
+        method,
+        method::WORKTREE_CREATE
+            | method::MANAGED_WORKTREE_CREATE
+            | method::WORKTREE_DELETE
+            | method::WORKTREE_APPLY_TO_LOCAL
+            | method::CHECKPOINT_LIST
+            | method::CHECKPOINT_DIFF
+            | method::CHECKPOINT_REVERT
+            | method::CHECKPOINT_STAGE
+            | method::THREAD_REVERT
+            | method::THREAD_COMPACT
+    )
+}
+
+/// The most detached requests one connection has running at a time, and all
+/// connections together. Each is host git over a whole checkout or a model
+/// call, so without a bound a client that sends them in a loop starts as many
+/// as it likes. A connection that did not prove ownership gets a small share
+/// of both, which the owner's connections cannot be crowded out of.
+const DETACHED_PER_CONNECTION: usize = 8;
+const DETACHED_PER_READ_ONLY_CONNECTION: usize = 2;
+const DETACHED_IN_TOTAL: usize = 16;
+const DETACHED_READ_ONLY_IN_TOTAL: usize = 4;
+
+/// The detached requests in flight across every connection of the process.
+pub(crate) struct DetachedJobs {
+    all: Semaphore,
+    read_only: Semaphore,
+}
+
+/// A place among the detached requests in flight, given back when the
+/// request has been answered.
+pub(crate) struct DetachedSlot {
+    _all: SemaphorePermit<'static>,
+    _read_only: Option<SemaphorePermit<'static>>,
+}
+
+static DETACHED_JOBS: DetachedJobs = DetachedJobs::new();
+
+impl DetachedJobs {
+    const fn new() -> Self {
+        Self {
+            all: Semaphore::const_new(DETACHED_IN_TOTAL),
+            read_only: Semaphore::const_new(DETACHED_READ_ONLY_IN_TOTAL),
+        }
+    }
+
+    /// A slot for one more request of a connection that has `running` of
+    /// them already, or why there is none. Nothing waits: a request that
+    /// finds no slot is refused at once, so a queue cannot grow either.
+    fn admit(
+        &'static self,
+        trust: DeveloperConnectionTrust,
+        running: usize,
+    ) -> Result<DetachedSlot, &'static str> {
+        const CONNECTION_BUSY: &str =
+            "This connection already has as many long-running requests in flight as it may; wait for one to finish";
+        const SERVER_BUSY: &str =
+            "The app-server already has as many long-running requests in flight as it may; wait for one to finish";
+        let owner = trust == DeveloperConnectionTrust::LoopbackOwner;
+        let per_connection = if owner {
+            DETACHED_PER_CONNECTION
+        } else {
+            DETACHED_PER_READ_ONLY_CONNECTION
+        };
+        if running >= per_connection {
+            return Err(CONNECTION_BUSY);
+        }
+        let read_only = if owner {
+            None
+        } else {
+            Some(self.read_only.try_acquire().map_err(|_| SERVER_BUSY)?)
+        };
+        let all = self.all.try_acquire().map_err(|_| SERVER_BUSY)?;
+        Ok(DetachedSlot {
+            _all: all,
+            _read_only: read_only,
+        })
+    }
+}
+
+/// Run one `runs_detached` request on its own task of `detached`, or answer
+/// that there is no room for it ([`DetachedJobs::admit`]), which the caller
+/// sends straight back.
+///
+/// The request id stays with the task, so in an unwinding build a host that
+/// panics still answers its client with an internal error instead of leaving
+/// the request open. The release profile sets `panic = "abort"`, where a panic
+/// ends the whole process and this catch never runs.
+pub(crate) fn spawn_detached(
+    detached: &mut JoinSet<AppServerResponse>,
+    mut processor: DeveloperSessionProcessor,
+    request: AppServerRequest,
+) -> Option<AppServerResponse> {
+    let slot = match DETACHED_JOBS.admit(processor.trust, detached.len()) {
+        Ok(slot) => slot,
+        Err(busy) => {
+            let busy = DeveloperSessionHostError::unavailable(busy);
+            return Some(AppServerResponse::failure(
+                request.id,
+                busy.code(),
+                busy.message(),
+            ));
+        }
+    };
+    let id = request.id.clone();
+    let method = request.method.clone();
+    detached.spawn(async move {
+        let _slot = slot;
+        AssertUnwindSafe(processor.process(request))
+            .catch_unwind()
+            .await
+            .unwrap_or_else(|_| {
+                AppServerResponse::failure(id, -32603, format!("{method} failed unexpectedly"))
+            })
+    });
+    None
+}
+
 /// Connection-local request processor for the shared CLI/VS Code runtime.
 ///
 /// A processor is intentionally not shared between connections: handshake
-/// state and the client identity belong to one stdio or WebSocket client.
+/// state and the client identity belong to one stdio or WebSocket client. A
+/// clone carries that state for one detached request of the same connection.
+#[derive(Clone)]
 pub struct DeveloperSessionProcessor {
     host: Arc<dyn DeveloperSessionHost>,
     capabilities: AppServerCapabilities,
@@ -603,6 +1046,14 @@ pub struct DeveloperSessionProcessor {
     client: Option<AppServerClientInfo>,
     trust: DeveloperConnectionTrust,
     negotiated_version: u32,
+    turn_client: TurnClient,
+}
+
+/// What the client that starts a turn has said it can do for that turn.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TurnClient {
+    /// The client answers `userInput/requested`; see `InitializeParams::user_input`.
+    pub answers_user_input: bool,
 }
 
 impl DeveloperSessionProcessor {
@@ -612,10 +1063,9 @@ impl DeveloperSessionProcessor {
 
     /// Build a processor for a connection whose authentication is known.
     ///
-    /// Only a connection that proved ownership out of band, process stdio or a
-    /// WebSocket upgrade carrying the token in a header, may mint account
-    /// credentials. A URL query token is logged by browsers and proxies, so a
-    /// connection authenticated that way is `Untrusted` for that one method.
+    /// Mutations and owner-only reads require process stdio or a WebSocket
+    /// upgrade carrying the token in a header. Query-token connections remain
+    /// restricted to methods classified as read-only.
     pub fn new_with_trust(
         host: Arc<dyn DeveloperSessionHost>,
         capabilities: AppServerCapabilities,
@@ -628,6 +1078,7 @@ impl DeveloperSessionProcessor {
             client: None,
             trust,
             negotiated_version: LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
+            turn_client: TurnClient::default(),
         }
     }
 
@@ -652,6 +1103,35 @@ impl DeveloperSessionProcessor {
                 -32002,
                 "Client must initialize before invoking app-server methods",
             );
+        }
+
+        if self.trust != DeveloperConnectionTrust::LoopbackOwner
+            && method_effect(&request.method) != Some(MethodEffect::ReadOnly)
+        {
+            return AppServerResponse::failure(
+                request.id,
+                -32006,
+                format!(
+                    "{} is refused on this connection, which may only read: call it over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    request.method
+                ),
+            );
+        }
+
+        if !self.capabilities.managed_worktrees
+            && matches!(
+                request.method.as_str(),
+                method::MANAGED_WORKTREE_CREATE
+                    | method::MANAGED_WORKTREE_LIST
+                    | method::WORKTREE_DELETE
+                    | method::WORKTREE_PIN
+                    | method::WORKTREE_KEEP
+                    | method::WORKTREE_APPLY_TO_LOCAL
+                    | method::WORKTREE_SETUP_RUN
+            )
+        {
+            let error = unsupported(&request.method);
+            return AppServerResponse::failure(request.id, error.code(), error.message());
         }
 
         let id = request.id.clone();
@@ -687,12 +1167,16 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::MODEL_LIST => {
-                let params = match parse_optional_params::<ModelListParams>(&request) {
+                let mut params = match parse_optional_params::<ModelListParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
                 };
+                // A refresh probes every local runtime and looks up a
+                // credential per route: only the owner's connection may ask
+                // for one, and the host is told who is asking besides.
+                params.refresh &= self.trust == DeveloperConnectionTrust::LoopbackOwner;
                 self.host
-                    .list_local_models(params)
+                    .list_local_models(params, self.trust)
                     .await
                     .map(serde_json::to_value)
             }
@@ -735,6 +1219,16 @@ impl DeveloperSessionProcessor {
                     .fork_thread(params, client)
                     .await
                     .map(|thread| serde_json::to_value(ThreadStartResponse { thread }))
+            }
+            method::THREAD_COMPACT => {
+                let params = match parse_params::<ThreadCompactParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .compact_thread(params)
+                    .await
+                    .map(serde_json::to_value)
             }
             method::THREAD_HANDOFF => {
                 let params = match parse_params::<ThreadHandoffParams>(&request) {
@@ -807,14 +1301,14 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::THREAD_DELETE => {
-                let params = match parse_params::<ThreadIdParams>(&request) {
+                let params = match parse_params::<ThreadDeleteParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
                 };
                 self.host
                     .delete_thread(params)
                     .await
-                    .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
+                    .map(serde_json::to_value)
             }
             method::THREAD_RECONNECT => {
                 let params = match parse_params::<ThreadIdParams>(&request) {
@@ -852,7 +1346,7 @@ impl DeveloperSessionProcessor {
                     Err(response) => return *response,
                 };
                 self.host
-                    .start_turn(params)
+                    .start_turn_for(params, self.turn_client)
                     .await
                     .map(|turn| serde_json::to_value(TurnStartResponse { turn }))
             }
@@ -886,11 +1380,25 @@ impl DeveloperSessionProcessor {
                     .await
                     .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
             }
-            method::ACCOUNT_STATUS => {
-                let params = match parse_optional_params::<AccountStatusParams>(&request) {
+            method::USER_INPUT_RESPOND => {
+                let params = match parse_params::<UserInputResponseParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
                 };
+                self.host
+                    .respond_to_user_input(params)
+                    .await
+                    .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
+            }
+            method::ACCOUNT_STATUS => {
+                let mut params = match parse_optional_params::<AccountStatusParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                // A refresh drops the cached account and calls the hosted API
+                // with the owner's credential, and the host cannot see who
+                // asked: only the owner's connection may ask for one.
+                params.refresh &= self.trust == DeveloperConnectionTrust::LoopbackOwner;
                 self.host
                     .account_status(params)
                     .await
@@ -922,13 +1430,6 @@ impl DeveloperSessionProcessor {
                     .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
             }
             method::ACCOUNT_TOKEN => {
-                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
-                    return AppServerResponse::failure(
-                        request.id,
-                        -32006,
-                        "account/token is refused on this connection: mint a credential only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
-                    );
-                }
                 if let Err(response) = parse_optional_params::<NoParams>(&request) {
                     return *response;
                 }
@@ -990,7 +1491,10 @@ impl DeveloperSessionProcessor {
                 if let Err(response) = parse_optional_params::<NoParams>(&request) {
                     return *response;
                 }
-                self.host.list_mcp_servers().await.map(serde_json::to_value)
+                self.host
+                    .list_mcp_servers(self.trust)
+                    .await
+                    .map(serde_json::to_value)
             }
             method::MCP_LOGIN => {
                 let params = match parse_params::<McpLoginParams>(&request) {
@@ -1109,6 +1613,26 @@ impl DeveloperSessionProcessor {
                     .await
                     .map(serde_json::to_value)
             }
+            method::MCP_APPROVAL_READ => {
+                let params = match parse_params::<McpApprovalReadParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .read_mcp_approval(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::MCP_APPROVAL_GRANT => {
+                let params = match parse_params::<McpApprovalGrantParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .grant_mcp_approval(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
             method::HOOKS_LIST => {
                 if let Err(response) = parse_optional_params::<NoParams>(&request) {
                     return *response;
@@ -1209,13 +1733,6 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::PERMISSIONS_ADD => {
-                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
-                    return AppServerResponse::failure(
-                        request.id,
-                        -32006,
-                        "permissions/add is refused on this connection: save a rule only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
-                    );
-                }
                 let params = match parse_params::<PermissionsAddParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
@@ -1236,13 +1753,6 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::GIT_PULL_REQUEST => {
-                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
-                    return AppServerResponse::failure(
-                        request.id,
-                        -32006,
-                        "git/pullRequest is refused on this connection: push and open a pull request only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
-                    );
-                }
                 let params = match parse_params::<GitPullRequestParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
@@ -1272,13 +1782,6 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::PROVIDERS_SET_KEY => {
-                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
-                    return AppServerResponse::failure(
-                        request.id,
-                        -32006,
-                        "providers/setKey is refused on this connection: save a key only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
-                    );
-                }
                 let params = match parse_params::<ProviderSetKeyParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
@@ -1289,13 +1792,6 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::PROVIDERS_REMOVE_KEY => {
-                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
-                    return AppServerResponse::failure(
-                        request.id,
-                        -32006,
-                        "providers/removeKey is refused on this connection: remove a key only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
-                    );
-                }
                 let params = match parse_params::<ProviderParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
@@ -1315,13 +1811,6 @@ impl DeveloperSessionProcessor {
                     .map(serde_json::to_value)
             }
             method::TRUST_REVOKE => {
-                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
-                    return AppServerResponse::failure(
-                        request.id,
-                        -32006,
-                        "trust/revoke is refused on this connection: revoke a folder only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
-                    );
-                }
                 let params = match parse_params::<TrustRevokeParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
@@ -1337,6 +1826,125 @@ impl DeveloperSessionProcessor {
                     Err(response) => return *response,
                 };
                 self.host.add_memory(params).await.map(serde_json::to_value)
+            }
+            method::MANAGED_WORKTREE_CREATE => {
+                let params = match parse_params::<ManagedWorktreeCreateParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .create_managed_worktree(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::MANAGED_WORKTREE_LIST => {
+                if let Err(response) = parse_optional_params::<NoParams>(&request) {
+                    return *response;
+                }
+                self.host
+                    .list_managed_worktrees()
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKTREE_DELETE => {
+                let params = match parse_params::<WorktreeIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .delete_worktree(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKTREE_PIN => {
+                let params = match parse_params::<WorktreePinParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .pin_worktree(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKTREE_KEEP => {
+                let params = match parse_optional_params::<WorktreeKeepParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .worktree_keep(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKTREE_APPLY_TO_LOCAL => {
+                let params = match parse_params::<WorktreeApplyParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .apply_worktree_to_local(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKTREE_SETUP_RUN => {
+                let params = match parse_params::<WorktreeSetupRunParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .run_worktree_setup(params)
+                    .await
+                    .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
+            }
+            method::CHECKPOINT_LIST => {
+                let params = match parse_params::<ThreadIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .list_turn_checkpoints(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CHECKPOINT_DIFF => {
+                let params = match parse_params::<CheckpointTurnParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .checkpoint_diff(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CHECKPOINT_REVERT => {
+                let params = match parse_params::<CheckpointSectionsParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .revert_checkpoint_sections(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CHECKPOINT_STAGE => {
+                let params = match parse_params::<CheckpointSectionsParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .stage_checkpoint_sections(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::THREAD_REVERT => {
+                let params = match parse_params::<ThreadRevertParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .revert_thread(params)
+                    .await
+                    .map(serde_json::to_value)
             }
             method::SHUTDOWN => {
                 if let Err(response) = parse_params::<ShutdownParams>(&request) {
@@ -1413,6 +2021,9 @@ impl DeveloperSessionProcessor {
 
         self.initialized = true;
         self.negotiated_version = negotiated;
+        self.turn_client = TurnClient {
+            answers_user_input: params.user_input,
+        };
         self.client = Some(params.client_info);
         response_from_serializable(
             request.id,
@@ -1451,10 +2062,16 @@ where
     let mut lines = BufReader::new(reader).lines();
     let mut initialized = false;
     let mut host_shutdown = false;
+    let mut detached: JoinSet<AppServerResponse> = JoinSet::new();
 
     let transport_result: Result<()> = async {
         loop {
             tokio::select! {
+                Some(finished) = detached.join_next(), if !detached.is_empty() => {
+                    if let Ok(response) = finished {
+                        write_json_line(&mut writer, &response).await?;
+                    }
+                }
                 line = lines.next_line() => {
                     let Some(line) = line? else {
                         return Ok(());
@@ -1478,6 +2095,14 @@ where
                             continue;
                         }
                     };
+                    if initialized && runs_detached(&request.method) {
+                        if let Some(refused) =
+                            spawn_detached(&mut detached, processor.clone(), request)
+                        {
+                            write_json_line(&mut writer, &refused).await?;
+                        }
+                        continue;
+                    }
                     let is_initialize = request.method == method::INITIALIZE;
                     let is_shutdown = request.method == method::SHUTDOWN;
                     let response = processor.process(request).await;
@@ -1486,6 +2111,13 @@ where
                     }
                     if is_shutdown && response.error.is_none() {
                         host_shutdown = true;
+                        // The host waited for every admitted request before
+                        // acknowledging, so their answers go out first.
+                        while let Some(finished) = detached.join_next().await {
+                            if let Ok(earlier) = finished {
+                                write_json_line(&mut writer, &earlier).await?;
+                            }
+                        }
                     }
                     write_json_line(&mut writer, &response).await?;
                     if host_shutdown {
@@ -1513,6 +2145,9 @@ where
     }
     .await;
 
+    // A request still running belongs to the host now: its git is left to
+    // finish rather than cut off, and shutdown below waits for it.
+    detached.detach_all();
     if !host_shutdown {
         processor
             .host
@@ -1611,5 +2246,70 @@ fn response_from_host_result(
             }
             response
         }
+    }
+}
+
+#[cfg(test)]
+mod detached_tests {
+    use super::*;
+
+    fn jobs() -> &'static DetachedJobs {
+        Box::leak(Box::new(DetachedJobs::new()))
+    }
+
+    #[test]
+    fn a_connection_is_held_to_its_own_share_of_detached_requests() {
+        let jobs = jobs();
+        for (trust, share) in [
+            (
+                DeveloperConnectionTrust::LoopbackOwner,
+                DETACHED_PER_CONNECTION,
+            ),
+            (
+                DeveloperConnectionTrust::Untrusted,
+                DETACHED_PER_READ_ONLY_CONNECTION,
+            ),
+        ] {
+            assert!(jobs.admit(trust, share - 1).is_ok(), "{trust:?}");
+            let refused = jobs.admit(trust, share).err().expect("no room");
+            assert!(refused.contains("This connection"), "{refused}");
+        }
+        const { assert!(DETACHED_PER_READ_ONLY_CONNECTION < DETACHED_PER_CONNECTION) };
+    }
+
+    #[test]
+    fn read_only_connections_share_a_few_slots_and_cannot_take_the_owners() {
+        let jobs = jobs();
+        let read_only: Vec<DetachedSlot> = (0..DETACHED_READ_ONLY_IN_TOTAL)
+            .map(|_| {
+                jobs.admit(DeveloperConnectionTrust::Untrusted, 0)
+                    .unwrap_or_else(|busy| panic!("{busy}"))
+            })
+            .collect();
+        let refused = jobs
+            .admit(DeveloperConnectionTrust::Untrusted, 0)
+            .err()
+            .expect("the read-only share is used up");
+        assert!(refused.contains("The app-server"), "{refused}");
+
+        let owners: Vec<DetachedSlot> = (0..DETACHED_IN_TOTAL - DETACHED_READ_ONLY_IN_TOTAL)
+            .map(|_| {
+                jobs.admit(DeveloperConnectionTrust::LoopbackOwner, 0)
+                    .unwrap_or_else(|busy| panic!("the owner was crowded out: {busy}"))
+            })
+            .collect();
+        assert!(
+            jobs.admit(DeveloperConnectionTrust::LoopbackOwner, 0)
+                .is_err(),
+            "every slot of the process is taken"
+        );
+
+        drop(read_only);
+        assert!(
+            jobs.admit(DeveloperConnectionTrust::Untrusted, 0).is_ok(),
+            "a finished request gives its slot back"
+        );
+        drop(owners);
+        const { assert!(DETACHED_READ_ONLY_IN_TOTAL < DETACHED_IN_TOTAL) };
     }
 }

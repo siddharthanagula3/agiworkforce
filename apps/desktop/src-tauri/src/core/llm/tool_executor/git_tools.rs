@@ -69,9 +69,9 @@ impl ToolExecutor {
             });
         }
 
-        use crate::sys::commands::git::git_status;
+        use crate::sys::commands::git::git_status_at;
 
-        match git_status(path.clone()).await {
+        match git_status_at(path.clone()).await {
             Ok(status) => Ok(ToolResult {
                 success: true,
                 data: json!({
@@ -113,7 +113,7 @@ impl ToolExecutor {
             .ok_or_else(|| anyhow!("Missing message parameter"))?
             .to_string();
 
-        if let Err(e) = self.validate_path(&path).await {
+        if let Err(e) = self.validate_modifiable_path(&path).await {
             return Ok(ToolResult {
                 success: false,
                 data: json!({ "error": e.to_string(), "success": false }),
@@ -122,9 +122,9 @@ impl ToolExecutor {
             });
         }
 
-        use crate::sys::commands::git::git_commit;
+        use crate::sys::commands::git::git_commit_at;
 
-        match git_commit(path.clone(), message.clone()).await {
+        match git_commit_at(path.clone(), message.clone()).await {
             Ok(commit_id) => Ok(ToolResult {
                 success: true,
                 data: json!({
@@ -165,7 +165,7 @@ impl ToolExecutor {
             .ok_or_else(|| anyhow!("Missing destination parameter"))?
             .to_string();
 
-        if let Err(e) = self.validate_path(&destination).await {
+        if let Err(e) = self.validate_modifiable_path(&destination).await {
             return Ok(ToolResult {
                 success: false,
                 data: json!({ "error": e.to_string(), "success": false }),
@@ -222,7 +222,7 @@ impl ToolExecutor {
             })
             .unwrap_or_else(|| vec![".".to_string()]);
 
-        if let Err(e) = self.validate_path(&path).await {
+        if let Err(e) = self.validate_modifiable_path(&path).await {
             return Ok(ToolResult {
                 success: false,
                 data: json!({ "error": e.to_string(), "success": false }),
@@ -231,9 +231,9 @@ impl ToolExecutor {
             });
         }
 
-        use crate::sys::commands::git::git_add;
+        use crate::sys::commands::git::git_add_at;
 
-        match git_add(path.clone(), files.clone()).await {
+        match git_add_at(path.clone(), files.clone()).await {
             Ok(msg) => Ok(ToolResult {
                 success: true,
                 data: json!({
@@ -288,9 +288,9 @@ impl ToolExecutor {
             });
         }
 
-        use crate::sys::commands::git::git_diff;
+        use crate::sys::commands::git::git_diff_at;
 
-        match git_diff(path.clone(), file_path.clone(), staged).await {
+        match git_diff_at(path.clone(), file_path.clone(), staged).await {
             Ok(diffs) => {
                 let mut remaining_bytes = max_bytes;
                 let mut any_truncated = false;
@@ -436,9 +436,9 @@ impl ToolExecutor {
             });
         }
 
-        use crate::sys::commands::git::git_list_branches;
+        use crate::sys::commands::git::git_list_branches_at;
 
-        match git_list_branches(path.clone()).await {
+        match git_list_branches_at(path.clone()).await {
             Ok(branches) => {
                 let branch_count = branches.len();
                 Ok(ToolResult {
@@ -483,7 +483,7 @@ impl ToolExecutor {
             .map(|s| s.to_string());
 
         if let Some(app) = &self.app_handle {
-            if let Err(e) = self.validate_path(&path).await {
+            if let Err(e) = self.validate_modifiable_path(&path).await {
                 return Ok(ToolResult {
                     success: false,
                     data: json!({ "error": e.to_string(), "success": false }),
@@ -544,7 +544,7 @@ impl ToolExecutor {
             .ok_or_else(|| anyhow!("Missing path parameter"))?;
 
         // Validate the path
-        if let Err(e) = self.validate_path(path).await {
+        if let Err(e) = self.validate_modifiable_path(path).await {
             return Ok(ToolResult {
                 success: false,
                 data: json!({ "error": e.to_string(), "success": false }),
@@ -553,10 +553,9 @@ impl ToolExecutor {
             });
         }
 
-        let output = tokio::process::Command::new("git")
-            .args(["init"])
-            .current_dir(path)
-            .output()
+        let mut command = agiworkforce_worktree::host_git_async();
+        command.args(["init"]).current_dir(path);
+        let output = crate::sys::commands::git::host_git_output_async(command)
             .await
             .map_err(|e| anyhow!("Failed to run git init: {}", e))?;
 
@@ -632,6 +631,229 @@ impl ToolExecutor {
                 ("name".to_string(), json!(name)),
                 ("private".to_string(), json!(private)),
             ]),
+        })
+    }
+}
+
+fn worktree_info_json(info: &agiworkforce_worktree::NamedWorktree) -> Value {
+    json!({
+        "slug": info.slug,
+        "name": info.name,
+        "branch": info.branch,
+        "path": info.path,
+        "head": info.head,
+        "dirty": info.dirty,
+        "existed": info.existed
+    })
+}
+
+type PinnedRepositories = HashMap<PathBuf, Option<agiworkforce_worktree::checkpoint::Workspace>>;
+
+/// The repository each folder held the first time this process looked,
+/// kept for the life of the process. The worktree tools run host git pinned
+/// to that git directory, so a `.git` a sandboxed command creates in the
+/// folder afterwards is never discovered and never configures the host's git.
+/// Its code-running settings are recorded then too, unless they were before,
+/// and host git refuses any added or changed later. The desktop keeps no
+/// trust record of its own: settings in the repository's own configuration
+/// or its work tree are obeyed only once the user has trusted them through
+/// `git_trust_repository_config`, which keeps that trust with the baseline,
+/// so a first baseline taken after a sandboxed command planted something
+/// blesses nothing. A failure to ask git at all is not remembered; an
+/// answer is.
+static PINNED_REPOSITORIES: std::sync::LazyLock<std::sync::Mutex<PinnedRepositories>> =
+    std::sync::LazyLock::new(Default::default);
+
+async fn pinned_repository(
+    dir: &Path,
+) -> Result<Option<agiworkforce_worktree::checkpoint::Workspace>> {
+    let dir = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+    if let Some(found) = PINNED_REPOSITORIES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .get(&dir)
+    {
+        return Ok(found.clone());
+    }
+    let found = agiworkforce_worktree::checkpoint::Workspace::discover(
+        &agiworkforce_worktree::TokioCommandRunner,
+        &dir,
+    )
+    .await?;
+    if let Some(workspace) = &found {
+        if let Err(error) = agiworkforce_worktree::config_guard::ensure_baseline(
+            &agiworkforce_worktree::TokioCommandRunner,
+            workspace,
+        )
+        .await
+        {
+            tracing::warn!(folder = %dir.display(), %error, "repository git settings not recorded");
+        }
+    }
+    Ok(PINNED_REPOSITORIES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .entry(dir)
+        .or_insert(found)
+        .clone())
+}
+
+/// Resolve the repository of a folder before a sandboxed command can write
+/// in it.
+pub(crate) async fn pin_repository(dir: &Path) {
+    if let Err(error) = pinned_repository(dir).await {
+        tracing::warn!(folder = %dir.display(), %error, "repository not resolved");
+    }
+}
+
+impl ToolExecutor {
+    /// The repository the worktree tools act on: the one pinned for the
+    /// active project folder, and only that one. A `repo_path` is accepted
+    /// when it is a checkout of that same repository, and even then the
+    /// pinned repository is what git runs against: a folder a sandboxed
+    /// command could have made into a repository of its own, with filters in
+    /// its configuration, is never handed to host git.
+    async fn worktree_repository(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<agiworkforce_worktree::checkpoint::Workspace> {
+        let project = self
+            .project_folder
+            .clone()
+            .ok_or_else(|| anyhow!("worktree tools need an active project folder"))?;
+        let folder = self
+            .canonicalize_validated_path(&self.resolve_path(&project))
+            .await?;
+        let repository = pinned_repository(&folder).await?.ok_or_else(|| {
+            anyhow!(
+                "{} held no git repository with a working tree when this app first used it, so worktree tools stay off for it. If you have created one since, restart the app.",
+                folder.display()
+            )
+        })?;
+        let Some(requested) = args
+            .get("repo_path")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            return Ok(repository);
+        };
+        let requested = self
+            .canonicalize_validated_path(&self.resolve_path(requested))
+            .await?;
+        let same = requested == folder
+            || agiworkforce_worktree::checkpoint::Workspace::discover(
+                &agiworkforce_worktree::TokioCommandRunner,
+                &requested,
+            )
+            .await?
+            .is_some_and(|found| found.same_repository(&repository));
+        if !same {
+            return Err(anyhow!(
+                "{} is not a checkout of the project's repository; worktree tools act only on the repository of the active project folder",
+                requested.display()
+            ));
+        }
+        Ok(repository)
+    }
+
+    pub(crate) async fn execute_worktree_create_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let repository = self.worktree_repository(args).await?;
+        let slug = args
+            .get("slug")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| anyhow!("Missing slug parameter"))?
+            .to_string();
+
+        let info = agiworkforce_worktree::create_or_resume_named_worktree(
+            &agiworkforce_worktree::TokioCommandRunner,
+            &repository,
+            &slug,
+        )
+        .await
+        .map_err(|error| anyhow!(crate::sys::commands::git::desktop_git_error(error)))?;
+
+        Ok(ToolResult {
+            success: true,
+            data: json!({
+                "success": true,
+                "worktree": worktree_info_json(&info),
+                "message": if info.existed { "worktree already existed" } else { "worktree created" },
+                "note": "This creates an isolated git worktree directory, not an OS sandbox."
+            }),
+            error: None,
+            metadata: HashMap::from([("tool".to_string(), json!("worktree_create"))]),
+        })
+    }
+
+    pub(crate) async fn execute_worktree_list_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let repository = self.worktree_repository(args).await?;
+
+        let worktrees = agiworkforce_worktree::list_named_worktrees(
+            &agiworkforce_worktree::TokioCommandRunner,
+            &repository,
+        )
+        .await?;
+
+        let count = worktrees.len();
+        let values: Vec<Value> = worktrees.iter().map(worktree_info_json).collect();
+
+        Ok(ToolResult {
+            success: true,
+            data: json!({
+                "success": true,
+                "worktrees": values,
+                "count": count
+            }),
+            error: None,
+            metadata: HashMap::from([("tool".to_string(), json!("worktree_list"))]),
+        })
+    }
+
+    pub(crate) async fn execute_worktree_remove_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let repository = self.worktree_repository(args).await?;
+        let slug = args
+            .get("slug")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| anyhow!("Missing slug parameter"))?
+            .to_string();
+        let force = args
+            .get("force")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        let delete_branch = args
+            .get("delete_branch")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+
+        let info = agiworkforce_worktree::remove_named_worktree(
+            &agiworkforce_worktree::TokioCommandRunner,
+            &repository,
+            &slug,
+            force,
+            delete_branch,
+        )
+        .await?;
+
+        Ok(ToolResult {
+            success: true,
+            data: json!({
+                "success": true,
+                "removed": true,
+                "worktree": worktree_info_json(&info),
+                "branch_deleted": delete_branch
+            }),
+            error: None,
+            metadata: HashMap::from([("tool".to_string(), json!("worktree_remove"))]),
         })
     }
 }
@@ -793,5 +1015,73 @@ mod tests {
         assert!(branches
             .iter()
             .any(|branch| branch["is_current"] == json!(true)));
+    }
+
+    #[tokio::test]
+    async fn a_folder_without_a_repository_keeps_worktree_tools_off_after_one_appears() {
+        let folder = tempfile::tempdir().expect("folder");
+        pin_repository(folder.path()).await;
+        git2::Repository::init(folder.path()).expect("planted repository");
+
+        let mut executor = ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")));
+        executor.set_project_folder(Some(folder.path().to_string_lossy().to_string()));
+        let error = executor
+            .execute_worktree_list_tool(&HashMap::new())
+            .await
+            .expect_err("a repository created after pinning is not used");
+
+        assert!(error.to_string().contains("held no git repository"));
+    }
+
+    #[tokio::test]
+    async fn worktree_tools_refuse_a_repository_planted_inside_the_project() {
+        let repo_dir = init_repo_with_commit().expect("repo");
+        pin_repository(repo_dir.path()).await;
+        let planted = repo_dir.path().join("planted");
+        std::fs::create_dir_all(&planted).expect("planted folder");
+        git2::Repository::init(&planted).expect("planted repository");
+
+        let mut executor = ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")));
+        executor.set_project_folder(Some(repo_dir.path().to_string_lossy().to_string()));
+        let args = HashMap::from([(
+            "repo_path".to_string(),
+            json!(planted.to_string_lossy().to_string()),
+        )]);
+        let error = executor
+            .execute_worktree_list_tool(&args)
+            .await
+            .expect_err("a repository other than the project's is refused");
+        assert!(error
+            .to_string()
+            .contains("not a checkout of the project's repository"));
+
+        let subfolder = repo_dir.path().join("src");
+        std::fs::create_dir_all(&subfolder).expect("subfolder");
+        let args = HashMap::from([(
+            "repo_path".to_string(),
+            json!(subfolder.to_string_lossy().to_string()),
+        )]);
+        assert!(
+            executor
+                .execute_worktree_list_tool(&args)
+                .await
+                .expect("a folder of the project's own repository")
+                .success
+        );
+    }
+
+    #[tokio::test]
+    async fn worktree_tools_use_the_repository_pinned_for_the_folder() {
+        let repo_dir = init_repo_with_commit().expect("repo");
+        pin_repository(repo_dir.path()).await;
+
+        let mut executor = ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")));
+        executor.set_project_folder(Some(repo_dir.path().to_string_lossy().to_string()));
+        let result = executor
+            .execute_worktree_list_tool(&HashMap::new())
+            .await
+            .expect("worktree list");
+
+        assert!(result.success);
     }
 }

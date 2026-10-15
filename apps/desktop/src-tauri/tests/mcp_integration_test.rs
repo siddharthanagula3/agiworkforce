@@ -30,6 +30,7 @@ mod mcp_integration_tests {
                 env: HashMap::new(),
                 enabled: true,
                 transport: None,
+                allow_local_network: false,
             },
         );
 
@@ -70,10 +71,15 @@ mod mcp_integration_tests {
             env: HashMap::new(),
             enabled: true,
             transport: None,
+            allow_local_network: false,
         };
 
         let result = client
-            .connect_server("test_server".to_string(), config)
+            .connect_server(
+                "test_server".to_string(),
+                config,
+                agiworkforce_desktop::core::mcp::ApprovedLaunch::assumed_in_tests(),
+            )
             .await;
         assert!(result.is_ok());
 
@@ -99,10 +105,15 @@ mod mcp_integration_tests {
             env: HashMap::new(),
             enabled: true,
             transport: None,
+            allow_local_network: false,
         };
 
         client
-            .connect_server("filesystem".to_string(), config)
+            .connect_server(
+                "filesystem".to_string(),
+                config,
+                agiworkforce_desktop::core::mcp::ApprovedLaunch::assumed_in_tests(),
+            )
             .await
             .unwrap();
 
@@ -132,10 +143,15 @@ mod mcp_integration_tests {
             env: HashMap::new(),
             enabled: true,
             transport: None,
+            allow_local_network: false,
         };
 
         client
-            .connect_server("filesystem".to_string(), config)
+            .connect_server(
+                "filesystem".to_string(),
+                config,
+                agiworkforce_desktop::core::mcp::ApprovedLaunch::assumed_in_tests(),
+            )
             .await
             .unwrap();
 
@@ -162,10 +178,15 @@ mod mcp_integration_tests {
             env: HashMap::new(),
             enabled: true,
             transport: None,
+            allow_local_network: false,
         };
 
         client
-            .connect_server("filesystem".to_string(), config)
+            .connect_server(
+                "filesystem".to_string(),
+                config,
+                agiworkforce_desktop::core::mcp::ApprovedLaunch::assumed_in_tests(),
+            )
             .await
             .unwrap();
 
@@ -194,10 +215,15 @@ mod mcp_integration_tests {
             env: HashMap::new(),
             enabled: true,
             transport: None,
+            allow_local_network: false,
         };
 
         client
-            .connect_server("test_server".to_string(), config)
+            .connect_server(
+                "test_server".to_string(),
+                config,
+                agiworkforce_desktop::core::mcp::ApprovedLaunch::assumed_in_tests(),
+            )
             .await
             .unwrap();
 
@@ -264,6 +290,7 @@ mod mcp_integration_tests {
                 env: HashMap::new(),
                 enabled: true,
                 transport: None,
+                allow_local_network: false,
             },
         );
 
@@ -354,7 +381,11 @@ mod mcp_integration_tests {
 
         let client = McpClient::new();
         client
-            .connect_server("integration-test-everything".to_string(), server_config)
+            .connect_server(
+                "integration-test-everything".to_string(),
+                server_config,
+                agiworkforce_desktop::core::mcp::ApprovedLaunch::assumed_in_tests(),
+            )
             .await
             .expect("real MCP server should connect");
 

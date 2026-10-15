@@ -16,4 +16,8 @@ unused_mut = "deny"
 dead_code = "deny"
 
 [dependencies]
+dirs = "6"
 serde = { version = "1", features = ["derive"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

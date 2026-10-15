@@ -43,6 +43,16 @@ impl HookEventType {
         ]
     }
 
+    /// A gating event is run to completion before the action it announces,
+    /// and its hooks can refuse that action. Every other event is fired and
+    /// not waited for.
+    pub fn is_gating(&self) -> bool {
+        matches!(
+            self,
+            HookEventType::PreToolUse | HookEventType::UserPromptSubmit
+        )
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             HookEventType::SessionStart => "SessionStart",
@@ -64,7 +74,7 @@ impl HookEventType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hook {
     pub name: String,
 
@@ -87,6 +97,12 @@ pub struct Hook {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub working_dir: Option<String>,
 
+    /// Decides one thing: what follows when this hook ran and exited with a
+    /// failure other than the blocking code. On `PreToolUse` and
+    /// `UserPromptSubmit`, `false` makes that failure refuse the action; on
+    /// every other event `false` stops the hooks after this one. It never
+    /// excuses a guard that did not run to completion, which refuses the
+    /// action whatever this says. Left out of hooks.yaml it reads as `true`.
     #[serde(default = "default_continue_on_error")]
     pub continue_on_error: bool,
 }
@@ -468,4 +484,10 @@ pub struct HookExecutionResult {
     pub stderr: String,
     pub execution_time_ms: u64,
     pub error: Option<String>,
+    /// True when the hook refuses the action its event announces. Only the
+    /// gating events, `PreToolUse` and `UserPromptSubmit`, act on it.
+    #[serde(default)]
+    pub blocked: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub block_reason: Option<String>,
 }

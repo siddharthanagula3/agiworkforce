@@ -24,12 +24,89 @@ pub struct SkillManagerConfig {
     pub include_unavailable_skills: bool,
 }
 
+/// The folder, inside the user's home and inside a project, that holds
+/// skills. The CLI reads the same two places.
+const DOTFILE_DIR: &str = ".agiworkforce";
+const SKILLS_DIR: &str = "skills";
+
+/// Where builds before the shared `~/.agiworkforce/skills` kept user skills.
+fn legacy_managed_skills_dir() -> Option<PathBuf> {
+    dirs::config_dir().map(|dir| dir.join("agiworkforce").join(SKILLS_DIR))
+}
+
+fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
+    if from.is_dir() {
+        std::fs::create_dir_all(to)?;
+        for entry in std::fs::read_dir(from)? {
+            let entry = entry?;
+            copy_tree(&entry.path(), &to.join(entry.file_name()))?;
+        }
+        Ok(())
+    } else {
+        std::fs::copy(from, to).map(|_| ())
+    }
+}
+
+fn remove_tree(path: &Path) -> std::io::Result<()> {
+    if path.is_dir() {
+        std::fs::remove_dir_all(path)
+    } else {
+        std::fs::remove_file(path)
+    }
+}
+
+/// Moves every skill in `legacy_dir` into `managed_dir`. An entry whose name
+/// is already taken there stays where it is, so nothing in either place is
+/// overwritten, and the move has nothing left to do the next time it runs.
+fn adopt_legacy_skills(legacy_dir: &Path, managed_dir: &Path) {
+    if legacy_dir == managed_dir || !legacy_dir.is_dir() {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(legacy_dir) else {
+        return;
+    };
+    if let Err(error) = std::fs::create_dir_all(managed_dir) {
+        warn!(
+            "Could not create {} to adopt earlier skills: {}",
+            managed_dir.display(),
+            error
+        );
+        return;
+    }
+
+    for entry in entries.flatten() {
+        let source = entry.path();
+        let target = managed_dir.join(entry.file_name());
+        if target.exists() {
+            warn!(
+                "Skill {} was left in place because {} already exists",
+                source.display(),
+                target.display()
+            );
+            continue;
+        }
+        let moved = std::fs::rename(&source, &target).or_else(|_| {
+            copy_tree(&source, &target)
+                .inspect_err(|_| {
+                    let _ = remove_tree(&target);
+                })
+                .and_then(|()| remove_tree(&source))
+        });
+        match moved {
+            Ok(()) => info!("Moved skill {} to {}", source.display(), target.display()),
+            Err(error) => warn!("Could not move skill {}: {}", source.display(), error),
+        }
+    }
+
+    let _ = std::fs::remove_dir(legacy_dir);
+}
+
 impl Default for SkillManagerConfig {
     fn default() -> Self {
-        let managed_dir = dirs::config_dir()
+        let managed_dir = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("agiworkforce")
-            .join("skills");
+            .join(DOTFILE_DIR)
+            .join(SKILLS_DIR);
 
         Self {
             managed_skills_dir: managed_dir,
@@ -44,7 +121,7 @@ impl Default for SkillManagerConfig {
 /// Skills are loaded from multiple sources:
 /// - Bundled skills (built into the application)
 /// - Managed skills (~/.agiworkforce/skills/)
-/// - Workspace skills (<workspace>/skills/)
+/// - Workspace skills (<workspace>/.agiworkforce/skills/)
 ///
 /// The manager provides methods to query available skills, check their
 /// requirements, and generate context for the AGI.
@@ -78,6 +155,15 @@ impl SkillManager {
             skills: Arc::new(RwLock::new(HashMap::new())),
             requirement_cache: Arc::new(RwLock::new(HashMap::new())),
             workspace_path: Arc::new(RwLock::new(None)),
+        }
+    }
+
+    /// Brings skills an earlier build stored under the OS config directory
+    /// into the managed directory. The running app calls this once before
+    /// [`Self::initialize`]; tests and tools that only read skills do not.
+    pub fn adopt_legacy_managed_skills(&self) {
+        if let Some(legacy_dir) = legacy_managed_skills_dir() {
+            adopt_legacy_skills(&legacy_dir, &self.config.managed_skills_dir);
         }
     }
 
@@ -523,7 +609,7 @@ Write tests for the specified code following these practices.
     /// Sets the workspace path and loads workspace-local skills.
     ///
     /// This clears any previously loaded workspace skills and loads skills
-    /// from `<workspace>/skills/` if that directory exists.
+    /// from `<workspace>/.agiworkforce/skills/` if that directory exists.
     pub fn set_workspace(&self, workspace_path: Option<PathBuf>) {
         // Clear existing workspace skills
         {
@@ -536,7 +622,7 @@ Write tests for the specified code following these practices.
 
         // Load workspace skills if path is provided
         if let Some(path) = workspace_path {
-            let skills_dir = path.join("skills");
+            let skills_dir = path.join(DOTFILE_DIR).join(SKILLS_DIR);
             if skills_dir.exists() {
                 let loaded =
                     SkillLoader::load_from_directory(&skills_dir, SkillSourceType::Workspace);
@@ -683,28 +769,6 @@ Write tests for the specified code following these practices.
             .collect()
     }
 
-    /// Generates a context string containing all available skill instructions.
-    ///
-    /// This is intended to be included in the AGI's system prompt.
-    #[must_use]
-    pub fn generate_skill_context(&self) -> String {
-        let available = self.available_skills();
-
-        if available.is_empty() {
-            return String::from("No additional skills are currently available.");
-        }
-
-        let mut context = String::from("# Available Skills\n\n");
-        context.push_str("The following skills are available to help complete tasks:\n\n");
-
-        for skill in &available {
-            context.push_str(&skill.to_context_string());
-            context.push_str("\n\n---\n\n");
-        }
-
-        context
-    }
-
     /// Generates a brief summary of available skills.
     ///
     /// Useful for quick reference without full instructions.
@@ -763,6 +827,14 @@ Write tests for the specified code following these practices.
         self.workspace_path.read().clone()
     }
 
+    /// The active workspace's skills directory, when it has one.
+    #[must_use]
+    pub fn workspace_skills_dir(&self) -> Option<PathBuf> {
+        self.workspace_path()
+            .map(|path| path.join(DOTFILE_DIR).join(SKILLS_DIR))
+            .filter(|dir| dir.is_dir())
+    }
+
     /// Gets the managed skills directory path.
     #[must_use]
     pub fn managed_skills_dir(&self) -> &Path {
@@ -798,53 +870,6 @@ Write tests for the specified code following these practices.
             allowed_tools: skill.allowed_tools.clone(),
             context_mode: skill.context_mode,
         })
-    }
-
-    /// Parses a slash command and returns skill invocation if valid.
-    ///
-    /// Slash commands have the format: `/skill-name [arguments]`
-    ///
-    /// # Examples
-    ///
-    /// - `/explain-code src/main.rs`
-    /// - `/create-document quarterly report`
-    /// - `/git-workflow commit all changes`
-    pub fn parse_slash_command(&self, input: &str) -> Option<SkillResult<SkillInvocation>> {
-        let input = input.trim();
-
-        // Check if it starts with /
-        if !input.starts_with('/') {
-            return None;
-        }
-
-        // Parse skill name and arguments
-        let without_slash = &input[1..];
-        let (skill_name, arguments) = match without_slash.find(' ') {
-            Some(pos) => {
-                let name = &without_slash[..pos];
-                let args = without_slash[pos + 1..].trim();
-                (name, args)
-            }
-            None => (without_slash, ""),
-        };
-
-        // Check if skill exists
-        self.get_skill(skill_name)?;
-
-        Some(self.invoke_skill(skill_name, arguments))
-    }
-
-    /// Returns a list of skill names that can be used as slash commands.
-    #[must_use]
-    pub fn get_slash_commands(&self) -> Vec<SlashCommand> {
-        self.available_skills()
-            .into_iter()
-            .map(|skill| SlashCommand {
-                name: skill.name.clone(),
-                description: skill.description.clone(),
-                has_arguments: skill.instructions.contains("$ARGUMENTS"),
-            })
-            .collect()
     }
 }
 
@@ -887,20 +912,6 @@ impl SkillInvocation {
     pub fn is_fork(&self) -> bool {
         self.context_mode.is_fork()
     }
-}
-
-/// A slash command for skill invocation.
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SlashCommand {
-    /// The skill name (used after the slash).
-    pub name: String,
-
-    /// Description of what the skill does.
-    pub description: String,
-
-    /// Whether this command accepts arguments.
-    pub has_arguments: bool,
 }
 
 /// Filter for selecting skills by their source.
@@ -980,7 +991,7 @@ Instructions for {name}.
     #[test]
     fn test_workspace_skills() {
         let temp_dir = TempDir::new().unwrap();
-        let skills_dir = temp_dir.path().join("skills");
+        let skills_dir = temp_dir.path().join(".agiworkforce").join("skills");
         std::fs::create_dir_all(&skills_dir).unwrap();
 
         create_skill_file(
@@ -1000,9 +1011,97 @@ Instructions for {name}.
         assert!(manager.get_skill("workspace-skill").is_some());
         assert_eq!(manager.skill_count(), initial_count + 1);
 
+        assert_eq!(manager.workspace_skills_dir(), Some(skills_dir));
+
         // Clear workspace
         manager.set_workspace(None);
         assert!(manager.get_skill("workspace-skill").is_none());
+        assert_eq!(manager.workspace_skills_dir(), None);
+    }
+
+    #[test]
+    fn a_skills_folder_at_the_workspace_root_is_not_a_skill_source() {
+        let temp_dir = TempDir::new().unwrap();
+        create_skill_file(
+            &temp_dir.path().join("skills"),
+            "root-skill",
+            "root-skill",
+            "A folder the product does not read",
+        );
+
+        let manager = SkillManager::with_config(SkillManagerConfig {
+            managed_skills_dir: temp_dir.path().join("managed"),
+            check_requirements_on_load: true,
+            include_unavailable_skills: false,
+        });
+        manager.set_workspace(Some(temp_dir.path().to_path_buf()));
+
+        assert!(manager.get_skill("root-skill").is_none());
+        assert_eq!(manager.workspace_skills_dir(), None);
+    }
+
+    #[test]
+    fn the_managed_directory_is_the_dotfile_one_the_cli_reads() {
+        let managed = SkillManagerConfig::default().managed_skills_dir;
+        assert!(managed.ends_with(Path::new(".agiworkforce").join("skills")));
+    }
+
+    #[test]
+    fn earlier_skills_move_into_the_managed_directory_once() {
+        let temp_dir = TempDir::new().unwrap();
+        let legacy = temp_dir.path().join("config").join("skills");
+        let managed = temp_dir.path().join("home").join("skills");
+        create_skill_file(&legacy, "recorded", "recorded", "A recorded skill");
+        std::fs::write(legacy.join("recorded").join("recording.json"), "{}").unwrap();
+
+        adopt_legacy_skills(&legacy, &managed);
+
+        assert!(managed.join("recorded").join("SKILL.md").is_file());
+        assert!(managed.join("recorded").join("recording.json").is_file());
+        assert!(!legacy.exists(), "an emptied legacy directory is removed");
+
+        adopt_legacy_skills(&legacy, &managed);
+        assert!(managed.join("recorded").join("SKILL.md").is_file());
+    }
+
+    #[test]
+    fn a_skill_already_in_the_managed_directory_is_never_overwritten() {
+        let temp_dir = TempDir::new().unwrap();
+        let legacy = temp_dir.path().join("config").join("skills");
+        let managed = temp_dir.path().join("home").join("skills");
+        create_skill_file(&legacy, "notes", "notes", "The older copy");
+        create_skill_file(
+            &legacy,
+            "only-legacy",
+            "only-legacy",
+            "Only in the old place",
+        );
+        create_skill_file(&managed, "notes", "notes", "The current copy");
+
+        adopt_legacy_skills(&legacy, &managed);
+
+        let kept = std::fs::read_to_string(managed.join("notes").join("SKILL.md")).unwrap();
+        assert!(kept.contains("The current copy"));
+        assert!(legacy.join("notes").join("SKILL.md").is_file());
+        assert!(managed.join("only-legacy").join("SKILL.md").is_file());
+    }
+
+    #[test]
+    fn a_tree_is_copied_whole_when_it_cannot_be_renamed() {
+        let temp_dir = TempDir::new().unwrap();
+        let source = temp_dir.path().join("source");
+        create_skill_file(&source, "nested", "nested", "A nested skill");
+
+        copy_tree(&source, &temp_dir.path().join("copy")).unwrap();
+        remove_tree(&source).unwrap();
+
+        assert!(temp_dir
+            .path()
+            .join("copy")
+            .join("nested")
+            .join("SKILL.md")
+            .is_file());
+        assert!(!source.exists());
     }
 
     #[test]
@@ -1016,17 +1115,6 @@ Instructions for {name}.
 
         let workspace = manager.skills_by_source(SkillSourceFilter::Workspace);
         assert!(workspace.is_empty()); // No workspace set yet
-    }
-
-    #[test]
-    fn test_generate_skill_context() {
-        let manager = SkillManager::new();
-        manager.initialize();
-
-        let context = manager.generate_skill_context();
-
-        assert!(context.contains("Available Skills"));
-        assert!(context.contains("file-operations"));
     }
 
     #[test]

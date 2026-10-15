@@ -26,6 +26,15 @@ pub async fn file_watch_start(
 ) -> Result<(), String> {
     debug!("Starting file watch: {} (recursive: {})", path, recursive);
 
+    // A watch reports every file name that changes under `path`, so the page
+    // may watch only inside a folder the person granted.
+    crate::sys::commands::file_ops::require_granted_path(
+        &app_handle,
+        &path,
+        crate::sys::commands::file_ops::FileOperation::Read,
+    )
+    .await?;
+
     let mut watcher_lock = state
         .0
         .lock()
@@ -62,37 +71,5 @@ pub async fn file_watch_stop(
         Ok(())
     } else {
         Err("File watcher not initialized".to_string())
-    }
-}
-
-#[tauri::command]
-pub async fn file_watch_list(state: State<'_, FileWatcherState>) -> Result<Vec<String>, String> {
-    let watcher_lock = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock watcher: {}", e))?;
-
-    if let Some(watcher) = watcher_lock.as_ref() {
-        watcher.get_watched_paths()
-    } else {
-        Ok(Vec::new())
-    }
-}
-
-#[tauri::command]
-pub async fn file_watch_stop_all(state: State<'_, FileWatcherState>) -> Result<(), String> {
-    debug!("Stopping all file watches");
-
-    let mut watcher_lock = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock watcher: {}", e))?;
-
-    if let Some(watcher) = watcher_lock.as_mut() {
-        watcher.unwatch_all()?;
-        info!("Stopped watching all paths");
-        Ok(())
-    } else {
-        Ok(())
     }
 }

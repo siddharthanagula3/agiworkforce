@@ -534,9 +534,9 @@ impl TuiApp {
                 },
             );
         }
-        let git_branch = std::process::Command::new("git")
-            .args(["rev-parse", "--abbrev-ref", "HEAD"])
-            .output()
+        let mut branch_command = agiworkforce_worktree::host_git();
+        branch_command.args(["rev-parse", "--abbrev-ref", "HEAD"]);
+        let git_branch = crate::platform::runtime::git::host_git_output(branch_command)
             .ok()
             .and_then(|o| {
                 if o.status.success() {
@@ -1052,50 +1052,52 @@ impl TuiApp {
                 }
             }
             OverlayResult::DiffReviewed(outcome) => {
+                let cwd = std::env::current_dir().unwrap_or_default();
+                if let Err(error) = crate::platform::runtime::git::check_repository_config_blocking(
+                    &cwd,
+                    agiworkforce_worktree::config_guard::ConfigUse::CONTENT,
+                ) {
+                    self.chat_messages.push(ChatMessage {
+                        role: ChatRole::System,
+                        text: format!("Nothing was changed: {error}"),
+                    });
+                    return;
+                }
+                let succeeded = |command: std::process::Command| {
+                    crate::platform::runtime::git::host_git_output(command)
+                        .is_ok_and(|output| output.status.success())
+                };
                 let staged_files = outcome
                     .approved
                     .iter()
                     .filter(|path| {
-                        std::process::Command::new("git")
-                            .arg("add")
-                            .arg("--")
-                            .arg(path)
-                            .status()
-                            .map(|s| s.success())
-                            .unwrap_or(false)
+                        let mut command = agiworkforce_worktree::host_git();
+                        command.arg("add").arg("--").arg(path);
+                        succeeded(command)
                     })
                     .count();
                 let apply = |patch: &str, args: &[&str]| -> bool {
-                    use std::io::Write;
-                    let Ok(mut child) = std::process::Command::new("git")
+                    let Ok(mut file) = tempfile::NamedTempFile::new() else {
+                        return false;
+                    };
+                    if std::io::Write::write_all(&mut file, patch.as_bytes()).is_err() {
+                        return false;
+                    }
+                    let mut command = agiworkforce_worktree::host_git();
+                    command
                         .arg("apply")
                         .args(args)
                         .arg("--recount")
-                        .arg("-")
-                        .stdin(std::process::Stdio::piped())
-                        .stdout(std::process::Stdio::null())
-                        .stderr(std::process::Stdio::null())
-                        .spawn()
-                    else {
-                        return false;
-                    };
-                    let written = child
-                        .stdin
-                        .take()
-                        .map(|mut stdin| stdin.write_all(patch.as_bytes()).is_ok())
-                        .unwrap_or(false);
-                    child.wait().map(|s| s.success()).unwrap_or(false) && written
+                        .arg(file.path());
+                    succeeded(command)
                 };
                 let unstaged_files = outcome
                     .unstage_files
                     .iter()
                     .filter(|path| {
-                        std::process::Command::new("git")
-                            .args(["reset", "-q", "--"])
-                            .arg(path)
-                            .status()
-                            .map(|s| s.success())
-                            .unwrap_or(false)
+                        let mut command = agiworkforce_worktree::host_git();
+                        command.args(["reset", "-q", "--"]).arg(path);
+                        succeeded(command)
                     })
                     .count();
                 let staged_hunks = outcome
@@ -1134,18 +1136,36 @@ impl TuiApp {
                 // Stage the approved files (reversible via `git reset`). Rejected /
                 // skipped files are deliberately left untouched, never auto-discard
                 // the user's working-tree changes.
-                let staged = paths
-                    .iter()
-                    .filter(|path| {
-                        std::process::Command::new("git")
-                            .arg("add")
-                            .arg("--")
-                            .arg(path)
-                            .status()
-                            .map(|s| s.success())
-                            .unwrap_or(false)
-                    })
-                    .count();
+                let cwd = std::env::current_dir().unwrap_or_default();
+                if let Err(error) = crate::platform::runtime::git::check_repository_config_blocking(
+                    &cwd,
+                    agiworkforce_worktree::config_guard::ConfigUse::CONTENT,
+                ) {
+                    self.chat_messages.push(ChatMessage {
+                        role: ChatRole::System,
+                        text: format!("Nothing was staged: {error}"),
+                    });
+                    return;
+                }
+                let mut staged = 0usize;
+                for path in paths.iter() {
+                    let mut command = agiworkforce_worktree::host_git();
+                    command.arg("add").arg("--").arg(path);
+                    match crate::platform::runtime::git::host_git_output(command) {
+                        Ok(output) if output.status.success() => staged += 1,
+                        Ok(_) => {}
+                        Err(error) => {
+                            self.chat_messages.push(ChatMessage {
+                                role: ChatRole::System,
+                                text: format!(
+                                    "Staging stopped: {}",
+                                    crate::platform::runtime::git::host_git_failure(&error)
+                                ),
+                            });
+                            break;
+                        }
+                    }
+                }
                 if staged > 0 {
                     self.chat_messages.push(ChatMessage {
                         role: ChatRole::System,
@@ -1276,6 +1296,14 @@ fn approval_overlay_for(
             .collect(),
     );
     overlay.always_allow_unavailable = !request.saves_always_allow;
+    overlay.set_targets(crate::tui::widgets::approval_overlay::targets_for(
+        &request.kind,
+    ));
+    if let crate::tui::approval_broker::ApprovalRequestKind::Exec { command } = &request.kind {
+        if crate::features::exec::exec_policy::proposed_allow_prefix(command).is_none() {
+            overlay.always_allow_unavailable = true;
+        }
+    }
     overlay
 }
 
@@ -1422,7 +1450,7 @@ fn run_idle_mcp_elicitation_modal(
     loop {
         terminal.draw(|frame| {
             let chat_area = draw_app_frame(frame, app);
-            render_overlay(frame, chat_area, &overlay, 0);
+            overlay.render_into(frame, chat_area);
         })?;
         if event::poll(super::motion::FRAME_INTERVAL)? {
             if let Some(response) = handle_mcp_elicitation_event(&mut overlay, event::read()?) {
@@ -1447,7 +1475,7 @@ fn run_turn_mcp_elicitation_modal(
     loop {
         terminal.draw(|frame| {
             let chat_area = draw_turn_chrome(frame, ctx);
-            render_overlay(frame, chat_area, &overlay, 0);
+            overlay.render_into(frame, chat_area);
         })?;
         if event::poll(super::motion::FRAME_INTERVAL)? {
             if let Some(response) = handle_mcp_elicitation_event(&mut overlay, event::read()?) {
@@ -2831,6 +2859,7 @@ fn render_overlay(
     ov: &dyn crate::tui::widgets::interactive::InteractiveView,
     scroll_offset: u16,
 ) {
+    ov.fit_rows(area.height);
     // Prefer a view's styled lines (e.g. the diff review's +/- coloring); fall
     // back to the plain text render for every other overlay.
     let mut lines: Vec<Line> = match ov.render_styled() {
@@ -5323,9 +5352,17 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/diff-review" => {
             use crate::tui::widgets::diff_review::{DiffReviewView, FileDiff};
             // Gather changed files from `git status --porcelain` synchronously.
-            let status = std::process::Command::new("git")
-                .args(["status", "--porcelain"])
-                .output();
+            let cwd = std::env::current_dir().unwrap_or_default();
+            if let Err(error) = crate::platform::runtime::git::check_repository_config_blocking(
+                &cwd,
+                agiworkforce_worktree::config_guard::ConfigUse::CONTENT,
+            )
+            {
+                return SlashResult::SystemMessage(error.to_string());
+            }
+            let mut status_command = agiworkforce_worktree::host_git();
+            status_command.args(["status", "--porcelain", "--ignore-submodules=dirty"]);
+            let status = crate::platform::runtime::git::host_git_output(status_command);
             // Same trap as /diff: a non-zero git exit leaves stdout empty, which
             // is indistinguishable from a clean tree unless the status is read.
             let status_out = match status {
@@ -5342,7 +5379,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     });
                 }
                 Err(error) => {
-                    return SlashResult::SystemMessage(format!("Could not run git: {error}"));
+                    return SlashResult::SystemMessage(
+                        crate::platform::runtime::git::host_git_failure(&error),
+                    );
                 }
             };
             // Untracked files have no HEAD revision to diff against, so they
@@ -5352,16 +5391,32 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 .filter_map(|line| line.strip_prefix("?? "))
                 .map(str::to_string)
                 .collect();
-            let tracked_diff = std::process::Command::new("git")
-                .args(["diff", "HEAD"])
-                .output()
-                .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-                .unwrap_or_default();
+            let mut diff_command = agiworkforce_worktree::host_git();
+            diff_command.args([
+                "diff",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--ignore-submodules=dirty",
+                "HEAD",
+            ]);
+            let tracked_diff = match crate::platform::runtime::git::host_git_output(diff_command)
+            {
+                Ok(output) => String::from_utf8_lossy(&output.stdout).to_string(),
+                Err(error) => {
+                    return SlashResult::SystemMessage(
+                        crate::platform::runtime::git::host_git_failure(&error),
+                    );
+                }
+            };
             let parsed = crate::diff_model::Diff::parse(&tracked_diff);
             let read_diff = |args: &[&str]| {
-                std::process::Command::new("git")
-                    .args(args)
-                    .output()
+                let mut command = agiworkforce_worktree::host_git();
+                command.args(args).args([
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--ignore-submodules=dirty",
+                ]);
+                crate::platform::runtime::git::host_git_output(command)
                     .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
                     .unwrap_or_default()
             };
@@ -6444,6 +6499,7 @@ async fn run_event_loop(
                                     auto_approve_edits: false,
                                     quiet: true,
                                     approval_callback: None,
+                                    user_input_callback: None,
                                     privacy_mode: app.session.privacy_mode,
                                     workspace_root: std::env::current_dir().ok(),
                                 };
@@ -7731,6 +7787,7 @@ mod tests {
                 auto_approve_edits: false,
                 quiet: true,
                 approval_callback: Some(callback),
+                user_input_callback: None,
                 privacy_mode: crate::agent::PrivacyMode::Local,
                 workspace_root: std::env::current_dir().ok(),
             };
@@ -7792,6 +7849,7 @@ mod tests {
                 auto_approve_edits: false,
                 quiet: true,
                 approval_callback: Some(callback),
+                user_input_callback: None,
                 privacy_mode: crate::agent::PrivacyMode::Local,
                 workspace_root: std::env::current_dir().ok(),
             };
@@ -7892,6 +7950,7 @@ mod tests {
                 auto_approve_edits: false,
                 quiet: true,
                 approval_callback: Some(callback),
+                user_input_callback: None,
                 privacy_mode: crate::agent::PrivacyMode::Local,
                 workspace_root: std::env::current_dir().ok(),
             };
@@ -9705,6 +9764,40 @@ mod tests {
             })
             .expect("draw");
         assert_no_terminal_escapes(&rendered_symbols(&terminal), "elicitation overlay");
+    }
+
+    /// Always Allow for a command no rule may be saved for would be a button
+    /// that always fails, so the modal leaves it out.
+    #[test]
+    fn approval_modal_offers_always_allow_only_where_a_rule_can_be_saved() {
+        use crate::tui::approval_broker::{ApprovalRequest, ApprovalRequestKind};
+
+        let offers = |kind: ApprovalRequestKind| {
+            !approval_overlay_for(
+                &ApprovalRequest::new(kind, "Allow this?", Vec::new()).saving_always_allow(true),
+            )
+            .always_allow_unavailable
+        };
+        let exec = |command: &str| ApprovalRequestKind::Exec {
+            command: command.to_string(),
+        };
+
+        assert!(offers(exec("cargo test")));
+        assert!(
+            approval_overlay_for(&ApprovalRequest::new(
+                exec("cargo test"),
+                "Allow this?",
+                Vec::new()
+            ))
+            .always_allow_unavailable,
+            "a request that saves no rule never offers one"
+        );
+        assert!(!offers(exec("python3 -c 'print(1)'")));
+        assert!(!offers(exec("bash -c ls")));
+        assert!(!offers(exec("git status && rm -rf ./src")));
+        assert!(offers(ApprovalRequestKind::FileWrite {
+            path: std::path::PathBuf::from("src/main.rs"),
+        }));
     }
 
     /// A tool-approval request carries the model's own command line and diff

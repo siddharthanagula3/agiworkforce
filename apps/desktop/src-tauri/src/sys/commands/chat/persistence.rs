@@ -1,6 +1,5 @@
 use chrono::Utc;
 
-use crate::data::cloud_sync;
 use crate::data::db::models::{Message, MessageRole};
 use crate::data::db::repository;
 
@@ -55,7 +54,6 @@ pub(super) fn save_assistant_message(
     cost: Option<f64>,
     provider: Option<&str>,
     model: &str,
-    cloud_sync: bool,
 ) -> Result<Message, String> {
     let conn = db.connection()?;
     let message = Message {
@@ -74,14 +72,8 @@ pub(super) fn save_assistant_message(
     };
     let id = repository::create_message(&conn, &message)
         .map_err(|e| format!("Failed to save assistant message: {e}"))?;
-    let saved = repository::get_message(&conn, id)
-        .map_err(|e| format!("Failed to retrieve assistant message: {e}"))?;
-    if cloud_sync {
-        if let Err(e) = cloud_sync::mark_message_for_push(&conn, id) {
-            tracing::warn!(error = %e, message_id = id, "failed to mark message for cloud push");
-        }
-    }
-    Ok(saved)
+    repository::get_message(&conn, id)
+        .map_err(|e| format!("Failed to retrieve assistant message: {e}"))
 }
 
 /// In incognito mode, create an in-memory Message without persisting to SQLite.
@@ -96,7 +88,6 @@ pub(super) fn save_or_skip_assistant_message(
     provider: Option<&str>,
     model: &str,
     incognito: bool,
-    cloud_sync: bool,
 ) -> Result<Message, String> {
     if incognito {
         Ok(Message {
@@ -123,7 +114,6 @@ pub(super) fn save_or_skip_assistant_message(
             cost,
             provider,
             model,
-            cloud_sync,
         )
     }
 }
@@ -151,16 +141,6 @@ pub(super) fn compute_or_skip_stats(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::db::{repository, Database};
-    use std::sync::Arc;
-
-    fn make_test_db() -> (Database, AppDatabase) {
-        let db_inner = Database::in_memory().expect("in-memory db must open");
-        let app_db = AppDatabase {
-            conn: Arc::clone(&db_inner.get_connection()),
-        };
-        (db_inner, app_db)
-    }
 
     #[test]
     fn conversation_cost_counts_each_full_request_once() {
@@ -187,119 +167,5 @@ mod tests {
         .with_metrics(10, 0.10);
 
         assert!((total_request_cost(&[user, assistant, system]) - 0.75).abs() < f64::EPSILON);
-    }
-
-    fn latest_message_sync_state(db: &AppDatabase, conv_id: i64) -> (i64, Option<String>) {
-        let conn = db.connection().expect("connection");
-        conn.query_row(
-            "SELECT needs_push, cloud_id FROM messages WHERE conversation_id = ?1 \
-             ORDER BY id DESC LIMIT 1",
-            rusqlite::params![conv_id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )
-        .expect("message row")
-    }
-
-    #[test]
-    fn message_not_marked_for_push_when_cloud_sync_disabled() {
-        let (_db_inner, db) = make_test_db();
-        let conn = db.connection().expect("connection");
-        let conv_id = repository::create_conversation(&conn, "c".to_string(), "u1".to_string())
-            .expect("create conversation");
-        drop(conn);
-
-        save_assistant_message(
-            &db,
-            conv_id,
-            "u1",
-            "hello",
-            Some(10),
-            Some(0.001),
-            Some("openai"),
-            "fixture-primary-model",
-            false, // cloud_sync_enabled = false
-        )
-        .expect("save should succeed");
-
-        let (needs_push, cloud_id) = latest_message_sync_state(&db, conv_id);
-        assert_eq!(
-            needs_push, 0,
-            "needs_push must stay 0 when cloud sync is disabled"
-        );
-        assert!(
-            cloud_id.is_none(),
-            "no cloud_id when cloud sync is disabled"
-        );
-    }
-
-    #[test]
-    fn local_conversation_message_not_marked_even_when_cloud_sync_enabled() {
-        let (_db_inner, db) = make_test_db();
-        let conn = db.connection().expect("connection");
-        let conv_id = repository::create_conversation(&conn, "local".to_string(), "u2".to_string())
-            .expect("create conversation"); // app_mode defaults to 'local'
-        drop(conn);
-
-        save_assistant_message(
-            &db,
-            conv_id,
-            "u2",
-            "cloud test",
-            None,
-            None,
-            None,
-            "fixture-primary-model",
-            true, // cloud_sync_enabled = true
-        )
-        .expect("save should succeed");
-
-        let (needs_push, cloud_id) = latest_message_sync_state(&db, conv_id);
-        assert_eq!(
-            needs_push, 0,
-            "local-conversation message must not be marked for push"
-        );
-        assert!(
-            cloud_id.is_none(),
-            "local-conversation message must not get a cloud_id"
-        );
-    }
-
-    /// Happy path: a CLOUD conversation + cloud_sync_enabled=true → the message IS
-    /// minted (cloud_id set, needs_push=1) so the sync engine will push it.
-    #[test]
-    fn cloud_conversation_message_marked_for_push_when_enabled() {
-        let (_db_inner, db) = make_test_db();
-        let conn = db.connection().expect("connection");
-        let conv_id = repository::create_conversation_with_mode(
-            &conn,
-            "cloud".to_string(),
-            "u3".to_string(),
-            "cloud",
-        )
-        .expect("create cloud conversation");
-        drop(conn);
-
-        save_assistant_message(
-            &db,
-            conv_id,
-            "u3",
-            "synced",
-            None,
-            None,
-            None,
-            "fixture-primary-model",
-            true, // cloud_sync_enabled = true
-        )
-        .expect("save should succeed");
-
-        let (needs_push, cloud_id) = latest_message_sync_state(&db, conv_id);
-        assert_eq!(
-            needs_push, 1,
-            "cloud-conversation message must be marked for push"
-        );
-        assert!(
-            cloud_id.is_some(),
-            "cloud-conversation message must get a cloud_id"
-        );
     }
 }

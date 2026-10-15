@@ -10,7 +10,7 @@ use uuid::Uuid;
 type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(into = "String", from = "String")]
 pub enum AuditEventType {
     ToolExecution,
     WorkflowExecution,
@@ -43,6 +43,32 @@ impl AuditEventType {
             Self::PermissionGranted => "permission_granted",
             Self::PermissionRevoked => "permission_revoked",
             Self::Other(s) => s,
+        }
+    }
+}
+
+impl From<AuditEventType> for String {
+    fn from(event_type: AuditEventType) -> Self {
+        event_type.as_str().to_string()
+    }
+}
+
+impl From<String> for AuditEventType {
+    fn from(stored: String) -> Self {
+        match stored.as_str() {
+            "tool_execution" => Self::ToolExecution,
+            "workflow_execution" => Self::WorkflowExecution,
+            "team_access" => Self::TeamAccess,
+            "security_violation" => Self::SecurityViolation,
+            "approval_request" => Self::ApprovalRequest,
+            "config_change" => Self::ConfigChange,
+            "data_export" => Self::DataExport,
+            "data_deletion" => Self::DataDeletion,
+            "agent_created" => Self::AgentCreated,
+            "agent_deleted" => Self::AgentDeleted,
+            "permission_granted" => Self::PermissionGranted,
+            "permission_revoked" => Self::PermissionRevoked,
+            _ => Self::Other(stored),
         }
     }
 }
@@ -324,7 +350,7 @@ impl AuditLogger {
                     timestamp: row.get(1)?,
                     user_id: row.get(2)?,
                     team_id: row.get(3)?,
-                    event_type: AuditEventType::Other(row.get(4)?),
+                    event_type: AuditEventType::from(row.get::<_, String>(4)?),
                     resource_type: row.get(5)?,
                     resource_id: row.get(6)?,
                     action: row.get(7)?,
@@ -486,6 +512,42 @@ mod tests {
 
         let is_valid = logger.verify_event(&event_id).unwrap();
         assert!(is_valid);
+    }
+
+    /// Settings > Privacy renders `event_type` as text and searches it. Every
+    /// listed event used to carry it as an object, `{"other": "..."}`.
+    #[test]
+    fn a_listed_event_names_its_type_as_plain_text() {
+        let db = setup_test_db();
+        let logger = AuditLogger::new(db).unwrap();
+        logger
+            .log(create_tool_execution_event(
+                None,
+                None,
+                "file_read".to_string(),
+                true,
+                None,
+            ))
+            .unwrap();
+        let mut custom = create_tool_execution_event(None, None, "vault".to_string(), true, None);
+        custom.event_type = AuditEventType::Other("vault_unlocked".to_string());
+        logger.log(custom).unwrap();
+
+        let listed =
+            serde_json::to_value(logger.get_events(AuditFilters::default()).unwrap()).unwrap();
+        let mut types: Vec<&str> = listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|event| event["event_type"].as_str().expect("a plain string"))
+            .collect();
+        types.sort_unstable();
+
+        assert_eq!(types, ["tool_execution", "vault_unlocked"]);
+        assert!(matches!(
+            AuditEventType::from("tool_execution".to_string()),
+            AuditEventType::ToolExecution
+        ));
     }
 
     #[test]

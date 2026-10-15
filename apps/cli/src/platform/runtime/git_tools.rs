@@ -154,6 +154,17 @@ pub fn git_tool_specs() -> &'static [GitToolSpec] {
             }),
         },
         GitToolSpec {
+            name: "git_commit",
+            description: "Commit what is staged, and only that, to the current branch with the given message. Unstaged and untracked changes stay out: stage them with git_stage first. The repository's commit hooks (pre-commit, commit-msg and the rest) run as they do for the user's own `git commit`, on the host outside the sandbox, and are never skipped; a hook that fails stops the commit. When any hook would run, the user is always asked first, whatever the session's approval mode, and with nobody to ask the commit does not run.",
+            class: GitToolClass::Mutating,
+            schema: || json!({
+                "type": "object",
+                "properties": {"message": {"type": "string", "description": "The commit message: a subject line, then optionally a blank line and a body."}},
+                "required": ["message"],
+                "additionalProperties": false
+            }),
+        },
+        GitToolSpec {
             name: "git_branch_create",
             description: "Create a branch at a base ref without switching to it.",
             class: GitToolClass::Mutating,
@@ -415,7 +426,7 @@ pub fn repository_operation_for(
         }
         "git_stage" | "git_unstage" | "git_stash" | "git_stash_drop" | "git_reset"
         | "git_clean" => Some(RepositoryOperation::EditFiles),
-        "git_merge" | "git_rebase" | "git_cherry_pick" | "git_revert" => {
+        "git_commit" | "git_merge" | "git_rebase" | "git_cherry_pick" | "git_revert" => {
             Some(RepositoryOperation::Commit)
         }
         "git_branch_create" => Some(RepositoryOperation::CreateBranch),
@@ -471,6 +482,9 @@ pub fn git_operation_for(tool_name: &str, args: &HashMap<String, String>) -> Res
         },
         "git_unstage" => GitOperation::Unstage {
             paths: paths(args, "paths")?,
+        },
+        "git_commit" => GitOperation::Commit {
+            message: required(args, "message")?.to_string(),
         },
         "git_branch_create" => GitOperation::BranchCreate {
             name: required(args, "name")?.to_string(),
@@ -620,6 +634,7 @@ mod tests {
     pub(super) fn example_args(tool_name: &str) -> HashMap<String, String> {
         match tool_name {
             "git_stage" | "git_unstage" => args(&[("paths", "src/lib.rs")]),
+            "git_commit" => args(&[("message", "Fix the parser")]),
             "git_branch_create" | "git_branch_delete" => args(&[("name", "feature")]),
             "git_merge" | "git_cherry_pick" | "git_revert" => args(&[("rev", "feature")]),
             "git_rebase" => args(&[("onto", "main")]),
@@ -673,7 +688,7 @@ mod tests {
             git_operation_for("git_reset", &args(&[("rev", "HEAD~2"), ("mode", "hard")])).unwrap();
         assert_eq!(
             operation.argv().unwrap(),
-            vec!["reset", "--hard", "HEAD~2"],
+            vec!["reset", "--hard", "--no-recurse-submodules", "HEAD~2"],
             "the mode is a flag the API chooses, never text a caller supplies"
         );
         assert!(operation.is_destructive());
@@ -728,6 +743,21 @@ mod tests {
         assert_eq!(push_force(&HashMap::new()).unwrap(), PushForce::Never);
         assert_eq!(remote_of(&HashMap::new()), "origin");
         assert_eq!(remote_of(&args(&[("remote", "upstream")])), "upstream");
+    }
+
+    #[test]
+    fn a_commit_tool_needs_a_message_and_asks_like_any_other_write() {
+        let spec = git_tool_spec("git_commit").expect("git_commit is offered");
+        assert_eq!(spec.class, GitToolClass::Mutating);
+        assert!(git_operation_for("git_commit", &HashMap::new()).is_err());
+        assert_eq!(
+            git_tool_target("git_commit", &args(&[("message", "Fix the parser")])),
+            "git commit --message=Fix the parser"
+        );
+        assert_eq!(
+            repository_operation_for("git_commit", &HashMap::new(), &[]),
+            Some(RepositoryOperation::Commit)
+        );
     }
 
     #[test]

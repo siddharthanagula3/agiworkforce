@@ -136,6 +136,7 @@ pub mod subagent_audit;
 pub use features::plugins::plugins;
 pub mod project_registry;
 pub mod project_scope;
+pub mod project_text;
 pub mod provenance;
 pub mod review;
 pub mod routing;
@@ -859,7 +860,9 @@ enum Command {
         /// Browser origin allowed to open the WebSocket; repeat for multiple origins.
         #[arg(long = "allowed-origin")]
         allowed_origin: Vec<String>,
-        /// Accept `?token=` for browser clients. Prefer headers because URLs are logged.
+        /// Accept `?token=` for browser clients, which then get a read-only connection:
+        /// they cannot start turns, answer approvals or change settings. URLs are logged,
+        /// so a header token is what grants full access.
         #[arg(long)]
         allow_query_token: bool,
         /// Run without saved memory: sessions neither read memories nor save new ones.
@@ -1930,7 +1933,10 @@ enum PluginSubcommand {
         source: String,
         #[arg(long)]
         name: Option<String>,
-        /// `sha256:<hex>` integrity claim. AUDIT-FIX: H-16
+        /// `sha256:<hex>` the installed plugin must hash to. The digest covers every file and
+        /// link under the plugin folder except `.git`, in path order: its path, its git mode
+        /// (100644, 100755 or 120000) and its bytes, a link's bytes being its target.
+        /// `agi plugin digest <path>` prints it.
         #[arg(long)]
         integrity: Option<String>,
         /// Bypass integrity verification. AUDIT-FIX: H-16, prints a warning to stderr every install.
@@ -1956,6 +1962,11 @@ enum PluginSubcommand {
     Disable { name: String },
     /// Update a plugin installed from git to its latest commit.
     Update { name: String },
+    /// Print the `sha256:<hex>` digest that `plugin install --integrity` checks.
+    Digest {
+        /// Plugin directory, as cloned or as it will be installed.
+        path: std::path::PathBuf,
+    },
     /// Sign a plugin directory with a publisher's Ed25519 key.
     Sign {
         /// Plugin directory containing its manifest.
@@ -4840,9 +4851,10 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                 .transpose()
                 .with_context(|| format!("registry entry for '{name}' is not a server config"))?
                 .ok_or_else(|| anyhow::anyhow!("no MCP server named '{name}' in the registry"))?;
+            let project = std::env::current_dir().ok();
             let connected = tokio::time::timeout(
                 std::time::Duration::from_secs(20),
-                crate::mcp::McpConnection::connect(name, &config),
+                crate::mcp::McpConnection::connect(name, &config, project.as_deref()),
             )
             .await;
             let mut connection = match connected {
@@ -5309,6 +5321,7 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
                 Some(source_resolved.path),
             );
             forked.messages = messages.clone();
+            forked.reconcile_transcript(&messages);
             let store = runtime::session_control::ManagedSessionStore::user_config()?;
             store.save(&forked)?;
             let saved_id = forked.session_id;
@@ -5538,6 +5551,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
     let no_sandbox_requested =
         cli.no_sandbox || std::env::var_os("AGIWORKFORCE_NO_SANDBOX").is_some();
     sandbox::set_sandbox_mode(sandbox::launch_mode(no_sandbox_requested, None, None));
+    if let Ok(workspace) = sandbox::sandbox_workspace() {
+        agiworkforce_worktree::register_workspace_root(workspace);
+    }
     if cli.no_sandbox && sandbox::sandbox_settings().forced {
         eprintln!(
             "{} --no-sandbox is ignored: your organization requires the sandbox",
@@ -5560,6 +5576,12 @@ async fn run_cli(cli: Cli) -> Result<()> {
     for dir in &normalized_cli_options.additional_dirs {
         crate::path_security::register_additional_workspace_root(dir)
             .map_err(|e| anyhow::anyhow!("--add-dir {}: {}", dir, e))?;
+    }
+
+    // Before any sandboxed command can run here, so a git setting one writes
+    // later is told apart from what the repository already had.
+    if let Ok(cwd) = std::env::current_dir() {
+        crate::platform::runtime::git::record_config_baseline_at_start(&cwd).await;
     }
 
     // --debug / --verbose: the tracing subscriber is already installed above with
@@ -5633,6 +5655,14 @@ async fn run_cli(cli: Cli) -> Result<()> {
         project_trusted = true;
     }
 
+    // A trusted project's own MCP file still names servers the user has not
+    // approved; ask here, on the terminal, before any session can start one.
+    if project_trusted && invocation_requires_project_trust(&cli) && interactive::can_prompt() {
+        if let Ok(cwd) = std::env::current_dir() {
+            mcp::consent::review_project_servers(&cwd);
+        }
+    }
+
     // Commands outside a trusted project still get global config and explicit
     // environment overrides, but repository-controlled config remains unread.
     let mut app_config = if project_trusted {
@@ -5683,6 +5713,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 full_auto,
                 json,
             } => {
+                crate::tools::forbid_terminal_questions();
                 // Honor an explicit model: exec-level --model first, then the
                 // top-level --model, then config. Mirrors the provider fallback
                 // below, without this, `agi --model X exec` silently dropped X
@@ -6095,7 +6126,10 @@ async fn run_cli(cli: Cli) -> Result<()> {
             Command::Sandbox { full_auto, command } => {
                 // argv must survive the sh -c round-trip; a plain join loses quoting.
                 let cmd_str = sandbox::shell_join(command);
-                let cwd = std::env::current_dir()?;
+                let (cwd, notice) = sandbox::command_workspace()?;
+                if let Some(notice) = notice {
+                    eprintln!("{notice}");
+                }
                 let mgr = if *full_auto {
                     sandbox::SandboxManager::full_auto(cwd.clone())
                 } else {
@@ -6212,6 +6246,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 allow_query_token,
                 no_memory,
             } => {
+                crate::tools::forbid_terminal_questions();
                 cli_options::set_memory_enabled(!no_memory);
                 let workspace_root = std::env::current_dir()?;
                 let host = std::sync::Arc::new(
@@ -6228,6 +6263,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                                     .skip_permissions,
                         ),
                 );
+                host.prepare().await;
                 let capabilities = host.capabilities();
                 let _heartbeat = device_registry::spawn_heartbeat_loop();
                 if listen == "stdio" {
@@ -6497,6 +6533,13 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             terminal_text::sanitize_terminal_text(name),
                             removed.display()
                         );
+                        Ok(())
+                    }
+                    PluginSubcommand::Digest { path } => {
+                        let digest = plugins::plugin_content_sha256(path).with_context(|| {
+                            format!("failed to read plugin folder {}", path.display())
+                        })?;
+                        println!("sha256:{digest}");
                         Ok(())
                     }
                     PluginSubcommand::Sign {
@@ -7695,6 +7738,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             });
 
     if let Some(ref prompt) = effective_prompt {
+        crate::tools::forbid_terminal_questions();
         let oneshot_resume = match cli.session.as_ref().or(cli.resume.as_ref()) {
             Some(reference) => resolve_resume_payload(reference, cli.fork_session)?.1,
             None => None,
@@ -8129,6 +8173,28 @@ pub(crate) async fn build_mcp_manager(
         include_plugin_configs,
         privacy_mode,
         None,
+        None,
+    )
+    .await
+}
+
+/// [`build_mcp_manager`] for a host that serves `project` rather than the
+/// directory the process is in, so the project servers and plugins it loads
+/// are the ones `mcp::consent` reports on for that folder.
+pub(crate) async fn build_mcp_manager_in(
+    project: &std::path::Path,
+    mcp_config_options: &mcp::McpConfigLoadOptions,
+    include_default_configs: bool,
+    include_plugin_configs: bool,
+    privacy_mode: agent::PrivacyMode,
+) -> Result<Option<mcp::McpManager>> {
+    build_mcp_manager_inner(
+        mcp_config_options,
+        include_default_configs,
+        include_plugin_configs,
+        privacy_mode,
+        None,
+        Some(project),
     )
     .await
 }
@@ -8148,6 +8214,7 @@ pub(crate) async fn build_mcp_manager_with_elicitation(
         include_plugin_configs,
         privacy_mode,
         Some(elicitation),
+        None,
     )
     .await
 }
@@ -8158,6 +8225,7 @@ async fn build_mcp_manager_inner(
     include_plugin_configs: bool,
     privacy_mode: agent::PrivacyMode,
     elicitation: Option<std::sync::Arc<dyn agiworkforce_mcp::ElicitationHandler>>,
+    project: Option<&std::path::Path>,
 ) -> Result<Option<mcp::McpManager>> {
     if !include_default_configs && !mcp_config_options.has_explicit_sources() {
         return Ok(None);
@@ -8168,14 +8236,26 @@ async fn build_mcp_manager_inner(
         load_options.strict = true;
     }
 
-    let mut mcp_configs = mcp::McpManager::load_configs_with_options(&load_options)?;
+    let mut mcp_configs = mcp::McpManager::load_configs_in(&load_options, project)?;
     if include_plugin_configs && !load_options.strict {
+        let project = project
+            .map(std::path::Path::to_path_buf)
+            .or_else(|| std::env::current_dir().ok());
         let mut plugin_mgr = plugins::PluginsManager::new();
-        if plugin_mgr
-            .load_all(std::env::current_dir().ok().as_deref())
-            .is_ok()
-        {
-            mcp_configs.extend(plugin_mgr.mcp_configs());
+        if plugin_mgr.load_all(project.as_deref()).is_ok() {
+            let (installed, mut from_project) = plugin_mgr.mcp_configs_by_scope();
+            mcp_configs.extend(installed);
+            // A project plugin is repository content a sandboxed command can
+            // write, so its servers start only with the same approval
+            // a project's MCP file needs.
+            if let Some(project) = project.as_deref() {
+                let withheld =
+                    mcp::consent::retain_consented_plugin_servers(project, &mut from_project);
+                if !withheld.is_empty() {
+                    tracing::warn!(project = %project.display(), servers = ?withheld, "project plugin MCP servers withheld until approved");
+                }
+            }
+            mcp_configs.extend(from_project);
         }
     }
 
@@ -8184,6 +8264,11 @@ async fn build_mcp_manager_inner(
     }
 
     let mut mcp_mgr = mcp::McpManager::new();
+    mcp_mgr.start_servers_in(
+        project
+            .map(std::path::Path::to_path_buf)
+            .or_else(|| std::env::current_dir().ok()),
+    );
     let connect_result = match elicitation {
         Some(handler) => {
             mcp_mgr

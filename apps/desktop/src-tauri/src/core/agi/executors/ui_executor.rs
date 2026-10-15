@@ -1,17 +1,22 @@
 //! UI automation executor.
 //!
 //! Handles UI automation operations including screenshots, clicking,
-//! and typing into UI elements. Uses the AutomationService for native
-//! mouse, keyboard, and accessibility operations.
+//! and typing into UI elements. The automation service behind the native
+//! mouse, keyboard, and accessibility operations is looked up when a step
+//! needs it, so a goal that never controls the desktop never asks for the
+//! permission that service requires.
 
 use super::{ExecutorContext, ToolExecutor};
-use crate::automation::AutomationService;
+use crate::automation::computer_use::{
+    app_argument, click_in_app, element_in_gated_app, focus_window_in_app, toggle_in_app,
+    type_in_app, ActedOn, UiTarget, APP_REQUIRED,
+};
+use crate::automation::input::MouseButton;
 use crate::core::agi::ExecutionContext;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::sync::Arc;
 
 pub const TARGET_PARAMETER: &str = "target";
 pub const ELEMENT_ID_KEY: &str = "element_id";
@@ -20,6 +25,7 @@ pub const WINDOW_KEY: &str = "window";
 const MISSING_TARGET: &str = "Missing target parameter";
 const MISSING_ELEMENT_ID: &str = "Missing 'element_id' in target";
 const MISSING_WINDOW: &str = "Missing 'window' in target";
+const APP_HANDLE_REQUIRED: &str = "Clicking and typing need the desktop app handle";
 const TOGGLED_ACTION: &str = "toggled";
 const FOCUSED_ACTION: &str = "focused";
 const SCROLLED_ACTION: &str = "scrolled";
@@ -37,14 +43,18 @@ const READ_ACTION: &str = "read";
 /// - `ui_scroll`: Scroll a named element into view
 /// - `ui_read_value`: Read an element's value back
 /// - `image_ocr`: Perform OCR on an image
-pub struct UiExecutor {
-    automation: Arc<AutomationService>,
-}
+pub struct UiExecutor;
 
 impl UiExecutor {
-    /// Create a new UI executor with the given automation service.
-    pub fn new(automation: Arc<AutomationService>) -> Self {
-        Self { automation }
+    /// Create a new UI executor.
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for UiExecutor {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -78,11 +88,11 @@ impl ToolExecutor for UiExecutor {
             "ui_screenshot" => self.execute_screenshot(parameters, context).await,
             "ui_click" => self.execute_click(parameters, context).await,
             "ui_type" => self.execute_type(parameters, context).await,
-            "ui_toggle" => self.execute_toggle(parameters, context),
-            "ui_focus_window" => self.execute_focus_window(parameters, context),
-            "ui_scroll" => self.execute_scroll(parameters, context),
-            "ui_read_value" => self.execute_read_value(parameters, context),
-            "image_ocr" => self.execute_ocr(parameters).await,
+            "ui_toggle" => self.execute_toggle(parameters, context).await,
+            "ui_focus_window" => self.execute_focus_window(parameters, context).await,
+            "ui_scroll" => self.execute_scroll(parameters, context).await,
+            "ui_read_value" => self.execute_read_value(parameters, context).await,
+            "image_ocr" => self.execute_ocr(parameters, context).await,
             _ => Err(anyhow!("Unknown UI tool: {}", tool_name)),
         }
     }
@@ -108,24 +118,17 @@ impl UiExecutor {
 
         context.emit_progress("Capturing screenshot...", Some(0.1));
 
-        let captured =
-            capture_primary_screen().map_err(|e| anyhow!("Failed to capture screen: {}", e))?;
+        let screenshot_path =
+            crate::automation::computer_use::capture_to_disk("screenshot", || {
+                Ok(capture_primary_screen()?.pixels)
+            })
+            .map_err(|e| anyhow!("Screenshot not saved: {e}"))?;
 
-        let temp_path = std::env::temp_dir().join(format!(
-            "screenshot_{}.png",
-            &uuid::Uuid::new_v4().to_string()[..8]
-        ));
-
-        context.emit_progress("Saving screenshot...", Some(0.5));
-
-        captured
-            .pixels
-            .save(&temp_path)
-            .map_err(|e| anyhow!("Failed to save screenshot: {}", e))?;
+        context.emit_progress("Screenshot saved", Some(0.5));
 
         // Emit screenshot event for UI with base64 encoded image
         if let Some(ref app_handle) = context.app_handle {
-            let image_bytes = std::fs::read(&temp_path)
+            let image_bytes = std::fs::read(&screenshot_path)
                 .map_err(|e| anyhow!("Failed to read screenshot file: {}", e))?;
 
             let image_base64 =
@@ -147,295 +150,143 @@ impl UiExecutor {
 
         context.emit_progress("Screenshot captured", Some(1.0));
 
-        Ok(json!({ "screenshot_path": temp_path.to_string_lossy().to_string() }))
+        Ok(json!({ "screenshot_path": screenshot_path.to_string_lossy().to_string() }))
     }
 
-    /// Execute ui_click operation.
-    ///
-    /// Clicks at a specified location or on a specified UI element.
-    /// Supports three targeting modes:
-    /// 1. Coordinates: `{ "coordinates": { "x": 100, "y": 200 } }`
-    /// 2. Element ID: `{ "element_id": "some-element-id" }`
-    /// 3. Text search: `{ "text": "Button Label" }`
-    ///
-    /// # Parameters
-    /// - `target`: Object containing one of: coordinates, element_id, or text
-    ///
-    /// # Returns
-    /// JSON with success status and details about the click action.
+    /// Clicks in the app named by `app`, after the same consent, per-app,
+    /// activation and target-process checks the chat tool passes.
     async fn execute_click(
         &self,
         parameters: &HashMap<String, Value>,
         context: &ExecutorContext,
     ) -> Result<Value> {
-        let target = parameters
-            .get("target")
-            .ok_or_else(|| anyhow!("Missing target parameter"))?;
+        let (handle, app_query, target) = desktop_request(parameters, context)?;
+        context.emit_progress(&format!("Clicking in '{app_query}'..."), Some(0.3));
 
-        context.emit_progress("Processing click target...", Some(0.1));
+        let acted_on = click_in_app(
+            handle,
+            app_query,
+            &target,
+            MouseButton::Left,
+            Some(context.session_id.as_str()),
+        )
+        .await
+        .map_err(|refusal| anyhow!(refusal))?;
 
-        // Handle coordinate-based click
-        if let Some(coords) = target.get("coordinates") {
-            // EXE-006 fix: Require explicit coordinates, don't silently default to (0,0)
-            let x = coords
-                .get("x")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| anyhow!("Missing or invalid 'x' coordinate"))?;
-            let y = coords
-                .get("y")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| anyhow!("Missing or invalid 'y' coordinate"))?;
-
-            // EXE-006 fix: Validate coordinate bounds (typical screen max is 32767)
-            const MAX_COORDINATE: i64 = 32767;
-            if !(0..=MAX_COORDINATE).contains(&x) {
-                return Err(anyhow!(
-                    "X coordinate {} out of bounds (must be 0-{})",
-                    x,
-                    MAX_COORDINATE
-                ));
-            }
-            if !(0..=MAX_COORDINATE).contains(&y) {
-                return Err(anyhow!(
-                    "Y coordinate {} out of bounds (must be 0-{})",
-                    y,
-                    MAX_COORDINATE
-                ));
-            }
-
-            let x = x as i32;
-            let y = y as i32;
-
-            context.emit_progress(&format!("Clicking at ({}, {})...", x, y), Some(0.5));
-
-            use crate::automation::input::MouseButton;
-            let mut mouse_guard = self.automation.mouse.lock().await;
-            let mouse = mouse_guard.as_mut().ok_or_else(|| {
-                anyhow!(
-                    "Mouse automation requires Input Monitoring permission. \
-                 Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
-                )
-            })?;
-            mouse.click(x, y, MouseButton::Left)?;
-
-            context.emit_progress("Click completed", Some(1.0));
-            return Ok(json!({ "success": true, "action": "clicked", "x": x, "y": y }));
-        }
-
-        // Handle element ID-based click (invoke via accessibility API)
-        if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
-            context.emit_progress(&format!("Invoking element '{}'...", element_id), Some(0.5));
-
-            self.automation
-                .native
-                .invoke(element_id)
-                .map_err(|e| anyhow!("Failed to invoke element '{}': {}", element_id, e))?;
-
-            context.emit_progress("Element invoked", Some(1.0));
-            return Ok(json!({ "success": true, "action": "invoked", "element_id": element_id }));
-        }
-
-        // Handle text-based element lookup and click
-        if let Some(text) = target.get("text").and_then(|v| v.as_str()) {
-            context.emit_progress(
-                &format!("Searching for element with text '{}'...", text),
-                Some(0.3),
-            );
-
-            use crate::automation::types::ElementQuery;
-            let query = ElementQuery {
-                window: None,
-                window_class: None,
-                name: Some(text.to_string()),
-                class_name: None,
-                automation_id: None,
-                control_type: None,
-                max_results: Some(1),
-            };
-
-            let elements = self
-                .automation
-                .native
-                .find_elements(None, &query)
-                .map_err(|e| anyhow!("Failed to search for element: {}", e))?;
-
-            if let Some(element) = elements.first() {
-                context.emit_progress(
-                    &format!("Found element, invoking '{}'...", element.id),
-                    Some(0.7),
-                );
-
-                self.automation
-                    .native
-                    .invoke(&element.id)
-                    .map_err(|e| anyhow!("Failed to invoke element '{}': {}", element.id, e))?;
-
-                context.emit_progress("Element invoked", Some(1.0));
-                return Ok(json!({
-                    "success": true,
-                    "action": "invoked",
-                    "element_id": element.id,
-                    "found_by": "text",
-                    "text": text
-                }));
-            }
-
-            return Err(anyhow!("Element with text '{}' not found", text));
-        }
-
-        Err(anyhow!(
-            "Invalid target format for ui_click - need coordinates, element_id, or text"
+        context.emit_progress("Click completed", Some(1.0));
+        Ok(acted_on_json(
+            match target {
+                UiTarget::Coordinates { .. } => "clicked",
+                _ => "invoked",
+            },
+            &acted_on,
         ))
     }
 
-    /// Execute ui_type operation.
-    ///
-    /// Types text into a specified UI element or at the current cursor position.
-    /// Can optionally focus an element before typing.
-    ///
-    /// # Parameters
-    /// - `target`: Object containing one of: element_id or text (for element lookup)
-    /// - `text`: The text to type
-    ///
-    /// # Returns
-    /// JSON with success status and the typed text.
     async fn execute_type(
         &self,
         parameters: &HashMap<String, Value>,
         context: &ExecutorContext,
     ) -> Result<Value> {
-        // use crate::automation::input::KeyboardSimulator; // Unused
-
-        let target = parameters
-            .get("target")
-            .ok_or_else(|| anyhow!("Missing target parameter"))?;
+        let (handle, app_query, target) = desktop_request(parameters, context)?;
         let text = parameters
             .get("text")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing text parameter"))?;
+        context.emit_progress(&format!("Typing in '{app_query}'..."), Some(0.3));
 
-        context.emit_progress("Preparing to type text...", Some(0.1));
-
-        // Focus the target element first if specified
-        if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
-            context.emit_progress(&format!("Focusing element '{}'...", element_id), Some(0.2));
-
-            self.automation
-                .native
-                .set_focus(element_id)
-                .map_err(|e| anyhow!("Failed to focus element '{}': {}", element_id, e))?;
-
-            // Small delay to ensure focus is registered
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        } else if let Some(target_text) = target.get("text").and_then(|v| v.as_str()) {
-            context.emit_progress(
-                &format!("Searching for element with text '{}'...", target_text),
-                Some(0.2),
-            );
-
-            use crate::automation::types::ElementQuery;
-            let query = ElementQuery {
-                window: None,
-                window_class: None,
-                name: Some(target_text.to_string()),
-                class_name: None,
-                automation_id: None,
-                control_type: None,
-                max_results: Some(1),
-            };
-
-            let elements = self
-                .automation
-                .native
-                .find_elements(None, &query)
-                .map_err(|e| anyhow!("Failed to search for element: {}", e))?;
-
-            if let Some(element) = elements.first() {
-                context.emit_progress(&format!("Focusing element '{}'...", element.id), Some(0.3));
-
-                self.automation
-                    .native
-                    .set_focus(&element.id)
-                    .map_err(|e| anyhow!("Failed to focus element '{}': {}", element.id, e))?;
-
-                // Small delay to ensure focus is registered
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            }
-        }
-
-        context.emit_progress("Typing text...", Some(0.5));
-
-        // Type the text using shared keyboard simulator
-        let mut kb_guard = self.automation.keyboard.lock().await;
-        let keyboard = kb_guard.as_mut().ok_or_else(|| {
-            anyhow!(
-                "Keyboard automation requires Input Monitoring permission. \
-             Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
-            )
-        })?;
-
-        keyboard
-            .send_text(text)
-            .await
-            .map_err(|e| anyhow!("Failed to type text: {}", e))?;
+        let acted_on = type_in_app(
+            handle,
+            app_query,
+            &target,
+            text,
+            Some(context.session_id.as_str()),
+        )
+        .await
+        .map_err(|refusal| anyhow!(refusal))?;
 
         context.emit_progress("Text typed successfully", Some(1.0));
-
-        Ok(json!({ "success": true, "action": "typed", "text": text }))
+        let mut typed = acted_on_json("typed", &acted_on);
+        typed["text"] = json!(text);
+        Ok(typed)
     }
 
-    fn execute_toggle(
+    async fn execute_toggle(
         &self,
         parameters: &HashMap<String, Value>,
         context: &ExecutorContext,
     ) -> Result<Value> {
         let element_id = target_element_id(parameters)?;
+        let handle = context
+            .app_handle
+            .as_ref()
+            .ok_or_else(|| anyhow!(APP_HANDLE_REQUIRED))?;
+        let app_query = app_argument(parameters).ok_or_else(|| anyhow!(APP_REQUIRED))?;
 
         context.emit_progress(&format!("Toggling element '{}'...", element_id), Some(0.5));
 
-        self.automation
-            .native
-            .toggle(element_id)
-            .map_err(|e| anyhow!("Failed to toggle element '{}': {}", element_id, e))?;
+        let acted_on = toggle_in_app(
+            handle,
+            app_query,
+            element_id,
+            Some(context.session_id.as_str()),
+        )
+        .await
+        .map_err(|refusal| anyhow!(refusal))?;
 
-        Ok(json!({ "success": true, "action": TOGGLED_ACTION, "element_id": element_id }))
+        Ok(acted_on_json(TOGGLED_ACTION, &acted_on))
     }
 
-    fn execute_focus_window(
+    async fn execute_focus_window(
         &self,
         parameters: &HashMap<String, Value>,
         context: &ExecutorContext,
     ) -> Result<Value> {
         let window = target_window(parameters)?;
+        let (handle, app_query) = named_app(parameters, context)?;
 
         context.emit_progress(&format!("Focusing window '{}'...", window), Some(0.5));
 
-        self.automation
-            .native
-            .focus_window(window)
-            .map_err(|e| anyhow!("Failed to focus window '{}': {}", window, e))?;
+        let acted_on =
+            focus_window_in_app(handle, app_query, window, Some(context.session_id.as_str()))
+                .await
+                .map_err(|refusal| anyhow!(refusal))?;
 
-        Ok(json!({ "success": true, "action": FOCUSED_ACTION, "window": window }))
+        let mut focused = acted_on_json(FOCUSED_ACTION, &acted_on);
+        focused["window"] = json!(window);
+        Ok(focused)
     }
 
-    fn execute_scroll(
+    async fn execute_scroll(
         &self,
         parameters: &HashMap<String, Value>,
         context: &ExecutorContext,
     ) -> Result<Value> {
         let element_id = target_element_id(parameters)?;
+        let (handle, app_query) = named_app(parameters, context)?;
+        element_in_gated_app(
+            handle,
+            app_query,
+            element_id,
+            Some(context.session_id.as_str()),
+        )
+        .await
+        .map_err(|refusal| anyhow!(refusal))?;
 
         context.emit_progress(&format!("Scrolling to '{}'...", element_id), Some(0.5));
 
-        self.scroll_to(element_id)
+        Self::scroll_to(handle, element_id)
             .map_err(|e| anyhow!("Failed to scroll to element '{}': {}", element_id, e))?;
 
         Ok(json!({ "success": true, "action": SCROLLED_ACTION, "element_id": element_id }))
     }
 
     #[cfg(windows)]
-    fn scroll_to(&self, element_id: &str) -> Result<()> {
-        self.automation.native.scroll_to_element(element_id)
+    fn scroll_to(handle: &tauri::AppHandle, element_id: &str) -> Result<()> {
+        crate::automation::shared_service(handle)
+            .map_err(|unavailable| anyhow!(unavailable))?
+            .native
+            .scroll_to_element(element_id)
     }
 
     /// Only the Windows automation service exposes a scroll pattern. The action
@@ -443,23 +294,32 @@ impl UiExecutor {
     /// reaching here means the tier was bypassed and the honest answer is that
     /// the service cannot do it.
     #[cfg(not(windows))]
-    fn scroll_to(&self, _element_id: &str) -> Result<()> {
+    fn scroll_to(_handle: &tauri::AppHandle, _element_id: &str) -> Result<()> {
         Err(anyhow!(
             crate::automation::ACCESSIBILITY_UNSUPPORTED_PLATFORM
         ))
     }
 
-    fn execute_read_value(
+    async fn execute_read_value(
         &self,
         parameters: &HashMap<String, Value>,
         context: &ExecutorContext,
     ) -> Result<Value> {
         let element_id = target_element_id(parameters)?;
+        let (handle, app_query) = named_app(parameters, context)?;
 
         context.emit_progress(&format!("Reading element '{}'...", element_id), Some(0.5));
 
-        let value = self
-            .automation
+        element_in_gated_app(
+            handle,
+            app_query,
+            element_id,
+            Some(context.session_id.as_str()),
+        )
+        .await
+        .map_err(|refusal| anyhow!(refusal))?;
+        let value = crate::automation::shared_service(handle)
+            .map_err(|unavailable| anyhow!(unavailable))?
             .native
             .get_value(element_id)
             .map_err(|e| anyhow!("Failed to read element '{}': {}", element_id, e))?;
@@ -481,11 +341,20 @@ impl UiExecutor {
     ///
     /// # Returns
     /// JSON with extracted text and confidence score.
-    async fn execute_ocr(&self, parameters: &HashMap<String, Value>) -> Result<Value> {
-        let image_path = parameters
+    async fn execute_ocr(
+        &self,
+        parameters: &HashMap<String, Value>,
+        context: &ExecutorContext,
+    ) -> Result<Value> {
+        let requested = parameters
             .get("image_path")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing image_path parameter"))?;
+        let granted = context.granted_folders().await?;
+        let canonical = granted.readable_path(std::path::Path::new(requested), "image_ocr")?;
+        let image_path = canonical
+            .to_str()
+            .ok_or_else(|| anyhow!("The path '{}' is not valid UTF-8", canonical.display()))?;
 
         use crate::automation::screen::perform_ocr;
 
@@ -500,6 +369,40 @@ impl UiExecutor {
             "confidence": ocr_result.confidence
         }))
     }
+}
+
+fn named_app<'a>(
+    parameters: &'a HashMap<String, Value>,
+    context: &'a ExecutorContext,
+) -> Result<(&'a tauri::AppHandle, &'a str)> {
+    let handle = context
+        .app_handle
+        .as_ref()
+        .ok_or_else(|| anyhow!(APP_HANDLE_REQUIRED))?;
+    let app_query = app_argument(parameters).ok_or_else(|| anyhow!(APP_REQUIRED))?;
+    Ok((handle, app_query))
+}
+
+fn desktop_request<'a>(
+    parameters: &'a HashMap<String, Value>,
+    context: &'a ExecutorContext,
+) -> Result<(&'a tauri::AppHandle, &'a str, UiTarget)> {
+    let (handle, app_query) = named_app(parameters, context)?;
+    let target = parameters
+        .get(TARGET_PARAMETER)
+        .ok_or_else(|| anyhow!(MISSING_TARGET))?;
+    let target = UiTarget::parse(target).map_err(|invalid| anyhow!(invalid))?;
+    Ok((handle, app_query, target))
+}
+
+fn acted_on_json(action: &str, acted_on: &ActedOn) -> Value {
+    json!({
+        "success": true,
+        "action": action,
+        "app": acted_on.app,
+        "target_kind": acted_on.target_kind,
+        "element_id": acted_on.element_id,
+    })
 }
 
 fn target_element_id(parameters: &HashMap<String, Value>) -> Result<&str> {
@@ -559,13 +462,7 @@ mod tests {
             return;
         }
 
-        // Create automation service (may fail without display)
-        let automation = match AutomationService::new() {
-            Ok(svc) => Arc::new(svc),
-            Err(_) => return, // Skip if automation unavailable
-        };
-
-        let executor = UiExecutor::new(automation);
+        let executor = UiExecutor::new();
         let names = executor.tool_names();
 
         assert!(names.contains(&"ui_screenshot"));
@@ -585,12 +482,7 @@ mod tests {
             return;
         }
 
-        let automation = match AutomationService::new() {
-            Ok(svc) => Arc::new(svc),
-            Err(_) => return,
-        };
-
-        let executor = UiExecutor::new(automation);
+        let executor = UiExecutor::new();
         assert!(!executor.description().is_empty());
     }
 }

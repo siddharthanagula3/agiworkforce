@@ -100,7 +100,7 @@ impl ToolExecutor {
                 .ok_or_else(|| anyhow!("Missing file_path parameter"))?
                 .to_string();
 
-            match document_read(file_path.clone(), state).await {
+            match document_read(file_path.clone(), app.clone(), state).await {
                 Ok(content) => Ok(ToolResult {
                     success: true,
                     data: json!({
@@ -149,7 +149,7 @@ impl ToolExecutor {
                 .ok_or_else(|| anyhow!("Missing query parameter"))?
                 .to_string();
 
-            match document_search(file_path.clone(), query.clone(), state).await {
+            match document_search(file_path.clone(), query.clone(), app.clone(), state).await {
                 Ok(results) => Ok(ToolResult {
                     success: true,
                     data: json!({

@@ -14,6 +14,7 @@ pub(crate) mod account;
 mod cloud_threads;
 mod developer_host;
 mod pull_request;
+mod review;
 pub(crate) mod surfaces;
 mod threads;
 
@@ -161,6 +162,7 @@ async fn call_cli_tool(params: Option<&Value>) -> Result<Value, RpcError> {
         auto_approve_edits: false,
         quiet: true,
         approval_callback: Some(refuse_prompts),
+        user_input_callback: None,
         privacy_mode: crate::agent::PrivacyMode::Local,
         workspace_root: std::env::current_dir().ok(),
         mcp_tool_definitions: None,

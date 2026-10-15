@@ -718,9 +718,6 @@ mod tests {
     fn write_context() -> ExecutorContext {
         ExecutorContext {
             app_handle: None,
-            automation: std::sync::Arc::new(
-                crate::automation::AutomationService::new().expect("automation service for tests"),
-            ),
             router: std::sync::Arc::new(tokio::sync::RwLock::new(
                 crate::core::llm::LLMRouter::new(),
             )),
@@ -729,6 +726,7 @@ mod tests {
             change_tracker: None,
             session_id: "test_session".to_string(),
             tool_id: "test_tool".to_string(),
+            granted_directories: Vec::new(),
         }
     }
 

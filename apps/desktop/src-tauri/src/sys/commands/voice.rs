@@ -1,18 +1,17 @@
-//! Tauri commands for voice functionality (transcription, TTS, wake word, PTT, barge-in, Deepgram STT)
+//! Tauri commands for voice functionality (transcription, TTS, wake word, barge-in)
 //!
 //! Includes local offline fallback with Whisper.cpp for STT and Piper for TTS.
 
+use crate::features::speech::tts::LocalPiperTts;
 use crate::features::speech::{
-    create_tts_provider, BargeInConfig, BargeInHandle, BargeInStats, DeepgramConfig, DeepgramState,
-    DeepgramStreamingStats, PiperLocal, PiperVoiceDefinitions, PiperVoiceInfo, PttConfig,
-    PushToTalk, SynthesisConfig, SystemTts, TranscriptionConfig, TtsConfig, TtsInterruptReason,
-    TtsPlayer, TtsProvider, Voice, VoiceWake, WakeWordConfig, WakeWordEvent, WhisperLocal,
-    WhisperModelInfo, WhisperModelSize,
+    BargeInConfig, BargeInHandle, PiperLocal, PiperVoiceDefinitions, PiperVoiceInfo,
+    SynthesisConfig, SystemTts, TranscriptionConfig, TtsConfig, TtsInterruptReason, TtsPlayer,
+    TtsProvider, VoiceWake, WakeWordConfig, WakeWordEvent, WhisperLocal, WhisperModelInfo,
+    WhisperModelSize,
 };
 #[cfg(feature = "vad")]
 use crate::features::speech::{BargeInDetector, SharedVad};
 use crate::sys::account::{get_access_token, get_api_base_url};
-use crate::sys::commands::settings_v2::SettingsServiceState;
 use agiworkforce_llm::{speech, TranscriptionRequest, TranscriptionResponseFormat};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -107,8 +106,6 @@ pub struct BargeInState {
 
 /// State for local Whisper STT
 pub struct LocalWhisperState {
-    /// Whisper instance (lazy loaded)
-    pub whisper: Option<WhisperLocal>,
     /// Selected runtime model identifier
     pub model_id: Option<WhisperModelSize>,
     /// Models directory
@@ -120,7 +117,6 @@ impl Default for LocalWhisperState {
         let models_dir = WhisperLocal::default_models_dir()
             .unwrap_or_else(|_| std::env::temp_dir().join("whisper"));
         Self {
-            whisper: None,
             model_id: None,
             models_dir,
         }
@@ -129,8 +125,6 @@ impl Default for LocalWhisperState {
 
 /// State for local Piper TTS
 pub struct LocalPiperState {
-    /// Piper instance (lazy loaded)
-    pub piper: Option<PiperLocal>,
     /// Selected voice ID
     pub voice_id: Option<String>,
     /// Models directory
@@ -142,7 +136,6 @@ impl Default for LocalPiperState {
         let models_dir =
             PiperLocal::default_models_dir().unwrap_or_else(|_| std::env::temp_dir().join("piper"));
         Self {
-            piper: None,
             voice_id: None,
             models_dir,
         }
@@ -194,9 +187,7 @@ pub struct VoiceState {
     pub tts_config: Arc<RwLock<TtsConfig>>,
     pub tts_player: Arc<RwLock<Option<TtsPlayer>>>,
     pub wake: Arc<RwLock<VoiceWake>>,
-    pub ptt: Arc<RwLock<PushToTalk>>,
     pub barge_in: Arc<RwLock<BargeInState>>,
-    pub deepgram: Arc<RwLock<DeepgramState>>,
     #[cfg(feature = "vad")]
     pub vad: Arc<RwLock<Option<SharedVad>>>,
     /// Local Whisper STT state
@@ -223,9 +214,7 @@ impl VoiceState {
             tts_config: Arc::new(RwLock::new(TtsConfig::default())),
             tts_player: Arc::new(RwLock::new(None)),
             wake: Arc::new(RwLock::new(VoiceWake::default())),
-            ptt: Arc::new(RwLock::new(PushToTalk::default())),
             barge_in: Arc::new(RwLock::new(BargeInState::default())),
-            deepgram: Arc::new(RwLock::new(DeepgramState::new())),
             #[cfg(feature = "vad")]
             vad: Arc::new(RwLock::new(None)),
             local_whisper: Arc::new(RwLock::new(LocalWhisperState::default())),
@@ -254,8 +243,7 @@ pub struct VoiceCapabilities {
     pub tts_provider: String,
     pub tts_playing: bool,
     pub wake_word_enabled: bool,
-    pub ptt_enabled: bool,
-    pub ptt_hotkey: String,
+    pub wake_word_available: bool,
     pub barge_in_enabled: bool,
     pub barge_in_sensitivity: f32,
     pub vad_available: bool,
@@ -279,28 +267,36 @@ pub struct VoiceCapabilities {
 // Transcription Commands
 // =============================================================================
 
-#[tauri::command]
-pub async fn voice_transcribe_file(
-    audio_path: PathBuf,
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-) -> Result<VoiceTranscription, String> {
-    tracing::info!("Transcribing audio file: {:?}", audio_path);
+/// User-facing error for a BYOK selection whose key is saved but sealed under
+/// a locked master password. The audio is NOT sent anywhere in this case.
+const LOCKED_BYOK_OPENAI_KEY_ERROR: &str = "Your OpenAI API key is locked by your master password. Unlock your saved keys in Settings, under Privacy, then dictate again, or switch the dictation provider to Local Whisper or AGI Cloud.";
 
-    let voice_state = state.lock().await;
-    let settings = voice_state.settings.lock().await;
+/// The user's own OpenAI key for BYOK dictation.
+///
+/// It is read through the same codec `save_api_key` seals it with. The
+/// settings service decrypts under a different key and never opened it.
+fn byok_openai_dictation_key() -> Result<String, String> {
+    byok_dictation_key_from(crate::sys::commands::mcp_oauth::retrieve_api_key(
+        crate::sys::security::vault_credentials::global(),
+        "openai",
+    ))
+}
 
-    match settings.provider {
-        VoiceProvider::Cloud => {
-            transcribe_with_cloud(&audio_path, &settings, &voice_state.client).await
+/// A key sealed under a locked vault is reported as locked, not as missing.
+/// Without a usable key the caller fails closed either way.
+fn byok_dictation_key_from(read: Result<String, String>) -> Result<String, String> {
+    use crate::features::speech::dictation::missing_byok_openai_key_error;
+    use crate::sys::security::vault_credentials::VAULT_LOCKED_MESSAGE;
+
+    match read {
+        Ok(key) if !key.trim().is_empty() => Ok(key),
+        Ok(_) => Err(missing_byok_openai_key_error()),
+        Err(error) if error == VAULT_LOCKED_MESSAGE => {
+            Err(LOCKED_BYOK_OPENAI_KEY_ERROR.to_string())
         }
-        VoiceProvider::WebSpeech => {
-            Err("Web Speech API transcription must be done from frontend".to_string())
-        }
-        VoiceProvider::Local => {
-            // Use local Whisper
-            let local_whisper = voice_state.local_whisper.read().await;
-            transcribe_with_local_whisper(&audio_path, &local_whisper, settings.language.clone())
-                .await
+        Err(error) => {
+            tracing::warn!("[voice] No usable OpenAI API key for dictation: {error}");
+            Err(missing_byok_openai_key_error())
         }
     }
 }
@@ -312,7 +308,6 @@ pub async fn voice_transcribe_blob(
     provider: Option<String>,
     language: Option<String>,
     state: State<'_, Arc<Mutex<VoiceState>>>,
-    settings_state: State<'_, SettingsServiceState>,
 ) -> Result<VoiceTranscription, String> {
     tracing::info!(
         "Transcribing audio blob ({} bytes, format: {}, provider: {:?})",
@@ -386,30 +381,19 @@ pub async fn voice_transcribe_blob(
 
                 match mode {
                     TranscriptionMode::ByokOpenai => {
-                        // Retrieve the user's OpenAI API key from SettingsService
-                        let api_key = {
-                            let svc = settings_state
-                                .service
-                                .lock()
-                                .map_err(|e| format!("Failed to lock settings service: {}", e))?;
-                            svc.get_api_key("openai").unwrap_or_else(|e| {
-                                tracing::warn!("[voice] Failed to retrieve OpenAI API key: {}", e);
-                                String::new()
-                            })
-                        };
-
-                        if api_key.is_empty() {
-                            // BYOK without a key fails closed, never silently
-                            // reroute the audio to managed cloud.
-                            Err(crate::features::speech::dictation::missing_byok_openai_key_error())
-                        } else {
-                            transcribe_with_openai_direct(
-                                &temp_file,
-                                &overridden,
-                                &voice_state.client,
-                                &api_key,
-                            )
-                            .await
+                        // BYOK without a usable key fails closed, never
+                        // silently reroute the audio to managed cloud.
+                        match byok_openai_dictation_key() {
+                            Err(error) => Err(error),
+                            Ok(api_key) => {
+                                transcribe_with_openai_direct(
+                                    &temp_file,
+                                    &overridden,
+                                    &voice_state.client,
+                                    &api_key,
+                                )
+                                .await
+                            }
                         }
                     }
                     TranscriptionMode::Managed => {
@@ -514,10 +498,17 @@ async fn transcribe_with_cloud(
     transcribe_with_managed_cloud(client, form).await
 }
 
+const MANAGED_TRANSCRIPTION_LOCAL_MODE_ERROR: &str = "AGI Cloud dictation is available only in Cloud mode. Choose Local Whisper or OpenAI Whisper (your key) in Voice settings, or switch the app to Cloud.";
+
+/// SECURITY: recorded audio leaves the device for AGI Cloud only while the
+/// app is in Cloud mode, whatever provider string the caller sent.
 async fn transcribe_with_managed_cloud(
     client: &Client,
     form: reqwest::multipart::Form,
 ) -> Result<VoiceTranscription, String> {
+    if !crate::sys::account::app_mode::is_cloud_app_mode() {
+        return Err(MANAGED_TRANSCRIPTION_LOCAL_MODE_ERROR.to_string());
+    }
     let token = get_access_token().map_err(|e| format!("Managed Cloud auth required: {}", e))?;
     let url = speech::managed_transcriptions_url(&get_api_base_url());
 
@@ -682,7 +673,7 @@ fn decode_audio_to_samples(audio_bytes: &[u8]) -> Result<(Vec<f32>, u32), String
         if chunk_id == b"fmt " {
             // The loop only guarantees pos+8 bytes, but the fmt body reads up to
             // pos+23, bound-check before indexing or a truncated/malformed WAV
-            // (reachable via the voice_transcribe_file IPC command) panics.
+            // (reachable via the voice_transcribe_blob IPC command) panics.
             if chunk_size >= 16 && pos + 24 <= audio_bytes.len() {
                 num_channels = u16::from_le_bytes([audio_bytes[pos + 10], audio_bytes[pos + 11]]);
                 sample_rate = u32::from_le_bytes([
@@ -786,7 +777,6 @@ pub async fn voice_get_capabilities(
     let tts_config = voice_state.tts_config.read().await;
     let tts_player = voice_state.tts_player.read().await;
     let wake = voice_state.wake.read().await;
-    let ptt = voice_state.ptt.read().await;
     let barge_in = voice_state.barge_in.read().await;
     let local_whisper = voice_state.local_whisper.read().await;
     let local_piper = voice_state.local_piper.read().await;
@@ -812,8 +802,7 @@ pub async fn voice_get_capabilities(
         tts_provider: format!("{:?}", tts_config.provider),
         tts_playing,
         wake_word_enabled: wake.get_config().enabled,
-        ptt_enabled: ptt.get_config().enabled,
-        ptt_hotkey: ptt.get_config().hotkey.clone(),
+        wake_word_available: wake_phrase_detection_available(),
         barge_in_enabled: barge_in.enabled,
         barge_in_sensitivity: barge_in.config.sensitivity,
         vad_available: cfg!(feature = "vad"),
@@ -832,47 +821,6 @@ pub async fn voice_get_capabilities(
         system_dictation_available: crate::features::speech::dictation::system_dictation_available(
         ),
     })
-}
-
-/// Speak text using TTS
-#[tauri::command]
-pub async fn voice_tts_speak(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    text: String,
-) -> Result<(), String> {
-    let voice_state = state.lock().await;
-    let config = voice_state.tts_config.read().await.clone();
-    let provider = create_tts_provider(config);
-
-    provider
-        .synthesize(&text)
-        .await
-        .map(|_| ())
-        .map_err(|e| e.to_string())
-}
-
-/// List available TTS voices
-#[tauri::command]
-pub async fn voice_tts_list_voices(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-) -> Result<Vec<Voice>, String> {
-    let voice_state = state.lock().await;
-    let config = voice_state.tts_config.read().await.clone();
-    let provider = create_tts_provider(config);
-
-    provider.list_voices().await.map_err(|e| e.to_string())
-}
-
-/// Configure TTS
-#[tauri::command]
-pub async fn voice_tts_configure(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    config: TtsConfig,
-) -> Result<(), String> {
-    let voice_state = state.lock().await;
-    let mut current = voice_state.tts_config.write().await;
-    *current = config;
-    Ok(())
 }
 
 // =============================================================================
@@ -1032,253 +980,13 @@ pub async fn voice_wake_disable(state: State<'_, Arc<Mutex<VoiceState>>>) -> Res
     Ok(())
 }
 
-/// Get wake word status
-#[tauri::command]
-pub async fn voice_wake_status(state: State<'_, Arc<Mutex<VoiceState>>>) -> Result<bool, String> {
-    let voice_state = state.lock().await;
-    let wake = voice_state.wake.read().await;
-    Ok(wake.is_listening())
-}
-
-/// Configure wake word
-#[tauri::command]
-pub async fn voice_wake_configure(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    config: WakeWordConfig,
-) -> Result<(), String> {
-    let voice_state = state.lock().await;
-    let mut wake = voice_state.wake.write().await;
-    wake.update_config(config);
-    Ok(())
-}
-
-// =============================================================================
-// Push-to-Talk Commands
-// =============================================================================
-
-/// Configure push-to-talk
-#[tauri::command]
-pub async fn voice_ptt_configure(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    config: PttConfig,
-) -> Result<(), String> {
-    let voice_state = state.lock().await;
-    let mut ptt = voice_state.ptt.write().await;
-    ptt.update_config(config);
-    Ok(())
-}
-
-/// Get PTT state
-#[tauri::command]
-pub async fn voice_ptt_state(state: State<'_, Arc<Mutex<VoiceState>>>) -> Result<String, String> {
-    let voice_state = state.lock().await;
-    let ptt = voice_state.ptt.read().await;
-    Ok(format!("{:?}", ptt.get_state()))
-}
-
-/// Handle PTT key down
-#[tauri::command]
-pub async fn voice_ptt_key_down(state: State<'_, Arc<Mutex<VoiceState>>>) -> Result<(), String> {
-    let voice_state = state.lock().await;
-    let ptt = voice_state.ptt.read().await;
-    ptt.key_down().await.map_err(|e| e.to_string())
-}
-
-/// Handle PTT key up
-#[tauri::command]
-pub async fn voice_ptt_key_up(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-) -> Result<Option<usize>, String> {
-    let voice_state = state.lock().await;
-    let ptt = voice_state.ptt.read().await;
-    ptt.key_up()
-        .await
-        .map(|audio| audio.map(|a| a.len()))
-        .map_err(|e| e.to_string())
-}
-
-// =============================================================================
-// Deepgram Streaming STT Commands
-// =============================================================================
-
-/// Deepgram streaming status response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeepgramStreamStatus {
-    /// Whether streaming is currently active
-    pub is_streaming: bool,
-    /// Current connection state
-    pub connection_state: String,
-    /// Statistics (if streaming)
-    pub stats: Option<DeepgramStreamingStats>,
-}
-
-/// Configure Deepgram streaming settings
-///
-/// This must be called before starting a stream to set the API key and options.
-#[tauri::command]
-pub async fn voice_deepgram_configure(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    config: DeepgramConfig,
-) -> Result<(), String> {
-    tracing::info!("Configuring Deepgram with model: {}", config.model);
-
-    let voice_state = state.lock().await;
-    let deepgram = voice_state.deepgram.write().await;
-    deepgram.initialize(config).await;
-
-    Ok(())
-}
-
-/// Start Deepgram streaming transcription
-///
-/// This starts a WebSocket connection to Deepgram and begins accepting audio.
-/// Transcripts will be emitted as Tauri events: `deepgram:transcript`
-#[tauri::command]
-pub async fn voice_start_deepgram_stream(
-    app: AppHandle,
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-) -> Result<(), String> {
-    tracing::info!("Starting Deepgram streaming transcription");
-
-    let voice_state = state.lock().await;
-    let deepgram = voice_state.deepgram.read().await;
-
-    // Start streaming
-    deepgram.start().await.map_err(|e| {
-        let msg = e.to_string();
-        tracing::error!("Failed to start Deepgram stream: {}", msg);
-        // Translate to user-friendly message
-        if msg.contains("API key") {
-            "Deepgram API key not configured. Please add your Deepgram API key in Voice settings."
-                .to_string()
-        } else if msg.contains("already active") {
-            "A streaming session is already active. Stop it first before starting a new one."
-                .to_string()
-        } else {
-            format!("Could not start voice transcription: {}", msg)
-        }
-    })?;
-
-    // Spawn a task to forward transcripts as Tauri events
-    let deepgram_clone = voice_state.deepgram.clone();
-    tokio::spawn(async move {
-        loop {
-            let deepgram_guard = deepgram_clone.read().await;
-            if let Some(event) = deepgram_guard.receive_transcript().await {
-                // Emit transcript event to frontend
-                if let Err(e) = app.emit("deepgram:transcript", &event) {
-                    tracing::error!("Failed to emit transcript event: {}", e);
-                }
-
-                // Also emit speech_final events separately for easier handling
-                if event.speech_final {
-                    if let Err(e) = app.emit("deepgram:speech_final", &event) {
-                        tracing::error!("Failed to emit speech_final event: {}", e);
-                    }
-                }
-            } else {
-                // Channel closed, streaming stopped
-                break;
-            }
-            drop(deepgram_guard);
-        }
-        tracing::debug!("Deepgram transcript forwarding task ended");
-    });
-
-    Ok(())
-}
-
-/// Stop Deepgram streaming transcription
-///
-/// This closes the WebSocket connection and stops accepting audio.
-/// Returns the final streaming statistics.
-#[tauri::command]
-pub async fn voice_stop_deepgram_stream(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-) -> Result<Option<DeepgramStreamingStats>, String> {
-    tracing::info!("Stopping Deepgram streaming transcription");
-
-    let voice_state = state.lock().await;
-    let deepgram = voice_state.deepgram.read().await;
-
-    // Get stats before stopping
-    let stats = deepgram.get_stats().await;
-
-    // Stop streaming
-    deepgram.stop().await;
-
-    Ok(stats)
-}
-
-/// Send audio data to the active Deepgram stream
-///
-/// Audio should be PCM 16-bit mono at 16kHz (or the configured sample rate).
-/// Audio can be sent as raw bytes or base64 encoded.
-#[tauri::command]
-pub async fn voice_deepgram_send_audio(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    audio_data: Vec<u8>,
-) -> Result<(), String> {
-    let voice_state = state.lock().await;
-    let deepgram = voice_state.deepgram.read().await;
-
-    deepgram.send_audio(audio_data).await.map_err(|e| {
-        let msg = e.to_string();
-        if msg.contains("not started") {
-            "No active streaming session. Call voice_start_deepgram_stream first.".to_string()
-        } else if msg.contains("channel closed") {
-            "Streaming session was closed. Please restart the session.".to_string()
-        } else {
-            format!("Could not send audio: {}", msg)
-        }
-    })
-}
-
-/// Get the current status of Deepgram streaming
-#[tauri::command]
-pub async fn voice_deepgram_status(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-) -> Result<DeepgramStreamStatus, String> {
-    let voice_state = state.lock().await;
-    let deepgram = voice_state.deepgram.read().await;
-
-    let is_streaming = deepgram.is_streaming().await;
-    let stats = deepgram.get_stats().await;
-
-    let connection_state = stats
-        .as_ref()
-        .map(|s| format!("{:?}", s.state))
-        .unwrap_or_else(|| "Disconnected".to_string());
-
-    Ok(DeepgramStreamStatus {
-        is_streaming,
-        connection_state,
-        stats,
-    })
-}
-
-/// Convert f32 audio samples to PCM 16-bit bytes for Deepgram
-///
-/// This is a utility function to convert floating-point audio samples
-/// (like those from the VAD or microphone) to the format expected by Deepgram.
-#[tauri::command]
-pub fn voice_convert_audio_to_pcm(samples: Vec<f32>) -> Vec<u8> {
-    let mut bytes = Vec::with_capacity(samples.len() * 2);
-    for sample in samples {
-        // Clamp to [-1.0, 1.0] and convert to i16
-        let clamped = sample.clamp(-1.0, 1.0);
-        let i16_sample = (clamped * 32767.0) as i16;
-        bytes.extend_from_slice(&i16_sample.to_le_bytes());
-    }
-    bytes
-}
-
 // =============================================================================
 // Local Whisper STT Commands
 // =============================================================================
 
 /// Download progress event payload
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DownloadProgress {
     pub bytes_downloaded: u64,
     pub total_bytes: u64,
@@ -1345,71 +1053,6 @@ pub async fn voice_list_whisper_models(
     WhisperLocal::discover_models(&models_dir).map_err(|e| e.to_string())
 }
 
-/// Set the active Whisper model size
-#[tauri::command]
-pub async fn voice_set_whisper_model(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    model_size: String,
-) -> Result<(), String> {
-    let model_id: WhisperModelSize = model_size
-        .parse()
-        .map_err(|e: anyhow::Error| e.to_string())?;
-
-    let voice_state = state.lock().await;
-    let mut local_whisper = voice_state.local_whisper.write().await;
-    WhisperLocal::resolve_model_path(&local_whisper.models_dir, &model_id)
-        .map_err(|e| e.to_string())?;
-    local_whisper.model_id = Some(model_id.clone());
-    // Clear existing whisper instance so it will be reloaded with new model
-    local_whisper.whisper = None;
-
-    tracing::info!("Set local speech model to {}", model_id);
-    Ok(())
-}
-
-/// Delete a downloaded Whisper model
-#[tauri::command]
-pub async fn voice_delete_whisper_model(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    model_size: String,
-) -> Result<(), String> {
-    let model_id: WhisperModelSize = model_size
-        .parse()
-        .map_err(|e: anyhow::Error| e.to_string())?;
-
-    let voice_state = state.lock().await;
-    let models_dir = voice_state.local_whisper.read().await.models_dir.clone();
-    drop(voice_state);
-
-    WhisperLocal::delete_model(&models_dir, &model_id)
-        .await
-        .map_err(|e| format!("Failed to delete model: {}", e))?;
-
-    let voice_state = state.lock().await;
-    let mut local_whisper = voice_state.local_whisper.write().await;
-    if local_whisper.model_id.as_ref() == Some(&model_id) {
-        local_whisper.model_id = None;
-        local_whisper.whisper = None;
-    }
-    tracing::info!("Deleted local speech model {}", model_id);
-    Ok(())
-}
-
-/// Transcribe audio using local Whisper (bypasses provider selection)
-#[tauri::command]
-pub async fn voice_transcribe_local(
-    audio_path: PathBuf,
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    language: Option<String>,
-) -> Result<VoiceTranscription, String> {
-    tracing::info!("Transcribing with local Whisper: {:?}", audio_path);
-
-    let voice_state = state.lock().await;
-    let local_whisper = voice_state.local_whisper.read().await;
-
-    transcribe_with_local_whisper(&audio_path, &local_whisper, language).await
-}
-
 // =============================================================================
 // Local Piper TTS Commands
 // =============================================================================
@@ -1464,54 +1107,6 @@ pub async fn voice_list_piper_voices(
     PiperVoiceDefinitions::discover(&models_dir).map_err(|e| e.to_string())
 }
 
-/// Set the active Piper voice
-#[tauri::command]
-pub async fn voice_set_piper_voice(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    voice_id: String,
-) -> Result<(), String> {
-    let voice_state = state.lock().await;
-    let mut local_piper = voice_state.local_piper.write().await;
-    let voices =
-        PiperVoiceDefinitions::discover(&local_piper.models_dir).map_err(|e| e.to_string())?;
-    if !voices
-        .iter()
-        .any(|voice| voice.id == voice_id && voice.is_downloaded)
-    {
-        return Err(format!("Local voice '{}' is not installed", voice_id));
-    }
-    local_piper.voice_id = Some(voice_id.clone());
-    // Clear existing piper instance so it will be reloaded with new voice
-    local_piper.piper = None;
-
-    tracing::info!("Set local Piper voice to {}", voice_id);
-    Ok(())
-}
-
-/// Delete a downloaded Piper voice
-#[tauri::command]
-pub async fn voice_delete_piper_voice(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    voice_id: String,
-) -> Result<(), String> {
-    let voice_state = state.lock().await;
-    let models_dir = voice_state.local_piper.read().await.models_dir.clone();
-    drop(voice_state);
-
-    PiperLocal::delete_voice(&models_dir, &voice_id)
-        .await
-        .map_err(|e| format!("Failed to delete voice: {}", e))?;
-
-    let voice_state = state.lock().await;
-    let mut local_piper = voice_state.local_piper.write().await;
-    if local_piper.voice_id.as_deref() == Some(voice_id.as_str()) {
-        local_piper.voice_id = None;
-        local_piper.piper = None;
-    }
-    tracing::info!("Deleted Piper voice {}", voice_id);
-    Ok(())
-}
-
 /// Synthesize text using local Piper TTS
 #[tauri::command]
 pub async fn voice_tts_speak_local(
@@ -1519,13 +1114,23 @@ pub async fn voice_tts_speak_local(
     text: String,
     rate: Option<f32>,
     volume: Option<f32>,
-) -> Result<Vec<f32>, String> {
-    let voice_state = state.lock().await;
-    let local_piper = voice_state.local_piper.read().await;
-
-    // Check if piper binary is available
-    let voice_id = selected_piper_voice(&local_piper)?;
-    let piper = PiperLocal::new(local_piper.models_dir.clone(), &voice_id)
+) -> Result<(), String> {
+    let (local_piper, tts_player, barge_in_state) = {
+        let voice_state = state.lock().await;
+        (
+            voice_state.local_piper.clone(),
+            voice_state.tts_player.clone(),
+            voice_state.barge_in.clone(),
+        )
+    };
+    let (models_dir, voice_id) = {
+        let local_piper = local_piper.read().await;
+        (
+            local_piper.models_dir.clone(),
+            selected_piper_voice(&local_piper)?,
+        )
+    };
+    PiperLocal::new(models_dir.clone(), &voice_id)
         .map_err(|e| format!("Failed to initialize Piper: {}", e))?;
 
     let config = SynthesisConfig {
@@ -1535,12 +1140,17 @@ pub async fn voice_tts_speak_local(
         output_raw: true,
     };
 
-    let result = piper
-        .synthesize(&text, Some(config))
-        .await
-        .map_err(|e| format!("TTS synthesis failed: {}", e))?;
-
-    Ok(result.samples)
+    // The Piper voice takes the shared player for this utterance, then hands
+    // it back so the next ordinary speak rebuilds from the configured provider.
+    if let Some(current) = tts_player.read().await.as_ref() {
+        current.stop_playback(TtsInterruptReason::ManualStop);
+    }
+    *tts_player.write().await = Some(TtsPlayer::new(Box::new(LocalPiperTts::new(
+        models_dir, voice_id, config,
+    ))));
+    let spoken = speak_with_barge_in(tts_player.clone(), barge_in_state, &text).await;
+    *tts_player.write().await = None;
+    spoken
 }
 
 /// Download Piper binary for the current platform
@@ -1577,66 +1187,8 @@ pub async fn voice_check_piper_binary() -> Result<bool, String> {
 }
 
 // =============================================================================
-// Combined Local Models Commands
-// =============================================================================
-
-/// Response for listing all local voice models
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LocalModelsInfo {
-    pub whisper_models: Vec<WhisperModelInfo>,
-    pub piper_voices: Vec<PiperVoiceInfo>,
-    pub whisper_models_dir: String,
-    pub piper_models_dir: String,
-    pub piper_binary_available: bool,
-}
-
-/// List all available local models (Whisper and Piper)
-#[tauri::command]
-pub async fn voice_list_local_models(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-) -> Result<LocalModelsInfo, String> {
-    let voice_state = state.lock().await;
-    let local_whisper = voice_state.local_whisper.read().await;
-    let local_piper = voice_state.local_piper.read().await;
-
-    let whisper_models_dir = local_whisper.models_dir.clone();
-    let piper_models_dir = local_piper.models_dir.clone();
-
-    let whisper_models =
-        WhisperLocal::discover_models(&whisper_models_dir).map_err(|e| e.to_string())?;
-    let piper_voices =
-        PiperVoiceDefinitions::discover(&piper_models_dir).map_err(|e| e.to_string())?;
-
-    // Check if Piper binary is available
-    let piper_binary_available = PiperLocal::binary_available();
-
-    Ok(LocalModelsInfo {
-        whisper_models,
-        piper_voices,
-        whisper_models_dir: whisper_models_dir.to_string_lossy().to_string(),
-        piper_models_dir: piper_models_dir.to_string_lossy().to_string(),
-        piper_binary_available,
-    })
-}
-
-// =============================================================================
 // Barge-In Detection Commands
 // =============================================================================
-
-/// Barge-in detection status response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BargeInStatus {
-    /// Whether barge-in detection is enabled
-    pub enabled: bool,
-    /// Whether barge-in monitoring is currently active
-    pub monitoring_active: bool,
-    /// Current sensitivity setting (0.0 - 1.0)
-    pub sensitivity: f32,
-    /// Minimum speech duration threshold (ms)
-    pub min_speech_ms: u32,
-    /// Detection statistics
-    pub stats: BargeInStats,
-}
 
 /// Enable or disable barge-in detection globally
 ///
@@ -1645,7 +1197,6 @@ pub struct BargeInStatus {
 #[tauri::command]
 pub async fn voice_enable_barge_in(
     state: State<'_, Arc<Mutex<VoiceState>>>,
-    app_handle: AppHandle,
     enabled: bool,
 ) -> Result<bool, String> {
     let voice_state = state.lock().await;
@@ -1707,9 +1258,6 @@ pub async fn voice_enable_barge_in(
         {
             barge_in.enabled = true;
             tracing::info!("Barge-in detection enabled");
-
-            // Emit event
-            let _ = app_handle.emit("voice:barge_in_enabled", true);
         }
     } else if !enabled && barge_in.enabled {
         // Stop any active monitoring
@@ -1718,226 +1266,26 @@ pub async fn voice_enable_barge_in(
         }
         barge_in.enabled = false;
         tracing::info!("Barge-in detection disabled");
-
-        // Emit event
-        let _ = app_handle.emit("voice:barge_in_enabled", false);
     }
 
     Ok(barge_in.enabled)
-}
-
-/// Set barge-in detection sensitivity
-///
-/// Higher sensitivity (closer to 1.0) makes it easier to trigger barge-in.
-/// Lower sensitivity (closer to 0.0) requires more distinct speech.
-#[tauri::command]
-pub async fn voice_set_barge_in_sensitivity(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    sensitivity: f32,
-) -> Result<f32, String> {
-    let clamped = sensitivity.clamp(0.0, 1.0);
-
-    let voice_state = state.lock().await;
-    let mut barge_in = voice_state.barge_in.write().await;
-
-    barge_in.config.sensitivity = clamped;
-
-    #[cfg(feature = "vad")]
-    if let Some(ref mut detector) = barge_in.detector {
-        detector.set_sensitivity(clamped);
-    }
-
-    tracing::debug!("Barge-in sensitivity set to {}", clamped);
-    Ok(clamped)
-}
-
-/// Get current barge-in detection status
-#[tauri::command]
-pub async fn voice_get_barge_in_status(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-) -> Result<BargeInStatus, String> {
-    let voice_state = state.lock().await;
-    let barge_in = voice_state.barge_in.read().await;
-
-    let monitoring_active = barge_in
-        .handle
-        .as_ref()
-        .map(|h| h.is_active())
-        .unwrap_or(false);
-
-    #[cfg(feature = "vad")]
-    let stats = barge_in
-        .detector
-        .as_ref()
-        .map(|d| d.stats())
-        .unwrap_or(BargeInStats {
-            total_detections: 0,
-            avg_latency_ms: 0,
-        });
-
-    #[cfg(not(feature = "vad"))]
-    let stats = BargeInStats {
-        total_detections: 0,
-        avg_latency_ms: 0,
-    };
-
-    Ok(BargeInStatus {
-        enabled: barge_in.enabled,
-        monitoring_active,
-        sensitivity: barge_in.config.sensitivity,
-        min_speech_ms: barge_in.config.min_speech_ms,
-        stats,
-    })
-}
-
-/// Configure barge-in detection parameters
-#[tauri::command]
-pub async fn voice_configure_barge_in(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    sensitivity: Option<f32>,
-    min_speech_ms: Option<u32>,
-    consecutive_frames_threshold: Option<u32>,
-) -> Result<BargeInConfig, String> {
-    let voice_state = state.lock().await;
-    let mut barge_in = voice_state.barge_in.write().await;
-
-    if let Some(s) = sensitivity {
-        barge_in.config.sensitivity = s.clamp(0.0, 1.0);
-    }
-
-    if let Some(ms) = min_speech_ms {
-        barge_in.config.min_speech_ms = ms.clamp(10, 1000);
-    }
-
-    if let Some(threshold) = consecutive_frames_threshold {
-        barge_in.config.consecutive_frames_threshold = threshold.clamp(1, 20);
-    }
-
-    #[cfg(feature = "vad")]
-    {
-        // Extract config values before mutable borrow of detector
-        let sensitivity = barge_in.config.sensitivity;
-        let min_speech_ms = barge_in.config.min_speech_ms;
-
-        if let Some(ref mut detector) = barge_in.detector {
-            detector.set_sensitivity(sensitivity);
-            detector.set_min_speech_ms(min_speech_ms);
-        }
-    }
-
-    tracing::debug!("Barge-in config updated: {:?}", barge_in.config);
-    Ok(barge_in.config.clone())
-}
-
-/// Start barge-in monitoring for current TTS playback
-///
-/// This is typically called automatically when TTS starts, but can be
-/// invoked manually if needed.
-#[tauri::command]
-pub async fn voice_start_barge_in_monitoring(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    app_handle: AppHandle,
-) -> Result<bool, String> {
-    let voice_state = state.lock().await;
-    let mut barge_in = voice_state.barge_in.write().await;
-
-    if !barge_in.enabled {
-        return Err("Barge-in detection is not enabled".to_string());
-    }
-
-    // Stop any existing monitoring
-    if let Some(handle) = barge_in.handle.take() {
-        handle.stop();
-    }
-
-    #[cfg(feature = "vad")]
-    {
-        if let Some(ref detector) = barge_in.detector {
-            let tts_player = voice_state.tts_player.clone();
-            let app_handle_clone = app_handle.clone();
-
-            match detector.start_monitoring(move |event| {
-                tracing::info!(
-                    "Barge-in detected! Latency: {}ms",
-                    event.detection_latency_ms
-                );
-
-                // Emit barge-in event
-                let _ = app_handle_clone.emit("voice:barge_in_detected", &event);
-
-                // Stop TTS playback
-                if let Ok(guard) = tts_player.try_read() {
-                    if let Some(ref player) = *guard {
-                        if let Some(interrupt_event) = player.handle_barge_in() {
-                            let _ =
-                                app_handle_clone.emit("voice:tts_interrupted", &interrupt_event);
-                        }
-                    }
-                }
-            }) {
-                Ok(handle) => {
-                    barge_in.handle = Some(handle);
-                    tracing::debug!("Barge-in monitoring started");
-                    Ok(true)
-                }
-                Err(e) => Err(format!("Failed to start barge-in monitoring: {}", e)),
-            }
-        } else {
-            Err("Barge-in detector not initialized".to_string())
-        }
-    }
-
-    #[cfg(not(feature = "vad"))]
-    Err("Barge-in detection requires VAD feature".to_string())
-}
-
-/// Stop barge-in monitoring
-#[tauri::command]
-pub async fn voice_stop_barge_in_monitoring(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-) -> Result<bool, String> {
-    let voice_state = state.lock().await;
-    let mut barge_in = voice_state.barge_in.write().await;
-
-    if let Some(handle) = barge_in.handle.take() {
-        handle.stop();
-        tracing::debug!("Barge-in monitoring stopped");
-        Ok(true)
-    } else {
-        Ok(false)
-    }
 }
 
 // =============================================================================
 // Enhanced TTS Commands with Barge-In Support
 // =============================================================================
 
-/// Speak text with barge-in support
-///
-/// This command:
-/// 1. Starts TTS playback
-/// 2. If barge-in is enabled, starts monitoring
-/// 3. Emits appropriate events (started, completed, or interrupted)
-#[tauri::command]
-pub async fn voice_tts_speak_with_barge_in(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    app_handle: AppHandle,
-    text: String,
+/// Speak on the shared player, with barge-in monitoring while it plays when
+/// barge-in is on. Every speaking command goes through here, so
+/// `voice_tts_stop` and barge-in reach whichever voice is talking.
+async fn speak_with_barge_in(
+    tts_player: Arc<RwLock<Option<TtsPlayer>>>,
+    barge_in_state: Arc<RwLock<BargeInState>>,
+    text: &str,
 ) -> Result<(), String> {
-    let voice_state = state.lock().await;
-    let tts_config = voice_state.tts_config.read().await.clone();
-
-    // Create or get TTS player
-    {
-        let mut player_guard = voice_state.tts_player.write().await;
-        if player_guard.is_none() {
-            *player_guard = Some(TtsPlayer::from_config(tts_config.clone()));
-        }
-    }
-
     // Check if barge-in should be started
     let barge_in_enabled = {
-        let barge_in = voice_state.barge_in.read().await;
+        let barge_in = barge_in_state.read().await;
         barge_in.enabled
     };
 
@@ -1945,7 +1293,7 @@ pub async fn voice_tts_speak_with_barge_in(
     if barge_in_enabled {
         // Stop any existing monitoring first
         {
-            let mut barge_in = voice_state.barge_in.write().await;
+            let mut barge_in = barge_in_state.write().await;
             if let Some(handle) = barge_in.handle.take() {
                 handle.stop();
             }
@@ -1953,69 +1301,46 @@ pub async fn voice_tts_speak_with_barge_in(
 
         #[cfg(feature = "vad")]
         {
-            let barge_in_guard = voice_state.barge_in.read().await;
+            let barge_in_guard = barge_in_state.read().await;
             if let Some(ref detector) = barge_in_guard.detector {
-                let tts_player = voice_state.tts_player.clone();
-                let app_handle_clone = app_handle.clone();
+                let tts_player = tts_player.clone();
 
-                if let Ok(handle) = detector.start_monitoring(move |event| {
-                    let _ = app_handle_clone.emit("voice:barge_in_detected", &event);
-
+                if let Ok(handle) = detector.start_monitoring(move |_event| {
                     if let Ok(guard) = tts_player.try_read() {
                         if let Some(ref player) = *guard {
-                            if let Some(interrupt_event) = player.handle_barge_in() {
-                                let _ = app_handle_clone
-                                    .emit("voice:tts_interrupted", &interrupt_event);
-                            }
+                            player.handle_barge_in();
                         }
                     }
                 }) {
                     drop(barge_in_guard);
-                    let mut barge_in = voice_state.barge_in.write().await;
+                    let mut barge_in = barge_in_state.write().await;
                     barge_in.handle = Some(handle);
                 }
             }
         }
     }
 
-    // Emit started event
-    let _ = app_handle.emit(
-        "voice:tts_started",
-        serde_json::json!({ "text": text.clone() }),
-    );
-
     // Perform synthesis (this will be interrupted if barge-in occurs)
-    let player_guard = voice_state.tts_player.read().await;
+    let player_guard = tts_player.read().await;
     if let Some(ref player) = *player_guard {
-        match player.speak(&text).await {
-            Ok(event) => {
+        match player.speak(text).await {
+            Ok(_) => {
                 // Stop barge-in monitoring
                 drop(player_guard);
-                let mut barge_in = voice_state.barge_in.write().await;
+                let mut barge_in = barge_in_state.write().await;
                 if let Some(handle) = barge_in.handle.take() {
                     handle.stop();
                 }
-
-                // Emit completion event
-                let _ = app_handle.emit("voice:tts_completed", &event);
                 Ok(())
             }
             Err(e) => {
                 // Stop barge-in monitoring
                 drop(player_guard);
-                let mut barge_in = voice_state.barge_in.write().await;
+                let mut barge_in = barge_in_state.write().await;
                 if let Some(handle) = barge_in.handle.take() {
                     handle.stop();
                 }
 
-                // Emit error event
-                let _ = app_handle.emit(
-                    "voice:tts_error",
-                    serde_json::json!({
-                        "text": text,
-                        "error": e.to_string()
-                    }),
-                );
                 Err(e.to_string())
             }
         }
@@ -2024,47 +1349,65 @@ pub async fn voice_tts_speak_with_barge_in(
     }
 }
 
+/// Speak text with barge-in support
+///
+/// This command:
+/// 1. Starts TTS playback
+/// 2. If barge-in is enabled, starts monitoring
+/// 3. Resolves when speech ends, whether it finished or was stopped
+#[tauri::command]
+pub async fn voice_tts_speak_with_barge_in(
+    state: State<'_, Arc<Mutex<VoiceState>>>,
+    text: String,
+) -> Result<(), String> {
+    // Playback can last minutes; holding the VoiceState lock across it made
+    // `voice_tts_stop` wait for the speech it was meant to stop.
+    let (tts_config, tts_player, barge_in_state) = {
+        let voice_state = state.lock().await;
+        let tts_config = voice_state.tts_config.read().await.clone();
+        (
+            tts_config,
+            voice_state.tts_player.clone(),
+            voice_state.barge_in.clone(),
+        )
+    };
+
+    // Create or get TTS player
+    {
+        let mut player_guard = tts_player.write().await;
+        if player_guard.is_none() {
+            *player_guard = Some(TtsPlayer::from_config(tts_config.clone()));
+        }
+    }
+
+    speak_with_barge_in(tts_player, barge_in_state, &text).await
+}
+
 /// Stop TTS playback manually
 #[tauri::command]
-pub async fn voice_tts_stop(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-    app_handle: AppHandle,
-) -> Result<bool, String> {
-    let voice_state = state.lock().await;
+pub async fn voice_tts_stop(state: State<'_, Arc<Mutex<VoiceState>>>) -> Result<bool, String> {
+    let (tts_player, barge_in_state) = {
+        let voice_state = state.lock().await;
+        (voice_state.tts_player.clone(), voice_state.barge_in.clone())
+    };
 
     // Stop barge-in monitoring
     {
-        let mut barge_in = voice_state.barge_in.write().await;
+        let mut barge_in = barge_in_state.write().await;
         if let Some(handle) = barge_in.handle.take() {
             handle.stop();
         }
     }
 
     // Stop TTS playback
-    let player_guard = voice_state.tts_player.read().await;
+    let player_guard = tts_player.read().await;
     if let Some(ref player) = *player_guard {
-        if let Some(event) = player.stop_playback(TtsInterruptReason::ManualStop) {
-            let _ = app_handle.emit("voice:tts_interrupted", &event);
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        Ok(player
+            .stop_playback(TtsInterruptReason::ManualStop)
+            .is_some())
     } else {
         Ok(false)
     }
-}
-
-/// Check if TTS is currently playing
-#[tauri::command]
-pub async fn voice_tts_is_playing(
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-) -> Result<bool, String> {
-    let voice_state = state.lock().await;
-    let player_guard = voice_state.tts_player.read().await;
-    Ok(player_guard
-        .as_ref()
-        .map(|p| p.is_playing())
-        .unwrap_or(false))
 }
 
 // =============================================================================
@@ -2140,27 +1483,17 @@ fn resample_linear(samples: &[f32], src_rate: u32, target_rate: u32) -> Vec<f32>
     out
 }
 
-/// List audio input devices for the dictation microphone picker.
-#[tauri::command]
-pub async fn dictation_list_input_devices(
-) -> Result<Vec<crate::features::speech::dictation::InputDeviceInfo>, String> {
-    crate::features::speech::dictation::list_input_devices()
-}
-
 /// Start audio recording for AGI Dictation.
 ///
 /// Capture mechanics (device selection, sample-format dispatch, bounded
 /// buffering, device-loss recovery) live in
 /// `features/speech/dictation/capture.rs`. `device` selects a microphone by
 /// name; when absent, or when the preferred device no longer exists, the
-/// system default is used and the substitution is reported in the started
-/// event payload. Emits `voice:recording:started` so the frontend overlay
-/// appears.
+/// system default is used and the substitution is logged.
 #[tauri::command]
 pub async fn speech_start_recording(
     _provider: String,
     device: Option<String>,
-    app_handle: AppHandle,
     state: State<'_, Arc<Mutex<VoiceState>>>,
 ) -> Result<(), String> {
     let voice_state = state.lock().await;
@@ -2198,18 +1531,11 @@ pub async fn speech_start_recording(
         *guard = Some(handle);
     }
 
-    let _ = app_handle.emit(
-        "voice:recording:started",
-        serde_json::json!({
-            "provider": _provider,
-            "device": device_name,
-            "requestedDeviceHonored": requested_device_honored,
-        }),
-    );
     tracing::info!(
-        "[dictation] Recording session started (provider={}, device={})",
+        "[dictation] Recording session started (provider={}, device={}, requested device honored={})",
         _provider,
-        device_name
+        device_name,
+        requested_device_honored
     );
     Ok(())
 }
@@ -2235,33 +1561,6 @@ async fn settle_capture_thread(handle: Option<std::thread::JoinHandle<()>>) {
     }
 }
 
-/// Cancel an active recording, discarding the captured audio without
-/// transcribing it. No-op error if nothing is recording.
-#[tauri::command]
-pub async fn speech_cancel_recording(
-    app_handle: AppHandle,
-    state: State<'_, Arc<Mutex<VoiceState>>>,
-) -> Result<(), String> {
-    let voice_state = state.lock().await;
-    let recording = {
-        let mut guard = voice_state
-            .recording
-            .lock()
-            .map_err(|e| format!("Recording lock poisoned: {}", e))?;
-        guard.take()
-    };
-    let recording = recording.ok_or_else(|| "No active recording session to cancel".to_string())?;
-
-    recording
-        .stop_flag
-        .store(true, std::sync::atomic::Ordering::SeqCst);
-    settle_capture_thread(recording.thread_handle).await;
-
-    let _ = app_handle.emit("voice:recording:stopped", ());
-    tracing::info!("[dictation] Recording session cancelled; audio discarded");
-    Ok(())
-}
-
 /// Stop recording and return transcription.
 ///
 /// Sets the stop flag, joins the recording thread, encodes the captured audio
@@ -2272,17 +1571,13 @@ pub async fn speech_cancel_recording(
 pub async fn speech_stop_and_transcribe(
     _provider: String,
     language: String,
-    app_handle: AppHandle,
     state: State<'_, Arc<Mutex<VoiceState>>>,
-    settings_state: State<'_, SettingsServiceState>,
 ) -> Result<SpeechTranscriptResult, String> {
     // Resolve the explicit transcription mode BEFORE touching the audio:
     // an unknown provider must fail closed without transcribing anywhere
     // (previously it silently fell back to the settings provider).
     use crate::features::speech::dictation::{parse_transcription_mode, TranscriptionMode};
     let mode = parse_transcription_mode(&_provider).map_err(|e| e.to_string())?;
-
-    let _ = app_handle.emit("voice:recording:stopped", ());
 
     let voice_state = state.lock().await;
 
@@ -2389,19 +1684,11 @@ pub async fn speech_stop_and_transcribe(
             )
             .await
         }
-        TranscriptionMode::ByokOpenai => {
-            let api_key = {
-                let svc = settings_state
-                    .service
-                    .lock()
-                    .map_err(|e| format!("Failed to lock settings service: {}", e))?;
-                svc.get_api_key("openai").unwrap_or_default()
-            };
-            if api_key.is_empty() {
-                // BYOK without a key fails closed, the audio must never be
-                // silently rerouted to managed cloud.
-                Err(crate::features::speech::dictation::missing_byok_openai_key_error())
-            } else {
+        // BYOK without a usable key fails closed, the audio must never be
+        // silently rerouted to managed cloud.
+        TranscriptionMode::ByokOpenai => match byok_openai_dictation_key() {
+            Err(error) => Err(error),
+            Ok(api_key) => {
                 transcribe_with_openai_direct(
                     &temp_file,
                     &effective_settings,
@@ -2410,7 +1697,7 @@ pub async fn speech_stop_and_transcribe(
                 )
                 .await
             }
-        }
+        },
     };
 
     // Clean up temp file
@@ -2422,7 +1709,6 @@ pub async fn speech_stop_and_transcribe(
                 "[dictation] Transcription complete: {} chars",
                 vt.text.len()
             );
-            let _ = app_handle.emit("voice:transcription:complete", &vt);
             Ok(SpeechTranscriptResult {
                 text: vt.text,
                 confidence: vt.confidence.unwrap_or(1.0),
@@ -2440,6 +1726,38 @@ pub async fn speech_stop_and_transcribe(
 /// were retyped here and again in `apps/cli/src/voice.rs`, so a provider change
 /// could land in one binary and silently miss the other. Both now read
 /// `agiworkforce_llm::speech` and the `voice_transcription` routing slot.
+#[cfg(test)]
+mod managed_transcription_mode_tests {
+    use super::*;
+    use crate::sys::account::app_mode::AppModeTestGuard;
+
+    #[tokio::test]
+    async fn managed_transcription_is_refused_while_the_app_is_local() {
+        let _guard = AppModeTestGuard::local().await;
+
+        let error = transcribe_with_managed_cloud(&Client::new(), reqwest::multipart::Form::new())
+            .await
+            .expect_err("recorded audio must not reach AGI Cloud from a Local app");
+
+        assert_eq!(error, MANAGED_TRANSCRIPTION_LOCAL_MODE_ERROR);
+    }
+
+    #[tokio::test]
+    async fn a_cloud_app_gets_past_the_mode_gate_to_the_sign_in_check() {
+        let _guard = AppModeTestGuard::cloud().await;
+        crate::sys::account::replace_access_token_for_managed_boundary_test(None);
+
+        let error = transcribe_with_managed_cloud(&Client::new(), reqwest::multipart::Form::new())
+            .await
+            .expect_err("a signed-out Cloud app still cannot transcribe");
+
+        assert!(
+            error.starts_with("Managed Cloud auth required"),
+            "unexpected Cloud-mode error: {error}"
+        );
+    }
+}
+
 #[cfg(test)]
 mod shared_speech_contract_tests {
     use super::*;
@@ -2634,5 +1952,47 @@ mod wake_event_tests {
     #[test]
     fn wake_phrase_detection_is_gated_until_the_detector_transcribes() {
         assert!(!wake_phrase_detection_available());
+    }
+}
+
+#[cfg(test)]
+mod byok_dictation_key_tests {
+    use super::*;
+    use crate::features::speech::dictation::missing_byok_openai_key_error;
+    use crate::sys::security::vault_credentials::VAULT_LOCKED_MESSAGE;
+
+    #[test]
+    fn a_saved_key_is_used_as_it_was_saved() {
+        assert_eq!(
+            byok_dictation_key_from(Ok("fixture-openai-key".to_string())),
+            Ok("fixture-openai-key".to_string())
+        );
+    }
+
+    #[test]
+    fn a_key_locked_by_the_master_password_is_reported_as_locked_not_missing() {
+        let refusal = byok_dictation_key_from(Err(VAULT_LOCKED_MESSAGE.to_string()))
+            .expect_err("a locked key cannot be used");
+
+        assert_eq!(refusal, LOCKED_BYOK_OPENAI_KEY_ERROR);
+        assert_ne!(refusal, missing_byok_openai_key_error());
+        assert!(refusal.contains("Unlock your saved keys"), "{refusal}");
+    }
+
+    #[test]
+    fn no_key_an_empty_key_and_an_unreadable_key_all_fail_closed_as_missing() {
+        for read in [
+            Err(
+                "No API key found for connector 'openai'. Please provide an API key first."
+                    .to_string(),
+            ),
+            Ok("   ".to_string()),
+            Err("Decryption failed: aead::Error".to_string()),
+        ] {
+            assert_eq!(
+                byok_dictation_key_from(read),
+                Err(missing_byok_openai_key_error())
+            );
+        }
     }
 }

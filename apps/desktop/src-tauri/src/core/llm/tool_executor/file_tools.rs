@@ -8,7 +8,7 @@ pub(super) const FILE_LIST_MAX_LIMIT: usize = 2_000;
 pub(super) const FILE_LIST_DEFAULT_LIMIT: usize = 500;
 pub(super) const FILE_LIST_MAX_OFFSET: usize = 100_000;
 pub(super) const FILE_READ_MAX_CHARS: usize = 200_000;
-pub(super) const FILE_READ_MAX_BYTES: u64 = 50 * 1024 * 1024;
+pub(crate) const FILE_READ_MAX_BYTES: u64 = 50 * 1024 * 1024;
 pub(super) const FILE_READ_RANGE_DEFAULT_LIMIT: usize = 2_000;
 pub(super) const FILE_READ_RANGE_MAX_LIMIT: usize = 5_000;
 /// Maximum size for binary file reads (50 MB). Binary files are base64-encoded
@@ -146,12 +146,8 @@ impl ToolExecutor {
             .ok_or_else(|| anyhow!("Missing path parameter"))?
             .to_string();
         let path = self.resolve_path(&raw_path);
-        let session_id = args
-            .get("session_id")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
 
-        let validated_path = match self.canonicalize_validated_path(&path).await {
+        let validated_path = match self.canonicalize_readable_path(&path).await {
             Ok(validated_path) => validated_path,
             Err(e) => {
                 return Ok(ToolResult {
@@ -221,13 +217,8 @@ impl ToolExecutor {
                 };
 
                 if let Some(app_handle) = &self.app_handle {
-                    let file_op = create_file_read_event(
-                        &validated_path_string,
-                        &content,
-                        true,
-                        None,
-                        session_id.clone(),
-                    );
+                    let file_op =
+                        create_file_read_event(&validated_path_string, &content, true, None, None);
                     emit_file_operation(app_handle, file_op);
                 }
 
@@ -286,7 +277,7 @@ impl ToolExecutor {
                                     &content,
                                     true,
                                     None,
-                                    session_id.clone(),
+                                    None,
                                 );
                                 emit_file_operation(app_handle, file_op);
                             }
@@ -319,7 +310,7 @@ impl ToolExecutor {
                                     "",
                                     false,
                                     Some(error.clone()),
-                                    session_id.clone(),
+                                    None,
                                 );
                                 emit_file_operation(app_handle, file_op);
                             }
@@ -350,7 +341,7 @@ impl ToolExecutor {
                             "",
                             false,
                             Some(error.clone()),
-                            session_id.clone(),
+                            None,
                         );
                         emit_file_operation(app_handle, file_op);
                     }
@@ -394,10 +385,6 @@ impl ToolExecutor {
             .map(|v| v as usize)
             .unwrap_or(FILE_READ_RANGE_DEFAULT_LIMIT)
             .min(FILE_READ_RANGE_MAX_LIMIT);
-        let session_id = args
-            .get("session_id")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
 
         if offset == 0 {
             let error = "offset must be a 1-indexed line number".to_string();
@@ -419,7 +406,7 @@ impl ToolExecutor {
             });
         }
 
-        let validated_path = match self.canonicalize_validated_path(&path).await {
+        let validated_path = match self.canonicalize_readable_path(&path).await {
             Ok(validated_path) => validated_path,
             Err(e) => {
                 return Ok(ToolResult {
@@ -510,13 +497,8 @@ impl ToolExecutor {
         };
 
         if let Some(app_handle) = &self.app_handle {
-            let file_op = create_file_read_event(
-                &validated_path_string,
-                &numbered_content,
-                true,
-                None,
-                session_id.clone(),
-            );
+            let file_op =
+                create_file_read_event(&validated_path_string, &numbered_content, true, None, None);
             emit_file_operation(app_handle, file_op);
         }
 
@@ -561,10 +543,6 @@ impl ToolExecutor {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing content parameter"))?
             .to_string();
-        let session_id = args
-            .get("session_id")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
 
         if content.len() > FILE_WRITE_MAX_BYTES {
             let error = format!(
@@ -580,7 +558,7 @@ impl ToolExecutor {
             });
         }
 
-        let validated_path = match self.canonicalize_validated_path(&path).await {
+        let validated_path = match self.canonicalize_modifiable_path(&path).await {
             Ok(validated_path) => validated_path,
             Err(e) => {
                 return Ok(ToolResult {
@@ -645,7 +623,8 @@ impl ToolExecutor {
             let _ = fs::create_dir_all(parent).await;
         }
 
-        let write_result = fs::write(&validated_path, content.as_bytes()).await;
+        let write_result =
+            write_validated_file(&validated_path, content.clone().into_bytes(), !file_exists).await;
 
         if let Some(app_handle) = &self.app_handle {
             let file_op = create_file_write_event(
@@ -654,7 +633,7 @@ impl ToolExecutor {
                 &content,
                 write_result.is_ok(),
                 write_result.as_ref().err().map(|e| e.to_string()),
-                session_id.clone(),
+                None,
             );
             emit_file_operation(app_handle, file_op);
         }
@@ -663,9 +642,7 @@ impl ToolExecutor {
             Ok(_) => {
                 if let Some(app_handle) = &self.app_handle {
                     if let Some(undo_state) = app_handle.try_state::<UndoState>() {
-                        let task_id = session_id
-                            .clone()
-                            .unwrap_or_else(|| Uuid::new_v4().to_string());
+                        let task_id = Uuid::new_v4().to_string();
                         let path_buf = std::path::PathBuf::from(&validated_path);
                         let _ = undo_state
                             .change_tracker
@@ -719,12 +696,8 @@ impl ToolExecutor {
             .ok_or_else(|| anyhow!("Missing path parameter"))?
             .to_string();
         let path = self.resolve_path(&raw_path);
-        let session_id = args
-            .get("session_id")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
 
-        let validated_path = match self.canonicalize_validated_path(&path).await {
+        let validated_path = match self.canonicalize_modifiable_path(&path).await {
             Ok(validated_path) => validated_path,
             Err(e) => {
                 return Ok(ToolResult {
@@ -751,7 +724,7 @@ impl ToolExecutor {
                 size_bytes,
                 delete_result.is_ok(),
                 delete_result.as_ref().err().map(|e| e.to_string()),
-                session_id.clone(),
+                None,
             );
             emit_file_operation(app_handle, file_op);
         }
@@ -760,9 +733,7 @@ impl ToolExecutor {
             Ok(_) => {
                 if let Some(app_handle) = &self.app_handle {
                     if let Some(undo_state) = app_handle.try_state::<UndoState>() {
-                        let task_id = session_id
-                            .clone()
-                            .unwrap_or_else(|| Uuid::new_v4().to_string());
+                        let task_id = Uuid::new_v4().to_string();
                         let path_buf = std::path::PathBuf::from(&validated_path);
                         let _ = undo_state
                             .change_tracker
@@ -1009,12 +980,8 @@ impl ToolExecutor {
             .ok_or_else(|| anyhow!("Missing path parameter"))?
             .to_string();
         let path = self.resolve_path(&raw_path);
-        let session_id = args
-            .get("session_id")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
 
-        let validated_path = match self.canonicalize_validated_path(&path).await {
+        let validated_path = match self.canonicalize_readable_path(&path).await {
             Ok(validated_path) => validated_path,
             Err(e) => {
                 return Ok(ToolResult {
@@ -1071,7 +1038,7 @@ impl ToolExecutor {
                         &format!("[binary: {} bytes, base64-encoded]", data.len()),
                         true,
                         None,
-                        session_id.clone(),
+                        None,
                     );
                     emit_file_operation(app_handle, file_op);
                 }
@@ -1103,7 +1070,7 @@ impl ToolExecutor {
                         "",
                         false,
                         Some(error.clone()),
-                        session_id.clone(),
+                        None,
                     );
                     emit_file_operation(app_handle, file_op);
                 }

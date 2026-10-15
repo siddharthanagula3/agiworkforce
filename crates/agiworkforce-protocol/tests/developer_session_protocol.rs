@@ -98,6 +98,7 @@ fn initialize_is_typed_and_does_not_claim_experimental_capabilities() {
                 version: "0.3.0".to_string(),
             },
             experimental_api: false,
+            user_input: false,
             protocol_version: None,
         },
     )
@@ -106,6 +107,7 @@ fn initialize_is_typed_and_does_not_claim_experimental_capabilities() {
     let value = serde_json::to_value(request).expect("serialize request");
     assert_eq!(value["params"]["clientInfo"]["name"], "agi_vscode");
     assert!(value["params"].get("experimentalApi").is_none());
+    assert!(value["params"].get("userInput").is_none());
 }
 
 #[test]
@@ -169,6 +171,7 @@ fn thread_read_reports_when_only_a_bounded_transcript_window_is_returned() {
             role: "assistant".to_string(),
             text: "newest message".to_string(),
             index: None,
+            turn_id: None,
         }],
         transcript_truncated: true,
         approvals: Vec::new(),
@@ -275,9 +278,14 @@ fn a_turn_ends_with_a_typed_failure_or_an_explicit_null() {
         error: None,
         failure: None,
         managed_request_ids: Vec::new(),
+        unsent_steers: 0,
     };
     let value = serde_json::to_value(&completed).expect("serialize completed");
     assert_eq!(value["status"], "completed");
+    assert!(
+        value.get("unsentSteers").is_none(),
+        "a turn that delivered every steer says nothing about them: {value}"
+    );
     assert!(
         value["failure"].is_null() && value["error"].is_null(),
         "both fields must be present and null, never absent: {value}"
@@ -755,10 +763,85 @@ fn session_lifecycle_and_writer_surfaces_are_additive_to_v8() {
             next_delta_index: 3,
             next_event_sequence: 7,
             pending_approvals: Vec::new(),
+            pending_user_inputs: Vec::new(),
         }),
     })
     .unwrap();
     assert_eq!(reconnect["activeTurn"]["nextDeltaIndex"], 3);
     assert_eq!(reconnect["activeTurn"]["nextEventSequence"], 7);
     assert_eq!(reconnect["thread"]["writer"]["holderId"], "writer-1");
+}
+
+#[test]
+fn worktree_and_checkpoint_params_read_the_shapes_clients_send() {
+    use agiworkforce_protocol::developer_session::{
+        CheckpointSectionsParams, ManagedWorktreeCreateParams, ThreadRevertParams,
+        ThreadRevertRestore, WorktreeApplyParams, WorktreeStartPoint,
+    };
+
+    let from_ref: ManagedWorktreeCreateParams =
+        serde_json::from_value(serde_json::json!({ "start": { "kind": "ref", "name": "HEAD" } }))
+            .expect("ref start");
+    assert_eq!(
+        from_ref.start,
+        WorktreeStartPoint::Ref {
+            name: "HEAD".to_string()
+        }
+    );
+    let from_changes: ManagedWorktreeCreateParams = serde_json::from_value(
+        serde_json::json!({ "start": { "kind": "working_tree" }, "label": "spike" }),
+    )
+    .expect("working tree start");
+    assert_eq!(from_changes.start, WorktreeStartPoint::WorkingTree);
+    assert_eq!(from_changes.label.as_deref(), Some("spike"));
+
+    let apply: WorktreeApplyParams =
+        serde_json::from_value(serde_json::json!({ "worktreeId": "0a1b2c3d" })).expect("apply");
+    assert!(!apply.preview, "a write is never a preview unless asked");
+
+    let sections: CheckpointSectionsParams = serde_json::from_value(serde_json::json!({
+        "threadId": "t",
+        "turnId": "u",
+        "sections": [{ "path": "a.rs" }, { "path": "b.rs", "hunks": [1, 3] }]
+    }))
+    .expect("sections");
+    assert!(sections.sections[0].hunks.is_empty());
+    assert_eq!(sections.sections[1].hunks, vec![1, 3]);
+
+    let revert = ThreadRevertParams {
+        thread_id: "t".to_string(),
+        turn_id: "u".to_string(),
+        preview: false,
+        restore: ThreadRevertRestore::Both,
+    };
+    assert_eq!(
+        serde_json::to_value(&revert).expect("serialize"),
+        serde_json::json!({ "threadId": "t", "turnId": "u" })
+    );
+    let code_only: ThreadRevertParams = serde_json::from_value(
+        serde_json::json!({ "threadId": "t", "turnId": "u", "restore": "code" }),
+    )
+    .expect("code only");
+    assert!(code_only.restore.restores_code());
+    assert!(!code_only.restore.restores_conversation());
+    let legacy: ThreadRevertParams =
+        serde_json::from_value(serde_json::json!({ "threadId": "t", "turnId": "u" }))
+            .expect("a revert that names no restore");
+    assert_eq!(
+        legacy.restore,
+        ThreadRevertRestore::Both,
+        "a client that predates the choice rewinds both, as it always did"
+    );
+}
+
+#[test]
+fn a_stored_message_without_a_turn_still_reads() {
+    let old: DeveloperMessage =
+        serde_json::from_value(serde_json::json!({ "role": "user", "text": "hi" }))
+            .expect("a transcript stored before turn ids reads");
+    assert_eq!(old.turn_id, None);
+    assert_eq!(
+        serde_json::to_value(&old).expect("serialize"),
+        serde_json::json!({ "role": "user", "text": "hi" })
+    );
 }

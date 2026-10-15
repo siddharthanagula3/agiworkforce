@@ -1,10 +1,9 @@
-use crate::features::terminal::session_manager::{validate_env_key, validate_env_value};
 use crate::features::terminal::{
     detect_available_shells, get_default_shell, SessionManager, ShellInfo, ShellType, TerminalAI,
 };
+use crate::sys::native_confirm::{shown_value, ConfirmGate, NativeConfirm};
 use crate::sys::security::command_validator::{
-    reject_if_root, validate_command, validate_interactive_input, write_security_audit_log,
-    ValidationConfig,
+    reject_if_root, validate_command, write_security_audit_log, ValidationConfig,
 };
 use crate::sys::security::log_redaction::redact_secrets;
 use std::time::Instant;
@@ -59,7 +58,9 @@ fn parse_shell_type(input: &str) -> Result<ShellType, String> {
     }
 }
 
-#[tauri::command]
+/// Runs one command for a tool call that arrived through this app's own MCP
+/// server. It is not registered for the page: the page has the terminal
+/// panel, which is the person's own shell behind its own native question.
 pub async fn execute_terminal_command(
     app: AppHandle,
     command: String,
@@ -114,6 +115,16 @@ pub async fn execute_terminal_command(
         "shell": shell,
     });
 
+    crate::ui::hooks::gate_tool_use(
+        "terminal_execute",
+        std::collections::HashMap::from([
+            ("command".to_string(), serde_json::json!(command)),
+            ("cwd".to_string(), serde_json::json!(cwd)),
+            ("shell".to_string(), serde_json::json!(shell)),
+        ]),
+    )
+    .await?;
+
     if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
         &app,
         "terminal_execute",
@@ -124,13 +135,11 @@ pub async fn execute_terminal_command(
         return Err("Operation denied by user".to_string());
     }
 
-    let mut cwd = cwd;
-    if let Some(ref dir) = cwd {
-        let canonical =
-            std::fs::canonicalize(dir).map_err(|e| format!("Invalid working directory: {}", e))?;
-        // Use canonical path from here
-        cwd = Some(canonical.to_string_lossy().to_string());
-    }
+    let requested_cwd = cwd
+        .map(|dir| {
+            std::path::absolute(dir).map_err(|e| format!("Invalid working directory: {}", e))
+        })
+        .transpose()?;
 
     // AUDIT-TERMINAL-054 fix: Use system default shell instead of hardcoded powershell/bash
     let shell = shell.unwrap_or_else(|| match get_default_shell() {
@@ -268,10 +277,37 @@ pub async fn execute_terminal_command(
         crate::sys::security::sandbox_runtime::build_sandboxed_command(
             &program,
             &args,
-            cwd.as_deref(),
+            requested_cwd
+                .as_ref()
+                .map(|dir| dir.to_string_lossy())
+                .as_deref(),
             &allowed_directories,
             &execution_preferences.terminal_sandbox,
         )?
+    };
+
+    // A sandbox holds the folder to where it first resolved, so only the
+    // system's own links are followed on the way to it. Unsandboxed, the
+    // command runs wherever the user's own link points, such as a folder
+    // linked to another volume.
+    let cwd = match requested_cwd {
+        Some(absolute) => {
+            let resolved = if sandbox_launch.is_some() {
+                agiworkforce_sandbox_policy::host_path::resolve_root_for_use(&absolute)?
+            } else {
+                std::fs::canonicalize(&absolute).map_err(|e| {
+                    format!("Invalid working directory {}: {}", absolute.display(), e)
+                })?
+            };
+            if !resolved.is_dir() {
+                return Err(format!(
+                    "Invalid working directory: {} is not a folder",
+                    resolved.display()
+                ));
+            }
+            Some(resolved.to_string_lossy().to_string())
+        }
+        None => None,
     };
 
     let (launch_program, launch_args) = match sandbox_launch.as_ref() {
@@ -288,7 +324,9 @@ pub async fn execute_terminal_command(
         cmd.current_dir(path);
     }
 
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
 
     let start_time = Instant::now();
     let stream_id = stream_id.unwrap_or_else(|| format!("oneshot-{}", correlation_id));
@@ -383,48 +421,17 @@ pub async fn execute_terminal_command(
         );
     }
 
+    let sandbox_warnings: String = sandbox_launch
+        .iter()
+        .flat_map(|spec| spec.warnings.iter())
+        .map(|warning| format!("{warning}\n"))
+        .collect();
     Ok(ExecuteResult {
         stdout: String::from_utf8_lossy(&stdout_bytes).to_string(),
-        stderr: String::from_utf8_lossy(&stderr_bytes).to_string(),
+        stderr: sandbox_warnings + &String::from_utf8_lossy(&stderr_bytes),
         exit_code: status.code(),
         duration_ms: duration.as_millis() as u64,
         stream_id: Some(stream_id),
-    })
-}
-
-/// Simplified terminal execution command used by canvasStore code execution.
-///
-/// Accepts a command string and optional working directory, returning
-/// stdout, stderr, and exit_code with snake_case serialization to match
-/// frontend expectations.
-#[derive(serde::Serialize)]
-pub struct TerminalExecuteResult {
-    pub stdout: String,
-    pub stderr: String,
-    pub exit_code: i32,
-}
-
-#[tauri::command]
-pub async fn terminal_execute(
-    app: AppHandle,
-    command: String,
-    working_dir: Option<String>,
-) -> Result<TerminalExecuteResult, String> {
-    let result = execute_terminal_command(
-        app,
-        command,
-        working_dir,
-        None,
-        None, // stream_id
-        None, // emit_events
-        None, // timeout_ms
-    )
-    .await?;
-
-    Ok(TerminalExecuteResult {
-        stdout: result.stdout,
-        stderr: result.stderr,
-        exit_code: result.exit_code.unwrap_or(-1),
     })
 }
 
@@ -436,18 +443,87 @@ pub async fn terminal_detect_shells() -> Result<Vec<ShellInfo>, String> {
     Ok(shells)
 }
 
+/// One question about opening the terminal at a time, and a wait after a no.
+static TERMINAL_DECISIONS: ConfirmGate = ConfirmGate::new();
+
+/// Set by the person's yes to the first terminal of this app run, and never
+/// saved: the next launch asks again.
+static TERMINAL_OPENED_THIS_RUN: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+const NO_TERMINAL_OPENED: &str =
+    "No terminal has been opened since the app started. Open one in the terminal panel first.";
+
+/// The folder a new session starts in: the one asked for, resolved, or the
+/// one this process runs in. The dialog names this folder and the session is
+/// started in it, so the two cannot differ.
+fn session_folder(cwd: Option<String>) -> Result<std::path::PathBuf, String> {
+    let folder = match cwd.as_deref().map(str::trim).filter(|cwd| !cwd.is_empty()) {
+        Some(cwd) => std::fs::canonicalize(cwd)
+            .map_err(|error| format!("The folder {cwd} could not be opened: {error}"))?,
+        None => std::env::current_dir()
+            .map_err(|error| format!("The app's own folder could not be read: {error}"))?,
+    };
+    if !folder.is_dir() {
+        return Err(format!("{} is not a folder.", folder.display()));
+    }
+    Ok(folder)
+}
+
+fn open_terminal_question(folder: &std::path::Path) -> NativeConfirm {
+    NativeConfirm {
+        title: "Open a terminal?".to_string(),
+        body: format!(
+            "Open a terminal in {}?\n\nCommands typed there run as you, outside the sandbox. This is asked once each time the app runs.",
+            shown_value(&folder.to_string_lossy())
+        ),
+        confirm_label: "Open Terminal".to_string(),
+    }
+}
+
+/// Refuses a session command until the person has said yes to a terminal in
+/// this app run. Sessions are only ever made by [`terminal_create_session`],
+/// so an id that exists was made after that yes.
+fn terminal_opened_this_run() -> Result<(), String> {
+    if TERMINAL_OPENED_THIS_RUN.load(std::sync::atomic::Ordering::SeqCst) {
+        Ok(())
+    } else {
+        Err(NO_TERMINAL_OPENED.to_string())
+    }
+}
+
+/// Opens a shell in the terminal panel. The panel is the person's own shell:
+/// nothing typed there is filtered, so the first one of an app run is decided
+/// in a native dialog that names the folder. A declined dialog is an error
+/// that says so, and no session exists.
 #[tauri::command]
 pub async fn terminal_create_session(
     shell_type: String,
     cwd: Option<String>,
+    app: AppHandle,
     state: State<'_, SessionManager>,
 ) -> Result<String, String> {
     tracing::info!("Creating terminal session with shell: {}", shell_type);
 
     let shell_type = parse_shell_type(&shell_type)?;
+    let folder = session_folder(cwd)?;
+
+    if !TERMINAL_OPENED_THIS_RUN.load(std::sync::atomic::Ordering::SeqCst) {
+        let request = format!("open a terminal in {}", folder.display());
+        let confirmed = TERMINAL_DECISIONS
+            .confirm(&app, &request, open_terminal_question(&folder))
+            .await
+            .map_err(|held| held.message())?;
+        if !confirmed {
+            return Err(
+                "No terminal was opened. You declined it in the system dialog.".to_string(),
+            );
+        }
+        TERMINAL_OPENED_THIS_RUN.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
 
     let session_id = state
-        .create_session(shell_type, cwd)
+        .create_session(shell_type, Some(folder.to_string_lossy().into_owned()))
         .await
         .map_err(|e| format!("Failed to create session: {}", e))?;
 
@@ -461,6 +537,8 @@ pub async fn terminal_send_input(
     data: String,
     state: State<'_, SessionManager>,
 ) -> Result<(), String> {
+    terminal_opened_this_run()?;
+
     // Generate correlation ID for request tracing
     let correlation_id = uuid::Uuid::new_v4().to_string();
 
@@ -502,19 +580,6 @@ pub async fn terminal_send_input(
         ));
     }
 
-    // SECURITY FIX: Apply command validation to interactive sessions too
-    // This prevents the security bypass where dangerous commands could be
-    // executed through interactive mode without validation
-    if let Err(e) = validate_interactive_input(&data, Some(&correlation_id)) {
-        tracing::warn!(
-            correlation_id = %correlation_id,
-            session_id = %session_id,
-            error = %e,
-            "Interactive input validation failed - blocking dangerous command"
-        );
-        return Err(format!("Command blocked for security: {}", e));
-    }
-
     state
         .send_input(&session_id, &data)
         .await
@@ -545,6 +610,8 @@ pub async fn terminal_resize(
     rows: u16,
     state: State<'_, SessionManager>,
 ) -> Result<(), String> {
+    terminal_opened_this_run()?;
+
     // AUDIT-003-010 fix: Add bounds checking for terminal dimensions
     // Validate minimum bounds
     if cols < MIN_TERMINAL_COLS {
@@ -591,20 +658,13 @@ pub async fn terminal_kill(
 }
 
 #[tauri::command]
-pub async fn terminal_list_sessions(
-    state: State<'_, SessionManager>,
-) -> Result<Vec<String>, String> {
-    let sessions = state.list_sessions().await;
-    Ok(sessions)
-}
-
-#[tauri::command]
 pub async fn terminal_get_history(
     session_id: String,
     limit: Option<usize>,
     _state: State<'_, SessionManager>,
     app: tauri::AppHandle,
 ) -> Result<Vec<String>, String> {
+    terminal_opened_this_run()?;
     let limit = limit.unwrap_or(50);
     let history =
         crate::features::terminal::session_manager::get_command_history(&app, &session_id, limit)
@@ -620,6 +680,7 @@ pub async fn terminal_ai_suggest_command(
     cwd: Option<String>,
     ai_state: State<'_, TerminalAI>,
 ) -> Result<String, String> {
+    crate::ui::hooks::gate_user_prompt("terminal", &intent).await?;
     tracing::info!("AI suggesting command for intent: {}", intent);
 
     let command = ai_state
@@ -653,6 +714,7 @@ pub async fn terminal_smart_commit(
     session_id: String,
     ai_state: State<'_, TerminalAI>,
 ) -> Result<String, String> {
+    terminal_opened_this_run()?;
     tracing::info!("AI smart commit for session: {}", session_id);
 
     let result = ai_state
@@ -679,95 +741,13 @@ pub async fn terminal_ai_suggest_improvements(
     Ok(suggestions)
 }
 
-/// Set an environment variable in a terminal session
-#[tauri::command]
-pub async fn terminal_set_env(
-    session_id: String,
-    key: String,
-    value: String,
-    state: State<'_, SessionManager>,
-) -> Result<(), String> {
-    validate_env_key(&key).map_err(|e| e.to_string())?;
-    validate_env_value(&value).map_err(|e| e.to_string())?;
-
-    tracing::info!(
-        "Setting environment variable {} in session {}",
-        key,
-        session_id
-    );
-
-    state
-        .set_env(&session_id, &key, &value)
-        .await
-        .map_err(|e| format!("Failed to set environment variable: {}", e))?;
-
-    Ok(())
-}
-
-/// Get an environment variable from a terminal session
-#[tauri::command]
-pub async fn terminal_get_env(
-    session_id: String,
-    key: String,
-    state: State<'_, SessionManager>,
-) -> Result<Option<String>, String> {
-    validate_env_key(&key).map_err(|e| e.to_string())?;
-
-    tracing::debug!(
-        "Getting environment variable {} from session {}",
-        key,
-        session_id
-    );
-
-    state
-        .get_env(&session_id, &key)
-        .await
-        .map_err(|e| format!("Failed to get environment variable: {}", e))
-}
-
-/// List all environment variables in a terminal session
-#[tauri::command]
-pub async fn terminal_list_env(
-    session_id: String,
-    state: State<'_, SessionManager>,
-) -> Result<Vec<(String, String)>, String> {
-    tracing::debug!("Listing environment variables in session {}", session_id);
-
-    state
-        .list_env(&session_id)
-        .await
-        .map_err(|e| format!("Failed to list environment variables: {}", e))
-}
-
-/// Unset an environment variable in a terminal session
-#[tauri::command]
-pub async fn terminal_unset_env(
-    session_id: String,
-    key: String,
-    state: State<'_, SessionManager>,
-) -> Result<(), String> {
-    validate_env_key(&key).map_err(|e| e.to_string())?;
-
-    tracing::info!(
-        "Unsetting environment variable {} in session {}",
-        key,
-        session_id
-    );
-
-    state
-        .unset_env(&session_id, &key)
-        .await
-        .map_err(|e| format!("Failed to unset environment variable: {}", e))?;
-
-    Ok(())
-}
-
 /// Clear command history in a terminal session
 #[tauri::command]
 pub async fn terminal_clear_history(
     session_id: String,
     state: State<'_, SessionManager>,
 ) -> Result<(), String> {
+    terminal_opened_this_run()?;
     tracing::info!("Clearing command history in session {}", session_id);
 
     state
@@ -810,5 +790,74 @@ mod tests {
     #[test]
     fn parse_shell_type_rejects_invalid_values() {
         assert!(parse_shell_type("totally-invalid-shell").is_err());
+    }
+
+    #[test]
+    fn the_question_names_the_folder_the_session_starts_in() {
+        let folder = std::env::temp_dir()
+            .canonicalize()
+            .expect("the temporary folder");
+        assert_eq!(
+            session_folder(Some(folder.to_string_lossy().into_owned())),
+            Ok(folder.clone())
+        );
+        assert_eq!(
+            session_folder(None),
+            Ok(std::env::current_dir().expect("this folder"))
+        );
+        assert_eq!(
+            session_folder(Some("   ".to_string())),
+            Ok(std::env::current_dir().expect("this folder"))
+        );
+        assert!(session_folder(Some("/no/such/folder/anywhere".to_string())).is_err());
+
+        let question = open_terminal_question(&folder);
+        assert!(question
+            .body
+            .contains(&shown_value(&folder.to_string_lossy())));
+        assert!(question.body.contains("run as you, outside the sandbox"));
+        assert!(crate::sys::native_confirm::can_ask_with(
+            &question.confirm_label
+        ));
+    }
+
+    #[test]
+    fn a_folder_name_cannot_add_lines_to_the_question() {
+        let question =
+            open_terminal_question(std::path::Path::new("/tmp/a\n\nAllow everything?\nb"));
+        assert_eq!(question.body.lines().count(), 3);
+    }
+
+    #[test]
+    fn nothing_reaches_a_session_before_the_first_terminal_is_opened() {
+        let production = include_str!("terminal.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production code");
+        for command in [
+            "pub async fn terminal_send_input(",
+            "pub async fn terminal_resize(",
+            "pub async fn terminal_get_history(",
+            "pub async fn terminal_smart_commit(",
+            "pub async fn terminal_clear_history(",
+        ] {
+            let body = production
+                .split(command)
+                .nth(1)
+                .unwrap_or_else(|| panic!("{command} is missing"));
+            let body = body.split("\n}\n").next().expect("a body");
+            assert!(
+                body.contains("terminal_opened_this_run()?;"),
+                "{command} does not wait for the first terminal"
+            );
+        }
+        assert!(
+            !production.contains("validate_interactive_input"),
+            "keystrokes in the person's own shell are not filtered"
+        );
+        assert!(
+            !production.contains("#[tauri::command]\npub async fn execute_terminal_command"),
+            "the page has no general shell command"
+        );
     }
 }

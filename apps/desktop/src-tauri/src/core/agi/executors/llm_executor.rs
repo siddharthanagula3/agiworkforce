@@ -31,9 +31,11 @@
 
 use super::{ExecutorContext, ToolExecutor};
 use crate::core::agi::ExecutionContext;
+use crate::core::llm::llm_router::provider_matches_trust_mode;
 use crate::core::llm::{
     ChatMessage, LLMRequest, LLMRouter, Provider, RouterPreferences, RoutingStrategy,
 };
+use agiworkforce_model_registry::TrustMode;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -59,25 +61,38 @@ impl LlmExecutor {
         Self { router }
     }
 
-    /// Parse provider string into Provider enum.
+    /// Place a provider inside the goal's trust boundary.
     ///
-    /// Supports common provider names in lowercase.
-    fn parse_provider(provider_str: &str) -> Option<Provider> {
-        let normalized = provider_str.to_lowercase();
-        match normalized.as_str() {
-            // All cloud providers route via ManagedCloud (no local API keys)
-            "anthropic" | "claude" | "openai" | "gpt" | "google" | "gemini" | "deepseek"
-            | "xai" | "grok" | "qwen" | "alibaba" | "moonshot" | "kimi" | "zhipu" | "glm"
-            | "perplexity" => Some(Provider::ManagedCloud),
-            "ollama" | "local" => Some(Provider::Ollama),
-            "managed" | "cloud" | "managed-cloud" => Some(Provider::ManagedCloud),
-            _ if crate::core::llm::models_config::get_provider_for_model(&normalized)
-                == Some(Provider::Perplexity) =>
-            {
-                Some(Provider::ManagedCloud)
-            }
-            _ => None,
-        }
+    /// A hosted provider is itself in a BYOK goal and AGI Managed Cloud in a
+    /// Managed goal. `None` means the provider lies outside the boundary, so
+    /// the caller must not pin it. An absent trust mode is Local, matching
+    /// `llm_router::effective_trust_mode`.
+    fn within_trust_boundary(
+        provider: Provider,
+        trust_mode: Option<TrustMode>,
+    ) -> Option<Provider> {
+        let trust_mode = trust_mode.unwrap_or(TrustMode::Local);
+        let is_hosted = !provider_matches_trust_mode(provider, TrustMode::Local);
+        let resolved = if trust_mode == TrustMode::ManagedCloud && is_hosted {
+            Provider::ManagedCloud
+        } else {
+            provider
+        };
+        provider_matches_trust_mode(resolved, trust_mode).then_some(resolved)
+    }
+
+    /// Resolve a provider name by the goal's trust mode.
+    fn resolve_provider(provider_str: &str, trust_mode: Option<TrustMode>) -> Option<Provider> {
+        let normalized = provider_str.trim().to_lowercase();
+        let named = match normalized.as_str() {
+            "claude" => Provider::Anthropic,
+            "gpt" => Provider::OpenAI,
+            "gemini" => Provider::Google,
+            "local" => Provider::Ollama,
+            "managed" | "managed-cloud" => Provider::ManagedCloud,
+            other => Provider::from_string(other)?,
+        };
+        Self::within_trust_boundary(named, trust_mode)
     }
 
     /// Execute llm_reason operation.
@@ -122,8 +137,10 @@ impl LlmExecutor {
         let (provider_override, model_override) =
             match execution_target {
                 Some((model, provider)) => (
-                    Some(Self::parse_provider(provider).ok_or_else(|| {
-                        anyhow!("Unsupported Task execution provider: {provider}")
+                    Some(Self::resolve_provider(provider, trust_mode).ok_or_else(|| {
+                        anyhow!(
+                            "Task execution provider {provider} is unknown or outside this goal's trust boundary"
+                        )
                     })?),
                     Some(model.to_string()),
                 ),
@@ -131,7 +148,7 @@ impl LlmExecutor {
                     parameters
                         .get("provider")
                         .and_then(|v| v.as_str())
-                        .and_then(Self::parse_provider),
+                        .and_then(|name| Self::resolve_provider(name, trust_mode)),
                     parameters
                         .get("model")
                         .and_then(|v| v.as_str())
@@ -202,20 +219,24 @@ impl LlmExecutor {
             multimodal_content: None,
         });
 
-        // Determine provider and model from explicit overrides only. Without
-        // overrides, leave both unset so the trust-aware Auto strategy picks
-        // a boundary-appropriate provider, a hardcoded ManagedCloud default
-        // is rejected by the router for Local/BYOK goals.
+        // Determine provider and model from explicit overrides only. An
+        // override that lies outside the goal's trust boundary is dropped, so
+        // the trust-aware Auto strategy picks a provider inside it instead of
+        // the step failing with no candidates.
         let (default_provider, default_model) = match (&provider_override, &model_override) {
             (Some(p), Some(m)) => (Some(*p), Some(m.clone())),
             (Some(p), None) => (Some(*p), Some(self.default_model_for_provider(*p))),
             (None, Some(m)) => {
-                let provider = self.infer_provider_from_model(m).ok_or_else(|| {
-                    anyhow!(
-                        "An uncataloged model override requires an explicit provider; model names are not provider declarations"
-                    )
-                })?;
-                (Some(provider), Some(m.clone()))
+                let catalog_provider = crate::core::llm::models_config::get_provider_for_model(m)
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "An uncataloged model override requires an explicit provider; model names are not provider declarations"
+                        )
+                    })?;
+                match Self::within_trust_boundary(catalog_provider, trust_mode) {
+                    Some(provider) => (Some(provider), Some(m.clone())),
+                    None => (None, None),
+                }
             }
             (None, None) => (None, None),
         };
@@ -425,18 +446,6 @@ impl LlmExecutor {
     fn default_model_for_provider(&self, provider: Provider) -> String {
         crate::core::llm::models_config::get_default_model(&provider).to_string()
     }
-
-    /// Resolve only catalog-addressable model overrides. Local runtime models
-    /// are dynamic and therefore require the caller's explicit provider.
-    fn infer_provider_from_model(&self, model: &str) -> Option<Provider> {
-        crate::core::llm::models_config::get_provider_for_model(model).map(|provider| {
-            if provider == Provider::Anthropic {
-                Provider::Anthropic
-            } else {
-                Provider::ManagedCloud
-            }
-        })
-    }
 }
 
 #[async_trait]
@@ -486,16 +495,13 @@ mod tests {
 
         ExecutorContext {
             app_handle: None,
-            automation: Arc::new(
-                crate::automation::AutomationService::new()
-                    .expect("Failed to create AutomationService for tests"),
-            ),
             router: create_test_router(),
             tool_cache: Arc::new(crate::data::cache::ToolResultCache::new()),
             security_guard: Arc::new(crate::sys::security::ToolExecutionGuard::new()),
             change_tracker: None,
             session_id: "test_session".to_string(),
             tool_id: "test_tool".to_string(),
+            granted_directories: Vec::new(),
         }
     }
 
@@ -545,62 +551,80 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_provider() {
-        assert_eq!(
-            LlmExecutor::parse_provider("anthropic"),
-            Some(Provider::ManagedCloud)
-        );
-        assert_eq!(
-            LlmExecutor::parse_provider("claude"),
-            Some(Provider::ManagedCloud)
-        );
-        assert_eq!(
-            LlmExecutor::parse_provider("openai"),
-            Some(Provider::ManagedCloud)
-        );
-        assert_eq!(
-            LlmExecutor::parse_provider("gpt"),
-            Some(Provider::ManagedCloud)
-        );
-        assert_eq!(
-            LlmExecutor::parse_provider("google"),
-            Some(Provider::ManagedCloud)
-        );
-        assert_eq!(
-            LlmExecutor::parse_provider("gemini"),
-            Some(Provider::ManagedCloud)
-        );
-        assert_eq!(
-            LlmExecutor::parse_provider("deepseek"),
-            Some(Provider::ManagedCloud)
-        );
-        assert_eq!(
-            LlmExecutor::parse_provider("xai"),
-            Some(Provider::ManagedCloud)
-        );
-        assert_eq!(
-            LlmExecutor::parse_provider("grok"),
-            Some(Provider::ManagedCloud)
-        );
-        assert_eq!(LlmExecutor::parse_provider("unknown_provider"), None);
+    fn a_hosted_provider_name_resolves_by_the_goals_trust_mode() {
+        for (name, provider) in [
+            ("anthropic", Provider::Anthropic),
+            ("claude", Provider::Anthropic),
+            ("openai", Provider::OpenAI),
+            ("gpt", Provider::OpenAI),
+            ("google", Provider::Google),
+            ("gemini", Provider::Google),
+            ("deepseek", Provider::DeepSeek),
+            ("xai", Provider::XAI),
+            ("grok", Provider::XAI),
+        ] {
+            assert_eq!(
+                LlmExecutor::resolve_provider(name, Some(TrustMode::Byok)),
+                Some(provider),
+                "a BYOK goal must be able to name its own provider {name}"
+            );
+            assert_eq!(
+                LlmExecutor::resolve_provider(name, Some(TrustMode::ManagedCloud)),
+                Some(Provider::ManagedCloud),
+                "a Managed goal reaches {name} through Managed Cloud"
+            );
+            for local in [None, Some(TrustMode::Local), Some(TrustMode::OnDevice)] {
+                assert_eq!(
+                    LlmExecutor::resolve_provider(name, local),
+                    None,
+                    "a Local goal must not pin the hosted provider {name}"
+                );
+            }
+        }
     }
 
     #[test]
-    fn test_infer_provider_from_model() {
-        let router = create_test_router();
-        let executor = LlmExecutor::new(router);
-
-        let anthropic_model =
-            crate::core::llm::models_config::get_default_model(&Provider::Anthropic);
+    fn local_and_managed_names_stay_inside_their_own_boundary() {
+        for name in ["ollama", "local", " Ollama "] {
+            assert_eq!(
+                LlmExecutor::resolve_provider(name, None),
+                Some(Provider::Ollama)
+            );
+            assert_eq!(
+                LlmExecutor::resolve_provider(name, Some(TrustMode::Local)),
+                Some(Provider::Ollama)
+            );
+            assert_eq!(
+                LlmExecutor::resolve_provider(name, Some(TrustMode::Byok)),
+                None
+            );
+            assert_eq!(
+                LlmExecutor::resolve_provider(name, Some(TrustMode::ManagedCloud)),
+                None
+            );
+        }
+        for name in ["managed", "cloud", "managed-cloud", "managed_cloud"] {
+            assert_eq!(
+                LlmExecutor::resolve_provider(name, Some(TrustMode::ManagedCloud)),
+                Some(Provider::ManagedCloud)
+            );
+            assert_eq!(
+                LlmExecutor::resolve_provider(name, Some(TrustMode::Byok)),
+                None
+            );
+            assert_eq!(LlmExecutor::resolve_provider(name, None), None);
+        }
         assert_eq!(
-            executor.infer_provider_from_model(anthropic_model),
-            Some(Provider::Anthropic)
-        );
-        assert_eq!(
-            executor.infer_provider_from_model("fixture-openai-model"),
+            LlmExecutor::resolve_provider("unknown_provider", Some(TrustMode::Byok)),
             None
         );
+    }
+
+    #[test]
+    fn a_catalog_provider_is_placed_inside_the_goals_boundary() {
         for provider in [
+            Provider::Anthropic,
+            Provider::OpenAI,
             Provider::Google,
             Provider::DeepSeek,
             Provider::XAI,
@@ -609,18 +633,16 @@ mod tests {
             Provider::Zhipu,
             Provider::Perplexity,
         ] {
-            let model = crate::core::llm::models_config::get_default_model(&provider);
             assert_eq!(
-                executor.infer_provider_from_model(model),
-                Some(Provider::ManagedCloud),
-                "{provider:?} catalog models must route through Managed Cloud"
+                LlmExecutor::within_trust_boundary(provider, Some(TrustMode::Byok)),
+                Some(provider)
             );
+            assert_eq!(
+                LlmExecutor::within_trust_boundary(provider, Some(TrustMode::ManagedCloud)),
+                Some(Provider::ManagedCloud)
+            );
+            assert_eq!(LlmExecutor::within_trust_boundary(provider, None), None);
         }
-        assert_eq!(
-            executor.infer_provider_from_model("fixture-local-model:dynamic"),
-            None
-        );
-        assert_eq!(executor.infer_provider_from_model("unknown-model"), None);
     }
 
     #[test]

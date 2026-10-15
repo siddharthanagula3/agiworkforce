@@ -1,19 +1,10 @@
-use crate::core::agi::executors::{
-    BranchDiffSummary, ConflictHunk, ConflictParser, ConflictResolver, GeneratedPrContent,
-    HunkResolution, PrCreationConfig, PrCreationResult, PrCreationWorkflow, ResolutionResult,
-    ResolutionStrategy,
-};
-use crate::core::llm::LLMRouter;
 use git2::{
     BranchType, Cred, FetchOptions, PushOptions, RemoteCallbacks, Repository, Signature,
     StatusOptions,
 };
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use tauri::async_runtime::spawn_blocking;
-use tauri::State;
-use tokio::sync::RwLock;
 
 /// Build a git2 credential fallback chain that works on all platforms.
 ///
@@ -99,6 +90,154 @@ pub struct GitDiff {
     pub diff_content: String,
 }
 
+/// What a desktop user can do when host git refuses a repository's
+/// configuration: trusting the project's git settings records them as they
+/// are now, through [`git_trust_repository_config`].
+const DESKTOP_CONFIG_REMEDY: &str = "Remove the setting, or, if you set it yourself, open \
+     Project settings \u{2192} Trust this project's git settings, and try again.";
+
+/// `error` as the desktop shows it: a refusal of the repository's
+/// configuration ends with what to do on the desktop.
+pub(crate) fn desktop_git_error(error: anyhow::Error) -> String {
+    match error.downcast_ref::<agiworkforce_worktree::config_guard::UntrustedRepositoryConfig>() {
+        Some(refusal) => refusal.message(DESKTOP_CONFIG_REMEDY),
+        None => error.to_string(),
+    }
+}
+
+/// How long a host git that holds its caller's thread may run.
+pub(crate) const HOST_GIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The output of a host git that blocks this thread, killed at
+/// [`HOST_GIT_TIMEOUT`]: a FIFO a sandboxed command left where git reads,
+/// such as `.gitattributes`, would otherwise hold the thread forever.
+pub(crate) fn host_git_output(
+    command: std::process::Command,
+) -> Result<std::process::Output, String> {
+    agiworkforce_worktree::host_git_output_blocking(command, HOST_GIT_TIMEOUT)
+        .map_err(|error| host_git_failure(&error))
+}
+
+/// [`host_git_output`] for an async caller. The child is killed when the
+/// deadline passes.
+pub(crate) async fn host_git_output_async(
+    mut command: tokio::process::Command,
+) -> Result<std::process::Output, String> {
+    command.kill_on_drop(true);
+    match tokio::time::timeout(HOST_GIT_TIMEOUT, command.output()).await {
+        Ok(result) => result.map_err(|error| host_git_failure(&error)),
+        Err(_) => Err(host_git_failure(&std::io::Error::from(
+            std::io::ErrorKind::TimedOut,
+        ))),
+    }
+}
+
+/// The sentence to show when a host git could not start or did not finish.
+pub(crate) fn host_git_failure(error: &std::io::Error) -> String {
+    if error.kind() == std::io::ErrorKind::TimedOut {
+        "git did not finish in time and was stopped. A file git reads in this repository may \
+         be a pipe or device that never ends."
+            .to_string()
+    } else {
+        format!("Failed to run git: {error}")
+    }
+}
+
+/// How long a libgit2 read of the work tree may run before the command
+/// answers without it.
+const WORK_TREE_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Run `work`, which reads the work tree through libgit2, on a blocking
+/// thread with a deadline. libgit2 reads `.gitignore` and `.gitattributes` as
+/// plain files, so one a sandboxed command replaced with a FIFO blocks it
+/// forever. libgit2 cannot be interrupted: on a timeout the blocked thread is
+/// left behind, the known cost of answering the user instead of hanging.
+pub(crate) async fn read_work_tree<T: Send + 'static>(
+    what: &'static str,
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    match tokio::time::timeout(WORK_TREE_READ_TIMEOUT, spawn_blocking(work)).await {
+        Ok(joined) => joined.map_err(|e| e.to_string())?,
+        Err(_) => Err(format!(
+            "{what} did not finish in time. A file in the repository may be a pipe or device \
+             that never ends."
+        )),
+    }
+}
+
+/// How long a fetch may spend talking to its remote.
+const REMOTE_TRANSFER_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// How much longer the caller waits for the transfer thread to notice its
+/// deadline before answering without it.
+const REMOTE_TRANSFER_GRACE: std::time::Duration = std::time::Duration::from_secs(10);
+
+const REMOTE_TIMED_OUT: &str =
+    "The remote did not finish in time, so the transfer was stopped. Your files were not changed.";
+
+/// The point after which a transfer stops. libgit2 asks the progress and
+/// sideband callbacks whether to continue, and `false` aborts the transfer.
+#[derive(Clone)]
+struct RemoteDeadline {
+    at: std::time::Instant,
+    passed: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl RemoteDeadline {
+    fn after(limit: std::time::Duration) -> Self {
+        Self {
+            at: std::time::Instant::now() + limit,
+            passed: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+
+    fn still_open(&self) -> bool {
+        if std::time::Instant::now() < self.at {
+            return true;
+        }
+        self.passed.store(true, std::sync::atomic::Ordering::SeqCst);
+        false
+    }
+
+    fn callbacks(&self) -> RemoteCallbacks<'static> {
+        let mut callbacks = RemoteCallbacks::new();
+        callbacks.credentials(make_git_credentials);
+        let transfer = self.clone();
+        callbacks.transfer_progress(move |_| transfer.still_open());
+        let sideband = self.clone();
+        callbacks.sideband_progress(move |_| sideband.still_open());
+        callbacks
+    }
+
+    fn describe(&self, error: &git2::Error) -> String {
+        if self.passed.load(std::sync::atomic::Ordering::SeqCst) {
+            REMOTE_TIMED_OUT.to_string()
+        } else {
+            error.message().to_string()
+        }
+    }
+}
+
+/// Run `work`, which talks to a remote through libgit2, on a blocking thread.
+/// The deadline it is handed stops a transfer that is still moving data; a
+/// connection that has gone silent never reaches a callback, so the caller
+/// also stops waiting shortly after the deadline. `work` must check the
+/// deadline again before it changes anything local.
+async fn run_remote_transfer<T: Send + 'static>(
+    work: impl FnOnce(RemoteDeadline) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    let deadline = RemoteDeadline::after(REMOTE_TRANSFER_TIMEOUT);
+    match tokio::time::timeout(
+        REMOTE_TRANSFER_TIMEOUT + REMOTE_TRANSFER_GRACE,
+        spawn_blocking(move || work(deadline)),
+    )
+    .await
+    {
+        Ok(joined) => joined.map_err(|e| e.to_string())?,
+        Err(_) => Err(REMOTE_TIMED_OUT.to_string()),
+    }
+}
+
 /// FIX-013 (Sprint 2): every `path: String` argument crossing into a git
 /// operation goes through `validate_path_security` so symlinks, `..`
 /// traversal, and `/etc/passwd`-style targets fail loudly before libgit2
@@ -107,6 +246,29 @@ pub struct GitDiff {
 fn validate_git_path(path: &str) -> Result<String, String> {
     let canonical = crate::sys::commands::file_ops::validate_path_security(path)?;
     Ok(canonical.to_string_lossy().to_string())
+}
+
+/// [`validate_git_path`] for a path the page names. Path sanity alone let
+/// the page run git, and read or change a repository, anywhere on the disk,
+/// so the path must also lie in a folder the user granted or in the open
+/// project folder: the test `file_read` applies, against the same list.
+async fn granted_git_path(app: &tauri::AppHandle, path: &str) -> Result<String, String> {
+    let canonical = validate_git_path(path)?;
+    let mut granted = crate::sys::commands::file_ops::granted_directories(app)
+        .await
+        .unwrap_or_default();
+    if let Some(project) =
+        crate::core::mcp::config::McpServersConfig::active_project_folder_from_env()
+    {
+        granted.push(std::fs::canonicalize(&project).unwrap_or_else(|_| PathBuf::from(project)));
+    }
+    if crate::sys::commands::file_ops::is_path_allowed(&canonical, &granted) {
+        Ok(canonical)
+    } else {
+        Err(format!(
+            "{path} is outside the folders you have allowed. Add its folder in Settings, Allowed Directories, or open it as the project folder."
+        ))
+    }
 }
 
 fn canonicalize_existing_or_new(path: &Path) -> Result<PathBuf, String> {
@@ -180,25 +342,19 @@ fn sanitize_commit_message(message: &str) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn git_init(path: String) -> Result<String, String> {
-    tracing::info!("Initializing Git repository at: {}", path);
-    let path = validate_git_path(&path)?;
-
-    spawn_blocking(move || {
-        Repository::init(&path)
-            .map(|_| format!("Initialized empty Git repository in {}", path))
-            .map_err(|e| e.message().to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
+pub async fn git_status(app: tauri::AppHandle, path: String) -> Result<GitStatus, String> {
+    let path = granted_git_path(&app, &path).await?;
+    git_status_at(path).await
 }
 
-#[tauri::command]
-pub async fn git_status(path: String) -> Result<GitStatus, String> {
+/// [`git_status`] for a caller that has already held `path` to the folders it
+/// may use: the tool executor, which applies the tool guard and its session
+/// grants.
+pub(crate) async fn git_status_at(path: String) -> Result<GitStatus, String> {
     tracing::info!("Getting Git status for: {}", path);
     let path = validate_git_path(&path)?;
 
-    spawn_blocking(move || {
+    read_work_tree("git status", move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
 
         let head = repo.head().ok();
@@ -280,11 +436,22 @@ pub async fn git_status(path: String) -> Result<GitStatus, String> {
         })
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub async fn git_add(path: String, files: Vec<String>) -> Result<String, String> {
+pub async fn git_add(
+    app: tauri::AppHandle,
+    path: String,
+    files: Vec<String>,
+) -> Result<String, String> {
+    let path = granted_git_path(&app, &path).await?;
+    git_add_at(path, files).await
+}
+
+/// [`git_add`] for a caller that has already held `path` to the folders it
+/// may use: the tool executor, which applies the tool guard and its session
+/// grants.
+pub(crate) async fn git_add_at(path: String, files: Vec<String>) -> Result<String, String> {
     tracing::info!("Adding {} files to staging", files.len());
     let path = validate_git_path(&path)?;
 
@@ -307,14 +474,27 @@ pub async fn git_add(path: String, files: Vec<String>) -> Result<String, String>
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
         let mut index = repo.index().map_err(|e| e.message().to_string())?;
 
+        // A deleted file is staged by removing it from the index; add_path
+        // and add_all both skip it, which left deletions unstageable.
         for file in &validated_files {
             if file == "." {
                 index
                     .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
                     .map_err(|e| e.message().to_string())?;
+                index
+                    .update_all(["*"].iter(), None)
+                    .map_err(|e| e.message().to_string())?;
             } else {
-                let path = Path::new(file);
-                index.add_path(path).map_err(|e| e.message().to_string())?;
+                let relative = Path::new(file);
+                if Path::new(&path).join(relative).exists() {
+                    index
+                        .add_path(relative)
+                        .map_err(|e| e.message().to_string())?;
+                } else {
+                    index
+                        .remove_path(relative)
+                        .map_err(|e| e.message().to_string())?;
+                }
             }
         }
 
@@ -326,7 +506,19 @@ pub async fn git_add(path: String, files: Vec<String>) -> Result<String, String>
 }
 
 #[tauri::command]
-pub async fn git_commit(path: String, message: String) -> Result<String, String> {
+pub async fn git_commit(
+    app: tauri::AppHandle,
+    path: String,
+    message: String,
+) -> Result<String, String> {
+    let path = granted_git_path(&app, &path).await?;
+    git_commit_at(path, message).await
+}
+
+/// [`git_commit`] for a caller that has already held `path` to the folders it
+/// may use: the tool executor, which applies the tool guard and its session
+/// grants.
+pub(crate) async fn git_commit_at(path: String, message: String) -> Result<String, String> {
     let path = validate_git_path(&path)?;
     let message = sanitize_commit_message(&message)?;
     tracing::info!("Creating commit ({} bytes)", message.len());
@@ -382,7 +574,6 @@ pub async fn git_commit(path: String, message: String) -> Result<String, String>
     .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
 pub async fn git_push(
     app: tauri::AppHandle,
     path: String,
@@ -394,8 +585,6 @@ pub async fn git_push(
     let remote_name = remote.unwrap_or_else(|| "origin".to_string());
     tracing::info!("Pushing to {}", remote_name);
 
-    // AUDIT-FIX: Enforce user confirmation for push
-    // We categorize this as "git_push" tool
     let confirmation_args = serde_json::json!({
         "path": path,
         "remote": remote_name,
@@ -403,18 +592,14 @@ pub async fn git_push(
         "force": force
     });
 
-    // We treat git push as always requiring confirmation for now,
-    // or we could check command_validator::requires_confirmation("git push")
-    // But since this is a specific tool command, we can just enforce it directly
-    // or use the validator if we want centralized config.
-    // Let's use the validator to be consistent with terminal.rs
-    if crate::sys::security::command_validator::requires_confirmation("git push")
-        && !crate::sys::commands::tool_confirmation::request_confirmation_simple(
-            &app,
-            "git_push",
-            &confirmation_args,
-        )
-        .await?
+    // Publishing to a remote cannot be taken back from here, and a force push
+    // overwrites history other clones depend on, so it always asks.
+    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        &app,
+        "git_push",
+        &confirmation_args,
+    )
+    .await?
     {
         return Err("Operation denied by user".to_string());
     }
@@ -457,123 +642,101 @@ pub async fn git_push(
 
 #[tauri::command]
 pub async fn git_pull(
+    app: tauri::AppHandle,
     path: String,
     remote: Option<String>,
     branch: Option<String>,
 ) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
+    let path = granted_git_path(&app, &path).await?;
     let remote_name = remote.unwrap_or_else(|| "origin".to_string());
     tracing::info!("Pulling from {}", remote_name);
 
-    spawn_blocking(move || {
-        let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        let mut remote = repo
-            .find_remote(&remote_name)
-            .map_err(|e| e.message().to_string())?;
-
-        let branch_name = if let Some(b) = branch {
-            b
-        } else {
-            let head = repo.head().map_err(|e| e.message().to_string())?;
-            head.shorthand().unwrap_or("main").to_string()
-        };
-
-        let mut callbacks = RemoteCallbacks::new();
-        callbacks.credentials(make_git_credentials);
-
-        let mut fetch_opts = FetchOptions::new();
-        fetch_opts.remote_callbacks(callbacks);
-
-        remote
-            .fetch(&[&branch_name], Some(&mut fetch_opts), None)
-            .map_err(|e| e.message().to_string())?;
-
-        let fetch_head = repo
-            .find_reference("FETCH_HEAD")
-            .map_err(|e| e.message().to_string())?;
-        let fetch_commit = repo
-            .reference_to_annotated_commit(&fetch_head)
-            .map_err(|e| e.message().to_string())?;
-        let analysis = repo
-            .merge_analysis(&[&fetch_commit])
-            .map_err(|e| e.message().to_string())?;
-
-        if analysis.0.is_fast_forward() {
-            let refname = format!("refs/heads/{}", branch_name);
-            let mut reference = repo
-                .find_reference(&refname)
-                .map_err(|e| e.message().to_string())?;
-            reference
-                .set_target(fetch_commit.id(), "Fast-Forward")
-                .map_err(|e| e.message().to_string())?;
-            repo.set_head(&refname)
-                .map_err(|e| e.message().to_string())?;
-            repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
-                .map_err(|e| e.message().to_string())?;
-        } else if analysis.0.is_normal() {
-            let head = repo.head().map_err(|e| e.message().to_string())?;
-            let head_commit = repo
-                .reference_to_annotated_commit(&head)
-                .map_err(|e| e.message().to_string())?;
-            repo.merge(&[&fetch_commit], None, None)
-                .map_err(|e| e.message().to_string())?;
-
-            let sig = repo.signature().map_err(|e| e.message().to_string())?;
-            let mut index = repo.index().map_err(|e| e.message().to_string())?;
-            let tree_id = index.write_tree().map_err(|e| e.message().to_string())?;
-            let tree = repo
-                .find_tree(tree_id)
-                .map_err(|e| e.message().to_string())?;
-
-            let head_commit_obj = repo
-                .find_commit(head_commit.id())
-                .map_err(|e| e.message().to_string())?;
-            let fetch_commit_obj = repo
-                .find_commit(fetch_commit.id())
-                .map_err(|e| e.message().to_string())?;
-
-            repo.commit(
-                Some("HEAD"),
-                &sig,
-                &sig,
-                "Merge",
-                &tree,
-                &[&head_commit_obj, &fetch_commit_obj],
-            )
-            .map_err(|e| e.message().to_string())?;
-
-            repo.checkout_head(None)
-                .map_err(|e| e.message().to_string())?;
-        }
-
-        Ok("Pull successful".to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    run_remote_transfer(move |deadline| pull_fast_forward(&path, &remote_name, branch, &deadline))
+        .await
 }
 
-#[tauri::command]
-pub async fn git_create_branch(path: String, branch_name: String) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
-    tracing::info!("Creating branch: {}", branch_name);
+fn pull_fast_forward(
+    path: &str,
+    remote_name: &str,
+    branch: Option<String>,
+    deadline: &RemoteDeadline,
+) -> Result<String, String> {
+    let repo = Repository::open(path).map_err(|e| e.message().to_string())?;
+    let mut remote = repo
+        .find_remote(remote_name)
+        .map_err(|e| e.message().to_string())?;
 
-    spawn_blocking(move || {
-        let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
+    let branch_name = if let Some(b) = branch {
+        b
+    } else {
         let head = repo.head().map_err(|e| e.message().to_string())?;
-        let commit = head.peel_to_commit().map_err(|e| e.message().to_string())?;
+        if !head.is_branch() {
+            return Err("Switch to a branch before pulling.".to_string());
+        }
+        head.shorthand().unwrap_or("main").to_string()
+    };
+    let refname = format!("refs/heads/{}", branch_name);
+    let mut reference = repo
+        .find_reference(&refname)
+        .map_err(|e| e.message().to_string())?;
 
-        repo.branch(&branch_name, &commit, false)
-            .map_err(|e| e.message().to_string())?;
+    let mut fetch_opts = FetchOptions::new();
+    fetch_opts.remote_callbacks(deadline.callbacks());
 
-        Ok(format!("Branch '{}' created", branch_name))
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    remote
+        .fetch(&[&branch_name], Some(&mut fetch_opts), None)
+        .map_err(|e| deadline.describe(&e))?;
+    if !deadline.still_open() {
+        return Err(REMOTE_TIMED_OUT.to_string());
+    }
+
+    let fetch_head = repo
+        .find_reference("FETCH_HEAD")
+        .map_err(|e| e.message().to_string())?;
+    let fetch_commit = repo
+        .reference_to_annotated_commit(&fetch_head)
+        .map_err(|e| e.message().to_string())?;
+    let analysis = repo
+        .merge_analysis(&[&fetch_commit])
+        .map_err(|e| e.message().to_string())?;
+
+    if analysis.0.is_up_to_date() {
+        return Ok("Already up to date".to_string());
+    }
+    if !analysis.0.is_fast_forward() {
+        return Err(format!(
+            "'{branch_name}' has commits that {remote_name} does not, so this pull needs a merge. Nothing was changed."
+        ));
+    }
+
+    // The work tree moves first and only where it cannot overwrite an
+    // uncommitted edit; the branch follows once that has succeeded.
+    let target = repo
+        .find_object(fetch_commit.id(), None)
+        .map_err(|e| e.message().to_string())?;
+    repo.checkout_tree(&target, Some(git2::build::CheckoutBuilder::new().safe()))
+        .map_err(|e| {
+            format!(
+                "Pull stopped before changing any file, because it would overwrite uncommitted changes: {}",
+                e.message()
+            )
+        })?;
+    reference
+        .set_target(fetch_commit.id(), "Fast-Forward")
+        .map_err(|e| e.message().to_string())?;
+    repo.set_head(&refname)
+        .map_err(|e| e.message().to_string())?;
+
+    Ok("Pull successful".to_string())
 }
 
 #[tauri::command]
-pub async fn git_checkout(path: String, branch_name: String) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
+pub async fn git_checkout(
+    app: tauri::AppHandle,
+    path: String,
+    branch_name: String,
+) -> Result<String, String> {
+    let path = granted_git_path(&app, &path).await?;
     tracing::info!("Switching to branch: {}", branch_name);
 
     spawn_blocking(move || {
@@ -592,8 +755,12 @@ pub async fn git_checkout(path: String, branch_name: String) -> Result<String, S
 }
 
 #[tauri::command]
-pub async fn git_checkout_new_branch(path: String, branch_name: String) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
+pub async fn git_checkout_new_branch(
+    app: tauri::AppHandle,
+    path: String,
+    branch_name: String,
+) -> Result<String, String> {
+    let path = granted_git_path(&app, &path).await?;
     tracing::info!("Creating and switching to branch: {}", branch_name);
 
     spawn_blocking(move || {
@@ -617,7 +784,18 @@ pub async fn git_checkout_new_branch(path: String, branch_name: String) -> Resul
 }
 
 #[tauri::command]
-pub async fn git_list_branches(path: String) -> Result<Vec<GitBranch>, String> {
+pub async fn git_list_branches(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<Vec<GitBranch>, String> {
+    let path = granted_git_path(&app, &path).await?;
+    git_list_branches_at(path).await
+}
+
+/// [`git_list_branches`] for a caller that has already held `path` to the folders it
+/// may use: the tool executor, which applies the tool guard and its session
+/// grants.
+pub(crate) async fn git_list_branches_at(path: String) -> Result<Vec<GitBranch>, String> {
     let path = validate_git_path(&path)?;
     tracing::info!("Listing branches");
 
@@ -662,25 +840,22 @@ pub async fn git_delete_branch(
     app: tauri::AppHandle,
     path: String,
     branch_name: String,
-    _force: bool,
 ) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
+    let path = granted_git_path(&app, &path).await?;
     tracing::info!("Deleting branch: {}", branch_name);
 
     // AUDIT-FIX: Enforce user confirmation for branch deletion
     let confirmation_args = serde_json::json!({
         "path": path,
-        "branch_name": branch_name,
-        "force": _force
+        "branch_name": branch_name
     });
 
-    if crate::sys::security::command_validator::requires_confirmation("git branch -D")
-        && !crate::sys::commands::tool_confirmation::request_confirmation_simple(
-            &app,
-            "git_delete_branch",
-            &confirmation_args,
-        )
-        .await?
+    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        &app,
+        "git_delete_branch",
+        &confirmation_args,
+    )
+    .await?
     {
         return Err("Operation denied by user".to_string());
     }
@@ -699,93 +874,6 @@ pub async fn git_delete_branch(
     .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
-pub async fn git_merge(path: String, branch_name: String) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
-    tracing::info!("Merging branch: {}", branch_name);
-
-    spawn_blocking(move || {
-        let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        let branch = repo
-            .find_branch(&branch_name, BranchType::Local)
-            .map_err(|e| e.message().to_string())?;
-
-        let annotated_commit = repo
-            .reference_to_annotated_commit(branch.get())
-            .map_err(|e| e.message().to_string())?;
-
-        let (analysis, _) = repo
-            .merge_analysis(&[&annotated_commit])
-            .map_err(|e| e.message().to_string())?;
-
-        // AUDIT-003-004 fix: Replace unwrap() calls with proper error propagation
-        if analysis.is_fast_forward() {
-            let refname = format!("refs/heads/{}", branch_name);
-            let mut reference = repo
-                .find_reference(&refname)
-                .map_err(|e| e.message().to_string())?;
-            let target_id = annotated_commit.id();
-            reference
-                .set_target(target_id, "Fast-Forward")
-                .map_err(|e| e.message().to_string())?;
-            repo.set_head(&refname)
-                .map_err(|e| e.message().to_string())?;
-            repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
-                .map_err(|e| e.message().to_string())?;
-        } else if analysis.is_normal() {
-            let head_ref = repo.head().map_err(|e| e.message().to_string())?;
-            let head_commit = repo
-                .reference_to_annotated_commit(&head_ref)
-                .map_err(|e| e.message().to_string())?;
-            repo.merge(&[&annotated_commit], None, None)
-                .map_err(|e| e.message().to_string())?;
-
-            // AUDIT-003-008 fix: Log warning when using fallback signature
-            let sig = match repo.signature() {
-                Ok(sig) => sig,
-                Err(e) => {
-                    tracing::warn!(
-                        "Git user.name/user.email not configured for merge, using fallback identity. \
-                        Original error: {}",
-                        e.message()
-                    );
-                    Signature::now("AGI Agent", "agent@agiworkforce.com")
-                        .map_err(|e| e.message().to_string())?
-                }
-            };
-            let mut index = repo.index().map_err(|e| e.message().to_string())?;
-            let tree_id = index.write_tree().map_err(|e| e.message().to_string())?;
-            let tree = repo
-                .find_tree(tree_id)
-                .map_err(|e| e.message().to_string())?;
-
-            let head_commit_obj = repo
-                .find_commit(head_commit.id())
-                .map_err(|e| e.message().to_string())?;
-            let other_commit_obj = repo
-                .find_commit(annotated_commit.id())
-                .map_err(|e| e.message().to_string())?;
-
-            repo.commit(
-                Some("HEAD"),
-                &sig,
-                &sig,
-                "Merge",
-                &tree,
-                &[&head_commit_obj, &other_commit_obj],
-            )
-            .map_err(|e| e.message().to_string())?;
-
-            repo.checkout_head(None).map_err(|e| e.message().to_string())?;
-        }
-
-        Ok("Merge successful".to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-#[tauri::command]
 pub async fn git_log(path: String, limit: Option<usize>) -> Result<Vec<GitCommit>, String> {
     let path = validate_git_path(&path)?;
     let max_count = limit.unwrap_or(50);
@@ -819,6 +907,19 @@ pub async fn git_log(path: String, limit: Option<usize>) -> Result<Vec<GitCommit
 
 #[tauri::command]
 pub async fn git_diff(
+    app: tauri::AppHandle,
+    path: String,
+    file_path: Option<String>,
+    staged: bool,
+) -> Result<Vec<GitDiff>, String> {
+    let path = granted_git_path(&app, &path).await?;
+    git_diff_at(path, file_path, staged).await
+}
+
+/// [`git_diff`] for a caller that has already held `path` to the folders it
+/// may use: the tool executor, which applies the tool guard and its session
+/// grants.
+pub(crate) async fn git_diff_at(
     path: String,
     file_path: Option<String>,
     staged: bool,
@@ -830,7 +931,7 @@ pub async fn git_diff(
         .transpose()?;
     tracing::info!("Getting diff{}", if staged { " (staged)" } else { "" });
 
-    spawn_blocking(move || {
+    read_work_tree("git diff", move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
         let mut opts = git2::DiffOptions::new();
 
@@ -897,10 +998,8 @@ pub async fn git_diff(
         Ok(diffs)
     })
     .await
-    .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
 pub async fn git_clone(url: String, destination: String) -> Result<String, String> {
     let destination = validate_git_path(&destination)?;
     tracing::info!("Cloning repository from: {}", url);
@@ -925,66 +1024,30 @@ pub async fn git_clone(url: String, destination: String) -> Result<String, Strin
 }
 
 #[tauri::command]
-pub async fn git_fetch(path: String, remote: Option<String>) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
+pub async fn git_fetch(
+    app: tauri::AppHandle,
+    path: String,
+    remote: Option<String>,
+) -> Result<String, String> {
+    let path = granted_git_path(&app, &path).await?;
     let remote_name = remote.unwrap_or_else(|| "origin".to_string());
     tracing::info!("Fetching from: {}", remote_name);
 
-    spawn_blocking(move || {
+    run_remote_transfer(move |deadline| {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
         let mut remote = repo
             .find_remote(&remote_name)
             .map_err(|e| e.message().to_string())?;
 
-        let mut callbacks = RemoteCallbacks::new();
-        callbacks.credentials(make_git_credentials);
-
         let mut fetch_opts = FetchOptions::new();
-        fetch_opts.remote_callbacks(callbacks);
+        fetch_opts.remote_callbacks(deadline.callbacks());
 
         remote
             .fetch(&[] as &[&str], Some(&mut fetch_opts), None)
             .map(|_| "Fetch successful".to_string())
-            .map_err(|e| e.message().to_string())
+            .map_err(|e| deadline.describe(&e))
     })
     .await
-    .map_err(|e| e.to_string())?
-}
-
-#[tauri::command]
-pub async fn git_stash(path: String, message: Option<String>) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
-    tracing::info!("Stashing changes");
-
-    spawn_blocking(move || {
-        let mut repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        let sig = repo.signature().map_err(|e| e.message().to_string())?;
-
-        repo.stash_save(
-            &sig,
-            message.as_deref().unwrap_or("Stash"),
-            Some(git2::StashFlags::DEFAULT),
-        )
-        .map(|_| "Stash successful".to_string())
-        .map_err(|e| e.message().to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-#[tauri::command]
-pub async fn git_stash_pop(path: String) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
-    tracing::info!("Popping stash");
-
-    spawn_blocking(move || {
-        let mut repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        repo.stash_pop(0, None)
-            .map(|_| "Stash pop successful".to_string())
-            .map_err(|e| e.message().to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -995,7 +1058,7 @@ pub async fn git_reset(
     mode: String,
     files: Option<Vec<String>>,
 ) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
+    let path = granted_git_path(&app, &path).await?;
     tracing::info!("Resetting to {} ({})", commit, mode);
 
     // If files specified, reset only those files (git reset HEAD -- <files>)
@@ -1003,37 +1066,28 @@ pub async fn git_reset(
         if !file_list.is_empty() {
             tracing::info!("Resetting {} specific files", file_list.len());
 
-            let confirmation_args = serde_json::json!({
-                "path": path,
-                "files": file_list
-            });
-
-            if crate::sys::security::command_validator::requires_confirmation("git reset")
-                && !crate::sys::commands::tool_confirmation::request_confirmation_simple(
-                    &app,
-                    "git_reset",
-                    &confirmation_args,
-                )
-                .await?
-            {
-                return Err("Operation denied by user".to_string());
-            }
-
             let path_clone = path.clone();
             let file_list_clone = file_list
                 .iter()
                 .map(|file| validate_git_relative_path(&path, file))
                 .collect::<Result<Vec<_>, _>>()?;
             return spawn_blocking(move || {
-                let mut cmd = std::process::Command::new("git");
+                agiworkforce_worktree::config_guard::check_repository_config_blocking(
+                    Path::new(&path_clone),
+                    agiworkforce_worktree::config_guard::ConfigUse::CONTENT,
+                    false,
+                )
+                .map_err(desktop_git_error)?;
+                let mut cmd = agiworkforce_worktree::host_git();
                 cmd.current_dir(&path_clone)
                     .arg("reset")
+                    .arg("--no-recurse-submodules")
                     .arg("HEAD")
                     .arg("--");
                 for f in &file_list_clone {
                     cmd.arg(f);
                 }
-                let output = cmd.output().map_err(|e| e.to_string())?;
+                let output = host_git_output(cmd)?;
                 if output.status.success() {
                     Ok(format!(
                         "Reset {} file(s) successfully",
@@ -1048,14 +1102,16 @@ pub async fn git_reset(
         }
     }
 
-    // AUDIT-FIX: Enforce user confirmation for reset
     let confirmation_args = serde_json::json!({
         "path": path,
         "commit": commit,
         "mode": mode
     });
 
-    if crate::sys::security::command_validator::requires_confirmation("git reset")
+    if (mode == "hard"
+        || crate::sys::security::command_validator::requires_confirmation(&format!(
+            "git reset --{mode}"
+        )))
         && !crate::sys::commands::tool_confirmation::request_confirmation_simple(
             &app,
             "git_reset",
@@ -1088,34 +1144,20 @@ pub async fn git_reset(
     .map_err(|e| e.to_string())?
 }
 
+/// Discards working-tree changes to `files`. The Changes panel asks first,
+/// naming the files whose changes are lost, so this command does not raise a
+/// second, generic question. The agent's git tools confirm on their own path.
 #[tauri::command]
 pub async fn git_checkout_files(
     app: tauri::AppHandle,
     path: String,
     files: Vec<String>,
 ) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
+    let path = granted_git_path(&app, &path).await?;
     tracing::info!("Checking out {} files to discard changes", files.len());
 
     if files.is_empty() {
         return Err("No files specified".to_string());
-    }
-
-    // AUDIT-FIX: Enforce user confirmation for checkout (destructive operation)
-    let confirmation_args = serde_json::json!({
-        "path": path,
-        "files": files
-    });
-
-    if crate::sys::security::command_validator::requires_confirmation("git checkout")
-        && !crate::sys::commands::tool_confirmation::request_confirmation_simple(
-            &app,
-            "git_checkout_files",
-            &confirmation_args,
-        )
-        .await?
-    {
-        return Err("Operation denied by user".to_string());
     }
 
     let files_clone = files
@@ -1123,12 +1165,21 @@ pub async fn git_checkout_files(
         .map(|file| validate_git_relative_path(&path, file))
         .collect::<Result<Vec<_>, _>>()?;
     spawn_blocking(move || {
-        let mut cmd = std::process::Command::new("git");
-        cmd.current_dir(&path).arg("checkout").arg("--");
+        agiworkforce_worktree::config_guard::check_repository_config_blocking(
+            Path::new(&path),
+            agiworkforce_worktree::config_guard::ConfigUse::CONTENT,
+            false,
+        )
+        .map_err(desktop_git_error)?;
+        let mut cmd = agiworkforce_worktree::host_git();
+        cmd.current_dir(&path)
+            .arg("checkout")
+            .arg("--no-recurse-submodules")
+            .arg("--");
         for f in &files_clone {
             cmd.arg(f);
         }
-        let output = cmd.output().map_err(|e| e.to_string())?;
+        let output = host_git_output(cmd)?;
         if output.status.success() {
             Ok(format!(
                 "Discarded changes in {} file(s)",
@@ -1142,895 +1193,178 @@ pub async fn git_checkout_files(
     .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
-pub async fn git_list_remotes(path: String) -> Result<Vec<(String, String)>, String> {
-    let path = validate_git_path(&path)?;
-    tracing::info!("Listing remotes");
-
-    spawn_blocking(move || {
-        let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        let remotes = repo.remotes().map_err(|e| e.message().to_string())?;
-
-        let mut result = Vec::new();
-        for name in remotes.iter().filter_map(|r| r.ok().flatten()) {
-            if let Ok(remote) = repo.find_remote(name) {
-                let url = remote.url().ok().unwrap_or("").to_string();
-                result.push((name.to_string(), url));
-            }
-        }
-
-        Ok(result)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-#[tauri::command]
-pub async fn git_add_remote(path: String, name: String, url: String) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
-    tracing::info!("Adding remote {} -> {}", name, url);
-
-    spawn_blocking(move || {
-        let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        repo.remote(&name, &url)
-            .map_err(|e| e.message().to_string())?;
-        Ok(format!("Remote '{}' added", name))
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-// ============================================================================
-// Conflict Resolution Commands
-// ============================================================================
-
-/// Conflict details for a file, serializable for the frontend.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GitConflictDetails {
-    /// Relative path to the file within the repository.
-    pub file_path: String,
-    /// The full content of the file with conflict markers.
-    pub full_content: String,
-    /// Individual conflict hunks within this file.
-    pub hunks: Vec<ConflictHunk>,
-    /// Total number of conflicts in this file.
-    pub conflict_count: usize,
-}
-
-/// List all files with merge conflicts in a repository.
-///
-/// Returns a list of file paths that have unresolved conflicts.
-#[tauri::command]
-pub async fn git_list_conflicts(path: String) -> Result<Vec<String>, String> {
-    let path = validate_git_path(&path)?;
-    tracing::info!("Listing conflicts in: {}", path);
-
-    spawn_blocking(move || {
-        let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-
-        let mut opts = StatusOptions::new();
-        opts.include_untracked(false);
-
-        let statuses = repo
-            .statuses(Some(&mut opts))
-            .map_err(|e| e.message().to_string())?;
-
-        let mut conflicts = Vec::new();
-
-        for entry in statuses.iter() {
-            let file_path = entry.path().unwrap_or("").to_string();
-            let status = entry.status();
-
-            if status.contains(git2::Status::CONFLICTED) {
-                conflicts.push(file_path);
-            }
-        }
-
-        // Also check for conflict markers in files that git might have missed
-        // (e.g., after manual edits)
-        let workdir = repo.workdir().ok_or("Not a working directory")?;
-
-        for entry in statuses.iter() {
-            let file_path = entry.path().unwrap_or("");
-            if conflicts.contains(&file_path.to_string()) {
-                continue;
-            }
-
-            let full_path = workdir.join(file_path);
-            if full_path.is_file() {
-                if let Ok(content) = std::fs::read_to_string(&full_path) {
-                    if ConflictParser::has_conflicts(&content) {
-                        conflicts.push(file_path.to_string());
-                    }
-                }
-            }
-        }
-
-        tracing::info!("Found {} files with conflicts", conflicts.len());
-        Ok(conflicts)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-/// Get detailed conflict information for a specific file.
-///
-/// Parses the file content and extracts all conflict hunks with
-/// their "ours" and "theirs" versions.
-#[tauri::command]
-pub async fn git_get_conflict_details(
-    path: String,
-    file_path: String,
-) -> Result<GitConflictDetails, String> {
-    let path = validate_git_path(&path)?;
-    let file_path = validate_git_relative_path(&path, &file_path)?;
-    tracing::info!("Getting conflict details for: {}/{}", path, file_path);
-
-    spawn_blocking(move || {
-        let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        let workdir = repo.workdir().ok_or("Not a working directory")?;
-
-        let full_path = workdir.join(&file_path);
-        if !full_path.is_file() {
-            return Err(format!("File not found: {}", file_path));
-        }
-
-        let content = std::fs::read_to_string(&full_path)
-            .map_err(|e| format!("Failed to read file: {}", e))?;
-
-        let hunks = ConflictParser::parse_conflicts(&content);
-        let conflict_count = hunks.len();
-
-        if conflict_count == 0 {
-            return Err(format!("No conflicts found in: {}", file_path));
-        }
-
-        tracing::info!("Found {} conflicts in file: {}", conflict_count, file_path);
-
-        Ok(GitConflictDetails {
-            file_path,
-            full_content: content,
-            hunks,
-            conflict_count,
-        })
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-/// Resolution request for the frontend.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConflictResolutionRequest {
-    /// Index of the hunk to resolve (0-indexed).
-    pub hunk_index: usize,
-    /// Resolution strategy to apply.
-    pub strategy: String, // "keep_ours", "keep_theirs", "keep_both", "manual"
-    /// Content for manual resolution (required if strategy is "manual").
-    pub manual_content: Option<String>,
-}
-
-/// Resolve conflicts in a file.
-///
-/// Applies the specified resolutions to the file and writes the result.
-/// Returns information about the resolution result.
-#[tauri::command]
-pub async fn git_resolve_conflict(
-    path: String,
-    file_path: String,
-    resolutions: Vec<ConflictResolutionRequest>,
-) -> Result<ResolutionResult, String> {
-    let path = validate_git_path(&path)?;
-    let file_path = validate_git_relative_path(&path, &file_path)?;
-    tracing::info!(
-        "Resolving {} conflicts in: {}/{}",
-        resolutions.len(),
-        path,
-        file_path
-    );
-
-    spawn_blocking(move || {
-        let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        let workdir = repo.workdir().ok_or("Not a working directory")?;
-
-        let full_path = workdir.join(&file_path);
-        if !full_path.is_file() {
-            return Err(format!("File not found: {}", file_path));
-        }
-
-        let content = std::fs::read_to_string(&full_path)
-            .map_err(|e| format!("Failed to read file: {}", e))?;
-
-        let hunks = ConflictParser::parse_conflicts(&content);
-
-        if hunks.is_empty() {
-            return Ok(ResolutionResult {
-                file_path: file_path.clone(),
-                success: true,
-                resolved_content: Some(content),
-                error: None,
-                conflicts_resolved: 0,
-                conflicts_remaining: 0,
-            });
-        }
-
-        // Convert frontend resolutions to internal format
-        let internal_resolutions: Vec<HunkResolution> = resolutions
-            .iter()
-            .map(|r| {
-                let strategy = match r.strategy.as_str() {
-                    "keep_ours" => ResolutionStrategy::KeepOurs,
-                    "keep_theirs" => ResolutionStrategy::KeepTheirs,
-                    "keep_both" => ResolutionStrategy::KeepBoth,
-                    "manual" => ResolutionStrategy::Manual,
-                    "llm_suggested" => ResolutionStrategy::LlmSuggested,
-                    _ => ResolutionStrategy::KeepOurs, // Default fallback
-                };
-
-                HunkResolution {
-                    hunk_index: r.hunk_index,
-                    strategy,
-                    resolved_content: r.manual_content.clone(),
-                }
-            })
-            .collect();
-
-        // Apply resolutions
-        let resolved_content =
-            ConflictResolver::resolve_all_hunks(&content, &hunks, &internal_resolutions)
-                .map_err(|e| format!("Resolution failed: {}", e))?;
-
-        // Check how many conflicts remain
-        let remaining_conflicts = ConflictParser::count_conflicts(&resolved_content);
-        let resolved_count = hunks.len().saturating_sub(remaining_conflicts);
-
-        // Write the resolved content back to the file
-        std::fs::write(&full_path, &resolved_content)
-            .map_err(|e| format!("Failed to write resolved file: {}", e))?;
-
-        tracing::info!(
-            "Resolved {} conflicts in {}, {} remaining",
-            resolved_count,
-            file_path,
-            remaining_conflicts
-        );
-
-        Ok(ResolutionResult {
-            file_path,
-            success: remaining_conflicts == 0,
-            resolved_content: Some(resolved_content),
-            error: None,
-            conflicts_resolved: resolved_count,
-            conflicts_remaining: remaining_conflicts,
-        })
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-/// Mark a file's conflicts as resolved (stage it for commit).
-///
-/// This should be called after all conflicts in a file have been resolved.
-#[tauri::command]
-pub async fn git_mark_resolved(path: String, file_path: String) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
-    let file_path = validate_git_relative_path(&path, &file_path)?;
-    tracing::info!("Marking {} as resolved", file_path);
-
-    spawn_blocking(move || {
-        let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-
-        // Read the file to verify no conflicts remain
-        let workdir = repo.workdir().ok_or("Not a working directory")?;
-        let full_path = workdir.join(&file_path);
-
-        if full_path.is_file() {
-            let content = std::fs::read_to_string(&full_path)
-                .map_err(|e| format!("Failed to read file: {}", e))?;
-
-            if ConflictParser::has_conflicts(&content) {
-                return Err(format!(
-                    "File {} still has {} unresolved conflicts",
-                    file_path,
-                    ConflictParser::count_conflicts(&content)
-                ));
-            }
-        }
-
-        // Stage the resolved file
-        let mut index = repo.index().map_err(|e| e.message().to_string())?;
-        index
-            .add_path(Path::new(&file_path))
-            .map_err(|e| e.message().to_string())?;
-        index.write().map_err(|e| e.message().to_string())?;
-
-        Ok(format!("Marked {} as resolved", file_path))
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-/// Get an LLM-generated suggestion for resolving a conflict hunk.
-///
-/// This prepares a prompt that can be sent to the LLM router for
-/// intelligent merge suggestions.
-#[tauri::command]
-pub async fn git_get_conflict_suggestion_prompt(
-    path: String,
-    file_path: String,
-    hunk_index: usize,
-) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
-    let file_path = validate_git_relative_path(&path, &file_path)?;
-    tracing::info!(
-        "Getting conflict suggestion prompt for: {}/{} hunk {}",
-        path,
-        file_path,
-        hunk_index
-    );
-
-    spawn_blocking(move || {
-        let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        let workdir = repo.workdir().ok_or("Not a working directory")?;
-
-        let full_path = workdir.join(&file_path);
-        if !full_path.is_file() {
-            return Err(format!("File not found: {}", file_path));
-        }
-
-        let content = std::fs::read_to_string(&full_path)
-            .map_err(|e| format!("Failed to read file: {}", e))?;
-
-        let hunks = ConflictParser::parse_conflicts(&content);
-
-        if hunk_index >= hunks.len() {
-            return Err(format!(
-                "Hunk index {} out of range (file has {} conflicts)",
-                hunk_index,
-                hunks.len()
-            ));
-        }
-
-        let prompt = ConflictResolver::generate_llm_prompt(&hunks[hunk_index], &file_path);
-        Ok(prompt)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-/// Check if the repository is in a conflicted state (e.g., during merge/rebase).
-#[tauri::command]
-pub async fn git_has_conflicts(path: String) -> Result<bool, String> {
-    let path = validate_git_path(&path)?;
-    tracing::info!("Checking for conflicts in: {}", path);
-
-    spawn_blocking(move || {
-        let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-
-        // Check repository state
-        let state = repo.state();
-        let in_merge = matches!(
-            state,
-            git2::RepositoryState::Merge
-                | git2::RepositoryState::Rebase
-                | git2::RepositoryState::RebaseInteractive
-                | git2::RepositoryState::RebaseMerge
-                | git2::RepositoryState::CherryPick
-                | git2::RepositoryState::Revert
-        );
-
-        if in_merge {
-            // Check for actual conflicted files
-            let mut opts = StatusOptions::new();
-            opts.include_untracked(false);
-
-            let statuses = repo
-                .statuses(Some(&mut opts))
-                .map_err(|e| e.message().to_string())?;
-
-            for entry in statuses.iter() {
-                if entry.status().contains(git2::Status::CONFLICTED) {
-                    return Ok(true);
-                }
-            }
-        }
-
-        // Also check for conflict markers in the working directory
-        let workdir = match repo.workdir() {
-            Some(w) => w,
-            None => return Ok(false),
-        };
-
-        let mut opts = StatusOptions::new();
-        opts.include_untracked(false);
-
-        let statuses = repo
-            .statuses(Some(&mut opts))
-            .map_err(|e| e.message().to_string())?;
-
-        for entry in statuses.iter() {
-            let file_path = match entry.path() {
-                Ok(p) => p,
-                Err(_) => continue,
-            };
-
-            let full_path = workdir.join(file_path);
-            if full_path.is_file() {
-                if let Ok(content) = std::fs::read_to_string(&full_path) {
-                    if ConflictParser::has_conflicts(&content) {
-                        return Ok(true);
-                    }
-                }
-            }
-        }
-
-        Ok(false)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-/// Abort an in-progress merge operation.
-#[tauri::command]
-pub async fn git_abort_merge(path: String) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
-    tracing::info!("Aborting merge in: {}", path);
-
-    spawn_blocking(move || {
-        let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-
-        // Check if we're actually in a merge state
-        let state = repo.state();
-        if !matches!(state, git2::RepositoryState::Merge) {
-            return Err("No merge in progress".to_string());
-        }
-
-        // Clean up the merge state
-        repo.cleanup_state().map_err(|e| e.message().to_string())?;
-
-        // Reset to HEAD
-        let head = repo.head().map_err(|e| e.message().to_string())?;
-        let target = head.target().ok_or("HEAD has no target")?;
-        let object = repo
-            .find_object(target, None)
-            .map_err(|e| e.message().to_string())?;
-
-        repo.reset(&object, git2::ResetType::Hard, None)
-            .map_err(|e| e.message().to_string())?;
-
-        Ok("Merge aborted".to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-/// Complete a merge after all conflicts have been resolved.
-#[tauri::command]
-pub async fn git_complete_merge(path: String, message: Option<String>) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
-    tracing::info!("Completing merge in: {}", path);
-
-    spawn_blocking(move || {
-        let mut repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-
-        // Check if we're in a merge state
-        let state = repo.state();
-        if !matches!(state, git2::RepositoryState::Merge) {
-            return Err("No merge in progress".to_string());
-        }
-
-        // Check for remaining conflicts (in a separate scope to release the borrow)
-        {
-            let mut opts = StatusOptions::new();
-            opts.include_untracked(false);
-
-            let statuses = repo
-                .statuses(Some(&mut opts))
-                .map_err(|e| e.message().to_string())?;
-
-            for entry in statuses.iter() {
-                if entry.status().contains(git2::Status::CONFLICTED) {
-                    return Err("Cannot complete merge: unresolved conflicts remain".to_string());
-                }
-            }
-        } // statuses is dropped here, releasing the borrow
-
-        // Get merge heads
-        let mut merge_heads = Vec::new();
-        repo.mergehead_foreach(|oid| {
-            merge_heads.push(*oid);
-            true
-        })
-        .map_err(|e| e.message().to_string())?;
-
-        if merge_heads.is_empty() {
-            return Err("No merge heads found".to_string());
-        }
-
-        // Create the merge commit
-        // AUDIT-003-008 fix: Log warning when using fallback signature
-        let sig = match repo.signature() {
-            Ok(sig) => sig,
-            Err(e) => {
-                tracing::warn!(
-                    "Git user.name/user.email not configured for merge completion, using fallback identity. \
-                    Original error: {}",
-                    e.message()
-                );
-                Signature::now("AGI Agent", "agent@agiworkforce.com")
-                    .map_err(|e| e.message().to_string())?
-            }
-        };
-
-        let head = repo.head().map_err(|e| e.message().to_string())?;
-        let head_target = head.target().ok_or("HEAD has no target")?;
-        let head_commit = repo
-            .find_commit(head_target)
-            .map_err(|e| e.message().to_string())?;
-
-        let mut index = repo.index().map_err(|e| e.message().to_string())?;
-        let tree_id = index.write_tree().map_err(|e| e.message().to_string())?;
-        let tree = repo
-            .find_tree(tree_id)
-            .map_err(|e| e.message().to_string())?;
-
-        // Build parent commits
-        let mut parents: Vec<git2::Commit> = vec![head_commit];
-        for oid in &merge_heads {
-            parents.push(
-                repo.find_commit(*oid)
-                    .map_err(|e| e.message().to_string())?,
-            );
-        }
-        let parent_refs: Vec<&git2::Commit> = parents.iter().collect();
-
-        let commit_message = message.unwrap_or_else(|| {
-            format!("Merge commit (resolved {} merge heads)", merge_heads.len())
-        });
-
-        let commit_id = repo
-            .commit(
-                Some("HEAD"),
-                &sig,
-                &sig,
-                &commit_message,
-                &tree,
-                &parent_refs,
+static GIT_TRUST_DECISIONS: crate::sys::native_confirm::ConfirmGate =
+    crate::sys::native_confirm::ConfirmGate::new();
+
+const TRUST_GIT_SETTINGS_LABEL: &str = "Trust Settings";
+
+/// The question asked before a repository's code-running git settings are
+/// trusted. Each one is shown with its value and the file that sets it, so
+/// the answer is to what will run and not to a count. A list the dialog
+/// could not show whole is refused rather than shortened.
+fn git_trust_question(
+    top: &Path,
+    entries: &[agiworkforce_worktree::config_guard::ConfigEntry],
+) -> Result<crate::sys::native_confirm::NativeConfirm, String> {
+    use crate::sys::native_confirm::shown_value;
+
+    let settings = entries
+        .iter()
+        .map(|entry| {
+            format!(
+                "{} = {}\n   set in {}",
+                shown_value(&entry.key),
+                shown_value(&entry.value),
+                shown_value(&entry.origin)
             )
-            .map_err(|e| e.message().to_string())?;
-
-        // Clean up merge state
-        repo.cleanup_state().map_err(|e| e.message().to_string())?;
-
-        Ok(commit_id.to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-// ============================================================================
-// PR Creation Commands
-// ============================================================================
-
-/// State wrapper for LLM router access in PR commands.
-pub struct GitPrState {
-    pub router: Arc<RwLock<LLMRouter>>,
-}
-
-impl GitPrState {
-    pub fn new(router: Arc<RwLock<LLMRouter>>) -> Self {
-        Self { router }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let body = format!(
+        "In {}:\n\n{settings}\n\nEach of these names a program that git runs outside the sandbox whenever the app uses git in this folder. Anyone who can change these files can change what runs.",
+        shown_value(&top.to_string_lossy())
+    );
+    if crate::sys::native_confirm::check_it_fits(&body).is_err() {
+        return Err(
+            "This repository's git settings that run programs are too many or too long to show in one dialog, so none was trusted. Remove the ones you do not need and try again."
+                .to_string(),
+        );
     }
-}
-
-/// Get a summary of differences between two branches for PR preview.
-///
-/// Returns commit history, files changed, and diff statistics.
-#[tauri::command]
-pub async fn git_get_branch_diff_summary(
-    path: String,
-    base_branch: String,
-    head_branch: String,
-) -> Result<BranchDiffSummary, String> {
-    let path = validate_git_path(&path)?;
-    tracing::info!(
-        "Getting branch diff summary: {} -> {} in {}",
-        head_branch,
-        base_branch,
-        path
-    );
-
-    spawn_blocking(move || {
-        PrCreationWorkflow::get_branch_diff_summary(Path::new(&path), &base_branch, &head_branch)
-            .map_err(|e| e.to_string())
+    Ok(crate::sys::native_confirm::NativeConfirm {
+        title: "Trust these git settings?".to_string(),
+        body,
+        confirm_label: TRUST_GIT_SETTINGS_LABEL.to_string(),
     })
-    .await
-    .map_err(|e| e.to_string())?
 }
 
-/// Generate PR title and description using AI.
+/// The user's word that the git settings of the repository at `project_path`
+/// are trusted as they are now: record them as its baseline, with the flag
+/// that marks them trusted, which host git then obeys, and return them.
 ///
-/// Uses the LLM to analyze the diff and generate a conventional commit style
-/// title and a structured description.
+/// The settings are listed to the user in a native dialog first, each with
+/// its value, and are trusted only when the answer there is yes and they
+/// are still exactly the ones listed. The page renders model output and can
+/// call this command itself, so a confirmation it draws is not the one that
+/// counts. A repository with no such setting has nothing to ask about.
+/// Until then the desktop trusts no repository's own settings, so the first
+/// baseline it takes blesses nothing, and a setting added or changed
+/// afterwards is refused until the user trusts again. See
+/// [`agiworkforce_worktree::config_guard`].
 #[tauri::command]
-pub async fn git_generate_pr_description(
-    path: String,
-    base_branch: String,
-    head_branch: String,
-    state: State<'_, Arc<RwLock<LLMRouter>>>,
-) -> Result<GeneratedPrContent, String> {
-    let path = validate_git_path(&path)?;
-    tracing::info!(
-        "Generating PR description: {} -> {} in {}",
-        head_branch,
-        base_branch,
-        path
-    );
+pub async fn git_trust_repository_config(
+    app: tauri::AppHandle,
+    project_path: String,
+) -> Result<Vec<agiworkforce_worktree::config_guard::ConfigEntry>, String> {
+    use agiworkforce_worktree::config_guard;
 
-    // Get diff summary first (blocking operation)
-    let diff_summary = spawn_blocking({
-        let path = path.clone();
-        let base_branch = base_branch.clone();
-        let head_branch = head_branch.clone();
-        move || {
-            PrCreationWorkflow::get_branch_diff_summary(
-                Path::new(&path),
-                &base_branch,
-                &head_branch,
-            )
+    let path = granted_git_path(&app, &project_path).await?;
+    let runner = agiworkforce_worktree::TokioCommandRunner;
+    let workspace =
+        agiworkforce_worktree::checkpoint::Workspace::discover(&runner, Path::new(&path))
+            .await
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| format!("{path} is not inside a git repository with a working tree"))?;
+    let entries = config_guard::repository_config_to_trust(&runner, &workspace)
+        .await
+        .map_err(|error| error.to_string())?;
+    if !entries.is_empty() {
+        let question = git_trust_question(workspace.top(), &entries)?;
+        let request = format!("git_trust:{}", question.body);
+        match GIT_TRUST_DECISIONS.confirm(&app, &request, question).await {
+            Ok(true) => {}
+            Ok(false) => {
+                return Err(
+                    "The git settings were not trusted: trusting them was not confirmed."
+                        .to_string(),
+                )
+            }
+            Err(not_asked) => return Err(not_asked.message()),
         }
-    })
-    .await
-    .map_err(|e| format!("Failed to get diff summary: {}", e))?
-    .map_err(|e| format!("Failed to analyze branches: {}", e))?;
+    }
+    config_guard::trust_repository_config_as_shown(&runner, &workspace, &entries)
+        .await
+        .map_err(|error| error.to_string())
+}
 
-    if diff_summary.commits_ahead == 0 {
-        return Err(format!(
-            "No commits to merge from '{}' into '{}'",
-            head_branch, base_branch
+#[cfg(test)]
+mod git_trust_tests {
+    use super::*;
+    use agiworkforce_worktree::config_guard::ConfigEntry;
+
+    fn entry(key: &str, value: &str) -> ConfigEntry {
+        ConfigEntry {
+            key: key.to_string(),
+            value: value.to_string(),
+            origin: "/Users/someone/code/app/.git/config".to_string(),
+        }
+    }
+
+    #[test]
+    fn every_setting_is_shown_with_its_value_and_where_it_is_set() {
+        let question = git_trust_question(
+            Path::new("/Users/someone/code/app"),
+            &[
+                entry("filter.lfs.smudge", "git-lfs smudge -- %f"),
+                entry("core.sshcommand", "ssh -i key\nTrust nothing else"),
+            ],
+        )
+        .expect("a question");
+
+        assert!(question.body.starts_with("In /Users/someone/code/app:"));
+        assert!(
+            question
+                .body
+                .contains("filter.lfs.smudge = git-lfs smudge -- %f\n   set in /Users/someone/code/app/.git/config"),
+            "{}",
+            question.body
+        );
+        assert!(question.body.contains("core.sshcommand = "));
+        assert!(
+            !question.body.contains("key\nTrust nothing else"),
+            "a line break in a value is marked, not drawn"
+        );
+        assert!(question.body.contains("outside the sandbox"));
+        assert_eq!(question.confirm_label, TRUST_GIT_SETTINGS_LABEL);
+        assert!(crate::sys::native_confirm::can_ask_with(
+            &question.confirm_label
         ));
     }
 
-    // Generate PR content using LLM
-    let router = state.inner().clone();
-    PrCreationWorkflow::generate_pr_content(&router, &diff_summary)
-        .await
-        .map_err(|e| format!("Failed to generate PR content: {}", e))
-}
+    #[test]
+    fn a_list_the_dialog_cannot_show_whole_is_refused() {
+        let many: Vec<ConfigEntry> = (0..30)
+            .map(|index| entry(&format!("filter.f{index}.clean"), "run-me"))
+            .collect();
+        let refused = git_trust_question(Path::new("/Users/someone/code/app"), &many)
+            .expect_err("too many rows");
+        assert!(refused.contains("none was trusted"), "{refused}");
 
-/// Create a pull request with optional AI-generated content.
-///
-/// This command prepares the PR content and returns the result.
-/// Actual PR creation requires GitHub API integration (via MCP or direct API).
-#[tauri::command]
-pub async fn git_create_pr(
-    path: String,
-    config: PrCreationConfig,
-    state: State<'_, Arc<RwLock<LLMRouter>>>,
-) -> Result<PrCreationResult, String> {
-    let path = validate_git_path(&path)?;
-    tracing::info!(
-        "Creating PR: {} -> {} in {}",
-        config.head_branch,
-        config.base_branch,
-        path
-    );
-
-    // Validate configuration
-    if config.head_branch.is_empty() {
-        return Err("Head branch cannot be empty".to_string());
+        let long = entry("core.sshcommand", &"x".repeat(4000));
+        assert!(git_trust_question(Path::new("/Users/someone/code/app"), &[long]).is_err());
     }
 
-    if config.base_branch.is_empty() {
-        return Err("Base branch cannot be empty".to_string());
+    /// Nothing is recorded as trusted before the native answer, and what is
+    /// recorded is held to what was listed.
+    #[test]
+    fn the_settings_are_listed_and_confirmed_natively_before_they_are_trusted() {
+        let shipped = include_str!("git.rs")
+            .split("pub async fn git_trust_repository_config(")
+            .nth(1)
+            .expect("git_trust_repository_config");
+        let body = shipped.split("\n}\n").next().unwrap_or(shipped);
+
+        let listed = body
+            .find("repository_config_to_trust(")
+            .expect("the settings are read first");
+        let asked = body
+            .find("GIT_TRUST_DECISIONS")
+            .expect("the native question");
+        let trusted = body
+            .find("trust_repository_config_as_shown(")
+            .expect("only what was shown is trusted");
+        assert!(listed < asked && asked < trusted);
+        assert!(!body.contains("config_guard::trust_repository_config("));
     }
-
-    let router = state.inner().clone();
-
-    PrCreationWorkflow::create_pull_request_workflow(Path::new(&path), &config, &router)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// Check if a branch is ready for PR creation.
-///
-/// Validates:
-/// - Branch exists
-/// - Branch has commits ahead of base
-/// - Branch is pushed to remote (if remote is configured)
-#[tauri::command]
-pub async fn git_check_pr_readiness(
-    path: String,
-    base_branch: String,
-    head_branch: String,
-) -> Result<PrReadinessResult, String> {
-    let path = validate_git_path(&path)?;
-    tracing::info!(
-        "Checking PR readiness: {} -> {} in {}",
-        head_branch,
-        base_branch,
-        path
-    );
-
-    spawn_blocking(move || {
-        let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-
-        let mut result = PrReadinessResult {
-            ready: true,
-            issues: Vec::new(),
-            commits_ahead: 0,
-            has_remote: false,
-            remote_up_to_date: false,
-        };
-
-        // Check if base branch exists
-        let base_exists = repo
-            .find_branch(&base_branch, BranchType::Local)
-            .or_else(|_| repo.find_branch(&base_branch, BranchType::Remote))
-            .is_ok();
-
-        if !base_exists {
-            result.ready = false;
-            result
-                .issues
-                .push(format!("Base branch '{}' not found", base_branch));
-        }
-
-        // Check if head branch exists
-        let head_branch_ref = repo
-            .find_branch(&head_branch, BranchType::Local)
-            .map_err(|_| format!("Head branch '{}' not found", head_branch))?;
-
-        // Check commits ahead
-        if base_exists {
-            if let Ok(diff_summary) = PrCreationWorkflow::get_branch_diff_summary(
-                Path::new(&path),
-                &base_branch,
-                &head_branch,
-            ) {
-                result.commits_ahead = diff_summary.commits_ahead;
-                if diff_summary.commits_ahead == 0 {
-                    result.ready = false;
-                    result.issues.push(format!(
-                        "No commits to merge from '{}' into '{}'",
-                        head_branch, base_branch
-                    ));
-                }
-            }
-        }
-
-        // Check if remote tracking branch exists
-        if let Ok(upstream) = head_branch_ref.upstream() {
-            result.has_remote = true;
-
-            // Check if local is ahead of remote
-            let local_oid = head_branch_ref
-                .get()
-                .target()
-                .ok_or("Failed to get local branch target")?;
-
-            let remote_oid = upstream
-                .get()
-                .target()
-                .ok_or("Failed to get remote branch target")?;
-
-            if local_oid == remote_oid {
-                result.remote_up_to_date = true;
-            } else {
-                let (ahead, _behind) = repo
-                    .graph_ahead_behind(local_oid, remote_oid)
-                    .map_err(|e| e.message().to_string())?;
-
-                if ahead > 0 {
-                    result.issues.push(format!(
-                        "Local branch is {} commit(s) ahead of remote. Consider pushing first.",
-                        ahead
-                    ));
-                } else {
-                    result.remote_up_to_date = true;
-                }
-            }
-        } else {
-            result.issues.push(format!(
-                "Branch '{}' has no upstream tracking branch. Push with -u to set upstream.",
-                head_branch
-            ));
-        }
-
-        // Check for uncommitted changes
-        let statuses = repo.statuses(None).map_err(|e| e.message().to_string())?;
-        let has_changes = statuses.iter().any(|s| {
-            let status = s.status();
-            status.is_index_new()
-                || status.is_index_modified()
-                || status.is_index_deleted()
-                || status.is_wt_modified()
-                || status.is_wt_deleted()
-        });
-
-        if has_changes {
-            result
-                .issues
-                .push("Working directory has uncommitted changes".to_string());
-        }
-
-        Ok(result)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-/// Result of PR readiness check.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PrReadinessResult {
-    /// Whether the branch is ready for PR creation.
-    pub ready: bool,
-    /// List of issues that may prevent or complicate PR creation.
-    pub issues: Vec<String>,
-    /// Number of commits ahead of base branch.
-    pub commits_ahead: usize,
-    /// Whether the branch has a remote tracking branch.
-    pub has_remote: bool,
-    /// Whether the local branch is up-to-date with remote.
-    pub remote_up_to_date: bool,
-}
-
-/// Get the current branch name.
-#[tauri::command]
-pub async fn git_current_branch(path: String) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
-    spawn_blocking(move || {
-        let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-        let head = repo.head().map_err(|e| e.message().to_string())?;
-
-        if head.is_branch() {
-            Ok(head.shorthand().unwrap_or("HEAD").to_string())
-        } else {
-            // Detached HEAD - return commit hash
-            head.target()
-                .map(|oid| format!("(detached at {})", &oid.to_string()[..7]))
-                .ok_or_else(|| "Failed to get HEAD target".to_string())
-        }
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-/// Get default branch name (main or master).
-#[tauri::command]
-pub async fn git_default_branch(path: String) -> Result<String, String> {
-    let path = validate_git_path(&path)?;
-    spawn_blocking(move || {
-        let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
-
-        // Check for common default branch names
-        for branch_name in &["main", "master", "develop"] {
-            if repo.find_branch(branch_name, BranchType::Local).is_ok() {
-                return Ok(branch_name.to_string());
-            }
-        }
-
-        // Check remote HEAD reference
-        if let Ok(remote) = repo.find_remote("origin") {
-            if let Ok(url) = remote.url() {
-                tracing::debug!("Remote URL: {}", url);
-            }
-
-            // Try to get default branch from remote
-            if let Ok(remote_head) = repo.find_reference("refs/remotes/origin/HEAD") {
-                if let Ok(Some(target)) = remote_head.symbolic_target() {
-                    // Format: refs/remotes/origin/main
-                    if let Some(branch) = target.strip_prefix("refs/remotes/origin/") {
-                        return Ok(branch.to_string());
-                    }
-                }
-            }
-        }
-
-        // Fallback to "main"
-        Ok("main".to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
 }
 
 #[cfg(test)]
@@ -2038,6 +1372,69 @@ mod security_tests {
     use super::{validate_git_path, validate_git_relative_path};
     use std::fs;
     use tempfile::tempdir;
+
+    /// A destructive verb is a command, not a shell string, so the
+    /// execpolicy substring list never saw it: `requires_confirmation("git push")`
+    /// returned false and the push ran unasked.
+    #[test]
+    fn destructive_git_commands_confirm_unconditionally_before_acting() {
+        const SOURCE: &str = include_str!("git.rs");
+        let shipped = SOURCE.split("#[cfg(test)]").next().expect("shipped source");
+        for command in ["pub async fn git_push(", "pub async fn git_delete_branch("] {
+            let body = shipped.split(command).nth(1).expect(command);
+            let body = body.split("#[tauri::command]").next().unwrap_or(body);
+            let confirm = body
+                .find("request_confirmation_simple(")
+                .unwrap_or_else(|| panic!("{command} must ask before it acts"));
+            let act = body
+                .find("spawn_blocking(")
+                .unwrap_or_else(|| panic!("{command} acts in spawn_blocking"));
+            assert!(confirm < act, "{command} must ask before it acts");
+            assert!(
+                !body[..confirm].contains("requires_confirmation("),
+                "{command} must not let a shell-string heuristic skip the question"
+            );
+        }
+
+        let reset = shipped
+            .split("pub async fn git_reset(")
+            .nth(1)
+            .expect("git_reset");
+        let reset = reset.split("#[tauri::command]").next().unwrap_or(reset);
+        assert!(
+            reset.contains("mode == \"hard\""),
+            "a hard reset must always ask"
+        );
+    }
+
+    /// Path sanity alone let the page run git in any repository on the
+    /// disk. Every command is held to the granted folders; only the
+    /// functions Rust calls itself still take a path on sanity alone.
+    #[test]
+    fn every_git_command_is_held_to_the_granted_folders() {
+        const SOURCE: &str = include_str!("git.rs");
+        let shipped = SOURCE.split("#[cfg(test)]").next().expect("shipped source");
+        let commands: Vec<&str> = shipped.split("#[tauri::command]").skip(1).collect();
+
+        assert_eq!(commands.len(), 13, "a new git command needs the gate too");
+        for command in &commands {
+            let body = command.split("\n}\n").next().unwrap_or(command);
+            assert!(
+                body.contains("granted_git_path(&app, "),
+                "not held to the granted folders: {}",
+                body.lines()
+                    .find(|line| line.contains("fn "))
+                    .unwrap_or(body)
+            );
+            assert!(!body.contains("validate_git_path("));
+        }
+        assert_eq!(
+            shipped.matches("= validate_git_path(").count(),
+            9,
+            "the gate itself, and the eight functions only Rust calls: git_log, git_clone, \
+             git_push and the five the tool executor reaches after its own folder check"
+        );
+    }
 
     #[test]
     fn git_relative_paths_must_stay_inside_repo() {
@@ -2078,5 +1475,155 @@ mod security_tests {
             let escaped = validate_git_relative_path(&repo, "linked.txt").unwrap_err();
             assert!(escaped.contains("escapes repository"));
         }
+    }
+}
+
+#[cfg(test)]
+mod remote_tests {
+    use super::{pull_fast_forward, RemoteDeadline, REMOTE_TIMED_OUT};
+    use git2::{Oid, Repository, RepositoryState, Signature};
+    use std::fs;
+    use std::path::Path;
+    use std::time::Duration;
+    use tempfile::{tempdir, TempDir};
+
+    fn commit_file(repo: &Repository, name: &str, content: &str) -> Oid {
+        let work_tree = repo.workdir().expect("a work tree");
+        fs::write(work_tree.join(name), content).unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new(name)).unwrap();
+        index.write().unwrap();
+        let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+        let author = Signature::now("Test User", "test@example.com").unwrap();
+        let parents: Vec<git2::Commit<'_>> = repo
+            .head()
+            .ok()
+            .and_then(|head| head.peel_to_commit().ok())
+            .into_iter()
+            .collect();
+        let parents: Vec<&git2::Commit<'_>> = parents.iter().collect();
+        repo.commit(Some("HEAD"), &author, &author, name, &tree, &parents)
+            .unwrap()
+    }
+
+    fn head_of(repo: &Repository) -> Oid {
+        repo.head().unwrap().target().expect("a commit")
+    }
+
+    fn open_deadline() -> RemoteDeadline {
+        RemoteDeadline::after(Duration::from_secs(60))
+    }
+
+    /// An origin with `shared.txt` and `other.txt`, a clone of it, and then
+    /// one more commit to `shared.txt` on the origin that the clone lacks.
+    fn origin_one_commit_ahead_of_its_clone() -> (TempDir, Repository, Repository, Oid) {
+        let root = tempdir().unwrap();
+        let origin_path = root.path().join("origin");
+        fs::create_dir_all(&origin_path).unwrap();
+        let origin = Repository::init(&origin_path).unwrap();
+        commit_file(&origin, "shared.txt", "one");
+        commit_file(&origin, "other.txt", "base");
+
+        let clone_path = root.path().join("clone");
+        let clone = Repository::clone(origin_path.to_str().unwrap(), &clone_path).unwrap();
+
+        let ahead = commit_file(&origin, "shared.txt", "two");
+        (root, origin, clone, ahead)
+    }
+
+    fn pull(clone: &Repository) -> Result<String, String> {
+        let path = clone.workdir().unwrap().to_str().unwrap().to_string();
+        pull_fast_forward(&path, "origin", None, &open_deadline())
+    }
+
+    #[test]
+    fn a_fast_forward_keeps_uncommitted_edits_in_files_it_does_not_touch() {
+        let (_root, _origin, clone, ahead) = origin_one_commit_ahead_of_its_clone();
+        let work_tree = clone.workdir().unwrap().to_path_buf();
+        fs::write(work_tree.join("other.txt"), "local edit").unwrap();
+
+        pull(&clone).expect("a fast-forward that touches no edited file succeeds");
+
+        assert_eq!(head_of(&clone), ahead);
+        assert_eq!(
+            fs::read_to_string(work_tree.join("shared.txt")).unwrap(),
+            "two"
+        );
+        assert_eq!(
+            fs::read_to_string(work_tree.join("other.txt")).unwrap(),
+            "local edit"
+        );
+    }
+
+    #[test]
+    fn a_diverged_branch_is_refused_and_no_merge_is_left_open() {
+        let (_root, _origin, clone, _ahead) = origin_one_commit_ahead_of_its_clone();
+        let local = commit_file(&clone, "local.txt", "local commit");
+        let work_tree = clone.workdir().unwrap().to_path_buf();
+
+        let refusal = pull(&clone).expect_err("a pull that needs a merge is refused");
+
+        assert!(refusal.contains("needs a merge"), "{refusal}");
+        assert!(refusal.contains("Nothing was changed"), "{refusal}");
+        assert_eq!(head_of(&clone), local);
+        assert!(!clone.path().join("MERGE_HEAD").exists());
+        assert_eq!(clone.state(), RepositoryState::Clean);
+        assert_eq!(
+            fs::read_to_string(work_tree.join("shared.txt")).unwrap(),
+            "one"
+        );
+    }
+
+    #[test]
+    fn an_uncommitted_edit_the_pull_would_overwrite_is_refused_and_kept() {
+        let (_root, _origin, clone, _ahead) = origin_one_commit_ahead_of_its_clone();
+        let before = head_of(&clone);
+        let work_tree = clone.workdir().unwrap().to_path_buf();
+        fs::write(work_tree.join("shared.txt"), "mine").unwrap();
+
+        let refusal = pull(&clone).expect_err("a pull over an edited file is refused");
+
+        assert!(refusal.contains("uncommitted changes"), "{refusal}");
+        assert_eq!(head_of(&clone), before);
+        assert_eq!(
+            fs::read_to_string(work_tree.join("shared.txt")).unwrap(),
+            "mine"
+        );
+    }
+
+    #[test]
+    fn a_pull_whose_deadline_passed_stops_before_the_work_tree() {
+        let (_root, _origin, clone, _ahead) = origin_one_commit_ahead_of_its_clone();
+        let before = head_of(&clone);
+        let path = clone.workdir().unwrap().to_str().unwrap().to_string();
+
+        let refusal = pull_fast_forward(
+            &path,
+            "origin",
+            None,
+            &RemoteDeadline::after(Duration::ZERO),
+        )
+        .expect_err("a transfer past its deadline is stopped");
+
+        assert_eq!(refusal, REMOTE_TIMED_OUT);
+        assert_eq!(head_of(&clone), before);
+        assert_eq!(
+            fs::read_to_string(clone.workdir().unwrap().join("shared.txt")).unwrap(),
+            "one"
+        );
+    }
+
+    #[test]
+    fn a_passed_deadline_stops_the_transfer_and_names_the_reason() {
+        let open = open_deadline();
+        assert!(open.still_open());
+        assert_eq!(open.describe(&git2::Error::from_str("refused")), "refused");
+
+        let passed = RemoteDeadline::after(Duration::ZERO);
+        assert!(!passed.still_open());
+        assert_eq!(
+            passed.describe(&git2::Error::from_str("user cancelled")),
+            REMOTE_TIMED_OUT
+        );
     }
 }

@@ -1,10 +1,8 @@
 use super::llm::LLMState;
 
-use crate::data::cloud_sync;
 use crate::data::db::models::{Conversation, Message, MessageRole};
 use crate::data::db::repository;
 use chrono::Utc;
-use std::sync::Arc;
 use tauri::{Emitter, Manager, State};
 
 use tracing::{debug, error, info, warn};
@@ -19,9 +17,8 @@ pub mod control;
 pub mod conversation;
 pub mod cost;
 pub mod export;
-pub mod intent;
+pub mod interrupted_turns;
 pub mod local_turn_host;
-pub mod maintenance;
 pub mod memory_handler;
 pub mod message_context;
 pub mod pending;
@@ -32,19 +29,18 @@ pub mod search;
 pub mod send_message;
 pub mod send_message_execution;
 pub mod send_message_setup;
-pub mod share;
+pub mod sources;
 pub mod state;
 pub mod stream_runtime;
+pub mod superseded;
 pub mod tool_config;
 pub mod tool_events;
 pub mod tool_execution;
 pub mod tool_timeouts;
 pub mod tools;
 pub mod types;
-#[cfg(test)]
-pub use crate::sys::commands::chat::state::should_stop_generation;
 pub use crate::sys::commands::chat::state::{
-    reset_stop_flag, should_stop_for_conversation, AppDatabase,
+    active_turn_count, request_stop, reset_stop_flag, should_stop_for_conversation, AppDatabase,
 };
 pub use branching::*;
 pub use compaction::*;
@@ -52,8 +48,6 @@ pub use control::*;
 pub use conversation::*;
 pub use cost::*;
 pub use export::*;
-pub use intent::*;
-pub use maintenance::*;
 pub use search::*;
 pub use send_message::*;
 pub use types::*;
@@ -68,11 +62,10 @@ use crate::sys::commands::chat::message_context::{
     inject_memory_context,
 };
 pub use crate::sys::commands::chat::pending::{
-    chat_add_pending_message, chat_clear_pending_messages, chat_get_pending_messages,
-    chat_pop_pending_message, has_pending_messages, has_pending_messages_for_conversation,
-    peek_pending_messages, peek_pending_messages_for_conversation, pending_messages_count,
-    pop_pending_message_for_conversation, AddPendingMessageRequest, PendingUserMessage,
-    PopPendingMessageRequest,
+    chat_add_pending_message, chat_pop_pending_message, has_pending_messages,
+    has_pending_messages_for_conversation, peek_pending_messages_for_conversation,
+    pending_messages_count, pop_pending_message_for_conversation, AddPendingMessageRequest,
+    PendingUserMessage, PopPendingMessageRequest,
 };
 use crate::sys::commands::chat::persistence::{
     compute_or_skip_stats, save_or_skip_assistant_message,
@@ -81,12 +74,11 @@ use crate::sys::commands::chat::prompt_context::{
     build_os_context, build_project_context_message, sanitize_multiline_for_prompt,
 };
 use crate::sys::commands::chat::provider_access::{
-    check_billing_and_budget, ensure_llamacpp_provider, ensure_lmstudio_provider,
-    ensure_managed_cloud_provider, ensure_ollama_provider, ensure_vllm_provider,
-    request_uses_managed_cloud,
+    ensure_llamacpp_provider, ensure_lmstudio_provider, ensure_managed_cloud_provider,
+    ensure_ollama_provider, ensure_vllm_provider,
 };
 use crate::sys::commands::chat::state::{
-    DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, PENDING_MESSAGES, STREAM_CHUNK_IDLE_TIMEOUT_SECS,
+    DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, STREAM_CHUNK_IDLE_TIMEOUT_SECS,
 };
 use crate::sys::commands::chat::stream_runtime::consume_llm_stream;
 use crate::sys::commands::chat::tool_config::{
@@ -106,16 +98,15 @@ use crate::sys::commands::chat::tool_timeouts::{
 mod tests {
     use super::*;
     use crate::sys::commands::chat::state::{
-        mark_tool_cancelled, take_tool_cancelled, ACTIVE_STOP_CONVERSATION,
-        DEFAULT_TOOL_TIMEOUT_SECS, FAST_METADATA_FOLLOWUP_INVOKE_TIMEOUT_SECS,
-        FAST_METADATA_FOLLOWUP_TOTAL_TIMEOUT_SECS, FAST_METADATA_TOOL_LOOP_MAX_ITERATIONS,
-        FAST_METADATA_TOOL_LOOP_MAX_SECS, FAST_TOOL_TIMEOUT_SECS, FOLLOWUP_INVOKE_TIMEOUT_SECS,
-        FOLLOWUP_TOTAL_TIMEOUT_SECS, LONG_RUNNING_TOOL_TIMEOUT_SECS, STOP_GENERATION,
-        STREAMING_TOOL_LOOP_MAX_ITERATIONS, STREAMING_TOOL_LOOP_MAX_SECS,
+        mark_tool_cancelled, take_tool_cancelled, DEFAULT_TOOL_TIMEOUT_SECS,
+        FAST_METADATA_FOLLOWUP_INVOKE_TIMEOUT_SECS, FAST_METADATA_FOLLOWUP_TOTAL_TIMEOUT_SECS,
+        FAST_METADATA_TOOL_LOOP_MAX_ITERATIONS, FAST_METADATA_TOOL_LOOP_MAX_SECS,
+        FAST_TOOL_TIMEOUT_SECS, FOLLOWUP_INVOKE_TIMEOUT_SECS, FOLLOWUP_TOTAL_TIMEOUT_SECS,
+        LONG_RUNNING_TOOL_TIMEOUT_SECS, STREAMING_TOOL_LOOP_MAX_ITERATIONS,
+        STREAMING_TOOL_LOOP_MAX_SECS,
     };
     use crate::sys::commands::chat::tool_timeouts::resolve_tool_execution_timeout_secs;
     use once_cell::sync::Lazy;
-    use std::sync::atomic::Ordering;
     use std::sync::Mutex;
 
     static STOP_FLAG_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
@@ -123,42 +114,136 @@ mod tests {
     #[test]
     fn stop_flag_can_be_reset_between_runs() {
         let _guard = STOP_FLAG_TEST_GUARD.lock().expect("test lock poisoned");
-        reset_stop_flag();
-        STOP_GENERATION.store(true, Ordering::SeqCst);
-        assert!(should_stop_generation());
+        reset_stop_flag(9_001);
+        request_stop(Some(9_001));
+        assert!(should_stop_for_conversation(9_001));
 
-        reset_stop_flag();
-        assert!(!should_stop_generation());
+        reset_stop_flag(9_001);
+        assert!(!should_stop_for_conversation(9_001));
     }
 
     #[test]
     fn scoped_stop_only_applies_to_matching_conversation() {
         let _guard = STOP_FLAG_TEST_GUARD.lock().expect("test lock poisoned");
-        reset_stop_flag();
-        STOP_GENERATION.store(true, Ordering::SeqCst);
-        if let Ok(mut active) = ACTIVE_STOP_CONVERSATION.lock() {
-            *active = Some(42);
-        }
+        reset_stop_flag(9_042);
+        reset_stop_flag(9_007);
+        request_stop(Some(9_042));
 
-        assert!(should_stop_for_conversation(42));
-        assert!(!should_stop_for_conversation(7));
+        assert!(should_stop_for_conversation(9_042));
+        assert!(!should_stop_for_conversation(9_007));
 
-        reset_stop_flag();
+        reset_stop_flag(9_042);
     }
 
     #[test]
-    fn global_stop_applies_when_no_conversation_is_scoped() {
+    fn sending_in_another_conversation_keeps_a_pending_stop() {
         let _guard = STOP_FLAG_TEST_GUARD.lock().expect("test lock poisoned");
-        reset_stop_flag();
-        STOP_GENERATION.store(true, Ordering::SeqCst);
-        if let Ok(mut active) = ACTIVE_STOP_CONVERSATION.lock() {
-            *active = None;
+        reset_stop_flag(9_100);
+        request_stop(Some(9_100));
+        reset_stop_flag(9_200);
+
+        assert!(should_stop_for_conversation(9_100));
+        assert!(!should_stop_for_conversation(9_200));
+
+        reset_stop_flag(9_100);
+    }
+
+    #[test]
+    fn global_stop_applies_only_to_running_conversations() {
+        use crate::sys::commands::chat::state::{mark_turn_finished, mark_turn_running};
+        let _guard = STOP_FLAG_TEST_GUARD.lock().expect("test lock poisoned");
+        reset_stop_flag(9_301);
+        reset_stop_flag(9_302);
+        reset_stop_flag(9_303);
+        mark_turn_running(9_301);
+        mark_turn_running(9_302);
+        mark_turn_running(9_303);
+        mark_turn_finished(9_303);
+        request_stop(None);
+
+        assert!(should_stop_for_conversation(9_301));
+        assert!(should_stop_for_conversation(9_302));
+        assert!(!should_stop_for_conversation(9_303));
+
+        mark_turn_finished(9_301);
+        mark_turn_finished(9_302);
+        reset_stop_flag(9_301);
+        reset_stop_flag(9_302);
+    }
+
+    #[test]
+    fn running_turns_are_counted_until_they_finish() {
+        use crate::sys::commands::chat::state::{mark_turn_finished, mark_turn_running};
+        let _guard = STOP_FLAG_TEST_GUARD.lock().expect("test lock poisoned");
+        let before = active_turn_count();
+
+        mark_turn_running(9_701);
+        mark_turn_running(9_702);
+        mark_turn_running(9_702);
+        assert_eq!(active_turn_count(), before + 3);
+
+        mark_turn_finished(9_702);
+        assert_eq!(active_turn_count(), before + 2);
+        request_stop(None);
+        assert!(should_stop_for_conversation(9_702));
+
+        mark_turn_finished(9_701);
+        mark_turn_finished(9_702);
+        assert_eq!(active_turn_count(), before);
+        reset_stop_flag(9_701);
+        reset_stop_flag(9_702);
+    }
+
+    #[test]
+    fn plan_mode_refuses_writes_and_allows_reads_and_planning() {
+        use crate::sys::commands::chat::state::{
+            is_conversation_in_plan_mode, plan_mode_refusal, set_conversation_plan_mode,
+        };
+
+        set_conversation_plan_mode(9_501, true);
+        assert!(is_conversation_in_plan_mode(9_501));
+        assert!(plan_mode_refusal(9_501, "file_write").is_some());
+        assert!(plan_mode_refusal(9_501, "terminal_execute").is_some());
+        assert!(plan_mode_refusal(9_501, "file_read").is_none());
+        assert!(plan_mode_refusal(9_501, "todo_write").is_none());
+
+        set_conversation_plan_mode(9_501, false);
+        assert!(plan_mode_refusal(9_501, "file_write").is_none());
+    }
+
+    #[test]
+    fn plan_mode_is_scoped_to_one_conversation() {
+        use crate::sys::commands::chat::state::{plan_mode_refusal, set_conversation_plan_mode};
+
+        set_conversation_plan_mode(9_601, true);
+        set_conversation_plan_mode(9_602, false);
+
+        assert!(plan_mode_refusal(9_601, "file_write").is_some());
+        assert!(plan_mode_refusal(9_602, "file_write").is_none());
+
+        set_conversation_plan_mode(9_601, false);
+    }
+
+    #[test]
+    fn time_waiting_on_the_user_does_not_count_toward_the_loop_cap() {
+        use crate::sys::commands::chat::state::{active_elapsed, user_wait_total, UserWaitGuard};
+
+        let started = std::time::Instant::now();
+        let wait_at_start = user_wait_total();
+        {
+            let _waiting = UserWaitGuard::start();
+            std::thread::sleep(std::time::Duration::from_millis(60));
         }
 
-        assert!(should_stop_for_conversation(42));
-        assert!(should_stop_for_conversation(7));
+        assert!(started.elapsed() >= std::time::Duration::from_millis(60));
+        assert!(active_elapsed(started, wait_at_start) < std::time::Duration::from_millis(40));
+    }
 
-        reset_stop_flag();
+    #[test]
+    fn the_question_tool_outlasts_the_users_answer_window() {
+        use crate::sys::commands::chat::state::USER_ANSWER_TIMEOUT_SECS;
+        assert_eq!(USER_ANSWER_TIMEOUT_SECS, 600);
+        assert!(resolve_tool_execution_timeout_secs("question") > USER_ANSWER_TIMEOUT_SECS);
     }
 
     #[test]

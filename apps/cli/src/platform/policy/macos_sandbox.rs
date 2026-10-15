@@ -100,12 +100,16 @@ pub fn build_profile(opts: &SandboxOptions) -> Result<String, SandboxError> {
     Ok(p)
 }
 
+/// Seatbelt's launcher, by absolute path: a bare name is looked up on
+/// `PATH`, where a project's `.venv/bin` can come first.
+const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";
+
 /// Wrap a Command to run under `sandbox-exec -p <profile>`. The wrapped
 /// command preserves args + env + cwd; the profile is passed inline via
 /// `-p`. (The longer-form `-f <file>` path can be added later.)
 pub fn wrap_command(opts: &SandboxOptions, inner: Command) -> Result<Command, SandboxError> {
     let profile = build_profile(opts)?; // AUDIT-FIX: C-8
-    let mut cmd = Command::new("sandbox-exec");
+    let mut cmd = Command::new(SANDBOX_EXEC);
     cmd.arg("-p").arg(profile);
     cmd.arg(inner.get_program());
     for a in inner.get_args() {
@@ -127,13 +131,9 @@ pub fn wrap_command(opts: &SandboxOptions, inner: Command) -> Result<Command, Sa
     Ok(cmd)
 }
 
-/// Verify sandbox-exec is on PATH. Useful for /doctor.
+/// Verify sandbox-exec is installed. Useful for /doctor.
 pub fn is_available() -> bool {
-    std::process::Command::new("which")
-        .arg("sandbox-exec")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    Path::new(SANDBOX_EXEC).is_file()
 }
 
 #[cfg(test)]
@@ -198,7 +198,7 @@ mod tests {
         let mut inner = std::process::Command::new("/bin/echo");
         inner.arg("hello");
         let wrapped = wrap_command(&opts(SandboxPreset::ReadOnly), inner).unwrap();
-        assert_eq!(wrapped.get_program(), "sandbox-exec");
+        assert_eq!(wrapped.get_program(), "/usr/bin/sandbox-exec");
     }
 
     #[test]

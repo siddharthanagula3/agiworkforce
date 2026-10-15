@@ -4,9 +4,13 @@ use super::state::{
     FAST_METADATA_TOOL_LOOP_MAX_SECS, FAST_TOOL_TIMEOUT_SECS, FOLLOWUP_INVOKE_TIMEOUT_SECS,
     FOLLOWUP_TOTAL_TIMEOUT_SECS, LONG_RUNNING_TOOL_TIMEOUT_SECS,
     MEDIA_FOLLOWUP_INVOKE_TIMEOUT_SECS, STREAMING_TOOL_LOOP_MAX_ITERATIONS,
-    STREAMING_TOOL_LOOP_MAX_SECS,
+    STREAMING_TOOL_LOOP_MAX_SECS, USER_ANSWER_TIMEOUT_SECS,
 };
 use super::tools;
+
+/// The question tool times itself out with a clear message; the executor's
+/// own limit sits just past it so that message is the one the model sees.
+const QUESTION_TIMEOUT_MARGIN_SECS: u64 = 15;
 
 pub(super) fn resolve_tool_execution_timeout_secs(tool_name: &str) -> u64 {
     let normalized = tool_name.to_lowercase();
@@ -30,6 +34,10 @@ pub(super) fn resolve_tool_execution_timeout_secs(tool_name: &str) -> u64 {
         || normalized == "media_generate_image"
     {
         return LONG_RUNNING_TOOL_TIMEOUT_SECS;
+    }
+
+    if normalized == "question" {
+        return USER_ANSWER_TIMEOUT_SECS + QUESTION_TIMEOUT_MARGIN_SECS;
     }
 
     DEFAULT_TOOL_TIMEOUT_SECS

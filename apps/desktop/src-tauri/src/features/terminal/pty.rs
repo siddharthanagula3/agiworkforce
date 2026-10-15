@@ -133,6 +133,47 @@ impl PtySession {
         Ok(())
     }
 
+    /// Ends the shell and everything it started. Killing only the shell leaves
+    /// a foreground job (a dev server, a build) running after the app quits:
+    /// an interactive shell puts each job in its own process group, so the
+    /// terminal's foreground group is signalled as well as the shell's own.
+    pub fn kill_tree(&mut self) -> Result<()> {
+        if !self.is_alive() {
+            return Ok(());
+        }
+
+        #[cfg(unix)]
+        {
+            let shell_group = self.child.process_id().map(|pid| pid as libc::pid_t);
+            let foreground_group = self.master.process_group_leader();
+            for group in [foreground_group, shell_group].into_iter().flatten() {
+                if group <= 1 {
+                    continue;
+                }
+                #[allow(unsafe_code)]
+                // SAFETY: killpg only sends a signal; both ids name process
+                // groups this PTY session owns and is still holding open.
+                unsafe {
+                    libc::killpg(group, libc::SIGKILL);
+                }
+            }
+        }
+
+        #[cfg(windows)]
+        if let Some(pid) = self.child.process_id() {
+            let _ = std::process::Command::new("taskkill")
+                .args(["/F", "/T", "/PID", &pid.to_string()])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+        }
+
+        if self.is_alive() {
+            self.kill()?;
+        }
+        Ok(())
+    }
+
     /// Execute a command in the PTY and return its output synchronously.
     /// This is useful for environment variable operations.
     pub fn execute_command(&mut self, command: &str) -> Result<String> {

@@ -12,7 +12,7 @@ use anyhow::anyhow;
 
 pub use capture::{
     capture_display, capture_primary_screen, capture_region, capture_window, create_thumbnail,
-    enumerate_windows, paste_from_clipboard, CapturedImage, CapturedRegion, WindowInfo, WindowRect,
+    enumerate_windows, CapturedImage, CapturedRegion, WindowInfo, WindowRect,
 };
 pub use dxgi::{list_displays, ScreenInfo};
 

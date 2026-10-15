@@ -7,10 +7,8 @@
 pub mod cache_manager;
 pub mod capability_detection;
 pub mod cost_calculator;
-pub mod council;
 pub mod daily_budget;
 pub mod fallback_chain;
-pub mod function_executor;
 pub mod job_autofill_runtime;
 pub mod llm_router;
 pub mod memory_integration;
@@ -144,6 +142,9 @@ pub enum ContentPart {
     Document { document: DocumentInput },
     ToolUse { tool_use: ToolUseInput },
     ToolResult { tool_result: ToolResultInput },
+    // An assistant content block echoed to the provider that produced it. Anthropic
+    // rejects a tool-use turn whose thinking blocks were dropped, edited or reordered.
+    ProviderBlock { block: serde_json::Value },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -267,12 +268,16 @@ pub struct ToolUseInput {
     pub input: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ToolResultInput {
     pub tool_use_id: String,
     pub content: String,
     #[serde(default)]
     pub is_error: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toolset_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<ImageInput>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -535,6 +540,9 @@ pub struct LLMResponse {
     /// Transcript from audio input (OpenAI whisper / audio input)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_transcript: Option<String>,
+    /// Assistant content blocks exactly as the provider returned them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_blocks: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -814,6 +822,13 @@ pub trait LLMProvider: Send + Sync {
     fn is_configured(&self) -> bool;
 
     fn name(&self) -> &str;
+
+    /// The base URL requests are sent to, for providers whose endpoint the user
+    /// can configure. Status and model-list checks read it so they probe the
+    /// same server chat uses.
+    fn base_url(&self) -> Option<&str> {
+        None
+    }
 
     /// Whether this provider is currently reachable.
     ///

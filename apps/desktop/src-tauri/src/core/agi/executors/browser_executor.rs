@@ -20,7 +20,6 @@
 
 use super::{ExecutorContext, ToolExecutor};
 use crate::automation::browser::{AdvancedBrowserOps, ExecuteOptions};
-use crate::automation::AutomationService;
 use crate::core::agi::ExecutionContext;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -34,21 +33,18 @@ use std::sync::Arc;
 /// This executor provides browser automation capabilities through the
 /// Tauri browser state wrapper, supporting navigation, clicking, and
 /// content extraction.
-pub struct BrowserExecutor {
-    _automation: Arc<AutomationService>,
-}
+pub struct BrowserExecutor;
 
 impl BrowserExecutor {
-    /// Create a new browser executor with the given automation service.
-    ///
-    /// # Arguments
-    ///
-    /// * `automation` - Shared automation service for cross-platform operations.
-    ///   Reserved for future use as fallback when CDP is unavailable.
-    pub fn new(automation: Arc<AutomationService>) -> Self {
-        Self {
-            _automation: automation,
-        }
+    /// Create a new browser executor.
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for BrowserExecutor {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -1668,20 +1664,10 @@ async fn execute_get_dom_snapshot(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::automation::AutomationService;
-
-    fn create_test_automation() -> Arc<AutomationService> {
-        Arc::new(
-            AutomationService::new().unwrap_or_else(|e| {
-                panic!("Failed to create automation service for testing: {}", e)
-            }),
-        )
-    }
 
     #[test]
     fn test_browser_executor_tool_names() {
-        let automation = create_test_automation();
-        let executor = BrowserExecutor::new(automation);
+        let executor = BrowserExecutor::new();
         let names = executor.tool_names();
 
         assert!(names.contains(&"browser_navigate"));
@@ -1697,13 +1683,13 @@ mod tests {
     fn create_test_context() -> ExecutorContext {
         ExecutorContext {
             app_handle: None,
-            automation: create_test_automation(),
             router: Arc::new(tokio::sync::RwLock::new(crate::core::llm::LLMRouter::new())),
             tool_cache: Arc::new(crate::data::cache::ToolResultCache::new()),
             security_guard: Arc::new(crate::sys::security::ToolExecutionGuard::new()),
             change_tracker: None,
             session_id: "test_session".to_string(),
             tool_id: "test_tool".to_string(),
+            granted_directories: Vec::new(),
         }
     }
 
@@ -1766,8 +1752,7 @@ mod tests {
 
     #[test]
     fn test_browser_executor_description() {
-        let automation = create_test_automation();
-        let executor = BrowserExecutor::new(automation);
+        let executor = BrowserExecutor::new();
 
         assert!(!executor.description().is_empty());
         assert!(executor.description().contains("Browser"));

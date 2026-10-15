@@ -32,10 +32,6 @@ mod tests {
     fn create_test_context() -> ExecutorContext {
         ExecutorContext {
             app_handle: None,
-            automation: Arc::new(
-                crate::automation::AutomationService::new()
-                    .expect("Failed to create AutomationService for tests"),
-            ),
             router: Arc::new(tokio::sync::RwLock::new(
                 crate::core::llm::LLMRouter::default(),
             )),
@@ -44,6 +40,7 @@ mod tests {
             change_tracker: None,
             session_id: "test_session".to_string(),
             tool_id: "file_executor_test".to_string(),
+            granted_directories: vec![std::env::temp_dir()],
         }
     }
 

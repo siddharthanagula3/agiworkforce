@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 /// A file larger than this is a log or a dump, not source a reader would open.
 pub const MAX_INDEXED_FILE_BYTES: u64 = 2 * 1024 * 1024;
@@ -289,39 +288,61 @@ pub fn classify(relative: &Path, size: Option<u64>) -> Option<ExclusionClass> {
     None
 }
 
+/// How many paths one `git check-ignore` is given, as arguments rather than
+/// on stdin: a `.gitignore` that never ends would leave git unread and the
+/// write to its stdin blocked past any deadline.
+const CHECK_IGNORE_BATCH: usize = 256;
+
 /// Paths `.gitignore` excludes, decided by git's own matcher rather than a
-/// second implementation of those semantics.
+/// second implementation of those semantics. Git quotes a path holding a
+/// quote, a backslash or a control character when it prints one, so each of
+/// those is asked about on its own and judged by the exit status.
 pub fn ignored_by_git(root: &Path, paths: &[PathBuf]) -> Vec<PathBuf> {
-    if paths.is_empty() {
-        return Vec::new();
+    let (quoted, plain): (Vec<&PathBuf>, Vec<&PathBuf>) =
+        paths.iter().partition(|path| git_quotes(path));
+    let mut ignored = Vec::new();
+    for batch in plain.chunks(CHECK_IGNORE_BATCH) {
+        let Some(output) = check_ignore(root, batch) else {
+            return ignored;
+        };
+        ignored.extend(
+            String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .filter(|line| !line.is_empty())
+                .map(PathBuf::from),
+        );
     }
-    let mut command = Command::new("git");
+    for path in quoted {
+        let Some(output) = check_ignore(root, &[path]) else {
+            return ignored;
+        };
+        if output.status.success() {
+            ignored.push(path.clone());
+        }
+    }
+    ignored
+}
+
+fn git_quotes(path: &Path) -> bool {
+    path.to_string_lossy()
+        .chars()
+        .any(|c| c == '"' || c == '\\' || c.is_control())
+}
+
+fn check_ignore(root: &Path, paths: &[&PathBuf]) -> Option<std::process::Output> {
+    let mut command = agiworkforce_worktree::host_git();
     command
         .arg("-C")
         .arg(root)
-        .args(["check-ignore", "--no-index", "--stdin", "-z"])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null());
-    let Ok(mut child) = command.spawn() else {
-        return Vec::new();
-    };
-    if let Some(mut stdin) = child.stdin.take() {
-        use std::io::Write;
-        for path in paths {
-            if write!(stdin, "{}\0", path.display()).is_err() {
-                break;
-            }
-        }
-    }
-    let Ok(output) = child.wait_with_output() else {
-        return Vec::new();
-    };
-    String::from_utf8_lossy(&output.stdout)
-        .split('\0')
-        .filter(|entry| !entry.is_empty())
-        .map(PathBuf::from)
-        .collect()
+        .args([
+            "-c",
+            "core.quotePath=false",
+            "check-ignore",
+            "--no-index",
+            "--",
+        ])
+        .args(paths);
+    crate::platform::runtime::git::host_git_output(command).ok()
 }
 
 /// Whether the index takes this path, and why not when it does not.
@@ -333,7 +354,13 @@ pub fn index_decision(
     size: Option<u64>,
     requested: bool,
 ) -> Option<ExclusionClass> {
-    let class = classify(relative, size);
+    let lands_on_a_credential_file =
+        crate::path_security::reads_a_credential_file(&root.join(relative).to_string_lossy());
+    let class = if lands_on_a_credential_file {
+        Some(ExclusionClass::Credential)
+    } else {
+        classify(relative, size)
+    };
     if requested {
         return class.filter(|class| class.survives_request());
     }
@@ -442,6 +469,30 @@ pub fn prioritized(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Command;
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_to_a_credential_file_stays_out_of_the_index_under_its_other_name() {
+        let root = tempfile::tempdir().expect("tempdir");
+        std::fs::write(root.path().join(".env"), "API_KEY=x").expect("write");
+        std::fs::write(root.path().join("plain.txt"), "notes").expect("write");
+        std::os::unix::fs::symlink(".env", root.path().join("notes.txt")).expect("link");
+        std::os::unix::fs::symlink(".env", root.path().join("notes.bin")).expect("link");
+
+        assert_eq!(classify(Path::new("notes.txt"), Some(9)), None);
+        for linked in ["notes.txt", "notes.bin"] {
+            assert_eq!(
+                index_decision(root.path(), Path::new(linked), Some(9), true),
+                Some(ExclusionClass::Credential),
+                "{linked} was indexed though it is the credential file"
+            );
+        }
+        assert_eq!(
+            index_decision(root.path(), Path::new("plain.txt"), Some(5), true),
+            None
+        );
+    }
 
     #[test]
     fn every_exclusion_class_names_itself_and_keeps_something_out() {

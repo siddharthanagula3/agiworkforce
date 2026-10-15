@@ -2,24 +2,11 @@
 //!
 //! This module provides Tauri commands for creating, reading, updating, and deleting
 //! projects. Projects group conversations, files, and custom instructions together.
-//!
-//! CLOUD SYNC HOOK:
-//! Write commands (project_create, project_update, project_delete) accept an optional
-//! `active_mode` param. When the active mode is managed-cloud, they call
-//! `mark_project_for_push` / `soft_delete_project_for_push` on the AppDatabase so the
-//! next project sync cycle will push the change. The gate uses the same
-//! `derive_cloud_sync_enabled` function that chat + memory sync use, the identical
-//! trust-boundary function, not a reimplementation.
-//! `projects.app_mode = 'cloud'` is set on rows created in cloud mode; the WHERE guard
-//! in `mark_project_for_push` makes it impossible to mark a local row.
 
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::data::projects_sync;
-use crate::sys::commands::chat::send_message_setup::derive_cloud_sync_enabled;
-use crate::sys::commands::settings::SettingsState;
 use crate::sys::commands::AppDatabase;
 
 /// Represents a file associated with a project
@@ -49,11 +36,12 @@ pub struct Project {
     pub color: Option<String>,
     pub icon: Option<String>,
     pub is_archived: bool,
+    #[serde(default)]
+    pub is_starred: bool,
     pub created_at: String,
     pub updated_at: String,
     pub icon_emoji: Option<String>,
     pub accent_color: Option<String>,
-    pub default_privacy_mode: Option<String>,
     /// JSON-serialized knowledge base file metadata with extracted content.
     /// Added in v65 migration, None means no knowledge files stored.
     #[serde(default)]
@@ -82,49 +70,53 @@ pub struct ProjectUpdate {
     pub color: Option<String>,
     pub icon: Option<String>,
     pub is_archived: Option<bool>,
+    pub is_starred: Option<bool>,
     pub updated_at: Option<String>,
     pub icon_emoji: Option<String>,
     pub accent_color: Option<String>,
-    pub default_privacy_mode: Option<String>,
     /// JSON knowledge base files update (added in v65)
     #[serde(default)]
     pub knowledge_base_files: Option<serde_json::Value>,
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers: cloud sync gating for project writes.
-// Reuses the EXACT same derive_cloud_sync_enabled function as memory.rs + send_message.rs.
-// ---------------------------------------------------------------------------
+/// The key a star is kept under in the project's `metadata` JSON, the same
+/// key the managed-cloud project record uses.
+const STARRED_METADATA_KEY: &str = "starred";
 
-/// Set `app_mode='cloud'` on a projects row. Called for rows created while
-/// cloud sync is enabled so they are marked correctly for push.
-fn set_project_cloud_mode(db: &AppDatabase, project_id: &str) {
-    if let Ok(conn) = db.connection() {
-        let _ = conn.execute(
-            "UPDATE projects SET app_mode = 'cloud' WHERE id = ?1 AND app_mode = 'local'",
-            rusqlite::params![project_id],
-        );
-    }
+fn starred_in_metadata(metadata: Option<&str>) -> bool {
+    metadata
+        .and_then(|stored| serde_json::from_str::<serde_json::Value>(stored).ok())
+        .and_then(|stored| stored.get(STARRED_METADATA_KEY).and_then(|v| v.as_bool()))
+        .unwrap_or(false)
 }
 
-/// Mark an existing cloud project for push. Non-fatal, a failed mark is logged
-/// but must never cause the write command to fail.
-fn try_mark_project_for_push(db: &AppDatabase, project_id: &str) {
-    if let Ok(conn) = db.connection() {
-        if let Err(e) = projects_sync::mark_project_for_push(&conn, project_id) {
-            tracing::warn!(error = %e, %project_id, "projects: failed to mark project for cloud push");
-        }
-    }
+fn metadata_with_star(metadata: Option<&str>, is_starred: bool) -> String {
+    let mut fields = metadata
+        .and_then(|stored| serde_json::from_str::<serde_json::Value>(stored).ok())
+        .and_then(|stored| match stored {
+            serde_json::Value::Object(fields) => Some(fields),
+            _ => None,
+        })
+        .unwrap_or_default();
+    fields.insert(
+        STARRED_METADATA_KEY.to_string(),
+        serde_json::Value::Bool(is_starred),
+    );
+    serde_json::Value::Object(fields).to_string()
 }
 
 /// Create a new project
 #[tauri::command]
 pub async fn project_create(
     project: Project,
-    active_mode: Option<String>,
     db: State<'_, AppDatabase>,
-    settings_state: State<'_, SettingsState>,
 ) -> Result<Project, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    create_project(&conn, &project)?;
+    Ok(project)
+}
+
+fn create_project(conn: &Connection, project: &Project) -> Result<(), String> {
     // Serialize files and conversation_ids as JSON
     let files_json = serde_json::to_string(&project.files).map_err(|e| e.to_string())?;
     let conversation_ids_json =
@@ -135,64 +127,50 @@ pub async fn project_create(
         .as_ref()
         .map(|v| serde_json::to_string(v).unwrap_or_default());
 
-    // Scope the mutex guard so it is released before calling cloud sync helpers.
-    {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        conn.execute(
-            "INSERT INTO projects (
-                id, name, description, custom_instructions, files, conversation_ids,
-                color, icon, is_archived, created_at, updated_at,
-                icon_emoji, accent_color, default_privacy_mode, knowledge_base_files
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
-            params![
-                project.id,
-                project.name,
-                project.description,
-                project.custom_instructions,
-                files_json,
-                conversation_ids_json,
-                project.color,
-                project.icon,
-                project.is_archived,
-                project.created_at,
-                project.updated_at,
-                project.icon_emoji,
-                project.accent_color,
-                project.default_privacy_mode,
-                kb_files_json,
-            ],
-        )
-        .map_err(|e| format!("Failed to create project: {}", e))?;
-    }
+    let metadata = project.is_starred.then(|| metadata_with_star(None, true));
 
-    // CLOUD SYNC HOOK: derive_cloud_sync_enabled is the single source of truth
-    // for the managed-cloud trust boundary (send_message_setup.rs:64).
-    let storage_mode_is_cloud = {
-        let settings = settings_state.settings.lock().await;
-        settings
-            .chat_preferences
-            .as_ref()
-            .map(|p| p.chat_storage_mode.as_str() == "cloud")
-            .unwrap_or(false)
-    };
-    if derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud) {
-        set_project_cloud_mode(&db, &project.id);
-        try_mark_project_for_push(&db, &project.id);
-    }
+    conn.execute(
+        "INSERT INTO projects (
+            id, name, description, custom_instructions, files, conversation_ids,
+            color, icon, is_archived, created_at, updated_at,
+            icon_emoji, accent_color, knowledge_base_files, metadata
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+        params![
+            project.id,
+            project.name,
+            project.description,
+            project.custom_instructions,
+            files_json,
+            conversation_ids_json,
+            project.color,
+            project.icon,
+            project.is_archived,
+            project.created_at,
+            project.updated_at,
+            project.icon_emoji,
+            project.accent_color,
+            kb_files_json,
+            metadata,
+        ],
+    )
+    .map_err(|e| format!("Failed to create project: {}", e))?;
 
-    Ok(project)
+    Ok(())
 }
 
 /// List all projects
 #[tauri::command]
 pub async fn project_list(db: State<'_, AppDatabase>) -> Result<Vec<Project>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    list_projects(&conn)
+}
 
+fn list_projects(conn: &Connection) -> Result<Vec<Project>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, name, description, custom_instructions, files, conversation_ids,
                     color, icon, is_archived, created_at, updated_at,
-                    icon_emoji, accent_color, default_privacy_mode, knowledge_base_files
+                    icon_emoji, accent_color, knowledge_base_files, metadata
              FROM projects
              ORDER BY updated_at DESC",
         )
@@ -202,7 +180,8 @@ pub async fn project_list(db: State<'_, AppDatabase>) -> Result<Vec<Project>, St
         .query_map([], |row| {
             let files_json: String = row.get(4)?;
             let conversation_ids_json: String = row.get(5)?;
-            let kb_files_json: Option<String> = row.get(14)?;
+            let kb_files_json: Option<String> = row.get(13)?;
+            let metadata: Option<String> = row.get(14)?;
 
             let files: Vec<ProjectFile> = serde_json::from_str(&files_json).unwrap_or_default();
             let conversation_ids: Vec<String> =
@@ -221,11 +200,11 @@ pub async fn project_list(db: State<'_, AppDatabase>) -> Result<Vec<Project>, St
                 color: row.get(6)?,
                 icon: row.get(7)?,
                 is_archived: row.get(8)?,
+                is_starred: starred_in_metadata(metadata.as_deref()),
                 created_at: row.get(9)?,
                 updated_at: row.get(10)?,
                 icon_emoji: row.get(11)?,
                 accent_color: row.get(12)?,
-                default_privacy_mode: row.get(13)?,
                 knowledge_base_files,
             })
         })
@@ -236,82 +215,18 @@ pub async fn project_list(db: State<'_, AppDatabase>) -> Result<Vec<Project>, St
     Ok(projects)
 }
 
-/// Get a single project by ID
-#[tauri::command]
-pub async fn project_get(
-    id: String,
-    db: State<'_, AppDatabase>,
-) -> Result<Option<Project>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, name, description, custom_instructions, files, conversation_ids,
-                    color, icon, is_archived, created_at, updated_at,
-                    icon_emoji, accent_color, default_privacy_mode, knowledge_base_files
-             FROM projects
-             WHERE id = ?1",
-        )
-        .map_err(|e| format!("Failed to prepare query: {}", e))?;
-
-    let project = stmt
-        .query_row([&id], |row| {
-            let files_json: String = row.get(4)?;
-            let conversation_ids_json: String = row.get(5)?;
-            let kb_files_json: Option<String> = row.get(14)?;
-
-            let files: Vec<ProjectFile> = serde_json::from_str(&files_json).unwrap_or_default();
-            let conversation_ids: Vec<String> =
-                serde_json::from_str(&conversation_ids_json).unwrap_or_default();
-            let knowledge_base_files: Option<serde_json::Value> = kb_files_json
-                .as_deref()
-                .and_then(|s| serde_json::from_str(s).ok());
-
-            Ok(Project {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                description: row.get(2)?,
-                custom_instructions: row.get(3)?,
-                files,
-                conversation_ids,
-                color: row.get(6)?,
-                icon: row.get(7)?,
-                is_archived: row.get(8)?,
-                created_at: row.get(9)?,
-                updated_at: row.get(10)?,
-                icon_emoji: row.get(11)?,
-                accent_color: row.get(12)?,
-                default_privacy_mode: row.get(13)?,
-                knowledge_base_files,
-            })
-        })
-        .optional()
-        .map_err(|e| format!("Failed to get project: {}", e))?;
-
-    Ok(project)
-}
-
 /// Update a project
 #[tauri::command]
 pub async fn project_update(
     id: String,
     updates: ProjectUpdate,
-    active_mode: Option<String>,
     db: State<'_, AppDatabase>,
-    settings_state: State<'_, SettingsState>,
 ) -> Result<(), String> {
-    // Derive cloud sync setting BEFORE building values (avoid holding non-Send
-    // Box<dyn ToSql> across an await point).
-    let storage_mode_is_cloud = {
-        let settings = settings_state.settings.lock().await;
-        settings
-            .chat_preferences
-            .as_ref()
-            .map(|p| p.chat_storage_mode.as_str() == "cloud")
-            .unwrap_or(false)
-    };
-    let cloud_enabled = derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud);
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    update_project(&conn, id, &updates)
+}
 
+fn update_project(conn: &Connection, id: String, updates: &ProjectUpdate) -> Result<(), String> {
     // Build dynamic UPDATE query based on provided fields
     let mut set_clauses = Vec::new();
     let mut values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -351,6 +266,19 @@ pub async fn project_update(
         set_clauses.push("is_archived = ?");
         values.push(Box::new(is_archived));
     }
+    if let Some(is_starred) = updates.is_starred {
+        let stored: Option<String> = conn
+            .query_row(
+                "SELECT metadata FROM projects WHERE id = ?1",
+                [&id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()
+            .map_err(|e| format!("Failed to read project: {}", e))?
+            .flatten();
+        set_clauses.push("metadata = ?");
+        values.push(Box::new(metadata_with_star(stored.as_deref(), is_starred)));
+    }
     if let Some(updated_at) = &updates.updated_at {
         set_clauses.push("updated_at = ?");
         values.push(Box::new(updated_at.clone()));
@@ -362,10 +290,6 @@ pub async fn project_update(
     if let Some(accent_color) = &updates.accent_color {
         set_clauses.push("accent_color = ?");
         values.push(Box::new(accent_color.clone()));
-    }
-    if let Some(default_privacy_mode) = &updates.default_privacy_mode {
-        set_clauses.push("default_privacy_mode = ?");
-        values.push(Box::new(default_privacy_mode.clone()));
     }
     if let Some(knowledge_base_files) = &updates.knowledge_base_files {
         let kb_json = serde_json::to_string(knowledge_base_files).map_err(|e| e.to_string())?;
@@ -382,62 +306,18 @@ pub async fn project_update(
         set_clauses.join(", ")
     );
 
-    // Scope the lock so it is released before cloud sync helpers re-acquire it.
-    {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        // Add id as the last parameter
-        values.push(Box::new(id.clone()));
+    values.push(Box::new(id));
+    let params: Vec<&dyn rusqlite::ToSql> = values.iter().map(|v| v.as_ref()).collect();
 
-        // Convert values to params_from_iter compatible format
-        let params: Vec<&dyn rusqlite::ToSql> = values.iter().map(|v| v.as_ref()).collect();
-
-        conn.execute(&query, params.as_slice())
-            .map_err(|e| format!("Failed to update project: {}", e))?;
-    }
-
-    // CLOUD SYNC HOOK.
-    if cloud_enabled {
-        try_mark_project_for_push(&db, &id);
-    }
+    conn.execute(&query, params.as_slice())
+        .map_err(|e| format!("Failed to update project: {}", e))?;
 
     Ok(())
 }
 
 /// Delete a project
-///
-/// In cloud mode: soft-deletes the row (sets deleted_at_utc + needs_push=1)
-/// so the tombstone propagates to other devices. Falls through to hard-delete
-/// for local rows.
 #[tauri::command]
-pub async fn project_delete(
-    id: String,
-    active_mode: Option<String>,
-    db: State<'_, AppDatabase>,
-    settings_state: State<'_, SettingsState>,
-) -> Result<(), String> {
-    let storage_mode_is_cloud = {
-        let settings = settings_state.settings.lock().await;
-        settings
-            .chat_preferences
-            .as_ref()
-            .map(|p| p.chat_storage_mode.as_str() == "cloud")
-            .unwrap_or(false)
-    };
-
-    if derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud) {
-        // Attempt soft-delete for cloud rows. If the row is a cloud row, return early
-        // (soft-deleted, tombstone will propagate). If not a cloud row, fall through.
-        if let Ok(conn) = db.connection() {
-            match projects_sync::soft_delete_project_for_push(&conn, &id) {
-                Ok(true) => return Ok(()), // cloud row, tombstoned, skip hard-delete
-                Ok(false) => {}            // local row, fall through to hard-delete
-                Err(e) => {
-                    tracing::warn!(error = %e, %id, "projects: soft-delete failed, falling back to hard-delete");
-                }
-            }
-        }
-    }
-
+pub async fn project_delete(id: String, db: State<'_, AppDatabase>) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     conn.execute("DELETE FROM projects WHERE id = ?1", [&id])
@@ -448,38 +328,6 @@ pub async fn project_delete(
         .ok(); // Ignore if table doesn't exist
 
     Ok(())
-}
-
-/// Get project settings
-#[tauri::command]
-pub async fn project_get_settings(
-    project_id: String,
-    db: State<'_, AppDatabase>,
-) -> Result<ProjectSettings, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-
-    let mut stmt = conn
-        .prepare(
-            "SELECT default_model, default_provider, context_window_size, auto_archive_after_days
-             FROM project_settings
-             WHERE project_id = ?1",
-        )
-        .map_err(|e| format!("Failed to prepare query: {}", e))?;
-
-    let settings = stmt
-        .query_row([&project_id], |row| {
-            Ok(ProjectSettings {
-                default_model: row.get(0)?,
-                default_provider: row.get(1)?,
-                context_window_size: row.get(2)?,
-                auto_archive_after_days: row.get(3)?,
-            })
-        })
-        .optional()
-        .map_err(|e| format!("Failed to get project settings: {}", e))?
-        .unwrap_or_default();
-
-    Ok(settings)
 }
 
 /// Update project settings
@@ -511,4 +359,93 @@ pub async fn project_update_settings(
     .map_err(|e| format!("Failed to update project settings: {}", e))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn migrated_database() -> Connection {
+        let conn = Connection::open_in_memory().expect("in-memory database");
+        crate::data::db::migrations::run_migrations(&conn).expect("migrate test database");
+        conn
+    }
+
+    /// What `src/stores/projectStore.ts` sends as `project` when it creates one.
+    fn project_from_the_ui(id: &str) -> Project {
+        serde_json::from_value(serde_json::json!({
+            "id": id,
+            "name": "Launch",
+            "description": "",
+            "customInstructions": "",
+            "files": [],
+            "conversationIds": [],
+            "isArchived": false,
+            "createdAt": "2026-10-11T00:00:00.000Z",
+            "updatedAt": "2026-10-11T00:00:00.000Z",
+        }))
+        .expect("project as the store sends it")
+    }
+
+    fn starred(conn: &Connection, id: &str) -> bool {
+        list_projects(conn)
+            .expect("list projects")
+            .into_iter()
+            .find(|project| project.id == id)
+            .expect("project is listed")
+            .is_starred
+    }
+
+    #[test]
+    fn a_star_set_from_the_project_list_is_still_there_when_projects_load_again() {
+        let conn = migrated_database();
+        create_project(&conn, &project_from_the_ui("p-1")).expect("create project");
+        assert!(!starred(&conn, "p-1"));
+
+        let star: ProjectUpdate = serde_json::from_value(serde_json::json!({
+            "isStarred": true,
+            "updatedAt": "2026-10-11T00:01:00.000Z",
+        }))
+        .expect("update as the store sends it");
+        update_project(&conn, "p-1".to_string(), &star).expect("star project");
+        assert!(starred(&conn, "p-1"));
+
+        let listed = serde_json::to_value(list_projects(&conn).expect("list projects"))
+            .expect("projects as the store reads them");
+        assert_eq!(listed[0]["isStarred"], true);
+
+        let unstar = ProjectUpdate {
+            is_starred: Some(false),
+            ..ProjectUpdate::default()
+        };
+        update_project(&conn, "p-1".to_string(), &unstar).expect("unstar project");
+        assert!(!starred(&conn, "p-1"));
+    }
+
+    #[test]
+    fn starring_keeps_whatever_else_the_project_metadata_holds() {
+        let kept = metadata_with_star(Some(r#"{"origin":"import","starred":false}"#), true);
+        let kept: serde_json::Value = serde_json::from_str(&kept).expect("metadata is json");
+        assert_eq!(kept["origin"], "import");
+        assert_eq!(kept["starred"], true);
+
+        assert!(starred_in_metadata(Some(&metadata_with_star(None, true))));
+        assert!(!starred_in_metadata(Some("not json")));
+        assert!(!starred_in_metadata(None));
+    }
+
+    #[test]
+    fn an_update_without_a_star_leaves_it_as_it_was() {
+        let conn = migrated_database();
+        let mut project = project_from_the_ui("p-2");
+        project.is_starred = true;
+        create_project(&conn, &project).expect("create starred project");
+
+        let rename = ProjectUpdate {
+            name: Some("Launch week".to_string()),
+            ..ProjectUpdate::default()
+        };
+        update_project(&conn, "p-2".to_string(), &rename).expect("rename project");
+        assert!(starred(&conn, "p-2"));
+    }
 }

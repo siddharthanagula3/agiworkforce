@@ -10,6 +10,22 @@ use super::ToolResult;
 
 const MAX_GLOB_RESULTS: usize = 1_000;
 
+/// A search program, started from where it is on the host and never from a
+/// bare name. These tools run it outside any sandbox and without asking, and
+/// a bare `rg` or `grep` is looked up on the whole `PATH`, where a project's
+/// `node_modules/.bin` or `.venv/bin` can come first and hold a program a
+/// sandboxed command put there.
+fn search_program(name: &str) -> std::io::Result<Command> {
+    crate::path_security::host_program(name)
+        .map(Command::new)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("{name} was not found in a folder of PATH outside the project"),
+            )
+        })
+}
+
 /// The file a `path:line:text` match came from, for a path that may itself
 /// carry a Windows drive prefix.
 fn matched_file(line: &str) -> Option<&str> {
@@ -32,17 +48,18 @@ fn matched_file(line: &str) -> Option<&str> {
 fn withhold_credential_matches(output: &str) -> (String, usize) {
     let mut kept: Vec<&str> = Vec::new();
     let mut withheld = 0usize;
+    let mut judged: HashMap<&str, bool> = HashMap::new();
     for line in output.lines() {
-        match matched_file(line) {
-            Some(path)
-                if crate::path_security::is_checkpoint_internal_path(std::path::Path::new(
-                    path,
-                )) =>
-            {
-                withheld += 1;
-            }
-            Some(path) if crate::sensitive_files::is_sensitive_file(path) => withheld += 1,
-            _ => kept.push(line),
+        let covered = matched_file(line).is_some_and(|path| {
+            *judged.entry(path).or_insert_with(|| {
+                crate::path_security::is_checkpoint_internal_path(std::path::Path::new(path))
+                    || crate::path_security::reads_a_credential_file(path)
+            })
+        });
+        if covered {
+            withheld += 1;
+        } else {
+            kept.push(line);
         }
     }
     (kept.join("\n"), withheld)
@@ -97,17 +114,21 @@ pub(super) async fn execute_search_files(args: &HashMap<String, String>) -> Resu
 
     print_tool_status("search_files", &format!("Search({}, {})", pattern, path));
 
-    let mut command = Command::new("grep");
-    command.arg("-rn").arg("--include=*").arg("-m").arg("200");
-    for directory in crate::repo::index_policy::excluded_directory_names() {
-        command.arg(format!("--exclude-dir={directory}"));
-    }
-    for pattern in crate::path_security::checkpoint_internal_globs() {
-        command.arg(format!("--exclude-dir={pattern}"));
-        command.arg(format!("--exclude={pattern}"));
-    }
-    command.arg("--").arg(pattern).arg(&validated_path);
-    let result = crate::process_tree::output(command, None, Some(COMMAND_TIMEOUT)).await;
+    let result = match search_program("grep") {
+        Ok(mut command) => {
+            command.arg("-rn").arg("--include=*").arg("-m").arg("200");
+            for directory in crate::repo::index_policy::excluded_directory_names() {
+                command.arg(format!("--exclude-dir={directory}"));
+            }
+            for pattern in crate::path_security::checkpoint_internal_globs() {
+                command.arg(format!("--exclude-dir={pattern}"));
+                command.arg(format!("--exclude={pattern}"));
+            }
+            command.arg("--").arg(pattern).arg(&validated_path);
+            crate::process_tree::output(command, None, Some(COMMAND_TIMEOUT)).await
+        }
+        Err(missing) => Err(missing),
+    };
 
     match result {
         Ok(output) => {
@@ -284,20 +305,25 @@ pub(super) async fn execute_grep_files(
     if !quiet {
         print_tool_status("grep_files", &format!("/{}/{}", pattern, path));
     }
-    let mut cmd = Command::new("rg");
-    cmd.arg("--line-number")
-        .arg("--no-heading")
-        .arg("--color=never")
-        .arg("--max-count=100");
-    if let Some(g) = include {
-        cmd.arg("--glob").arg(g);
-    }
-    for pattern in crate::path_security::checkpoint_internal_globs() {
-        cmd.arg("--glob").arg(format!("!**/{pattern}"));
-        cmd.arg("--glob").arg(format!("!**/{pattern}/**"));
-    }
-    cmd.arg("--").arg(pattern).arg(&validated_path);
-    match crate::process_tree::output(cmd, None, Some(COMMAND_TIMEOUT)).await {
+    let found = match search_program("rg") {
+        Ok(mut cmd) => {
+            cmd.arg("--line-number")
+                .arg("--no-heading")
+                .arg("--color=never")
+                .arg("--max-count=100");
+            if let Some(g) = include {
+                cmd.arg("--glob").arg(g);
+            }
+            for pattern in crate::path_security::checkpoint_internal_globs() {
+                cmd.arg("--glob").arg(format!("!**/{pattern}"));
+                cmd.arg("--glob").arg(format!("!**/{pattern}/**"));
+            }
+            cmd.arg("--").arg(pattern).arg(&validated_path);
+            crate::process_tree::output(cmd, None, Some(COMMAND_TIMEOUT)).await
+        }
+        Err(missing) => Err(missing),
+    };
+    match found {
         Ok(o) => {
             let stdout = String::from_utf8_lossy(&o.stdout).to_string();
             if stdout.is_empty() {
@@ -310,7 +336,16 @@ pub(super) async fn execute_grep_files(
             Ok(searched("grep_files", stdout))
         }
         Err(error) if error.kind() != std::io::ErrorKind::TimedOut => {
-            let mut fb = Command::new("grep");
+            let mut fb = match search_program("grep") {
+                Ok(fb) => fb,
+                Err(missing) => {
+                    return Ok(ToolResult {
+                        tool_name: "grep_files".into(),
+                        success: false,
+                        output: missing.to_string(),
+                    })
+                }
+            };
             fb.arg("-rn").arg("--max-count=100");
             for directory in crate::repo::index_policy::excluded_directory_names() {
                 fb.arg(format!("--exclude-dir={directory}"));

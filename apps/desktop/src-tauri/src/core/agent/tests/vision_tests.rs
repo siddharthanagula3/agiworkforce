@@ -31,14 +31,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_vision_automation_new_creates_screenshot_dir() {
-        let _vision = VisionAutomation::new().unwrap();
-        let dir = std::env::temp_dir().join("agiworkforce_screenshots");
-        assert!(dir.exists(), "Screenshot directory must be created");
-        assert!(dir.is_dir(), "Screenshot path must be a directory");
-    }
-
     // ------------------------------------------------------------------
     // is_ocr_available() -- compile-time feature gate
     // ------------------------------------------------------------------

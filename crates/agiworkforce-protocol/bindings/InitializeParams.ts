@@ -5,6 +5,12 @@ export type InitializeParams = {
   clientInfo: AppServerClientInfo;
   experimentalApi?: boolean;
   /**
+   * The client renders `userInput/requested` and answers it with
+   * `userInput/respond`. A host puts the agent's questions only to a client
+   * that says so; for any other client `ask_user` is refused at once.
+   */
+  userInput?: boolean;
+  /**
    * Wire version this client speaks. Omitted by pre-negotiation clients,
    * which are answered with [`LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION`].
    */

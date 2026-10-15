@@ -82,6 +82,31 @@ pub fn format_context_report(usage: &ContextUsage) -> String {
     )
 }
 
+/// Compact only `messages[keep..]`. Everything before `keep` is returned
+/// exactly as it was, so a checkpoint taken there still matches the
+/// conversation, and the budgets describe the whole result.
+pub async fn compact_after(
+    messages: &[Message],
+    keep: usize,
+    config: &agiworkforce_agent_core::context::ContextCompactionConfig,
+    summarizer: Option<&dyn agiworkforce_agent_core::context::ContextSummarizer>,
+) -> agiworkforce_agent_core::context::ContextCompactionResult {
+    use agiworkforce_agent_core::context::{compact_context, context_budget};
+
+    let keep = keep.min(messages.len());
+    let tail = compact_context(&messages[keep..], config, None, summarizer).await;
+    let mut combined = messages[..keep].to_vec();
+    combined.extend(tail.messages);
+    let window = config.context_window_tokens;
+    let reserved = config.reserved_output_tokens;
+    agiworkforce_agent_core::context::ContextCompactionResult {
+        before: context_budget(messages, window, reserved, None),
+        after: context_budget(&combined, window, reserved, None),
+        messages: combined,
+        ..tail
+    }
+}
+
 /// Find the project root by walking upward to the first known root marker.
 pub fn find_project_root(start: &Path) -> Option<PathBuf> {
     let mut current = start.to_path_buf();
@@ -113,6 +138,12 @@ pub struct InstructionSource {
 ///
 /// [`load_instructions`] is built from this, so a client preview and the turn
 /// itself can never disagree about which files were read.
+///
+/// Each file is repository content that goes into the system prompt, so it is
+/// read through [`crate::project_text`]: only where it is a regular file
+/// inside the folder it was found in, once its links are followed, and never
+/// a credential file. A link out of that folder, a FIFO or an oversized file
+/// is skipped, and the log says which and why.
 pub fn instruction_sources(cwd: &Path) -> (Vec<InstructionSource>, bool) {
     let dirs = walk_to_root(cwd);
     let mut sources = Vec::new();
@@ -139,9 +170,8 @@ pub fn instruction_sources(cwd: &Path) -> (Vec<InstructionSource>, bool) {
             if sources.iter().any(|source| same_file(&source.path, &path)) {
                 continue;
             }
-            let content = match std::fs::read_to_string(&path) {
-                Ok(content) => content,
-                Err(_) => continue,
+            let Some(content) = crate::project_text::read_within(dir, &path) else {
+                continue;
             };
             let tokens = estimate_tokens(&content);
             if total + tokens > MAX_INSTRUCTION_TOKENS {
@@ -281,5 +311,34 @@ mod tests {
 
         let instructions = load_instructions(&child).expect("instructions");
         assert!(instructions.find("root rule") < instructions.find("child rule"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_instruction_file_that_leads_out_of_its_folder_is_not_sent_to_the_model() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let outside = tempfile::tempdir().expect("outside");
+        fs::write(outside.path().join("credentials"), "not for the prompt").expect("outside file");
+        std::os::unix::fs::symlink(
+            outside.path().join("credentials"),
+            dir.path().join("AGENTS.md"),
+        )
+        .expect("link out");
+        fs::write(dir.path().join("house-rules.md"), "house rules").expect("real file");
+        std::os::unix::fs::symlink("house-rules.md", dir.path().join("CLAUDE.md"))
+            .expect("link in");
+
+        let (sources, _) = instruction_sources(dir.path());
+        let loaded: Vec<&str> = sources
+            .iter()
+            .filter(|source| source.dir == dir.path())
+            .map(|source| source.content.as_str())
+            .collect();
+
+        assert_eq!(
+            loaded,
+            ["house rules"],
+            "a link out of the folder was loaded, or a link inside it was not"
+        );
     }
 }

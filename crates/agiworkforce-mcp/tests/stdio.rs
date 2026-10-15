@@ -11,13 +11,14 @@ mod support;
 use std::collections::HashMap;
 use std::time::Duration;
 
-use agiworkforce_mcp::{McpClient, McpTimeouts, TransportConfig};
+use agiworkforce_mcp::{ClientHooks, McpClient, McpTimeouts, TransportConfig};
 
 fn stdio_cfg(mode: &str) -> TransportConfig {
     TransportConfig::Stdio {
         command: env!("CARGO_BIN_EXE_mcp_sim_stdio").to_string(),
         args: vec![mode.to_string()],
         env: HashMap::new(),
+        cwd: None,
     }
 }
 
@@ -84,6 +85,121 @@ async fn stdio_stdout_configured_cap_preserves_ordinary_frames() {
         .expect("tool response");
     assert_eq!(result["content"][0]["text"], "λ🙂");
     client.shutdown().await.expect("the child shuts down");
+}
+
+async fn folder_started_in(cwd: Option<std::path::PathBuf>) -> std::path::PathBuf {
+    let cfg = TransportConfig::Stdio {
+        command: env!("CARGO_BIN_EXE_mcp_sim_stdio").to_string(),
+        args: vec!["cwd".to_string()],
+        env: HashMap::new(),
+        cwd,
+    };
+    let mut client = McpClient::connect(
+        "stdio-cwd",
+        cfg,
+        McpTimeouts::default(),
+        support::decline_hooks(),
+    )
+    .await
+    .expect("connect");
+    let raw = client
+        .call_tool_value("echo", serde_json::json!({}))
+        .await
+        .expect("call_tool_value")
+        .expect("result");
+    let _ = client.shutdown().await;
+    std::path::PathBuf::from(raw["content"][0]["text"].as_str().expect("folder"))
+        .canonicalize()
+        .expect("the folder the server reported")
+}
+
+fn starts_logged(log: &std::path::Path) -> usize {
+    std::fs::read_to_string(log)
+        .unwrap_or_default()
+        .lines()
+        .count()
+}
+
+async fn crashing_server(log: &std::path::Path, hooks: ClientHooks) -> McpClient {
+    let cfg = TransportConfig::Stdio {
+        command: env!("CARGO_BIN_EXE_mcp_sim_stdio").to_string(),
+        args: vec!["die".to_string(), log.to_string_lossy().into_owned()],
+        env: HashMap::new(),
+        cwd: None,
+    };
+    McpClient::connect("stdio-respawn", cfg, McpTimeouts::default(), hooks)
+        .await
+        .expect("connect")
+}
+
+#[tokio::test]
+async fn a_stopped_stdio_server_restarts_only_when_the_host_still_allows_it() {
+    let folder = tempfile::tempdir().expect("tempdir");
+
+    let unchecked = folder.path().join("unchecked");
+    let mut client = crashing_server(&unchecked, support::decline_hooks()).await;
+    let raw = client
+        .call_tool_value("echo", serde_json::json!({ "text": "after the restart" }))
+        .await
+        .expect("a host with no check gets the restart it always got")
+        .expect("result");
+    assert_eq!(raw["content"][0]["text"], "after the restart");
+    assert_eq!(starts_logged(&unchecked), 2);
+    let _ = client.shutdown().await;
+
+    let refused = folder.path().join("refused");
+    let hooks = ClientHooks {
+        before_respawn: Some(std::sync::Arc::new(|| {
+            Err("its launch changed since it was approved".to_string())
+        })),
+        ..support::decline_hooks()
+    };
+    let mut client = crashing_server(&refused, hooks).await;
+    let error = client
+        .call_tool_value("echo", serde_json::json!({ "text": "never answered" }))
+        .await
+        .expect_err("a launch the host no longer allows was started again");
+    let error = format!("{error:#}");
+    assert!(
+        error.contains("not restarted: its launch changed since it was approved"),
+        "{error}"
+    );
+    assert_eq!(
+        starts_logged(&refused),
+        1,
+        "the server was started again in silence"
+    );
+    assert!(
+        client
+            .call_tool_value("echo", serde_json::json!({ "text": "still down" }))
+            .await
+            .is_err(),
+        "a server kept down answered"
+    );
+    assert_eq!(starts_logged(&refused), 1, "it stays down on the next call");
+    let _ = client.shutdown().await;
+}
+
+#[tokio::test]
+async fn stdio_child_starts_in_the_folder_the_transport_names() {
+    let folder = tempfile::tempdir().expect("tempdir");
+    let named = folder.path().canonicalize().expect("canonical folder");
+
+    assert_eq!(
+        folder_started_in(Some(folder.path().to_path_buf())).await,
+        named
+    );
+
+    let here = std::env::current_dir()
+        .expect("current dir")
+        .canonicalize()
+        .expect("canonical current dir");
+    assert_ne!(here, named);
+    assert_eq!(
+        folder_started_in(None).await,
+        here,
+        "a transport that names no folder moved the server out of this process's"
+    );
 }
 
 #[tokio::test]
@@ -191,6 +307,7 @@ sys.stdin.readline()  # block until shutdown
         command: "python3".to_string(),
         args: vec!["-u".to_string(), "-c".to_string(), script.to_string()],
         env: HashMap::new(),
+        cwd: None,
     };
     let mut client = McpClient::connect(
         "stdio-stderr",
@@ -296,6 +413,7 @@ write_frame({"jsonrpc": "2.0", "id": tools["id"], "result": {"tools": []}})
         command: "python3".to_string(),
         args: vec!["-u".to_string(), "-c".to_string(), script.to_string()],
         env: HashMap::new(),
+        cwd: None,
     };
     let timeouts = McpTimeouts {
         initialize: Duration::from_secs(2),

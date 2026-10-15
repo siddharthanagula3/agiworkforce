@@ -26,39 +26,21 @@ pub async fn chat_send_message(
 ) -> Result<ChatSendMessageResponse, String> {
     let correlation_id = uuid::Uuid::new_v4().to_string();
 
-    // TRUST-BOUNDARY: active_mode="local" must prevent cloud sync regardless of
-    // chat_storage_mode. A user with storage_mode="cloud" but active_mode="local"
-    // must not have their local chats synced to Neon (mirrors the is_local_mode
-    // invariant enforced in send_message_setup.rs:745).
-    let cloud_sync_enabled = {
-        let storage_mode_is_cloud = {
-            let settings = settings_state.settings.lock().await;
-            settings
-                .chat_preferences
-                .as_ref()
-                .map(|prefs| prefs.chat_storage_mode.as_str() == "cloud")
-                .unwrap_or(false)
-        };
-        super::send_message_setup::derive_cloud_sync_enabled(
-            request.active_mode.as_deref(),
-            storage_mode_is_cloud,
-        )
-    };
-    let (memory_enabled, auto_save_memories, allow_tool_assisted_memory_generation) = {
+    let memory_enabled = {
         let settings = settings_state.settings.lock().await;
-        let preferences = settings
+        settings
             .chat_preferences
             .as_ref()
-            .cloned()
-            .unwrap_or_default();
-        (
-            preferences.memory_enabled,
-            preferences.memory_enabled && preferences.auto_save_memories,
-            preferences.allow_tool_assisted_memory_generation,
-        )
+            .is_some_and(|preferences| preferences.memory_enabled)
     };
 
-    reset_stop_flag();
+    if let Some(conversation_id) = request.conversation_id {
+        reset_stop_flag(conversation_id);
+    }
+    let turn = request
+        .conversation_id
+        .map(super::interrupted_turns::ChatTurn::begin);
+    let started_new_conversation = request.conversation_id.is_none();
     request.validate().map_err(|error| error.to_string())?;
     log_chat_request(&request, &correlation_id);
 
@@ -72,23 +54,7 @@ pub async fn chat_send_message(
 
     let flags = resolve_request_flags(&request, &app_handle);
     let (provider_enum, model) = resolve_provider_and_model(&request);
-    let uses_managed_cloud =
-        request_uses_managed_cloud(provider_enum, request.prefer_cloud_credits);
-
-    if uses_managed_cloud {
-        check_billing_and_budget(&_db, &request.user_id)?;
-    } else {
-        info!(
-            target: "chat",
-            correlation_id = %correlation_id,
-            provider = ?provider_enum,
-            "Skipping subscription gate for Local/BYOK chat request"
-        );
-    }
-
-    let plan_tier = if uses_managed_cloud { "free" } else { "byok" }.to_string();
-
-    let preferences = build_router_preferences(&request, provider_enum, &model, plan_tier);
+    let preferences = build_router_preferences(&request, provider_enum, &model, "byok".to_string());
     let db = AppDatabase {
         conn: _db.inner().conn.clone(),
     };
@@ -106,12 +72,20 @@ pub async fn chat_send_message(
         model,
         preferences,
         flags,
-        cloud_sync_enabled,
-        auto_save_memories,
         memory_enabled,
-        allow_tool_assisted_memory_generation,
     )
     .await?;
+    if started_new_conversation {
+        reset_stop_flag(prepared.conversation.id);
+    }
+    let conversation_id = prepared.conversation.id;
+    let mut turn = match turn {
+        Some(turn) if turn.conversation_id() == conversation_id => turn,
+        _ => super::interrupted_turns::ChatTurn::begin(conversation_id),
+    };
+    if !prepared.flags.incognito {
+        turn.record_persisted(&db, prepared.user_message.id);
+    }
 
     let runtime = SendMessageRuntime {
         app_handle,
@@ -122,7 +96,7 @@ pub async fn chat_send_message(
     };
 
     if prepared.flags.stream_mode {
-        handle_streaming_message(runtime, prepared).await
+        handle_streaming_message(runtime, prepared, turn).await
     } else {
         handle_nonstreaming_message(runtime, prepared).await
     }

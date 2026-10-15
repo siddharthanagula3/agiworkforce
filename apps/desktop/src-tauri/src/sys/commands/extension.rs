@@ -51,51 +51,6 @@ pub struct PageAction {
     pub delay: Option<u32>,
 }
 
-/// Form information from the extension
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FormData {
-    pub url: String,
-    pub tab_id: u32,
-    pub forms: Vec<FormInfo>,
-}
-
-/// Information about a single form
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FormInfo {
-    pub id: Option<String>,
-    pub name: Option<String>,
-    pub method: String,
-    pub action: Option<String>,
-    pub fields: Vec<FormField>,
-}
-
-/// A form field
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FormField {
-    pub name: String,
-    #[serde(rename = "type")]
-    pub field_type: String,
-    pub value: Option<String>,
-    pub required: bool,
-    pub options: Option<Vec<String>>,
-}
-
-/// Form analysis response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FormAnalysisResponse {
-    pub success: bool,
-    pub analysis: Option<FormAnalysis>,
-    pub error: Option<String>,
-}
-
-/// Analysis results for forms
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FormAnalysis {
-    pub form_types: Vec<String>,
-    pub recommended_fields: Vec<String>,
-    pub suggested_actions: Vec<String>,
-}
-
 /// Task result from extension execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskResult {
@@ -252,84 +207,6 @@ pub(crate) async fn process_task_result_event(
     })
 }
 
-/// Process page context from extension
-///
-/// This command receives page information from the browser extension
-/// and initiates an AGI task to interact with the page.
-#[tauri::command]
-pub async fn extension_page_context(
-    context: PageContext,
-    _state: State<'_, crate::AppState>,
-    app_handle: tauri::AppHandle,
-) -> Result<PageContextResponse, String> {
-    process_page_context_event(context, &app_handle).await
-}
-
-/// Analyze forms detected by the extension
-///
-/// This command receives form data from the browser extension
-/// and provides analysis and recommendations.
-#[tauri::command]
-pub async fn extension_analyze_forms(data: FormData) -> Result<FormAnalysisResponse, String> {
-    tracing::info!(
-        "Analyzing {} forms from extension (tab: {})",
-        data.forms.len(),
-        data.tab_id
-    );
-
-    // Analyze form types
-    let form_types: Vec<String> = data
-        .forms
-        .iter()
-        .flat_map(|form| {
-            let form_type = match form.method.to_uppercase().as_str() {
-                "POST" => detect_form_type(&form.fields),
-                _ => "search".to_string(),
-            };
-            Some(form_type)
-        })
-        .collect();
-
-    // Extract field names
-    let mut recommended_fields: Vec<String> = Vec::new();
-    for form in &data.forms {
-        for field in &form.fields {
-            if field.required {
-                recommended_fields.push(field.name.clone());
-            }
-        }
-    }
-
-    // Remove duplicates
-    recommended_fields.sort();
-    recommended_fields.dedup();
-
-    let analysis = FormAnalysis {
-        form_types,
-        recommended_fields,
-        suggested_actions: vec!["fill_form".to_string(), "submit_form".to_string()],
-    };
-
-    Ok(FormAnalysisResponse {
-        success: true,
-        analysis: Some(analysis),
-        error: None,
-    })
-}
-
-/// Submit task results back to the desktop app
-///
-/// The extension calls this when a task completes to report
-/// the results and status back to the application.
-#[tauri::command]
-pub async fn extension_task_result(
-    result: TaskResult,
-    _state: State<'_, crate::AppState>,
-    app_handle: tauri::AppHandle,
-) -> Result<TaskResultResponse, String> {
-    process_task_result_event(result, &app_handle).await
-}
-
 /// Acknowledge an authenticated selected-context preview after an explicit Desktop decision.
 /// Exact-match clearing prevents an older dialog from erasing a newer staged handoff.
 #[tauri::command]
@@ -405,7 +282,8 @@ pub async fn extension_status(
     let (token_path, token_exists, token_valid, token_error) =
         match app_handle.path().app_data_dir() {
             Ok(app_data_dir) => {
-                let path = app_data_dir.join(".ipc_token");
+                let path =
+                    crate::integrations::native_messaging::endpoint::token_path(&app_data_dir);
                 match std::fs::read_to_string(&path) {
                     Ok(contents) => {
                         let trimmed = contents.trim();
@@ -540,50 +418,11 @@ pub async fn extension_status(
             "recommendations": recommendations,
         },
         "commands": [
-            "extension_page_context",
-            "extension_analyze_forms",
-            "extension_task_result",
             "extension_clear_selected_context_handoff",
             "extension_get_pending_selected_context_handoff",
             "extension_status"
         ]
     }))
-}
-
-/// Helper function to detect form type
-fn detect_form_type(fields: &[FormField]) -> String {
-    let field_names: Vec<String> = fields.iter().map(|f| f.name.to_lowercase()).collect();
-
-    // Check for common form patterns
-    if field_names.contains(&"username".to_string())
-        && field_names.contains(&"password".to_string())
-    {
-        return "login".to_string();
-    }
-
-    if field_names.contains(&"email".to_string()) && field_names.contains(&"password".to_string()) {
-        return "login".to_string();
-    }
-
-    if field_names.contains(&"username".to_string()) && field_names.contains(&"email".to_string()) {
-        return "registration".to_string();
-    }
-
-    if field_names
-        .iter()
-        .any(|name| name.contains("search") || name == "q" || name == "query")
-    {
-        return "search".to_string();
-    }
-
-    if field_names
-        .iter()
-        .any(|name| name.contains("email") || name.contains("phone"))
-    {
-        return "contact".to_string();
-    }
-
-    "unknown".to_string()
 }
 
 fn plan_page_actions(context: &PageContext, html: &str) -> Vec<PageAction> {
@@ -644,41 +483,6 @@ fn plan_page_actions(context: &PageContext, html: &str) -> Vec<PageAction> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_detect_form_type_login() {
-        let fields = vec![
-            FormField {
-                name: "username".to_string(),
-                field_type: "text".to_string(),
-                value: None,
-                required: true,
-                options: None,
-            },
-            FormField {
-                name: "password".to_string(),
-                field_type: "password".to_string(),
-                value: None,
-                required: true,
-                options: None,
-            },
-        ];
-
-        assert_eq!(detect_form_type(&fields), "login");
-    }
-
-    #[test]
-    fn test_detect_form_type_search() {
-        let fields = vec![FormField {
-            name: "search_query".to_string(),
-            field_type: "text".to_string(),
-            value: None,
-            required: false,
-            options: None,
-        }];
-
-        assert_eq!(detect_form_type(&fields), "search");
-    }
 
     #[test]
     fn test_validate_page_context() {

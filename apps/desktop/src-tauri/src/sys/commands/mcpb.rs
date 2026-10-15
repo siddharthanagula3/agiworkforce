@@ -11,7 +11,7 @@
 //! - Progress events during installation
 //! - Persistent metadata storage
 
-use crate::core::mcp::manifest::AllowlistState;
+use crate::core::mcp::manifest::{AllowedPackage, AllowlistState};
 use crate::core::mcp::McpServerConfig;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -178,6 +178,7 @@ pub struct InstalledBundlesData {
 const OFFICIAL_MCP_REGISTRY_SERVERS_URL: &str =
     "https://registry.modelcontextprotocol.io/v0.1/servers";
 const OFFICIAL_REGISTRY_BUNDLE_PREFIX: &str = "mcp-registry-";
+const NPM_REGISTRY_URL: &str = "https://registry.npmjs.org";
 
 #[derive(Debug, Deserialize)]
 struct OfficialRegistryResponse {
@@ -486,32 +487,180 @@ fn merge_installed_bundle_snapshots(
     }
 }
 
+/// The reviewed pin for a bundle's npm package. A package outside the
+/// allow-list, or any package when the list is missing, has no pin and is
+/// refused before npm can reach the network.
 fn verified_install_spec(
-    bundle: &McpBundle,
     npm_package: &str,
     allowlist: &AllowlistState,
-) -> Result<String, String> {
-    if !allowlist.permits(npm_package) {
+) -> Result<AllowedPackage, String> {
+    allowlist.pinned(npm_package).cloned().ok_or_else(|| {
         tracing::warn!(package = %npm_package, absent = allowlist.is_absent(), "MCP install refused");
-        return Err(if allowlist.is_absent() {
+        if allowlist.is_absent() {
             format!("The MCP allow-list is missing from this installation, so '{npm_package}' cannot be verified. Reinstall AGI Workforce.")
         } else {
             format!("MCP package '{npm_package}' is not on the allow-list.")
-        });
-    }
+        }
+    })
+}
 
-    if bundle.id.starts_with(OFFICIAL_REGISTRY_BUNDLE_PREFIX) {
-        let versioned_prefix = format!("{npm_package}@");
-        Ok(bundle
-            .config_template
-            .args
-            .iter()
-            .find(|argument| argument.starts_with(&versioned_prefix))
-            .cloned()
-            .unwrap_or_else(|| format!("{npm_package}@{}", bundle.version)))
-    } else {
-        Ok(npm_package.to_string())
+/// Launch arguments that name the package run the pinned version, so the
+/// server that starts is the one whose tarball was verified.
+fn pinned_launch_args(args: &[String], pin: &AllowedPackage) -> Vec<String> {
+    let versioned_prefix = format!("{}@", pin.name);
+    args.iter()
+        .map(|argument| {
+            if *argument == pin.name || argument.starts_with(&versioned_prefix) {
+                pin.install_spec()
+            } else {
+                argument.clone()
+            }
+        })
+        .collect()
+}
+
+fn npm_version_url(pin: &AllowedPackage) -> String {
+    format!(
+        "{}/{}/{}",
+        NPM_REGISTRY_URL,
+        pin.name.replace('/', "%2F"),
+        pin.version
+    )
+}
+
+#[derive(Debug, Deserialize)]
+struct NpmVersionDist {
+    integrity: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NpmVersionManifest {
+    dist: NpmVersionDist,
+}
+
+fn check_registry_integrity(pin: &AllowedPackage, published: Option<&str>) -> Result<(), String> {
+    match published {
+        Some(integrity) if integrity == pin.integrity => Ok(()),
+        Some(_) => Err(format!(
+            "The registry tarball for {} does not match the reviewed hash. The install was stopped.",
+            pin.install_spec()
+        )),
+        None => Err(format!(
+            "The registry publishes no sha512 hash for {}, so it cannot be verified.",
+            pin.install_spec()
+        )),
     }
+}
+
+async fn verify_registry_integrity(pin: &AllowedPackage) -> Result<(), String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let response = client
+        .get(npm_version_url(pin))
+        .header("Accept", "application/json")
+        .header(
+            "User-Agent",
+            format!("AGIWorkforce/{}", env!("CARGO_PKG_VERSION")),
+        )
+        .send()
+        .await
+        .map_err(|e| format!("npm registry request failed: {}", e))?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "npm registry returned {} for {}",
+            response.status(),
+            pin.install_spec()
+        ));
+    }
+    let manifest: NpmVersionManifest = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse npm registry response: {}", e))?;
+    check_registry_integrity(pin, manifest.dist.integrity.as_deref())
+}
+
+fn npm_install_args(pin: &AllowedPackage) -> Vec<String> {
+    let mut args = vec!["install".to_string(), "-g".to_string()];
+    if !pin.allow_scripts {
+        args.push("--ignore-scripts".to_string());
+    }
+    args.push(pin.install_spec());
+    args
+}
+
+static PACKAGE_INSTALL_DECISIONS: crate::sys::native_confirm::ConfirmGate =
+    crate::sys::native_confirm::ConfirmGate::new();
+
+const INSTALL_PACKAGE_LABEL: &str = "Install Package";
+
+/// The question asked before npm installs a bundle's package for the whole
+/// computer. The package and its version are the allowlist's own, never the
+/// page's.
+fn package_install_question(pin: &AllowedPackage) -> crate::sys::native_confirm::NativeConfirm {
+    let scripts = if pin.allow_scripts {
+        "Its install scripts will run."
+    } else {
+        "Its install scripts will not run."
+    };
+    crate::sys::native_confirm::NativeConfirm {
+        title: "Install this npm package?".to_string(),
+        body: format!(
+            "npm will install {} version {} for every program on this computer (npm install -g). {scripts}\n\nIt is a package this app lists, and the download is checked against the hash recorded for that version.",
+            crate::sys::native_confirm::shown_value(&pin.name),
+            crate::sys::native_confirm::shown_value(&pin.version),
+        ),
+        confirm_label: INSTALL_PACKAGE_LABEL.to_string(),
+    }
+}
+
+/// Asks in a native dialog before a package is installed. The page renders
+/// model output and can call the install commands itself, so its own
+/// confirmation is not the one that counts.
+async fn confirm_package_install<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    pin: &AllowedPackage,
+) -> Result<(), String> {
+    let spec = pin.install_spec();
+    match PACKAGE_INSTALL_DECISIONS
+        .confirm(
+            app,
+            &format!("npm_install:{spec}"),
+            package_install_question(pin),
+        )
+        .await
+    {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(format!(
+            "{spec} was not installed: installing it was not confirmed."
+        )),
+        Err(not_asked) => Err(not_asked.message()),
+    }
+}
+
+/// Install the pinned package after its registry hash matches the pin.
+/// `npm` then checks the downloaded tarball against that same hash.
+async fn install_pinned_package(pin: &AllowedPackage) -> Result<(), String> {
+    verify_registry_integrity(pin).await?;
+
+    let args = npm_install_args(pin);
+    let output = if cfg!(target_os = "windows") {
+        Command::new("cmd")
+            .args(["/C", "npm"])
+            .args(&args)
+            .output()
+            .await
+    } else {
+        Command::new("npm").args(&args).output().await
+    }
+    .map_err(|e| format!("Failed to run npm: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("npm install failed: {}", stderr));
+    }
+    Ok(())
 }
 
 // ============================================================================
@@ -586,40 +735,8 @@ impl McpbState {
 // Event Emission Helpers
 // ============================================================================
 
-fn emit_install_started(app: &AppHandle, bundle_id: &str) {
-    let _ = app.emit(
-        "mcpb:install_started",
-        serde_json::json!({
-            "bundleId": bundle_id,
-            "timestamp": chrono::Utc::now().timestamp()
-        }),
-    );
-}
-
 fn emit_install_progress(app: &AppHandle, progress: &InstallProgress) {
     let _ = app.emit("mcpb:install_progress", progress);
-}
-
-fn emit_install_completed(app: &AppHandle, bundle_id: &str, version: &str) {
-    let _ = app.emit(
-        "mcpb:install_completed",
-        serde_json::json!({
-            "bundleId": bundle_id,
-            "version": version,
-            "timestamp": chrono::Utc::now().timestamp()
-        }),
-    );
-}
-
-fn emit_install_failed(app: &AppHandle, bundle_id: &str, error: &str) {
-    let _ = app.emit(
-        "mcpb:install_failed",
-        serde_json::json!({
-            "bundleId": bundle_id,
-            "error": error,
-            "timestamp": chrono::Utc::now().timestamp()
-        }),
-    );
 }
 
 // ============================================================================
@@ -2756,11 +2873,9 @@ pub async fn mcpb_install_bundle(
         .ok_or_else(|| "Bundle has no npm package".to_string())?;
     // The spec is refused before npm can fetch the package and run its install
     // scripts, so a typosquatted registry entry never reaches the network.
-    let install_spec =
-        verified_install_spec(&bundle, &npm_package, &load_packaged_allowlist(&app))?;
-
-    // Emit install started event
-    emit_install_started(&app, &bundle_id);
+    let pin = verified_install_spec(&npm_package, &load_packaged_allowlist(&app))?;
+    confirm_package_install(&app, &pin).await?;
+    let install_spec = pin.install_spec();
 
     // Phase 1: Downloading/Installing npm package
     emit_install_progress(
@@ -2773,35 +2888,11 @@ pub async fn mcpb_install_bundle(
         },
     );
 
-    // Run npm install globally
-    let npm_result = if cfg!(target_os = "windows") {
-        Command::new("cmd")
-            .args(["/C", "npm", "install", "-g", &install_spec])
-            .output()
-            .await
-    } else {
-        Command::new("npm")
-            .args(["install", "-g", &install_spec])
-            .output()
-            .await
-    };
-
-    match npm_result {
-        Ok(output) => {
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                tracing::error!("npm install failed: {}", stderr);
-                emit_install_failed(&app, &bundle_id, &stderr);
-                return Err(format!("npm install failed: {}", stderr));
-            }
-            tracing::info!("npm install succeeded for {}", install_spec);
-        }
-        Err(e) => {
-            tracing::error!("Failed to run npm: {}", e);
-            emit_install_failed(&app, &bundle_id, &e.to_string());
-            return Err(format!("Failed to run npm: {}", e));
-        }
+    if let Err(error) = install_pinned_package(&pin).await {
+        tracing::error!("{}", error);
+        return Err(error);
     }
+    tracing::info!("npm install succeeded for {}", install_spec);
 
     emit_install_progress(
         &app,
@@ -2821,10 +2912,11 @@ pub async fn mcpb_install_bundle(
 
     let server_config = McpServerConfig {
         command: bundle.config_template.command.clone(),
-        args: bundle.config_template.args.clone(),
+        args: pinned_launch_args(&bundle.config_template.args, &pin),
         env: bundle.config_template.env.clone(),
         enabled: false,  // Start disabled so user can configure credentials
         transport: None, // Use default STDIO transport
+        allow_local_network: false,
     };
 
     // Add to MCP config
@@ -2873,9 +2965,6 @@ pub async fn mcpb_install_bundle(
 
     state.save_installed_metadata().await?;
 
-    // Emit completion
-    emit_install_completed(&app, &bundle_id, &bundle.version);
-
     tracing::info!("Bundle {} installed successfully", bundle_id);
     Ok(format!(
         "Bundle '{}' installed successfully as MCP server '{}'",
@@ -2903,18 +2992,30 @@ pub async fn mcpb_uninstall_bundle(
     };
 
     // Remove from MCP config
-    let config_clone = {
+    let (config_clone, orphaned_credential_rows) = {
         let mut config = mcp_state.config.lock();
 
-        // Remove if present
-        if config.mcp_servers.contains_key(&metadata.server_name) {
-            config.mcp_servers.remove(&metadata.server_name);
-        }
-        config.clone()
+        let rows = match config.mcp_servers.remove(&metadata.server_name) {
+            Some(removed) => config.credential_rows_left_by(
+                &crate::core::mcp::config::active_credential_scope(),
+                &metadata.server_name,
+                &removed,
+            ),
+            None => Vec::new(),
+        };
+        (config.clone(), rows)
     };
 
     // Save config (outside the lock)
     mcp_state.persist_config_snapshot(&config_clone).await?;
+    if let Err(error) = crate::sys::commands::mcp::forget_credential_rows(&orphaned_credential_rows)
+    {
+        tracing::warn!(
+            "Stored credentials of '{}' were not deleted: {}",
+            metadata.server_name,
+            error
+        );
+    }
 
     // Optionally uninstall npm package (commented out to avoid breaking other uses)
     // if let Some(ref npm_package) = metadata.npm_package {
@@ -3052,10 +3153,8 @@ pub async fn mcpb_update_bundle(
         .npm_package
         .clone()
         .ok_or_else(|| "Bundle has no npm package".to_string())?;
-    let install_spec =
-        verified_install_spec(&bundle, &npm_package, &load_packaged_allowlist(&app))?;
-
-    emit_install_started(&app, &bundle_id);
+    let pin = verified_install_spec(&npm_package, &load_packaged_allowlist(&app))?;
+    confirm_package_install(&app, &pin).await?;
 
     emit_install_progress(
         &app,
@@ -3063,37 +3162,13 @@ pub async fn mcpb_update_bundle(
             bundle_id: bundle_id.clone(),
             phase: "updating".to_string(),
             progress: 20,
-            message: format!("Updating {} to version {}...", npm_package, bundle.version),
+            message: format!("Updating to {}...", pin.install_spec()),
         },
     );
 
-    // Run npm update
-    let npm_result = if cfg!(target_os = "windows") {
-        Command::new("cmd")
-            .args(["/C", "npm", "install", "-g", &install_spec])
-            .output()
-            .await
-    } else {
-        Command::new("npm")
-            .args(["install", "-g", &install_spec])
-            .output()
-            .await
-    };
-
-    match npm_result {
-        Ok(output) => {
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                tracing::error!("npm update failed: {}", stderr);
-                emit_install_failed(&app, &bundle_id, &stderr);
-                return Err(format!("npm update failed: {}", stderr));
-            }
-        }
-        Err(e) => {
-            tracing::error!("Failed to run npm: {}", e);
-            emit_install_failed(&app, &bundle_id, &e.to_string());
-            return Err(format!("Failed to run npm: {}", e));
-        }
+    if let Err(error) = install_pinned_package(&pin).await {
+        tracing::error!("{}", error);
+        return Err(error);
     }
 
     emit_install_progress(
@@ -3110,8 +3185,7 @@ pub async fn mcpb_update_bundle(
     let config_clone = {
         let mut config = mcp_state.config.lock();
         if let Some(server_config) = config.mcp_servers.get_mut(&metadata.server_name) {
-            // Update args in case they changed
-            server_config.args = bundle.config_template.args.clone();
+            server_config.args = pinned_launch_args(&bundle.config_template.args, &pin);
         }
         config.clone()
     };
@@ -3133,8 +3207,6 @@ pub async fn mcpb_update_bundle(
     }
 
     state.save_installed_metadata().await?;
-
-    emit_install_completed(&app, &bundle_id, &bundle.version);
 
     tracing::info!("Bundle {} updated to version {}", bundle_id, bundle.version);
     Ok(format!(
@@ -3258,42 +3330,145 @@ mod tests {
         assert_eq!(bundle.required_credentials.len(), 1);
         assert!(bundle.required_credentials[0].required);
         assert!(!bundle.verified);
+        let pin = verified_install_spec(
+            "@example/secure-tools",
+            &allowlist_naming("@example/secure-tools"),
+        )
+        .unwrap();
         assert_eq!(
-            verified_install_spec(
-                bundle,
-                "@example/secure-tools",
-                &allowlist_naming("@example/secure-tools")
-            )
-            .unwrap(),
-            "@example/secure-tools@1.2.3"
+            pinned_launch_args(&bundle.config_template.args, &pin),
+            vec!["-y", "@example/secure-tools@1.2.3", "--stdio"]
+        );
+    }
+
+    const PINNED_INTEGRITY: &str = "sha512-kKaFkyAh6oipvc9+EAbJ552JafnMnOq5nzmzWkp1jJdBhTAAGpmIpWihUG1+rfNhmEFM98gUZDdCHCDD4v6a7Q==";
+
+    fn pin_for(package: &str) -> AllowedPackage {
+        AllowedPackage {
+            name: package.to_string(),
+            version: "1.2.3".to_string(),
+            integrity: PINNED_INTEGRITY.to_string(),
+            allow_scripts: false,
+        }
+    }
+
+    #[test]
+    fn the_install_question_names_the_package_its_version_and_its_scripts() {
+        let question = package_install_question(&pin_for("@example/secure-tools"));
+
+        assert!(
+            question
+                .body
+                .contains("install @example/secure-tools version 1.2.3 for every program"),
+            "{}",
+            question.body
+        );
+        assert!(question.body.contains("Its install scripts will not run."));
+        assert_eq!(question.confirm_label, INSTALL_PACKAGE_LABEL);
+        assert!(crate::sys::native_confirm::can_ask_with(
+            &question.confirm_label
+        ));
+        assert!(crate::sys::native_confirm::check_it_fits(&question.body).is_ok());
+
+        let mut scripted = pin_for("@example/secure-tools");
+        scripted.allow_scripts = true;
+        assert!(package_install_question(&scripted)
+            .body
+            .contains("Its install scripts will run."));
+    }
+
+    /// `npm install -g` runs for the whole computer. Installing and updating
+    /// a bundle each ask natively first.
+    #[test]
+    fn npm_is_not_run_before_the_native_answer() {
+        let shipped = include_str!("mcpb.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap_or_default();
+        for command in [
+            "pub async fn mcpb_install_bundle(",
+            "pub async fn mcpb_update_bundle(",
+        ] {
+            let body = shipped.split(command).nth(1).expect(command);
+            let body = body.split("#[tauri::command]").next().unwrap_or(body);
+            let asked = body
+                .find("confirm_package_install(&app, &pin).await?")
+                .unwrap_or_else(|| panic!("{command} must ask natively"));
+            let installed = body
+                .find("install_pinned_package(&pin)")
+                .unwrap_or_else(|| panic!("{command} installs the pinned package"));
+            assert!(asked < installed, "{command} must ask before npm runs");
+        }
+        assert_eq!(
+            shipped.matches("install_pinned_package(&pin)").count(),
+            2,
+            "every place npm installs a package is one of the two that ask"
         );
     }
 
     fn allowlist_naming(package: &str) -> AllowlistState {
         AllowlistState::Loaded(crate::core::mcp::manifest::Manifest {
-            version: 1,
-            allowed_packages: vec![package.to_string()],
+            version: 2,
+            allowed_packages: vec![pin_for(package)],
         })
     }
 
-    fn registry_bundle(npm_package: &str) -> McpBundle {
-        let mut bundle = get_embedded_registry()
-            .into_iter()
-            .next()
-            .expect("embedded registry should not be empty");
-        bundle.id = format!("{OFFICIAL_REGISTRY_BUNDLE_PREFIX}typosquat");
-        bundle.version = "9.9.9".to_string();
-        bundle.npm_package = Some(npm_package.to_string());
-        bundle.config_template.args = vec!["-y".to_string(), npm_package.to_string()];
-        bundle
+    #[test]
+    fn install_skips_scripts_unless_the_pin_allows_them() {
+        let mut pin = pin_for("@example/secure-tools");
+        assert_eq!(
+            npm_install_args(&pin),
+            vec![
+                "install",
+                "-g",
+                "--ignore-scripts",
+                "@example/secure-tools@1.2.3"
+            ]
+        );
+        pin.allow_scripts = true;
+        assert_eq!(
+            npm_install_args(&pin),
+            vec!["install", "-g", "@example/secure-tools@1.2.3"]
+        );
+    }
+
+    #[test]
+    fn registry_hash_must_equal_the_pin() {
+        let pin = pin_for("@example/secure-tools");
+        assert!(check_registry_integrity(&pin, Some(PINNED_INTEGRITY)).is_ok());
+        assert!(check_registry_integrity(&pin, Some("sha512-other==")).is_err());
+        assert!(check_registry_integrity(&pin, None).is_err());
+    }
+
+    #[test]
+    fn launch_args_run_the_pinned_version() {
+        let pin = pin_for("@modelcontextprotocol/server-github");
+        let args = vec![
+            "-y".to_string(),
+            "@modelcontextprotocol/server-github".to_string(),
+        ];
+        assert_eq!(
+            pinned_launch_args(&args, &pin),
+            vec!["-y", "@modelcontextprotocol/server-github@1.2.3"]
+        );
+        let versioned = vec!["@modelcontextprotocol/server-github@9.9.9".to_string()];
+        assert_eq!(
+            pinned_launch_args(&versioned, &pin),
+            vec!["@modelcontextprotocol/server-github@1.2.3"]
+        );
+    }
+
+    #[test]
+    fn scoped_package_url_encodes_the_slash() {
+        assert_eq!(
+            npm_version_url(&pin_for("@example/secure-tools")),
+            "https://registry.npmjs.org/@example%2Fsecure-tools/1.2.3"
+        );
     }
 
     #[test]
     fn no_install_spec_exists_for_a_package_outside_the_allowlist() {
-        let bundle = registry_bundle("@modelcontextprotocol/server-fetchh");
-
         let refusal = verified_install_spec(
-            &bundle,
             "@modelcontextprotocol/server-fetchh",
             &allowlist_naming("@modelcontextprotocol/server-fetch"),
         )
@@ -3303,19 +3478,14 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_packaged_allowlist_yields_no_install_spec_in_release() {
-        let bundle = registry_bundle("@modelcontextprotocol/server-fetch");
-
-        let outcome = verified_install_spec(
-            &bundle,
+    fn a_missing_packaged_allowlist_yields_no_install_spec() {
+        let refusal = verified_install_spec(
             "@modelcontextprotocol/server-fetch",
             &AllowlistState::Absent,
-        );
+        )
+        .unwrap_err();
 
-        assert_eq!(outcome.is_ok(), cfg!(debug_assertions));
-        if let Err(refusal) = outcome {
-            assert!(refusal.contains("Reinstall"), "got: {refusal}");
-        }
+        assert!(refusal.contains("Reinstall"), "got: {refusal}");
     }
 
     #[test]

@@ -36,6 +36,7 @@ agiworkforce-model-registry = { path = "../../../crates/agiworkforce-model-regis
 agiworkforce-mcp = { path = "../../../crates/agiworkforce-mcp" }
 agiworkforce-protocol = { path = "../../../crates/agiworkforce-protocol" }
 agiworkforce-sandbox-policy = { path = "../../../crates/agiworkforce-sandbox-policy" }
+agiworkforce-worktree = { path = "../../../crates/agiworkforce-worktree" }
 
 tauri = { version = "2.11.0", features = ["tray-icon", "macos-private-api", "isolation"] }
 tauri-plugin-shell = { version = "2.3.5", optional = true }
@@ -252,6 +253,7 @@ tauri-plugin-stronghold = "2.3.1"
 
 
 [target.'cfg(windows)'.dependencies]
+dunce = "1.0.4"
 keyring = { version = "3", default-features = false, features = ["windows-native"] }
 winreg = "0.55"
 windows = { version = "0.56", features = [

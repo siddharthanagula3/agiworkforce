@@ -1,4 +1,4 @@
-//! Error types for the proactive scheduler module.
+//! Error types for the scheduler module.
 
 use thiserror::Error;
 

@@ -3,7 +3,8 @@ use crate::core::llm::cost_calculator::CostCalculator;
 use crate::core::llm::sse_parser::TokenUsage;
 use crate::core::llm::token_counter::TokenCounter;
 use crate::core::llm::{ChatMessage, LLMRequest};
-use crate::sys::commands::chat::send_message_setup::{should_generate_memory, PreparedSendMessage};
+use crate::sys::commands::chat::interrupted_turns::ChatTurn;
+use crate::sys::commands::chat::send_message_setup::PreparedSendMessage;
 
 #[derive(Clone)]
 pub(super) struct SendMessageRuntime {
@@ -17,9 +18,8 @@ pub(super) struct SendMessageRuntime {
 pub(super) async fn handle_streaming_message(
     runtime: SendMessageRuntime,
     prepared: PreparedSendMessage,
+    turn: ChatTurn,
 ) -> Result<ChatSendMessageResponse, String> {
-    reset_stop_flag();
-
     let response =
         empty_streaming_response(prepared.conversation.clone(), prepared.user_message.clone());
     let frontend_message_id = prepared
@@ -57,7 +57,7 @@ pub(super) async fn handle_streaming_message(
     }
 
     if prepared.flags.is_deep_research {
-        spawn_streaming_deep_research(runtime, prepared, frontend_message_id);
+        spawn_streaming_deep_research(runtime, prepared, frontend_message_id, turn);
         return Ok(response);
     }
 
@@ -70,11 +70,11 @@ pub(super) async fn handle_streaming_message(
     );
 
     if prepared.flags.agent_mode {
-        spawn_streaming_agent(runtime, prepared, frontend_message_id);
+        spawn_streaming_agent(runtime, prepared, frontend_message_id, turn);
         return Ok(response);
     }
 
-    spawn_streaming_chat(runtime, prepared, frontend_message_id);
+    spawn_streaming_chat(runtime, prepared, frontend_message_id, turn);
     Ok(response)
 }
 
@@ -131,6 +131,7 @@ fn spawn_streaming_deep_research(
     runtime: SendMessageRuntime,
     prepared: PreparedSendMessage,
     frontend_message_id: String,
+    turn: ChatTurn,
 ) {
     use crate::core::research::{ResearchMode, ResearchOrchestrator};
 
@@ -139,11 +140,7 @@ fn spawn_streaming_deep_research(
         conversation,
         provider_enum,
         model,
-        memory_handler,
         flags,
-        cloud_sync_enabled,
-        auto_save_memories,
-        allow_tool_assisted_memory_generation,
         ..
     } = prepared;
 
@@ -161,6 +158,7 @@ fn spawn_streaming_deep_research(
     let query = request.content.clone();
 
     tauri::async_runtime::spawn(async move {
+        let _turn = turn;
         info!(
             target: "chat",
             correlation_id = %runtime.correlation_id,
@@ -238,7 +236,6 @@ fn spawn_streaming_deep_research(
                     provider_enum.map(|provider| provider.as_string()),
                     &model,
                     flags.incognito,
-                    cloud_sync_enabled,
                 ) {
                     Ok(message) => message,
                     Err(error) => {
@@ -252,24 +249,6 @@ fn spawn_streaming_deep_research(
                         return;
                     }
                 };
-
-                if should_generate_memory(
-                    auto_save_memories,
-                    allow_tool_assisted_memory_generation,
-                    true,
-                    flags.incognito,
-                    true,
-                ) {
-                    if let Err(error) = memory_handler
-                        .detect_and_save_decision(&result.report, request.project_folder.as_deref())
-                        .await
-                    {
-                        warn!(
-                            "[Chat] Failed to auto-save research memory (non-fatal): {}",
-                            error
-                        );
-                    }
-                }
 
                 let _ = runtime.app_handle.emit(
                     "chat:stream-end",
@@ -319,10 +298,8 @@ fn spawn_streaming_agent(
     runtime: SendMessageRuntime,
     prepared: PreparedSendMessage,
     frontend_message_id: String,
+    turn: ChatTurn,
 ) {
-    use crate::automation::AutomationService;
-    use crate::core::agi::{AGIConfig, AgentOrchestrator};
-
     let PreparedSendMessage {
         request,
         conversation,
@@ -331,16 +308,12 @@ fn spawn_streaming_agent(
         provider_enum,
         model,
         agent_instruction,
-        memory_handler,
         flags,
-        cloud_sync_enabled,
-        auto_save_memories,
-        allow_tool_assisted_memory_generation,
         ..
     } = prepared;
 
     tauri::async_runtime::spawn(async move {
-        let start_time = std::time::Instant::now();
+        let _turn = turn;
         let _ = runtime.app_handle.emit(
             "agent:thinking",
             serde_json::json!({
@@ -349,112 +322,57 @@ fn spawn_streaming_agent(
             }),
         );
 
-        let orchestrator_arc = {
-            let guard = crate::sys::commands::agi::ORCHESTRATOR.lock();
-            guard.clone()
-        };
-
-        let orchestrator_arc = match orchestrator_arc {
-            Some(orchestrator) => orchestrator,
-            None => {
-                let automation = match AutomationService::new() {
-                    Ok(service) => Arc::new(service),
-                    Err(error) => {
-                        let error_msg = format!("Automation service unavailable: {}", error);
-                        let _ = runtime.app_handle.emit(
-                            "agent:finished",
-                            serde_json::json!({
-                                "success": false,
-                                "error": error_msg,
-                                "duration_ms": start_time.elapsed().as_millis() as u64
-                            }),
-                        );
-                        let _ = runtime.app_handle.emit(
-                            "automation:permission_required",
-                            serde_json::json!({
-                                "reason": "agent_mode",
-                                "message": "Grant Accessibility, Screen Recording, and Input Monitoring permissions to use Agent mode."
-                            }),
-                        );
-                        let _ = runtime.app_handle.emit(
-                            "chat:stream-error",
-                            serde_json::json!({
-                                "conversation_id": conversation.id,
-                                "message_id": frontend_message_id,
-                                "error": "Agent mode requires automation permissions"
-                            }),
-                        );
-                        let _ = runtime.app_handle.emit(
-                            "chat:stream-end",
-                            serde_json::json!({
-                                "conversation_id": conversation.id,
-                                "message_id": frontend_message_id,
-                                "content": "Agent mode is unavailable (missing automation permissions).",
-                                "error": true,
-                                "has_pending_messages": has_pending_messages()
-                            }),
-                        );
-                        return;
-                    }
-                };
-
-                let orchestrator = match AgentOrchestrator::new(
-                    4,
-                    AGIConfig::default(),
-                    runtime.router.clone(),
-                    automation,
-                    Some(runtime.app_handle.clone()),
-                ) {
-                    Ok(orchestrator) => orchestrator,
-                    Err(error) => {
-                        let error_msg = format!("Failed to initialize orchestrator: {}", error);
-                        let _ = runtime.app_handle.emit(
-                            "agent:finished",
-                            serde_json::json!({
-                                "success": false,
-                                "error": error_msg,
-                                "duration_ms": start_time.elapsed().as_millis() as u64
-                            }),
-                        );
-                        let _ = runtime.app_handle.emit(
-                            "chat:stream-error",
-                            serde_json::json!({
-                                "conversation_id": conversation.id,
-                                "message_id": frontend_message_id,
-                                "error": "Failed to start agent mode"
-                            }),
-                        );
-                        let _ = runtime.app_handle.emit(
-                            "chat:stream-end",
-                            serde_json::json!({
-                                "conversation_id": conversation.id,
-                                "message_id": frontend_message_id,
-                                "content": "Failed to start agent mode.",
-                                "error": true,
-                                "has_pending_messages": has_pending_messages()
-                            }),
-                        );
-                        return;
-                    }
-                };
-
-                let orchestrator_arc = Arc::new(tokio::sync::Mutex::new(orchestrator));
-                *crate::sys::commands::agi::ORCHESTRATOR.lock() = Some(orchestrator_arc.clone());
-                orchestrator_arc
+        let orchestrator_arc = match crate::sys::commands::agi::ensure_orchestrator(
+            &runtime.app_handle,
+            runtime.router.clone(),
+        ) {
+            Ok(orchestrator) => orchestrator,
+            Err(error) => {
+                let error_msg = format!("Failed to start agent mode: {}", error);
+                let _ = runtime.app_handle.emit(
+                    "chat:stream-error",
+                    serde_json::json!({
+                        "conversation_id": conversation.id,
+                        "message_id": frontend_message_id,
+                        "error": error_msg
+                    }),
+                );
+                let _ = runtime.app_handle.emit(
+                    "chat:stream-end",
+                    serde_json::json!({
+                        "conversation_id": conversation.id,
+                        "message_id": frontend_message_id,
+                        "content": "Failed to start agent mode.",
+                        "error": true,
+                        "has_pending_messages": has_pending_messages()
+                    }),
+                );
+                return;
             }
         };
 
         let result = {
-            let orchestrator = orchestrator_arc.lock().await;
-            orchestrator
-                .process_instruction(
-                    &agent_instruction,
-                    request.attachments.clone(),
-                    request
-                        .execution_mode
-                        .map(crate::sys::commands::chat::types::ChatExecutionMode::trust_mode),
-                )
-                .await
+            let orchestrator = orchestrator_arc.lock().await.clone();
+            let instruction = orchestrator.process_instruction(
+                &agent_instruction,
+                request.attachments.clone(),
+                request
+                    .execution_mode
+                    .map(crate::sys::commands::chat::types::ChatExecutionMode::trust_mode),
+            );
+            tokio::pin!(instruction);
+            let mut stop_poll = tokio::time::interval(std::time::Duration::from_millis(200));
+            stop_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                tokio::select! {
+                    outcome = &mut instruction => break Some(outcome),
+                    _ = stop_poll.tick() => {
+                        if should_stop_for_conversation(conversation.id) {
+                            break None;
+                        }
+                    }
+                }
+            }
         };
 
         let _ = runtime.app_handle.emit(
@@ -463,6 +381,21 @@ fn spawn_streaming_agent(
                 "thinking": false,
             }),
         );
+
+        let Some(result) = result else {
+            info!("[Chat] Agent run stopped by user");
+            let _ = runtime.app_handle.emit(
+                "chat:stream-end",
+                serde_json::json!({
+                    "conversation_id": conversation.id,
+                    "message_id": frontend_message_id,
+                    "content": "*[Generation stopped by user]*",
+                    "stopped": true,
+                    "has_pending_messages": has_pending_messages_for_conversation(conversation.id)
+                }),
+            );
+            return;
+        };
 
         match result {
             Ok(orchestrator_result) => {
@@ -560,7 +493,6 @@ fn spawn_streaming_agent(
                     provider_enum.map(|provider| provider.as_string()),
                     &model,
                     flags.incognito,
-                    cloud_sync_enabled,
                 ) {
                     Ok(message) => message,
                     Err(error) => {
@@ -575,24 +507,6 @@ fn spawn_streaming_agent(
                     }
                 };
 
-                if should_generate_memory(
-                    auto_save_memories,
-                    allow_tool_assisted_memory_generation,
-                    true,
-                    flags.incognito,
-                    success,
-                ) {
-                    if let Err(error) = memory_handler
-                        .detect_and_save_decision(&final_content, request.project_folder.as_deref())
-                        .await
-                    {
-                        warn!(
-                            "[Chat] Failed to auto-save agent memory (non-fatal): {}",
-                            error
-                        );
-                    }
-                }
-
                 let _ = runtime.app_handle.emit(
                     "chat:stream-end",
                     serde_json::json!({
@@ -603,32 +517,15 @@ fn spawn_streaming_agent(
                         "has_pending_messages": has_pending_messages()
                     }),
                 );
-
-                let _ = runtime.app_handle.emit(
-                    "agent:finished",
-                    serde_json::json!({
-                        "success": success,
-                        "result": final_content,
-                        "duration_ms": start_time.elapsed().as_millis() as u64
-                    }),
-                );
             }
             Err(error) => {
-                let error_msg = error.to_string();
-                let _ = runtime.app_handle.emit(
-                    "agent:finished",
-                    serde_json::json!({
-                        "success": false,
-                        "error": error_msg,
-                        "duration_ms": start_time.elapsed().as_millis() as u64
-                    }),
-                );
+                let error_msg = format!("Agent execution failed: {}", error);
                 let _ = runtime.app_handle.emit(
                     "chat:stream-error",
                     serde_json::json!({
                         "conversation_id": conversation.id,
                         "message_id": frontend_message_id,
-                        "error": "Agent execution failed"
+                        "error": error_msg
                     }),
                 );
                 let _ = runtime.app_handle.emit(
@@ -650,6 +547,7 @@ fn spawn_streaming_chat(
     runtime: SendMessageRuntime,
     prepared: PreparedSendMessage,
     frontend_message_id: String,
+    turn: ChatTurn,
 ) {
     let PreparedSendMessage {
         request,
@@ -659,15 +557,12 @@ fn spawn_streaming_chat(
         provider_enum,
         model,
         tool_registry,
-        memory_handler,
         flags,
-        cloud_sync_enabled,
-        auto_save_memories,
-        allow_tool_assisted_memory_generation,
         ..
     } = prepared;
 
     tauri::async_runtime::spawn(async move {
+        let _turn = turn;
         let router = runtime.router.read().await;
 
         match router
@@ -759,16 +654,6 @@ fn spawn_streaming_chat(
                         tool_calls.len()
                     );
 
-                    let _ = runtime.app_handle.emit(
-                        "chat:tool-calls",
-                        serde_json::json!({
-                            "conversation_id": conversation.id,
-                            "message_id": frontend_message_id,
-                            "tool_calls": tool_calls,
-                            "streaming": true
-                        }),
-                    );
-
                     let (tool_results, batch_failures) = execute_tool_calls_batch(
                         &tool_calls,
                         &runtime.app_handle,
@@ -808,6 +693,7 @@ fn spawn_streaming_chat(
                         let mut max_streaming_tool_iterations =
                             resolve_streaming_tool_loop_max_iterations(only_fast_metadata_tools);
                         let streaming_tool_loop_started = std::time::Instant::now();
+                        let user_wait_at_loop_start = super::state::user_wait_total();
 
                         let _ = runtime.app_handle.emit(
                             "agentic:loop-started",
@@ -822,7 +708,13 @@ fn spawn_streaming_chat(
                             streaming_tool_iteration += 1;
                             let loop_max_secs =
                                 resolve_streaming_tool_loop_max_secs(only_fast_metadata_tools);
-                            if streaming_tool_loop_started.elapsed().as_secs() >= loop_max_secs {
+                            if super::state::active_elapsed(
+                                streaming_tool_loop_started,
+                                user_wait_at_loop_start,
+                            )
+                            .as_secs()
+                                >= loop_max_secs
+                            {
                                 warn!(
                                     "[Chat] Streaming tool loop exceeded {}s, stopping",
                                     loop_max_secs
@@ -949,12 +841,23 @@ fn spawn_streaming_chat(
                                     tool_call_id: None,
                                     multimodal_content: None,
                                 });
+                                let backend_message_id = if flags.incognito {
+                                    None
+                                } else {
+                                    super::pending::persist_steered_message(
+                                        &runtime.db,
+                                        conversation.id,
+                                        &request.user_id,
+                                        &pending.content,
+                                    )
+                                };
                                 let _ = runtime.app_handle.emit(
                                     "agentic:message-consumed",
                                     serde_json::json!({
                                         "conversation_id": conversation.id,
                                         "message_id": frontend_message_id,
                                         "pending_message": pending,
+                                        "backend_message_id": backend_message_id,
                                     }),
                                 );
                             }
@@ -1123,17 +1026,6 @@ fn spawn_streaming_chat(
                                                     "[Chat] Follow-up streaming response has {} more tool call(s) (iteration {})",
                                                     new_tool_calls.len(),
                                                     streaming_tool_iteration
-                                                );
-
-                                                let _ = runtime.app_handle.emit(
-                                                    "chat:tool-calls",
-                                                    serde_json::json!({
-                                                        "conversation_id": conversation.id,
-                                                        "message_id": frontend_message_id,
-                                                        "tool_calls": new_tool_calls,
-                                                        "streaming": true,
-                                                        "iteration": streaming_tool_iteration
-                                                    }),
                                                 );
 
                                                 let (new_results, batch_failures) =
@@ -1346,35 +1238,32 @@ fn spawn_streaming_chat(
                     provider_enum.map(|provider| provider.as_string()),
                     &model,
                     flags.incognito,
-                    cloud_sync_enabled,
                 ) {
                     Ok(message) => message,
                     Err(error) => {
-                        emit_stream_failure(
-                            &runtime.app_handle,
-                            conversation.id,
-                            &frontend_message_id,
-                            format!("Failed to save message: {error}"),
-                            Some(&full_content),
+                        let _ = runtime.app_handle.emit(
+                            "chat:stream-error",
+                            serde_json::json!({
+                                "conversation_id": conversation.id,
+                                "message_id": frontend_message_id,
+                                "error": format!("Failed to save message: {error}")
+                            }),
+                        );
+                        let _ = runtime.app_handle.emit(
+                            "chat:stream-end",
+                            serde_json::json!({
+                                "conversation_id": conversation.id,
+                                "message_id": frontend_message_id,
+                                "content": full_content,
+                                "error": true,
+                                "usage": final_usage,
+                                "model": initial_model,
+                                "has_pending_messages": has_pending_messages()
+                            }),
                         );
                         return;
                     }
                 };
-
-                if should_generate_memory(
-                    auto_save_memories,
-                    allow_tool_assisted_memory_generation,
-                    has_tool_calls || flags.is_web_focus,
-                    flags.incognito,
-                    !was_stopped,
-                ) {
-                    if let Err(error) = memory_handler
-                        .detect_and_save_decision(&full_content, request.project_folder.as_deref())
-                        .await
-                    {
-                        warn!("[Chat] Failed to auto-save memory (non-fatal): {}", error);
-                    }
-                }
 
                 let pending_at_end = peek_pending_messages_for_conversation(conversation.id);
 
@@ -1398,27 +1287,11 @@ fn spawn_streaming_chat(
                         "pending_messages_count": pending_at_end.len(),
                         "has_pending_messages": !pending_at_end.is_empty(),
                         "usage": final_usage,
+                        "model": initial_model,
                         "credits": final_credits,
                         "finish_reason": final_finish_reason
                     }),
                 );
-
-                if !pending_at_end.is_empty() {
-                    info!(
-                        target: "chat",
-                        correlation_id = %runtime.correlation_id,
-                        pending_count = pending_at_end.len(),
-                        "Stream ended with pending messages to process"
-                    );
-                    let _ = runtime.app_handle.emit(
-                        "chat:pending-messages-ready",
-                        serde_json::json!({
-                            "conversation_id": conversation.id,
-                            "pending_messages": pending_at_end,
-                            "count": pending_at_end.len()
-                        }),
-                    );
-                }
             }
             Err(error) => {
                 tracing::error!(
@@ -1452,11 +1325,7 @@ async fn run_nonstreaming_deep_research(
         request,
         provider_enum,
         model,
-        memory_handler,
         flags,
-        cloud_sync_enabled,
-        auto_save_memories,
-        allow_tool_assisted_memory_generation,
         ..
     } = prepared;
 
@@ -1480,26 +1349,7 @@ async fn run_nonstreaming_deep_research(
         provider_enum.map(|provider| provider.as_string()),
         &model,
         flags.incognito,
-        cloud_sync_enabled,
     )?;
-
-    if should_generate_memory(
-        auto_save_memories,
-        allow_tool_assisted_memory_generation,
-        true,
-        flags.incognito,
-        true,
-    ) {
-        if let Err(error) = memory_handler
-            .detect_and_save_decision(&result.report, request.project_folder.as_deref())
-            .await
-        {
-            warn!(
-                "[Chat] Failed to auto-save research memory (non-fatal): {}",
-                error
-            );
-        }
-    }
 
     let stats = compute_or_skip_stats(&runtime.db, conversation.id, flags.incognito)?;
 
@@ -1517,9 +1367,6 @@ async fn run_nonstreaming_agent(
     runtime: SendMessageRuntime,
     prepared: PreparedSendMessage,
 ) -> Result<ChatSendMessageResponse, String> {
-    use crate::automation::AutomationService;
-    use crate::core::agi::{AGIConfig, AgentOrchestrator};
-
     let PreparedSendMessage {
         conversation,
         user_message,
@@ -1529,49 +1376,13 @@ async fn run_nonstreaming_agent(
         provider_enum,
         model,
         agent_instruction,
-        memory_handler,
         flags,
-        cloud_sync_enabled,
-        auto_save_memories,
-        allow_tool_assisted_memory_generation,
         ..
     } = prepared;
 
-    let orchestrator_arc = {
-        let guard = crate::sys::commands::agi::ORCHESTRATOR.lock();
-        guard.clone()
-    };
-
-    let orchestrator_arc = match orchestrator_arc {
-        Some(orchestrator) => orchestrator,
-        None => {
-            let automation = match AutomationService::new() {
-                Ok(service) => service,
-                Err(error) => {
-                    let _ = runtime.app_handle.emit(
-                        "automation:permission_required",
-                        serde_json::json!({
-                            "reason": "agent_mode",
-                            "message": "Grant Accessibility, Screen Recording, and Input Monitoring permissions to use Agent mode."
-                        }),
-                    );
-                    return Err(format!("Automation service unavailable: {}", error));
-                }
-            };
-            let orchestrator = AgentOrchestrator::new(
-                4,
-                AGIConfig::default(),
-                runtime.router.clone(),
-                Arc::new(automation),
-                Some(runtime.app_handle.clone()),
-            )
+    let orchestrator_arc =
+        crate::sys::commands::agi::ensure_orchestrator(&runtime.app_handle, runtime.router.clone())
             .map_err(|error| format!("Failed to initialize orchestrator: {}", error))?;
-
-            let orchestrator_arc = Arc::new(tokio::sync::Mutex::new(orchestrator));
-            *crate::sys::commands::agi::ORCHESTRATOR.lock() = Some(orchestrator_arc.clone());
-            orchestrator_arc
-        }
-    };
 
     let orchestrator_result = {
         let orchestrator = orchestrator_arc.lock().await;
@@ -1637,26 +1448,7 @@ async fn run_nonstreaming_agent(
         provider_enum.map(|provider| provider.as_string()),
         &model,
         flags.incognito,
-        cloud_sync_enabled,
     )?;
-
-    if should_generate_memory(
-        auto_save_memories,
-        allow_tool_assisted_memory_generation,
-        true,
-        flags.incognito,
-        orchestrator_result.success,
-    ) {
-        if let Err(error) = memory_handler
-            .detect_and_save_decision(&final_content, request.project_folder.as_deref())
-            .await
-        {
-            warn!(
-                "[Chat] Failed to auto-save agent memory (non-fatal): {}",
-                error
-            );
-        }
-    }
 
     let stats = compute_or_skip_stats(&runtime.db, conversation.id, flags.incognito)?;
 
@@ -1682,12 +1474,8 @@ async fn run_nonstreaming_chat(
         preferences,
         provider_enum: _provider_enum,
         model,
-        memory_handler,
         tool_registry,
         flags,
-        cloud_sync_enabled,
-        auto_save_memories,
-        allow_tool_assisted_memory_generation,
         ..
     } = prepared;
 
@@ -1744,7 +1532,6 @@ async fn run_nonstreaming_chat(
                         Some(outcome.provider.as_string()),
                         &outcome.model,
                         flags.incognito,
-                        cloud_sync_enabled,
                     )?;
 
                     let stats =
@@ -1843,25 +1630,9 @@ async fn run_nonstreaming_chat(
                     Some(outcome.provider.as_string()),
                     &outcome.model,
                     flags.incognito,
-                    cloud_sync_enabled,
                 )?;
 
                 let stats = compute_or_skip_stats(&runtime.db, conversation.id, flags.incognito)?;
-
-                if should_generate_memory(
-                    auto_save_memories,
-                    allow_tool_assisted_memory_generation,
-                    tool_iteration > 0 || flags.is_web_focus,
-                    flags.incognito,
-                    true,
-                ) {
-                    if let Err(error) = memory_handler
-                        .detect_and_save_decision(&final_content, request.project_folder.as_deref())
-                        .await
-                    {
-                        warn!("[Chat] Failed to auto-save decision (non-fatal): {}", error);
-                    }
-                }
 
                 return Ok(ChatSendMessageResponse {
                     conversation,

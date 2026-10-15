@@ -13,3 +13,6 @@ pub mod git_executor_tests;
 
 // Database operations executor tests
 pub mod database_executor_tests;
+
+// Granted-folder checks on executor path parameters
+pub mod granted_paths_tests;

@@ -26,6 +26,9 @@ pub enum TransportConfig {
         command: String,
         args: Vec<String>,
         env: HashMap<String, String>,
+        /// The folder the child starts in, where a relative `command` is
+        /// read from too. `None` leaves the child in this process's folder.
+        cwd: Option<std::path::PathBuf>,
     },
     /// Long-lived Server-Sent Events stream + POST for outbound requests.
     Sse {
@@ -251,6 +254,7 @@ mod tests {
                 command: "server".to_string(),
                 args: Vec::new(),
                 env: HashMap::new(),
+                cwd: None,
             }
             .remote_url(),
             None

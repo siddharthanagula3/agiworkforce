@@ -1,9 +1,9 @@
 //! Runs a routed call on the executor the tier named.
 //!
 //! A tier below the visual loop reuses the executor the AGI goal path already
-//! owns, and clears the same approval gate and the same tool guard before it
-//! runs. Routing decides where an action goes; it never decides whether the
-//! action is allowed.
+//! owns, and clears the `PreToolUse` hooks, the same approval gate and the same
+//! tool guard before it runs. Routing decides where an action goes; it never
+//! decides whether the action is allowed.
 
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
@@ -14,7 +14,6 @@ use tauri::Manager;
 use tokio::sync::RwLock;
 
 use super::{ExecutorTier, RoutedCall};
-use crate::automation::AutomationService;
 use crate::core::agi::executor::require_tool_approval;
 use crate::core::agi::executors::{
     ApiExecutor, BrowserExecutor, ExecutorContext, ToolExecutor, UiExecutor,
@@ -50,7 +49,6 @@ impl fmt::Display for DispatchError {
 
 pub struct TierDispatch {
     app_handle: Option<AppHandle>,
-    automation: Arc<AutomationService>,
     llm_router: Arc<RwLock<LLMRouter>>,
     trust_mode: Option<agiworkforce_model_registry::TrustMode>,
 }
@@ -58,13 +56,11 @@ pub struct TierDispatch {
 impl TierDispatch {
     pub fn new(
         app_handle: Option<AppHandle>,
-        automation: Arc<AutomationService>,
         llm_router: Arc<RwLock<LLMRouter>>,
         trust_mode: Option<agiworkforce_model_registry::TrustMode>,
     ) -> Self {
         Self {
             app_handle,
-            automation,
             llm_router,
             trust_mode,
         }
@@ -83,6 +79,16 @@ impl TierDispatch {
             .app_handle
             .as_ref()
             .ok_or_else(|| DispatchError::Failed(String::from(APP_HANDLE_REQUIRED)))?;
+
+        crate::ui::hooks::gate_tool_use(&call.tool, parameter_map(&call.parameters))
+            .await
+            .map_err(DispatchError::Denied)?;
+
+        if let Some(off) =
+            crate::sys::commands::capabilities::capability_refusal(app_handle, &call.tool).await
+        {
+            return Err(DispatchError::Denied(off));
+        }
 
         require_tool_approval(
             app_handle,
@@ -110,13 +116,13 @@ impl TierDispatch {
         let tool_id = format!("{}{TOOL_ID_SEPARATOR}{}", call.tool, task_id);
         let executor_context = ExecutorContext {
             app_handle: Some(app_handle.clone()),
-            automation: self.automation.clone(),
             router: self.llm_router.clone(),
             tool_cache: Arc::new(ToolResultCache::new()),
             security_guard: guard,
             change_tracker: None,
             session_id: task_id.to_string(),
             tool_id,
+            granted_directories: Vec::new(),
         };
         let execution_context = self.execution_context(task_id, task_description, &call.tool);
 
@@ -134,8 +140,8 @@ impl TierDispatch {
     fn executor_for(&self, tier: ExecutorTier) -> Result<Arc<dyn ToolExecutor>> {
         match tier {
             ExecutorTier::Api => Ok(Arc::new(ApiExecutor::new())),
-            ExecutorTier::Ui => Ok(Arc::new(UiExecutor::new(self.automation.clone()))),
-            ExecutorTier::Browser => Ok(Arc::new(BrowserExecutor::new(self.automation.clone()))),
+            ExecutorTier::Ui => Ok(Arc::new(UiExecutor::new())),
+            ExecutorTier::Browser => Ok(Arc::new(BrowserExecutor::new())),
             ExecutorTier::Visual => Err(anyhow!(VISUAL_TIER_HAS_NO_EXECUTOR)),
         }
     }
@@ -188,12 +194,7 @@ mod tests {
 
     #[test]
     fn the_visual_tier_has_no_executor_to_dispatch_to() {
-        let dispatch = TierDispatch::new(
-            None,
-            Arc::new(AutomationService::new().expect("automation service")),
-            Arc::new(RwLock::new(LLMRouter::new())),
-            None,
-        );
+        let dispatch = TierDispatch::new(None, Arc::new(RwLock::new(LLMRouter::new())), None);
 
         assert!(dispatch.executor_for(ExecutorTier::Visual).is_err());
         assert!(dispatch.executor_for(ExecutorTier::Ui).is_ok());

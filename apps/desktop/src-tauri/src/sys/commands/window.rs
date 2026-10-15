@@ -127,36 +127,6 @@ pub fn window_dock(
 }
 
 #[tauri::command]
-pub fn window_is_maximized(app: AppHandle) -> Result<bool, String> {
-    let window = main_window(&app)?;
-    window.is_maximized().map_err(|err| err.to_string())
-}
-
-#[tauri::command]
-pub fn window_maximize(app: AppHandle, state: State<AppState>) -> Result<(), String> {
-    let window = main_window(&app)?;
-
-    let is_fullscreen = window.is_fullscreen().map_err(|e| e.to_string())?;
-    if is_fullscreen {
-        window.set_fullscreen(false).map_err(|e| e.to_string())?;
-        state
-            .update(|s| {
-                s.fullscreen = false;
-                true
-            })
-            .map_err(|e| e.to_string())?;
-    }
-
-    window.maximize().map_err(|err| err.to_string())
-}
-
-#[tauri::command]
-pub fn window_unmaximize(app: AppHandle) -> Result<(), String> {
-    let window = main_window(&app)?;
-    window.unmaximize().map_err(|err| err.to_string())
-}
-
-#[tauri::command]
 pub fn window_toggle_maximize(app: AppHandle, _state: State<AppState>) -> Result<(), String> {
     let window = main_window(&app)?;
 
@@ -172,56 +142,11 @@ pub fn window_toggle_maximize(app: AppHandle, _state: State<AppState>) -> Result
 }
 
 #[tauri::command]
-pub fn window_set_fullscreen(
-    app: AppHandle,
-    state: State<AppState>,
-    fullscreen: bool,
-) -> Result<(), String> {
-    let window = main_window(&app)?;
-    window
-        .set_fullscreen(fullscreen)
-        .map_err(|e| e.to_string())?;
-
-    state
-        .update(|s| {
-            s.fullscreen = fullscreen;
-
-            if fullscreen {
-                s.maximized = false;
-            }
-            true
-        })
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
-}
-
-#[tauri::command]
-pub fn window_is_fullscreen(app: AppHandle) -> Result<bool, String> {
-    let window = main_window(&app)?;
-    window.is_fullscreen().map_err(|e| e.to_string())
-}
-
-// Floating window commands
-
-#[tauri::command]
 pub fn window_toggle_floating(app: AppHandle) -> Result<bool, String> {
     window::toggle_floating_window(&app).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
-pub fn window_open_floating(app: AppHandle) -> Result<(), String> {
-    window::create_floating_window(&app)
-        .map(|_| ())
-        .map_err(|err| err.to_string())
-}
-
-#[tauri::command]
 pub fn window_close_floating(app: AppHandle) -> Result<(), String> {
     window::close_floating_window(&app).map_err(|err| err.to_string())
-}
-
-#[tauri::command]
-pub fn window_is_floating_visible(app: AppHandle) -> Result<bool, String> {
-    Ok(window::is_floating_window_visible(&app))
 }

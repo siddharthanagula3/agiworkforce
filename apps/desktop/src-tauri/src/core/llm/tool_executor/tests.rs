@@ -94,6 +94,26 @@ fn test_terminal_registry_does_not_expose_model_shell_override() {
     assert!(!names.contains(&"shell"));
 }
 
+/// `run_tool_call` asks the guard only when it has an app handle, which no test
+/// here does. A test of a tool the chat advertises goes through this instead,
+/// so a tool the guard would refuse in the app fails here too.
+async fn execute_through_guard(
+    executor: &ToolExecutor,
+    tool_call: &ToolCall,
+) -> Result<ToolResult> {
+    let args = executor
+        .normalized_arguments(tool_call)
+        .expect("tool arguments");
+    let snapshot = serde_json::to_value(&args).expect("argument snapshot");
+    if let Err(error) = crate::sys::security::ToolExecutionGuard::new()
+        .validate_tool_call(&tool_call.name, &snapshot)
+        .await
+    {
+        panic!("the tool guard refuses {}: {error}", tool_call.name);
+    }
+    executor.execute_tool_call(tool_call).await
+}
+
 #[cfg(target_os = "macos")]
 #[tokio::test]
 async fn code_execute_routes_through_network_denied_sandbox() {
@@ -141,6 +161,61 @@ fn gap_002_extracts_nested_paths_and_assigns_capabilities() {
         ToolExecutor::folder_capabilities_for_tool("file_read"),
         vec!["read"]
     );
+}
+
+/// Every chat tool that checks its path with `canonicalize_modifiable_path`
+/// or `validate_modifiable_path`, as the tool files call them. Keep in sync
+/// with those call sites: a tool missing here asks only to read, and its own
+/// check then refuses the folder the user just approved.
+const TOOLS_REQUIRING_MODIFY: &[&str] = &[
+    "file_write",
+    "file_delete",
+    "multi_edit",
+    "apply_patch",
+    "edit_exact_replace",
+    "git_commit",
+    "git_clone",
+    "git_add",
+    "git_push",
+    "git_init",
+    "api_download",
+    "coding_checkpoint_create",
+    "coding_checkpoint_rewind",
+];
+
+#[test]
+fn every_tool_that_requires_modify_asks_for_modify() {
+    for tool in TOOLS_REQUIRING_MODIFY {
+        assert_eq!(
+            ToolExecutor::folder_capabilities_for_tool(tool),
+            vec!["modify"],
+            "{tool} changes its path but would ask only to read"
+        );
+    }
+    for tool in [
+        "mcp__filesystem__read_text_file",
+        "mcp__filesystem__list_directory",
+        "mcp__filesystem__write_file",
+    ] {
+        assert_eq!(
+            ToolExecutor::folder_capabilities_for_tool(tool),
+            vec!["modify"],
+            "{tool}"
+        );
+    }
+    for tool in [
+        "file_read",
+        "git_status",
+        "git_diff",
+        "undo_get_summary",
+        "image_ocr",
+    ] {
+        assert_eq!(
+            ToolExecutor::folder_capabilities_for_tool(tool),
+            vec!["read"],
+            "{tool}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -1221,7 +1296,7 @@ async fn test_file_read_range_is_routed_and_numbered() {
         .to_string(),
     };
 
-    let result = executor.execute_tool_call(&tool_call).await.unwrap();
+    let result = execute_through_guard(&executor, &tool_call).await.unwrap();
 
     assert!(result.success, "range read failed: {:?}", result.error);
     assert_eq!(result.data["content"].as_str(), Some("2: beta\n3: gamma"));
@@ -1296,7 +1371,7 @@ async fn test_file_read_range_offset_exceeds_file_length() {
         .to_string(),
     };
 
-    let result = executor.execute_tool_call(&tool_call).await.unwrap();
+    let result = execute_through_guard(&executor, &tool_call).await.unwrap();
 
     assert!(!result.success);
     assert_eq!(result.error.as_deref(), Some("offset exceeds file length"));
@@ -1918,8 +1993,7 @@ async fn test_browser_autofill_tool_is_routed_not_unknown() {
             default: None,
         }],
     ));
-    let err = executor
-        .execute_tool_call(&tool_call)
+    let err = execute_through_guard(&executor, &tool_call)
         .await
         .expect_err("autofill browser tool should fail cleanly without app handle");
     let message = err.to_string();
@@ -2221,7 +2295,7 @@ async fn test_tool_search_select_returns_exact_schema() {
         .to_string(),
     };
 
-    let result = executor.execute_tool_call(&tool_call).await.unwrap();
+    let result = execute_through_guard(&executor, &tool_call).await.unwrap();
 
     assert!(
         result.success,
@@ -2238,4 +2312,392 @@ async fn test_tool_search_select_returns_exact_schema() {
             .as_str(),
         Some("string")
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_granted_folder_a_sandbox_swapped_for_a_link_grants_nothing_and_is_named() {
+    let base = tempfile::tempdir().expect("base");
+    let base = base.path().canonicalize().expect("canonical base");
+    let project = base.join("project");
+    let target = base.join("target");
+    for dir in [&project, &target] {
+        std::fs::create_dir_all(dir).expect("dir");
+    }
+    agiworkforce_sandbox_policy::verify_writable_root(&project).expect("project recorded");
+    let (verified, refused) = verified_granted_roots(vec![project.clone()]);
+    assert_eq!(verified, vec![project.clone()]);
+    assert!(refused.is_empty());
+
+    std::fs::rename(&project, base.join("moved")).expect("move away");
+    std::os::unix::fs::symlink(&target, &project).expect("link");
+    let (verified, refused) = verified_granted_roots(vec![project.clone()]);
+    assert!(verified.is_empty(), "the swapped folder grants nothing");
+    let error = refused_root_holding(&target.join("x"), &refused)
+        .expect("a write into the link's target names the refused folder");
+    assert!(error.contains(REFUSED_GRANTED_FOLDER), "{error}");
+    assert!(error.contains(&project.display().to_string()), "{error}");
+}
+
+#[test]
+fn a_granted_filesystem_root_is_refused_and_named_as_one() {
+    let root = std::env::current_dir()
+        .expect("cwd")
+        .ancestors()
+        .last()
+        .expect("a root")
+        .to_path_buf();
+    let (verified, refused) = verified_granted_roots(vec![root.clone()]);
+    assert!(verified.is_empty(), "{verified:?}");
+    assert_eq!(refused.len(), 1);
+    assert_eq!(refused[0].0, root);
+    assert_eq!(
+        refused[0].1,
+        crate::core::agi::executors::WHOLE_DRIVE_REFUSED
+    );
+    assert!(
+        refused_root_holding(&root.join("Users").join("x"), &refused).is_none(),
+        "a refused whole drive claims no path, so consent is asked again"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_refused_alias_of_the_filesystem_root_claims_no_path() {
+    let alias = PathBuf::from("/tmp/..");
+    let refused = vec![(
+        alias.clone(),
+        crate::core::agi::executors::WHOLE_DRIVE_REFUSED.to_string(),
+    )];
+    assert!(
+        alias.parent().is_some(),
+        "the alias is not spelled as a root"
+    );
+    assert!(
+        refused_root_holding(Path::new("/tmp/../Users/x"), &refused).is_none(),
+        "a refused folder that resolves to / claims nothing as spelled"
+    );
+    assert!(
+        refused_root_holding(Path::new("/Users/x"), &refused).is_none(),
+        "a refused folder that resolves to / claims nothing as it resolves"
+    );
+}
+
+#[test]
+fn a_path_under_a_missing_folder_resolves_through_its_nearest_existing_ancestor() {
+    let base = tempfile::tempdir().expect("base");
+    let canonical = base.path().canonicalize().expect("canonical base");
+    let missing = base.path().join("a").join("b").join("c.txt");
+    assert_eq!(
+        canonical_target(&missing).expect("an ancestor exists"),
+        canonical.join("a").join("b").join("c.txt")
+    );
+    // Windows drops `..` lexically before resolving, so only a Unix path
+    // keeps the climb for the traversal check to refuse.
+    #[cfg(unix)]
+    {
+        let climbing = base.path().join("a").join("..").join("..").join("x");
+        assert!(canonical_target(&climbing)
+            .expect("an ancestor exists")
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir)));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_link_to_a_missing_target_is_refused_rather_than_written_through() {
+    let base = tempfile::tempdir().expect("base");
+    let granted = base
+        .path()
+        .canonicalize()
+        .expect("canonical base")
+        .join("granted");
+    let outside = base.path().join("outside");
+    std::fs::create_dir(&granted).expect("granted folder");
+    std::fs::create_dir(&outside).expect("outside folder");
+    let link = granted.join("notes.txt");
+    std::os::unix::fs::symlink(outside.join("planted.txt"), &link).expect("dangling link");
+
+    let error = canonical_target(&link).expect_err("a dangling link never resolves to itself");
+    assert!(
+        error.to_string().contains(LINK_TO_MISSING_TARGET),
+        "{error}"
+    );
+
+    let dir_link = granted.join("subdir");
+    std::os::unix::fs::symlink(outside.join("missing"), &dir_link).expect("dangling folder link");
+    let error = canonical_target(&dir_link.join("new.txt"))
+        .expect_err("a dangling link on the way is refused too");
+    assert!(
+        error.to_string().contains(LINK_TO_MISSING_TARGET),
+        "{error}"
+    );
+    assert!(!outside.join("planted.txt").exists());
+}
+
+#[test]
+fn chat_file_tools_reach_neither_the_working_directory_nor_temp_unasked() {
+    let cwd = std::env::current_dir().expect("cwd");
+    let temp = std::env::temp_dir();
+    let defaults = SettingsState::new().get_allowed_directories();
+    assert!(
+        granted_roots(defaults.clone(), None).is_empty(),
+        "with nothing configured or open, every path goes through folder consent"
+    );
+    let project = granted_roots(defaults, Some("/work/project"));
+    assert_eq!(project, vec![PathBuf::from("/work/project")]);
+    let configured = granted_roots(vec!["/work/allowed".to_string()], Some("/work/project"));
+    assert_eq!(
+        configured,
+        vec![
+            PathBuf::from("/work/allowed"),
+            PathBuf::from("/work/project")
+        ],
+        "an allowed folder never hides the open project"
+    );
+    for roots in [project, configured] {
+        assert!(!roots.contains(&cwd), "{roots:?}");
+        assert!(!roots.contains(&temp), "{roots:?}");
+    }
+}
+
+#[tokio::test]
+async fn the_past_conversation_tools_pass_the_guard_and_then_need_the_app() {
+    let executor = ToolExecutor::new(create_registry_with_all_tools());
+
+    for (name, arguments) in [
+        (
+            "conversation_search",
+            json!({ "query": "quarterly roadmap", "limit": 5, "conversation_id": 7 }),
+        ),
+        ("recent_chats", json!({ "limit": 5 })),
+    ] {
+        let tool_call = ToolCall {
+            id: format!("test_{name}"),
+            name: name.to_string(),
+            arguments: arguments.to_string(),
+        };
+
+        let result = execute_through_guard(&executor, &tool_call)
+            .await
+            .expect("a refusal is a result, not an error");
+
+        assert!(!result.success, "{name} has no database without the app");
+        assert!(
+            result
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("App handle not available")),
+            "{name}: {:?}",
+            result.error
+        );
+    }
+}
+
+#[tokio::test]
+async fn the_planning_tools_pass_the_guard_with_their_declared_parameters() {
+    let guard = crate::sys::security::ToolExecutionGuard::new();
+
+    for (name, arguments) in [
+        (
+            "todo_write",
+            json!({ "todos": [{ "id": "1", "title": "Read the file", "status": "pending" }] }),
+        ),
+        (
+            "tool_search",
+            json!({ "query": "edit", "max_results": 5, "include_schemas": true }),
+        ),
+        (
+            "question",
+            json!({ "question": "Which folder?", "choices": ["a", "b"], "multi_select": false }),
+        ),
+    ] {
+        let mut args: HashMap<String, Value> =
+            serde_json::from_value(arguments).expect("arguments");
+        ToolExecutor::normalize_tool_arguments(name, &mut args);
+        guard
+            .validate_tool_call(name, &json!(args))
+            .await
+            .unwrap_or_else(|error| panic!("the tool guard refuses {name}: {error}"));
+    }
+}
+
+fn call(name: &str, arguments: Value) -> ToolCall {
+    ToolCall {
+        id: format!("test_{name}"),
+        name: name.to_string(),
+        arguments: arguments.to_string(),
+    }
+}
+
+#[test]
+fn an_alias_is_promoted_before_any_gate_reads_the_arguments() {
+    let executor = ToolExecutor::new(create_registry_with_all_tools());
+
+    let terminal = executor
+        .normalized_arguments(&call("terminal_execute", json!({ "cmd": "ls -la" })))
+        .expect("arguments");
+    assert_eq!(terminal.get("command"), Some(&json!("ls -la")));
+    assert!(
+        !terminal.contains_key("cmd"),
+        "a hook or guard rule on `command` must see the alias as `command`"
+    );
+
+    let read = executor
+        .normalized_arguments(&call("file_read", json!({ "file_path": "/tmp/notes.txt" })))
+        .expect("arguments");
+    assert_eq!(read.get("path"), Some(&json!("/tmp/notes.txt")));
+    assert!(!read.contains_key("file_path"));
+
+    let video = executor
+        .normalized_arguments(&call(
+            "video_generate",
+            json!({ "prompt": "a", "duration": 4 }),
+        ))
+        .expect("arguments");
+    assert_eq!(video.get("duration_seconds"), Some(&json!(4)));
+    assert!(!video.contains_key("duration"));
+}
+
+#[test]
+fn the_executor_default_is_in_the_arguments_the_gates_read() {
+    let mut executor = ToolExecutor::new(create_registry_with_all_tools());
+    executor.project_folder = Some("/work/project".to_string());
+
+    let listed = executor
+        .normalized_arguments(&call("file_list", json!({})))
+        .expect("arguments");
+    assert_eq!(listed.get("path"), Some(&json!("/work/project")));
+
+    let empty = ToolCall {
+        id: "test_empty".to_string(),
+        name: "file_list".to_string(),
+        arguments: String::new(),
+    };
+    assert_eq!(
+        executor
+            .normalized_arguments(&empty)
+            .expect("arguments")
+            .get("path"),
+        Some(&json!("/work/project"))
+    );
+    assert!(executor
+        .normalized_arguments(&call("file_list", json!("not an object")))
+        .is_err());
+}
+
+#[tokio::test]
+async fn chat_refuses_the_goal_run_database_and_reasoning_tools_by_name() {
+    let executor = ToolExecutor::new(create_registry_with_all_tools());
+
+    for (name, arguments) in [
+        (
+            "db_query",
+            json!({ "connection_id": "c", "query": "SELECT content FROM messages" }),
+        ),
+        (
+            "db_execute",
+            json!({ "connection_id": "c", "sql": "DELETE FROM messages WHERE id = 1" }),
+        ),
+        ("db_transaction_begin", json!({ "connection_id": "c" })),
+        ("llm_reason", json!({ "prompt": "think" })),
+    ] {
+        let result = executor
+            .execute_tool_call(&call(name, arguments))
+            .await
+            .expect("a refusal is a result");
+        assert!(!result.success, "{name}");
+        assert!(
+            result
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("not available in chat")),
+            "{name}: {:?}",
+            result.error
+        );
+    }
+}
+
+#[test]
+fn text_over_the_read_limit_is_cut_on_a_character_boundary() {
+    let limit = file_tools::FILE_READ_MAX_CHARS;
+    let multibyte = "é".repeat(limit);
+    assert!(multibyte.len() > limit && !multibyte.is_char_boundary(limit + 1));
+
+    let cut = truncated_for_chat(format!("a{multibyte}"));
+    let kept = cut.split("\n\n... [truncated").next().expect("kept text");
+    assert!(kept.len() <= limit);
+    assert!(kept.starts_with('a') && kept.ends_with('é'));
+
+    let short = "short é".to_string();
+    assert_eq!(truncated_for_chat(short.clone()), short);
+}
+
+#[tokio::test]
+async fn a_relative_path_is_resolved_once_against_the_project_for_every_gate() {
+    let mut executor = ToolExecutor::new(create_registry_with_all_tools());
+    executor.project_folder = Some("/work/project".to_string());
+    let guard = crate::sys::security::ToolExecutionGuard::new();
+
+    for (relative, resolved) in [
+        ("src/a.ts", "/work/project/src/a.ts"),
+        ("etc/hosts", "/work/project/etc/hosts"),
+    ] {
+        let read = executor
+            .normalized_arguments(&call("file_read", json!({ "path": relative })))
+            .expect("arguments");
+        assert_eq!(read.get("path"), Some(&json!(resolved)));
+
+        guard
+            .validate_before_folder_consent("file_read", &json!(read))
+            .await
+            .unwrap_or_else(|error| panic!("{resolved} passes the first guard pass: {error}"));
+        assert!(
+            guard
+                .validate_before_folder_consent("file_read", &json!({ "path": relative }))
+                .await
+                .is_err(),
+            "the guard never guesses what {relative} is relative to"
+        );
+    }
+
+    let diff = executor
+        .normalized_arguments(&call(
+            "git_diff",
+            json!({ "path": "repo", "file_path": "src/lib.rs" }),
+        ))
+        .expect("arguments");
+    assert_eq!(diff.get("path"), Some(&json!("/work/project/repo")));
+    assert_eq!(
+        diff.get("file_path"),
+        Some(&json!("src/lib.rs")),
+        "a path inside the repository stays relative to it"
+    );
+
+    let edits = executor
+        .normalized_arguments(&call(
+            "multi_edit",
+            json!({ "edits": [{ "path": "src/a.ts", "old_text": "a", "new_text": "b" }] }),
+        ))
+        .expect("arguments");
+    assert_eq!(edits["edits"][0]["path"], json!("/work/project/src/a.ts"));
+
+    let absolute = executor
+        .normalized_arguments(&call(
+            "file_read",
+            json!({ "path": "/elsewhere/notes.txt" }),
+        ))
+        .expect("arguments");
+    assert_eq!(absolute.get("path"), Some(&json!("/elsewhere/notes.txt")));
+
+    if let Some(home) = dirs::home_dir() {
+        let in_home = executor
+            .normalized_arguments(&call("file_read", json!({ "path": "~/notes.txt" })))
+            .expect("arguments");
+        assert_eq!(
+            in_home.get("path"),
+            Some(&json!(home.join("notes.txt").to_string_lossy()))
+        );
+    }
 }

@@ -35,7 +35,6 @@
 //! ```
 
 mod action_executor;
-pub mod anthropic_agent;
 mod app_permissions;
 pub mod approval;
 pub mod clipboard_permission;
@@ -43,9 +42,12 @@ pub mod confirmation;
 pub mod consent;
 pub mod control;
 mod observe_plan_act;
+mod run_start;
 mod safety;
 mod session;
 mod step_routing;
+mod target_app;
+mod targeted_input;
 mod types;
 mod visual_reasoner;
 mod window_manager;
@@ -54,7 +56,6 @@ mod zoom;
 #[cfg(test)]
 mod tests;
 
-pub use anthropic_agent::{AnthropicComputerUseAgent, AnthropicComputerUseConfig};
 pub use app_permissions::{
     ensure_navigation_url_allowed, is_always_blocked_bundle, is_always_blocked_host, AppPermission,
     AppPermissionManager, AppPermissionRequest, PermissionDecision, PermissionStatus,
@@ -71,11 +72,26 @@ pub use control::{ControlState, DialogResponse};
 pub use observe_plan_act::{
     CompletionReason, ComputerUseAgent, ComputerUseConfig, ExecutionState, OpaLoopResult,
 };
+pub use run_start::{
+    classify_start_apps, settle_front_app, FrontAppState, StartCandidate, StartSurface,
+};
 pub use safety::{
-    ComputerUseSafetyLayer, PromptInjectionDetector, SafetyConfig, SafetyDecision, SafetyReason,
+    describe_app_permission_block, ComputerUseSafetyLayer, PromptInjectionDetector, SafetyConfig,
+    SafetyDecision, SafetyReason,
 };
 pub use session::{
+    capture_to_disk, ensure_capture_may_be_written, prepare_screenshot_dir, write_screenshot,
     ActionSnapshot, ComputerUseSession, SessionConfig, SessionEvent, SessionManager, UndoAction,
+};
+pub use target_app::{
+    app_at_point, app_with_keyboard_focus, bring_to_front, ensure_element_in_target,
+    ensure_point_in_target, frontmost_app, match_target_app, resolve_target_app,
+    running_target_apps, same_app, TargetApp,
+};
+pub use targeted_input::{
+    app_argument, click_in_app, element_in_gated_app, ensure_app_may_be_raised,
+    focus_window_in_app, front_app_state, guard_front_app_input, toggle_in_app, type_in_app,
+    ActedOn, UiTarget, APP_REQUIRED, TARGET_APP_PARAMETER,
 };
 pub use types::{
     ComputerUseAction, ComputerUseTask, Coordinate, ElementBounds, HotkeyModifier, MouseButton,

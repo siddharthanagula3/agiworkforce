@@ -69,6 +69,15 @@ impl AgentSession {
         self.report_unsaved_checkpoints();
     }
 
+    /// The conversation as a reader sees it, including what compaction
+    /// summarized out of the model's context.
+    pub fn shown_messages(&self) -> Vec<Message> {
+        match self.managed_session.as_ref() {
+            Some(managed_session) => managed_session.shown_with_context(&self.messages),
+            None => self.messages.clone(),
+        }
+    }
+
     #[allow(dead_code)]
     pub fn restore_checkpoint(&mut self) -> bool {
         let Some(saved) = self.checkpoint_log.pop() else {

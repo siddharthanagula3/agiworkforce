@@ -3,9 +3,12 @@
 //! These commands expose the master password functionality to the frontend,
 //! allowing users to set up, verify, and manage their master password.
 
+use crate::sys::native_confirm::{ConfirmGate, NativeConfirm};
 use crate::sys::security::master_password::{
-    MasterPasswordError, MasterPasswordManager, MasterPasswordStatus,
+    password_rule_violation, MasterPasswordError, MasterPasswordManager, MasterPasswordStatus,
+    PasswordKey, PasswordRuleViolation,
 };
+use crate::sys::security::{vault_credentials, KeyPurpose};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -183,32 +186,76 @@ impl MasterPasswordState {
 pub struct MasterPasswordResponse {
     pub success: bool,
     pub message: String,
+    /// The password rule a refused new password broke, for the interface to
+    /// explain in its own words.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub violation: Option<PasswordRuleViolation>,
+    /// Providers whose saved key no key opens. An unlock that finds any keeps
+    /// the stored password row as it is and reports them here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keys_not_upgraded: Vec<String>,
 }
 
-/// Check if the master password has been configured
-#[tauri::command]
-pub async fn master_password_is_configured(
-    state: State<'_, MasterPasswordState>,
-) -> Result<bool, String> {
-    let manager = state
-        .manager
-        .lock()
-        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+impl MasterPasswordResponse {
+    fn done(message: &str) -> Self {
+        Self {
+            success: true,
+            message: message.to_string(),
+            violation: None,
+            keys_not_upgraded: Vec::new(),
+        }
+    }
 
-    manager.is_configured().map_err(|e| e.to_string())
+    fn refused(message: &str) -> Self {
+        Self {
+            success: false,
+            message: message.to_string(),
+            violation: None,
+            keys_not_upgraded: Vec::new(),
+        }
+    }
+
+    fn rejected(violation: PasswordRuleViolation) -> Self {
+        Self {
+            success: false,
+            message: violation.to_string(),
+            violation: Some(violation),
+            keys_not_upgraded: Vec::new(),
+        }
+    }
 }
 
-/// Check if the app is currently unlocked
-#[tauri::command]
-pub async fn master_password_is_unlocked(
-    state: State<'_, MasterPasswordState>,
-) -> Result<bool, String> {
-    let manager = state
-        .manager
-        .lock()
-        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+/// An earlier build sealed the connector permissions file under the vault key
+/// whenever it was saved while unlocked. With the key in hand the file goes
+/// back under the machine key, which is where it now always lives and which
+/// opens it whether or not a key replacement commits.
+fn release_connector_permissions(vault_key: &PasswordKey<'_>) -> Result<(), MasterPasswordError> {
+    let keys = vault_key.purpose_keys(KeyPurpose::ConnectorPermissions)?;
+    crate::sys::commands::connector_permissions::release_from_vault_keys(&keys)
+        .map_err(MasterPasswordError::CryptoError)
+}
 
-    Ok(manager.is_unlocked())
+fn settle_unlock(
+    conn: &Connection,
+    key: &PasswordKey<'_>,
+    upgraded: Option<&PasswordKey<'_>>,
+) -> Result<(), MasterPasswordError> {
+    vault_credentials::settle_at_unlock(conn, key, upgraded)?;
+    release_connector_permissions(key)
+}
+
+fn reseal_for_change(
+    conn: &Connection,
+    old_key: &PasswordKey<'_>,
+    new_key: &PasswordKey<'_>,
+) -> Result<(), MasterPasswordError> {
+    vault_credentials::reseal_for_new_password(conn, old_key, new_key)?;
+    release_connector_permissions(old_key)
+}
+
+fn reseal_for_removal(conn: &Connection, key: &PasswordKey<'_>) -> Result<(), MasterPasswordError> {
+    vault_credentials::reseal_under_install_key(conn, key)?;
+    release_connector_permissions(key)
 }
 
 /// Get the current master password status
@@ -224,221 +271,380 @@ pub async fn master_password_get_status(
     manager.get_status().map_err(|e| e.to_string())
 }
 
-/// Set up the master password for the first time
+/// Setting or changing the master password seals the user's saved keys under
+/// a password of the caller's choosing, after which a lock keeps them out of
+/// reach. The window may ask for that, but only the user may agree to it, in
+/// a dialog the operating system draws. One such question at a time, and a
+/// wait after a no that grows while the noes keep coming.
+static MASTER_PASSWORD_DECISIONS: ConfirmGate = ConfirmGate::new();
+
+const SETUP_CONFIRM_LABEL: &str = "Set Master Password";
+const CHANGE_CONFIRM_LABEL: &str = "Change Master Password";
+const SETUP_NOT_CONFIRMED: &str =
+    "Setting a master password was not confirmed, so nothing was changed.";
+const CHANGE_NOT_CONFIRMED: &str =
+    "Changing the master password was not confirmed, so nothing was changed.";
+
+fn setup_question() -> NativeConfirm {
+    NativeConfirm {
+        title: "Set a master password?".to_string(),
+        body: "Your saved provider keys will be sealed with the password you just typed in the AGI Workforce window, and will need it at every start.\n\nIt cannot be recovered. If you forget it, those saved keys are lost.".to_string(),
+        confirm_label: SETUP_CONFIRM_LABEL.to_string(),
+    }
+}
+
+fn change_question() -> NativeConfirm {
+    NativeConfirm {
+        title: "Change the master password?".to_string(),
+        body: "Your saved provider keys will be sealed with the new password you just typed in the AGI Workforce window, and will need it at every start.\n\nIt cannot be recovered. If you forget it, those saved keys are lost.".to_string(),
+        confirm_label: CHANGE_CONFIRM_LABEL.to_string(),
+    }
+}
+
+/// `None` when the user said yes in the native dialog; otherwise the refusal
+/// to hand back, which never claims the change was made.
+async fn refusal_unless_confirmed(
+    app: &tauri::AppHandle,
+    request: &str,
+    question: NativeConfirm,
+    not_confirmed: &str,
+) -> Option<MasterPasswordResponse> {
+    match MASTER_PASSWORD_DECISIONS
+        .confirm(app, request, question)
+        .await
+    {
+        Ok(true) => None,
+        Ok(false) => Some(MasterPasswordResponse::refused(not_confirmed)),
+        Err(held) => Some(MasterPasswordResponse::refused(&held.message())),
+    }
+}
+
+/// Set the master password for the first time, once the user has confirmed
+/// it natively. Every saved provider key is sealed under it in the
+/// transaction that stores the salt and verifier, so none stays readable
+/// without the password, and a failure sets no password. A password that
+/// breaks the rules, or a vault that already has one, is turned down before
+/// anything is asked.
 #[tauri::command]
 pub async fn master_password_setup(
+    app: tauri::AppHandle,
     password: String,
     state: State<'_, MasterPasswordState>,
 ) -> Result<MasterPasswordResponse, String> {
+    if let Some(violation) = password_rule_violation(&password) {
+        return Ok(MasterPasswordResponse::rejected(violation));
+    }
+    let already_configured = state
+        .manager
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock: {}", e))?
+        .is_configured()
+        .map_err(|e| e.to_string())?;
+    if already_configured {
+        return Ok(MasterPasswordResponse::refused(
+            "Master password is already configured",
+        ));
+    }
+    if let Some(refusal) =
+        refusal_unless_confirmed(&app, "setup", setup_question(), SETUP_NOT_CONFIRMED).await
+    {
+        return Ok(refusal);
+    }
+
     let manager = state
         .manager
         .lock()
         .map_err(|e| format!("Failed to acquire lock: {}", e))?;
 
-    match manager.setup(&password) {
-        Ok(()) => Ok(MasterPasswordResponse {
-            success: true,
-            message: "Master password set up successfully".to_string(),
-        }),
-        Err(MasterPasswordError::PasswordTooShort { min_length }) => Ok(MasterPasswordResponse {
-            success: false,
-            message: format!("Password must be at least {} characters long", min_length),
-        }),
-        Err(MasterPasswordError::AlreadyConfigured) => Ok(MasterPasswordResponse {
-            success: false,
-            message: "Master password is already configured".to_string(),
-        }),
+    match manager.setup_with(&password, |conn, new_key| {
+        vault_credentials::seal_existing_under_password(conn, new_key).map(|_| ())
+    }) {
+        Ok(()) => Ok(MasterPasswordResponse::done(
+            "Master password set up successfully",
+        )),
+        Err(MasterPasswordError::PasswordRejected(violation)) => {
+            Ok(MasterPasswordResponse::rejected(violation))
+        }
+        Err(MasterPasswordError::AlreadyConfigured) => Ok(MasterPasswordResponse::refused(
+            "Master password is already configured",
+        )),
         Err(e) => Err(e.to_string()),
     }
 }
 
-/// Verify the master password (without unlocking)
-#[tauri::command]
-pub async fn master_password_verify(
-    password: String,
-    state: State<'_, MasterPasswordState>,
-) -> Result<bool, String> {
-    // RT-01: enforce brute-force rate limit before every attempt.
-    check_and_enforce_lockout()?;
-
-    let manager = state
-        .manager
-        .lock()
-        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
-
-    let result = manager.verify(&password).map_err(|e| e.to_string())?;
-    record_attempt_outcome(result);
-    Ok(result)
-}
-
-/// Unlock the app with the master password
+/// Unlock the app with the master password. A stored row from before the
+/// verifier and the vault key were separated is replaced here, with everything
+/// its key sealed moved to the new key in the same transaction.
 #[tauri::command]
 pub async fn master_password_unlock(
     password: String,
     state: State<'_, MasterPasswordState>,
+    llm_state: State<'_, crate::sys::commands::llm::LLMState>,
+    encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
 ) -> Result<MasterPasswordResponse, String> {
     // RT-01: enforce brute-force rate limit before every attempt.
     check_and_enforce_lockout()?;
 
-    let manager = state
-        .manager
-        .lock()
-        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    let outcome = {
+        let manager = state
+            .manager
+            .lock()
+            .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+        manager.unlock(&password, settle_unlock)
+    };
 
-    match manager.unlock(&password) {
-        Ok(()) => {
+    match outcome {
+        Ok(unlocked) => {
             record_attempt_outcome(true);
+            crate::sys::commands::llm::rehydrate_byok_providers(
+                &llm_state.router,
+                encryption.inner(),
+            )
+            .await;
             Ok(MasterPasswordResponse {
-                success: true,
-                message: "App unlocked successfully".to_string(),
+                keys_not_upgraded: unlocked.keys_not_upgraded,
+                ..MasterPasswordResponse::done("App unlocked successfully")
             })
         }
         Err(MasterPasswordError::InvalidPassword) => {
             record_attempt_outcome(false);
-            Ok(MasterPasswordResponse {
-                success: false,
-                message: "Invalid password".to_string(),
-            })
+            Ok(MasterPasswordResponse::refused("Invalid password"))
         }
-        Err(MasterPasswordError::NotConfigured) => Ok(MasterPasswordResponse {
-            success: false,
-            message: "Master password has not been set up yet".to_string(),
-        }),
+        Err(MasterPasswordError::NotConfigured) => Ok(MasterPasswordResponse::refused(
+            "Master password has not been set up yet",
+        )),
         Err(e) => Err(e.to_string()),
     }
 }
 
-/// Lock the app (clear cached key)
+/// Lock the app: clear the cached vault key and forget every provider key
+/// that was read through it, so nothing the vault protects stays usable from
+/// memory. The providers come back on the next unlock.
 #[tauri::command]
 pub async fn master_password_lock(
     state: State<'_, MasterPasswordState>,
+    llm_state: State<'_, crate::sys::commands::llm::LLMState>,
+    encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
 ) -> Result<MasterPasswordResponse, String> {
-    let manager = state
-        .manager
-        .lock()
-        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    {
+        let manager = state
+            .manager
+            .lock()
+            .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+        manager.lock();
+    }
 
-    manager.lock();
+    crate::sys::commands::llm::forget_locked_providers(&llm_state.router, encryption.inner()).await;
 
-    Ok(MasterPasswordResponse {
-        success: true,
-        message: "App locked successfully".to_string(),
-    })
+    Ok(MasterPasswordResponse::done("App locked successfully"))
 }
 
-/// Change the master password
+/// Change the master password, once the user has confirmed it natively.
+/// Every credential sealed under the old password is re-sealed under the new
+/// one in the transaction that stores the new salt and verifier, so a failure
+/// leaves the old password working and nothing unreadable.
 #[tauri::command]
 pub async fn master_password_change(
+    app: tauri::AppHandle,
     current_password: String,
     new_password: String,
     state: State<'_, MasterPasswordState>,
+    llm_state: State<'_, crate::sys::commands::llm::LLMState>,
+    encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
 ) -> Result<MasterPasswordResponse, String> {
-    let manager = state
-        .manager
-        .lock()
-        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    // RT-01: the current password is checked here too, so the same
+    // brute-force gate applies.
+    check_and_enforce_lockout()?;
 
-    match manager.change(&current_password, &new_password) {
-        Ok(()) => Ok(MasterPasswordResponse {
-            success: true,
-            message: "Master password changed successfully".to_string(),
-        }),
-        Err(MasterPasswordError::InvalidPassword) => Ok(MasterPasswordResponse {
-            success: false,
-            message: "Current password is incorrect".to_string(),
-        }),
-        Err(MasterPasswordError::PasswordTooShort { min_length }) => Ok(MasterPasswordResponse {
-            success: false,
-            message: format!(
-                "New password must be at least {} characters long",
-                min_length
-            ),
-        }),
+    if let Some(violation) = password_rule_violation(&new_password) {
+        return Ok(MasterPasswordResponse::rejected(violation));
+    }
+    if let Some(refusal) =
+        refusal_unless_confirmed(&app, "change", change_question(), CHANGE_NOT_CONFIRMED).await
+    {
+        return Ok(refusal);
+    }
+
+    let outcome = {
+        let manager = state
+            .manager
+            .lock()
+            .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+        manager.change(&current_password, &new_password, reseal_for_change)
+    };
+
+    match outcome {
+        Ok(()) => {
+            record_attempt_outcome(true);
+            // A change made while locked leaves the vault open under the new
+            // password, so the providers it protects are restored.
+            crate::sys::commands::llm::rehydrate_byok_providers(
+                &llm_state.router,
+                encryption.inner(),
+            )
+            .await;
+            Ok(MasterPasswordResponse::done(
+                "Master password changed successfully",
+            ))
+        }
+        Err(MasterPasswordError::InvalidPassword) => {
+            record_attempt_outcome(false);
+            Ok(MasterPasswordResponse::refused(
+                "Current password is incorrect",
+            ))
+        }
+        Err(MasterPasswordError::PasswordRejected(violation)) => {
+            Ok(MasterPasswordResponse::rejected(violation))
+        }
+        Err(unreadable @ MasterPasswordError::UnreadableSavedKeys { .. }) => {
+            Ok(MasterPasswordResponse::refused(&unreadable.to_string()))
+        }
         Err(e) => Err(e.to_string()),
     }
 }
 
-/// Check if migration from machine-only keys is needed
+/// Remove the master password. Every credential sealed under it is re-sealed
+/// under this device's key in the transaction that deletes the salt and
+/// verifier, so nothing is deleted and everything opens without a password
+/// afterwards. A failure leaves the password in place.
 #[tauri::command]
-pub async fn master_password_needs_migration(
+pub async fn master_password_remove(
+    password: String,
     state: State<'_, MasterPasswordState>,
-) -> Result<bool, String> {
-    let manager = state
-        .manager
-        .lock()
-        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
-
-    manager.needs_migration().map_err(|e| e.to_string())
-}
-
-/// Start the migration process
-#[tauri::command]
-pub async fn master_password_start_migration(
-    state: State<'_, MasterPasswordState>,
+    llm_state: State<'_, crate::sys::commands::llm::LLMState>,
+    encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
 ) -> Result<MasterPasswordResponse, String> {
-    let manager = state
-        .manager
-        .lock()
-        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+    // RT-01: enforce brute-force rate limit before every attempt.
+    check_and_enforce_lockout()?;
 
-    match manager.start_migration() {
-        Ok(()) => Ok(MasterPasswordResponse {
-            success: true,
-            message: "Migration started".to_string(),
-        }),
-        Err(e) => Err(e.to_string()),
-    }
-}
+    let outcome = {
+        let manager = state
+            .manager
+            .lock()
+            .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+        manager.remove(&password, reseal_for_removal)
+    };
 
-/// Complete the migration process
-#[tauri::command]
-pub async fn master_password_complete_migration(
-    state: State<'_, MasterPasswordState>,
-) -> Result<MasterPasswordResponse, String> {
-    let manager = state
-        .manager
-        .lock()
-        .map_err(|e| format!("Failed to acquire lock: {}", e))?;
-
-    match manager.complete_migration() {
-        Ok(()) => Ok(MasterPasswordResponse {
-            success: true,
-            message: "Migration completed successfully".to_string(),
-        }),
+    match outcome {
+        Ok(()) => {
+            record_attempt_outcome(true);
+            crate::sys::commands::llm::rehydrate_byok_providers(
+                &llm_state.router,
+                encryption.inner(),
+            )
+            .await;
+            Ok(MasterPasswordResponse::done("Master password removed"))
+        }
+        Err(MasterPasswordError::InvalidPassword) => {
+            record_attempt_outcome(false);
+            Ok(MasterPasswordResponse::refused("Password is incorrect"))
+        }
+        Err(MasterPasswordError::NotConfigured) => Ok(MasterPasswordResponse::refused(
+            "Master password has not been set up yet",
+        )),
+        Err(unreadable @ MasterPasswordError::UnreadableSavedKeys { .. }) => {
+            Ok(MasterPasswordResponse::refused(&unreadable.to_string()))
+        }
         Err(e) => Err(e.to_string()),
     }
 }
 
 /// Result of running the credential-store migration to the master-password
 /// vault. Emitted to the frontend so the UI can summarize what happened.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VaultMigrationReport {
     pub api_keys_migrated: u32,
-    pub mcp_oauth_credentials_migrated: u32,
-    pub messaging_connections_migrated: u32,
     pub rows_skipped_already_modern: u32,
     pub rows_skipped_undecryptable: u32,
 }
 
-/// FIX-001 / FIX-002 (Sprint 1): re-encrypt every credential row written
-/// under the legacy machine-key-only derivation with the
-/// master-password-derived key.
+/// Seal every vault-owned credential that is still under the per-install key.
+/// Setting a master password does this itself; this is for a store whose
+/// password was set by a build that did not.
 ///
-/// Idempotent: rows already encrypted with the new key are detected via a
-/// successful master-key decrypt and skipped. Rows that fail to decrypt
-/// under both schemes are counted in `rows_skipped_undecryptable` and
-/// left untouched so subsequent retries can attempt them again.
+/// Only the rows `vault_credentials::vault_owns_setting` names are touched.
+/// MCP server credentials, connector app credentials and connector sign-ins
+/// are read by code that runs with the vault locked, so rewriting them under
+/// the vault key would leave them unreadable; they are never candidates.
 ///
-/// Requires the vault to be unlocked. Each table's pass runs inside its
-/// own SQLite transaction so a crash mid-migration leaves the schema in
-/// a consistent state.
+/// Each new ciphertext is read back through `vault_credentials::open`, the
+/// path every reader of these rows uses, before it replaces the old one. The
+/// whole pass is one transaction: an error returns before the commit, which
+/// leaves every row as it was.
+///
+/// Idempotent: a row that already opens under the vault key is counted and
+/// skipped, and a row no key opens is counted and left for a later retry.
+pub(crate) fn migrate_vault_owned_settings(
+    conn: &mut Connection,
+    vault: &crate::sys::security::MasterPasswordEncryption,
+) -> Result<VaultMigrationReport, String> {
+    let mut report = VaultMigrationReport::default();
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("Failed to begin the credential migration: {e}"))?;
+
+    let candidates: Vec<(String, String)> = {
+        let mut stmt = tx
+            .prepare(
+                "SELECT key, value FROM settings_v2
+                 WHERE category = 'security' AND encrypted = 1
+                 ORDER BY key",
+            )
+            .map_err(|e| format!("Failed to query settings_v2: {e}"))?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|e| format!("Failed to iterate settings_v2 rows: {e}"))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(|e| format!("Failed to collect settings_v2 rows: {e}"))?
+    };
+
+    for (key, stored) in candidates {
+        if !vault_credentials::vault_owns_setting(&key) {
+            continue;
+        }
+        if vault.decrypt(KeyPurpose::McpCredentials, &stored).is_ok() {
+            report.rows_skipped_already_modern += 1;
+            continue;
+        }
+        let Ok(plaintext) = vault_credentials::open_with_install_key(&stored) else {
+            report.rows_skipped_undecryptable += 1;
+            continue;
+        };
+
+        let sealed = vault_credentials::seal(Some(vault), &plaintext)
+            .map_err(|e| format!("Failed to re-encrypt {key}, so nothing was changed: {e}"))?;
+        let read_back = vault_credentials::open(Some(vault), &sealed).map_err(|e| {
+            format!("{key} did not read back after re-encryption, so nothing was changed: {e}")
+        })?;
+        if read_back != plaintext {
+            return Err(format!(
+                "{key} read back differently after re-encryption, so nothing was changed"
+            ));
+        }
+
+        tx.execute(
+            "UPDATE settings_v2 SET value = ?1 WHERE key = ?2",
+            rusqlite::params![sealed, key],
+        )
+        .map_err(|e| format!("Failed to update {key}, so nothing was changed: {e}"))?;
+
+        report.api_keys_migrated += 1;
+    }
+
+    tx.commit()
+        .map_err(|e| format!("Failed to commit the credential migration: {e}"))?;
+    Ok(report)
+}
+
+/// Re-encrypt the vault-owned credentials under the master password. See
+/// [`migrate_vault_owned_settings`] for which rows that is and what it
+/// guarantees. Requires the vault to be unlocked.
+#[tauri::command]
 pub async fn master_password_migrate_credentials(
     encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
-    db: State<'_, crate::sys::commands::AppDatabase>,
 ) -> Result<VaultMigrationReport, String> {
-    use crate::sys::security::KeyPurpose;
-    use crate::sys::security::MasterPasswordEncryption;
-
     if !encryption.is_configured() {
         return Err("Master password is not set up yet, nothing to migrate.".to_string());
     }
@@ -448,125 +654,8 @@ pub async fn master_password_migrate_credentials(
         );
     }
 
-    let helper: &MasterPasswordEncryption = encryption.inner();
-    let mut report = VaultMigrationReport {
-        api_keys_migrated: 0,
-        mcp_oauth_credentials_migrated: 0,
-        messaging_connections_migrated: 0,
-        rows_skipped_already_modern: 0,
-        rows_skipped_undecryptable: 0,
-    };
-
-    // ---- Table 1: settings_v2, api_key_* and mcp_oauth_config_*_client_*
-    {
-        let mut conn = crate::core::mcp::config::open_mcp_settings_db()?;
-        let tx = conn
-            .transaction()
-            .map_err(|e| format!("Failed to begin tx for settings_v2: {e}"))?;
-
-        let candidates: Vec<(String, String)> = {
-            let mut stmt = tx
-                .prepare(
-                    "SELECT key, value FROM settings_v2 WHERE category = 'security' AND encrypted = 1",
-                )
-                .map_err(|e| format!("Failed to query settings_v2: {e}"))?;
-            let rows = stmt
-                .query_map([], |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-                })
-                .map_err(|e| format!("Failed to iterate settings_v2 rows: {e}"))?;
-            rows.collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(|e| format!("Failed to collect settings_v2 rows: {e}"))?
-        };
-
-        for (key, encrypted) in candidates {
-            // Skip if it already decrypts under the master key.
-            if helper
-                .decrypt(KeyPurpose::McpCredentials, &encrypted)
-                .is_ok()
-            {
-                report.rows_skipped_already_modern += 1;
-                continue;
-            }
-
-            // Try the legacy machine-only path.
-            let plaintext = match crate::sys::commands::mcp_oauth::decrypt_legacy_machine_credential(
-                &encrypted,
-            ) {
-                Ok(v) => v,
-                Err(_) => {
-                    report.rows_skipped_undecryptable += 1;
-                    continue;
-                }
-            };
-
-            let new_ciphertext = helper
-                .encrypt(KeyPurpose::McpCredentials, &plaintext)
-                .map_err(|e| format!("Failed to re-encrypt {key}: {e}"))?;
-
-            tx.execute(
-                "UPDATE settings_v2 SET value = ?1 WHERE key = ?2",
-                rusqlite::params![new_ciphertext, key],
-            )
-            .map_err(|e| format!("Failed to update {key}: {e}"))?;
-
-            if key.starts_with("api_key_") {
-                report.api_keys_migrated += 1;
-            } else if key.starts_with("mcp_oauth_config_") {
-                report.mcp_oauth_credentials_migrated += 1;
-            }
-        }
-
-        tx.commit()
-            .map_err(|e| format!("Failed to commit settings_v2 migration tx: {e}"))?;
-    }
-
-    // ---- Table 2: messaging_connections, encrypt the credentials JSON blob.
-    {
-        let conn = db.connection()?;
-        let candidates: Vec<(String, String)> = {
-            let mut stmt = conn
-                .prepare("SELECT id, credentials FROM messaging_connections")
-                .map_err(|e| format!("Failed to query messaging_connections: {e}"))?;
-            let rows = stmt
-                .query_map([], |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-                })
-                .map_err(|e| format!("Failed to iterate messaging_connections rows: {e}"))?;
-            rows.collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(|e| format!("Failed to collect messaging_connections rows: {e}"))?
-        };
-
-        for (id, value) in candidates {
-            // Already-encrypted rows decrypt cleanly under the master key.
-            if helper.decrypt(KeyPurpose::Messaging, &value).is_ok() {
-                report.rows_skipped_already_modern += 1;
-                continue;
-            }
-
-            // Legacy rows are stored as raw JSON, wrap them under the master
-            // key. If the value is neither valid JSON nor master-key
-            // ciphertext we count it and leave it; the surrounding error
-            // path on send_message will surface the bad data.
-            if serde_json::from_str::<serde_json::Value>(&value).is_err() {
-                report.rows_skipped_undecryptable += 1;
-                continue;
-            }
-
-            let new_ciphertext = helper
-                .encrypt(KeyPurpose::Messaging, &value)
-                .map_err(|e| format!("Failed to encrypt messaging row {id}: {e}"))?;
-
-            conn.execute(
-                "UPDATE messaging_connections SET credentials = ?1 WHERE id = ?2",
-                rusqlite::params![new_ciphertext, id],
-            )
-            .map_err(|e| format!("Failed to update messaging row {id}: {e}"))?;
-            report.messaging_connections_migrated += 1;
-        }
-    }
-
-    Ok(report)
+    let mut conn = crate::core::mcp::config::open_mcp_settings_db()?;
+    migrate_vault_owned_settings(&mut conn, encryption.inner())
 }
 
 #[cfg(test)]
@@ -606,7 +695,51 @@ mod tests {
         manager.lock();
         assert!(!manager.is_unlocked());
 
-        manager.unlock(valid_test_passphrase()).unwrap();
+        manager
+            .unlock(valid_test_passphrase(), |_, _, _| Ok(()))
+            .unwrap();
         assert!(manager.is_unlocked());
+    }
+
+    #[test]
+    fn the_native_questions_say_what_cannot_be_undone_and_can_be_asked() {
+        for question in [setup_question(), change_question()] {
+            assert!(question.body.contains("cannot be recovered"));
+            assert!(question.body.contains("at every start"));
+            assert!(question.body.contains("typed in the AGI Workforce window"));
+            assert!(crate::sys::native_confirm::can_ask_with(
+                &question.confirm_label
+            ));
+            assert!(crate::sys::native_confirm::check_it_fits(&question.body).is_ok());
+        }
+        assert_ne!(
+            setup_question().confirm_label,
+            change_question().confirm_label
+        );
+        assert!(SETUP_NOT_CONFIRMED.contains("nothing was changed"));
+        assert!(CHANGE_NOT_CONFIRMED.contains("nothing was changed"));
+    }
+
+    #[test]
+    fn a_refused_new_password_names_the_rule_it_broke() {
+        let state = create_test_state();
+        let manager = state.manager.lock().unwrap();
+
+        let refusal = manager
+            .setup_with("onlylowercaseletters", |_, _| Ok(())) // gitleaks:allow
+            .expect_err("one character class is not enough");
+        let MasterPasswordError::PasswordRejected(violation) = refusal else {
+            panic!("expected a password rule violation");
+        };
+
+        let response = MasterPasswordResponse::rejected(violation);
+        assert!(!response.success);
+        assert!(!response.message.contains("Cryptographic"));
+        let sent = serde_json::to_value(&response).unwrap();
+        assert_eq!(sent["violation"]["rule"], "too_few_character_classes");
+        assert_eq!(sent["violation"]["min_character_classes"], 3);
+
+        let sent = serde_json::to_value(MasterPasswordResponse::done("ok")).unwrap();
+        assert!(sent.get("violation").is_none());
     }
 }

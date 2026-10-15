@@ -1,7 +1,6 @@
 use crate::sys::error::{Error, Result};
 use docx_rs::*;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,12 +65,12 @@ impl WordDocumentCreator {
             docx = self.add_content(docx, content)?;
         }
 
+        let mut packed = std::io::Cursor::new(Vec::new());
         docx.build()
-            .pack(
-                File::create(output_path)
-                    .map_err(|e| Error::Generic(format!("Failed to create file: {}", e)))?,
-            )
+            .pack(&mut packed)
             .map_err(|e| Error::Generic(format!("Failed to pack DOCX: {}", e)))?;
+        crate::sys::utils::write_file_without_following(path, packed.get_ref())
+            .map_err(|e| Error::Generic(format!("Failed to create file: {}", e)))?;
 
         Ok(())
     }

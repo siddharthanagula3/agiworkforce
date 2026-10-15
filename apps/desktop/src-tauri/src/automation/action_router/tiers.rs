@@ -47,6 +47,7 @@ const SELECTOR_PARAMETER: &str = "selector";
 const TAB_ID_PARAMETER: &str = "tab_id";
 const ELEMENT_ID_KEY: &str = "element_id";
 const WINDOW_KEY: &str = "window";
+const APP_PARAMETER: &str = "app";
 const NO_CONNECTED_TAB: &str = "no browser tab is connected";
 
 fn platform() -> String {
@@ -250,7 +251,7 @@ impl ActionTier for UiTier {
             return Err(TierDecline::OutOfScope);
         };
 
-        let parameters = if verb.capability == AccessibilityCapability::FocusWindow {
+        let mut parameters = if verb.capability == AccessibilityCapability::FocusWindow {
             let token = self.resolve(phrase, self.probe.locate_window(phrase))?;
             serde_json::json!({ TARGET_PARAMETER: { WINDOW_KEY: token } })
         } else {
@@ -276,6 +277,11 @@ impl ActionTier for UiTier {
                 _ => serde_json::json!({ TARGET_PARAMETER: { ELEMENT_ID_KEY: element_id } }),
             }
         };
+        // The executor acts only inside a named app; a task that names none is
+        // left for the visual loop, which checks the app in front at each step.
+        if let Some(application) = intent.application.as_deref() {
+            parameters[APP_PARAMETER] = serde_json::json!(application);
+        }
 
         Ok(RoutedCall {
             tier: ExecutorTier::Ui,
@@ -621,6 +627,29 @@ mod tests {
             call.parameters.get(TEXT_PARAMETER).and_then(|t| t.as_str()),
             Some("hello")
         );
+    }
+
+    #[tokio::test]
+    async fn the_ui_tier_names_the_task_app_so_the_executor_can_gate_it() {
+        let call = ui_tier(StubAccessibility::default())
+            .assess(&ActionIntent::parse(
+                "click the Send button",
+                Some("Slack".to_string()),
+            ))
+            .await
+            .expect("accepted");
+
+        assert_eq!(
+            call.parameters
+                .get(APP_PARAMETER)
+                .and_then(|app| app.as_str()),
+            Some("Slack")
+        );
+        assert!(ui_call("click the Send button")
+            .await
+            .parameters
+            .get(APP_PARAMETER)
+            .is_none());
     }
 
     #[tokio::test]

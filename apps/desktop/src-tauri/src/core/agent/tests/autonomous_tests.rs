@@ -12,10 +12,8 @@
 //  • `ClickTarget` enum: construction of each variant
 //  • `ScrollDirection` enum: serialisation
 //  • `TaskStep` construction
-//  • `PENDING_TASK_APPROVALS` static (accessible without runtime)
 #[cfg(test)]
 mod tests {
-    use crate::core::agent::autonomous::PENDING_TASK_APPROVALS;
     use crate::core::agent::{
         Action, AgentConfig, ClickTarget, ScreenRegion, ScreenshotQuality, ScrollDirection,
         StepResult, Task, TaskStatus, TaskStep, VisionModel,
@@ -55,7 +53,6 @@ mod tests {
             TaskStatus::Pending,
             TaskStatus::Planning,
             TaskStatus::Executing,
-            TaskStatus::WaitingApproval,
             TaskStatus::Paused,
             TaskStatus::Completed,
             TaskStatus::Cancelled,
@@ -72,7 +69,6 @@ mod tests {
             TaskStatus::Pending => matches!(s, TaskStatus::Pending),
             TaskStatus::Planning => matches!(s, TaskStatus::Planning),
             TaskStatus::Executing => matches!(s, TaskStatus::Executing),
-            TaskStatus::WaitingApproval => matches!(s, TaskStatus::WaitingApproval),
             TaskStatus::Paused => matches!(s, TaskStatus::Paused),
             TaskStatus::Completed => matches!(s, TaskStatus::Completed),
             TaskStatus::Failed(_) => matches!(s, TaskStatus::Failed(_)),
@@ -103,27 +99,21 @@ mod tests {
     #[test]
     fn test_agent_config_default_values() {
         let cfg = AgentConfig::default();
-        assert!(!cfg.auto_approve);
-        assert_eq!(cfg.max_concurrent_tasks, 1);
         assert_eq!(cfg.default_timeout, Duration::from_secs(30));
         assert_eq!(cfg.max_retries, 3);
         assert!(cfg.use_local_llm_fallback);
         assert_eq!(cfg.local_llm_threshold_tokens, 1000);
-        assert_eq!(cfg.cpu_limit_percent, 50.0);
-        assert_eq!(cfg.memory_limit_mb, 512);
         assert_eq!(cfg.max_cost_per_task, 5.0);
         assert_eq!(cfg.max_session_cost, 50.0);
     }
 
     #[test]
-    fn test_agent_config_auto_approve_override() {
+    fn test_agent_config_field_override() {
         let cfg = AgentConfig {
-            auto_approve: true,
-            max_concurrent_tasks: 4,
+            max_loop_iterations: 4,
             ..AgentConfig::default()
         };
-        assert!(cfg.auto_approve);
-        assert_eq!(cfg.max_concurrent_tasks, 4);
+        assert_eq!(cfg.max_loop_iterations, 4);
         // Other fields must still have default values
         assert_eq!(cfg.max_retries, 3);
     }
@@ -399,31 +389,11 @@ mod tests {
             max_retries: 3,
             retry_count: 0,
             replan_count: 0,
-            requires_approval: false,
-            auto_approve: true,
         };
 
         assert_eq!(task.id, "task_001");
         assert_eq!(task.status, TaskStatus::Pending);
-        assert!(task.auto_approve);
-        assert!(!task.requires_approval);
         assert_eq!(task.max_retries, 3);
-    }
-
-    // ------------------------------------------------------------------
-    // PENDING_TASK_APPROVALS static
-    // ------------------------------------------------------------------
-
-    #[test]
-    fn test_pending_task_approvals_starts_empty() {
-        // The DashMap should start empty at test time (no active agents).
-        // Previously this was `let _ = …` which silently discarded the result,
-        // making the test always pass regardless of actual state.
-        assert_eq!(
-            PENDING_TASK_APPROVALS.len(),
-            0,
-            "PENDING_TASK_APPROVALS should be empty when no agents are running"
-        );
     }
 
     // ------------------------------------------------------------------

@@ -7,6 +7,11 @@
 //!   * `elicit`: on tools/list, first sends `elicitation/create`, reads the
 //!     client's reply, then answers tools/list. Mirrors the CLI's stdio
 //!     elicitation ordering test without requiring python3.
+//!   * `cwd`: as `normal`, but tools/call answers with the folder the server
+//!     was started in.
+//!   * `die`: appends a line to the file argv[2] names each time it starts,
+//!     and the first start exits at tools/call without answering, as a server
+//!     that crashed. A later start answers as `normal`.
 //!
 //! Kept deliberately dependency-light (std io + serde_json) so it starts fast.
 
@@ -30,6 +35,16 @@ fn main() {
         }
         stderr.write_all(b"\nstderr complete\n").unwrap();
     }
+    let starts = if mode == "die" {
+        std::env::args().nth(2).map_or(0, |log| {
+            let mut started = std::fs::read_to_string(&log).unwrap_or_default();
+            started.push_str("started\n");
+            let _ = std::fs::write(&log, &started);
+            started.lines().count()
+        })
+    } else {
+        0
+    };
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
     let mut lines = stdin.lock().lines();
@@ -140,16 +155,24 @@ fn main() {
                 );
             }
             "tools/call" => {
+                if starts == 1 {
+                    std::process::exit(1);
+                }
                 let args = frame
                     .get("params")
                     .and_then(|p| p.get("arguments"))
                     .cloned()
                     .unwrap_or(serde_json::Value::Null);
-                let echoed = args
-                    .get("text")
-                    .and_then(|t| t.as_str())
-                    .unwrap_or("(no text)")
-                    .to_string();
+                let echoed = if mode == "cwd" {
+                    std::env::current_dir()
+                        .map(|folder| folder.to_string_lossy().into_owned())
+                        .unwrap_or_default()
+                } else {
+                    args.get("text")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("(no text)")
+                        .to_string()
+                };
                 reply(
                     &mut stdout,
                     &id,

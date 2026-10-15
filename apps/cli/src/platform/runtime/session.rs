@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 use crate::cli_options::PermissionMode;
 use crate::features::plan::plan_mode::Plan;
-use crate::models::Message;
+use crate::models::{ContentBlock, Message, MessageContent};
 use crate::platform::runtime::change_reason::ChangeReason;
 use crate::platform::runtime::validation_run::ValidationKind;
 
@@ -50,6 +50,13 @@ fn atomic_write_session(target: &Path, contents: &[u8]) -> Result<()> {
 static SESSION_FINGERPRINTS: std::sync::Mutex<
     Option<std::collections::HashMap<PathBuf, (u64, std::time::SystemTime)>>,
 > = std::sync::Mutex::new(None);
+
+fn reads_the_same(one: &Message, other: &Message) -> bool {
+    matches!(
+        (serde_json::to_value(one), serde_json::to_value(other)),
+        (Ok(one), Ok(other)) if one == other
+    )
+}
 
 pub(crate) type SessionFingerprint = (u64, std::time::SystemTime);
 
@@ -116,6 +123,12 @@ fn quarantine_conflicting_session(path: &Path) -> Option<PathBuf> {
 ///     fields, so every persisted session reads as one domain record whether
 ///     or not it was written as one.
 pub const MANAGED_SESSION_VERSION: u32 = 6;
+
+/// v7: a compacted session keeps its transcript in `TranscriptMessage`
+///     records. Only a file that has them is written as v7, so a build that
+///     predates them refuses it rather than loading the session without its
+///     history and saving it back that way.
+pub const MANAGED_SESSION_TRANSCRIPT_VERSION: u32 = 7;
 
 pub const MANAGED_SESSION_ID_MAX_ENCODED_UNITS: usize = 200;
 pub const MANAGED_SESSION_TITLE_MAX_UTF16: usize = 500;
@@ -477,6 +490,255 @@ pub struct ManagedSession {
     /// for those rather than making callers branch on the file's age.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub code: Option<Box<CodeSession>>,
+    /// The conversation in its original wording, kept when compaction
+    /// replaces part of `messages`. Absent until the first compaction, and on
+    /// every file written before it existed; [`ManagedSession::shown_messages`]
+    /// reads both the same way.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transcript: Option<ManagedSessionTranscript>,
+}
+
+/// Every message shown up to the latest compaction, in its original wording.
+/// The messages after the first `context_base` entries of `messages` were
+/// added since, and continue it. The first `kept` entries of `messages` are
+/// the ones that compaction left exactly as they were, `context` fingerprints
+/// those first `context_base` entries as it left them, and `earlier` holds
+/// the same for each compaction before it, oldest first.
+///
+/// It describes one context. A context cut shorter than an entry was cleared
+/// or rewound, and what the entry held goes with it, as the user asked: the
+/// newest entry the context is still long enough for is the one that counts,
+/// and with none left there is no transcript.
+///
+/// A conversation that is replaced by another on purpose says so
+/// ([`ManagedSession::conversation_replaced`]) and starts with no transcript,
+/// so another conversation's history is never shown as this one's.
+///
+/// A context as long as an entry that reads differently, with nothing having
+/// said why, is an edit this was never told of. The transcript is the only
+/// copy of what was said, so every message of it is kept and goes on being
+/// shown, and only the entry's fingerprint is brought up to date, once, with
+/// a warning that names the session.
+///
+/// Change it only through [`ManagedSession`]'s `record_compaction*`,
+/// `context_*`, `reconcile_transcript`, `restore_transcript` and
+/// `conversation_replaced`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManagedSessionTranscript {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    messages: Vec<Message>,
+    context_base: usize,
+    #[serde(default)]
+    kept: usize,
+    #[serde(default)]
+    context: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    earlier: Vec<ManagedSessionTranscriptMark>,
+}
+
+/// What a [`ManagedSessionTranscript`] held after one compaction.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ManagedSessionTranscriptMark {
+    shown: usize,
+    context_base: usize,
+    #[serde(default)]
+    kept: usize,
+    #[serde(default)]
+    context: String,
+}
+
+impl ManagedSessionTranscript {
+    fn mark(&self) -> ManagedSessionTranscriptMark {
+        ManagedSessionTranscriptMark {
+            shown: self.messages.len(),
+            context_base: self.context_base,
+            kept: self.kept,
+            context: self.context.clone(),
+        }
+    }
+
+    fn adopt(&mut self, mark: ManagedSessionTranscriptMark) {
+        self.messages.truncate(mark.shown);
+        self.context_base = mark.context_base;
+        self.kept = mark.kept;
+        self.context = mark.context;
+    }
+
+    /// Whether `context` still begins with what the latest compaction left.
+    fn matches(&self, context: &[Message]) -> bool {
+        context.len() >= self.context_base
+            && context_fingerprint(&context[..self.context_base]) == self.context
+    }
+
+    /// This transcript as it stands for `context`, and whether an entry had
+    /// to be brought up to date to get there. `None` when nothing of it is
+    /// left: `context` is shorter than every entry, so it was cut back past
+    /// them all.
+    fn reconciled(&self, context: &[Message]) -> (Option<Self>, bool) {
+        let mut next = self.clone();
+        loop {
+            if next.matches(context) {
+                return (Some(next), false);
+            }
+            if context.len() >= next.context_base {
+                next.context = prefix_fingerprint(context, next.context_base);
+                return (Some(next), true);
+            }
+            match next.earlier.pop() {
+                Some(earlier) => next.adopt(earlier),
+                None => return (None, false),
+            }
+        }
+    }
+
+    /// `self` with tool input and output cut to `tool_text_max`.
+    fn shortened(&self, tool_text_max: usize) -> Self {
+        Self {
+            messages: self
+                .messages
+                .iter()
+                .map(|message| transcript_form(message, tool_text_max))
+                .collect(),
+            context_base: self.context_base,
+            kept: self.kept,
+            context: self.context.clone(),
+            earlier: self.earlier.clone(),
+        }
+    }
+
+    /// `(shown, context_base, kept)` after each compaction, newest first.
+    fn states(&self) -> impl Iterator<Item = (usize, usize, usize)> + '_ {
+        std::iter::once((self.messages.len(), self.context_base, self.kept)).chain(
+            self.earlier
+                .iter()
+                .rev()
+                .map(|earlier| (earlier.shown, earlier.context_base, earlier.kept)),
+        )
+    }
+
+    /// Where `messages[context_index]` sits in the transcript, or `None` for
+    /// a message that is a summary or was moved by one.
+    fn shown_index_of(&self, context_index: usize) -> Option<usize> {
+        for (shown, context_base, kept) in self.states() {
+            if context_index >= context_base {
+                return Some(shown + context_index - context_base);
+            }
+            if context_index >= kept {
+                return None;
+            }
+        }
+        Some(context_index)
+    }
+
+    /// [`Self::shown_index_of`], counting a message a compaction moved: what
+    /// it kept after its summary is the end of what it had been shown, so
+    /// those line up from the end.
+    fn position_of(&self, context_index: usize) -> Option<usize> {
+        for (shown, context_base, kept) in self.states() {
+            if context_index >= context_base {
+                return Some(shown + context_index - context_base);
+            }
+            if context_index >= kept {
+                return shown.checked_sub(context_base - context_index);
+            }
+        }
+        Some(context_index)
+    }
+
+    /// The stretch of a `context_len` long context that `context_index`
+    /// shares with nothing a compaction rewrote: from the compaction it was
+    /// added after, up to where the next one stopped leaving things as they
+    /// were. `None` for a place a summary now stands in for.
+    fn span_of(&self, context_index: usize, context_len: usize) -> Option<(usize, usize)> {
+        let mut ceiling = context_len;
+        for (_, context_base, kept) in self.states() {
+            if context_index >= context_base {
+                return Some((context_base, ceiling));
+            }
+            if context_index >= kept {
+                return None;
+            }
+            ceiling = kept;
+        }
+        Some((0, ceiling))
+    }
+}
+
+/// The longest tool output, and the longest tool input, a message keeps once
+/// it is in the transcript: what compaction itself leaves of a tool result.
+pub const MANAGED_SESSION_TRANSCRIPT_TOOL_TEXT_MAX_CHARS: usize = 4_000;
+
+/// Shorter limits tried in turn when the file would not otherwise fit.
+const TRANSCRIPT_TOOL_TEXT_FALLBACKS: [usize; 2] = [400, 0];
+
+const TRANSCRIPT_OUTPUT_TRUNCATED: &str = "[output truncated in transcript]";
+const TRANSCRIPT_INPUT_TRUNCATED: &str = "[input truncated in transcript]";
+
+/// A message as the transcript keeps it. What was said is kept whole. An
+/// image becomes a line saying one was attached, and tool input and output
+/// longer than `tool_text_max` are cut there and marked, so a history of any
+/// length stays a file that can be written.
+fn transcript_form(message: &Message, tool_text_max: usize) -> Message {
+    let MessageContent::Blocks(blocks) = &message.content else {
+        return message.clone();
+    };
+    let blocks = blocks
+        .iter()
+        .map(|block| match block {
+            ContentBlock::Image { mime, .. } => ContentBlock::Text {
+                text: format!("[image attachment ({mime}), not kept in transcript]"),
+            },
+            ContentBlock::ToolResult {
+                tool_use_id,
+                content,
+                is_error,
+            } if content.chars().count() > tool_text_max => {
+                let kept: String = content.chars().take(tool_text_max).collect();
+                ContentBlock::ToolResult {
+                    tool_use_id: tool_use_id.clone(),
+                    content: if kept.is_empty() {
+                        TRANSCRIPT_OUTPUT_TRUNCATED.to_string()
+                    } else {
+                        format!("{kept}\n{TRANSCRIPT_OUTPUT_TRUNCATED}")
+                    },
+                    is_error: *is_error,
+                }
+            }
+            ContentBlock::ToolUse { id, name, input }
+                if input.to_string().chars().count() > tool_text_max =>
+            {
+                ContentBlock::ToolUse {
+                    id: id.clone(),
+                    name: name.clone(),
+                    input: serde_json::json!({ "truncated": TRANSCRIPT_INPUT_TRUNCATED }),
+                }
+            }
+            other => other.clone(),
+        })
+        .collect();
+    Message {
+        role: message.role.clone(),
+        content: MessageContent::Blocks(blocks),
+    }
+}
+
+fn prefix_fingerprint(context: &[Message], count: usize) -> String {
+    context_fingerprint(context.get(..count).unwrap_or(context))
+}
+
+/// What identifies the conversation in `messages`. The system prompt at its
+/// head is left out: it is rewritten where it stands when the output style
+/// changes, and it is never part of what a reader is shown, so a new prompt
+/// must not read as a different conversation.
+fn context_fingerprint(messages: &[Message]) -> String {
+    use sha2::{Digest, Sha256};
+
+    let spoken = messages
+        .iter()
+        .position(|message| message.role != "system")
+        .unwrap_or(messages.len());
+    let encoded = serde_json::to_vec(&messages[spoken..]).unwrap_or_default();
+    crate::hex::encode(&Sha256::digest(encoded))
 }
 
 /// The header record's payload, boxed by the record enum below.
@@ -541,13 +803,20 @@ struct ManagedSessionJsonlHeader {
     routing_authority: Option<Box<ManagedSessionRoutingAuthority>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     code: Option<Box<CodeSession>>,
+    /// Everything of the transcript but its messages, which follow as
+    /// `TranscriptMessage` records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    transcript: Option<ManagedSessionTranscript>,
 }
 
+/// A reader that predates `TranscriptMessage` skips it as unreadable and
+/// still loads the session it belongs to.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "record_type", rename_all = "snake_case")]
 enum ManagedSessionJsonlRecord {
     Header(Box<ManagedSessionJsonlHeader>),
     Message { message: Message },
+    TranscriptMessage { message: Message },
 }
 
 impl ManagedSession {
@@ -584,6 +853,7 @@ impl ManagedSession {
             auto_routing: None,
             routing_authority: None,
             code: None,
+            transcript: None,
         }
     }
 
@@ -606,13 +876,16 @@ impl ManagedSession {
         forked_at: DateTime<Utc>,
         source_session_path: Option<PathBuf>,
     ) -> Self {
-        Self::fork_with_messages(
-            source,
-            session_id,
-            forked_at,
-            source_session_path,
-            source.messages.clone(),
-        )
+        Self {
+            transcript: source.transcript.clone(),
+            ..Self::fork_with_messages(
+                source,
+                session_id,
+                forked_at,
+                source_session_path,
+                source.messages.clone(),
+            )
+        }
     }
 
     /// Create a fork that retains ancestry metadata but inherits no source
@@ -677,6 +950,7 @@ impl ManagedSession {
             auto_routing: source.auto_routing.clone(),
             routing_authority: source.routing_authority.clone(),
             code: None,
+            transcript: None,
         }
     }
 
@@ -726,6 +1000,324 @@ impl ManagedSession {
         }
         self.messages.push(message);
         self.touch();
+    }
+
+    /// The conversation as a reader sees it: every message in its original
+    /// wording, including what compaction summarized out of `messages`.
+    pub fn shown_messages(&self) -> Vec<Message> {
+        self.shown_with_context(&self.messages)
+    }
+
+    /// [`Self::shown_messages`] for a context newer than the one last saved
+    /// here, which is what a running session holds between saves.
+    pub fn shown_with_context(&self, context: &[Message]) -> Vec<Message> {
+        match self.transcript_for(context) {
+            None => context.to_vec(),
+            Some(transcript) => transcript
+                .messages
+                .iter()
+                .chain(context.get(transcript.context_base..).unwrap_or_default())
+                .cloned()
+                .collect(),
+        }
+    }
+
+    /// The transcript as far as it still describes `context`.
+    fn transcript_for(
+        &self,
+        context: &[Message],
+    ) -> Option<std::borrow::Cow<'_, ManagedSessionTranscript>> {
+        let transcript = self.transcript.as_ref()?;
+        if transcript.matches(context) {
+            return Some(std::borrow::Cow::Borrowed(transcript));
+        }
+        transcript
+            .reconciled(context)
+            .0
+            .map(std::borrow::Cow::Owned)
+    }
+
+    /// Bring the transcript in line with a context that is no longer the one
+    /// it recorded. What a cut or a clear leaves behind is dropped. A change
+    /// nothing recorded keeps every message and is warned of once; see
+    /// [`ManagedSessionTranscript`].
+    pub fn reconcile_transcript(&mut self, context: &[Message]) {
+        let Some(transcript) = self.transcript.as_ref() else {
+            return;
+        };
+        if transcript.matches(context) {
+            return;
+        }
+        let (next, changed_untold) = transcript.reconciled(context);
+        if changed_untold {
+            tracing::warn!(
+                session_id = %self.session_id,
+                "the conversation no longer reads the way its transcript recorded and nothing said why; the transcript is kept as it was and goes on being shown"
+            );
+        }
+        self.transcript = next;
+    }
+
+    /// The conversation was replaced by another one on purpose, as when a
+    /// saved or hosted conversation is loaded over this session. The
+    /// transcript described the one that is gone and must never be shown as
+    /// the new one's history, so the new one starts without it.
+    pub fn conversation_replaced(&mut self) {
+        self.transcript = None;
+    }
+
+    /// Where the transcript stands now, for a caller that may later put this
+    /// moment's context back.
+    pub fn transcript_mark(&self) -> Option<ManagedSessionTranscriptMark> {
+        self.transcript.as_ref().map(ManagedSessionTranscript::mark)
+    }
+
+    /// Cut the transcript back to `mark`, taken when the context now being
+    /// restored was current. The transcript only ever grows at its end, so
+    /// what a later compaction added is exactly what falls off.
+    pub fn restore_transcript(&mut self, mark: Option<ManagedSessionTranscriptMark>) {
+        let Some(mark) = mark else {
+            self.transcript = None;
+            return;
+        };
+        let Some(transcript) = self.transcript.as_mut() else {
+            return;
+        };
+        if let Some(position) = transcript
+            .earlier
+            .iter()
+            .position(|earlier| *earlier == mark)
+        {
+            transcript.earlier.truncate(position);
+        }
+        transcript.adopt(mark);
+    }
+
+    /// For each of `shown_messages()`, where it sits in `messages`, or `None`
+    /// for a message the model now reads only as part of a summary.
+    pub fn context_indices_of_shown(&self) -> Vec<Option<usize>> {
+        let Some(transcript) = self.transcript_for(&self.messages) else {
+            return (0..self.messages.len()).map(Some).collect();
+        };
+        let added = self.messages.len().saturating_sub(transcript.context_base);
+        let mut indices = vec![None; transcript.messages.len() + added];
+        for context_index in 0..self.messages.len() {
+            if let Some(shown_index) = transcript.shown_index_of(context_index) {
+                if let Some(slot) = indices.get_mut(shown_index) {
+                    *slot = Some(context_index);
+                }
+            }
+        }
+        indices
+    }
+
+    /// The stretch of `messages` a turn that starts at `context_index` shares
+    /// with nothing a compaction rewrote, as `(from, to)`: a turn's label, the
+    /// turn it is cut from and the turn after it all come from inside it.
+    /// `None` when a summary now stands in for that turn.
+    pub fn addressable_span(&self, context_index: usize) -> Option<(usize, usize)> {
+        self.addressable_span_in(&self.messages, context_index)
+    }
+
+    /// [`Self::addressable_span`] of every message in `messages`.
+    pub fn addressable_spans(&self) -> Vec<Option<(usize, usize)>> {
+        let context_len = self.messages.len();
+        match self.transcript_for(&self.messages) {
+            None => vec![Some((0, context_len)); context_len],
+            Some(transcript) => (0..context_len)
+                .map(|context_index| transcript.span_of(context_index, context_len))
+                .collect(),
+        }
+    }
+
+    /// [`Self::addressable_span`] for a context newer than the one last saved.
+    pub fn addressable_span_in(
+        &self,
+        context: &[Message],
+        context_index: usize,
+    ) -> Option<(usize, usize)> {
+        match self.transcript_for(context) {
+            None => Some((0, context.len())),
+            Some(transcript) => transcript.span_of(context_index, context.len()),
+        }
+    }
+
+    /// Keep the conversation as shown while compaction replaces
+    /// `context_before`, the model's context, with `context_after`. Only the
+    /// context changes; nothing leaves the transcript.
+    pub fn record_compaction(&mut self, context_before: &[Message], context_after: &[Message]) {
+        self.record_compaction_keeping(context_before, context_after, 0);
+    }
+
+    /// [`Self::record_compaction`] for a compaction that left the first
+    /// `kept` messages of the context exactly as they were.
+    pub fn record_compaction_keeping(
+        &mut self,
+        context_before: &[Message],
+        context_after: &[Message],
+        kept: usize,
+    ) {
+        self.reconcile_transcript(context_before);
+        let messages = self
+            .shown_with_context(context_before)
+            .iter()
+            .map(|message| transcript_form(message, MANAGED_SESSION_TRANSCRIPT_TOOL_TEXT_MAX_CHARS))
+            .collect();
+        let earlier = match self.transcript.take() {
+            Some(previous) => {
+                let mark = previous.mark();
+                let mut earlier = previous.earlier;
+                earlier.push(mark);
+                earlier
+            }
+            None => Vec::new(),
+        };
+        self.transcript = Some(ManagedSessionTranscript {
+            messages,
+            context_base: context_after.len(),
+            kept: kept.min(context_after.len()),
+            context: context_fingerprint(context_after),
+            earlier,
+        });
+    }
+
+    /// Compaction shortened tool output in `context_before` and summarized
+    /// nothing, leaving `context_after` with every message where it was.
+    /// Nothing is recorded as a compaction, so every turn stays addressable;
+    /// the entries that described the context are only brought up to date.
+    ///
+    /// When messages came or went as well, no entry can be brought up to
+    /// date, since what each counts from may have moved. That is recorded as
+    /// the compaction it amounts to, keeping what both contexts begin with,
+    /// so the transcript goes on showing every message instead of failing
+    /// its next check.
+    pub fn record_pruning(&mut self, context_before: &[Message], context_after: &[Message]) {
+        if context_before.len() != context_after.len() {
+            let untouched = context_before
+                .iter()
+                .zip(context_after)
+                .take_while(|(before, after)| reads_the_same(before, after))
+                .count();
+            self.record_compaction_keeping(context_before, context_after, untouched);
+            return;
+        }
+        let Some(transcript) = self.transcript.as_mut() else {
+            return;
+        };
+        if prefix_fingerprint(context_before, transcript.context_base) == transcript.context {
+            transcript.context = prefix_fingerprint(context_after, transcript.context_base);
+        }
+        for earlier in &mut transcript.earlier {
+            if prefix_fingerprint(context_before, earlier.context_base) == earlier.context {
+                earlier.context = prefix_fingerprint(context_after, earlier.context_base);
+            }
+        }
+    }
+
+    /// The context was cut back to its first `count` messages, as a rewind
+    /// or a fork through a turn does. A cut that lands in the part a
+    /// compaction left untouched undoes that compaction's entry, so the
+    /// transcript stops showing turns that are no longer in the conversation.
+    pub fn context_truncated_to(&mut self, count: usize) {
+        loop {
+            let cut_past_every_entry = match self.transcript.as_mut() {
+                None => return,
+                Some(transcript) if transcript.context_base <= count => return,
+                Some(transcript) => match transcript.earlier.pop() {
+                    Some(earlier) => {
+                        transcript.adopt(earlier);
+                        false
+                    }
+                    None => true,
+                },
+            };
+            if cut_past_every_entry {
+                self.transcript = None;
+                return;
+            }
+        }
+    }
+
+    /// A message was inserted into `context` at `index`. One added since the
+    /// latest compaction is shown as any new message is. One placed inside
+    /// what a compaction already accounted for joins the transcript straight
+    /// after the message it follows, moves where the rest of the context
+    /// begins, and ends what that compaction had left untouched.
+    pub fn context_inserted_at(&mut self, index: usize, context: &[Message]) {
+        let Some(transcript) = self.transcript.as_mut() else {
+            return;
+        };
+        let Some(message) = context.get(index) else {
+            return;
+        };
+        if index >= transcript.context_base {
+            return;
+        }
+        let position = index
+            .checked_sub(1)
+            .and_then(|before| transcript.position_of(before))
+            .map_or(0, |before| before + 1)
+            .min(transcript.messages.len());
+        transcript.messages.insert(
+            position,
+            transcript_form(message, MANAGED_SESSION_TRANSCRIPT_TOOL_TEXT_MAX_CHARS),
+        );
+        transcript.context_base += 1;
+        transcript.context = prefix_fingerprint(context, transcript.context_base);
+        let mut untouched = index < transcript.kept;
+        if untouched {
+            transcript.kept = index;
+        }
+        for earlier in transcript.earlier.iter_mut().rev() {
+            if position < earlier.shown {
+                earlier.shown += 1;
+            }
+            if !untouched || index >= earlier.context_base {
+                untouched = false;
+                continue;
+            }
+            earlier.context_base += 1;
+            earlier.context = prefix_fingerprint(context, earlier.context_base);
+            untouched = index < earlier.kept;
+            if untouched {
+                earlier.kept = index;
+            }
+        }
+    }
+
+    /// The message at `index` of `context` was changed where it stands, as
+    /// when a late tool result joins the ones already there. Inside what a
+    /// compaction accounted for, the transcript takes the new wording and the
+    /// entries that cover it are brought up to date, so the change is not
+    /// mistaken for a different conversation.
+    pub fn context_edited_at(&mut self, index: usize, context: &[Message]) {
+        let Some(transcript) = self.transcript.as_mut() else {
+            return;
+        };
+        let Some(message) = context.get(index) else {
+            return;
+        };
+        if index >= transcript.context_base {
+            return;
+        }
+        if let Some(position) = transcript.position_of(index) {
+            if let Some(shown) = transcript.messages.get_mut(position) {
+                *shown = transcript_form(message, MANAGED_SESSION_TRANSCRIPT_TOOL_TEXT_MAX_CHARS);
+            }
+        }
+        transcript.context = prefix_fingerprint(context, transcript.context_base);
+        if index >= transcript.kept {
+            return;
+        }
+        for earlier in transcript.earlier.iter_mut().rev() {
+            if index >= earlier.context_base {
+                return;
+            }
+            earlier.context = prefix_fingerprint(context, earlier.context_base);
+            if index >= earlier.kept {
+                return;
+            }
+        }
     }
 
     /// What the session is working on and what it has established, as it
@@ -869,37 +1461,7 @@ impl ManagedSession {
                 .with_context(|| format!("Failed to create {}", parent.display()))?;
         }
 
-        let mut buf = Vec::new();
-        {
-            let mut writer = BufWriter::new(&mut buf);
-            if path
-                .extension()
-                .and_then(|extension| extension.to_str())
-                .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
-            {
-                serde_json::to_writer_pretty(&mut writer, self).with_context(|| {
-                    format!("Failed to serialize JSON session {}", path.display())
-                })?;
-                writer.write_all(b"\n").with_context(|| {
-                    format!("Failed to finalize JSON session {}", path.display())
-                })?;
-            } else {
-                self.write_jsonl(&mut writer).with_context(|| {
-                    format!("Failed to serialize JSONL session {}", path.display())
-                })?;
-            }
-            writer
-                .flush()
-                .with_context(|| format!("Failed to flush session buffer {}", path.display()))?;
-        }
-
-        if buf.len() > MANAGED_SESSION_FILE_MAX_BYTES {
-            bail!(
-                "Managed session file {} would exceed the {} byte limit",
-                path.display(),
-                MANAGED_SESSION_FILE_MAX_BYTES
-            );
-        }
+        let buf = self.serialized_within(path, MANAGED_SESSION_FILE_MAX_BYTES)?;
 
         if path.exists() && fingerprint_of(path) != seen_fingerprint(path) {
             match quarantine_conflicting_session(path) {
@@ -918,6 +1480,78 @@ impl ManagedSession {
             .with_context(|| format!("Failed to write session file {}", path.display()))?;
         remember_fingerprint(path);
         Ok(())
+    }
+
+    /// The bytes to write at `path`, no more than `limit` of them. The
+    /// transcript is what gives way when they would not fit: its tool input
+    /// and output are cut shorter, then left out, and as a last resort the
+    /// file is written without it, so a long history never makes a session
+    /// impossible to save. Only a context too large by itself still fails.
+    fn serialized_within(&self, path: &Path, limit: usize) -> Result<Vec<u8>> {
+        let as_json = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("json"));
+        let transcript = self.transcript_for(&self.messages);
+        let buf = self.serialized(path, as_json, transcript.as_deref())?;
+        if buf.len() <= limit {
+            return Ok(buf);
+        }
+        if let Some(transcript) = transcript.as_deref() {
+            for tool_text_max in TRANSCRIPT_TOOL_TEXT_FALLBACKS {
+                let shorter = transcript.shortened(tool_text_max);
+                let buf = self.serialized(path, as_json, Some(&shorter))?;
+                if buf.len() <= limit {
+                    return Ok(buf);
+                }
+            }
+            let buf = self.serialized(path, as_json, None)?;
+            if buf.len() <= limit {
+                tracing::warn!(
+                    session_id = %self.session_id,
+                    "the session was saved without its transcript, which no longer fits in the file"
+                );
+                return Ok(buf);
+            }
+        }
+        bail!(
+            "Managed session file {} would exceed the {} byte limit",
+            path.display(),
+            limit
+        );
+    }
+
+    fn serialized(
+        &self,
+        path: &Path,
+        as_json: bool,
+        transcript: Option<&ManagedSessionTranscript>,
+    ) -> Result<Vec<u8>> {
+        let mut buf = Vec::new();
+        {
+            let mut writer = BufWriter::new(&mut buf);
+            if as_json {
+                let written = ManagedSession {
+                    version: self.written_version(transcript.is_some()),
+                    transcript: transcript.cloned(),
+                    ..self.clone()
+                };
+                serde_json::to_writer_pretty(&mut writer, &written).with_context(|| {
+                    format!("Failed to serialize JSON session {}", path.display())
+                })?;
+                writer.write_all(b"\n").with_context(|| {
+                    format!("Failed to finalize JSON session {}", path.display())
+                })?;
+            } else {
+                self.write_jsonl(&mut writer, transcript).with_context(|| {
+                    format!("Failed to serialize JSONL session {}", path.display())
+                })?;
+            }
+            writer
+                .flush()
+                .with_context(|| format!("Failed to flush session buffer {}", path.display()))?;
+        }
+        Ok(buf)
     }
 
     /// Load a managed session from a JSONL or JSON file.
@@ -965,6 +1599,7 @@ impl ManagedSession {
     fn from_jsonl(contents: &str) -> Result<Self> {
         let mut header: Option<ManagedSession> = None;
         let mut messages = Vec::new();
+        let mut shown = Vec::new();
         let mut unreadable_lines: Vec<usize> = Vec::new();
 
         for (line_number, line) in contents.lines().enumerate() {
@@ -1028,6 +1663,7 @@ impl ManagedSession {
                         auto_routing: record.auto_routing.map(|routing| *routing),
                         routing_authority: record.routing_authority.map(|authority| *authority),
                         code: record.code,
+                        transcript: record.transcript,
                     });
                 }
                 ManagedSessionJsonlRecord::Message { message } => {
@@ -1035,6 +1671,12 @@ impl ManagedSession {
                         bail!("Managed session JSONL file is missing the header record");
                     }
                     messages.push(message);
+                }
+                ManagedSessionJsonlRecord::TranscriptMessage { message } => {
+                    if header.is_none() {
+                        bail!("Managed session JSONL file is missing the header record");
+                    }
+                    shown.push(message);
                 }
             }
         }
@@ -1059,15 +1701,18 @@ impl ManagedSession {
             );
         }
         session.messages = messages;
+        if let Some(transcript) = session.transcript.as_mut() {
+            transcript.messages = shown;
+        }
         Ok(session)
     }
 
     fn validate(&self) -> Result<()> {
-        if self.version == 0 || self.version > MANAGED_SESSION_VERSION {
+        if self.version == 0 || self.version > MANAGED_SESSION_TRANSCRIPT_VERSION {
             bail!(
                 "Unsupported managed session version {} (max supported: {})",
                 self.version,
-                MANAGED_SESSION_VERSION
+                MANAGED_SESSION_TRANSCRIPT_VERSION
             );
         }
 
@@ -1155,7 +1800,11 @@ impl ManagedSession {
         if self.messages.len() > MANAGED_SESSION_MAX_MESSAGES {
             bail!("Managed session contains more than {MANAGED_SESSION_MAX_MESSAGES} messages");
         }
-        for message in &self.messages {
+        let shown_only = self
+            .transcript
+            .iter()
+            .flat_map(|transcript| &transcript.messages);
+        for message in self.messages.iter().chain(shown_only) {
             validate_summary_text(
                 &message.role,
                 "message role",
@@ -1189,9 +1838,27 @@ impl ManagedSession {
         Ok(())
     }
 
-    fn write_jsonl(&self, writer: &mut impl Write) -> Result<()> {
+    fn written_version(&self, with_transcript: bool) -> u32 {
+        if with_transcript {
+            MANAGED_SESSION_TRANSCRIPT_VERSION
+        } else {
+            self.version.min(MANAGED_SESSION_VERSION)
+        }
+    }
+
+    /// `transcript` is the one that still describes `messages`, so a caller
+    /// that replaced or cut the conversation without saying so cannot put
+    /// another one's history in the file. A file with a transcript is v7; one
+    /// without is never written as v7, so builds that predate the transcript
+    /// keep reading it.
+    fn write_jsonl(
+        &self,
+        writer: &mut impl Write,
+        transcript: Option<&ManagedSessionTranscript>,
+    ) -> Result<()> {
+        let version = self.written_version(transcript.is_some());
         let header = ManagedSessionJsonlRecord::Header(Box::new(ManagedSessionJsonlHeader {
-            version: self.version,
+            version,
             session_id: self.session_id.clone(),
             created_at: self.created_at,
             updated_at: self.updated_at,
@@ -1220,6 +1887,13 @@ impl ManagedSession {
             auto_routing: self.auto_routing.clone().map(Box::new),
             routing_authority: self.routing_authority.clone().map(Box::new),
             code: self.code.clone(),
+            transcript: transcript.map(|transcript| ManagedSessionTranscript {
+                messages: Vec::new(),
+                context_base: transcript.context_base,
+                kept: transcript.kept,
+                context: transcript.context.clone(),
+                earlier: transcript.earlier.clone(),
+            }),
         }));
         serde_json::to_writer(&mut *writer, &header)
             .context("Failed to serialize managed session header")?;
@@ -1236,6 +1910,20 @@ impl ManagedSession {
             writer
                 .write_all(b"\n")
                 .context("Failed to write session message newline")?;
+        }
+
+        for message in transcript
+            .iter()
+            .flat_map(|transcript| &transcript.messages)
+        {
+            let record = ManagedSessionJsonlRecord::TranscriptMessage {
+                message: message.clone(),
+            };
+            serde_json::to_writer(&mut *writer, &record)
+                .context("Failed to serialize managed session transcript message")?;
+            writer
+                .write_all(b"\n")
+                .context("Failed to write session transcript newline")?;
         }
 
         Ok(())
@@ -1433,6 +2121,7 @@ mod tests {
             auto_routing: None,
             routing_authority: None,
             code: None,
+            transcript: None,
         };
 
         session.save_to_path(&path).unwrap();
@@ -1488,6 +2177,7 @@ mod tests {
             auto_routing: None,
             routing_authority: None,
             code: None,
+            transcript: None,
         };
 
         session.save_to_path(&path).unwrap();
@@ -1515,6 +2205,673 @@ mod tests {
         assert!(session.created_by.is_none());
         assert!(session.archived_at.is_none());
         assert!(session.require_routing_authority().is_err());
+    }
+
+    fn said(words: &[&str]) -> Vec<Message> {
+        words
+            .iter()
+            .map(|word| Message::text("user", *word))
+            .collect()
+    }
+
+    fn spoken(session: &ManagedSession, context: &[Message]) -> Vec<String> {
+        session
+            .shown_with_context(context)
+            .iter()
+            .map(Message::text_content)
+            .collect()
+    }
+
+    fn routed(session_id: &str) -> ManagedSession {
+        let mut session = ManagedSession::new(session_id, Utc::now());
+        session.model = Some("fixture-route-model".to_string());
+        session.routing_authority = Some(ManagedSessionRoutingAuthority {
+            privacy_mode: PrivacyMode::Local,
+            provider: "ollama".to_string(),
+        });
+        session
+    }
+
+    #[test]
+    fn a_session_written_before_the_transcript_shows_its_messages() {
+        let v1_jsonl = r#"{"record_type":"header","version":1,"session_id":"v1-session","created_at":"2025-03-01T00:00:00Z","updated_at":"2025-03-01T00:05:00Z"}
+{"record_type":"message","message":{"role":"user","content":"hello"}}"#;
+        let session = ManagedSession::from_serialized_str(v1_jsonl).unwrap();
+
+        assert!(session.transcript.is_none());
+        assert_eq!(spoken(&session, &session.messages), ["hello"]);
+        assert_eq!(session.context_indices_of_shown(), [Some(0)]);
+        assert_eq!(session.addressable_span(0), Some((0, 1)));
+    }
+
+    #[test]
+    fn compaction_replaces_the_context_but_never_the_transcript() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().join("compacted.jsonl");
+        let mut session = routed("compacted");
+        let before = said(&["first ask", "first answer", "second ask", "second answer"]);
+        let after = said(&["summary of the first turn", "second ask", "second answer"]);
+        session.record_compaction(&before, &after);
+        session.messages = after;
+        session.messages.push(Message::text("user", "third ask"));
+
+        session.save_to_path(&path).expect("save compacted session");
+        let restored = ManagedSession::load_from_path(&path).expect("load compacted session");
+
+        assert_eq!(
+            spoken(&restored, &restored.messages),
+            [
+                "first ask",
+                "first answer",
+                "second ask",
+                "second answer",
+                "third ask"
+            ]
+        );
+        assert_eq!(restored.messages.len(), 4);
+        assert_eq!(
+            restored.context_indices_of_shown(),
+            [None, None, None, None, Some(3)]
+        );
+
+        let mut again = restored.clone();
+        let context = again.messages.clone();
+        let summary = said(&["summary of everything"]);
+        again.record_compaction(&context, &summary);
+        again.messages = summary;
+        assert_eq!(again.shown_messages().len(), 5);
+    }
+
+    #[test]
+    fn only_a_file_with_a_transcript_is_written_as_the_version_older_builds_refuse() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().join("versioned.jsonl");
+        let mut session = routed("versioned");
+        session.messages = said(&["first ask", "first answer"]);
+        session.save_to_path(&path).expect("save");
+        assert_eq!(
+            ManagedSession::load_from_path(&path).expect("load").version,
+            super::MANAGED_SESSION_VERSION
+        );
+
+        let before = session.messages.clone();
+        let after = said(&["summary", "first answer"]);
+        session.record_compaction(&before, &after);
+        session.messages = after;
+        session.save_to_path(&path).expect("save compacted");
+        let compacted = ManagedSession::load_from_path(&path).expect("load compacted");
+        assert_eq!(compacted.version, super::MANAGED_SESSION_TRANSCRIPT_VERSION);
+        assert!(
+            compacted.version > super::MANAGED_SESSION_VERSION,
+            "a build that predates the transcript must refuse this file, not rewrite it without its history"
+        );
+
+        let mut cleared = compacted;
+        cleared.messages = said(&["a fresh start"]);
+        let context = cleared.messages.clone();
+        cleared.reconcile_transcript(&context);
+        cleared.save_to_path(&path).expect("save cleared");
+        assert_eq!(
+            ManagedSession::load_from_path(&path).expect("load").version,
+            super::MANAGED_SESSION_VERSION
+        );
+
+        let newer = std::fs::read_to_string(&path).expect("read").replacen(
+            "\"version\":6",
+            "\"version\":8",
+            1,
+        );
+        assert!(ManagedSession::from_serialized_str(&newer).is_err());
+    }
+
+    #[test]
+    fn the_transcript_keeps_what_was_said_and_bounds_what_tools_carried() {
+        let long = "z".repeat(super::MANAGED_SESSION_TRANSCRIPT_TOOL_TEXT_MAX_CHARS + 500);
+        let original = vec![
+            Message::blocks(
+                "user",
+                vec![
+                    ContentBlock::Text {
+                        text: "what is in this picture".to_string(),
+                    },
+                    ContentBlock::Image {
+                        mime: "image/png".to_string(),
+                        data_b64: "A".repeat(10_000),
+                    },
+                ],
+            ),
+            Message::blocks(
+                "user",
+                vec![ContentBlock::ToolResult {
+                    tool_use_id: "call-1".to_string(),
+                    content: long.clone(),
+                    is_error: false,
+                }],
+            ),
+            Message::text("assistant", long.clone()),
+        ];
+        let mut session = routed("bounded");
+        let after = said(&["summary"]);
+        session.record_compaction(&original, &after);
+        session.messages = after;
+
+        let shown = session.shown_messages();
+        let MessageContent::Blocks(picture) = &shown[0].content else {
+            panic!("the message with the picture kept its blocks");
+        };
+        assert!(
+            matches!(&picture[1], ContentBlock::Text { text } if text.contains("image/png")),
+            "an image was kept in the transcript byte for byte"
+        );
+        let MessageContent::Blocks(result) = &shown[1].content else {
+            panic!("the tool result kept its block");
+        };
+        let ContentBlock::ToolResult { content, .. } = &result[0] else {
+            panic!("the tool result kept its block");
+        };
+        assert!(content.ends_with("[output truncated in transcript]"));
+        assert!(content.chars().count() < long.chars().count());
+        assert_eq!(
+            shown[2].text_content(),
+            long,
+            "what the assistant said is kept whole"
+        );
+    }
+
+    #[test]
+    fn a_transcript_too_long_for_the_file_gives_way_before_the_save_fails() {
+        let path = Path::new("bounded.jsonl");
+        let output = "z".repeat(3_000);
+        let original: Vec<Message> = (0..20)
+            .map(|index| {
+                Message::blocks(
+                    "user",
+                    vec![ContentBlock::ToolResult {
+                        tool_use_id: format!("call-{index}"),
+                        content: output.clone(),
+                        is_error: false,
+                    }],
+                )
+            })
+            .collect();
+        let mut session = routed("too-long");
+        let after = said(&["summary"]);
+        session.record_compaction(&original, &after);
+        session.messages = after;
+        let whole = session
+            .serialized_within(path, usize::MAX)
+            .expect("fits when nothing bounds it")
+            .len();
+
+        let tighter = session
+            .serialized_within(path, whole / 2)
+            .expect("a long transcript is cut shorter, not a reason to fail the save");
+        let restored =
+            ManagedSession::from_serialized_str(std::str::from_utf8(&tighter).expect("utf8"))
+                .expect("the shorter file still loads");
+        assert_eq!(restored.shown_messages().len(), original.len());
+
+        let without = session
+            .serialized_within(path, 1_500)
+            .expect("the last resort is a file without the transcript");
+        let restored =
+            ManagedSession::from_serialized_str(std::str::from_utf8(&without).expect("utf8"))
+                .expect("it loads");
+        assert!(restored.transcript.is_none());
+        assert_eq!(restored.messages.len(), 1);
+
+        assert!(session.serialized_within(path, 10).is_err());
+    }
+
+    #[test]
+    fn a_rewritten_system_prompt_is_not_another_conversation() {
+        let before = said(&["first ask", "first answer", "second ask"]);
+        let mut original = vec![Message::text("system", "prompt in the default style")];
+        original.extend(before);
+        let mut context = vec![
+            Message::text("system", "prompt in the default style"),
+            Message::text("assistant", "summary of the first turn"),
+            Message::text("user", "second ask"),
+        ];
+        let mut session = routed("restyled");
+        session.record_compaction(&original, &context);
+
+        context[0] = Message::text("system", "prompt in the terse style");
+        context.push(Message::text("assistant", "second answer"));
+        session.reconcile_transcript(&context);
+
+        assert!(
+            session.transcript.is_some(),
+            "changing the output style after a summary deleted the saved transcript"
+        );
+        assert_eq!(
+            spoken(&session, &context)[1..],
+            ["first ask", "first answer", "second ask", "second answer"]
+        );
+    }
+
+    #[test]
+    fn a_json_session_file_carries_the_transcript_under_the_version_that_has_one() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().join("compacted.json");
+        let mut session = routed("json-compacted");
+        let before = said(&["first ask", "first answer", "second ask"]);
+        let after = said(&["summary of the first turn", "second ask"]);
+        session.record_compaction(&before, &after);
+        session.messages = after;
+
+        session.save_to_path(&path).expect("save json");
+        let restored = ManagedSession::load_from_path(&path).expect("load json");
+        assert_eq!(restored.version, super::MANAGED_SESSION_TRANSCRIPT_VERSION);
+        assert_eq!(restored.shown_messages().len(), 3);
+
+        let mut replaced = restored;
+        replaced.messages = said(&["another conversation"]);
+        replaced.save_to_path(&path).expect("save replaced");
+        let restored = ManagedSession::load_from_path(&path).expect("load replaced");
+        assert_eq!(restored.version, super::MANAGED_SESSION_VERSION);
+        assert!(restored.transcript.is_none());
+    }
+
+    #[test]
+    fn output_shortened_without_a_summary_records_no_compaction() {
+        let original = said(&["a1", "a2", "b1 with long output", "b2"]);
+        let mut session = routed("pruned");
+        let after = said(&["summary of a", "b1 with long output", "b2"]);
+        session.record_compaction(&original, &after);
+        let mut context = after;
+        context.extend(said(&["c1", "c2 with long output"]));
+        session.messages = context.clone();
+        let spans = session.addressable_spans();
+
+        let mut pruned = context.clone();
+        pruned[1] = Message::text("user", "b1 with output cut short");
+        pruned[4] = Message::text("user", "c2 with output cut short");
+        session.record_pruning(&context, &pruned);
+        session.messages = pruned;
+
+        assert_eq!(
+            session.addressable_spans(),
+            spans,
+            "shortening tool output took every turn's id away though nothing was summarized"
+        );
+        assert_eq!(session.shown_messages().len(), 6);
+        assert_eq!(
+            session.shown_messages()[2].text_content(),
+            "b1 with long output"
+        );
+    }
+
+    #[test]
+    fn a_cleared_or_replaced_conversation_never_shows_the_one_before_it() {
+        let before = said(&["system", "first ask", "first answer", "second ask"]);
+        let after = said(&["system", "summary of the first turn", "second ask"]);
+        let mut session = routed("cleared");
+        session.record_compaction(&before, &after);
+
+        let cleared = &after[..1];
+        assert_eq!(
+            spoken(&session, cleared),
+            ["system"],
+            "/clear left the cleared conversation in the transcript"
+        );
+        let other = said(&[
+            "system",
+            "another conversation",
+            "entirely",
+            "with more in it",
+        ]);
+        let mut replaced = session.clone();
+        replaced.conversation_replaced();
+        assert_eq!(spoken(&replaced, &other).len(), other.len());
+        assert_eq!(
+            replaced.addressable_span_in(&other, 2),
+            Some((0, other.len()))
+        );
+
+        assert_eq!(spoken(&session, &after).len(), 4);
+        session.reconcile_transcript(cleared);
+        assert!(session.transcript.is_none());
+        assert_eq!(spoken(&session, &after).len(), 3);
+    }
+
+    #[test]
+    fn an_edit_the_transcript_was_never_told_of_keeps_the_history_shown() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().join("edited.jsonl");
+        let original = said(&["first ask", "first answer", "second ask"]);
+        let mut context = said(&["summary of the first turn", "second ask"]);
+        let mut session = routed("edited-untold");
+        session.record_compaction(&original, &context);
+
+        context[0] = Message::text("user", "a summary rewritten where it stood");
+        assert!(
+            session
+                .transcript
+                .as_ref()
+                .expect("transcript")
+                .reconciled(&context)
+                .1,
+            "a change nothing recorded went unnoticed"
+        );
+        session.reconcile_transcript(&context);
+        session.messages = context.clone();
+
+        assert_eq!(
+            spoken(&session, &context),
+            ["first ask", "first answer", "second ask"],
+            "the only copy of what was said went with a fingerprint"
+        );
+        assert!(
+            !session
+                .transcript
+                .as_ref()
+                .expect("transcript")
+                .reconciled(&context)
+                .1,
+            "the same change is warned of on every save"
+        );
+
+        session.save_to_path(&path).expect("save");
+        let loaded = ManagedSession::load_from_path(&path).expect("load");
+        assert_eq!(loaded.version, super::MANAGED_SESSION_TRANSCRIPT_VERSION);
+        assert_eq!(spoken(&loaded, &loaded.messages).len(), 3);
+
+        context.push(Message::text("user", "third ask"));
+        let after = said(&["summary of everything"]);
+        session.record_compaction(&context, &after);
+        assert_eq!(
+            spoken(&session, &after),
+            ["first ask", "first answer", "second ask", "third ask"],
+            "the transcript stopped taking what later summaries replace"
+        );
+    }
+
+    #[test]
+    fn a_mismatch_found_only_while_saving_keeps_the_transcript_in_the_file() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().join("changed.jsonl");
+        let mut session = routed("changed-unreconciled");
+        session.record_compaction(&said(&["first ask", "first answer"]), &said(&["summary"]));
+        session.messages = said(&["a summary rewritten where it stood", "second ask"]);
+
+        session.save_to_path(&path).expect("save");
+
+        let loaded = ManagedSession::load_from_path(&path).expect("load");
+        assert_eq!(
+            spoken(&loaded, &loaded.messages),
+            ["first ask", "first answer", "second ask"]
+        );
+        assert!(
+            loaded
+                .transcript
+                .as_ref()
+                .expect("transcript")
+                .matches(&loaded.messages),
+            "the file was written with a fingerprint its own context fails"
+        );
+    }
+
+    #[test]
+    fn a_conversation_replaced_on_purpose_starts_without_the_one_before_it() {
+        let mut session = routed("replaced-on-purpose");
+        session.record_compaction(&said(&["first ask", "first answer"]), &said(&["summary"]));
+
+        let other = said(&["another conversation", "entirely"]);
+        session.conversation_replaced();
+        session.messages = other.clone();
+        session.reconcile_transcript(&other);
+
+        assert!(session.transcript.is_none());
+        assert_eq!(
+            spoken(&session, &other),
+            ["another conversation", "entirely"],
+            "another conversation's history was shown as this one's"
+        );
+    }
+
+    #[test]
+    fn a_transcript_message_is_held_to_what_a_conversation_message_is() {
+        let unsendable = Message::text(
+            &"r".repeat(super::MANAGED_SESSION_MESSAGE_ROLE_MAX_UTF16 + 1),
+            "said",
+        );
+        let after = said(&["summary", "tail"]);
+
+        let mut shown = routed("unsendable-shown");
+        shown.record_compaction(&[unsendable], &after);
+        shown.messages = after;
+        assert!(
+            shown.validate().is_err(),
+            "a transcript role no client could be sent passed validation"
+        );
+    }
+
+    #[test]
+    fn pruning_that_drops_a_message_keeps_every_message_shown() {
+        let original = said(&["a1", "a2", "b1", "b2"]);
+        let after = said(&["summary of a", "b1", "b2"]);
+        let mut session = routed("pruned-shorter");
+        session.record_compaction(&original, &after);
+        let mut context = after;
+        context.extend(said(&["c1"]));
+
+        let mut pruned = context.clone();
+        pruned.remove(1);
+        session.record_pruning(&context, &pruned);
+        session.messages = pruned.clone();
+
+        assert_eq!(
+            spoken(&session, &pruned),
+            ["a1", "a2", "b1", "b2", "c1"],
+            "a message pruned out of the context left the transcript with it"
+        );
+        session.reconcile_transcript(&pruned);
+        assert!(
+            session.transcript.is_some(),
+            "the entries were left describing a context that is gone"
+        );
+
+        let mut unsummarized = routed("pruned-unsummarized");
+        let whole = said(&["a1", "a2", "a3"]);
+        unsummarized.record_pruning(&whole, &whole[..2]);
+        assert_eq!(spoken(&unsummarized, &whole[..2]), ["a1", "a2", "a3"]);
+    }
+
+    #[test]
+    fn a_fork_cut_back_without_a_word_is_saved_without_the_turns_it_dropped() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().join("fork.jsonl");
+        let original = said(&["a1", "a2", "b1", "b2", "c1", "c2"]);
+        let mut source = routed("fork-source");
+        let after = said(&["a1", "a2", "summary of b", "c1", "c2"]);
+        source.record_compaction_keeping(&original, &after, 2);
+        source.messages = after;
+
+        let mut forked = ManagedSession::forked_from(&source, "fork-copy", Utc::now(), None);
+        forked.messages.truncate(2);
+        forked.save_to_path(&path).expect("save fork");
+
+        let restored = ManagedSession::load_from_path(&path).expect("load fork");
+        assert_eq!(spoken(&restored, &restored.messages), ["a1", "a2"]);
+        assert_eq!(restored.version, super::MANAGED_SESSION_VERSION);
+    }
+
+    #[test]
+    fn a_turn_is_addressed_only_inside_what_no_summary_rewrote() {
+        let original = said(&["system", "a1", "a2", "b1", "b2"]);
+        let whole = said(&["system", "summary of a", "b1", "b2"]);
+        let mut session = routed("spans");
+        session.record_compaction(&original, &whole);
+        session.messages = whole.clone();
+        session.messages.extend(said(&["c1", "c2", "d1", "d2"]));
+
+        assert_eq!(
+            session.addressable_span(1),
+            None,
+            "a first turn's start sits right after the system prompt, which every summary keeps, and must not address what came after one"
+        );
+        assert_eq!(session.addressable_span(2), None);
+        assert_eq!(session.addressable_span(4), Some((4, 8)));
+        assert_eq!(session.addressable_span(6), Some((4, 8)));
+
+        let context = session.messages.clone();
+        let mut from_d = context[..6].to_vec();
+        from_d.extend(said(&["summary of d", "e1", "e2"]));
+        session.record_compaction_keeping(&context, &from_d, 6);
+        session.messages = from_d;
+        session.messages.push(Message::text("user", "f1"));
+
+        assert_eq!(session.addressable_span(4), Some((4, 6)));
+        assert_eq!(
+            session.addressable_span(6),
+            None,
+            "the turn a summary was taken from is no longer one to cut at"
+        );
+        assert_eq!(session.addressable_span(9), Some((9, 10)));
+        assert_eq!(session.addressable_span(1), None);
+    }
+
+    #[test]
+    fn a_rewind_into_what_a_summary_left_untouched_stops_showing_the_summarized_turns() {
+        let original = said(&["a1", "a2", "b1", "b2"]);
+        let mut session = routed("rewound");
+        let mut context = said(&["summary of a", "b1", "b2"]);
+        session.record_compaction(&original, &context);
+        context.extend(said(&["c1", "c2", "d1", "d2"]));
+        session.messages = context.clone();
+        assert_eq!(
+            session.context_indices_of_shown(),
+            [None, None, None, None, Some(3), Some(4), Some(5), Some(6)]
+        );
+
+        let from_c = said(&["summary of a", "b1", "b2", "summary of c", "d1", "d2"]);
+        session.record_compaction_keeping(&context, &from_c, 3);
+        context = from_c;
+        assert_eq!(
+            spoken(&session, &context),
+            ["a1", "a2", "b1", "b2", "c1", "c2", "d1", "d2"]
+        );
+
+        context.truncate(3);
+        session.context_truncated_to(3);
+        assert_eq!(spoken(&session, &context), ["a1", "a2", "b1", "b2"]);
+
+        context.push(Message::text("user", "e1"));
+        assert_eq!(spoken(&session, &context), ["a1", "a2", "b1", "b2", "e1"]);
+    }
+
+    #[test]
+    fn a_cut_nobody_reported_still_falls_back_to_the_entry_it_landed_in() {
+        let original = said(&["a1", "a2", "b1", "b2"]);
+        let mut session = routed("unreported");
+        let mut context = said(&["summary of a", "b1", "b2"]);
+        session.record_compaction(&original, &context);
+        context.extend(said(&["c1", "c2", "d1", "d2"]));
+        let from_c = said(&["summary of a", "b1", "b2", "summary of c", "d1", "d2"]);
+        session.record_compaction_keeping(&context, &from_c, 3);
+
+        assert_eq!(
+            spoken(&session, &from_c[..3]),
+            ["a1", "a2", "b1", "b2"],
+            "a context cut back without a word showed turns that are gone"
+        );
+    }
+
+    #[test]
+    fn a_first_summary_from_a_turn_keeps_the_turns_before_it_addressable() {
+        let original = said(&["a1", "a2", "b1", "b2", "c1", "c2"]);
+        let mut session = routed("kept-prefix");
+        let after = said(&["a1", "a2", "summary of b", "c1", "c2"]);
+        session.record_compaction_keeping(&original, &after, 2);
+        session.messages = after;
+        session.messages.push(Message::text("user", "d1"));
+
+        assert_eq!(
+            session.context_indices_of_shown(),
+            [Some(0), Some(1), None, None, None, None, Some(5)]
+        );
+
+        session
+            .messages
+            .insert(1, Message::text("user", "a1 result"));
+        let context = session.messages.clone();
+        session.context_inserted_at(1, &context);
+        assert_eq!(
+            session.context_indices_of_shown()[..3],
+            [Some(0), None, None],
+            "a message placed inside the untouched part ends it there"
+        );
+        assert_eq!(
+            spoken(&session, &session.messages),
+            ["a1", "a1 result", "a2", "b1", "b2", "c1", "c2", "d1"],
+            "and it joins the transcript after the message it follows"
+        );
+
+        session.context_truncated_to(1);
+        assert!(session.transcript.is_none());
+    }
+
+    #[test]
+    fn a_result_added_to_a_tool_call_a_summary_kept_shows_after_that_call() {
+        let original = said(&["a1", "a2", "b1 call", "b2"]);
+        let mut session = routed("answered-late");
+        let after = said(&["summary of a", "b1 call", "b2"]);
+        session.record_compaction(&original, &after);
+        session.messages = after;
+
+        session
+            .messages
+            .insert(2, Message::text("user", "b1 result"));
+        let context = session.messages.clone();
+        session.context_inserted_at(2, &context);
+        session.messages.push(Message::text("user", "c1"));
+        assert_eq!(
+            spoken(&session, &session.messages),
+            ["a1", "a2", "b1 call", "b1 result", "b2", "c1"]
+        );
+
+        session.messages[2] = Message::text("user", "b1 result and a late one");
+        let context = session.messages.clone();
+        session.context_edited_at(2, &context);
+        assert_eq!(
+            spoken(&session, &session.messages),
+            [
+                "a1",
+                "a2",
+                "b1 call",
+                "b1 result and a late one",
+                "b2",
+                "c1"
+            ],
+            "a message changed where it stands was taken for another conversation"
+        );
+    }
+
+    #[test]
+    fn restoring_an_earlier_context_cuts_the_transcript_back_to_it() {
+        let first = said(&["first ask", "first answer"]);
+        let mut session = routed("restored");
+        let before_any_compaction = session.transcript_mark();
+        assert_eq!(before_any_compaction, None);
+
+        let mut second = said(&["summary of the first turn"]);
+        session.record_compaction(&first, &second);
+        second.push(Message::text("user", "second ask"));
+        let after_first = session.transcript_mark();
+        let third = said(&["summary of both"]);
+        session.record_compaction(&second, &third);
+        assert_eq!(spoken(&session, &third).len(), 3);
+
+        session.restore_transcript(after_first);
+        assert_eq!(
+            spoken(&session, &second),
+            ["first ask", "first answer", "second ask"]
+        );
+
+        session.restore_transcript(before_any_compaction);
+        assert!(session.transcript.is_none());
+        assert_eq!(spoken(&session, &first).len(), 2);
     }
 
     #[test]

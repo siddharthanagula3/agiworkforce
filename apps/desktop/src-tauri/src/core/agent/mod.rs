@@ -1,27 +1,17 @@
-//! Agent runtime: planning, execution, autonomous mode, vision, and RAG.
+//! Agent runtime: planning, execution, autonomous mode and vision.
 //!
 //! Agents decompose goals into steps, execute tools via [`executor`], and iterate
 //! up to configurable limits. [`autonomous`] provides full desktop automation.
 //! [`vision`] handles OCR and screen analysis. [`planner`] creates multi-step plans.
 
-pub mod ai_orchestrator;
 pub mod approval;
 pub mod autonomous;
 pub mod background_agent;
-pub mod background_tasks;
 pub mod change_tracker;
-pub mod code_generator;
 pub mod context_compactor;
-pub mod context_manager;
-pub mod continuous_executor;
 pub mod executor;
-pub mod form_undo;
-pub mod intelligent_file_access;
 pub mod planner;
 pub mod prompt_engineer;
-pub mod rag_system;
-pub mod runtime;
-pub mod timeout_manager;
 pub mod triggers;
 pub mod undo_manager;
 pub mod vision;
@@ -29,25 +19,15 @@ pub mod vision;
 #[cfg(test)]
 mod tests;
 
-pub use approval::ApprovalManager;
 pub use autonomous::AutonomousAgent;
 pub use background_agent::{
     AgentProgress, AgentSummary, BackgroundAgent, BackgroundAgentContext, BackgroundAgentManager,
     BackgroundAgentManagerState, BackgroundAgentStatus, ConversationMessage,
     DEFAULT_AGENT_TIMEOUT_SECS, MAX_BACKGROUND_AGENTS,
 };
-pub use background_tasks::{AutonomousTaskCheckpoint, PersistentTask, TaskCheckpoint, TaskStorage};
 pub use change_tracker::{ChangeTracker, NamedFileCheckpoint};
-pub use continuous_executor::{
-    ContinuousExecutor, ContinuousExecutorConfig, ContinuousTask, ContinuousTaskStatus,
-    DailyLimitTracker, DailyUsageStats, ExecutionCheckpoint, ExecutionProgress,
-    ExecutionStatePersistence,
-};
 pub use executor::TaskExecutor;
-pub use form_undo::{FormSubmission, FormUndoManager, FormUndoResult};
 pub use planner::TaskPlanner;
-pub use runtime::AgentRuntime;
-pub use timeout_manager::{TimeoutConfig, TimeoutResponse, TimeoutTracker, TimeoutWarning};
 pub use triggers::{
     RegisteredTrigger, TriggerAction, TriggerConfig, TriggerExecution, TriggerRegistry,
     TriggerRegistryState, TriggerType,
@@ -65,7 +45,6 @@ pub enum TaskStatus {
     Pending,
     Planning,
     Executing,
-    WaitingApproval,
     Paused,
     Completed,
     Failed(String),
@@ -84,8 +63,6 @@ pub struct Task {
     pub max_retries: usize,
     pub retry_count: usize,
     pub replan_count: usize,
-    pub requires_approval: bool,
-    pub auto_approve: bool,
 }
 
 impl Serialize for Task {
@@ -93,7 +70,7 @@ impl Serialize for Task {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("Task", 12)?;
+        let mut state = serializer.serialize_struct("Task", 10)?;
         state.serialize_field("id", &self.id)?;
         state.serialize_field("description", &self.description)?;
         state.serialize_field("status", &self.status)?;
@@ -104,8 +81,6 @@ impl Serialize for Task {
         state.serialize_field("maxRetries", &self.max_retries)?;
         state.serialize_field("retryCount", &self.retry_count)?;
         state.serialize_field("replanCount", &self.replan_count)?;
-        state.serialize_field("requiresApproval", &self.requires_approval)?;
-        state.serialize_field("autoApprove", &self.auto_approve)?;
         state.end()
     }
 }
@@ -129,8 +104,6 @@ impl<'de> Deserialize<'de> for Task {
             retry_count: usize,
             #[serde(default)]
             replan_count: usize,
-            requires_approval: bool,
-            auto_approve: bool,
         }
 
         let helper = TaskSurrogate::deserialize(deserializer)?;
@@ -153,8 +126,6 @@ impl<'de> Deserialize<'de> for Task {
             max_retries: helper.max_retries,
             retry_count: helper.retry_count,
             replan_count: helper.replan_count,
-            requires_approval: helper.requires_approval,
-            auto_approve: helper.auto_approve,
         })
     }
 }
@@ -264,22 +235,18 @@ pub struct StepResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentConfig {
-    pub auto_approve: bool,
-    pub max_concurrent_tasks: usize,
     pub default_timeout: Duration,
     pub max_retries: usize,
     pub use_local_llm_fallback: bool,
     pub local_llm_threshold_tokens: u64,
     pub screenshot_quality: ScreenshotQuality,
     pub vision_model: VisionModel,
-    pub cpu_limit_percent: f64,
-    pub memory_limit_mb: u64,
     /// Maximum cost allowed per individual task in USD (default $5.00)
     pub max_cost_per_task: f64,
     /// Maximum cumulative cost allowed per session in USD (default $50.00)
     pub max_session_cost: f64,
-    /// Maximum loop iterations for autonomous execution.
-    /// Set to 0 to use the compile-time default (100).
+    /// The most times a run may execute a step, retries included.
+    /// 0 means the default, `DEFAULT_MAX_STEP_RUNS` in `autonomous.rs`.
     #[serde(default)]
     pub max_loop_iterations: usize,
 }
@@ -323,16 +290,12 @@ pub enum VisionModel {
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
-            auto_approve: false,
-            max_concurrent_tasks: 1,
             default_timeout: Duration::from_secs(30),
             max_retries: 3,
             use_local_llm_fallback: true,
             local_llm_threshold_tokens: 1000,
             screenshot_quality: ScreenshotQuality::Medium,
             vision_model: VisionModel::Hybrid,
-            cpu_limit_percent: 50.0,
-            memory_limit_mb: 512,
             max_cost_per_task: 5.0,
             max_session_cost: 50.0,
             max_loop_iterations: 0,

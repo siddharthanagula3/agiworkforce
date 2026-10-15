@@ -1,5 +1,48 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+pub mod full_read;
+pub mod host_path;
+pub mod launch_env;
+pub mod launch_files;
+pub mod protected_paths;
+pub mod resolve;
+pub mod wrap;
+
+pub use full_read::{
+    credential_paths, full_read_program, full_read_program_guarding, full_read_program_protecting,
+    FullReadSpec, ProtectedProgram,
+};
+pub use host_path::{sandbox_launcher, verify_writable_root};
+pub use launch_env::{
+    holds_a_credential, pinned_value, shown_value, value_is_secret, REDACTED_SUFFIX,
+    VALUE_DIGEST_PREFIX,
+};
+pub use protected_paths::{
+    folded, is_protected_project_path, is_protected_relative_path, protected_project_entries,
+    AGENT_INSTRUCTION_PATHS, DEPENDENCY_TREE_NAMES, GIT_METADATA_ENTRY, HOOK_MANAGER_PATHS,
+    PROJECT_CONFIG_PATHS,
+};
+pub use resolve::{landing_path, read_file_within, LinkLoop, NotRead};
+pub use wrap::{
+    project_config_paths, sandboxed_program, NetworkPolicy, SandboxBackend, SandboxSpec,
+};
+
+/// A directory a sandbox may grant write access to. The filesystem root, the
+/// home directory and every directory above it are refused: writing there
+/// reaches shell profiles, launch agents and every other user's project.
+pub fn is_safe_write_root(path: &Path) -> bool {
+    if !path.is_absolute() || path.parent().is_none() {
+        return false;
+    }
+    match dirs::home_dir() {
+        Some(home) => {
+            let home = home.canonicalize().unwrap_or(home);
+            !home.starts_with(path)
+        }
+        None => true,
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -64,7 +107,21 @@ impl Default for SandboxPolicy {
 
 #[cfg(test)]
 mod tests {
-    use super::SandboxPolicy;
+    use super::{is_safe_write_root, SandboxPolicy};
+    use std::path::Path;
+
+    #[test]
+    fn home_root_and_their_ancestors_are_never_write_roots() {
+        let home = dirs::home_dir().expect("home dir");
+        let home = home.canonicalize().unwrap_or(home);
+        assert!(!is_safe_write_root(Path::new("/")));
+        assert!(!is_safe_write_root(&home));
+        if let Some(parent) = home.parent() {
+            assert!(!is_safe_write_root(parent));
+        }
+        assert!(is_safe_write_root(&home.join("projects").join("app")));
+        assert!(!is_safe_write_root(Path::new("relative")));
+    }
 
     #[test]
     fn defaults_to_workspace_write() {

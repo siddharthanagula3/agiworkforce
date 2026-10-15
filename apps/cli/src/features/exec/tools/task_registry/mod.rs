@@ -468,9 +468,16 @@ pub(super) async fn execute_todo_write(
 // ask_user tool
 // ---------------------------------------------------------------------------
 
+const QUESTION_NOT_ANSWERED: &str =
+    "The user did not answer. Continue without the answer and say which assumption you made.";
+
+/// Put the question to the surface driving the session, then to a human at the
+/// terminal, and otherwise refuse. The terminal is never read when it is not a
+/// human's: in the app-server stdin carries the client's protocol frames.
 pub(super) async fn execute_ask_user(
     args: &HashMap<String, String>,
     approval_callback: Option<&super::ApprovalCallback>,
+    user_input: Option<&super::UserInputCallback>,
 ) -> Result<ToolResult> {
     let question = match args
         .get("question")
@@ -501,7 +508,7 @@ pub(super) async fn execute_ask_user(
         );
         let approved = match super::request_approval(approval_callback, request).await {
             Some(decision) => super::approval_allows(decision),
-            None if crate::interactive::can_prompt() => dialoguer::Confirm::new()
+            None if super::terminal_questions_allowed() => dialoguer::Confirm::new()
                 .with_prompt(question.as_str())
                 .default(false)
                 .interact()
@@ -523,6 +530,17 @@ pub(super) async fn execute_ask_user(
     }
 
     let options = question_options(args.get("options"));
+    if let Some(callback) = user_input {
+        let reply = callback(super::UserInputRequest {
+            question: question.clone(),
+        })
+        .await;
+        return Ok(match reply {
+            Some(reply) => answer(true, format!("User responded: {reply}")),
+            None => answer(false, QUESTION_NOT_ANSWERED.into()),
+        });
+    }
+
     if approval_callback.is_some() && super::interactive_questions_enabled() {
         let request = crate::tui::approval_broker::ApprovalRequest::new(
             crate::tui::approval_broker::ApprovalRequestKind::Question {
@@ -547,7 +565,7 @@ pub(super) async fn execute_ask_user(
         });
     }
 
-    if approval_callback.is_some() || !crate::interactive::can_prompt() {
+    if approval_callback.is_some() || !super::terminal_questions_allowed() {
         return Ok(answer(
             false,
             "A typed answer cannot be collected mid-turn here. Ask the question in your reply and end the turn; the user will answer in their next message."
@@ -1080,5 +1098,73 @@ mod advisor_privacy_tests {
             "the Local invocation must not contaminate the BYOK invocation: {}",
             not_blocked.output
         );
+    }
+}
+
+#[cfg(test)]
+mod ask_user_tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    fn question(text: &str) -> HashMap<String, String> {
+        HashMap::from([("question".to_string(), text.to_string())])
+    }
+
+    #[tokio::test]
+    async fn refuses_without_reading_stdin_once_stdin_carries_protocol_frames() {
+        super::super::forbid_terminal_questions();
+        assert!(!super::super::terminal_questions_allowed());
+
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            execute_ask_user(&question("Which branch?"), None, None),
+        )
+        .await
+        .expect("ask_user must answer at once rather than wait on stdin")
+        .expect("ask_user result");
+
+        assert!(!result.success);
+        assert!(
+            result.output.contains("cannot be collected mid-turn"),
+            "{}",
+            result.output
+        );
+    }
+
+    #[tokio::test]
+    async fn hands_the_question_to_the_surface_and_returns_its_answer() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let recorded = seen.clone();
+        let callback: super::super::UserInputCallback = Arc::new(move |request| {
+            recorded
+                .lock()
+                .expect("record")
+                .push(request.question.clone());
+            Box::pin(async { Some("main".to_string()) })
+        });
+
+        let result = execute_ask_user(&question("Which branch?"), None, Some(&callback))
+            .await
+            .expect("ask_user result");
+
+        assert!(result.success);
+        assert_eq!(result.output, "User responded: main");
+        assert_eq!(
+            *seen.lock().expect("read"),
+            vec!["Which branch?".to_string()]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_question_is_a_tool_error_not_an_empty_answer() {
+        let callback: super::super::UserInputCallback =
+            Arc::new(|_request| Box::pin(async { None }));
+
+        let result = execute_ask_user(&question("Which branch?"), None, Some(&callback))
+            .await
+            .expect("ask_user result");
+
+        assert!(!result.success);
+        assert_eq!(result.output, QUESTION_NOT_ANSWERED);
     }
 }

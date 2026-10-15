@@ -1,9 +1,10 @@
 use std::collections::{HashMap, VecDeque};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, TryLockError};
 use std::time::Duration;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
@@ -31,7 +32,7 @@ pub const INHERITED_ENV_ALLOWLIST: &[&str] = &[
     "XDG_RUNTIME_DIR",
 ];
 
-const BLOCKED_MANIFEST_VARS: &[&str] = &[
+pub const WITHHELD_MANIFEST_VARS: &[&str] = &[
     "DYLD_INSERT_LIBRARIES",
     "DYLD_LIBRARY_PATH",
     "DYLD_FORCE_FLAT_NAMESPACE",
@@ -39,16 +40,26 @@ const BLOCKED_MANIFEST_VARS: &[&str] = &[
     "LD_LIBRARY_PATH",
     "LD_AUDIT",
     "NODE_OPTIONS",
+    "NODE_PATH",
     "PYTHONPATH",
+    "PYTHONSTARTUP",
     "RUBYLIB",
+    "RUBYOPT",
     "PERL5LIB",
-    "http_proxy",
-    "https_proxy",
-    "HTTP_PROXY",
-    "HTTPS_PROXY",
-    "ALL_PROXY",
-    "all_proxy",
+    "PERL5OPT",
+    "BASH_ENV",
+    "ENV",
+    "JAVA_TOOL_OPTIONS",
+    "JDK_JAVA_OPTIONS",
+    "_JAVA_OPTIONS",
+    "DOTNET_STARTUP_HOOKS",
 ];
+
+pub fn manifest_var_is_passed(name: &str) -> bool {
+    !WITHHELD_MANIFEST_VARS
+        .iter()
+        .any(|withheld| withheld.eq_ignore_ascii_case(name))
+}
 
 const EXIT_GRACE: Duration = Duration::from_secs(2);
 
@@ -77,10 +88,16 @@ impl StdioConn {
         events: Arc<Events>,
         hooks: ClientHooks,
     ) -> Result<Self> {
-        let TransportConfig::Stdio { command, args, env } = config else {
+        let TransportConfig::Stdio {
+            command,
+            args,
+            env,
+            cwd,
+        } = config
+        else {
             return Err(anyhow!("MCP stdio transport configuration required"));
         };
-        let mut child = spawn_child(server_name, command, args, env)?;
+        let mut child = spawn_child(server_name, command, args, env, cwd.as_deref())?;
         let stdin = child
             .stdin
             .take()
@@ -378,8 +395,20 @@ fn spawn_child(
     command: &str,
     args: &[String],
     env: &HashMap<String, String>,
+    cwd: Option<&Path>,
 ) -> Result<Child> {
-    let mut cmd = Command::new(command);
+    let folder =
+        cwd.map(|folder| std::path::absolute(folder).unwrap_or_else(|_| folder.to_path_buf()));
+    let mut cmd = Command::new(program_started_in(command, folder.as_deref()));
+    if let Some(folder) = folder.as_deref() {
+        if !folder.is_dir() {
+            bail!(
+                "[{name}] Cannot start MCP server in {}: it is not a folder",
+                folder.display()
+            );
+        }
+        cmd.current_dir(folder);
+    }
     cmd.args(args)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -393,17 +422,10 @@ fn spawn_child(
     }
 
     for (key, val) in env {
-        let blocked = BLOCKED_MANIFEST_VARS
-            .iter()
-            .any(|b| b.eq_ignore_ascii_case(key));
-        if blocked {
+        if !manifest_var_is_passed(key) {
             eprintln!(
-                "[{name}] security: manifest env var {key:?} is blocked (loader-injection / proxy hijack risk)"
+                "[{name}] security: manifest env var {key:?} is set in the config and not passed to the server (it would load code no approval of the launch covers)"
             );
-            continue;
-        }
-        if key.to_uppercase().ends_with("_PROXY") {
-            eprintln!("[{name}] security: manifest env var {key:?} is blocked (proxy hijack risk)");
             continue;
         }
         cmd.env(key, val);
@@ -415,6 +437,16 @@ fn spawn_child(
             args.join(" ")
         )
     })
+}
+
+fn program_started_in(command: &str, cwd: Option<&Path>) -> PathBuf {
+    let program = Path::new(command);
+    match cwd {
+        Some(folder) if program.is_relative() && program.components().count() > 1 => {
+            folder.join(program)
+        }
+        _ => program.to_path_buf(),
+    }
 }
 
 const STDERR_TRUNCATED: &str = " [stderr truncated]";
@@ -956,5 +988,47 @@ mod stderr_tests {
         )
         .await;
         assert_eq!(buf.drain(), vec!["partial", STDERR_READ_FAILED]);
+    }
+}
+
+#[cfg(test)]
+mod spawn_tests {
+    use super::*;
+
+    #[test]
+    fn a_relative_program_is_read_from_the_folder_the_child_starts_in() {
+        let folder = Path::new("/srv/project");
+        assert_eq!(
+            program_started_in("./bin/server", Some(folder)),
+            folder.join("./bin/server")
+        );
+        assert_eq!(
+            program_started_in("bin/server", Some(folder)),
+            folder.join("bin/server")
+        );
+        assert_eq!(
+            program_started_in("server", Some(folder)),
+            PathBuf::from("server"),
+            "a bare name is found on the search path, not in the folder"
+        );
+        assert_eq!(
+            program_started_in("/usr/bin/server", Some(folder)),
+            PathBuf::from("/usr/bin/server")
+        );
+        assert_eq!(
+            program_started_in("./bin/server", None),
+            PathBuf::from("./bin/server")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_server_is_not_started_in_a_folder_that_is_not_there() {
+        let gone = tempfile::tempdir().expect("tempdir").path().join("gone");
+        let error = match spawn_child("nowhere", "server", &[], &HashMap::new(), Some(&gone)) {
+            Ok(_) => panic!("a server started in a folder that does not exist"),
+            Err(error) => error.to_string(),
+        };
+        assert!(error.contains("is not a folder"), "{error}");
+        assert!(error.contains("gone"), "{error}");
     }
 }

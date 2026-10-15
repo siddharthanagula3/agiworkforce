@@ -1210,16 +1210,13 @@ mod trust_mode_threading_tests {
     fn executor_context(router: Arc<RwLock<LLMRouter>>) -> ExecutorContext {
         ExecutorContext {
             app_handle: None,
-            automation: Arc::new(
-                crate::automation::AutomationService::new()
-                    .expect("Failed to create AutomationService for tests"),
-            ),
             router,
             tool_cache: Arc::new(crate::data::cache::ToolResultCache::new()),
             security_guard: Arc::new(crate::sys::security::ToolExecutionGuard::new()),
             change_tracker: None,
             session_id: "trust_test_session".to_string(),
             tool_id: "trust_test_tool".to_string(),
+            granted_directories: Vec::new(),
         }
     }
 

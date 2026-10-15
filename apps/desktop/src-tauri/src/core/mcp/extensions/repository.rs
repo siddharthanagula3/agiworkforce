@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 
 /// Status of an installed extension
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum ExtensionStatus {
     /// Extension is installed but not enabled
     #[default]
@@ -547,6 +547,30 @@ impl ExtensionRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The status reaches Settings > Extensions through serde and the database
+    /// through `Display`. They disagreed on `PendingRemoval`, so a half-removed
+    /// extension was shown with a status the UI did not know.
+    #[test]
+    fn a_status_is_sent_to_the_ui_as_it_is_stored() {
+        for status in [
+            ExtensionStatus::Disabled,
+            ExtensionStatus::Enabled,
+            ExtensionStatus::Running,
+            ExtensionStatus::Error,
+            ExtensionStatus::Updating,
+            ExtensionStatus::PendingRemoval,
+        ] {
+            assert_eq!(
+                serde_json::to_value(status).unwrap(),
+                serde_json::Value::String(status.to_string())
+            );
+        }
+        assert_eq!(
+            ExtensionStatus::PendingRemoval.to_string(),
+            "pending_removal"
+        );
+    }
 
     fn create_test_repo() -> ExtensionRepository {
         let conn = Connection::open_in_memory().unwrap();

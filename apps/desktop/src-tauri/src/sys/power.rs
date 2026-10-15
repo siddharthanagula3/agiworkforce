@@ -5,14 +5,18 @@
 
 /// Prevents the OS from sleeping while this guard is held.
 ///
-/// - **macOS**: spawns `caffeinate -s -w <PID>` -- prevents system sleep,
-///   auto-exits when the Tauri process exits (crash-safe, no cleanup needed).
-/// - **Windows**: calls `SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED
-///   | ES_AWAYMODE_REQUIRED)` -- keeps the system awake.
+/// - **macOS**: spawns `caffeinate -s -w <PID>` -- prevents system sleep. Dropping
+///   the guard ends it; `-w` still ends it if the app exits without dropping.
+/// - **Windows**: a dedicated thread calls `SetThreadExecutionState(ES_CONTINUOUS
+///   | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)` and holds it until the guard
+///   drops, then clears it. The state belongs to the thread that set it, and an
+///   async task moves between threads, so the guard must not set it itself.
 /// - **Other platforms**: no-op.
 pub struct SleepPrevention {
     #[cfg(target_os = "macos")]
-    _child: Option<std::process::Child>,
+    child: Option<std::process::Child>,
+    #[cfg(windows)]
+    holder: Option<(std::sync::mpsc::Sender<()>, std::thread::JoinHandle<()>)>,
 }
 
 impl SleepPrevention {
@@ -28,21 +32,21 @@ impl SleepPrevention {
                     tracing::warn!("[SleepPrevention] Failed to spawn caffeinate: {e}");
                 })
                 .ok();
-            Self { _child: child }
+            Self { child }
         }
 
         #[cfg(windows)]
-        // SAFETY: SetThreadExecutionState is a safe Win32 API that only affects the
-        // calling thread's execution state flags. It has no memory safety implications.
-        #[allow(unsafe_code)]
         {
-            use windows::Win32::System::Power::{
-                SetThreadExecutionState, ES_AWAYMODE_REQUIRED, ES_CONTINUOUS, ES_SYSTEM_REQUIRED,
-            };
-            unsafe {
-                SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED);
-            }
-            Self {}
+            let (release, released) = std::sync::mpsc::channel::<()>();
+            let holder = std::thread::Builder::new()
+                .name("keep-awake".to_string())
+                .spawn(move || hold_awake_until(released))
+                .map_err(|e| {
+                    tracing::warn!("[SleepPrevention] Failed to start the keep-awake thread: {e}");
+                })
+                .ok()
+                .map(|thread| (release, thread));
+            Self { holder }
         }
 
         #[cfg(not(any(target_os = "macos", windows)))]
@@ -52,19 +56,41 @@ impl SleepPrevention {
     }
 }
 
+/// Sets the keep-awake state on this thread, waits until the guard drops its
+/// sender, and clears the state on the same thread.
+#[cfg(windows)]
+#[allow(unsafe_code)]
+fn hold_awake_until(released: std::sync::mpsc::Receiver<()>) {
+    use windows::Win32::System::Power::{
+        SetThreadExecutionState, ES_AWAYMODE_REQUIRED, ES_CONTINUOUS, ES_SYSTEM_REQUIRED,
+    };
+    // SAFETY: SetThreadExecutionState only changes the calling thread's
+    // execution state flags and touches no memory.
+    unsafe {
+        SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED);
+    }
+    let _ = released.recv();
+    // SAFETY: as above; ES_CONTINUOUS alone restores normal idle behaviour.
+    unsafe {
+        SetThreadExecutionState(ES_CONTINUOUS);
+    }
+}
+
 impl Drop for SleepPrevention {
     fn drop(&mut self) {
         #[cfg(windows)]
-        // SAFETY: Resetting the execution state back to ES_CONTINUOUS is safe --
-        // it just re-enables normal system idle behavior for the calling thread.
-        #[allow(unsafe_code)]
-        {
-            use windows::Win32::System::Power::{SetThreadExecutionState, ES_CONTINUOUS};
-            unsafe {
-                SetThreadExecutionState(ES_CONTINUOUS);
+        if let Some((release, thread)) = self.holder.take() {
+            drop(release);
+            if thread.join().is_err() {
+                tracing::warn!("[SleepPrevention] The keep-awake thread panicked");
             }
         }
-        // macOS: caffeinate exits automatically when our PID exits or the child is dropped.
-        // Other platforms: no-op.
+        #[cfg(target_os = "macos")]
+        if let Some(mut child) = self.child.take() {
+            if let Err(e) = child.kill() {
+                tracing::warn!("[SleepPrevention] Failed to stop caffeinate: {e}");
+            }
+            let _ = child.wait();
+        }
     }
 }

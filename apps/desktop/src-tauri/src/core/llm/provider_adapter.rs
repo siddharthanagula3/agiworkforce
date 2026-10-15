@@ -1655,6 +1655,9 @@ impl OpenAIAdapter {
                         "is_error": tool_result.is_error
                     }));
                 }
+                ContentPart::ProviderBlock { .. } => {
+                    tracing::warn!("Skipping a provider-native content block in an OpenAI request");
+                }
             }
         }
 
@@ -2125,7 +2128,8 @@ impl AnthropicAdapter {
     /// - Anthropic SERVER tools use a typed definition format the crate
     ///   `ToolDefinition` cannot express;
     /// - multimodal parts beyond Text/Image/ToolUse/ToolResult (Document,
-    ///   Audio, Video) have no crate `ContentBlock`.
+    ///   Audio, Video, an echoed provider block) have no crate `ContentBlock`,
+    ///   and neither has a tool result that carries images or a toolset name.
     fn crate_expressible(request: &LLMRequest) -> bool {
         use crate::core::llm::server_tools;
 
@@ -2143,14 +2147,14 @@ impl AnthropicAdapter {
         });
         let multimodal_expressible = request.messages.iter().all(|message| {
             message.multimodal_content.as_ref().is_none_or(|parts| {
-                parts.iter().all(|part| {
-                    matches!(
-                        part,
-                        super::ContentPart::Text { .. }
-                            | super::ContentPart::Image { .. }
-                            | super::ContentPart::ToolUse { .. }
-                            | super::ContentPart::ToolResult { .. }
-                    )
+                parts.iter().all(|part| match part {
+                    super::ContentPart::Text { .. }
+                    | super::ContentPart::Image { .. }
+                    | super::ContentPart::ToolUse { .. } => true,
+                    super::ContentPart::ToolResult { tool_result } => {
+                        tool_result.toolset_name.is_none() && tool_result.images.is_empty()
+                    }
+                    _ => false,
                 })
             })
         });
@@ -2460,12 +2464,10 @@ impl AnthropicAdapter {
                                     "[Anthropic] Tool message {} paired with tool_use block",
                                     tool_result.tool_use_id
                                 );
-                                content_blocks.push(serde_json::json!({
-                                    "type": "tool_result",
-                                    "tool_use_id": tool_result.tool_use_id,
-                                    "content": tool_result.content,
-                                    "is_error": tool_result.is_error
-                                }));
+                                content_blocks.push(Self::tool_result_block(tool_result));
+                            }
+                            super::ContentPart::ProviderBlock { block } => {
+                                content_blocks.push(block.clone());
                             }
                             _ => {
                                 tracing::warn!(
@@ -2595,6 +2597,8 @@ impl AnthropicAdapter {
         if let Some(tools) = &request.tools {
             use crate::core::llm::server_tools;
 
+            Self::validate_client_toolset_tool_choice(tools, request.tool_choice.as_ref())?;
+
             let anthropic_tools: Vec<Value> = tools
                 .iter()
                 .filter_map(|tool| {
@@ -2603,7 +2607,7 @@ impl AnthropicAdapter {
                     // Check if this is a known Anthropic server-side tool
                     if server_tools::is_anthropic_server_tool(tool_name) {
                         // Use the server-tool definition format
-                        server_tools::build_server_tool_definition(tool_name)
+                        server_tools::build_server_tool_definition(tool_name, &tool.parameters)
                     } else {
                         // Regular client tool – flat format with input_schema
                         Some(serde_json::json!({
@@ -2955,6 +2959,7 @@ impl ProviderAdapter for AnthropicAdapter {
             tool_calls,
             finish_reason,
             reasoning_content,
+            content_blocks: response["content"].as_array().cloned(),
             ..LLMResponse::default()
         })
     }
@@ -2981,6 +2986,65 @@ impl ProviderAdapter for AnthropicAdapter {
 }
 
 impl AnthropicAdapter {
+    fn tool_result_block(tool_result: &super::ToolResultInput) -> Value {
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+        let content = if tool_result.images.is_empty() {
+            serde_json::json!(tool_result.content)
+        } else {
+            let mut blocks: Vec<Value> = Vec::with_capacity(tool_result.images.len() + 1);
+            if !tool_result.content.is_empty() {
+                blocks.push(serde_json::json!({
+                    "type": "text",
+                    "text": tool_result.content
+                }));
+            }
+            blocks.extend(tool_result.images.iter().map(|image| {
+                serde_json::json!({
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": image.format.mime_type(),
+                        "data": STANDARD.encode(&image.data)
+                    }
+                })
+            }));
+            Value::Array(blocks)
+        };
+
+        let mut block = serde_json::json!({
+            "type": "tool_result",
+            "tool_use_id": tool_result.tool_use_id,
+            "content": content,
+            "is_error": tool_result.is_error
+        });
+        // Anthropic rejects a client toolset member result that omits
+        // `toolset_name`; only member results may carry it.
+        if let Some(toolset_name) = &tool_result.toolset_name {
+            block["toolset_name"] = serde_json::json!(toolset_name);
+        }
+        block
+    }
+
+    /// A client toolset entry rejects a `tool_choice` of type `tool`, whether it
+    /// names the toolset or one of its members.
+    fn validate_client_toolset_tool_choice(
+        tools: &[super::ToolDefinition],
+        tool_choice: Option<&super::ToolChoice>,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        use crate::core::llm::server_tools::COMPUTER_TOOLSET_TYPE;
+
+        let declares_toolset = tools.iter().any(|tool| tool.name == COMPUTER_TOOLSET_TYPE);
+        if declares_toolset && matches!(tool_choice, Some(super::ToolChoice::Specific(_))) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "The computer use toolset cannot be combined with a tool_choice that names a tool",
+            )
+            .into());
+        }
+        Ok(())
+    }
+
     /// Validate that every tool result message has a matching tool_use block
     /// in a preceding assistant message.  Orphaned tool results would cause
     /// the Anthropic API to reject the request.
@@ -3007,8 +3071,18 @@ impl AnthropicAdapter {
                 // From multimodal ToolUse content parts
                 if let Some(ref parts) = msg.multimodal_content {
                     for part in parts {
-                        if let super::ContentPart::ToolUse { tool_use } = part {
-                            emitted_tool_use_ids.insert(tool_use.id.clone());
+                        match part {
+                            super::ContentPart::ToolUse { tool_use } => {
+                                emitted_tool_use_ids.insert(tool_use.id.clone());
+                            }
+                            super::ContentPart::ProviderBlock { block }
+                                if block["type"] == "tool_use" =>
+                            {
+                                if let Some(id) = block["id"].as_str() {
+                                    emitted_tool_use_ids.insert(id.to_string());
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -3359,7 +3433,10 @@ impl GoogleAdapter {
                                     }
                                 })
                             }
+                            // Another provider's wire block has no Gemini form.
+                            super::ContentPart::ProviderBlock { .. } => Value::Null,
                         })
+                        .filter(|part| !part.is_null())
                         .collect();
                     serde_json::json!({"role": gemini_role, "parts": parts})
                 } else if msg.role == "tool" {

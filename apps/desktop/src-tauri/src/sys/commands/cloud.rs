@@ -29,6 +29,7 @@ impl CloudState {
 }
 
 #[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CloudCompleteOAuthRequest {
     pub state: String,
     pub code: String,
@@ -46,6 +47,7 @@ pub struct CloudAccountResponse {
 }
 
 #[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CloudListRequest {
     pub account_id: String,
     pub folder_path: Option<String>,
@@ -55,12 +57,14 @@ pub struct CloudListRequest {
 }
 
 #[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CloudPathRequest {
     pub account_id: String,
     pub remote_path: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CloudUploadRequest {
     pub account_id: String,
     pub local_path: String,
@@ -68,6 +72,7 @@ pub struct CloudUploadRequest {
 }
 
 #[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CloudDownloadRequest {
     pub account_id: String,
     pub remote_path: String,
@@ -75,6 +80,7 @@ pub struct CloudDownloadRequest {
 }
 
 #[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CloudShareRequest {
     pub account_id: String,
     pub remote_path: String,
@@ -117,15 +123,9 @@ pub async fn cloud_complete_oauth(
 }
 
 #[tauri::command]
-pub async fn cloud_disconnect(
-    account_id: String,
-    state: State<'_, CloudState>,
-    app: AppHandle,
-) -> Result<()> {
-    tracing::info!("Disconnecting cloud account {}", account_id);
-
+pub async fn cloud_disconnect(account_id: String, state: State<'_, CloudState>) -> Result<()> {
     state.manager.disconnect(&account_id)?;
-    let _ = app.emit("cloud:disconnected", &account_id);
+    tracing::info!("Disconnected a cloud storage account");
     Ok(())
 }
 
@@ -342,4 +342,112 @@ pub async fn cloud_share(
             Box::pin(async move { client.share_link(&remote, allow_edit).await })
         })
         .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::integrations::cloud::CloudProvider;
+    use serde_json::json;
+
+    /// The exact objects `src/stores/cloudStore.ts` passes as `config` and
+    /// `request`. Tauri hands a struct argument to serde unchanged, so these
+    /// keys are the contract.
+    #[test]
+    fn the_requests_the_cloud_store_sends_are_read() {
+        let config: CloudOAuthConfig = serde_json::from_value(json!({
+            "provider": "google_drive",
+            "clientId": "client-1",
+            "clientSecret": "secret-1",
+            "redirectUri": "http://localhost:1420/callback",
+        }))
+        .expect("connect config");
+        assert_eq!(config.provider, CloudProvider::GoogleDrive);
+        assert_eq!(config.client_id, "client-1");
+        assert_eq!(config.client_secret.as_deref(), Some("secret-1"));
+        assert_eq!(config.redirect_uri, "http://localhost:1420/callback");
+
+        let list: CloudListRequest = serde_json::from_value(json!({
+            "accountId": "drive-1",
+            "folderPath": "/docs",
+            "search": "plan",
+            "includeFolders": true,
+        }))
+        .expect("list request");
+        assert_eq!(list.account_id, "drive-1");
+        assert_eq!(list.folder_path.as_deref(), Some("/docs"));
+        assert_eq!(list.search.as_deref(), Some("plan"));
+        assert!(list.include_folders);
+
+        let upload: CloudUploadRequest = serde_json::from_value(json!({
+            "accountId": "drive-1",
+            "localPath": "/tmp/plan.md",
+            "remotePath": "/docs/plan.md",
+        }))
+        .expect("upload request");
+        assert_eq!(upload.local_path, "/tmp/plan.md");
+        assert_eq!(upload.remote_path, "/docs/plan.md");
+
+        let download: CloudDownloadRequest = serde_json::from_value(json!({
+            "accountId": "drive-1",
+            "remotePath": "/docs/plan.md",
+            "localPath": "/tmp/plan.md",
+        }))
+        .expect("download request");
+        assert_eq!(download.account_id, "drive-1");
+        assert_eq!(download.local_path, "/tmp/plan.md");
+
+        let path: CloudPathRequest = serde_json::from_value(json!({
+            "accountId": "drive-1",
+            "remotePath": "/docs/old.md",
+        }))
+        .expect("delete and create-folder request");
+        assert_eq!(path.remote_path, "/docs/old.md");
+
+        let share: CloudShareRequest = serde_json::from_value(json!({
+            "accountId": "drive-1",
+            "remotePath": "/docs/plan.md",
+            "allowEdit": true,
+        }))
+        .expect("share request");
+        assert_eq!(share.remote_path, "/docs/plan.md");
+        assert!(share.allow_edit);
+
+        let complete: CloudCompleteOAuthRequest =
+            serde_json::from_value(json!({ "state": "s-1", "code": "c-1" }))
+                .expect("complete request");
+        assert_eq!(
+            (complete.state.as_str(), complete.code.as_str()),
+            ("s-1", "c-1")
+        );
+    }
+
+    /// The store reads these replies by their snake_case names.
+    #[test]
+    fn the_replies_keep_the_names_the_cloud_store_reads() {
+        let started = serde_json::to_value(CloudAuthorizationResponse {
+            auth_url: "https://accounts.example/authorize".to_string(),
+            state: "s-1".to_string(),
+        })
+        .expect("authorization reply");
+        assert_eq!(started["auth_url"], "https://accounts.example/authorize");
+
+        let account = serde_json::to_value(CloudAccount {
+            account_id: "drive-1".to_string(),
+            provider: CloudProvider::GoogleDrive,
+            label: None,
+        })
+        .expect("account");
+        assert_eq!(account["account_id"], "drive-1");
+        assert_eq!(account["provider"], "google_drive");
+
+        let link = serde_json::to_value(ShareLink {
+            url: "https://share.example/1".to_string(),
+            expires_at: None,
+            scope: None,
+            allow_edit: true,
+        })
+        .expect("share link");
+        assert_eq!(link["allow_edit"], true);
+    }
 }

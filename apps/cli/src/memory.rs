@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
@@ -165,8 +164,9 @@ Move the file to {} (or run `agi migrate`) to keep using it going forward.",
             });
         }
 
+        let project_root = self.project_path.as_deref().and_then(Path::parent);
         if let Some(ref pp) = self.project_path {
-            if let Some(content) = read_if_exists(pp) {
+            if let Some(content) = read_project_memory(project_root, pp) {
                 entries.push(MemoryEntry {
                     content,
                     source: MemoryTier::Project,
@@ -176,7 +176,7 @@ Move the file to {} (or run `agi migrate`) to keep using it going forward.",
         }
 
         if let Some(ref lp) = self.local_path {
-            if let Some(content) = read_if_exists(lp) {
+            if let Some(content) = read_project_memory(project_root, lp) {
                 entries.push(MemoryEntry {
                     content,
                     source: MemoryTier::Local,
@@ -378,19 +378,26 @@ pub fn load_rules(cwd: &Path) -> Vec<Rule> {
     // Project-level rules
     let project_root = find_git_root(cwd);
     if let Some(ref root) = project_root {
-        load_rules_from_dir(&root.join(".agiworkforce").join("rules"), &mut rules);
+        load_rules_from_dir(
+            &root.join(".agiworkforce").join("rules"),
+            Some(root.as_path()),
+            &mut rules,
+        );
     }
 
     // Global rules (only .md files, skip .rules which are exec-policy files)
     if let Some(home) = dirs::home_dir() {
-        load_rules_from_dir(&home.join(".agiworkforce").join("rules"), &mut rules);
+        load_rules_from_dir(&home.join(".agiworkforce").join("rules"), None, &mut rules);
     }
 
     rules
 }
 
 /// Scan a directory for `.md` rule files and parse each one.
-fn load_rules_from_dir(dir: &Path, rules: &mut Vec<Rule>) {
+///
+/// `project` is the project a rules folder belongs to. Its files are
+/// repository content, read only where they are regular files inside it.
+fn load_rules_from_dir(dir: &Path, project: Option<&Path>, rules: &mut Vec<Rule>) {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return,
@@ -399,16 +406,25 @@ fn load_rules_from_dir(dir: &Path, rules: &mut Vec<Rule>) {
     for entry in entries.flatten() {
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) == Some("md") {
-            if let Some(rule) = parse_rule_file(&path) {
+            let content = match project {
+                Some(root) => crate::project_text::read_within(root, &path),
+                None => std::fs::read_to_string(&path).ok(),
+            };
+            if let Some(rule) = content.and_then(|content| parse_rule(&path, content)) {
                 rules.push(rule);
             }
         }
     }
 }
 
-/// Parse a single `.md` rule file, extracting YAML frontmatter globs and kind.
+#[cfg(test)]
 fn parse_rule_file(path: &Path) -> Option<Rule> {
-    let content = std::fs::read_to_string(path).ok()?;
+    parse_rule(path, std::fs::read_to_string(path).ok()?)
+}
+
+/// Parse the text of one `.md` rule file, extracting YAML frontmatter globs
+/// and kind.
+fn parse_rule(path: &Path, content: String) -> Option<Rule> {
     if content.trim().is_empty() {
         return None;
     }
@@ -647,6 +663,14 @@ pub fn activate_matching_rules(
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// A memory file a project supplies, read only where it is a regular file
+/// inside that project: `root` when one was found, else the folder the file
+/// is in. Empty counts as absent.
+fn read_project_memory(root: Option<&Path>, path: &Path) -> Option<String> {
+    let root = root.or_else(|| path.parent())?;
+    crate::project_text::read_within(root, path).filter(|content| !content.trim().is_empty())
+}
+
 /// Read a file's contents if it exists and is readable.
 fn read_if_exists(path: &Path) -> Option<String> {
     if !path.exists() {
@@ -664,11 +688,11 @@ fn read_if_exists(path: &Path) -> Option<String> {
 /// Falls back to walking up looking for `.git` if git is unavailable.
 fn find_git_root(start: &Path) -> Option<PathBuf> {
     // Try git command first (most accurate)
-    let output = Command::new("git")
+    let mut command = agiworkforce_worktree::host_git();
+    command
         .args(["rev-parse", "--show-toplevel"])
-        .current_dir(start)
-        .output()
-        .ok();
+        .current_dir(start);
+    let output = crate::platform::runtime::git::host_git_output(command).ok();
 
     if let Some(out) = output {
         if out.status.success() {

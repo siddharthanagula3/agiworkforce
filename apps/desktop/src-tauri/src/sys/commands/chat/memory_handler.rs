@@ -1,44 +1,21 @@
 //! Chat memory integration handler
 //!
-//! This module handles automatic memory loading and saving in chat interactions.
-//! It integrates memories into LLM context and detects/saves architectural decisions.
+//! Loads account and project memories into the LLM context for a chat turn.
 
-use crate::core::agi::memory_manager::{MemoryCategory, MemoryManager};
+use crate::core::agi::memory_manager::MemoryManager;
 use crate::core::agi::project_memory::ProjectMemoryManager;
 use crate::core::llm::memory_integration::{
     MemoryInjectionConfig, MemoryInjectionResult, MemoryInjector,
 };
 use crate::sys::error::{Error, Result};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
-
-/// Request to load project memories for chat context
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LoadProjectMemoriesRequest {
-    pub project_path: Option<String>,
-}
+use tracing::{info, warn};
 
 /// Response from memory loading
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoadProjectMemoriesResponse {
     pub injection_result: MemoryInjectionResult,
     pub system_prompt_enhancement: String,
-    pub message: String,
-}
-
-/// Request to save a decision to memory
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SaveDecisionRequest {
-    pub message: String,
-    pub auto_detected: bool,
-}
-
-/// Response from decision saving
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SaveDecisionResponse {
-    pub memory_id: i64,
-    pub topic: String,
-    pub importance: i32,
     pub message: String,
 }
 
@@ -50,19 +27,6 @@ pub struct ChatMemoryHandler {
 }
 
 impl ChatMemoryHandler {
-    /// Create a new chat memory handler
-    pub fn new(memory_manager: Option<std::sync::Arc<MemoryManager>>) -> Result<Self> {
-        Self::with_config(memory_manager, MemoryInjectionConfig::default())
-    }
-
-    /// Create a handler using the process policy selected by Settings.
-    pub fn with_config(
-        memory_manager: Option<std::sync::Arc<MemoryManager>>,
-        config: MemoryInjectionConfig,
-    ) -> Result<Self> {
-        Self::with_project_config(memory_manager, None, config)
-    }
-
     /// Create a handler backed by both global and exact-folder project memory.
     pub fn with_project_config(
         memory_manager: Option<std::sync::Arc<MemoryManager>>,
@@ -133,124 +97,6 @@ impl ChatMemoryHandler {
             system_prompt_enhancement: system_prompt,
             message,
         })
-    }
-
-    /// Detect and save a decision from chat message
-    pub async fn detect_and_save_decision(
-        &self,
-        message: &str,
-        project_path: Option<&str>,
-    ) -> Result<Option<SaveDecisionResponse>> {
-        let detection = self.injector.detect_decision(message);
-
-        if !detection.is_decision {
-            return Ok(None);
-        }
-
-        let topic = detection.topic.unwrap_or_else(|| {
-            message
-                .chars()
-                .take(30)
-                .collect::<String>()
-                .replace(" ", "_")
-        });
-
-        // A turn attached to a project writes to that exact folder's dedicated
-        // store. Unscoped turns retain the global user-memory behavior.
-        let memory_id = match (
-            self.project_memory_manager.as_ref(),
-            project_path.map(str::trim).filter(|path| !path.is_empty()),
-        ) {
-            (Some(project_manager), Some(path)) => {
-                let project_manager = project_manager.read().await;
-                project_manager.save_architectural_decision(
-                    path,
-                    message,
-                    "Auto-detected from a completed chat turn.",
-                    Some("accepted"),
-                    Some(detection.importance),
-                )?
-            }
-            (None, Some(_)) => {
-                return Err(Error::Other(
-                    "Project memory manager not initialized for scoped decision".to_string(),
-                ));
-            }
-            (_, None) => {
-                let manager = self
-                    .memory_manager
-                    .as_ref()
-                    .ok_or_else(|| Error::Other("Memory manager not initialized".to_string()))?;
-                manager.remember(
-                    MemoryCategory::Decision,
-                    &topic,
-                    message,
-                    Some(detection.importance),
-                    Some("auto-detected from chat"),
-                )?
-            }
-        };
-
-        info!(
-            "[ChatMemory] Saved decision '{}' (importance: {}, id: {})",
-            topic, detection.importance, memory_id
-        );
-
-        Ok(Some(SaveDecisionResponse {
-            memory_id,
-            topic,
-            importance: detection.importance,
-            message: format!("Decision saved: {}", message),
-        }))
-    }
-
-    /// Manually save a decision to memory
-    pub fn save_decision(&self, request: SaveDecisionRequest) -> Result<SaveDecisionResponse> {
-        let manager = self
-            .memory_manager
-            .as_ref()
-            .ok_or_else(|| Error::Other("Memory manager not initialized".to_string()))?;
-
-        let detection = self.injector.detect_decision(&request.message);
-
-        let topic = detection.topic.unwrap_or_else(|| {
-            request
-                .message
-                .chars()
-                .take(30)
-                .collect::<String>()
-                .replace(" ", "_")
-        });
-
-        let memory_id = manager.remember(
-            MemoryCategory::Decision,
-            &topic,
-            &request.message,
-            Some(detection.importance),
-            Some(if request.auto_detected {
-                "auto-detected from chat"
-            } else {
-                "manually saved from chat"
-            }),
-        )?;
-
-        info!(
-            "[ChatMemory] Saved decision '{}' (importance: {}, auto: {})",
-            topic, detection.importance, request.auto_detected
-        );
-
-        Ok(SaveDecisionResponse {
-            memory_id,
-            topic,
-            importance: detection.importance,
-            message: format!("Decision saved: {}", request.message),
-        })
-    }
-
-    /// Set memory injection configuration
-    pub fn set_injection_config(&mut self, config: MemoryInjectionConfig) {
-        self.injector.set_config(config);
-        debug!("[ChatMemory] Updated injection configuration");
     }
 }
 
@@ -326,42 +172,26 @@ mod tests {
         (temp_dir, global, project)
     }
 
-    #[test]
-    fn test_chat_memory_handler_creation() {
-        let handler = ChatMemoryHandler::new(None).unwrap();
-        assert!(handler.memory_manager.is_none());
-        assert!(handler.project_memory_manager.is_none());
-    }
-
-    #[test]
-    fn test_decision_detection_in_handler() {
-        let handler = ChatMemoryHandler::new(None).unwrap();
-        let detection = handler.injector.detect_decision("We decided to use Rust");
-        assert!(detection.is_decision);
-    }
-
     #[tokio::test]
-    async fn project_recall_and_capture_use_the_exact_folder_store() {
+    async fn project_recall_uses_the_exact_folder_store() {
         let (_temp_dir, global, project) = setup_memory_managers(true, None);
         {
             let project = project.read().await;
             project
-                .save_project_context(
+                .save_architectural_decision(
                     "/workspace/shared",
-                    vec!["Rust".to_string()],
-                    Some("Rust"),
-                    Some("workspace-only-marker"),
-                    vec!["Tauri".to_string()],
+                    "workspace-only-marker",
+                    "Rust and Tauri",
+                    None,
                     Some(9),
                 )
                 .unwrap();
             project
-                .save_project_context(
+                .save_architectural_decision(
                     "/other/shared",
-                    vec!["TypeScript".to_string()],
-                    Some("TypeScript"),
-                    Some("other-only-marker"),
-                    vec!["Next.js".to_string()],
+                    "other-only-marker",
+                    "TypeScript and Next.js",
+                    None,
                     Some(9),
                 )
                 .unwrap();
@@ -388,24 +218,6 @@ mod tests {
             .system_prompt_enhancement
             .contains("/workspace/shared"));
         assert!(!recalled.system_prompt_enhancement.contains("/other/shared"));
-
-        handler
-            .detect_and_save_decision(
-                "We decided to keep exact project memory isolation.",
-                Some("/workspace/shared"),
-            )
-            .await
-            .unwrap();
-
-        let project = project.read().await;
-        let workspace_memories = project.get_project_memories("/workspace/shared").unwrap();
-        let other_memories = project.get_project_memories("/other/shared").unwrap();
-        assert_eq!(workspace_memories.len(), 2);
-        assert_eq!(other_memories.len(), 1);
-        assert!(workspace_memories
-            .iter()
-            .any(|memory| memory.content.contains("exact project memory isolation")));
-        assert!(global.get_important_memories(1).unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -428,24 +240,5 @@ mod tests {
         assert!(!recalled
             .system_prompt_enhancement
             .contains("legacy-decision-must-not-enter-project-prompt"));
-    }
-
-    #[tokio::test]
-    async fn scoped_capture_without_project_store_fails_closed() {
-        let (_temp_dir, global, _project) = setup_memory_managers(false, None);
-        let handler =
-            ChatMemoryHandler::with_config(Some(global.clone()), MemoryInjectionConfig::default())
-                .unwrap();
-
-        let error = handler
-            .detect_and_save_decision(
-                "We decided this must remain inside the selected repository.",
-                Some("/workspace/scoped"),
-            )
-            .await
-            .unwrap_err();
-
-        assert!(error.to_string().contains("Project memory manager"));
-        assert!(global.get_important_memories(1).unwrap().is_empty());
     }
 }

@@ -11,8 +11,10 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Bundle IDs (macOS) and process names (Windows) that are ALWAYS blocked
-/// regardless of user-configured permissions. Mirrors Claude Cowork's
-/// hard-blocked categories: investment / brokerage / crypto / banking.
+/// regardless of user-configured permissions: money (brokerage, crypto,
+/// banking, payments), and the apps that would let input reach past the
+/// per-app gate itself (terminals, password managers, the system's security
+/// and settings surfaces).
 ///
 /// On macOS, matches against the foreground app's bundle identifier. On Windows
 /// and Linux the OS reports only a process name, so `is_always_blocked_bundle`
@@ -51,7 +53,83 @@ pub const ALWAYS_BLOCKED_BUNDLE_IDS: &[&str] = &[
     "com.squareup.cash",
     "com.paypal.ppclient",
     "com.zellepay.zelle",
+    // Terminals: typing into one is running a command
+    "com.apple.Terminal",
+    "com.googlecode.iterm2",
+    "dev.warp.Warp-Stable",
+    "net.kovidgoyal.kitty",
+    "com.mitchellh.ghostty",
+    "io.alacritty",
+    "co.zeit.hyper",
+    // Password managers
+    "com.1password.1password",
+    "com.agilebits.onepassword7",
+    "com.bitwarden.desktop",
+    "com.lastpass.LastPass",
+    "com.dashlane.dashlanephonefinal",
+    "com.apple.Passwords",
+    // System security and settings, where permissions and secrets are granted
+    "com.apple.keychainaccess",
+    "com.apple.SecurityAgent",
+    "com.apple.LocalAuthentication.UIAgent",
+    "com.apple.systempreferences",
+    "com.apple.Settings",
 ];
+
+/// Window-title fragments that mark a screen as one whose pixels routinely
+/// hold secrets, such as a browser on a sign-in or bank page. A title only
+/// ever adds sensitivity: it is free text any app or page sets, so it can
+/// mark a capture sensitive but never clear an app on the list above.
+pub const SENSITIVE_TITLE_FRAGMENTS: &[&str] = &[
+    "password",
+    "passphrase",
+    "credential",
+    "keychain",
+    "keyring",
+    "sign in",
+    "signin",
+    "log in",
+    "login",
+    "authenticator",
+    "one-time",
+    "one time code",
+    "otp",
+    "2fa",
+    "two-factor",
+    "verification code",
+    "security code",
+    "secret",
+    "api key",
+    "private key",
+    "seed phrase",
+    "recovery phrase",
+    "wallet",
+    "bank",
+    "checkout",
+    "payment",
+    "credit card",
+    "1password",
+    "bitwarden",
+    "lastpass",
+    "dashlane",
+    "keeper",
+    "vault",
+    "security preferences",
+    "system preferences",
+    "control panel",
+    "task manager",
+    "terminal",
+    "cmd.exe",
+    "powershell",
+];
+
+/// Whether a window title names a surface whose capture must stay off disk.
+pub fn is_sensitive_title(title: &str) -> bool {
+    let lowered = title.to_lowercase();
+    SENSITIVE_TITLE_FRAGMENTS
+        .iter()
+        .any(|fragment| lowered.contains(fragment))
+}
 
 /// URL host patterns that should be treated as ALWAYS blocked when the
 /// agent is targeting a browser tab via the browser bridge. Used for
@@ -87,7 +165,9 @@ pub const ALWAYS_BLOCKED_URL_HOSTS: &[&str] = &[
 ];
 
 /// Components that carry no brand and so must never block on their own.
-const GENERIC_IDENTIFIER_COMPONENTS: &[&str] = &["com", "io", "app", "us", "inc"];
+const GENERIC_IDENTIFIER_COMPONENTS: &[&str] = &[
+    "com", "io", "app", "us", "inc", "co", "dev", "net", "apple", "desktop",
+];
 
 fn brand_stem(identifier: &str) -> String {
     let lowered = identifier.to_lowercase();
@@ -189,6 +269,18 @@ pub enum PermissionStatus {
     Denied,
     /// User will be prompted each time.
     AskEveryTime,
+}
+
+impl PermissionStatus {
+    /// How far an app may be used under this status. Only `Allowed` lets a
+    /// step through; `AskEveryTime` is also what an app nobody judged gets.
+    fn latitude(self) -> u8 {
+        match self {
+            Self::Denied => 0,
+            Self::AskEveryTime => 1,
+            Self::Allowed => 2,
+        }
+    }
 }
 
 /// Permission record for a single application.
@@ -347,6 +439,39 @@ impl AppPermissionManager {
         perms.remove(app_name);
     }
 
+    /// The stored entry for a name, with the bundle id it was recorded under.
+    pub async fn entry(&self, app_name: &str) -> Option<AppPermission> {
+        self.permissions.read().await.get(app_name).cloned()
+    }
+
+    /// Whether storing `status` under this name and bundle id would let an
+    /// app be used more than it can be now. An entry answers for its name
+    /// and, for an app with no entry under its own name, for its bundle id,
+    /// so the request is compared with what each of the two has stored. A
+    /// name or bundle id with nothing stored is at `AskEveryTime`.
+    pub async fn loosens(
+        &self,
+        app_name: &str,
+        bundle_id: Option<&str>,
+        status: PermissionStatus,
+    ) -> bool {
+        let unjudged = PermissionStatus::AskEveryTime.latitude();
+        let perms = self.permissions.read().await;
+        let for_name = perms
+            .get(app_name)
+            .map_or(unjudged, |entry| entry.status.latitude());
+        let for_bundle_id = bundle_id.map(|bundle_id| {
+            perms
+                .values()
+                .filter(|entry| entry.bundle_id.as_deref() == Some(bundle_id))
+                .map(|entry| entry.status.latitude())
+                .min()
+                .unwrap_or(unjudged)
+        });
+        status.latitude() > for_name
+            || for_bundle_id.is_some_and(|stored| status.latitude() > stored)
+    }
+
     /// Returns all permissions as a list.
     pub async fn list_permissions(&self) -> Vec<AppPermission> {
         let perms = self.permissions.read().await;
@@ -422,6 +547,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn only_a_change_that_lets_an_app_be_used_more_loosens_its_permission() {
+        let mgr = AppPermissionManager::new();
+        let notes = Some("com.apple.Notes");
+        assert!(mgr.loosens("Notes", notes, PermissionStatus::Allowed).await);
+        assert!(
+            !mgr.loosens("Notes", notes, PermissionStatus::AskEveryTime)
+                .await
+        );
+        assert!(!mgr.loosens("Notes", None, PermissionStatus::Denied).await);
+
+        mgr.set_permission_with_bundle("Notes", notes, PermissionStatus::Allowed)
+            .await;
+        assert!(!mgr.loosens("Notes", notes, PermissionStatus::Allowed).await);
+        assert!(!mgr.loosens("Notes", notes, PermissionStatus::Denied).await);
+
+        let mail = Some("com.apple.mail");
+        mgr.set_permission_with_bundle("Mail", mail, PermissionStatus::Denied)
+            .await;
+        assert!(
+            mgr.loosens("Mail", mail, PermissionStatus::AskEveryTime)
+                .await
+        );
+        assert!(mgr.loosens("Mail", mail, PermissionStatus::Allowed).await);
+        assert_eq!(
+            mgr.entry("Mail").await.and_then(|entry| entry.bundle_id),
+            Some("com.apple.mail".to_string())
+        );
+        assert!(mgr.entry("Calendar").await.is_none());
+    }
+
+    /// An entry answers for its name and for its bundle id. Reusing an
+    /// allowed one of the two beside a new one of the other would allow a
+    /// second app, so it counts as loosening.
+    #[tokio::test]
+    async fn an_allowed_entry_does_not_cover_a_second_name_or_bundle_id() {
+        let mgr = AppPermissionManager::new();
+        mgr.set_permission_with_bundle("Notes", Some("com.apple.Notes"), PermissionStatus::Allowed)
+            .await;
+
+        assert!(
+            mgr.loosens(
+                "Calculator",
+                Some("com.apple.Notes"),
+                PermissionStatus::Allowed
+            )
+            .await
+        );
+        assert!(
+            mgr.loosens("Notes", Some("com.apple.mail"), PermissionStatus::Allowed)
+                .await
+        );
+    }
+
+    #[tokio::test]
     async fn test_list_allowed_denied() {
         let mgr = AppPermissionManager::new();
         mgr.set_permission("Safari", PermissionStatus::Allowed)
@@ -479,6 +658,46 @@ mod tests {
                 mgr.decide(identifier, None).await,
                 PermissionStatus::Denied,
                 "{identifier} reached the agent unblocked"
+            );
+        }
+    }
+
+    /// Input into a terminal runs commands, into a password manager or the
+    /// keychain reads secrets, and into System Settings or an authorization
+    /// prompt grants permissions, so none of them can be allowed per app.
+    #[tokio::test]
+    async fn terminals_password_managers_and_security_surfaces_are_always_blocked() {
+        let mgr = AppPermissionManager::new();
+        for (name, bundle_id) in [
+            ("Terminal", "com.apple.Terminal"),
+            ("iTerm2", "com.googlecode.iterm2"),
+            ("Warp", "dev.warp.Warp-Stable"),
+            ("Ghostty", "com.mitchellh.ghostty"),
+            ("1Password", "com.1password.1password"),
+            ("Bitwarden", "com.bitwarden.desktop"),
+            ("Passwords", "com.apple.Passwords"),
+            ("Keychain Access", "com.apple.keychainaccess"),
+            ("SecurityAgent", "com.apple.SecurityAgent"),
+            ("System Settings", "com.apple.systempreferences"),
+        ] {
+            mgr.set_permission_with_bundle(name, Some(bundle_id), PermissionStatus::Allowed)
+                .await;
+            assert_eq!(
+                mgr.decide(name, Some(bundle_id)).await,
+                PermissionStatus::Denied,
+                "{bundle_id} was allowed by a user setting"
+            );
+        }
+    }
+
+    /// The new entries carry generic components; none of them may block an
+    /// unrelated app that merely shares one.
+    #[test]
+    fn a_shared_generic_component_blocks_nothing_on_its_own() {
+        for identifier in ["dev", "net", "co", "apple", "desktop", "com.apple.Notes"] {
+            assert!(
+                !is_always_blocked_bundle(identifier),
+                "{identifier} was blocked"
             );
         }
     }

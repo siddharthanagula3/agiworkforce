@@ -210,7 +210,7 @@ pub async fn dispatch(
     executor: Arc<dyn McpServerExecutor>,
 ) -> JsonRpcResponse {
     match request.method.as_str() {
-        "tools/list" => handle_tools_list(request, enabled_tools),
+        "tools/list" => handle_tools_list(request, enabled_tools, executor.as_ref()),
         "tools/call" => handle_tools_call(request, enabled_tools, executor).await,
         _ => JsonRpcResponse::error(
             request.id.clone(),
@@ -220,9 +220,20 @@ pub async fn dispatch(
     }
 }
 
-fn handle_tools_list(request: &JsonRpcRequest, enabled_tools: &[String]) -> JsonRpcResponse {
+fn handle_tools_list(
+    request: &JsonRpcRequest,
+    enabled_tools: &[String],
+    executor: &dyn McpServerExecutor,
+) -> JsonRpcResponse {
     use crate::core::mcp::server::tools::McpServerToolRegistry;
-    let tools = McpServerToolRegistry::list_tools(enabled_tools);
+    let tools: Vec<Value> = McpServerToolRegistry::list_tools(enabled_tools)
+        .into_iter()
+        .filter(|tool| {
+            tool.get("name")
+                .and_then(Value::as_str)
+                .is_none_or(|name| executor.switched_off(name).is_none())
+        })
+        .collect();
     JsonRpcResponse::success(request.id.clone(), json!({ "tools": tools }))
 }
 
@@ -322,6 +333,10 @@ async fn handle_tools_call(
         );
     }
 
+    if let Some(off) = executor.switched_off(&call_params.name) {
+        return JsonRpcResponse::error(request.id.clone(), INVALID_PARAMS as i32, off);
+    }
+
     let arguments: HashMap<String, Value> = call_params.arguments.unwrap_or_default();
     let tool_schema = McpServerToolRegistry::list_tools(enabled_tools)
         .into_iter()
@@ -354,10 +369,15 @@ mod tests {
     struct StubExecutor {
         last_call: Mutex<Option<(String, HashMap<String, Value>)>>,
         outcome: Mutex<Option<McpServerToolOutcome>>,
+        switched_off: Mutex<HashMap<String, String>>,
     }
 
     #[async_trait]
     impl McpServerExecutor for StubExecutor {
+        fn switched_off(&self, tool_name: &str) -> Option<String> {
+            self.switched_off.lock().get(tool_name).cloned()
+        }
+
         async fn execute_tool(
             &self,
             tool_name: &str,
@@ -401,6 +421,50 @@ mod tests {
         assert_eq!(
             executor.last_call.lock().as_ref().unwrap().1["message"],
             "hello"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_tool_whose_capability_is_off_is_neither_listed_nor_run() {
+        let executor = Arc::new(StubExecutor::default());
+        executor.switched_off.lock().insert(
+            "agi_bash".to_string(),
+            "Terminal is turned off in Settings, Capabilities.".to_string(),
+        );
+
+        let list = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: "tools/list".to_string(),
+            params: None,
+            id: Some(json!(1)),
+        };
+        let listed = dispatch(&list, &[], executor.clone()).await;
+        let names: Vec<String> = listed.result.as_ref().unwrap()["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|tool| tool["name"].as_str().unwrap().to_string())
+            .collect();
+        assert!(!names.iter().any(|name| name == "agi_bash"), "{names:?}");
+        assert!(names.iter().any(|name| name == "agi_chat"));
+
+        let call = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: "tools/call".to_string(),
+            params: Some(json!({ "name": "agi_bash", "arguments": { "command": "pwd" } })),
+            id: Some(json!(2)),
+        };
+        let refused = dispatch(&call, &[], executor.clone()).await;
+        assert!(refused.result.is_none());
+        assert!(refused
+            .error
+            .as_ref()
+            .unwrap()
+            .message
+            .starts_with("Terminal is turned off"));
+        assert!(
+            executor.last_call.lock().is_none(),
+            "a refused call never reaches the executor"
         );
     }
 

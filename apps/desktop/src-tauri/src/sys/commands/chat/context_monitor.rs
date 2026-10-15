@@ -251,18 +251,6 @@ pub async fn maybe_compact_context(
         },
     );
 
-    // Also emit the legacy event for backwards compatibility
-    let _ = app_handle.emit(
-        "chat:context-compacted",
-        &CompactionCompletedEvent {
-            conversation_id,
-            messages_compacted,
-            tokens_before,
-            tokens_after,
-            savings_percent,
-        },
-    );
-
     Ok(true)
 }
 

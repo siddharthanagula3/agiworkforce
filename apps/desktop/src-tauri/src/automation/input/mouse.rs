@@ -269,18 +269,14 @@ impl MouseSimulator {
     }
 
     pub fn scroll(&mut self, delta: i32) -> Result<()> {
+        self.scroll_along(delta, enigo::Axis::Vertical)
+    }
+
+    pub fn scroll_along(&mut self, delta: i32, axis: enigo::Axis) -> Result<()> {
         let _enigo_lock = lock_enigo()?;
         self.enigo
-            .scroll(delta, enigo::Axis::Vertical)
+            .scroll(delta, axis)
             .map_err(|e| anyhow!("Failed to scroll: {:?}", e))
-    }
-
-    pub fn scroll_up(&mut self, amount: i32) -> Result<()> {
-        self.scroll(amount)
-    }
-
-    pub fn scroll_down(&mut self, amount: i32) -> Result<()> {
-        self.scroll(-amount)
     }
 
     pub fn drag_to(&mut self, from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> Result<()> {

@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use colored::Colorize;
 use dialoguer::Confirm;
-use sha2::{Digest, Sha256};
 use tokio::io::AsyncReadExt;
 
 use crate::permissions::FilePermissionOperation;
@@ -14,8 +13,9 @@ use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalRequestKind};
 
 use super::common::{
-    display_path, generate_simple_diff, preview_string, print_tool_status, truncate_line,
-    truncate_output_with_save, validate_file_path, validate_file_write_path, MAX_FILE_LINES,
+    change_detail, display_path, generate_simple_diff, marked_lines, preview_string,
+    print_tool_status, truncate_line, truncate_output_with_save, validate_file_path,
+    validate_file_write_path, MAX_FILE_LINES,
 };
 use super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
 
@@ -176,26 +176,26 @@ fn read_existing_text_for_preview(
 
 #[cfg(test)]
 async fn patch_target_paths(patch: &str) -> std::result::Result<Vec<PathBuf>, String> {
-    let cwd = std::env::current_dir().map_err(|reason| reason.to_string())?;
+    let cwd = std::env::current_dir()
+        .map_err(|error| format!("Patch target rejected: no working directory: {error}"))?;
     patch_target_paths_with_cwd(patch, &cwd).await
 }
 
+/// The files `patch` would change, each checked as a file write is: inside
+/// the workspace and outside the folders loaded as trusted instructions. The
+/// names come from git ([`crate::apply_patch::patch_targets`]), so a patch
+/// whose targets cannot be established is an error here, never an empty list.
 pub(super) async fn patch_target_paths_with_cwd(
     patch: &str,
     cwd: &Path,
 ) -> std::result::Result<Vec<PathBuf>, String> {
-    let targets = crate::apply_patch::parsed_patch_targets(patch)
-        .await
-        .map_err(|reason| format!("Patch target rejected: {reason}"))?;
+    let targets = crate::apply_patch::patch_targets(patch, cwd).await?;
     let mut seen = HashSet::new();
     let mut paths = Vec::new();
-    for target in targets {
-        let raw = target
-            .to_str()
-            .ok_or("Patch target rejected: non-UTF-8 path")?;
-        let path = crate::path_security::validate_workspace_write_path_with_cwd(raw, cwd)
+    for target in &targets {
+        let path = crate::path_security::validate_workspace_write_path_with_cwd(&target.name, cwd)
             .map_err(|reason| format!("Patch target rejected: {reason}"))?;
-        if std::fs::symlink_metadata(cwd.join(&target))
+        if std::fs::symlink_metadata(&target.file)
             .is_ok_and(|metadata| metadata.file_type().is_symlink())
         {
             return Err("Patch target rejected: symbolic link source or target".to_string());
@@ -207,17 +207,114 @@ pub(super) async fn patch_target_paths_with_cwd(
     Ok(paths)
 }
 
-fn patch_permission_paths(patch: &str, targets: &[PathBuf]) -> Vec<PathBuf> {
-    if targets.is_empty() {
-        let digest = Sha256::digest(patch.as_bytes());
-        let hex = digest
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
-        vec![PathBuf::from(format!("patch-sha256:{hex}"))]
-    } else {
-        targets.to_vec()
+/// Where a write to `path` lands when the path is checked, before any
+/// prompt ([`agiworkforce_sandbox_policy::landing_path`]). A path whose links
+/// never settle is kept as written, which the comparison made before the
+/// write then refuses.
+fn landing_when_checked(path: &Path) -> PathBuf {
+    agiworkforce_sandbox_policy::landing_path(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+/// Why nothing may be written to `path` now, when it no longer lands at
+/// `approved`, where it did when it was checked. A prompt can stay open for
+/// minutes, and a sandboxed command still running may put a link on the way
+/// in that time: `d/x` was approved, `d` becomes a link to `.git/hooks`, and
+/// the answer would be spent on a hook.
+fn moved_since_checked(path: &Path, approved: &Path) -> Option<String> {
+    match agiworkforce_sandbox_policy::landing_path(path) {
+        Ok(landing) if landing == approved => None,
+        Ok(landing) => Some(format!(
+            "{} led to {} when it was checked and leads to {} now, so nothing was written",
+            path.display(),
+            approved.display(),
+            landing.display()
+        )),
+        Err(_) => Some(format!(
+            "{} now goes through a loop of symbolic links, so nothing was written",
+            path.display()
+        )),
     }
+}
+
+/// Whether `file`, just opened, is the file at `approved`, with no link on
+/// the way there. Comparing the path again before the open leaves the
+/// moment between the two; this is asked of the open file, which no later
+/// swap can change. A folder swapped for a link and back in that moment
+/// leaves another file, or none, at `approved`.
+#[cfg(unix)]
+fn opened_where_approved(file: &std::fs::File, approved: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let a_link_on_the_way = approved.ancestors().any(|folder| {
+        std::fs::symlink_metadata(folder).is_ok_and(|found| found.file_type().is_symlink())
+    });
+    let the_same_file = match (file.metadata(), std::fs::metadata(approved)) {
+        (Ok(opened), Ok(named)) => opened.dev() == named.dev() && opened.ino() == named.ino(),
+        _ => false,
+    };
+    !a_link_on_the_way && the_same_file
+}
+
+/// Write `contents` to `path` as `tokio::fs::write` does, creating or
+/// replacing the file, but never through a link at its last component, and
+/// only where `approved` says a write to it landed when the path was checked
+/// ([`landing_when_checked`]). The path was checked before the approval
+/// prompt, and the prompt can stay open for minutes: a link put at the name
+/// or on a folder above it in between would send the write wherever it
+/// points, such as a git hook. So the landing is compared again, the open
+/// refuses a link at the name, and the file is emptied and written only once
+/// the open file is known to be the approved one. Windows has no flag for
+/// the open and no way to ask the open file, and gets the comparison alone.
+async fn write_without_following(
+    path: &Path,
+    approved: &Path,
+    contents: &[u8],
+) -> std::io::Result<()> {
+    let target = path.to_path_buf();
+    let approved = approved.to_path_buf();
+    let contents = contents.to_vec();
+    let written = tokio::task::spawn_blocking(move || {
+        use std::io::Write;
+        let refused = |why: String| std::io::Error::new(std::io::ErrorKind::PermissionDenied, why);
+        if let Some(moved) = moved_since_checked(&target, &approved) {
+            return Err(refused(moved));
+        }
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(nix::libc::O_NOFOLLOW);
+        }
+        let mut file = options.open(&target)?;
+        #[cfg(unix)]
+        {
+            if !opened_where_approved(&file, &approved) {
+                return Err(refused(format!(
+                    "{} was moved while it was being opened, so nothing was written",
+                    target.display()
+                )));
+            }
+        }
+        file.set_len(0)?;
+        file.write_all(&contents)
+    })
+    .await
+    .map_err(std::io::Error::other)?;
+    written.map_err(|error| {
+        let is_link =
+            std::fs::symlink_metadata(path).is_ok_and(|found| found.file_type().is_symlink());
+        if is_link {
+            std::io::Error::new(
+                error.kind(),
+                format!(
+                    "{} became a symbolic link after it was checked, so nothing was written",
+                    path.display()
+                ),
+            )
+        } else {
+            error
+        }
+    })
 }
 
 /// Below this many lines a file is cheap to rewrite whole.
@@ -383,7 +480,7 @@ pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<
         }
     };
 
-    if crate::sensitive_files::is_sensitive_file(path) {
+    if crate::path_security::reads_a_credential_file(path) {
         return Ok(ToolResult {
             tool_name: "read_file".to_string(),
             success: false,
@@ -618,6 +715,7 @@ pub(super) async fn execute_write_file(
     };
 
     let file_path = validated_path.as_path();
+    let approved = landing_when_checked(file_path);
     let shown_path = display_path(file_path);
     print_tool_status("write_file", &format!("Write({})", shown_path));
 
@@ -754,6 +852,13 @@ pub(super) async fn execute_write_file(
         }
     }
 
+    if let Some(moved) = moved_since_checked(file_path, &approved) {
+        return Ok(ToolResult {
+            tool_name: "write_file".to_string(),
+            success: false,
+            output: moved,
+        });
+    }
     if let Some(parent) = file_path.parent() {
         if !parent.exists() {
             if let Err(e) = tokio::fs::create_dir_all(parent).await {
@@ -768,7 +873,7 @@ pub(super) async fn execute_write_file(
 
     let edited = crate::tools::take_approved_edit();
     let content = edited.as_deref().unwrap_or(content.as_str());
-    match tokio::fs::write(file_path, content).await {
+    match write_without_following(file_path, &approved, content.as_bytes()).await {
         Ok(()) => {
             crate::file_state::record_file_write(file_path, content);
             let line_count = content.lines().count();
@@ -794,37 +899,39 @@ pub(super) async fn execute_write_file(
     }
 }
 
+/// What the prompt for a file write shows: the file, and all of what the
+/// write changes. A file that exists is shown as the difference the write
+/// makes; a new one, or one too large to compare, as the lines written.
 fn file_write_detail(
     display_path: &str,
     content: &str,
     file_path: &std::path::Path,
     line_count: usize,
 ) -> Vec<String> {
-    if file_path.exists() && file_path.is_file() {
-        match read_existing_text_for_preview(file_path) {
-            Ok(existing) => {
-                let mut detail = vec![format!("Diff for {} ({} lines):", display_path, line_count)];
-                detail.extend(
-                    generate_simple_diff(&existing, content)
-                        .lines()
-                        .take(40)
-                        .map(str::to_string),
-                );
-                return detail;
-            }
-            Err(message) => {
-                return vec![
-                    message,
-                    format!("Will write {} lines to {}", line_count, display_path),
-                ];
-            }
+    let existing = (file_path.exists() && file_path.is_file())
+        .then(|| read_existing_text_for_preview(file_path));
+    let change = match existing {
+        Some(Ok(existing)) => {
+            let mut change = vec![format!("Diff ({line_count} lines after the write):")];
+            change.extend(
+                generate_simple_diff(&existing, content)
+                    .lines()
+                    .map(str::to_string),
+            );
+            change
         }
-    }
-
-    vec![format!(
-        "[new file] {} ({} lines)",
-        display_path, line_count
-    )]
+        Some(Err(message)) => {
+            let mut change = vec![message, format!("Will write {line_count} lines:")];
+            change.extend(marked_lines('+', content));
+            change
+        }
+        None => {
+            let mut change = vec![format!("[new file] {line_count} lines:")];
+            change.extend(marked_lines('+', content));
+            change
+        }
+    };
+    change_detail(&[display_path.to_string()], change)
 }
 
 pub(super) async fn execute_edit_file(
@@ -882,6 +989,7 @@ pub(super) async fn execute_edit_file(
     );
 
     let file_path = validated_path.as_path();
+    let approved = landing_when_checked(file_path);
     if !file_path.exists() {
         return Ok(ToolResult {
             tool_name: "edit_file".to_string(),
@@ -954,7 +1062,13 @@ pub(super) async fn execute_edit_file(
                             path: file_path.to_path_buf(),
                         },
                         "Allow this edit?",
-                        vec![format!("- {}", old_preview), format!("+ {}", new_preview)],
+                        change_detail(
+                            &[display_path(file_path)],
+                            marked_lines('-', old_string)
+                                .into_iter()
+                                .chain(marked_lines('+', new_string))
+                                .collect(),
+                        ),
                     )
                     .with_proposal(new_contents.clone())
                     .saving_always_allow(true),
@@ -1009,7 +1123,7 @@ pub(super) async fn execute_edit_file(
     let edited = crate::tools::take_approved_edit();
     let new_contents = edited.clone().unwrap_or(new_contents);
 
-    match tokio::fs::write(file_path, &new_contents).await {
+    match write_without_following(file_path, &approved, new_contents.as_bytes()).await {
         Ok(()) => {
             crate::file_state::record_file_write(file_path, &new_contents);
             Ok(ToolResult {
@@ -1058,13 +1172,17 @@ pub(super) async fn execute_apply_patch(
             });
         }
     };
+    let approved: Vec<PathBuf> = patch_paths
+        .iter()
+        .map(|path| landing_when_checked(path))
+        .collect();
     if require_confirm {
-        let permission_paths = patch_permission_paths(patch, &patch_paths);
+        let permission_paths = &patch_paths;
         print_tool_status(
             "apply_patch",
             &format!("Apply patch ({} lines)", patch.lines().count()),
         );
-        let allowed = match saved_file_permission(FilePermissionOperation::Patch, &permission_paths)
+        let allowed = match saved_file_permission(FilePermissionOperation::Patch, permission_paths)
         {
             Some(true) => true,
             Some(false) => {
@@ -1082,7 +1200,13 @@ pub(super) async fn execute_apply_patch(
                             files: patch_paths.clone(),
                         },
                         "Apply this patch?",
-                        patch.lines().take(40).map(str::to_string).collect(),
+                        change_detail(
+                            &patch_paths
+                                .iter()
+                                .map(|path| display_path(path))
+                                .collect::<Vec<_>>(),
+                            patch.lines().map(str::to_string).collect(),
+                        ),
                     )
                     .saving_always_allow(true),
                 )
@@ -1092,7 +1216,7 @@ pub(super) async fn execute_apply_patch(
                         persist_file_permission_decision(
                             decision,
                             FilePermissionOperation::Patch,
-                            &permission_paths,
+                            permission_paths,
                         );
                         true
                     } else {
@@ -1131,6 +1255,18 @@ pub(super) async fn execute_apply_patch(
                 });
             }
         }
+    }
+
+    if let Some(moved) = patch_paths
+        .iter()
+        .zip(&approved)
+        .find_map(|(path, approved)| moved_since_checked(path, approved))
+    {
+        return Ok(ToolResult {
+            tool_name: "apply_patch".into(),
+            success: false,
+            output: format!("apply_patch blocked: {moved}"),
+        });
     }
 
     match crate::apply_patch::apply_git_patch(patch, Some(&cwd)).await {
@@ -1203,6 +1339,7 @@ pub(super) async fn execute_multiedit(
     };
 
     let file_path = validated_path.as_path();
+    let approved = landing_when_checked(file_path);
     if !file_path.exists() {
         return Ok(ToolResult {
             tool_name: "multiedit".into(),
@@ -1261,7 +1398,10 @@ pub(super) async fn execute_multiedit(
                             path: file_path.to_path_buf(),
                         },
                         "Allow these edits?",
-                        diff.lines().take(40).map(str::to_string).collect(),
+                        change_detail(
+                            &[display_path(file_path)],
+                            diff.lines().map(str::to_string).collect(),
+                        ),
                     )
                     .with_proposal(updated.clone())
                     .saving_always_allow(true),
@@ -1315,7 +1455,7 @@ pub(super) async fn execute_multiedit(
 
     let edited = crate::tools::take_approved_edit();
     let updated = edited.clone().unwrap_or(updated);
-    if let Err(e) = tokio::fs::write(file_path, &updated).await {
+    if let Err(e) = write_without_following(file_path, &approved, updated.as_bytes()).await {
         return Ok(ToolResult {
             tool_name: "multiedit".into(),
             success: false,
@@ -1409,6 +1549,14 @@ pub(super) async fn execute_read_many_files(args: &HashMap<String, String>) -> R
                 continue;
             }
         };
+        if crate::path_security::reads_a_credential_file(path_str) {
+            output_parts.push(format!(
+                "--- {} ---\n[{}]",
+                path_str,
+                crate::sensitive_files::sensitive_refusal(path_str)
+            ));
+            continue;
+        }
         if !file_path.exists() {
             output_parts.push(format!("--- {} ---\n[File not found]", path_str));
             continue;
@@ -1719,12 +1867,60 @@ mod tests {
         assert_eq!(*approval_count.lock().expect("approval count lock"), 1);
     }
 
+    /// A file in a folder made in the working directory, as a patch names
+    /// it: the temporary-file crate hands back an absolute path whatever it
+    /// was given, and a patch header that spells an absolute path is refused.
+    fn named_in_the_working_directory(file: &Path) -> String {
+        let folder = file.parent().and_then(Path::file_name).expect("folder");
+        let name = file.file_name().expect("file name");
+        format!("{}/{}", folder.to_string_lossy(), name.to_string_lossy())
+    }
+
+    /// A folder made in the working directory, as a patch names it.
+    fn folder_in_the_working_directory(folder: &Path) -> String {
+        folder
+            .file_name()
+            .expect("folder")
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn no_read_tool_reads_a_credential_file_through_a_link() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        std::fs::write(tmp.path().join(".env"), "TOKEN=EXAMPLE-VALUE\n").expect("env file");
+        std::fs::write(tmp.path().join("notes.txt"), "ordinary\n").expect("notes");
+        let link = tmp.path().join("settings.txt");
+        std::os::unix::fs::symlink(".env", &link).expect("link");
+        let link = link.to_string_lossy().into_owned();
+        let notes = tmp.path().join("notes.txt").to_string_lossy().into_owned();
+
+        let one = execute_read_file(&HashMap::from([("path".to_string(), link.clone())]))
+            .await
+            .unwrap();
+        assert!(!one.success, "{}", one.output);
+        assert!(!one.output.contains("EXAMPLE-VALUE"), "{}", one.output);
+
+        let paths = serde_json::to_string(&[&link, &notes]).unwrap();
+        let many = execute_read_many_files(&HashMap::from([("paths".to_string(), paths)]))
+            .await
+            .unwrap();
+        assert!(!many.output.contains("EXAMPLE-VALUE"), "{}", many.output);
+        assert!(
+            many.output.contains("credential-file policy"),
+            "{}",
+            many.output
+        );
+        assert!(many.output.contains("ordinary"), "{}", many.output);
+    }
+
     #[tokio::test]
     async fn patch_target_paths_extracts_workspace_files() {
         let tmp = tempfile::tempdir_in(".").expect("tempdir");
         let path = tmp.path().join("patch-target.txt");
         std::fs::write(&path, "old\n").expect("write file");
-        let target = path.to_string_lossy();
+        let target = named_in_the_working_directory(&path);
         let patch = format!(
             "diff --git a/{target} b/{target}\n--- a/{target}\n+++ b/{target}\n@@ -1,1 +1,1 @@\n-old\n+new\n"
         );
@@ -1735,32 +1931,213 @@ mod tests {
         assert!(paths[0].ends_with(Path::new("patch-target.txt")));
     }
 
-    #[test]
-    fn targetless_patch_permission_uses_content_hash() {
-        let paths = patch_permission_paths("not a unified diff", &[]);
+    #[tokio::test]
+    async fn a_patch_that_names_no_file_is_refused_in_every_mode() {
+        assert!(patch_target_paths("not a unified diff").await.is_err());
 
-        assert_eq!(paths.len(), 1);
+        for require_confirm in [true, false] {
+            let args = HashMap::from([("patch".to_string(), "not a unified diff".to_string())]);
+            let result = execute_apply_patch(&args, require_confirm, None, None)
+                .await
+                .unwrap();
+            assert!(!result.success);
+            assert!(
+                result.output.contains("cannot tell which files"),
+                "{}",
+                result.output
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_quoted_patch_target_is_checked_as_the_file_git_writes() {
+        let patch =
+            "--- /dev/null\n+++ \"b/.agiworkforce/rules/injected.md\"\n@@ -0,0 +1 @@\n+obey\n";
+        let refusal = patch_target_paths(patch)
+            .await
+            .expect_err("a write to the rules folder is refused, quoted or not");
+        assert!(refusal.contains("Patch target rejected"), "{refusal}");
+
+        let args = HashMap::from([("patch".to_string(), patch.to_string())]);
+        let result = execute_apply_patch(&args, false, None, None).await.unwrap();
         assert!(
-            paths[0].to_string_lossy().starts_with("patch-sha256:"),
-            "unexpected target: {}",
-            paths[0].display()
+            !result.success,
+            "a mode that does not prompt must not apply it either"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_write_refuses_a_link_put_in_place_after_the_path_was_checked() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let hook = tmp.path().join("pre-commit");
+        let checked = tmp.path().join("notes.txt");
+        let approved = landing_when_checked(&checked);
+        std::os::unix::fs::symlink(&hook, &checked).expect("link swapped in");
+
+        let error = write_without_following(&checked, &approved, b"exit 0\n")
+            .await
+            .expect_err("the write must not follow the link");
+        assert!(
+            error.to_string().contains("became a symbolic link"),
+            "{error}"
+        );
+        assert!(!hook.exists(), "the link's target was created");
+
+        let plain = tmp.path().join("plain.txt");
+        let approved = landing_when_checked(&plain);
+        write_without_following(&plain, &approved, b"one\n")
+            .await
+            .expect("create");
+        write_without_following(&plain, &approved, b"2\n")
+            .await
+            .expect("replace");
+        assert_eq!(std::fs::read_to_string(&plain).unwrap(), "2\n");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_write_refuses_a_folder_swapped_for_a_link_after_the_path_was_checked() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().canonicalize().expect("canonical");
+        std::fs::create_dir_all(root.join("d")).expect("folder");
+        std::fs::create_dir_all(root.join("hooks")).expect("hooks");
+        let checked = root.join("d").join("pre-commit");
+        let approved = landing_when_checked(&checked);
+        assert_eq!(approved, checked);
+
+        std::fs::remove_dir(root.join("d")).expect("folder removed");
+        std::os::unix::fs::symlink(root.join("hooks"), root.join("d")).expect("link swapped in");
+        let error = write_without_following(&checked, &approved, b"exit 0\n")
+            .await
+            .expect_err("the write must not go where the folder now leads");
+        assert!(error.to_string().contains("leads to"), "{error}");
+        assert!(
+            !root.join("hooks").join("pre-commit").exists(),
+            "the hook was written through the swapped folder"
+        );
+        assert!(moved_since_checked(&checked, &approved).is_some());
+
+        let through_the_link = std::fs::File::create(root.join("d").join("opened")).expect("open");
+        assert!(
+            !opened_where_approved(&through_the_link, &root.join("d").join("opened")),
+            "a file opened through a link passed for the approved one"
+        );
+        assert!(opened_where_approved(
+            &through_the_link,
+            &root.join("hooks").join("opened")
+        ));
+        let other = std::fs::File::create(root.join("hooks").join("other")).expect("open");
+        assert!(
+            !opened_where_approved(&other, &root.join("hooks").join("opened")),
+            "another file passed for the approved one"
+        );
+
+        std::fs::remove_file(root.join("d")).expect("link removed");
+        std::fs::create_dir(root.join("d")).expect("folder back");
+        write_without_following(&checked, &approved, b"exit 0\n")
+            .await
+            .expect("the path lands where it was approved again");
+        assert_eq!(std::fs::read_to_string(&checked).unwrap(), "exit 0\n");
+    }
+
+    #[test]
+    fn a_write_prompt_names_the_file_and_shows_all_of_the_change() {
+        use super::super::common::PROMPT_CHANGE_LINES;
+
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let detail =
+            file_write_detail("new.txt", "first\nsecond\n", &tmp.path().join("new.txt"), 2);
+        assert_eq!(
+            detail,
+            [
+                "file: new.txt",
+                "[new file] 2 lines:",
+                "+ first",
+                "+ second"
+            ]
+        );
+
+        let existing = tmp.path().join("old.txt");
+        std::fs::write(&existing, "kept\nold\n").expect("write file");
+        let detail = file_write_detail("old.txt", "kept\nnew\n", &existing, 2);
+        assert_eq!(detail[0], "file: old.txt");
+        for line in [" kept", "-old", "+new"] {
+            assert!(
+                detail.iter().any(|shown| shown == line),
+                "{line}: {detail:?}"
+            );
+        }
+
+        let lines = PROMPT_CHANGE_LINES + 50;
+        let long: String = (0..lines).map(|line| format!("line {line}\n")).collect();
+        let detail = file_write_detail("long.txt", &long, &tmp.path().join("long.txt"), lines);
+        assert_eq!(detail.len(), 1 + PROMPT_CHANGE_LINES + 1);
+        assert_eq!(
+            detail.last().map(String::as_str),
+            Some("… 51 more line(s) of this change are not shown here")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_patch_prompt_lists_every_file_before_the_whole_patch() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let mut patch = String::new();
+        for name in ["one.txt", "two.txt"] {
+            let path = tmp.path().join(name);
+            std::fs::write(&path, "old\n").expect("write file");
+            let target = named_in_the_working_directory(&path);
+            patch.push_str(&format!(
+                "diff --git a/{target} b/{target}\n--- a/{target}\n+++ b/{target}\n@@ -1,1 +1,1 @@\n-old\n+new\n"
+            ));
+        }
+        let seen: std::sync::Arc<std::sync::Mutex<Vec<String>>> = Default::default();
+        let seen_for_callback = std::sync::Arc::clone(&seen);
+        let callback: ApprovalCallback = std::sync::Arc::new(move |request| {
+            let seen_for_callback = std::sync::Arc::clone(&seen_for_callback);
+            Box::pin(async move {
+                *seen_for_callback.lock().expect("seen lock") = request.detail;
+                crate::tui::approval_broker::ApprovalDecision::Deny
+            })
+        });
+        let args = HashMap::from([("patch".to_string(), patch.clone())]);
+
+        let result = execute_apply_patch(&args, true, Some(&callback), None)
+            .await
+            .unwrap();
+
+        assert!(!result.success);
+        let detail = seen.lock().expect("seen lock").clone();
+        assert!(
+            detail[0].starts_with("file: ") && detail[0].ends_with("one.txt"),
+            "{detail:?}"
+        );
+        assert!(
+            detail[1].starts_with("file: ") && detail[1].ends_with("two.txt"),
+            "{detail:?}"
+        );
+        assert_eq!(
+            detail[2..],
+            patch.lines().map(str::to_string).collect::<Vec<_>>(),
+            "the patch is shown whole after the files it changes"
         );
     }
 
     #[tokio::test]
     async fn patch_target_paths_rejects_copies_renames_and_quoted_instruction_paths() {
         let tmp = tempfile::tempdir_in(".").expect("tempdir");
-        let root = tmp.path().to_string_lossy().replace('\\', "/");
+        let root = folder_in_the_working_directory(tmp.path());
+        let cwd = std::env::current_dir().expect("working directory");
         for operation in ["copy", "rename"] {
             let patch = format!(
                 "diff --git a/{root}/notes.md b/{root}/notes.md\nsimilarity index 100%\n{operation} from {root}/notes.md\n{operation} to {root}/.agiworkforce/rules/q.md\n"
             );
-            let parsed = crate::apply_patch::parsed_patch_targets(&patch)
+            let parsed = crate::apply_patch::patch_targets(&patch, &cwd)
                 .await
                 .expect("valid patch");
             assert!(parsed
                 .iter()
-                .any(|target| target.ends_with(".agiworkforce/rules/q.md")));
+                .any(|target| target.name.ends_with(".agiworkforce/rules/q.md")));
             assert!(
                 patch_target_paths(&patch).await.is_err(),
                 "allowed {operation}"
@@ -1769,12 +2146,12 @@ mod tests {
         let patch = format!(
             "diff --git \"a/{root}/.agiworkforce/rule\\163/q.md\" \"b/{root}/.agiworkforce/rule\\163/q.md\"\nnew file mode 100644\n--- /dev/null\n+++ \"b/{root}/.agiworkforce/rule\\163/q.md\"\n@@ -0,0 +1 @@\n+injected\n"
         );
-        let parsed = crate::apply_patch::parsed_patch_targets(&patch)
+        let parsed = crate::apply_patch::patch_targets(&patch, &cwd)
             .await
             .expect("valid quoted patch");
         assert!(parsed
             .iter()
-            .any(|target| target.ends_with(".agiworkforce/rules/q.md")));
+            .any(|target| target.name.ends_with(".agiworkforce/rules/q.md")));
         assert!(
             patch_target_paths(&patch).await.is_err(),
             "allowed quoted rules"
@@ -1784,7 +2161,7 @@ mod tests {
     #[tokio::test]
     async fn patch_target_paths_rejects_new_symlinks() {
         let tmp = tempfile::tempdir_in(".").expect("tempdir");
-        let root = tmp.path().display();
+        let root = folder_in_the_working_directory(tmp.path());
         let patch = format!(
             "diff --git a/{root}/alias b/{root}/alias\nnew file mode 120000\n--- /dev/null\n+++ b/{root}/alias\n@@ -0,0 +1 @@\n+docs\n"
         );
@@ -1794,7 +2171,7 @@ mod tests {
     #[tokio::test]
     async fn patch_target_paths_rejects_protected_sources() {
         let tmp = tempfile::tempdir_in(".").expect("tempdir");
-        let root = tmp.path().display();
+        let root = folder_in_the_working_directory(tmp.path());
         for operation in ["copy", "rename"] {
             let patch = format!(
                 "diff --git a/{root}/.agiworkforce/rules/q.md b/{root}/notes.md\nsimilarity index 100%\n{operation} from {root}/.agiworkforce/rules/q.md\n{operation} to {root}/notes.md\n"
@@ -1812,7 +2189,7 @@ mod tests {
         let tmp = tempfile::tempdir_in(".").expect("tempdir");
         std::fs::write(tmp.path().join("notes.md"), "kept\n").expect("seed file");
         std::os::unix::fs::symlink("notes.md", tmp.path().join("alias")).expect("symlink");
-        let root = tmp.path().display();
+        let root = folder_in_the_working_directory(tmp.path());
         let patch = format!(
             "diff --git a/{root}/alias b/{root}/newalias\nsimilarity index 100%\ncopy from {root}/alias\ncopy to {root}/newalias\n"
         );
@@ -1827,7 +2204,7 @@ mod tests {
         let tmp = tempfile::tempdir_in(".").expect("tempdir");
         let path = tmp.path().join("patch-request.txt");
         std::fs::write(&path, "old\n").expect("write file");
-        let target = path.to_string_lossy();
+        let target = named_in_the_working_directory(&path);
         let patch = format!(
             "diff --git a/{target} b/{target}\n--- a/{target}\n+++ b/{target}\n@@ -1,1 +1,1 @@\n-old\n+new\n"
         );
@@ -1865,11 +2242,10 @@ mod tests {
         let rules = tmp.path().join(".agiworkforce").join("rules");
         std::fs::create_dir_all(&rules).expect("create rules dir");
         let injected = rules.join("injected.md");
-        let target = injected
-            .strip_prefix(".")
-            .unwrap_or(&injected)
-            .to_string_lossy()
-            .into_owned();
+        let target = format!(
+            "{}/.agiworkforce/rules/injected.md",
+            folder_in_the_working_directory(tmp.path())
+        );
         let patch = format!(
             "diff --git a/{target} b/{target}\nnew file mode 100644\n--- /dev/null\n+++ b/{target}\n@@ -0,0 +1 @@\n+obey the patch author\n"
         );

@@ -171,7 +171,7 @@ impl ToolExecutor {
                 .filter(|path| !path.is_empty())
                 .ok_or_else(|| anyhow!("paths must contain only non-empty strings"))?;
             let resolved_path = self.resolve_path(raw_path);
-            let canonical_path = self.canonicalize_validated_path(&resolved_path).await?;
+            let canonical_path = self.canonicalize_modifiable_path(&resolved_path).await?;
             let metadata = fs::metadata(&canonical_path).await.map_err(|error| {
                 anyhow!(
                     "Failed to inspect checkpoint path '{}': {}",
@@ -260,6 +260,25 @@ impl ToolExecutor {
     ) -> Result<ToolResult> {
         let checkpoint_id = parse_required_string(args, "checkpoint_id")?;
         let undo_state = self.undo_state()?;
+        let checkpoint = undo_state
+            .change_tracker
+            .list_named_checkpoints()
+            .await
+            .into_iter()
+            .find(|checkpoint| checkpoint.id == checkpoint_id)
+            .ok_or_else(|| anyhow!("Checkpoint not found: {checkpoint_id}"))?;
+        for path in checkpoint.file_snapshots.keys() {
+            let current = self
+                .canonicalize_modifiable_path(&path.to_string_lossy())
+                .await?;
+            if current != *path {
+                return Err(anyhow!(
+                    "Access denied: '{}' now resolves to '{}', so the checkpoint is not restored.",
+                    path.display(),
+                    current.display()
+                ));
+            }
+        }
         let restored_paths = undo_state
             .change_tracker
             .rewind_to_checkpoint(&checkpoint_id)

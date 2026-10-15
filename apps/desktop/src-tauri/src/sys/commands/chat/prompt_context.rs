@@ -126,51 +126,107 @@ pub(super) fn build_project_context_message(folder: &str) -> String {
     project_context_content
 }
 
-/// Maximum character length for project instruction content.
+/// Maximum characters of repository instruction text injected into one turn.
 const MAX_PROJECT_INSTRUCTIONS_LEN: usize = 16_000;
 
-/// Load project-specific instructions from well-known files in the project root.
-///
-/// Checks the following files in order and returns the first one found:
-/// 1. `.agi/instructions.md`
-/// 2. `CLAUDE.md`
-/// 3. `.cursor/rules`
-///
-/// Content is truncated to 16,000 characters to fit within context budgets.
-pub fn load_project_instructions(folder: &std::path::Path) -> Option<String> {
-    let candidates = [
-        folder.join(".agi/instructions.md"),
-        folder.join("CLAUDE.md"),
-        folder.join(".cursor/rules"),
-    ];
+/// Instruction files read in each directory, in this order.
+const INSTRUCTION_FILE_NAMES: [&str; 3] = ["AGENTS.md", "CLAUDE.md", ".agi/instructions.md"];
 
-    for path in &candidates {
-        if path.is_file() {
-            match std::fs::read_to_string(path) {
-                Ok(content) if !content.trim().is_empty() => {
-                    let truncated: String =
-                        content.chars().take(MAX_PROJECT_INSTRUCTIONS_LEN).collect();
-                    debug!(
-                        "[PromptContext] Loaded project instructions from {:?} ({} chars{})",
-                        path,
-                        truncated.len(),
-                        if truncated.len() < content.len() {
-                            ", truncated"
-                        } else {
-                            ""
-                        }
-                    );
-                    return Some(truncated);
-                }
-                Ok(_) => {}
+/// How far above the project folder the git root is looked for.
+const MAX_INSTRUCTION_ANCESTOR_LEVELS: usize = 5;
+
+/// Directories whose instruction files apply to `folder`, nearest first.
+///
+/// Ancestors are only included up to the enclosing git root, so a folder that
+/// is not inside a repository never reads instruction files from the user's
+/// home or other unrelated parents.
+fn instruction_directories(folder: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut chain = Vec::new();
+    let mut current = Some(folder);
+    for _ in 0..=MAX_INSTRUCTION_ANCESTOR_LEVELS {
+        let Some(dir) = current else { break };
+        chain.push(dir.to_path_buf());
+        if dir.join(".git").exists() {
+            return chain;
+        }
+        current = dir.parent();
+    }
+    vec![folder.to_path_buf()]
+}
+
+/// Load the repository instruction files that apply to `folder`.
+///
+/// Reads `AGENTS.md`, then `CLAUDE.md`, then `.agi/instructions.md` in the
+/// folder and in each parent up to the git root. Files from the nearest
+/// directory come first and win on conflict; the combined text is capped at
+/// [`MAX_PROJECT_INSTRUCTIONS_LEN`] characters and says so when it was cut.
+pub fn load_project_instructions(folder: &std::path::Path) -> Option<String> {
+    let directories = instruction_directories(folder);
+    let root = directories
+        .last()
+        .cloned()
+        .unwrap_or_else(|| folder.to_path_buf());
+    let mut sections: Vec<String> = Vec::new();
+    let mut remaining = MAX_PROJECT_INSTRUCTIONS_LEN;
+    let mut truncated = false;
+
+    'directories: for dir in &directories {
+        for name in INSTRUCTION_FILE_NAMES {
+            let path = dir.join(name);
+            if !path.is_file() {
+                continue;
+            }
+            let content = match std::fs::read_to_string(&path) {
+                Ok(content) => content,
                 Err(e) => {
                     debug!("[PromptContext] Could not read {:?}: {}", path, e);
+                    continue;
                 }
+            };
+            let content = content.trim();
+            if content.is_empty() {
+                continue;
             }
+            if remaining == 0 {
+                truncated = true;
+                break 'directories;
+            }
+            let kept: String = content.chars().take(remaining).collect();
+            let kept_len = kept.chars().count();
+            if kept_len < content.chars().count() {
+                truncated = true;
+            }
+            remaining -= kept_len;
+            let label = path
+                .strip_prefix(&root)
+                .unwrap_or(&path)
+                .display()
+                .to_string();
+            sections.push(format!("#### {}\n\n{}", label, kept));
         }
     }
 
-    None
+    if sections.is_empty() {
+        return None;
+    }
+
+    debug!(
+        "[PromptContext] Loaded {} instruction file(s){}",
+        sections.len(),
+        if truncated { ", truncated" } else { "" }
+    );
+
+    let mut prompt = String::from(
+        "Repository instruction files, nearest directory first. Where they conflict, the nearer file wins.\n\n",
+    );
+    prompt.push_str(&sections.join("\n\n"));
+    if truncated {
+        prompt.push_str(&format!(
+            "\n\n[Instruction files were cut at {} characters; the rest was not loaded.]",
+            MAX_PROJECT_INSTRUCTIONS_LEN
+        ));
+    }
+    Some(prompt)
 }
 
 /// Detect the primary project type by probing for language-specific manifest files.
@@ -202,7 +258,7 @@ pub fn detect_project_type(folder: &std::path::Path) -> String {
 /// - Project type detection
 /// - Working directory path
 /// - Tool usage instructions
-/// - Project instructions (if found via `load_project_instructions`)
+/// - Repository instruction files (see [`load_project_instructions`])
 pub fn build_coding_system_prompt(folder: &std::path::Path) -> String {
     let project_type = detect_project_type(folder);
     let folder_display = folder.to_string_lossy();
@@ -267,6 +323,56 @@ pub fn build_coding_system_prompt(folder: &std::path::Path) -> String {
     prompt
 }
 
+/// Render the instructions the user set for this chat, for all chats, and in
+/// `~/.agiworkforce/INSTRUCTIONS.md`.
+///
+/// The most specific source comes first and wins: this chat, then all chats,
+/// then the instructions file. The file is the broadest source, as it is for
+/// the CLI, which loads it before a project's own instruction files so those
+/// override it. Returns `None` when no source has text.
+pub fn build_user_instructions_prompt(
+    global: Option<&str>,
+    conversation: Option<&str>,
+    instructions_file: Option<&str>,
+) -> Option<String> {
+    let global = global.map(str::trim).filter(|text| !text.is_empty());
+    let conversation = conversation.map(str::trim).filter(|text| !text.is_empty());
+    let instructions_file = instructions_file
+        .map(str::trim)
+        .filter(|text| !text.is_empty());
+    if global.is_none() && conversation.is_none() && instructions_file.is_none() {
+        return None;
+    }
+
+    let mut prompt = String::from(
+        "## User Instructions\n\nThe user wrote these instructions. Follow them in every reply unless the current message asks otherwise. Where they conflict, the instructions for this conversation win, then the instructions for all conversations, then the instructions file. Repository instruction files also win over the instructions file.",
+    );
+    if let Some(conversation) = conversation {
+        prompt.push_str("\n\n### This conversation\n\n");
+        prompt.push_str(conversation);
+    }
+    if let Some(global) = global {
+        prompt.push_str("\n\n### All conversations\n\n");
+        prompt.push_str(global);
+    }
+    if let Some(instructions_file) = instructions_file {
+        prompt.push_str("\n\n### Instructions file (~/.agiworkforce/INSTRUCTIONS.md)\n\n");
+        let kept: String = instructions_file
+            .chars()
+            .take(MAX_PROJECT_INSTRUCTIONS_LEN)
+            .collect();
+        let cut = kept.chars().count() < instructions_file.chars().count();
+        prompt.push_str(&kept);
+        if cut {
+            prompt.push_str(&format!(
+                "\n\n[The instructions file was cut at {} characters; the rest was not loaded.]",
+                MAX_PROJECT_INSTRUCTIONS_LEN
+            ));
+        }
+    }
+    Some(prompt)
+}
+
 /// Escape XML special characters to prevent injection into XML-like prompt tags.
 pub(super) fn escape_xml(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -301,6 +407,121 @@ mod tests {
             sanitize_multiline_for_prompt("line 1\n\tline 2`\x07", 32),
             "line 1\n\tline 2"
         );
+    }
+
+    #[test]
+    fn instruction_files_read_agents_first_and_nearest_directory_first() {
+        let repo = tempfile::tempdir().unwrap();
+        std::fs::create_dir(repo.path().join(".git")).unwrap();
+        let package = repo.path().join("packages").join("app");
+        std::fs::create_dir_all(package.join(".agi")).unwrap();
+        std::fs::write(repo.path().join("AGENTS.md"), "root agents").unwrap();
+        std::fs::write(package.join("CLAUDE.md"), "package claude").unwrap();
+        std::fs::write(package.join("AGENTS.md"), "package agents").unwrap();
+        std::fs::write(package.join(".agi/instructions.md"), "package agi").unwrap();
+
+        let prompt = load_project_instructions(&package).unwrap();
+        let position = |needle: &str| prompt.find(needle).unwrap();
+
+        assert!(position("package agents") < position("package claude"));
+        assert!(position("package claude") < position("package agi"));
+        assert!(position("package agi") < position("root agents"));
+        let package_label = package.join("AGENTS.md");
+        let package_label = package_label.strip_prefix(repo.path()).unwrap().display();
+        assert!(prompt.contains(&format!("#### {package_label}")));
+        assert!(!prompt.contains("cut at"));
+    }
+
+    #[test]
+    fn instruction_files_outside_a_repository_ignore_parents() {
+        let parent = tempfile::tempdir().unwrap();
+        let folder = parent.path().join("project");
+        std::fs::create_dir(&folder).unwrap();
+        std::fs::write(parent.path().join("AGENTS.md"), "unrelated parent").unwrap();
+
+        assert!(load_project_instructions(&folder).is_none());
+
+        std::fs::write(folder.join("AGENTS.md"), "own rules").unwrap();
+        let prompt = load_project_instructions(&folder).unwrap();
+        assert!(prompt.contains("own rules"));
+        assert!(!prompt.contains("unrelated parent"));
+    }
+
+    #[test]
+    fn instruction_files_are_capped_and_say_so() {
+        let repo = tempfile::tempdir().unwrap();
+        std::fs::create_dir(repo.path().join(".git")).unwrap();
+        std::fs::write(
+            repo.path().join("AGENTS.md"),
+            "a".repeat(MAX_PROJECT_INSTRUCTIONS_LEN + 10),
+        )
+        .unwrap();
+        std::fs::write(repo.path().join("CLAUDE.md"), "never reached").unwrap();
+
+        let prompt = load_project_instructions(repo.path()).unwrap();
+        assert!(!prompt.contains("never reached"));
+        assert!(prompt.contains(&format!(
+            "cut at {} characters",
+            MAX_PROJECT_INSTRUCTIONS_LEN
+        )));
+    }
+
+    #[test]
+    fn user_instructions_put_the_conversation_before_global() {
+        assert_eq!(
+            build_user_instructions_prompt(None, Some("  "), Some("\n")),
+            None
+        );
+
+        let prompt = build_user_instructions_prompt(
+            Some("Answer in British English."),
+            Some("Be brief."),
+            None,
+        )
+        .unwrap();
+        assert!(prompt.find("Be brief.").unwrap() < prompt.find("British English").unwrap());
+        assert!(prompt.contains("### This conversation"));
+        assert!(prompt.contains("### All conversations"));
+        assert!(!prompt.contains("### Instructions file"));
+
+        let global_only =
+            build_user_instructions_prompt(Some("Use metric units."), None, None).unwrap();
+        assert!(!global_only.contains("### This conversation"));
+        assert!(global_only.contains("Use metric units."));
+    }
+
+    #[test]
+    fn the_instructions_file_is_the_broadest_source_and_comes_last() {
+        let prompt = build_user_instructions_prompt(
+            Some("Answer in British English."),
+            Some("Be brief."),
+            Some("Prefer functional patterns."),
+        )
+        .unwrap();
+        let conversation = prompt.find("Be brief.").unwrap();
+        let global = prompt.find("British English").unwrap();
+        let file = prompt.find("Prefer functional patterns.").unwrap();
+        assert!(conversation < global && global < file);
+        assert!(prompt.contains("### Instructions file (~/.agiworkforce/INSTRUCTIONS.md)"));
+        assert!(prompt.contains("then the instructions file"));
+        assert!(prompt.contains("Repository instruction files also win"));
+
+        let file_only =
+            build_user_instructions_prompt(None, None, Some("  Run tests after changes.\n"))
+                .unwrap();
+        assert!(file_only.ends_with("Run tests after changes."));
+        assert!(!file_only.contains("### All conversations"));
+    }
+
+    #[test]
+    fn an_oversized_instructions_file_is_cut_and_says_so() {
+        let oversized = "界".repeat(MAX_PROJECT_INSTRUCTIONS_LEN + 10);
+        let prompt = build_user_instructions_prompt(None, None, Some(&oversized)).unwrap();
+        assert_eq!(prompt.matches('界').count(), MAX_PROJECT_INSTRUCTIONS_LEN);
+        assert!(prompt.contains(&format!(
+            "cut at {} characters",
+            MAX_PROJECT_INSTRUCTIONS_LEN
+        )));
     }
 
     #[test]

@@ -3,6 +3,7 @@ pub mod bedrock;
 pub mod direct_api_provider;
 pub mod http_client;
 pub mod http_client_factory;
+pub mod local_endpoint;
 pub mod managed_cloud_provider;
 pub mod ollama;
 

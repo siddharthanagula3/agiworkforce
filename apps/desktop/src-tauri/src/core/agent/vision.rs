@@ -2,7 +2,6 @@ use super::*;
 use crate::automation::screen::{capture_primary_screen, capture_region};
 use anyhow::{anyhow, Result};
 use image::ImageBuffer;
-use std::path::PathBuf;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -21,16 +20,11 @@ const MAX_CAPTURE_FAILURES: u32 = 5;
 #[cfg(feature = "ocr")]
 const MIN_OCR_CONFIDENCE: f32 = 0.15;
 
-pub struct VisionAutomation {
-    screenshot_dir: PathBuf,
-}
+pub struct VisionAutomation;
 
 impl VisionAutomation {
     pub fn new() -> Result<Self> {
-        let screenshot_dir = std::env::temp_dir().join("agiworkforce_screenshots");
-        std::fs::create_dir_all(&screenshot_dir)?;
-
-        Ok(Self { screenshot_dir })
+        Ok(Self)
     }
 
     /// Returns `true` when OCR text recognition is available in this build.
@@ -100,22 +94,24 @@ impl VisionAutomation {
         }
     }
 
+    /// Saved through the shared capture gate into the app's private folder: an
+    /// agent task can run unattended, so a capture is taken only with consent
+    /// and never while a sensitive app is in front.
     pub async fn capture_screenshot(&self, region: Option<ScreenRegion>) -> Result<String> {
-        let filename = format!("screenshot_{}.png", &uuid::Uuid::new_v4().to_string()[..8]);
-        let path = self.screenshot_dir.join(&filename);
-
-        if let Some(region) = region {
-            let captured = capture_region(
-                region.x,
-                region.y,
-                region.width as u32,
-                region.height as u32,
-            )?;
-            captured.pixels.save(&path)?;
-        } else {
-            let captured = capture_primary_screen()?;
-            captured.pixels.save(&path)?;
-        }
+        let path = crate::automation::computer_use::capture_to_disk("screenshot", || {
+            Ok(match region {
+                Some(region) => {
+                    capture_region(
+                        region.x,
+                        region.y,
+                        region.width as u32,
+                        region.height as u32,
+                    )?
+                    .pixels
+                }
+                None => capture_primary_screen()?.pixels,
+            })
+        })?;
 
         Ok(path.to_string_lossy().to_string())
     }
@@ -139,16 +135,21 @@ impl VisionAutomation {
         {
             // Capture the screen exactly once -- reuse the same image for both
             // dimension detection and saving to disk for the OCR engine.
-            let captured = match capture_primary_screen() {
-                Ok(img) => img,
-                Err(e) => {
-                    tracing::warn!("Screen capture failed during find_text: {}", e);
-                    return Ok(Vec::new());
-                }
-            };
+            let mut dimensions = (0, 0);
+            let screenshot_path =
+                match crate::automation::computer_use::capture_to_disk("ocr_screenshot", || {
+                    let captured = capture_primary_screen()?;
+                    dimensions = (captured.pixels.width(), captured.pixels.height());
+                    Ok(captured.pixels)
+                }) {
+                    Ok(path) => path,
+                    Err(e) => {
+                        tracing::warn!("Screen capture not available during find_text: {}", e);
+                        return Ok(Vec::new());
+                    }
+                };
 
-            let img_width = captured.pixels.width();
-            let img_height = captured.pixels.height();
+            let (img_width, img_height) = dimensions;
 
             // Guard: reject zero-dimension captures (headless / broken display).
             if img_width == 0 || img_height == 0 {
@@ -157,14 +158,6 @@ impl VisionAutomation {
                     img_width,
                     img_height
                 );
-                return Ok(Vec::new());
-            }
-
-            // Save the already-captured image to disk for the OCR engine.
-            let filename = format!("screenshot_{}.png", &uuid::Uuid::new_v4().to_string()[..8]);
-            let screenshot_path = self.screenshot_dir.join(&filename);
-            if let Err(e) = captured.pixels.save(&screenshot_path) {
-                tracing::warn!("Failed to save screenshot for OCR: {}", e);
                 return Ok(Vec::new());
             }
 

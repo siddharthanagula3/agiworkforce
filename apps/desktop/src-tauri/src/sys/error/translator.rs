@@ -91,8 +91,6 @@ impl ErrorTranslator {
             AGIError::PlanningError(msg) => self.translate_planning_error(msg),
             AGIError::Database(msg) => self.translate_database_error(msg),
             AGIError::CommandTimeout(msg) => self.translate_command_timeout(msg),
-            AGIError::EmailSend(msg) => self.translate_email_send_error(msg),
-            AGIError::EmailParse(msg) => self.translate_email_parse_error(msg),
             AGIError::InvalidPath(msg) => self.translate_invalid_path_error(msg),
             AGIError::Provider(msg) => self.translate_provider_error(msg),
             AGIError::Http(msg) => self.translate_http_error(msg),
@@ -109,8 +107,6 @@ impl ErrorTranslator {
             ToolError::DatabaseError(msg) => self.translate_database_error(msg),
             ToolError::ApiError(msg) => self.translate_api_error(msg),
             ToolError::UIAutomationError(msg) => self.translate_ui_automation_error(msg),
-            ToolError::EmailError(msg) => self.translate_email_tool_error(msg),
-            ToolError::CalendarError(msg) => self.translate_calendar_error(msg),
             ToolError::CloudError(msg) => self.translate_cloud_error(msg),
             ToolError::CodeExecutionError(msg) => self.translate_code_execution_error(msg),
             ToolError::OCRError(msg) => self.translate_ocr_error(msg),
@@ -402,72 +398,6 @@ impl ErrorTranslator {
                 will_auto_retry: true,
                 retry_wait_seconds: Some(2),
                 user_actionable: false,
-            }
-        }
-    }
-
-    fn translate_email_tool_error(&self, msg: &str) -> FriendlyError {
-        let msg_lower = msg.to_lowercase();
-
-        if msg_lower.contains("auth") || msg_lower.contains("credential") {
-            FriendlyError {
-                message: "I couldn't access your email account.".to_string(),
-                suggestion: "Please reconnect your email account in settings.".to_string(),
-                category: FriendlyErrorCategory::NeedsAction,
-                will_auto_retry: false,
-                retry_wait_seconds: None,
-                user_actionable: true,
-            }
-        } else if msg_lower.contains("send") || msg_lower.contains("delivery") {
-            FriendlyError {
-                message: "The email couldn't be sent.".to_string(),
-                suggestion: "Please check the recipient address and try again.".to_string(),
-                category: FriendlyErrorCategory::Error,
-                will_auto_retry: false,
-                retry_wait_seconds: None,
-                user_actionable: true,
-            }
-        } else {
-            FriendlyError {
-                message: "Something went wrong with the email operation.".to_string(),
-                suggestion: "Please try again or check your email settings.".to_string(),
-                category: FriendlyErrorCategory::Temporary,
-                will_auto_retry: true,
-                retry_wait_seconds: Some(5),
-                user_actionable: true,
-            }
-        }
-    }
-
-    fn translate_calendar_error(&self, msg: &str) -> FriendlyError {
-        let msg_lower = msg.to_lowercase();
-
-        if msg_lower.contains("auth") || msg_lower.contains("permission") {
-            FriendlyError {
-                message: "I couldn't access your calendar.".to_string(),
-                suggestion: "Please reconnect your calendar account in settings.".to_string(),
-                category: FriendlyErrorCategory::NeedsAction,
-                will_auto_retry: false,
-                retry_wait_seconds: None,
-                user_actionable: true,
-            }
-        } else if msg_lower.contains("conflict") || msg_lower.contains("overlap") {
-            FriendlyError {
-                message: "There's a scheduling conflict.".to_string(),
-                suggestion: "That time slot might already be taken. Would you like to choose a different time?".to_string(),
-                category: FriendlyErrorCategory::NeedsAction,
-                will_auto_retry: false,
-                retry_wait_seconds: None,
-                user_actionable: true,
-            }
-        } else {
-            FriendlyError {
-                message: "Something went wrong with the calendar operation.".to_string(),
-                suggestion: "Please try again or check your calendar settings.".to_string(),
-                category: FriendlyErrorCategory::Temporary,
-                will_auto_retry: true,
-                retry_wait_seconds: Some(3),
-                user_actionable: true,
             }
         }
     }
@@ -892,29 +822,6 @@ impl ErrorTranslator {
             will_auto_retry: true,
             retry_wait_seconds: Some(3),
             user_actionable: false,
-        }
-    }
-
-    fn translate_email_send_error(&self, _msg: &str) -> FriendlyError {
-        FriendlyError {
-            message: "The email couldn't be sent.".to_string(),
-            suggestion: "Please check the recipient address and your email settings.".to_string(),
-            category: FriendlyErrorCategory::Error,
-            will_auto_retry: false,
-            retry_wait_seconds: None,
-            user_actionable: true,
-        }
-    }
-
-    fn translate_email_parse_error(&self, _msg: &str) -> FriendlyError {
-        FriendlyError {
-            message: "I had trouble reading that email.".to_string(),
-            suggestion: "The email format might be unusual. Please try a different email."
-                .to_string(),
-            category: FriendlyErrorCategory::Error,
-            will_auto_retry: false,
-            retry_wait_seconds: None,
-            user_actionable: true,
         }
     }
 

@@ -3,8 +3,8 @@ use agiworkforce_cli::app_server::CliDeveloperSessionHost;
 use agiworkforce_cli::config::CliConfig;
 use agiworkforce_cli::runtime::session_control::{ManagedSessionReference, ManagedSessionStore};
 use agiworkforce_protocol::developer_session::{
-    AppServerClientInfo, DeveloperSessionSource, ThreadForkParams, ThreadIdParams,
-    ThreadListParams, ThreadStartParams, ThreadStatus, TurnStartParams,
+    AppServerClientInfo, ContextInstructionsParams, DeveloperSessionSource, ThreadForkParams,
+    ThreadIdParams, ThreadListParams, ThreadStartParams, ThreadStatus, TurnStartParams,
 };
 use tempfile::tempdir;
 
@@ -76,6 +76,7 @@ async fn cli_and_vscode_share_one_persisted_thread_store() {
                 thread_id: started.id,
                 title: Some("Try another approach".to_string()),
                 through_message_index: None,
+                through_turn_id: None,
             },
             AppServerClientInfo {
                 name: "agi_vscode".to_string(),
@@ -219,6 +220,7 @@ async fn a_workspace_scoped_host_cannot_fork_or_archive_another_workspace_thread
                 thread_id: thread.id.clone(),
                 title: None,
                 through_message_index: None,
+                through_turn_id: None,
             },
             client,
         )
@@ -257,6 +259,127 @@ async fn a_workspace_scoped_host_cannot_fork_or_archive_another_workspace_thread
             .status,
         ThreadStatus::Idle
     );
+}
+
+#[tokio::test]
+async fn a_workspace_scoped_host_reads_only_from_its_own_folder() {
+    const SCOPED: &str = "This app-server is scoped to";
+
+    let session_store = tempdir().expect("session store");
+    let workspace = tempdir().expect("workspace");
+    let other_workspace = tempdir().expect("other workspace");
+    let store = ManagedSessionStore::new(session_store.path().to_path_buf());
+    let host = CliDeveloperSessionHost::new_with_store(
+        CliConfig::default(),
+        workspace.path().to_path_buf(),
+        store.clone(),
+        false,
+    )
+    .expect("host");
+    let other_host = CliDeveloperSessionHost::new_with_store(
+        CliConfig::default(),
+        other_workspace.path().to_path_buf(),
+        store,
+        false,
+    )
+    .expect("other host");
+    let own = workspace.path().display().to_string();
+    let outside = other_workspace.path().display().to_string();
+    let listing = |cwd: Option<String>| ThreadListParams {
+        cwd,
+        ..ThreadListParams::default()
+    };
+
+    let refused = host
+        .list_threads(listing(Some(outside.clone())))
+        .await
+        .expect_err("thread/list must not read another folder");
+    assert!(refused.message().contains(SCOPED), "{}", refused.message());
+    host.list_threads(listing(None))
+        .await
+        .expect("an absent cwd is the server's own folder");
+    host.list_threads(listing(Some(own.clone())))
+        .await
+        .expect("the server's own folder is accepted");
+
+    let refused = host
+        .context_instructions(ContextInstructionsParams {
+            cwd: Some(outside.clone()),
+        })
+        .await
+        .expect_err("context/instructions must not read another folder");
+    assert!(refused.message().contains(SCOPED), "{}", refused.message());
+    host.context_instructions(ContextInstructionsParams::default())
+        .await
+        .expect("an absent cwd is the server's own folder");
+    host.context_instructions(ContextInstructionsParams { cwd: Some(own) })
+        .await
+        .expect("the server's own folder is accepted");
+
+    #[cfg(unix)]
+    {
+        let links = tempdir().expect("links");
+        let alias = links.path().join("alias");
+        std::os::unix::fs::symlink(workspace.path(), &alias).expect("link to the workspace");
+        host.list_threads(listing(Some(alias.display().to_string())))
+            .await
+            .expect("a link that leads to the server's own folder names that folder");
+        let elsewhere = links.path().join("elsewhere");
+        std::os::unix::fs::symlink(other_workspace.path(), &elsewhere)
+            .expect("link to the other workspace");
+        let refused = host
+            .list_threads(listing(Some(elsewhere.display().to_string())))
+            .await
+            .expect_err("a link is judged by where it leads");
+        assert!(refused.message().contains(SCOPED), "{}", refused.message());
+    }
+    assert!(
+        host.list_threads(listing(Some(
+            workspace.path().join("missing").display().to_string()
+        )))
+        .await
+        .is_err(),
+        "a folder that is not there is not the server's own"
+    );
+
+    let foreign = other_host
+        .start_thread(
+            ThreadStartParams {
+                model: None,
+                provider: None,
+                cwd: Some(outside),
+                title: Some("Other workspace".to_string()),
+            },
+            AppServerClientInfo {
+                name: "agi_vscode".to_string(),
+                title: "AGI for VS Code".to_string(),
+                version: "0.3.0".to_string(),
+            },
+        )
+        .await
+        .expect("other workspace thread");
+    let refused = host
+        .read_thread(ThreadIdParams {
+            thread_id: foreign.id.clone(),
+        })
+        .await
+        .expect_err("a thread of another workspace must not be read by its id");
+    assert_eq!(
+        refused.message(),
+        "Thread does not belong to this workspace"
+    );
+    assert!(
+        !refused
+            .message()
+            .contains(&other_workspace.path().display().to_string()),
+        "the refusal must not say where the thread lives"
+    );
+    other_host
+        .read_thread(ThreadIdParams {
+            thread_id: foreign.id,
+        })
+        .await
+        .expect("its own workspace still reads it");
 }
 
 #[tokio::test]

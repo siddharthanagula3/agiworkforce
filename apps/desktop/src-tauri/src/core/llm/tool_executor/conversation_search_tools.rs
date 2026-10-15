@@ -1,6 +1,28 @@
 use super::*;
 
 impl ToolExecutor {
+    /// A model tool may read only history the person already sent where this
+    /// turn is going: the same account, on the running chat's own execution
+    /// boundary. A turn with no stored conversation has no such history.
+    fn running_conversation_scope(
+        &self,
+        conn: &rusqlite::Connection,
+    ) -> std::result::Result<crate::features::search::ConversationScope, String> {
+        let conversation_id = self
+            .conversation_id
+            .ok_or_else(|| "Past conversations are not available in this chat".to_string())?;
+        crate::features::search::ConversationScope::of_conversation(conn, conversation_id)
+    }
+
+    fn conversation_scope_refusal(tool_id: &str, error: String) -> ToolResult {
+        ToolResult {
+            success: false,
+            data: json!({ "error": error }),
+            error: Some(error),
+            metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+        }
+    }
+
     /// Execute the `conversation_search` agent tool.
     ///
     /// Searches past conversations for messages matching a keyword query,
@@ -30,9 +52,14 @@ impl ToolExecutor {
             let conversation_id = args.get("conversation_id").and_then(|v| v.as_i64());
 
             let conn = db_state.connection().map_err(|e| anyhow!("{}", e))?;
+            let scope = match self.running_conversation_scope(&conn) {
+                Ok(scope) => scope,
+                Err(error) => return Ok(Self::conversation_scope_refusal(tool_id, error)),
+            };
 
             match conversation_search::search_past_conversations(
                 &conn,
+                &scope,
                 &query,
                 limit,
                 conversation_id,
@@ -109,8 +136,12 @@ impl ToolExecutor {
                 .map(|v| v as usize);
 
             let conn = db_state.connection().map_err(|e| anyhow!("{}", e))?;
+            let scope = match self.running_conversation_scope(&conn) {
+                Ok(scope) => scope,
+                Err(error) => return Ok(Self::conversation_scope_refusal(tool_id, error)),
+            };
 
-            match conversation_search::get_recent_conversations(&conn, limit) {
+            match conversation_search::get_recent_conversations(&conn, &scope, limit) {
                 Ok(results) => {
                     let count = results.len();
                     let result_json: Vec<Value> = results

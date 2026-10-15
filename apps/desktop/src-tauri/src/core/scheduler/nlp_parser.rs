@@ -20,9 +20,11 @@
 //! ## Natural Patterns
 //! - "every morning" (8am), "every evening" (6pm), "every night" (10pm)
 
-use chrono::{DateTime, Datelike, Duration, Local, NaiveTime, Timelike, Utc, Weekday};
+use chrono::{
+    DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Timelike,
+    Utc, Weekday,
+};
 use regex::Regex;
-use std::str::FromStr;
 use std::sync::LazyLock;
 use thiserror::Error;
 
@@ -57,7 +59,13 @@ static RE_EVERY_UNIT: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 static RE_EVERY_DAY_AT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^every\s+day\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$").expect("RE_EVERY_DAY_AT")
+    Regex::new(r"^every\s+day\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$")
+        .expect("RE_EVERY_DAY_AT")
+});
+
+static RE_EVERY_PART_OF_DAY_AT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^every\s+(morning|afternoon|evening|night)\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$")
+        .expect("RE_EVERY_PART_OF_DAY_AT")
 });
 
 static RE_EVERY_WEEKDAY: LazyLock<Regex> = LazyLock::new(|| {
@@ -66,7 +74,7 @@ static RE_EVERY_WEEKDAY: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 static RE_EVERY_WEEKDAY_AT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$").expect("RE_EVERY_WEEKDAY_AT")
+    Regex::new(r"^every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$").expect("RE_EVERY_WEEKDAY_AT")
 });
 
 static RE_WEEKLY_ON: LazyLock<Regex> = LazyLock::new(|| {
@@ -136,31 +144,6 @@ impl ParsedSchedule {
     pub fn is_interval(&self) -> bool {
         matches!(self, Self::Interval(_))
     }
-
-    /// Gets the next execution time for this schedule.
-    ///
-    /// For `Once`, returns the scheduled time if it's in the future.
-    /// For `Cron`, calculates the next matching time.
-    /// For `Interval`, returns `now + interval`.
-    pub fn next_execution(&self) -> Option<DateTime<Utc>> {
-        let now = Utc::now();
-        match self {
-            Self::Once(dt) => {
-                if *dt > now {
-                    Some(*dt)
-                } else {
-                    None
-                }
-            }
-            Self::Cron(expr) => {
-                use cron::Schedule;
-                Schedule::from_str(expr)
-                    .ok()
-                    .and_then(|s| s.upcoming(Utc).next())
-            }
-            Self::Interval(duration) => Some(now + *duration),
-        }
-    }
 }
 
 /// Parses a natural language schedule expression into a `ParsedSchedule`.
@@ -189,10 +172,23 @@ impl ParsedSchedule {
 /// let schedule = parse_schedule("every day at 8am").unwrap();
 /// ```
 pub fn parse_schedule(input: &str) -> Result<ParsedSchedule, ParseError> {
+    parse_schedule_at(input, &Local::now())
+}
+
+/// Parses `input` as said at `now`: "tomorrow at 9" is 09:00 on the wall
+/// clock of `now`'s time zone, the day after `now`.
+pub fn parse_schedule_at<Z: TimeZone>(
+    input: &str,
+    now: &DateTime<Z>,
+) -> Result<ParsedSchedule, ParseError> {
+    if let Some(schedule) = try_parse_written_form(input.trim(), now)? {
+        return Ok(schedule);
+    }
+
     let input = input.trim().to_lowercase();
 
     // Try each parser in order of specificity
-    if let Some(schedule) = try_parse_relative_time(&input)? {
+    if let Some(schedule) = try_parse_relative_time(&input, now)? {
         return Ok(schedule);
     }
 
@@ -200,7 +196,7 @@ pub fn parse_schedule(input: &str) -> Result<ParsedSchedule, ParseError> {
         return Ok(schedule);
     }
 
-    if let Some(schedule) = try_parse_absolute_time(&input)? {
+    if let Some(schedule) = try_parse_absolute_time(&input, now)? {
         return Ok(schedule);
     }
 
@@ -213,8 +209,34 @@ pub fn parse_schedule(input: &str) -> Result<ParsedSchedule, ParseError> {
     )))
 }
 
+/// The forms the scheduling tools document besides plain phrases: a
+/// timestamp for a single time, and a cron expression for a repeating one. A
+/// timestamp with no offset is a wall-clock time in `now`'s zone.
+fn try_parse_written_form<Z: TimeZone>(
+    input: &str,
+    now: &DateTime<Z>,
+) -> Result<Option<ParsedSchedule>, ParseError> {
+    if let Ok(at) = DateTime::parse_from_rfc3339(input) {
+        return Ok(Some(ParsedSchedule::Once(at.with_timezone(&Utc))));
+    }
+    for format in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M"] {
+        if let Ok(at) = NaiveDateTime::parse_from_str(input, format) {
+            return at_wall_clock(&now.timezone(), at.date(), at.time())
+                .map(|at| Some(ParsedSchedule::Once(at)));
+        }
+    }
+    let fields = input.split_whitespace().count();
+    if (fields == 5 || fields == 6) && super::schedule::cron_schedule(input).is_ok() {
+        return Ok(Some(ParsedSchedule::Cron(input.to_string())));
+    }
+    Ok(None)
+}
+
 /// Attempts to parse a relative time expression like "in 5 minutes".
-fn try_parse_relative_time(input: &str) -> Result<Option<ParsedSchedule>, ParseError> {
+fn try_parse_relative_time<Z: TimeZone>(
+    input: &str,
+    now: &DateTime<Z>,
+) -> Result<Option<ParsedSchedule>, ParseError> {
     if let Some(caps) = RE_RELATIVE_TIME.captures(input) {
         let amount_str = caps.get(1).map(|m| m.as_str()).unwrap_or("0");
         let amount: i64 = amount_str
@@ -240,60 +262,73 @@ fn try_parse_relative_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
             ParseError::InvalidInterval(format!("Interval out of range: {amount} {unit}"))
         })?;
 
-        let target_time = Utc::now() + duration;
+        let target_time = now
+            .with_timezone(&Utc)
+            .checked_add_signed(duration)
+            .ok_or_else(|| {
+                ParseError::InvalidInterval(format!("Interval out of range: {amount} {unit}"))
+            })?;
         return Ok(Some(ParsedSchedule::Once(target_time)));
     }
 
     Ok(None)
 }
 
+/// The instant a wall-clock date and time names in `zone`. A time a clock
+/// change repeats is taken on its first pass; one a clock change skips does
+/// not exist and is refused.
+fn at_wall_clock<Z: TimeZone>(
+    zone: &Z,
+    date: NaiveDate,
+    time: NaiveTime,
+) -> Result<DateTime<Utc>, ParseError> {
+    zone.from_local_datetime(&date.and_time(time))
+        .earliest()
+        .map(|at| at.with_timezone(&Utc))
+        .ok_or_else(|| {
+            ParseError::InvalidTime(format!(
+                "{time} does not exist on {date}: the clocks change then"
+            ))
+        })
+}
+
 /// Attempts to parse an absolute time expression like "at 3pm" or "tomorrow at 9am".
-fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseError> {
+fn try_parse_absolute_time<Z: TimeZone>(
+    input: &str,
+    now: &DateTime<Z>,
+) -> Result<Option<ParsedSchedule>, ParseError> {
+    let zone = now.timezone();
+    let today = now.date_naive();
+    let tomorrow = || {
+        today
+            .succ_opt()
+            .ok_or_else(|| ParseError::InvalidDate("Cannot compute next day".to_string()))
+    };
+
     // Pattern: "at HH:MM" or "at Ham/pm"
     if let Some(caps) = RE_AT_TIME.captures(input) {
         let time = parse_time_from_captures(&caps)?;
-        let now = Local::now();
-        let target = now
-            .date_naive()
-            .and_time(time)
-            .and_local_timezone(Local)
-            .single()
-            .ok_or_else(|| ParseError::InvalidTime("Ambiguous local time".to_string()))?;
+        let target = at_wall_clock(&zone, today, time)?;
 
-        // If the time has passed today, schedule for tomorrow.
-        // Use calendar-day arithmetic (succ_opt) instead of Duration::days(1)
-        // to correctly handle DST transitions where a day may not be exactly 24 hours.
-        let target = if target <= now {
-            let tomorrow = now
-                .date_naive()
-                .succ_opt()
-                .ok_or_else(|| ParseError::InvalidDate("Cannot compute next day".to_string()))?;
-            tomorrow
-                .and_time(time)
-                .and_local_timezone(Local)
-                .single()
-                .ok_or_else(|| ParseError::InvalidTime("Ambiguous local time".to_string()))?
+        // Calendar-day arithmetic, because a day with a clock change is not
+        // 24 hours long.
+        let target = if target <= now.with_timezone(&Utc) {
+            at_wall_clock(&zone, tomorrow()?, time)?
         } else {
             target
         };
 
-        return Ok(Some(ParsedSchedule::Once(target.with_timezone(&Utc))));
+        return Ok(Some(ParsedSchedule::Once(target)));
     }
 
     // Pattern: "tomorrow at HH:MM"
     if let Some(caps) = RE_TOMORROW_AT.captures(input) {
         let time = parse_time_from_captures(&caps)?;
-        let tomorrow = Local::now()
-            .date_naive()
-            .succ_opt()
-            .ok_or_else(|| ParseError::InvalidDate("Cannot compute next day".to_string()))?;
-        let target = tomorrow
-            .and_time(time)
-            .and_local_timezone(Local)
-            .single()
-            .ok_or_else(|| ParseError::InvalidTime("Ambiguous local time".to_string()))?;
-
-        return Ok(Some(ParsedSchedule::Once(target.with_timezone(&Utc))));
+        return Ok(Some(ParsedSchedule::Once(at_wall_clock(
+            &zone,
+            tomorrow()?,
+            time,
+        )?)));
     }
 
     // Pattern: "next/this <weekday> at HH:MM"
@@ -307,14 +342,12 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
             NaiveTime::from_hms_opt(9, 0, 0).unwrap_or(NaiveTime::MIN) // Default to 9am
         };
 
-        let target_date = find_next_weekday(weekday, modifier == "next");
-        let target = target_date
-            .and_time(time)
-            .and_local_timezone(Local)
-            .single()
-            .ok_or_else(|| ParseError::InvalidTime("Ambiguous local time".to_string()))?;
-
-        return Ok(Some(ParsedSchedule::Once(target.with_timezone(&Utc))));
+        let target_date = find_next_weekday(today, weekday, modifier == "next");
+        return Ok(Some(ParsedSchedule::Once(at_wall_clock(
+            &zone,
+            target_date,
+            time,
+        )?)));
     }
 
     // Pattern: "on <month> <day>" or "on <month> <day> at HH:MM"
@@ -333,29 +366,23 @@ fn try_parse_absolute_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
             NaiveTime::from_hms_opt(9, 0, 0).unwrap_or(NaiveTime::MIN) // Default to 9am
         };
 
-        let now = Local::now();
-        let mut year = now.year();
+        let mut year = today.year();
 
         // If the date has passed this year, use next year
-        let target_date = chrono::NaiveDate::from_ymd_opt(year, month, day)
+        let target_date = NaiveDate::from_ymd_opt(year, month, day)
             .ok_or_else(|| ParseError::InvalidDate(format!("Invalid date: {month}/{day}")))?;
 
-        if target_date < now.date_naive() || (target_date == now.date_naive() && time <= now.time())
-        {
+        if target_date < today || (target_date == today && time <= now.time()) {
             year += 1;
         }
 
-        let final_date = chrono::NaiveDate::from_ymd_opt(year, month, day).ok_or_else(|| {
+        let final_date = NaiveDate::from_ymd_opt(year, month, day).ok_or_else(|| {
             ParseError::InvalidDate(format!("Invalid date: {month}/{day}/{year}"))
         })?;
 
-        let target = final_date
-            .and_time(time)
-            .and_local_timezone(Local)
-            .single()
-            .ok_or_else(|| ParseError::InvalidTime("Ambiguous local time".to_string()))?;
-
-        return Ok(Some(ParsedSchedule::Once(target.with_timezone(&Utc))));
+        return Ok(Some(ParsedSchedule::Once(at_wall_clock(
+            &zone, final_date, time,
+        )?)));
     }
 
     Ok(None)
@@ -375,13 +402,16 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
         let unit = caps.get(2).map(|m| m.as_str()).unwrap_or("");
 
         let duration = match unit {
-            "second" | "seconds" => Duration::seconds(amount),
-            "minute" | "minutes" => Duration::minutes(amount),
-            "hour" | "hours" => Duration::hours(amount),
-            "day" | "days" => Duration::days(amount),
-            "week" | "weeks" => Duration::weeks(amount),
+            "second" | "seconds" => Duration::try_seconds(amount),
+            "minute" | "minutes" => Duration::try_minutes(amount),
+            "hour" | "hours" => Duration::try_hours(amount),
+            "day" | "days" => Duration::try_days(amount),
+            "week" | "weeks" => Duration::try_weeks(amount),
             _ => return Err(ParseError::InvalidInterval(format!("Unknown unit: {unit}"))),
-        };
+        }
+        .ok_or_else(|| {
+            ParseError::InvalidInterval(format!("Interval out of range: {amount} {unit}"))
+        })?;
 
         return Ok(Some(ParsedSchedule::Interval(duration)));
     }
@@ -406,6 +436,21 @@ fn try_parse_recurring(input: &str) -> Result<Option<ParsedSchedule>, ParseError
     if let Some(caps) = RE_EVERY_DAY_AT.captures(input) {
         let time = parse_time_from_captures(&caps)?;
         let cron = format!("{} {} * * *", time.minute(), time.hour());
+        return Ok(Some(ParsedSchedule::Cron(cron)));
+    }
+
+    // Pattern: "every morning at 8am". An afternoon, evening or night hour
+    // given without am or pm is the later one: "every evening at 6" is 18:00.
+    if let Some(caps) = RE_EVERY_PART_OF_DAY_AT.captures(input) {
+        let time = parse_time_from_captures_offset(&caps, 2)?;
+        let after_noon = caps.get(1).is_some_and(|part| part.as_str() != "morning");
+        let stated_half = caps.get(4).is_some();
+        let hour = if after_noon && !stated_half && (1..12).contains(&time.hour()) {
+            time.hour() + 12
+        } else {
+            time.hour()
+        };
+        let cron = format!("{} {} * * *", time.minute(), hour);
         return Ok(Some(ParsedSchedule::Cron(cron)));
     }
 
@@ -593,9 +638,8 @@ fn weekday_to_cron(weekday: Weekday) -> u32 {
     }
 }
 
-/// Finds the next occurrence of a weekday.
-fn find_next_weekday(target: Weekday, force_next_week: bool) -> chrono::NaiveDate {
-    let today = Local::now().date_naive();
+/// Finds the next occurrence of a weekday on or after `today`.
+fn find_next_weekday(today: NaiveDate, target: Weekday, force_next_week: bool) -> NaiveDate {
     let today_weekday = today.weekday();
 
     let days_until = if target == today_weekday && !force_next_week {
@@ -1073,40 +1117,100 @@ mod tests {
     }
 
     #[test]
-    fn test_next_execution_once_future() {
-        let future_time = Utc::now() + Duration::hours(1);
-        let schedule = ParsedSchedule::Once(future_time);
-        assert!(schedule.next_execution().is_some());
+    fn a_phrase_is_read_on_the_wall_clock_of_the_zone_it_was_said_in() {
+        let tokyo: chrono_tz::Tz = "Asia/Tokyo".parse().expect("zone");
+        let now = tokyo
+            .with_ymd_and_hms(2026, 1, 15, 21, 0, 0)
+            .single()
+            .expect("a Thursday evening in Tokyo");
+        let at = |text: &str| {
+            DateTime::parse_from_rfc3339(text)
+                .expect("timestamp")
+                .with_timezone(&Utc)
+        };
+
+        assert_eq!(
+            parse_schedule_at("tomorrow at 9", &now),
+            Ok(ParsedSchedule::Once(at("2026-01-16T09:00:00+09:00")))
+        );
+        assert_eq!(
+            parse_schedule_at("at 8pm", &now),
+            Ok(ParsedSchedule::Once(at("2026-01-16T20:00:00+09:00"))),
+            "20:00 has passed today in Tokyo"
+        );
+        assert_eq!(
+            parse_schedule_at("next monday at 7:30", &now),
+            Ok(ParsedSchedule::Once(at("2026-01-19T07:30:00+09:00")))
+        );
+        assert_eq!(
+            parse_schedule_at("in 2 hours", &now),
+            Ok(ParsedSchedule::Once(at("2026-01-15T23:00:00+09:00")))
+        );
+        assert_eq!(
+            parse_schedule_at("every Monday 9am", &now),
+            Ok(ParsedSchedule::Cron("0 9 * * 1".to_string()))
+        );
+        assert_eq!(
+            parse_schedule_at("every day 7:15", &now),
+            Ok(ParsedSchedule::Cron("15 7 * * *".to_string()))
+        );
     }
 
     #[test]
-    fn test_next_execution_once_past() {
-        let past_time = Utc::now() - Duration::hours(1);
-        let schedule = ParsedSchedule::Once(past_time);
-        assert!(schedule.next_execution().is_none());
+    fn the_forms_the_scheduling_tools_document_are_all_read() {
+        let tokyo: chrono_tz::Tz = "Asia/Tokyo".parse().expect("zone");
+        let now = tokyo
+            .with_ymd_and_hms(2026, 1, 15, 21, 0, 0)
+            .single()
+            .expect("a Thursday evening in Tokyo");
+        let at = |text: &str| {
+            ParsedSchedule::Once(
+                DateTime::parse_from_rfc3339(text)
+                    .expect("timestamp")
+                    .with_timezone(&Utc),
+            )
+        };
+        let cron = |expression: &str| ParsedSchedule::Cron(expression.to_string());
+
+        assert_eq!(
+            parse_schedule_at("2026-02-01T09:00:00-05:00", &now),
+            Ok(at("2026-02-01T09:00:00-05:00"))
+        );
+        assert_eq!(
+            parse_schedule_at("2026-02-01T09:00", &now),
+            Ok(at("2026-02-01T09:00:00+09:00")),
+            "no offset means the wall clock where it was said"
+        );
+        assert_eq!(
+            parse_schedule_at("0 9 * * 1-5", &now),
+            Ok(cron("0 9 * * 1-5"))
+        );
+        assert_eq!(
+            parse_schedule_at("0 0 9 * * MON", &now),
+            Ok(cron("0 0 9 * * MON"))
+        );
+        assert_eq!(
+            parse_schedule_at("every morning at 8am", &now),
+            Ok(cron("0 8 * * *"))
+        );
+        assert_eq!(
+            parse_schedule_at("every evening at 6:30", &now),
+            Ok(cron("30 18 * * *"))
+        );
+        assert_eq!(
+            parse_schedule_at("every Friday at 5pm", &now),
+            Ok(cron("0 17 * * 5"))
+        );
+        assert!(parse_schedule_at("every so often I guess", &now).is_err());
     }
 
     #[test]
-    fn test_next_execution_interval() {
-        let schedule = ParsedSchedule::Interval(Duration::hours(1));
-        let next = schedule.next_execution().unwrap();
-        let expected = Utc::now() + Duration::hours(1);
-        assert!((next - expected).num_seconds().abs() < 2);
+    fn an_interval_too_large_to_hold_is_refused_instead_of_panicking() {
+        assert!(matches!(
+            parse_schedule("every 99999999999999999 weeks"),
+            Err(ParseError::InvalidInterval(_))
+        ));
     }
-
-    #[test]
-    fn test_next_execution_cron() {
-        // Note: The cron crate expects 7-field expressions (sec min hour day mon dow year)
-        // But our parser generates 5-field expressions (min hour day mon dow)
-        // The next_execution method uses the cron::Schedule which may fail for 5-field expressions
-        // This test verifies the current behavior
-        let schedule = ParsedSchedule::Cron("0 * * * *".to_string()); // 5-field: every hour at minute 0
-                                                                      // 5-field cron may not be supported by the cron crate, so next_execution might return None
-                                                                      // This is acceptable behavior - the scheduler implementation handles this appropriately
-        let _next = schedule.next_execution(); // May be Some or None depending on cron crate version
-    }
-
-    // ==================== Case Insensitivity Tests ====================
 
     #[test]
     fn test_case_insensitive() {

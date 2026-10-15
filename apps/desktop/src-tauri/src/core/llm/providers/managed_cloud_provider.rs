@@ -113,14 +113,11 @@ impl ManagedCloudProvider {
         Some(trimmed.chars().take(500).collect::<String>())
     }
 
+    /// An uncatalogued id is sent in the OpenAI-compatible shape even when its
+    /// name resembles an Anthropic family.
     fn is_anthropic_model(model: &str) -> bool {
-        let m = model.to_lowercase();
-        m.starts_with("claude")
-            || m.starts_with("anthropic/")
-            || m.contains("claude-")
-            || m.contains("sonnet")
-            || m.contains("opus")
-            || m.contains("haiku")
+        crate::core::llm::models_config::get_provider_for_model(model)
+            == Some(crate::core::llm::Provider::Anthropic)
     }
 
     /// Returns true for Perplexity search models, which do not support
@@ -241,7 +238,7 @@ impl ManagedCloudProvider {
                     .filter_map(|tool| {
                         let tool_name = tool.name.as_str();
                         if server_tools::is_anthropic_server_tool(tool_name) {
-                            server_tools::build_server_tool_definition(tool_name)
+                            server_tools::build_server_tool_definition(tool_name, &tool.parameters)
                         } else {
                             let normalized_input_schema =
                                 Self::normalize_array_items_in_schema(&tool.parameters);
@@ -825,13 +822,12 @@ impl LLMProvider for ManagedCloudProvider {
 mod tests {
     use super::*;
     use crate::core::llm::{ToolChoice, ToolDefinition};
+    use crate::sys::account::app_mode::AppModeTestGuard;
     use crate::sys::account::{
         capture_managed_auth_boundary, get_access_token,
         replace_access_token_for_managed_boundary_test, scope_managed_auth_boundary,
     };
     use base64::Engine;
-
-    static MANAGED_BOUNDARY_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     fn managed_test_token(subject: &str, session_id: &str, nonce: &str) -> String {
         let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(br#"{"alg":"none"}"#);
@@ -843,7 +839,7 @@ mod tests {
 
     #[tokio::test]
     async fn managed_goal_cannot_use_a_replacement_accounts_bearer() {
-        let _guard = MANAGED_BOUNDARY_TEST_LOCK.lock().await;
+        let _guard = AppModeTestGuard::cloud().await;
         let account_a_token = managed_test_token("account-a", "session-a", "token-a");
         let account_b_token = managed_test_token("account-b", "session-b", "token-b");
         replace_access_token_for_managed_boundary_test(Some(account_a_token));
@@ -880,7 +876,7 @@ mod tests {
 
     #[tokio::test]
     async fn managed_goal_accepts_a_rotated_token_from_the_same_account_session() {
-        let _guard = MANAGED_BOUNDARY_TEST_LOCK.lock().await;
+        let _guard = AppModeTestGuard::cloud().await;
         let original = managed_test_token("account-a", "session-a", "token-a1");
         let rotated = managed_test_token("account-a", "session-a", "token-a2");
         replace_access_token_for_managed_boundary_test(Some(original));
@@ -900,7 +896,7 @@ mod tests {
 
     #[tokio::test]
     async fn managed_goal_rejects_a_new_session_for_the_same_account() {
-        let _guard = MANAGED_BOUNDARY_TEST_LOCK.lock().await;
+        let _guard = AppModeTestGuard::cloud().await;
         let old_session = managed_test_token("account-a", "session-a1", "token-a1");
         let new_session = managed_test_token("account-a", "session-a2", "token-a2");
         replace_access_token_for_managed_boundary_test(Some(old_session));
@@ -915,6 +911,70 @@ mod tests {
         assert!(result
             .expect_err("new account session must revoke the old goal")
             .contains("account session changed"));
+    }
+
+    #[tokio::test]
+    async fn a_local_process_never_sends_a_managed_request() {
+        let _guard = AppModeTestGuard::local().await;
+        replace_access_token_for_managed_boundary_test(Some(managed_test_token(
+            "account-a",
+            "session-a",
+            "token-a",
+        )));
+        let provider = ManagedCloudProvider::new().expect("ManagedCloudProvider::new");
+        let request = LLMRequest::new(
+            vec![ChatMessage {
+                role: "user".to_string(),
+                content: "a Local transcript".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            "managed-cloud-auto".to_string(),
+        );
+
+        let configured = provider.is_configured();
+        let result = provider.send_message(&request).await;
+        replace_access_token_for_managed_boundary_test(None);
+
+        assert!(
+            !configured,
+            "a signed-in session must not make ManagedCloud routable in Local mode"
+        );
+        let error = result.expect_err("a Local process must fail before any network request");
+        assert!(
+            error
+                .to_string()
+                .contains(crate::sys::account::app_mode::LOCAL_MODE_REFUSAL),
+            "unexpected Local-mode refusal: {error}"
+        );
+    }
+
+    #[test]
+    fn an_uncatalogued_model_is_not_treated_as_anthropic_by_its_name() {
+        for lookalike in [
+            "claude-not-in-the-catalog",
+            "anthropic/fixture-model",
+            "fixture-sonnet",
+            "fixture-opus",
+            "fixture-haiku",
+        ] {
+            assert!(
+                !ManagedCloudProvider::is_anthropic_model(lookalike),
+                "'{lookalike}' is not a catalog model and must not select the Anthropic shape"
+            );
+        }
+    }
+
+    #[test]
+    fn a_catalog_anthropic_model_selects_the_anthropic_shape() {
+        let model = crate::core::llm::models_config::get_default_model(
+            &crate::core::llm::Provider::Anthropic,
+        );
+        assert!(ManagedCloudProvider::is_anthropic_model(model));
+        let openai =
+            crate::core::llm::models_config::get_default_model(&crate::core::llm::Provider::OpenAI);
+        assert!(!ManagedCloudProvider::is_anthropic_model(openai));
     }
 
     #[test]

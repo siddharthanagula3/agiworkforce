@@ -1,10 +1,8 @@
-use crate::automation::AutomationService;
 use crate::core::agi::{
     AGIConfig, AGICore, AgentOrchestrator, AgentResult, AgentStatus, Constraint, ConstraintValue,
     ExecutionContext, Goal, Priority,
 };
-// use crate::core::agi::reflection::ReflectionEngine;
-use crate::core::llm::{Provider, TaskType};
+use crate::core::llm::{LLMRouter, Provider, TaskType};
 use crate::sys::billing::BillingStateWrapper;
 use crate::sys::commands::llm::LLMState;
 use crate::sys::commands::AppDatabase;
@@ -12,6 +10,7 @@ use agiworkforce_protocol::task_state::AgentTaskState;
 use anyhow::Result;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tauri::{Emitter, Manager, State};
 use tokio::sync::Mutex as TokioMutex;
@@ -125,9 +124,9 @@ pub struct SubmitParallelGoalResponse {
     pub error: Option<String>,
 }
 
-const MAX_PARALLEL_RESULT_CHARS: usize = 16_000;
+const MAX_RESULT_OUTPUT_CHARS: usize = 16_000;
 
-fn parallel_result_output(value: &serde_json::Value) -> Option<String> {
+pub(crate) fn bounded_result_output(value: &serde_json::Value) -> Option<String> {
     let rendered = match value {
         serde_json::Value::Null => return None,
         serde_json::Value::String(value) => value.trim().to_string(),
@@ -140,7 +139,7 @@ fn parallel_result_output(value: &serde_json::Value) -> Option<String> {
     }
 
     let mut chars = rendered.chars();
-    let bounded: String = chars.by_ref().take(MAX_PARALLEL_RESULT_CHARS).collect();
+    let bounded: String = chars.by_ref().take(MAX_RESULT_OUTPUT_CHARS).collect();
     if chars.next().is_some() {
         Some(format!("{bounded}\n\n… [output truncated]"))
     } else {
@@ -153,6 +152,7 @@ fn parallel_result_output(value: &serde_json::Value) -> Option<String> {
 /// past that the extra agents replan the same "balanced approach" at full cost.
 const MAX_PARALLEL_AGENTS: usize = 8;
 const DEFAULT_PARALLEL_AGENTS: usize = 4;
+const GOAL_PROMPT_SOURCE: &str = "goal";
 
 /// Zero agents would hand the comparator an empty result set, so the floor is 1.
 fn clamp_num_agents(requested: Option<usize>) -> usize {
@@ -173,6 +173,36 @@ fn max_steps_constraints(max_steps: Option<u64>) -> Vec<Constraint> {
             }]
         })
         .unwrap_or_default()
+}
+
+pub(crate) const MAX_DURATION_CONSTRAINT: &str = "max_duration_secs";
+
+pub(crate) async fn configured_task_time_limit(app: &tauri::AppHandle) -> Option<Duration> {
+    let settings = app.try_state::<crate::sys::commands::settings::SettingsState>()?;
+    let minutes = settings
+        .settings
+        .lock()
+        .await
+        .execution_preferences
+        .as_ref()
+        .map(|preferences| preferences.max_timeout_minutes)?;
+    (minutes > 0).then(|| Duration::from_secs(u64::from(minutes) * 60))
+}
+
+pub(crate) fn time_limit_constraint(limit: Duration) -> Constraint {
+    Constraint {
+        name: MAX_DURATION_CONSTRAINT.to_string(),
+        value: ConstraintValue::Custom {
+            key: MAX_DURATION_CONSTRAINT.to_string(),
+            value: limit.as_secs().to_string(),
+        },
+    }
+}
+
+async fn configured_time_limit_constraint(app: &tauri::AppHandle) -> Option<Constraint> {
+    configured_task_time_limit(app)
+        .await
+        .map(time_limit_constraint)
 }
 
 fn provider_allowed_for_trust_mode(
@@ -262,25 +292,6 @@ fn goal_constraints(
 
 static AGI_CORE: Mutex<Option<Arc<TokioMutex<AGICore>>>> = Mutex::new(None);
 
-fn ensure_task_automation_available(
-    automation: &Option<Arc<AutomationService>>,
-) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    if !super::system_permissions::check_accessibility() {
-        return Err(
-            "macOS Accessibility permission is required before launching a Task.".to_string(),
-        );
-    }
-
-    if automation.is_none() {
-        return Err(
-            "The automation service is not ready. Restart AGI after granting Accessibility."
-                .to_string(),
-        );
-    }
-    Ok(())
-}
-
 async fn ensure_goal_provider(goal: &Goal, llm_state: &LLMState) -> Result<(), String> {
     let Some((_, provider_name)) = goal.execution_target() else {
         return Ok(());
@@ -301,7 +312,6 @@ async fn ensure_goal_provider(goal: &Goal, llm_state: &LLMState) -> Result<(), S
 #[tauri::command]
 pub async fn agi_init(
     config: AGIConfig,
-    automation: State<'_, Option<Arc<AutomationService>>>,
     llm_state: State<'_, LLMState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
@@ -313,15 +323,9 @@ pub async fn agi_init(
         return Ok(());
     }
 
-    ensure_task_automation_available(automation.inner())?;
-
     let router_for_agi = llm_state.router.clone();
 
-    let automation_arc = automation.inner().clone().ok_or_else(|| {
-        "Automation service not available. Please grant accessibility permissions.".to_string()
-    })?;
-
-    let agi = AGICore::new(config, router_for_agi, automation_arc, Some(app.clone()))
+    let agi = AGICore::new(config, router_for_agi, Some(app.clone()))
         .map_err(|e| format!("Failed to create AGI: {}", e))?;
 
     // We need to inject reflection engine into AGI, but AGICore::new doesn't take it yet.
@@ -352,6 +356,10 @@ pub async fn agi_init(
 
 #[tauri::command]
 pub async fn agi_cancel_goal(goal_id: String) -> Result<(), String> {
+    if crate::core::swarm::stop_swarm_run(&goal_id) {
+        return Ok(());
+    }
+
     let agi_opt = {
         let guard = AGI_CORE.lock();
         guard.clone()
@@ -397,10 +405,11 @@ pub async fn agi_resume_goal(goal_id: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn agi_submit_goal(
     request: SubmitGoalRequest,
-    automation: State<'_, Option<Arc<AutomationService>>>,
+    app: tauri::AppHandle,
     llm_state: State<'_, LLMState>,
 ) -> Result<SubmitGoalResponse, String> {
-    ensure_task_automation_available(automation.inner())?;
+    crate::ui::hooks::gate_user_prompt(GOAL_PROMPT_SOURCE, &request.description).await?;
+
     let agi_arc = {
         let agi_guard = AGI_CORE.lock();
         agi_guard
@@ -417,12 +426,13 @@ pub async fn agi_submit_goal(
         _ => Priority::Medium,
     };
 
-    let constraints = goal_constraints(
+    let mut constraints = goal_constraints(
         request.max_steps,
         request.model_id,
         request.provider,
         request.trust_mode,
     )?;
+    constraints.extend(configured_time_limit_constraint(&app).await);
     let goal = Goal {
         id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
         description: request.description,
@@ -448,10 +458,10 @@ pub async fn agi_submit_goal(
 pub async fn agi_submit_goal_parallel(
     request: SubmitParallelGoalRequest,
     app: tauri::AppHandle,
-    automation: State<'_, Option<Arc<AutomationService>>>,
     llm_state: State<'_, LLMState>,
 ) -> Result<SubmitParallelGoalResponse, String> {
-    ensure_task_automation_available(automation.inner())?;
+    crate::ui::hooks::gate_user_prompt(GOAL_PROMPT_SOURCE, &request.description).await?;
+
     let agi_arc = {
         let agi_guard = AGI_CORE.lock();
         agi_guard
@@ -468,8 +478,9 @@ pub async fn agi_submit_goal_parallel(
         _ => Priority::Medium,
     };
 
-    let constraints =
+    let mut constraints =
         goal_constraints(None, request.model_id, request.provider, request.trust_mode)?;
+    constraints.extend(configured_time_limit_constraint(&app).await);
     let goal = Goal {
         id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
         description: request.description,
@@ -505,7 +516,7 @@ pub async fn agi_submit_goal_parallel(
     let state = agi
         .get_task_state(&goal_id)
         .ok_or_else(|| format!("Parallel goal {goal_id} completed without a canonical state"))?;
-    let output = parallel_result_output(&best_result.result.output);
+    let output = bounded_result_output(&best_result.result.output);
     let error = best_result.result.error;
 
     Ok(SubmitParallelGoalResponse {
@@ -579,27 +590,117 @@ pub async fn agi_list_goals() -> Result<Vec<Goal>, String> {
     Ok(goals)
 }
 
-#[tauri::command]
-pub async fn agi_stop() -> Result<(), String> {
-    let agi_arc_opt = {
-        let agi_guard = AGI_CORE.lock();
-        agi_guard.as_ref().cloned()
-    };
-
-    if let Some(agi_arc) = agi_arc_opt {
-        let agi = agi_arc.lock().await;
-        agi.stop();
-    }
-    Ok(())
-}
-
 pub static ORCHESTRATOR: Mutex<Option<Arc<TokioMutex<AgentOrchestrator>>>> = Mutex::new(None);
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OrchestratorInitRequest {
-    pub max_agents: usize,
-    pub config: AGIConfig,
+const ORCHESTRATOR_MAX_AGENTS: usize = 4;
+
+pub fn ensure_orchestrator(
+    app: &tauri::AppHandle,
+    router: Arc<tokio::sync::RwLock<LLMRouter>>,
+) -> Result<Arc<TokioMutex<AgentOrchestrator>>, String> {
+    if let Some(existing) = ORCHESTRATOR.lock().clone() {
+        return Ok(existing);
+    }
+
+    let orchestrator = AgentOrchestrator::new(
+        ORCHESTRATOR_MAX_AGENTS,
+        AGIConfig::default(),
+        router,
+        Some(app.clone()),
+    )
+    .map_err(|e| format!("Failed to create orchestrator: {}", e))?;
+
+    Ok(ORCHESTRATOR
+        .lock()
+        .get_or_insert_with(|| Arc::new(TokioMutex::new(orchestrator)))
+        .clone())
+}
+
+fn is_live_agent(status: &AgentStatus) -> bool {
+    matches!(
+        status.status,
+        crate::core::agi::AgentState::Running | crate::core::agi::AgentState::Paused
+    )
+}
+
+static AWAITED_AGENT_RUNS: AtomicUsize = AtomicUsize::new(0);
+
+struct AwaitedAgentRun;
+
+impl AwaitedAgentRun {
+    fn enter() -> Self {
+        AWAITED_AGENT_RUNS.fetch_add(1, Ordering::SeqCst);
+        Self
+    }
+}
+
+impl Drop for AwaitedAgentRun {
+    fn drop(&mut self) {
+        AWAITED_AGENT_RUNS.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+/// Agent runs started for a caller that waits on the result here. A chat
+/// turn or a scheduled run that owns an agent is counted by its owner.
+pub fn awaited_agent_run_count() -> usize {
+    AWAITED_AGENT_RUNS.load(Ordering::SeqCst)
+}
+
+pub async fn cancel_live_orchestrator_agents() -> usize {
+    let Some(orchestrator_arc) = ORCHESTRATOR.lock().clone() else {
+        return 0;
+    };
+    let orchestrator = orchestrator_arc.lock().await.clone();
+    let mut cancelled = 0;
+    for status in orchestrator.list_active_agents().await {
+        if !is_live_agent(&status) {
+            continue;
+        }
+        match orchestrator.cancel_agent(&status.id).await {
+            Ok(()) => cancelled += 1,
+            Err(error) => {
+                tracing::warn!(
+                    "[Orchestrator] Failed to cancel agent {}: {error}",
+                    status.id
+                )
+            }
+        }
+    }
+    cancelled
+}
+
+fn is_live_goal(state: Option<AgentTaskState>) -> bool {
+    state.is_some_and(|state| !state.is_terminal() && !state.needs_review())
+}
+
+pub async fn live_goal_count() -> usize {
+    let Some(agi_arc) = AGI_CORE.lock().clone() else {
+        return 0;
+    };
+    let agi = agi_arc.lock().await;
+    agi.list_goals()
+        .iter()
+        .filter(|goal| is_live_goal(agi.get_task_state(&goal.id)))
+        .count()
+}
+
+pub async fn cancel_live_goals() -> usize {
+    let Some(agi_arc) = AGI_CORE.lock().clone() else {
+        return 0;
+    };
+    let agi = agi_arc.lock().await;
+    let mut cancelled = 0;
+    for goal in agi.list_goals() {
+        if !is_live_goal(agi.get_task_state(&goal.id)) {
+            continue;
+        }
+        match agi.cancel_goal(&goal.id).await {
+            Ok(()) => cancelled += 1,
+            Err(error) => tracing::warn!("[AGI] Failed to cancel goal {}: {error}", goal.id),
+        }
+    }
+    agi.stop();
+    cancelled
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -618,74 +719,22 @@ pub struct SpawnAgentResponse {
     pub agent_id: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SpawnParallelAgentsRequest {
-    pub goals: Vec<SpawnAgentRequest>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SpawnParallelAgentsResponse {
-    pub agent_ids: Vec<String>,
-}
-
-#[tauri::command]
-pub async fn orchestrator_init(
-    request: OrchestratorInitRequest,
-    automation: State<'_, Option<Arc<AutomationService>>>,
-    llm_state: State<'_, LLMState>,
-    app: tauri::AppHandle,
-) -> Result<(), String> {
-    if automation.is_none() {
-        return Err(
-            "Automation service not available. Please grant accessibility permissions.".to_string(),
-        );
+/// The boundary a run started with no session of its own stays inside: the
+/// one the app is in now. BYOK is never chosen here, because it is entered
+/// only by a conversation the user forked with consent.
+fn app_trust_mode(cloud_app_mode: bool) -> agiworkforce_model_registry::TrustMode {
+    if cloud_app_mode {
+        agiworkforce_model_registry::TrustMode::ManagedCloud
+    } else {
+        agiworkforce_model_registry::TrustMode::Local
     }
-
-    let router_for_orchestrator = llm_state.router.clone();
-
-    let automation_arc = automation.inner().clone().ok_or_else(|| {
-        "Automation service not available. Please grant accessibility permissions.".to_string()
-    })?;
-
-    let orchestrator = AgentOrchestrator::new(
-        request.max_agents,
-        request.config,
-        router_for_orchestrator,
-        automation_arc,
-        Some(app.clone()),
-    )
-    .map_err(|e| format!("Failed to create orchestrator: {}", e))?;
-
-    let orchestrator_arc = Arc::new(TokioMutex::new(orchestrator));
-    *ORCHESTRATOR.lock() = Some(orchestrator_arc);
-
-    tracing::info!(
-        "[Orchestrator] Initialized with max_agents={}",
-        request.max_agents
-    );
-
-    Ok(())
 }
 
-#[tauri::command]
-pub async fn orchestrator_init_default(
-    automation: State<'_, Option<Arc<AutomationService>>>,
-    llm_state: State<'_, LLMState>,
-    app: tauri::AppHandle,
-) -> Result<(), String> {
-    let request = OrchestratorInitRequest {
-        max_agents: 4,
-        config: AGIConfig::default(),
-    };
-    orchestrator_init(request, automation, llm_state, app).await
-}
-
-#[tauri::command]
 pub async fn orchestrator_spawn_agent(
     request: SpawnAgentRequest,
 ) -> Result<SpawnAgentResponse, String> {
+    crate::ui::hooks::gate_user_prompt(GOAL_PROMPT_SOURCE, &request.description).await?;
+
     let orchestrator_arc = {
         let guard = ORCHESTRATOR.lock();
         guard
@@ -702,14 +751,18 @@ pub async fn orchestrator_spawn_agent(
         _ => Priority::Medium,
     };
 
+    let mut constraints = max_steps_constraints(request.max_steps);
+    constraints.push(crate::core::agi::executor::unattended_constraint());
     let goal = Goal {
         id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
         description: request.description,
         priority,
         deadline: request.deadline,
-        constraints: max_steps_constraints(request.max_steps),
+        constraints,
         success_criteria: request.success_criteria.unwrap_or_default(),
-        trust_mode: None,
+        trust_mode: Some(app_trust_mode(
+            crate::sys::account::app_mode::is_cloud_app_mode(),
+        )),
     };
 
     let orchestrator = orchestrator_arc.lock().await;
@@ -719,83 +772,6 @@ pub async fn orchestrator_spawn_agent(
         .map_err(|e| format!("Failed to spawn agent: {}", e))?;
 
     Ok(SpawnAgentResponse { agent_id })
-}
-
-#[tauri::command]
-pub async fn orchestrator_spawn_parallel(
-    request: SpawnParallelAgentsRequest,
-) -> Result<SpawnParallelAgentsResponse, String> {
-    let orchestrator_arc = {
-        let guard = ORCHESTRATOR.lock();
-        guard
-            .as_ref()
-            .ok_or_else(|| "Orchestrator not initialized".to_string())?
-            .clone()
-    };
-
-    let mut goals = Vec::new();
-    for req in request.goals {
-        let priority = match req.priority.as_deref() {
-            Some("low") => Priority::Low,
-            Some("medium") => Priority::Medium,
-            Some("high") => Priority::High,
-            Some("critical") => Priority::Critical,
-            _ => Priority::Medium,
-        };
-
-        let goal = Goal {
-            id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
-            description: req.description,
-            priority,
-            deadline: req.deadline,
-            constraints: max_steps_constraints(req.max_steps),
-            success_criteria: req.success_criteria.unwrap_or_default(),
-            trust_mode: None,
-        };
-        goals.push(goal);
-    }
-
-    let orchestrator = orchestrator_arc.lock().await;
-    let agent_ids = orchestrator
-        .spawn_parallel(goals)
-        .await
-        .map_err(|e| format!("Failed to spawn parallel agents: {}", e))?;
-
-    Ok(SpawnParallelAgentsResponse { agent_ids })
-}
-
-#[tauri::command]
-pub async fn orchestrator_get_agent_status(
-    agent_id: String,
-) -> Result<Option<AgentStatus>, String> {
-    let orchestrator_arc = {
-        let guard = ORCHESTRATOR.lock();
-        guard
-            .as_ref()
-            .ok_or_else(|| "Orchestrator not initialized".to_string())?
-            .clone()
-    };
-
-    let orchestrator = orchestrator_arc.lock().await;
-    let status = orchestrator.get_agent_status(&agent_id).await;
-
-    Ok(status)
-}
-
-#[tauri::command]
-pub async fn orchestrator_list_agents() -> Result<Vec<AgentStatus>, String> {
-    let orchestrator_arc = {
-        let guard = ORCHESTRATOR.lock();
-        guard
-            .as_ref()
-            .ok_or_else(|| "Orchestrator not initialized".to_string())?
-            .clone()
-    };
-
-    let orchestrator = orchestrator_arc.lock().await;
-    let agents = orchestrator.list_active_agents().await;
-
-    Ok(agents)
 }
 
 #[tauri::command]
@@ -825,72 +801,54 @@ pub async fn orchestrator_cancel_all() -> Result<(), String> {
             .clone()
     };
 
-    let orchestrator = orchestrator_arc.lock().await;
+    let orchestrator = orchestrator_arc.lock().await.clone();
     orchestrator
         .cancel_all_agents()
         .await
         .map_err(|e| format!("Failed to cancel all agents: {}", e))
 }
 
-#[tauri::command]
-pub async fn orchestrator_wait_all() -> Result<Vec<AgentResult>, String> {
-    let orchestrator_arc = {
-        let guard = ORCHESTRATOR.lock();
-        guard
-            .as_ref()
-            .ok_or_else(|| "Orchestrator not initialized".to_string())?
-            .clone()
-    };
-
-    let orchestrator = orchestrator_arc.lock().await;
-    let results = orchestrator.wait_for_all().await;
-
-    Ok(results)
-}
-
 pub async fn wait_for_agent_result(
     agent_id: &str,
     timeout: Duration,
 ) -> Result<AgentResult, String> {
-    let orchestrator_arc = {
-        let guard = ORCHESTRATOR.lock();
-        guard
-            .as_ref()
-            .ok_or_else(|| "Orchestrator not initialized".to_string())?
-            .clone()
-    };
+    let orchestrator_arc = ORCHESTRATOR
+        .lock()
+        .clone()
+        .ok_or_else(|| "Orchestrator not initialized".to_string())?;
+    let orchestrator = orchestrator_arc.lock().await.clone();
+    let _run = AwaitedAgentRun::enter();
 
     let started = std::time::Instant::now();
 
     loop {
+        let status = orchestrator
+            .get_agent_status(agent_id)
+            .await
+            .ok_or_else(|| format!("Agent '{}' not found", agent_id))?;
+
+        if matches!(
+            status.status,
+            crate::core::agi::AgentState::Completed | crate::core::agi::AgentState::Failed
+        ) {
+            let result = orchestrator
+                .get_agent_result(agent_id)
+                .await
+                .ok_or_else(|| format!("Agent '{}' completed without a result", agent_id))?;
+            orchestrator.remove_finished_agent(agent_id).await;
+            return Ok(result);
+        }
+
         if started.elapsed() > timeout {
+            if let Err(error) = orchestrator.cancel_agent(agent_id).await {
+                tracing::warn!("[Orchestrator] Failed to cancel agent {agent_id}: {error}");
+            }
+            orchestrator.remove_finished_agent(agent_id).await;
             return Err(format!(
-                "Agent '{}' did not finish within {} seconds.",
+                "Agent '{}' did not finish within {} seconds and was stopped.",
                 agent_id,
                 timeout.as_secs()
             ));
-        }
-
-        {
-            let orchestrator = orchestrator_arc.lock().await;
-
-            let status = orchestrator
-                .get_agent_status(agent_id)
-                .await
-                .ok_or_else(|| format!("Agent '{}' not found", agent_id))?;
-
-            if matches!(
-                status.status,
-                crate::core::agi::AgentState::Completed | crate::core::agi::AgentState::Failed
-            ) {
-                let result = orchestrator
-                    .get_agent_result(agent_id)
-                    .await
-                    .ok_or_else(|| format!("Agent '{}' completed without a result", agent_id))?;
-
-                let _ = orchestrator.cleanup_completed().await;
-                return Ok(result);
-            }
         }
 
         sleep(Duration::from_millis(100)).await;
@@ -1018,23 +976,6 @@ pub async fn resume_agent(agent_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn cancel_agent(agent_id: String) -> Result<(), String> {
-    let orchestrator_arc = {
-        let guard = ORCHESTRATOR.lock();
-        guard
-            .as_ref()
-            .ok_or_else(|| "Orchestrator not initialized".to_string())?
-            .clone()
-    };
-
-    let orchestrator = orchestrator_arc.lock().await;
-    orchestrator
-        .cancel_agent(&agent_id)
-        .await
-        .map_err(|e| format!("Failed to cancel agent: {}", e))
-}
-
-#[tauri::command]
 pub async fn refresh_agent_status() -> Result<Vec<AgentStatus>, String> {
     let orchestrator_arc = {
         let guard = ORCHESTRATOR.lock();
@@ -1057,117 +998,6 @@ pub async fn refresh_agent_status() -> Result<Vec<AgentStatus>, String> {
     Ok(statuses)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct KnowledgeEntryResponse {
-    pub id: String,
-    pub category: String,
-    pub content: String,
-    pub metadata: std::collections::HashMap<String, String>,
-    pub timestamp: u64,
-    pub importance: f64,
-}
-
-#[tauri::command]
-pub async fn query_knowledge(
-    query: String,
-    limit: usize,
-) -> Result<Vec<KnowledgeEntryResponse>, String> {
-    let agi_arc = {
-        let guard = AGI_CORE.lock();
-        guard
-            .as_ref()
-            .ok_or_else(|| "AGI not initialized".to_string())?
-            .clone()
-    };
-
-    let agi = agi_arc.lock().await;
-    let entries = agi
-        .knowledge_base()
-        .query(&query, limit)
-        .await
-        .map_err(|e| format!("Failed to query knowledge: {}", e))?;
-
-    Ok(entries
-        .into_iter()
-        .map(|e| KnowledgeEntryResponse {
-            id: e.id,
-            category: e.category,
-            content: e.content,
-            metadata: e.metadata,
-            timestamp: e.timestamp,
-            importance: e.importance,
-        })
-        .collect())
-}
-
-#[tauri::command]
-pub async fn get_recent_knowledge(limit: usize) -> Result<Vec<KnowledgeEntryResponse>, String> {
-    let agi_arc = {
-        let guard = AGI_CORE.lock();
-        guard
-            .as_ref()
-            .ok_or_else(|| "AGI not initialized".to_string())?
-            .clone()
-    };
-
-    let agi = agi_arc.lock().await;
-
-    let entries = agi
-        .knowledge_base()
-        .query("", limit)
-        .await
-        .map_err(|e| format!("Failed to get recent knowledge: {}", e))?;
-
-    Ok(entries
-        .into_iter()
-        .map(|e| KnowledgeEntryResponse {
-            id: e.id,
-            category: e.category,
-            content: e.content,
-            metadata: e.metadata,
-            timestamp: e.timestamp,
-            importance: e.importance,
-        })
-        .collect())
-}
-
-#[tauri::command]
-pub async fn get_knowledge_by_category(
-    category: String,
-    limit: usize,
-) -> Result<Vec<KnowledgeEntryResponse>, String> {
-    let agi_arc = {
-        let guard = AGI_CORE.lock();
-        guard
-            .as_ref()
-            .ok_or_else(|| "AGI not initialized".to_string())?
-            .clone()
-    };
-
-    let agi = agi_arc.lock().await;
-    let entries = agi
-        .knowledge_base()
-        .query(&category, limit)
-        .await
-        .map_err(|e| format!("Failed to get knowledge by category: {}", e))?;
-
-    let filtered: Vec<_> = entries
-        .into_iter()
-        .filter(|e| e.category == category)
-        .map(|e| KnowledgeEntryResponse {
-            id: e.id,
-            category: e.category,
-            content: e.content,
-            metadata: e.metadata,
-            timestamp: e.timestamp,
-            importance: e.importance,
-        })
-        .collect();
-
-    Ok(filtered)
-}
-
 async fn get_user_tier_from_billing(_billing: &BillingStateWrapper) -> String {
     "free".to_string()
 }
@@ -1187,7 +1017,6 @@ fn select_best_model_by_tier(tier: &str) -> (&'static str, Provider) {
     }
 }
 
-#[tauri::command]
 pub async fn start_agent_task(
     app: tauri::AppHandle,
     goal: String,
@@ -1256,10 +1085,6 @@ pub async fn start_agent_task(
         )
         .await
         .map_err(|e| format!("Failed to route request: {}", e))?;
-
-    // 5. Emit streaming tokens to frontend (for real-time updates)
-    // Emit the full response content
-    let _ = app.emit("chat-token", &route_outcome.response.content);
 
     // 6. Calculate and log token usage
     let input_tokens = route_outcome.prompt_tokens;
@@ -1415,187 +1240,6 @@ pub async fn agi_get_reflection_insights(
     }
 }
 
-/// Get all failure patterns from recent reflections for a goal
-#[tauri::command]
-pub async fn agi_get_failure_patterns(
-    goal_id: String,
-) -> Result<Vec<FailurePatternResponse>, String> {
-    let agi_arc = {
-        let agi_guard = AGI_CORE.lock();
-        match agi_guard.as_ref() {
-            Some(arc) => arc.clone(),
-            None => return Ok(vec![]),
-        }
-    };
-
-    let agi = agi_arc.lock().await;
-
-    let context = match agi.get_goal_status(&goal_id) {
-        Some(ctx) => ctx,
-        None => return Ok(vec![]),
-    };
-
-    // Collect all failure patterns from all reflections
-    let mut all_patterns: Vec<FailurePatternResponse> = vec![];
-
-    for entry in context.context_memory.iter() {
-        if entry.event.starts_with("reflection_iteration_") {
-            if let Ok(insight) =
-                serde_json::from_value::<crate::core::agi::ReflectionInsight>(entry.data.clone())
-            {
-                for pattern in insight.failure_patterns {
-                    all_patterns.push(convert_failure_pattern(&pattern));
-                }
-            }
-        }
-    }
-
-    // Deduplicate by pattern_id and aggregate frequency
-    let mut pattern_map: std::collections::HashMap<String, FailurePatternResponse> =
-        std::collections::HashMap::new();
-    for pattern in all_patterns {
-        pattern_map
-            .entry(pattern.category.clone())
-            .and_modify(|existing| {
-                existing.frequency += pattern.frequency;
-                for step in &pattern.affected_steps {
-                    if !existing.affected_steps.contains(step) {
-                        existing.affected_steps.push(step.clone());
-                    }
-                }
-            })
-            .or_insert(pattern);
-    }
-
-    let mut patterns: Vec<_> = pattern_map.into_values().collect();
-    patterns.sort_by(|a, b| b.frequency.cmp(&a.frequency));
-
-    Ok(patterns)
-}
-
-/// Get suggested corrections for failed steps
-#[tauri::command]
-pub async fn agi_get_suggested_corrections(
-    goal_id: String,
-) -> Result<Vec<CorrectionResponse>, String> {
-    let agi_arc = {
-        let agi_guard = AGI_CORE.lock();
-        match agi_guard.as_ref() {
-            Some(arc) => arc.clone(),
-            None => return Ok(vec![]),
-        }
-    };
-
-    let agi = agi_arc.lock().await;
-
-    let context = match agi.get_goal_status(&goal_id) {
-        Some(ctx) => ctx,
-        None => return Ok(vec![]),
-    };
-
-    // Get the most recent reflection's corrections
-    let reflection_entry = context
-        .context_memory
-        .iter()
-        .rev()
-        .find(|entry| entry.event.starts_with("reflection_iteration_"));
-
-    match reflection_entry {
-        Some(entry) => {
-            if let Ok(insight) =
-                serde_json::from_value::<crate::core::agi::ReflectionInsight>(entry.data.clone())
-            {
-                let corrections: Vec<CorrectionResponse> =
-                    insight.corrections.iter().map(convert_correction).collect();
-                Ok(corrections)
-            } else {
-                Ok(vec![])
-            }
-        }
-        None => Ok(vec![]),
-    }
-}
-
-/// Get sub-goals derived from failed steps
-#[tauri::command]
-pub async fn agi_get_sub_goals(goal_id: String) -> Result<Vec<SubGoalResponse>, String> {
-    let agi_arc = {
-        let agi_guard = AGI_CORE.lock();
-        match agi_guard.as_ref() {
-            Some(arc) => arc.clone(),
-            None => return Ok(vec![]),
-        }
-    };
-
-    let agi = agi_arc.lock().await;
-
-    let context = match agi.get_goal_status(&goal_id) {
-        Some(ctx) => ctx,
-        None => return Ok(vec![]),
-    };
-
-    // Get the most recent reflection's sub-goals
-    let reflection_entry = context
-        .context_memory
-        .iter()
-        .rev()
-        .find(|entry| entry.event.starts_with("reflection_iteration_"));
-
-    match reflection_entry {
-        Some(entry) => {
-            if let Ok(insight) =
-                serde_json::from_value::<crate::core::agi::ReflectionInsight>(entry.data.clone())
-            {
-                let sub_goals: Vec<SubGoalResponse> =
-                    insight.sub_goals.iter().map(convert_sub_goal).collect();
-                Ok(sub_goals)
-            } else {
-                Ok(vec![])
-            }
-        }
-        None => Ok(vec![]),
-    }
-}
-
-/// Get recommendations for improving execution
-#[tauri::command]
-pub async fn agi_get_recommendations(goal_id: String) -> Result<Vec<String>, String> {
-    let agi_arc = {
-        let agi_guard = AGI_CORE.lock();
-        match agi_guard.as_ref() {
-            Some(arc) => arc.clone(),
-            None => return Ok(vec![]),
-        }
-    };
-
-    let agi = agi_arc.lock().await;
-
-    let context = match agi.get_goal_status(&goal_id) {
-        Some(ctx) => ctx,
-        None => return Ok(vec![]),
-    };
-
-    // Get the most recent reflection's recommendations
-    let reflection_entry = context
-        .context_memory
-        .iter()
-        .rev()
-        .find(|entry| entry.event.starts_with("reflection_iteration_"));
-
-    match reflection_entry {
-        Some(entry) => {
-            if let Ok(insight) =
-                serde_json::from_value::<crate::core::agi::ReflectionInsight>(entry.data.clone())
-            {
-                Ok(insight.recommendations)
-            } else {
-                Ok(vec![])
-            }
-        }
-        None => Ok(vec![]),
-    }
-}
-
 // Helper functions to convert internal types to response types
 
 fn convert_reflection_insight(
@@ -1686,33 +1330,20 @@ fn convert_sub_goal(sub_goal: &crate::core::agi::SubGoal) -> SubGoalResponse {
 // massively parallel multi-agent execution. The swarm is transparent to
 // users - it's an internal optimization for complex parallelizable goals.
 
-/// Response from swarm goal execution.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SwarmGoalResponse {
-    pub success: bool,
-    pub goal_id: String,
-    pub succeeded: usize,
-    pub failed: usize,
-    pub wall_time_ms: u64,
-    pub speedup_ratio: f64,
-    pub critical_path_length: usize,
-    pub max_parallelism: usize,
-    pub summary: String,
-}
-
-/// Submits a goal for swarm execution with parallel multi-agent processing.
+/// Starts a swarm run for the goal and returns its id straight away.
 ///
-/// The swarm system decomposes the goal into parallelizable subtasks and
-/// spawns multiple agents to execute them concurrently. This is ideal for
-/// complex goals that can be broken into independent work units.
+/// The run reports through `agi:task:state_changed`, the `swarm:subtask_*`
+/// events and `agi:goal:swarm_completed`, and `agi_cancel_goal` stops it. It
+/// works on a clone of the engine, so the engine lock is free for the status,
+/// list and cancel commands while the swarm is busy.
 #[tauri::command]
 pub async fn agi_submit_goal_swarm(
     request: SubmitGoalRequest,
-    automation: State<'_, Option<Arc<AutomationService>>>,
+    app: tauri::AppHandle,
     llm_state: State<'_, LLMState>,
-) -> Result<SwarmGoalResponse, String> {
-    ensure_task_automation_available(automation.inner())?;
+) -> Result<SubmitGoalResponse, String> {
+    crate::ui::hooks::gate_user_prompt(GOAL_PROMPT_SOURCE, &request.description).await?;
+
     let agi_arc = {
         let agi_guard = AGI_CORE.lock();
         agi_guard
@@ -1729,12 +1360,13 @@ pub async fn agi_submit_goal_swarm(
         _ => Priority::Medium,
     };
 
-    let constraints = goal_constraints(
+    let mut constraints = goal_constraints(
         request.max_steps,
         request.model_id,
         request.provider,
         request.trust_mode,
     )?;
+    constraints.extend(configured_time_limit_constraint(&app).await);
     let goal = Goal {
         id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
         description: request.description,
@@ -1748,23 +1380,19 @@ pub async fn agi_submit_goal_swarm(
     let goal_id = goal.id.clone();
     ensure_goal_provider(&goal, &llm_state).await?;
 
-    let agi = agi_arc.lock().await;
-    let result = agi
-        .submit_goal_swarm(goal)
-        .await
-        .map_err(|e| format!("Swarm execution failed: {}", e))?;
+    let swarm_engine = {
+        let agi = agi_arc.lock().await;
+        let mut engine = agi.clone_for_execution();
+        engine.app_handle = Some(app);
+        engine
+    };
+    tokio::spawn(async move {
+        if let Err(error) = swarm_engine.submit_goal_swarm(goal).await {
+            tracing::warn!("[AGI] Swarm goal ended without a result: {error}");
+        }
+    });
 
-    Ok(SwarmGoalResponse {
-        success: result.success,
-        goal_id,
-        succeeded: result.succeeded,
-        failed: result.failed,
-        wall_time_ms: result.wall_time.as_millis() as u64,
-        speedup_ratio: result.speedup_ratio,
-        critical_path_length: result.critical_path_length,
-        max_parallelism: result.max_parallelism,
-        summary: result.summary,
-    })
+    Ok(SubmitGoalResponse { goal_id })
 }
 
 /// Submits a goal with automatic execution strategy selection.
@@ -1778,10 +1406,11 @@ pub async fn agi_submit_goal_swarm(
 #[tauri::command]
 pub async fn agi_submit_goal_auto(
     request: SubmitGoalRequest,
-    automation: State<'_, Option<Arc<AutomationService>>>,
+    app: tauri::AppHandle,
     llm_state: State<'_, LLMState>,
 ) -> Result<SubmitGoalResponse, String> {
-    ensure_task_automation_available(automation.inner())?;
+    crate::ui::hooks::gate_user_prompt(GOAL_PROMPT_SOURCE, &request.description).await?;
+
     let agi_arc = {
         let agi_guard = AGI_CORE.lock();
         agi_guard
@@ -1798,12 +1427,13 @@ pub async fn agi_submit_goal_auto(
         _ => Priority::Medium,
     };
 
-    let constraints = goal_constraints(
+    let mut constraints = goal_constraints(
         request.max_steps,
         request.model_id,
         request.provider,
         request.trust_mode,
     )?;
+    constraints.extend(configured_time_limit_constraint(&app).await);
     let goal = Goal {
         id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
         description: request.description,
@@ -1864,6 +1494,18 @@ mod tests {
 
     fn parse(json: &str) -> Result<SubmitGoalRequest, serde_json::Error> {
         serde_json::from_str(json)
+    }
+
+    #[test]
+    fn a_run_with_no_session_takes_the_app_mode_and_never_byok() {
+        assert_eq!(
+            app_trust_mode(false),
+            agiworkforce_model_registry::TrustMode::Local
+        );
+        assert_eq!(
+            app_trust_mode(true),
+            agiworkforce_model_registry::TrustMode::ManagedCloud
+        );
     }
 
     #[test]
@@ -1948,18 +1590,18 @@ mod tests {
     }
 
     #[test]
-    fn parallel_result_output_is_reviewable_and_bounded() {
-        assert_eq!(parallel_result_output(&serde_json::json!({})), None);
+    fn result_output_is_reviewable_and_bounded() {
+        assert_eq!(bounded_result_output(&serde_json::json!({})), None);
         assert_eq!(
-            parallel_result_output(&serde_json::json!({"answer": 42})),
+            bounded_result_output(&serde_json::json!({"answer": 42})),
             Some("{\n  \"answer\": 42\n}".to_string())
         );
 
-        let oversized = "x".repeat(MAX_PARALLEL_RESULT_CHARS + 1);
-        let rendered = parallel_result_output(&serde_json::json!(oversized))
+        let oversized = "x".repeat(MAX_RESULT_OUTPUT_CHARS + 1);
+        let rendered = bounded_result_output(&serde_json::json!(oversized))
             .expect("non-empty output is retained");
         assert!(rendered.ends_with("… [output truncated]"));
-        assert!(rendered.chars().count() < MAX_PARALLEL_RESULT_CHARS + 32);
+        assert!(rendered.chars().count() < MAX_RESULT_OUTPUT_CHARS + 32);
     }
 
     #[test]

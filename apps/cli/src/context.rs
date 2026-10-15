@@ -34,19 +34,35 @@ pub struct SystemContext {
 
 /// Gather system context about the current working directory.
 pub fn gather_system_context() -> SystemContext {
-    let cwd = std::env::current_dir()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| "unknown".to_string());
+    match std::env::current_dir() {
+        Ok(cwd) => gather_system_context_in(&cwd),
+        Err(_) => gather_system_context_in(Path::new("unknown")),
+    }
+}
 
-    let layout = crate::repo::detect_repository_layout(Path::new(&cwd));
+/// [`gather_system_context_in`] for a thread whose workspace is `dir`, on a
+/// blocking thread: it runs git and reads the project's files, which must
+/// not hold up the async runtime.
+pub async fn gather_system_context_for(dir: PathBuf) -> SystemContext {
+    let fallback = dir.clone();
+    tokio::task::spawn_blocking(move || gather_system_context_in(&dir))
+        .await
+        .unwrap_or_else(|_| gather_system_context_in(&fallback))
+}
+
+/// Gather system context about `dir`.
+pub fn gather_system_context_in(dir: &Path) -> SystemContext {
+    let cwd = dir.display().to_string();
+
+    let layout = crate::repo::detect_repository_layout(dir);
     let git_branch = layout
         .as_ref()
         .map(|layout| layout.head.to_string())
-        .or_else(detect_git_branch);
+        .or_else(|| detect_git_branch(dir));
     let git_status_summary = if layout.as_ref().is_some_and(|layout| layout.bare) {
         Some("bare repository".to_string())
     } else {
-        detect_git_status_summary()
+        detect_git_status_summary(dir)
     };
     let git_remote_url = layout
         .as_ref()
@@ -78,12 +94,13 @@ pub fn gather_system_context() -> SystemContext {
     }
 }
 
-/// Run `git rev-parse --abbrev-ref HEAD` to get the current branch name.
-fn detect_git_branch() -> Option<String> {
-    let output = Command::new("git")
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-        .ok()?;
+/// Run `git rev-parse --abbrev-ref HEAD` in `dir` to get the branch name.
+fn detect_git_branch(dir: &Path) -> Option<String> {
+    let mut command = agiworkforce_worktree::host_git();
+    command
+        .current_dir(dir)
+        .args(["rev-parse", "--abbrev-ref", "HEAD"]);
+    let output = crate::platform::runtime::git::host_git_output(command).ok()?;
 
     if !output.status.success() {
         return None;
@@ -97,12 +114,22 @@ fn detect_git_branch() -> Option<String> {
     }
 }
 
-/// Run `git status --short` and summarize modified/added/deleted counts.
-fn detect_git_status_summary() -> Option<String> {
-    let output = Command::new("git")
-        .args(["status", "--short"])
-        .output()
-        .ok()?;
+/// Run `git status --short` in `dir` and summarize modified/added/deleted
+/// counts. Status can run the repository's filters, so a repository whose
+/// configuration the user has not trusted, and that sets one, has no summary.
+/// Submodules are not looked inside: git would read each with the
+/// configuration of whatever git directory its `.git` file names.
+fn detect_git_status_summary(dir: &Path) -> Option<String> {
+    crate::platform::runtime::git::check_repository_config_blocking(
+        dir,
+        agiworkforce_worktree::config_guard::ConfigUse::CONTENT,
+    )
+    .ok()?;
+    let mut command = agiworkforce_worktree::host_git();
+    command
+        .current_dir(dir)
+        .args(["status", "--short", "--ignore-submodules=dirty"]);
+    let output = crate::platform::runtime::git::host_git_output(command).ok()?;
 
     if !output.status.success() {
         return None;
@@ -413,11 +440,9 @@ const MAX_DISCOVERED_BINARIES: usize = 4_096;
 const MAX_VERSION_LINE_CHARS: usize = 120;
 
 fn git_output(dir: &Path, args: &[&str]) -> Option<String> {
-    let output = Command::new("git")
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .ok()?;
+    let mut command = agiworkforce_worktree::host_git();
+    command.current_dir(dir).args(args);
+    let output = crate::platform::runtime::git::host_git_output(command).ok()?;
     if !output.status.success() {
         return None;
     }
@@ -576,9 +601,16 @@ pub fn capture_repository_snapshot(
     snapshot.head_commit = git_output(cwd, &["rev-parse", "HEAD"])
         .map(|text| text.trim().to_string())
         .filter(|commit| !commit.is_empty());
-    snapshot.changes = git_output(cwd, &["status", "--porcelain"])
-        .map(|text| parse_porcelain_status(&text))
-        .unwrap_or_default();
+    if crate::platform::runtime::git::check_repository_config_blocking(
+        cwd,
+        agiworkforce_worktree::config_guard::ConfigUse::CONTENT,
+    )
+    .is_ok()
+    {
+        snapshot.changes = git_output(cwd, &["status", "--porcelain", "--ignore-submodules=dirty"])
+            .map(|text| parse_porcelain_status(&text))
+            .unwrap_or_default();
+    }
     Some(snapshot)
 }
 
@@ -632,7 +664,14 @@ fn binary_path(name: &str) -> Option<PathBuf> {
     })
 }
 
+/// What the program at `path` says its version is. A program a sandboxed
+/// command could have written, one in the project, a workspace root or a
+/// temporary folder, is not run to ask: this runs on the host, and `PATH`
+/// often has a project's `.venv/bin` or `node_modules/.bin` on it.
 fn binary_version(path: &Path) -> Option<String> {
+    if crate::path_security::program_is_untrusted(path) {
+        return None;
+    }
     let output = Command::new(path).arg("--version").output().ok()?;
     if !output.status.success() {
         return None;
@@ -1676,12 +1715,12 @@ mod tests {
     #[test]
     fn test_git_status_parsing_runs() {
         // Just ensure no panics. Actual content depends on repo state.
-        let _result = detect_git_status_summary();
+        let _result = detect_git_status_summary(Path::new("."));
     }
 
     #[test]
     fn test_git_branch_parsing_runs() {
-        let _result = detect_git_branch();
+        let _result = detect_git_branch(Path::new("."));
     }
 
     // -----------------------------------------------------------------------

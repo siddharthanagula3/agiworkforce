@@ -130,10 +130,27 @@ impl ApprovalRequestKind {
             // user withdraws it the same way they gave it.
             Self::TrustDirectory { .. } => (Level::Medium, true),
             // AGI keeps no copy of what a file held before it wrote to it, so
-            // it cannot offer to put the file back.
-            Self::FileWrite { .. } | Self::FileEdit { .. } | Self::Patch { .. } => {
-                (Level::Medium, false)
-            }
+            // it cannot offer to put the file back. A file that chooses what
+            // runs on this machine is the most a write can reach.
+            Self::FileWrite { path } | Self::FileEdit { path } => (
+                if crate::path_security::controls_what_runs(None, path) {
+                    Level::High
+                } else {
+                    Level::Medium
+                },
+                false,
+            ),
+            Self::Patch { files } => (
+                if files
+                    .iter()
+                    .any(|path| crate::path_security::controls_what_runs(None, path))
+                {
+                    Level::High
+                } else {
+                    Level::Medium
+                },
+                false,
+            ),
             // Whatever these reach is outside this machine's control: a remote
             // tool, a hook's own side effects, a branch someone else may
             // already have pulled.

@@ -1,4 +1,8 @@
 use super::*;
+use crate::core::mcp::sandbox::SandboxedProgram;
+use agiworkforce_sandbox_policy::{
+    sandboxed_program, NetworkPolicy, SandboxBackend, SandboxPolicy, SandboxSpec,
+};
 
 /// Maximum code length allowed for execution (1MB), mirrors core/agi/executors/code_executor.rs.
 const MAX_CODE_LENGTH: usize = 1024 * 1024;
@@ -71,7 +75,210 @@ fn format_terminal_output(
     output
 }
 
+/// How much of the OS sandbox held for one agent command. Linux is partial
+/// because Bubblewrap cannot block loopback while external network is allowed;
+/// Windows is off because it has no backend and nothing confines the command,
+/// whatever the per-command confirmation decided.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SandboxEnforcement {
+    Full,
+    Partial,
+    Off,
+}
+
+impl SandboxEnforcement {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Partial => "partial",
+            Self::Off => "off",
+        }
+    }
+}
+
+/// What held for a command that was launched. Only macOS confines writes and
+/// blocks loopback; Bubblewrap leaves loopback open, and a command that was
+/// not wrapped, as on Windows, ran with the user's full rights.
+pub(crate) fn sandbox_enforcement(wrapped: bool) -> SandboxEnforcement {
+    if !wrapped {
+        SandboxEnforcement::Off
+    } else if cfg!(target_os = "macos") {
+        SandboxEnforcement::Full
+    } else {
+        SandboxEnforcement::Partial
+    }
+}
+
+/// Read-only keeps the narrow profile, which confines reads as well, because
+/// the shared full-read wrapper always lets the workspace be written.
+fn read_only_program(
+    program: &str,
+    args: &[String],
+    workspace: &Path,
+) -> std::result::Result<Option<SandboxedProgram>, String> {
+    use crate::core::mcp::sandbox::{
+        create_sandbox_scratch_dir, detect_sandbox_backend, scratch_path,
+    };
+    let Some((backend, _)) = detect_sandbox_backend() else {
+        if cfg!(target_os = "macos") || cfg!(target_os = "linux") {
+            return Err(
+                "The OS sandbox is required but sandbox-exec (macOS) or bwrap (Linux) is not \
+                 installed."
+                    .to_string(),
+            );
+        }
+        return Ok(None);
+    };
+    let scratch = match backend {
+        SandboxBackend::MacosSeatbelt => Some(create_sandbox_scratch_dir()?),
+        SandboxBackend::LinuxBubblewrap => None,
+    };
+    let policy = SandboxPolicy::ReadOnly;
+    let (launcher, wrapped) = sandboxed_program(
+        backend,
+        &SandboxSpec {
+            policy: &policy,
+            workspace_dir: workspace,
+            network_policy: NetworkPolicy::AllowExternal,
+            protected_paths: &[],
+        },
+        scratch.as_ref().map(scratch_path).as_deref(),
+        program,
+        args,
+    )?;
+    Ok(Some(SandboxedProgram {
+        program: launcher,
+        args: wrapped,
+        scratch,
+    }))
+}
+
+/// An agent command ready to spawn. `scratch` is the sandboxed command's
+/// private temporary directory, removed when this is dropped, so the caller
+/// keeps it until the command exits.
+pub(crate) struct TerminalLaunch {
+    pub program: String,
+    pub args: Vec<String>,
+    pub enforcement: SandboxEnforcement,
+    pub scratch: Option<tempfile::TempDir>,
+}
+
+/// Launch an agent command. Only an explicit danger-full-access policy runs it
+/// bare; every other policy goes through the OS sandbox and fails closed on
+/// macOS and Linux when the sandbox tool is missing. A bare launch names its
+/// shell by absolute path.
+pub(crate) fn sandboxed_terminal_launch(
+    policy: &SandboxPolicy,
+    workspace: &Path,
+    program: String,
+    args: Vec<String>,
+) -> std::result::Result<TerminalLaunch, String> {
+    let bare = |program: &str, args: Vec<String>| TerminalLaunch {
+        program: crate::core::mcp::sandbox::host_shell(program),
+        args,
+        enforcement: sandbox_enforcement(false),
+        scratch: None,
+    };
+    if matches!(policy, SandboxPolicy::DangerFullAccess) {
+        return Ok(bare(&program, args));
+    }
+    let wrapped = match policy {
+        SandboxPolicy::ReadOnly => read_only_program(&program, &args, workspace)?,
+        _ => crate::core::mcp::sandbox::full_read_sandbox_program(
+            &program,
+            &args,
+            workspace,
+            &[],
+            &crate::core::mcp::sandbox::protected_config_paths(),
+            NetworkPolicy::AllowExternal,
+            crate::core::mcp::sandbox::SandboxCaches::Private,
+            &|name| std::env::var(name).ok(),
+        )?,
+    };
+    Ok(match wrapped {
+        Some(wrapped) => TerminalLaunch {
+            program: wrapped.program,
+            args: wrapped.args,
+            enforcement: sandbox_enforcement(true),
+            scratch: wrapped.scratch,
+        },
+        None => bare(&program, args),
+    })
+}
+
 impl ToolExecutor {
+    async fn terminal_sandbox_policy(&self) -> SandboxPolicy {
+        let Some(app_handle) = &self.app_handle else {
+            return SandboxPolicy::default();
+        };
+        let Some(state) = app_handle.try_state::<SettingsState>() else {
+            return SandboxPolicy::default();
+        };
+        let settings = state.settings.lock().await;
+        settings
+            .execution_preferences
+            .as_ref()
+            .map(|preferences| SandboxPolicy::from_mode_str(&preferences.terminal_sandbox.policy))
+            .unwrap_or_default()
+    }
+
+    /// The directory an agent command may write to. A `cwd` inside a granted
+    /// root (the project folder, a directory allowed in settings, or a path
+    /// approved this session for changes or commands) gets that root; otherwise the project folder or
+    /// the sandbox workspace. The `cwd` the model names is never a write root
+    /// on its own, and neither is the home directory or anything above it.
+    /// Roots are compared as they resolve and returned through only the links
+    /// root owns, so the sandbox holds each to where it first resolved.
+    async fn terminal_write_root(&self, cwd: Option<&str>) -> std::result::Result<PathBuf, String> {
+        let mut granted: Vec<PathBuf> = self.project_folder.iter().map(PathBuf::from).collect();
+        if let Some(app_handle) = &self.app_handle {
+            if let Some(settings_state) = app_handle.try_state::<SettingsState>() {
+                let settings = settings_state.settings.lock().await;
+                granted.extend(settings.allowed_directories.iter().map(PathBuf::from));
+            }
+            if let Some(confirmation_state) = app_handle.try_state::<ToolConfirmationState>() {
+                granted.extend(confirmation_state.get_session_allowed_paths_where(
+                    crate::sys::commands::tool_confirmation::SessionFolderGrant::lets_commands_write,
+                ));
+            }
+        }
+        let project = self.project_folder.clone().map(PathBuf::from);
+        let cwd = cwd.map(PathBuf::from);
+
+        let chosen = tokio::task::spawn_blocking(move || {
+            let safe = |root: PathBuf| {
+                let resolved = root
+                    .canonicalize()
+                    .ok()
+                    .filter(|resolved| resolved.is_dir())
+                    .filter(|resolved| crate::core::mcp::sandbox::is_safe_write_root(resolved))?;
+                let spelled = std::path::absolute(&root).ok()?;
+                // A link a command could have made stays a link, which the sandbox then refuses
+                // with the real folder named in the tool's error.
+                let spelled =
+                    agiworkforce_sandbox_policy::host_path::resolve_root_for_use(&spelled)
+                        .unwrap_or(spelled);
+                Some((spelled, resolved))
+            };
+            let granted: Vec<(PathBuf, PathBuf)> = granted.into_iter().filter_map(safe).collect();
+            let holding_cwd = cwd.and_then(|cwd| cwd.canonicalize().ok()).and_then(|cwd| {
+                granted
+                    .iter()
+                    .filter(|(_, resolved)| cwd.starts_with(resolved))
+                    .min_by_key(|(_, resolved)| resolved.components().count())
+                    .map(|(root, _)| root.clone())
+            });
+            holding_cwd.or_else(|| project.and_then(safe).map(|(root, _)| root))
+        })
+        .await
+        .map_err(|e| format!("Failed to resolve the command workspace: {e}"))?;
+
+        match chosen {
+            Some(root) => Ok(root),
+            None => crate::core::mcp::sandbox::sandbox_workspace(),
+        }
+    }
+
     pub(crate) async fn execute_terminal_tool(
         &self,
         args: HashMap<String, serde_json::Value>,
@@ -301,13 +508,46 @@ impl ToolExecutor {
             }
         };
 
-        let mut cmd = Command::new(&program);
-        for arg in shell_args.drain(..) {
-            cmd.arg(arg);
+        let policy = self.terminal_sandbox_policy().await;
+        let workspace = self.terminal_write_root(cwd.as_deref()).await;
+        if let Ok(workspace) = &workspace {
+            super::git_tools::pin_repository(workspace).await;
         }
-        if let Some(dir) = &cwd {
-            cmd.current_dir(dir);
+        if let Some(project) = &self.project_folder {
+            super::git_tools::pin_repository(Path::new(project)).await;
         }
+        let launch = workspace.and_then(|workspace| {
+            sandboxed_terminal_launch(
+                &policy,
+                &workspace,
+                program.clone(),
+                std::mem::take(&mut shell_args),
+            )
+            .map(|launch| (launch, workspace))
+        });
+        let (
+            TerminalLaunch {
+                program: launch_program,
+                args: launch_args,
+                enforcement,
+                scratch: _scratch,
+            },
+            workspace,
+        ) = match launch {
+            Ok(launch) => launch,
+            Err(err) => {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": err.clone(), "success": false }),
+                    error: Some(err),
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+
+        let mut cmd = Command::new(&launch_program);
+        cmd.args(&launch_args);
+        cmd.current_dir(cwd.as_deref().map(Path::new).unwrap_or(&workspace));
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         cmd.kill_on_drop(true);
 
@@ -513,6 +753,8 @@ impl ToolExecutor {
         let mut metadata = HashMap::new();
         metadata.insert("shell".to_string(), json!(shell));
         metadata.insert("program".to_string(), json!(program));
+        metadata.insert("sandbox".to_string(), json!(enforcement.as_str()));
+        metadata.insert("sandbox_policy".to_string(), json!(policy.mode_name()));
         metadata.insert("timeout_ms".to_string(), json!(timeout_ms));
         metadata.insert("max_output_bytes".to_string(), json!(max_output_bytes));
         metadata.insert("stdout_bytes".to_string(), json!(stdout_capture.bytes_read));
@@ -593,6 +835,10 @@ impl ToolExecutor {
         &self,
         args: &HashMap<String, Value>,
     ) -> Result<ToolResult> {
+        if let Some(reason) = super::platform_unavailable_reason("code_execute") {
+            return Err(anyhow!(reason));
+        }
+
         let language = args
             .get("language")
             .and_then(|v| v.as_str())
@@ -835,5 +1081,127 @@ impl ToolExecutor {
             error: None,
             metadata: HashMap::from([("language".to_string(), json!(language))]),
         })
+    }
+}
+
+#[cfg(test)]
+mod sandbox_launch_tests {
+    use super::*;
+
+    #[test]
+    fn danger_full_access_is_the_only_policy_that_runs_bare() {
+        let args = vec!["-lc".to_string(), "cargo test".to_string()];
+        let launch = sandboxed_terminal_launch(
+            &SandboxPolicy::DangerFullAccess,
+            Path::new("/Users/someone/project"),
+            "bash".to_string(),
+            args.clone(),
+        )
+        .expect("bare launch");
+        assert_eq!(
+            launch.program,
+            crate::core::mcp::sandbox::host_shell("bash"),
+            "a bare launch names the shell by absolute path where it can"
+        );
+        assert!(launch.program.ends_with("bash"));
+        assert_eq!(launch.args, args);
+        assert_eq!(launch.enforcement, SandboxEnforcement::Off);
+        assert!(launch.scratch.is_none());
+    }
+
+    #[test]
+    fn workspace_write_never_launches_the_shell_directly_where_a_sandbox_exists() {
+        let _env = crate::sys::utils::APP_DATA_DIR_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let result = sandboxed_terminal_launch(
+            &SandboxPolicy::default(),
+            Path::new("/Users/someone/project"),
+            "bash".to_string(),
+            vec!["-lc".to_string(), "ls".to_string()],
+        );
+        if cfg!(target_os = "windows") {
+            let launch = result.expect("windows runs unwrapped");
+            assert_eq!(launch.program, "bash");
+            assert_eq!(launch.enforcement, SandboxEnforcement::Off);
+        } else if let Ok(launch) = result {
+            assert!(
+                !launch.program.ends_with("bash"),
+                "a sandboxed policy must not run the shell bare"
+            );
+            assert!(Path::new(&launch.program).is_absolute());
+            assert_eq!(&launch.args[launch.args.len() - 3..], ["bash", "-lc", "ls"]);
+        }
+    }
+
+    fn executor_with_project(project: Option<&Path>) -> ToolExecutor {
+        let mut executor = ToolExecutor::new(std::sync::Arc::new(
+            crate::core::agi::tools::ToolRegistry::new().unwrap(),
+        ));
+        executor.set_project_folder(project.map(|path| path.to_string_lossy().to_string()));
+        executor
+    }
+
+    #[tokio::test]
+    async fn a_cwd_inside_the_project_writes_to_the_project() {
+        let project = tempfile::tempdir().expect("project");
+        let inner = project.path().join("src");
+        std::fs::create_dir_all(&inner).expect("inner dir");
+        let executor = executor_with_project(Some(project.path()));
+
+        let root = executor
+            .terminal_write_root(Some(inner.to_str().unwrap()))
+            .await
+            .expect("write root");
+
+        assert_eq!(
+            root,
+            project.path().canonicalize().unwrap(),
+            "the root is the granted folder, through the system's own links"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_model_cannot_make_root_or_home_writable_through_cwd() {
+        let project = tempfile::tempdir().expect("project");
+        let executor = executor_with_project(Some(project.path()));
+        let home = dirs::home_dir().expect("home");
+
+        for cwd in ["/".to_string(), home.to_string_lossy().to_string()] {
+            let root = executor
+                .terminal_write_root(Some(&cwd))
+                .await
+                .expect("write root");
+            assert_eq!(root, project.path().canonicalize().unwrap(), "cwd {cwd}");
+        }
+    }
+
+    #[tokio::test]
+    async fn without_a_project_the_write_root_is_never_home_or_root() {
+        let _env = crate::sys::utils::APP_DATA_DIR_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let executor = executor_with_project(None);
+        let home = dirs::home_dir().expect("home");
+
+        let root = executor
+            .terminal_write_root(Some(&home.to_string_lossy()))
+            .await
+            .expect("write root");
+
+        assert!(crate::core::mcp::sandbox::is_safe_write_root(&root));
+    }
+
+    #[test]
+    fn only_macos_reports_full_enforcement_and_an_unwrapped_command_reports_off() {
+        assert_eq!(
+            sandbox_enforcement(true),
+            if cfg!(target_os = "macos") {
+                SandboxEnforcement::Full
+            } else {
+                SandboxEnforcement::Partial
+            }
+        );
+        assert_eq!(sandbox_enforcement(false), SandboxEnforcement::Off);
     }
 }

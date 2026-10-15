@@ -15,7 +15,7 @@
 //! All file modifications are tracked via the `ChangeTracker` to support the
 //! reversibility principle. Users can undo file writes and restore deleted files.
 
-use super::{ExecutorContext, ToolExecutor};
+use super::{ExecutorContext, GrantedFolders, ToolExecutor};
 use crate::core::agi::ExecutionContext;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -129,14 +129,14 @@ impl FileExecutor {
     /// # Arguments
     ///
     /// * `path` - The path to validate
-    /// * `context` - The executor context containing allowed directories
+    /// * `granted` - The folders this tool call may reach
     /// * `operation` - The operation name for logging
     ///
     /// # Returns
     ///
     /// The canonicalized path if validation succeeds, or an error if the path
     /// is invalid or outside allowed directories.
-    fn validate_path(path: &Path, context: &ExecutorContext, operation: &str) -> Result<PathBuf> {
+    fn validate_path(path: &Path, granted: &GrantedFolders, operation: &str) -> Result<PathBuf> {
         // EXE-002 fix: Validate path length to prevent overflow attacks
         let path_str = path.to_string_lossy();
         if path_str.len() > MAX_PATH_LENGTH {
@@ -173,34 +173,8 @@ impl FileExecutor {
         })?;
 
         // SECURITY: Validate the canonicalized path is within allowed directories
-        // This prevents path traversal attacks like "../../../etc/passwd"
-        let allowed_directories = context.get_allowed_directories();
-        let path_allowed = if allowed_directories.is_empty() {
-            // If no restrictions configured, allow access (backwards compatibility)
-            // but log a security warning
-            tracing::warn!(
-                "[FileExecutor] No allowed_directories configured - {} unrestricted. \
-                Consider configuring allowed directories for security.",
-                operation
-            );
-            true
-        } else {
-            allowed_directories
-                .iter()
-                .any(|allowed_dir| canonical_path.starts_with(allowed_dir))
-        };
-
-        if !path_allowed {
-            tracing::error!(
-                "[FileExecutor] Path traversal attempt blocked: '{}' resolved to '{}' which is outside allowed directories",
-                path.display(),
-                canonical_path.display()
-            );
-            return Err(anyhow!(
-                "Access denied: path '{}' is outside allowed directories",
-                path.display()
-            ));
-        }
+        // and off the secrets denylist
+        granted.require_reachable(path, &canonical_path, operation)?;
 
         Ok(canonical_path)
     }
@@ -253,19 +227,15 @@ impl FileExecutor {
 
     /// Validate a path for new file creation.
     ///
-    /// For new files, the file doesn't exist yet so we validate the parent directory
-    /// and ensure it's within allowed directories.
-    ///
-    /// # Security
-    ///
-    /// - For existing files: canonicalizes and validates the full path
-    /// - For new files: canonicalizes the parent directory and validates it
-    /// - Prevents creation of files outside allowed directories
+    /// An existing file is validated as it resolves. A new file needs an
+    /// existing parent directory, and its own name must not already be a
+    /// link to a missing target, since a write would follow that link out of
+    /// the granted folder.
     ///
     /// # Arguments
     ///
     /// * `path` - The path where the file will be created
-    /// * `context` - The executor context containing allowed directories
+    /// * `granted` - The folders this tool call may reach
     /// * `operation` - The operation name for logging
     ///
     /// # Returns
@@ -273,61 +243,22 @@ impl FileExecutor {
     /// The canonicalized path where the file will be created.
     fn validate_new_path(
         path: &Path,
-        context: &ExecutorContext,
+        granted: &GrantedFolders,
         operation: &str,
     ) -> Result<PathBuf> {
         if path.exists() {
-            // File exists, use standard validation
-            Self::validate_path(path, context, operation)
-        } else {
-            // New file - validate parent directory
-            let parent = path
-                .parent()
-                .ok_or_else(|| anyhow!("Invalid path: no parent directory"))?;
-
-            if !parent.exists() {
-                return Err(anyhow!(
-                    "Parent directory does not exist: {}",
-                    parent.display()
-                ));
-            }
-
-            let canonical_parent = std::fs::canonicalize(parent)
-                .map_err(|e| anyhow!("Invalid parent directory '{}': {}", parent.display(), e))?;
-
-            // Validate parent is within allowed directories
-            let allowed_directories = context.get_allowed_directories();
-            let path_allowed = if allowed_directories.is_empty() {
-                tracing::warn!(
-                    "[FileExecutor] No allowed_directories configured - {} unrestricted. \
-                    Consider configuring allowed directories for security.",
-                    operation
-                );
-                true
-            } else {
-                allowed_directories
-                    .iter()
-                    .any(|allowed_dir| canonical_parent.starts_with(allowed_dir))
-            };
-
-            if !path_allowed {
-                tracing::error!(
-                    "[FileExecutor] Path traversal attempt blocked: '{}' parent '{}' is outside allowed directories",
-                    path.display(),
-                    canonical_parent.display()
-                );
-                return Err(anyhow!(
-                    "Access denied: path '{}' is outside allowed directories",
-                    path.display()
-                ));
-            }
-
-            // Construct the full canonical path for the new file
-            let filename = path
-                .file_name()
-                .ok_or_else(|| anyhow!("Invalid filename"))?;
-            Ok(canonical_parent.join(filename))
+            return Self::validate_path(path, granted, operation);
         }
+        let parent = path
+            .parent()
+            .ok_or_else(|| anyhow!("Invalid path: no parent directory"))?;
+        if !parent.exists() {
+            return Err(anyhow!(
+                "Parent directory does not exist: {}",
+                parent.display()
+            ));
+        }
+        granted.writable_new_path(path, operation)
     }
 
     fn invalidate_file_read_cache(
@@ -369,7 +300,8 @@ impl FileExecutor {
             .ok_or_else(|| anyhow!("Missing required 'path' parameter"))?;
 
         // SECURITY: Validate the path is within allowed directories
-        let canonical_path = Self::validate_path(Path::new(path), context, "file_read")?;
+        let granted = context.granted_folders().await?;
+        let canonical_path = Self::validate_path(Path::new(path), &granted, "file_read")?;
 
         // EXE-005 fix: Check file size before reading to prevent memory exhaustion
         let metadata = std::fs::metadata(&canonical_path)?;
@@ -476,7 +408,9 @@ impl FileExecutor {
         }
 
         // SECURITY: Validate the path (handles both existing and new files)
-        let canonical_path = Self::validate_new_path(Path::new(path), context, "file_write")?;
+        let granted = context.granted_folders().await?;
+        let canonical_path = Self::validate_new_path(Path::new(path), &granted, "file_write")?;
+        granted.require_modifiable(&canonical_path, "file_write")?;
 
         // Store old content for undo capability (CRITICAL for safety model)
         let file_exists = canonical_path.exists();
@@ -493,7 +427,11 @@ impl FileExecutor {
             let _ = Self::parse_expected_sha256(parameters)?;
         }
 
-        let result = std::fs::write(&canonical_path, content);
+        let result = crate::sys::utils::write_without_following(
+            &canonical_path,
+            content.as_bytes(),
+            was_new_file,
+        );
 
         // Emit file operation event for UI
         if let Some(ref app_handle) = context.app_handle {
@@ -595,7 +533,9 @@ impl FileExecutor {
             .ok_or_else(|| anyhow!("Missing required 'path' parameter"))?;
 
         // SECURITY: Validate the path is within allowed directories
-        let canonical_path = Self::validate_path(Path::new(path), context, "file_delete")?;
+        let granted = context.granted_folders().await?;
+        let canonical_path = Self::validate_path(Path::new(path), &granted, "file_delete")?;
+        granted.require_modifiable(&canonical_path, "file_delete")?;
 
         // SECURITY: Ensure we're deleting a file, not a directory
         // Directories require a separate tool with different safety considerations
@@ -715,23 +655,20 @@ mod tests {
     ///
     /// Note: This context has no app_handle, change_tracker, or security_guard,
     /// so some features (event emission, undo tracking) won't work in tests.
-    /// The `get_allowed_directories` method will return default directories
-    /// (home, cwd, temp) when there's no app_handle with settings state.
+    /// It grants only the temporary folder, as `granted_directories`; with no
+    /// app_handle nothing else is granted.
     fn create_test_context() -> ExecutorContext {
         use std::sync::Arc;
 
         ExecutorContext {
             app_handle: None,
-            automation: Arc::new(
-                crate::automation::AutomationService::new()
-                    .expect("Failed to create AutomationService for tests"),
-            ),
             router: Arc::new(tokio::sync::RwLock::new(crate::core::llm::LLMRouter::new())),
             tool_cache: Arc::new(crate::data::cache::ToolResultCache::new()),
             security_guard: Arc::new(crate::sys::security::ToolExecutionGuard::new()),
             change_tracker: None,
             session_id: "test_session".to_string(),
             tool_id: "test_tool".to_string(),
+            granted_directories: vec![std::env::temp_dir()],
         }
     }
 
@@ -780,13 +717,106 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn with_no_folder_granted_every_file_tool_refuses() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.txt");
+        fs::write(&test_file, "Hello, World!").unwrap();
+        let context = ExecutorContext {
+            granted_directories: Vec::new(),
+            ..create_test_context()
+        };
+        assert_eq!(
+            context.granted_folders().await.unwrap_err().to_string(),
+            crate::core::agi::executors::NO_GRANTED_FOLDER
+        );
+
+        let executor = FileExecutor::new();
+        let exec_context = create_test_execution_context();
+        for tool in ["file_read", "file_write", "file_delete"] {
+            let mut params = HashMap::new();
+            params.insert(
+                "path".to_string(),
+                Value::String(test_file.to_string_lossy().to_string()),
+            );
+            params.insert("content".to_string(), Value::String("x".to_string()));
+            let error = executor
+                .execute(tool, &params, &context, &exec_context)
+                .await
+                .expect_err("nothing granted means nothing reachable");
+            assert!(
+                error
+                    .to_string()
+                    .contains(crate::core::agi::executors::NO_GRANTED_FOLDER),
+                "{tool}: {error}"
+            );
+        }
+        assert_eq!(fs::read_to_string(&test_file).unwrap(), "Hello, World!");
+    }
+
+    #[test]
+    fn a_folder_granted_to_read_is_read_but_never_changed() {
+        let temp_dir = TempDir::new().unwrap();
+        let folder = temp_dir.path().canonicalize().unwrap();
+        let file = folder.join("notes.txt");
+        let granted = GrantedFolders::verify(vec![(folder.clone(), false)]);
+        assert!(granted.contains(&file));
+        let error = granted
+            .require_modifiable(&file, "file_write")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("reading only"), "{error}");
+
+        let granted = GrantedFolders::verify(vec![(folder.clone(), false), (folder, true)]);
+        granted.require_modifiable(&file, "file_write").unwrap();
+    }
+
+    #[test]
+    fn a_filesystem_root_is_never_a_granted_folder() {
+        let root = std::env::temp_dir()
+            .ancestors()
+            .last()
+            .unwrap()
+            .to_path_buf();
+        let granted = GrantedFolders::verify(vec![(root.clone(), true)]);
+        assert!(!granted.contains(&std::env::temp_dir()));
+        let error = granted
+            .denial(&std::env::temp_dir(), "outside".to_string())
+            .to_string();
+        assert!(
+            error.contains(crate::core::agi::executors::WHOLE_DRIVE_REFUSED),
+            "{error}"
+        );
+        assert!(error.contains(&root.display().to_string()), "{error}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_granted_folder_that_is_refused_is_named_with_why() {
+        let temp_dir = TempDir::new().unwrap();
+        let real = temp_dir.path().join("real");
+        fs::create_dir(&real).unwrap();
+        let link = temp_dir.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let context = ExecutorContext {
+            granted_directories: vec![link.clone()],
+            ..create_test_context()
+        };
+        let error = context.granted_folders().await.unwrap_err().to_string();
+        assert!(
+            error.starts_with(crate::core::agi::executors::NO_GRANTED_FOLDER),
+            "{error}"
+        );
+        assert!(error.contains(&link.display().to_string()), "{error}");
+        assert!(error.contains("goes through a link"), "{error}");
+    }
+
+    #[tokio::test]
     async fn test_file_read() {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.txt");
         fs::write(&test_file, "Hello, World!").unwrap();
 
-        // For tests without settings state, get_allowed_directories returns home + cwd + temp
-        // which includes the temp_dir used by tempfile
+        // The test context grants the temporary folder tempfile writes in
         let context = create_test_context();
 
         let executor = FileExecutor::new();

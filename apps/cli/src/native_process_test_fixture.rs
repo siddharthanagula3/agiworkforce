@@ -538,8 +538,14 @@ mod tests {
             let settings = crate::sandbox::sandbox_settings();
             assert!(settings.forced);
             assert!(settings.scrub_environment);
-            assert!(settings.sandbox_user_hooks);
-            assert!(settings.sandbox_mcp_servers);
+            assert_eq!(
+                settings.user_hooks,
+                crate::sandbox::SandboxDefault::Required
+            );
+            assert_eq!(
+                settings.mcp_servers,
+                crate::sandbox::SandboxDefault::Required
+            );
         });
         fixture.assert_inputs(&[
             Input::ExecRules,
@@ -578,7 +584,14 @@ mod tests {
             assert!(crate::features::exec::exec_policy::load_policy().is_err());
             let settings = crate::sandbox::sandbox_settings();
             assert!(settings.forced && settings.scrub_environment);
-            assert!(settings.sandbox_user_hooks && settings.sandbox_mcp_servers);
+            assert_eq!(
+                settings.user_hooks,
+                crate::sandbox::SandboxDefault::Required
+            );
+            assert_eq!(
+                settings.mcp_servers,
+                crate::sandbox::SandboxDefault::Required
+            );
         });
         let counts = fixture.inputs.counts.lock().unwrap();
         for input in [Input::ExecRules, Input::ManagedSettings] {

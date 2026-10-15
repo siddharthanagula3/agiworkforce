@@ -14,10 +14,7 @@
 //!
 //! This module is now the single source of truth, a strict superset of every
 //! prior list so consolidation never weakens security. Each consumer calls
-//! [`is_blocked_env_var`] (for inline filter loops) or
-//! [`filter_blocked_env_vars`] (for `Option<HashMap>` shapes).
-
-use std::collections::HashMap;
+//! [`is_blocked_env_var`].
 
 /// Environment variables that must never be set on child processes spawned by
 /// the desktop app. Covers:
@@ -106,19 +103,6 @@ pub fn is_blocked_env_var(key: &str) -> bool {
         .any(|blocked| blocked.eq_ignore_ascii_case(key))
 }
 
-/// Convenience wrapper that filters an `Option<HashMap<String, String>>`,
-/// removing every key flagged by [`is_blocked_env_var`]. Matches the signature
-/// previously exposed by `sys/commands/code_execution::filter_blocked_env_vars`.
-pub fn filter_blocked_env_vars(
-    env_vars: Option<HashMap<String, String>>,
-) -> Option<HashMap<String, String>> {
-    env_vars.map(|vars| {
-        vars.into_iter()
-            .filter(|(key, _)| !is_blocked_env_var(key))
-            .collect()
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,26 +173,6 @@ mod tests {
         assert!(!is_blocked_env_var("DEBUG_LEVEL"));
         assert!(!is_blocked_env_var("ANTHROPIC_API_KEY"));
         assert!(!is_blocked_env_var("OPENAI_API_KEY"));
-    }
-
-    #[test]
-    fn filter_removes_blocked_preserves_safe() {
-        let mut input = HashMap::new();
-        input.insert("LD_PRELOAD".to_string(), "/tmp/evil.so".to_string());
-        input.insert("MY_API_KEY".to_string(), "secret".to_string());
-        input.insert("BASH_FUNC_x".to_string(), "() { id; }".to_string());
-        input.insert("NODE_OPTIONS".to_string(), "--inspect".to_string());
-
-        let out = filter_blocked_env_vars(Some(input)).expect("Some in -> Some out");
-        assert!(!out.contains_key("LD_PRELOAD"));
-        assert!(!out.contains_key("BASH_FUNC_x"));
-        assert!(!out.contains_key("NODE_OPTIONS"));
-        assert_eq!(out.get("MY_API_KEY").map(|s| s.as_str()), Some("secret"));
-    }
-
-    #[test]
-    fn filter_passes_through_none() {
-        assert!(filter_blocked_env_vars(None).is_none());
     }
 
     /// Regression guard: ensure the centralized list is a strict superset of

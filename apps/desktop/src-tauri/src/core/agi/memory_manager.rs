@@ -537,8 +537,38 @@ impl MemoryManager {
         let rows = conn
             .execute("DELETE FROM user_memory WHERE id = ?1", params![memory_id])
             .map_err(|e| Error::Database(format!("Failed to delete memory: {}", e)))?;
+        drop(conn);
 
+        if rows > 0 {
+            self.remove_from_index(memory_id)?;
+        }
         Ok(rows > 0)
+    }
+
+    /// Delete the given memories in one transaction. Returns how many rows
+    /// were removed.
+    pub fn forget_many(&self, memory_ids: &[i64]) -> Result<usize> {
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::Generic(e.to_string()))?;
+        let tx = conn
+            .transaction()
+            .map_err(|e| Error::Database(format!("Failed to start delete: {}", e)))?;
+        let mut removed = 0;
+        for memory_id in memory_ids {
+            removed += tx
+                .execute("DELETE FROM user_memory WHERE id = ?1", params![memory_id])
+                .map_err(|e| Error::Database(format!("Failed to delete memory: {}", e)))?;
+        }
+        tx.commit()
+            .map_err(|e| Error::Database(format!("Failed to commit delete: {}", e)))?;
+        drop(conn);
+
+        for memory_id in memory_ids {
+            self.remove_from_index(*memory_id)?;
+        }
+        Ok(removed)
     }
 
     /// Delete a memory by category and topic
@@ -584,76 +614,6 @@ impl MemoryManager {
         Ok(id)
     }
 
-    /// Get daily logs for a specific date
-    pub fn get_daily_logs(&self, date: &str) -> Result<Vec<DailyLogEntry>> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| Error::Generic(e.to_string()))?;
-
-        let mut stmt = conn
-            .prepare(
-                "SELECT id, log_date, timestamp, entry_type, content, metadata
-                 FROM daily_logs
-                 WHERE log_date = ?1
-                 ORDER BY timestamp ASC",
-            )
-            .map_err(|e| Error::Database(format!("Failed to prepare query: {}", e)))?;
-
-        let entries = stmt
-            .query_map(params![date], |row| {
-                Ok(DailyLogEntry {
-                    id: row.get(0)?,
-                    log_date: row.get(1)?,
-                    timestamp: row.get(2)?,
-                    entry_type: row.get(3)?,
-                    content: row.get(4)?,
-                    metadata: row.get(5)?,
-                })
-            })
-            .map_err(|e| Error::Database(format!("Failed to get daily logs: {}", e)))?
-            .collect::<rusqlite::Result<Vec<_>>>()
-            .map_err(|e| Error::Database(format!("Failed to collect logs: {}", e)))?;
-
-        Ok(entries)
-    }
-
-    /// Get recent context for session initialization (today + yesterday logs + important memories)
-    pub fn get_session_context(&self) -> Result<String> {
-        let today = Utc::now().date_naive();
-        let yesterday = today.pred_opt().unwrap_or(today);
-
-        let mut context = String::new();
-
-        // Load today's and yesterday's logs
-        for date in [yesterday, today] {
-            let date_str = date.format("%Y-%m-%d").to_string();
-            let logs = self.get_daily_logs(&date_str)?;
-            if !logs.is_empty() {
-                context.push_str(&format!("\n## {} Log\n", date_str));
-                for log in logs {
-                    context.push_str(&format!("[{}] {}\n", log.timestamp, log.content));
-                }
-            }
-        }
-
-        // Load important memories (importance >= 7)
-        let important = self.get_important_memories(7)?;
-        if !important.is_empty() {
-            context.push_str("\n## Important Memories\n");
-            for memory in important {
-                context.push_str(&format!(
-                    "- **{} ({})**: {}\n",
-                    memory.topic,
-                    memory.category.as_str(),
-                    memory.content
-                ));
-            }
-        }
-
-        Ok(context)
-    }
-
     /// Get all memories for export
     pub fn export_all(&self) -> Result<Vec<MemoryEntry>> {
         let conn = self
@@ -676,24 +636,6 @@ impl MemoryManager {
             .map_err(|e| Error::Database(format!("Failed to collect memories: {}", e)))?;
 
         Ok(entries)
-    }
-
-    /// Clear old daily logs (keep last N days)
-    pub fn cleanup_old_logs(&self, keep_days: i32) -> Result<usize> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| Error::Generic(e.to_string()))?;
-
-        let rows = conn
-            .execute(
-                "DELETE FROM daily_logs
-                 WHERE log_date < date('now', '-' || ?1 || ' days')",
-                params![keep_days],
-            )
-            .map_err(|e| Error::Database(format!("Failed to cleanup logs: {}", e)))?;
-
-        Ok(rows)
     }
 
     // =========================================================================
@@ -742,43 +684,6 @@ impl MemoryManager {
         }
 
         Ok(new_importance)
-    }
-
-    /// Recall a memory and boost its importance
-    /// This is used when a memory is actively used by the AGI
-    pub fn recall_with_boost(
-        &self,
-        category: MemoryCategory,
-        topic: &str,
-    ) -> Result<Option<MemoryEntry>> {
-        let config = self.get_decay_config()?;
-
-        // First recall to get the entry
-        let entry = self.recall(category, topic)?;
-
-        if let Some(ref memory) = entry {
-            if config.enabled {
-                // Boost importance (but not above 10)
-                let shared_config =
-                    agiworkforce_agent_core::memory::MemoryDecayConfig::from(&config);
-                let new_importance = agiworkforce_agent_core::memory::boosted_importance(
-                    memory.importance,
-                    &shared_config,
-                );
-                if new_importance != memory.importance {
-                    let conn = self
-                        .conn
-                        .lock()
-                        .map_err(|e| Error::Generic(e.to_string()))?;
-                    let _ = conn.execute(
-                        "UPDATE user_memory SET importance = ?1, last_accessed = datetime('now') WHERE id = ?2",
-                        params![new_importance, memory.id],
-                    );
-                }
-            }
-        }
-
-        Ok(entry)
     }
 
     /// Get memories that are candidates for decay
@@ -1332,26 +1237,6 @@ impl MemoryManager {
             .map_err(|e| Error::Generic(format!("Failed to serialize memory export: {}", e)))
     }
 
-    /// Export all memories and logs to a JSON file
-    ///
-    /// Writes the export data to the specified file path.
-    /// Returns the number of bytes written on success.
-    ///
-    /// # Arguments
-    /// * `path` - The file path to write the JSON export to
-    ///
-    /// # Example
-    /// ```ignore
-    /// let manager = MemoryManager::new("path/to/db")?;
-    /// let bytes_written = manager.export_to_json_file(Path::new("/tmp/memory_backup.json"))?;
-    /// println!("Wrote {} bytes", bytes_written);
-    /// ```
-    pub fn export_to_json_file(&self, path: &std::path::Path) -> Result<usize> {
-        let json = self.export_to_json()?;
-        std::fs::write(path, &json).map_err(|e| Error::Other(e.to_string()))?;
-        Ok(json.len())
-    }
-
     /// Export all memories to Markdown format organized by category
     ///
     /// Returns a formatted Markdown string containing all memories grouped by category.
@@ -1406,26 +1291,6 @@ impl MemoryManager {
         Ok(md)
     }
 
-    /// Export all memories to a Markdown file
-    ///
-    /// Writes the Markdown-formatted export data to the specified file path.
-    /// Returns the number of bytes written on success.
-    ///
-    /// # Arguments
-    /// * `path` - The file path to write the Markdown export to
-    ///
-    /// # Example
-    /// ```ignore
-    /// let manager = MemoryManager::new("path/to/db")?;
-    /// let bytes_written = manager.export_to_markdown_file(Path::new("/tmp/memory_backup.md"))?;
-    /// println!("Wrote {} bytes", bytes_written);
-    /// ```
-    pub fn export_to_markdown_file(&self, path: &std::path::Path) -> Result<usize> {
-        let md = self.export_to_markdown()?;
-        std::fs::write(path, &md).map_err(|e| Error::Other(e.to_string()))?;
-        Ok(md.len())
-    }
-
     // =========================================================================
     // Memory Import Methods
     // =========================================================================
@@ -1451,8 +1316,22 @@ impl MemoryManager {
         json: &str,
         strategy: ImportConflictStrategy,
     ) -> Result<ImportResult> {
-        let export: MemoryExport = serde_json::from_str(json)
-            .map_err(|e| Error::Generic(format!("Invalid JSON: {}", e)))?;
+        let export: MemoryExport = match serde_json::from_str::<MemoryExport>(json) {
+            Ok(export) => export,
+            // Settings exported a bare list of memories before it exported
+            // the full backup format; those files must still import.
+            Err(export_error) => match serde_json::from_str::<Vec<MemoryEntry>>(json) {
+                Ok(memories) => MemoryExport {
+                    version: String::new(),
+                    exported_at: String::new(),
+                    memory_count: memories.len(),
+                    log_count: 0,
+                    memories,
+                    daily_logs: Vec::new(),
+                },
+                Err(_) => return Err(Error::Generic(format!("Invalid JSON: {}", export_error))),
+            },
+        };
 
         let mut result = ImportResult {
             memories_imported: 0,
@@ -1562,32 +1441,6 @@ impl MemoryManager {
 
         Ok(result)
     }
-
-    /// Import from JSON file
-    ///
-    /// Reads and imports memories from a JSON file.
-    ///
-    /// # Arguments
-    /// * `path` - Path to the JSON file to import
-    /// * `strategy` - How to handle conflicts with existing memories
-    ///
-    /// # Example
-    /// ```ignore
-    /// let manager = MemoryManager::new("path/to/db")?;
-    /// let result = manager.import_from_json_file(
-    ///     Path::new("/tmp/memory_backup.json"),
-    ///     ImportConflictStrategy::Merge
-    /// )?;
-    /// println!("Imported {} memories, replaced {}", result.memories_imported, result.memories_replaced);
-    /// ```
-    pub fn import_from_json_file(
-        &self,
-        path: &std::path::Path,
-        strategy: ImportConflictStrategy,
-    ) -> Result<ImportResult> {
-        let json = std::fs::read_to_string(path).map_err(|e| Error::Other(e.to_string()))?;
-        self.import_from_json(&json, strategy)
-    }
 }
 
 fn map_memory_row(row: &Row<'_>) -> rusqlite::Result<MemoryEntry> {
@@ -1688,6 +1541,55 @@ mod tests {
     }
 
     #[test]
+    fn forget_many_deletes_only_the_given_memories() {
+        let (_temp_dir, manager) = setup_test_db();
+        let first = manager
+            .remember(MemoryCategory::Fact, "a", "first", None, None)
+            .unwrap();
+        let second = manager
+            .remember(MemoryCategory::Fact, "b", "second", None, None)
+            .unwrap();
+        let kept = manager
+            .remember(MemoryCategory::Fact, "c", "kept", None, None)
+            .unwrap();
+
+        assert_eq!(manager.forget_many(&[first, second]).unwrap(), 2);
+
+        let remaining: Vec<i64> = manager
+            .export_all()
+            .unwrap()
+            .into_iter()
+            .map(|memory| memory.id)
+            .collect();
+        assert_eq!(remaining, vec![kept]);
+        assert_eq!(manager.forget_many(&[]).unwrap(), 0);
+    }
+
+    #[test]
+    fn import_accepts_the_bare_list_settings_used_to_export() {
+        let (_temp_dir, source) = setup_test_db();
+        source
+            .remember(MemoryCategory::Preference, "editor", "vim", Some(6), None)
+            .unwrap();
+        let bare_list = serde_json::to_string(&source.export_all().unwrap()).unwrap();
+
+        let (_other_dir, target) = setup_test_db();
+        let result = target
+            .import_from_json(&bare_list, ImportConflictStrategy::Skip)
+            .unwrap();
+
+        assert_eq!(result.memories_imported, 1);
+        let memory = target
+            .recall(MemoryCategory::Preference, "editor")
+            .unwrap()
+            .unwrap();
+        assert_eq!(memory.content, "vim");
+        assert!(target
+            .import_from_json("{\"not\": \"a backup\"}", ImportConflictStrategy::Skip)
+            .is_err());
+    }
+
+    #[test]
     fn test_canonical_categories_update_legacy_rows_without_duplicates() {
         let (_temp_dir, manager) = setup_test_db();
         let legacy_id = {
@@ -1773,8 +1675,7 @@ mod tests {
             .unwrap();
         assert!(id > 0);
 
-        let today = Utc::now().format("%Y-%m-%d").to_string();
-        let logs = manager.get_daily_logs(&today).unwrap();
+        let logs = manager.get_all_daily_logs().unwrap();
         assert_eq!(logs.len(), 1);
         assert_eq!(logs[0].content, "Started new session");
     }

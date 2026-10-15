@@ -1,4 +1,6 @@
-use agiworkforce_app_server::{DeveloperSessionHost, DeveloperSessionHostError};
+use agiworkforce_app_server::{
+    DeveloperConnectionTrust, DeveloperSessionHost, DeveloperSessionHostError, TurnClient,
+};
 use agiworkforce_protocol::agent_events::{
     AgentEvent, AgentEventArtifactProduced, AgentEventCommandStarted, AgentEventError,
     AgentEventFileChangeKind, AgentEventFileChanged, AgentEventProgressStatus,
@@ -10,52 +12,70 @@ use agiworkforce_protocol::developer_session::{
     agent_event_notification, task_state_notification, AccountLoginOutcome, AccountLoginResponse,
     AccountLoginWaitParams, AccountLoginWaitResponse, AccountSource, AccountStatusParams,
     AccountStatusResponse, AccountTokenResponse, ActiveTurnSnapshot, AppServerCapabilities,
-    AppServerClientInfo, AppServerNotification, ApprovalResponseParams, ContextInstructionsParams,
-    ContextInstructionsResponse, DeveloperAgentMode, DeveloperApprovalOutcome, DeveloperMessage,
-    DeveloperReasoningEffort, DeveloperRoutingProfile, DeveloperRoutingTaskType,
-    DeveloperSessionApproval, DeveloperSessionHandoff, DeveloperSessionSource,
-    DeveloperSessionTrustMode, DeveloperSessionWriter, DeveloperSessionWriterChange,
-    GitPullRequestParams, GitPullRequestPlanParams, GitPullRequestPlanResponse,
-    GitPullRequestResponse, HandoffAdmission, HandoffAdmissionContext, HandoffEnvironment,
-    HandoffLastTurn, HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookAddParams,
-    HookListResponse, HookRemoveParams, HostModelSummary, LocalModelListResponse,
-    LocalModelProvider, LocalModelSummary, McpAddParams, McpAuthRequiredNotification,
+    AppServerClientInfo, AppServerNotification, ApprovalResponseParams, CheckpointDiffResponse,
+    CheckpointListResponse, CheckpointSectionsParams, CheckpointSectionsResponse,
+    CheckpointTurnParams, ContextInstructionsParams, ContextInstructionsResponse,
+    DeveloperAgentMode, DeveloperApprovalOutcome, DeveloperMessage, DeveloperReasoningEffort,
+    DeveloperRoutingProfile, DeveloperRoutingTaskType, DeveloperSessionApproval,
+    DeveloperSessionHandoff, DeveloperSessionSource, DeveloperSessionTrustMode,
+    DeveloperSessionWriter, DeveloperSessionWriterChange, GitPullRequestParams,
+    GitPullRequestPlanParams, GitPullRequestPlanResponse, GitPullRequestResponse, HandoffAdmission,
+    HandoffAdmissionContext, HandoffEnvironment, HandoffLastTurn, HandoffLocalResource,
+    HandoffRefusal, HandoffTurnState, HookAddParams, HookListResponse, HookRemoveParams,
+    HostModelSummary, LocalModelListResponse, LocalModelProvider, LocalModelSummary,
+    ManagedWorktreeCreateParams, ManagedWorktreeListResponse, ManagedWorktreeSummary, McpAddParams,
+    McpApprovalGrantParams, McpApprovalReadParams, McpApprovalRequest, McpAuthRequiredNotification,
     McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerInspectResponse,
-    McpServerListResponse, McpServerParams, McpServerTestResponse, McpServerToolsResponse,
-    MemoryAddParams, MemoryAddResponse, ModelListParams, PendingApprovalSnapshot,
-    PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
-    PermissionsRemoveParams, PlanDecideParams, PlanDecision, PluginInstallParams,
-    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
-    ProviderParams, ProviderSetKeyParams, ProvidersListResponse, RewindSkippedFile,
-    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
-    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint,
-    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPlanNotification,
-    ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse,
+    McpServerListResponse, McpServerParams, McpServerScope, McpServerTestResponse,
+    McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
+    PendingApprovalSnapshot, PendingUserInputSnapshot, PermissionRulesResponse,
+    PermissionsAddParams, PermissionsListResponse, PermissionsRemoveParams, PlanDecideParams,
+    PlanDecision, PluginInstallParams, PluginListResponse, PluginRemoveParams,
+    PluginSetEnabledParams, PluginUpdateResponse, ProviderParams, ProviderSetKeyParams,
+    ProvidersListResponse, RewindSkippedFile, SettingsReadResponse, SettingsWriteParams,
+    SkillConsentParams, SkillConsentResponse, SkillInstallParams, SkillListResponse,
+    SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadCompactParams,
+    ThreadCompactResponse, ThreadDeleteParams, ThreadDeleteResponse, ThreadForkParams,
+    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
+    ThreadRevertParams, ThreadRevertResponse, ThreadRewindParams, ThreadRewindResponse,
     ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
     ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
     ThreadWriterConflictData, TrustListResponse, TrustRevokeParams, TurnEndedNotification,
     TurnFailure, TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams,
-    TurnStatus, TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse,
-    WorktreeRemoveParams, WorktreeSummary,
+    TurnStatus, TurnSteerParams, TurnSummary, UserInputRequestedParams, UserInputResponseParams,
+    WorktreeApplyParams, WorktreeApplyResponse, WorktreeArchive, WorktreeCleanupFailure,
+    WorktreeCreateParams, WorktreeCreateResponse, WorktreeIdParams, WorktreeKeepParams,
+    WorktreeKeepResponse, WorktreeListResponse, WorktreePinParams, WorktreeRefusedFile,
+    WorktreeRemoveParams, WorktreeSetupFinishedNotification, WorktreeSetupRunParams,
+    WorktreeSummary,
 };
-use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
+use agiworkforce_protocol::protocol::{
+    ExecPolicyAmendment, NetworkPolicyRuleAction, ReviewDecision,
+};
 use agiworkforce_protocol::task_state::AgentTaskState;
 use agiworkforce_protocol::user_input::UserInput;
+use agiworkforce_worktree::checkpoint::Phase;
 use async_trait::async_trait;
 use base64::Engine as _;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
-use tokio::sync::{broadcast, oneshot, Mutex, RwLock, RwLockReadGuard};
+use tokio::sync::{
+    broadcast, oneshot, Mutex, OwnedMutexGuard, OwnedRwLockReadGuard, OwnedRwLockWriteGuard,
+    RwLock, RwLockReadGuard,
+};
 use uuid::Uuid;
 
 use super::account;
+use super::review;
 use super::surfaces;
 use super::threads;
-use crate::agent::{AgentSession, ContinuationSink, ToolApprovalSink, ToolEventSink};
+use crate::agent::{
+    AgentSession, ContinuationSink, ToolApprovalSink, ToolEventSink, UserInputSink,
+};
 use crate::config::CliConfig;
 use crate::context;
 use crate::models::{self, ContentBlock};
@@ -272,6 +292,94 @@ fn settle_client_turn(
     }
 }
 
+fn approval_for_client(
+    name: String,
+    scope: McpServerScope,
+    asked: crate::mcp::consent::ApprovalRequest,
+) -> McpApprovalRequest {
+    McpApprovalRequest {
+        name,
+        scope,
+        question: asked.question,
+        fingerprint: asked.fingerprint,
+        launch: Some(asked.launch),
+    }
+}
+
+/// Whether a server to approve is declared by the project's plugins rather
+/// than its MCP file. The user's own servers start without this approval.
+fn approval_from_plugin(scope: McpServerScope) -> Result<bool, DeveloperSessionHostError> {
+    match scope {
+        McpServerScope::Project => Ok(false),
+        McpServerScope::Plugin => Ok(true),
+        McpServerScope::User => Err(DeveloperSessionHostError::invalid_request(
+            "Only a server this project names needs approval",
+        )),
+    }
+}
+
+/// Withhold the subagent-spawning tools whenever a child session would run
+/// outside the host's authority: always when the workspace policy denies
+/// them, and otherwise unless this very send runs in bypass.
+fn withhold_subagent_tools(workspace_root: &Path, agent: &mut AgentSession) {
+    let policy = PolicyEngine::load_workspace(workspace_root).ok();
+    let mut disallowed = agent
+        .disallowed_tools
+        .iter()
+        .filter(|spec| !SUBAGENT_SPAWN_TOOLS.contains(&spec.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    for tool in SUBAGENT_SPAWN_TOOLS {
+        let denied_by_policy = policy
+            .as_ref()
+            .is_some_and(|policy| policy.evaluate(tool, "") == PolicyDecision::Deny);
+        if denied_by_policy || !agent.skip_permissions {
+            disallowed.push(tool.to_string());
+        }
+    }
+    let allowed = agent.allowed_tools.clone().unwrap_or_default();
+    agent.apply_tool_filters(&allowed, &disallowed);
+}
+
+/// Bypass covers what the client that confirmed it sent with the turn, and
+/// nothing a later message adds. A send that carries a steered message goes
+/// back to the thread's own mode first, with the tools bypass had added taken
+/// away again.
+fn end_bypass_for_follow_up(workspace_root: &Path, agent: &mut AgentSession) {
+    if !agent.skip_permissions
+        && agent.permission_mode != crate::cli_options::PermissionMode::BypassPermissions
+    {
+        return;
+    }
+    leave_bypass(agent);
+    keep_thread_mode(agent);
+    withhold_subagent_tools(workspace_root, agent);
+}
+
+/// Hands the running turn whatever was steered into it since its last tool
+/// batch. `try_lock` keeps it from waiting on a steer being queued this very
+/// moment: that one is taken at the next batch, or after the turn's reply.
+fn steer_source(
+    steering: Arc<Mutex<HashMap<String, Vec<PreparedInput>>>>,
+    thread_id: String,
+) -> crate::agent::SteerSource {
+    crate::agent::SteerSource(Arc::new(move || {
+        let Ok(mut queues) = steering.try_lock() else {
+            return Vec::new();
+        };
+        queues
+            .get_mut(&thread_id)
+            .map(std::mem::take)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|input| crate::agent::SteeredInput {
+                text: input.text,
+                images: input.images,
+            })
+            .collect()
+    }))
+}
+
 async fn take_steered_input_or_close(
     running_turns: &Mutex<HashMap<String, RunningTurn>>,
     steering: &Mutex<HashMap<String, Vec<PreparedInput>>>,
@@ -298,12 +406,26 @@ async fn take_steered_input_or_close(
     next
 }
 
+/// What a turn holds from just before it closes its claim on the thread until
+/// its after-checkpoint is recorded, so neither a turn of the same thread, a
+/// delete of it, nor a revert or stage of the workspace lands in between.
+async fn hold_for_finish(
+    thread_files: &Arc<Mutex<()>>,
+    workspace_files: &Arc<RwLock<()>>,
+) -> (OwnedMutexGuard<()>, OwnedRwLockReadGuard<()>) {
+    let thread = thread_files.clone().lock_owned().await;
+    let workspace = workspace_files.clone().read_owned().await;
+    (thread, workspace)
+}
+
+/// Close the turn's claim on its thread, answering how many steered
+/// follow-ups it never delivered.
 async fn close_running_turn_claim(
     running_turns: &Mutex<HashMap<String, RunningTurn>>,
     steering: &Mutex<HashMap<String, Vec<PreparedInput>>>,
     thread_id: &str,
     turn_id: &str,
-) {
+) -> u32 {
     let mut running = running_turns.lock().await;
     let mut queues = steering.lock().await;
     if running
@@ -311,14 +433,22 @@ async fn close_running_turn_claim(
         .is_some_and(|running| running.turn_id == turn_id)
     {
         running.remove(thread_id);
-        queues.remove(thread_id);
+        return unsent_count(queues.remove(thread_id));
     }
+    0
+}
+
+fn unsent_count(queue: Option<Vec<PreparedInput>>) -> u32 {
+    u32::try_from(queue.map_or(0, |queue| queue.len())).unwrap_or(u32::MAX)
 }
 
 struct PendingApproval {
     thread_id: String,
     turn_id: String,
     snapshot: PendingApprovalSnapshot,
+    /// The shell command a command approval is for, which an "always allow
+    /// this command shape" answer is checked against.
+    exec_command: Option<String>,
     responder: oneshot::Sender<ApprovalReply>,
 }
 
@@ -339,6 +469,17 @@ impl ApprovalReply {
     }
 }
 
+/// A question waiting on `userInput/respond`. Dropping it unanswered tells
+/// `ask_user` that nobody answered.
+struct PendingUserInput {
+    thread_id: String,
+    turn_id: String,
+    snapshot: PendingUserInputSnapshot,
+    responder: oneshot::Sender<Option<String>>,
+}
+
+type PendingUserInputs = Arc<Mutex<HashMap<String, PendingUserInput>>>;
+
 /// Canonical local developer runtime shared by the CLI and VS Code.
 ///.
 pub struct CliDeveloperSessionHost {
@@ -352,6 +493,7 @@ pub struct CliDeveloperSessionHost {
     running_turns: Arc<Mutex<HashMap<String, RunningTurn>>>,
     steering: Arc<Mutex<HashMap<String, Vec<PreparedInput>>>>,
     pending_approvals: Arc<Mutex<HashMap<String, PendingApproval>>>,
+    pending_user_inputs: PendingUserInputs,
     notifications: broadcast::Sender<AppServerNotification>,
     shutdown_started: Arc<AtomicBool>,
     lifecycle: Arc<RwLock<()>>,
@@ -360,6 +502,69 @@ pub struct CliDeveloperSessionHost {
     writer: &'static WriterIdentity,
     client_turns: ClientTurns,
     taken_handoffs: Arc<Mutex<Vec<String>>>,
+    /// Where `worktree/managed/create` makes worktrees; `None` is the CLI
+    /// config root.
+    worktrees_root: Option<PathBuf>,
+    /// The checkout this host serves when it was started inside a worktree it
+    /// or another host made, which then belongs to one session only.
+    worktree_checkout: Option<PathBuf>,
+    setup_runs: Arc<Mutex<HashMap<String, RunningSetup>>>,
+    /// One lock per thread, held by a turn while it starts, and again from
+    /// closing its claim until its after-checkpoint is recorded, and by a
+    /// delete of the thread.
+    thread_files: Arc<StdMutex<HashMap<String, Arc<Mutex<()>>>>>,
+    /// The workspace every thread of this host edits: written by a revert or
+    /// a stage for as long as it runs, read by a turn while it starts and
+    /// while it records its after-checkpoint.
+    workspace_files: Arc<RwLock<()>>,
+    /// Threads this host deleted, whose worktree archives a client may still
+    /// ask it to discard.
+    deleted_threads: Arc<StdMutex<HashSet<String>>>,
+    /// Threads being summarized, each with the signal that stops its model
+    /// call. An interrupt of the thread or a shutdown raises it, and the
+    /// summary ends with the thread as it was.
+    compactions: Arc<StdMutex<HashMap<String, Arc<tokio::sync::Notify>>>>,
+}
+
+/// One thread's entry in the host's table of running summaries, taken out
+/// again however the summary ends, a dropped request included.
+struct CompactionClaim {
+    compactions: Arc<StdMutex<HashMap<String, Arc<tokio::sync::Notify>>>>,
+    thread_id: String,
+    stop: Arc<tokio::sync::Notify>,
+}
+
+impl CompactionClaim {
+    fn new(
+        compactions: &Arc<StdMutex<HashMap<String, Arc<tokio::sync::Notify>>>>,
+        thread_id: &str,
+    ) -> Self {
+        let stop = Arc::new(tokio::sync::Notify::new());
+        compactions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(thread_id.to_string(), stop.clone());
+        Self {
+            compactions: compactions.clone(),
+            thread_id: thread_id.to_string(),
+            stop,
+        }
+    }
+}
+
+impl Drop for CompactionClaim {
+    fn drop(&mut self) {
+        self.compactions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&self.thread_id);
+    }
+}
+
+/// A worktree setup script this host started and has not reaped.
+struct RunningSetup {
+    handle: tokio::task::JoinHandle<()>,
+    process_owner: crate::process_tree::ProcessTreeOwner,
 }
 
 /// A device grant this host started and has not yet resolved.
@@ -390,7 +595,12 @@ impl CliDeveloperSessionHost {
             crate::path_security::WorkspaceFileAuthority::new(&workspace_root)
                 .map_err(invalid_request)?;
         let workspace_root = workspace_file_authority.root().to_path_buf();
+        if agiworkforce_sandbox_policy::is_safe_write_root(&workspace_root) {
+            agiworkforce_worktree::register_workspace_root(workspace_root.clone());
+        }
         let (notifications, _) = broadcast::channel(1024);
+        let worktree_checkout =
+            agiworkforce_worktree::managed::checkout_containing(&workspace_root);
         Ok(Self {
             config: Arc::new(config),
             workspace_root,
@@ -402,6 +612,7 @@ impl CliDeveloperSessionHost {
             running_turns: Arc::new(Mutex::new(HashMap::new())),
             steering: Arc::new(Mutex::new(HashMap::new())),
             pending_approvals: Arc::new(Mutex::new(HashMap::new())),
+            pending_user_inputs: Arc::new(Mutex::new(HashMap::new())),
             notifications,
             shutdown_started: Arc::new(AtomicBool::new(false)),
             lifecycle: Arc::new(RwLock::new(())),
@@ -410,12 +621,245 @@ impl CliDeveloperSessionHost {
             writer: writer_lease::process_writer(WRITER_LABEL),
             client_turns: Arc::new(StdMutex::new(HashMap::new())),
             taken_handoffs: Arc::new(Mutex::new(Vec::new())),
+            worktrees_root: None,
+            worktree_checkout,
+            setup_runs: Arc::new(Mutex::new(HashMap::new())),
+            thread_files: Arc::new(StdMutex::new(HashMap::new())),
+            workspace_files: Arc::new(RwLock::new(())),
+            deleted_threads: Arc::new(StdMutex::new(HashSet::new())),
+            compactions: Arc::new(StdMutex::new(HashMap::new())),
         })
     }
 
     pub fn with_bypass_permissions_available(mut self, available: bool) -> Self {
         self.bypass_permissions_available = available;
         self
+    }
+
+    /// Stop the summary running for `thread_id`, if one is. The signal is
+    /// kept until the summary looks for it, so one raised an instant early
+    /// is not lost.
+    fn stop_compaction(&self, thread_id: &str) -> bool {
+        let stop = self
+            .compactions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(thread_id)
+            .cloned();
+        match stop {
+            Some(stop) => {
+                stop.notify_one();
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn stop_every_compaction(&self) {
+        for stop in self
+            .compactions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .values()
+        {
+            stop.notify_one();
+        }
+    }
+
+    /// What a host does once, before it takes its first request: resolve the
+    /// repository its git bookkeeping is pinned to, and lock the worktree it
+    /// serves so cleanup leaves it alone from the start.
+    pub async fn prepare(&self) {
+        review::pin_workspace(&self.workspace_root).await;
+        if let Some(checkout) = self.worktree_checkout.as_deref() {
+            agiworkforce_worktree::managed::lock_checkout(
+                &crate::runtime::worktree::BookkeepingRunner,
+                checkout,
+            )
+            .await;
+        }
+    }
+
+    /// Make worktrees under `root` instead of the CLI config root.
+    pub fn with_worktrees_root(mut self, root: PathBuf) -> Self {
+        self.worktrees_root = Some(root);
+        self
+    }
+
+    fn worktrees_root(&self) -> Result<PathBuf, DeveloperSessionHostError> {
+        review::worktrees_root(self.worktrees_root.as_deref())
+    }
+
+    /// The session this host's worktree belongs to, when it serves one.
+    fn worktree_owner(&self) -> Option<String> {
+        self.worktree_checkout
+            .as_deref()
+            .and_then(agiworkforce_worktree::managed::marker_for_checkout)
+            .and_then(|marker| marker.thread_id)
+    }
+
+    /// Bind this host's worktree to `thread_id` and lock it against cleanup.
+    /// A worktree another session owns refuses.
+    async fn claim_worktree(&self, thread_id: &str) -> Result<(), DeveloperSessionHostError> {
+        let Some(checkout) = self.worktree_checkout.as_deref() else {
+            return Ok(());
+        };
+        agiworkforce_worktree::managed::claim_checkout(
+            &crate::runtime::worktree::BookkeepingRunner,
+            checkout,
+            thread_id,
+        )
+        .await
+        .map(|_| ())
+        .map_err(|error| DeveloperSessionHostError::conflict(error.to_string()))
+    }
+
+    /// The thread as persisted, after checking it belongs to this workspace.
+    /// Read from the store rather than the live agent, whose lock a running
+    /// turn holds for as long as it runs.
+    async fn stored_session(
+        &self,
+        thread_id: &str,
+    ) -> Result<ManagedSession, DeveloperSessionHostError> {
+        let store = self.store.clone();
+        let thread_id = thread_id.to_string();
+        let session = tokio::task::spawn_blocking(move || {
+            store.load(ManagedSessionReference::SessionId(thread_id))
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(not_found_error)?;
+        self.validate_session_workspace(&session)?;
+        Ok(session)
+    }
+
+    async fn stored_thread_summary(&self, thread_id: &str) -> Option<ThreadSummary> {
+        let store = self.store.clone();
+        let thread_id = thread_id.to_string();
+        let resolved = tokio::task::spawn_blocking(move || {
+            store.resolve(ManagedSessionReference::SessionId(thread_id))
+        })
+        .await
+        .ok()?
+        .ok()?;
+        Some(self.resolved_summary(resolved).await)
+    }
+
+    async fn worktree_with_thread(
+        &self,
+        worktree: &agiworkforce_worktree::managed::ManagedWorktree,
+    ) -> ManagedWorktreeSummary {
+        let mut summary = review::worktree_summary(worktree);
+        if let Some(thread_id) = summary.thread_id.clone() {
+            summary.thread = self.stored_thread_summary(&thread_id).await;
+        }
+        summary
+    }
+
+    /// Free every worktree a deleted thread owned: the one this host serves,
+    /// and any this repository's worktree root holds. The thread is already
+    /// gone, so a failure is logged rather than reported.
+    async fn release_worktrees(&self, thread_id: &str) -> Vec<String> {
+        let mut released = Vec::new();
+        if let Some(checkout) = self.worktree_checkout.as_deref() {
+            match agiworkforce_worktree::managed::release_checkout(checkout, thread_id) {
+                Ok(true) => {
+                    if let Some(marker) =
+                        agiworkforce_worktree::managed::marker_for_checkout(checkout)
+                    {
+                        released.push(marker.id);
+                    }
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    tracing::warn!(thread_id, %error, "the deleted thread's worktree was not released")
+                }
+            }
+            return released;
+        }
+        let Ok(root) = self.worktrees_root() else {
+            return released;
+        };
+        let Ok(manager) = review::manager(&root, &self.workspace_root).await else {
+            return released;
+        };
+        match manager.release_thread(thread_id).await {
+            Ok(ids) => released.extend(ids),
+            Err(error) => {
+                tracing::warn!(thread_id, %error, "the deleted thread's worktrees were not released")
+            }
+        }
+        released
+    }
+
+    /// Every thread of this host edits the same workspace, so a turn running
+    /// in any of them refuses a change to its files.
+    async fn refuse_while_running(&self, thread_id: &str) -> Result<(), DeveloperSessionHostError> {
+        let other = {
+            let running = self.running_turns.lock().await;
+            if running.contains_key(thread_id) {
+                return Err(DeveloperSessionHostError::conflict(
+                    "A turn is running in this thread; stop it before changing its files.",
+                ));
+            }
+            running.keys().min().cloned()
+        };
+        let Some(other) = other else {
+            return Ok(());
+        };
+        let title = self
+            .stored_thread_summary(&other)
+            .await
+            .map(|summary| summary.title)
+            .filter(|title| !title.trim().is_empty())
+            .unwrap_or(other);
+        Err(DeveloperSessionHostError::conflict(format!(
+            "A turn is running in \"{title}\", which works in the same folder; stop it before changing files here."
+        )))
+    }
+
+    /// Refuse when another live process holds this thread's writer lease.
+    fn refuse_foreign_writer(
+        &self,
+        thread_id: &str,
+        session_path: &Path,
+        refused: &str,
+    ) -> Result<(), DeveloperSessionHostError> {
+        let Some(holder) = writer_lease::read(session_path).filter(|lease| {
+            lease.holder_id != self.writer.id && !lease.is_stale(chrono::Utc::now())
+        }) else {
+            return Ok(());
+        };
+        Err(DeveloperSessionHostError::writer_conflict(
+            format!(
+                "{} is writing this thread; it cannot be {refused} until that writer stops",
+                holder.holder_label
+            ),
+            ThreadWriterConflictData {
+                thread_id: thread_id.to_string(),
+                writer: writer_summary(self.writer, holder),
+            },
+        ))
+    }
+
+    fn thread_files(&self, thread_id: &str) -> Arc<Mutex<()>> {
+        self.thread_files
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .entry(thread_id.to_string())
+            .or_default()
+            .clone()
+    }
+
+    /// Wait for every turn start, after-checkpoint, revert and stage in this
+    /// workspace, then hold it so no turn can start until the guard drops.
+    async fn lock_workspace_files(
+        &self,
+        thread_id: &str,
+    ) -> Result<OwnedRwLockWriteGuard<()>, DeveloperSessionHostError> {
+        let guard = self.workspace_files.clone().write_owned().await;
+        self.refuse_while_running(thread_id).await?;
+        Ok(guard)
     }
 
     async fn admit_request(&self) -> Result<RwLockReadGuard<'_, ()>, DeveloperSessionHostError> {
@@ -470,6 +914,12 @@ impl CliDeveloperSessionHost {
             questions: true,
             plan_decisions: true,
             pull_requests: true,
+            fork_through_turn: true,
+            thread_compact: true,
+            bypass_per_turn: true,
+            revert_restore: true,
+            mcp_approval: true,
+            managed_worktrees: true,
         }
     }
 
@@ -593,7 +1043,7 @@ impl CliDeveloperSessionHost {
         let authority = managed_session
             .require_routing_authority()
             .map_err(invalid_request)?;
-        let system_context = context::gather_system_context();
+        let system_context = context::gather_system_context_for(self.workspace_root.clone()).await;
         refresh_account_memory_setting().await;
         let mut agent = AgentSession::new_checked(
             model,
@@ -616,23 +1066,7 @@ impl CliDeveloperSessionHost {
     /// Withhold the subagent-spawning tools whenever a child session would run
     /// outside this host's authority.
     fn apply_subagent_boundary_policy(&self, agent: &mut AgentSession) {
-        let policy = PolicyEngine::load_workspace(&self.workspace_root).ok();
-        let mut disallowed = agent
-            .disallowed_tools
-            .iter()
-            .filter(|spec| !SUBAGENT_SPAWN_TOOLS.contains(&spec.as_str()))
-            .cloned()
-            .collect::<Vec<_>>();
-        for tool in SUBAGENT_SPAWN_TOOLS {
-            let denied_by_policy = policy
-                .as_ref()
-                .is_some_and(|policy| policy.evaluate(tool, "") == PolicyDecision::Deny);
-            if denied_by_policy || !agent.skip_permissions {
-                disallowed.push(tool.to_string());
-            }
-        }
-        let allowed = agent.allowed_tools.clone().unwrap_or_default();
-        agent.apply_tool_filters(&allowed, &disallowed);
+        withhold_subagent_tools(&self.workspace_root, agent);
     }
 
     fn load_integrations_in_background(
@@ -648,6 +1082,7 @@ impl CliDeveloperSessionHost {
         let notifications = self.notifications.clone();
         let shutdown_started = self.shutdown_started.clone();
         let lifecycle = self.lifecycle.clone();
+        let workspace_root = self.workspace_root.clone();
         tokio::spawn(async move {
             // Discovery may launch MCP subprocesses, so it participates in the
             // same admission barrier as requests. Shutdown either waits for.
@@ -658,7 +1093,8 @@ impl CliDeveloperSessionHost {
             let privacy_mode = session.lock().await.privacy_mode;
             let result = tokio::time::timeout(
                 std::time::Duration::from_secs(MCP_LOAD_TIMEOUT_SECONDS),
-                crate::build_mcp_manager(
+                crate::build_mcp_manager_in(
+                    &workspace_root,
                     &crate::mcp::McpConfigLoadOptions::default(),
                     true,
                     true,
@@ -682,9 +1118,15 @@ impl CliDeveloperSessionHost {
                     if let Some(mut previous) = previous {
                         previous.shutdown_all().await;
                     }
-                    ("mcp/ready", None)
+                    (
+                        "mcp/ready",
+                        crate::mcp::consent::withheld_message(&workspace_root),
+                    )
                 }
-                Ok(Ok(None)) => ("mcp/ready", None),
+                Ok(Ok(None)) => (
+                    "mcp/ready",
+                    crate::mcp::consent::withheld_message(&workspace_root),
+                ),
                 Ok(Err(error)) => {
                     eprintln!("MCP integration discovery failed: {error:#}");
                     (
@@ -1181,6 +1623,7 @@ impl CliDeveloperSessionHost {
     }
 
     async fn cancel_pending_approvals(&self, turn_id: &str) {
+        drop_pending_user_inputs(&self.pending_user_inputs, Some(turn_id)).await;
         let mut pending = self.pending_approvals.lock().await;
         let ids: Vec<_> = pending
             .iter()
@@ -1388,6 +1831,35 @@ impl CliDeveloperSessionHost {
         }
         resources
     }
+
+    /// How many of the thread's stored messages a fork through `turn_id`
+    /// keeps: everything before the turn that followed it. A turn the
+    /// conversation can no longer be cut back to is refused, as a rewind is.
+    async fn fork_message_count(
+        &self,
+        thread_id: &str,
+        turn_id: &str,
+    ) -> Result<usize, DeveloperSessionHostError> {
+        let store = self.store.clone();
+        let source_id = thread_id.to_string();
+        let source = tokio::task::spawn_blocking(move || {
+            store.load(ManagedSessionReference::SessionId(source_id))
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(not_found_error)?;
+        let starts = review::turn_starts(&self.workspace_root, thread_id, &source.messages).await;
+        turn_start_index(&starts, turn_id)
+            .and_then(|start| {
+                let span = source.addressable_span(start)?;
+                Some(messages_through_turn(&starts, start, span))
+            })
+            .ok_or_else(|| {
+                DeveloperSessionHostError::conflict(
+                    "The conversation was compacted after this turn, or the turn was not recorded, so a new session cannot start from it.",
+                )
+            })
+    }
 }
 
 /// What a refusal says, in the words the record itself carries.
@@ -1463,8 +1935,16 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     async fn list_local_models(
         &self,
         params: ModelListParams,
+        trust: DeveloperConnectionTrust,
     ) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        if trust != DeveloperConnectionTrust::LoopbackOwner {
+            return Ok(LocalModelListResponse {
+                models: Vec::new(),
+                host_models: self.host_models.read().await.clone().unwrap_or_default(),
+                local_servers: Vec::new(),
+            });
+        }
         let host_models = self.host_models(params.refresh).await;
         let probes = crate::local_models::discover_all(&self.config).await;
         let local_servers = probes
@@ -1499,6 +1979,11 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     ) -> Result<ThreadSummary, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
         self.validate_requested_cwd(params.cwd.as_deref())?;
+        if let Some(owner) = self.worktree_owner() {
+            return Err(DeveloperSessionHostError::conflict(format!(
+                "This worktree already belongs to session {owner}. Continue that session, or start a new worktree."
+            )));
+        }
         let requested_model = params
             .model
             .clone()
@@ -1510,7 +1995,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let title = clean_title(params.title);
         let source = source_from_client(&client);
 
-        let system_context = context::gather_system_context();
+        let system_context = context::gather_system_context_for(self.workspace_root.clone()).await;
         let auto_trust = resolved_model
             .auto_routing
             .as_ref()
@@ -1578,6 +2063,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .await
             .insert(id.clone(), session.clone());
         self.load_integrations_in_background(id.clone(), session);
+        self.claim_worktree(&id).await?;
 
         let store = self.store.clone();
         let id_for_summary = id.clone();
@@ -1687,20 +2173,44 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .map_err(internal_error)?
         .map_err(not_found_error)?;
         self.validate_session_workspace(&session)?;
-        let transcript: Vec<_> = session
+        let turn_starts =
+            review::turn_starts(&self.workspace_root, &session.session_id, &session.messages).await;
+        let shown = session.shown_messages();
+        let context_indices = session.context_indices_of_shown();
+        let spans = session.addressable_spans();
+        let mut transcript_count = 0u32;
+        let transcript_indices: Vec<Option<u32>> = session
             .messages
             .iter()
-            .filter(|message| threads::is_transcript_message(message))
+            .map(|message| {
+                if !threads::is_transcript_message(message) {
+                    return None;
+                }
+                transcript_count += 1;
+                Some(transcript_count - 1)
+            })
+            .collect();
+        let transcript: Vec<_> = shown
+            .iter()
+            .enumerate()
+            .filter(|(_, message)| threads::is_transcript_message(message))
             .collect();
         let eligible_count = transcript.len();
         let mut messages_newest_first = Vec::new();
         let mut serialized_bytes = 2usize; // JSON array brackets.
         let mut transcript_truncated = false;
-        for (index, message) in transcript.iter().enumerate().rev() {
+        for (shown_index, message) in transcript.iter().rev() {
+            let context_index = context_indices.get(*shown_index).copied().flatten();
             let projected = DeveloperMessage {
                 role: message.role.clone(),
                 text: message.text_content(),
-                index: u32::try_from(index).ok(),
+                index: context_index
+                    .and_then(|context_index| transcript_indices.get(context_index).copied())
+                    .flatten(),
+                turn_id: context_index.and_then(|context_index| {
+                    let span = spans.get(context_index).copied().flatten()?;
+                    turn_in_span(&turn_starts, span, context_index)
+                }),
             };
             let projected_bytes = serde_json::to_vec(&projected)
                 .map_err(internal_error)?
@@ -1757,6 +2267,20 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "Cannot fork a thread while its turn is running",
             ));
         }
+        if self.worktree_checkout.is_some() {
+            return Err(DeveloperSessionHostError::conflict(
+                "This session runs in a worktree that belongs to it alone, so it cannot be branched. Branch a session in the original folder instead.",
+            ));
+        }
+        if params.through_message_index.is_some() && params.through_turn_id.is_some() {
+            return Err(DeveloperSessionHostError::invalid_request(
+                "Fork through a message or through a turn, not both",
+            ));
+        }
+        let keep_messages = match params.through_turn_id.as_deref() {
+            Some(turn_id) => Some(self.fork_message_count(&params.thread_id, turn_id).await?),
+            None => None,
+        };
         let store = self.store.clone();
         let source_id = params.thread_id;
         let title = clean_title(params.title);
@@ -1778,7 +2302,14 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 .load(forked.reference.clone())
                 .map_err(not_found_error)?;
             if let Some(index) = through_message_index {
+                let kept = threads::transcript_position(&session.messages, index)
+                    .map_or(session.messages.len(), |position| position + 1);
                 threads::keep_through_message(&mut session.messages, index);
+                session.context_truncated_to(kept);
+            }
+            if let Some(count) = keep_messages {
+                session.messages.truncate(count);
+                session.context_truncated_to(count);
             }
             if title.is_some() {
                 session.title = title;
@@ -1795,6 +2326,89 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let summary = self.resolved_summary(resolved).await;
         self.emit("thread/forked", serde_json::json!({ "thread": summary }));
         Ok(summary)
+    }
+
+    async fn compact_thread(
+        &self,
+        params: ThreadCompactParams,
+    ) -> Result<ThreadCompactResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        // Held for the whole summary, and taken before the thread is looked
+        // at: a turn refuses to start on a thread whose files guard is held,
+        // so none can begin and then wait on the agent while it holds the
+        // table of running turns, which every other thread needs.
+        let _thread_files = self.thread_files(&params.thread_id).lock_owned().await;
+        if self
+            .running_turns
+            .lock()
+            .await
+            .contains_key(&params.thread_id)
+        {
+            return Err(DeveloperSessionHostError::conflict(
+                "Stop the running turn before summarizing this session.",
+            ));
+        }
+        let session = self.load_agent(&params.thread_id).await?;
+        let path = self.persisted_session_path(&params.thread_id).await?;
+        self.refuse_foreign_writer(&params.thread_id, &path, "summarized")?;
+        let mut agent = session.lock().await;
+        agent.validate_privacy_boundary().map_err(invalid_request)?;
+        let keep = match params.from_turn_id.as_deref() {
+            Some(turn_id) => {
+                let starts =
+                    review::turn_starts(&self.workspace_root, &params.thread_id, &agent.messages)
+                        .await;
+                let start = turn_start_index(&starts, turn_id).filter(|start| {
+                    agent.managed_session.as_ref().is_none_or(|stored| {
+                        stored
+                            .addressable_span_in(&agent.messages, *start)
+                            .is_some()
+                    })
+                });
+                Some(start.ok_or_else(|| {
+                    DeveloperSessionHostError::conflict(
+                        "This turn was not recorded, or the conversation was already summarized past it, so it cannot be summarized from here.",
+                    )
+                })?)
+            }
+            None => None,
+        };
+        let config = turn_config_pinned_to_session_route(&self.config, &agent);
+        // The agent is changed only once the model has answered, so a summary
+        // stopped while it waits leaves the thread exactly as it was.
+        let claim = CompactionClaim::new(&self.compactions, &params.thread_id);
+        // Shutdown stops the summaries it finds in the table. One that got
+        // here after it looked must not start a model call it would wait on.
+        if self.shutdown_started.load(Ordering::Acquire) {
+            return Err(DeveloperSessionHostError::unavailable(
+                "The app-server is shutting down",
+            ));
+        }
+        let summarized = tokio::select! {
+            result = async {
+                match keep {
+                    Some(keep) => agent.compact_from(&config, keep).await,
+                    None => agent.compact_now(&config, None).await,
+                }
+            } => Some(result),
+            () = claim.stop.notified() => None,
+        };
+        drop(claim);
+        let Some(result) = summarized else {
+            return Err(DeveloperSessionHostError::conflict(
+                "Summarizing this session was stopped. Nothing in it changed.",
+            ));
+        };
+        if result.compacted {
+            agent.persist_managed_session().map_err(internal_error)?;
+        }
+        Ok(ThreadCompactResponse {
+            thread_id: params.thread_id,
+            compacted: result.messages_compacted > 0,
+            messages_summarized: u32::try_from(result.messages_compacted).unwrap_or(u32::MAX),
+            tokens_before: u32::try_from(result.before.used_tokens).unwrap_or(u32::MAX),
+            tokens_after: u32::try_from(result.after.used_tokens).unwrap_or(u32::MAX),
+        })
     }
 
     /// The record another surface needs to carry this thread on. It is built
@@ -1882,6 +2496,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     ) -> Result<(), DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
         self.validate_thread_ownership(&params.thread_id).await?;
+        // Waits out a summary of this thread, which would otherwise save the
+        // session again afterwards and take the archive back.
+        let _thread_files = self.thread_files(&params.thread_id).lock_owned().await;
         if self
             .running_turns
             .lock()
@@ -2131,9 +2748,47 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         })
     }
 
-    async fn delete_thread(&self, params: ThreadIdParams) -> Result<(), DeveloperSessionHostError> {
+    async fn delete_thread(
+        &self,
+        params: ThreadDeleteParams,
+    ) -> Result<ThreadDeleteResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        // A client learns that archives were kept only from deleting the
+        // thread, so discarding them comes after the thread is already gone.
+        // Only a thread this host deleted qualifies: the refs of an id it never
+        // knew may belong to another host's live thread.
+        if params.discard_worktree_archives {
+            match self.persisted_session_path(&params.thread_id).await {
+                Ok(_) => {}
+                Err(error) if error.code() == DeveloperSessionHostError::not_found("").code() => {
+                    if !self
+                        .deleted_threads
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .contains(&params.thread_id)
+                    {
+                        return Err(DeveloperSessionHostError::not_found(format!(
+                            "Thread {} is not one this app-server knows or deleted, so its worktree archives are left alone",
+                            params.thread_id
+                        )));
+                    }
+                    let forgotten =
+                        review::forget_thread(&self.workspace_root, &params.thread_id, true)
+                            .await?;
+                    return Ok(ThreadDeleteResponse {
+                        acknowledged: true,
+                        kept_worktree_archives: forgotten.kept_archives,
+                        removed_worktree_archives: forgotten.removed_archives,
+                        released_worktrees: Vec::new(),
+                    });
+                }
+                Err(error) => return Err(error),
+            }
+        }
         self.validate_thread_ownership(&params.thread_id).await?;
+        // Waits out a turn of this thread still recording its after-checkpoint,
+        // whose refs the delete removes.
+        let _thread_files = self.thread_files(&params.thread_id).lock_owned().await;
         if self
             .running_turns
             .lock()
@@ -2145,20 +2800,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             ));
         }
         let path = self.persisted_session_path(&params.thread_id).await?;
-        if let Some(holder) = writer_lease::read(&path).filter(|lease| {
-            lease.holder_id != self.writer.id && !lease.is_stale(chrono::Utc::now())
-        }) {
-            return Err(DeveloperSessionHostError::writer_conflict(
-                format!(
-                    "{} is writing this thread; it cannot be deleted until that writer stops",
-                    holder.holder_label
-                ),
-                ThreadWriterConflictData {
-                    thread_id: params.thread_id.clone(),
-                    writer: writer_summary(self.writer, holder),
-                },
-            ));
-        }
+        self.refuse_foreign_writer(&params.thread_id, &path, "deleted")?;
 
         let removed = self.sessions.lock().await.remove(&params.thread_id);
         if let Some(session) = removed {
@@ -2191,11 +2833,33 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .await
         .map_err(internal_error)?
         .map_err(internal_error)?;
+        self.deleted_threads
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(params.thread_id.clone());
+        // The thread is already gone from the store, so a repository failure
+        // here cannot undo the delete; it is logged and the rest still runs.
+        let forgotten = review::forget_thread(
+            &self.workspace_root,
+            &params.thread_id,
+            params.discard_worktree_archives,
+        )
+        .await
+        .unwrap_or_else(|error| {
+            tracing::warn!(thread_id = %params.thread_id, error = %error.message(), "checkpoint refs of a deleted thread were not removed");
+            Default::default()
+        });
+        let released_worktrees = self.release_worktrees(&params.thread_id).await;
         self.emit(
             "thread/deleted",
             serde_json::json!({ "threadId": params.thread_id }),
         );
-        Ok(())
+        Ok(ThreadDeleteResponse {
+            acknowledged: true,
+            kept_worktree_archives: forgotten.kept_archives,
+            removed_worktree_archives: forgotten.removed_archives,
+            released_worktrees,
+        })
     }
 
     async fn reconnect_thread(
@@ -2230,12 +2894,23 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         })
                         .map(|approval| approval.snapshot.clone())
                         .collect();
+                    let pending_user_inputs = self
+                        .pending_user_inputs
+                        .lock()
+                        .await
+                        .values()
+                        .filter(|input| {
+                            input.thread_id == params.thread_id && input.turn_id == turn_id
+                        })
+                        .map(|input| input.snapshot.clone())
+                        .collect();
                     Some(ActiveTurnSnapshot {
                         turn_id,
                         partial_response,
                         next_delta_index,
                         next_event_sequence,
                         pending_approvals,
+                        pending_user_inputs,
                     })
                 }
                 None => None,
@@ -2313,6 +2988,14 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         &self,
         params: TurnStartParams,
     ) -> Result<TurnSummary, DeveloperSessionHostError> {
+        self.start_turn_for(params, TurnClient::default()).await
+    }
+
+    async fn start_turn_for(
+        &self,
+        params: TurnStartParams,
+        client: TurnClient,
+    ) -> Result<TurnSummary, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
         if super::cloud_threads::cloud_session_id(&params.thread_id).is_some() {
             return Err(super::cloud_threads::turn_refusal());
@@ -2324,6 +3007,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let client_turn_id = validated_client_turn_id(params.client_turn_id)?;
         let max_turns = validated_max_turns(params.max_turns)?;
         let session = self.load_agent(&params.thread_id).await?;
+        self.claim_worktree(&params.thread_id).await?;
         // Claim exclusive start ownership before touching the shared agent.
         // Keeping this guard through session setup prevents a losing concurrent.
         let mut running_turns = self.running_turns.lock().await;
@@ -2343,6 +3027,18 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "This app-server already has {MAX_CONCURRENT_RUNNING_TURNS} turns running; interrupt one before starting another"
             )));
         }
+        // Refused rather than awaited: a turn starts on the connection's own
+        // loop, which a revert's or a checkpoint's git must not hold up.
+        let Ok(_workspace_files) = self.workspace_files.clone().try_read_owned() else {
+            return Err(DeveloperSessionHostError::conflict(
+                "This folder's files are being reverted or staged; start the turn once that finishes.",
+            ));
+        };
+        let Ok(_thread_files) = self.thread_files(&params.thread_id).try_lock_owned() else {
+            return Err(DeveloperSessionHostError::conflict(
+                "This thread's last turn is still being recorded, or the thread is being summarized or deleted; start the turn once that finishes.",
+            ));
+        };
         let session_path = session
             .lock()
             .await
@@ -2439,6 +3135,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     agent.fallback_chain = None;
                     agent.set_managed_auto_routing(None);
                 }
+                leave_bypass(&mut agent);
+                if params.agent_mode.is_none() {
+                    keep_thread_mode(&mut agent);
+                }
                 apply_agent_controls(&mut agent, params.agent_mode, params.reasoning_effort)?;
                 if params.allowed_tools.is_some() || params.disallowed_tools.is_some() {
                     let allowed = validated_tool_filter(params.allowed_tools.as_deref())?
@@ -2513,6 +3213,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let task_running = self.running_turns.clone();
         let task_steering = self.steering.clone();
         let task_pending = self.pending_approvals.clone();
+        let task_user_inputs = self.pending_user_inputs.clone();
+        let task_answers_user_input = client.answers_user_input;
         let task_partial = partial.clone();
         let task_thread_id = thread_id.clone();
         let task_turn_id = turn_id.clone();
@@ -2522,6 +3224,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let task_workspace_root = self.workspace_root.clone();
         let task_client_turns = self.client_turns.clone();
         let task_writer = self.writer;
+        let task_thread_files = self.thread_files(&thread_id);
+        let task_workspace_files = self.workspace_files.clone();
         let task_session_path = session_path;
         let task_activity = activity;
         let process_owner = crate::process_tree::ProcessTreeOwner::new();
@@ -2533,6 +3237,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 task_notifications.clone(),
             )));
             if start_receiver.await.is_err() {
+                leave_bypass(&mut *task_session.lock().await);
                 close_running_turn_claim(
                     task_running.as_ref(),
                     task_steering.as_ref(),
@@ -2543,6 +3248,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 return;
             }
             let mut next_input = Some(prepared);
+            let mut finishing = None;
             let mut final_status = TurnStatus::Completed;
             let mut final_error: Option<String> = None;
             let mut final_failure: Option<TurnFailure> = None;
@@ -2551,6 +3257,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let mut cumulative_input_tokens = 0u32;
             let mut managed_request_ids: Vec<String> = Vec::new();
             let mut cumulative_output_tokens = 0u32;
+            let mut unsent_steers = 0u32;
 
             // A route that cannot start is refused before any work is announced,
             // so a client shows the failure alone rather than an activity row.
@@ -2569,7 +3276,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 final_error = Some(format!("{error:#}"));
                 final_failure = Some(classify_turn_failure(&error));
                 next_input = None;
-                close_running_turn_claim(
+                finishing = Some(hold_for_finish(&task_thread_files, &task_workspace_files).await);
+                unsent_steers = close_running_turn_claim(
                     task_running.as_ref(),
                     task_steering.as_ref(),
                     &task_thread_id,
@@ -2602,8 +3310,30 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 );
             }
 
+            let checkpointed = work_started && {
+                let mark = {
+                    let mut agent = task_session.lock().await;
+                    // Before the mark, so the turn's own messages begin after
+                    // any result a stored history was still missing.
+                    agent.close_unanswered_tool_calls();
+                    review::conversation_mark(&agent.messages)
+                };
+                review::record_turn_start_checkpoint(
+                    &task_workspace_root,
+                    &task_thread_id,
+                    &task_turn_id,
+                    mark,
+                )
+                .await
+            };
+
+            let mut follow_up = false;
             while let Some(input) = next_input {
                 let mut agent = task_session.lock().await;
+                if follow_up {
+                    end_bypass_for_follow_up(&task_workspace_root, &mut agent);
+                }
+                follow_up = true;
                 agent.pending_image_blocks = input.images;
                 agent.search_next_turn = input.search;
                 agent.quiet = true;
@@ -2613,6 +3343,14 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     task_pending.clone(),
                     task_notifications.clone(),
                 )));
+                agent.on_user_input = task_answers_user_input.then(|| {
+                    UserInputSink(user_input_callback(
+                        task_thread_id.clone(),
+                        task_turn_id.clone(),
+                        task_user_inputs.clone(),
+                        task_notifications.clone(),
+                    ))
+                });
                 agent.on_tool_event = Some(ToolEventSink(mcp_sign_in_tracking(
                     plan_tracking(
                         tool_event_callback(
@@ -2634,6 +3372,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     turn_model.clone(),
                     task_notifications.clone(),
                 )));
+                // A message steered into a bypass send would run with approvals
+                // off, so it waits in the queue and starts the next send.
+                agent.on_steer = (!agent.skip_permissions)
+                    .then(|| steer_source(task_steering.clone(), task_thread_id.clone()));
 
                 let on_chunk = install_output_deltas(
                     &mut agent,
@@ -2669,6 +3411,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 agent.on_tool_event = None;
                 agent.on_continuation_chunk = None;
                 agent.on_fallback = None;
+                agent.on_steer = None;
 
                 match result {
                     Ok(turn) => {
@@ -2706,7 +3449,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         final_error = Some(format!("{error:#}"));
                         final_failure = Some(classify_turn_failure(&error));
                         drop(agent);
-                        close_running_turn_claim(
+                        finishing =
+                            Some(hold_for_finish(&task_thread_files, &task_workspace_files).await);
+                        unsent_steers = close_running_turn_claim(
                             task_running.as_ref(),
                             task_steering.as_ref(),
                             &task_thread_id,
@@ -2718,6 +3463,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 }
                 drop(agent);
 
+                let held = hold_for_finish(&task_thread_files, &task_workspace_files).await;
                 next_input = take_steered_input_or_close(
                     task_running.as_ref(),
                     task_steering.as_ref(),
@@ -2725,7 +3471,12 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     &task_turn_id,
                 )
                 .await;
+                if next_input.is_none() {
+                    finishing = Some(held);
+                }
             }
+
+            leave_bypass(&mut *task_session.lock().await);
 
             let pending_ids = {
                 let pending = task_pending.lock().await;
@@ -2745,6 +3496,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 }
             }
             drop(pending);
+            drop_pending_user_inputs(&task_user_inputs, Some(task_turn_id.as_str())).await;
 
             // The account refused this machine's session mid-life (a passkey
             // enrolled, the device unlinked). Renew once, or forget it so the
@@ -2805,6 +3557,26 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         AgentEventProgressStatus::Failed,
                     )
                 };
+            if checkpointed {
+                review::record_checkpoint(
+                    &task_workspace_root,
+                    &task_thread_id,
+                    &task_turn_id,
+                    Phase::After,
+                    None,
+                )
+                .await;
+            }
+            // Saved while the thread is still held: once it is let go an
+            // archive or a delete may run, and a save after either would
+            // take the archive back or bring the deleted thread back.
+            refresh_persisted_workspace_state(
+                &task_store,
+                &task_workspace_root,
+                task_thread_id.clone(),
+            )
+            .await;
+            drop(finishing);
             if let Some(diff) = turn_diff(&task_activity) {
                 emit_agent_event(
                     &task_thread_id,
@@ -2877,12 +3649,6 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 &task_turn_id,
                 final_status,
             );
-            refresh_persisted_workspace_state(
-                &task_store,
-                &task_workspace_root,
-                task_thread_id.clone(),
-            )
-            .await;
             if let Ok(notification) = AppServerNotification::new(
                 method,
                 TurnEndedNotification {
@@ -2895,6 +3661,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     error: final_error,
                     failure: final_failure,
                     managed_request_ids,
+                    unsent_steers,
                 },
             ) {
                 let _ = task_notifications.send(notification);
@@ -3000,21 +3767,39 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: TurnInterruptParams,
     ) -> Result<(), DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
-        let mut running_turns = self.running_turns.lock().await;
-        let Some(active) = running_turns.get(&params.thread_id) else {
-            return Err(DeveloperSessionHostError::not_found(
-                "No running turn exists for this thread",
-            ));
-        };
-        if active.turn_id != params.turn_id {
-            return Err(DeveloperSessionHostError::conflict(
-                "The active turn does not match turnId",
-            ));
+        // A thread being summarized has no turn to name, so an interrupt of it
+        // stops the summary whatever turn id it carries.
+        if self.stop_compaction(&params.thread_id) {
+            return Ok(());
         }
-        let running = running_turns
-            .remove(&params.thread_id)
-            .ok_or_else(|| DeveloperSessionHostError::not_found("Running turn disappeared"))?;
-        drop(running_turns);
+        let check_active = |running_turns: &HashMap<String, RunningTurn>| {
+            let Some(active) = running_turns.get(&params.thread_id) else {
+                return Err(DeveloperSessionHostError::not_found(
+                    "No running turn exists for this thread",
+                ));
+            };
+            if active.turn_id != params.turn_id {
+                return Err(DeveloperSessionHostError::conflict(
+                    "The active turn does not match turnId",
+                ));
+            }
+            Ok(())
+        };
+        check_active(&*self.running_turns.lock().await)?;
+        // The claim is handed to the thread's finishing locks before it is
+        // released, and they are held until the killed turn's processes are
+        // reaped: a revert waits, and a turn start is refused, until nothing
+        // the turn started can still write. Taken outside `running_turns`,
+        // the order every finishing turn uses.
+        let finishing =
+            hold_for_finish(&self.thread_files(&params.thread_id), &self.workspace_files).await;
+        let running = {
+            let mut running_turns = self.running_turns.lock().await;
+            check_active(&running_turns)?;
+            running_turns
+                .remove(&params.thread_id)
+                .ok_or_else(|| DeveloperSessionHostError::not_found("Running turn disappeared"))?
+        };
         let process_owner = running.process_owner;
         // Order matters: the turn task holds the session mutex across
         // `agent.send`, and the two steps below need it. `abort` releases it.
@@ -3040,7 +3825,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             manager.shutdown_all().await;
         }
         let _ = running.handle.await;
-        self.steering.lock().await.remove(&params.thread_id);
+        let unsent_steers = unsent_count(self.steering.lock().await.remove(&params.thread_id));
         self.cancel_pending_approvals(&params.turn_id).await;
 
         settle_client_turn(
@@ -3057,8 +3842,13 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             };
             let mut session = session.lock().await;
             session.cancel_turn(&partial).await;
+            leave_bypass(&mut session);
             persist_error = session.persist_managed_session().err();
         }
+        // Released only now: a turn another client starts on this thread must
+        // find the stopped turn's steers gone and its history already closed,
+        // or it would inherit the one and be cut short by the other.
+        drop(finishing);
         if let Some(error) = process_shutdown_error {
             return Err(internal_error(error));
         }
@@ -3079,6 +3869,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "threadId": params.thread_id,
                 "turnId": params.turn_id,
                 "status": TurnStatus::Interrupted,
+                "unsentSteers": unsent_steers,
             }),
         );
         Ok(())
@@ -3089,7 +3880,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ApprovalResponseParams,
     ) -> Result<(), DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
-        let mut approvals = self.pending_approvals.lock().await;
+        let approvals = self.pending_approvals.lock().await;
         let Some(pending) = approvals.get(&params.request_id) else {
             return Err(DeveloperSessionHostError::not_found(
                 "Approval request is no longer pending",
@@ -3100,7 +3891,35 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "Approval response thread or turn does not match the pending request",
             ));
         }
-        let decision = review_to_approval_decision(params.decision);
+        // "Always allow" for a command saves the rule this host proposed with
+        // the request, before the command is let through once. Any other
+        // prefix is refused and the request stays pending for another answer.
+        let save_prefix = match (&params.decision, pending.exec_command.as_deref()) {
+            (
+                ReviewDecision::ApprovedExecpolicyAmendment {
+                    proposed_execpolicy_amendment,
+                },
+                Some(command),
+            ) => {
+                let Some(proposed) = pending.snapshot.proposed_execpolicy_amendment.as_ref() else {
+                    return Err(DeveloperSessionHostError::invalid_request(
+                        "This command can only be approved once or for the session",
+                    ));
+                };
+                if proposed != proposed_execpolicy_amendment {
+                    return Err(DeveloperSessionHostError::invalid_request(format!(
+                        "Always allow must save the rule this request proposed: {}",
+                        proposed.command().join(" ")
+                    )));
+                }
+                Some((command.to_string(), proposed.command().to_vec()))
+            }
+            _ => None,
+        };
+        let decision = match save_prefix {
+            Some(_) => ApprovalDecision::AllowOnce,
+            None => review_to_approval_decision(params.decision),
+        };
         if params.edited_content.is_some() {
             if pending.snapshot.proposed_content.is_none() {
                 return Err(DeveloperSessionHostError::invalid_request(
@@ -3122,10 +3941,20 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "An approval note can be at most {MAX_APPROVAL_NOTE_CHARS} characters"
             )));
         }
-        let pending = approvals.remove(&params.request_id).ok_or_else(|| {
-            DeveloperSessionHostError::not_found("Approval request is no longer pending")
-        })?;
         drop(approvals);
+        if let Some((command, prefix)) = save_prefix {
+            crate::features::exec::exec_policy::persist_allow_prefix(&command, &prefix)
+                .await
+                .map_err(invalid_request)?;
+        }
+        let pending = self
+            .pending_approvals
+            .lock()
+            .await
+            .remove(&params.request_id)
+            .ok_or_else(|| {
+                DeveloperSessionHostError::not_found("Approval request is no longer pending")
+            })?;
         pending
             .responder
             .send(ApprovalReply {
@@ -3138,6 +3967,37 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     "Approval request ended before the response was delivered",
                 )
             })
+    }
+
+    async fn respond_to_user_input(
+        &self,
+        params: UserInputResponseParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let mut inputs = self.pending_user_inputs.lock().await;
+        let Some(pending) = inputs.get(&params.request_id) else {
+            return Err(DeveloperSessionHostError::not_found(
+                "That question is no longer waiting for an answer",
+            ));
+        };
+        if pending.thread_id != params.thread_id || pending.turn_id != params.turn_id {
+            return Err(DeveloperSessionHostError::invalid_request(
+                "Answer thread or turn does not match the pending question",
+            ));
+        }
+        let pending = inputs.remove(&params.request_id).ok_or_else(|| {
+            DeveloperSessionHostError::not_found("That question is no longer waiting for an answer")
+        })?;
+        drop(inputs);
+        let answer = params
+            .answer
+            .filter(|answer| !answer.trim().is_empty())
+            .map(agiworkforce_protocol::user_input::clamp_user_input_text);
+        pending.responder.send(answer).map_err(|_| {
+            DeveloperSessionHostError::conflict(
+                "The question ended before the answer was delivered",
+            )
+        })
     }
 
     async fn account_status(
@@ -3313,7 +4173,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: SkillConsentParams,
     ) -> Result<SkillConsentResponse, DeveloperSessionHostError> {
         let _guard = self.admit_request().await?;
-        surfaces::set_skill_consent(&self.workspace_root, params.granted)
+        surfaces::set_skill_consent(&self.workspace_root, params)
     }
 
     async fn list_plugins(&self) -> Result<PluginListResponse, DeveloperSessionHostError> {
@@ -3329,9 +4189,15 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         surfaces::set_plugin_enabled(&self.workspace_root, &params.id, params.enabled)
     }
 
-    async fn list_mcp_servers(&self) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+    async fn list_mcp_servers(
+        &self,
+        trust: DeveloperConnectionTrust,
+    ) -> Result<McpServerListResponse, DeveloperSessionHostError> {
         let _guard = self.admit_request().await?;
-        Ok(surfaces::list_mcp_servers(&self.workspace_root))
+        Ok(surfaces::list_mcp_servers_for(
+            &self.workspace_root,
+            trust == DeveloperConnectionTrust::LoopbackOwner,
+        ))
     }
 
     async fn login_mcp_server(
@@ -3348,6 +4214,17 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     params.name
                 ))
             })?;
+        if crate::mcp::consent::server_awaits_approval(
+            &self.workspace_root,
+            server.origin,
+            &server.name,
+        ) {
+            return Err(DeveloperSessionHostError::conflict(format!(
+                "MCP server '{}' is named by this project and its launch is not approved yet, \
+                 so nothing connects to it. Approve it first.",
+                server.name
+            )));
+        }
 
         let state = crate::mcp::login_to_remote_server_for_client(&server.name, &server.config)
             .await
@@ -3360,6 +4237,47 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 crate::mcp::McpCredentialState::Configured => McpServerConfiguredStatus::Configured,
             },
         })
+    }
+
+    async fn read_mcp_approval(
+        &self,
+        params: McpApprovalReadParams,
+    ) -> Result<McpApprovalRequest, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let from_plugin = approval_from_plugin(params.scope)?;
+        let asked =
+            crate::mcp::consent::approval_request(&self.workspace_root, &params.name, from_plugin)
+                .map_err(|error| DeveloperSessionHostError::conflict(format!("{error:#}")))?;
+        Ok(approval_for_client(params.name, params.scope, asked))
+    }
+
+    async fn grant_mcp_approval(
+        &self,
+        params: McpApprovalGrantParams,
+    ) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let from_plugin = approval_from_plugin(params.scope)?;
+        match crate::mcp::consent::grant_approval(
+            &self.workspace_root,
+            &params.name,
+            from_plugin,
+            &params.fingerprint,
+        ) {
+            Ok(()) => Ok(surfaces::list_mcp_servers(&self.workspace_root)),
+            Err(crate::mcp::consent::GrantRefusal::Changed(current)) => {
+                Err(DeveloperSessionHostError::mcp_approval_stale(
+                    format!(
+                        "MCP server '{}' changed while its launch was being reviewed, so \
+                         nothing was approved",
+                        params.name
+                    ),
+                    approval_for_client(params.name, params.scope, *current),
+                ))
+            }
+            Err(crate::mcp::consent::GrantRefusal::Other(error)) => {
+                Err(DeveloperSessionHostError::conflict(format!("{error:#}")))
+            }
+        }
     }
 
     async fn test_mcp_server(
@@ -3864,10 +4782,311 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         Ok(WorktreeListResponse { worktrees })
     }
 
+    async fn create_managed_worktree(
+        &self,
+        params: ManagedWorktreeCreateParams,
+    ) -> Result<WorktreeCreateResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        if self.worktree_checkout.is_some() {
+            return Err(DeveloperSessionHostError::invalid_request(
+                "This session already runs in a worktree. Make new worktrees from the original folder.",
+            ));
+        }
+        let manager = review::manager(&self.worktrees_root()?, &self.workspace_root).await?;
+        let created = manager
+            .create(review::start_point(params.start), params.label)
+            .await
+            .map_err(invalid_request)?;
+        Ok(WorktreeCreateResponse {
+            worktree: review::worktree_summary(&created.worktree),
+            copied_files: created.included.copied,
+            refused_files: created
+                .included
+                .refused
+                .into_iter()
+                .map(|(path, reason)| WorktreeRefusedFile { path, reason })
+                .collect(),
+            setup_script: created.setup.map(review::setup_script),
+            archived: created.cleaned.into_iter().map(review::archive).collect(),
+            cleanup_failures: created
+                .cleanup_failures
+                .into_iter()
+                .map(|(worktree_id, reason)| WorktreeCleanupFailure {
+                    worktree_id,
+                    reason,
+                })
+                .collect(),
+        })
+    }
+
+    async fn list_managed_worktrees(
+        &self,
+    ) -> Result<ManagedWorktreeListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let manager = review::manager(&self.worktrees_root()?, &self.workspace_root).await?;
+        let mut worktrees = Vec::new();
+        for worktree in manager.list().await.map_err(internal_error)? {
+            worktrees.push(self.worktree_with_thread(&worktree).await);
+        }
+        Ok(ManagedWorktreeListResponse {
+            worktrees,
+            keep: u32::try_from(manager.keep()).unwrap_or(u32::MAX),
+            setup_script: manager
+                .setup_script()
+                .map_err(internal_error)?
+                .map(review::setup_script),
+        })
+    }
+
+    async fn delete_worktree(
+        &self,
+        params: WorktreeIdParams,
+    ) -> Result<WorktreeArchive, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let manager = review::manager(&self.worktrees_root()?, &self.workspace_root).await?;
+        manager
+            .archive(&params.worktree_id)
+            .await
+            .map(review::archive)
+            .map_err(|error| DeveloperSessionHostError::conflict(error.to_string()))
+    }
+
+    async fn pin_worktree(
+        &self,
+        params: WorktreePinParams,
+    ) -> Result<ManagedWorktreeSummary, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let manager = review::manager(&self.worktrees_root()?, &self.workspace_root).await?;
+        let worktree = manager
+            .set_pinned(&params.worktree_id, params.pinned)
+            .await
+            .map_err(not_found_error)?;
+        Ok(self.worktree_with_thread(&worktree).await)
+    }
+
+    async fn worktree_keep(
+        &self,
+        params: WorktreeKeepParams,
+    ) -> Result<WorktreeKeepResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let root = self.worktrees_root()?;
+        let keep = match params.keep {
+            Some(keep) => agiworkforce_worktree::managed::write_keep(
+                &root,
+                usize::try_from(keep).unwrap_or(usize::MAX),
+            )
+            .map_err(invalid_request)?,
+            None => agiworkforce_worktree::managed::read_keep(&root),
+        };
+        Ok(WorktreeKeepResponse {
+            keep: u32::try_from(keep).unwrap_or(u32::MAX),
+            max_keep: u32::try_from(agiworkforce_worktree::managed::MAX_KEEP).unwrap_or(u32::MAX),
+        })
+    }
+
+    async fn apply_worktree_to_local(
+        &self,
+        params: WorktreeApplyParams,
+    ) -> Result<WorktreeApplyResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let manager = review::manager(&self.worktrees_root()?, &self.workspace_root).await?;
+        let outcome = manager
+            .apply_to_local(&params.worktree_id, params.preview)
+            .await
+            .map_err(invalid_request)?;
+        Ok(WorktreeApplyResponse {
+            applied: outcome.applied,
+            skipped: outcome.skipped,
+            conflicted: outcome.conflicted,
+            preview: params.preview,
+        })
+    }
+
+    async fn run_worktree_setup(
+        &self,
+        params: WorktreeSetupRunParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let root = self.worktrees_root()?;
+        let manager = review::manager(&root, &self.workspace_root).await?;
+        let worktree = manager
+            .get(&params.worktree_id)
+            .await
+            .map_err(not_found_error)?;
+        let mut runs = self.setup_runs.lock().await;
+        if runs
+            .get(&params.worktree_id)
+            .is_some_and(|run| !run.handle.is_finished())
+        {
+            return Err(DeveloperSessionHostError::conflict(
+                "The setup script is already running in this worktree.",
+            ));
+        }
+        let run = manager
+            .approved_setup_command(&params.worktree_id, &params.sha256)
+            .await
+            .map_err(|error| DeveloperSessionHostError::conflict(error.to_string()))?;
+
+        let process_owner = crate::process_tree::ProcessTreeOwner::new();
+        let notifications = self.notifications.clone();
+        let workspace = self.workspace_root.clone();
+        let worktree_id = params.worktree_id.clone();
+        let thread_id = worktree.marker.thread_id.clone();
+        let handle = tokio::spawn(crate::process_tree::scope(process_owner, async move {
+            let exit_code =
+                review::run_setup_script(run, &worktree_id, thread_id.as_deref(), &notifications)
+                    .await;
+            if let Ok(manager) = review::manager(&root, &workspace).await {
+                if let Err(error) = manager.record_setup_result(&worktree_id, exit_code) {
+                    tracing::warn!(worktree_id = %worktree_id, %error, "setup result not recorded");
+                }
+            }
+            if let Ok(notification) = AppServerNotification::new(
+                agiworkforce_protocol::developer_session::method::WORKTREE_SETUP_FINISHED,
+                WorktreeSetupFinishedNotification {
+                    worktree_id,
+                    thread_id,
+                    exit_code,
+                    succeeded: exit_code == Some(0),
+                },
+            ) {
+                let _ = notifications.send(notification);
+            }
+        }));
+        runs.insert(
+            params.worktree_id,
+            RunningSetup {
+                handle,
+                process_owner,
+            },
+        );
+        Ok(())
+    }
+
+    async fn list_turn_checkpoints(
+        &self,
+        params: ThreadIdParams,
+    ) -> Result<CheckpointListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let session = self.stored_session(&params.thread_id).await?;
+        review::list_checkpoints(&self.workspace_root, &params.thread_id, &session.messages).await
+    }
+
+    async fn checkpoint_diff(
+        &self,
+        params: CheckpointTurnParams,
+    ) -> Result<CheckpointDiffResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_thread_ownership(&params.thread_id).await?;
+        review::checkpoint_diff(&self.workspace_root, &params.thread_id, &params.turn_id).await
+    }
+
+    async fn revert_checkpoint_sections(
+        &self,
+        params: CheckpointSectionsParams,
+    ) -> Result<CheckpointSectionsResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_thread_ownership(&params.thread_id).await?;
+        let _workspace_files = if params.preview {
+            None
+        } else {
+            Some(self.lock_workspace_files(&params.thread_id).await?)
+        };
+        review::apply_sections(&self.workspace_root, params, false).await
+    }
+
+    async fn stage_checkpoint_sections(
+        &self,
+        params: CheckpointSectionsParams,
+    ) -> Result<CheckpointSectionsResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_thread_ownership(&params.thread_id).await?;
+        let _workspace_files = if params.preview {
+            None
+        } else {
+            Some(self.workspace_files.clone().write_owned().await)
+        };
+        review::apply_sections(&self.workspace_root, params, true).await
+    }
+
+    async fn revert_thread(
+        &self,
+        params: ThreadRevertParams,
+    ) -> Result<ThreadRevertResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let _workspace_files = self.lock_workspace_files(&params.thread_id).await?;
+        let session = self.load_agent(&params.thread_id).await?;
+        let restores_conversation = params.restore.restores_conversation();
+        if restores_conversation && !params.preview {
+            let path = self.persisted_session_path(&params.thread_id).await?;
+            self.refuse_foreign_writer(&params.thread_id, &path, "reverted")?;
+        }
+        let target =
+            review::rewind_target(&self.workspace_root, &params.thread_id, &params.turn_id).await?;
+        let mark = if restores_conversation {
+            Some(target.conversation.ok_or_else(|| {
+                DeveloperSessionHostError::conflict(
+                    "This turn's checkpoint did not record the conversation, so the conversation cannot rewind to it.",
+                )
+            })?)
+        } else {
+            None
+        };
+        // Held across the file rewind so a turn starting now waits for it, and
+        // the files and the conversation can never land out of step.
+        let mut agent = session.lock().await;
+        if let Some(mark) = &mark {
+            if !review::conversation_rewinds_to(&agent.messages, mark) {
+                return Err(DeveloperSessionHostError::conflict(
+                    "The conversation was compacted after this turn, so it can no longer be cut back to it. Start a new session from here instead.",
+                ));
+            }
+        }
+        let messages_removed = mark
+            .as_ref()
+            .map_or(0, |mark| agent.messages.len() - mark.message_count);
+        let outcome = if params.restore.restores_code() {
+            Some(
+                review::rewind_files(
+                    &self.workspace_root,
+                    &params.thread_id,
+                    &params.turn_id,
+                    params.preview,
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
+        if let (Some(mark), false) = (&mark, params.preview) {
+            agent.messages.truncate(mark.message_count);
+            if let Some(managed_session) = agent.managed_session.as_mut() {
+                managed_session.context_truncated_to(mark.message_count);
+            }
+            agent.persist_managed_session().map_err(internal_error)?;
+        }
+        let (files, skipped_files, recovery_ref) = outcome
+            .map_or((Vec::new(), Vec::new(), None), |outcome| {
+                (outcome.files, outcome.skipped, outcome.recovery_ref)
+            });
+        Ok(ThreadRevertResponse {
+            thread_id: params.thread_id,
+            turn_id: params.turn_id,
+            preview: params.preview,
+            files,
+            skipped_files,
+            messages_removed: u32::try_from(messages_removed).unwrap_or(u32::MAX),
+            recovery_ref,
+        })
+    }
+
     async fn shutdown(&self) -> Result<(), DeveloperSessionHostError> {
         // Flip admission before waiting for the exclusive lifecycle guard so a
         // queued WebSocket request cannot slip in behind shutdown.
         self.shutdown_started.store(true, Ordering::Release);
+        // A summary holds its request open on a model call; stopped here, it
+        // returns at once and shutdown does not wait on the model.
+        self.stop_every_compaction();
         let _exclusive = self.lifecycle.write().await;
 
         let running_turns = {
@@ -3885,13 +5104,19 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 .responder
                 .send(ApprovalReply::decided(ApprovalDecision::Cancel));
         }
+        drop_pending_user_inputs(&self.pending_user_inputs, None).await;
 
+        let setup_runs = std::mem::take(&mut *self.setup_runs.lock().await);
         let process_owners = running_turns
             .values()
             .map(|running| running.process_owner)
+            .chain(setup_runs.values().map(|run| run.process_owner))
             .collect::<Vec<_>>();
         for running in running_turns.values() {
             running.handle.abort();
+        }
+        for run in setup_runs.values() {
+            run.handle.abort();
         }
         // Same ordering as `interrupt_turn`, and the same dependency on
         // `wait_all` yielding: the session locks below are unreachable until.
@@ -3961,6 +5186,13 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .collect::<Vec<_>>();
         for thread_id in held_threads {
             self.release_writer_quietly(&thread_id).await;
+        }
+        if let Some(checkout) = self.worktree_checkout.as_deref() {
+            agiworkforce_worktree::managed::unlock_checkout(
+                &crate::runtime::worktree::BookkeepingRunner,
+                checkout,
+            )
+            .await;
         }
 
         if let Some(error) = process_shutdown_error {
@@ -4175,6 +5407,10 @@ fn approval_callback(
         Box::pin(async move {
             let request_id = request.id.to_string();
             let risk = request.kind.risk();
+            let exec_command = match &request.kind {
+                ApprovalRequestKind::Exec { command } => Some(command.clone()),
+                _ => None,
+            };
             let question = match &request.kind {
                 ApprovalRequestKind::Question { question, options } => Some(serde_json::json!({
                     "question": question,
@@ -4194,6 +5430,10 @@ fn approval_callback(
                     .clone()
                     .filter(|content| content.len() <= MAX_PROPOSED_CONTENT_BYTES),
                 always_allow_saved: request.saves_always_allow,
+                proposed_execpolicy_amendment: exec_command
+                    .as_deref()
+                    .and_then(crate::features::exec::exec_policy::proposed_allow_prefix)
+                    .map(ExecPolicyAmendment::new),
             };
             let (sender, receiver) = oneshot::channel();
             pending.lock().await.insert(
@@ -4202,6 +5442,7 @@ fn approval_callback(
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     snapshot: snapshot.clone(),
+                    exec_command,
                     responder: sender,
                 },
             );
@@ -4227,6 +5468,7 @@ fn approval_callback(
                     "proposedContent": snapshot.proposed_content,
                     "editable": snapshot.proposed_content.is_some(),
                     "alwaysAllowSaved": snapshot.always_allow_saved,
+                    "proposedExecpolicyAmendment": snapshot.proposed_execpolicy_amendment,
                     "question": question,
                 }),
             ) {
@@ -4261,6 +5503,85 @@ fn approval_callback(
             decision
         })
     })
+}
+
+/// Route `ask_user` to the client: announce the question, then wait for
+/// `userInput/respond`. Nobody answering within the approval window, an
+/// interrupt, or the turn ending all resolve to no answer.
+fn user_input_callback(
+    thread_id: String,
+    turn_id: String,
+    pending: PendingUserInputs,
+    notifications: broadcast::Sender<AppServerNotification>,
+) -> crate::tools::UserInputCallback {
+    Arc::new(move |request: crate::tools::UserInputRequest| {
+        let thread_id = thread_id.clone();
+        let turn_id = turn_id.clone();
+        let pending = pending.clone();
+        let notifications = notifications.clone();
+        Box::pin(async move {
+            let request_id = Uuid::new_v4().to_string();
+            let (sender, receiver) = oneshot::channel();
+            pending.lock().await.insert(
+                request_id.clone(),
+                PendingUserInput {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    snapshot: PendingUserInputSnapshot {
+                        request_id: request_id.clone(),
+                        question: request.question.clone(),
+                    },
+                    responder: sender,
+                },
+            );
+            if let Ok(notification) = task_state_notification(
+                turn_id.clone(),
+                AgentTaskState::AwaitingInput,
+                Some(AgentTaskState::Running),
+                Some("The agent asked a question and is waiting for the answer.".to_string()),
+            ) {
+                let _ = notifications.send(notification);
+            }
+            let params = UserInputRequestedParams {
+                thread_id,
+                turn_id: turn_id.clone(),
+                request_id: request_id.clone(),
+                question: request.question,
+            };
+            if let Ok(notification) = AppServerNotification::new(
+                agiworkforce_protocol::developer_session::method::USER_INPUT_REQUESTED,
+                &params,
+            ) {
+                let _ = notifications.send(notification);
+            }
+            let answer = match tokio::time::timeout(
+                std::time::Duration::from_secs(APPROVAL_TIMEOUT_SECONDS),
+                receiver,
+            )
+            .await
+            {
+                Ok(Ok(answer)) => answer,
+                Ok(Err(_)) | Err(_) => None,
+            };
+            pending.lock().await.remove(&request_id);
+            if let Ok(notification) = task_state_notification(
+                turn_id,
+                AgentTaskState::Running,
+                Some(AgentTaskState::AwaitingInput),
+                Some("Agent resumed after the question.".to_string()),
+            ) {
+                let _ = notifications.send(notification);
+            }
+            answer
+        })
+    })
+}
+
+async fn drop_pending_user_inputs(pending: &PendingUserInputs, turn_id: Option<&str>) {
+    pending
+        .lock()
+        .await
+        .retain(|_, input| turn_id.is_some_and(|turn_id| input.turn_id != turn_id));
 }
 
 fn emit_agent_event(
@@ -4798,6 +6119,76 @@ fn validated_tool_filter(
     ))
 }
 
+fn turn_start_index(starts: &[(usize, String)], turn_id: &str) -> Option<usize> {
+    starts
+        .iter()
+        .find(|(_, id)| id == turn_id)
+        .map(|(start, _)| *start)
+}
+
+/// How many messages a conversation keeps through the turn that starts at
+/// `start`: everything before the next turn, and never past the end of
+/// `span`, the stretch around it that no summary rewrote.
+fn messages_through_turn(starts: &[(usize, String)], start: usize, span: (usize, usize)) -> usize {
+    starts
+        .iter()
+        .map(|(next, _)| *next)
+        .filter(|next| *next > start)
+        .min()
+        .map_or(span.1, |next| next.min(span.1))
+}
+
+/// The turn the message at `context_index` belongs to: the last one that
+/// starts at or before it, provided that start lies in `span` too. A turn's
+/// start mark from before a summary can still check out, as the first turn's
+/// always does, and a message added after the summary must never be taken
+/// for part of that turn.
+fn turn_in_span(
+    starts: &[(usize, String)],
+    span: (usize, usize),
+    context_index: usize,
+) -> Option<String> {
+    review::turn_of(starts, context_index)
+        .filter(|turn_id| turn_start_index(starts, turn_id).is_some_and(|start| start >= span.0))
+}
+
+/// Bypass belongs to the one turn that named it. Before the next turn and when
+/// that turn ends, however it ends, the thread goes back to the last posture
+/// it was saved in, which is never bypass, or to asking.
+fn leave_bypass(agent: &mut AgentSession) {
+    use crate::cli_options::PermissionMode;
+
+    if !agent.skip_permissions && agent.permission_mode != PermissionMode::BypassPermissions {
+        return;
+    }
+    let resting = match agent
+        .managed_session
+        .as_ref()
+        .and_then(|session| session.permission_mode)
+    {
+        Some(PermissionMode::AcceptEdits) => DeveloperAgentMode::Auto,
+        Some(PermissionMode::Plan) => DeveloperAgentMode::Plan,
+        Some(PermissionMode::Default)
+        | Some(PermissionMode::DontAsk)
+        | Some(PermissionMode::BypassPermissions)
+        | None => DeveloperAgentMode::Ask,
+    };
+    // `resting` is never Bypass, the one mode `apply_agent_controls` refuses.
+    let _ = apply_agent_controls(agent, Some(resting), None);
+}
+
+/// A turn that names no mode runs in the thread's own, as it was last saved.
+/// A session opened from its file brings back the mode but not what the mode
+/// switches on, so the two are made to agree here. Called after
+/// [`leave_bypass`], it can never leave a turn asking for nothing.
+fn keep_thread_mode(agent: &mut AgentSession) {
+    use crate::cli_options::PermissionMode;
+
+    agent.skip_permissions = false;
+    agent.auto_approve_safe = agent.permission_mode == PermissionMode::AcceptEdits;
+    agent.plan_mode = agent.permission_mode == PermissionMode::Plan;
+}
+
 fn apply_agent_controls(
     agent: &mut AgentSession,
     mode: Option<DeveloperAgentMode>,
@@ -5055,7 +6446,7 @@ mod tests {
     use crate::runtime::session::{ManagedSessionRoutingAuthority, PrivacyMode};
     use agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel;
     use agiworkforce_protocol::agent_events::AgentEventToolCategory;
-    use agiworkforce_protocol::developer_session::TurnFailureAction;
+    use agiworkforce_protocol::developer_session::{ThreadRevertRestore, TurnFailureAction};
     use tempfile::tempdir;
 
     fn text_input(text: &str) -> UserInput {
@@ -5082,6 +6473,214 @@ mod tests {
             shell: "test".to_string(),
         };
         AgentSession::new("test-model", &context, None)
+    }
+
+    #[tokio::test]
+    async fn a_summary_can_be_stopped_and_is_forgotten_however_it_ends() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        assert!(!host.stop_compaction("thread-1"));
+
+        let claim = CompactionClaim::new(&host.compactions, "thread-1");
+        assert!(host.stop_compaction("thread-1"));
+        tokio::time::timeout(std::time::Duration::from_secs(1), claim.stop.notified())
+            .await
+            .expect("a stop raised before the summary looked for it must still reach it");
+
+        let other = CompactionClaim::new(&host.compactions, "thread-2");
+        host.stop_every_compaction();
+        tokio::time::timeout(std::time::Duration::from_secs(1), other.stop.notified())
+            .await
+            .expect("shutdown stops every summary");
+
+        drop(claim);
+        drop(other);
+        assert!(!host.stop_compaction("thread-1"));
+        assert!(!host.stop_compaction("thread-2"));
+    }
+
+    #[test]
+    fn a_steered_follow_up_never_runs_in_the_bypass_its_turn_was_started_in() {
+        use crate::cli_options::PermissionMode;
+
+        let workspace = tempdir().expect("workspace");
+        let mut agent = test_agent();
+        let mut stored = ManagedSession::new("steered", chrono::Utc::now());
+        stored.permission_mode = Some(PermissionMode::Default);
+        agent.managed_session = Some(stored);
+        agent.bypass_permissions_available = true;
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None)
+            .expect("authorized controls");
+        withhold_subagent_tools(workspace.path(), &mut agent);
+        assert!(tool_names(&agent).iter().any(|name| name == "task"));
+
+        end_bypass_for_follow_up(workspace.path(), &mut agent);
+
+        assert!(
+            !agent.skip_permissions && !agent.auto_approve_safe,
+            "a message steered into a bypass turn ran with approvals off"
+        );
+        assert_eq!(agent.permission_mode, PermissionMode::Default);
+        assert!(
+            !tool_names(&agent).iter().any(|name| name == "task"),
+            "the follow-up kept a tool only bypass may offer"
+        );
+
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Auto), None)
+            .expect("authorized controls");
+        end_bypass_for_follow_up(workspace.path(), &mut agent);
+        assert!(
+            agent.auto_approve_safe,
+            "a follow-up in a turn that was never bypass keeps the turn's mode"
+        );
+    }
+
+    #[test]
+    fn bypass_does_not_outlive_the_turn_that_named_it() {
+        use crate::cli_options::PermissionMode;
+
+        let mut agent = test_agent();
+        let mut stored = ManagedSession::new("bypass-turn", chrono::Utc::now());
+        stored.permission_mode = Some(PermissionMode::AcceptEdits);
+        agent.managed_session = Some(stored);
+
+        agent.bypass_permissions_available = true;
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None)
+            .expect("authorized controls");
+        assert!(agent.skip_permissions);
+
+        leave_bypass(&mut agent);
+        apply_agent_controls(&mut agent, None, None).expect("authorized controls");
+        assert!(
+            !agent.skip_permissions,
+            "a turn that names no mode ran in the bypass an earlier turn confirmed"
+        );
+        assert_eq!(agent.permission_mode, PermissionMode::AcceptEdits);
+        assert!(agent.auto_approve_safe);
+
+        agent.managed_session = None;
+        agent.bypass_permissions_available = true;
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None)
+            .expect("authorized controls");
+        leave_bypass(&mut agent);
+        assert_eq!(agent.permission_mode, PermissionMode::Default);
+        assert!(!agent.skip_permissions && !agent.auto_approve_safe);
+
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Plan), None)
+            .expect("authorized controls");
+        leave_bypass(&mut agent);
+        assert_eq!(
+            agent.permission_mode,
+            PermissionMode::Plan,
+            "a posture that is not bypass is left as the turn set it"
+        );
+    }
+
+    #[test]
+    fn a_turn_that_names_no_mode_runs_in_the_threads_saved_one_and_never_in_bypass() {
+        use crate::cli_options::PermissionMode;
+
+        let mut reopened = test_agent();
+        reopened.permission_mode = PermissionMode::AcceptEdits;
+        leave_bypass(&mut reopened);
+        keep_thread_mode(&mut reopened);
+        assert!(
+            reopened.auto_approve_safe && !reopened.skip_permissions,
+            "a thread left in Auto was not in Auto for a turn that named no mode"
+        );
+
+        let mut planned = test_agent();
+        planned.permission_mode = PermissionMode::Plan;
+        leave_bypass(&mut planned);
+        keep_thread_mode(&mut planned);
+        assert!(planned.plan_mode && !planned.auto_approve_safe);
+
+        let mut after_bypass = test_agent();
+        let mut stored = ManagedSession::new("remote-turn", chrono::Utc::now());
+        stored.permission_mode = Some(PermissionMode::Plan);
+        after_bypass.managed_session = Some(stored);
+        after_bypass.bypass_permissions_available = true;
+        apply_agent_controls(&mut after_bypass, Some(DeveloperAgentMode::Bypass), None)
+            .expect("authorized controls");
+        leave_bypass(&mut after_bypass);
+        keep_thread_mode(&mut after_bypass);
+        assert_eq!(after_bypass.permission_mode, PermissionMode::Plan);
+        assert!(!after_bypass.skip_permissions && !after_bypass.auto_approve_safe);
+    }
+
+    #[test]
+    fn summarizing_from_a_turn_keeps_every_message_before_it() {
+        let starts = vec![(1, "turn-a".to_string()), (4, "turn-b".to_string())];
+
+        assert_eq!(turn_start_index(&starts, "turn-a"), Some(1));
+        assert_eq!(turn_start_index(&starts, "turn-b"), Some(4));
+        assert_eq!(
+            turn_start_index(&starts, "turn-compacted-away"),
+            None,
+            "an unknown turn must be refused rather than summarize the whole thread"
+        );
+    }
+
+    #[test]
+    fn a_fork_through_a_turn_keeps_the_messages_before_the_next_one() {
+        let starts = vec![(1, "turn-a".to_string()), (4, "turn-b".to_string())];
+
+        assert_eq!(messages_through_turn(&starts, 1, (0, 9)), 4);
+        assert_eq!(messages_through_turn(&starts, 4, (0, 9)), 9);
+        assert_eq!(
+            messages_through_turn(&starts, 1, (0, 3)),
+            3,
+            "a fork through a turn a summary follows carried the summary too"
+        );
+        assert_eq!(turn_start_index(&starts, "turn-compacted-away"), None);
+    }
+
+    #[test]
+    fn a_message_after_a_summary_is_never_labelled_with_a_turn_from_before_it() {
+        let crate_message = |text: &str| crate::models::Message::text("user", text);
+        let original: Vec<_> = ["system", "a1", "a2", "b1", "b2"]
+            .into_iter()
+            .map(crate_message)
+            .collect();
+        let mut stored = ManagedSession::new("labels", chrono::Utc::now());
+        let compacted: Vec<_> = ["system", "summary of a", "b1", "b2"]
+            .into_iter()
+            .map(crate_message)
+            .collect();
+        stored.record_compaction(&original, &compacted);
+        stored.messages = compacted;
+        stored.messages.push(crate_message("c1"));
+        stored.messages.push(crate_message("c2"));
+        // Turn a's mark covers only the system prompt, which the summary
+        // kept, so it still checks out. Turn c took its mark before the
+        // summary ran inside its own send, so it no longer does.
+        let starts = vec![(1, "turn-a".to_string())];
+
+        let spans = stored.addressable_spans();
+        let label = |context_index: usize| {
+            spans[context_index].and_then(|span| turn_in_span(&starts, span, context_index))
+        };
+        assert_eq!(
+            label(4),
+            None,
+            "turn c's message was labelled turn a, so rewinding it would cut the conversation to the system prompt"
+        );
+        assert_eq!(label(5), None);
+        assert_eq!(label(2), None);
+
+        let later = vec![(1, "turn-a".to_string()), (6, "turn-d".to_string())];
+        stored.messages.push(crate_message("d1"));
+        let spans = stored.addressable_spans();
+        assert_eq!(
+            spans[6].and_then(|span| turn_in_span(&later, span, 6)),
+            Some("turn-d".to_string())
+        );
+        assert_eq!(
+            stored.addressable_span(1),
+            None,
+            "turn a is not one a fork or a summary may start from any more"
+        );
     }
 
     #[test]
@@ -5639,6 +7238,62 @@ mod tests {
         assert!(read.messages[1].text.starts_with("message-2:"));
         assert!(read.messages[2].text.starts_with("message-3:"));
         assert!(serde_json::to_vec(&read).expect("serialize response").len() < 4 * 1024 * 1024);
+    }
+
+    #[tokio::test]
+    async fn reading_a_compacted_thread_shows_what_the_summary_replaced() {
+        let workspace = tempdir().expect("workspace");
+        let store_dir = tempdir().expect("store");
+        let store = ManagedSessionStore::new(store_dir.path().to_path_buf());
+        let workspace_root = workspace.path().canonicalize().expect("canonical");
+        let original = vec![
+            crate::models::Message::text("user", "first ask"),
+            crate::models::Message::text("assistant", "first answer"),
+            crate::models::Message::text("user", "second ask"),
+        ];
+        let mut session =
+            ManagedSession::with_messages("compacted-read", chrono::Utc::now(), Vec::new());
+        let compacted = vec![
+            crate::models::Message::text("assistant", "summary of the first turn"),
+            crate::models::Message::text("user", "second ask"),
+        ];
+        session.record_compaction(&original, &compacted);
+        session.messages = compacted;
+        session
+            .messages
+            .push(crate::models::Message::text("assistant", "second answer"));
+        session.model = Some("fixture-local-model:latest".to_string());
+        session.workspace_root = Some(workspace_root.clone());
+        session.routing_authority = Some(ManagedSessionRoutingAuthority {
+            privacy_mode: PrivacyMode::Local,
+            provider: "ollama".to_string(),
+        });
+        store.save(&session).expect("save compacted session");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace_root,
+            store,
+            false,
+        )
+        .expect("host");
+
+        let read = host
+            .read_thread(ThreadIdParams {
+                thread_id: session.session_id,
+            })
+            .await
+            .expect("read compacted thread");
+
+        let texts: Vec<&str> = read
+            .messages
+            .iter()
+            .map(|message| message.text.as_str())
+            .collect();
+        assert_eq!(
+            texts,
+            ["first ask", "first answer", "second ask", "second answer"],
+            "compaction must change what the model reads, never what the reader sees"
+        );
     }
 
     /// The handoff a host issues is addressed to one surface, and the same
@@ -6863,6 +8518,11 @@ mod tests {
         // `rm -rf build` and `ls` by eye.
         assert_eq!(notification.params["riskLevel"], "medium");
         assert_eq!(notification.params["reversible"], false);
+        assert_eq!(
+            notification.params["proposedExecpolicyAmendment"],
+            serde_json::json!(["cargo", "test"]),
+            "an always-allow answer may only save the rule the host proposed"
+        );
 
         let approval = pending
             .lock()
@@ -6877,6 +8537,177 @@ mod tests {
             waiter.await.expect("waiter task"),
             ApprovalDecision::AllowOnce
         );
+    }
+
+    fn pending_command_approval(
+        command: &str,
+        proposed: Option<Vec<String>>,
+    ) -> (PendingApproval, oneshot::Receiver<ApprovalReply>) {
+        let (responder, decision) = oneshot::channel();
+        (
+            PendingApproval {
+                thread_id: "thread-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                snapshot: PendingApprovalSnapshot {
+                    request_id: "approval-1".to_string(),
+                    kind: "Exec".to_string(),
+                    summary: "Run a command".to_string(),
+                    detail: command.to_string(),
+                    risk_level: Some(AgentEventApprovalRiskLevel::Medium),
+                    reversible: Some(false),
+                    proposed_content: None,
+                    always_allow_saved: proposed.is_some(),
+                    proposed_execpolicy_amendment: proposed.map(ExecPolicyAmendment::new),
+                },
+                exec_command: Some(command.to_string()),
+                responder,
+            },
+            decision,
+        )
+    }
+
+    fn always_allow(prefix: &[&str]) -> ApprovalResponseParams {
+        ApprovalResponseParams {
+            thread_id: "thread-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            request_id: "approval-1".to_string(),
+            decision: ReviewDecision::ApprovedExecpolicyAmendment {
+                proposed_execpolicy_amendment: ExecPolicyAmendment::new(
+                    prefix.iter().map(|word| (*word).to_string()).collect(),
+                ),
+            },
+            note: None,
+            edited_content: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn always_allow_only_saves_the_rule_the_host_proposed() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        let (pending, _decision) = pending_command_approval(
+            "npm test -- --watch",
+            Some(vec![
+                "npm".to_string(),
+                "test".to_string(),
+                "--".to_string(),
+                "--watch".to_string(),
+            ]),
+        );
+        host.pending_approvals
+            .lock()
+            .await
+            .insert("approval-1".to_string(), pending);
+
+        let refused = host
+            .respond_to_approval(always_allow(&["npm"]))
+            .await
+            .expect_err("a client-chosen prefix must be refused");
+        assert_eq!(
+            refused.code(),
+            DeveloperSessionHostError::invalid_request("").code()
+        );
+        assert!(
+            host.pending_approvals
+                .lock()
+                .await
+                .contains_key("approval-1"),
+            "the request stays pending for another answer"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_interpreter_command_cannot_be_always_allowed() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        let command = "python3 -c 'print(1)'";
+        let (pending, _decision) = pending_command_approval(
+            command,
+            crate::features::exec::exec_policy::proposed_allow_prefix(command),
+        );
+        assert!(pending.snapshot.proposed_execpolicy_amendment.is_none());
+        host.pending_approvals
+            .lock()
+            .await
+            .insert("approval-1".to_string(), pending);
+
+        let refused = host
+            .respond_to_approval(always_allow(&["python3"]))
+            .await
+            .expect_err("an interpreter rule must be refused");
+        assert!(refused.message().contains("approved once"), "{refused}");
+        assert!(host
+            .pending_approvals
+            .lock()
+            .await
+            .contains_key("approval-1"));
+    }
+
+    #[tokio::test]
+    async fn ask_user_is_announced_to_the_client_and_resumed_by_its_answer() {
+        let pending: PendingUserInputs = Arc::new(Mutex::new(HashMap::new()));
+        let (notifications, mut receiver) = broadcast::channel(8);
+        let callback = user_input_callback(
+            "thread-1".to_string(),
+            "turn-1".to_string(),
+            pending.clone(),
+            notifications,
+        );
+        let waiter = tokio::spawn(async move {
+            callback(crate::tools::UserInputRequest {
+                question: "Which branch?".to_string(),
+            })
+            .await
+        });
+
+        let state = receiver.recv().await.expect("awaiting-input notification");
+        assert_eq!(state.method, "task/state_changed");
+        assert_eq!(state.params["state"], "awaiting_input");
+        let notification = receiver.recv().await.expect("question notification");
+        assert_eq!(notification.method, "userInput/requested");
+        let announced: UserInputRequestedParams =
+            serde_json::from_value(notification.params).expect("typed question");
+        assert_eq!(announced.thread_id, "thread-1");
+        assert_eq!(announced.turn_id, "turn-1");
+        assert_eq!(announced.question, "Which branch?");
+
+        let input = pending
+            .lock()
+            .await
+            .remove(&announced.request_id)
+            .expect("pending question");
+        input
+            .responder
+            .send(Some("main".to_string()))
+            .expect("resume question waiter");
+        assert_eq!(waiter.await.expect("waiter"), Some("main".to_string()));
+    }
+
+    #[tokio::test]
+    async fn an_interrupted_question_resolves_to_no_answer() {
+        let pending: PendingUserInputs = Arc::new(Mutex::new(HashMap::new()));
+        let (notifications, mut receiver) = broadcast::channel(8);
+        let callback = user_input_callback(
+            "thread-1".to_string(),
+            "turn-1".to_string(),
+            pending.clone(),
+            notifications,
+        );
+        let waiter = tokio::spawn(async move {
+            callback(crate::tools::UserInputRequest {
+                question: "Which branch?".to_string(),
+            })
+            .await
+        });
+        let _ = receiver.recv().await;
+        let _ = receiver.recv().await;
+
+        drop_pending_user_inputs(&pending, Some("turn-1")).await;
+
+        assert_eq!(waiter.await.expect("waiter"), None);
+        assert!(pending.lock().await.is_empty());
     }
 
     #[tokio::test]
@@ -6940,13 +8771,62 @@ mod tests {
             },
         );
         let mut notifications = host.subscribe();
+        let hook_scratch = tempdir().expect("hook scratch");
+        let hook_started = hook_scratch.path().join("started");
+        let hook_release = hook_scratch.path().join("release");
+        host.sessions
+            .lock()
+            .await
+            .get(&thread.id)
+            .cloned()
+            .expect("live session")
+            .lock()
+            .await
+            .hooks_config = crate::hooks::HooksConfig {
+            hooks: HashMap::from([(
+                "TurnCancelled".to_string(),
+                vec![crate::hooks::Hook {
+                    command: format!(
+                        "touch '{}'; while [ ! -f '{}' ]; do sleep 0.02; done",
+                        hook_started.display(),
+                        hook_release.display()
+                    ),
+                    args: Vec::new(),
+                    timeout: 5,
+                    blocking: true,
+                    matcher: None,
+                    if_condition: None,
+                    source: crate::hooks::HookSource::User,
+                }],
+            )]),
+            sandbox: Some(false),
+        };
 
-        host.interrupt_turn(TurnInterruptParams {
-            thread_id: thread.id.clone(),
-            turn_id: turn_id.clone(),
-        })
-        .await
-        .expect("interrupt turn");
+        let (interrupted, ()) = tokio::join!(
+            host.interrupt_turn(TurnInterruptParams {
+                thread_id: thread.id.clone(),
+                turn_id: turn_id.clone(),
+            }),
+            async {
+                for _ in 0..500 {
+                    if hook_started.exists() {
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+                assert!(
+                    hook_started.exists(),
+                    "the stopped turn's history is closed while the interrupt runs"
+                );
+                assert!(
+                    host.thread_files(&thread.id).try_lock_owned().is_err(),
+                    "no turn of this thread may start until the stopped one is closed and saved"
+                );
+                std::fs::write(&hook_release, "").expect("release the hook");
+            }
+        );
+        interrupted.expect("interrupt turn");
+        assert!(host.thread_files(&thread.id).try_lock_owned().is_ok());
         assert!(host.running_turns.lock().await.get(&thread.id).is_none());
         let cancelled = notifications
             .recv()
@@ -7536,6 +9416,7 @@ mod tests {
                 auto_approve_edits: false,
                 quiet: true,
                 approval_callback: None,
+                user_input_callback: None,
                 privacy_mode: agent.privacy_mode,
                 workspace_root: agent
                     .managed_session
@@ -7584,6 +9465,7 @@ mod tests {
                 auto_approve_edits: false,
                 quiet: true,
                 approval_callback: None,
+                user_input_callback: None,
                 privacy_mode: local_agent.privacy_mode,
                 workspace_root: local_agent
                     .managed_session
@@ -8052,14 +9934,33 @@ mod tests {
         assert!(host.running_turns.lock().await.is_empty());
 
         let deleted = host
-            .delete_thread(ThreadIdParams {
+            .delete_thread(ThreadDeleteParams {
                 thread_id: thread.id.clone(),
+                discard_worktree_archives: false,
             })
             .await
             .expect_err("a thread another process is writing cannot be deleted");
         assert_eq!(
             deleted.code(),
             agiworkforce_protocol::developer_session::THREAD_WRITER_CONFLICT_ERROR_CODE
+        );
+
+        let reverted = host
+            .revert_thread(ThreadRevertParams {
+                thread_id: thread.id.clone(),
+                turn_id: "turn-1".to_string(),
+                preview: false,
+                restore: ThreadRevertRestore::Both,
+            })
+            .await
+            .expect_err("a thread another process is writing cannot be reverted");
+        assert_eq!(
+            reverted.code(),
+            agiworkforce_protocol::developer_session::THREAD_WRITER_CONFLICT_ERROR_CODE
+        );
+        assert!(
+            reverted.message().contains("cannot be reverted"),
+            "{reverted}"
         );
 
         let taken = host
@@ -8240,8 +10141,24 @@ mod tests {
                     reversible: Some(false),
                     proposed_content: None,
                     always_allow_saved: false,
+                    proposed_execpolicy_amendment: None,
                 },
+                exec_command: Some("cargo test".to_string()),
                 responder,
+            },
+        );
+
+        let (question_responder, _answer) = oneshot::channel();
+        host.pending_user_inputs.lock().await.insert(
+            "question-live".to_string(),
+            PendingUserInput {
+                thread_id: thread.id.clone(),
+                turn_id: "turn-live".to_string(),
+                snapshot: PendingUserInputSnapshot {
+                    request_id: "question-live".to_string(),
+                    question: "Which branch?".to_string(),
+                },
+                responder: question_responder,
             },
         );
 
@@ -8259,6 +10176,13 @@ mod tests {
         assert_eq!(active.next_event_sequence, 9);
         assert_eq!(active.pending_approvals.len(), 1);
         assert_eq!(active.pending_approvals[0].summary, "Run the test suite");
+        assert_eq!(
+            active.pending_user_inputs,
+            vec![PendingUserInputSnapshot {
+                request_id: "question-live".to_string(),
+                question: "Which branch?".to_string(),
+            }]
+        );
 
         let finished = host.running_turns.lock().await.remove(&thread.id);
         if let Some(turn) = finished {
@@ -8288,8 +10212,9 @@ mod tests {
             },
         );
         assert_eq!(
-            host.delete_thread(ThreadIdParams {
+            host.delete_thread(ThreadDeleteParams {
                 thread_id: thread.id.clone(),
+                discard_worktree_archives: false,
             })
             .await
             .expect_err("a running thread is not deleted")
@@ -8302,8 +10227,9 @@ mod tests {
         }
 
         let mut notifications = host.subscribe();
-        host.delete_thread(ThreadIdParams {
+        host.delete_thread(ThreadDeleteParams {
             thread_id: thread.id.clone(),
+            discard_worktree_archives: false,
         })
         .await
         .expect("delete an idle thread");
@@ -8331,6 +10257,436 @@ mod tests {
             .code(),
             -32004
         );
+    }
+
+    #[tokio::test]
+    async fn worktree_archives_kept_by_a_delete_are_discarded_by_a_second_confirmed_delete() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let workspace = tempdir().expect("workspace");
+        git_repo(workspace.path());
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        let archive = format!("refs/agiworkforce/worktree-archive/{}/0a1b2c3d", thread.id);
+        let git = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .current_dir(workspace.path())
+                .args(args)
+                .output()
+                .expect("git");
+            assert!(output.status.success(), "git {args:?}");
+            String::from_utf8(output.stdout).expect("utf8")
+        };
+        git(&["update-ref", &archive, "HEAD"]);
+
+        let deleted = host
+            .delete_thread(ThreadDeleteParams {
+                thread_id: thread.id.clone(),
+                discard_worktree_archives: false,
+            })
+            .await
+            .expect("delete the thread");
+        assert_eq!(deleted.kept_worktree_archives, vec![archive.clone()]);
+        assert!(deleted.removed_worktree_archives.is_empty());
+        assert!(git(&["for-each-ref", "--format=%(refname)"]).contains(&archive));
+
+        let discarded = host
+            .delete_thread(ThreadDeleteParams {
+                thread_id: thread.id.clone(),
+                discard_worktree_archives: true,
+            })
+            .await
+            .expect("a deleted thread's archives can still be discarded");
+        assert!(discarded.acknowledged);
+        assert!(discarded.kept_worktree_archives.is_empty());
+        assert_eq!(discarded.removed_worktree_archives, vec![archive.clone()]);
+        assert!(discarded.released_worktrees.is_empty());
+        assert!(!git(&["for-each-ref", "--format=%(refname)"]).contains(&archive));
+
+        assert_eq!(
+            host.delete_thread(ThreadDeleteParams {
+                thread_id: thread.id.clone(),
+                discard_worktree_archives: false,
+            })
+            .await
+            .expect_err("without the discard a deleted thread is still not found")
+            .code(),
+            -32004
+        );
+    }
+
+    #[tokio::test]
+    async fn a_discard_the_repository_could_not_carry_out_is_an_error_not_an_empty_answer() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let workspace = tempdir().expect("workspace");
+        git_repo(workspace.path());
+        let store = tempdir().expect("store");
+        let (host, _thread) = managed_thread(workspace.path(), store.path()).await;
+        host.deleted_threads
+            .lock()
+            .unwrap()
+            .insert("no/such..thread".to_string());
+
+        let error = host
+            .delete_thread(ThreadDeleteParams {
+                thread_id: "no/such..thread".to_string(),
+                discard_worktree_archives: true,
+            })
+            .await
+            .expect_err("a ref name git refuses fails the discard");
+
+        assert_eq!(error.code(), -32603);
+        assert!(
+            error.message().contains("could not be removed"),
+            "{}",
+            error.message()
+        );
+    }
+
+    fn idle_running_turn(turn_id: &str) -> RunningTurn {
+        RunningTurn {
+            turn_id: turn_id.to_string(),
+            handle: tokio::spawn(std::future::pending::<()>()),
+            partial: Arc::new(StdMutex::new(PartialOutput::default())),
+            event_sequence: Arc::new(StdMutex::new(0)),
+            process_owner: crate::process_tree::ProcessTreeOwner::new(),
+        }
+    }
+
+    fn turn_params(thread_id: &str, text: &str) -> TurnStartParams {
+        TurnStartParams {
+            thread_id: thread_id.to_string(),
+            input: vec![text_input(text)],
+            model: None,
+            routing_task_type: None,
+            cwd: None,
+            agent_mode: None,
+            reasoning_effort: None,
+            context_files: None,
+            client_turn_id: None,
+            max_turns: None,
+            routing_profile: None,
+            cloud_project_id: None,
+            allowed_tools: None,
+            disallowed_tools: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_turn_cannot_start_while_its_threads_files_are_being_reverted() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        let reverting = host.workspace_files.clone().write_owned().await;
+
+        let refused = host
+            .start_turn(TurnStartParams {
+                thread_id: thread.id.clone(),
+                input: vec![text_input("must not run under a revert")],
+                model: None,
+                routing_task_type: None,
+                cwd: None,
+                agent_mode: None,
+                reasoning_effort: None,
+                context_files: None,
+                client_turn_id: None,
+                max_turns: None,
+                routing_profile: None,
+                cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
+            })
+            .await
+            .expect_err("a revert in progress must refuse the turn");
+
+        assert_eq!(
+            refused.code(),
+            DeveloperSessionHostError::conflict("").code()
+        );
+        assert!(
+            refused.message().contains("being reverted or staged"),
+            "{refused}"
+        );
+        assert!(host.running_turns.lock().await.is_empty());
+        drop(reverting);
+    }
+
+    #[tokio::test]
+    async fn a_revert_waits_for_the_thread_and_then_refuses_a_turn_that_started() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        let revert = || {
+            host.revert_thread(ThreadRevertParams {
+                thread_id: thread.id.clone(),
+                turn_id: "turn-1".to_string(),
+                preview: false,
+                restore: ThreadRevertRestore::Both,
+            })
+        };
+        let starting = host.workspace_files.clone().read_owned().await;
+
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(100), revert())
+                .await
+                .is_err(),
+            "a revert waits while a turn is starting"
+        );
+
+        host.running_turns
+            .lock()
+            .await
+            .insert(thread.id.clone(), idle_running_turn("turn-2"));
+        drop(starting);
+        let refused = revert()
+            .await
+            .expect_err("a turn that won the thread refuses the revert");
+        assert_eq!(
+            refused.code(),
+            DeveloperSessionHostError::conflict("").code()
+        );
+        assert_eq!(
+            refused.message(),
+            "A turn is running in this thread; stop it before changing its files."
+        );
+    }
+
+    #[tokio::test]
+    async fn a_turn_cannot_start_while_its_threads_last_turn_is_still_recording() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        let finishing =
+            hold_for_finish(&host.thread_files(&thread.id), &host.workspace_files).await;
+
+        let refused = host
+            .start_turn(turn_params(
+                &thread.id,
+                "must wait for the last turn's checkpoint",
+            ))
+            .await
+            .expect_err("a turn still recording its checkpoint refuses the next one");
+
+        assert_eq!(
+            refused.code(),
+            DeveloperSessionHostError::conflict("").code()
+        );
+        assert!(
+            refused.message().contains("still being recorded"),
+            "{refused}"
+        );
+        assert!(host.running_turns.lock().await.is_empty());
+        drop(finishing);
+    }
+
+    #[tokio::test]
+    async fn a_revert_or_delete_waits_for_a_finishing_turn_to_record_its_checkpoint() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        let finishing =
+            hold_for_finish(&host.thread_files(&thread.id), &host.workspace_files).await;
+
+        assert!(
+            tokio::time::timeout(
+                std::time::Duration::from_millis(100),
+                host.revert_thread(ThreadRevertParams {
+                    thread_id: thread.id.clone(),
+                    turn_id: "turn-1".to_string(),
+                    preview: false,
+                    restore: ThreadRevertRestore::Both,
+                }),
+            )
+            .await
+            .is_err(),
+            "a revert waits for the after-checkpoint"
+        );
+        assert!(
+            tokio::time::timeout(
+                std::time::Duration::from_millis(100),
+                host.delete_thread(ThreadDeleteParams {
+                    thread_id: thread.id.clone(),
+                    discard_worktree_archives: false,
+                }),
+            )
+            .await
+            .is_err(),
+            "a delete waits for the after-checkpoint"
+        );
+        drop(finishing);
+        assert!(host.persisted_session_path(&thread.id).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn an_interrupted_turn_keeps_the_thread_until_it_is_reaped() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        let agent = host.load_agent(&thread.id).await.expect("agent");
+        // Holding the agent parks the interrupt mid-reap, after it released
+        // the claim, where it waits for the session to take its subagents.
+        let reaping = agent.clone().lock_owned().await;
+        host.running_turns
+            .lock()
+            .await
+            .insert(thread.id.clone(), idle_running_turn("turn-1"));
+
+        let interrupt = host.interrupt_turn(TurnInterruptParams {
+            thread_id: thread.id.clone(),
+            turn_id: "turn-1".to_string(),
+        });
+        let probe = async {
+            for _ in 0..200 {
+                if !host.running_turns.lock().await.contains_key(&thread.id) {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+            assert!(!host.running_turns.lock().await.contains_key(&thread.id));
+
+            let refused = tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                host.start_turn(turn_params(&thread.id, "must wait for the reap")),
+            )
+            .await
+            .expect("a start right after an interrupt is refused, not left waiting")
+            .expect_err("the interrupted turn still holds its thread");
+            assert!(
+                refused.message().contains("still being recorded"),
+                "{refused}"
+            );
+            assert!(
+                tokio::time::timeout(
+                    std::time::Duration::from_millis(100),
+                    host.revert_thread(ThreadRevertParams {
+                        thread_id: thread.id.clone(),
+                        turn_id: "turn-1".to_string(),
+                        preview: false,
+                        restore: ThreadRevertRestore::Both,
+                    }),
+                )
+                .await
+                .is_err(),
+                "a revert waits until the interrupted turn is reaped"
+            );
+            drop(reaping);
+        };
+        let (interrupted, ()) = tokio::join!(interrupt, probe);
+
+        interrupted.expect("interrupt");
+        assert!(host.thread_files(&thread.id).try_lock_owned().is_ok());
+        assert!(host.workspace_files.clone().try_write_owned().is_ok());
+    }
+
+    #[tokio::test]
+    async fn a_revert_is_refused_while_another_thread_runs_a_turn_in_the_same_folder() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        let other = host
+            .start_thread(
+                ThreadStartParams {
+                    model: Some("auto-premium".to_string()),
+                    provider: None,
+                    cwd: Some(workspace.path().display().to_string()),
+                    title: Some("Refactor the parser".to_string()),
+                },
+                AppServerClientInfo {
+                    name: "agi_vscode_test".to_string(),
+                    title: "VS Code test".to_string(),
+                    version: "0.0.0".to_string(),
+                },
+            )
+            .await
+            .expect("start the other thread");
+        host.running_turns
+            .lock()
+            .await
+            .insert(other.id.clone(), idle_running_turn("turn-other"));
+
+        let refused = host
+            .revert_thread(ThreadRevertParams {
+                thread_id: thread.id.clone(),
+                turn_id: "turn-1".to_string(),
+                preview: false,
+                restore: ThreadRevertRestore::Both,
+            })
+            .await
+            .expect_err("a turn in another thread of this folder refuses the revert");
+        assert_eq!(
+            refused.code(),
+            DeveloperSessionHostError::conflict("").code()
+        );
+        assert!(
+            refused.message().contains("\"Refactor the parser\""),
+            "{refused}"
+        );
+
+        let staged_back = host
+            .revert_checkpoint_sections(CheckpointSectionsParams {
+                thread_id: thread.id.clone(),
+                turn_id: "turn-1".to_string(),
+                sections: Vec::new(),
+                preview: false,
+            })
+            .await
+            .expect_err("a section revert is refused the same way");
+        assert!(
+            staged_back.message().contains("\"Refactor the parser\""),
+            "{staged_back}"
+        );
+    }
+
+    #[tokio::test]
+    async fn archives_of_a_thread_this_host_never_knew_are_not_discarded() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let workspace = tempdir().expect("workspace");
+        git_repo(workspace.path());
+        let store = tempdir().expect("store");
+        let (host, _thread) = managed_thread(workspace.path(), store.path()).await;
+        let foreign = "thread-of-another-host";
+        let archive = format!("refs/agiworkforce/worktree-archive/{foreign}/0a1b2c3d");
+        let git = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .current_dir(workspace.path())
+                .args(args)
+                .output()
+                .expect("git");
+            assert!(output.status.success(), "git {args:?}");
+            String::from_utf8(output.stdout).expect("utf8")
+        };
+        git(&["update-ref", &archive, "HEAD"]);
+
+        let refused = host
+            .delete_thread(ThreadDeleteParams {
+                thread_id: foreign.to_string(),
+                discard_worktree_archives: true,
+            })
+            .await
+            .expect_err("an unknown thread's archives must be left alone");
+
+        assert_eq!(refused.code(), -32004);
+        assert!(git(&["for-each-ref", "--format=%(refname)"]).contains(&archive));
+    }
+
+    #[tokio::test]
+    async fn a_discarding_delete_of_a_live_thread_deletes_it_first() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        let session_path = host
+            .persisted_session_path(&thread.id)
+            .await
+            .expect("session path");
+
+        host.delete_thread(ThreadDeleteParams {
+            thread_id: thread.id.clone(),
+            discard_worktree_archives: true,
+        })
+        .await
+        .expect("delete and discard in one call");
+
+        assert!(!session_path.exists());
+        assert!(!host.sessions.lock().await.contains_key(&thread.id));
     }
 
     #[tokio::test]
@@ -8495,5 +10851,483 @@ mod tests {
                 "{code:?} settled as {reason:?}, which is not a failure's stop reason"
             );
         }
+    }
+
+    fn git_repo(dir: &Path) {
+        let run = |args: &[&str]| {
+            let status = std::process::Command::new("git")
+                .current_dir(dir)
+                .args(args)
+                .status()
+                .expect("git");
+            assert!(status.success(), "git {args:?}");
+        };
+        run(&["init", "-q", "-b", "main"]);
+        run(&["config", "user.email", "test@example.invalid"]);
+        run(&["config", "user.name", "Test"]);
+        std::fs::write(dir.join("README.md"), "hello\n").unwrap();
+        run(&["add", "."]);
+        run(&["commit", "-q", "-m", "init"]);
+    }
+
+    #[tokio::test]
+    async fn output_pruned_during_a_later_turn_leaves_every_message_with_its_own_turn() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let workspace = tempdir().expect("workspace");
+        let root = workspace.path().canonicalize().expect("canonical");
+        git_repo(&root);
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(&root, store.path()).await;
+        let session = host.load_agent(&thread.id).await.expect("agent");
+        let result = |content: String| {
+            crate::models::Message::blocks(
+                "user",
+                vec![ContentBlock::ToolResult {
+                    tool_use_id: "call-1".to_string(),
+                    content,
+                    is_error: false,
+                }],
+            )
+        };
+        let mark_turn = |turn: u32| {
+            let session = session.clone();
+            let root = root.clone();
+            let thread_id = thread.id.clone();
+            async move {
+                let mark = review::conversation_mark(&session.lock().await.messages);
+                assert!(
+                    review::record_checkpoint(
+                        &root,
+                        &thread_id,
+                        &format!("turn-{turn}"),
+                        Phase::Before,
+                        Some(mark)
+                    )
+                    .await
+                );
+            }
+        };
+
+        mark_turn(1).await;
+        {
+            let mut agent = session.lock().await;
+            agent
+                .messages
+                .push(crate::models::Message::text("user", "ask 1"));
+            agent.messages.push(crate::models::Message::blocks(
+                "assistant",
+                vec![ContentBlock::ToolUse {
+                    id: "call-1".to_string(),
+                    name: "read_file".to_string(),
+                    input: serde_json::json!({ "path": "README.md" }),
+                }],
+            ));
+            agent.messages.push(result("x".repeat(8_000)));
+            agent
+                .messages
+                .push(crate::models::Message::text("assistant", "answer 1"));
+        }
+        mark_turn(2).await;
+        {
+            let mut agent = session.lock().await;
+            agent
+                .messages
+                .push(crate::models::Message::text("user", "ask 2"));
+            agent
+                .messages
+                .push(crate::models::Message::text("assistant", "answer 2"));
+        }
+        mark_turn(3).await;
+        {
+            // Turn 3's own send shortens turn 1's tool output and summarizes
+            // nothing, after the host has taken turn 3's mark.
+            let mut agent = session.lock().await;
+            let before = agent.messages.clone();
+            let output = before
+                .iter()
+                .position(|message| {
+                    matches!(&message.content, models::MessageContent::Blocks(blocks)
+                        if blocks.iter().any(|block| matches!(block, ContentBlock::ToolResult { .. })))
+                })
+                .expect("turn 1's tool result");
+            agent.messages[output] =
+                result("[Older tool output pruned during context compaction]\nxxxx".to_string());
+            let after = agent.messages.clone();
+            if let Some(stored) = agent.managed_session.as_mut() {
+                stored.record_pruning(&before, &after);
+            }
+            agent
+                .messages
+                .push(crate::models::Message::text("user", "ask 3"));
+            agent
+                .messages
+                .push(crate::models::Message::text("assistant", "answer 3"));
+            agent.persist_managed_session().expect("persist");
+        }
+
+        let labels: Vec<Option<String>> = host
+            .read_thread(ThreadIdParams {
+                thread_id: thread.id.clone(),
+            })
+            .await
+            .expect("read")
+            .messages
+            .into_iter()
+            .skip_while(|message| message.text != "ask 1")
+            .map(|message| message.turn_id)
+            .collect();
+        let own = [1, 1, 1, 1, 2, 2, 3, 3].map(|turn| format!("turn-{turn}"));
+        assert_eq!(labels.len(), own.len());
+        for (index, (label, own)) in labels.iter().zip(&own).enumerate() {
+            assert!(
+                label.as_ref().is_none_or(|label| label == own),
+                "message {index} of {own} was labelled {label:?}, so rewinding it would cut another turn"
+            );
+        }
+        assert_eq!(
+            labels[6].as_deref(),
+            Some("turn-3"),
+            "the turn whose send pruned an earlier one's output lost its own mark"
+        );
+        assert_eq!(labels[4].as_deref(), Some("turn-2"));
+    }
+
+    #[tokio::test]
+    async fn a_rewind_under_a_summary_shows_the_turns_before_it_in_their_own_words() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let workspace = tempdir().expect("workspace");
+        let root = workspace.path().canonicalize().expect("canonical");
+        git_repo(&root);
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(&root, store.path()).await;
+        let session = host.load_agent(&thread.id).await.expect("agent");
+        for turn in 1..=4 {
+            let turn_id = format!("turn-{turn}");
+            let mark = review::conversation_mark(&session.lock().await.messages);
+            assert!(
+                review::record_checkpoint(&root, &thread.id, &turn_id, Phase::Before, Some(mark))
+                    .await
+            );
+            {
+                let mut agent = session.lock().await;
+                agent
+                    .messages
+                    .push(crate::models::Message::text("user", format!("ask {turn}")));
+                agent.messages.push(crate::models::Message::text(
+                    "assistant",
+                    format!("answer {turn}"),
+                ));
+                agent.persist_managed_session().expect("persist");
+            }
+            assert!(
+                review::record_checkpoint(&root, &thread.id, &turn_id, Phase::After, None).await
+            );
+        }
+        {
+            let mut agent = session.lock().await;
+            let before = agent.messages.clone();
+            let keep = before
+                .iter()
+                .position(|message| message.text_content() == "ask 3")
+                .expect("turn 3");
+            let mut after = before[..keep].to_vec();
+            after.push(crate::models::Message::text(
+                "assistant",
+                "a summary of turn 3",
+            ));
+            after.extend_from_slice(&before[before.len() - 2..]);
+            agent
+                .managed_session
+                .as_mut()
+                .expect("managed session")
+                .record_compaction_keeping(&before, &after, keep);
+            agent.messages = after;
+            agent.persist_managed_session().expect("persist");
+        }
+        let shown = || async {
+            host.read_thread(ThreadIdParams {
+                thread_id: thread.id.clone(),
+            })
+            .await
+            .expect("read")
+            .messages
+            .into_iter()
+            .map(|message| (message.text, message.turn_id))
+            .collect::<Vec<_>>()
+        };
+        let summarized = shown().await;
+        assert_eq!(
+            summarized
+                .iter()
+                .map(|(text, _)| text.as_str())
+                .collect::<Vec<_>>(),
+            ["ask 1", "answer 1", "ask 2", "answer 2", "ask 3", "answer 3", "ask 4", "answer 4"],
+            "a summary from turn 3 takes nothing out of the transcript"
+        );
+        assert_eq!(summarized[2].1.as_deref(), Some("turn-2"));
+        assert_eq!(
+            summarized[4].1, None,
+            "a summarized turn is no longer one to rewind to"
+        );
+
+        host.revert_thread(ThreadRevertParams {
+            thread_id: thread.id.clone(),
+            turn_id: "turn-3".to_string(),
+            preview: false,
+            restore: ThreadRevertRestore::Conversation,
+        })
+        .await
+        .expect("rewind to the end of turn 2");
+
+        assert_eq!(
+            shown()
+                .await
+                .iter()
+                .map(|(text, _)| text.as_str())
+                .collect::<Vec<_>>(),
+            ["ask 1", "answer 1", "ask 2", "answer 2"],
+            "turns 1 and 2 in their original wording, and nothing after"
+        );
+    }
+
+    #[tokio::test]
+    async fn worktrees_are_made_listed_applied_and_archived_through_the_host() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let workspace = tempdir().expect("workspace");
+        git_repo(workspace.path());
+        let store = tempdir().expect("store");
+        let root = tempdir().expect("worktrees");
+        let host = boundary_host(workspace.path(), store.path())
+            .with_worktrees_root(root.path().to_path_buf());
+        assert!(host.capabilities().worktrees);
+        assert!(host.capabilities().checkpoints);
+
+        let created = host
+            .create_managed_worktree(ManagedWorktreeCreateParams {
+                start: agiworkforce_protocol::developer_session::WorktreeStartPoint::Ref {
+                    name: "HEAD".to_string(),
+                },
+                label: None,
+            })
+            .await
+            .expect("create");
+        let checkout = PathBuf::from(&created.worktree.path);
+        assert!(checkout.join("README.md").is_file());
+        assert!(created.worktree.thread_id.is_none());
+
+        std::fs::write(checkout.join("README.md"), "from the worktree\n").unwrap();
+        let preview = host
+            .apply_worktree_to_local(WorktreeApplyParams {
+                worktree_id: created.worktree.id.clone(),
+                preview: true,
+            })
+            .await
+            .expect("preview");
+        assert_eq!(preview.applied, vec!["README.md".to_string()]);
+        assert_eq!(
+            std::fs::read_to_string(workspace.path().join("README.md")).unwrap(),
+            "hello\n"
+        );
+        host.apply_worktree_to_local(WorktreeApplyParams {
+            worktree_id: created.worktree.id.clone(),
+            preview: false,
+        })
+        .await
+        .expect("apply");
+        assert_eq!(
+            std::fs::read_to_string(workspace.path().join("README.md")).unwrap(),
+            "from the worktree\n"
+        );
+
+        assert_eq!(
+            host.list_managed_worktrees()
+                .await
+                .expect("list")
+                .worktrees
+                .len(),
+            1
+        );
+        let archived = host
+            .delete_worktree(WorktreeIdParams {
+                worktree_id: created.worktree.id.clone(),
+            })
+            .await
+            .expect("delete");
+        assert!(archived.snapshot_ref.ends_with(&created.worktree.id));
+        assert!(!checkout.exists());
+        assert!(host
+            .list_managed_worktrees()
+            .await
+            .expect("list")
+            .worktrees
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_worktree_belongs_to_one_session_and_rewinds_files_and_conversation_together() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let workspace = tempdir().expect("workspace");
+        git_repo(workspace.path());
+        let store = tempdir().expect("store");
+        let root = tempdir().expect("worktrees");
+        let main_host = boundary_host(workspace.path(), store.path())
+            .with_worktrees_root(root.path().to_path_buf());
+        let created = main_host
+            .create_managed_worktree(ManagedWorktreeCreateParams {
+                start: agiworkforce_protocol::developer_session::WorktreeStartPoint::WorkingTree,
+                label: Some("rewind".to_string()),
+            })
+            .await
+            .expect("create");
+        let checkout = PathBuf::from(&created.worktree.path);
+
+        let (host, thread) = managed_thread(&checkout, store.path()).await;
+        let listed = main_host.list_managed_worktrees().await.expect("list");
+        assert_eq!(
+            listed.worktrees[0].thread_id.as_deref(),
+            Some(thread.id.as_str())
+        );
+        assert!(listed.worktrees[0].active);
+        let second = host
+            .start_thread(
+                ThreadStartParams {
+                    model: Some("auto-premium".to_string()),
+                    provider: None,
+                    cwd: Some(checkout.display().to_string()),
+                    title: None,
+                },
+                AppServerClientInfo {
+                    name: "agi_vscode_test".to_string(),
+                    title: "VS Code test".to_string(),
+                    version: "0.0.0".to_string(),
+                },
+            )
+            .await
+            .expect_err("a claimed worktree takes no second session");
+        assert!(second.message().contains(&thread.id));
+
+        let session = host.load_agent(&thread.id).await.expect("agent");
+        let mark = review::conversation_mark(&session.lock().await.messages);
+        assert!(
+            review::record_checkpoint(&checkout, &thread.id, "turn-1", Phase::Before, Some(mark))
+                .await
+        );
+        std::fs::write(checkout.join("README.md"), "changed by a shell command\n").unwrap();
+        {
+            let mut agent = session.lock().await;
+            agent
+                .messages
+                .push(crate::models::Message::text("user", "change it"));
+            agent
+                .messages
+                .push(crate::models::Message::text("assistant", "changed"));
+            agent.persist_managed_session().expect("persist");
+        }
+        assert!(
+            review::record_checkpoint(&checkout, &thread.id, "turn-1", Phase::After, None).await
+        );
+
+        let checkpoints = host
+            .list_turn_checkpoints(ThreadIdParams {
+                thread_id: thread.id.clone(),
+            })
+            .await
+            .expect("checkpoints");
+        assert!(checkpoints.available);
+        assert_eq!(checkpoints.turns.len(), 1);
+        assert!(checkpoints.turns[0].rewindable);
+        assert_eq!(checkpoints.turns[0].files[0].path, "README.md");
+        let read = host
+            .read_thread(ThreadIdParams {
+                thread_id: thread.id.clone(),
+            })
+            .await
+            .expect("read");
+        let asked = read
+            .messages
+            .iter()
+            .find(|message| message.text == "change it")
+            .expect("the turn's prompt is in the transcript");
+        assert_eq!(asked.turn_id.as_deref(), Some("turn-1"));
+
+        let code_only = host
+            .revert_thread(ThreadRevertParams {
+                thread_id: thread.id.clone(),
+                turn_id: "turn-1".to_string(),
+                preview: true,
+                restore: ThreadRevertRestore::Code,
+            })
+            .await
+            .expect("code preview");
+        assert_eq!(code_only.files, vec!["README.md".to_string()]);
+        assert_eq!(code_only.messages_removed, 0);
+        let conversation_only = host
+            .revert_thread(ThreadRevertParams {
+                thread_id: thread.id.clone(),
+                turn_id: "turn-1".to_string(),
+                preview: true,
+                restore: ThreadRevertRestore::Conversation,
+            })
+            .await
+            .expect("conversation preview");
+        assert!(conversation_only.files.is_empty());
+        assert_eq!(conversation_only.messages_removed, 2);
+
+        let preview = host
+            .revert_thread(ThreadRevertParams {
+                thread_id: thread.id.clone(),
+                turn_id: "turn-1".to_string(),
+                preview: true,
+                restore: ThreadRevertRestore::Both,
+            })
+            .await
+            .expect("preview");
+        assert_eq!(preview.files, vec!["README.md".to_string()]);
+        assert_eq!(preview.messages_removed, 2);
+        assert!(preview.recovery_ref.is_none());
+
+        let rewound = host
+            .revert_thread(ThreadRevertParams {
+                thread_id: thread.id.clone(),
+                turn_id: "turn-1".to_string(),
+                preview: false,
+                restore: ThreadRevertRestore::Both,
+            })
+            .await
+            .expect("rewind");
+        assert!(rewound.recovery_ref.is_some());
+        assert_eq!(
+            std::fs::read_to_string(checkout.join("README.md")).unwrap(),
+            "hello\n"
+        );
+        let stored = host.stored_session(&thread.id).await.expect("stored");
+        assert_eq!(stored.messages.len(), session.lock().await.messages.len());
+        assert!(!stored
+            .messages
+            .iter()
+            .any(|message| message.text_content() == "change it"));
+
+        host.delete_thread(ThreadDeleteParams {
+            thread_id: thread.id.clone(),
+            discard_worktree_archives: false,
+        })
+        .await
+        .expect("delete");
+        let refs = std::process::Command::new("git")
+            .current_dir(&checkout)
+            .args(["for-each-ref", "--format=%(refname)", "refs/agiworkforce"])
+            .output()
+            .expect("git");
+        let refs = String::from_utf8_lossy(&refs.stdout);
+        assert!(!refs.contains(&thread.id), "{refs}");
+        host.shutdown().await.expect("shutdown");
+        assert!(
+            !main_host
+                .list_managed_worktrees()
+                .await
+                .expect("list")
+                .worktrees[0]
+                .active
+        );
     }
 }

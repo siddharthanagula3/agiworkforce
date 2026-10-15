@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use super::hooks::{glob_match, parse_event_name, Hook, HookSource, HooksConfig};
+use super::hooks::{glob_match, parse_event_name, validate_hook, Hook, HookSource, HooksConfig};
 
 pub const MANAGED_SETTINGS_FILE: &str = "managed-settings.json";
 
@@ -203,6 +203,9 @@ fn validate_policy(mut policy: ManagedHookPolicy) -> Result<ManagedHookPolicy, S
         let canonical = parse_event_name(&event)
             .map_err(|error| error.to_string())?
             .to_string();
+        for hook in &entries {
+            validate_hook(&event, hook)?;
+        }
         let entries: Vec<Hook> = entries
             .into_iter()
             .map(|mut hook| {
@@ -247,7 +250,10 @@ pub fn apply_managed_hook_policy(
 
     let mut merged: HashMap<String, Vec<Hook>> = policy.hooks.clone();
     if policy.managed_hooks_only {
-        return HooksConfig { hooks: merged };
+        return HooksConfig {
+            hooks: merged,
+            sandbox: config.sandbox,
+        };
     }
     let mut refused = 0usize;
     for (event, hooks) in config.hooks {
@@ -255,9 +261,9 @@ pub fn apply_managed_hook_policy(
             let permitted = match hook.source {
                 HookSource::Managed => true,
                 HookSource::Plugin => {
-                    policy.allow_plugin_hooks && command_allowed(policy, &hook.command)
+                    policy.allow_plugin_hooks && command_allowed(policy, &hook.display_command())
                 }
-                HookSource::User => command_allowed(policy, &hook.command),
+                HookSource::User => command_allowed(policy, &hook.display_command()),
             };
             if permitted {
                 merged.entry(event.clone()).or_default().push(hook);
@@ -273,7 +279,10 @@ pub fn apply_managed_hook_policy(
             refused
         );
     }
-    HooksConfig { hooks: merged }
+    HooksConfig {
+        hooks: merged,
+        sandbox: config.sandbox,
+    }
 }
 
 #[cfg(test)]
@@ -302,7 +311,10 @@ mod tests {
                 hook("./scripts/plugin.sh", HookSource::Plugin),
             ],
         );
-        HooksConfig { hooks }
+        HooksConfig {
+            hooks,
+            sandbox: None,
+        }
     }
 
     fn write_policy(json: &str) -> (tempfile::TempDir, ManagedHookPolicyState) {
@@ -352,6 +364,46 @@ mod tests {
                 ("./scripts/lint.sh".to_string(), HookSource::User),
             ]
         );
+    }
+
+    #[test]
+    fn the_allowlist_reads_a_hook_together_with_its_arguments() {
+        let (_dir, state) = write_policy(r#"{"hooks":{"allowedCommands": ["sh ./scripts/*"]}}"#);
+        let with_args = |script: &str| {
+            let mut entry = hook("sh", HookSource::User);
+            entry.args = vec![script.to_string()];
+            entry
+        };
+        let mut hooks = HashMap::new();
+        hooks.insert(
+            "PreToolUse".to_string(),
+            vec![
+                with_args("./scripts/lint.sh"),
+                with_args("/tmp/other.sh"),
+                hook("sh", HookSource::User),
+            ],
+        );
+        let config = apply_managed_hook_policy(
+            HooksConfig {
+                hooks,
+                sandbox: None,
+            },
+            &state,
+        );
+        let kept = &config.hooks["PreToolUse"];
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].args, vec!["./scripts/lint.sh".to_string()]);
+    }
+
+    #[test]
+    fn a_managed_hook_that_could_never_fire_makes_the_policy_invalid() {
+        let (_dir, state) = write_policy(
+            r#"{"hooks":{"hooks":{"Stop":[{"command":"/opt/corp/stop.sh","matcher":"("}]}}}"#,
+        );
+        let ManagedHookPolicyState::Invalid(error) = state else {
+            panic!("a matcher that is no regular expression must not load");
+        };
+        assert!(error.contains("not a regular expression"), "{error}");
     }
 
     #[test]

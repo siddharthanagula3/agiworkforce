@@ -63,6 +63,10 @@ fn export_typescript_bindings() {
         .expect("export developer-session thread id graph");
     agiworkforce_protocol::developer_session::ThreadForkParams::export_all_to(dir)
         .expect("export developer-session thread fork graph");
+    agiworkforce_protocol::developer_session::ThreadCompactParams::export_all_to(dir)
+        .expect("export developer-session thread compact params graph");
+    agiworkforce_protocol::developer_session::ThreadCompactResponse::export_all_to(dir)
+        .expect("export developer-session thread compact response graph");
     agiworkforce_protocol::developer_session::ThreadHandoffParams::export_all_to(dir)
         .expect("export developer-session handoff params graph");
     agiworkforce_protocol::developer_session::ThreadHandoffAcceptParams::export_all_to(dir)
@@ -81,6 +85,10 @@ fn export_typescript_bindings() {
         .expect("export developer-session turn ended graph");
     agiworkforce_protocol::developer_session::ApprovalResponseParams::export_all_to(dir)
         .expect("export developer-session approval graph");
+    agiworkforce_protocol::developer_session::UserInputRequestedParams::export_all_to(dir)
+        .expect("export developer-session user input request graph");
+    agiworkforce_protocol::developer_session::UserInputResponseParams::export_all_to(dir)
+        .expect("export developer-session user input response graph");
     agiworkforce_protocol::developer_session::AcknowledgedResponse::export_all_to(dir)
         .expect("export developer-session acknowledgement graph");
     // Session lifecycle and concurrency: `thread/reconnect`, the writer lease
@@ -130,6 +138,12 @@ fn export_typescript_bindings() {
         .expect("export developer-session mcp login params graph");
     agiworkforce_protocol::developer_session::McpLoginResponse::export_all_to(dir)
         .expect("export developer-session mcp login graph");
+    agiworkforce_protocol::developer_session::McpApprovalReadParams::export_all_to(dir)
+        .expect("export developer-session mcp approval read params graph");
+    agiworkforce_protocol::developer_session::McpApprovalRequest::export_all_to(dir)
+        .expect("export developer-session mcp approval request graph");
+    agiworkforce_protocol::developer_session::McpApprovalGrantParams::export_all_to(dir)
+        .expect("export developer-session mcp approval grant params graph");
     agiworkforce_protocol::developer_session::HookListResponse::export_all_to(dir)
         .expect("export developer-session hook graph");
     agiworkforce_protocol::developer_session::SettingsReadResponse::export_all_to(dir)
@@ -237,4 +251,51 @@ fn export_typescript_bindings() {
         .expect("export session handoff admission graph");
     agiworkforce_protocol::developer_session::HandoffRefusal::export_all_to(dir)
         .expect("export session handoff refusal graph");
+
+    // Worktrees and per-turn checkpoints. Every params and response type is
+    // its own root: no envelope carries them as typed params.
+    agiworkforce_protocol::developer_session::ManagedWorktreeCreateParams::export_all_to(dir)
+        .expect("export developer-session worktree create params graph");
+    agiworkforce_protocol::developer_session::WorktreeCreateResponse::export_all_to(dir)
+        .expect("export developer-session worktree create graph");
+    agiworkforce_protocol::developer_session::ManagedWorktreeListResponse::export_all_to(dir)
+        .expect("export developer-session worktree list graph");
+    agiworkforce_protocol::developer_session::WorktreeIdParams::export_all_to(dir)
+        .expect("export developer-session worktree id graph");
+    agiworkforce_protocol::developer_session::WorktreeKeepParams::export_all_to(dir)
+        .expect("export developer-session worktree keep params graph");
+    agiworkforce_protocol::developer_session::WorktreeKeepResponse::export_all_to(dir)
+        .expect("export developer-session worktree keep graph");
+    agiworkforce_protocol::developer_session::WorktreePinParams::export_all_to(dir)
+        .expect("export developer-session worktree pin graph");
+    agiworkforce_protocol::developer_session::WorktreeApplyParams::export_all_to(dir)
+        .expect("export developer-session worktree apply params graph");
+    agiworkforce_protocol::developer_session::WorktreeApplyResponse::export_all_to(dir)
+        .expect("export developer-session worktree apply graph");
+    agiworkforce_protocol::developer_session::WorktreeArchive::export_all_to(dir)
+        .expect("export developer-session worktree archive graph");
+    agiworkforce_protocol::developer_session::WorktreeSetupRunParams::export_all_to(dir)
+        .expect("export developer-session worktree setup params graph");
+    agiworkforce_protocol::developer_session::WorktreeSetupFinishedNotification::export_all_to(dir)
+        .expect("export developer-session worktree setup finished graph");
+    agiworkforce_protocol::developer_session::WorktreeSetupLogNotification::export_all_to(dir)
+        .expect("export developer-session worktree setup log graph");
+    agiworkforce_protocol::developer_session::CheckpointListResponse::export_all_to(dir)
+        .expect("export developer-session checkpoint list graph");
+    agiworkforce_protocol::developer_session::CheckpointTurnParams::export_all_to(dir)
+        .expect("export developer-session checkpoint turn params graph");
+    agiworkforce_protocol::developer_session::CheckpointDiffResponse::export_all_to(dir)
+        .expect("export developer-session checkpoint diff graph");
+    agiworkforce_protocol::developer_session::CheckpointSectionsParams::export_all_to(dir)
+        .expect("export developer-session checkpoint sections params graph");
+    agiworkforce_protocol::developer_session::CheckpointSectionsResponse::export_all_to(dir)
+        .expect("export developer-session checkpoint sections graph");
+    agiworkforce_protocol::developer_session::ThreadRevertParams::export_all_to(dir)
+        .expect("export developer-session thread revert params graph");
+    agiworkforce_protocol::developer_session::ThreadRevertResponse::export_all_to(dir)
+        .expect("export developer-session thread revert graph");
+    agiworkforce_protocol::developer_session::ThreadDeleteParams::export_all_to(dir)
+        .expect("export developer-session thread delete params graph");
+    agiworkforce_protocol::developer_session::ThreadDeleteResponse::export_all_to(dir)
+        .expect("export developer-session thread delete graph");
 }

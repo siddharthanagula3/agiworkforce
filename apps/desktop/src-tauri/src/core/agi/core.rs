@@ -1,7 +1,6 @@
 use super::*;
-use crate::automation::AutomationService;
 use crate::core::agent::ChangeTracker;
-use crate::core::agi::planner::Plan;
+use crate::core::agi::planner::{Plan, WithheldTools};
 use crate::core::llm::LLMRouter;
 use crate::sys::account::{
     capture_managed_auth_boundary, current_managed_auth_boundary, scope_managed_auth_boundary,
@@ -54,6 +53,22 @@ fn goal_iteration_limit(goal: &Goal) -> usize {
             _ => None,
         })
         .unwrap_or(DEFAULT_MAX_ITERATIONS)
+}
+
+fn goal_time_limit(goal: &Goal) -> Duration {
+    const DEFAULT_MAX_DURATION: Duration = Duration::from_secs(300);
+
+    goal.constraints
+        .iter()
+        .find_map(|constraint| match &constraint.value {
+            ConstraintValue::Custom { key, value } if key == "max_duration_secs" => value
+                .parse::<u64>()
+                .ok()
+                .filter(|seconds| *seconds > 0)
+                .map(Duration::from_secs),
+            _ => None,
+        })
+        .unwrap_or(DEFAULT_MAX_DURATION)
 }
 
 fn managed_auth_boundary_for_goal(goal: &Goal) -> Result<Option<ManagedAuthBoundary>> {
@@ -135,6 +150,17 @@ impl Default for PlanStepRuntimeState {
     }
 }
 
+/// The undo state's tracker, so file edits a goal makes appear in the rewind
+/// timeline and in Undo alongside the chat loop's edits.
+fn shared_change_tracker(app_handle: &Option<tauri::AppHandle>) -> Arc<ChangeTracker> {
+    use tauri::Manager;
+    app_handle
+        .as_ref()
+        .and_then(|app| app.try_state::<crate::sys::commands::undo::UndoState>())
+        .map(|state| state.change_tracker.clone())
+        .unwrap_or_else(|| Arc::new(ChangeTracker::new()))
+}
+
 pub struct AGICore {
     config: AGIConfig,
     capabilities: AGICapabilities,
@@ -145,7 +171,6 @@ pub struct AGICore {
     executor: Arc<AGIExecutor>,
     learning: Arc<LearningSystem>,
     router: Arc<RwLock<LLMRouter>>,
-    automation: Arc<AutomationService>,
     // Bug #36: std::sync::Mutex used here because AGICore is constructed outside async
     // context AND several sync methods (get_goal_status, list_goals, cleanup_goal) access
     // these fields. Migrating to tokio::sync::Mutex would require making those methods
@@ -171,18 +196,31 @@ pub struct AGICore {
     stop_signal: Arc<AtomicBool>,
     pause_signal: Arc<AtomicBool>,
     pub(crate) app_handle: Option<tauri::AppHandle>,
-    process_reasoning: Option<Arc<ProcessReasoning>>,
-    process_ontology: Option<Arc<ProcessOntology>>,
-    outcome_tracker: Option<Arc<OutcomeTracker>>,
     /// Reflection engine for multi-turn agentic reasoning
     reflection_engine: Option<Arc<ReflectionEngine>>,
 }
 
 impl AGICore {
+    /// The registry tools a capability switched off in Settings rules out
+    /// right now, for the planner, which holds no app state of its own.
+    fn withheld_tools(&self) -> WithheldTools {
+        use tauri::Manager;
+
+        let Some(switches) = self
+            .app_handle
+            .as_ref()
+            .and_then(|app| app.try_state::<crate::sys::commands::capabilities::CapabilityState>())
+        else {
+            return WithheldTools::default();
+        };
+        WithheldTools::among(self.tool_registry.list_tools(), |tool| {
+            switches.tool_refusal_now(tool)
+        })
+    }
+
     pub fn new(
         config: AGIConfig,
         router: Arc<RwLock<LLMRouter>>,
-        automation: Arc<AutomationService>,
         app_handle: Option<tauri::AppHandle>,
     ) -> Result<Self> {
         let tool_registry = Arc::new(ToolRegistry::new()?);
@@ -201,23 +239,19 @@ impl AGICore {
             knowledge_base.clone(),
         )?);
 
-        // Create reflection engine EARLY so we can pass it to executor
         let reflection_engine = Arc::new(ReflectionEngine::new(
             router.clone(),
             knowledge_base.clone(),
             learning.clone(),
         )?);
 
-        // Create a shared ChangeTracker for undo capability
-        let change_tracker = Arc::new(ChangeTracker::new());
+        let change_tracker = shared_change_tracker(&app_handle);
 
         let executor = Arc::new(AGIExecutor::new(
             tool_registry.clone(),
             resource_manager.clone(),
-            automation.clone(),
             router.clone(),
             app_handle.clone(),
-            Some(reflection_engine.clone()),
             Some(change_tracker),
         )?);
 
@@ -233,7 +267,6 @@ impl AGICore {
             executor,
             learning,
             router,
-            automation,
             active_goals: Arc::new(Mutex::new(Vec::new())),
             execution_contexts: Arc::new(Mutex::new(HashMap::new())),
             task_states: Arc::new(Mutex::new(HashMap::new())),
@@ -242,9 +275,6 @@ impl AGICore {
             stop_signal: Arc::new(AtomicBool::new(false)),
             pause_signal: Arc::new(AtomicBool::new(false)),
             app_handle,
-            process_reasoning: None,
-            process_ontology: None,
-            outcome_tracker: None,
             reflection_engine: Some(reflection_engine),
         })
     }
@@ -257,92 +287,8 @@ impl AGICore {
         Arc::clone(&self.knowledge_base)
     }
 
-    pub fn with_process_reasoning(
-        config: AGIConfig,
-        router: Arc<RwLock<LLMRouter>>,
-        automation: Arc<AutomationService>,
-        app_handle: Option<tauri::AppHandle>,
-        db_path: String,
-    ) -> Result<Self> {
-        let tool_registry = Arc::new(ToolRegistry::new()?);
-        let knowledge_base = Arc::new(KnowledgeBase::new(config.knowledge_memory_mb)?);
-        let resource_manager = Arc::new(ResourceManager::new(config.resource_limits.clone())?);
-
-        let process_reasoning = Arc::new(ProcessReasoning::new(router.clone())?);
-        let process_ontology = Arc::new(ProcessOntology::new(db_path.clone())?);
-        let outcome_tracker = Arc::new(OutcomeTracker::new(db_path)?);
-
-        let planner = Arc::new(AGIPlanner::with_process_reasoning(
-            router.clone(),
-            tool_registry.clone(),
-            knowledge_base.clone(),
-            process_reasoning.clone(),
-            process_ontology.clone(),
-        )?);
-
-        // Create a shared ChangeTracker for undo capability
-        let change_tracker = Arc::new(ChangeTracker::new());
-
-        // Initialize learning system first
-        let learning = Arc::new(LearningSystem::new(
-            config.enable_learning,
-            config.enable_self_improvement,
-        )?);
-
-        // Create reflection engine EARLY
-        let reflection_engine = Arc::new(ReflectionEngine::new(
-            router.clone(),
-            knowledge_base.clone(),
-            learning.clone(),
-        )?);
-
-        let encoder = crate::core::agi::executor::AGIExecutor::with_process_reasoning(
-            tool_registry.clone(),
-            resource_manager.clone(),
-            automation.clone(),
-            router.clone(),
-            app_handle.clone(),
-            process_reasoning.clone(),
-            outcome_tracker.clone(),
-            Some(reflection_engine.clone()),
-            Some(change_tracker),
-        );
-
-        let executor = Arc::new(encoder?);
-
-        // learning already initialized above
-
-        tool_registry.register_all_tools()?;
-
-        // Reflection engine already created above
-
-        Ok(Self {
-            config,
-            capabilities: AGICapabilities::default(),
-            tool_registry,
-            knowledge_base,
-            resource_manager,
-            planner,
-            executor,
-            learning,
-            router,
-            automation,
-            active_goals: Arc::new(Mutex::new(Vec::new())),
-            execution_contexts: Arc::new(Mutex::new(HashMap::new())),
-            task_states: Arc::new(Mutex::new(HashMap::new())),
-            task_history: Arc::new(Mutex::new(VecDeque::new())),
-            goal_handles: Arc::new(Mutex::new(HashMap::new())),
-            stop_signal: Arc::new(AtomicBool::new(false)),
-            pause_signal: Arc::new(AtomicBool::new(false)),
-            app_handle,
-            process_reasoning: Some(process_reasoning),
-            process_ontology: Some(process_ontology),
-            outcome_tracker: Some(outcome_tracker),
-            reflection_engine: Some(reflection_engine),
-        })
-    }
-
     fn emit_event(&self, event: &str, payload: serde_json::Value) {
+        crate::ui::hooks::lifecycle::agent_event(event, &payload);
         if let Some(ref app) = self.app_handle {
             if let Err(e) = app.emit(event, payload) {
                 tracing::warn!("Failed to emit event {}: {}", event, e);
@@ -620,7 +566,7 @@ impl AGICore {
             tracing::info!("[AGI] Generating {} parallel plans", num_agents);
             let plans = self
                 .planner
-                .create_parallel_plans(&goal, &context, num_agents)
+                .create_parallel_plans(&goal, &context, num_agents, &self.withheld_tools())
                 .await?;
 
             self.emit_event(
@@ -758,7 +704,7 @@ impl AGICore {
         &self,
         goal: Goal,
     ) -> Result<crate::core::swarm::SwarmResult> {
-        use crate::core::swarm::{SwarmConfig, SwarmOrchestrator};
+        use crate::core::swarm::{ActiveSwarmRun, SwarmConfig, SwarmOrchestrator};
 
         tracing::info!("[AGI] Swarm goal submitted: {}", goal.description);
         self.transition_task_state(
@@ -790,33 +736,41 @@ impl AGICore {
         };
 
         // Create swarm orchestrator
-        let orchestrator = match SwarmOrchestrator::new(
-            config,
-            self.router.clone(),
-            self.automation.clone(),
-            self.app_handle.clone(),
-        ) {
-            Ok(orchestrator) => orchestrator,
-            Err(error) => {
-                let error = anyhow::anyhow!("Failed to create swarm orchestrator: {}", error);
-                self.transition_task_state(
-                    &goal.id,
-                    AgentTaskState::Failed,
-                    format!("Swarm initialization failed: {error}"),
-                );
-                self.emit_event(
-                    "agi:goal:error",
-                    json!({
-                        "goal_id": goal.id,
-                        "error": error.to_string(),
-                    }),
-                );
-                return Err(error);
-            }
-        };
+        let orchestrator =
+            match SwarmOrchestrator::new(config, self.router.clone(), self.app_handle.clone()) {
+                Ok(orchestrator) => orchestrator,
+                Err(error) => {
+                    let error = anyhow::anyhow!("Failed to create swarm orchestrator: {}", error);
+                    self.transition_task_state(
+                        &goal.id,
+                        AgentTaskState::Failed,
+                        format!("Swarm initialization failed: {error}"),
+                    );
+                    self.emit_event(
+                        "agi:goal:error",
+                        json!({
+                            "goal_id": goal.id,
+                            "error": error.to_string(),
+                        }),
+                    );
+                    return Err(error);
+                }
+            };
 
-        // Execute the goal using swarm
-        let result = match orchestrator.execute_swarm_task(goal.clone()).await {
+        let orchestrator = Arc::new(orchestrator);
+        let _active_run = ActiveSwarmRun::track(&goal.id, orchestrator.clone());
+
+        let outcome = orchestrator.execute_swarm_task(goal.clone()).await;
+        if orchestrator.stop_requested() {
+            self.transition_task_state(
+                &goal.id,
+                AgentTaskState::Cancelled,
+                "Swarm work was cancelled.",
+            );
+            return Err(anyhow::anyhow!("Swarm work was cancelled"));
+        }
+
+        let result = match outcome {
             Ok(result) => result,
             Err(error) => {
                 let error = anyhow::anyhow!("Swarm execution failed: {}", error);
@@ -847,6 +801,7 @@ impl AGICore {
                 "speedup_ratio": result.speedup_ratio,
                 "critical_path_length": result.critical_path_length,
                 "max_parallelism": result.max_parallelism,
+                "summary": result.summary,
                 "error": if result.success { None } else { Some(result.summary.clone()) },
             }),
         );
@@ -1000,7 +955,7 @@ impl AGICore {
         self.transition_task_state(&goal_id, AgentTaskState::Running, "Agent started working.");
 
         let max_iterations = goal_iteration_limit(&context.goal);
-        let max_duration = Duration::from_secs(300); // 5 minute absolute timeout
+        let max_duration = goal_time_limit(&context.goal);
         let start_time = std::time::Instant::now();
         let mut iteration = 0;
         let mut last_reflection: Option<reflection::ReflectionInsight> = None;
@@ -1142,7 +1097,10 @@ impl AGICore {
             }
 
             // Create plan, potentially informed by previous reflection
-            let mut plan = self.planner.create_plan(&context.goal, &context).await?;
+            let mut plan = self
+                .planner
+                .create_plan(&context.goal, &context, &self.withheld_tools())
+                .await?;
 
             tracing::info!("[AGI] Plan created with {} steps", plan.steps.len());
 
@@ -1707,7 +1665,6 @@ impl AGICore {
             executor: self.executor.clone(),
             learning: self.learning.clone(),
             router: self.router.clone(),
-            automation: self.automation.clone(),
             active_goals: self.active_goals.clone(),
             execution_contexts: self.execution_contexts.clone(),
             task_states: self.task_states.clone(),
@@ -1716,9 +1673,6 @@ impl AGICore {
             stop_signal: self.stop_signal.clone(),
             pause_signal: self.pause_signal.clone(),
             app_handle: None,
-            process_reasoning: self.process_reasoning.clone(),
-            process_ontology: self.process_ontology.clone(),
-            outcome_tracker: self.outcome_tracker.clone(),
             reflection_engine: self.reflection_engine.clone(),
         }
     }
@@ -1934,6 +1888,42 @@ mod tests {
         };
 
         assert_eq!(goal_iteration_limit(&goal), 12);
+    }
+
+    #[test]
+    fn goal_time_limit_defaults_to_five_minutes() {
+        let goal = Goal {
+            id: "goal-3".to_string(),
+            description: "default".to_string(),
+            priority: Priority::Medium,
+            deadline: None,
+            constraints: vec![],
+            success_criteria: vec![],
+            trust_mode: None,
+        };
+
+        assert_eq!(goal_time_limit(&goal), Duration::from_secs(300));
+    }
+
+    #[test]
+    fn goal_time_limit_uses_max_duration_constraint() {
+        let goal = Goal {
+            id: "goal-4".to_string(),
+            description: "long".to_string(),
+            priority: Priority::Medium,
+            deadline: None,
+            constraints: vec![Constraint {
+                name: "max_duration_secs".to_string(),
+                value: ConstraintValue::Custom {
+                    key: "max_duration_secs".to_string(),
+                    value: "7200".to_string(),
+                },
+            }],
+            success_criteria: vec![],
+            trust_mode: None,
+        };
+
+        assert_eq!(goal_time_limit(&goal), Duration::from_secs(7200));
     }
 
     #[test]

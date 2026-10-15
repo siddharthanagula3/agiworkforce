@@ -719,7 +719,9 @@ fn repository_layout_check(layout: &crate::repo::RepositoryLayout) -> DoctorChec
 }
 
 fn git_output(args: &[&str]) -> Option<String> {
-    let output = StdCommand::new("git").args(args).output().ok()?;
+    let mut command = agiworkforce_worktree::host_git();
+    command.args(args);
+    let output = crate::platform::runtime::git::host_git_output(command).ok()?;
     if !output.status.success() {
         return None;
     }

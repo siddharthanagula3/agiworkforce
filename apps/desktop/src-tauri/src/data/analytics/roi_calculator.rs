@@ -291,36 +291,6 @@ impl ROICalculator {
 
         Ok(cache_savings)
     }
-
-    pub async fn save_snapshot(
-        &self,
-        user_id: &str,
-        team_id: Option<&str>,
-        report: &ROIReport,
-    ) -> Result<String> {
-        let conn = self.db.lock().expect("analytics db mutex poisoned");
-        let snapshot_id = uuid::Uuid::new_v4().to_string();
-        let now = chrono::Utc::now().timestamp();
-
-        let roi_json = serde_json::to_string(report)
-            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-
-        conn.execute(
-            "INSERT INTO analytics_snapshots
-             (id, user_id, team_id, snapshot_date, roi_data, metrics_data, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, '{}', ?6)",
-            params![
-                snapshot_id,
-                user_id,
-                team_id,
-                report.report_end_date,
-                roi_json,
-                now
-            ],
-        )?;
-
-        Ok(snapshot_id)
-    }
 }
 
 #[cfg(test)]

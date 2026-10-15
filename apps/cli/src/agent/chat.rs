@@ -43,13 +43,33 @@ macro_rules! narrate {
     };
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct CompactionUsage {
     input_tokens: u32,
     output_tokens: u32,
     cache_read_tokens: u32,
     cache_creation_tokens: u32,
     included_in_subscription: bool,
+}
+
+impl CompactionUsage {
+    /// One compaction can summarize twice, the earlier turns and then the
+    /// inside of the turn it kept, and both calls are spent. The total counts
+    /// as included in a subscription only when every call was.
+    fn with(self, later: Self) -> Self {
+        Self {
+            input_tokens: self.input_tokens.saturating_add(later.input_tokens),
+            output_tokens: self.output_tokens.saturating_add(later.output_tokens),
+            cache_read_tokens: self
+                .cache_read_tokens
+                .saturating_add(later.cache_read_tokens),
+            cache_creation_tokens: self
+                .cache_creation_tokens
+                .saturating_add(later.cache_creation_tokens),
+            included_in_subscription: self.included_in_subscription
+                && later.included_in_subscription,
+        }
+    }
 }
 
 fn fallback_provider_for(
@@ -144,12 +164,16 @@ impl ContextSummarizer for CliContextSummarizer<'_> {
         .await
         .context("context summarization failed")?;
         if let Ok(mut usage) = self.usage.lock() {
-            *usage = Some(CompactionUsage {
+            let call = CompactionUsage {
                 input_tokens: result.input_tokens,
                 output_tokens: result.output_tokens,
                 cache_read_tokens: result.cache_read_input_tokens,
                 cache_creation_tokens: result.cache_creation_input_tokens,
                 included_in_subscription: result.via_subscription,
+            };
+            *usage = Some(match *usage {
+                Some(earlier) => earlier.with(call),
+                None => call,
             });
         }
         Ok(result.text)
@@ -183,6 +207,7 @@ fn tool_event_summary(name: &str, args: &serde_json::Value) -> String {
 /// Keep tool results useful for expandable clients without allowing an
 /// unbounded subprocess or connector response to dominate the event channel.
 const MAX_TOOL_EVENT_OUTPUT_CHARS: usize = 16_384;
+const INTERRUPTED_TOOL_RESULT: &str = "Interrupted by the user before this tool finished";
 const TOOL_EVENT_TRUNCATION_MARKER: &str = "\n… output truncated";
 
 fn tool_event_output(output: &str) -> String {
@@ -449,6 +474,7 @@ impl AgentSession {
     /// the partial assistant text (or a `[stopped]` marker) so history stays a
     /// valid user→assistant sequence for the next turn.
     pub async fn cancel_turn(&mut self, partial: &str) {
+        self.close_unanswered_tool_calls();
         let was_running = self.messages.last().map(|m| m.role.as_str()) == Some("user");
         self.finalize_cancelled_turn(partial);
         if was_running {
@@ -476,6 +502,7 @@ impl AgentSession {
     }
 
     pub fn finalize_cancelled_turn(&mut self, partial: &str) {
+        self.close_unanswered_tool_calls();
         if self.messages.last().map(|m| m.role.as_str()) == Some("user") {
             let text = if partial.trim().is_empty() {
                 "[stopped]".to_string()
@@ -484,6 +511,78 @@ impl AgentSession {
             };
             self.messages.push(Message::text("assistant", text));
         }
+    }
+
+    /// Answer every tool call of the last assistant message that has no
+    /// result, returning how many it answered.
+    ///
+    /// A turn stopped while a tool ran never commits that batch's results, and
+    /// providers refuse a history in which a tool call goes unanswered, so the
+    /// session's next turn would fail before it started.
+    pub fn close_unanswered_tool_calls(&mut self) -> usize {
+        let Some(asked_at) = self
+            .messages
+            .iter()
+            .rposition(|message| message.role == "assistant")
+        else {
+            return 0;
+        };
+        let models::MessageContent::Blocks(asked) = &self.messages[asked_at].content else {
+            return 0;
+        };
+        let answered: HashSet<&str> = self.messages[asked_at + 1..]
+            .iter()
+            .filter_map(|message| match &message.content {
+                models::MessageContent::Blocks(blocks) => Some(blocks),
+                models::MessageContent::Text(_) => None,
+            })
+            .flatten()
+            .filter_map(|block| match block {
+                ContentBlock::ToolResult { tool_use_id, .. } => Some(tool_use_id.as_str()),
+                _ => None,
+            })
+            .collect();
+        let unanswered: Vec<ContentBlock> = asked
+            .iter()
+            .filter_map(|block| match block {
+                ContentBlock::ToolUse { id, .. } if !answered.contains(id.as_str()) => {
+                    Some(ContentBlock::ToolResult {
+                        tool_use_id: id.clone(),
+                        content: INTERRUPTED_TOOL_RESULT.to_string(),
+                        is_error: true,
+                    })
+                }
+                _ => None,
+            })
+            .collect();
+        let closed = unanswered.len();
+        if closed == 0 {
+            return 0;
+        }
+        let partly_answered = self.messages.get(asked_at + 1).is_some_and(|next| {
+            next.role == "user"
+                && matches!(&next.content, models::MessageContent::Blocks(blocks)
+                    if blocks.iter().any(|block| matches!(block, ContentBlock::ToolResult { .. })))
+        });
+        if partly_answered {
+            if let models::MessageContent::Blocks(results) =
+                &mut self.messages[asked_at + 1].content
+            {
+                let mut merged = unanswered;
+                merged.append(results);
+                *results = merged;
+            }
+            if let Some(managed_session) = self.managed_session.as_mut() {
+                managed_session.context_edited_at(asked_at + 1, &self.messages);
+            }
+        } else {
+            self.messages
+                .insert(asked_at + 1, Message::blocks("user", unanswered));
+            if let Some(managed_session) = self.managed_session.as_mut() {
+                managed_session.context_inserted_at(asked_at + 1, &self.messages);
+            }
+        }
+        closed
     }
 
     fn record_partial_completion_usage(
@@ -829,17 +928,28 @@ impl AgentSession {
         config: &CliConfig,
         compaction_config: &ContextCompactionConfig,
     ) -> ContextCompactionResult {
-        let summarizer = CliContextSummarizer::new(config, &self.provider, self.model.as_str());
-        let result = compact_context(
-            &self.messages,
-            compaction_config,
-            self.context_usage_anchor,
-            Some(&summarizer),
-        )
-        .await;
-        let compaction_usage = summarizer.take_usage();
+        let (result, usage) = {
+            let summarizer = CliContextSummarizer::new(config, &self.provider, self.model.as_str());
+            let result = compact_context(
+                &self.messages,
+                compaction_config,
+                self.context_usage_anchor,
+                Some(&summarizer),
+            )
+            .await;
+            (result, summarizer.take_usage())
+        };
+        self.adopt_compaction(usage, &result, 0);
+        result
+    }
 
-        if let Some(summary_usage) = compaction_usage {
+    fn adopt_compaction(
+        &mut self,
+        summary_usage: Option<CompactionUsage>,
+        result: &ContextCompactionResult,
+        kept: usize,
+    ) {
+        if let Some(summary_usage) = summary_usage {
             self.total_input_tokens += summary_usage.input_tokens;
             self.total_output_tokens += summary_usage.output_tokens;
             self.total_cache_read_tokens += summary_usage.cache_read_tokens;
@@ -848,10 +958,20 @@ impl AgentSession {
         }
 
         if result.compacted {
+            if let Some(managed_session) = self.managed_session.as_mut() {
+                if result.messages_compacted > 0 {
+                    managed_session.record_compaction_keeping(
+                        &self.messages,
+                        &result.messages,
+                        kept.min(self.messages.len()),
+                    );
+                } else {
+                    managed_session.record_pruning(&self.messages, &result.messages);
+                }
+            }
             self.messages = result.messages.clone();
             self.context_usage_anchor = None;
         }
-        result
     }
 
     /// Force a summarizing compaction for the interactive `/compact` command.
@@ -880,6 +1000,37 @@ impl AgentSession {
         self.compact_history(config, &compaction_config).await
     }
 
+    /// Summarize the conversation from `keep` on, leaving the messages before
+    /// it exactly as they were so the turns there can still be rewound to.
+    /// The latest turn stays word for word.
+    pub async fn compact_from(
+        &mut self,
+        config: &CliConfig,
+        keep: usize,
+    ) -> ContextCompactionResult {
+        let compaction_config = ContextCompactionConfig {
+            context_window_tokens: crate::model_catalog::context_window(&self.model),
+            reserved_output_tokens: config.default.max_tokens as usize,
+            compaction_fraction: 0.0,
+            target_fraction: 0.50,
+            preserve_recent_messages: 1,
+            ..ContextCompactionConfig::default()
+        };
+        let (result, usage) = {
+            let summarizer = CliContextSummarizer::new(config, &self.provider, self.model.as_str());
+            let result = crate::compaction::compact_after(
+                &self.messages,
+                keep,
+                &compaction_config,
+                Some(&summarizer),
+            )
+            .await;
+            (result, summarizer.take_usage())
+        };
+        self.adopt_compaction(usage, &result, keep);
+        result
+    }
+
     pub async fn send(
         &mut self,
         config: &CliConfig,
@@ -899,6 +1050,7 @@ impl AgentSession {
         self.validate_privacy_boundary()?;
         self.claim_writer_lease();
         crate::cloud::workspace_policy::refresh_when_due().await;
+        self.close_unanswered_tool_calls();
 
         // Auto sessions: classify this turn and re-resolve the route before
         // anything downstream reads `self.model` (compaction limits, request
@@ -2189,6 +2341,7 @@ impl TurnHostAdapter<'_> {
                     .auto_approves_edits(),
                 quiet: self.session.quiet,
                 approval_callback: self.session.recorded_approval_callback(),
+                user_input_callback: self.session.user_input_callback(),
                 privacy_mode: self.session.privacy_mode,
                 workspace_root: self.session.workspace_root(),
             };
@@ -2705,6 +2858,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 .auto_approves_edits(),
             quiet: self.session.quiet,
             approval_callback: self.session.recorded_approval_callback(),
+            user_input_callback: self.session.user_input_callback(),
             privacy_mode: self.session.privacy_mode,
             workspace_root: self.session.workspace_root(),
         };
@@ -2876,6 +3030,22 @@ impl TurnHost for TurnHostAdapter<'_> {
         if !self.hook_additional_contexts.is_empty() {
             let merged = std::mem::take(&mut self.hook_additional_contexts).join("\n\n");
             self.session.messages.push(Message::text("system", merged));
+        }
+
+        let steered = self
+            .session
+            .on_steer
+            .as_ref()
+            .map(|source| (source.0)())
+            .unwrap_or_default();
+        for input in steered {
+            let mut blocks = input.images;
+            if !input.text.is_empty() {
+                blocks.push(ContentBlock::Text { text: input.text });
+            }
+            if !blocks.is_empty() {
+                self.session.messages.push(Message::blocks("user", blocks));
+            }
         }
 
         narrate!();
@@ -3293,6 +3463,37 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
+    fn a_compaction_that_summarizes_twice_is_charged_for_both_calls() {
+        let first = CompactionUsage {
+            input_tokens: 900,
+            output_tokens: 120,
+            cache_read_tokens: 40,
+            cache_creation_tokens: 10,
+            included_in_subscription: true,
+        };
+        let second = CompactionUsage {
+            input_tokens: 600,
+            output_tokens: 80,
+            cache_read_tokens: 0,
+            cache_creation_tokens: 5,
+            included_in_subscription: false,
+        };
+
+        assert_eq!(
+            first.with(second),
+            CompactionUsage {
+                input_tokens: 1_500,
+                output_tokens: 200,
+                cache_read_tokens: 40,
+                cache_creation_tokens: 15,
+                included_in_subscription: false,
+            },
+            "the second summary's tokens replaced the first's instead of adding to them"
+        );
+        assert!(first.with(first).included_in_subscription);
+    }
+
+    #[test]
     fn a_parallel_call_is_cancelled_at_its_declared_timeout() {
         let declared = crate::runtime::tool_catalog::tool_timeout("web_fetch")
             .expect("web_fetch declares a timeout");
@@ -3652,6 +3853,7 @@ mod tests {
         );
         hooks::HooksConfig {
             hooks: hooks_by_event,
+            sandbox: Some(false),
         }
     }
 
@@ -3999,6 +4201,90 @@ mod tests {
     }
 
     #[test]
+    fn a_turn_stopped_mid_tool_answers_the_call_before_the_stopped_reply() {
+        let mut session = make_local_session();
+        session
+            .messages
+            .push(Message::text("user", "run the build"));
+        session.messages.push(Message::blocks(
+            "assistant",
+            vec![
+                ContentBlock::ToolUse {
+                    id: "call-1".to_string(),
+                    name: "run_command".to_string(),
+                    input: serde_json::json!({ "command": "pnpm build" }),
+                },
+                ContentBlock::ToolUse {
+                    id: "call-2".to_string(),
+                    name: "read_file".to_string(),
+                    input: serde_json::json!({ "path": "README.md" }),
+                },
+            ],
+        ));
+
+        session.finalize_cancelled_turn("building");
+        session.finalize_cancelled_turn("straggler");
+
+        assert_eq!(session.messages.len(), 5);
+        let models::MessageContent::Blocks(results) = &session.messages[3].content else {
+            panic!("the tool calls are answered in one user message");
+        };
+        assert_eq!(session.messages[3].role, "user");
+        let answered: Vec<(&str, &str, bool)> = results
+            .iter()
+            .filter_map(|block| match block {
+                ContentBlock::ToolResult {
+                    tool_use_id,
+                    content,
+                    is_error,
+                } => Some((tool_use_id.as_str(), content.as_str(), *is_error)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            answered,
+            vec![
+                ("call-1", INTERRUPTED_TOOL_RESULT, true),
+                ("call-2", INTERRUPTED_TOOL_RESULT, true),
+            ]
+        );
+        assert_eq!(session.messages[4].role, "assistant");
+        assert_eq!(session.messages[4].text_content(), "building\n\n[stopped]");
+        assert_eq!(session.close_unanswered_tool_calls(), 0);
+    }
+
+    #[test]
+    fn a_stored_history_with_an_unanswered_call_is_repaired_and_an_answered_one_left_alone() {
+        let mut session = make_local_session();
+        session.messages.push(Message::text("user", "read it"));
+        session.messages.push(Message::blocks(
+            "assistant",
+            vec![ContentBlock::ToolUse {
+                id: "call-1".to_string(),
+                name: "read_file".to_string(),
+                input: serde_json::json!({ "path": "README.md" }),
+            }],
+        ));
+        let answered = Message::blocks(
+            "user",
+            vec![ContentBlock::ToolResult {
+                tool_use_id: "call-1".to_string(),
+                content: "# readme".to_string(),
+                is_error: false,
+            }],
+        );
+        let mut complete = make_local_session();
+        complete.messages = session.messages.clone();
+        complete.messages.push(answered);
+
+        assert_eq!(complete.close_unanswered_tool_calls(), 0);
+        assert_eq!(complete.messages.len(), 4);
+        assert_eq!(session.close_unanswered_tool_calls(), 1);
+        assert_eq!(session.messages.len(), 4);
+        assert_eq!(session.messages[3].role, "user");
+    }
+
+    #[test]
     fn cancelled_turn_with_no_output_appends_stopped_marker() {
         let mut session = make_local_session();
         session.messages.push(Message::text("user", "hello"));
@@ -4181,6 +4467,7 @@ mod tests {
         }
         hooks::HooksConfig {
             hooks: hooks_by_event,
+            sandbox: Some(false),
         }
     }
 
@@ -4361,6 +4648,69 @@ mod tests {
             "the parallel batch must execute the real read tool; got: {read_output}"
         );
         assert!(!read_is_error);
+    }
+
+    #[tokio::test]
+    async fn live_turn_delivers_a_steer_with_the_next_tool_results() {
+        let scratch = workspace_scratch();
+        let readable = scratch.path().join("notes.txt");
+        std::fs::write(&readable, "steer-body").unwrap();
+
+        let waiting = std::sync::Arc::new(std::sync::Mutex::new(vec!["also check the tests"]));
+        let source = waiting.clone();
+        let mut session = live_session();
+        session.on_steer = Some(crate::agent::SteerSource(std::sync::Arc::new(move || {
+            source
+                .lock()
+                .unwrap()
+                .drain(..)
+                .map(|text| crate::agent::SteeredInput {
+                    text: text.to_string(),
+                    images: Vec::new(),
+                })
+                .collect()
+        })));
+        run_live_turn(
+            &mut session,
+            LiveTurnTools {
+                available: &["read_file"],
+                concurrency_safe: &["read_file"],
+                plan_mode_mutating: &[],
+            },
+            vec![
+                live_completion(
+                    "reading",
+                    vec![live_call(
+                        "read-1",
+                        "read_file",
+                        serde_json::json!({"path": readable.to_string_lossy()}),
+                    )],
+                ),
+                live_completion("done", vec![]),
+            ],
+        )
+        .await;
+
+        assert!(waiting.lock().unwrap().is_empty());
+        let results_at = session
+            .messages
+            .iter()
+            .position(|message| {
+                matches!(&message.content, crate::models::MessageContent::Blocks(blocks)
+                    if blocks.iter().any(|block| matches!(block, ContentBlock::ToolResult { .. })))
+            })
+            .expect("the tool results are committed");
+        let steered = &session.messages[results_at + 1];
+        assert_eq!(steered.role, "user");
+        assert_eq!(
+            steered.text_content(),
+            "also check the tests",
+            "the steer reaches the model before its next completion, not after the turn's reply"
+        );
+        assert_eq!(
+            session.messages.last().map(|m| m.role.as_str()),
+            Some("assistant")
+        );
     }
 
     #[tokio::test]

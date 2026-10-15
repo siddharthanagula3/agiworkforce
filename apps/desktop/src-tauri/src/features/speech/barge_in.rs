@@ -43,7 +43,7 @@
 
 use crate::sys::error::{Error, Result};
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 #[cfg(feature = "vad")]
 use std::time::Duration;
@@ -120,11 +120,6 @@ impl BargeInHandle {
             self.start_time.elapsed()
         );
     }
-
-    /// Check if monitoring is still active
-    pub fn is_active(&self) -> bool {
-        self.is_active.load(Ordering::SeqCst)
-    }
 }
 
 /// Barge-in detector that monitors for speech during TTS playback
@@ -137,10 +132,6 @@ pub struct BargeInDetector {
     config: BargeInConfig,
     /// Flag indicating if detection is currently enabled globally
     enabled: Arc<AtomicBool>,
-    /// Statistics: total barge-ins detected
-    total_detections: Arc<AtomicU64>,
-    /// Statistics: average detection latency (ms)
-    avg_latency_ms: Arc<AtomicU64>,
 }
 
 impl BargeInDetector {
@@ -158,8 +149,6 @@ impl BargeInDetector {
             vad,
             config,
             enabled: Arc::new(AtomicBool::new(true)),
-            total_detections: Arc::new(AtomicU64::new(0)),
-            avg_latency_ms: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -169,22 +158,10 @@ impl BargeInDetector {
         Self::new(vad, BargeInConfig::default())
     }
 
-    /// Set sensitivity (0.0 - 1.0)
-    #[cfg(feature = "vad")]
-    pub fn set_sensitivity(&mut self, sensitivity: f32) {
-        self.config.sensitivity = sensitivity.clamp(0.0, 1.0);
-    }
-
     /// Get current sensitivity
     #[cfg(feature = "vad")]
     pub fn sensitivity(&self) -> f32 {
         self.config.sensitivity
-    }
-
-    /// Set minimum speech duration for triggering (ms)
-    #[cfg(feature = "vad")]
-    pub fn set_min_speech_ms(&mut self, min_ms: u32) {
-        self.config.min_speech_ms = min_ms;
     }
 
     /// Get minimum speech duration
@@ -203,15 +180,6 @@ impl BargeInDetector {
     #[cfg(feature = "vad")]
     pub fn is_enabled(&self) -> bool {
         self.enabled.load(Ordering::SeqCst)
-    }
-
-    /// Get detection statistics
-    #[cfg(feature = "vad")]
-    pub fn stats(&self) -> BargeInStats {
-        BargeInStats {
-            total_detections: self.total_detections.load(Ordering::Relaxed),
-            avg_latency_ms: self.avg_latency_ms.load(Ordering::Relaxed),
-        }
     }
 
     /// Check if a single audio chunk indicates barge-in
@@ -253,21 +221,12 @@ impl BargeInDetector {
 
         let config = self.config.clone();
         let vad = self.vad.clone();
-        let total_detections = self.total_detections.clone();
-        let avg_latency_ms = self.avg_latency_ms.clone();
 
         // Spawn monitoring on a dedicated thread (cpal::Stream is not Send)
         std::thread::Builder::new()
             .name("barge-in-monitor".to_string())
             .spawn(move || {
-                if let Err(e) = Self::monitoring_loop(
-                    config,
-                    vad,
-                    is_active,
-                    on_barge_in,
-                    total_detections,
-                    avg_latency_ms,
-                ) {
+                if let Err(e) = Self::monitoring_loop(config, vad, is_active, on_barge_in) {
                     tracing::error!("Barge-in monitoring error: {}", e);
                 }
             })
@@ -285,8 +244,6 @@ impl BargeInDetector {
         vad: SharedVad,
         is_active: Arc<AtomicBool>,
         on_barge_in: F,
-        total_detections: Arc<AtomicU64>,
-        avg_latency_ms: Arc<AtomicU64>,
     ) -> Result<()>
     where
         F: Fn(BargeInEvent) + Send + 'static,
@@ -416,18 +373,7 @@ impl BargeInDetector {
                                     detection_latency
                                 );
 
-                                // Update statistics
-                                let count = total_detections.fetch_add(1, Ordering::Relaxed) + 1;
                                 let latency_ms = detection_latency.as_millis() as u64;
-
-                                // Running average
-                                let prev_avg = avg_latency_ms.load(Ordering::Relaxed);
-                                let new_avg = if count == 1 {
-                                    latency_ms
-                                } else {
-                                    (prev_avg * (count - 1) + latency_ms) / count
-                                };
-                                avg_latency_ms.store(new_avg, Ordering::Relaxed);
 
                                 // Create event
                                 let event = BargeInEvent {
@@ -471,13 +417,9 @@ impl BargeInDetector {
         ))
     }
 
-    pub fn set_sensitivity(&mut self, _sensitivity: f32) {}
-
     pub fn sensitivity(&self) -> f32 {
         0.0
     }
-
-    pub fn set_min_speech_ms(&mut self, _min_ms: u32) {}
 
     pub fn min_speech_ms(&self) -> u32 {
         0
@@ -487,13 +429,6 @@ impl BargeInDetector {
 
     pub fn is_enabled(&self) -> bool {
         false
-    }
-
-    pub fn stats(&self) -> BargeInStats {
-        BargeInStats {
-            total_detections: 0,
-            avg_latency_ms: 0,
-        }
     }
 
     pub fn check_barge_in(&self, _audio: &[f32]) -> bool {
@@ -508,15 +443,6 @@ impl BargeInDetector {
             "VAD feature is not enabled. Rebuild with --features vad".to_string(),
         ))
     }
-}
-
-/// Statistics for barge-in detection
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BargeInStats {
-    /// Total number of barge-ins detected
-    pub total_detections: u64,
-    /// Average detection latency in milliseconds
-    pub avg_latency_ms: u64,
 }
 
 #[cfg(test)]
@@ -538,19 +464,9 @@ mod tests {
         let is_active = Arc::new(AtomicBool::new(true));
         let handle = BargeInHandle::new(is_active.clone());
 
-        assert!(handle.is_active());
+        assert!(is_active.load(Ordering::SeqCst));
         handle.stop();
-        assert!(!handle.is_active());
-    }
-
-    #[test]
-    fn test_barge_in_stats_default() {
-        let stats = BargeInStats {
-            total_detections: 0,
-            avg_latency_ms: 0,
-        };
-        assert_eq!(stats.total_detections, 0);
-        assert_eq!(stats.avg_latency_ms, 0);
+        assert!(!is_active.load(Ordering::SeqCst));
     }
 
     #[test]

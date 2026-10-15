@@ -3,7 +3,7 @@
 
 pub mod identity;
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
@@ -111,11 +111,19 @@ pub struct TrustStatus {
     pub revoked_at: Option<String>,
     /// Why this workspace is not trusted, when it is not.
     pub reason: Option<String>,
+    /// Whether the grant was made in this checkout, or in one sharing its git
+    /// directory, so the repository configuration it covers is the one here.
+    pub grant_covers_checkout: bool,
 }
 
 impl TrustStatus {
+    /// A grant keyed by the remote also matches a clone at another path,
+    /// including one a sandboxed command made, whose configuration the user
+    /// never saw; there the repository's configuration stays untrusted.
     pub fn restrictions(&self) -> TrustRestrictions {
-        TrustRestrictions::for_state(self.state)
+        let mut restrictions = TrustRestrictions::for_state(self.state);
+        restrictions.repository_config &= self.grant_covers_checkout;
+        restrictions
     }
 
     pub fn render(&self) -> String {
@@ -157,7 +165,36 @@ fn restricted(root: PathBuf, identity: WorkspaceIdentity, reason: &str) -> Trust
         granted_at: None,
         revoked_at: None,
         reason: Some(reason.to_string()),
+        grant_covers_checkout: false,
     }
+}
+
+/// Whether a trusted grant for `identity` was made at `scope`, or in a
+/// checkout whose git directory `scope` shares, where the repository
+/// configuration is the same file.
+fn grant_covers_checkout(
+    registry: &ProjectRegistry,
+    identity: &WorkspaceIdentity,
+    scope: &Path,
+) -> bool {
+    if identity.kind == IdentityKind::Path {
+        return true;
+    }
+    let resolved = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let granted = registry.trusted_paths(&identity.key);
+    let here = resolved(scope);
+    if granted.iter().any(|path| resolved(path) == here) {
+        return true;
+    }
+    let common_dir = |path: &Path| {
+        crate::repo::detect_repository_layout(path).map(|layout| resolved(&layout.common_dir))
+    };
+    let Some(here) = common_dir(scope) else {
+        return false;
+    };
+    granted
+        .iter()
+        .any(|path| common_dir(path).as_deref() == Some(here.as_path()))
 }
 
 /// Resolve the trust state a registry records for one workspace root.
@@ -190,6 +227,7 @@ pub fn status_from_registry(
         granted_at: entry.trusted_at.clone(),
         revoked_at: entry.revoked_at.clone(),
         reason: None,
+        grant_covers_checkout: false,
     };
     if status.state.is_trusted() {
         // A grant carries who made it and where. A grant that travelled to
@@ -214,6 +252,10 @@ pub fn status_from_registry(
     }
     if status.state == TrustState::Untrusted && status.revoked_at.is_some() {
         status.reason = Some("trust was revoked for this repository".to_string());
+    }
+    if status.state.is_trusted() {
+        status.grant_covers_checkout = entry.identity.is_none()
+            || grant_covers_checkout(registry, &status.identity, &status.root);
     }
     status
 }
@@ -321,13 +363,24 @@ pub fn is_trusted(root: &Path) -> bool {
     status_for(root).state.is_trusted()
 }
 
-/// Record a trust grant for `root`, bound to this account and machine.
+/// Record a trust grant for `root`, bound to this account and machine, and
+/// record its repository's code-running git settings as they are now, which
+/// host git then obeys there. See [`agiworkforce_worktree::config_guard`].
+/// When the settings cannot be recorded the folder is not trusted either:
+/// host git would go on refusing what the user meant to trust.
 pub fn grant(root: &Path) -> Result<TrustStatus> {
     if !crate::platform::policy::managed::trust_grants_allowed() {
         bail!(
             "Your organization's managed policy does not allow trusting workspaces on this device"
         );
     }
+    crate::platform::runtime::git::use_git_state_dir();
+    agiworkforce_worktree::config_guard::record_baseline_blocking(root).with_context(|| {
+        format!(
+            "{} was not trusted, because its repository's git settings could not be recorded",
+            root.display()
+        )
+    })?;
     let config_dir = CliConfig::config_dir()?;
     let scope = crate::project_scope::resolve_project_scope(root);
     let identity = identity::workspace_identity(&scope);
@@ -478,6 +531,40 @@ mod tests {
         assert!(rendered.contains("Trust:     ask"));
         assert!(rendered.contains("Restricted:"));
         assert!(rendered.contains("commands have no network access"));
+    }
+
+    #[test]
+    fn a_remote_grant_does_not_trust_the_configuration_of_a_clone_elsewhere() {
+        let original = tempfile::tempdir().unwrap();
+        let clone = tempfile::tempdir().unwrap();
+        for dir in [original.path(), clone.path()] {
+            let init = std::process::Command::new("git")
+                .args(["init", "-q"])
+                .current_dir(dir)
+                .status()
+                .unwrap();
+            assert!(init.success());
+            let remote = std::process::Command::new("git")
+                .args(["remote", "add", "origin", "https://example.test/o/r.git"])
+                .current_dir(dir)
+                .status()
+                .unwrap();
+            assert!(remote.success());
+        }
+        let key = identity::workspace_identity(original.path()).key;
+        assert_eq!(key, identity::workspace_identity(clone.path()).key);
+        let mut registry = ProjectRegistry::default();
+        registry
+            .trust(original.path(), &key, "ada", "laptop")
+            .unwrap();
+
+        let here = status_from_registry(&registry, original.path(), "ada", "laptop");
+        assert!(here.restrictions().repository_config);
+
+        let elsewhere = status_from_registry(&registry, clone.path(), "ada", "laptop");
+        assert_eq!(elsewhere.state, TrustState::Trusted);
+        assert!(elsewhere.restrictions().unrestricted_shell);
+        assert!(!elsewhere.restrictions().repository_config);
     }
 
     #[test]

@@ -1,261 +1,14 @@
-//! Shared Action Executor for Computer Use.
-//!
-//! Extracted from the OPA loop to be reusable by both the original
-//! `ComputerUseAgent` and the new `AnthropicComputerUseAgent`.
+//! Input the observe-plan-act loop sends: keystroke sequences for file
+//! pickers and dialogs, key names, and the wheel motion of a scroll.
 
 use anyhow::Result;
 use std::time::Duration;
 use tokio::time::sleep;
 
-use crate::automation::input::{
-    KeyboardSimulator, MouseButton as InputMouseButton, MouseSimulator,
-};
-use crate::automation::screen::{capture_display, ScreenInfo};
+use crate::automation::input::KeyboardSimulator;
 
-use super::control::{
-    dialog_keystrokes, ensure_agent_in_control, file_picker_keystrokes, target_display,
-    validate_picker_path, FilePickerPlatform, PickerKeystroke, PickerModifier,
-};
-use super::types::{
-    ComputerUseAction, Coordinate, HotkeyModifier, MouseButton, ScrollDirection, WaitCondition,
-};
-use super::window_manager::WindowCoordinator;
-
-/// Executes `ComputerUseAction` variants using the platform's input simulation.
-///
-/// Handles coordinate translation for HiDPI displays. Does NOT handle
-/// advanced wait conditions (TextAppears, ScreenStable), those require a
-/// `VisualReasoner` and remain in the caller's responsibility.
-pub struct ActionExecutor {
-    window_coordinator: WindowCoordinator,
-}
-
-impl ActionExecutor {
-    /// Creates a new executor with the given window coordinator.
-    pub fn new(window_coordinator: WindowCoordinator) -> Self {
-        Self { window_coordinator }
-    }
-
-    /// Executes a single `ComputerUseAction`.
-    ///
-    /// Returns `Ok(())` on success. For `Wait` conditions beyond `Duration`,
-    /// falls back to sleeping for the condition's max duration.
-    pub async fn execute(&self, action: &ComputerUseAction) -> Result<()> {
-        ensure_agent_in_control()?;
-        let primary_display = resolve_target_display()?;
-
-        match action {
-            ComputerUseAction::Click { x, y, button } => {
-                let mut mouse = MouseSimulator::new()?;
-                let btn = match button {
-                    MouseButton::Left => InputMouseButton::Left,
-                    MouseButton::Right => InputMouseButton::Right,
-                    MouseButton::Middle => InputMouseButton::Middle,
-                };
-                let (input_x, input_y) = translate_capture_point(*x, *y, &primary_display);
-                mouse.click(input_x, input_y, btn)?;
-            }
-            ComputerUseAction::DoubleClick { x, y } => {
-                let mut mouse = MouseSimulator::new()?;
-                let (input_x, input_y) = translate_capture_point(*x, *y, &primary_display);
-                mouse.double_click(input_x, input_y).await?;
-            }
-            ComputerUseAction::TripleClick { x, y } => {
-                let mut mouse = MouseSimulator::new()?;
-                let (input_x, input_y) = translate_capture_point(*x, *y, &primary_display);
-                mouse.click(input_x, input_y, InputMouseButton::Left)?;
-                sleep(Duration::from_millis(50)).await;
-                mouse.click(input_x, input_y, InputMouseButton::Left)?;
-                sleep(Duration::from_millis(50)).await;
-                mouse.click(input_x, input_y, InputMouseButton::Left)?;
-            }
-            ComputerUseAction::RightClick { x, y } => {
-                let mut mouse = MouseSimulator::new()?;
-                let (input_x, input_y) = translate_capture_point(*x, *y, &primary_display);
-                mouse.click(input_x, input_y, InputMouseButton::Right)?;
-            }
-            ComputerUseAction::Type { text, delay_ms } => {
-                let mut keyboard = KeyboardSimulator::new()?;
-                keyboard.send_text_with_delay(text, *delay_ms).await?;
-            }
-            ComputerUseAction::KeyPress { key } => {
-                let mut keyboard = KeyboardSimulator::new()?;
-                if let Some(k) = parse_key(key) {
-                    keyboard.tap_key(k)?;
-                }
-            }
-            ComputerUseAction::Hotkey { modifiers, key } => {
-                let mut keyboard = KeyboardSimulator::new()?;
-                let mods: Vec<enigo::Key> = modifiers
-                    .iter()
-                    .map(|m| match m {
-                        HotkeyModifier::Ctrl => enigo::Key::Control,
-                        HotkeyModifier::Alt => enigo::Key::Alt,
-                        HotkeyModifier::Shift => enigo::Key::Shift,
-                        HotkeyModifier::Meta => enigo::Key::Meta,
-                    })
-                    .collect();
-
-                if let Some(k) = parse_key(key) {
-                    keyboard.send_hotkey(&mods, k)?;
-                }
-            }
-            ComputerUseAction::Scroll {
-                direction,
-                amount,
-                at,
-            } => {
-                let mut mouse = MouseSimulator::new()?;
-
-                if let Some(coord) = at {
-                    let translated = translate_capture_coordinate(*coord, &primary_display);
-                    mouse.move_to(translated.x, translated.y)?;
-                }
-
-                let scroll_amount = match direction {
-                    ScrollDirection::Up | ScrollDirection::Left => *amount,
-                    ScrollDirection::Down | ScrollDirection::Right => -*amount,
-                };
-
-                mouse.scroll(scroll_amount)?;
-            }
-            ComputerUseAction::Drag {
-                from,
-                to,
-                duration_ms,
-            } => {
-                let mut mouse = MouseSimulator::new()?;
-                let input_from = translate_capture_coordinate(*from, &primary_display);
-                let input_to = translate_capture_coordinate(*to, &primary_display);
-                mouse
-                    .drag_and_drop(
-                        input_from.x,
-                        input_from.y,
-                        input_to.x,
-                        input_to.y,
-                        *duration_ms,
-                    )
-                    .await?;
-            }
-            ComputerUseAction::MoveMouse { x, y, smooth } => {
-                let mut mouse = MouseSimulator::new()?;
-                let (input_x, input_y) = translate_capture_point(*x, *y, &primary_display);
-                if *smooth {
-                    mouse.move_to_smooth(input_x, input_y, 200).await?;
-                } else {
-                    mouse.move_to(input_x, input_y)?;
-                }
-            }
-            ComputerUseAction::Wait { condition } => {
-                // Basic wait handling. Advanced conditions (TextAppears, ScreenStable)
-                // are handled by the caller with a VisualReasoner if available.
-                match condition {
-                    WaitCondition::Duration { ms } => {
-                        sleep(Duration::from_millis(*ms)).await;
-                    }
-                    WaitCondition::WindowAppears {
-                        title_contains,
-                        timeout_ms,
-                    } => {
-                        let _ = self
-                            .window_coordinator
-                            .wait_for_window(title_contains, Duration::from_millis(*timeout_ms))
-                            .await;
-                    }
-                    other => {
-                        // Fallback: sleep for the condition's max duration
-                        sleep(other.max_duration()).await;
-                    }
-                }
-            }
-            ComputerUseAction::Screenshot {
-                region: _,
-                save_path,
-            } => {
-                let screenshot = capture_display(target_display())?;
-                if let Some(path) = save_path {
-                    screenshot.pixels.save(path)?;
-                }
-            }
-            ComputerUseAction::FocusWindow { title } => {
-                self.window_coordinator.activate_by_title(title).await;
-            }
-            ComputerUseAction::LaunchApplication { name } => {
-                self.window_coordinator.launch_application(name).await?;
-            }
-            ComputerUseAction::Copy => {
-                let mut keyboard = KeyboardSimulator::new()?;
-                #[cfg(target_os = "macos")]
-                keyboard.send_hotkey(&[enigo::Key::Meta], enigo::Key::Unicode('c'))?;
-                #[cfg(not(target_os = "macos"))]
-                keyboard.send_hotkey(&[enigo::Key::Control], enigo::Key::Unicode('c'))?;
-            }
-            ComputerUseAction::Paste => {
-                let mut keyboard = KeyboardSimulator::new()?;
-                #[cfg(target_os = "macos")]
-                keyboard.send_hotkey(&[enigo::Key::Meta], enigo::Key::Unicode('v'))?;
-                #[cfg(not(target_os = "macos"))]
-                keyboard.send_hotkey(&[enigo::Key::Control], enigo::Key::Unicode('v'))?;
-            }
-            ComputerUseAction::SelectAll => {
-                let mut keyboard = KeyboardSimulator::new()?;
-                #[cfg(target_os = "macos")]
-                keyboard.send_hotkey(&[enigo::Key::Meta], enigo::Key::Unicode('a'))?;
-                #[cfg(not(target_os = "macos"))]
-                keyboard.send_hotkey(&[enigo::Key::Control], enigo::Key::Unicode('a'))?;
-            }
-            ComputerUseAction::Undo => {
-                let mut keyboard = KeyboardSimulator::new()?;
-                #[cfg(target_os = "macos")]
-                keyboard.send_hotkey(&[enigo::Key::Meta], enigo::Key::Unicode('z'))?;
-                #[cfg(not(target_os = "macos"))]
-                keyboard.send_hotkey(&[enigo::Key::Control], enigo::Key::Unicode('z'))?;
-            }
-            ComputerUseAction::Redo => {
-                let mut keyboard = KeyboardSimulator::new()?;
-                #[cfg(target_os = "macos")]
-                keyboard.send_hotkey(
-                    &[enigo::Key::Meta, enigo::Key::Shift],
-                    enigo::Key::Unicode('z'),
-                )?;
-                #[cfg(not(target_os = "macos"))]
-                keyboard.send_hotkey(&[enigo::Key::Control], enigo::Key::Unicode('y'))?;
-            }
-            ComputerUseAction::Zoom {
-                region,
-                zoom_level,
-                capture_screenshot: _,
-            } => {
-                let zoom_action = super::zoom::ZoomAction::new(
-                    super::zoom::Region::from_element_bounds(region),
-                    super::zoom::ZoomLevel::from_factor(*zoom_level),
-                );
-                let zoom_result = super::zoom::zoom_region(&zoom_action)?;
-                tracing::info!(
-                    "Zoomed region at ({}, {}) {}x{} with {}x magnification, zoomed image {}x{} ({} bytes base64)",
-                    region.left,
-                    region.top,
-                    region.width,
-                    region.height,
-                    zoom_level,
-                    zoom_result.width,
-                    zoom_result.height,
-                    zoom_result.image_base64.len(),
-                );
-            }
-            ComputerUseAction::ChooseFile { path } => {
-                let path = validate_picker_path(path)?;
-                run_keystrokes(&file_picker_keystrokes(FilePickerPlatform::current(), path))
-                    .await?;
-            }
-            ComputerUseAction::RespondToDialog { response } => {
-                run_keystrokes(&dialog_keystrokes(*response)).await?;
-            }
-        }
-
-        Ok(())
-    }
-}
+use super::control::{ensure_agent_in_control, PickerKeystroke, PickerModifier};
+use super::types::ScrollDirection;
 
 pub async fn run_keystrokes(strokes: &[PickerKeystroke]) -> Result<()> {
     let mut keyboard = KeyboardSimulator::new()?;
@@ -283,7 +36,7 @@ pub async fn run_keystrokes(strokes: &[PickerKeystroke]) -> Result<()> {
     Ok(())
 }
 
-/// Parses a key name string into an enigo `Key`.
+/// Parses a key string to enigo Key.
 pub fn parse_key(key: &str) -> Option<enigo::Key> {
     match key.to_lowercase().as_str() {
         "enter" | "return" => Some(enigo::Key::Return),
@@ -317,22 +70,15 @@ pub fn parse_key(key: &str) -> Option<enigo::Key> {
     }
 }
 
-/// Translates a coordinate from capture space to input space, accounting for HiDPI.
-pub fn translate_capture_coordinate(coord: Coordinate, display: &ScreenInfo) -> Coordinate {
-    Coordinate::new(
-        display.x + ((coord.x as f32) / display.scale_factor).round() as i32,
-        display.y + ((coord.y as f32) / display.scale_factor).round() as i32,
-    )
-}
-
-/// Translates an (x, y) point from capture space to input space.
-pub fn translate_capture_point(x: i32, y: i32, display: &ScreenInfo) -> (i32, i32) {
-    let translated = translate_capture_coordinate(Coordinate::new(x, y), display);
-    (translated.x, translated.y)
-}
-
-pub fn resolve_target_display() -> Result<ScreenInfo> {
-    super::control::resolve_target_display()
+/// The wheel axis and signed length for a scroll. enigo scrolls down and to
+/// the right for a positive length, on every platform.
+pub fn wheel_motion(direction: ScrollDirection, amount: i32) -> (enigo::Axis, i32) {
+    match direction {
+        ScrollDirection::Up => (enigo::Axis::Vertical, -amount),
+        ScrollDirection::Down => (enigo::Axis::Vertical, amount),
+        ScrollDirection::Left => (enigo::Axis::Horizontal, -amount),
+        ScrollDirection::Right => (enigo::Axis::Horizontal, amount),
+    }
 }
 
 #[cfg(test)]
@@ -375,34 +121,22 @@ mod tests {
     }
 
     #[test]
-    fn test_translate_capture_coordinate_hidpi() {
-        let display = ScreenInfo {
-            id: 0,
-            x: 100,
-            y: 50,
-            width: 1440,
-            height: 900,
-            scale_factor: 2.0,
-            is_primary: true,
-        };
-
-        let translated = translate_capture_coordinate(Coordinate::new(400, 200), &display);
-        assert_eq!(translated, Coordinate::new(300, 150));
-    }
-
-    #[test]
-    fn test_translate_capture_coordinate_no_scaling() {
-        let display = ScreenInfo {
-            id: 0,
-            x: 0,
-            y: 0,
-            width: 1920,
-            height: 1080,
-            scale_factor: 1.0,
-            is_primary: true,
-        };
-
-        let translated = translate_capture_coordinate(Coordinate::new(500, 300), &display);
-        assert_eq!(translated, Coordinate::new(500, 300));
+    fn a_scroll_turns_the_wheel_the_way_it_was_asked() {
+        assert_eq!(
+            wheel_motion(ScrollDirection::Down, 3),
+            (enigo::Axis::Vertical, 3)
+        );
+        assert_eq!(
+            wheel_motion(ScrollDirection::Up, 3),
+            (enigo::Axis::Vertical, -3)
+        );
+        assert_eq!(
+            wheel_motion(ScrollDirection::Right, 2),
+            (enigo::Axis::Horizontal, 2)
+        );
+        assert_eq!(
+            wheel_motion(ScrollDirection::Left, 2),
+            (enigo::Axis::Horizontal, -2)
+        );
     }
 }

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod integration_tests {
     use crate::data::settings::{
-        models::{AppSettings, SettingCategory, SettingValue},
+        models::{SettingCategory, SettingValue},
         repository, SettingsService,
     };
     use rusqlite::Connection;
@@ -129,37 +129,6 @@ mod integration_tests {
     }
 
     #[test]
-    fn test_category_filtering() {
-        let service = setup_test_service();
-
-        service
-            .set(
-                "llm_setting".to_string(),
-                SettingValue::String("llm_value".to_string()),
-                SettingCategory::Llm,
-                false,
-            )
-            .unwrap();
-
-        service
-            .set(
-                "ui_setting".to_string(),
-                SettingValue::String("ui_value".to_string()),
-                SettingCategory::Ui,
-                false,
-            )
-            .unwrap();
-
-        let llm_settings = service.get_by_category(SettingCategory::Llm).unwrap();
-        assert_eq!(llm_settings.len(), 1);
-        assert_eq!(llm_settings[0].key, "llm_setting");
-
-        let ui_settings = service.get_by_category(SettingCategory::Ui).unwrap();
-        assert_eq!(ui_settings.len(), 1);
-        assert_eq!(ui_settings[0].key, "ui_setting");
-    }
-
-    #[test]
     fn test_validation() {
         let service = setup_test_service();
 
@@ -219,28 +188,6 @@ mod integration_tests {
 
         let value3 = service.get("cached_key").unwrap();
         assert_eq!(value3.as_string(), Some("cached_value"));
-    }
-
-    #[test]
-    fn test_app_settings_roundtrip() {
-        let service = setup_test_service();
-
-        let mut settings = AppSettings {
-            default_provider: "anthropic".to_string(),
-            ..Default::default()
-        };
-        settings.default_model = "fixture-settings-model".to_string();
-        settings.ui_preferences.theme = "dark".to_string();
-        settings.ui_preferences.font_size = 16;
-
-        service.save_app_settings(&settings).unwrap();
-
-        let loaded = service.load_app_settings().unwrap();
-
-        assert_eq!(loaded.default_provider, "anthropic");
-        assert_eq!(loaded.default_model, "fixture-settings-model");
-        assert_eq!(loaded.ui_preferences.theme, "dark");
-        assert_eq!(loaded.ui_preferences.font_size, 16);
     }
 
     #[test]

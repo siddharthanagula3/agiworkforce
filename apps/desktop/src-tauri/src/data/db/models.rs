@@ -43,6 +43,15 @@ impl Default for Conversation {
     }
 }
 
+/// A conversation as the history list shows it, with the flags only the list needs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationListItem {
+    #[serde(flatten)]
+    pub conversation: Conversation,
+    pub archived: bool,
+    pub pinned: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum MessageRole {
@@ -107,24 +116,43 @@ impl Default for Message {
     }
 }
 
-pub const DEFAULT_BRANCH_ID: &str = "main";
-
+/// A stored message with the turn detail the chat rendered live: tool calls,
+/// reasoning and the names of attached files.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ConversationBranch {
-    pub id: String,
-    pub conversation_id: i64,
-    pub parent_branch_id: Option<String>,
-    pub fork_point_message_id: Option<i64>,
-    pub name: String,
-    pub created_at: DateTime<Utc>,
+pub struct MessageWithDetail {
+    #[serde(flatten)]
+    pub message: Message,
+    pub tool_calls: Option<serde_json::Value>,
+    pub thinking: Option<String>,
+    pub attachments: Option<serde_json::Value>,
+    /// The web searches a turn ran and the results each returned.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sources: Option<serde_json::Value>,
+    pub feedback: Option<String>,
+    /// `"summarized"` for a message compaction replaced in the model's
+    /// history, `"summary"` for the message that stands in for such messages.
+    /// Neither can be edited, retried or branched from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compaction: Option<String>,
 }
 
+pub const COMPACTION_SUMMARIZED: &str = "summarized";
+pub const COMPACTION_SUMMARY: &str = "summary";
+
+pub const DEFAULT_BRANCH_ID: &str = "main";
+
+/// Chats that share a history up to one message: the conversation a branch was
+/// made from, then each branch made at that message, oldest first.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ForkResult {
-    pub branch: ConversationBranch,
-    pub messages: Vec<Message>,
+pub struct ConversationBranchGroup {
+    /// The shared message as it is stored in the conversation being viewed.
+    pub message_id: i64,
+    /// The id the renderer gave that message, when it was sent in this window.
+    pub client_id: Option<String>,
+    pub conversation_ids: Vec<i64>,
+    /// Where the conversation being viewed sits in `conversation_ids`.
+    pub active_index: usize,
 }
 
 impl Message {

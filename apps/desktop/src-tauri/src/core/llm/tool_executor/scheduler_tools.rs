@@ -1,4 +1,38 @@
 use super::*;
+use crate::core::scheduler::{ParsedSchedule, TaskSchedule};
+use crate::sys::commands::scheduler::{ScheduledJob, SchedulerActionType, SchedulerState};
+
+/// Stores what a phrase asked for as a job on the typed schedule the task
+/// form uses, read on this computer's clock, and tells every window.
+fn schedule_from_chat(
+    app: &tauri::AppHandle,
+    parsed: &ParsedSchedule,
+    name: String,
+    action_type: SchedulerActionType,
+    action_data: Value,
+) -> std::result::Result<ScheduledJob, String> {
+    use tauri::Manager;
+
+    let plan = TaskSchedule::from_parsed(parsed, chrono::Local::now().naive_local())?;
+    let job = ScheduledJob::planned(name, plan, action_type, action_data)
+        .map_err(|error| error.to_string())?;
+    app.state::<SchedulerState>()
+        .add_and_announce(app, job)
+        .map_err(|error| error.to_string())
+}
+
+fn local_time(at: chrono::DateTime<chrono::Utc>) -> String {
+    at.with_timezone(&chrono::Local)
+        .format("%I:%M %p on %B %d")
+        .to_string()
+}
+
+fn schedule_in_words(job: &ScheduledJob) -> String {
+    job.plan
+        .as_ref()
+        .map(TaskSchedule::summary)
+        .unwrap_or_else(|| format!("cron {} (UTC)", job.schedule))
+}
 
 impl ToolExecutor {
     pub(super) async fn execute_schedule_reminder_tool(
@@ -7,10 +41,7 @@ impl ToolExecutor {
         tool_id: &str,
     ) -> Result<ToolResult> {
         if let Some(ref app) = self.app_handle {
-            use crate::core::scheduler::{parse_schedule, ParsedSchedule};
-            use crate::sys::commands::scheduler::{SchedulerActionType, SchedulerState};
-            use chrono::{Datelike, Local, Timelike};
-            use tauri::Manager;
+            use crate::core::scheduler::parse_schedule;
 
             let message = args
                 .get("message")
@@ -33,62 +64,35 @@ impl ToolExecutor {
                 )
             })?;
 
-            // Convert to cron expression or one-time schedule
-            let (schedule_expr, is_recurring) = match &parsed {
-                ParsedSchedule::Once(dt) => {
-                    // For one-time reminders, create a specific cron that matches this exact time
-                    let local = dt.with_timezone(&Local);
-                    let cron = format!(
-                        "{} {} {} {} *",
-                        local.minute(),
-                        local.hour(),
-                        local.day(),
-                        local.month()
-                    );
-                    (cron, false)
-                }
-                ParsedSchedule::Cron(expr) => (expr.clone(), true),
-                ParsedSchedule::Interval(duration) => {
-                    // Convert interval to approximate cron (limited precision)
-                    let minutes = duration.num_minutes();
-                    if minutes < 60 {
-                        (format!("*/{} * * * *", minutes.max(1)), true)
-                    } else {
-                        let hours = duration.num_hours();
-                        (format!("0 */{} * * *", hours.max(1)), true)
-                    }
-                }
-            };
-
-            let state = app.state::<SchedulerState>();
             let action_data = json!({
                 "message": message,
                 "title": "Reminder"
             });
 
-            match state.scheduler.add_job(
+            match schedule_from_chat(
+                app,
+                &parsed,
                 format!("Reminder: {}", message),
-                schedule_expr,
                 SchedulerActionType::Notification,
                 action_data,
             ) {
-                Ok(job_id) => {
-                    // Format user-friendly response
-                    let friendly_time = match &parsed {
-                        ParsedSchedule::Once(dt) => {
-                            let local = dt.with_timezone(&Local);
-                            local.format("%I:%M %p on %B %d").to_string()
-                        }
-                        ParsedSchedule::Cron(_) | ParsedSchedule::Interval(_) => time_expr.clone(),
-                    };
+                Ok(job) => {
+                    let job_id = job.id.clone();
+                    let is_recurring = !parsed.is_once();
+                    let schedule = schedule_in_words(&job);
+                    let next_run = job.next_run.map(local_time);
 
                     let response_msg = if is_recurring {
                         format!(
                             "I've scheduled a recurring reminder for '{}' ({})",
-                            message, time_expr
+                            message, schedule
                         )
                     } else {
-                        format!("I've set a reminder for {} to '{}'", friendly_time, message)
+                        format!(
+                            "I've set a reminder for {} to '{}'",
+                            next_run.as_deref().unwrap_or(&schedule),
+                            message
+                        )
                     };
 
                     Ok(ToolResult {
@@ -96,7 +100,8 @@ impl ToolExecutor {
                         data: json!({
                             "job_id": job_id,
                             "message": message,
-                            "scheduled_time": friendly_time,
+                            "schedule": schedule,
+                            "scheduled_time": next_run,
                             "is_recurring": is_recurring,
                             "confirmation": response_msg
                         }),
@@ -130,9 +135,7 @@ impl ToolExecutor {
         tool_id: &str,
     ) -> Result<ToolResult> {
         if let Some(ref app) = self.app_handle {
-            use crate::core::scheduler::{parse_schedule, ParsedSchedule};
-            use crate::sys::commands::scheduler::{SchedulerActionType, SchedulerState};
-            use tauri::Manager;
+            use crate::core::scheduler::parse_schedule;
 
             let task_name = args
                 .get("name")
@@ -154,11 +157,6 @@ impl ToolExecutor {
                 .ok_or_else(|| anyhow!("Missing task_description parameter"))?
                 .to_string();
 
-            let action_type_str = args
-                .get("action_type")
-                .and_then(|v| v.as_str())
-                .unwrap_or("agi_task");
-
             // Parse the natural language schedule expression
             let parsed = parse_schedule(&schedule_expr).map_err(|e| {
                 anyhow!(
@@ -168,110 +166,42 @@ impl ToolExecutor {
                 )
             })?;
 
-            // Convert to cron expression
-            let cron_expr = match &parsed {
-                ParsedSchedule::Cron(expr) => expr.clone(),
-                ParsedSchedule::Interval(duration) => {
-                    let minutes = duration.num_minutes();
-                    if minutes < 60 {
-                        format!("*/{} * * * *", minutes.max(1))
-                    } else {
-                        let hours = duration.num_hours();
-                        format!("0 */{} * * *", hours.max(1))
-                    }
-                }
-                ParsedSchedule::Once(_) => {
-                    let err_msg = "Recurring tasks require a repeating schedule like 'every day at 9am' or 'every monday'. For one-time tasks, use schedule_reminder instead.".to_string();
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": err_msg.clone(), "success": false }),
-                        error: Some(err_msg),
-                        metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
-                    });
-                }
-            };
-
-            // Recurring model-created tasks are limited to AGI task prompts. More
-            // privileged scheduler actions are created through explicit UI flows.
-            let action_type = match action_type_str.to_lowercase().as_str() {
-                "agi_task" | "agitask" | "agi-task" => SchedulerActionType::AgiTask,
-                other => {
-                    let err_msg = format!(
-                        "schedule_recurring_task supports only action_type='agi_task' from chat, got '{other}'"
-                    );
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": err_msg.clone(), "success": false }),
-                        error: Some(err_msg),
-                        metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
-                    });
-                }
-            };
-
-            let mut action_data = args
-                .get("action_data")
-                .cloned()
-                .unwrap_or_else(|| json!({}));
-
-            if !action_data.is_object() {
+            if parsed.is_once() {
+                let err_msg = "Recurring tasks require a repeating schedule like 'every day at 9am' or 'every monday'. For one-time tasks, use schedule_reminder instead.".to_string();
                 return Ok(ToolResult {
                     success: false,
-                    data: json!({
-                        "error": "action_data must be a JSON object when provided",
-                        "success": false
-                    }),
-                    error: Some("action_data must be a JSON object when provided".to_string()),
+                    data: json!({ "error": err_msg.clone(), "success": false }),
+                    error: Some(err_msg),
                     metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
                 });
             }
 
-            if let Some(action_object) = action_data.as_object_mut() {
-                action_object
-                    .entry("prompt".to_string())
-                    .or_insert_with(|| json!(task_description.clone()));
-                action_object
-                    .entry("task_description".to_string())
-                    .or_insert_with(|| json!(task_description.clone()));
-            }
+            // A task made in chat is an AI prompt, as one made in the task
+            // form is; no other kind of job can be scheduled.
+            let action_type = SchedulerActionType::AgiTask;
+            let action_data = json!({ "prompt": task_description });
 
-            let state = app.state::<SchedulerState>();
-
-            match state.scheduler.add_job(
+            match schedule_from_chat(
+                app,
+                &parsed,
                 task_name.clone(),
-                cron_expr.clone(),
                 action_type.clone(),
                 action_data,
             ) {
-                Ok(job_id) => {
-                    // Format user-friendly response
-                    let friendly_schedule = match &parsed {
-                        ParsedSchedule::Cron(_) => schedule_expr.clone(),
-                        ParsedSchedule::Interval(d) => {
-                            let hours = d.num_hours();
-                            let minutes = d.num_minutes() % 60;
-                            if hours > 0 && minutes > 0 {
-                                format!("every {} hours and {} minutes", hours, minutes)
-                            } else if hours > 0 {
-                                format!("every {} hour(s)", hours)
-                            } else {
-                                format!("every {} minute(s)", d.num_minutes())
-                            }
-                        }
-                        ParsedSchedule::Once(_) => schedule_expr.clone(),
-                    };
-
-                    let response_msg = format!(
-                        "I've scheduled '{}' to run {}",
-                        task_name, friendly_schedule
-                    );
+                Ok(job) => {
+                    let job_id = job.id.clone();
+                    let schedule = schedule_in_words(&job);
+                    let response_msg =
+                        format!("I've scheduled '{}' to run {}", task_name, schedule);
 
                     Ok(ToolResult {
                         success: true,
                         data: json!({
                             "job_id": job_id,
                             "name": task_name,
-                            "schedule": friendly_schedule,
-                            "cron_expression": cron_expr,
+                            "schedule": schedule,
+                            "cron_expression": job.schedule,
+                            "next_run": job.next_run.map(local_time),
                             "action_type": action_type.to_string(),
                             "confirmation": response_msg
                         }),
@@ -305,14 +235,12 @@ impl ToolExecutor {
         tool_id: &str,
     ) -> Result<ToolResult> {
         if let Some(ref app) = self.app_handle {
-            use crate::sys::commands::scheduler::SchedulerState;
             use tauri::Manager;
 
             let job_id = args
-                .get("job_id")
-                .or_else(|| args.get("task_id"))
+                .get("task_id")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| anyhow!("Missing job_id or task_id parameter"))?
+                .ok_or_else(|| anyhow!("Missing task_id parameter"))?
                 .to_string();
 
             let state = app.state::<SchedulerState>();
@@ -325,7 +253,7 @@ impl ToolExecutor {
                 .flatten()
                 .map(|j| j.name.clone());
 
-            match state.scheduler.remove_job(&job_id) {
+            match state.remove_and_announce(app, &job_id) {
                 Ok(removed) => {
                     if removed {
                         let response_msg = match job_name {
@@ -381,8 +309,6 @@ impl ToolExecutor {
         tool_id: &str,
     ) -> Result<ToolResult> {
         if let Some(ref app) = self.app_handle {
-            use crate::sys::commands::scheduler::SchedulerState;
-            use chrono::Local;
             use tauri::Manager;
 
             let state = app.state::<SchedulerState>();
@@ -392,28 +318,17 @@ impl ToolExecutor {
                     let task_list: Vec<serde_json::Value> = jobs
                         .iter()
                         .map(|job| {
-                            let next_run_str = job.next_run.map(|dt| {
-                                dt.with_timezone(&Local)
-                                    .format("%I:%M %p on %B %d")
-                                    .to_string()
-                            });
-
-                            let last_run_str = job.last_run.map(|dt| {
-                                dt.with_timezone(&Local)
-                                    .format("%I:%M %p on %B %d")
-                                    .to_string()
-                            });
-
                             json!({
                                 "id": job.id,
                                 "name": job.name,
-                                "schedule": job.schedule,
+                                "schedule": schedule_in_words(job),
                                 "action_type": job.action_type.to_string(),
                                 "status": format!("{:?}", job.status).to_lowercase(),
-                                "next_run": next_run_str,
-                                "last_run": last_run_str,
+                                "next_run": job.next_run.map(local_time),
+                                "last_run": job.last_run.map(local_time),
                                 "run_count": job.run_count,
-                                "description": job.description
+                                "description": job.description,
+                                "last_problem": job.last_problem.as_ref().map(|problem| &problem.reason)
                             })
                         })
                         .collect();

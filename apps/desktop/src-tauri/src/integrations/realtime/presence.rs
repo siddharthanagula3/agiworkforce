@@ -91,24 +91,6 @@ impl PresenceManager {
         }
     }
 
-    pub async fn set_activity(&self, user_id: &str, activity: UserActivity) {
-        let mut users = self.online_users.lock().await;
-        if let Some(presence) = users.get_mut(user_id) {
-            presence.current_activity = Some(activity);
-            let presence_clone = presence.clone();
-            drop(users);
-            let _ = self.persist_presence(&presence_clone).await;
-        }
-    }
-
-    pub async fn get_team_presence(&self, _team_id: &str) -> Vec<UserPresence> {
-        self.online_users.lock().await.values().cloned().collect()
-    }
-
-    pub async fn get_user_presence(&self, user_id: &str) -> Option<UserPresence> {
-        self.online_users.lock().await.get(user_id).cloned()
-    }
-
     async fn persist_presence(&self, presence: &UserPresence) -> Result<(), rusqlite::Error> {
         let db = self.db.lock().await;
         let activity_json = presence

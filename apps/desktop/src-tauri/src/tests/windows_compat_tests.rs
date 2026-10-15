@@ -1066,39 +1066,8 @@ mod windows_compat_tests {
     }
 
     // ===================================================================
-    // SETTINGS MODELS, WINDOWS-SPECIFIC DEFAULTS
+    // SETTINGS VALUES, WINDOWS PATHS
     // ===================================================================
-
-    #[test]
-    fn test_app_settings_default_schema_version() {
-        use crate::data::settings::models::AppSettings;
-        let settings = AppSettings::default();
-        assert_eq!(
-            settings.schema_version, 1,
-            "Default schema version must be 1"
-        );
-    }
-
-    #[test]
-    fn test_app_settings_security_defaults_match_windows_expectations() {
-        use crate::data::settings::models::AppSettings;
-        let settings = AppSettings::default();
-        let sec = &settings.security_settings;
-        // File system and network access are enabled by default
-        assert!(
-            sec.allow_file_system_access,
-            "File system access should be enabled by default"
-        );
-        assert!(
-            sec.allow_network_access,
-            "Network access should be enabled by default"
-        );
-        // Confirmation is required by default (important on Windows where UAC exists)
-        assert!(
-            sec.require_confirmation_for_actions,
-            "Confirmation should be required by default"
-        );
-    }
 
     #[test]
     fn test_setting_value_windows_path_round_trips() {

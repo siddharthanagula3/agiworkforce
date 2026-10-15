@@ -9,7 +9,7 @@ use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalReq
 
 mod operations;
 
-pub(super) use operations::execute_git_tool;
+pub(super) use operations::{execute_git_tool, hook_gate};
 
 pub(super) fn worktree_permission_command(
     tool_name: &str,

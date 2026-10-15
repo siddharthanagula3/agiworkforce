@@ -38,6 +38,7 @@ pub mod secret_manager;
 pub mod storage;
 pub mod tool_guard;
 pub mod updater;
+pub mod vault_credentials;
 
 pub use api::{ApiKey, ApiSecurityManager, CorsConfig, CspBuilder};
 pub use approval_workflow::{

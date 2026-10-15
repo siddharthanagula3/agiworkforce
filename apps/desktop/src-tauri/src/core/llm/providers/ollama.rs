@@ -231,6 +231,28 @@ pub(crate) fn build_ollama_chat_body(
     )
 }
 
+static KEEP_ALIVE_SECONDS: std::sync::RwLock<Option<i64>> = std::sync::RwLock::new(None);
+
+/// How long Ollama keeps a model in memory after a chat request, in seconds.
+/// A negative value keeps it loaded, zero unloads it straight after the reply,
+/// and `None` leaves the server's own default in force.
+pub fn configured_keep_alive_seconds() -> Option<i64> {
+    KEEP_ALIVE_SECONDS.read().ok().and_then(|seconds| *seconds)
+}
+
+pub fn set_configured_keep_alive_seconds(seconds: Option<i64>) {
+    if let Ok(mut slot) = KEEP_ALIVE_SECONDS.write() {
+        *slot = seconds;
+    }
+}
+
+fn with_keep_alive(mut body: serde_json::Value, seconds: Option<i64>) -> serde_json::Value {
+    if let (Some(seconds), Some(fields)) = (seconds, body.as_object_mut()) {
+        fields.insert("keep_alive".to_string(), serde_json::json!(seconds));
+    }
+    body
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct OllamaResponse {
     model: String,
@@ -251,6 +273,27 @@ pub struct OllamaProvider {
 impl OllamaProvider {
     pub fn new(base_url: Option<String>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         Self::with_config(base_url, HttpClientConfig::default())
+    }
+
+    /// Create the Local-mode Ollama provider for a user-supplied URL, refusing any
+    /// host outside the Local trust boundary (see `local_endpoint`).
+    pub fn new_local_runtime(
+        base_url: Option<String>,
+        allow_private_network: bool,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let resolved = match base_url {
+            Some(url) => {
+                super::local_endpoint::validate_local_runtime_url(
+                    &url,
+                    "Ollama",
+                    allow_private_network,
+                )
+                .map_err(Box::<dyn std::error::Error + Send + Sync>::from)?
+                .0
+            }
+            None => super::super::OLLAMA_DEFAULT_BASE_URL.to_string(),
+        };
+        Self::new(Some(resolved))
     }
 
     /// Create a new Ollama provider with explicit proxy / CA certificate configuration.
@@ -309,6 +352,7 @@ impl OllamaProvider {
         model: &str,
     ) -> Result<reqwest::Response, Box<dyn Error + Send + Sync>> {
         let url = format!("{}/api/chat", self.base_url);
+        let body = with_keep_alive(body, configured_keep_alive_seconds());
         let post = |payload: serde_json::Value| {
             let client = self.client.clone();
             let url = url.clone();
@@ -612,6 +656,10 @@ impl LLMProvider for OllamaProvider {
         "Ollama"
     }
 
+    fn base_url(&self) -> Option<&str> {
+        Some(&self.base_url)
+    }
+
     fn supports_vision(&self) -> bool {
         true
     }
@@ -797,6 +845,21 @@ mod tests {
     use super::*;
     use crate::core::llm::{ChatMessage, LLMRequest};
 
+    #[test]
+    fn a_chosen_keep_alive_is_sent_with_the_chat_request() {
+        let body = with_keep_alive(serde_json::json!({ "model": "local-fixture" }), Some(900));
+        assert_eq!(body["keep_alive"], serde_json::json!(900));
+
+        let pinned = with_keep_alive(serde_json::json!({ "model": "local-fixture" }), Some(-1));
+        assert_eq!(pinned["keep_alive"], serde_json::json!(-1));
+    }
+
+    #[test]
+    fn no_keep_alive_leaves_the_server_default_in_force() {
+        let body = with_keep_alive(serde_json::json!({ "model": "local-fixture" }), None);
+        assert!(body.get("keep_alive").is_none());
+    }
+
     fn make_tool(name: &str) -> ToolDefinition {
         ToolDefinition {
             name: name.to_string(),
@@ -938,5 +1001,22 @@ mod tests {
         let provider = OllamaProvider::new(Some(String::new())).expect("Failed to create provider");
 
         assert!(!provider.is_available().await);
+    }
+
+    #[test]
+    fn local_runtime_constructor_keeps_ollama_inside_the_local_boundary() {
+        assert!(OllamaProvider::new_local_runtime(None, false).is_ok());
+        assert!(
+            OllamaProvider::new_local_runtime(Some("https://ollama.example.com".into()), true)
+                .is_err()
+        );
+        assert!(
+            OllamaProvider::new_local_runtime(Some("http://192.168.1.20:11434".into()), false)
+                .is_err()
+        );
+        let provider =
+            OllamaProvider::new_local_runtime(Some("http://192.168.1.20:11434/".into()), true)
+                .expect("marked private-network Ollama should be accepted");
+        assert_eq!(provider.base_url, "http://192.168.1.20:11434");
     }
 }

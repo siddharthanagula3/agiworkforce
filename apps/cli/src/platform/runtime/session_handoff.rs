@@ -404,6 +404,7 @@ mod tests {
             reversible: Some(false),
             proposed_content: None,
             always_allow_saved: false,
+            proposed_execpolicy_amendment: None,
         }];
 
         let admitted = developer_session_handoff(&session, context)

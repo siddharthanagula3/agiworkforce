@@ -103,6 +103,19 @@ impl PermissionMode {
             PermissionMode::DontAsk => "dontAsk",
         }
     }
+
+    /// The mode a session file may hold for this one. Bypass is never
+    /// written: the file keeps the last mode it held that was not bypass, or
+    /// the default, so a session opened again cannot start with every
+    /// approval off because one earlier turn was allowed to.
+    pub(crate) fn storable(self, last_stored: Option<PermissionMode>) -> PermissionMode {
+        match self {
+            PermissionMode::BypassPermissions => last_stored
+                .filter(|mode| *mode != PermissionMode::BypassPermissions)
+                .unwrap_or_default(),
+            mode => mode,
+        }
+    }
 }
 
 impl EffectivePermissions {
@@ -244,6 +257,22 @@ pub(crate) fn session_persistence_policy_lock() -> std::sync::MutexGuard<'static
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn bypass_is_never_the_mode_a_session_file_holds() {
+        let bypass = PermissionMode::BypassPermissions;
+
+        assert_eq!(
+            bypass.storable(Some(PermissionMode::AcceptEdits)),
+            PermissionMode::AcceptEdits
+        );
+        assert_eq!(bypass.storable(None), PermissionMode::Default);
+        assert_eq!(bypass.storable(Some(bypass)), PermissionMode::Default);
+        assert_eq!(
+            PermissionMode::Plan.storable(Some(PermissionMode::AcceptEdits)),
+            PermissionMode::Plan
+        );
+    }
 
     #[test]
     fn accept_edits_is_the_only_mode_that_accepts_edits() {

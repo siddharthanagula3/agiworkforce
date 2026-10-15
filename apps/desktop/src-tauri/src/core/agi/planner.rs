@@ -1,7 +1,5 @@
 use super::*;
 use crate::core::agi::knowledge::KnowledgeEntry;
-use crate::core::agi::process_ontology::ProcessOntology;
-use crate::core::agi::process_reasoning::ProcessReasoning;
 use crate::core::llm::{
     ChatMessage, LLMRequest, LLMRouter, Provider, RouterPreferences, RoutingStrategy,
     ThinkingParameter,
@@ -46,6 +44,8 @@ fn task_plan_request(
     }
 }
 
+const NO_MODEL_TO_PLAN: &str = "No model is available to plan this task inside its execution boundary. Add a model, or start the local runtime, and run it again.";
+
 fn reasoning_only_plan_json(goal: &Goal, tools: &[Tool]) -> Result<Option<String>> {
     let [reasoning_tool] = tools else {
         return Ok(None);
@@ -72,12 +72,48 @@ fn reasoning_only_plan_json(goal: &Goal, tools: &[Tool]) -> Result<Option<String
     })])?))
 }
 
+/// Tools the caller rules out for a plan, each with what a person would be
+/// told: today, a capability switched off in Settings. The planner holds no
+/// app state, so whoever starts the plan says what is off. None of these is
+/// offered to the planning model, and no plan step naming one is accepted.
+#[derive(Debug, Clone, Default)]
+pub struct WithheldTools(HashMap<String, String>);
+
+impl WithheldTools {
+    /// The tools among `tools` that `refusal` rules out.
+    pub fn among(tools: Vec<Tool>, refusal: impl Fn(&str) -> Option<String>) -> Self {
+        Self(
+            tools
+                .into_iter()
+                .filter_map(|tool| refusal(&tool.id).map(|reason| (tool.id, reason)))
+                .collect(),
+        )
+    }
+
+    fn reason(&self, tool_id: &str) -> Option<&str> {
+        self.0.get(tool_id).map(String::as_str)
+    }
+
+    fn offered(&self, tools: Vec<Tool>) -> Vec<Tool> {
+        tools
+            .into_iter()
+            .filter(|tool| self.reason(&tool.id).is_none())
+            .collect()
+    }
+
+    /// The first step that names a withheld tool, with the reason.
+    fn refused_step(&self, steps: &[PlanStep]) -> Option<(String, &str)> {
+        steps.iter().find_map(|step| {
+            self.reason(&step.tool_id)
+                .map(|reason| (step.tool_id.clone(), reason))
+        })
+    }
+}
+
 pub struct AGIPlanner {
     router: Arc<RwLock<LLMRouter>>,
     tool_registry: Arc<ToolRegistry>,
     knowledge_base: Arc<KnowledgeBase>,
-    process_reasoning: Option<Arc<ProcessReasoning>>,
-    process_ontology: Option<Arc<ProcessOntology>>,
 }
 
 fn goal_routing_target(goal: &Goal) -> Result<(Option<Provider>, Option<String>)> {
@@ -119,85 +155,79 @@ impl AGIPlanner {
             router,
             tool_registry,
             knowledge_base,
-            process_reasoning: None,
-            process_ontology: None,
         })
     }
 
-    pub fn with_process_reasoning(
-        router: Arc<RwLock<LLMRouter>>,
-        tool_registry: Arc<ToolRegistry>,
-        knowledge_base: Arc<KnowledgeBase>,
-        process_reasoning: Arc<ProcessReasoning>,
-        process_ontology: Arc<ProcessOntology>,
-    ) -> Result<Self> {
-        Ok(Self {
-            router,
-            tool_registry,
-            knowledge_base,
-            process_reasoning: Some(process_reasoning),
-            process_ontology: Some(process_ontology),
-        })
-    }
-
-    pub async fn create_plan(&self, goal: &Goal, context: &ExecutionContext) -> Result<Plan> {
+    pub async fn create_plan(
+        &self,
+        goal: &Goal,
+        context: &ExecutionContext,
+        withheld: &WithheldTools,
+    ) -> Result<Plan> {
         tracing::info!("[Planner] Creating plan for goal: {}", goal.description);
-
-        let process_type = if let Some(ref pr) = self.process_reasoning {
-            match pr.identify_process_type(goal).await {
-                Ok(pt) => {
-                    tracing::info!("[Planner] Identified process type: {:?}", pt);
-                    Some(pt)
-                }
-                Err(e) => {
-                    tracing::warn!("[Planner] Failed to identify process type: {}", e);
-                    None
-                }
-            }
-        } else {
-            None
-        };
-
-        let best_practices =
-            if let (Some(pt), Some(ref po)) = (process_type, &self.process_ontology) {
-                po.get_best_practices(pt)
-            } else {
-                vec![]
-            };
 
         let knowledge = self.knowledge_base.get_relevant_knowledge(goal, 10).await?;
 
-        let suggested_tools: Vec<_> = self.tool_registry.suggest_tools(&goal.description);
+        let suggested_tools = withheld.offered(self.tool_registry.suggest_tools(&goal.description));
 
         if let Some(plan_json) = reasoning_only_plan_json(goal, &suggested_tools)? {
             return self.parse_plan(goal, &plan_json);
         }
 
         let plan_json = self
-            .plan_with_llm(goal, context, &knowledge, &suggested_tools, &best_practices)
+            .plan_with_llm(goal, context, &knowledge, &suggested_tools, None)
             .await?;
+        let plan = self.parse_plan(goal, &plan_json)?;
 
-        self.parse_plan(goal, &plan_json)
+        // The model can still name a tool it was not offered. One more plan is
+        // asked for, told what is unavailable; a second miss fails here with
+        // the reason, before any step runs.
+        let Some((tool_id, reason)) = withheld.refused_step(&plan.steps) else {
+            return Ok(plan);
+        };
+        tracing::warn!(
+            "[Planner] The plan named '{}', which is withheld; planning once more",
+            tool_id
+        );
+        let unavailable = format!("{tool_id} ({reason})");
+        let plan_json = self
+            .plan_with_llm(
+                goal,
+                context,
+                &knowledge,
+                &suggested_tools,
+                Some(&unavailable),
+            )
+            .await?;
+        let plan = self.parse_plan(goal, &plan_json)?;
+        match withheld.refused_step(&plan.steps) {
+            None => Ok(plan),
+            Some((tool_id, reason)) => Err(anyhow::anyhow!(
+                "The plan needs {tool_id}, which is not available. {reason}"
+            )),
+        }
     }
 
+    /// The plan a model writes, or why none could be had. There is no plan
+    /// without a model: a task that runs with nobody watching must fail with
+    /// the reason rather than run steps guessed from words in its prompt.
     async fn invoke_plan_candidate(
         &self,
         request: &LLMRequest,
         preferences: &RouterPreferences,
         selected_target: bool,
         plan_kind: &str,
-    ) -> Result<Option<String>> {
+    ) -> Result<String> {
         let router = self.router.read().await;
         let candidates = router.candidates(request, preferences);
         drop(router);
 
         let Some(candidate) = candidates.first() else {
-            if selected_target {
-                return Err(anyhow::anyhow!(
-                    "The selected Task model is unavailable inside this execution boundary"
-                ));
-            }
-            return Ok(None);
+            return Err(anyhow::anyhow!(if selected_target {
+                "The selected Task model is unavailable inside this execution boundary"
+            } else {
+                NO_MODEL_TO_PLAN
+            }));
         };
 
         let router = self.router.read().await;
@@ -207,11 +237,13 @@ impl AGIPlanner {
         )
         .await
         {
-            Ok(Ok(outcome)) => Ok(Some(outcome.response.content)),
+            Ok(Ok(outcome)) => Ok(outcome.response.content),
             Ok(Err(error)) if selected_target => Err(anyhow::anyhow!(
                 "The selected Task model could not create {plan_kind}: {error}"
             )),
-            Ok(Err(_)) => Ok(None),
+            Ok(Err(error)) => Err(anyhow::anyhow!(
+                "No Task model could create {plan_kind}: {error}"
+            )),
             Err(_) if selected_target => Err(anyhow::anyhow!(
                 "The selected Task model did not create {plan_kind} within {} seconds",
                 TASK_PLAN_TIMEOUT.as_secs()
@@ -229,7 +261,7 @@ impl AGIPlanner {
         context: &ExecutionContext,
         knowledge: &[KnowledgeEntry],
         tools: &[Tool],
-        best_practices: &[String],
+        unavailable: Option<&str>,
     ) -> Result<String> {
         let knowledge_summary: Vec<String> = knowledge
             .iter()
@@ -242,19 +274,12 @@ impl AGIPlanner {
             .map(|t| format!("- {}: {}", t.id, t.description))
             .take(10)
             .collect();
-
-        let best_practices_section = if !best_practices.is_empty() {
-            format!(
-                "\nBest Practices for this Process:\n{}\n",
-                best_practices
-                    .iter()
-                    .map(|p| format!("- {}", p))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            )
-        } else {
-            String::new()
-        };
+        let mut tools_section = tools_summary.join("\n");
+        if let Some(unavailable) = unavailable {
+            tools_section.push_str(&format!(
+                "\n\nNot available right now, do not plan with it: {unavailable}"
+            ));
+        }
 
         let prompt = format!(
             r#"You are AGI Workforce's planning system - an autonomous AI that helps non-technical users automate tasks on their computer.
@@ -273,7 +298,7 @@ Available Tools:
 
 Relevant Knowledge:
 {}
-{}
+
 Current Context:
 - Operating System: {} ({})
 - Architecture: {}
@@ -310,7 +335,7 @@ Example:
     "id": "step_2",
     "tool_id": "ui_click",
     "description": "Click on the button",
-    "parameters": {{ "target": {{ "type": "text", "text": "Open" }}}},
+    "parameters": {{ "app": "Finder", "target": {{ "text": "Open" }}}},
     "estimated_resources": {{ "cpu_percent": 5.0, "memory_mb": 50, "network_mb": 0.0 }},
     "dependencies": ["step_1"]
   }}
@@ -320,9 +345,8 @@ Return ONLY the JSON array."#,
             goal.description,
             goal.priority,
             goal.success_criteria.join(", "),
-            tools_summary.join("\n"),
+            tools_section,
             knowledge_summary.join("\n"),
-            best_practices_section,
             std::env::consts::OS,
             std::env::consts::FAMILY,
             std::env::consts::ARCH,
@@ -348,66 +372,8 @@ Return ONLY the JSON array."#,
 
         let request = task_plan_request(prompt, target_model.as_deref(), None);
 
-        if let Some(plan) = self
-            .invoke_plan_candidate(&request, &preferences, target_model.is_some(), "a plan")
-            .await?
-        {
-            return Ok(plan);
-        }
-
-        self.generate_basic_plan(goal, tools, best_practices).await
-    }
-
-    async fn generate_basic_plan(
-        &self,
-        goal: &Goal,
-        tools: &[Tool],
-        _best_practices: &[String],
-    ) -> Result<String> {
-        let mut steps = Vec::new();
-
-        if let Some(screenshot_tool) = tools.iter().find(|t| t.id == "ui_screenshot") {
-            steps.push(json!({
-                "id": "step_1",
-                "tool_id": "ui_screenshot",
-                "description": format!("Take screenshot to understand current state for: {}", goal.description),
-                "parameters": {},
-                "estimated_resources": screenshot_tool.estimated_resources,
-                "dependencies": []
-            }));
-        }
-
-        let description_lower = goal.description.to_lowercase();
-        let mut step_num = 2;
-
-        if description_lower.contains("click") || description_lower.contains("button") {
-            if let Some(click_tool) = tools.iter().find(|t| t.id == "ui_click") {
-                steps.push(json!({
-                    "id": format!("step_{}", step_num),
-                    "tool_id": "ui_click",
-                    "description": "Click on UI element",
-                    "parameters": { "target": { "type": "text", "text": "button" } },
-                    "estimated_resources": click_tool.estimated_resources,
-                    "dependencies": ["step_1"]
-                }));
-                step_num += 1;
-            }
-        }
-
-        if description_lower.contains("type") || description_lower.contains("text") {
-            if let Some(type_tool) = tools.iter().find(|t| t.id == "ui_type") {
-                steps.push(json!({
-                    "id": format!("step_{}", step_num),
-                    "tool_id": "ui_type",
-                    "description": "Type text",
-                    "parameters": { "target": {}, "text": "text" },
-                    "estimated_resources": type_tool.estimated_resources,
-                    "dependencies": [format!("step_{}", step_num - 1)]
-                }));
-            }
-        }
-
-        Ok(serde_json::to_string(&steps)?)
+        self.invoke_plan_candidate(&request, &preferences, target_model.is_some(), "a plan")
+            .await
     }
 
     fn parse_plan(&self, goal: &Goal, plan_json: &str) -> Result<Plan> {
@@ -643,6 +609,7 @@ Respond with ONLY "true" or "false"."#,
         goal: &Goal,
         context: &ExecutionContext,
         num_plans: usize,
+        withheld: &WithheldTools,
     ) -> Result<Vec<Plan>> {
         tracing::info!(
             "[Planner] Creating {} parallel plans for goal: {}",
@@ -651,7 +618,7 @@ Respond with ONLY "true" or "false"."#,
         );
 
         let knowledge = self.knowledge_base.get_relevant_knowledge(goal, 10).await?;
-        let suggested_tools: Vec<_> = self.tool_registry.suggest_tools(&goal.description);
+        let suggested_tools = withheld.offered(self.tool_registry.suggest_tools(&goal.description));
 
         let mut plans = Vec::new();
 
@@ -672,6 +639,11 @@ Respond with ONLY "true" or "false"."#,
                 .await?;
 
             let mut plan = self.parse_plan(goal, &plan_json)?;
+            if let Some((tool_id, reason)) = withheld.refused_step(&plan.steps) {
+                return Err(anyhow::anyhow!(
+                    "The plan needs {tool_id}, which is not available. {reason}"
+                ));
+            }
             plan.goal_id = format!("{}_{}", goal.id, i);
 
             plans.push(plan);
@@ -771,25 +743,52 @@ Return ONLY a JSON array of steps with this structure:
 
         let request = task_plan_request(prompt, target_model.as_deref(), Some(0.2));
 
-        if let Some(plan) = self
-            .invoke_plan_candidate(
-                &request,
-                &preferences,
-                target_model.is_some(),
-                "a parallel plan",
-            )
-            .await?
-        {
-            return Ok(plan);
-        }
-
-        self.generate_basic_plan(goal, tools, &[]).await
+        self.invoke_plan_candidate(
+            &request,
+            &preferences,
+            target_model.is_some(),
+            "a parallel plan",
+        )
+        .await
     }
 }
 
 #[cfg(test)]
 mod task_plan_request_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn with_no_model_to_plan_there_is_no_plan_and_the_reason_is_given() {
+        let planner = AGIPlanner::new(
+            Arc::new(RwLock::new(LLMRouter::new())),
+            Arc::new(ToolRegistry::new().expect("registry")),
+            Arc::new(KnowledgeBase::new(64).expect("knowledge base")),
+        )
+        .expect("planner");
+        let request = task_plan_request("Build a guide to the UI".to_string(), None, None);
+        let preferences = RouterPreferences {
+            provider: None,
+            model: None,
+            strategy: RoutingStrategy::Auto,
+            context: None,
+            prefer_cloud_credits: false,
+            local_only: false,
+            managed_cloud_only: false,
+            trust_mode: None,
+        };
+
+        let refused = planner
+            .invoke_plan_candidate(&request, &preferences, false, "a plan")
+            .await
+            .expect_err("no model, no plan");
+        assert_eq!(refused.to_string(), NO_MODEL_TO_PLAN);
+
+        let selected = planner
+            .invoke_plan_candidate(&request, &preferences, true, "a plan")
+            .await
+            .expect_err("no model, no plan");
+        assert!(selected.to_string().contains("selected Task model"));
+    }
 
     #[test]
     fn planner_requests_are_bounded_and_disable_thinking() {
@@ -843,5 +842,50 @@ mod task_plan_request_tests {
 
         assert_eq!(value[0]["tool_id"], "llm_reason");
         assert_eq!(value[0]["parameters"]["prompt"], goal.description);
+    }
+
+    #[test]
+    fn a_withheld_tool_is_neither_offered_to_the_planner_nor_accepted_in_a_plan() {
+        use crate::sys::commands::capabilities::{CapabilityState, SavedSwitches};
+
+        let registry = ToolRegistry::new().expect("registry");
+        registry.register_all_tools().expect("register all tools");
+        let terminal_off = CapabilityState::from_saved(SavedSwitches::Saved(HashMap::from([(
+            "terminalAccess".to_string(),
+            false,
+        )])));
+        let withheld = WithheldTools::among(registry.list_tools(), |tool| {
+            terminal_off.tool_refusal_now(tool)
+        });
+
+        let offered = withheld.offered(registry.list_tools());
+        assert!(offered
+            .iter()
+            .all(|tool| tool.id != "terminal_execute" && tool.id != "test_run"));
+        assert!(offered.iter().any(|tool| tool.id == "file_read"));
+
+        let step = |tool_id: &str| PlanStep {
+            id: "step_1".to_string(),
+            tool_id: tool_id.to_string(),
+            description: String::new(),
+            parameters: HashMap::new(),
+            estimated_resources: ResourceUsage {
+                cpu_percent: 0.0,
+                memory_mb: 0,
+                network_mb: 0.0,
+            },
+            dependencies: Vec::new(),
+        };
+        let plan = [step("file_read"), step("terminal_execute")];
+        let (tool_id, reason) = withheld
+            .refused_step(&plan)
+            .expect("the plan names a tool that is off");
+        assert_eq!(tool_id, "terminal_execute");
+        assert!(reason.starts_with("Terminal is turned off"), "{reason}");
+
+        assert!(withheld.refused_step(&[step("file_read")]).is_none());
+        assert!(WithheldTools::default()
+            .refused_step(&[step("terminal_execute")])
+            .is_none());
     }
 }

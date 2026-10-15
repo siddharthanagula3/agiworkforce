@@ -11,9 +11,20 @@
 //! Both functions operate on the same SQLite database used by the chat module
 //! and are designed to be called from the agent tool executor or via Tauri
 //! commands from the frontend.
+//!
+//! Every query takes a [`ConversationScope`]. The database holds every local
+//! account's chats on every execution boundary; an unscoped query lists another
+//! account's chats and hands one boundary's history to another's provider.
 
+use crate::sys::commands::chat::ChatExecutionMode;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+
+const EXECUTION_BOUNDARIES: [ChatExecutionMode; 3] = [
+    ChatExecutionMode::LocalOnly,
+    ChatExecutionMode::Byok,
+    ChatExecutionMode::CloudManaged,
+];
 
 // ---------------------------------------------------------------------------
 // Types
@@ -48,6 +59,65 @@ pub struct ConversationSummary {
     pub timestamp: String,
     /// Total number of messages in this conversation.
     pub message_count: i64,
+}
+
+/// The account and the execution boundaries a query may read.
+///
+/// Local-only and BYOK chats share the device's storage and the `local` app
+/// mode, so the app mode alone would hand a Local-only chat to the third-party
+/// provider answering a BYOK one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConversationScope {
+    user_id: String,
+    app_mode: &'static str,
+    execution_modes: [Option<&'static str>; 3],
+}
+
+impl ConversationScope {
+    /// `execution_modes` must sit on one side of storage: Local-only and BYOK
+    /// chats are kept on the device, Managed Cloud chats are not.
+    pub fn new(user_id: &str, execution_modes: &[ChatExecutionMode]) -> Result<Self, String> {
+        let user_id = user_id.trim();
+        if user_id.is_empty() {
+            return Err("Conversation search needs the signed-in user".to_string());
+        }
+        let Some(first) = execution_modes.first() else {
+            return Err("Conversation search needs an execution boundary".to_string());
+        };
+        let on_device = first.uses_local_storage();
+        if execution_modes
+            .iter()
+            .any(|mode| mode.uses_local_storage() != on_device)
+        {
+            return Err("Conversation search cannot span Local and Cloud history".to_string());
+        }
+        Ok(Self {
+            user_id: user_id.to_string(),
+            app_mode: if on_device { "local" } else { "cloud" },
+            execution_modes: EXECUTION_BOUNDARIES
+                .map(|mode| execution_modes.contains(&mode).then_some(mode.as_str())),
+        })
+    }
+
+    /// The scope of the conversation a turn is running in: the same account on
+    /// the same execution boundary, so a model reads only history the person
+    /// already agreed to send where this turn is going.
+    pub fn of_conversation(conn: &Connection, conversation_id: i64) -> Result<Self, String> {
+        let (user_id, stored_mode): (String, String) = conn
+            .query_row(
+                "SELECT user_id, execution_mode FROM conversations WHERE id = ?1",
+                rusqlite::params![conversation_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|e| format!("Could not read the running conversation: {e}"))?;
+        let execution_mode = EXECUTION_BOUNDARIES
+            .into_iter()
+            .find(|mode| mode.as_str() == stored_mode)
+            .ok_or_else(|| {
+                format!("The running conversation has an unknown execution boundary: {stored_mode}")
+            })?;
+        Self::new(&user_id, &[execution_mode])
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -88,10 +158,11 @@ fn build_fts_query(query: &str) -> Result<String, String> {
 /// Uses the `messages_fts` FTS5 table joined with `messages` and
 /// `conversations` for metadata. Results are ranked by BM25 relevance.
 ///
-/// If `conversation_id` is provided, results are scoped to that single
-/// conversation. Otherwise all conversations are searched.
+/// If `conversation_id` is provided, results are narrowed to that single
+/// conversation. Otherwise every conversation inside `scope` is searched.
 pub fn search_past_conversations(
     conn: &Connection,
+    scope: &ConversationScope,
     query: &str,
     limit: Option<usize>,
     conversation_id: Option<i64>,
@@ -134,7 +205,11 @@ pub fn search_past_conversations(
             JOIN messages      m ON m.id  = CAST(f.message_id      AS INTEGER)
             JOIN conversations c ON c.id  = CAST(f.conversation_id AS INTEGER)
             WHERE messages_fts MATCH ?1
-              AND CAST(f.conversation_id AS INTEGER) = ?3
+              AND m.superseded_key IS NULL
+              AND c.user_id = ?3
+              AND COALESCE(c.app_mode, 'local') = ?4
+              AND c.execution_mode IN (?5, ?6, ?7)
+              AND CAST(f.conversation_id AS INTEGER) = ?8
             ORDER BY rank
             LIMIT ?2"
                 .to_string(),
@@ -153,6 +228,10 @@ pub fn search_past_conversations(
             JOIN messages      m ON m.id  = CAST(f.message_id      AS INTEGER)
             JOIN conversations c ON c.id  = CAST(f.conversation_id AS INTEGER)
             WHERE messages_fts MATCH ?1
+              AND m.superseded_key IS NULL
+              AND c.user_id = ?3
+              AND COALESCE(c.app_mode, 'local') = ?4
+              AND c.execution_mode IN (?5, ?6, ?7)
             ORDER BY rank
             LIMIT ?2"
                 .to_string(),
@@ -167,7 +246,16 @@ pub fn search_past_conversations(
     let rows: Vec<ConversationSearchResult> = if use_conv_filter {
         let conv_id = conversation_id.unwrap_or(0);
         stmt.query_map(
-            rusqlite::params![fts_query, effective_limit, conv_id],
+            rusqlite::params![
+                fts_query,
+                effective_limit,
+                scope.user_id,
+                scope.app_mode,
+                scope.execution_modes[0],
+                scope.execution_modes[1],
+                scope.execution_modes[2],
+                conv_id
+            ],
             map_search_row,
         )
         .map_err(|e| format!("Conversation search failed: {e}"))?
@@ -175,7 +263,15 @@ pub fn search_past_conversations(
         .collect()
     } else {
         stmt.query_map(
-            rusqlite::params![fts_query, effective_limit],
+            rusqlite::params![
+                fts_query,
+                effective_limit,
+                scope.user_id,
+                scope.app_mode,
+                scope.execution_modes[0],
+                scope.execution_modes[1],
+                scope.execution_modes[2]
+            ],
             map_search_row,
         )
         .map_err(|e| format!("Conversation search failed: {e}"))?
@@ -186,9 +282,11 @@ pub fn search_past_conversations(
     Ok(rows)
 }
 
-/// Return the N most recently updated conversations with message counts.
+/// Return the N most recently updated conversations inside `scope` that are
+/// not archived, with message counts.
 pub fn get_recent_conversations(
     conn: &Connection,
+    scope: &ConversationScope,
     limit: Option<usize>,
 ) -> Result<Vec<ConversationSummary>, String> {
     let effective_limit = limit.unwrap_or(10).clamp(1, 50) as i64;
@@ -200,7 +298,11 @@ pub fn get_recent_conversations(
             c.updated_at                 AS updated_at,
             COUNT(m.id)                  AS message_count
         FROM conversations c
-        LEFT JOIN messages m ON m.conversation_id = c.id
+        LEFT JOIN messages m ON m.conversation_id = c.id AND m.superseded_key IS NULL
+        WHERE c.user_id = ?2
+          AND COALESCE(c.app_mode, 'local') = ?3
+          AND c.execution_mode IN (?4, ?5, ?6)
+          AND COALESCE(c.archived, 0) = 0
         GROUP BY c.id
         ORDER BY c.updated_at DESC
         LIMIT ?1
@@ -211,14 +313,24 @@ pub fn get_recent_conversations(
         .map_err(|e| format!("Failed to prepare recent conversations query: {e}"))?;
 
     let rows: Vec<ConversationSummary> = stmt
-        .query_map(rusqlite::params![effective_limit], |row| {
-            Ok(ConversationSummary {
-                conversation_id: row.get(0)?,
-                title: row.get(1)?,
-                timestamp: row.get(2)?,
-                message_count: row.get(3)?,
-            })
-        })
+        .query_map(
+            rusqlite::params![
+                effective_limit,
+                scope.user_id,
+                scope.app_mode,
+                scope.execution_modes[0],
+                scope.execution_modes[1],
+                scope.execution_modes[2]
+            ],
+            |row| {
+                Ok(ConversationSummary {
+                    conversation_id: row.get(0)?,
+                    title: row.get(1)?,
+                    timestamp: row.get(2)?,
+                    message_count: row.get(3)?,
+                })
+            },
+        )
         .map_err(|e| format!("Recent conversations query failed: {e}"))?
         .filter_map(|r| r.ok())
         .collect();
@@ -261,6 +373,9 @@ mod tests {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT NOT NULL DEFAULT 'test',
                 title TEXT NOT NULL DEFAULT 'Untitled',
+                app_mode TEXT NOT NULL DEFAULT 'local',
+                execution_mode TEXT NOT NULL DEFAULT 'local_only',
+                archived INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
@@ -276,6 +391,7 @@ mod tests {
                 model TEXT,
                 parent_message_id INTEGER,
                 branch_id TEXT DEFAULT 'main',
+                superseded_key TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
             CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
@@ -295,12 +411,56 @@ mod tests {
     }
 
     fn insert_conversation(conn: &Connection, title: &str) -> i64 {
+        insert_scoped_conversation(conn, title, "test", ChatExecutionMode::LocalOnly, false)
+    }
+
+    fn insert_scoped_conversation(
+        conn: &Connection,
+        title: &str,
+        user_id: &str,
+        execution_mode: ChatExecutionMode,
+        archived: bool,
+    ) -> i64 {
+        let app_mode = if execution_mode.uses_local_storage() {
+            "local"
+        } else {
+            "cloud"
+        };
         conn.execute(
-            "INSERT INTO conversations (user_id, title) VALUES ('test', ?1)",
-            rusqlite::params![title],
+            "INSERT INTO conversations (user_id, title, app_mode, execution_mode, archived)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![user_id, title, app_mode, execution_mode.as_str(), archived],
         )
         .expect("insert conversation");
         conn.last_insert_rowid()
+    }
+
+    fn scope_of(user_id: &str, execution_mode: ChatExecutionMode) -> ConversationScope {
+        ConversationScope::new(user_id, &[execution_mode]).expect("scope")
+    }
+
+    fn test_scope() -> ConversationScope {
+        scope_of("test", ChatExecutionMode::LocalOnly)
+    }
+
+    fn recent_titles(conn: &Connection, scope: &ConversationScope) -> Vec<String> {
+        let mut titles: Vec<String> = get_recent_conversations(conn, scope, Some(50))
+            .unwrap()
+            .into_iter()
+            .map(|r| r.title)
+            .collect();
+        titles.sort();
+        titles
+    }
+
+    fn found_titles(conn: &Connection, scope: &ConversationScope, query: &str) -> Vec<String> {
+        let mut titles: Vec<String> = search_past_conversations(conn, scope, query, Some(50), None)
+            .unwrap()
+            .into_iter()
+            .map(|r| r.conversation_title)
+            .collect();
+        titles.sort();
+        titles
     }
 
     fn insert_message(conn: &Connection, conv_id: i64, role: &str, content: &str) {
@@ -331,7 +491,8 @@ mod tests {
             "You can use async/await with tokio runtime.",
         );
 
-        let results = search_past_conversations(&conn, "async await", None, None).unwrap();
+        let results =
+            search_past_conversations(&conn, &test_scope(), "async await", None, None).unwrap();
         assert!(!results.is_empty());
         assert_eq!(results[0].conversation_title, "Rust Discussion");
     }
@@ -344,7 +505,8 @@ mod tests {
         insert_message(&conn, conv1, "user", "alpha beta gamma");
         insert_message(&conn, conv2, "user", "alpha delta epsilon");
 
-        let results = search_past_conversations(&conn, "alpha", Some(5), Some(conv1)).unwrap();
+        let results =
+            search_past_conversations(&conn, &test_scope(), "alpha", Some(5), Some(conv1)).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].conversation_id, conv1);
     }
@@ -352,7 +514,7 @@ mod tests {
     #[test]
     fn search_empty_query_returns_error() {
         let conn = setup_test_db();
-        let result = search_past_conversations(&conn, "   ", None, None);
+        let result = search_past_conversations(&conn, &test_scope(), "   ", None, None);
         assert!(result.is_err());
     }
 
@@ -371,7 +533,7 @@ mod tests {
         )
         .unwrap();
 
-        let results = get_recent_conversations(&conn, Some(10)).unwrap();
+        let results = get_recent_conversations(&conn, &test_scope(), Some(10)).unwrap();
         assert!(results.len() >= 2);
         // Most recent first
         assert_eq!(results[0].title, "Newer Chat");
@@ -385,11 +547,182 @@ mod tests {
         insert_message(&conn, conv_id, "assistant", "message 2");
         insert_message(&conn, conv_id, "user", "message 3");
 
-        let results = get_recent_conversations(&conn, Some(10)).unwrap();
+        let results = get_recent_conversations(&conn, &test_scope(), Some(10)).unwrap();
         let found = results
             .iter()
             .find(|r| r.conversation_id == conv_id)
             .expect("conversation not found");
         assert_eq!(found.message_count, 3);
+    }
+
+    fn seed_every_boundary(conn: &Connection) {
+        for (title, user_id, execution_mode) in [
+            ("Mine local", "user-a", ChatExecutionMode::LocalOnly),
+            ("Mine byok", "user-a", ChatExecutionMode::Byok),
+            ("Mine cloud", "user-a", ChatExecutionMode::CloudManaged),
+            ("Someone else", "user-b", ChatExecutionMode::LocalOnly),
+        ] {
+            let id = insert_scoped_conversation(conn, title, user_id, execution_mode, false);
+            insert_message(conn, id, "user", "quarterly roadmap");
+        }
+    }
+
+    #[test]
+    fn recent_conversations_stay_inside_the_account_and_skip_archived() {
+        let conn = setup_test_db();
+        seed_every_boundary(&conn);
+        insert_scoped_conversation(
+            &conn,
+            "Mine archived",
+            "user-a",
+            ChatExecutionMode::LocalOnly,
+            true,
+        );
+
+        assert_eq!(
+            recent_titles(&conn, &scope_of("user-a", ChatExecutionMode::LocalOnly)),
+            vec!["Mine local".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_local_only_chat_never_reads_byok_or_cloud_history() {
+        let conn = setup_test_db();
+        seed_every_boundary(&conn);
+        let local = scope_of("user-a", ChatExecutionMode::LocalOnly);
+
+        assert_eq!(recent_titles(&conn, &local), vec!["Mine local".to_string()]);
+        assert_eq!(
+            found_titles(&conn, &local, "quarterly roadmap"),
+            vec!["Mine local".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_byok_chat_never_reads_local_only_or_cloud_history() {
+        let conn = setup_test_db();
+        seed_every_boundary(&conn);
+        let byok = scope_of("user-a", ChatExecutionMode::Byok);
+
+        assert_eq!(recent_titles(&conn, &byok), vec!["Mine byok".to_string()]);
+        assert_eq!(
+            found_titles(&conn, &byok, "quarterly roadmap"),
+            vec!["Mine byok".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_cloud_chat_never_reads_history_kept_on_the_device() {
+        let conn = setup_test_db();
+        seed_every_boundary(&conn);
+        let cloud = scope_of("user-a", ChatExecutionMode::CloudManaged);
+
+        assert_eq!(recent_titles(&conn, &cloud), vec!["Mine cloud".to_string()]);
+        assert_eq!(
+            found_titles(&conn, &cloud, "quarterly roadmap"),
+            vec!["Mine cloud".to_string()]
+        );
+    }
+
+    #[test]
+    fn narrowing_to_a_conversation_on_another_boundary_finds_nothing() {
+        let conn = setup_test_db();
+        let local = insert_scoped_conversation(
+            &conn,
+            "Local",
+            "user-a",
+            ChatExecutionMode::LocalOnly,
+            false,
+        );
+        let byok =
+            insert_scoped_conversation(&conn, "Byok", "user-a", ChatExecutionMode::Byok, false);
+        insert_message(&conn, local, "user", "quarterly roadmap");
+        insert_message(&conn, byok, "user", "quarterly roadmap");
+
+        for (scope, other) in [
+            (scope_of("user-a", ChatExecutionMode::Byok), local),
+            (scope_of("user-a", ChatExecutionMode::LocalOnly), byok),
+        ] {
+            let narrowed = search_past_conversations(
+                &conn,
+                &scope,
+                "quarterly roadmap",
+                Some(10),
+                Some(other),
+            )
+            .unwrap();
+            assert!(narrowed.is_empty());
+        }
+    }
+
+    #[test]
+    fn the_persons_own_list_may_name_both_boundaries_kept_on_the_device() {
+        let conn = setup_test_db();
+        seed_every_boundary(&conn);
+        let on_device = ConversationScope::new(
+            "user-a",
+            &[ChatExecutionMode::LocalOnly, ChatExecutionMode::Byok],
+        )
+        .unwrap();
+
+        assert_eq!(
+            recent_titles(&conn, &on_device),
+            vec!["Mine byok".to_string(), "Mine local".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_row_whose_app_mode_contradicts_its_boundary_is_read_by_no_scope() {
+        let conn = setup_test_db();
+        conn.execute(
+            "INSERT INTO conversations (user_id, title, app_mode, execution_mode)
+             VALUES ('user-a', 'Contradiction', 'cloud', 'local_only')",
+            [],
+        )
+        .unwrap();
+
+        for execution_mode in EXECUTION_BOUNDARIES {
+            assert!(recent_titles(&conn, &scope_of("user-a", execution_mode)).is_empty());
+        }
+    }
+
+    #[test]
+    fn a_scope_needs_a_user_and_boundaries_on_one_side_of_storage() {
+        assert!(ConversationScope::new("  ", &[ChatExecutionMode::LocalOnly]).is_err());
+        assert!(ConversationScope::new("user-a", &[]).is_err());
+        assert!(ConversationScope::new(
+            "user-a",
+            &[
+                ChatExecutionMode::LocalOnly,
+                ChatExecutionMode::CloudManaged
+            ]
+        )
+        .is_err());
+        assert_ne!(
+            scope_of("user-a", ChatExecutionMode::Byok),
+            scope_of("user-a", ChatExecutionMode::LocalOnly)
+        );
+    }
+
+    #[test]
+    fn the_scope_of_a_running_conversation_is_its_owner_and_boundary() {
+        let conn = setup_test_db();
+
+        for execution_mode in EXECUTION_BOUNDARIES {
+            let id = insert_scoped_conversation(&conn, "Chat", "user-a", execution_mode, false);
+            assert_eq!(
+                ConversationScope::of_conversation(&conn, id).unwrap(),
+                scope_of("user-a", execution_mode)
+            );
+        }
+        assert!(ConversationScope::of_conversation(&conn, 9_999).is_err());
+
+        conn.execute(
+            "INSERT INTO conversations (user_id, title, execution_mode)
+             VALUES ('user-a', 'Unknown', 'shared')",
+            [],
+        )
+        .unwrap();
+        assert!(ConversationScope::of_conversation(&conn, conn.last_insert_rowid()).is_err());
     }
 }

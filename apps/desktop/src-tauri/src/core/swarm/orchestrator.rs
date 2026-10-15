@@ -15,7 +15,6 @@ use super::{
     task_decomposer::{DependencyGraph, Subtask, TaskDecomposer},
     AgentHealth, SwarmError, SwarmMetrics, SwarmResultType,
 };
-use crate::automation::AutomationService;
 use crate::core::agi::{Goal, Priority};
 use crate::core::llm::LLMRouter;
 use parking_lot::RwLock;
@@ -171,13 +170,11 @@ impl SwarmOrchestrator {
     pub fn new(
         config: SwarmConfig,
         router: Arc<tokio::sync::RwLock<LLMRouter>>,
-        automation: Arc<AutomationService>,
         app_handle: Option<tauri::AppHandle>,
     ) -> SwarmResultType<Self> {
         let decomposer = TaskDecomposer::new(router.clone());
         let spawner = Arc::new(AgentSpawner::new(
             router.clone(),
-            automation.clone(),
             app_handle.clone(),
             config.max_agents,
         ));
@@ -200,19 +197,10 @@ impl SwarmOrchestrator {
     pub async fn execute_swarm_task(&self, goal: Goal) -> SwarmResultType<SwarmResult> {
         let start_time = Instant::now();
         self.is_running.store(true, Ordering::SeqCst);
-        self.stop_signal.store(false, Ordering::SeqCst);
 
         tracing::info!(
             "[SwarmOrchestrator] Starting swarm execution for goal: {}",
             goal.description
-        );
-
-        self.emit_event(
-            "swarm:started",
-            serde_json::json!({
-                "goal_id": goal.id,
-                "description": goal.description,
-            }),
         );
 
         // Step 1: Decompose the task into subtasks
@@ -308,18 +296,6 @@ impl SwarmOrchestrator {
             }
         }
 
-        self.emit_event(
-            "swarm:completed",
-            serde_json::json!({
-                "goal_id": goal.id,
-                "success": result.success,
-                "succeeded": result.succeeded,
-                "failed": result.failed,
-                "wall_time_ms": wall_time.as_millis(),
-                "speedup_ratio": result.speedup_ratio,
-            }),
-        );
-
         self.is_running.store(false, Ordering::SeqCst);
 
         // Clean up: invalidate decomposition cache for this goal (no longer
@@ -352,6 +328,7 @@ impl SwarmOrchestrator {
         AgentTask {
             subtask,
             trust_mode: goal.trust_mode,
+            constraints: goal.constraints.clone(),
             result_sender,
         }
     }
@@ -380,20 +357,11 @@ impl SwarmOrchestrator {
 
         let start_time = Instant::now();
         self.is_running.store(true, Ordering::SeqCst);
-        self.stop_signal.store(false, Ordering::SeqCst);
 
         let initial_stats = dependency_graph.stats();
         tracing::info!(
             "[SwarmOrchestrator] Starting pre-built graph execution: {} subtasks",
             initial_stats.total_subtasks
-        );
-
-        self.emit_event(
-            "swarm:started",
-            serde_json::json!({
-                "goal_id": goal.id,
-                "description": goal.description,
-            }),
         );
 
         self.emit_event(
@@ -478,18 +446,6 @@ impl SwarmOrchestrator {
                 stats.peak_agents = peak_parallelism;
             }
         }
-
-        self.emit_event(
-            "swarm:completed",
-            serde_json::json!({
-                "goal_id": goal.id,
-                "success": result.success,
-                "succeeded": result.succeeded,
-                "failed": result.failed,
-                "wall_time_ms": wall_time.as_millis(),
-                "speedup_ratio": result.speedup_ratio,
-            }),
-        );
 
         self.is_running.store(false, Ordering::SeqCst);
         {
@@ -768,10 +724,17 @@ impl SwarmOrchestrator {
         })
     }
 
-    /// Stops the orchestrator gracefully.
+    /// Stops the run: no further subtask is dispatched and every sub-agent
+    /// cancels the sub-goal it is working on. A stopped orchestrator stays
+    /// stopped, so a stop that lands before the run starts is not lost.
     pub fn stop(&self) {
         tracing::info!("[SwarmOrchestrator] Initiating graceful shutdown");
         self.stop_signal.store(true, Ordering::SeqCst);
+        self.spawner.stop_all();
+    }
+
+    pub fn stop_requested(&self) -> bool {
+        self.stop_signal.load(Ordering::SeqCst)
     }
 
     /// Forcefully terminates all agents.
@@ -869,7 +832,6 @@ impl SwarmOrchestrator {
 pub struct SwarmOrchestratorBuilder {
     config: SwarmConfig,
     router: Option<Arc<tokio::sync::RwLock<LLMRouter>>>,
-    automation: Option<Arc<AutomationService>>,
     app_handle: Option<tauri::AppHandle>,
 }
 
@@ -879,7 +841,6 @@ impl SwarmOrchestratorBuilder {
         Self {
             config: SwarmConfig::default(),
             router: None,
-            automation: None,
             app_handle: None,
         }
     }
@@ -926,12 +887,6 @@ impl SwarmOrchestratorBuilder {
         self
     }
 
-    /// Sets the automation service.
-    pub fn automation(mut self, automation: Arc<AutomationService>) -> Self {
-        self.automation = Some(automation);
-        self
-    }
-
     /// Sets the application handle.
     pub fn app_handle(mut self, handle: tauri::AppHandle) -> Self {
         self.app_handle = Some(handle);
@@ -943,11 +898,8 @@ impl SwarmOrchestratorBuilder {
         let router = self
             .router
             .ok_or_else(|| SwarmError::Internal(anyhow::anyhow!("LLM router is required")))?;
-        let automation = self.automation.ok_or_else(|| {
-            SwarmError::Internal(anyhow::anyhow!("Automation service is required"))
-        })?;
 
-        SwarmOrchestrator::new(self.config, router, automation, self.app_handle)
+        SwarmOrchestrator::new(self.config, router, self.app_handle)
     }
 }
 

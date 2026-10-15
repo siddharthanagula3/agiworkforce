@@ -1,20 +1,11 @@
-use crate::integrations::realtime::{
-    PairRequestPrompt, PresenceManager, RealtimeServer, UserActivity, UserPresence,
-};
+use crate::integrations::realtime::{PairRequestPrompt, RealtimeServer};
 use std::sync::Arc;
 use tauri::{Manager, State};
 use tokio::sync::RwLock as TokioRwLock;
 
 pub struct RealtimeServerHandle(pub Arc<RealtimeServer>);
 
-#[derive(serde::Serialize)]
-pub struct RealtimeConnectionInfo {
-    pub url: String,
-    pub token: String,
-}
-
 pub struct RealtimeState {
-    pub presence: Arc<PresenceManager>,
     pub websocket_port: u16,
     /// B6 fix: live IPC token. Shared with `RealtimeServer` so that
     /// `bridge_rotate_token` updates take effect for new WebSocket
@@ -23,75 +14,12 @@ pub struct RealtimeState {
 }
 
 impl RealtimeState {
-    pub fn new(
-        presence: Arc<PresenceManager>,
-        websocket_port: u16,
-        token: Arc<TokioRwLock<String>>,
-    ) -> Self {
+    pub fn new(websocket_port: u16, token: Arc<TokioRwLock<String>>) -> Self {
         Self {
-            presence,
             websocket_port,
             token,
         }
     }
-}
-
-#[tauri::command]
-pub async fn connect_websocket(
-    state: State<'_, RealtimeState>,
-    _user_id: String,
-    _team_id: Option<String>,
-) -> Result<RealtimeConnectionInfo, String> {
-    let current = state.token.read().await.clone();
-    Ok(RealtimeConnectionInfo {
-        url: format!("ws://localhost:{}", state.websocket_port),
-        token: current,
-    })
-}
-
-#[tauri::command]
-pub async fn get_team_presence(
-    state: State<'_, RealtimeState>,
-    team_id: String,
-) -> Result<Vec<UserPresence>, String> {
-    let presence = state.presence.get_team_presence(&team_id).await;
-    Ok(presence)
-}
-
-#[tauri::command]
-pub async fn update_user_activity(
-    state: State<'_, RealtimeState>,
-    user_id: String,
-    activity: UserActivity,
-) -> Result<(), String> {
-    state.presence.set_activity(&user_id, activity).await;
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn set_user_online(
-    state: State<'_, RealtimeState>,
-    user_id: String,
-) -> Result<(), String> {
-    state.presence.set_online(&user_id).await;
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn set_user_offline(
-    state: State<'_, RealtimeState>,
-    user_id: String,
-) -> Result<(), String> {
-    state.presence.set_offline(&user_id).await;
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn get_user_presence(
-    state: State<'_, RealtimeState>,
-    user_id: String,
-) -> Result<Option<UserPresence>, String> {
-    Ok(state.presence.get_user_presence(&user_id).await)
 }
 
 /// Pairing requests the extension opened and the user has not answered yet.
@@ -208,9 +136,7 @@ pub async fn bridge_rotate_token(
         token_path
     );
 
-    // B6 fix: previous code did `app.emit("bridge:token-rotated", &new_token)`,
-    // broadcasting the secret to every Tauri window. Caller already has
-    // the new token via the return value. Removed.
+    // Return the token, never emit it: an app event reaches every window.
 
     Ok(new_token)
 }

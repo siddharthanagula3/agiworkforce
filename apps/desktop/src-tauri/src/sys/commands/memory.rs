@@ -2,57 +2,17 @@
 //!
 //! These commands expose the MemoryManager to the frontend,
 //! allowing the AGI to persist and recall information across sessions.
-//!
-//! CLOUD SYNC HOOK (Requirement 4):
-//! Write commands (remember/store/forget/delete/forget_topic) accept an optional
-//! `active_mode` param. When the active mode is managed-cloud, they call
-//! `mark_memory_for_push` on the AppDatabase so the next memory sync cycle will
-//! push the change. The gate uses the same `derive_cloud_sync_enabled` function
-//! that chat sync uses, the identical trust-boundary function, not a reimplementation.
-//! `user_memory.app_mode = 'cloud'` is set on rows created in cloud mode; the WHERE
-//! guard in `mark_memory_for_push` makes it impossible to mark a local row.
 
-use chrono::Utc;
 use std::sync::Arc;
 use tauri::State;
 
 use crate::core::agi::memory_manager::{
-    DailyLogEntry, DecayCandidate, DecayConfig, DecayResult, ImportConflictStrategy, ImportResult,
-    LogEntryType, MemoryCategory, MemoryEntry, MemoryExport, MemoryManager, MemoryStats,
+    ImportConflictStrategy, ImportResult, MemoryCategory, MemoryEntry, MemoryExport, MemoryManager,
 };
 use crate::core::llm::memory_integration::MemoryInjectionConfig;
-use crate::data::memory_sync;
-use crate::sys::commands::chat::send_message_setup::derive_cloud_sync_enabled;
-use crate::sys::commands::chat::state::AppDatabase;
-use crate::sys::commands::settings::SettingsState;
 use crate::sys::error::{Error, Result};
+use crate::sys::native_confirm::{ConfirmGate, NativeConfirm};
 use tokio::sync::RwLock;
-
-// ---------------------------------------------------------------------------
-// Internal helper: derive whether we're in managed-cloud mode for memory writes.
-// Reuses the EXACT same function as send_message.rs (not a reimplementation).
-// ---------------------------------------------------------------------------
-
-/// Set `app_mode='cloud'` on a user_memory row. Called for rows created while
-/// cloud sync is enabled so they are marked correctly for push.
-fn set_memory_cloud_mode(db: &AppDatabase, memory_id: i64) {
-    if let Ok(conn) = db.connection() {
-        let _ = conn.execute(
-            "UPDATE user_memory SET app_mode = 'cloud' WHERE id = ?1 AND app_mode = 'local'",
-            rusqlite::params![memory_id],
-        );
-    }
-}
-
-/// Mark an existing cloud memory for push. Non-fatal, a failed mark is logged
-/// but must never cause the write command to fail.
-fn try_mark_memory_for_push(db: &AppDatabase, memory_id: i64) {
-    if let Ok(conn) = db.connection() {
-        if let Err(e) = memory_sync::mark_memory_for_push(&conn, memory_id) {
-            tracing::warn!(error = %e, memory_id, "memory: failed to mark memory for cloud push");
-        }
-    }
-}
 
 /// State wrapper for the MemoryManager
 pub struct MemoryState {
@@ -120,289 +80,47 @@ impl MemoryState {
     }
 }
 
-/// State wrapper for the ConversationSummarizer (shared application-wide).
-///
-/// Uses `HttpSummaryLLM` as the concrete LLM backend, which implements a
-/// 3-tier fallback: Ollama local -> OpenAI cloud -> None.
+/// Shared scheduled memory extractor; see `core::agi::conversation_summarizer`.
 pub struct ConversationSummarizerState {
-    pub summarizer: Arc<
-        crate::core::agi::conversation_summarizer::ConversationSummarizer<
-            crate::core::agi::conversation_summarizer::HttpSummaryLLM,
-        >,
-    >,
+    pub summarizer: Arc<crate::core::agi::conversation_summarizer::ConversationSummarizer>,
+}
+
+impl Default for ConversationSummarizerState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ConversationSummarizerState {
-    /// Create a new summarizer state backed by a real MemoryStore database path.
-    pub fn new(db_path: &str, openai_api_key: Option<String>) -> Result<Self> {
-        use crate::core::agi::conversation_summarizer::{ConversationSummarizer, HttpSummaryLLM};
-        use crate::core::agi::memory_persistence::MemoryStore;
-
-        let store = Arc::new(MemoryStore::new(db_path)?);
-        let llm = Arc::new(HttpSummaryLLM::new(openai_api_key));
-        let summarizer = ConversationSummarizer::new(store, llm);
-
-        Ok(Self {
-            summarizer: Arc::new(summarizer),
-        })
-    }
-
-    /// Create a summarizer state over an already-keyed main-database
-    /// connection. `MemoryStore` lives in the encrypted main database, so a
-    /// plain `Connection::open(db_path)` (what `MemoryStore::new` used) opened
-    /// it without the SQLCipher key and every summarization run failed with
-    /// "file is not a database". Callers targeting the main database must hand
-    /// in a `MainDatabaseAccess` connection.
-    pub fn from_connection(conn: rusqlite::Connection, openai_api_key: Option<String>) -> Self {
-        use crate::core::agi::conversation_summarizer::{ConversationSummarizer, HttpSummaryLLM};
-        use crate::core::agi::memory_persistence::MemoryStore;
-
-        let store = Arc::new(MemoryStore::from_connection(conn));
-        let llm = Arc::new(HttpSummaryLLM::new(openai_api_key));
+    pub fn new() -> Self {
         Self {
-            summarizer: Arc::new(ConversationSummarizer::new(store, llm)),
+            summarizer: Arc::new(
+                crate::core::agi::conversation_summarizer::ConversationSummarizer::new(),
+            ),
         }
     }
-
-    /// Create a degraded summarizer state backed by an in-memory database.
-    /// Summarization will function but without persistence across restarts.
-    pub fn new_degraded() -> Self {
-        use crate::core::agi::conversation_summarizer::{ConversationSummarizer, HttpSummaryLLM};
-        use crate::core::agi::memory_persistence::MemoryStore;
-
-        // Use in-memory store, will not persist but won't panic either.
-        let store = Arc::new(
-            MemoryStore::new(":memory:")
-                .expect("in-memory MemoryStore should never fail to construct"),
-        );
-        let llm = Arc::new(HttpSummaryLLM::new(None));
-        let summarizer = ConversationSummarizer::new(store, llm);
-
-        Self {
-            summarizer: Arc::new(summarizer),
-        }
-    }
-}
-
-/// Store or update a memory
-///
-/// If a memory with the same category+topic already exists, it will be updated.
-///
-/// `active_mode`: optional frontend mode string (`"local"` | `"cloud"`).
-/// When in cloud mode, marks the memory for push to the managed cloud.
-#[tauri::command]
-pub async fn memory_remember(
-    category: String,
-    topic: String,
-    content: String,
-    importance: Option<i32>,
-    source: Option<String>,
-    active_mode: Option<String>,
-    state: State<'_, MemoryState>,
-    db: State<'_, AppDatabase>,
-    settings_state: State<'_, SettingsState>,
-) -> Result<i64> {
-    let category = parse_category(&category)?;
-    let memory_id =
-        state
-            .manager
-            .remember(category, &topic, &content, importance, source.as_deref())?;
-
-    // CLOUD SYNC HOOK: derive_cloud_sync_enabled is the single source of truth
-    // for the managed-cloud trust boundary (send_message_setup.rs:64).
-    let storage_mode_is_cloud = {
-        let settings = settings_state.settings.lock().await;
-        settings
-            .chat_preferences
-            .as_ref()
-            .map(|p| p.chat_storage_mode.as_str() == "cloud")
-            .unwrap_or(false)
-    };
-    if derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud) {
-        set_memory_cloud_mode(&db, memory_id);
-        try_mark_memory_for_push(&db, memory_id);
-    }
-
-    Ok(memory_id)
-}
-
-/// Recall a specific memory by category and topic
-#[tauri::command]
-pub async fn memory_recall(
-    category: String,
-    topic: String,
-    state: State<'_, MemoryState>,
-) -> Result<Option<MemoryEntry>> {
-    let category = parse_category(&category)?;
-    state.manager.recall(category, &topic)
-}
-
-/// Search memories by query text
-#[tauri::command]
-pub async fn memory_search(
-    query: String,
-    limit: Option<usize>,
-    state: State<'_, MemoryState>,
-) -> Result<Vec<MemoryEntry>> {
-    let limit = limit.unwrap_or(20);
-    state.manager.search(&query, limit)
-}
-
-/// Get all memories in a category
-#[tauri::command]
-pub async fn memory_get_by_category(
-    category: String,
-    limit: Option<usize>,
-    state: State<'_, MemoryState>,
-) -> Result<Vec<MemoryEntry>> {
-    let category = parse_category(&category)?;
-    state.manager.get_by_category(category, limit)
-}
-
-/// Get high-importance memories (for session initialization)
-#[tauri::command]
-pub async fn memory_get_important(
-    min_importance: Option<i32>,
-    state: State<'_, MemoryState>,
-) -> Result<Vec<MemoryEntry>> {
-    let min_importance = min_importance.unwrap_or(7);
-    state.manager.get_important_memories(min_importance)
-}
-
-/// Delete a memory by ID
-///
-/// In cloud mode: soft-deletes the row (sets deleted_at_utc + needs_push=1)
-/// so the tombstone propagates to other devices. Falls through to hard-delete
-/// for local rows.
-#[tauri::command]
-pub async fn memory_forget(
-    memory_id: i64,
-    active_mode: Option<String>,
-    state: State<'_, MemoryState>,
-    db: State<'_, AppDatabase>,
-    settings_state: State<'_, SettingsState>,
-) -> Result<bool> {
-    let storage_mode_is_cloud = {
-        let settings = settings_state.settings.lock().await;
-        settings
-            .chat_preferences
-            .as_ref()
-            .map(|p| p.chat_storage_mode.as_str() == "cloud")
-            .unwrap_or(false)
-    };
-
-    if derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud) {
-        // Attempt soft-delete for cloud rows. If the row is a cloud row, return true
-        // (soft-deleted, tombstone will propagate). If not a cloud row, fall through.
-        if let Ok(conn) = db.connection() {
-            match memory_sync::soft_delete_memory_for_push(&conn, memory_id) {
-                Ok(true) => return Ok(true), // cloud row soft-deleted
-                Ok(false) => {}              // not a cloud row, hard-delete below
-                Err(e) => {
-                    tracing::warn!(error = %e, memory_id, "memory_forget: soft-delete failed, falling through to hard delete");
-                }
-            }
-        }
-    }
-
-    state.manager.forget(memory_id)
 }
 
 /// Delete a memory by category and topic
-///
-/// In cloud mode: soft-deletes the row so the tombstone propagates.
 #[tauri::command]
 pub async fn memory_forget_topic(
     category: String,
     topic: String,
-    active_mode: Option<String>,
     state: State<'_, MemoryState>,
-    db: State<'_, AppDatabase>,
-    settings_state: State<'_, SettingsState>,
 ) -> Result<bool> {
     let category = parse_category(&category)?;
-
-    let storage_mode_is_cloud = {
-        let settings = settings_state.settings.lock().await;
-        settings
-            .chat_preferences
-            .as_ref()
-            .map(|p| p.chat_storage_mode.as_str() == "cloud")
-            .unwrap_or(false)
-    };
-
-    if derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud) {
-        if let Ok(conn) = db.connection() {
-            match memory_sync::soft_delete_memory_by_topic_for_push(
-                &conn,
-                category.as_str(),
-                &topic,
-            ) {
-                Ok(true) => return Ok(true),
-                Ok(false) => {}
-                Err(e) => {
-                    tracing::warn!(error = %e, topic = %topic, "memory_forget_topic: soft-delete failed, falling through to hard delete");
-                }
-            }
-        }
-    }
-
     state.manager.forget_topic(category, &topic)
 }
 
-/// Log an entry to today's daily log
-#[tauri::command]
-pub async fn memory_log_context(
-    content: String,
-    entry_type: Option<String>,
-    metadata: Option<String>,
-    state: State<'_, MemoryState>,
-) -> Result<i64> {
-    let entry_type = match entry_type.as_deref() {
-        Some("action") => LogEntryType::Action,
-        Some("note") => LogEntryType::Note,
-        Some("milestone") => LogEntryType::Milestone,
-        _ => LogEntryType::Context,
-    };
-    state
-        .manager
-        .log_context(&content, entry_type, metadata.as_deref())
-}
-
-/// Get daily logs for a specific date (YYYY-MM-DD format)
-#[tauri::command]
-pub async fn memory_get_daily_logs(
-    date: String,
-    state: State<'_, MemoryState>,
-) -> Result<Vec<DailyLogEntry>> {
-    state.manager.get_daily_logs(&date)
-}
-
-/// Get session context (recent logs + important memories) for AGI initialization
-#[tauri::command]
-pub async fn memory_get_session_context(state: State<'_, MemoryState>) -> Result<String> {
-    state.manager.get_session_context()
-}
-
-/// List all memory categories
-#[tauri::command]
-pub async fn memory_list_categories() -> Result<Vec<String>> {
-    Ok(memory_category_names())
-}
-
-/// Export all memories for backup
-#[tauri::command]
-pub async fn memory_export_all(state: State<'_, MemoryState>) -> Result<Vec<MemoryEntry>> {
-    state.manager.export_all()
-}
-
-/// List all memories (alias for memory_export_all for frontend compatibility)
+/// List all memories.
 #[tauri::command]
 pub async fn memory_list_all(state: State<'_, MemoryState>) -> Result<Vec<MemoryEntry>> {
     state.manager.export_all()
 }
 
-/// Store or update a memory (alias for memory_remember for frontend compatibility)
+/// Store or update a memory
+///
+/// If a memory with the same category+topic already exists, it will be updated.
 #[tauri::command]
 pub async fn memory_store(
     category: String,
@@ -410,257 +128,113 @@ pub async fn memory_store(
     content: String,
     importance: Option<i32>,
     source: Option<String>,
-    active_mode: Option<String>,
     state: State<'_, MemoryState>,
-    db: State<'_, AppDatabase>,
-    settings_state: State<'_, SettingsState>,
 ) -> Result<i64> {
     let category = parse_category(&category)?;
-    let memory_id =
-        state
-            .manager
-            .remember(category, &topic, &content, importance, source.as_deref())?;
-
-    let storage_mode_is_cloud = {
-        let settings = settings_state.settings.lock().await;
-        settings
-            .chat_preferences
-            .as_ref()
-            .map(|p| p.chat_storage_mode.as_str() == "cloud")
-            .unwrap_or(false)
-    };
-    if derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud) {
-        set_memory_cloud_mode(&db, memory_id);
-        try_mark_memory_for_push(&db, memory_id);
-    }
-
-    Ok(memory_id)
+    state
+        .manager
+        .remember(category, &topic, &content, importance, source.as_deref())
 }
 
-/// Delete a memory by ID (alias for memory_forget for frontend compatibility)
-///
-/// In cloud mode: soft-deletes the row so the tombstone propagates.
+/// Delete a memory by ID.
 #[tauri::command]
-pub async fn memory_delete(
-    memory_id: i64,
-    active_mode: Option<String>,
-    state: State<'_, MemoryState>,
-    db: State<'_, AppDatabase>,
-    settings_state: State<'_, SettingsState>,
-) -> Result<bool> {
-    let storage_mode_is_cloud = {
-        let settings = settings_state.settings.lock().await;
-        settings
-            .chat_preferences
-            .as_ref()
-            .map(|p| p.chat_storage_mode.as_str() == "cloud")
-            .unwrap_or(false)
-    };
-
-    if derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud) {
-        if let Ok(conn) = db.connection() {
-            match memory_sync::soft_delete_memory_for_push(&conn, memory_id) {
-                Ok(true) => return Ok(true),
-                Ok(false) => {}
-                Err(e) => {
-                    tracing::warn!(error = %e, memory_id, "memory_delete: soft-delete failed, falling through to hard delete");
-                }
-            }
-        }
-    }
-
+pub async fn memory_delete(memory_id: i64, state: State<'_, MemoryState>) -> Result<bool> {
     state.manager.forget(memory_id)
 }
 
-/// Cleanup old daily logs (keep last N days)
+/// One delete-all question at a time, and a wait after a no that grows
+/// while the noes keep coming, so a loop cannot stack them or wear the user
+/// down.
+static FORGET_ALL_DECISIONS: ConfirmGate = ConfirmGate::new();
+const FORGET_ALL_REQUEST: &str = "delete every memory on this device";
+const FORGET_ALL_LABEL: &str = "Delete All Memories";
+
+/// The question asked before every memory is deleted, in the words the
+/// Memory settings use.
+fn forget_all_question(count: usize) -> NativeConfirm {
+    let noun = if count == 1 { "memory" } else { "memories" };
+    NativeConfirm {
+        title: format!("Delete all {count} {noun}?"),
+        body: "This permanently deletes every memory saved on this device. Chats stop using \
+               them, and they cannot be recovered unless you exported them first."
+            .to_string(),
+        confirm_label: FORGET_ALL_LABEL.to_string(),
+    }
+}
+
+/// Deletes the memories that were there when the question was asked, and
+/// only on a yes. `None` is a decline: nothing was touched. The window can
+/// call the command but cannot answer the question, so a script running in
+/// it cannot erase what the assistant remembers.
+async fn forget_all_confirmed<Confirm, Answer>(
+    manager: &MemoryManager,
+    confirm: Confirm,
+) -> Result<Option<usize>>
+where
+    Confirm: FnOnce(NativeConfirm) -> Answer,
+    Answer: std::future::Future<Output = Result<bool>>,
+{
+    let memory_ids: Vec<i64> = manager
+        .export_all()?
+        .into_iter()
+        .map(|memory| memory.id)
+        .collect();
+    if memory_ids.is_empty() {
+        return Ok(Some(0));
+    }
+    if !confirm(forget_all_question(memory_ids.len())).await? {
+        tracing::info!("[Memory] Deleting every memory was declined in the native dialog");
+        return Ok(None);
+    }
+    manager.forget_many(&memory_ids).map(Some)
+}
+
+/// Deletes every saved memory once the user has said yes in a dialog the
+/// operating system draws, and returns how many were deleted; `None` means
+/// the user declined and nothing changed.
 #[tauri::command]
-pub async fn memory_cleanup_logs(
-    keep_days: Option<i32>,
+pub async fn memory_delete_all(
+    app: tauri::AppHandle,
     state: State<'_, MemoryState>,
-) -> Result<usize> {
-    let keep_days = keep_days.unwrap_or(30);
-    state.manager.cleanup_old_logs(keep_days)
+) -> Result<Option<usize>> {
+    let app = &app;
+    forget_all_confirmed(&state.manager, |question| async move {
+        FORGET_ALL_DECISIONS
+            .confirm(app, FORGET_ALL_REQUEST, question)
+            .await
+            .map_err(|held| Error::Generic(held.message()))
+    })
+    .await
 }
 
 // =============================================================================
 // Memory Importance Decay Commands
 // =============================================================================
 
-/// Run memory importance decay
-#[tauri::command]
-pub async fn memory_run_decay(state: State<'_, MemoryState>) -> Result<DecayResult> {
-    state.manager.decay_memories()
-}
-
-/// Get the current decay configuration
-#[tauri::command]
-pub async fn memory_get_decay_config(state: State<'_, MemoryState>) -> Result<DecayConfig> {
-    state.manager.get_decay_config()
-}
-
-/// Set the decay configuration
-#[tauri::command]
-pub async fn memory_set_decay_config(
-    enabled: bool,
-    decay_rate: f32,
-    decay_period_days: i32,
-    min_importance: i32,
-    access_boost: i32,
-    state: State<'_, MemoryState>,
-) -> Result<()> {
-    let config = DecayConfig {
-        enabled,
-        decay_rate,
-        decay_period_days,
-        min_importance,
-        access_boost,
-    };
-    state.manager.set_decay_config(config)
-}
-
-/// Get memories that are candidates for decay
-#[tauri::command]
-pub async fn memory_get_decay_candidates(
-    state: State<'_, MemoryState>,
-) -> Result<Vec<DecayCandidate>> {
-    state.manager.get_decay_candidates()
-}
-
-/// Boost the importance of a memory by ID
-#[tauri::command]
-pub async fn memory_boost_on_access(memory_id: i64, state: State<'_, MemoryState>) -> Result<i32> {
-    state.manager.boost_on_access(memory_id)
-}
-
-/// Recall a memory with importance boost
-#[tauri::command]
-pub async fn memory_recall_with_boost(
-    category: String,
-    topic: String,
-    state: State<'_, MemoryState>,
-) -> Result<Option<MemoryEntry>> {
-    let category = parse_category(&category)?;
-    state.manager.recall_with_boost(category, &topic)
-}
-
-/// Manually decay a specific memory by a given amount
-#[tauri::command]
-pub async fn memory_decay_single(
-    memory_id: i64,
-    decay_amount: i32,
-    state: State<'_, MemoryState>,
-) -> Result<i32> {
-    state.manager.decay_memory(memory_id, decay_amount)
-}
-
-/// Get statistics about memory importance distribution
-#[tauri::command]
-pub async fn memory_get_stats(state: State<'_, MemoryState>) -> Result<MemoryStats> {
-    state.manager.get_memory_stats()
-}
-
 // =============================================================================
 // Memory Export Commands
 // =============================================================================
 
-/// Export all memories and logs to JSON format
-///
-/// If a path is provided, exports to that file and returns metadata about the export.
-/// If no path is provided, returns the full JSON export data.
+/// Export all memories and logs as the JSON backup `memory_import_json_string` reads.
 #[tauri::command]
-pub async fn memory_export_json(
-    state: State<'_, MemoryState>,
-    path: Option<String>,
-) -> Result<serde_json::Value> {
-    match path {
-        Some(file_path) => {
-            // Export to file
-            let path = std::path::Path::new(&file_path);
-            let bytes_written = state.manager.export_to_json_file(path)?;
+pub async fn memory_export_json(state: State<'_, MemoryState>) -> Result<serde_json::Value> {
+    let json_string = state.manager.export_to_json()?;
+    let export: MemoryExport = serde_json::from_str(&json_string)
+        .map_err(|e| Error::Generic(format!("Failed to parse export: {}", e)))?;
 
-            // Return metadata about the export
-            Ok(serde_json::json!({
-                "success": true,
-                "path": file_path,
-                "bytes_written": bytes_written,
-                "exported_at": chrono::Utc::now().to_rfc3339()
-            }))
-        }
-        None => {
-            // Return the JSON export directly
-            let json_string = state.manager.export_to_json()?;
-            let export: MemoryExport = serde_json::from_str(&json_string)
-                .map_err(|e| Error::Generic(format!("Failed to parse export: {}", e)))?;
-
-            Ok(serde_json::to_value(export)
-                .map_err(|e| Error::Generic(format!("Failed to serialize export: {}", e)))?)
-        }
-    }
+    serde_json::to_value(export)
+        .map_err(|e| Error::Generic(format!("Failed to serialize export: {}", e)))
 }
 
-/// Export all memories to Markdown format organized by category
-///
-/// If a path is provided, exports to that file and returns metadata about the export as JSON.
-/// If no path is provided, returns the Markdown string directly.
+/// Export all memories as Markdown grouped by category.
 #[tauri::command]
-pub async fn memory_export_markdown(
-    state: State<'_, MemoryState>,
-    path: Option<String>,
-) -> Result<String> {
-    match path {
-        Some(file_path) => {
-            // Export to file
-            let path = std::path::Path::new(&file_path);
-            let bytes_written = state.manager.export_to_markdown_file(path)?;
-
-            // Return metadata as JSON string (caller can parse if needed)
-            Ok(serde_json::json!({
-                "success": true,
-                "path": file_path,
-                "bytes_written": bytes_written,
-                "exported_at": Utc::now().to_rfc3339()
-            })
-            .to_string())
-        }
-        None => {
-            // Return the Markdown export directly
-            state.manager.export_to_markdown()
-        }
-    }
+pub async fn memory_export_markdown(state: State<'_, MemoryState>) -> Result<String> {
+    state.manager.export_to_markdown()
 }
 
 // =============================================================================
 // Memory Import Commands
 // =============================================================================
-
-/// Import memories from a JSON backup file
-///
-/// Imports memories and daily logs from a previously exported JSON backup.
-/// The strategy parameter controls how to handle conflicts with existing memories:
-/// - "skip" (default): Keep existing memories, skip duplicates
-/// - "replace": Replace existing memories with imported data
-/// - "merge": Only update if imported data is newer
-#[tauri::command]
-pub async fn memory_import_json(
-    state: State<'_, MemoryState>,
-    path: String,
-    strategy: Option<String>,
-) -> Result<ImportResult> {
-    // Parse the conflict strategy
-    let strategy = match strategy.as_deref() {
-        Some(s) => ImportConflictStrategy::from_str(s).ok_or_else(|| {
-            Error::Generic(format!(
-                "Invalid import strategy: '{}'. Valid options: skip, replace, merge",
-                s
-            ))
-        })?,
-        None => ImportConflictStrategy::default(),
-    };
-
-    // Import from file
-    let file_path = std::path::Path::new(&path);
-    state.manager.import_from_json_file(file_path, strategy)
-}
 
 /// Import memories from a JSON string
 ///
@@ -684,62 +258,6 @@ pub async fn memory_import_json_string(
     };
 
     state.manager.import_from_json(&json, strategy)
-}
-
-// =============================================================================
-// Memory Dashboard Commands
-// =============================================================================
-
-/// Get memory dashboard statistics
-#[tauri::command]
-pub async fn memory_get_dashboard_stats(
-    state: State<'_, MemoryState>,
-) -> Result<serde_json::Value> {
-    let stats = state.manager.get_memory_stats()?;
-
-    Ok(serde_json::json!({
-        "memory_stats": stats,
-    }))
-}
-
-/// Get project-specific memories for injection into LLM context
-#[tauri::command]
-pub async fn memory_get_project_memories(
-    project_name: Option<String>,
-    limit: Option<usize>,
-    state: State<'_, MemoryState>,
-) -> Result<Vec<MemoryEntry>> {
-    let limit = limit.unwrap_or(10);
-
-    if let Some(name) = project_name {
-        // Search for project-specific memories
-        state.manager.search(&name, limit)
-    } else {
-        // Return high-importance memories for context
-        state.manager.get_important_memories(6)
-    }
-}
-
-/// Get memory usage trends (placeholder for future analytics)
-#[tauri::command]
-pub async fn memory_get_usage_trends(state: State<'_, MemoryState>) -> Result<serde_json::Value> {
-    let stats = state.manager.get_memory_stats()?;
-
-    // Return basic trend data
-    Ok(serde_json::json!({
-        "total_memories": stats.total_count,
-        "average_importance": stats.avg_importance,
-        "high_importance": stats.high_importance_count,
-        "low_importance": stats.low_importance_count,
-        "trend": "stable"
-    }))
-}
-
-/// Suggest important memories for user review
-#[tauri::command]
-pub async fn memory_suggest_important(state: State<'_, MemoryState>) -> Result<Vec<MemoryEntry>> {
-    // Get critical memories (importance >= 9)
-    state.manager.get_important_memories(9)
 }
 
 const ALL_MEMORY_CATEGORIES: [MemoryCategory; 6] = [
@@ -781,6 +299,80 @@ fn parse_category(category: &str) -> Result<MemoryCategory> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn manager_with(memories: usize) -> MemoryManager {
+        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory database");
+        crate::data::db::migrations::run_migrations(&conn).expect("run migrations");
+        let manager = MemoryManager::from_connection(conn);
+        for index in 0..memories {
+            manager
+                .remember(
+                    MemoryCategory::Fact,
+                    &format!("topic_{index}"),
+                    "Uses VS Code",
+                    Some(7),
+                    Some("test"),
+                )
+                .expect("remember");
+        }
+        manager
+    }
+
+    #[tokio::test]
+    async fn no_memory_is_deleted_unless_the_native_dialog_says_so() {
+        let manager = manager_with(2);
+        let asked = std::cell::RefCell::new(None);
+
+        let outcome = forget_all_confirmed(&manager, |question| {
+            *asked.borrow_mut() = Some(question);
+            async { Ok(false) }
+        })
+        .await;
+
+        assert!(matches!(outcome, Ok(None)));
+        assert_eq!(manager.export_all().expect("list").len(), 2);
+        let question = asked.into_inner().expect("the user was asked");
+        assert_eq!(question.title, "Delete all 2 memories?");
+        assert_eq!(question.confirm_label, "Delete All Memories");
+        assert!(crate::sys::native_confirm::can_ask_with(
+            &question.confirm_label
+        ));
+        assert!(question.body.contains("cannot be recovered"));
+
+        let outcome = forget_all_confirmed(&manager, |_| async { Ok(true) }).await;
+
+        assert!(matches!(outcome, Ok(Some(2))));
+        assert!(manager.export_all().expect("list").is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_question_that_was_not_asked_deletes_nothing() {
+        let manager = manager_with(1);
+
+        let outcome = forget_all_confirmed(&manager, |_| async {
+            Err(Error::Generic("Try again in 30 seconds.".to_string()))
+        })
+        .await;
+
+        assert!(outcome.is_err());
+        assert_eq!(manager.export_all().expect("list").len(), 1);
+    }
+
+    #[tokio::test]
+    async fn nothing_is_asked_when_there_is_nothing_to_delete() {
+        let manager = manager_with(0);
+        let asked = std::cell::Cell::new(false);
+
+        let outcome = forget_all_confirmed(&manager, |_| {
+            asked.set(true);
+            async { Ok(true) }
+        })
+        .await;
+
+        assert!(matches!(outcome, Ok(Some(0))));
+        assert!(!asked.get());
+        assert_eq!(forget_all_question(1).title, "Delete all 1 memory?");
+    }
 
     #[test]
     fn test_parse_category() {

@@ -669,6 +669,12 @@ pub fn model_rejects_sampling_parameters(model_id: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Whether the catalog declares computer use for this exact model. Unknown
+/// models fail closed.
+pub fn model_supports_computer_use(model_id: &str) -> bool {
+    get_model_entry(model_id).is_some_and(|entry| entry.capabilities.computer_use)
+}
+
 /// Validate an effort requested while thinking is explicitly disabled.
 /// Unknown models have no declared ceiling and are left to their provider.
 pub fn model_allows_effort_with_thinking_disabled(model_id: &str, effort: &str) -> bool {
@@ -1087,10 +1093,6 @@ mod tests {
         let sources: &[(&str, &str)] = &[
             ("core/llm/llm_router.rs", include_str!("llm_router.rs")),
             (
-                "sys/commands/completion.rs",
-                include_str!("../../sys/commands/completion.rs"),
-            ),
-            (
                 "sys/commands/voice.rs",
                 include_str!("../../sys/commands/voice.rs"),
             ),
@@ -1357,6 +1359,19 @@ mod tests {
             &model.id, "max"
         ));
         assert_eq!(max_effort_when_thinking_disabled(&model.id), Some("high"));
+    }
+
+    #[test]
+    fn computer_use_support_comes_from_the_catalog_capability() {
+        let capable = active_catalog_model("anthropic", |entry| entry.capabilities.computer_use);
+        let incapable = CONFIG
+            .models
+            .values()
+            .find(|entry| !entry.capabilities.computer_use)
+            .expect("catalog must contain a model without computer use");
+        assert!(model_supports_computer_use(&capable.id));
+        assert!(!model_supports_computer_use(&incapable.id));
+        assert!(!model_supports_computer_use("unknown-anthropic-model"));
     }
 
     #[test]

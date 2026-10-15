@@ -21,7 +21,6 @@ use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation, IUIAutomat
 
 mod actions;
 mod element_tree;
-pub mod inspector_impl;
 mod patterns;
 mod wait;
 

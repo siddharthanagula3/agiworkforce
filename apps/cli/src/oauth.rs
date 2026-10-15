@@ -126,7 +126,7 @@ fn percent_encode(input: &str) -> String {
 }
 
 pub fn build_authorize_url(provider: &OAuthProvider, pkce: &PkceCodes) -> String {
-    let mut url = format!(
+    format!(
         "{}?response_type=code&client_id={}&redirect_uri={}&scope={}&code_challenge={}&code_challenge_method=S256&state={}&code=true",
         provider.authorize_url,
         provider.client_id,
@@ -134,14 +134,7 @@ pub fn build_authorize_url(provider: &OAuthProvider, pkce: &PkceCodes) -> String
         percent_encode(provider.scopes),
         pkce.challenge,
         percent_encode(&pkce.state),
-    );
-
-    // OpenAI-specific params
-    if provider.id == "openai" {
-        url.push_str("&id_token_add_organizations=true&codex_cli_simplified_flow=true");
-    }
-
-    url
+    )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

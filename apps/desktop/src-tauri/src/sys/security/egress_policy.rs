@@ -33,10 +33,12 @@
 //! REDIRECTS are part of the destination, not an afterthought: judging only the
 //! first URL is no guard at all when the client follows up to ten further hops.
 //! [`public_destination_redirect_policy`] re-runs the judgement on every hop and
-//! is installed on every `reqwest::Client` built under `sys::api`, all five
-//! `ApiClient` builders and the `OAuth2Client` one, which matters most because
-//! its three token calls POST `client_secret` in a form body and a 307/308
-//! preserves both method and body.
+//! is installed on the app-destination `ApiClient` builders and the
+//! `OAuth2Client` one, which matters most because its three token calls POST
+//! `client_secret` in a form body and a 307/308 preserves both method and body.
+//! The public `ApiClient` goes further: it is built by
+//! [`PublicHttpClient::without_redirects`] and follows each hop itself, so it
+//! can also drop credentials when the origin changes.
 
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, ToSocketAddrs};
@@ -221,14 +223,16 @@ pub(crate) fn is_loopback_name(domain: &str) -> bool {
 /// Kept in lockstep with the web egress policy (`apps/web/lib/egress-policy.ts`),
 /// which is the reference list for what counts as internal.
 pub(crate) fn is_internal_ipv4(ip: Ipv4Addr) -> bool {
-    let [a, b, _, _] = ip.octets();
+    let [a, b, c, _] = ip.octets();
     ip.is_loopback() // 127.0.0.0/8
         || ip.is_private() // 10/8, 172.16/12, 192.168/16
         || ip.is_link_local() // 169.254/16, cloud metadata (IMDS)
         || ip.is_broadcast()
-        || ip.is_documentation()
+        || ip.is_documentation() // 192.0.2/24, 198.51.100/24, 203.0.113/24
         || a == 0 // 0.0.0.0/8, "this network"; most stacks route it to the local host
         || (a == 100 && (64..=127).contains(&b)) // 100.64/10 CGNAT, carrier and mesh-VPN peers
+        || (a == 192 && b == 0 && c == 0) // 192.0.0.0/24 IETF protocol assignments
+        || (a == 198 && (18..=19).contains(&b)) // 198.18/15 benchmarking, routed inside test labs
         || a >= 224 // 224/4 multicast + 240/4 reserved
 }
 
@@ -254,6 +258,15 @@ pub(crate) fn is_internal_ipv6(ip: Ipv6Addr) -> bool {
         || ip.is_multicast()
         || (seg[0] & 0xfe00) == 0xfc00 // fc00::/7 unique local
         || (seg[0] & 0xffc0) == 0xfe80 // fe80::/10 link-local
+        || (seg[0] & 0xffc0) == 0xfec0 // fec0::/10 site-local, deprecated but still routed privately
+        // 6to4 and Teredo carry an IPv4 destination inside the address, so a
+        // relay would deliver the request to whatever it names. No public
+        // service is reached only through either, so both prefixes are
+        // refused whole rather than judged by the address they embed.
+        || seg[0] == 0x2002 // 2002::/16 6to4
+        || (seg[0] == 0x2001 && seg[1] == 0x0000) // 2001::/32 Teredo
+        || (seg[0] == 0x2001 && seg[1] == 0x0db8) // 2001:db8::/32 documentation
+        || (seg[0] == 0x0100 && seg[1] == 0 && seg[2] == 0 && seg[3] == 0) // 100::/64 discard
 }
 
 /// Hop ceiling for a redirect chain. `reqwest`'s default policy is
@@ -419,6 +432,19 @@ impl PublicHttpClient {
         let pins = std::sync::Arc::new(PinnedDestinations::default());
         let inner = builder
             .redirect(pinned_public_redirect_policy(std::sync::Arc::clone(&pins)))
+            .dns_resolver(PinnedResolver(std::sync::Arc::clone(&pins)))
+            .build()?;
+        Ok(Self { inner, pins })
+    }
+
+    /// Build a public-only client that follows no redirect itself. The caller
+    /// sends each hop through [`Self::request`], which judges and pins it, and
+    /// so decides what a hop may carry, such as dropping credentials when the
+    /// origin changes.
+    pub fn without_redirects(builder: reqwest::ClientBuilder) -> Result<Self, reqwest::Error> {
+        let pins = std::sync::Arc::new(PinnedDestinations::default());
+        let inner = builder
+            .redirect(reqwest::redirect::Policy::none())
             .dns_resolver(PinnedResolver(std::sync::Arc::clone(&pins)))
             .build()?;
         Ok(Self { inner, pins })
@@ -864,29 +890,24 @@ mod tests {
     fn arbitrary_public_surfaces_remain_wired_to_the_public_boundary() {
         let guarded_surfaces = [
             (
-                "Discord webhook",
-                include_str!("../../features/messaging/discord.rs"),
-                "client: PublicHttpClient",
-            ),
-            (
                 "generic webhook",
                 include_str!("../../features/webhooks/mod.rs"),
                 "client: PublicHttpClient",
             ),
             (
-                "scheduler webhook",
-                include_str!("../commands/scheduler.rs"),
-                "egress_policy::PublicHttpClient::new()",
-            ),
-            (
                 "LLM API upload/download",
                 include_str!("../../core/llm/tool_executor/api_tools.rs"),
-                "PublicHttpClient::new()",
+                "ApiClient::public()",
             ),
             (
                 "LLM physical scrape",
                 include_str!("../../core/llm/tool_executor/search_tools.rs"),
-                "PublicHttpClient::with_builder",
+                "ApiClient::public()",
+            ),
+            (
+                "public API client",
+                include_str!("../api/client.rs"),
+                "PublicHttpClient::without_redirects(",
             ),
             (
                 "AGI API tools",
@@ -1029,6 +1050,99 @@ mod tests {
                     Err(EgressDenial::InternalDestination(_))
                 ),
                 "{url} must be refused"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_special_purpose_ipv4_ranges() {
+        for url in [
+            "http://198.18.0.1/",
+            "http://198.19.255.254/",
+            "http://192.0.0.8/",
+            "http://192.0.2.10/",
+            "http://198.51.100.10/",
+            "http://203.0.113.10/",
+            "http://240.0.0.1/",
+            "http://250.1.2.3/",
+        ] {
+            assert!(
+                matches!(
+                    ensure_public_http_destination(url),
+                    Err(EgressDenial::InternalDestination(_))
+                ),
+                "{url} must be refused"
+            );
+        }
+        for url in [
+            "http://198.17.255.255/",
+            "http://198.20.0.1/",
+            "http://192.0.1.1/",
+        ] {
+            assert!(
+                ensure_public_http_destination(url).is_ok(),
+                "{url} borders a refused range and must stay reachable"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_tunnel_site_local_discard_and_documentation_ipv6() {
+        for url in [
+            // 6to4 and Teredo, with both a private and a public address embedded.
+            "http://[2002:a9fe:a9fe::1]/",
+            "http://[2002:0808:0808::1]/",
+            "http://[2001:0:4136:e378:8000:63bf:3fff:fdd2]/",
+            "http://[2001::1]/",
+            "http://[fec0::1]/",
+            "http://[feff:ffff::1]/",
+            "http://[100::1]/",
+            "http://[2001:db8::1]/",
+        ] {
+            assert!(
+                matches!(
+                    ensure_public_http_destination(url),
+                    Err(EgressDenial::InternalDestination(_))
+                ),
+                "{url} must be refused"
+            );
+        }
+        for url in [
+            "http://[2001:4860:4860::8888]/",
+            "http://[2003::1]/",
+            "http://[100:0:0:1::1]/",
+        ] {
+            assert!(
+                ensure_public_http_destination(url).is_ok(),
+                "{url} borders a refused range and must stay reachable"
+            );
+        }
+    }
+
+    #[test]
+    fn a_name_that_resolves_into_a_newly_refused_range_is_refused() {
+        let resolver = StubResolver::new(&[
+            ("bench.attacker.example", "198.18.0.1"),
+            ("sixtofour.attacker.example", "2002:7f00:1::1"),
+            (
+                "teredo.attacker.example",
+                "2001:0:4136:e378:8000:63bf:3fff:fdd2",
+            ),
+            ("sitelocal.attacker.example", "fec0::1"),
+        ]);
+        for host in [
+            "bench.attacker.example",
+            "sixtofour.attacker.example",
+            "teredo.attacker.example",
+            "sitelocal.attacker.example",
+        ] {
+            let url = format!("https://{host}/");
+            assert!(
+                matches!(
+                    judge_destination(&url, &resolver),
+                    Err(EgressDenial::InternalDestination(_))
+                ),
+                "{url} resolves into a refused range"
             );
         }
     }

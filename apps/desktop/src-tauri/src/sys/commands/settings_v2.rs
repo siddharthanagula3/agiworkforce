@@ -1,7 +1,5 @@
-use crate::data::settings::{
-    models::{AppSettings, SettingCategory, SettingValue},
-    SettingsService,
-};
+use crate::automation::computer_use::consent::{process_scope, revoke_consent, ConsentScope};
+use crate::data::settings::SettingsService;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tauri::State;
@@ -25,53 +23,25 @@ pub struct SettingsResponse {
     pub message: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetSettingRequest {
-    pub key: String,
-    pub value: serde_json::Value,
-    pub category: String,
-    pub encrypted: bool,
+/// Withdraw computer-use consent: the stored grant is removed and every
+/// grant already issued under it stops working.
+fn withdraw_computer_use_consent(
+    scope: &ConsentScope,
+    service: &SettingsService,
+) -> Result<(), String> {
+    revoke_consent(scope, service)
+        .map_err(|e| format!("Failed to withdraw computer-use consent: {}", e))
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GetSettingsRequest {
-    pub keys: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GetSettingsResponse {
-    pub settings: std::collections::HashMap<String, serde_json::Value>,
-}
-
+/// Withdraw the consent that lets the app control this computer.
+///
+/// This is the only thing the page may change in `settings_v2`. No
+/// page-callable command reads, writes or deletes a setting by key: the same
+/// table holds saved provider keys, connector sign-ins, capability consents
+/// and the list of approved hooks, and a delete by key could remove any of
+/// them.
 #[tauri::command]
-pub async fn settings_v2_get(
-    key: String,
-    state: State<'_, SettingsServiceState>,
-) -> Result<serde_json::Value, String> {
-    let service = state
-        .service
-        .lock()
-        .map_err(|e| format!("Lock error: {}", e))?;
-
-    let value = service
-        .get(&key)
-        .map_err(|e| format!("Failed to get setting '{}': {}", key, e))?;
-
-    match value {
-        SettingValue::String(s) => Ok(serde_json::Value::String(s)),
-        SettingValue::Integer(i) => Ok(serde_json::Value::Number(i.into())),
-        SettingValue::Float(f) => Ok(serde_json::json!(f)),
-        SettingValue::Boolean(b) => Ok(serde_json::Value::Bool(b)),
-        SettingValue::Json(j) => Ok(j),
-    }
-}
-
-#[tauri::command]
-pub async fn settings_v2_set(
-    request: SetSettingRequest,
+pub async fn computer_use_revoke_consent(
     state: State<'_, SettingsServiceState>,
 ) -> Result<SettingsResponse, String> {
     let service = state
@@ -79,123 +49,11 @@ pub async fn settings_v2_set(
         .lock()
         .map_err(|e| format!("Lock error: {}", e))?;
 
-    let category = SettingCategory::from_str(&request.category)
-        .ok_or_else(|| format!("Invalid category: {}", request.category))?;
-
-    let value = json_to_setting_value(&request.value);
-
-    service
-        .set(request.key.clone(), value, category, request.encrypted)
-        .map_err(|e| format!("Failed to set setting '{}': {}", request.key, e))?;
+    withdraw_computer_use_consent(process_scope(), &service)?;
 
     Ok(SettingsResponse {
         success: true,
-        message: None,
-    })
-}
-
-#[tauri::command]
-pub async fn settings_v2_get_batch(
-    request: GetSettingsRequest,
-    state: State<'_, SettingsServiceState>,
-) -> Result<GetSettingsResponse, String> {
-    let service = state
-        .service
-        .lock()
-        .map_err(|e| format!("Lock error: {}", e))?;
-
-    let mut settings = std::collections::HashMap::new();
-
-    for key in request.keys {
-        if let Ok(value) = service.get(&key) {
-            let json_value = setting_value_to_json(&value);
-            settings.insert(key, json_value);
-        }
-    }
-
-    Ok(GetSettingsResponse { settings })
-}
-
-#[tauri::command]
-pub async fn settings_v2_delete(
-    key: String,
-    state: State<'_, SettingsServiceState>,
-) -> Result<SettingsResponse, String> {
-    let service = state
-        .service
-        .lock()
-        .map_err(|e| format!("Lock error: {}", e))?;
-
-    service
-        .delete(&key)
-        .map_err(|e| format!("Failed to delete setting '{}': {}", key, e))?;
-
-    Ok(SettingsResponse {
-        success: true,
-        message: Some(format!("Setting '{}' deleted", key)),
-    })
-}
-
-#[tauri::command]
-pub async fn settings_v2_get_category(
-    category: String,
-    state: State<'_, SettingsServiceState>,
-) -> Result<GetSettingsResponse, String> {
-    let service = state
-        .service
-        .lock()
-        .map_err(|e| format!("Lock error: {}", e))?;
-
-    let category_enum = SettingCategory::from_str(&category)
-        .ok_or_else(|| format!("Invalid category: {}", category))?;
-
-    let settings_list = service
-        .get_by_category(category_enum)
-        .map_err(|e| format!("Failed to get settings for category '{}': {}", category, e))?;
-
-    let mut settings = std::collections::HashMap::new();
-
-    for setting in settings_list {
-        if let Ok(value) = setting.get_value() {
-            let json_value = setting_value_to_json(&value);
-            settings.insert(setting.key, json_value);
-        }
-    }
-
-    Ok(GetSettingsResponse { settings })
-}
-
-#[tauri::command]
-pub async fn settings_v2_load_app_settings(
-    state: State<'_, SettingsServiceState>,
-) -> Result<AppSettings, String> {
-    let service = state
-        .service
-        .lock()
-        .map_err(|e| format!("Lock error: {}", e))?;
-
-    service
-        .load_app_settings()
-        .map_err(|e| format!("Failed to load app settings: {}", e))
-}
-
-#[tauri::command]
-pub async fn settings_v2_save_app_settings(
-    settings: AppSettings,
-    state: State<'_, SettingsServiceState>,
-) -> Result<SettingsResponse, String> {
-    let service = state
-        .service
-        .lock()
-        .map_err(|e| format!("Lock error: {}", e))?;
-
-    service
-        .save_app_settings(&settings)
-        .map_err(|e| format!("Failed to save app settings: {}", e))?;
-
-    Ok(SettingsResponse {
-        success: true,
-        message: Some("Application settings saved successfully".to_string()),
+        message: Some("Computer-use consent withdrawn".to_string()),
     })
 }
 
@@ -216,82 +74,74 @@ pub async fn settings_v2_clear_cache(
     })
 }
 
-#[tauri::command]
-pub async fn settings_v2_list_all(
-    state: State<'_, SettingsServiceState>,
-) -> Result<GetSettingsResponse, String> {
-    let service = state
-        .service
-        .lock()
-        .map_err(|e| format!("Lock error: {}", e))?;
-
-    let all_settings = service
-        .list_all()
-        .map_err(|e| format!("Failed to list settings: {}", e))?;
-
-    let mut settings = std::collections::HashMap::new();
-
-    for setting in all_settings {
-        if !setting.encrypted {
-            if let Ok(value) = setting.get_value() {
-                let json_value = setting_value_to_json(&value);
-                settings.insert(setting.key, json_value);
-            }
-        }
-    }
-
-    Ok(GetSettingsResponse { settings })
-}
-
-fn json_to_setting_value(json: &serde_json::Value) -> SettingValue {
-    match json {
-        serde_json::Value::String(s) => SettingValue::String(s.clone()),
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                SettingValue::Integer(i)
-            } else if let Some(f) = n.as_f64() {
-                SettingValue::Float(f)
-            } else {
-                SettingValue::Json(json.clone())
-            }
-        }
-        serde_json::Value::Bool(b) => SettingValue::Boolean(*b),
-        _ => SettingValue::Json(json.clone()),
-    }
-}
-
-fn setting_value_to_json(value: &SettingValue) -> serde_json::Value {
-    match value {
-        SettingValue::String(s) => serde_json::Value::String(s.clone()),
-        SettingValue::Integer(i) => serde_json::Value::Number((*i).into()),
-        SettingValue::Float(f) => serde_json::json!(f),
-        SettingValue::Boolean(b) => serde_json::Value::Bool(*b),
-        SettingValue::Json(j) => j.clone(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::automation::computer_use::CONSENT_SETTINGS_KEY;
+    use crate::data::settings::{SettingCategory, SettingValue};
+    use rusqlite::Connection;
 
-    #[test]
-    fn test_json_conversions() {
-        let json_str = serde_json::Value::String("test".to_string());
-        let setting_val = json_to_setting_value(&json_str);
-        assert_eq!(setting_val.as_string(), Some("test"));
-
-        let back_to_json = setting_value_to_json(&setting_val);
-        assert_eq!(back_to_json, json_str);
+    fn service_holding(rows: &[&str]) -> SettingsService {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE settings_v2 (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                category TEXT NOT NULL,
+                encrypted INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .unwrap();
+        let service = SettingsService::new(Arc::new(Mutex::new(conn))).unwrap();
+        for row in rows {
+            service
+                .set(
+                    row.to_string(),
+                    SettingValue::String("fixture".to_string()),
+                    SettingCategory::Security,
+                    false,
+                )
+                .unwrap();
+        }
+        service
     }
 
     #[test]
-    fn test_number_conversions() {
-        let json_int = serde_json::Value::Number(42.into());
-        let setting_val = json_to_setting_value(&json_int);
-        assert_eq!(setting_val.as_integer(), Some(42));
+    fn withdrawing_consent_removes_the_consent_row_and_no_other_setting() {
+        let kept = [
+            "hooks_approved_yaml",
+            "api_key_openai",
+            "mcp_oauth_tokens_github",
+            "mcp_oauth_config_github_client_secret",
+        ];
+        let mut rows = kept.to_vec();
+        rows.push(CONSENT_SETTINGS_KEY);
+        let service = service_holding(&rows);
 
-        let json_float = serde_json::json!(3.15);
-        let setting_val = json_to_setting_value(&json_float);
-        assert_eq!(setting_val.as_float(), Some(3.15));
+        withdraw_computer_use_consent(&ConsentScope::new(), &service).expect("withdraw");
+
+        assert!(service.get(CONSENT_SETTINGS_KEY).is_err());
+        for row in kept {
+            assert_eq!(
+                service.get(row).unwrap(),
+                SettingValue::String("fixture".to_string()),
+                "{row} was removed with the consent"
+            );
+        }
+    }
+
+    #[test]
+    fn withdrawing_consent_that_was_never_given_changes_nothing() {
+        let service = service_holding(&["hooks_approved_yaml"]);
+
+        withdraw_computer_use_consent(&ConsentScope::new(), &service).expect("withdraw");
+
+        assert_eq!(
+            service.get("hooks_approved_yaml").unwrap(),
+            SettingValue::String("fixture".to_string())
+        );
     }
 }

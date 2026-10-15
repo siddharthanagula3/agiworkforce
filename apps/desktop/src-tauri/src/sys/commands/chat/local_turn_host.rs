@@ -13,8 +13,8 @@
 //! behind the host: model completion via `LLMRouter::invoke_candidate` (with the
 //! same per-followup timeout, `pause_turn` logging, and followup-failure
 //! graceful-stop the inline loop had), per-tool execution + Tauri tool events
-//! via `execute_tool_calls_batch`, the `chat:agent-progress` / `chat:tool-calls`
-//! emits, message-history accrual, and cost/token accounting. The engine never
+//! via `execute_tool_calls_batch`, the `chat:agent-progress` emit,
+//! message-history accrual, and cost/token accounting. The engine never
 //! performs I/O, prints, or resolves credentials.
 //!
 //! ## Scope note (why non-streaming only)
@@ -180,9 +180,8 @@ struct LocalChatTurnHost {
     /// 1-based prefix index for `normalize_tool_calls`, mirroring the inline
     /// loop's `tool_iteration` (`tool_call_1`, `tool_call_2`, …).
     next_prefix_index: usize,
-    /// This iteration's normalized tool calls, used both for the `chat:tool-calls`
-    /// emit and to recover the exact `StreamingToolCall` (arguments string) for
-    /// execution, so bytes are never round-tripped through `serde_json::Value`.
+    /// This iteration's normalized tool calls, used to recover the exact
+    /// `StreamingToolCall` (arguments string) for execution, so bytes are never round-tripped through `serde_json::Value`.
     pending_calls: Vec<StreamingToolCall>,
     last_outcome: RouteOutcome,
     request_cost: RequestCostAccumulator,
@@ -347,9 +346,25 @@ impl TurnHost for LocalChatTurnHost {
     }
 
     async fn prepare_tool(&mut self, call: &CoreToolCall, _mode: DispatchMode) -> Prepared {
-        // The non-streaming loop had no per-tool pre-checks (availability, hooks,
-        // plan-mode), normalization already happened in `absorb`. Proceed with
-        // the call's arguments verbatim.
+        // Normalization already happened in `absorb`; the only pre-check is the
+        // conversation's plan mode, which refuses anything that could act.
+        if let Some(refusal) = super::state::plan_mode_refusal(self.conversation_id, &call.name) {
+            let _ = self.app_handle.emit(
+                "tool:blocked_by_mode",
+                serde_json::json!({
+                    "tool_name": call.name,
+                    "mode": "plan",
+                    "hint": "Switch to Ask mode to let it run.",
+                }),
+            );
+            return Prepared::PreEmpted {
+                block: ResultBlock {
+                    tool_use_id: call.id.clone(),
+                    content: format!("Error: {refusal}"),
+                    is_error: true,
+                },
+            };
+        }
         Prepared::Proceed {
             args: call.arguments.clone(),
         }
@@ -375,8 +390,7 @@ impl TurnHost for LocalChatTurnHost {
     ) -> ExecResult {
         // Recover the exact normalized StreamingToolCall (its arguments string is
         // byte-preserved) and run it through the real per-tool executor, which
-        // emits the desktop tool events (`ToolEvent::Started/Completed`,
-        // `chat:tool-executing`, `chat:tool-result`) identically to the batch.
+        // emits the desktop `tool:event` stream identically to the batch.
         let Some(stc) = self
             .pending_calls
             .iter()
@@ -486,15 +500,6 @@ impl TurnHost for LocalChatTurnHost {
                 "chat:agent-progress",
                 agent_progress_payload(self.conversation_id, display_iteration, *max, *tool_count),
             );
-            let _ = self.app_handle.emit(
-                "chat:tool-calls",
-                tool_calls_payload(
-                    self.conversation_id,
-                    &self.frontend_message_id,
-                    &self.pending_calls,
-                    display_iteration,
-                ),
-            );
         }
     }
 
@@ -589,23 +594,6 @@ fn agent_progress_payload(
         "max_iterations": max_iterations,
         "status": "executing_tools",
         "tool_count": tool_count,
-    })
-}
-
-/// The `chat:tool-calls` payload emitted before dispatching a tool batch.
-/// `message_id` serializes to `null` when absent, matching the inline loop's
-/// `request.frontend_message_id.clone()`.
-fn tool_calls_payload(
-    conversation_id: i64,
-    message_id: &Option<String>,
-    calls: &[StreamingToolCall],
-    iteration: usize,
-) -> serde_json::Value {
-    serde_json::json!({
-        "conversation_id": conversation_id,
-        "message_id": message_id,
-        "tool_calls": calls,
-        "iteration": iteration,
     })
 }
 
@@ -1019,36 +1007,6 @@ mod tests {
                 "tool_count": 2,
             })
         );
-    }
-
-    #[test]
-    fn tool_calls_payload_matches_inline_shape() {
-        use super::StreamingToolCall;
-        let calls = vec![StreamingToolCall {
-            index: 0,
-            id: "tool_call_1_0".to_string(),
-            name: "read_file".to_string(),
-            arguments: "{\"path\":\"a\"}".to_string(),
-        }];
-        // With a message id present.
-        let payload = super::tool_calls_payload(42, &Some("fmid".to_string()), &calls, 1);
-        assert_eq!(
-            payload,
-            serde_json::json!({
-                "conversation_id": 42,
-                "message_id": "fmid",
-                "tool_calls": [{
-                    "index": 0,
-                    "id": "tool_call_1_0",
-                    "name": "read_file",
-                    "arguments": "{\"path\":\"a\"}",
-                }],
-                "iteration": 1,
-            })
-        );
-        // Absent message id serializes to null, as `request.frontend_message_id` did.
-        let payload_none = super::tool_calls_payload(42, &None, &calls, 1);
-        assert_eq!(payload_none["message_id"], serde_json::Value::Null);
     }
 
     #[test]

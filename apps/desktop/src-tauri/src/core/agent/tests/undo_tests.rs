@@ -15,8 +15,7 @@
 #[allow(unused_variables, unused_mut, unused_imports)]
 mod tests {
     use crate::core::agent::change_tracker::{Change, ChangeTracker, ChangeType};
-    use crate::core::agent::undo_manager::{UndoManager, UndoResult, UndoSummary, UndoableChange};
-    use std::collections::HashMap;
+    use crate::core::agent::undo_manager::{UndoManager, UndoableChange};
     use std::path::PathBuf;
     use std::sync::Arc;
     use tempfile::TempDir;
@@ -575,43 +574,6 @@ mod tests {
         assert!(file_b.exists(), "file_b should still exist");
     }
 
-    #[tokio::test]
-    async fn test_undo_task_all_changes() {
-        let temp_dir = TempDir::new().unwrap();
-        let files: Vec<PathBuf> = (0..3)
-            .map(|i| temp_dir.path().join(format!("task_file_{}.txt", i)))
-            .collect();
-
-        // Create all files
-        for (i, file) in files.iter().enumerate() {
-            fs::write(file, format!("content_{}", i)).await.unwrap();
-        }
-
-        let tracker = Arc::new(ChangeTracker::new());
-        for (i, file) in files.iter().enumerate() {
-            tracker
-                .record_file_created(
-                    file.clone(),
-                    format!("content_{}", i),
-                    "task-batch".to_string(),
-                )
-                .await;
-        }
-
-        let manager = UndoManager::new(tracker);
-        let results = manager.undo_task("task-batch").await;
-
-        assert!(results.is_ok());
-        let undo_results = results.unwrap();
-        assert_eq!(undo_results.len(), 3);
-        assert!(undo_results.iter().all(|r| r.success));
-
-        // Verify all files are deleted
-        for file in &files {
-            assert!(!file.exists(), "All files should be deleted");
-        }
-    }
-
     // =========================================================================
     // Partial Rollback Failure Handling Tests
     // =========================================================================
@@ -755,52 +717,6 @@ mod tests {
             change.before_content.is_some(),
             "File modification must capture before_content for undo"
         );
-    }
-
-    #[tokio::test]
-    async fn test_undo_task_partial_failure() {
-        let temp_dir = TempDir::new().unwrap();
-        let file1 = temp_dir.path().join("file1.txt");
-        let file2 = temp_dir.path().join("file2.txt");
-
-        // Create only file1 (file2 doesn't exist, simulating external deletion)
-        fs::write(&file1, "content1").await.unwrap();
-
-        let tracker = Arc::new(ChangeTracker::new());
-        tracker
-            .record_file_created(
-                file1.clone(),
-                "content1".to_string(),
-                "task-partial".to_string(),
-            )
-            .await;
-        tracker
-            .record_file_created(
-                file2.clone(),
-                "content2".to_string(),
-                "task-partial".to_string(),
-            )
-            .await;
-
-        let manager = UndoManager::new(tracker);
-        let results = manager.undo_task("task-partial").await;
-
-        assert!(results.is_ok());
-        let undo_results = results.unwrap();
-        assert_eq!(undo_results.len(), 2);
-
-        // Both should succeed - file1 is deleted, file2 was already missing
-        assert!(undo_results.iter().all(|r| r.success));
-    }
-
-    #[tokio::test]
-    async fn test_undo_task_empty() {
-        let tracker = Arc::new(ChangeTracker::new());
-        let manager = UndoManager::new(tracker);
-
-        let result = manager.undo_task("nonexistent-task").await;
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("No revertible changes"));
     }
 
     // =========================================================================

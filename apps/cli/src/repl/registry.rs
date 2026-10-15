@@ -579,6 +579,71 @@ mod export_tests {
         let json = export_conversation_for_display("json", &session).expect("json export");
         assert!(json.contains("a question"), "{json}");
     }
+
+    fn compacted_session() -> crate::agent::AgentSession {
+        let mut session = test_session(true);
+        session.managed_session = Some(crate::runtime::session::ManagedSession::new(
+            "export-after-compaction",
+            chrono::Utc::now(),
+        ));
+        session
+            .messages
+            .push(Message::text("user", "the first question"));
+        session
+            .messages
+            .push(Message::text("assistant", "the first answer"));
+        session.save_checkpoint();
+        let before = session.messages.clone();
+        let after = vec![Message::text("assistant", "a summary of the first turn")];
+        if let Some(managed_session) = session.managed_session.as_mut() {
+            managed_session.record_compaction(&before, &after);
+        }
+        session.messages = after;
+        session
+            .messages
+            .push(Message::text("user", "the second question"));
+        session
+    }
+
+    #[test]
+    fn an_export_after_compaction_still_carries_what_was_summarized() {
+        let session = compacted_session();
+
+        for format in ["markdown", "json"] {
+            let export = export_conversation_for_display(format, &session).expect("export");
+            assert!(export.contains("the first question"), "{format}: {export}");
+            assert!(export.contains("the first answer"), "{format}: {export}");
+            assert!(export.contains("the second question"), "{format}: {export}");
+            assert!(
+                !export.contains("a summary of the first turn"),
+                "{format} exported the model's summary as if it were a message: {export}"
+            );
+        }
+    }
+
+    #[test]
+    fn restoring_a_checkpoint_from_before_compaction_keeps_the_compacted_conversation_whole() {
+        let mut session = compacted_session();
+        let compacted: Vec<String> = session.messages.iter().map(Message::text_content).collect();
+
+        assert!(session.restore_checkpoint());
+
+        let kept: Vec<String> = session.messages.iter().map(Message::text_content).collect();
+        assert_eq!(kept, compacted);
+        let spoken: Vec<String> = session
+            .shown_messages()
+            .iter()
+            .filter(|message| message.role != "system")
+            .map(Message::text_content)
+            .collect();
+        for said in [
+            "the first question",
+            "the first answer",
+            "the second question",
+        ] {
+            assert!(spoken.iter().any(|text| text == said), "{said}: {spoken:?}");
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

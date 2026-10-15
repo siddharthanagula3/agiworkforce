@@ -260,6 +260,44 @@ pub(crate) fn generate_simple_diff(old: &str, new: &str) -> String {
     result
 }
 
+/// The most lines of a change a prompt carries. A change that is longer says
+/// so in the prompt, so nothing is approved as if it had been shown.
+pub(crate) const PROMPT_CHANGE_LINES: usize = 400;
+
+/// `text` as the lines of a change, each after `mark`: `+` for what is
+/// added, `-` for what is removed.
+pub(crate) fn marked_lines(mark: char, text: &str) -> Vec<String> {
+    text.lines().map(|line| format!("{mark} {line}")).collect()
+}
+
+/// The lines of a change as a prompt carries them: all of them to
+/// [`PROMPT_CHANGE_LINES`], and after that one line that says how many more
+/// there are.
+pub(crate) fn capped_change(mut lines: Vec<String>) -> Vec<String> {
+    if lines.len() > PROMPT_CHANGE_LINES {
+        let hidden = lines.len() - PROMPT_CHANGE_LINES;
+        lines.truncate(PROMPT_CHANGE_LINES);
+        lines.push(format!(
+            "… {hidden} more line(s) of this change are not shown here"
+        ));
+    }
+    lines
+}
+
+/// What a prompt for a change to files shows: every file the answer covers
+/// first, each on a line of its own, and then the change itself
+/// ([`capped_change`]). One yes applies all of it, so a patch is not asked
+/// about with its first lines and no list of what it touches, nor a new file
+/// with only its length.
+pub(crate) fn change_detail(targets: &[String], change: Vec<String>) -> Vec<String> {
+    let mut detail: Vec<String> = targets
+        .iter()
+        .map(|target| format!("file: {target}"))
+        .collect();
+    detail.extend(capped_change(change));
+    detail
+}
+
 pub(super) fn preview_string(s: &str, max_lines: usize) -> String {
     let lines: Vec<&str> = s.lines().collect();
     if lines.len() <= max_lines {

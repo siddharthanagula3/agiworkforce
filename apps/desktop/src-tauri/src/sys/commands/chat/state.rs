@@ -2,8 +2,7 @@
 
 use once_cell::sync::Lazy;
 use rusqlite::Connection;
-use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 // === Named constants for previously-hardcoded values ===
@@ -13,8 +12,10 @@ pub(crate) const DEFAULT_TEMPERATURE: f32 = 0.7;
 pub(crate) const DEFAULT_MAX_TOKENS: u32 = 4096;
 /// Maximum characters to extract from text/PDF file attachments (~100 KB)
 pub(crate) const MAX_FILE_EXTRACT_CHARS: usize = 100_000;
-/// Default limit when listing conversations
-pub(crate) const DEFAULT_CONVERSATION_LIST_LIMIT: i64 = 1000;
+/// Conversations returned per history page when the caller names no limit
+pub(crate) const DEFAULT_CONVERSATION_PAGE_SIZE: i64 = 200;
+/// Largest history page one call may request
+pub(crate) const MAX_CONVERSATION_PAGE_SIZE: i64 = 500;
 /// Maximum length for pending user messages
 pub(crate) const MAX_PENDING_MESSAGE_CHARS: usize = 100_000;
 /// Max idle wait for next streaming chunk before failing the stream.
@@ -53,6 +54,9 @@ pub(crate) const FAST_METADATA_TOOL_LOOP_MAX_SECS: u64 = 120;
 pub(crate) const STREAMING_TOOL_LOOP_MAX_ITERATIONS: usize = 25;
 /// Fast metadata loops should terminate quickly while still allowing recovery retries.
 pub(crate) const FAST_METADATA_TOOL_LOOP_MAX_ITERATIONS: usize = 8;
+/// How long the agent waits for the user to answer a question it asked, the
+/// same window the CLI gives a tool approval.
+pub(crate) const USER_ANSWER_TIMEOUT_SECS: u64 = 600;
 /// Long-running operations that can legitimately take minutes.
 pub(crate) const LONG_RUNNING_TOOL_TIMEOUT_SECS: u64 = 300;
 /// Default timeout for most tools.
@@ -70,10 +74,83 @@ pub(crate) const PAGE_CONTEXT_SELECTED_TEXT_MAX_LEN: usize = 4096;
 
 // === Static globals ===
 
-pub(crate) static STOP_GENERATION: AtomicBool = AtomicBool::new(false);
-// AUDIT-STREAM-038 fix: Track active conversation for scoped stop
-pub(crate) static ACTIVE_STOP_CONVERSATION: Lazy<Mutex<Option<i64>>> =
-    Lazy::new(|| Mutex::new(None));
+#[derive(Default)]
+pub(crate) struct StopRegistry {
+    stopped: HashSet<i64>,
+    running: HashMap<i64, usize>,
+}
+
+pub(crate) static STOP_REGISTRY: Lazy<Mutex<StopRegistry>> =
+    Lazy::new(|| Mutex::new(StopRegistry::default()));
+
+#[derive(Default)]
+struct UserWaitClock {
+    open_waits: usize,
+    open_since: Option<std::time::Instant>,
+    total: std::time::Duration,
+}
+
+/// Time spent waiting on the user (an agent question or a tool approval).
+/// Process-wide: approvals carry no conversation id, and a wait in one chat
+/// only ever lengthens another chat's allowance, never shortens it.
+static USER_WAIT_CLOCK: Lazy<Mutex<UserWaitClock>> =
+    Lazy::new(|| Mutex::new(UserWaitClock::default()));
+
+/// Counts the time it is alive as time spent waiting on the user.
+pub(crate) struct UserWaitGuard(());
+
+impl UserWaitGuard {
+    pub(crate) fn start() -> Self {
+        if let Ok(mut clock) = USER_WAIT_CLOCK.lock() {
+            if clock.open_waits == 0 {
+                clock.open_since = Some(std::time::Instant::now());
+            }
+            clock.open_waits += 1;
+        }
+        Self(())
+    }
+}
+
+impl Drop for UserWaitGuard {
+    fn drop(&mut self) {
+        if let Ok(mut clock) = USER_WAIT_CLOCK.lock() {
+            clock.open_waits = clock.open_waits.saturating_sub(1);
+            if clock.open_waits == 0 {
+                if let Some(since) = clock.open_since.take() {
+                    clock.total += since.elapsed();
+                }
+            }
+        }
+    }
+}
+
+/// Total time spent waiting on the user so far, including a wait still open.
+pub(crate) fn user_wait_total() -> std::time::Duration {
+    USER_WAIT_CLOCK
+        .lock()
+        .map(|clock| {
+            clock.total
+                + clock
+                    .open_since
+                    .map(|since| since.elapsed())
+                    .unwrap_or_default()
+        })
+        .unwrap_or_default()
+}
+
+/// Time since `started` that was not spent waiting on the user, given the
+/// wait total read when the clock started.
+pub(crate) fn active_elapsed(
+    started: std::time::Instant,
+    user_wait_at_start: std::time::Duration,
+) -> std::time::Duration {
+    started
+        .elapsed()
+        .saturating_sub(user_wait_total().saturating_sub(user_wait_at_start))
+}
+
+pub(crate) static PLAN_MODE_CONVERSATIONS: Lazy<Mutex<HashSet<i64>>> =
+    Lazy::new(|| Mutex::new(HashSet::new()));
 
 // Pending messages queue for mid-task user input
 pub(crate) static PENDING_MESSAGES: Lazy<Mutex<Vec<super::PendingUserMessage>>> =
@@ -120,30 +197,93 @@ pub(crate) fn is_tool_cancelled(tool_call_id: &str) -> bool {
     false
 }
 
-#[cfg(test)]
-pub fn should_stop_generation() -> bool {
-    STOP_GENERATION.load(Ordering::SeqCst)
+/// Marks a conversation stopped, or with `None` every conversation that has
+/// a turn running, and returns the conversations it marked.
+pub fn request_stop(conversation_id: Option<i64>) -> Vec<i64> {
+    let Ok(mut registry) = STOP_REGISTRY.lock() else {
+        return Vec::new();
+    };
+    let stopped: Vec<i64> = match conversation_id {
+        Some(id) => vec![id],
+        None => registry.running.keys().copied().collect(),
+    };
+    registry.stopped.extend(stopped.iter().copied());
+    stopped
 }
 
-// AUDIT-STREAM-038 fix: Check if stop is scoped to a specific conversation
 pub fn should_stop_for_conversation(conversation_id: i64) -> bool {
-    if !STOP_GENERATION.load(Ordering::SeqCst) {
-        return false;
+    STOP_REGISTRY
+        .lock()
+        .map(|registry| registry.stopped.contains(&conversation_id))
+        .unwrap_or(false)
+}
+
+pub fn reset_stop_flag(conversation_id: i64) {
+    if let Ok(mut registry) = STOP_REGISTRY.lock() {
+        registry.stopped.remove(&conversation_id);
     }
-    // If no active conversation is set, stop for all (backwards compatibility)
-    if let Ok(active) = ACTIVE_STOP_CONVERSATION.lock() {
-        if let Some(active_conv) = *active {
-            return active_conv == conversation_id;
+}
+
+pub(crate) fn mark_turn_running(conversation_id: i64) {
+    if let Ok(mut registry) = STOP_REGISTRY.lock() {
+        *registry.running.entry(conversation_id).or_default() += 1;
+    }
+}
+
+/// Records that one turn of `conversation_id` ended, and returns true when no
+/// other turn of it is still running.
+pub(crate) fn mark_turn_finished(conversation_id: i64) -> bool {
+    let Ok(mut registry) = STOP_REGISTRY.lock() else {
+        return false;
+    };
+    match registry.running.get_mut(&conversation_id) {
+        Some(turns) if *turns > 1 => {
+            *turns -= 1;
+            false
+        }
+        _ => {
+            registry.running.remove(&conversation_id);
+            true
         }
     }
-    // No active conversation set, allow stop for any (global stop)
-    true
 }
 
-pub fn reset_stop_flag() {
-    STOP_GENERATION.store(false, Ordering::SeqCst);
-    // AUDIT-STREAM-038 fix: Clear active conversation
-    if let Ok(mut active) = ACTIVE_STOP_CONVERSATION.lock() {
-        *active = None;
+/// Chat turns running now, for the quit prompt.
+pub fn active_turn_count() -> usize {
+    STOP_REGISTRY
+        .lock()
+        .map(|registry| registry.running.values().sum())
+        .unwrap_or(0)
+}
+
+pub fn set_conversation_plan_mode(conversation_id: i64, enabled: bool) {
+    if let Ok(mut conversations) = PLAN_MODE_CONVERSATIONS.lock() {
+        if enabled {
+            conversations.insert(conversation_id);
+        } else {
+            conversations.remove(&conversation_id);
+        }
     }
+}
+
+pub fn is_conversation_in_plan_mode(conversation_id: i64) -> bool {
+    PLAN_MODE_CONVERSATIONS
+        .lock()
+        .map(|conversations| conversations.contains(&conversation_id))
+        .unwrap_or(false)
+}
+
+/// The refusal a plan-mode conversation returns for a tool that could change
+/// something, or `None` when the tool may run.
+pub(crate) fn plan_mode_refusal(conversation_id: i64, tool_name: &str) -> Option<String> {
+    use crate::sys::commands::tool_confirmation::{AgentMode, ToolConfirmationState};
+
+    if !is_conversation_in_plan_mode(conversation_id)
+        || ToolConfirmationState::is_tool_permitted_for_mode(tool_name, AgentMode::Plan)
+    {
+        return None;
+    }
+    Some(format!(
+        "Tool '{tool_name}' is not permitted in plan mode. Plan mode can only read; present the plan and ask the user to switch to Ask mode to carry it out."
+    ))
 }

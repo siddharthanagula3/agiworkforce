@@ -1,7 +1,7 @@
 //! Hooks system, event-driven command execution.
 //!
-//! Hooks are configured in ~/.agiworkforce/hooks.json and run shell commands
-//! in response to lifecycle events (SessionStart, Stop, AfterToolUse).
+//! Hooks are configured in ~/.agiworkforce/hooks.json and run commands in
+//! response to lifecycle events (SessionStart, Stop, PostToolUse).
 //!
 //! Hooks can optionally include a `matcher` regex, the hook only fires when
 //! the matcher matches the event name **or** the `tool_name` from the input.
@@ -24,10 +24,12 @@ use std::time::Duration;
 /// A configured hook.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Hook {
-    /// Shell command to execute.
+    /// What to run. With no `args` it is a shell command line, run by
+    /// `sh -c`. With `args` it is a program, started with exactly those
+    /// arguments: nothing in them is read as shell syntax.
     pub command: String,
 
-    /// Optional arguments.
+    /// Arguments for `command`. Any at all makes the hook a program launch.
     #[serde(default)]
     pub args: Vec<String>,
 
@@ -35,7 +37,9 @@ pub struct Hook {
     #[serde(default = "default_timeout")]
     pub timeout: u64,
 
-    /// Whether to block on this hook (default: true).
+    /// Whether this hook's failure stops the hooks after it, and whether the
+    /// action is blocked when the hook cannot be started (default: true).
+    /// Every hook is waited for either way.
     #[serde(default = "default_blocking")]
     pub blocking: bool,
 
@@ -65,6 +69,69 @@ pub enum HookSource {
     Plugin,
 }
 
+/// How a hook is started.
+enum HookLaunch<'a> {
+    Shell(&'a str),
+    Program {
+        program: &'a str,
+        args: &'a [String],
+    },
+}
+
+impl Hook {
+    fn launch(&self) -> HookLaunch<'_> {
+        if self.args.is_empty() {
+            HookLaunch::Shell(&self.command)
+        } else {
+            HookLaunch::Program {
+                program: &self.command,
+                args: &self.args,
+            }
+        }
+    }
+
+    /// The whole of what the hook runs, on one line: the command line as
+    /// written, or the program and each argument quoted as a shell would need
+    /// it. Lists, failure messages, the audit log and the managed allowlist
+    /// all read this, so none of them sees a hook without its arguments.
+    pub fn display_command(&self) -> String {
+        match self.launch() {
+            HookLaunch::Shell(script) => script.to_string(),
+            HookLaunch::Program { program, args } => crate::sandbox::shell_join(
+                &std::iter::once(program.to_string())
+                    .chain(args.iter().cloned())
+                    .collect::<Vec<_>>(),
+            ),
+        }
+    }
+}
+
+/// Refuse a hook that could never fire as written, naming it and why.
+pub(crate) fn validate_hook(event: &str, hook: &Hook) -> std::result::Result<(), String> {
+    if hook.command.trim().is_empty() {
+        return Err(format!("a hook under \"{event}\" has no command"));
+    }
+    if let Some(pattern) = &hook.matcher {
+        if let Err(error) = Regex::new(pattern) {
+            return Err(format!(
+                "hook `{}` under \"{event}\" has a matcher that is not a regular expression \
+                 ({pattern:?}): {error}",
+                hook.display_command()
+            ));
+        }
+    }
+    if let Some(rule) = &hook.if_condition {
+        if split_permission_rule(rule).is_none_or(|(tool, _)| tool.is_empty()) {
+            return Err(format!(
+                "hook `{}` under \"{event}\" has `if` {rule:?}, which is not of the form \
+                 Tool(pattern), for example Bash(git *)",
+                hook.display_command()
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn default_timeout() -> u64 {
     10
 }
@@ -72,10 +139,11 @@ fn default_blocking() -> bool {
     true
 }
 
-/// Hook events, canonical names match Claude Code's 19-event vocabulary
-/// for free interop with `~/.claude/hooks.json` configs. Old AGI-specific
-/// names (`BeforeToolUse`, `PreEdit`, …) still load via custom Deserialize
-/// with a one-time stderr deprecation warning per alias per session.
+/// Hook events. The canonical spelling of each is its variant name, which is
+/// what `Display` prints, what the runner looks up and what a saved hooks
+/// file is keyed by. Older AGI names (`BeforeToolUse`, `PreEdit`, …) are
+/// accepted wherever a name is read and mapped to it by
+/// [`resolve_event_name`], with one stderr notice per name per session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub enum HookEvent {
     SessionStart,
@@ -207,6 +275,55 @@ impl std::fmt::Display for HookEvent {
     }
 }
 
+/// Names this build used before it took Claude Code's event vocabulary, the
+/// event each one now is, and what to add to the hook to keep its old scope.
+const LEGACY_EVENT_ALIASES: [(&str, HookEvent, &str); 10] = [
+    ("BeforeToolUse", HookEvent::PreToolUse, ""),
+    ("AfterToolUse", HookEvent::PostToolUse, ""),
+    ("BeforeMessage", HookEvent::UserPromptSubmit, ""),
+    (
+        "PreEdit",
+        HookEvent::PreToolUse,
+        ", use `if: \"Edit(*)\"` to filter to edit tools",
+    ),
+    (
+        "PostEdit",
+        HookEvent::PostToolUse,
+        ", use `if: \"Edit(*)\"` to filter to edit tools",
+    ),
+    (
+        "PreCommand",
+        HookEvent::PreToolUse,
+        ", use `if: \"Bash(*)\"` to filter to shell commands",
+    ),
+    (
+        "PostCommand",
+        HookEvent::PostToolUse,
+        ", use `if: \"Bash(*)\"` to filter to shell commands",
+    ),
+    ("ContextCompacted", HookEvent::PostCompact, ""),
+    ("SubagentSpawned", HookEvent::SubagentStart, ""),
+    ("SubagentCompleted", HookEvent::SubagentStop, ""),
+];
+
+/// The error for a name that is no event: it names the name, every event, and
+/// every older name that still loads.
+fn unknown_event_message(name: &str) -> String {
+    format!(
+        "unknown hook event \"{name}\". Events: {}. Older names still accepted: {}",
+        ALL_EVENTS
+            .iter()
+            .map(HookEvent::to_string)
+            .collect::<Vec<_>>()
+            .join(", "),
+        LEGACY_EVENT_ALIASES
+            .iter()
+            .map(|(alias, event, _)| format!("{alias} (now {event})"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
 /// Tracks which deprecated event aliases have already emitted a stderr
 /// warning this session. Keyed by old alias name. Once an alias has been
 /// warned about, subsequent loads in the same process stay silent.
@@ -263,31 +380,10 @@ fn resolve_event_name(name: &str) -> Option<HookEvent> {
     }
 
     // Legacy aliases, resolve + warn once per session per alias.
-    let (event, hint): (HookEvent, &'static str) = match name {
-        "BeforeToolUse" => (HookEvent::PreToolUse, ""),
-        "AfterToolUse" => (HookEvent::PostToolUse, ""),
-        "BeforeMessage" => (HookEvent::UserPromptSubmit, ""),
-        "PreEdit" => (
-            HookEvent::PreToolUse,
-            ", use `if: \"Edit(*)\"` to filter to edit tools",
-        ),
-        "PostEdit" => (
-            HookEvent::PostToolUse,
-            ", use `if: \"Edit(*)\"` to filter to edit tools",
-        ),
-        "PreCommand" => (
-            HookEvent::PreToolUse,
-            ", use `if: \"Bash(*)\"` to filter to shell commands",
-        ),
-        "PostCommand" => (
-            HookEvent::PostToolUse,
-            ", use `if: \"Bash(*)\"` to filter to shell commands",
-        ),
-        "ContextCompacted" => (HookEvent::PostCompact, ""),
-        "SubagentSpawned" => (HookEvent::SubagentStart, ""),
-        "SubagentCompleted" => (HookEvent::SubagentStop, ""),
-        _ => return None,
-    };
+    let (_, event, hint) = LEGACY_EVENT_ALIASES
+        .iter()
+        .copied()
+        .find(|(alias, _, _)| *alias == name)?;
 
     if let Ok(mut seen) = deprecation_seen().lock() {
         if seen.insert(name.to_string()) {
@@ -307,22 +403,8 @@ impl<'de> Deserialize<'de> for HookEvent {
         D: Deserializer<'de>,
     {
         let name = String::deserialize(deserializer)?;
-        resolve_event_name(&name).ok_or_else(|| {
-            serde::de::Error::custom(format!(
-                "unknown hook event \"{}\". Canonical events: SessionStart, SessionEnd, \
-                 PreToolUse, PostToolUse, UserPromptSubmit, UserPromptExpansion, AfterMessage, \
-                 PlanModeChanged, PreCompact, PostCompact, BeforeModelResolve, BeforePromptBuild, \
-                 ToolResultPersist, SubagentStart, SubagentStop, PermissionRequest, \
-                 PermissionDenied, Notification, Stop, StopFailure, PostToolBatch, CronTriggered, \
-                 WebhookReceived, FileChanged, DaemonStarted, DaemonStopped, Setup, TeammateIdle, \
-                 WorktreeCreate, WorktreeRemove, Elicitation, ElicitationResult, TurnStart, \
-                 Error, TurnCancelled. \
-                 Legacy aliases (deprecated): BeforeToolUse, AfterToolUse, BeforeMessage, \
-                 PreEdit, PostEdit, PreCommand, PostCommand, ContextCompacted, \
-                 SubagentSpawned, SubagentCompleted.",
-                name
-            ))
-        })
+        resolve_event_name(&name)
+            .ok_or_else(|| serde::de::Error::custom(unknown_event_message(&name)))
     }
 }
 
@@ -340,16 +422,9 @@ fn matches_permission_rule(
     tool_name: &str,
     tool_args: Option<&serde_json::Value>,
 ) -> bool {
-    // Find the opening paren that begins the arg-glob.
-    let open = match rule.find('(') {
-        Some(i) => i,
-        None => return false,
-    };
-    if !rule.ends_with(')') {
+    let Some((rule_tool, arg_glob)) = split_permission_rule(rule) else {
         return false;
-    }
-    let rule_tool = rule[..open].trim();
-    let arg_glob = &rule[open + 1..rule.len() - 1];
+    };
 
     // Tool names accept AGI's canonical identifiers and reference-compatible aliases.
     if !tool_name_matches(rule_tool, tool_name) {
@@ -372,6 +447,14 @@ fn matches_permission_rule(
         .unwrap_or_default();
 
     glob_match(arg_glob, &arg_value)
+}
+
+/// `Tool(arg-glob)` as its tool name and its glob, or `None` for any other
+/// shape.
+fn split_permission_rule(rule: &str) -> Option<(&str, &str)> {
+    let open = rule.find('(')?;
+    let arg_glob = rule.get(open + 1..)?.strip_suffix(')')?;
+    Some((rule[..open].trim(), arg_glob))
 }
 
 /// Tiny shell-style glob matcher: `*` matches any (possibly empty) run of
@@ -427,8 +510,64 @@ fn hook_tool_name_candidates(tool_name: &str) -> Vec<&str> {
 /// Hooks configuration loaded from hooks.json.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct HooksConfig {
-    #[serde(default)]
-    pub hooks: HashMap<String, Vec<Hook>>, // event name -> hooks
+    /// Hooks by canonical event name, [`HookEvent`]'s `Display`. Loading maps
+    /// an older name to it and refuses a name that is no event, because a
+    /// hook kept under a name the runner never looks up never runs.
+    #[serde(default, deserialize_with = "deserialize_hooks_by_event")]
+    pub hooks: HashMap<String, Vec<Hook>>,
+    /// `false` runs the user's own hooks outside the sandbox, in the folder
+    /// the session started in. Plugin hooks stay sandboxed, and a managed
+    /// policy that requires the sandbox overrides it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox: Option<bool>,
+}
+
+impl HooksConfig {
+    pub fn user_hooks_sandboxed(&self) -> bool {
+        self.sandbox != Some(false)
+    }
+}
+
+/// Read the `hooks` map of a hooks file. Entries keep the order the file
+/// gives them, so hooks written under an older name and under the event it
+/// became run in the order they were written.
+fn deserialize_hooks_by_event<'de, D>(
+    deserializer: D,
+) -> Result<HashMap<String, Vec<Hook>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct ByEvent;
+
+    impl<'de> serde::de::Visitor<'de> for ByEvent {
+        type Value = HashMap<String, Vec<Hook>>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("a map from hook event name to a list of hooks")
+        }
+
+        fn visit_map<A>(self, mut entries: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::MapAccess<'de>,
+        {
+            let mut hooks: HashMap<String, Vec<Hook>> = HashMap::new();
+            while let Some(name) = entries.next_key::<String>()? {
+                let Some(event) = resolve_event_name(&name) else {
+                    return Err(serde::de::Error::custom(unknown_event_message(&name)));
+                };
+                let listed: Vec<Hook> = entries.next_value()?;
+                for hook in &listed {
+                    if let Err(problem) = validate_hook(&name, hook) {
+                        return Err(serde::de::Error::custom(problem));
+                    }
+                }
+                hooks.entry(event.to_string()).or_default().extend(listed);
+            }
+            Ok(hooks)
+        }
+    }
+
+    deserializer.deserialize_map(ByEvent)
 }
 
 // ---------------------------------------------------------------------------
@@ -639,7 +778,7 @@ pub struct HookInput {
     pub tool_output: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
-    /// Structured tool execution payload (populated for AfterToolUse).
+    /// Structured tool execution payload (populated for PostToolUse).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_execution: Option<ToolExecutionPayload>,
 }
@@ -904,20 +1043,45 @@ fn merge_plugin_hooks(config: &mut HooksConfig) {
         if from_project {
             eprintln!(
                 "[plugins] security: hooks for event '{}' from a project-local plugin were blocked. \
-                 Only plugins installed in ~/.agiworkforce/plugins/ may contribute hooks. \
-                 See --trust-plugin to explicitly opt in.",
-                event_name
+                 Only plugins installed in ~/.agiworkforce/plugins/ may contribute hooks; \
+                 install the plugin with `agi plugin install <path>` to use them.",
+                crate::terminal_text::sanitize_terminal_text(&event_name)
             );
         }
     }
-    for (event_name, hook_values) in plugins_mgr.hook_configs() {
+    append_plugin_hooks(config, plugins_mgr.hook_configs());
+}
+
+/// Add plugin-declared hooks under the event each is declared for. A plugin
+/// is not the user's own file, so one bad entry is reported and left out
+/// instead of failing every hook.
+fn append_plugin_hooks(
+    config: &mut HooksConfig,
+    declared: HashMap<String, Vec<serde_json::Value>>,
+) {
+    for (event_name, hook_values) in declared {
+        let Some(event) = resolve_event_name(&event_name) else {
+            eprintln!(
+                "[plugins] {} hook(s) were not loaded: {}",
+                hook_values.len(),
+                crate::terminal_text::sanitize_terminal_text(&unknown_event_message(&event_name))
+            );
+            continue;
+        };
         for value in hook_values {
             match serde_json::from_value::<Hook>(value.clone()) {
                 Ok(mut hook) => {
+                    if let Err(problem) = validate_hook(&event_name, &hook) {
+                        eprintln!(
+                            "[plugins] a hook was not loaded: {}",
+                            crate::terminal_text::sanitize_terminal_text(&problem)
+                        );
+                        continue;
+                    }
                     hook.source = HookSource::Plugin;
                     config
                         .hooks
-                        .entry(event_name.clone())
+                        .entry(event.to_string())
                         .or_default()
                         .push(hook);
                 }
@@ -1016,7 +1180,7 @@ const MAX_ADDITIONAL_CONTEXT_BYTES: usize = 4 * 1024;
 /// Recognised shapes (any subset can appear together):
 /// - `{"decision": "block", "reason": "..."}` → blocked=true, reason
 /// - `{"continue": false}` → should_stop=true
-/// - `{"updated_input": {...}}` → rewrite tool args (BeforeToolUse only)
+/// - `{"updated_input": {...}}` → rewrite tool args (PreToolUse only)
 /// - `{"additional_context": "..."}` → inject system message (capped 4KB)
 /// - `{"updated_mcp_tool_output": "..."}` → rewrite tool output
 ///
@@ -1180,8 +1344,8 @@ fn append_updated_input_audit(
 
 /// Aggregate transformer fields across hook results. Caller decides how to
 /// apply the result, typically:
-///   - `updated_input` mutates the tool args before exec (BeforeToolUse)
-///   - `updated_mcp_tool_output` replaces the tool result (AfterToolUse)
+///   - `updated_input` mutates the tool args before exec (PreToolUse)
+///   - `updated_mcp_tool_output` replaces the tool result (PostToolUse)
 ///   - `additional_context` is appended as a system message
 ///
 /// HIGH-2: when `updated_input` is present in any hook result, the rewrite is
@@ -1239,7 +1403,7 @@ pub async fn run_hooks(
     let mut results = Vec::new();
 
     for hook in hooks {
-        let result = run_single_hook(hook, &input_json).await;
+        let result = run_single_hook(hook, &input_json, config.user_hooks_sandboxed()).await;
         let is_blocking = hook.blocking;
         results.push(result);
 
@@ -1252,12 +1416,14 @@ pub async fn run_hooks(
     results
 }
 
-/// Execute a single hook command.
-pub(crate) fn hook_requires_sandbox(hook: &Hook) -> bool {
+/// Whether a hook runs sandboxed. `user_hooks_sandboxed` is the hooks
+/// file's own setting, [`HooksConfig::user_hooks_sandboxed`].
+pub(crate) fn hook_requires_sandbox(hook: &Hook, user_hooks_sandboxed: bool) -> bool {
     hook_sandbox_required(
         hook.source,
         crate::sandbox::sandbox_settings(),
         crate::sandbox::sandbox_disabled(),
+        user_hooks_sandboxed,
     )
 }
 
@@ -1265,23 +1431,30 @@ fn hook_sandbox_required(
     source: HookSource,
     settings: crate::sandbox::SandboxSettings,
     sandbox_disabled: bool,
+    user_hooks_sandboxed: bool,
 ) -> bool {
     if sandbox_disabled {
         return false;
     }
     match source {
         HookSource::Plugin => true,
-        HookSource::User => settings.sandbox_user_hooks,
+        HookSource::User => settings.user_hooks.applies(user_hooks_sandboxed),
         HookSource::Managed => false,
     }
 }
 
-async fn run_hook_process(hook: &Hook, input_json: &str) -> std::io::Result<std::process::Output> {
+async fn run_hook_process(
+    hook: &Hook,
+    input_json: &str,
+    user_hooks_sandboxed: bool,
+) -> std::io::Result<std::process::Output> {
     let timeout = Duration::from_secs(hook.timeout);
     let stdin = Some(input_json.as_bytes().to_vec());
-    if !hook_requires_sandbox(hook) {
-        let cmd = crate::process_tree::shell_command(&hook.command);
-        return crate::process_tree::output(cmd, stdin, Some(timeout)).await;
+    if !hook_requires_sandbox(hook, user_hooks_sandboxed) {
+        return run_hook_on_host(hook, stdin, timeout).await;
+    }
+    if hook.source == HookSource::User {
+        return run_user_hook_sandboxed(hook, stdin, timeout).await;
     }
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let manager = crate::sandbox::SandboxManager::for_command_execution(
@@ -1292,10 +1465,11 @@ async fn run_hook_process(hook: &Hook, input_json: &str) -> std::io::Result<std:
         std::io::Error::other(format!(
             "plugin hook refused, it must run sandboxed: {error}"
         ))
-    })?;
+    })?
+    .with_shared_cache();
     crate::sandbox::execute_sandboxed_with_input(
         &manager,
-        &hook.command,
+        &manager.shell_with_shared_cache(&hook.display_command()),
         Some(&cwd),
         stdin,
         Some(timeout),
@@ -1310,19 +1484,185 @@ async fn run_hook_process(hook: &Hook, input_json: &str) -> std::io::Result<std:
     })
 }
 
-async fn run_single_hook(hook: &Hook, input_json: &str) -> HookResult {
-    let start = std::time::Instant::now();
+/// A hook outside the sandbox. Its `PATH` leaves out every folder a
+/// sandboxed command can write, so a `git`, `node` or `npx` one left in a
+/// project's `.venv/bin` or `node_modules/.bin` is never the one it runs.
+async fn run_hook_on_host(
+    hook: &Hook,
+    stdin: Option<Vec<u8>>,
+    timeout: Duration,
+) -> std::io::Result<std::process::Output> {
+    let mut cmd = match hook.launch() {
+        HookLaunch::Shell(script) => crate::process_tree::shell_command(script),
+        HookLaunch::Program { program, args } => {
+            let mut command = tokio::process::Command::new(program);
+            command.args(args);
+            command
+        }
+    };
+    cmd.env("PATH", agiworkforce_sandbox_policy::host_path::host_path());
+    crate::process_tree::output(cmd, stdin, Some(timeout)).await
+}
 
-    let result = run_hook_process(hook, input_json).await;
+/// The user's own hook under the full-read sandbox the desktop gives its
+/// hooks: it reads anywhere, so scripts and toolchains in the home folder
+/// still run, but writes only the workspace and a private scratch directory,
+/// and keeps the network. Nothing it leaves running outlives it. On a
+/// platform with no sandbox at all it runs as configured.
+async fn run_user_hook_sandboxed(
+    hook: &Hook,
+    stdin: Option<Vec<u8>>,
+    timeout: Duration,
+) -> std::io::Result<std::process::Output> {
+    let refused = |error: anyhow::Error| {
+        std::io::Error::other(format!("hook refused, it must run sandboxed: {error:#}"))
+    };
+    let workspace = crate::sandbox::sandbox_workspace().map_err(refused)?;
+    let (program, args): (&str, Vec<String>) = match hook.launch() {
+        HookLaunch::Shell(script) => ("/bin/sh", vec!["-c".to_string(), script.to_string()]),
+        HookLaunch::Program { program, args } => (program, args.to_vec()),
+    };
+    let wrapped = crate::sandbox::full_read_program(
+        crate::sandbox::SandboxType::detect(),
+        &workspace,
+        &[],
+        crate::sandbox::NetworkPolicy::Allow,
+        |name| std::env::var(name).ok(),
+        program,
+        &args,
+    )
+    .map_err(refused)?;
+    let Some(crate::sandbox::SandboxedLaunch {
+        program,
+        args,
+        scratch,
+    }) = wrapped
+    else {
+        return run_hook_on_host(hook, stdin, timeout).await;
+    };
+    let mut cmd = tokio::process::Command::new(program);
+    cmd.args(args);
+    // ENVIRONMENT POLICY CALL SITE: this is the one sandboxed child hooks.rs
+    // spawns itself. The sandbox lane's function that applies the resolved
+    // environment policy to a child takes `cmd` here, before it is spawned.
+    let output = crate::process_tree::output_ending_group(cmd, stdin, Some(timeout)).await;
+    drop(scratch);
+    output
+}
+
+/// The exit code with which a hook blocks without printing JSON, as in
+/// Claude Code's hooks. Its stderr is the reason.
+const BLOCKING_EXIT_CODE: i32 = 2;
+
+fn first_line(text: &str) -> Option<&str> {
+    text.lines().map(str::trim).find(|line| !line.is_empty())
+}
+
+/// Why a hook failed without a decision of its own, as one line. A
+/// sandboxed hook's line says so and names the opt-out, since the sandbox is
+/// the likeliest cause of a hook that worked before.
+fn hook_failure_reason(hook: &Hook, stderr: &str, ran: bool, sandboxed: bool) -> String {
+    let detail = first_line(stderr).unwrap_or("it exited with an error");
+    let mut reason = if ran {
+        format!("hook `{}` failed: {detail}", hook.display_command())
+    } else {
+        format!("hook `{}` could not run: {detail}", hook.display_command())
+    };
+    if sandboxed {
+        match hook.source {
+            HookSource::User => reason.push_str(&format!(
+                ". It ran in the OS sandbox, which lets it write only the workspace; to run \
+                 your hooks outside it, set \"sandbox\": false in hooks.json or {}=0",
+                crate::sandbox::SANDBOX_HOOKS_ENV
+            )),
+            HookSource::Plugin | HookSource::Managed => {
+                reason.push_str(". It ran in the OS sandbox, which plugin hooks always run in")
+            }
+        }
+    }
+    reason
+}
+
+/// Show a failed hook's line once a session, so a hook that fails on every
+/// tool call does not repeat it.
+fn report_hook_failure_once(command: &str, reason: &str) {
+    static REPORTED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    let first = REPORTED
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(command.to_string());
+    if !first {
+        return;
+    }
+    if crate::tui::tui_active() {
+        tracing::warn!("{reason}");
+    } else {
+        eprintln!(
+            "{} {}",
+            crate::terminal_style::danger_header("warning:"),
+            crate::terminal_text::sanitize_terminal_text(reason)
+        );
+    }
+}
+
+/// What a hook's failure decides. Exit code 2 blocks, with stderr as the
+/// reason; any other non-zero exit is an error that is shown and does not
+/// block. A blocking hook that could not run at all (refused by the sandbox
+/// or not spawned) blocks: a guard that did not run must not read as a guard
+/// that allowed. One that ran out of time did run, so, as in Claude Code, it
+/// is an error that is shown and does not block. Every failure is shown once
+/// a session.
+fn settle_failure(
+    hook: &Hook,
+    mut result: HookResult,
+    ran: bool,
+    timed_out: bool,
+    exit_code: Option<i32>,
+    sandboxed: bool,
+) -> HookResult {
+    if result.success || result.blocked || result.should_stop {
+        return result;
+    }
+    if ran && exit_code == Some(BLOCKING_EXIT_CODE) {
+        result.blocked = true;
+        result.reason = Some(
+            first_line(&result.stderr)
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("hook `{}` blocked the action", hook.display_command())),
+        );
+        return result;
+    }
+    let reason = hook_failure_reason(hook, &result.stderr, ran || timed_out, sandboxed);
+    report_hook_failure_once(&hook.display_command(), &reason);
+    if !ran && !timed_out && hook.blocking {
+        result.blocked = true;
+        result.reason = Some(reason);
+    }
+    result
+}
+
+async fn run_single_hook(hook: &Hook, input_json: &str, user_hooks_sandboxed: bool) -> HookResult {
+    let start = std::time::Instant::now();
+    let sandboxed = cfg!(any(target_os = "macos", target_os = "linux"))
+        && hook_requires_sandbox(hook, user_hooks_sandboxed);
+
+    let result = run_hook_process(hook, input_json, user_hooks_sandboxed).await;
 
     let duration_ms = start.elapsed().as_millis() as u64;
 
-    match result {
+    let ran = result.is_ok();
+    let timed_out = result
+        .as_ref()
+        .is_err_and(|error| error.kind() == std::io::ErrorKind::TimedOut);
+    let exit_code = result.as_ref().ok().and_then(|output| output.status.code());
+    let result = match result {
         Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let signals = parse_hook_output(&stdout);
             HookResult {
-                hook_command: hook.command.clone(),
+                hook_command: hook.display_command(),
                 success: output.status.success(),
                 stdout,
                 stderr: String::from_utf8_lossy(&output.stderr).to_string(),
@@ -1336,7 +1676,7 @@ async fn run_single_hook(hook: &Hook, input_json: &str) -> HookResult {
             }
         }
         Err(e) if e.kind() != std::io::ErrorKind::TimedOut => HookResult {
-            hook_command: hook.command.clone(),
+            hook_command: hook.display_command(),
             success: false,
             stdout: String::new(),
             stderr: format!("Failed to execute hook: {}", e),
@@ -1349,7 +1689,7 @@ async fn run_single_hook(hook: &Hook, input_json: &str) -> HookResult {
             updated_mcp_tool_output: None,
         },
         Err(_) => HookResult {
-            hook_command: hook.command.clone(),
+            hook_command: hook.display_command(),
             success: false,
             stdout: String::new(),
             stderr: format!("Hook timed out after {}s", hook.timeout),
@@ -1361,7 +1701,8 @@ async fn run_single_hook(hook: &Hook, input_json: &str) -> HookResult {
             additional_context: None,
             updated_mcp_tool_output: None,
         },
-    }
+    };
+    settle_failure(hook, result, ran, timed_out, exit_code, sandboxed)
 }
 
 /// Every canonical event, in declaration order.
@@ -1411,16 +1752,7 @@ pub const ALL_EVENTS: [HookEvent; 35] = [
 /// legacy aliases the loader accepts, so a hook added from the command line is
 /// stored under a name the runner fires.
 pub fn parse_event_name(name: &str) -> Result<HookEvent> {
-    resolve_event_name(name).ok_or_else(|| {
-        anyhow::anyhow!(
-            "unknown hook event \"{name}\". Events: {}",
-            ALL_EVENTS
-                .iter()
-                .map(HookEvent::to_string)
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
-    })
+    resolve_event_name(name).ok_or_else(|| anyhow::anyhow!("{}", unknown_event_message(name)))
 }
 
 /// Append a hook to an event, returning the canonical event name it landed
@@ -1507,7 +1839,7 @@ pub fn apply_hooks_command(args: &str) -> Result<String> {
             let path = save_user_hooks_file(&config)?;
             Ok(format!(
                 "Removed hook {position} ({}) from {event} in {}.",
-                removed.command,
+                removed.display_command(),
                 path.display()
             ))
         }
@@ -1520,19 +1852,26 @@ pub fn format_hooks_list(config: &HooksConfig) -> String {
     if config.hooks.is_empty() {
         return "No hooks configured.\n\nCreate ~/.agiworkforce/hooks.json \
                 to add hooks.\nExample:\n{\n  \"hooks\": {\n    \
-                \"SessionStart\": [{\"command\": \"echo Session started\"}],\n\
-                    \"AfterToolUse\": [{\"command\": \"./my-hook.sh\", \
-                \"timeout\": 5}]\n  }\n}"
+                \"SessionStart\": [{\"command\": \"echo Session started\"}],\n    \
+                \"PostToolUse\": [{\"command\": \"./my-hook.sh\", \
+                \"timeout\": 5}],\n    \
+                \"PreToolUse\": [{\"command\": \"python3\", \
+                \"args\": [\"guard.py\"]}]\n  }\n}\n\n\
+                A \"command\" alone is a shell command line. With \"args\" it is a \
+                program started with exactly those arguments: nothing in them is read \
+                as shell syntax."
             .to_string();
     }
 
+    let mut events: Vec<&String> = config.hooks.keys().collect();
+    events.sort();
     let mut out = String::new();
-    for (event, hooks) in &config.hooks {
+    for event in events {
         out.push_str(&format!("{}:\n", event));
-        for hook in hooks {
+        for hook in &config.hooks[event] {
             let mut flags = String::new();
             if !hook.blocking {
-                flags.push_str(" [async]");
+                flags.push_str(" [non-blocking]");
             }
             if hook.timeout != 10 {
                 flags.push_str(&format!(" [{}s timeout]", hook.timeout));
@@ -1543,7 +1882,7 @@ pub fn format_hooks_list(config: &HooksConfig) -> String {
             if let Some(c) = &hook.if_condition {
                 flags.push_str(&format!(" [if: {}]", c));
             }
-            out.push_str(&format!("  - {}{}\n", hook.command, flags));
+            out.push_str(&format!("  - {}{}\n", hook.display_command(), flags));
         }
     }
     out.push_str(&format!("\n{} events configured.", config.hooks.len()));
@@ -1569,19 +1908,68 @@ mod editing_tests {
     }
 
     #[test]
-    fn plugin_hooks_always_and_user_hooks_on_opt_in_require_the_sandbox() {
+    fn plugin_and_user_hooks_require_the_sandbox_unless_the_hooks_file_opts_out() {
+        use crate::sandbox::{SandboxDefault, SandboxSettings};
         let hook: Hook = serde_json::from_str(r#"{"command":"true"}"#).unwrap();
         assert_eq!(hook.source, HookSource::User);
-        let default = crate::sandbox::SandboxSettings::default();
-        let opted_in = crate::sandbox::SandboxSettings {
-            sandbox_user_hooks: true,
+        let default = SandboxSettings::default();
+        let required = SandboxSettings {
+            user_hooks: SandboxDefault::Required,
             ..default
         };
-        assert!(!hook_sandbox_required(HookSource::User, default, false));
-        assert!(hook_sandbox_required(HookSource::User, opted_in, false));
-        assert!(!hook_sandbox_required(HookSource::Managed, opted_in, false));
-        assert!(hook_sandbox_required(HookSource::Plugin, default, false));
-        assert!(!hook_sandbox_required(HookSource::Plugin, opted_in, true));
+        let env_opt_out = SandboxSettings {
+            user_hooks: SandboxDefault::Off,
+            ..default
+        };
+        assert!(hook_sandbox_required(
+            HookSource::User,
+            default,
+            false,
+            true
+        ));
+        assert!(!hook_sandbox_required(
+            HookSource::User,
+            default,
+            false,
+            false
+        ));
+        assert!(!hook_sandbox_required(
+            HookSource::User,
+            env_opt_out,
+            false,
+            true
+        ));
+        assert!(hook_sandbox_required(
+            HookSource::User,
+            required,
+            false,
+            false
+        ));
+        assert!(!hook_sandbox_required(
+            HookSource::Managed,
+            required,
+            false,
+            true
+        ));
+        assert!(hook_sandbox_required(
+            HookSource::Plugin,
+            env_opt_out,
+            false,
+            false
+        ));
+        assert!(!hook_sandbox_required(
+            HookSource::Plugin,
+            default,
+            true,
+            true
+        ));
+
+        let config: HooksConfig = serde_json::from_str(r#"{"hooks":{}}"#).unwrap();
+        assert!(config.user_hooks_sandboxed());
+        assert!(!serde_json::to_string(&config).unwrap().contains("sandbox"));
+        let opted_out: HooksConfig =
+            serde_json::from_str(r#"{"hooks":{},"sandbox":false}"#).unwrap();
+        assert!(!opted_out.user_hooks_sandboxed());
     }
 
     #[cfg(target_os = "macos")]
@@ -1604,14 +1992,24 @@ mod editing_tests {
             source,
         };
 
-        let plugin_result = run_single_hook(&hook_for(HookSource::Plugin), "{}").await;
+        let plugin_result = run_single_hook(&hook_for(HookSource::Plugin), "{}", false).await;
         assert!(
             !plugin_result.success,
             "sandboxed plugin hook wrote outside the workspace"
         );
         assert!(!target.exists());
 
-        let user_result = run_single_hook(&hook_for(HookSource::User), "{\"ok\":true}").await;
+        if crate::sandbox::sandbox_settings().user_hooks == crate::sandbox::SandboxDefault::On {
+            let sandboxed = run_single_hook(&hook_for(HookSource::User), "{}", true).await;
+            assert!(
+                !sandboxed.success,
+                "a user hook is sandboxed unless the hooks file opts out"
+            );
+            assert!(!target.exists());
+        }
+
+        let user_result =
+            run_single_hook(&hook_for(HookSource::User), "{\"ok\":true}", false).await;
         assert!(user_result.success, "{}", user_result.stderr);
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "{\"ok\":true}");
     }
@@ -1717,6 +2115,219 @@ mod editing_tests {
         assert!(!config.hooks.contains_key("BeforeToolUse"));
     }
 
+    fn argv_hook(command: &str, args: &[&str]) -> Hook {
+        Hook {
+            command: command.to_string(),
+            args: args.iter().map(|arg| arg.to_string()).collect(),
+            timeout: default_timeout(),
+            blocking: true,
+            matcher: None,
+            if_condition: None,
+            source: HookSource::User,
+        }
+    }
+
+    fn commands<'a>(config: &'a HooksConfig, event: &str) -> Vec<&'a str> {
+        config.hooks[event]
+            .iter()
+            .map(|hook| hook.command.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn hooks_under_an_older_event_name_load_under_the_event_the_runner_fires() {
+        let config: HooksConfig = serde_json::from_str(
+            r#"{"hooks": {
+                "BeforeToolUse": [{"command": "first"}],
+                "PreToolUse": [{"command": "second"}],
+                "PreCommand": [{"command": "third"}],
+                "AfterToolUse": [{"command": "after"}]
+            }}"#,
+        )
+        .unwrap();
+        assert_eq!(config.hooks.len(), 2);
+        assert_eq!(
+            commands(&config, "PreToolUse"),
+            vec!["first", "second", "third"],
+            "the order the file gives is the order they run in"
+        );
+        assert_eq!(commands(&config, "PostToolUse"), vec!["after"]);
+
+        let saved = serde_json::to_string(&config).unwrap();
+        assert!(!saved.contains("BeforeToolUse") && !saved.contains("AfterToolUse"));
+    }
+
+    #[tokio::test]
+    async fn a_hook_written_under_an_older_name_fires() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let config: HooksConfig = serde_json::from_str(
+            r#"{"sandbox": false, "hooks": {"AfterToolUse": [{"command": "echo fired"}]}}"#,
+        )
+        .unwrap();
+        let input = HookInput {
+            event: "PostToolUse".to_string(),
+            session_id: None,
+            model: None,
+            tool_name: Some("read_file".to_string()),
+            tool_args: None,
+            tool_output: None,
+            message: None,
+            tool_execution: None,
+        };
+        let results = run_hooks(&config, HookEvent::PostToolUse, &input).await;
+        assert_eq!(results.len(), 1);
+        assert!(results[0].stdout.contains("fired"), "{:?}", results[0]);
+    }
+
+    #[test]
+    fn an_unknown_event_key_is_refused_by_name() {
+        let error = serde_json::from_str::<HooksConfig>(
+            r#"{"hooks": {"BeforeLunch": [{"command": "echo hi"}]}}"#,
+        )
+        .expect_err("a key that is no event")
+        .to_string();
+        assert!(
+            error.contains("unknown hook event \"BeforeLunch\""),
+            "{error}"
+        );
+        assert!(error.contains("PreToolUse"), "{error}");
+        assert!(error.contains("BeforeToolUse (now PreToolUse)"), "{error}");
+    }
+
+    #[test]
+    fn a_hook_that_could_never_fire_is_refused_when_the_file_loads() {
+        for (json, expected) in [
+            (
+                r#"{"hooks": {"Stop": [{"command": "guard.sh", "matcher": "("}]}}"#,
+                "not a regular expression",
+            ),
+            (
+                r#"{"hooks": {"PreToolUse": [{"command": "guard.sh", "if": "Bash"}]}}"#,
+                "Tool(pattern)",
+            ),
+            (
+                r#"{"hooks": {"PreToolUse": [{"command": "guard.sh", "if": "(git *)"}]}}"#,
+                "Tool(pattern)",
+            ),
+            (
+                r#"{"hooks": {"Stop": [{"command": "  "}]}}"#,
+                "has no command",
+            ),
+        ] {
+            let error = serde_json::from_str::<HooksConfig>(json)
+                .expect_err(json)
+                .to_string();
+            assert!(error.contains(expected), "{json}: {error}");
+        }
+
+        let kept: HooksConfig = serde_json::from_str(
+            r#"{"hooks": {"PreToolUse": [{"command": "guard.sh", "matcher": "^bash$", "if": "Bash(git *)"}]}}"#,
+        )
+        .unwrap();
+        assert_eq!(commands(&kept, "PreToolUse"), vec!["guard.sh"]);
+    }
+
+    #[tokio::test]
+    async fn args_reach_the_program_as_written_and_stdin_is_never_run_as_a_script() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let scratch = tempfile::tempdir().unwrap();
+        let marker = scratch.path().join("ran-from-stdin");
+        let script = scratch.path().join("guard.sh");
+        std::fs::write(&script, "cat >/dev/null\nprintf '%s|' \"$@\"\n").unwrap();
+        let input = serde_json::json!({
+            "tool_args": {"command": format!("$(touch '{}')", marker.display())}
+        })
+        .to_string();
+
+        let hook = argv_hook(
+            "sh",
+            &[
+                script.to_str().unwrap(),
+                "a b",
+                "$(printf injected)",
+                "; echo c",
+            ],
+        );
+        let result = run_single_hook(&hook, &input, false).await;
+
+        assert!(result.success, "{}", result.stderr);
+        assert_eq!(result.stdout, "a b|$(printf injected)|; echo c|");
+        assert!(
+            !marker.exists(),
+            "the hook JSON on stdin was run as a shell script"
+        );
+        assert_eq!(result.hook_command, hook.display_command());
+    }
+
+    #[test]
+    fn a_hook_with_args_is_named_whole_wherever_it_is_named() {
+        let hook = argv_hook("sh", &["guard.sh", "two words"]);
+        assert_eq!(hook.display_command(), "sh guard.sh 'two words'");
+        assert_eq!(argv_hook("echo hi", &[]).display_command(), "echo hi");
+
+        let mut config = HooksConfig::default();
+        config
+            .hooks
+            .insert("PreToolUse".to_string(), vec![hook.clone()]);
+        assert!(format_hooks_list(&config).contains("  - sh guard.sh 'two words'\n"));
+        assert!(hook_failure_reason(&hook, "", true, false).contains("`sh guard.sh 'two words'`"));
+    }
+
+    #[test]
+    fn the_list_is_in_event_order_and_names_a_non_blocking_hook_for_what_it_is() {
+        let mut config = HooksConfig::default();
+        add_hook(&mut config, "Stop", "later").expect("added");
+        add_hook(&mut config, "PreToolUse", "sooner").expect("added");
+        config.hooks.get_mut("Stop").expect("event")[0].blocking = false;
+
+        let list = format_hooks_list(&config);
+        assert!(
+            list.find("PreToolUse:").expect("listed") < list.find("Stop:").expect("listed"),
+            "{list}"
+        );
+        assert!(list.contains("  - later [non-blocking]\n"), "{list}");
+        assert!(!list.contains("[async]"), "{list}");
+    }
+
+    #[test]
+    fn the_example_for_an_empty_list_uses_names_the_runner_fires() {
+        let help = format_hooks_list(&HooksConfig::default());
+        let example = &help[help.find('{').expect("example")..=help.rfind('}').expect("example")];
+        let parsed: HooksConfig = serde_json::from_str(example).expect("the example loads");
+        assert!(parsed.hooks.contains_key("PostToolUse"), "{help}");
+        assert_eq!(
+            parsed.hooks["PreToolUse"][0].args,
+            vec!["guard.py".to_string()]
+        );
+        assert!(!help.contains("AfterToolUse"), "{help}");
+    }
+
+    #[test]
+    fn plugin_hooks_load_under_the_canonical_event_and_bad_entries_are_left_out() {
+        let mut config = HooksConfig::default();
+        append_plugin_hooks(
+            &mut config,
+            HashMap::from([
+                (
+                    "AfterToolUse".to_string(),
+                    vec![serde_json::json!({"command": "sh", "args": ["post.sh"]})],
+                ),
+                (
+                    "BeforeLunch".to_string(),
+                    vec![serde_json::json!({"command": "never"})],
+                ),
+                (
+                    "Stop".to_string(),
+                    vec![serde_json::json!({"command": "bad", "matcher": "("})],
+                ),
+            ]),
+        );
+        assert_eq!(config.hooks.len(), 1, "{:?}", config.hooks.keys());
+        let hook = &config.hooks["PostToolUse"][0];
+        assert_eq!(hook.source, HookSource::Plugin);
+        assert_eq!(hook.display_command(), "sh post.sh");
+    }
+
     #[test]
     fn a_hook_needs_a_command() {
         let mut config = HooksConfig::default();
@@ -1785,7 +2396,8 @@ mod tests {
         assert_eq!(config.hooks.len(), 2);
         assert_eq!(config.hooks["SessionStart"].len(), 1);
         assert_eq!(config.hooks["SessionStart"][0].timeout, 5);
-        assert_eq!(config.hooks["AfterToolUse"][0].timeout, 10); // default
+        assert!(!config.hooks.contains_key("AfterToolUse"));
+        assert_eq!(config.hooks["PostToolUse"][0].timeout, 10); // default
         assert!(config.hooks["SessionStart"][0].matcher.is_none());
     }
 
@@ -1832,7 +2444,10 @@ mod tests {
             }],
         );
 
-        let config = HooksConfig { hooks };
+        let config = HooksConfig {
+            hooks,
+            sandbox: Some(false),
+        };
         let list = format_hooks_list(&config);
         assert!(list.contains("SessionStart:"));
         assert!(list.contains("echo hello"));
@@ -1875,7 +2490,7 @@ mod tests {
             source: HookSource::User,
         };
 
-        let result = run_single_hook(&hook, "{}").await;
+        let result = run_single_hook(&hook, "{}", false).await;
         assert!(result.success);
         assert!(result.stdout.contains("test_output"));
         assert!(!result.blocked);
@@ -1906,7 +2521,7 @@ mod tests {
                 if_condition: None,
                 source: HookSource::User,
             };
-            let result = run_single_hook(&hook, "{}").await;
+            let result = run_single_hook(&hook, "{}", false).await;
             assert!(result.success, "hook failed: {}", result.stderr);
             assert_eq!(
                 result.updated_input,
@@ -1931,7 +2546,7 @@ mod tests {
             if_condition: None,
             source: HookSource::User,
         };
-        let result = run_single_hook(&hook, &input.to_string()).await;
+        let result = run_single_hook(&hook, &input.to_string(), false).await;
         assert!(result.success, "{}", result.stderr);
         assert_eq!(result.updated_input, Some(input["updated_input"].clone()));
     }
@@ -1949,7 +2564,7 @@ mod tests {
             source: HookSource::User,
         };
 
-        let result = run_single_hook(&hook, "{}").await;
+        let result = run_single_hook(&hook, "{}", false).await;
         assert!(!result.success);
         assert!(result.stderr.contains("timed out"));
     }
@@ -2153,7 +2768,10 @@ mod tests {
                 },
             ],
         );
-        let config = HooksConfig { hooks };
+        let config = HooksConfig {
+            hooks,
+            sandbox: Some(false),
+        };
 
         // tool_name=read_file, first hook should be skipped, second runs
         let input = HookInput {
@@ -2327,7 +2945,7 @@ mod tests {
             if_condition: None,
             source: HookSource::User,
         };
-        let result = run_single_hook(&hook, "{}").await;
+        let result = run_single_hook(&hook, "{}", false).await;
         assert!(result.success);
         assert!(result.blocked);
         assert_eq!(result.reason.as_deref(), Some("nope"));
@@ -2345,10 +2963,155 @@ mod tests {
             if_condition: None,
             source: HookSource::User,
         };
-        let result = run_single_hook(&hook, "{}").await;
+        let result = run_single_hook(&hook, "{}", false).await;
         assert!(result.success);
         assert!(!result.blocked);
         assert!(result.should_stop);
+    }
+
+    fn failing_hook(command: &str, blocking: bool) -> Hook {
+        Hook {
+            command: command.to_string(),
+            args: Vec::new(),
+            timeout: 5,
+            blocking,
+            matcher: None,
+            if_condition: None,
+            source: HookSource::User,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_hook_that_exits_with_code_two_blocks_with_its_stderr() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let hook = failing_hook("echo 'no writes to main' >&2; exit 2", true);
+        let result = run_single_hook(&hook, "{}", false).await;
+        assert!(!result.success);
+        assert!(result.blocked);
+        assert_eq!(result.reason.as_deref(), Some("no writes to main"));
+        assert!(matches!(
+            aggregate_results(&[result]),
+            HookAggregateOutcome::Blocked { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn any_other_non_zero_exit_is_an_error_that_does_not_block() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        for blocking in [true, false] {
+            let hook = failing_hook("echo 'guard broke' >&2; exit 3", blocking);
+            let result = run_single_hook(&hook, "{}", false).await;
+            assert!(!result.success);
+            assert!(!result.blocked, "blocking={blocking}");
+            assert!(result.stderr.contains("guard broke"));
+            assert_eq!(aggregate_results(&[result]), HookAggregateOutcome::Continue);
+        }
+    }
+
+    fn not_run(stderr: &str) -> HookResult {
+        HookResult {
+            hook_command: "guard.sh".to_string(),
+            success: false,
+            stdout: String::new(),
+            stderr: stderr.to_string(),
+            duration_ms: 0,
+            blocked: false,
+            reason: None,
+            should_stop: false,
+            updated_input: None,
+            additional_context: None,
+            updated_mcp_tool_output: None,
+        }
+    }
+
+    #[test]
+    fn a_blocking_hook_that_could_not_run_blocks() {
+        let hook = failing_hook("guard.sh", true);
+        let result = settle_failure(
+            &hook,
+            not_run("Failed to execute hook: hook refused, it must run sandboxed"),
+            false,
+            false,
+            None,
+            true,
+        );
+        assert!(
+            result.blocked,
+            "a guard that never ran must not read as allowed"
+        );
+        let reason = result.reason.expect("a reason");
+        assert!(reason.contains("could not run"), "{reason}");
+    }
+
+    #[test]
+    fn a_blocking_hook_that_timed_out_is_shown_and_does_not_block() {
+        let hook = failing_hook("npx guard", true);
+        let result = settle_failure(
+            &hook,
+            not_run("Hook timed out after 5s"),
+            false,
+            true,
+            None,
+            true,
+        );
+        assert!(!result.blocked);
+        assert!(result.reason.is_none());
+        assert_eq!(aggregate_results(&[result]), HookAggregateOutcome::Continue);
+    }
+
+    #[tokio::test]
+    async fn a_blocking_hook_that_runs_out_of_time_does_not_block() {
+        let mut hook = failing_hook("sleep 10", true);
+        hook.timeout = 1;
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let result = run_single_hook(&hook, "{}", false).await;
+        assert!(!result.success);
+        assert!(
+            !result.blocked,
+            "a timeout is a shown error, as in Claude Code"
+        );
+        assert!(result.stderr.contains("timed out"), "{}", result.stderr);
+    }
+
+    #[tokio::test]
+    async fn a_non_blocking_hook_that_could_not_run_does_not_block() {
+        let mut hook = failing_hook("sleep 10", false);
+        hook.timeout = 1;
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let result = run_single_hook(&hook, "{}", false).await;
+        assert!(!result.success);
+        assert!(!result.blocked);
+    }
+
+    #[tokio::test]
+    async fn a_failing_hook_keeps_its_own_decision() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let hook = failing_hook(r#"echo '{"continue":false}'; exit 1"#, true);
+        let result = run_single_hook(&hook, "{}", false).await;
+        assert!(!result.success);
+        assert!(result.should_stop);
+        assert!(!result.blocked);
+    }
+
+    #[test]
+    fn a_sandboxed_hook_failure_names_the_sandbox_and_the_opt_out() {
+        let reason = hook_failure_reason(
+            &failing_hook("guard.sh", true),
+            "permission denied\n",
+            false,
+            true,
+        );
+        assert!(reason.contains("OS sandbox"), "{reason}");
+        assert!(reason.contains("\"sandbox\": false"), "{reason}");
+        assert!(reason.contains("AGIWORKFORCE_SANDBOX_HOOKS=0"), "{reason}");
+        assert!(reason.contains("permission denied"), "{reason}");
+
+        let unsandboxed = hook_failure_reason(&failing_hook("guard.sh", true), "", true, false);
+        assert!(!unsandboxed.contains("sandbox"), "{unsandboxed}");
+        assert!(
+            unsandboxed.contains("it exited with an error"),
+            "{unsandboxed}"
+        );
     }
 
     // -- Aggregation tests --
@@ -2597,7 +3360,7 @@ mod tests {
             }
         }"#;
         let config: HooksConfig = serde_json::from_str(json).unwrap();
-        let hooks = &config.hooks["AfterToolUse"];
+        let hooks = &config.hooks["PostToolUse"];
         assert_eq!(hooks[0].matcher, Some("^bash$".to_string()));
         assert_eq!(hooks[1].matcher, None);
     }
@@ -2617,7 +3380,10 @@ mod tests {
                 source: HookSource::User,
             }],
         );
-        let config = HooksConfig { hooks };
+        let config = HooksConfig {
+            hooks,
+            sandbox: Some(false),
+        };
         let list = format_hooks_list(&config);
         assert!(list.contains("[matcher: ^bash$]"));
     }

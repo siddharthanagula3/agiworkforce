@@ -223,7 +223,10 @@ fn build_execution_command(
             ));
         }
 
-        let bubblewrap = which::which("bwrap").map_err(|_| {
+        let bubblewrap = agiworkforce_sandbox_policy::sandbox_launcher(
+            agiworkforce_sandbox_policy::SandboxBackend::LinuxBubblewrap,
+        )
+        .ok_or_else(|| {
             anyhow!(
                 "Network-disabled code execution requires Linux Bubblewrap (`bwrap`), but it is unavailable; refusing unsandboxed execution"
             )

@@ -6,31 +6,11 @@
     "main"
   ],
   "permissions": [
-    "wdio-webdriver:default",
-    "wdio:default",
     "core:default",
-    "core:window:allow-create",
     "core:window:allow-center",
-    "core:window:allow-request-user-attention",
-    "core:window:allow-set-resizable",
-    "core:window:allow-set-title",
-    "core:window:allow-maximize",
-    "core:window:allow-unmaximize",
     "core:window:allow-minimize",
-    "core:window:allow-unminimize",
-    "core:window:allow-show",
-    "core:window:allow-hide",
     "core:window:allow-close",
-    "core:window:allow-set-decorations",
-    "core:window:allow-set-always-on-top",
-    "core:window:allow-set-size",
-    "core:window:allow-set-min-size",
-    "core:window:allow-set-max-size",
-    "core:window:allow-set-position",
-    "core:window:allow-set-fullscreen",
-    "core:window:allow-set-focus",
-    "core:window:allow-set-icon",
-    "core:window:allow-set-skip-taskbar",
+    "core:window:allow-destroy",
     "core:window:allow-start-dragging",
     "core:webview:allow-print",
     "core:webview:allow-create-webview-window",
@@ -260,6 +240,39 @@
         },
         {
           "path": "$HOME/.agiworkforce/**/auth.json"
+        },
+        {
+          "path": "$APPDATA/agiworkforce.db*"
+        },
+        {
+          "path": "$APPDATA/scheduler.db*"
+        },
+        {
+          "path": "$APPDATA/knowledge.db*"
+        },
+        {
+          "path": "$APPDATA/audit.db*"
+        },
+        {
+          "path": "$APPDATA/clipboard.db*"
+        },
+        {
+          "path": "$APPDATA/keys.stronghold"
+        },
+        {
+          "path": "$APPDATA/stronghold.salt"
+        },
+        {
+          "path": "$APPDATA/app_permissions.json"
+        },
+        {
+          "path": "$APPDATA/trusted_workflows.json"
+        },
+        {
+          "path": "$APPDATA/connector-permissions.json"
+        },
+        {
+          "path": "$APPDATA/.ipc_token"
         }
       ]
     },
@@ -474,6 +487,39 @@
         },
         {
           "path": "$HOME/.agiworkforce/**/auth.json"
+        },
+        {
+          "path": "$APPDATA/agiworkforce.db*"
+        },
+        {
+          "path": "$APPDATA/scheduler.db*"
+        },
+        {
+          "path": "$APPDATA/knowledge.db*"
+        },
+        {
+          "path": "$APPDATA/audit.db*"
+        },
+        {
+          "path": "$APPDATA/clipboard.db*"
+        },
+        {
+          "path": "$APPDATA/keys.stronghold"
+        },
+        {
+          "path": "$APPDATA/stronghold.salt"
+        },
+        {
+          "path": "$APPDATA/app_permissions.json"
+        },
+        {
+          "path": "$APPDATA/trusted_workflows.json"
+        },
+        {
+          "path": "$APPDATA/connector-permissions.json"
+        },
+        {
+          "path": "$APPDATA/.ipc_token"
         }
       ]
     },
@@ -688,6 +734,39 @@
         },
         {
           "path": "$HOME/.agiworkforce/**/auth.json"
+        },
+        {
+          "path": "$APPDATA/agiworkforce.db*"
+        },
+        {
+          "path": "$APPDATA/scheduler.db*"
+        },
+        {
+          "path": "$APPDATA/knowledge.db*"
+        },
+        {
+          "path": "$APPDATA/audit.db*"
+        },
+        {
+          "path": "$APPDATA/clipboard.db*"
+        },
+        {
+          "path": "$APPDATA/keys.stronghold"
+        },
+        {
+          "path": "$APPDATA/stronghold.salt"
+        },
+        {
+          "path": "$APPDATA/app_permissions.json"
+        },
+        {
+          "path": "$APPDATA/trusted_workflows.json"
+        },
+        {
+          "path": "$APPDATA/connector-permissions.json"
+        },
+        {
+          "path": "$APPDATA/.ipc_token"
         }
       ]
     },
@@ -902,6 +981,39 @@
         },
         {
           "path": "$HOME/.agiworkforce/**/auth.json"
+        },
+        {
+          "path": "$APPDATA/agiworkforce.db*"
+        },
+        {
+          "path": "$APPDATA/scheduler.db*"
+        },
+        {
+          "path": "$APPDATA/knowledge.db*"
+        },
+        {
+          "path": "$APPDATA/audit.db*"
+        },
+        {
+          "path": "$APPDATA/clipboard.db*"
+        },
+        {
+          "path": "$APPDATA/keys.stronghold"
+        },
+        {
+          "path": "$APPDATA/stronghold.salt"
+        },
+        {
+          "path": "$APPDATA/app_permissions.json"
+        },
+        {
+          "path": "$APPDATA/trusted_workflows.json"
+        },
+        {
+          "path": "$APPDATA/connector-permissions.json"
+        },
+        {
+          "path": "$APPDATA/.ipc_token"
         }
       ]
     },
@@ -1116,202 +1228,39 @@
         },
         {
           "path": "$HOME/.agiworkforce/**/auth.json"
-        }
-      ]
-    },
-    {
-      "identifier": "fs:allow-write-file",
-      "allow": [
-        {
-          "path": "$DOCUMENT/**"
         },
         {
-          "path": "$DOWNLOAD/**"
+          "path": "$APPDATA/agiworkforce.db*"
         },
         {
-          "path": "$APPDATA/**"
+          "path": "$APPDATA/scheduler.db*"
         },
         {
-          "path": "$APPCONFIG/**"
-        }
-      ],
-      "deny": [
-        {
-          "path": "$HOME/.ssh/**"
+          "path": "$APPDATA/knowledge.db*"
         },
         {
-          "path": "$HOME/.aws/**"
+          "path": "$APPDATA/audit.db*"
         },
         {
-          "path": "$HOME/.gnupg/**"
+          "path": "$APPDATA/clipboard.db*"
         },
         {
-          "path": "$HOME/.kube/**"
+          "path": "$APPDATA/keys.stronghold"
         },
         {
-          "path": "$HOME/.config/gcloud/**"
+          "path": "$APPDATA/stronghold.salt"
         },
         {
-          "path": "$HOME/Library/Keychains/**"
+          "path": "$APPDATA/app_permissions.json"
         },
         {
-          "path": "/etc/passwd"
+          "path": "$APPDATA/trusted_workflows.json"
         },
         {
-          "path": "/etc/shadow"
+          "path": "$APPDATA/connector-permissions.json"
         },
         {
-          "path": "$HOME/.docker/**"
-        },
-        {
-          "path": "$HOME/.npmrc"
-        },
-        {
-          "path": "$HOME/.pypirc"
-        },
-        {
-          "path": "$HOME/.netrc"
-        },
-        {
-          "path": "$HOME/.azure/**"
-        },
-        {
-          "path": "$HOME/.config/gh/**"
-        },
-        {
-          "path": "$HOME/.config/heroku/**"
-        },
-        {
-          "path": "$HOME/.config/op/**"
-        },
-        {
-          "path": "$HOME/.config/stripe/**"
-        },
-        {
-          "path": "$HOME/.env"
-        },
-        {
-          "path": "$HOME/**/.env"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Google/Chrome/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Chromium/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Firefox/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/BraveSoftware/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/com.microsoft.edgemac/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Vivaldi/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/com.operasoftware.Opera/**"
-        },
-        {
-          "path": "$HOME/Library/Cookies/**"
-        },
-        {
-          "path": "$HOME/Library/Safari/**"
-        },
-        {
-          "path": "$HOME/.mozilla/**"
-        },
-        {
-          "path": "$HOME/.config/google-chrome/**"
-        },
-        {
-          "path": "$HOME/.config/chromium/**"
-        },
-        {
-          "path": "$HOME/.config/BraveSoftware/**"
-        },
-        {
-          "path": "$HOME/.config/microsoft-edge/**"
-        },
-        {
-          "path": "$HOME/.config/vivaldi/**"
-        },
-        {
-          "path": "$HOME/.config/opera/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Google/Chrome/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Chromium/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Microsoft/Edge/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/BraveSoftware/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Vivaldi/**"
-        },
-        {
-          "path": "$HOME/AppData/Roaming/Mozilla/**"
-        },
-        {
-          "path": "$HOME/AppData/Roaming/Opera Software/**"
-        },
-        {
-          "path": "$HOME/.terraform.d/credentials.tfrc.json"
-        },
-        {
-          "path": "$HOME/.cargo/credentials"
-        },
-        {
-          "path": "$HOME/.cargo/credentials.toml"
-        },
-        {
-          "path": "$HOME/.agiworkforce/secrets/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/credentials/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/keys/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/tokens/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/vault/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/byok/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/sessions/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/oauth/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/.env"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/.env"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/*.key"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/*.pem"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/credentials.json"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/auth.json"
+          "path": "$APPDATA/.ipc_token"
         }
       ]
     },
@@ -1319,16 +1268,7 @@
       "identifier": "fs:allow-write-text-file",
       "allow": [
         {
-          "path": "$DOCUMENT/**"
-        },
-        {
-          "path": "$DOWNLOAD/**"
-        },
-        {
-          "path": "$APPDATA/**"
-        },
-        {
-          "path": "$APPCONFIG/**"
+          "path": "$APPDATA/artifacts/**"
         }
       ],
       "deny": [
@@ -1508,202 +1448,39 @@
         },
         {
           "path": "$HOME/.agiworkforce/**/auth.json"
-        }
-      ]
-    },
-    {
-      "identifier": "fs:allow-copy-file",
-      "allow": [
-        {
-          "path": "$DOCUMENT/**"
         },
         {
-          "path": "$DOWNLOAD/**"
+          "path": "$APPDATA/agiworkforce.db*"
         },
         {
-          "path": "$APPDATA/**"
+          "path": "$APPDATA/scheduler.db*"
         },
         {
-          "path": "$APPCONFIG/**"
-        }
-      ],
-      "deny": [
-        {
-          "path": "$HOME/.ssh/**"
+          "path": "$APPDATA/knowledge.db*"
         },
         {
-          "path": "$HOME/.aws/**"
+          "path": "$APPDATA/audit.db*"
         },
         {
-          "path": "$HOME/.gnupg/**"
+          "path": "$APPDATA/clipboard.db*"
         },
         {
-          "path": "$HOME/.kube/**"
+          "path": "$APPDATA/keys.stronghold"
         },
         {
-          "path": "$HOME/.config/gcloud/**"
+          "path": "$APPDATA/stronghold.salt"
         },
         {
-          "path": "$HOME/Library/Keychains/**"
+          "path": "$APPDATA/app_permissions.json"
         },
         {
-          "path": "/etc/passwd"
+          "path": "$APPDATA/trusted_workflows.json"
         },
         {
-          "path": "/etc/shadow"
+          "path": "$APPDATA/connector-permissions.json"
         },
         {
-          "path": "$HOME/.docker/**"
-        },
-        {
-          "path": "$HOME/.npmrc"
-        },
-        {
-          "path": "$HOME/.pypirc"
-        },
-        {
-          "path": "$HOME/.netrc"
-        },
-        {
-          "path": "$HOME/.azure/**"
-        },
-        {
-          "path": "$HOME/.config/gh/**"
-        },
-        {
-          "path": "$HOME/.config/heroku/**"
-        },
-        {
-          "path": "$HOME/.config/op/**"
-        },
-        {
-          "path": "$HOME/.config/stripe/**"
-        },
-        {
-          "path": "$HOME/.env"
-        },
-        {
-          "path": "$HOME/**/.env"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Google/Chrome/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Chromium/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Firefox/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/BraveSoftware/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/com.microsoft.edgemac/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Vivaldi/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/com.operasoftware.Opera/**"
-        },
-        {
-          "path": "$HOME/Library/Cookies/**"
-        },
-        {
-          "path": "$HOME/Library/Safari/**"
-        },
-        {
-          "path": "$HOME/.mozilla/**"
-        },
-        {
-          "path": "$HOME/.config/google-chrome/**"
-        },
-        {
-          "path": "$HOME/.config/chromium/**"
-        },
-        {
-          "path": "$HOME/.config/BraveSoftware/**"
-        },
-        {
-          "path": "$HOME/.config/microsoft-edge/**"
-        },
-        {
-          "path": "$HOME/.config/vivaldi/**"
-        },
-        {
-          "path": "$HOME/.config/opera/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Google/Chrome/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Chromium/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Microsoft/Edge/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/BraveSoftware/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Vivaldi/**"
-        },
-        {
-          "path": "$HOME/AppData/Roaming/Mozilla/**"
-        },
-        {
-          "path": "$HOME/AppData/Roaming/Opera Software/**"
-        },
-        {
-          "path": "$HOME/.terraform.d/credentials.tfrc.json"
-        },
-        {
-          "path": "$HOME/.cargo/credentials"
-        },
-        {
-          "path": "$HOME/.cargo/credentials.toml"
-        },
-        {
-          "path": "$HOME/.agiworkforce/secrets/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/credentials/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/keys/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/tokens/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/vault/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/byok/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/sessions/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/oauth/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/.env"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/.env"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/*.key"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/*.pem"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/credentials.json"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/auth.json"
+          "path": "$APPDATA/.ipc_token"
         }
       ]
     },
@@ -1711,399 +1488,7 @@
       "identifier": "fs:allow-mkdir",
       "allow": [
         {
-          "path": "$DOCUMENT/**"
-        },
-        {
-          "path": "$DOWNLOAD/**"
-        },
-        {
-          "path": "$APPDATA/**"
-        }
-      ]
-    },
-    {
-      "identifier": "fs:allow-remove",
-      "allow": [
-        {
-          "path": "$DOCUMENT/**"
-        },
-        {
-          "path": "$DOWNLOAD/**"
-        },
-        {
-          "path": "$APPDATA/**"
-        }
-      ],
-      "deny": [
-        {
-          "path": "$HOME/.ssh/**"
-        },
-        {
-          "path": "$HOME/.aws/**"
-        },
-        {
-          "path": "$HOME/.gnupg/**"
-        },
-        {
-          "path": "$HOME/.kube/**"
-        },
-        {
-          "path": "$HOME/.config/gcloud/**"
-        },
-        {
-          "path": "$HOME/Library/Keychains/**"
-        },
-        {
-          "path": "/etc/passwd"
-        },
-        {
-          "path": "/etc/shadow"
-        },
-        {
-          "path": "$HOME/.docker/**"
-        },
-        {
-          "path": "$HOME/.npmrc"
-        },
-        {
-          "path": "$HOME/.pypirc"
-        },
-        {
-          "path": "$HOME/.netrc"
-        },
-        {
-          "path": "$HOME/.azure/**"
-        },
-        {
-          "path": "$HOME/.config/gh/**"
-        },
-        {
-          "path": "$HOME/.config/heroku/**"
-        },
-        {
-          "path": "$HOME/.config/op/**"
-        },
-        {
-          "path": "$HOME/.config/stripe/**"
-        },
-        {
-          "path": "$HOME/.env"
-        },
-        {
-          "path": "$HOME/**/.env"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Google/Chrome/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Chromium/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Firefox/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/BraveSoftware/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/com.microsoft.edgemac/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Vivaldi/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/com.operasoftware.Opera/**"
-        },
-        {
-          "path": "$HOME/Library/Cookies/**"
-        },
-        {
-          "path": "$HOME/Library/Safari/**"
-        },
-        {
-          "path": "$HOME/.mozilla/**"
-        },
-        {
-          "path": "$HOME/.config/google-chrome/**"
-        },
-        {
-          "path": "$HOME/.config/chromium/**"
-        },
-        {
-          "path": "$HOME/.config/BraveSoftware/**"
-        },
-        {
-          "path": "$HOME/.config/microsoft-edge/**"
-        },
-        {
-          "path": "$HOME/.config/vivaldi/**"
-        },
-        {
-          "path": "$HOME/.config/opera/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Google/Chrome/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Chromium/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Microsoft/Edge/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/BraveSoftware/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Vivaldi/**"
-        },
-        {
-          "path": "$HOME/AppData/Roaming/Mozilla/**"
-        },
-        {
-          "path": "$HOME/AppData/Roaming/Opera Software/**"
-        },
-        {
-          "path": "$HOME/.terraform.d/credentials.tfrc.json"
-        },
-        {
-          "path": "$HOME/.cargo/credentials"
-        },
-        {
-          "path": "$HOME/.cargo/credentials.toml"
-        },
-        {
-          "path": "$HOME/.agiworkforce/secrets/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/credentials/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/keys/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/tokens/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/vault/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/byok/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/sessions/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/oauth/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/.env"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/.env"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/*.key"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/*.pem"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/credentials.json"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/auth.json"
-        }
-      ]
-    },
-    {
-      "identifier": "fs:allow-rename",
-      "allow": [
-        {
-          "path": "$DOCUMENT/**"
-        },
-        {
-          "path": "$DOWNLOAD/**"
-        },
-        {
-          "path": "$APPDATA/**"
-        }
-      ],
-      "deny": [
-        {
-          "path": "$HOME/.ssh/**"
-        },
-        {
-          "path": "$HOME/.aws/**"
-        },
-        {
-          "path": "$HOME/.gnupg/**"
-        },
-        {
-          "path": "$HOME/.kube/**"
-        },
-        {
-          "path": "$HOME/.config/gcloud/**"
-        },
-        {
-          "path": "$HOME/Library/Keychains/**"
-        },
-        {
-          "path": "/etc/passwd"
-        },
-        {
-          "path": "/etc/shadow"
-        },
-        {
-          "path": "$HOME/.docker/**"
-        },
-        {
-          "path": "$HOME/.npmrc"
-        },
-        {
-          "path": "$HOME/.pypirc"
-        },
-        {
-          "path": "$HOME/.netrc"
-        },
-        {
-          "path": "$HOME/.azure/**"
-        },
-        {
-          "path": "$HOME/.config/gh/**"
-        },
-        {
-          "path": "$HOME/.config/heroku/**"
-        },
-        {
-          "path": "$HOME/.config/op/**"
-        },
-        {
-          "path": "$HOME/.config/stripe/**"
-        },
-        {
-          "path": "$HOME/.env"
-        },
-        {
-          "path": "$HOME/**/.env"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Google/Chrome/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Chromium/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Firefox/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/BraveSoftware/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/com.microsoft.edgemac/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/Vivaldi/**"
-        },
-        {
-          "path": "$HOME/Library/Application Support/com.operasoftware.Opera/**"
-        },
-        {
-          "path": "$HOME/Library/Cookies/**"
-        },
-        {
-          "path": "$HOME/Library/Safari/**"
-        },
-        {
-          "path": "$HOME/.mozilla/**"
-        },
-        {
-          "path": "$HOME/.config/google-chrome/**"
-        },
-        {
-          "path": "$HOME/.config/chromium/**"
-        },
-        {
-          "path": "$HOME/.config/BraveSoftware/**"
-        },
-        {
-          "path": "$HOME/.config/microsoft-edge/**"
-        },
-        {
-          "path": "$HOME/.config/vivaldi/**"
-        },
-        {
-          "path": "$HOME/.config/opera/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Google/Chrome/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Chromium/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Microsoft/Edge/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/BraveSoftware/**"
-        },
-        {
-          "path": "$HOME/AppData/Local/Vivaldi/**"
-        },
-        {
-          "path": "$HOME/AppData/Roaming/Mozilla/**"
-        },
-        {
-          "path": "$HOME/AppData/Roaming/Opera Software/**"
-        },
-        {
-          "path": "$HOME/.terraform.d/credentials.tfrc.json"
-        },
-        {
-          "path": "$HOME/.cargo/credentials"
-        },
-        {
-          "path": "$HOME/.cargo/credentials.toml"
-        },
-        {
-          "path": "$HOME/.agiworkforce/secrets/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/credentials/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/keys/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/tokens/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/vault/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/byok/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/sessions/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/oauth/**"
-        },
-        {
-          "path": "$HOME/.agiworkforce/.env"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/.env"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/*.key"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/*.pem"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/credentials.json"
-        },
-        {
-          "path": "$HOME/.agiworkforce/**/auth.json"
+          "path": "$APPDATA/artifacts"
         }
       ]
     },
@@ -2318,34 +1703,39 @@
         },
         {
           "path": "$HOME/.agiworkforce/**/auth.json"
-        }
-      ]
-    },
-    {
-      "identifier": "fs:allow-watch",
-      "allow": [
-        {
-          "path": "$DOCUMENT/**"
         },
         {
-          "path": "$DOWNLOAD/**"
+          "path": "$APPDATA/agiworkforce.db*"
         },
         {
-          "path": "$APPDATA/**"
-        }
-      ]
-    },
-    {
-      "identifier": "fs:allow-unwatch",
-      "allow": [
-        {
-          "path": "$DOCUMENT/**"
+          "path": "$APPDATA/scheduler.db*"
         },
         {
-          "path": "$DOWNLOAD/**"
+          "path": "$APPDATA/knowledge.db*"
         },
         {
-          "path": "$APPDATA/**"
+          "path": "$APPDATA/audit.db*"
+        },
+        {
+          "path": "$APPDATA/clipboard.db*"
+        },
+        {
+          "path": "$APPDATA/keys.stronghold"
+        },
+        {
+          "path": "$APPDATA/stronghold.salt"
+        },
+        {
+          "path": "$APPDATA/app_permissions.json"
+        },
+        {
+          "path": "$APPDATA/trusted_workflows.json"
+        },
+        {
+          "path": "$APPDATA/connector-permissions.json"
+        },
+        {
+          "path": "$APPDATA/.ipc_token"
         }
       ]
     },
@@ -2354,21 +1744,6 @@
     "dialog:allow-message",
     "dialog:allow-ask",
     "dialog:allow-confirm",
-    "notification:allow-is-permission-granted",
-    "notification:allow-request-permission",
-    "notification:allow-notify",
-    "notification:allow-register-action-types",
-    "notification:allow-register-listener",
-    "notification:allow-cancel",
-    "notification:allow-get-pending",
-    "notification:allow-remove-active",
-    "notification:allow-get-active",
-    "notification:allow-check-permissions",
-    "notification:allow-show",
-    "notification:allow-batch",
-    "notification:allow-list-channels",
-    "notification:allow-delete-channel",
-    "notification:allow-create-channel",
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-write-image",
     "clipboard-manager:allow-write-html",
@@ -2386,10 +1761,7 @@
     "updater:allow-download",
     "updater:allow-install",
     "updater:allow-download-and-install",
-    "stronghold:default",
-    "stronghold:allow-destroy",
-    "stronghold:allow-remove-store-record",
-    "stronghold:allow-remove-secret",
+    "process:allow-restart",
     {
       "identifier": "shell:allow-open",
       "allow": [

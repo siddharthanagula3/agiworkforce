@@ -42,15 +42,6 @@ impl Default for TtsConfig {
     }
 }
 
-/// Voice metadata
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Voice {
-    pub id: String,
-    pub name: String,
-    pub preview_url: Option<String>,
-    pub category: Option<String>,
-}
-
 /// Audio output from TTS
 #[derive(Debug, Clone)]
 pub struct AudioOutput {
@@ -100,12 +91,217 @@ pub enum TtsPlaybackEvent {
     },
 }
 
+/// OpenAI's `pcm` speech format and ElevenLabs' `pcm_24000` are both mono
+/// signed 16-bit little-endian samples at this rate.
+const CLOUD_PCM_SAMPLE_RATE: u32 = 24_000;
+
+fn decode_pcm16_le(bytes: &[u8]) -> Vec<f32> {
+    bytes
+        .chunks_exact(2)
+        .map(|pair| f32::from(i16::from_le_bytes([pair[0], pair[1]])) / 32_768.0)
+        .collect()
+}
+
+fn resample_linear(samples: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
+    if samples.is_empty() || from_rate == to_rate || from_rate == 0 || to_rate == 0 {
+        return samples.to_vec();
+    }
+    let ratio = f64::from(from_rate) / f64::from(to_rate);
+    let len = ((samples.len() as f64) / ratio).ceil() as usize;
+    (0..len)
+        .map(|i| {
+            let source = i as f64 * ratio;
+            let index = source.floor() as usize;
+            let next = (index + 1).min(samples.len() - 1);
+            let frac = (source - index as f64) as f32;
+            let current = samples[index.min(samples.len() - 1)];
+            current + (samples[next] - current) * frac
+        })
+        .collect()
+}
+
+/// Play mono 16-bit PCM on the default output device.
+async fn play_pcm16_le(bytes: Vec<u8>, sample_rate: u32, stop: Arc<AtomicBool>) -> Result<()> {
+    play_samples(decode_pcm16_le(&bytes), sample_rate, stop).await
+}
+
+/// Play mono float samples on the default output device. Resolves when the
+/// audio has played or `stop` is set; the audio callback reads `stop`, so a
+/// stop is heard within one device buffer.
+async fn play_samples(samples: Vec<f32>, sample_rate: u32, stop: Arc<AtomicBool>) -> Result<()> {
+    tokio::task::spawn_blocking(move || play_samples_blocking(&samples, sample_rate, &stop))
+        .await
+        .map_err(|e| Error::Generic(format!("Audio playback task failed: {e}")))?
+}
+
+fn play_samples_blocking(input: &[f32], sample_rate: u32, stop: &Arc<AtomicBool>) -> Result<()> {
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+
+    if stop.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    let device = cpal::default_host()
+        .default_output_device()
+        .ok_or_else(|| Error::Generic("No audio output device is available".into()))?;
+    let supported = device
+        .default_output_config()
+        .map_err(|e| Error::Generic(format!("Failed to read the audio output config: {e}")))?;
+    let output_rate = supported.sample_rate().0;
+    let channels = usize::from(supported.channels()).max(1);
+    let sample_format = supported.sample_format();
+    let config: cpal::StreamConfig = supported.into();
+
+    let samples = Arc::new(resample_linear(input, sample_rate, output_rate));
+    let total = samples.len();
+    let position = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let failed = Arc::new(AtomicBool::new(false));
+
+    let stream = match sample_format {
+        cpal::SampleFormat::F32 => build_playback_stream::<f32>(
+            &device, &config, channels, &samples, &position, stop, &failed,
+        ),
+        cpal::SampleFormat::I16 => build_playback_stream::<i16>(
+            &device, &config, channels, &samples, &position, stop, &failed,
+        ),
+        cpal::SampleFormat::U16 => build_playback_stream::<u16>(
+            &device, &config, channels, &samples, &position, stop, &failed,
+        ),
+        cpal::SampleFormat::I32 => build_playback_stream::<i32>(
+            &device, &config, channels, &samples, &position, stop, &failed,
+        ),
+        other => {
+            return Err(Error::Generic(format!(
+                "Unsupported audio output sample format: {other:?}"
+            )))
+        }
+    }
+    .map_err(|e| Error::Generic(format!("Failed to open audio output: {e}")))?;
+    stream
+        .play()
+        .map_err(|e| Error::Generic(format!("Failed to start audio output: {e}")))?;
+
+    while !stop.load(Ordering::SeqCst)
+        && !failed.load(Ordering::SeqCst)
+        && position.load(Ordering::SeqCst) < total
+    {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    drop(stream);
+
+    if failed.load(Ordering::SeqCst) {
+        return Err(Error::Generic("Audio output failed during playback".into()));
+    }
+    Ok(())
+}
+
+fn build_playback_stream<T>(
+    device: &cpal::Device,
+    config: &cpal::StreamConfig,
+    channels: usize,
+    samples: &Arc<Vec<f32>>,
+    position: &Arc<std::sync::atomic::AtomicUsize>,
+    stop: &Arc<AtomicBool>,
+    failed: &Arc<AtomicBool>,
+) -> std::result::Result<cpal::Stream, cpal::BuildStreamError>
+where
+    T: cpal::SizedSample + cpal::FromSample<f32>,
+{
+    use cpal::traits::DeviceTrait;
+
+    let samples = samples.clone();
+    let position = position.clone();
+    let stop = stop.clone();
+    let failed = failed.clone();
+    device.build_output_stream(
+        config,
+        move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+            let silent = stop.load(Ordering::Relaxed);
+            for frame in data.chunks_mut(channels) {
+                let value = if silent {
+                    0.0
+                } else {
+                    let index = position.fetch_add(1, Ordering::Relaxed);
+                    samples.get(index).copied().unwrap_or(0.0)
+                };
+                for out in frame.iter_mut() {
+                    *out = T::from_sample(value);
+                }
+            }
+        },
+        move |err| {
+            tracing::error!("TTS audio output error: {err}");
+            failed.store(true, Ordering::SeqCst);
+        },
+        None,
+    )
+}
+
+/// On-device Piper voice, played through the same output path and stop flag
+/// as the cloud voices so Stop and barge-in reach it.
+pub struct LocalPiperTts {
+    models_dir: std::path::PathBuf,
+    voice_id: String,
+    config: super::local_tts::SynthesisConfig,
+    playback_stop: Arc<AtomicBool>,
+}
+
+impl LocalPiperTts {
+    pub fn new(
+        models_dir: std::path::PathBuf,
+        voice_id: String,
+        config: super::local_tts::SynthesisConfig,
+    ) -> Self {
+        Self {
+            models_dir,
+            voice_id,
+            config,
+            playback_stop: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
+
+#[async_trait]
+impl TextToSpeech for LocalPiperTts {
+    async fn synthesize(&self, text: &str) -> Result<AudioOutput> {
+        self.playback_stop.store(false, Ordering::SeqCst);
+        let piper = super::local_tts::PiperLocal::new(self.models_dir.clone(), &self.voice_id)
+            .map_err(|e| Error::Generic(format!("Failed to initialize Piper: {e}")))?;
+        let result = piper
+            .synthesize(text, Some(self.config.clone()))
+            .await
+            .map_err(|e| Error::Generic(format!("TTS synthesis failed: {e}")))?;
+        play_samples(
+            result.samples,
+            result.sample_rate,
+            self.playback_stop.clone(),
+        )
+        .await?;
+        Ok(AudioOutput {
+            data: Vec::new(),
+            format: AudioFormat::Pcm,
+            sample_rate: result.sample_rate,
+        })
+    }
+
+    fn provider_name(&self) -> &'static str {
+        "piper"
+    }
+
+    fn stop(&self) -> bool {
+        !self.playback_stop.swap(true, Ordering::SeqCst)
+    }
+}
+
 /// TTS trait for different providers
 #[async_trait]
 pub trait TextToSpeech: Send + Sync {
     async fn synthesize(&self, text: &str) -> Result<AudioOutput>;
-    async fn list_voices(&self) -> Result<Vec<Voice>>;
     fn provider_name(&self) -> &'static str;
+    /// Silence speech this provider is producing right now. Providers that
+    /// only return audio bytes have nothing playing to stop.
+    fn stop(&self) -> bool {
+        false
+    }
 }
 
 /// Default OpenAI voice model, selected from the canonical catalog.
@@ -133,6 +329,7 @@ pub(crate) fn openai_default_tts_model() -> &'static str {
 pub struct ElevenLabsTts {
     config: TtsConfig,
     client: reqwest::Client,
+    playback_stop: Arc<AtomicBool>,
 }
 
 impl ElevenLabsTts {
@@ -140,6 +337,7 @@ impl ElevenLabsTts {
         Self {
             config,
             client: reqwest::Client::new(),
+            playback_stop: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -178,7 +376,11 @@ impl TextToSpeech for ElevenLabsTts {
         let voice_id = self.voice_id();
         let model_id = self.model_id()?;
 
-        let url = format!("https://api.elevenlabs.io/v1/text-to-speech/{}", voice_id);
+        let url = format!(
+            "https://api.elevenlabs.io/v1/text-to-speech/{}?output_format=pcm_{}",
+            voice_id, CLOUD_PCM_SAMPLE_RATE
+        );
+        self.playback_stop.store(false, Ordering::SeqCst);
 
         let payload = serde_json::json!({
             "text": text,
@@ -194,7 +396,6 @@ impl TextToSpeech for ElevenLabsTts {
             .post(&url)
             .header("xi-api-key", api_key)
             .header("Content-Type", "application/json")
-            .header("Accept", "audio/mpeg")
             .json(&payload)
             .send()
             .await
@@ -210,46 +411,26 @@ impl TextToSpeech for ElevenLabsTts {
             .await
             .map_err(|e| Error::Generic(format!("Failed to read audio: {}", e)))?;
 
+        let data = data.to_vec();
+        play_pcm16_le(
+            data.clone(),
+            CLOUD_PCM_SAMPLE_RATE,
+            self.playback_stop.clone(),
+        )
+        .await?;
         Ok(AudioOutput {
-            data: data.to_vec(),
-            format: AudioFormat::Mp3,
-            sample_rate: 44100,
+            data,
+            format: AudioFormat::Pcm,
+            sample_rate: CLOUD_PCM_SAMPLE_RATE,
         })
-    }
-
-    async fn list_voices(&self) -> Result<Vec<Voice>> {
-        let api_key = self.api_key()?;
-
-        let response = self
-            .client
-            .get("https://api.elevenlabs.io/v1/voices")
-            .header("xi-api-key", api_key)
-            .send()
-            .await
-            .map_err(|e| Error::Generic(format!("ElevenLabs API error: {}", e)))?;
-
-        let data: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| Error::Generic(format!("Failed to parse voices: {}", e)))?;
-
-        let voices = data["voices"]
-            .as_array()
-            .unwrap_or(&vec![])
-            .iter()
-            .map(|v| Voice {
-                id: v["voice_id"].as_str().unwrap_or("").to_string(),
-                name: v["name"].as_str().unwrap_or("").to_string(),
-                preview_url: v["preview_url"].as_str().map(String::from),
-                category: v["category"].as_str().map(String::from),
-            })
-            .collect();
-
-        Ok(voices)
     }
 
     fn provider_name(&self) -> &'static str {
         "elevenlabs"
+    }
+
+    fn stop(&self) -> bool {
+        !self.playback_stop.swap(true, Ordering::SeqCst)
     }
 }
 
@@ -257,6 +438,7 @@ impl TextToSpeech for ElevenLabsTts {
 pub struct OpenAiTts {
     config: TtsConfig,
     client: reqwest::Client,
+    playback_stop: Arc<AtomicBool>,
 }
 
 impl OpenAiTts {
@@ -264,6 +446,7 @@ impl OpenAiTts {
         Self {
             config,
             client: reqwest::Client::new(),
+            playback_stop: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -295,8 +478,9 @@ impl TextToSpeech for OpenAiTts {
             "model": self.model(),
             "input": text,
             "voice": self.voice(),
-            "response_format": "mp3"
+            "response_format": "pcm"
         });
+        self.playback_stop.store(false, Ordering::SeqCst);
 
         let response = self
             .client
@@ -318,78 +502,27 @@ impl TextToSpeech for OpenAiTts {
             .await
             .map_err(|e| Error::Generic(format!("Failed to read audio: {}", e)))?;
 
+        let data = data.to_vec();
+        play_pcm16_le(
+            data.clone(),
+            CLOUD_PCM_SAMPLE_RATE,
+            self.playback_stop.clone(),
+        )
+        .await?;
         Ok(AudioOutput {
-            data: data.to_vec(),
-            format: AudioFormat::Mp3,
-            sample_rate: 24000,
+            data,
+            format: AudioFormat::Pcm,
+            sample_rate: CLOUD_PCM_SAMPLE_RATE,
         })
-    }
-
-    async fn list_voices(&self) -> Result<Vec<Voice>> {
-        Ok(vec![
-            Voice {
-                id: "alloy".to_string(),
-                name: "Alloy".to_string(),
-                preview_url: None,
-                category: Some("openai".to_string()),
-            },
-            Voice {
-                id: "echo".to_string(),
-                name: "Echo".to_string(),
-                preview_url: None,
-                category: Some("openai".to_string()),
-            },
-            Voice {
-                id: "fable".to_string(),
-                name: "Fable".to_string(),
-                preview_url: None,
-                category: Some("openai".to_string()),
-            },
-            Voice {
-                id: "onyx".to_string(),
-                name: "Onyx".to_string(),
-                preview_url: None,
-                category: Some("openai".to_string()),
-            },
-            Voice {
-                id: "nova".to_string(),
-                name: "Nova".to_string(),
-                preview_url: None,
-                category: Some("openai".to_string()),
-            },
-            Voice {
-                id: "shimmer".to_string(),
-                name: "Shimmer".to_string(),
-                preview_url: None,
-                category: Some("openai".to_string()),
-            },
-        ])
     }
 
     fn provider_name(&self) -> &'static str {
         "openai"
     }
-}
 
-/// The voices `SystemTts` can actually speak with on a build whose platform
-/// support is `platform_supported`.
-///
-/// A voice entry the build cannot speak with is placeholder data. This used to
-/// return "System Default" unconditionally, so the Windows and Linux builds.
-/// where `SystemTts::speak_sync` is unimplemented, advertised a selectable
-/// voice whose only behaviour was to fail. Split out from `list_voices` so both
-/// branches are testable from any host, not only from the platform under test.
-fn system_voice_catalog(platform_supported: bool) -> Vec<Voice> {
-    if !platform_supported {
-        return Vec::new();
+    fn stop(&self) -> bool {
+        !self.playback_stop.swap(true, Ordering::SeqCst)
     }
-
-    vec![Voice {
-        id: "system-default".to_string(),
-        name: "System Default".to_string(),
-        preview_url: None,
-        category: Some("system".to_string()),
-    }]
 }
 
 /// System TTS (uses OS native TTS) with playback control
@@ -481,38 +614,6 @@ impl SystemTts {
             ))
         }
     }
-
-    /// Speak text and wait for completion
-    pub fn speak_sync_blocking(&self, text: &str) -> Result<()> {
-        #[cfg(target_os = "macos")]
-        {
-            self.is_playing.store(true, Ordering::SeqCst);
-
-            let status = std::process::Command::new("say")
-                .arg(text)
-                .status()
-                .map_err(|e| {
-                    self.is_playing.store(false, Ordering::SeqCst);
-                    Error::Generic(format!("TTS error: {}", e))
-                })?;
-
-            self.is_playing.store(false, Ordering::SeqCst);
-
-            if status.success() {
-                Ok(())
-            } else {
-                Err(Error::Generic("TTS process exited with error".into()))
-            }
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = text;
-            Err(Error::Generic(
-                "System TTS not implemented for this platform".into(),
-            ))
-        }
-    }
 }
 
 #[async_trait]
@@ -521,6 +622,30 @@ impl TextToSpeech for SystemTts {
         // System TTS doesn't return audio data, just speaks directly
         self.speak_sync(text)?;
 
+        // Resolve when `say` finishes or is killed by `stop`, so a caller's
+        // completion means the speech actually ended.
+        #[cfg(target_os = "macos")]
+        loop {
+            let finished = match self.current_process.lock() {
+                Ok(mut guard) => match guard.as_mut() {
+                    None => true,
+                    Some(child) => match child.try_wait() {
+                        Ok(None) => false,
+                        Ok(Some(_)) | Err(_) => {
+                            *guard = None;
+                            true
+                        }
+                    },
+                },
+                Err(_) => true,
+            };
+            if finished {
+                self.is_playing.store(false, Ordering::SeqCst);
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+
         Ok(AudioOutput {
             data: vec![],
             format: AudioFormat::Pcm,
@@ -528,12 +653,12 @@ impl TextToSpeech for SystemTts {
         })
     }
 
-    async fn list_voices(&self) -> Result<Vec<Voice>> {
-        Ok(system_voice_catalog(Self::platform_supported()))
-    }
-
     fn provider_name(&self) -> &'static str {
         "system"
+    }
+
+    fn stop(&self) -> bool {
+        self.stop_playback()
     }
 }
 
@@ -618,8 +743,9 @@ impl TtsPlayer {
         // Synthesize (this is async and may take a while for network-based providers)
         let result = self.provider.synthesize(text).await;
 
-        // Clear state
-        self.is_playing.store(false, Ordering::SeqCst);
+        // `stop_playback` clears the flag first, so a cleared flag here means
+        // this speech was cut off rather than finished.
+        let stopped = !self.is_playing.swap(false, Ordering::SeqCst);
         let duration_ms = self.elapsed_ms();
 
         if let Ok(mut guard) = self.current_text.lock() {
@@ -637,9 +763,19 @@ impl TtsPlayer {
         // heard nothing while every layer above reported success, including the
         // browser-TTS fallback in `useTTS.speakWithBargeIn`, which is wired to
         // a rejected promise and so never ran.
-        result.map(|_| TtsPlaybackEvent::Completed {
-            text: text.to_string(),
-            duration_ms,
+        result.map(|_| {
+            if stopped {
+                TtsPlaybackEvent::Interrupted {
+                    text: text.to_string(),
+                    reason: TtsInterruptReason::ManualStop,
+                    played_ms: duration_ms,
+                }
+            } else {
+                TtsPlaybackEvent::Completed {
+                    text: text.to_string(),
+                    duration_ms,
+                }
+            }
         })
     }
 
@@ -654,6 +790,8 @@ impl TtsPlayer {
 
         let text = self.current_text();
         let played_ms = self.elapsed_ms();
+
+        self.provider.stop();
 
         // Clear state
         self.is_playing.store(false, Ordering::SeqCst);
@@ -773,24 +911,6 @@ mod tests {
         assert!(!tts.is_playing());
     }
 
-    /// The Windows/Linux defect, reproducible from any host: `list_voices` used
-    /// to hand back "System Default" unconditionally, so a build that cannot
-    /// speak still offered a selectable voice.
-    #[test]
-    fn system_voice_catalog_is_empty_where_the_platform_cannot_speak() {
-        assert!(
-            system_voice_catalog(false).is_empty(),
-            "a build with no implemented speak arm must not advertise a voice"
-        );
-    }
-
-    #[test]
-    fn system_voice_catalog_offers_the_default_voice_where_the_platform_can_speak() {
-        let voices = system_voice_catalog(true);
-        assert_eq!(voices.len(), 1);
-        assert_eq!(voices[0].id, "system-default");
-    }
-
     /// `platform_supported()` must track the ONLY arm of `speak_sync` that is
     /// implemented. Asserted from the unsupported side, which is where the
     /// capability lie lived, on macOS this only pins the constant, without
@@ -816,18 +936,6 @@ mod tests {
         );
     }
 
-    /// End-to-end through the trait the Tauri command actually calls.
-    #[tokio::test]
-    async fn list_voices_never_offers_a_voice_the_build_cannot_speak_with() {
-        let voices = SystemTts::new().list_voices().await.unwrap();
-        assert_eq!(
-            voices.is_empty(),
-            !SystemTts::platform_supported(),
-            "list_voices must agree with platform support, got: {:?}",
-            voices.iter().map(|v| &v.id).collect::<Vec<_>>()
-        );
-    }
-
     #[test]
     fn test_tts_player_initial_state() {
         let player = TtsPlayer::from_config(TtsConfig::default());
@@ -847,9 +955,6 @@ mod tests {
                 "System TTS not implemented for this platform".into(),
             ))
         }
-        async fn list_voices(&self) -> Result<Vec<Voice>> {
-            Ok(Vec::new())
-        }
         fn provider_name(&self) -> &'static str {
             "failing"
         }
@@ -865,9 +970,6 @@ mod tests {
                 format: AudioFormat::Pcm,
                 sample_rate: 0,
             })
-        }
-        async fn list_voices(&self) -> Result<Vec<Voice>> {
-            Ok(Vec::new())
         }
         fn provider_name(&self) -> &'static str {
             "silent-ok"
@@ -897,5 +999,111 @@ mod tests {
         let event = player.speak("hello").await.unwrap();
         assert!(matches!(event, TtsPlaybackEvent::Completed { .. }));
         assert!(!player.is_playing());
+    }
+
+    /// Speaks until `stop` is called, like `say` on macOS.
+    struct SpeakingTts {
+        stopped: tokio::sync::Notify,
+    }
+
+    #[async_trait]
+    impl TextToSpeech for SpeakingTts {
+        async fn synthesize(&self, _text: &str) -> Result<AudioOutput> {
+            self.stopped.notified().await;
+            Ok(AudioOutput {
+                data: vec![],
+                format: AudioFormat::Pcm,
+                sample_rate: 0,
+            })
+        }
+        fn provider_name(&self) -> &'static str {
+            "speaking"
+        }
+        fn stop(&self) -> bool {
+            self.stopped.notify_one();
+            true
+        }
+    }
+
+    #[tokio::test]
+    async fn stopping_mid_speech_silences_the_provider_and_is_not_reported_as_completed() {
+        let player = Arc::new(TtsPlayer::new(Box::new(SpeakingTts {
+            stopped: tokio::sync::Notify::new(),
+        })));
+        let speaking = {
+            let player = player.clone();
+            tokio::spawn(async move { player.speak("a long answer").await })
+        };
+        while !player.is_playing() {
+            tokio::task::yield_now().await;
+        }
+
+        let interrupted = player.stop_playback(TtsInterruptReason::ManualStop);
+        assert!(matches!(
+            interrupted,
+            Some(TtsPlaybackEvent::Interrupted { .. })
+        ));
+
+        let finished = speaking.await.unwrap().unwrap();
+        assert!(matches!(finished, TtsPlaybackEvent::Interrupted { .. }));
+        assert!(!player.is_playing());
+    }
+
+    #[test]
+    fn cloud_pcm_decodes_as_signed_little_endian() {
+        let samples = decode_pcm16_le(&[0x00, 0x80, 0xff, 0x7f, 0x00, 0x00, 0x01]);
+        assert_eq!(samples.len(), 3, "a trailing odd byte is not a sample");
+        assert_eq!(samples[0], -1.0);
+        assert!((samples[1] - 32_767.0 / 32_768.0).abs() < f32::EPSILON);
+        assert_eq!(samples[2], 0.0);
+    }
+
+    #[test]
+    fn resampling_keeps_duration_and_endpoints() {
+        let one_second = vec![0.25_f32; 24_000];
+        let resampled = resample_linear(&one_second, 24_000, 48_000);
+        assert_eq!(resampled.len(), 48_000);
+        assert!(resampled.iter().all(|sample| (*sample - 0.25).abs() < 1e-6));
+        assert_eq!(resample_linear(&one_second, 24_000, 24_000).len(), 24_000);
+        assert!(resample_linear(&[], 24_000, 48_000).is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_stop_before_playback_plays_nothing() {
+        let stop = Arc::new(AtomicBool::new(true));
+        play_pcm16_le(vec![0, 0, 0, 0], CLOUD_PCM_SAMPLE_RATE, stop)
+            .await
+            .expect("a stopped playback resolves without touching the audio device");
+    }
+
+    #[test]
+    fn cloud_providers_can_be_stopped() {
+        let openai = OpenAiTts::new(TtsConfig {
+            provider: TtsProvider::OpenAi,
+            api_key: Some("key".into()),
+            voice_id: None,
+            model_id: None,
+        });
+        assert!(openai.stop());
+        assert!(openai.playback_stop.load(Ordering::SeqCst));
+        assert!(!openai.stop(), "a second stop has nothing left to stop");
+    }
+
+    #[test]
+    fn the_local_piper_voice_can_be_stopped() {
+        let models_dir = std::path::PathBuf::from("/tmp/piper");
+        let voice = super::super::artifact_registry::piper_voice_descriptors(&models_dir)
+            .expect("the speech artifact catalog loads")
+            .into_iter()
+            .next()
+            .expect("the catalog lists a Piper voice");
+        let piper = LocalPiperTts::new(
+            models_dir,
+            voice.id,
+            super::super::local_tts::SynthesisConfig::default(),
+        );
+        assert_eq!(piper.provider_name(), "piper");
+        assert!(piper.stop());
+        assert!(!piper.stop());
     }
 }

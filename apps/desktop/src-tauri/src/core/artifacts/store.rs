@@ -7,7 +7,6 @@ use super::types::*;
 use chrono::Utc;
 use parking_lot::RwLock;
 use rusqlite::Connection;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -229,71 +228,6 @@ impl ArtifactStore {
         Ok(artifact)
     }
 
-    /// Create a streaming artifact (content will be appended incrementally)
-    pub fn create_streaming(
-        &self,
-        title: String,
-        artifact_type: ArtifactType,
-        metadata: Option<ArtifactMetadata>,
-        conversation_id: Option<i64>,
-        message_id: Option<i64>,
-    ) -> Result<Artifact, String> {
-        let id = Self::generate_id();
-
-        let metadata = metadata.unwrap_or_else(|| match artifact_type {
-            ArtifactType::Code => ArtifactMetadata::Code(CodeMetadata::default()),
-            ArtifactType::Document => ArtifactMetadata::Document(DocumentMetadata::default()),
-            _ => ArtifactMetadata::default(),
-        });
-
-        let mut artifact = Artifact::new_streaming(id, title, artifact_type, metadata);
-        artifact.conversation_id = conversation_id;
-        artifact.message_id = message_id;
-
-        self.insert_artifact(artifact.clone());
-
-        Ok(artifact)
-    }
-
-    /// Append content to a streaming artifact
-    pub fn append_streaming(&self, id: &str, delta: &str) -> Result<(), String> {
-        let mut artifacts = self.artifacts.write();
-        let artifact = artifacts
-            .get_mut(id)
-            .ok_or_else(|| format!("Artifact not found: {}", id))?;
-
-        if artifact.status != ArtifactStatus::Streaming {
-            return Err("Artifact is not in streaming state".to_string());
-        }
-
-        artifact.append_content(delta);
-        Ok(())
-    }
-
-    /// Finalize a streaming artifact
-    pub fn finalize_streaming(
-        &self,
-        id: &str,
-        change_description: Option<String>,
-    ) -> Result<Artifact, String> {
-        let mut artifacts = self.artifacts.write();
-        let artifact = artifacts
-            .get_mut(id)
-            .ok_or_else(|| format!("Artifact not found: {}", id))?;
-
-        if artifact.status != ArtifactStatus::Streaming {
-            return Err("Artifact is not in streaming state".to_string());
-        }
-
-        artifact.finalize_streaming(change_description);
-        let result = artifact.clone();
-
-        // Persist finalized artifact to DB
-        self.persist_artifact(&result);
-
-        Ok(result)
-    }
-
     /// Get an artifact by ID
     pub fn get(&self, id: &str) -> Option<Artifact> {
         self.artifacts.read().get(id).cloned()
@@ -408,40 +342,6 @@ impl ArtifactStore {
         Ok(())
     }
 
-    /// Add tags to an artifact
-    pub fn add_tags(&self, id: &str, tags: Vec<String>) -> Result<(), String> {
-        let mut artifacts = self.artifacts.write();
-        let artifact = artifacts
-            .get_mut(id)
-            .ok_or_else(|| format!("Artifact not found: {}", id))?;
-
-        for tag in tags {
-            if !artifact.tags.contains(&tag) {
-                artifact.tags.push(tag);
-            }
-        }
-        artifact.updated_at = Utc::now();
-
-        // Persist tag changes to DB
-        self.persist_artifact(artifact);
-        Ok(())
-    }
-
-    /// Remove tags from an artifact
-    pub fn remove_tags(&self, id: &str, tags: Vec<String>) -> Result<(), String> {
-        let mut artifacts = self.artifacts.write();
-        let artifact = artifacts
-            .get_mut(id)
-            .ok_or_else(|| format!("Artifact not found: {}", id))?;
-
-        artifact.tags.retain(|t| !tags.contains(t));
-        artifact.updated_at = Utc::now();
-
-        // Persist tag changes to DB
-        self.persist_artifact(artifact);
-        Ok(())
-    }
-
     /// List all artifacts with optional filtering
     pub fn list(&self, filter: ArtifactFilter) -> Vec<ArtifactSummary> {
         let artifacts = self.artifacts.read();
@@ -511,15 +411,6 @@ impl ArtifactStore {
             .unwrap_or(results.len());
 
         results[start..end].to_vec()
-    }
-
-    /// Get artifacts for a specific conversation
-    pub fn get_by_conversation(&self, conversation_id: i64) -> Vec<ArtifactSummary> {
-        self.list(ArtifactFilter {
-            conversation_id: Some(conversation_id),
-            statuses: Some(vec![ArtifactStatus::Complete, ArtifactStatus::Streaming]),
-            ..Default::default()
-        })
     }
 
     /// Return the full durable artifact records needed to reconstruct chat
@@ -605,57 +496,6 @@ impl ArtifactStore {
         self.artifacts.read().get(id).map(|a| a.versions.clone())
     }
 
-    /// Get diff between two versions
-    pub fn get_diff(&self, id: &str, from_version: u32, to_version: u32) -> Option<VersionDiff> {
-        self.artifacts
-            .read()
-            .get(id)
-            .and_then(|a| a.get_version_diff(from_version, to_version))
-    }
-
-    /// Get artifact statistics
-    pub fn get_stats(&self) -> ArtifactStoreStats {
-        let artifacts = self.artifacts.read();
-
-        let mut stats = ArtifactStoreStats {
-            total_artifacts: artifacts.len(),
-            total_versions: 0,
-            total_size_bytes: 0,
-            by_type: HashMap::new(),
-            by_status: HashMap::new(),
-        };
-
-        for artifact in artifacts.values() {
-            stats.total_versions += artifact.versions.len();
-            stats.total_size_bytes += artifact.content.len();
-
-            *stats.by_type.entry(artifact.artifact_type).or_insert(0) += 1;
-            *stats.by_status.entry(artifact.status).or_insert(0) += 1;
-        }
-
-        stats
-    }
-
-    /// Clear all artifacts (use with caution)
-    pub fn clear(&self) {
-        self.artifacts.write().clear();
-        self.by_conversation.write().clear();
-        self.by_type.write().clear();
-    }
-
-    /// Export all artifacts for backup
-    pub fn export_all(&self) -> Vec<Artifact> {
-        self.artifacts.read().values().cloned().collect()
-    }
-
-    /// Import artifacts from backup
-    pub fn import_all(&self, artifacts: Vec<Artifact>) {
-        for artifact in artifacts {
-            self.persist_artifact(&artifact);
-            self.insert_artifact(artifact);
-        }
-    }
-
     // Private helper methods
 
     fn insert_artifact(&self, artifact: Artifact) {
@@ -730,16 +570,6 @@ impl ArtifactStore {
             artifact.versions.extend(recent);
         }
     }
-}
-
-/// Statistics about the artifact store
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ArtifactStoreStats {
-    pub total_artifacts: usize,
-    pub total_versions: usize,
-    pub total_size_bytes: usize,
-    pub by_type: HashMap<ArtifactType, usize>,
-    pub by_status: HashMap<ArtifactStatus, usize>,
 }
 
 /// Thread-safe artifact store wrapper
@@ -994,7 +824,6 @@ mod tests {
 
         assert!(store.get(&artifact.id).is_none());
         assert!(store.get_conversation_snapshot(conversation_id).is_empty());
-        assert!(store.get_by_conversation(conversation_id).is_empty());
     }
 
     #[test]
@@ -1111,35 +940,6 @@ mod tests {
 
         assert_eq!(rolled_back.content, "Version 1");
         assert_eq!(rolled_back.current_version, 3); // Rollback creates a new version
-    }
-
-    #[test]
-    fn test_streaming_artifact() {
-        let store = ArtifactStore::default();
-
-        let artifact = store
-            .create_streaming(
-                "Streaming Code".to_string(),
-                ArtifactType::Code,
-                None,
-                None,
-                None,
-            )
-            .unwrap();
-
-        let id = artifact.id.clone();
-        assert_eq!(artifact.status, ArtifactStatus::Streaming);
-
-        // Append content
-        store.append_streaming(&id, "fn ").unwrap();
-        store.append_streaming(&id, "main() {}").unwrap();
-
-        // Finalize
-        let finalized = store.finalize_streaming(&id, None).unwrap();
-
-        assert_eq!(finalized.status, ArtifactStatus::Complete);
-        assert_eq!(finalized.content, "fn main() {}");
-        assert_eq!(finalized.current_version, 1);
     }
 
     #[test]

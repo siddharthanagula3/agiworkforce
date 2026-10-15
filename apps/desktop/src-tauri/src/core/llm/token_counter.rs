@@ -184,7 +184,9 @@ impl TokenCounter {
                             // Default to 5 pages
                             total_tokens += 5000;
                         }
-                        ContentPart::ToolUse { .. } | ContentPart::ToolResult { .. } => {
+                        ContentPart::ToolUse { .. }
+                        | ContentPart::ToolResult { .. }
+                        | ContentPart::ProviderBlock { .. } => {
                             // Tool use and result blocks are typically structured JSON
                             // Estimate conservatively
                             total_tokens += 200;

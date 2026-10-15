@@ -46,9 +46,6 @@
 //! // Set a workspace to load workspace-local skills
 //! manager.set_workspace(Some(PathBuf::from("/path/to/workspace")));
 //!
-//! // Get available skills for AGI context
-//! let context = manager.generate_skill_context();
-//!
 //! // Check if a specific skill is available
 //! if let Some(skill) = manager.get_skill("git-workflow") {
 //!     let requirements = manager.check_skill_requirements(&skill.name);
@@ -65,9 +62,7 @@ mod skill;
 
 pub use error::{SkillError, SkillResult};
 pub use loader::{RequirementCheckResult, SkillLoader, SkillSourceType};
-pub use manager::{
-    SkillInvocation, SkillManager, SkillManagerConfig, SkillSourceFilter, SlashCommand,
-};
+pub use manager::{SkillInvocation, SkillManager, SkillManagerConfig, SkillSourceFilter};
 pub use skill::{Skill, SkillBuilder, SkillContextMode, SkillRequirements, SkillSource};
 
 #[cfg(test)]
@@ -81,7 +76,7 @@ mod tests {
     fn test_full_skills_workflow() {
         // Create a temporary workspace with skills
         let temp_dir = TempDir::new().unwrap();
-        let skills_dir = temp_dir.path().join("skills");
+        let skills_dir = temp_dir.path().join(".agiworkforce").join("skills");
         std::fs::create_dir_all(&skills_dir).unwrap();
 
         // Create a workspace skill
@@ -125,10 +120,6 @@ Use this skill for custom operations.
         let requirements = manager.check_skill_requirements("custom-skill");
         assert!(requirements.is_some());
 
-        // Generate context
-        let context = manager.generate_skill_context();
-        assert!(context.contains("custom-skill") || context.contains("file-operations"));
-
         // Generate summary
         let summary = manager.generate_skill_summary();
         assert!(!summary.is_empty());
@@ -164,34 +155,6 @@ Use this skill for custom operations.
         assert!(!explain_code.is_tool_allowed("Write"));
     }
 
-    /// Test slash command parsing.
-    #[test]
-    fn test_slash_command_parsing() {
-        let manager = SkillManager::new();
-        manager.initialize();
-
-        // Valid slash command with arguments
-        let result = manager.parse_slash_command("/explain-code src/main.rs");
-        assert!(result.is_some());
-        let invocation = result.unwrap().expect("Should parse successfully");
-        assert_eq!(invocation.skill_name, "explain-code");
-        assert!(invocation.instructions.contains("src/main.rs"));
-
-        // Valid slash command without arguments
-        let result = manager.parse_slash_command("/file-operations");
-        assert!(result.is_some());
-        let invocation = result.unwrap().expect("Should parse successfully");
-        assert_eq!(invocation.skill_name, "file-operations");
-
-        // Not a slash command
-        let result = manager.parse_slash_command("explain-code src/main.rs");
-        assert!(result.is_none());
-
-        // Unknown skill
-        let result = manager.parse_slash_command("/unknown-skill args");
-        assert!(result.is_none());
-    }
-
     /// Test skill invocation with arguments.
     #[test]
     fn test_skill_invocation() {
@@ -207,21 +170,6 @@ Use this skill for custom operations.
         assert!(invocation.is_fork());
         assert!(invocation.is_tool_allowed("Read"));
         assert!(!invocation.is_tool_allowed("Execute"));
-    }
-
-    /// Test get slash commands.
-    #[test]
-    fn test_get_slash_commands() {
-        let manager = SkillManager::new();
-        manager.initialize();
-
-        let commands = manager.get_slash_commands();
-        assert!(!commands.is_empty());
-
-        // Check that explain-code has arguments
-        let explain_code = commands.iter().find(|c| c.name == "explain-code");
-        assert!(explain_code.is_some());
-        assert!(explain_code.unwrap().has_arguments);
     }
 
     /// Test that skill sources work correctly.

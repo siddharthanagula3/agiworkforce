@@ -1,5 +1,5 @@
 use crate::core::llm::token_counter::TokenCounter;
-use crate::sys::commands::chat::pending::{has_pending_messages, peek_pending_messages};
+use crate::sys::commands::chat::pending::has_pending_messages_for_conversation;
 use crate::sys::commands::chat::state::should_stop_for_conversation;
 use futures_util::StreamExt;
 use std::collections::HashMap;
@@ -64,8 +64,6 @@ pub(super) async fn consume_llm_stream(
     // `chat:artifact` event still arrives when the tool executes).
     let mut artifact_progress_seq: HashMap<usize, u64> = HashMap::new();
 
-    let mut pending_notified = false;
-
     loop {
         let next_chunk = match tokio::time::timeout(
             std::time::Duration::from_secs(idle_timeout_secs),
@@ -104,23 +102,6 @@ pub(super) async fn consume_llm_stream(
             info!("[Chat] Generation stopped by user");
             was_stopped = true;
             break;
-        }
-
-        if has_pending_messages() && !pending_notified {
-            let pending = peek_pending_messages();
-            info!(
-                "[Chat] {} pending message(s) detected during streaming",
-                pending.len()
-            );
-            let _ = app_handle.emit(
-                "chat:pending-context-available",
-                serde_json::json!({
-                    "pending_messages": pending,
-                    "current_phase": "streaming",
-                    "count": pending.len()
-                }),
-            );
-            pending_notified = true;
         }
 
         match chunk_result {
@@ -230,7 +211,7 @@ pub(super) async fn consume_llm_stream(
                         "message_id": message_id,
                         "delta": chunk.content,
                         "content": full_content.clone(),
-                        "has_pending_messages": has_pending_messages()
+                        "has_pending_messages": has_pending_messages_for_conversation(conversation_id)
                     }),
                 );
             }

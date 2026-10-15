@@ -1,24 +1,21 @@
-//! Proactive scheduler module for automated task execution.
+//! Scheduling types and parsing.
 //!
-//! This module provides scheduling capabilities for running automated tasks
-//! and managing scheduled jobs.
+//! Schedule types and natural-language schedule parsing. The scheduler that
+//! runs jobs is `sys::commands::scheduler`.
 //!
 //! # Overview
 //!
 //! The scheduler module consists of:
 //!
-//! - **Types**: Core data structures for scheduled jobs, schedules, and actions.
+//! - **Types**: The record of one job run and its status.
 //! - **Error**: Error types and result aliases for scheduler operations.
 //! - **NLP Parser**: Natural language parsing for schedule expressions.
-//! - **Proactive**: Proactive scheduler for automated task execution.
+//! - **Schedule**: The schedule a task stores, and its next run in a time zone.
 
 pub mod error;
 pub mod nlp_parser;
-pub mod proactive;
+pub mod schedule;
 pub mod types;
-
-#[cfg(test)]
-mod tests;
 
 // Re-export error types
 pub use error::{SchedulerError, SchedulerResult};
@@ -26,11 +23,7 @@ pub use error::{SchedulerError, SchedulerResult};
 // Re-export NLP parser types
 pub use nlp_parser::{parse_schedule, ParseError, ParsedSchedule};
 
-// Re-export proactive scheduler
-pub use proactive::{ActionHandler, ProactiveScheduler};
+pub use schedule::{cron_schedule, TaskSchedule};
 
-// Re-export job types
-pub use types::{
-    CallbackAction, ExecutionStatus, JobAction, JobExecution, JobExecutionRecord, JobInterval,
-    JobSchedule, JobState, JobSummary, ScheduledJob, ScheduledJobBuilder,
-};
+// Re-export job run types
+pub use types::{ExecutionStatus, JobExecutionRecord};

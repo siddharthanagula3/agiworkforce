@@ -1,51 +1,6 @@
 use crate::core::llm::Provider;
-use crate::data::db::repository;
-use crate::sys::commands::chat::state::AppDatabase;
-use chrono::{Datelike, Utc};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
-
-pub(super) fn request_uses_managed_cloud(
-    provider: Option<Provider>,
-    prefer_cloud_credits: bool,
-) -> bool {
-    prefer_cloud_credits || matches!(provider, Some(Provider::ManagedCloud))
-}
-
-/// Check billing subscription access and monthly budget limits.
-/// Returns `Ok(())` if the request is allowed, `Err(String)` if blocked.
-pub(super) fn check_billing_and_budget(db: &AppDatabase, user_id: &str) -> Result<(), String> {
-    let conn = db
-        .connection()
-        .map_err(|e| format!("Budget check failed: {e}"))?;
-
-    if let Ok(budget_setting) = repository::get_setting(&conn, "billing.monthly_budget") {
-        if let Ok(budget_limit) = budget_setting.value.parse::<f64>() {
-            if budget_limit > 0.0 {
-                let now = Utc::now();
-                let start_of_month = now
-                    .date_naive()
-                    .with_day(1)
-                    .ok_or_else(|| "Failed to determine start of month".to_string())?
-                    .and_hms_opt(0, 0, 0)
-                    .ok_or_else(|| "Failed to set time for start of month".to_string())?
-                    .and_utc();
-
-                let current_usage = repository::sum_cost_since(&conn, start_of_month, user_id)
-                    .map_err(|e| format!("Failed to query usage for budget check: {}", e))?;
-
-                if current_usage >= budget_limit {
-                    return Err(format!(
-                        "Monthly budget exceeded. Usage: ${:.2}, Limit: ${:.2}. Please update settings.",
-                        current_usage, budget_limit
-                    ));
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
 
 /// Ensure ManagedCloud provider is registered in the router for authenticated users.
 ///
@@ -225,7 +180,9 @@ pub(crate) async fn ensure_vllm_provider(
 /// Reuse the chat runtime-registration seam for non-chat local work. This does
 /// not select a model or broaden the trust boundary; it only makes the exact
 /// provider already admitted by the Task submission reachable in the shared
-/// router. BYOK providers remain startup/keyring-owned.
+/// router. BYOK providers are registered at startup by
+/// `rehydrate_byok_providers` from the encrypted `api_key_*` rows in the app
+/// database's `settings_v2` table, not from the OS keyring, and never here.
 pub(crate) async fn ensure_task_provider(
     router: &Arc<tokio::sync::RwLock<crate::core::llm::llm_router::LLMRouter>>,
     provider: Provider,
@@ -237,26 +194,5 @@ pub(crate) async fn ensure_task_provider(
         Provider::Vllm => ensure_vllm_provider(router).await,
         Provider::ManagedCloud => ensure_managed_cloud_provider(router).await,
         _ => {}
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn managed_cloud_requests_use_subscription_gate() {
-        assert!(request_uses_managed_cloud(
-            Some(Provider::ManagedCloud),
-            false
-        ));
-        assert!(request_uses_managed_cloud(Some(Provider::Ollama), true));
-    }
-
-    #[test]
-    fn local_and_byok_requests_skip_subscription_gate() {
-        assert!(!request_uses_managed_cloud(Some(Provider::Ollama), false));
-        assert!(!request_uses_managed_cloud(Some(Provider::OpenAI), false));
-        assert!(!request_uses_managed_cloud(None, false));
     }
 }

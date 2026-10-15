@@ -5,17 +5,16 @@ mod browser_tools;
 mod code_tools;
 mod communication_tools;
 mod conversation_search_tools;
-mod db_tools;
 mod document_tools;
 mod edit_tools;
 mod file_tools;
 mod git_tools;
 pub(crate) mod interactive_tools;
-mod llm_tools;
 mod mcp_tools;
 mod media_tools;
 mod memory_tools;
 mod planning_tools;
+mod platform;
 mod scheduler_tools;
 mod search_tools;
 mod skill_tools;
@@ -23,19 +22,20 @@ mod terminal_tools;
 mod tool_search_tools;
 mod ui_automation_tools;
 mod undo_tools;
-mod worktree_tools;
 
 #[cfg(test)]
 mod tests;
 
+pub(crate) use file_tools::FILE_READ_MAX_BYTES;
+pub use platform::platform_unavailable_reason;
+
 use crate::core::agi::tools::{Tool, ToolRegistry, ToolResult};
 use crate::core::llm::job_autofill_runtime::build_job_autofill_eval_script;
 use crate::core::llm::{ToolCall, ToolDefinition};
-use crate::sys::commands::chat::{has_pending_messages, peek_pending_messages};
 use crate::sys::commands::settings::SettingsState;
 use crate::sys::commands::tool_confirmation::{
     enforce_agent_mode_gate, request_folder_access_confirmation, request_tool_confirmation,
-    ToolConfirmationState, FOLDER_ACCESS_TOOL_NAME,
+    shown_spelling, SessionFolderGrant, ToolConfirmationState, FOLDER_ACCESS_TOOL_NAME,
 };
 use crate::sys::commands::undo::UndoState;
 use crate::sys::security::tool_guard::RiskLevel;
@@ -103,7 +103,6 @@ impl ToolTimeoutConfig {
             "search_web"
             | "api_call"
             | "web_fetch"
-            | "llm_reason"
             | "code_search"
             | "grep_search"
             | "glob_search"
@@ -126,11 +125,6 @@ impl ToolTimeoutConfig {
             | "git_add"
             | "git_commit"
             | "git_clone"
-            | "db_query"
-            | "db_execute"
-            | "db_transaction_begin"
-            | "db_transaction_commit"
-            | "db_transaction_rollback"
             | "multi_edit"
             | "apply_patch"
             | "edit_exact_replace"
@@ -159,10 +153,6 @@ impl ToolTimeoutConfig {
             | "media_generate_image"
             | "git_push"
             | "github_create_repo"
-            | "email_send"
-            | "email_fetch"
-            | "calendar_create_event"
-            | "calendar_list_events"
             | "cloud_upload"
             | "cloud_download"
             | "productivity_create_task"
@@ -199,14 +189,26 @@ const DANGEROUS_TOOLS: &[&str] = &[
     "api_call",
     "api_upload",
     "cloud_upload",
-    "email_send",
-    "db_execute",
-    "db_transaction_begin",
     "code_execute",
     "multi_edit",
     "apply_patch",
     "edit_exact_replace",
 ];
+
+/// Text cut to the chat read limit on a character boundary, with a note of
+/// what was left out. A byte index inside a character would panic the slice.
+pub(crate) fn truncated_for_chat(text: String) -> String {
+    if text.len() <= file_tools::FILE_READ_MAX_CHARS {
+        return text;
+    }
+    let safe_end = crate::core::agi::floor_char_boundary(&text, file_tools::FILE_READ_MAX_CHARS);
+    format!(
+        "{}\n\n... [truncated to first {} chars out of {}]",
+        &text[..safe_end],
+        safe_end,
+        text.len()
+    )
+}
 
 fn is_dangerous_tool(tool_id: &str) -> bool {
     DANGEROUS_TOOLS.contains(&tool_id)
@@ -283,7 +285,7 @@ pub struct ToolExecutor {
     /// Frontend message ID for the assistant turn in progress (when known).
     /// Forwarded on the `chat:artifact` event so `TauriRuntime.ts` can
     /// correlate the artifact with the streaming message, mirroring how
-    /// `tool:event`/`chat:tool-result` already carry `message_id`.
+    /// `tool:event` already carries `message_id`.
     frontend_message_id: Option<String>,
     /// Whether app-owned resources created by tools may be written to durable
     /// storage. Normal conversations default to true; temporary/incognito
@@ -474,6 +476,10 @@ impl ToolExecutor {
             Self::promote_alias_arg(args, "prompt", &["text", "query", "description"]);
         }
 
+        if normalized == "video_generate" {
+            Self::promote_alias_arg(args, "duration_seconds", &["duration_secs", "duration"]);
+        }
+
         if normalized.starts_with("document_create_") {
             Self::promote_alias_arg(args, "output_path", &["path", "file_path", "destination"]);
         }
@@ -603,21 +609,6 @@ impl ToolExecutor {
                 self.project_folder = state.get_folder().await;
             }
         }
-    }
-
-    pub fn get_tool_definitions(&self, tool_ids: Option<Vec<String>>) -> Vec<ToolDefinition> {
-        let tools = if let Some(ids) = tool_ids {
-            ids.iter()
-                .filter_map(|id| self.registry.get_tool(id))
-                .collect()
-        } else {
-            self.registry.list_tools()
-        };
-
-        tools
-            .iter()
-            .map(|tool| self.convert_tool_to_definition(tool))
-            .collect()
     }
 
     fn convert_tool_to_definition(&self, tool: &Tool) -> ToolDefinition {
@@ -838,25 +829,42 @@ impl ToolExecutor {
         paths
     }
 
+    /// What a tool asks of the folders it names. Every tool that changes a
+    /// path is listed by name; any other asks only to read. A filesystem MCP
+    /// server enforces its own folders, not the split between reading and
+    /// changing, so each of its tools asks to modify.
     fn folder_capabilities_for_tool(tool_name: &str) -> Vec<&'static str> {
         let name = tool_name.to_ascii_lowercase();
-        if matches!(
-            name.as_str(),
-            "terminal_execute" | "code_execute" | "test_run" | "background_agent_start"
-        ) {
-            return vec!["execute"];
+        if name.starts_with("mcp__filesystem__") {
+            return vec!["modify"];
         }
-
-        let modifies = [
-            "write", "delete", "create", "update", "remove", "move", "rename", "edit", "patch",
-            "format", "commit", "clone", "init", "download", "rewind", "undo",
-        ]
-        .iter()
-        .any(|operation| name.contains(operation));
-        if modifies {
-            vec!["modify"]
-        } else {
-            vec!["read"]
+        match name.as_str() {
+            "terminal_execute" | "code_execute" | "test_run" | "background_agent_start" => {
+                vec!["execute"]
+            }
+            "file_write"
+            | "file_delete"
+            | "multi_edit"
+            | "apply_patch"
+            | "edit_exact_replace"
+            | "git_commit"
+            | "git_clone"
+            | "git_add"
+            | "git_push"
+            | "git_init"
+            | "worktree_create"
+            | "worktree_remove"
+            | "undo_last"
+            | "undo_change"
+            | "coding_checkpoint_create"
+            | "coding_checkpoint_rewind"
+            | "document_create_word"
+            | "document_create_excel"
+            | "document_edit_excel"
+            | "document_create_pdf"
+            | "api_download"
+            | "cloud_download" => vec!["modify"],
+            _ => vec!["read"],
         }
     }
 
@@ -951,15 +959,23 @@ impl ToolExecutor {
 
         let mut requested_paths = BTreeSet::new();
         let mut requested_directories = BTreeSet::new();
+        let capabilities = Self::folder_capabilities_for_tool(tool_name);
+        let allows = session_grant_allowing(&capabilities);
+        let reads_only = capabilities == ["read"];
 
         for raw_path in raw_paths {
             let resolved = self.resolve_path(&raw_path);
-            match self.canonicalize_validated_path(&resolved).await {
+            match self
+                .canonicalize_path_allowing(&resolved, allows, reads_only)
+                .await
+            {
                 Ok(_) => continue,
                 Err(error) => {
                     let message = error.to_string();
                     if message.contains("protected system path")
                         || message.contains("directory traversal")
+                        || message.contains(REFUSED_GRANTED_FOLDER)
+                        || message.contains(LINK_TO_MISSING_TARGET)
                     {
                         return Err(error);
                     }
@@ -967,15 +983,14 @@ impl ToolExecutor {
             }
 
             let (target, directory) = Self::resolve_folder_consent_target(resolved.clone()).await?;
-            requested_paths.insert(target.to_string_lossy().to_string());
-            requested_directories.insert(directory.to_string_lossy().to_string());
+            requested_paths.insert(shown_spelling(&target).to_string_lossy().to_string());
+            requested_directories.insert(shown_spelling(&directory).to_string_lossy().to_string());
         }
 
         if requested_paths.is_empty() {
             return Ok(());
         }
 
-        let capabilities = Self::folder_capabilities_for_tool(tool_name);
         let request = ToolConfirmationRequest {
             request_id: format!("folder-access:{}:{}", action_id, Uuid::new_v4()),
             tool_name: FOLDER_ACCESS_TOOL_NAME.to_string(),
@@ -1018,7 +1033,8 @@ impl ToolExecutor {
         // persistence/state failures and guarantees the tool never runs merely
         // because the renderer displayed an Allow decision.
         for requested in requested_paths {
-            self.canonicalize_validated_path(&requested).await?;
+            self.canonicalize_path_allowing(&requested, allows, reads_only)
+                .await?;
         }
 
         Ok(())
@@ -1028,7 +1044,42 @@ impl ToolExecutor {
         self.canonicalize_validated_path(path_str).await.map(|_| ())
     }
 
+    async fn validate_modifiable_path(&self, path_str: &str) -> Result<()> {
+        self.canonicalize_modifiable_path(path_str)
+            .await
+            .map(|_| ())
+    }
+
     async fn canonicalize_validated_path(&self, path_str: &str) -> Result<PathBuf> {
+        self.canonicalize_path_allowing(path_str, |_| true, false)
+            .await
+    }
+
+    /// As [`Self::canonicalize_validated_path`], for a tool that only reads
+    /// the path: the app's agent artifacts folder, where chat screenshots are
+    /// saved, holds it too.
+    async fn canonicalize_readable_path(&self, path_str: &str) -> Result<PathBuf> {
+        self.canonicalize_path_allowing(path_str, |_| true, true)
+            .await
+    }
+
+    /// As [`Self::canonicalize_validated_path`], for a tool that changes the
+    /// path: a folder approved this session only to read does not hold it.
+    async fn canonicalize_modifiable_path(&self, path_str: &str) -> Result<PathBuf> {
+        self.canonicalize_path_allowing(path_str, |grant| grant.modify, false)
+            .await
+    }
+
+    /// `path_str` canonicalized, if it lies in the directories allowed in
+    /// settings, the open project folder, a folder approved this session
+    /// whose grant `allows` accepts, or, when `reads_artifacts`, the app's
+    /// agent artifacts folder, which no tool that changes a path is given.
+    async fn canonicalize_path_allowing(
+        &self,
+        path_str: &str,
+        allows: fn(SessionFolderGrant) -> bool,
+        reads_artifacts: bool,
+    ) -> Result<PathBuf> {
         if let Some(app_handle) = &self.app_handle {
             let settings_state = app_handle.state::<SettingsState>();
 
@@ -1043,31 +1094,14 @@ impl ToolExecutor {
                 settings.allowed_directories.clone()
             };
 
-            let mut allowed = if configured_dirs.is_empty() {
-                let mut defaults = Vec::new();
-
-                if let Some(ref project_folder) = self.project_folder {
-                    defaults.push(PathBuf::from(project_folder));
-                }
-                if let Ok(cwd) = std::env::current_dir() {
-                    defaults.push(cwd);
-                }
-                defaults.push(std::env::temp_dir());
-
-                defaults
-            } else {
-                configured_dirs
-                    .iter()
-                    .map(PathBuf::from)
-                    .collect::<Vec<_>>()
-            };
+            let mut allowed = granted_roots(configured_dirs, self.project_folder.as_deref());
             if let Some(confirmation_state) = app_handle.try_state::<ToolConfirmationState>() {
-                allowed.extend(confirmation_state.get_session_allowed_paths());
+                allowed.extend(confirmation_state.get_session_allowed_paths_where(allows));
             }
             allowed.sort();
             allowed.dedup();
 
-            if allowed.is_empty() {
+            if allowed.is_empty() && !reads_artifacts {
                 return Err(anyhow!("Access denied: No allowed directories configured."));
             }
 
@@ -1078,49 +1112,31 @@ impl ToolExecutor {
             // (mirrors the existing `spawn_blocking` usage elsewhere in this
             // file, e.g. the PDF-extraction path).
             let path_str_owned = path_str.to_string();
-            let (allowed_canonical, canonical_path) = tokio::task::spawn_blocking(move || {
-                let allowed_canonical = allowed
-                    .into_iter()
-                    .map(|dir| std::fs::canonicalize(&dir).unwrap_or(dir))
-                    .collect::<Vec<_>>();
+            let (granted, canonical_path) = tokio::task::spawn_blocking(move || {
+                let mut granted = verified_granted_roots(allowed);
+                if reads_artifacts {
+                    granted.0.extend(
+                        crate::core::agi::executors::agent_artifacts_dir()
+                            .ok()
+                            .and_then(|dir| std::fs::canonicalize(dir).ok()),
+                    );
+                }
 
-                // Canonicalize the input path to resolve symlinks and .. components.
-                // This prevents path traversal via symlinks or relative components.
-                let canonical_path = match std::fs::canonicalize(&path_str_owned) {
-                    Ok(canon) => canon,
-                    Err(_) => {
-                        // Path doesn't exist yet (e.g., file_write to a new file).
-                        // Canonicalize the parent directory and append the filename.
-                        let path = std::path::Path::new(&path_str_owned);
-                        if let Some(parent) = path.parent() {
-                            match std::fs::canonicalize(parent) {
-                                Ok(canon_parent) => {
-                                    if let Some(filename) = path.file_name() {
-                                        canon_parent.join(filename)
-                                    } else {
-                                        PathBuf::from(&path_str_owned)
-                                    }
-                                }
-                                Err(_) => PathBuf::from(&path_str_owned),
-                            }
-                        } else {
-                            PathBuf::from(&path_str_owned)
-                        }
-                    }
-                };
-
-                (allowed_canonical, canonical_path)
+                (granted, canonical_target(Path::new(&path_str_owned)))
             })
             .await
             .map_err(|e| anyhow!("Path validation task failed: {}", e))?;
+            let (allowed_canonical, refused) = granted;
+            let canonical_path = canonical_path
+                .map_err(|error| anyhow!("Could not resolve '{}': {}", path_str, error))?;
 
-            // Fail closed if the resolved path still contains a `..` component. The
-            // fallback arms above can return an UN-canonicalized path (e.g. when an
-            // intermediate directory does not exist yet for a new-file write), and
-            // `starts_with` is component-prefix based, so `<allowed>/x/../../../etc/..`
-            // would otherwise pass the allowed-dir check and the OS would resolve the
-            // `..` at write time, escaping the sandbox. Mirrors the `..` rejection on
-            // the direct command path (sys/commands/file_ops.rs).
+            // Fail closed if the resolved path still contains a `..` component. A
+            // path that does not exist yet keeps the part below its nearest existing
+            // folder as given, and `starts_with` is component-prefix based, so
+            // `<allowed>/x/../../../etc/..` would otherwise pass the allowed-dir check
+            // and the OS would resolve the `..` at write time, escaping the sandbox.
+            // Mirrors the `..` rejection on the direct command path
+            // (sys/commands/file_ops.rs).
             if canonical_path
                 .components()
                 .any(|c| matches!(c, std::path::Component::ParentDir))
@@ -1149,6 +1165,9 @@ impl ToolExecutor {
                     return Ok(canonical_path);
                 }
             }
+            if let Some(refusal) = refused_root_holding(&canonical_path, &refused) {
+                return Err(anyhow!(refusal));
+            }
 
             return Err(anyhow!(
                 "Access denied: Path '{}' is not in allowed directories.",
@@ -1164,29 +1183,18 @@ impl ToolExecutor {
             }
             allowed.push(std::env::temp_dir());
 
-            let path = Path::new(path_str);
-            let canonical_path = match std::fs::canonicalize(path) {
-                Ok(canonical) => canonical,
-                Err(_) => {
-                    if let Some(parent) = path.parent() {
-                        match std::fs::canonicalize(parent) {
-                            Ok(canonical_parent) => path
-                                .file_name()
-                                .map(|file_name| canonical_parent.join(file_name))
-                                .unwrap_or(canonical_parent),
-                            Err(_) => PathBuf::from(path_str),
-                        }
-                    } else {
-                        PathBuf::from(path_str)
-                    }
-                }
-            };
+            let canonical_path = canonical_target(Path::new(path_str))
+                .map_err(|error| anyhow!("Could not resolve '{}': {}", path_str, error))?;
 
-            for allowed_dir in allowed {
-                let canonical_allowed = std::fs::canonicalize(&allowed_dir).unwrap_or(allowed_dir);
-                if canonical_path.starts_with(&canonical_allowed) {
-                    return Ok(canonical_path);
-                }
+            let (allowed_canonical, refused) = verified_granted_roots(allowed);
+            if allowed_canonical
+                .iter()
+                .any(|allowed_dir| canonical_path.starts_with(allowed_dir))
+            {
+                return Ok(canonical_path);
+            }
+            if let Some(refusal) = refused_root_holding(&canonical_path, &refused) {
+                return Err(anyhow!(refusal));
             }
         }
 
@@ -1199,7 +1207,222 @@ impl ToolExecutor {
         ))
     }
 
+    /// Runs one chat tool call between the user's PreToolUse and
+    /// PostToolUse/ToolError hooks, the same events the agent executor fires.
     pub async fn execute_tool_call(&self, tool_call: &ToolCall) -> Result<ToolResult> {
+        let session_id = uuid::Uuid::new_v4().to_string();
+        let arguments = self.normalized_arguments(tool_call);
+        let parameters = arguments.as_ref().ok().cloned().unwrap_or_default();
+
+        let refusal = crate::ui::hooks::gate_event(crate::ui::hooks::HookEvent::pre_tool_use(
+            session_id.clone(),
+            tool_call.name.clone(),
+            tool_call.id.clone(),
+            parameters.clone(),
+        ))
+        .await;
+
+        let started = Instant::now();
+        let outcome = match refusal {
+            Some(reason) => Ok(self.hook_blocked_result(tool_call, &reason)),
+            None => self.run_tool_call(tool_call, arguments).await,
+        };
+
+        let hook_event = match &outcome {
+            Ok(result) if result.success => crate::ui::hooks::HookEvent::post_tool_use(
+                session_id,
+                tool_call.name.clone(),
+                tool_call.id.clone(),
+                parameters,
+                result.data.clone(),
+                started.elapsed().as_millis() as u64,
+            ),
+            Ok(result) => crate::ui::hooks::HookEvent::tool_error(
+                session_id,
+                tool_call.name.clone(),
+                tool_call.id.clone(),
+                parameters,
+                result
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "Tool reported failure".to_string()),
+            ),
+            Err(error) => crate::ui::hooks::HookEvent::tool_error(
+                session_id,
+                tool_call.name.clone(),
+                tool_call.id.clone(),
+                parameters,
+                error.to_string(),
+            ),
+        };
+        crate::ui::hooks::emit_event(hook_event).await;
+
+        outcome
+    }
+
+    /// The result of a call a `PreToolUse` hook refused. The tool never runs,
+    /// and the hook's own reason goes to the model so it can choose otherwise.
+    fn hook_blocked_result(&self, tool_call: &ToolCall, reason: &str) -> ToolResult {
+        let action_id = self.next_action_id(tool_call);
+        let message = format!("A PreToolUse hook blocked this tool: {reason}");
+        self.emit_tool_action(
+            &action_id,
+            &tool_call.name,
+            "failed",
+            &json!({ "blocked_by_hook": true }),
+            Some(message.clone()),
+        );
+        self.emit_tool_metrics(&action_id, &tool_call.name, 0, false);
+        if let Some(app_handle) = &self.app_handle {
+            emit_tool_error(app_handle, &action_id, &message, 0, false);
+        }
+
+        ToolResult {
+            success: false,
+            data: json!({
+                "success": false,
+                "error": message,
+                "blocked_by_hook": true,
+            }),
+            error: Some(message),
+            metadata: HashMap::from([("tool_name".to_string(), json!(tool_call.name))]),
+        }
+    }
+
+    /// What the tool guard says to a call, if it refuses. MCP tools are
+    /// registered on the first pass so they meet the rate limit and the
+    /// parameter checks; the second pass charges no rate limit again.
+    async fn guard_refusal(
+        &self,
+        tool_call: &ToolCall,
+        arguments: &Value,
+        after_folder_consent: bool,
+    ) -> Option<String> {
+        let app_handle = self.app_handle.as_ref()?;
+        let confirmation_state = app_handle.try_state::<ToolConfirmationState>()?;
+        let guard = confirmation_state.tool_guard();
+        let judged = if after_folder_consent {
+            guard
+                .validate_after_folder_consent(&tool_call.name, arguments)
+                .await
+        } else {
+            if tool_call.name.starts_with("mcp__") {
+                guard.register_mcp_tool(&tool_call.name);
+            }
+            guard
+                .validate_before_folder_consent(&tool_call.name, arguments)
+                .await
+        };
+        judged.err().map(|refusal| refusal.to_string())
+    }
+
+    /// Reports a call a gate refused before the tool ran and builds its result.
+    #[allow(clippy::too_many_arguments)]
+    fn refused_before_running(
+        &self,
+        action_id: &str,
+        tool_name: &str,
+        arguments: &Value,
+        start_time: Instant,
+        data: Value,
+        flag: &str,
+        message: String,
+    ) -> ToolResult {
+        self.emit_tool_action(
+            action_id,
+            tool_name,
+            "blocked",
+            arguments,
+            Some(message.clone()),
+        );
+        self.emit_tool_metrics(
+            action_id,
+            tool_name,
+            start_time.elapsed().as_millis() as u64,
+            false,
+        );
+        if let Some(app_handle) = &self.app_handle {
+            emit_tool_error(
+                app_handle,
+                action_id,
+                &message,
+                start_time.elapsed().as_millis() as u64,
+                false,
+            );
+        }
+        ToolResult {
+            success: false,
+            data,
+            error: Some(message),
+            metadata: HashMap::from([
+                (flag.to_string(), json!(true)),
+                ("tool_name".to_string(), json!(tool_name)),
+            ]),
+        }
+    }
+
+    /// The arguments every stage reads: aliases promoted to the declared names
+    /// and the executor's own defaults filled in. The hook gate, the guard,
+    /// folder consent and the tool itself all take this one map, so a rule
+    /// written against `command` or `path` cannot be passed by spelling it
+    /// `cmd` or by leaving it out.
+    fn normalized_arguments(
+        &self,
+        tool_call: &ToolCall,
+    ) -> std::result::Result<HashMap<String, Value>, serde_json::Error> {
+        let raw = if tool_call.arguments.trim().is_empty() {
+            "{}"
+        } else {
+            tool_call.arguments.as_str()
+        };
+        let mut args: HashMap<String, Value> = serde_json::from_str(raw)?;
+
+        Self::normalize_tool_arguments(&tool_call.name, &mut args);
+
+        // file_list is frequently invoked from natural prompts like "this folder"
+        // without an explicit path argument. Default to project folder/cwd so it
+        // resolves quickly instead of entering retry loops.
+        if tool_call.name == "file_list"
+            || tool_call.name == "mcp__filesystem__list_directory"
+            || tool_call.name == "mcp__filesystem__list_directory_with_sizes"
+        {
+            let has_valid_path = args
+                .get("path")
+                .and_then(|value| value.as_str())
+                .is_some_and(|value| !value.trim().is_empty());
+            if !has_valid_path {
+                let fallback_path = self
+                    .project_folder
+                    .clone()
+                    .or_else(|| {
+                        std::env::current_dir()
+                            .ok()
+                            .map(|cwd| cwd.to_string_lossy().to_string())
+                    })
+                    .unwrap_or_else(|| ".".to_string());
+                args.insert("path".to_string(), json!(fallback_path));
+            }
+        }
+
+        let base = self
+            .project_folder
+            .as_deref()
+            .map(PathBuf::from)
+            .or_else(dirs::home_dir);
+        crate::sys::security::ToolExecutionGuard::resolve_path_arguments(
+            &tool_call.name,
+            &mut args,
+            base.as_deref(),
+        );
+
+        Ok(args)
+    }
+
+    async fn run_tool_call(
+        &self,
+        tool_call: &ToolCall,
+        arguments: std::result::Result<HashMap<String, Value>, serde_json::Error>,
+    ) -> Result<ToolResult> {
         // Generate correlation ID for request tracing (using action_id)
         let action_id = self.next_action_id(tool_call);
 
@@ -1210,42 +1433,12 @@ impl ToolExecutor {
             "Tool execution started"
         );
 
-        // Check for pending user messages before executing tool
-        // This allows the AI to be aware of new user input mid-task
-        if has_pending_messages() {
-            if let Some(app_handle) = &self.app_handle {
-                let pending = peek_pending_messages();
-                tracing::info!(
-                    target: "tool",
-                    correlation_id = %action_id,
-                    pending_count = pending.len(),
-                    tool_name = %tool_call.name,
-                    "Pending user message(s) detected before tool execution"
-                );
-                // Emit event so AI can incorporate the new context
-                let _ = app_handle.emit(
-                    "chat:pending-context-available",
-                    json!({
-                        "pending_messages": pending,
-                        "current_tool": tool_call.name,
-                        "count": pending.len()
-                    }),
-                );
-            }
-        }
-
-        let args_json = if tool_call.arguments.trim().is_empty() {
-            "{}".to_string()
-        } else {
-            tool_call.arguments.clone()
-        };
-
         let start_time = Instant::now();
-        let mut args: HashMap<String, serde_json::Value> = match serde_json::from_str(&args_json) {
-            Ok(parsed) => parsed,
+        let args = match arguments {
+            Ok(args) => args,
             Err(e) => {
                 let message = format!("Invalid tool arguments: {}", e);
-                let raw_metadata = json!({ "raw_arguments": args_json });
+                let raw_metadata = json!({ "raw_arguments": tool_call.arguments });
                 self.emit_tool_action(
                     &action_id,
                     &tool_call.name,
@@ -1281,31 +1474,124 @@ impl ToolExecutor {
             }
         };
 
-        Self::normalize_tool_arguments(&tool_call.name, &mut args);
-
-        // file_list is frequently invoked from natural prompts like "this folder"
-        // without an explicit path argument. Default to project folder/cwd so it
-        // resolves quickly instead of entering retry loops.
-        if tool_call.name == "file_list"
-            || tool_call.name == "mcp__filesystem__list_directory"
-            || tool_call.name == "mcp__filesystem__list_directory_with_sizes"
+        if let Some(told) = crate::sys::commands::chat::tools::not_offered_in_chat(&tool_call.name)
         {
-            let has_valid_path = args
-                .get("path")
-                .and_then(|value| value.as_str())
-                .is_some_and(|value| !value.trim().is_empty());
-            if !has_valid_path {
-                let fallback_path = self
-                    .project_folder
-                    .clone()
-                    .or_else(|| {
-                        std::env::current_dir()
-                            .ok()
-                            .map(|cwd| cwd.to_string_lossy().to_string())
-                    })
-                    .unwrap_or_else(|| ".".to_string());
-                args.insert("path".to_string(), json!(fallback_path));
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": told, "success": false }),
+                error: Some(told.to_string()),
+                metadata: HashMap::from([("tool_name".to_string(), json!(tool_call.name))]),
+            });
+        }
+
+        let metadata_snapshot = serde_json::to_value(&args).unwrap_or(json!({}));
+
+        self.emit_tool_action(
+            &action_id,
+            &tool_call.name,
+            "running",
+            &metadata_snapshot,
+            None,
+        );
+
+        // Emit tool stream started event for real-time progress tracking
+        if let Some(app_handle) = &self.app_handle {
+            emit_tool_started(
+                app_handle,
+                &action_id,
+                &tool_call.name,
+                Some(metadata_snapshot.clone()),
+            );
+        }
+
+        let is_mcp_tool = tool_call.name.starts_with("mcp__");
+
+        // Every refusal comes before folder consent: mode, capability, then the
+        // guard. A call that will not run must not ask for a folder, and must
+        // not leave a remembered grant behind.
+        if let Some(app_handle) = &self.app_handle {
+            if let Some(confirmation_state) = app_handle.try_state::<ToolConfirmationState>() {
+                if let Err(message) =
+                    enforce_agent_mode_gate(app_handle, &confirmation_state, &tool_call.name)
+                {
+                    return Ok(self.refused_before_running(
+                        &action_id,
+                        &tool_call.name,
+                        &metadata_snapshot,
+                        start_time,
+                        json!({ "error": message, "blocked_by_mode": true }),
+                        "blocked_by_mode",
+                        message,
+                    ));
+                }
             }
+        }
+
+        // Enforce capability toggles from Settings, Capabilities.
+        // If a user disables a capability (e.g. "fileOperations"), all tools
+        // mapped to that capability are blocked before any further checks.
+        if let Some(app_handle) = &self.app_handle {
+            if let Some(cap_state) =
+                app_handle.try_state::<crate::sys::commands::capabilities::CapabilityState>()
+            {
+                if let Some(capability) =
+                    crate::sys::commands::capabilities::tool_to_capability(&tool_call.name)
+                {
+                    if let Some(msg) = cap_state.refusal(capability).await {
+                        tracing::warn!(
+                            "[ToolExecutor] Blocked tool '{}': capability '{}' is disabled",
+                            tool_call.name,
+                            capability
+                        );
+                        self.emit_tool_action(
+                            &action_id,
+                            &tool_call.name,
+                            "blocked",
+                            &metadata_snapshot,
+                            Some(msg.clone()),
+                        );
+
+                        if let Some(ah) = &self.app_handle {
+                            emit_tool_error(
+                                ah,
+                                &action_id,
+                                &msg,
+                                start_time.elapsed().as_millis() as u64,
+                                false,
+                            );
+                        }
+
+                        return Ok(ToolResult {
+                            success: false,
+                            data: json!({ "capability_disabled": true, "capability": capability }),
+                            error: Some(msg),
+                            metadata: HashMap::from([
+                                ("capability_disabled".to_string(), json!(true)),
+                                ("capability".to_string(), json!(capability)),
+                                ("tool_name".to_string(), json!(tool_call.name)),
+                            ]),
+                        });
+                    }
+                }
+            }
+        }
+
+        // Tool policy in two passes around folder consent. The first holds the
+        // call to every guard rule except whether its paths sit in a granted
+        // folder; consent then decides that, and the second pass enforces it.
+        if let Some(refusal) = self
+            .guard_refusal(tool_call, &metadata_snapshot, false)
+            .await
+        {
+            return Ok(self.refused_before_running(
+                &action_id,
+                &tool_call.name,
+                &metadata_snapshot,
+                start_time,
+                json!({ "policy_blocked": true }),
+                "requires_confirmation",
+                refusal,
+            ));
         }
 
         if let Err(error) = self
@@ -1313,7 +1599,6 @@ impl ToolExecutor {
             .await
         {
             let message = error.to_string();
-            let metadata_snapshot = serde_json::to_value(&args).unwrap_or(json!({}));
             self.emit_tool_action(
                 &action_id,
                 &tool_call.name,
@@ -1350,30 +1635,103 @@ impl ToolExecutor {
             });
         }
 
-        let metadata_snapshot = serde_json::to_value(&args).unwrap_or(json!({}));
-
-        self.emit_tool_action(
-            &action_id,
-            &tool_call.name,
-            "running",
-            &metadata_snapshot,
-            None,
-        );
-
-        // Emit tool stream started event for real-time progress tracking
-        if let Some(app_handle) = &self.app_handle {
-            emit_tool_started(
-                app_handle,
+        if let Some(refusal) = self
+            .guard_refusal(tool_call, &metadata_snapshot, true)
+            .await
+        {
+            return Ok(self.refused_before_running(
                 &action_id,
                 &tool_call.name,
-                Some(metadata_snapshot.clone()),
-            );
+                &metadata_snapshot,
+                start_time,
+                json!({ "policy_blocked": true }),
+                "requires_confirmation",
+                refusal,
+            ));
         }
 
-        // Reliability fast-path: this read-only filesystem metadata call should always
-        // return quickly, even when MCP server startup/connectivity is degraded.
-        // Important: this runs BEFORE policy/confirmation checks to avoid waiting
-        // on irrelevant approval paths for a local metadata lookup.
+        // Safety tier check: determine if user confirmation is required
+        // MCP tools are handled by dedicated manual-mode approval below; skip the generic
+        // safety gate here to avoid duplicate/hidden confirmation waits.
+        if !is_mcp_tool {
+            if let Some(app_handle) = &self.app_handle {
+                if let Err(e) = self
+                    .check_safety_tier_and_confirm(
+                        app_handle,
+                        &tool_call.name,
+                        &metadata_snapshot,
+                        &action_id,
+                        start_time,
+                    )
+                    .await
+                {
+                    // User denied or timeout - return approval required result
+                    self.emit_tool_action(
+                        &action_id,
+                        &tool_call.name,
+                        "blocked",
+                        &metadata_snapshot,
+                        Some(e.to_string()),
+                    );
+                    self.emit_tool_metrics(
+                        &action_id,
+                        &tool_call.name,
+                        start_time.elapsed().as_millis() as u64,
+                        false,
+                    );
+
+                    // Emit tool error for stream tracking
+                    emit_tool_error(
+                        app_handle,
+                        &action_id,
+                        &e.to_string(),
+                        start_time.elapsed().as_millis() as u64,
+                        true,
+                    );
+
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "confirmation_denied": true }),
+                        error: Some(e.to_string()),
+                        metadata: HashMap::from([
+                            ("requires_confirmation".to_string(), json!(true)),
+                            ("tool_name".to_string(), json!(tool_call.name)),
+                        ]),
+                    });
+                }
+            }
+        }
+
+        // MCP connector permission gate (audit C-rank 1: "per-tool connector
+        // permissions have no runtime effect"). Runs in EVERY conversation
+        // mode, not just "manual", the block this replaced only gated MCP
+        // tools when `conversation_mode == "manual"`, so "auto" mode (the
+        // default) executed every MCP tool with zero permission or
+        // confirmation check at all, and even the stored per-tool
+        // permission (Settings → Connectors) was consulted nowhere in this
+        // loop. Mirrors the gate in `sys::commands::mcp::mcp_call_tool` (the
+        // direct-invoke Tauri command), which this agent loop never calls.
+        if tool_call.name.starts_with("mcp__") {
+            if let Some(app_handle) = &self.app_handle {
+                if let Some(blocked) = self
+                    .enforce_mcp_connector_permission(
+                        app_handle,
+                        tool_call,
+                        &metadata_snapshot,
+                        &action_id,
+                        start_time,
+                    )
+                    .await
+                {
+                    return Ok(blocked);
+                }
+            }
+        }
+
+        // Local stand-ins for two filesystem connector calls, so they answer
+        // when the MCP server is slow or down. They sit after the capability
+        // toggle, the guard and the connector permission: answering locally
+        // must not be a way around a gate the connector call would meet.
         if tool_call.name == "mcp__filesystem__list_allowed_directories" {
             let mut directories: Vec<String> = Vec::new();
 
@@ -1475,6 +1833,32 @@ impl ToolExecutor {
                 timeout_ms
             );
 
+            let size_bytes = fs::metadata(&path).await.map(|metadata| metadata.len());
+            if let Ok(size_bytes) = size_bytes {
+                if size_bytes > file_tools::FILE_READ_MAX_BYTES {
+                    let result = ToolResult {
+                        success: false,
+                        data: json!({ "path": path, "size_bytes": size_bytes }),
+                        error: Some(format!(
+                            "File is too large to read: {} bytes (limit {} bytes)",
+                            size_bytes,
+                            file_tools::FILE_READ_MAX_BYTES
+                        )),
+                        metadata: HashMap::from([
+                            ("tool_name".to_string(), json!(tool_call.name)),
+                            ("path".to_string(), json!(path)),
+                        ]),
+                    };
+                    return self.finalize_tool_result(
+                        &action_id,
+                        &tool_call.name,
+                        metadata_snapshot,
+                        start_time,
+                        Ok(result),
+                    );
+                }
+            }
+
             let read_result = timeout(
                 TokioDuration::from_millis(timeout_ms),
                 fs::read_to_string(&path),
@@ -1482,6 +1866,7 @@ impl ToolExecutor {
             .await;
             let result = match read_result {
                 Ok(Ok(content)) => {
+                    let content = truncated_for_chat(content);
                     if let Some(app_handle) = &self.app_handle {
                         let file_op = create_file_read_event(&path, &content, true, None, None);
                         emit_file_operation(app_handle, file_op);
@@ -1526,16 +1911,7 @@ impl ToolExecutor {
 
                             match pdf_result {
                                 Ok(extracted_text) => {
-                                    let content = if extracted_text.len() > file_tools::FILE_READ_MAX_CHARS {
-                                        format!(
-                                            "{}\n\n... [truncated to first {} chars out of {}]",
-                                            &extracted_text[..file_tools::FILE_READ_MAX_CHARS],
-                                            file_tools::FILE_READ_MAX_CHARS,
-                                            extracted_text.len()
-                                        )
-                                    } else {
-                                        extracted_text
-                                    };
+                                    let content = truncated_for_chat(extracted_text);
 
                                     if let Some(app_handle) = &self.app_handle {
                                         let file_op = create_file_read_event(
@@ -1648,191 +2024,6 @@ impl ToolExecutor {
                 start_time,
                 Ok(result),
             );
-        }
-
-        let is_mcp_tool = tool_call.name.starts_with("mcp__");
-
-        // Enforce capability toggles from Settings > Features & Privacy.
-        // If a user disables a capability (e.g. "fileOperations"), all tools
-        // mapped to that capability are blocked before any further checks.
-        if let Some(app_handle) = &self.app_handle {
-            if let Some(cap_state) =
-                app_handle.try_state::<crate::sys::commands::capabilities::CapabilityState>()
-            {
-                if let Some(capability) =
-                    crate::sys::commands::capabilities::tool_to_capability(&tool_call.name)
-                {
-                    if !cap_state.is_enabled(capability).await {
-                        let msg = format!(
-                            "Capability '{}' is disabled in Settings. Enable it in Features & Privacy to use this tool.",
-                            capability
-                        );
-                        tracing::warn!(
-                            "[ToolExecutor] Blocked tool '{}': capability '{}' is disabled",
-                            tool_call.name,
-                            capability
-                        );
-                        self.emit_tool_action(
-                            &action_id,
-                            &tool_call.name,
-                            "blocked",
-                            &metadata_snapshot,
-                            Some(msg.clone()),
-                        );
-
-                        if let Some(ah) = &self.app_handle {
-                            emit_tool_error(
-                                ah,
-                                &action_id,
-                                &msg,
-                                start_time.elapsed().as_millis() as u64,
-                                false,
-                            );
-                        }
-
-                        return Ok(ToolResult {
-                            success: false,
-                            data: json!({ "capability_disabled": true, "capability": capability }),
-                            error: Some(msg),
-                            metadata: HashMap::from([
-                                ("capability_disabled".to_string(), json!(true)),
-                                ("capability".to_string(), json!(capability)),
-                                ("tool_name".to_string(), json!(tool_call.name)),
-                            ]),
-                        });
-                    }
-                }
-            }
-        }
-
-        // Enforce tool policy validation (allowed tools, parameters, and path rules)
-        // For MCP tools, dynamically register them in ToolGuard before validation
-        // so they go through rate limiting and parameter security checks.
-        if let Some(app_handle) = &self.app_handle {
-            if let Some(confirmation_state) = app_handle.try_state::<ToolConfirmationState>() {
-                if is_mcp_tool {
-                    confirmation_state
-                        .tool_guard()
-                        .register_mcp_tool(&tool_call.name);
-                }
-                if let Err(e) = confirmation_state
-                    .tool_guard()
-                    .validate_tool_call(&tool_call.name, &metadata_snapshot)
-                    .await
-                {
-                    self.emit_tool_action(
-                        &action_id,
-                        &tool_call.name,
-                        "blocked",
-                        &metadata_snapshot,
-                        Some(e.to_string()),
-                    );
-                    self.emit_tool_metrics(
-                        &action_id,
-                        &tool_call.name,
-                        start_time.elapsed().as_millis() as u64,
-                        false,
-                    );
-
-                    if let Some(app_handle) = &self.app_handle {
-                        emit_tool_error(
-                            app_handle,
-                            &action_id,
-                            &e.to_string(),
-                            start_time.elapsed().as_millis() as u64,
-                            false,
-                        );
-                    }
-
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "policy_blocked": true }),
-                        error: Some(e.to_string()),
-                        metadata: HashMap::from([
-                            ("requires_confirmation".to_string(), json!(true)),
-                            ("tool_name".to_string(), json!(tool_call.name)),
-                        ]),
-                    });
-                }
-            }
-        }
-
-        // Safety tier check: determine if user confirmation is required
-        // MCP tools are handled by dedicated manual-mode approval below; skip the generic
-        // safety gate here to avoid duplicate/hidden confirmation waits.
-        if !is_mcp_tool {
-            if let Some(app_handle) = &self.app_handle {
-                if let Err(e) = self
-                    .check_safety_tier_and_confirm(
-                        app_handle,
-                        &tool_call.name,
-                        &metadata_snapshot,
-                        &action_id,
-                        start_time,
-                    )
-                    .await
-                {
-                    // User denied or timeout - return approval required result
-                    self.emit_tool_action(
-                        &action_id,
-                        &tool_call.name,
-                        "blocked",
-                        &metadata_snapshot,
-                        Some(e.to_string()),
-                    );
-                    self.emit_tool_metrics(
-                        &action_id,
-                        &tool_call.name,
-                        start_time.elapsed().as_millis() as u64,
-                        false,
-                    );
-
-                    // Emit tool error for stream tracking
-                    emit_tool_error(
-                        app_handle,
-                        &action_id,
-                        &e.to_string(),
-                        start_time.elapsed().as_millis() as u64,
-                        true,
-                    );
-
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "confirmation_denied": true }),
-                        error: Some(e.to_string()),
-                        metadata: HashMap::from([
-                            ("requires_confirmation".to_string(), json!(true)),
-                            ("tool_name".to_string(), json!(tool_call.name)),
-                        ]),
-                    });
-                }
-            }
-        }
-
-        // MCP connector permission gate (audit C-rank 1: "per-tool connector
-        // permissions have no runtime effect"). Runs in EVERY conversation
-        // mode, not just "manual", the block this replaced only gated MCP
-        // tools when `conversation_mode == "manual"`, so "auto" mode (the
-        // default) executed every MCP tool with zero permission or
-        // confirmation check at all, and even the stored per-tool
-        // permission (Settings → Connectors) was consulted nowhere in this
-        // loop. Mirrors the gate in `sys::commands::mcp::mcp_call_tool` (the
-        // direct-invoke Tauri command), which this agent loop never calls.
-        if tool_call.name.starts_with("mcp__") {
-            if let Some(app_handle) = &self.app_handle {
-                if let Some(blocked) = self
-                    .enforce_mcp_connector_permission(
-                        app_handle,
-                        tool_call,
-                        &metadata_snapshot,
-                        &action_id,
-                        start_time,
-                    )
-                    .await
-                {
-                    return Ok(blocked);
-                }
-            }
         }
 
         // Route MCP tools (format: mcp__server__tool__) to MCP executor
@@ -2001,9 +2192,7 @@ impl ToolExecutor {
 
                     // Approved: fall through to normal execution below instead
                     // of returning the blocked result.
-                    if let crate::core::agent::approval::ApprovalResolution::Approved { .. } =
-                        resolution
-                    {
+                    if let crate::core::agent::approval::ApprovalResolution::Approved = resolution {
                         tracing::info!(
                             "[Security] User approved dangerous tool '{}'; executing.",
                             tool_call.name
@@ -2132,11 +2321,6 @@ impl ToolExecutor {
             "code_execute" => self.execute_code_execute_tool(&args).await,
             "terminal_execute" => self.execute_terminal_tool(args, action_id).await,
             "git_push" => self.execute_git_push_tool(&args).await,
-            "db_query" => self.execute_db_query_tool(&args).await,
-            "db_execute" => self.execute_db_execute_tool(&args).await,
-            "db_transaction_begin" => self.execute_db_transaction_begin_tool(&args).await,
-            "db_transaction_commit" => self.execute_db_transaction_commit_tool(&args).await,
-            "db_transaction_rollback" => self.execute_db_transaction_rollback_tool(&args).await,
             "api_call" => self.execute_api_call_tool(&args).await,
             "image_ocr" => self.execute_image_ocr_tool(&args).await,
             "code_analyze" => self.execute_code_analyze_tool(&args).await,
@@ -2146,17 +2330,6 @@ impl ToolExecutor {
             }
             "video_generate" | "media_generate_video" => {
                 self.execute_video_generate_tool(&args).await
-            }
-            "llm_reason" => self.execute_llm_reason_tool(&args).await,
-            "email_send" => self.execute_email_send_tool(&args, &tool.id).await,
-            "email_fetch" => self.execute_email_fetch_tool(&args, &tool.id).await,
-            "calendar_create_event" => {
-                self.execute_calendar_create_event_tool(&args, &tool.id)
-                    .await
-            }
-            "calendar_list_events" => {
-                self.execute_calendar_list_events_tool(&args, &tool.id)
-                    .await
             }
             "cloud_upload" => self.execute_cloud_upload_tool(&args, &tool.id).await,
             "cloud_download" => self.execute_cloud_download_tool(&args, &tool.id).await,
@@ -2595,11 +2768,8 @@ impl ToolExecutor {
         };
         let enc = encryption_from_state(&mp_state);
 
-        let is_destructive = tool_name.contains("delete")
-            || tool_name.contains("write")
-            || tool_name.contains("create")
-            || tool_name.contains("update")
-            || tool_name.contains("remove");
+        let is_destructive =
+            crate::sys::commands::connector_permissions::tool_name_looks_destructive(&tool_name);
 
         let perm = resolve_permission(&enc, &connector_id, &tool_name, is_destructive);
 
@@ -2802,7 +2972,7 @@ impl ToolExecutor {
         app_handle: &tauri::AppHandle<R>,
         tool_name: &str,
         parameters: &Value,
-        action_id: &str,
+        _action_id: &str,
         _start_time: Instant,
     ) -> Result<()> {
         let confirmation_state = match app_handle.try_state::<ToolConfirmationState>() {
@@ -2867,18 +3037,6 @@ impl ToolExecutor {
 
         // Safe and RequiresNotification tiers don't need user confirmation
         if !safety_tier.requires_user_action() {
-            // For RequiresNotification tier, emit a notification event
-            if matches!(safety_tier, ToolSafetyTier::RequiresNotification) {
-                let _ = app_handle.emit(
-                    "tool:notification",
-                    json!({
-                        "tool_name": tool_name,
-                        "action_id": action_id,
-                        "message": format!("Executing: {}", tool_name),
-                        "parameters_preview": self.summarize_parameters(parameters),
-                    }),
-                );
-            }
             return Ok(());
         }
 
@@ -2951,38 +3109,135 @@ impl ToolExecutor {
             }
         }
     }
+}
 
-    /// Create a brief summary of tool parameters for display
-    fn summarize_parameters(&self, parameters: &Value) -> String {
-        if let Some(obj) = parameters.as_object() {
-            obj.iter()
-                .take(3) // Limit to first 3 parameters
-                .map(|(k, v)| {
-                    let value_preview = match v {
-                        Value::String(s) => {
-                            if s.len() > 30 {
-                                format!(
-                                    "\"{}...\"",
-                                    &s[..crate::core::agi::floor_char_boundary(s, 27)]
-                                )
-                            } else {
-                                format!("\"{}\"", s)
-                            }
-                        }
-                        Value::Number(n) => n.to_string(),
-                        Value::Bool(b) => b.to_string(),
-                        Value::Array(arr) => format!("[{} items]", arr.len()),
-                        Value::Object(obj) => format!("{{...{} keys}}", obj.len()),
-                        Value::Null => "null".to_string(),
-                    };
-                    format!("{}: {}", k, value_preview)
-                })
-                .collect::<Vec<_>>()
-                .join(", ")
-        } else {
-            "No parameters".to_string()
+const REFUSED_GRANTED_FOLDER: &str = "a granted folder is no longer used";
+
+const LINK_TO_MISSING_TARGET: &str = "is a link to a missing target";
+
+/// Writes `content` to `path`, a target a path check returned, off the async
+/// runtime: as a new file when `create_new`, or else replacing the file there.
+/// A link put in its place since the check is never followed.
+async fn write_validated_file(
+    path: &Path,
+    content: Vec<u8>,
+    create_new: bool,
+) -> std::io::Result<()> {
+    let path = path.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        crate::sys::utils::write_without_following(&path, &content, create_new)
+    })
+    .await
+    .map_err(std::io::Error::other)?
+}
+
+/// The folders the chat's host-side file tools reach before asking: the
+/// directories allowed in settings and the open project folder. Never this
+/// process's working directory, which is `/` for an app opened from Finder,
+/// nor the temporary folder, which no chat tool needs unasked; every other
+/// path goes through the folder consent prompt.
+fn granted_roots(configured: Vec<String>, project_folder: Option<&str>) -> Vec<PathBuf> {
+    configured
+        .into_iter()
+        .chain(project_folder.map(str::to_string))
+        .map(PathBuf::from)
+        .collect()
+}
+
+/// Which folders approved this session hold a path for a tool asking for
+/// `capabilities`, as [`ToolExecutor::folder_capabilities_for_tool`] names
+/// them: any to read, one approved for changes to modify, and one approved
+/// for changes or commands to execute.
+fn session_grant_allowing(capabilities: &[&str]) -> fn(SessionFolderGrant) -> bool {
+    if capabilities.contains(&"modify") {
+        return |grant| grant.modify;
+    }
+    if capabilities.contains(&"execute") {
+        return SessionFolderGrant::lets_commands_write;
+    }
+    |_| true
+}
+
+/// `path` as it resolves: its canonical spelling, or, for a path that does
+/// not exist yet, its nearest existing ancestor's canonical spelling with the
+/// rest appended as given. A link to a missing target below that ancestor is
+/// refused: writing through it would create the file wherever the link
+/// points, which was never compared with a granted folder.
+fn canonical_target(path: &Path) -> std::io::Result<PathBuf> {
+    if let Ok(canonical) = std::fs::canonicalize(path) {
+        return Ok(canonical);
+    }
+    let mut ancestor = path;
+    while let Some(parent) = ancestor.parent() {
+        ancestor = parent;
+        if let Ok(canonical) = std::fs::canonicalize(ancestor) {
+            let rest = path.strip_prefix(ancestor).map_err(std::io::Error::other)?;
+            let mut below = ancestor.to_path_buf();
+            for component in rest.components() {
+                below.push(component);
+                if std::fs::symlink_metadata(&below).is_ok() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!("'{}' {LINK_TO_MISSING_TARGET}", below.display()),
+                    ));
+                }
+            }
+            return Ok(canonical.join(rest));
         }
     }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "no part of the path exists",
+    ))
+}
+
+/// The granted folders that still hold, each in its canonical spelling, the
+/// one a canonicalized target is compared with, for a host-side tool that
+/// runs outside any sandbox, and every other one with why it was refused. A folder a sandbox swapped for a link, or a link a
+/// command could have made on its way, would otherwise let the host write
+/// wherever the link points.
+fn verified_granted_roots(granted: Vec<PathBuf>) -> (Vec<PathBuf>, Vec<(PathBuf, String)>) {
+    let mut verified = Vec::new();
+    let mut refused = Vec::new();
+    for root in granted {
+        let checked = std::path::absolute(&root)
+            .map_err(|error| error.to_string())
+            .and_then(|absolute| {
+                agiworkforce_sandbox_policy::host_path::verify_read_root(&absolute)
+            })
+            .and_then(|resolved| {
+                if resolved.canonical.parent().is_none() {
+                    Err(crate::core::agi::executors::WHOLE_DRIVE_REFUSED.to_string())
+                } else {
+                    Ok(resolved)
+                }
+            });
+        match checked {
+            Ok(resolved) => verified.push(resolved.canonical),
+            Err(reason) => refused.push((root, reason)),
+        }
+    }
+    (verified, refused)
+}
+
+/// Why `path` is denied when it lies in a granted folder that was refused,
+/// as that folder is named or as it resolves now. A refused whole drive
+/// claims no path, so a path on it is asked for again rather than refused.
+fn refused_root_holding(path: &Path, refused: &[(PathBuf, String)]) -> Option<String> {
+    refused
+        .iter()
+        .find(|(root, _)| {
+            let now = std::fs::canonicalize(root).ok();
+            let whole_drive =
+                root.parent().is_none() || now.as_ref().is_some_and(|now| now.parent().is_none());
+            !whole_drive && (path.starts_with(root) || now.is_some_and(|now| path.starts_with(now)))
+        })
+        .map(|(root, reason)| {
+            format!(
+                "Access denied: {REFUSED_GRANTED_FOLDER}, '{}': {reason}",
+                root.display()
+            )
+        })
 }
 
 #[cfg(test)]

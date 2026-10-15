@@ -128,6 +128,7 @@ impl DiagnosticsBuffer {
 #[allow(dead_code)]
 pub struct LspClient {
     child: crate::process_tree::ProcessTreeChild,
+    _scratch: Option<tempfile::TempDir>,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
     next_id: AtomicI64,
@@ -153,15 +154,16 @@ impl LspClient {
             crate::sandbox::NetworkPolicy::Deny,
         )?;
         let server_args: Vec<String> = server_args.iter().map(|arg| (*arg).to_string()).collect();
-        let command = crate::sandbox::background_command(
-            Some(&manager),
-            crate::sandbox::Invocation::Program {
-                program: server_cmd,
-                args: &server_args,
-            },
-            &workspace,
-            None,
-        )?;
+        let crate::terminals::PreparedCommand { command, scratch } =
+            crate::sandbox::background_command(
+                Some(&manager),
+                crate::sandbox::Invocation::Program {
+                    program: server_cmd,
+                    args: &server_args,
+                },
+                &workspace,
+                None,
+            )?;
         let mut cmd = Command::from(command);
         cmd.stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
@@ -194,6 +196,7 @@ impl LspClient {
         let stdout = child.child_mut().stdout.take().context("stdout")?;
         let mut client = Self {
             child,
+            _scratch: scratch,
             stdin,
             stdout: BufReader::new(stdout),
             next_id: AtomicI64::new(2),

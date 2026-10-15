@@ -146,13 +146,13 @@ fn handle_menu_click(app: &AppHandle, id: &str) -> Result<()> {
         "new_conversation" => {
             if let Some(window) = app.get_webview_window("main") {
                 window::show_window(&window)?;
-                window.emit("tray:new_conversation", ())?;
+                window.emit("shortcut_action", "new_composer")?;
             }
         }
         "open_settings" => {
             if let Some(window) = app.get_webview_window("main") {
                 window::show_window(&window)?;
-                window.emit("tray:open_settings", ())?;
+                window.emit("menu_action", "open_settings")?;
             }
         }
         "quit" => {

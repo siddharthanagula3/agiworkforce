@@ -60,6 +60,7 @@ pub struct ListOptions {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CloudOAuthConfig {
     pub provider: CloudProvider,
     pub client_id: String,
@@ -185,11 +186,13 @@ impl CloudStorageManager {
         Ok(account_id)
     }
 
+    /// Forgets the account and the OAuth tokens its client holds. They live
+    /// only in this map, so nothing else has to be cleared.
     pub fn disconnect(&self, account_id: &str) -> Result<()> {
         self.accounts
             .remove(account_id)
-            .ok_or_else(|| Error::Other("Account not found".to_string()))?;
-        Ok(())
+            .map(|_| ())
+            .ok_or_else(|| Error::Other("That cloud account is not connected".to_string()))
     }
 
     pub fn list_accounts(&self) -> Vec<CloudAccount> {
@@ -334,5 +337,11 @@ mod tests {
     fn test_manager_creation() {
         let manager = CloudStorageManager::new();
         assert_eq!(manager.list_accounts().len(), 0);
+    }
+
+    #[test]
+    fn disconnecting_an_account_that_is_not_connected_is_refused() {
+        let manager = CloudStorageManager::new();
+        assert!(manager.disconnect("missing-account").is_err());
     }
 }

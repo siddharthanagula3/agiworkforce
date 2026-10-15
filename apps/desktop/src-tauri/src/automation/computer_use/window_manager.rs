@@ -868,11 +868,7 @@ impl WindowCoordinator {
             return Ok(());
         }
 
-        // Try via cmd /c start
-        Command::new("cmd")
-            .args(["/c", "start", "", name])
-            .spawn()
-            .context("Failed to launch application")?;
+        open::that_detached(name).context("Failed to launch application")?;
 
         sleep(Duration::from_millis(500)).await;
         Ok(())

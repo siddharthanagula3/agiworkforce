@@ -1,7 +1,23 @@
+use rusqlite::Connection;
 use tauri::State;
-use tracing::warn;
 
 use super::AppDatabase;
+use crate::data::db::repository;
+
+/// The title of a conversation the user owns, or an error naming why it cannot
+/// be exported.
+fn owned_conversation_title(
+    conn: &Connection,
+    conversation_id: i64,
+    user_id: &str,
+) -> Result<String, String> {
+    if user_id.is_empty() {
+        return Err("User ID cannot be empty".to_string());
+    }
+    repository::get_conversation(conn, conversation_id, user_id)
+        .map(|conversation| conversation.title)
+        .map_err(|e| format!("Conversation {conversation_id} not found: {e}"))
+}
 
 /// Export a conversation as formatted text.
 ///
@@ -14,6 +30,7 @@ use super::AppDatabase;
 pub async fn conversation_export(
     conversation_id: String,
     format: String,
+    user_id: String,
     db: State<'_, AppDatabase>,
 ) -> Result<String, String> {
     if format != "markdown" {
@@ -26,21 +43,12 @@ pub async fn conversation_export(
 
     let conn = db.connection()?;
 
-    let title: String = conn
-        .query_row(
-            "SELECT title FROM conversations WHERE id = ?1",
-            rusqlite::params![conv_id],
-            |row| row.get(0),
-        )
-        .unwrap_or_else(|e| {
-            warn!("Could not fetch title for conversation {}: {e}", conv_id);
-            "Untitled Conversation".to_string()
-        });
+    let title = owned_conversation_title(&conn, conv_id, &user_id)?;
 
     let mut stmt = conn
         .prepare(
             "SELECT role, content, created_at FROM messages \
-             WHERE conversation_id = ?1 ORDER BY created_at ASC",
+             WHERE conversation_id = ?1 AND superseded_key IS NULL ORDER BY created_at ASC, id ASC",
         )
         .map_err(|e| format!("Failed to prepare message query: {e}"))?;
 
@@ -82,6 +90,7 @@ pub async fn conversation_export(
 pub async fn conversation_export_pdf(
     conversation_id: String,
     output_path: String,
+    user_id: String,
     db: State<'_, AppDatabase>,
 ) -> Result<String, String> {
     use crate::features::document::{PdfContent, PdfDocumentConfig, PdfDocumentCreator};
@@ -118,21 +127,12 @@ pub async fn conversation_export_pdf(
 
     let conn = db.connection()?;
 
-    let title: String = conn
-        .query_row(
-            "SELECT title FROM conversations WHERE id = ?1",
-            rusqlite::params![conv_id],
-            |row| row.get(0),
-        )
-        .unwrap_or_else(|e| {
-            warn!("Could not fetch title for conversation {}: {e}", conv_id);
-            "Untitled Conversation".to_string()
-        });
+    let title = owned_conversation_title(&conn, conv_id, &user_id)?;
 
     let mut stmt = conn
         .prepare(
             "SELECT role, content FROM messages \
-             WHERE conversation_id = ?1 ORDER BY created_at ASC",
+             WHERE conversation_id = ?1 AND superseded_key IS NULL ORDER BY created_at ASC, id ASC",
         )
         .map_err(|e| format!("Failed to prepare message query: {e}"))?;
 

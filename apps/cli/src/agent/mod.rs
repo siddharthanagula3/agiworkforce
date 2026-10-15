@@ -78,6 +78,15 @@ impl std::fmt::Debug for ToolApprovalSink {
     }
 }
 
+#[derive(Clone)]
+pub struct UserInputSink(pub crate::tools::UserInputCallback);
+
+impl std::fmt::Debug for UserInputSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("UserInputSink(<callback>)")
+    }
+}
+
 /// Surface adapter for streaming tool lifecycle events out of the shared agent
 /// loop. The TUI turns these into transcript cells; the developer app-server
 /// maps the same events into canonical `AgentEventEnvelope` notifications.
@@ -90,6 +99,24 @@ pub struct ToolEventSink(
 impl std::fmt::Debug for ToolEventSink {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("ToolEventSink(<callback>)")
+    }
+}
+
+/// A follow-up the user sent while a turn was running, delivered to the model
+/// with the next tool results rather than after the turn's last reply.
+pub struct SteeredInput {
+    pub text: String,
+    pub images: Vec<models::ContentBlock>,
+}
+
+/// Takes every follow-up waiting for the running turn. It must not block: it
+/// is called from inside the turn, between a tool batch and the next model call.
+#[derive(Clone)]
+pub struct SteerSource(pub std::sync::Arc<dyn Fn() -> Vec<SteeredInput> + Send + Sync>);
+
+impl std::fmt::Debug for SteerSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SteerSource(<callback>)")
     }
 }
 
@@ -179,7 +206,10 @@ pub struct AgentSession {
     pub(crate) bypass_permissions_available: bool,
     pub auto_approve_safe: bool,
     pub on_tool_approval: Option<ToolApprovalSink>,
+    /// Where `ask_user` sends its question when a surface can answer it.
+    pub on_user_input: Option<UserInputSink>,
     pub on_tool_event: Option<ToolEventSink>,
+    pub on_steer: Option<SteerSource>,
     pub on_continuation_chunk: Option<ContinuationSink>,
     /// Whether the desktop shell is running with a browser paired to it.
     ///
@@ -707,7 +737,9 @@ impl AgentSession {
             bypass_permissions_available: false,
             auto_approve_safe: false,
             on_tool_approval: None::<ToolApprovalSink>,
+            on_user_input: None::<UserInputSink>,
             on_tool_event: None::<ToolEventSink>,
+            on_steer: None::<SteerSource>,
             on_continuation_chunk: None::<ContinuationSink>,
             browser_available: None,
             quiet: false,
@@ -1526,7 +1558,13 @@ impl AgentSession {
             ),
         )];
         destination.auto_routing = pending.destination_auto_routing;
-        destination.permission_mode = Some(self.permission_mode);
+        destination.permission_mode = Some(
+            self.permission_mode.storable(
+                self.managed_session
+                    .as_ref()
+                    .and_then(|session| session.permission_mode),
+            ),
+        );
         destination.plan_mode = Some(self.plan_mode);
         destination.plan_approved = Some(false);
         destination.current_plan = None;
@@ -1601,6 +1639,9 @@ impl AgentSession {
     /// Clear the conversation history (keeps system prompt).
     pub fn clear(&mut self) {
         self.messages.truncate(1);
+        if let Some(managed_session) = self.managed_session.as_mut() {
+            managed_session.reconcile_transcript(&self.messages);
+        }
         self.turn_count = 0;
         self.recent_tool_calls.clear();
         self.loop_strike_count = 0;
@@ -1794,7 +1835,7 @@ impl AgentSession {
         self.provider = provider;
         self.set_privacy_mode(authority.privacy_mode);
         if let Some(pm) = managed_session.permission_mode {
-            self.permission_mode = pm;
+            self.permission_mode = pm.storable(None);
         }
         if let Some(plan_mode) = managed_session.plan_mode {
             self.plan_mode = plan_mode;
@@ -2138,6 +2179,10 @@ impl AgentSession {
         })
     }
 
+    pub(crate) fn user_input_callback(&self) -> Option<crate::tools::UserInputCallback> {
+        self.on_user_input.as_ref().map(|sink| sink.0.clone())
+    }
+
     /// Persist the current in-memory conversation into the managed session file.
     ///
     /// No-op under `--no-session-persistence`, including on a `--resume`d
@@ -2162,6 +2207,7 @@ impl AgentSession {
         ) else {
             return Ok(());
         };
+        managed_session.reconcile_transcript(&self.messages);
         managed_session.messages = self.messages.clone();
         managed_session.model = Some(self.model.clone());
         managed_session.routing_authority = Some(ManagedSessionRoutingAuthority {
@@ -2188,7 +2234,10 @@ impl AgentSession {
                 })
                 .filter(|title| !title.is_empty());
         }
-        managed_session.permission_mode = Some(self.permission_mode);
+        managed_session.permission_mode = Some(
+            self.permission_mode
+                .storable(managed_session.permission_mode),
+        );
         managed_session.plan_mode = Some(self.plan_mode);
         managed_session.plan_approved = Some(self.plan_approved);
         managed_session.current_plan = self.current_plan.clone();
@@ -2653,9 +2702,59 @@ mod tests {
     }
 
     #[test]
+    fn a_session_file_never_holds_bypass_and_never_opens_in_it() {
+        use crate::cli_options::PermissionMode;
+
+        let temp_dir = tempfile::tempdir().expect("session store");
+        let store = crate::runtime::session_control::ManagedSessionStore::new(
+            temp_dir.path().to_path_buf(),
+        );
+        let stored = |mode: PermissionMode| {
+            let mut source = ManagedSession::with_messages(
+                format!("bypass-{mode:?}").to_lowercase(),
+                chrono::Utc::now(),
+                vec![Message::text("user", "keep the posture honest")],
+            );
+            source.model = Some("fixture-local-model:latest".to_string());
+            source.routing_authority = Some(ManagedSessionRoutingAuthority {
+                privacy_mode: PrivacyMode::Local,
+                provider: "ollama".to_string(),
+            });
+            source.permission_mode = Some(mode);
+            let path = store.save(&source).expect("save source");
+            (source, path)
+        };
+
+        let (source, path) = stored(PermissionMode::AcceptEdits);
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.set_session_persistence(true);
+        session
+            .adopt_managed_session(source, path.clone())
+            .expect("adopt");
+        session.permission_mode = PermissionMode::BypassPermissions;
+        session.skip_permissions = true;
+        session.persist_managed_session().expect("persist");
+        assert_eq!(
+            ManagedSession::load_from_path(&path)
+                .expect("load")
+                .permission_mode,
+            Some(PermissionMode::AcceptEdits),
+            "a bypass turn was written to the session file"
+        );
+
+        let (legacy, legacy_path) = stored(PermissionMode::BypassPermissions);
+        let mut reopened = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        reopened
+            .adopt_managed_session(legacy, legacy_path)
+            .expect("adopt legacy");
+        assert_eq!(reopened.permission_mode, PermissionMode::Default);
+        assert!(!reopened.skip_permissions);
+    }
+
+    #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        assert_eq!(defs.len(), 64);
+        assert_eq!(defs.len(), 65);
         assert!(defs.iter().any(|definition| definition.name == "skill"));
         assert!(defs.iter().any(|definition| definition.name == "agent"));
         assert!(defs

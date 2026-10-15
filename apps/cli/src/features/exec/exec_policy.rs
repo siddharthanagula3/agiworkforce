@@ -332,6 +332,523 @@ pub async fn persist_allow_command(command: &str) -> Result<()> {
 }
 
 async fn persist_allow_command_to(path: PathBuf, command: &str) -> Result<()> {
+    let argv = single_command_argv(command)?;
+    let prefix = proposed_allow_prefix(command).ok_or_else(|| {
+        anyhow::anyhow!(
+            "{} runs whatever its arguments say, so it can only be approved once or for this session",
+            argv[0]
+        )
+    })?;
+    append_allow_prefix(path, prefix).await
+}
+
+/// Persist an Always Allow rule for `prefix`, the leading words of `command`
+/// a client chose as the shape to allow, such as `npm test` for
+/// `npm test -- --watch`. The prefix must be exactly how the command begins,
+/// so approving one command can never allow a different one.
+pub async fn persist_allow_prefix(command: &str, prefix: &[String]) -> Result<()> {
+    let path = user_approved_policy_path()?;
+    persist_allow_prefix_to(path, command, prefix).await
+}
+
+async fn persist_allow_prefix_to(path: PathBuf, command: &str, prefix: &[String]) -> Result<()> {
+    let argv = single_command_argv(command)?;
+    if runs_arbitrary_code(&argv) {
+        anyhow::bail!(
+            "{} runs whatever its arguments say, so it can only be approved once",
+            argv[0]
+        );
+    }
+    if prefix.is_empty() || !argv.starts_with(prefix) {
+        anyhow::bail!(
+            "the Always Allow prefix must be the words this command starts with: {}",
+            argv.join(" ")
+        );
+    }
+    append_allow_prefix(path, prefix.to_vec()).await
+}
+
+/// The Always Allow rule the host offers for `command`: its whole argv, the
+/// shape Codex proposes as an execpolicy amendment. `None` when the command
+/// can only be approved once, because it is not one plain invocation or its
+/// program runs code its arguments name.
+pub fn proposed_allow_prefix(command: &str) -> Option<Vec<String>> {
+    let argv = single_command_argv(command).ok()?;
+    (!runs_arbitrary_code(&argv)).then_some(argv)
+}
+
+/// Shells, interpreters and wrappers: a rule for any prefix of their argv
+/// short of the whole command would allow every program they can be told to
+/// run.
+const ARBITRARY_CODE_PROGRAMS: &[&str] = &[
+    "sh",
+    "bash",
+    "zsh",
+    "fish",
+    "dash",
+    "ksh",
+    "csh",
+    "tcsh",
+    "ash",
+    "busybox",
+    "pwsh",
+    "powershell",
+    "cmd",
+    "python",
+    "python2",
+    "python3",
+    "pypy",
+    "pypy3",
+    "node",
+    "nodejs",
+    "deno",
+    "bun",
+    "bunx",
+    "ruby",
+    "irb",
+    "perl",
+    "php",
+    "lua",
+    "osascript",
+    "npx",
+    "pnpx",
+    "uvx",
+    "env",
+    "sudo",
+    "doas",
+    "su",
+    "xargs",
+    "time",
+    "nice",
+    "nohup",
+    "timeout",
+    "exec",
+    "command",
+    "eval",
+    "setsid",
+    "stdbuf",
+    "chroot",
+    "watch",
+];
+
+/// Package managers whose named subcommand fetches and runs a package,
+/// wherever their leading options put it.
+const ARBITRARY_CODE_SUBCOMMANDS: &[(&str, &str)] = &[
+    ("pnpm", "dlx"),
+    ("pnpm", "exec"),
+    ("npm", "exec"),
+    ("npm", "x"),
+    ("npm", "explore"),
+    ("yarn", "dlx"),
+    ("yarn", "exec"),
+    ("uv", "run"),
+];
+
+/// What makes a program run a command that a prefix rule for it never named.
+enum CodeRunningArguments {
+    /// Any of these options; see [`has_option`].
+    Options(&'static [&'static str]),
+    /// A check that needs more than an option list.
+    Check(fn(&[String]) -> bool),
+    /// Every invocation: what it runs is its arguments.
+    Always,
+}
+
+/// Programs that are safe to allow by prefix until a later argument tells
+/// them to run a command. A rule allowing `find . -name x` would otherwise
+/// allow `find . -name x -exec rm {} ;`.
+const CODE_RUNNING_ARGUMENTS: &[(&str, CodeRunningArguments)] = &[
+    (
+        "find",
+        CodeRunningArguments::Options(&[
+            "-exec", "-execdir", "-ok", "-okdir", "-delete", "-fls", "-fprint", "-fprint0",
+            "-fprintf",
+        ]),
+    ),
+    (
+        "rg",
+        CodeRunningArguments::Options(&["--pre", "--pre-glob"]),
+    ),
+    (
+        "tar",
+        CodeRunningArguments::Options(&[
+            "-I",
+            "-F",
+            "--to-command",
+            "--use-compress-program",
+            "--checkpoint-action",
+            "--info-script",
+            "--new-volume-script",
+        ]),
+    ),
+    ("git", CodeRunningArguments::Check(git_runs_code)),
+    (
+        "rsync",
+        CodeRunningArguments::Options(&["-e", "--rsh", "--rsync-path"]),
+    ),
+    (
+        "zip",
+        CodeRunningArguments::Options(&["-TT", "--unzip-command"]),
+    ),
+    ("sed", CodeRunningArguments::Check(sed_runs_code)),
+    ("awk", CodeRunningArguments::Always),
+    ("gawk", CodeRunningArguments::Always),
+    ("mawk", CodeRunningArguments::Always),
+    ("nawk", CodeRunningArguments::Always),
+    ("xargs", CodeRunningArguments::Always),
+    ("env", CodeRunningArguments::Always),
+];
+
+fn program_name(first: &str) -> &str {
+    let program = first.rsplit(['/', '\\']).next().unwrap_or(first);
+    program.strip_suffix(".exe").unwrap_or(program)
+}
+
+/// An option among `args` before any `--`. A two-character option such as
+/// `-I` also counts inside a cluster (`-xIf`) or with its value attached; a
+/// longer one counts alone or as `--name=value`.
+fn has_option(args: &[String], options: &[&str]) -> bool {
+    args.iter().take_while(|arg| *arg != "--").any(|arg| {
+        options.iter().any(|option| match option.strip_prefix('-') {
+            Some(letter) if letter.len() == 1 => {
+                arg.len() > 1
+                    && arg.starts_with('-')
+                    && !arg.starts_with("--")
+                    && arg[1..].contains(letter)
+            }
+            _ => {
+                arg == option
+                    || arg
+                        .strip_prefix(option)
+                        .is_some_and(|value| value.starts_with('='))
+            }
+        })
+    })
+}
+
+/// Git's own options that take their value as the next argument.
+const GIT_GLOBAL_OPTIONS_WITH_VALUE: &[&str] = &[
+    "-c",
+    "-C",
+    "--config-env",
+    "--git-dir",
+    "--work-tree",
+    "--namespace",
+    "--super-prefix",
+];
+
+/// Git's own options that point it at other configuration, helpers or
+/// repositories, wherever they sit before the subcommand.
+const GIT_CODE_RUNNING_GLOBAL_OPTIONS: &[&str] = &[
+    "-c",
+    "-C",
+    "--config-env",
+    "--exec-path",
+    "--git-dir",
+    "--work-tree",
+];
+
+/// The subcommands git builds in that run nothing their arguments or the
+/// configuration do not already name to a rule. Anything else may be an
+/// alias, which can be `!` and a shell command, or a `git-<name>` program on
+/// the path, so it is never allowed by prefix.
+const GIT_BUILTIN_SUBCOMMANDS: &[&str] = &[
+    "add",
+    "annotate",
+    "apply",
+    "archive",
+    "bisect",
+    "blame",
+    "branch",
+    "bundle",
+    "cat-file",
+    "check-attr",
+    "check-ignore",
+    "check-mailmap",
+    "check-ref-format",
+    "checkout",
+    "checkout-index",
+    "cherry",
+    "cherry-pick",
+    "clean",
+    "clone",
+    "commit",
+    "commit-graph",
+    "commit-tree",
+    "config",
+    "count-objects",
+    "describe",
+    "diff",
+    "diff-files",
+    "diff-index",
+    "diff-tree",
+    "fetch",
+    "for-each-ref",
+    "format-patch",
+    "fsck",
+    "gc",
+    "grep",
+    "hash-object",
+    "help",
+    "init",
+    "log",
+    "ls-files",
+    "ls-remote",
+    "ls-tree",
+    "maintenance",
+    "merge",
+    "merge-base",
+    "mv",
+    "name-rev",
+    "notes",
+    "prune",
+    "pull",
+    "push",
+    "range-diff",
+    "rebase",
+    "reflog",
+    "remote",
+    "repack",
+    "replace",
+    "reset",
+    "restore",
+    "rev-list",
+    "rev-parse",
+    "revert",
+    "rm",
+    "shortlog",
+    "show",
+    "show-branch",
+    "show-ref",
+    "sparse-checkout",
+    "stash",
+    "status",
+    "submodule",
+    "switch",
+    "symbolic-ref",
+    "tag",
+    "update-index",
+    "update-ref",
+    "var",
+    "verify-commit",
+    "verify-tag",
+    "version",
+    "whatchanged",
+    "worktree",
+    "write-tree",
+];
+
+/// Git runs a command its arguments name through its own options before the
+/// subcommand, an alias or external subcommand, a subcommand that runs a tool
+/// or a script, or a few subcommand options that name a program.
+fn git_runs_code(args: &[String]) -> bool {
+    let mut index = 0;
+    while let Some(arg) = args.get(index).filter(|arg| arg.starts_with('-')) {
+        let name = arg.split('=').next().unwrap_or(arg);
+        if GIT_CODE_RUNNING_GLOBAL_OPTIONS.contains(&name)
+            || (arg.starts_with("-c") && !arg.starts_with("--"))
+        {
+            return true;
+        }
+        index += if GIT_GLOBAL_OPTIONS_WITH_VALUE.contains(&arg.as_str()) {
+            2
+        } else {
+            1
+        };
+    }
+    let Some((subcommand, options)) = args.get(index..).and_then(<[String]>::split_first) else {
+        return false;
+    };
+    let first_operand = options.iter().find(|arg| !arg.starts_with('-'));
+    match subcommand.as_str() {
+        "difftool" | "mergetool" => return true,
+        "submodule" if first_operand.is_some_and(|operand| operand == "foreach") => return true,
+        "bisect" if first_operand.is_some_and(|operand| operand == "run") => return true,
+        "filter-branch" => return true,
+        "rebase" if has_option(options, &["-x"]) => return true,
+        "clone" if has_option(options, &["-u"]) => return true,
+        "grep" if has_option(options, &["-O", "--open-files-in-pager"]) => return true,
+        name if !GIT_BUILTIN_SUBCOMMANDS.contains(&name) => return true,
+        _ => {}
+    }
+    has_option(
+        options,
+        &["--upload-pack", "--receive-pack", "--exec", "--extcmd"],
+    )
+}
+
+/// `sed` runs a command for its `e` command or the `e` flag of `s`, and
+/// writes files for `w`, `W` and the `w` flag; `-i` rewrites its inputs. A
+/// script read from a file is not seen, and one this cannot parse counts.
+fn sed_runs_code(args: &[String]) -> bool {
+    if has_option(args, &["-i", "-f", "--in-place", "--file"]) {
+        return true;
+    }
+    let mut scripts: Vec<&str> = Vec::new();
+    let mut first_positional = None;
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        if arg == "--" {
+            first_positional = first_positional.or(args.next());
+            break;
+        }
+        if let Some(script) = arg.strip_prefix("--expression=") {
+            scripts.push(script);
+        } else if arg == "--expression" {
+            scripts.extend(args.next().map(String::as_str));
+        } else if let Some(cluster) = arg
+            .strip_prefix('-')
+            .filter(|cluster| !cluster.is_empty() && !cluster.starts_with('-'))
+        {
+            if let Some((letter, value)) = cluster
+                .char_indices()
+                .find(|(_, letter)| matches!(*letter, 'e' | 'l'))
+                .map(|(at, letter)| (letter, &cluster[at + 1..]))
+            {
+                let value = if value.is_empty() {
+                    args.next().map(String::as_str)
+                } else {
+                    Some(value)
+                };
+                if letter == 'e' {
+                    scripts.extend(value);
+                }
+            }
+        } else if !arg.starts_with("--") && first_positional.is_none() {
+            first_positional = Some(arg);
+        }
+    }
+    if scripts.is_empty() {
+        scripts.extend(first_positional.map(String::as_str));
+    }
+    scripts.into_iter().any(sed_script_runs_code)
+}
+
+/// Walk a `sed` script command by command, skipping addresses, regexes and
+/// the text of `s`, `y`, `a`, `i` and `c`, so a letter inside a pattern is
+/// never read as a command.
+fn sed_script_runs_code(script: &str) -> bool {
+    let chars: Vec<char> = script.chars().collect();
+    let mut index = 0;
+    let skip_delimited = |index: &mut usize, delimiter: char| -> bool {
+        while *index < chars.len() {
+            match chars[*index] {
+                '\\' => *index += 2,
+                character if character == delimiter => {
+                    *index += 1;
+                    return true;
+                }
+                _ => *index += 1,
+            }
+        }
+        false
+    };
+    let skip_to_end_of_command = |index: &mut usize| {
+        while *index < chars.len() && !matches!(chars[*index], ';' | '\n' | '}') {
+            *index += 1;
+        }
+    };
+    while index < chars.len() {
+        let character = chars[index];
+        index += 1;
+        match character {
+            ' ' | '\t' | '\n' | ';' | '{' | '}' | '!' | ',' | '$' | '~' | '+' | '0'..='9' => {}
+            '/' => {
+                if !skip_delimited(&mut index, '/') {
+                    return true;
+                }
+            }
+            '\\' => {
+                let Some(&delimiter) = chars.get(index) else {
+                    return true;
+                };
+                index += 1;
+                if !skip_delimited(&mut index, delimiter) {
+                    return true;
+                }
+            }
+            'e' | 'w' | 'W' => return true,
+            's' | 'y' => {
+                let Some(&delimiter) = chars.get(index) else {
+                    return true;
+                };
+                index += 1;
+                if !skip_delimited(&mut index, delimiter) || !skip_delimited(&mut index, delimiter)
+                {
+                    return true;
+                }
+                let flags_start = index;
+                skip_to_end_of_command(&mut index);
+                if character == 's'
+                    && chars[flags_start..index]
+                        .iter()
+                        .any(|flag| matches!(*flag, 'e' | 'w'))
+                {
+                    return true;
+                }
+            }
+            'a' | 'i' | 'c' => {
+                while index < chars.len() && chars[index] != '\n' {
+                    index += 1;
+                }
+            }
+            ':' | 'b' | 't' | 'T' | 'r' | 'R' | 'q' | 'Q' | 'l' | 'L' => {
+                skip_to_end_of_command(&mut index)
+            }
+            'p' | 'P' | 'd' | 'D' | 'n' | 'N' | 'g' | 'G' | 'h' | 'H' | 'x' | '=' | 'z' | 'F' => {}
+            _ => return true,
+        }
+    }
+    false
+}
+
+/// `argv` names a program that runs code its later arguments choose: a
+/// package manager's runner subcommand, wherever leading options put it, or
+/// an option [`CODE_RUNNING_ARGUMENTS`] lists for its program.
+fn carries_code_running_argument(argv: &[String]) -> bool {
+    let Some((first, args)) = argv.split_first() else {
+        return false;
+    };
+    let program = program_name(first);
+    let runner = args
+        .iter()
+        .take_while(|arg| *arg != "--")
+        .filter(|arg| !arg.starts_with('-'))
+        .any(|arg| {
+            ARBITRARY_CODE_SUBCOMMANDS
+                .iter()
+                .any(|(manager, runs)| program == *manager && arg == runs)
+        });
+    runner
+        || CODE_RUNNING_ARGUMENTS.iter().any(|(name, risk)| {
+            program == *name
+                && match risk {
+                    CodeRunningArguments::Options(options) => has_option(args, options),
+                    CodeRunningArguments::Check(runs_code) => runs_code(args),
+                    CodeRunningArguments::Always => true,
+                }
+        })
+}
+
+fn runs_arbitrary_code(argv: &[String]) -> bool {
+    let Some(first) = argv.first() else {
+        return true;
+    };
+    if first.contains('=') {
+        return true;
+    }
+    let program = program_name(first);
+    let unversioned = program.trim_end_matches(|c: char| c.is_ascii_digit() || c == '.');
+    ARBITRARY_CODE_PROGRAMS.contains(&program)
+        || ARBITRARY_CODE_PROGRAMS.contains(&unversioned)
+        || carries_code_running_argument(argv)
+}
+
+/// The argv of a command that is one program invocation, refusing anything
+/// with shell operators, since a rule for its first part would not cover the
+/// rest. Leading variable assignments stay in it, so a command that sets one
+/// is never persisted as a rule for the program alone.
+fn single_command_argv(command: &str) -> Result<Vec<String>> {
     let segments = shell_segments(command)
         .ok_or_else(|| anyhow::anyhow!("cannot persist an unparseable shell command"))?;
     let [segment] = segments.as_slice() else {
@@ -339,8 +856,12 @@ async fn persist_allow_command_to(path: PathBuf, command: &str) -> Result<()> {
             "cannot persist an Always Allow rule for a command with shell operators; approve each command separately"
         );
     };
-    let prefix = segment_argv(segment)
-        .ok_or_else(|| anyhow::anyhow!("cannot persist an empty or invalid shell command"))?;
+    shlex::split(segment)
+        .filter(|tokens| !tokens.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("cannot persist an empty or invalid shell command"))
+}
+
+async fn append_allow_prefix(path: PathBuf, prefix: Vec<String>) -> Result<()> {
     let display_path = path.display().to_string();
     tokio::task::spawn_blocking(move || blocking_append_allow_prefix_rule(&path, &prefix))
         .await
@@ -607,10 +1128,20 @@ pub fn evaluate_command(policy: &Policy, command: &str) -> CommandEvaluation {
             continue;
         };
         let evaluation = policy.check(&argv, &fallback);
-        decision = decision.max(evaluation.decision);
+        // A prefix rule allows whatever follows the prefix, so one naming a
+        // safe shape never waives the prompt for an argument that runs code.
+        let allowed_past_its_rule = evaluation.is_match()
+            && evaluation.decision == Decision::Allow
+            && carries_code_running_argument(&argv);
+        decision = decision.max(if allowed_past_its_rule {
+            Decision::Prompt
+        } else {
+            evaluation.decision
+        });
         if evaluation.is_match() {
             matched_rule = true;
-        } else {
+        }
+        if !evaluation.is_match() || allowed_past_its_rule {
             every_segment_matched_rule = false;
         }
     }
@@ -851,5 +1382,267 @@ mod tests {
             .expect_err("chained command must be rejected");
         assert!(error.to_string().contains("shell operators"));
         assert!(!policy_path.exists());
+    }
+
+    #[tokio::test]
+    async fn the_bash_tool_never_saves_an_always_allow_rule_for_an_interpreter() {
+        let temp = tempdir().expect("tempdir");
+        let policy_path = temp.path().join("user-approved.rules");
+        for command in [
+            "python3 -c 'print(1)'",
+            "bash -c ls",
+            "npx cowsay hi",
+            "sudo ls",
+        ] {
+            let error = persist_allow_command_to(policy_path.clone(), command)
+                .await
+                .expect_err(command);
+            assert!(
+                error.to_string().contains("approved once"),
+                "{command}: {error}"
+            );
+        }
+        assert!(!policy_path.exists());
+
+        persist_allow_command_to(policy_path.clone(), "npm test")
+            .await
+            .expect("a plain command is saved");
+        let policy = load_policy_from_dir(temp.path()).expect("load policy");
+        assert_eq!(evaluate(&policy, "npm test"), Decision::Allow);
+    }
+
+    #[tokio::test]
+    async fn a_chosen_prefix_allows_that_command_shape_and_nothing_else() {
+        let temp = tempdir().expect("tempdir");
+        let policy_path = temp.path().join("user-approved.rules");
+        persist_allow_prefix_to(
+            policy_path.clone(),
+            "npm test -- --watch",
+            &["npm".to_string(), "test".to_string()],
+        )
+        .await
+        .expect("persist prefix");
+
+        let policy = load_policy_from_dir(temp.path()).expect("load policy");
+        assert_eq!(evaluate(&policy, "npm test -- --coverage"), Decision::Allow);
+        assert_ne!(evaluate(&policy, "npm publish"), Decision::Allow);
+    }
+
+    #[tokio::test]
+    async fn a_prefix_the_command_does_not_start_with_is_refused() {
+        let temp = tempdir().expect("tempdir");
+        let policy_path = temp.path().join("user-approved.rules");
+        for prefix in [
+            vec![],
+            vec!["rm".to_string()],
+            vec!["npm".to_string(), "test".to_string(), "--watch".to_string()],
+        ] {
+            assert!(
+                persist_allow_prefix_to(policy_path.clone(), "npm test", &prefix)
+                    .await
+                    .is_err(),
+                "{prefix:?}"
+            );
+        }
+        assert!(!policy_path.exists());
+    }
+
+    #[test]
+    fn the_host_offers_the_whole_command_as_the_rule() {
+        assert_eq!(
+            proposed_allow_prefix("npm test -- --watch"),
+            Some(vec![
+                "npm".to_string(),
+                "test".to_string(),
+                "--".to_string(),
+                "--watch".to_string(),
+            ])
+        );
+        assert_eq!(proposed_allow_prefix("git status && rm -rf ./src"), None);
+    }
+
+    #[test]
+    fn shells_interpreters_and_wrappers_are_offered_approve_once_only() {
+        for command in [
+            "python3 -c 'print(1)'",
+            "python3.12 script.py",
+            "/usr/bin/python3 script.py",
+            "bash -c 'ls'",
+            "node index.js",
+            "deno run main.ts",
+            "bun run dev",
+            "ruby -e 'puts 1'",
+            "perl -e 'print 1'",
+            "php -r 'echo 1;'",
+            "npx cowsay hi",
+            "pnpm dlx cowsay hi",
+            "env FOO=1 ls",
+            "FOO=1 ls",
+            "sudo ls",
+            "xargs rm",
+            "time ls",
+            "nice ls",
+            "timeout 5 ls",
+            "exec ls",
+        ] {
+            assert_eq!(proposed_allow_prefix(command), None, "{command}");
+        }
+    }
+
+    #[tokio::test]
+    async fn an_interpreter_prefix_is_never_persisted() {
+        let temp = tempdir().expect("tempdir");
+        let policy_path = temp.path().join("user-approved.rules");
+        let error = persist_allow_prefix_to(
+            policy_path.clone(),
+            "python3 -c 'print(1)'",
+            &["python3".to_string()],
+        )
+        .await
+        .expect_err("an interpreter rule must be refused");
+        assert!(error.to_string().contains("approved once"));
+        assert!(!policy_path.exists());
+    }
+
+    fn policy_allowing(rules: &[&[&str]]) -> Policy {
+        let mut policy = default_policy();
+        for rule in rules {
+            let rule: Vec<String> = rule.iter().map(|word| word.to_string()).collect();
+            policy
+                .add_prefix_rule(&rule, Decision::Allow)
+                .expect("allow rule");
+        }
+        policy
+    }
+
+    #[test]
+    fn a_rule_for_a_safe_shape_does_not_allow_a_trailing_argument_that_runs_code() {
+        let policy = policy_allowing(&[
+            &["find", ".", "-name", "x"],
+            &["rg", "foo"],
+            &["tar", "-xf", "a.tar"],
+            &["git", "fetch"],
+            &["git", "submodule"],
+            &["git", "bisect"],
+            &["git", "difftool"],
+            &["sed", "-n"],
+            &["npm", "--yes"],
+        ]);
+        for allowed in [
+            "find . -name x -type f",
+            "rg foo src",
+            "tar -xf a.tar -C out",
+            "git fetch origin",
+            "git submodule status",
+            "git bisect good",
+            "sed -n 1,5p notes.txt",
+        ] {
+            let evaluation = evaluate_command(&policy, allowed);
+            assert_eq!(evaluation.decision, Decision::Allow, "{allowed}");
+            assert!(evaluation.every_segment_matched_rule, "{allowed}");
+        }
+        for command in [
+            "find . -name x -exec rm {} \\;",
+            "find . -name x -delete",
+            "rg foo --pre ./planted.sh",
+            "rg foo --pre=./planted.sh",
+            "tar -xf a.tar --to-command=sh",
+            "tar -xf a.tar -I ./planted.sh",
+            "tar -xf a.tar --checkpoint-action=exec=sh",
+            "git fetch --upload-pack=./planted.sh origin",
+            "git submodule foreach ./planted.sh",
+            "git bisect run ./planted.sh",
+            "git difftool -x ./planted.sh HEAD",
+            "sed -n s/x/y/e notes.txt",
+            "sed -n -i s/x/y/ notes.txt",
+            "npm --yes exec cowsay",
+        ] {
+            let evaluation = evaluate_command(&policy, command);
+            assert_eq!(evaluation.decision, Decision::Prompt, "{command}");
+            assert!(evaluation.matched_rule, "{command}");
+            assert!(!evaluation.every_segment_matched_rule, "{command}");
+        }
+    }
+
+    #[test]
+    fn a_runner_subcommand_behind_leading_options_is_offered_approve_once_only() {
+        for command in [
+            "npm --yes exec cowsay",
+            "npm x cowsay",
+            "pnpm --silent dlx cowsay",
+            "yarn exec cowsay",
+            "find . -name x -delete",
+            "rg --pre cat foo",
+            "tar -xIzstd -f a.tar",
+            "git -c core.pager=sh log",
+            "git -C ../other status",
+            "git rebase -x ./planted.sh main",
+            "git rebase --exec=./planted.sh main",
+            "git submodule foreach ./planted.sh",
+            "git submodule --quiet foreach ./planted.sh",
+            "git bisect run ./planted.sh",
+            "git difftool -x ./planted.sh HEAD",
+            "git difftool --extcmd=./planted.sh HEAD",
+            "git difftool HEAD",
+            "git mergetool",
+            "git filter-branch --tree-filter ./planted.sh HEAD",
+            "git filter-branch --msg-filter=./planted.sh",
+            "git clone -u ./planted.sh https://example.invalid/repo.git",
+            "git clone --upload-pack=./planted.sh https://example.invalid/repo.git",
+            "git grep -O./planted.sh needle",
+            "git grep -O needle",
+            "git grep --open-files-in-pager=./planted.sh needle",
+            "git --no-pager -c core.pager=sh log",
+            "git --no-pager --config-env=core.pager=X log",
+            "git --namespace n -c alias.x=!sh x",
+            "git -ccore.pager=sh log",
+            "git planted-alias",
+            "git --no-pager planted-alias HEAD",
+            "sed -i s/a/b/ notes.txt",
+            "sed -e 1e\\ date notes.txt",
+            "awk '{print $1}' notes.txt",
+        ] {
+            assert_eq!(proposed_allow_prefix(command), None, "{command}");
+        }
+        for command in [
+            "npm test -- exec",
+            "git switch -c feature",
+            "git diff -C",
+            "git cherry-pick -x abc123",
+            "git grep -n needle",
+            "git clone --depth 1 https://example.invalid/repo.git",
+            "git submodule status",
+            "git bisect good",
+            "git --no-pager log --oneline",
+            "git status",
+            "sed -n 's/hello/world/p' notes.txt",
+            "find . -name '*.rs'",
+        ] {
+            assert!(proposed_allow_prefix(command).is_some(), "{command}");
+        }
+    }
+
+    #[test]
+    fn a_sed_script_runs_code_only_through_its_e_and_w_commands_and_flags() {
+        for script in [
+            "1,5p",
+            "s/hello/world/g",
+            "/where/d",
+            "y/abc/xyz/",
+            "$!N;P;D",
+        ] {
+            assert!(!sed_script_runs_code(script), "{script}");
+        }
+        for script in [
+            "1e date",
+            "s/a/b/e",
+            "s/a/b/w out.txt",
+            "w out.txt",
+            "/x/W out.txt",
+            "s/a;b/c/e",
+            "s/unterminated",
+        ] {
+            assert!(sed_script_runs_code(script), "{script}");
+        }
     }
 }

@@ -25,10 +25,12 @@ pub fn describe_app_permission_block(reason: &SafetyReason) -> String {
             format!("'{app_name}' is blocked by your automation permissions.")
         }
         SafetyReason::AppHardBlocked { app_name, .. } => format!(
-            "'{app_name}' is in the always-blocked category (investment, crypto, banking, payments) and cannot be automated."
+            "'{app_name}' is always blocked (money, terminals, password managers, and system security or settings) and cannot be automated."
         ),
         SafetyReason::AppRequiresApproval { app_name, .. } => {
-            format!("'{app_name}' has not been approved for automation yet.")
+            format!(
+                "'{app_name}' has not been approved for automation yet. Allow it in Settings > Capabilities > Computer use, then start again."
+            )
         }
         other => format!("{other:?}"),
     }
@@ -689,6 +691,13 @@ impl ComputerUseSafetyLayer {
             });
         }
 
+        if super::app_permissions::is_always_blocked_bundle(name) {
+            return SafetyDecision::block(SafetyReason::AppHardBlocked {
+                app_name: name.to_string(),
+                bundle_id: None,
+            });
+        }
+
         // Check for sensitive applications
         let name_lower = name.to_lowercase();
         let sensitive_apps = ["terminal", "cmd", "powershell", "bash", "sh", "regedit"];
@@ -707,6 +716,13 @@ impl ComputerUseSafetyLayer {
 
     /// Evaluates window focus for protected windows.
     fn evaluate_window_focus(&self, title: &str) -> SafetyDecision {
+        if super::app_permissions::is_always_blocked_bundle(title) {
+            return SafetyDecision::block(SafetyReason::AppHardBlocked {
+                app_name: title.to_string(),
+                bundle_id: None,
+            });
+        }
+
         let Some(patterns) = SENSITIVE_WINDOW_TITLES.get() else {
             // Patterns not initialized yet; allow but warn
             return SafetyDecision::allow_with_warning(
@@ -909,6 +925,28 @@ mod tests {
         assert!(layer.check_foreground_app(None).await.is_none());
     }
 
+    /// Launching or focusing an app puts it on screen for the next capture,
+    /// so a plan that names a refuse-listed one is blocked before any driver
+    /// takes it, not merely flagged.
+    #[test]
+    fn a_plan_cannot_launch_or_focus_a_refuse_listed_app() {
+        let layer = ComputerUseSafetyLayer::new(SafetyConfig::default());
+        for name in ["Robinhood", "Bitwarden", "Terminal"] {
+            let launch = layer.evaluate_action(&ComputerUseAction::LaunchApplication {
+                name: name.to_string(),
+            });
+            assert!(!launch.allowed, "{name} could be launched");
+            let focus = layer.evaluate_action(&ComputerUseAction::FocusWindow {
+                title: name.to_string(),
+            });
+            assert!(!focus.allowed, "{name} could be focused");
+        }
+        let notes = layer.evaluate_action(&ComputerUseAction::LaunchApplication {
+            name: "Notes".to_string(),
+        });
+        assert!(notes.allowed);
+    }
+
     #[test]
     fn a_block_reads_as_a_sentence_not_a_debug_dump() {
         let described = describe_app_permission_block(&SafetyReason::AppHardBlocked {
@@ -916,7 +954,7 @@ mod tests {
             bundle_id: Some("com.coinbase.app".to_string()),
         });
         assert!(described.contains("Coinbase"));
-        assert!(described.contains("always-blocked"));
+        assert!(described.contains("always blocked"));
         assert!(!described.contains("AppHardBlocked"));
     }
 

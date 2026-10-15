@@ -199,6 +199,17 @@ impl ProjectRegistry {
             .filter(|entry| entry.identity.is_none())
     }
 
+    /// The folders where `identity` was granted trust, as they were recorded.
+    pub fn trusted_paths(&self, identity: &str) -> Vec<PathBuf> {
+        self.projects
+            .iter()
+            .filter(|(_, entry)| {
+                entry.trust_level == "trusted" && entry.identity.as_deref() == Some(identity)
+            })
+            .map(|(path, _)| PathBuf::from(path))
+            .collect()
+    }
+
     fn path_key(path: &Path) -> String {
         path.canonicalize()
             .unwrap_or_else(|_| path.to_path_buf())

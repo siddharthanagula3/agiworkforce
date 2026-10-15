@@ -1,11 +1,11 @@
-use image::{DynamicImage, RgbaImage};
+use image::RgbaImage;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "macos")]
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Manager, State};
-use tauri_plugin_clipboard_manager::ClipboardExt;
 use uuid::Uuid;
 
 #[cfg(not(target_os = "macos"))]
@@ -13,7 +13,8 @@ use crate::automation::screen::{capture_primary_screen, capture_region, capture_
 #[cfg(target_os = "macos")]
 use crate::automation::screen::{capture_region, capture_window};
 use crate::{
-    automation::screen::{enumerate_windows, paste_from_clipboard},
+    automation::computer_use::{prepare_screenshot_dir, write_screenshot},
+    automation::screen::enumerate_windows,
     sys::commands::AppDatabase,
 };
 
@@ -78,17 +79,53 @@ pub struct WindowBounds {
     pub height: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CaptureRecord {
-    pub id: String,
-    pub conversation_id: Option<i64>,
-    pub capture_type: String,
-    pub file_path: String,
-    pub thumbnail_path: Option<String>,
-    pub ocr_text: Option<String>,
-    pub ocr_confidence: Option<f32>,
-    pub metadata: String,
-    pub created_at: i64,
+const CAPTURE_CONFIRM_LABEL: &str = "Take Picture";
+const CAPTURE_REQUEST: &str = "screen-capture";
+const CAPTURE_DECLINED_MESSAGE: &str =
+    "The screen capture was not confirmed, so no picture was taken.";
+
+/// One capture question at a time, and a wait after a no that grows while
+/// the noes keep coming.
+static CAPTURE_DECISIONS: crate::sys::native_confirm::ConfirmGate =
+    crate::sys::native_confirm::ConfirmGate::new();
+
+/// Set by the user's yes to the question below and kept until the app quits.
+/// It covers captures asked for from the window and nothing else: it is not
+/// computer-use consent, and a capture taken for a model still needs that.
+static CAPTURE_CONFIRMED_THIS_RUN: AtomicBool = AtomicBool::new(false);
+
+fn capture_question() -> crate::sys::native_confirm::NativeConfirm {
+    crate::sys::native_confirm::NativeConfirm {
+        title: "Take a picture of your screen?".to_string(),
+        body: "It goes into the chat you are writing. You will not be asked again until you quit AGI Workforce.".to_string(),
+        confirm_label: CAPTURE_CONFIRM_LABEL.to_string(),
+    }
+}
+
+/// What every command here passes before it looks at the screen or lists what
+/// is on it. A click on the capture button reaches these commands exactly as
+/// a script in the window would, so the first capture of an app run is
+/// confirmed in a native dialog, and the Screenshots switch in Settings,
+/// Capabilities, which the window cannot turn on by itself, is honoured every
+/// time.
+async fn ensure_capture_allowed(app: &tauri::AppHandle) -> Result<(), String> {
+    if let Some(off) =
+        crate::sys::commands::capabilities::capability_refusal(app, "ui_screenshot").await
+    {
+        return Err(off);
+    }
+    if CAPTURE_CONFIRMED_THIS_RUN.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    let confirmed = CAPTURE_DECISIONS
+        .confirm(app, CAPTURE_REQUEST, capture_question())
+        .await
+        .map_err(|held| held.message())?;
+    if !confirmed {
+        return Err(CAPTURE_DECLINED_MESSAGE.to_string());
+    }
+    CAPTURE_CONFIRMED_THIS_RUN.store(true, Ordering::SeqCst);
+    Ok(())
 }
 
 #[tauri::command]
@@ -97,6 +134,7 @@ pub async fn capture_screen_full(
     db: State<'_, AppDatabase>,
     conversation_id: Option<i64>,
 ) -> Result<CaptureResult, String> {
+    ensure_capture_allowed(&app_handle).await?;
     tracing::info!("Capturing full screen");
 
     #[cfg(target_os = "macos")]
@@ -107,8 +145,9 @@ pub async fn capture_screen_full(
             .unwrap_or_default()
             .as_secs() as i64;
 
+        let captures_dir = private_captures_dir(&app_handle)?;
         let pixels = with_hidden_main_window_for_capture(&app_handle, || {
-            std::panic::catch_unwind(|| capture_with_macos_screencapture(&["-x"]))
+            std::panic::catch_unwind(|| capture_with_macos_screencapture(&["-x"], &captures_dir))
                 .map_err(|_| "Capture backend panicked while capturing full screen".to_string())?
         })?;
         let metadata = CaptureMetadata {
@@ -186,6 +225,7 @@ pub async fn capture_screen_region(
     height: u32,
     conversation_id: Option<i64>,
 ) -> Result<CaptureResult, String> {
+    ensure_capture_allowed(&app_handle).await?;
     tracing::info!("Capturing screen region: ({x}, {y}) {width}x{height}");
 
     #[cfg(target_os = "macos")]
@@ -285,7 +325,8 @@ pub async fn capture_screen_region(
 }
 
 #[tauri::command]
-pub async fn capture_get_windows() -> Result<Vec<WindowInfo>, String> {
+pub async fn capture_get_windows(app_handle: tauri::AppHandle) -> Result<Vec<WindowInfo>, String> {
+    ensure_capture_allowed(&app_handle).await?;
     tracing::info!("Getting available windows");
 
     let windows = std::panic::catch_unwind(enumerate_windows)
@@ -309,152 +350,13 @@ pub async fn capture_get_windows() -> Result<Vec<WindowInfo>, String> {
 }
 
 #[tauri::command]
-pub async fn capture_get_history(
-    db: State<'_, AppDatabase>,
-    conversation_id: Option<i64>,
-    limit: Option<u32>,
-) -> Result<Vec<CaptureRecord>, String> {
-    tracing::info!("Getting capture history");
-
-    let limit = limit.unwrap_or(50);
-
-    let conn = db.connection()?;
-
-    let captures: Result<Vec<CaptureRecord>, String> = if let Some(conv_id) = conversation_id {
-        let mut stmt = conn
-            .prepare(
-                "SELECT id, conversation_id, capture_type, file_path, thumbnail_path, ocr_text, ocr_confidence, metadata, created_at
-                 FROM captures
-                 WHERE conversation_id = ?1
-                 ORDER BY created_at DESC
-                 LIMIT ?2",
-            )
-            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-
-        let rows = stmt
-            .query_map(rusqlite::params![conv_id, limit], |row| {
-                Ok(CaptureRecord {
-                    id: row.get(0)?,
-                    conversation_id: row.get(1)?,
-                    capture_type: row.get(2)?,
-                    file_path: row.get(3)?,
-                    thumbnail_path: row.get(4)?,
-                    ocr_text: row.get(5)?,
-                    ocr_confidence: row.get(6)?,
-                    metadata: row.get(7)?,
-                    created_at: row.get(8)?,
-                })
-            })
-            .map_err(|e| format!("Failed to query captures: {}", e))?;
-
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| format!("Failed to collect captures: {}", e))
-    } else {
-        let mut stmt = conn
-            .prepare(
-                "SELECT id, conversation_id, capture_type, file_path, thumbnail_path, ocr_text, ocr_confidence, metadata, created_at
-                 FROM captures
-                 ORDER BY created_at DESC
-                 LIMIT ?1",
-            )
-            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-
-        let rows = stmt
-            .query_map(rusqlite::params![limit], |row| {
-                Ok(CaptureRecord {
-                    id: row.get(0)?,
-                    conversation_id: row.get(1)?,
-                    capture_type: row.get(2)?,
-                    file_path: row.get(3)?,
-                    thumbnail_path: row.get(4)?,
-                    ocr_text: row.get(5)?,
-                    ocr_confidence: row.get(6)?,
-                    metadata: row.get(7)?,
-                    created_at: row.get(8)?,
-                })
-            })
-            .map_err(|e| format!("Failed to query captures: {}", e))?;
-
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| format!("Failed to collect captures: {}", e))
-    };
-
-    captures
-}
-
-#[tauri::command]
-pub async fn capture_delete(db: State<'_, AppDatabase>, capture_id: String) -> Result<(), String> {
-    tracing::info!("Deleting capture: {}", capture_id);
-
-    let conn = db.connection()?;
-
-    let (file_path, thumbnail_path): (String, Option<String>) = conn
-        .query_row(
-            "SELECT file_path, thumbnail_path FROM captures WHERE id = ?1",
-            rusqlite::params![&capture_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .map_err(|e| format!("Failed to get capture: {}", e))?;
-
-    conn.execute(
-        "DELETE FROM captures WHERE id = ?1",
-        rusqlite::params![&capture_id],
-    )
-    .map_err(|e| format!("Failed to delete capture: {}", e))?;
-
-    let _ = std::fs::remove_file(&file_path);
-    if let Some(thumb) = thumbnail_path {
-        let _ = std::fs::remove_file(&thumb);
-    }
-
-    tracing::info!("Capture deleted successfully: {}", capture_id);
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn capture_save_to_clipboard(
-    app_handle: tauri::AppHandle,
-    capture_id: String,
-    db: State<'_, AppDatabase>,
-) -> Result<(), String> {
-    tracing::info!("Copying capture to clipboard: {}", capture_id);
-
-    let conn = db.connection()?;
-
-    let file_path: String = conn
-        .query_row(
-            "SELECT file_path FROM captures WHERE id = ?1",
-            rusqlite::params![&capture_id],
-            |row| row.get(0),
-        )
-        .map_err(|e| format!("Failed to get capture: {}", e))?;
-
-    let img_data = image::open(&file_path)
-        .map_err(|e| format!("Failed to load image: {}", e))?
-        .to_rgba8();
-
-    let (width, height) = img_data.dimensions();
-    let rgba = img_data.into_raw();
-
-    let img = tauri::image::Image::new_owned(rgba, width, height);
-
-    app_handle
-        .clipboard()
-        .write_image(&img)
-        .map_err(|e| format!("Failed to write to clipboard: {}", e))?;
-
-    tracing::info!("Capture copied to clipboard successfully");
-    Ok(())
-}
-
-#[tauri::command]
 pub async fn capture_screen_window(
     app_handle: tauri::AppHandle,
     db: State<'_, AppDatabase>,
     hwnd: String,
     conversation_id: Option<i64>,
 ) -> Result<CaptureResult, String> {
+    ensure_capture_allowed(&app_handle).await?;
     tracing::info!("Capturing window: {}", hwnd);
 
     #[cfg(target_os = "macos")]
@@ -561,47 +463,6 @@ pub async fn capture_screen_window(
     Err("Unsupported platform for capture_screen_window".to_string())
 }
 
-#[tauri::command]
-pub async fn capture_from_clipboard(
-    app_handle: tauri::AppHandle,
-    db: State<'_, AppDatabase>,
-    conversation_id: Option<i64>,
-) -> Result<CaptureResult, String> {
-    tracing::info!("Capturing from clipboard");
-
-    let capture_id = Uuid::new_v4().to_string();
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-
-    let capture =
-        paste_from_clipboard().map_err(|e| format!("Failed to paste from clipboard: {}", e))?;
-
-    let metadata = CaptureMetadata {
-        width: capture.pixels.width(),
-        height: capture.pixels.height(),
-        window_title: Some("Clipboard".to_string()),
-        region: None,
-        screen_index: Some(capture.screen_index),
-    };
-
-    let result = persist_capture(
-        &app_handle,
-        &db,
-        &capture_id,
-        CaptureType::Region,
-        &capture.pixels,
-        &metadata,
-        conversation_id,
-        timestamp,
-    )?;
-
-    tracing::info!("Clipboard captured successfully: {}", capture_id);
-
-    Ok(result)
-}
-
 #[allow(clippy::too_many_arguments)]
 fn persist_capture(
     app_handle: &tauri::AppHandle,
@@ -613,20 +474,11 @@ fn persist_capture(
     conversation_id: Option<i64>,
     timestamp: i64,
 ) -> Result<CaptureResult, String> {
-    let data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get data dir: {e}"))?;
-
-    let captures_dir = data_dir.join("captures");
-    std::fs::create_dir_all(&captures_dir)
-        .map_err(|e| format!("Failed to create captures directory: {e}"))?;
+    let captures_dir = private_captures_dir(app_handle)?;
 
     let file_name = format!("capture_{capture_id}.png");
     let file_path = captures_dir.join(&file_name);
-    DynamicImage::ImageRgba8(image.clone())
-        .save(&file_path)
-        .map_err(|e| format!("Failed to save image: {e}"))?;
+    write_screenshot(&file_path, image).map_err(|e| format!("Failed to save image: {e}"))?;
 
     let thumbnail_path = generate_thumbnail(image, &captures_dir, capture_id)?;
 
@@ -727,9 +579,25 @@ where
     result
 }
 
+/// The app's own captures folder, readable by its owner only. A user's
+/// screenshots stay here, and never pass through the shared temp directory.
+fn private_captures_dir(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let captures_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get data dir: {e}"))?
+        .join("captures");
+    prepare_screenshot_dir(&captures_dir)
+        .map_err(|e| format!("Failed to create captures directory: {e}"))?;
+    Ok(captures_dir)
+}
+
 #[cfg(target_os = "macos")]
-fn capture_with_macos_screencapture(args: &[&str]) -> Result<RgbaImage, String> {
-    let tmp_path = std::env::temp_dir().join(format!("agi-capture-{}.png", Uuid::new_v4()));
+fn capture_with_macos_screencapture(
+    args: &[&str],
+    captures_dir: &Path,
+) -> Result<RgbaImage, String> {
+    let tmp_path = captures_dir.join(format!(".pending-{}.png", Uuid::new_v4()));
     let output_path = tmp_path
         .to_str()
         .ok_or_else(|| "Invalid temporary capture path".to_string())?;
@@ -747,11 +615,11 @@ fn capture_with_macos_screencapture(args: &[&str]) -> Result<RgbaImage, String> 
         );
     }
 
-    let image = image::open(&tmp_path)
-        .map_err(|e| format!("Failed to load captured screenshot: {}", e))?
-        .to_rgba8();
+    let loaded = image::open(&tmp_path);
     let _ = std::fs::remove_file(&tmp_path);
-    Ok(image)
+    Ok(loaded
+        .map_err(|e| format!("Failed to load captured screenshot: {}", e))?
+        .to_rgba8())
 }
 
 fn generate_thumbnail(
@@ -779,9 +647,90 @@ fn generate_thumbnail(
 
     let thumb_name = format!("thumb_{}.png", capture_id);
     let thumb_path = output_dir.join(&thumb_name);
-    thumbnail
-        .save(&thumb_path)
+    write_screenshot(&thumb_path, &thumbnail)
         .map_err(|e| format!("Failed to save thumbnail: {}", e))?;
 
     Ok(Some(thumb_path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_capture_button_is_one_the_native_dialog_can_ask_with() {
+        assert!(crate::sys::native_confirm::can_ask_with(
+            CAPTURE_CONFIRM_LABEL
+        ));
+        let question = capture_question();
+        assert_eq!(question.confirm_label, CAPTURE_CONFIRM_LABEL);
+        assert_eq!(question.title, "Take a picture of your screen?");
+        assert!(question.body.contains("until you quit"));
+    }
+
+    /// The yes for a capture is its own: nothing here reads or grants
+    /// computer-use consent.
+    #[test]
+    fn a_capture_yes_is_kept_apart_from_computer_use_consent() {
+        let source = include_str!("capture.rs");
+        let gate = source
+            .split("async fn ensure_capture_allowed(")
+            .nth(1)
+            .and_then(|rest| rest.split("\n}\n").next())
+            .expect("ensure_capture_allowed");
+
+        assert!(gate.contains("capability_refusal(app, \"ui_screenshot\")"));
+        assert!(
+            gate.find("CAPTURE_DECISIONS").expect("asks")
+                < gate
+                    .find("CAPTURE_CONFIRMED_THIS_RUN.store(true")
+                    .expect("remembers")
+        );
+        for name in ["require_consent", "consent_is_live", "persist_consent"] {
+            let mention = format!("{name}(");
+            assert_eq!(
+                source.matches(mention.as_str()).count(),
+                0,
+                "capture.rs must not touch computer-use consent through {name}"
+            );
+        }
+    }
+
+    /// Each capture command is callable by whatever runs in the window, so
+    /// each passes the switch and the confirmation before anything else.
+    #[test]
+    fn every_capture_command_passes_the_switch_and_the_confirmation_first() {
+        let source = include_str!("capture.rs");
+        let commands: Vec<&str> = source
+            .split("#[tauri::command]\npub async fn ")
+            .skip(1)
+            .collect();
+        let names: Vec<&str> = commands
+            .iter()
+            .filter_map(|command| command.split('(').next())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "capture_screen_full",
+                "capture_screen_region",
+                "capture_get_windows",
+                "capture_screen_window",
+            ],
+            "a command added here needs a place in this test"
+        );
+
+        for command in commands {
+            let name = command.split('(').next().unwrap_or_default();
+            let body = command
+                .split_once(" {\n")
+                .map(|(_, body)| body)
+                .unwrap_or_default();
+            assert!(
+                body.trim_start()
+                    .starts_with("ensure_capture_allowed(&app_handle).await?;"),
+                "{name} must pass the capture gate before anything else"
+            );
+        }
+    }
 }

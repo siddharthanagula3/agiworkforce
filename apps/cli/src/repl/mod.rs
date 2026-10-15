@@ -825,6 +825,7 @@ pub async fn attach_url_context(url: &str, session: &mut AgentSession) -> Result
         auto_approve_edits: session.governed_permission_mode().auto_approves_edits(),
         quiet: true,
         approval_callback: None,
+        user_input_callback: None,
         privacy_mode: session.privacy_mode,
         workspace_root: session.workspace_root(),
     };
@@ -860,6 +861,7 @@ pub async fn run_user_shell_command(
         auto_approve_edits: session.governed_permission_mode().auto_approves_edits(),
         quiet: session.quiet,
         approval_callback: None,
+        user_input_callback: None,
         privacy_mode: session.privacy_mode,
         workspace_root: session.workspace_root(),
     };
@@ -891,6 +893,7 @@ async fn run_advisor_question(
         auto_approve_edits: false,
         quiet: false,
         approval_callback: None,
+        user_input_callback: None,
         privacy_mode,
         workspace_root: std::env::current_dir().ok(),
     };

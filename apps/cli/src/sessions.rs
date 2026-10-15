@@ -615,6 +615,7 @@ pub fn import_hosted_session(
         None => ManagedSession::new(session_id.to_string(), Utc::now()),
     };
     session.messages = messages;
+    session.conversation_replaced();
     session.model = model.map(str::to_string);
     session.title = Some(title.to_string());
     session.created_by = Some("cli".to_string());

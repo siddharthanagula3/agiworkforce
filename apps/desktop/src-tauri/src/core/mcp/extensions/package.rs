@@ -76,14 +76,22 @@ impl ExtensionPackage {
     /// - Blocks potentially dangerous file types
     /// - Validates manifest structure
     pub fn from_file<P: AsRef<Path>>(path: P) -> ExtensionResult<Self> {
+        Self::read(path).map(|(package, _)| package)
+    }
+
+    /// [`Self::from_file`] together with the bytes the package was checked
+    /// from. An installer extracts from these bytes and never opens the path
+    /// again, so what is installed is what was checked and shown to the user
+    /// even when the file is replaced meanwhile.
+    pub fn read<P: AsRef<Path>>(path: P) -> ExtensionResult<(Self, Vec<u8>)> {
+        use sha2::{Digest, Sha256};
+
         let path = path.as_ref();
 
-        // Check file exists
         if !path.exists() {
             return Err(ExtensionError::PackageNotFound(path.display().to_string()));
         }
 
-        // Validate file extension
         let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
         if extension != EXTENSION_FILE_EXTENSION {
             return Err(ExtensionError::InvalidPackage(format!(
@@ -92,22 +100,26 @@ impl ExtensionPackage {
             )));
         }
 
-        // Check file size
-        let metadata = std::fs::metadata(path)?;
-        let file_size = metadata.len();
+        let too_large = |size: u64| ExtensionError::PackageTooLarge {
+            size,
+            max_size: MAX_PACKAGE_SIZE,
+        };
+        let file_size = std::fs::metadata(path)?.len();
         if file_size > MAX_PACKAGE_SIZE {
-            return Err(ExtensionError::PackageTooLarge {
-                size: file_size,
-                max_size: MAX_PACKAGE_SIZE,
-            });
+            return Err(too_large(file_size));
         }
 
-        // Calculate hash before opening
-        let package_hash = Self::calculate_file_hash(path)?;
+        let mut bytes = Vec::new();
+        std::fs::File::open(path)?
+            .take(MAX_PACKAGE_SIZE + 1)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() as u64 > MAX_PACKAGE_SIZE {
+            return Err(too_large(bytes.len() as u64));
+        }
 
-        // Open the ZIP archive
-        let file = std::fs::File::open(path)?;
-        Self::from_reader(file, package_hash)
+        let package_hash = hex::encode(Sha256::digest(&bytes));
+        let package = Self::from_reader(std::io::Cursor::new(bytes.as_slice()), package_hash)?;
+        Ok((package, bytes))
     }
 
     /// Parse and validate an extension package from a reader
@@ -331,26 +343,6 @@ impl ExtensionPackage {
         }
 
         Err(ExtensionError::ServerFileMissing)
-    }
-
-    /// Calculate SHA-256 hash of a file
-    fn calculate_file_hash<P: AsRef<Path>>(path: P) -> ExtensionResult<String> {
-        use sha2::{Digest, Sha256};
-
-        let mut file = std::fs::File::open(path)?;
-        let mut hasher = Sha256::new();
-        let mut buffer = [0u8; 8192];
-
-        loop {
-            let bytes_read = file.read(&mut buffer)?;
-            if bytes_read == 0 {
-                break;
-            }
-            hasher.update(&buffer[..bytes_read]);
-        }
-
-        let hash = hasher.finalize();
-        Ok(hex::encode(hash))
     }
 
     /// Get the installation ID (same as manifest ID)

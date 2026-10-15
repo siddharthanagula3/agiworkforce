@@ -779,6 +779,7 @@ mod tests {
             auto_routing: None,
             routing_authority: None,
             code: None,
+            transcript: None,
         };
         let first_path = super::save_session_in(base, &first).unwrap();
         assert!(first_path.starts_with(&store_dir));
@@ -814,6 +815,7 @@ mod tests {
             auto_routing: None,
             routing_authority: None,
             code: None,
+            transcript: None,
         };
         let second_path = super::save_session_in(base, &second).unwrap();
         assert!(second_path.starts_with(&store_dir));

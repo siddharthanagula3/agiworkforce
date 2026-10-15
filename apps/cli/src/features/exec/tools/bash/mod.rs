@@ -86,8 +86,22 @@ pub(super) async fn execute_run_command(
         .await;
     }
 
-    let cwd = crate::path_security::validation_workspace();
-    let unrestricted = crate::sandbox::sandbox_disabled_for_workspace(&cwd);
+    let scoped = crate::path_security::validation_workspace();
+    let unrestricted = crate::sandbox::sandbox_disabled_for_workspace(&scoped);
+    let (cwd, workspace_notice) = if unrestricted {
+        (scoped, None)
+    } else {
+        match command_workspace(scoped) {
+            Ok(workspace) => workspace,
+            Err(error) => {
+                return Ok(ToolResult {
+                    tool_name: "run_command".to_string(),
+                    success: false,
+                    output: format!("Sandbox unavailable ({error:#})."),
+                })
+            }
+        }
+    };
     let result: std::io::Result<std::process::Output> = {
         if !unrestricted {
             if let Some(refusal) = internal_destination_refusal(command) {
@@ -183,12 +197,15 @@ pub(super) async fn execute_run_command(
             }
 
             let combined = truncate_output_with_save("run_command", combined);
+            let notice = workspace_notice
+                .map(|notice| format!("{notice}\n"))
+                .unwrap_or_default();
 
             Ok(ToolResult {
                 tool_name: "run_command".to_string(),
                 success: output.status.success(),
                 output: format!(
-                    "Exit code: {}\n{}",
+                    "{notice}Exit code: {}\n{}",
                     output.status.code().unwrap_or(-1),
                     combined
                 ),
@@ -237,9 +254,18 @@ async fn start_in_background(
         success: false,
         output,
     };
-    let cwd = crate::path_security::validation_workspace();
+    let scoped = crate::path_security::validation_workspace();
+    let unrestricted = crate::sandbox::sandbox_disabled_for_workspace(&scoped);
+    let (cwd, workspace_notice) = if unrestricted {
+        (scoped, None)
+    } else {
+        match command_workspace(scoped) {
+            Ok(workspace) => workspace,
+            Err(error) => return Ok(refuse(format!("Sandbox unavailable ({error:#})."))),
+        }
+    };
     let run_in = working_dir.unwrap_or_else(|| cwd.clone());
-    let manager = if crate::sandbox::sandbox_disabled_for_workspace(&cwd) {
+    let manager = if unrestricted {
         Some(
             crate::sandbox::SandboxManager::new(
                 crate::sandbox::SandboxPolicy::DangerFullAccess,
@@ -278,18 +304,33 @@ async fn start_in_background(
     } else {
         "with piped input and output, because this system has no pseudo-terminal"
     };
+    let notice = workspace_notice
+        .map(|notice| format!("{notice}\n"))
+        .unwrap_or_default();
     Ok(ToolResult {
         tool_name: "run_command".to_string(),
         success: !matches!(output.state, crate::terminals::CommandState::Exited(code) if code != Some(0)),
         output: truncate_output_with_save(
             "run_command",
             format!(
-                "Started {} in the background {how}. Read what it prints or type into it with command_output, and end it with command_stop.\n{}",
+                "{notice}Started {} in the background {how}. Read what it prints or type into it with command_output, and end it with command_stop.\n{}",
                 background.id,
                 crate::terminals::report(&background, &output)
             ),
         ),
     })
+}
+
+/// A session scoped to another workspace keeps it; one in the folder the
+/// process started in takes [`crate::sandbox::command_workspace`], which moves
+/// a home-folder start to the private agent workspace and says so once.
+fn command_workspace(
+    scoped: std::path::PathBuf,
+) -> anyhow::Result<(std::path::PathBuf, Option<String>)> {
+    if std::env::current_dir().ok().as_deref() != Some(scoped.as_path()) {
+        return Ok((scoped, None));
+    }
+    crate::sandbox::command_workspace()
 }
 
 pub(super) async fn execute_command_output(
@@ -552,7 +593,7 @@ pub(super) async fn approve_command(
                                         tool_name: tool_name.to_string(),
                                         success: false,
                                         output: format!(
-                                            "Command was approved but its Always Allow rule could not be saved ({error}); the command was not run. Choose Allow Once to proceed without persistence."
+                                            "Command was approved but its Always Allow rule could not be saved ({error}); the command was not run. Choose Allow Once or Allow for Session to proceed without persistence."
                                         ),
                                     }));
                                 }

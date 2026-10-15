@@ -23772,6 +23772,39 @@
         "workers-ai/chat-completions"
       ]
     },
+    "chrome/managed-browser-task": {
+      "family": "browser",
+      "surface": "chrome",
+      "executionMode": "local",
+      "trustMode": "managed_cloud",
+      "status": "implemented",
+      "features": { "computerUse": { "implementation": "implemented" } },
+      "allowedHarnessIds": [
+        "openai/responses",
+        "openai/chat-completions",
+        "anthropic/messages",
+        "google/generate-content",
+        "xai/chat-completions",
+        "deepseek/chat-completions",
+        "qwen/chat-completions",
+        "moonshot/chat-completions",
+        "mistral/chat-completions",
+        "zhipu/chat-completions",
+        "perplexity/chat-completions",
+        "groq/chat-completions",
+        "minimax/chat-completions",
+        "open-router/chat-completions-managed",
+        "cheaperinference/chat-completions",
+        "cheaperinference-anthropic/messages",
+        "deepinfra/chat-completions",
+        "together/chat-completions",
+        "novita/chat-completions",
+        "experientiallabs/chat-completions",
+        "experientiallabs-anthropic/messages",
+        "vercel_gateway/chat-completions",
+        "workers-ai/chat-completions"
+      ]
+    },
     "chrome/browser-task": {
       "family": "browser",
       "surface": "chrome",
@@ -40934,6 +40967,6 @@
       ],
       "flagship_additions": ["gpt-6-astra", "claude-fable-5-1", "claude-opus-5-5", "grok-4.7"]
     },
-    "release": { "policyVersion": 26 }
+    "release": { "policyVersion": 34 }
   }
 }

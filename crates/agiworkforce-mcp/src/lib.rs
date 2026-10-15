@@ -26,11 +26,14 @@ pub use elicitation::{
 };
 pub use error::McpError;
 pub use hooks::{
-    BrowserAuthorizer, ClientHooks, ClientInfo, ClientRegistration, OAuthToken, TokenStore,
+    BrowserAuthorizer, ClientHooks, ClientInfo, ClientRegistration, OAuthToken, RespawnCheck,
+    TokenStore,
 };
 pub use notification::McpNotification;
 pub use protocol::{Implementation, RpcError};
 pub use resources::{McpResource, McpResourceContents, McpResourceTemplate};
-pub use transport::stdio::INHERITED_ENV_ALLOWLIST;
+pub use transport::stdio::{
+    INHERITED_ENV_ALLOWLIST, WITHHELD_MANIFEST_VARS, manifest_var_is_passed,
+};
 
 pub use agiworkforce_protocol::mcp::{CallToolResult, Tool};

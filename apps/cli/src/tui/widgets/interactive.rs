@@ -86,6 +86,11 @@ pub trait InteractiveView: Send {
         None
     }
 
+    /// The rows the host has for the next render. A view whose content is
+    /// approved from the keyboard fits itself to them, so its controls and
+    /// its place in the content are never cut off; any other view ignores it.
+    fn fit_rows(&self, _rows: u16) {}
+
     /// Handle a key event. Returns the next action for the event loop.
     fn handle_key(&mut self, key: KeyAction) -> ViewAction;
 

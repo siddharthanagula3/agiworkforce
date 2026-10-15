@@ -1,6 +1,7 @@
+use super::elicitation::ElicitationBroker;
 use super::protocol::McpToolDefinition;
 use super::session::McpSession;
-use crate::core::mcp::{McpError, McpResult, McpServerConfig};
+use crate::core::mcp::{ApprovedLaunch, McpError, McpResult, McpServerConfig};
 use parking_lot::RwLock;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -25,36 +26,63 @@ impl From<McpToolDefinition> for McpTool {
 
 pub struct McpClient {
     sessions: Arc<RwLock<HashMap<String, Arc<McpSession>>>>,
+    /// The launch each connected server was approved and started as.
+    launches: Arc<RwLock<HashMap<String, McpServerConfig>>>,
+    elicitation: Arc<ElicitationBroker>,
 }
 
 impl McpClient {
     pub fn new() -> Self {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
+            launches: Arc::new(RwLock::new(HashMap::new())),
+            elicitation: Arc::new(ElicitationBroker::new()),
         }
     }
 
-    pub async fn connect_server(&self, name: String, config: McpServerConfig) -> McpResult<()> {
-        self.connect(name, config, false).await
+    pub fn elicitation(&self) -> &Arc<ElicitationBroker> {
+        &self.elicitation
+    }
+
+    /// Starts a server. `approved` is the proof that this launch went
+    /// through the approval check; `config` is the same entry with its
+    /// credentials resolved.
+    pub async fn connect_server(
+        &self,
+        name: String,
+        config: McpServerConfig,
+        approved: ApprovedLaunch,
+    ) -> McpResult<()> {
+        self.connect(name, config, approved, false).await
     }
 
     pub async fn sign_in_and_connect(
         &self,
         name: String,
         config: McpServerConfig,
+        approved: ApprovedLaunch,
     ) -> McpResult<()> {
-        self.connect(name, config, true).await
+        self.connect(name, config, approved, true).await
     }
 
     async fn connect(
         &self,
         name: String,
         config: McpServerConfig,
+        approved: ApprovedLaunch,
         interactive: bool,
     ) -> McpResult<()> {
         tracing::info!("[MCP Client] Connecting to server '{}'", name);
 
-        let session = McpSession::connect(name.clone(), config, interactive).await?;
+        let launch = approved.server().cloned();
+        let session = McpSession::connect(
+            name.clone(),
+            config,
+            interactive,
+            self.elicitation.clone(),
+            approved,
+        )
+        .await?;
 
         let server_info = session.get_server_info();
         tracing::info!(
@@ -75,6 +103,10 @@ impl McpClient {
         self.sessions
             .write()
             .insert(name.clone(), Arc::new(session));
+        match launch {
+            Some(launch) => self.launches.write().insert(name, launch),
+            None => self.launches.write().remove(&name),
+        };
 
         Ok(())
     }
@@ -82,6 +114,7 @@ impl McpClient {
     pub async fn disconnect_server(&self, name: &str) -> McpResult<()> {
         tracing::info!("[MCP Client] Disconnecting from server '{}'", name);
 
+        self.launches.write().remove(name);
         let session_arc = {
             let mut sessions = self.sessions.write();
             sessions
@@ -226,6 +259,17 @@ impl McpClient {
             .iter()
             .map(|(name, session_arc)| (name.clone(), session_arc.get_cached_tools().len()))
             .collect()
+    }
+
+    /// The launch a connected server was approved and started as, before
+    /// its credentials were resolved. What the configuration says now is
+    /// not it: the page can rewrite the configuration under a running
+    /// server.
+    pub fn started_launch(&self, name: &str) -> Option<McpServerConfig> {
+        if !self.sessions.read().contains_key(name) {
+            return None;
+        }
+        self.launches.read().get(name).cloned()
     }
 
     pub fn get_connected_servers(&self) -> Vec<String> {

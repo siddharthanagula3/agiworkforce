@@ -179,7 +179,10 @@ mod contract_mapping_tests {
             "Run rm -rf build?",
             Vec::new(),
         );
-        let observing = crate::hooks::HooksConfig { hooks };
+        let observing = crate::hooks::HooksConfig {
+            hooks,
+            sandbox: Some(false),
+        };
         assert_eq!(
             permission_request_hook_denial(&observing, &request).await,
             None
@@ -197,7 +200,10 @@ mod contract_mapping_tests {
                 "printf '%s' '{\"decision\":\"block\",\"reason\":\"no deletes\"}'".to_string(),
             )],
         );
-        let denying = crate::hooks::HooksConfig { hooks };
+        let denying = crate::hooks::HooksConfig {
+            hooks,
+            sandbox: Some(false),
+        };
         assert_eq!(
             permission_request_hook_denial(&denying, &request).await,
             Some(vec!["no deletes".to_string()])
@@ -291,6 +297,34 @@ pub(crate) fn interactive_questions_enabled() -> bool {
     INTERACTIVE_QUESTIONS.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// A question `ask_user` puts to whoever is driving the session.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserInputRequest {
+    pub question: String,
+}
+
+/// Resolves to the answer, or `None` when the question was cancelled or
+/// nobody answered in time.
+pub type UserInputCallback = Arc<
+    dyn Fn(UserInputRequest) -> Pin<Box<dyn Future<Output = Option<String>> + Send>> + Send + Sync,
+>;
+
+static STDIN_CARRIES_PROTOCOL: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Called once by a run with no human at the terminal: the app-server, whose
+/// stdin carries its client's protocol frames, and exec or one-shot runs. From
+/// then on `ask_user` never reads the terminal, which would take a protocol
+/// frame as the answer or wait forever for a line nobody types.
+pub fn forbid_terminal_questions() {
+    STDIN_CARRIES_PROTOCOL.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+pub(crate) fn terminal_questions_allowed() -> bool {
+    !STDIN_CARRIES_PROTOCOL.load(std::sync::atomic::Ordering::SeqCst)
+        && crate::interactive::can_prompt()
+}
+
 #[derive(Clone)]
 pub struct ToolExecOptions {
     pub require_confirmation: bool,
@@ -299,6 +333,9 @@ pub struct ToolExecOptions {
     pub auto_approve_edits: bool,
     pub quiet: bool,
     pub approval_callback: Option<ApprovalCallback>,
+    /// Where `ask_user` sends its question. `None` means no surface can answer,
+    /// and the terminal is used only when a human is on it.
+    pub user_input_callback: Option<UserInputCallback>,
     /// Trust boundary of the session that requested this invocation.
     ///
     /// Tool policy must travel with each call. A process-global flag is unsafe
@@ -455,6 +492,7 @@ pub async fn execute_tool(call: &ToolCall, require_confirmation: bool) -> Result
         auto_approve_edits: false,
         quiet: false,
         approval_callback: None,
+        user_input_callback: None,
         // A sessionless invocation has no authority to leave the device.
         privacy_mode: crate::agent::PrivacyMode::Local,
         workspace_root: std::env::current_dir().ok(),
@@ -480,9 +518,11 @@ async fn file_mutation_targets(
     let raw = if tool == "apply_patch" {
         let patch = args.get("patch").ok_or("Missing: patch")?;
         file_ops::patch_target_paths_with_cwd(patch, &root).await?;
-        crate::apply_patch::parsed_patch_targets(patch)
-            .await
-            .map_err(|reason| reason.to_string())?
+        crate::apply_patch::patch_targets(patch, &root)
+            .await?
+            .into_iter()
+            .map(|target| std::path::PathBuf::from(target.name))
+            .collect()
     } else {
         let path = args.get("path").ok_or("Missing required argument: path")?;
         let path = std::path::PathBuf::from(crate::path_security::expand_home(path));
@@ -824,12 +864,13 @@ async fn execute_tool_with_scoped_permissions(
     }
     let call = &scoped_call;
     if opts.require_confirmation {
+        let protects = |path: &std::path::Path| {
+            crate::path_security::is_protected_path(path)
+                || crate::path_security::controls_what_runs(opts.workspace_root.as_deref(), path)
+        };
         let protected: Vec<_> = targets
             .iter()
-            .filter(|(requested, resolved)| {
-                crate::path_security::is_protected_path(requested)
-                    || crate::path_security::is_protected_path(resolved)
-            })
+            .filter(|(requested, resolved)| protects(requested) || protects(resolved))
             .collect();
         if !protected.is_empty() {
             let operation = match canonical_name {
@@ -858,8 +899,7 @@ async fn execute_tool_with_scoped_permissions(
             let mut details: Vec<_> = targets
                 .iter()
                 .map(|(requested, path)| {
-                    let protected = crate::path_security::is_protected_path(requested)
-                        || crate::path_security::is_protected_path(path);
+                    let protected = protects(requested) || protects(path);
                     format!(
                         "{} (resolved: {}, protected: {protected})",
                         requested.display(),
@@ -1089,7 +1129,14 @@ async fn execute_tool_with_scoped_permissions(
         "notebook_edit" => execute_notebook_edit(&call.args, require_confirm).await,
         "todo_read" => execute_todo_read(opts.workspace_root.as_deref()).await,
         "todo_write" => execute_todo_write(&call.args, opts.workspace_root.as_deref()).await,
-        "ask_user" => execute_ask_user(&call.args, opts.approval_callback.as_ref()).await,
+        "ask_user" => {
+            execute_ask_user(
+                &call.args,
+                opts.approval_callback.as_ref(),
+                opts.user_input_callback.as_ref(),
+            )
+            .await
+        }
         "read_many_files" => execute_read_many_files(&call.args).await,
         "team_create" => execute_team_create(&call.args).await,
         "team_delete" => execute_team_delete(&call.args).await,
@@ -1523,6 +1570,44 @@ async fn execute_resolve_conflict(
         }
     }
 
+    let staging = crate::platform::runtime::git::GitOperation::Stage {
+        paths: vec![relative.to_path_buf()],
+    };
+    let git = match git::hook_gate(
+        &crate::platform::runtime::git::GitApi::at(&root),
+        staging.host_hooks(),
+    )
+    .await
+    {
+        Ok((git, None)) => git,
+        Ok((git, Some(hooks))) => {
+            let request = ApprovalRequest::new(
+                ApprovalRequestKind::Git {
+                    tool_name: "resolve_conflict".to_string(),
+                    target: format!("git add -- {path}"),
+                },
+                format!("Run the index hooks in {} to stage {path}?", root.display()),
+                hooks,
+            );
+            let allowed = match request_approval(approval_callback, request.clone()).await {
+                Some(decision) => approval_allows(decision),
+                None => Confirm::new()
+                    .with_prompt(format!("{} Allow it?", request.summary))
+                    .default(false)
+                    .interact()
+                    .unwrap_or(false),
+            };
+            if !allowed {
+                return refuse(
+                    "The repository's index hooks were not approved; no resolution was applied."
+                        .to_string(),
+                );
+            }
+            git
+        }
+        Err(reason) => return refuse(reason),
+    };
+
     let run_tests_requested = args
         .get("run_tests")
         .is_some_and(|value| matches!(value.trim(), "true" | "1" | "yes"));
@@ -1562,7 +1647,7 @@ async fn execute_resolve_conflict(
     } else {
         false
     };
-    match crate::merge_conflicts::resolve_conflicted_file(&root, relative, &resolutions, run_tests)
+    match crate::merge_conflicts::resolve_conflicted_file(&git, relative, &resolutions, run_tests)
         .await
     {
         Ok(outcome) => Ok(ToolResult {
@@ -2629,6 +2714,7 @@ mod tests {
             auto_approve_edits: false,
             quiet: true,
             approval_callback: Some(callback),
+            user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Byok,
             workspace_root: None,
         }
@@ -2821,6 +2907,7 @@ mod tests {
             auto_approve_edits: false,
             quiet: true,
             approval_callback: None,
+            user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Local,
             workspace_root: std::env::current_dir().ok(),
         };
@@ -2874,6 +2961,7 @@ reason = "regression test"
             auto_approve_edits: false,
             quiet: true,
             approval_callback: None,
+            user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Local,
             workspace_root: Some(workspace.path().to_path_buf()),
         };
@@ -2926,6 +3014,7 @@ decision = "ask"
             auto_approve_edits: false,
             quiet: true,
             approval_callback: Some(callback),
+            user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Local,
             workspace_root: Some(workspace.path().to_path_buf()),
         };
@@ -2983,6 +3072,7 @@ decision = "ask"
             auto_approve_edits: false,
             quiet: true,
             approval_callback: Some(callback),
+            user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Local,
             workspace_root: Some(workspace.path().to_path_buf()),
         };
@@ -3010,6 +3100,209 @@ decision = "ask"
             1,
             "a removed rule still put a prompt in front of the user"
         );
+    }
+
+    fn accepting_edits(callback: ApprovalCallback) -> ToolExecOptions {
+        ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
+            mcp_tool_definitions: None,
+            require_confirmation: true,
+            auto_approve_safe: true,
+            auto_approve_edits: true,
+            quiet: true,
+            approval_callback: Some(callback),
+            user_input_callback: None,
+            privacy_mode: crate::agent::PrivacyMode::Local,
+            workspace_root: None,
+        }
+    }
+
+    /// A folder made in the working directory, as a patch names it. The
+    /// temporary-file crate hands back an absolute path whatever it was given,
+    /// and a patch header that spells an absolute path is refused.
+    fn relative_name(folder: &std::path::Path) -> String {
+        folder
+            .file_name()
+            .expect("a folder made in the working directory has a name")
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn edit_call(name: &str, pairs: &[(&str, String)]) -> ToolCall {
+        ToolCall {
+            name: name.to_string(),
+            args: pairs
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.clone()))
+                .collect(),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_mode_that_accepts_edits_writes_a_project_file_without_asking() {
+        let project = tempfile::tempdir_in(".").expect("project");
+        std::fs::create_dir_all(project.path().join("src")).expect("src");
+        let target = project.path().join("src").join("a.rs");
+        let (callback, seen) = recording_callback(ApprovalDecision::Deny);
+
+        let result = execute_tool_with_opts(
+            &edit_call(
+                "write_file",
+                &[
+                    ("path", target.display().to_string()),
+                    ("content", "fn main() {}\n".to_string()),
+                ],
+            ),
+            &accepting_edits(callback),
+        )
+        .await
+        .expect("write");
+
+        assert!(result.success, "{}", result.output);
+        assert!(
+            seen.lock().expect("seen").is_empty(),
+            "an ordinary project file was asked about in a mode that accepts edits"
+        );
+        assert!(target.exists());
+    }
+
+    #[tokio::test]
+    async fn renaming_an_ordinary_file_onto_a_protected_path_asks_for_the_whole_patch() {
+        use agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel;
+
+        let project = tempfile::tempdir_in(".").expect("project");
+        let notes = project.path().join("notes.json");
+        let servers = project.path().join(".mcp.json");
+        std::fs::write(&notes, "{}\n").expect("notes");
+        let folder = relative_name(project.path());
+        let from = format!("{folder}/notes.json");
+        let to = format!("{folder}/.mcp.json");
+        let patch = format!(
+            "diff --git a/{from} b/{to}\nsimilarity index 100%\nrename from {from}\nrename to {to}\n"
+        );
+        let cwd = std::env::current_dir().expect("cwd");
+        let mut named: Vec<String> = crate::apply_patch::patch_targets(&patch, &cwd)
+            .await
+            .expect("targets")
+            .into_iter()
+            .map(|target| target.name)
+            .collect();
+        named.sort();
+        let mut expected = [from.clone(), to.clone()];
+        expected.sort();
+        assert_eq!(named, expected);
+
+        let (callback, seen) = recording_callback(ApprovalDecision::Deny);
+        let result = execute_tool_with_opts(
+            &edit_call("apply_patch", &[("patch", patch)]),
+            &accepting_edits(callback),
+        )
+        .await
+        .expect("refused patch");
+
+        assert!(!result.success);
+        let asked = seen.lock().expect("seen").clone();
+        assert_eq!(asked.len(), 1);
+        assert!(
+            matches!(&asked[0], ApprovalRequestKind::Patch { files } if files.len() == 2),
+            "{asked:?}"
+        );
+        assert_eq!(asked[0].risk().level, AgentEventApprovalRiskLevel::High);
+        assert!(notes.exists() && !servers.exists());
+    }
+
+    /// Git accepts a name in C quotes, octal escapes included. Read off the
+    /// header as text the quotes stayed on, the name matched no protected
+    /// entry, and the patch applied unasked in a mode that accepts edits.
+    #[tokio::test]
+    async fn a_patch_that_quotes_or_escapes_a_protected_name_still_asks() {
+        use agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel;
+
+        let project = tempfile::tempdir_in(".").expect("project");
+        let folder = relative_name(project.path());
+        for (header, written) in [
+            (format!("\"b/{folder}/.mcp.json\""), ".mcp.json"),
+            (
+                format!("\"b/{folder}/.husk\\171/pre-commit\""),
+                ".husky/pre-commit",
+            ),
+        ] {
+            let patch = format!("--- /dev/null\n+++ {header}\n@@ -0,0 +1 @@\n+x\n");
+            let (callback, seen) = recording_callback(ApprovalDecision::Deny);
+            let result = execute_tool_with_opts(
+                &edit_call("apply_patch", &[("patch", patch)]),
+                &accepting_edits(callback),
+            )
+            .await
+            .expect("refused patch");
+
+            assert!(!result.success, "{written}: {}", result.output);
+            let asked = seen.lock().expect("seen").clone();
+            assert_eq!(asked.len(), 1, "{written} was written with no approval");
+            assert!(
+                matches!(
+                    &asked[0],
+                    ApprovalRequestKind::Patch { files }
+                        if files.len() == 1 && files[0].ends_with(written)
+                ),
+                "{asked:?}"
+            );
+            assert_eq!(asked[0].risk().level, AgentEventApprovalRiskLevel::High);
+            assert!(!project.path().join(written).exists());
+        }
+    }
+
+    #[tokio::test]
+    async fn a_patch_whose_targets_git_cannot_name_is_refused_before_any_prompt() {
+        let (callback, seen) = recording_callback(ApprovalDecision::AllowOnce);
+        let result = execute_tool_with_opts(
+            &edit_call("apply_patch", &[("patch", "not a patch\n".to_string())]),
+            &accepting_edits(callback),
+        )
+        .await
+        .expect("refusal");
+
+        assert!(!result.success);
+        assert!(
+            result.output.contains("cannot tell which files"),
+            "{}",
+            result.output
+        );
+        assert!(seen.lock().expect("seen").is_empty());
+    }
+
+    /// The link is committed with nothing at its target, so `canonicalize`
+    /// fails and the nearest existing folder is the project itself: the path
+    /// read as `notes.txt`, an ordinary file, while the write created the hook.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_write_through_a_dangling_link_to_a_git_hook_asks() {
+        use agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel;
+
+        let project = tempfile::tempdir_in(".").expect("project");
+        std::fs::create_dir_all(project.path().join(".git")).expect("git folder");
+        let link = project.path().join("notes.txt");
+        std::os::unix::fs::symlink(".git/hooks/pre-commit", &link).expect("dangling link");
+
+        let (callback, seen) = recording_callback(ApprovalDecision::Deny);
+        let result = execute_tool_with_opts(
+            &edit_call(
+                "write_file",
+                &[
+                    ("path", link.display().to_string()),
+                    ("content", "#!/bin/sh\n".to_string()),
+                ],
+            ),
+            &accepting_edits(callback),
+        )
+        .await
+        .expect("refused write");
+
+        assert!(!result.success, "{}", result.output);
+        let asked = seen.lock().expect("seen").clone();
+        assert_eq!(asked.len(), 1, "the hook was written with no approval");
+        assert_eq!(asked[0].risk().level, AgentEventApprovalRiskLevel::High);
+        assert!(!project.path().join(".git/hooks/pre-commit").exists());
     }
 
     /// Every tool the catalog classes as a file edit is pointed at a file
@@ -3056,6 +3349,7 @@ decision = "ask"
                 auto_approve_edits: !policy_allow && !saved_allow,
                 quiet: true,
                 approval_callback: Some(callback),
+                user_input_callback: None,
                 privacy_mode: crate::agent::PrivacyMode::Byok,
                 workspace_root: Some(workspace.path().to_path_buf()),
                 mcp_tool_definitions: None,
@@ -3113,6 +3407,7 @@ decision = "ask"
                 auto_approve_edits: true,
                 quiet: true,
                 approval_callback: Some(callback),
+                user_input_callback: None,
                 privacy_mode: crate::agent::PrivacyMode::Byok,
                 workspace_root: Some(workspace.path().to_path_buf()),
                 mcp_tool_definitions: None,
@@ -3164,6 +3459,7 @@ decision = "ask"
                 auto_approve_edits: true,
                 quiet: true,
                 approval_callback: Some(callback),
+                user_input_callback: None,
                 privacy_mode: crate::agent::PrivacyMode::Byok,
                 workspace_root: Some(workspace.path().to_path_buf()),
                 mcp_tool_definitions: None,
@@ -3237,6 +3533,7 @@ decision = "ask"
                 auto_approve_edits: true,
                 quiet: true,
                 approval_callback: Some(callback),
+                user_input_callback: None,
                 privacy_mode: crate::agent::PrivacyMode::Byok,
                 workspace_root: Some(workspace.path().to_path_buf()),
                 mcp_tool_definitions: None,
@@ -3272,7 +3569,10 @@ decision = "ask"
             let background = crate::terminals::start("interactive test shell", |_| {
                 let mut command = std::process::Command::new("/bin/sh");
                 command.args(["-c", "stty -echo; exec /bin/sh -i"]);
-                Ok(command)
+                Ok(crate::terminals::PreparedCommand {
+                    command,
+                    scratch: None,
+                })
             })
             .unwrap();
             let (callback, _) = recording_callback(ApprovalDecision::AllowOnce);
@@ -3283,6 +3583,7 @@ decision = "ask"
                 auto_approve_edits: true,
                 quiet: true,
                 approval_callback: Some(callback),
+                user_input_callback: None,
                 privacy_mode: crate::agent::PrivacyMode::Byok,
                 workspace_root: None,
                 mcp_tool_definitions: None,
@@ -3364,6 +3665,7 @@ decision = "ask"
             auto_approve_edits: false,
             quiet: true,
             approval_callback: Some(callback),
+            user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Byok,
             workspace_root: Some(workspace.path().to_path_buf()),
             mcp_tool_definitions: None,
@@ -3394,6 +3696,7 @@ decision = "ask"
                     source: crate::hooks::HookSource::User,
                 }],
             )]),
+            sandbox: Some(false),
         };
         assert_eq!(
             permission_request_hook_denial(&config, &request).await,
@@ -3478,6 +3781,7 @@ decision = "ask"
             auto_approve_edits: false,
             quiet: true,
             approval_callback: Some(callback),
+            user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Byok,
             workspace_root: Some(workspace.path().to_path_buf()),
             mcp_tool_definitions: None,
@@ -3536,6 +3840,7 @@ decision = "ask"
             auto_approve_edits: true,
             quiet: true,
             approval_callback: Some(callback),
+            user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Byok,
             workspace_root: Some(workspace.path().to_path_buf()),
             mcp_tool_definitions: None,
@@ -3636,6 +3941,7 @@ decision = "ask"
                 auto_approve_edits: true,
                 quiet: true,
                 approval_callback: None,
+                user_input_callback: None,
                 privacy_mode: crate::agent::PrivacyMode::Local,
                 workspace_root: Some(cwd.clone()),
             };
@@ -3690,6 +3996,7 @@ decision = "deny"
             auto_approve_edits: false,
             quiet: true,
             approval_callback: None,
+            user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Local,
             workspace_root: Some(workspace.path().to_path_buf()),
         };
@@ -3805,6 +4112,7 @@ decision = "deny"
             auto_approve_edits: true,
             quiet: true,
             approval_callback: None,
+            user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Local,
             workspace_root: Some(workspace.path().to_path_buf()),
         };
@@ -3856,6 +4164,7 @@ decision = "deny"
             auto_approve_edits: false,
             quiet: true,
             approval_callback: Some(callback),
+            user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Local,
             workspace_root: Some(workspace.path().to_path_buf()),
         };
@@ -3949,6 +4258,7 @@ decision = "deny"
             auto_approve_edits: false,
             quiet: true,
             approval_callback: None,
+            user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Byok,
             workspace_root: Some(workspace.path().to_path_buf()),
         };
@@ -4092,6 +4402,7 @@ decision = "deny"
             auto_approve_edits: false,
             quiet: true,
             approval_callback: None,
+            user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Local,
             workspace_root: std::env::current_dir().ok(),
         };

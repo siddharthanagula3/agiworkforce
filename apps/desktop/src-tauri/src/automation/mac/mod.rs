@@ -1,2 +1,2 @@
-pub mod inspector_impl;
+pub mod apps;
 pub mod service;

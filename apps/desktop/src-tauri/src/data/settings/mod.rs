@@ -6,10 +6,7 @@ pub mod validation;
 #[cfg(test)]
 mod tests;
 
-pub use models::{
-    AppSettings, LLMProviderConfig, ModelConfig, SecuritySettings, Setting, SettingCategory,
-    SettingValue, UIPreferences, WindowStatePreferences,
-};
+pub use models::{Setting, SettingCategory, SettingValue};
 
 pub use repository::{
     count_settings_by_category, delete_setting, delete_settings_by_category,

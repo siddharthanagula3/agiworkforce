@@ -4,15 +4,37 @@ use tauri::State;
 
 use crate::features::document::{
     build_generated_document_manifest, DocumentContent, DocumentManager, DocumentMetadata,
-    ExcelDocumentConfig, ExcelDocumentCreator, ExcelEdit, ExcelEditor, ExcelSheet,
-    GeneratedDocumentArtifactManifest, GeneratedDocumentComputeSession, GeneratedDocumentFile,
-    GeneratedDocumentKind, PdfContent, PdfDocumentConfig, PdfDocumentCreator, PresentationConfig,
-    PresentationCreator, SearchResult, WordContent, WordDocumentConfig, WordDocumentCreator,
+    ExcelDocumentCreator, ExcelEdit, ExcelEditor, GeneratedDocumentArtifactManifest,
+    GeneratedDocumentComputeSession, GeneratedDocumentFile, GeneratedDocumentKind,
+    PdfDocumentCreator, PresentationCreator, SearchResult, WordDocumentCreator,
 };
+use crate::sys::commands::file_ops::FileOperation;
 use crate::sys::error::{Error, Result};
 
 pub struct DocumentState {
     pub manager: Arc<DocumentManager>,
+}
+
+/// A document the page names must lie in a folder the person granted: the
+/// test `file_read` applies, against the same list. The assistant's document
+/// tools are approved call by call and do not come through these commands.
+async fn granted_document(
+    app: &tauri::AppHandle,
+    path: &str,
+    operation: FileOperation,
+) -> Result<()> {
+    crate::sys::commands::file_ops::require_granted_path(app, path, operation)
+        .await
+        .map(|_| ())
+        .map_err(Error::PermissionError)
+}
+
+/// Where a page-requested document will be written, held to the granted
+/// folders before anything is created there.
+async fn granted_output_path(app: &tauri::AppHandle, output_path: &str) -> Result<String> {
+    let resolved = resolve_output_path(output_path)?;
+    granted_document(app, &resolved, FileOperation::Write).await?;
+    Ok(resolved)
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -48,24 +70,30 @@ impl DocumentState {
 #[tauri::command]
 pub async fn document_read(
     file_path: String,
+    app: tauri::AppHandle,
     state: State<'_, DocumentState>,
 ) -> Result<DocumentContent> {
+    granted_document(&app, &file_path, FileOperation::Read).await?;
     state.manager.read_document(&file_path).await
 }
 
 #[tauri::command]
 pub async fn document_extract_text(
     file_path: String,
+    app: tauri::AppHandle,
     state: State<'_, DocumentState>,
 ) -> Result<String> {
+    granted_document(&app, &file_path, FileOperation::Read).await?;
     state.manager.extract_text(&file_path).await
 }
 
 #[tauri::command]
 pub async fn document_get_metadata(
     file_path: String,
+    app: tauri::AppHandle,
     state: State<'_, DocumentState>,
 ) -> Result<DocumentMetadata> {
+    granted_document(&app, &file_path, FileOperation::Read).await?;
     state.manager.get_metadata(&file_path).await
 }
 
@@ -73,27 +101,18 @@ pub async fn document_get_metadata(
 pub async fn document_search(
     file_path: String,
     query: String,
+    app: tauri::AppHandle,
     state: State<'_, DocumentState>,
 ) -> Result<Vec<SearchResult>> {
+    granted_document(&app, &file_path, FileOperation::Read).await?;
     state.manager.search(&file_path, &query).await
 }
 
 #[tauri::command]
-pub async fn document_detect_type(file_path: String) -> Result<String> {
+pub async fn document_detect_type(file_path: String, app: tauri::AppHandle) -> Result<String> {
+    granted_document(&app, &file_path, FileOperation::Read).await?;
     let doc_type = DocumentManager::detect_type(&file_path)?;
     Ok(format!("{:?}", doc_type))
-}
-
-#[tauri::command]
-pub async fn document_create_word(
-    output_path: String,
-    config: WordDocumentConfig,
-    contents: Vec<WordContent>,
-) -> Result<String> {
-    let resolved_path = resolve_output_path(&output_path)?;
-    let creator = WordDocumentCreator::new();
-    creator.create(&resolved_path, config, contents)?;
-    Ok(resolved_path)
 }
 
 /// Edit an existing spreadsheet, preserving the data already in it.
@@ -107,7 +126,6 @@ pub async fn document_create_word(
 /// document from the edits alone, discarding the source. Exposing that as
 /// "edit your document" would silently destroy the user's content. See
 /// docs/decisions/wire-or-cut.md.
-#[tauri::command]
 pub async fn document_edit_excel(
     file_path: String,
     output_path: String,
@@ -120,16 +138,6 @@ pub async fn document_edit_excel(
     Ok(resolved_output)
 }
 
-pub async fn document_create_word_manifest(
-    output_path: String,
-    config: WordDocumentConfig,
-    contents: Vec<WordContent>,
-) -> Result<DocumentCreationResult> {
-    let path = document_create_word(output_path, config, contents).await?;
-    document_creation_result(path, "docx", GeneratedDocumentKind::Docx)
-}
-
-#[tauri::command]
 pub async fn document_create_word_simple(
     output_path: String,
     title: Option<String>,
@@ -148,33 +156,13 @@ pub async fn document_create_word_simple_manifest(
     title: Option<String>,
     author: Option<String>,
     paragraphs: Vec<String>,
+    app: tauri::AppHandle,
 ) -> Result<DocumentCreationResult> {
+    let output_path = granted_output_path(&app, &output_path).await?;
     let path = document_create_word_simple(output_path, title, author, paragraphs).await?;
     document_creation_result(path, "docx", GeneratedDocumentKind::Docx)
 }
 
-#[tauri::command]
-pub async fn document_create_excel(
-    output_path: String,
-    config: ExcelDocumentConfig,
-    sheets: Vec<ExcelSheet>,
-) -> Result<String> {
-    let resolved_path = resolve_output_path(&output_path)?;
-    let creator = ExcelDocumentCreator::new();
-    creator.create(&resolved_path, config, sheets)?;
-    Ok(resolved_path)
-}
-
-pub async fn document_create_excel_manifest(
-    output_path: String,
-    config: ExcelDocumentConfig,
-    sheets: Vec<ExcelSheet>,
-) -> Result<DocumentCreationResult> {
-    let path = document_create_excel(output_path, config, sheets).await?;
-    document_creation_result(path, "xlsx", GeneratedDocumentKind::Xlsx)
-}
-
-#[tauri::command]
 pub async fn document_create_excel_simple(
     output_path: String,
     sheet_name: String,
@@ -193,12 +181,13 @@ pub async fn document_create_excel_simple_manifest(
     sheet_name: String,
     headers: Vec<String>,
     rows: Vec<Vec<String>>,
+    app: tauri::AppHandle,
 ) -> Result<DocumentCreationResult> {
+    let output_path = granted_output_path(&app, &output_path).await?;
     let path = document_create_excel_simple(output_path, sheet_name, headers, rows).await?;
     document_creation_result(path, "xlsx", GeneratedDocumentKind::Xlsx)
 }
 
-#[tauri::command]
 pub async fn document_create_excel_numbers(
     output_path: String,
     sheet_name: String,
@@ -217,33 +206,13 @@ pub async fn document_create_excel_numbers_manifest(
     sheet_name: String,
     headers: Vec<String>,
     rows: Vec<Vec<f64>>,
+    app: tauri::AppHandle,
 ) -> Result<DocumentCreationResult> {
+    let output_path = granted_output_path(&app, &output_path).await?;
     let path = document_create_excel_numbers(output_path, sheet_name, headers, rows).await?;
     document_creation_result(path, "xlsx", GeneratedDocumentKind::Xlsx)
 }
 
-#[tauri::command]
-pub async fn document_create_pdf(
-    output_path: String,
-    config: PdfDocumentConfig,
-    contents: Vec<PdfContent>,
-) -> Result<String> {
-    let resolved_path = resolve_output_path(&output_path)?;
-    let creator = PdfDocumentCreator::new();
-    creator.create(&resolved_path, config, contents)?;
-    Ok(resolved_path)
-}
-
-pub async fn document_create_pdf_manifest(
-    output_path: String,
-    config: PdfDocumentConfig,
-    contents: Vec<PdfContent>,
-) -> Result<DocumentCreationResult> {
-    let path = document_create_pdf(output_path, config, contents).await?;
-    document_creation_result(path, "pdf", GeneratedDocumentKind::Pdf)
-}
-
-#[tauri::command]
 pub async fn document_create_pdf_simple(
     output_path: String,
     title: Option<String>,
@@ -262,31 +231,13 @@ pub async fn document_create_pdf_simple_manifest(
     title: Option<String>,
     author: Option<String>,
     paragraphs: Vec<String>,
+    app: tauri::AppHandle,
 ) -> Result<DocumentCreationResult> {
+    let output_path = granted_output_path(&app, &output_path).await?;
     let path = document_create_pdf_simple(output_path, title, author, paragraphs).await?;
     document_creation_result(path, "pdf", GeneratedDocumentKind::Pdf)
 }
 
-#[tauri::command]
-pub async fn document_create_powerpoint(
-    output_path: String,
-    config: PresentationConfig,
-) -> Result<String> {
-    let resolved_path = resolve_output_path(&output_path)?;
-    let creator = PresentationCreator::new();
-    creator.create(&config, &resolved_path)?;
-    Ok(resolved_path)
-}
-
-pub async fn document_create_powerpoint_manifest(
-    output_path: String,
-    config: PresentationConfig,
-) -> Result<DocumentCreationResult> {
-    let path = document_create_powerpoint(output_path, config).await?;
-    document_creation_result(path, "pptx", GeneratedDocumentKind::Pptx)
-}
-
-#[tauri::command]
 pub async fn document_create_powerpoint_simple(
     output_path: String,
     title: String,
@@ -305,7 +256,9 @@ pub async fn document_create_powerpoint_simple_manifest(
     title: String,
     author: String,
     slides: Vec<(String, Vec<String>)>,
+    app: tauri::AppHandle,
 ) -> Result<DocumentCreationResult> {
+    let output_path = granted_output_path(&app, &output_path).await?;
     let path = document_create_powerpoint_simple(output_path, title, author, slides).await?;
     document_creation_result(path, "pptx", GeneratedDocumentKind::Pptx)
 }
@@ -430,6 +383,28 @@ fn resolve_output_path(output_path: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_document_command_the_page_calls_is_held_to_the_granted_folders() {
+        let source = include_str!("document.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+        let attribute = ["#[tauri", "::command]"].concat();
+        let commands: Vec<&str> = production.split(attribute.as_str()).skip(1).collect();
+        assert!(commands.len() >= 10, "found {} commands", commands.len());
+        for command in commands {
+            let body = command.split("\n}\n").next().unwrap_or(command);
+            let name = body
+                .split("pub async fn ")
+                .nth(1)
+                .and_then(|rest| rest.split('(').next())
+                .unwrap_or("?");
+            assert!(
+                body.contains("granted_document(&app, ")
+                    || body.contains("granted_output_path(&app, "),
+                "{name} opens or writes a path the page names without the granted-folder check"
+            );
+        }
+    }
 
     #[test]
     fn document_creation_result_exposes_legacy_path_and_manifest_metadata() {

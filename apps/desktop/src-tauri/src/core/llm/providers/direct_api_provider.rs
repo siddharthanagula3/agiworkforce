@@ -6,6 +6,7 @@
 //! Fireworks, Cerebras, DeepInfra, Cohere, AI21, Sambanova, and Azure.
 
 use super::http_client_factory::{create_http_client, HttpClientConfig};
+use super::local_endpoint::{validate_local_runtime_url, LocalEndpointScope};
 use crate::core::llm::provider_adapter::ProviderAdapterFactory;
 use crate::core::llm::sse_parser::StreamChunk;
 use crate::core::llm::stream_engine::decode_direct_stream;
@@ -45,12 +46,45 @@ impl DirectApiProvider {
         Self::with_config(provider, api_key, base_url, HttpClientConfig::default())
     }
 
+    /// Create a Local runtime (LM Studio, llama.cpp, vLLM) bound to the Local
+    /// trust boundary. `allow_private_network` is the user's mark that
+    /// private-network addresses are machines they own; without it only this
+    /// computer is accepted. `api_key` is sent as a bearer token when the
+    /// server was started with one.
+    pub fn new_local_runtime(
+        provider: Provider,
+        api_key: Option<String>,
+        base_url: Option<String>,
+        allow_private_network: bool,
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        if local_runtime_label(provider).is_none() {
+            return Err(format!("{} is not a Local runtime", provider.as_string()).into());
+        }
+        Self::build(
+            provider,
+            api_key.unwrap_or_default(),
+            base_url,
+            HttpClientConfig::default(),
+            allow_private_network,
+        )
+    }
+
     /// Create a new DirectApiProvider with explicit HTTP client configuration.
     pub fn with_config(
         provider: Provider,
         api_key: String,
         base_url: Option<String>,
         config: HttpClientConfig,
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        Self::build(provider, api_key, base_url, config, false)
+    }
+
+    fn build(
+        provider: Provider,
+        api_key: String,
+        base_url: Option<String>,
+        config: HttpClientConfig,
+        allow_private_network: bool,
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let client = create_http_client(&config).map_err(Box::<dyn Error + Send + Sync>::from)?;
 
@@ -64,9 +98,19 @@ impl DirectApiProvider {
         let resolved_base_url = resolve_direct_base_url(provider, base_url)
             .map_err(Box::<dyn Error + Send + Sync>::from)?;
 
-        // Validate the base URL to prevent SSRF attacks
-        validate_provider_base_url(&resolved_base_url)
-            .map_err(Box::<dyn Error + Send + Sync>::from)?;
+        if let Some(label) = local_runtime_label(provider) {
+            let (_, scope) =
+                validate_local_runtime_url(&resolved_base_url, label, allow_private_network)
+                    .map_err(Box::<dyn Error + Send + Sync>::from)?;
+            if scope == LocalEndpointScope::ThisComputer {
+                validate_provider_base_url(&resolved_base_url)
+                    .map_err(Box::<dyn Error + Send + Sync>::from)?;
+            }
+        } else {
+            // Validate the base URL to prevent SSRF attacks
+            validate_provider_base_url(&resolved_base_url)
+                .map_err(Box::<dyn Error + Send + Sync>::from)?;
+        }
         if provider == Provider::Azure {
             validate_azure_base_url(&resolved_base_url)
                 .map_err(Box::<dyn Error + Send + Sync>::from)?;
@@ -131,8 +175,7 @@ impl DirectApiProvider {
         match self.provider {
             Provider::Anthropic => builder
                 .header("x-api-key", &self.api_key)
-                .header("anthropic-version", "2023-06-01")
-                .header("anthropic-beta", "computer-use-2025-11-24"),
+                .header("anthropic-version", "2023-06-01"),
             // Google uses x-goog-api-key header (avoids leaking key in URL/logs)
             Provider::Google => builder.header("x-goog-api-key", &self.api_key),
             // Azure uses api-key header (not Bearer auth)
@@ -403,6 +446,17 @@ fn validate_azure_base_url(url: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Display name of a Local runtime served through this provider, or `None` for
+/// every provider that leaves the machine.
+pub fn local_runtime_label(provider: Provider) -> Option<&'static str> {
+    match provider {
+        Provider::LmStudio => Some("LM Studio"),
+        Provider::LlamaCpp => Some("llama.cpp"),
+        Provider::Vllm => Some("vLLM"),
+        _ => None,
+    }
+}
+
 /// Joins a capability path onto a provider's registered base URL so callers outside
 /// this module never retype a provider host.
 pub fn provider_endpoint(provider: Provider, path: &str) -> Option<String> {
@@ -635,6 +689,10 @@ impl LLMProvider for DirectApiProvider {
         }
     }
 
+    fn base_url(&self) -> Option<&str> {
+        Some(&self.base_url)
+    }
+
     fn supports_vision(&self) -> bool {
         matches!(
             self.provider,
@@ -802,18 +860,23 @@ mod tests {
         assert_eq!(p.chat_endpoint(), "https://api.anthropic.com/v1/messages");
     }
 
+    // The computer use toolset takes no beta header: "Remove the beta header.
+    // Drop `anthropic-beta: computer-use-2025-11-24` from your requests."
+    // (platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool,
+    // "Migrate from `computer_20251124`").
     #[test]
-    fn anthropic_apply_auth_sends_current_computer_use_beta() {
+    fn anthropic_apply_auth_sends_no_computer_use_beta() {
         let p = DirectApiProvider::new(Provider::Anthropic, "key".to_string(), None)
             .expect("should create");
         let builder = reqwest::Client::new().post("https://api.anthropic.com/v1/messages");
         let request = p.apply_auth(builder).build().expect("request should build");
+        assert!(request.headers().get("anthropic-beta").is_none());
         assert_eq!(
             request
                 .headers()
-                .get("anthropic-beta")
+                .get("anthropic-version")
                 .and_then(|value| value.to_str().ok()),
-            Some("computer-use-2025-11-24")
+            Some("2023-06-01")
         );
     }
 
@@ -964,6 +1027,43 @@ mod tests {
             Some("not-a-valid-url".to_string()),
         );
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn local_runtime_refuses_a_public_server() {
+        for provider in [Provider::LmStudio, Provider::LlamaCpp, Provider::Vllm] {
+            let result = DirectApiProvider::new(
+                provider,
+                String::new(),
+                Some("https://models.example.com/v1".to_string()),
+            );
+            assert!(
+                result.is_err(),
+                "{} accepted a public host",
+                provider.as_string()
+            );
+        }
+    }
+
+    #[test]
+    fn local_runtime_accepts_a_private_network_server_only_when_marked() {
+        let url = Some("http://192.168.1.40:1234/v1".to_string());
+        assert!(DirectApiProvider::new(Provider::LmStudio, String::new(), url.clone()).is_err());
+        assert!(
+            DirectApiProvider::new_local_runtime(Provider::LmStudio, None, url.clone(), false)
+                .is_err()
+        );
+        let provider = DirectApiProvider::new_local_runtime(Provider::LmStudio, None, url, true)
+            .expect("marked private-network server should be accepted");
+        assert_eq!(
+            provider.chat_endpoint(),
+            "http://192.168.1.40:1234/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn new_local_runtime_refuses_cloud_providers() {
+        assert!(DirectApiProvider::new_local_runtime(Provider::OpenAI, None, None, true).is_err());
     }
 
     /// `is_available()` must complete quickly (bounded by its internal 2s timeout)

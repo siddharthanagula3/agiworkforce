@@ -1,11 +1,9 @@
 //! Support-bundle assembly for desktop logs.
 //!
-//! Three registered IPC commands copy application logs out of the app:
-//! `get_filtered_logs` (whose result `FeedbackDialog` uploads to
-//! `/api/feedback`), and `error_get_logs` / `error_export_logs`, which hand log
-//! text to the webview. All three build their output through
-//! [`collect_bundle_lines`] so one set of rules applies to every copy that
-//! leaves the log directory.
+//! One registered IPC command copies application logs out of the app:
+//! `error_get_logs`, which hands log text to the webview. It builds its output
+//! through [`collect_bundle_lines`] so one set of rules applies to every copy
+//! that leaves the log directory.
 //!
 //! What this module actually does, stated exactly:
 //!
@@ -24,9 +22,8 @@
 //!   truncated to [`MAX_LINE_BYTES`]. These two are the parts that are NOT
 //!   allowlisted, and that is the limit of the guarantee here: a log site that
 //!   formats user text into its own message string would still reach a bundle.
-//!   Log sites must therefore not do that, see the `prompt_chars` /
-//!   `text_chars` fields in `sys::commands::scheduler` and
-//!   `features::messaging::teams` for the shape to use instead.
+//!   Log sites must therefore not do that, see the `prompt_chars` field in
+//!   `sys::commands::scheduler` for the shape to use instead.
 //! * A record whose rendered text mentions account or billing terms is dropped
 //!   whole rather than redacted.
 

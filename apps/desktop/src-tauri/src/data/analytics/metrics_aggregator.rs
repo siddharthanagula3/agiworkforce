@@ -339,25 +339,6 @@ impl MetricsAggregator {
         Ok(trends)
     }
 
-    pub async fn get_top_processes(
-        &self,
-        start: i64,
-        end: i64,
-        limit: usize,
-    ) -> Result<Vec<ProcessMetrics>> {
-        let mut all_metrics = self.aggregate_by_process_type(start, end).await?;
-
-        all_metrics.sort_by(|a, b| {
-            b.cost_savings_usd
-                .partial_cmp(&a.cost_savings_usd)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-
-        all_metrics.truncate(limit);
-
-        Ok(all_metrics)
-    }
-
     pub async fn get_summary(&self, start: i64, end: i64) -> Result<HashMap<String, f64>> {
         let conn = self.db.lock().expect("analytics db mutex poisoned");
         let mut summary = HashMap::new();

@@ -570,6 +570,26 @@ mod tests {
     use super::*;
     use crate::features::speech::artifact_registry::RUNTIME_MANIFEST_FILENAME;
 
+    /// `src/features/settings/VoiceSettings.tsx` reads the model list by
+    /// these names to show a size and whether a model is already on disk.
+    #[test]
+    fn a_listed_model_carries_the_names_voice_settings_reads() {
+        let listed = serde_json::to_value(WhisperModelInfo {
+            size: "fixture-local-stt".parse().unwrap(),
+            filename: "fixture-local-stt.bin".to_string(),
+            description: "Balanced".to_string(),
+            approximate_size_mb: 147,
+            is_downloaded: true,
+            path: Some(PathBuf::from("/models/fixture-local-stt.bin")),
+        })
+        .unwrap();
+
+        assert_eq!(listed["size"], "fixture-local-stt");
+        assert_eq!(listed["approximate_size_mb"], 147);
+        assert_eq!(listed["is_downloaded"], true);
+        assert_eq!(listed["path"], "/models/fixture-local-stt.bin");
+    }
+
     #[test]
     fn runtime_model_identifier_is_transparent_and_validated() {
         let id = "fixture-local-stt".parse::<WhisperModelSize>().unwrap();

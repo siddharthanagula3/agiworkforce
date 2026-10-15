@@ -317,6 +317,7 @@ fn imported_server_to_mcp_config(
             env: imported.env.clone(),
             enabled: false,
             transport: None,
+            allow_local_network: false,
         }
     } else {
         // No command means this was a remote/HTTP entry, `json_server_entry`
@@ -333,6 +334,7 @@ fn imported_server_to_mcp_config(
                     ..Default::default()
                 }))
             }),
+            allow_local_network: false,
         }
     }
 }

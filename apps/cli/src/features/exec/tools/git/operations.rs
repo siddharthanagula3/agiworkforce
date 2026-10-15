@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 
 use super::super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
 use crate::platform::runtime::git::{
-    BaselineDiff, GitApi, GitOperation, MergeOutcome, PushForce, PushPlan, StashOutcome,
+    BaselineDiff, GitApi, GitOperation, MergeOutcome, PushForce, PushPlan, StashOutcome, PUSH_HOOKS,
 };
 use crate::platform::runtime::git_tools::{
     git_operation_for, git_tool_spec, push_force, remote_of, repository_operation_for, GitToolClass,
@@ -171,11 +171,16 @@ pub(crate) async fn execute_git_tool(
         _ => None,
     };
 
+    let (git, host_hooks) = match hook_gate(&git, operation.host_hooks()).await {
+        Ok(gated) => gated,
+        Err(reason) => return Ok(failed(tool_name, reason)),
+    };
     if let Some(denial) = consent_for_operation(
         tool_name,
         spec.class,
         require_confirmation,
         needs_checkout_approval,
+        host_hooks,
         &operation,
         &git,
         &approver,
@@ -195,23 +200,72 @@ pub(crate) async fn execute_git_tool(
     })
 }
 
-/// Ask when the operation discards work, turns the repository's hooks off, the
-/// checkout says this operation needs a decision, or the session is still
-/// confirming its writes. A destructive operation asks whatever the session's
-/// permission mode says, because the thing it throws away is not in the
-/// repository afterwards.
+/// The one gate for every typed operation that can run repository hooks on
+/// the host, outside the sandbox. A hooks directory a sandboxed command can
+/// write, such as a `core.hooksPath` inside the working tree, would otherwise
+/// turn any of them into a way to run anything unsandboxed.
+///
+/// Returns the API to run the operation with and, when hooks would run, the
+/// lines the approval prompt shows. With no hook among `events`, the
+/// operation runs with hooks turned off, so one planted after this check
+/// cannot run either. With any, the prompt names every hook the repository
+/// holds, since an operation that keeps its hooks can reach all of them, and
+/// the API runs only while they are exactly what the prompt named. When git
+/// cannot say which hooks there are, the operation does not run.
+/// What the approval prompt says before it lists the hooks. Only the listed
+/// files are pinned; a hook commonly runs more of the repository, and a
+/// command the agent ran could have changed any of it.
+const HOOKS_ARE_REPOSITORY_CODE: &str = "These hooks are code from this repository, and they \
+     run outside the sandbox with your full permissions, only while they stay exactly as \
+     listed. A hook can also run other files from the repository that are not listed, such as \
+     package scripts, programs in node_modules/.bin, or lint and test configuration (husky \
+     runs npx lint-staged), and a command the agent ran could have changed those. Approve only \
+     if you trust what is in this checkout now:";
+
+pub(crate) async fn hook_gate(
+    git: &GitApi,
+    events: &[&str],
+) -> std::result::Result<(GitApi, Option<Vec<String>>), String> {
+    if events.is_empty() {
+        return Ok((git.with_hooks_disabled(), None));
+    }
+    match git.host_hooks().await {
+        Ok(hooks) if !hooks.reaches(events) => Ok((git.with_hooks_disabled(), None)),
+        Ok(hooks) => {
+            let mut lines = vec![HOOKS_ARE_REPOSITORY_CODE.to_string()];
+            lines.extend(hooks.describe());
+            Ok((git.with_approved_hooks(hooks), Some(lines)))
+        }
+        Err(error) => Err(format!(
+            "Could not tell which repository hooks would run ({error}), so nothing ran."
+        )),
+    }
+}
+
+/// Ask when the operation discards work, turns the repository's hooks off,
+/// runs hooks on the host, the checkout says this operation needs a
+/// decision, or the session is still confirming its writes. A destructive
+/// operation, and one that runs hooks, asks whatever the session's permission
+/// mode says, and with nobody to ask it does not run.
+#[allow(clippy::too_many_arguments)]
 async fn consent_for_operation(
     tool_name: &str,
     class: GitToolClass,
     require_confirmation: bool,
     checkout_reason: Option<String>,
+    host_hooks: Option<Vec<String>>,
     operation: &GitOperation,
     git: &GitApi,
     approver: &SurfaceApprover<'_>,
 ) -> Option<ToolResult> {
     let bypasses_hooks = operation.bypasses_hooks();
     let confirming_a_write = require_confirmation && operation.is_write();
-    if !class.always_asks() && !bypasses_hooks && !confirming_a_write && checkout_reason.is_none() {
+    if !class.always_asks()
+        && !bypasses_hooks
+        && !confirming_a_write
+        && checkout_reason.is_none()
+        && host_hooks.is_none()
+    {
         return None;
     }
 
@@ -225,7 +279,14 @@ async fn consent_for_operation(
     if let Some(reason) = checkout_reason {
         detail.push(reason);
     }
-    let discarded = git.discarded_by(operation).await.unwrap_or_default();
+    if let Some(hooks) = host_hooks {
+        detail.extend(hooks);
+    }
+    let discarded = git
+        .with_hooks_disabled()
+        .discarded_by(operation)
+        .await
+        .unwrap_or_default();
     if !discarded.is_empty() {
         detail.push(format!(
             "{} uncommitted file(s) go with it: {}",
@@ -329,6 +390,13 @@ async fn run_operation(
             .unstage(paths)
             .await
             .map(|staged| json!({ "unstaged": display(&staged.paths) })),
+        GitOperation::Commit { message } => git.commit(message).await.map(|detail| {
+            json!({
+                "commit": detail.commit,
+                "subject": detail.subject,
+                "files": display(&detail.files),
+            })
+        }),
         GitOperation::BranchCreate { name, base } => git
             .branch_create(name, base.as_deref())
             .await
@@ -476,13 +544,36 @@ async fn run_push(
         ));
     }
 
+    let (git, host_hooks) = match hook_gate(git, PUSH_HOOKS).await {
+        Ok(gated) => gated,
+        Err(reason) => return Ok(failed(tool_name, reason)),
+    };
+    if let Some(hooks) = host_hooks {
+        let decision = approver
+            .ask(ApprovalRequest::new(
+                ApprovalRequestKind::Git {
+                    tool_name: tool_name.to_string(),
+                    target: format!("git push {}", plan.remote),
+                },
+                format!("Run the push hooks in {}?", git.root().display()),
+                hooks,
+            ))
+            .await;
+        if !approval_allows(decision) {
+            return Ok(failed(
+                tool_name,
+                "The push hooks were not approved and nothing left this machine.".to_string(),
+            ));
+        }
+    }
+
     let Some(consent) = request_push_consent(approver, &plan).await else {
         return Ok(failed(
             tool_name,
             "The push was not approved and nothing left this machine.".to_string(),
         ));
     };
-    run_approved_push(tool_name, git, plan, consent).await
+    run_approved_push(tool_name, &git, plan, consent).await
 }
 
 async fn run_approved_push(
@@ -675,6 +766,222 @@ mod tests {
         );
     }
 
+    /// A repository whose `core.hooksPath` is a folder of the working tree,
+    /// as husky sets it, with an executable pre-commit hook in it and one
+    /// file staged.
+    #[cfg(unix)]
+    fn repo_with_hooks_in_the_work_tree(dir: &Path) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        init_repo(dir);
+        let hooks = dir.join(".husky");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let marker = dir.join("hook-ran");
+        let hook = hooks.join("pre-commit");
+        std::fs::write(&hook, format!("#!/bin/sh\ntouch '{}'\n", marker.display())).unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        for command in [
+            &["config", "core.hooksPath", ".husky"][..],
+            &["add", ".husky/pre-commit"][..],
+        ] {
+            SyncCommand::new("git")
+                .current_dir(dir)
+                .args(command)
+                .output()
+                .expect("git");
+        }
+        marker
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_commit_that_would_run_a_work_tree_hook_always_asks_and_names_it() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let marker = repo_with_hooks_in_the_work_tree(dir.path());
+        let (callback, seen) = recording(ApprovalDecision::Deny);
+
+        let result = execute_git_tool(
+            "git_commit",
+            &args(&[("message", "Add the hook")]),
+            Some(dir.path()),
+            false,
+            false,
+            Some(&callback),
+        )
+        .await
+        .expect("commit");
+
+        assert!(!result.success, "{}", result.output);
+        assert!(!marker.exists(), "the hook ran before anyone approved it");
+        let requests = seen.lock().expect("seen");
+        assert_eq!(
+            requests.len(),
+            1,
+            "a session that does not confirm writes still asks"
+        );
+        let warning = requests[0]
+            .detail
+            .iter()
+            .find(|line| line.contains("code from this repository"))
+            .expect("the prompt says the hooks are repository code");
+        assert!(warning.contains("outside the sandbox with your full permissions"));
+        assert!(warning.contains("code from this repository"));
+        assert!(warning.contains("could have changed those"));
+        assert!(requests[0]
+            .detail
+            .iter()
+            .any(|line| line.contains(".husky/pre-commit") && line.contains("sha256")));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_commit_that_would_run_a_hook_with_nobody_to_ask_does_not_run() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let marker = repo_with_hooks_in_the_work_tree(dir.path());
+
+        let result = execute_git_tool(
+            "git_commit",
+            &args(&[("message", "Add the hook")]),
+            Some(dir.path()),
+            false,
+            false,
+            None,
+        )
+        .await
+        .expect("commit");
+
+        assert!(!result.success);
+        assert!(!marker.exists(), "a headless session ran a host hook");
+    }
+
+    #[tokio::test]
+    async fn a_commit_with_no_hooks_keeps_the_sessions_approval_flow() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        init_repo(dir.path());
+        SyncCommand::new("git")
+            .current_dir(dir.path())
+            .args(["config", "core.hooksPath", "no-hooks-here"])
+            .output()
+            .expect("git");
+        std::fs::write(dir.path().join("new.txt"), "new\n").unwrap();
+        SyncCommand::new("git")
+            .current_dir(dir.path())
+            .args(["add", "new.txt"])
+            .output()
+            .expect("git");
+        let (callback, seen) = recording(ApprovalDecision::Deny);
+
+        let result = execute_git_tool(
+            "git_commit",
+            &args(&[("message", "Add new.txt")]),
+            Some(dir.path()),
+            false,
+            false,
+            Some(&callback),
+        )
+        .await
+        .expect("commit");
+
+        assert!(result.success, "{}", result.output);
+        assert!(seen.lock().expect("seen").is_empty());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_merge_that_would_run_a_work_tree_hook_asks_and_a_headless_one_refuses() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().expect("tempdir");
+        init_repo(dir.path());
+        let hooks = dir.path().join(".husky");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let marker = dir.path().join("post-merge-ran");
+        let hook = hooks.join("post-merge");
+        std::fs::write(&hook, format!("#!/bin/sh\ntouch '{}'\n", marker.display())).unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        SyncCommand::new("git")
+            .current_dir(dir.path())
+            .args(["config", "core.hooksPath", ".husky"])
+            .output()
+            .expect("git");
+        let (callback, seen) = recording(ApprovalDecision::Deny);
+
+        let asked = execute_git_tool(
+            "git_merge",
+            &args(&[("rev", "HEAD")]),
+            Some(dir.path()),
+            false,
+            false,
+            Some(&callback),
+        )
+        .await
+        .expect("merge");
+        assert!(!asked.success);
+        assert!(seen.lock().expect("seen")[0]
+            .detail
+            .iter()
+            .any(|line| line.contains(".husky/post-merge")));
+
+        let headless = execute_git_tool(
+            "git_merge",
+            &args(&[("rev", "HEAD")]),
+            Some(dir.path()),
+            false,
+            false,
+            None,
+        )
+        .await
+        .expect("merge");
+        assert!(!headless.success);
+        assert!(!marker.exists(), "a host hook ran without approval");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_push_hook_is_asked_about_before_the_push_and_a_refusal_sends_nothing() {
+        use std::os::unix::fs::PermissionsExt;
+        let (_root, work, remote) = repo_with_remote();
+        let marker = work.join("pre-push-ran");
+        let hook = work.join(".git/hooks/pre-push");
+        std::fs::create_dir_all(hook.parent().unwrap()).unwrap();
+        std::fs::write(&hook, format!("#!/bin/sh\ntouch '{}'\n", marker.display())).unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        SyncCommand::new("git")
+            .current_dir(&work)
+            .args(["config", "core.hooksPath", ".git/hooks"])
+            .output()
+            .expect("git");
+        let (callback, seen) = recording(ApprovalDecision::Deny);
+
+        let result = execute_git_tool(
+            "git_push",
+            &HashMap::new(),
+            Some(&work),
+            false,
+            false,
+            Some(&callback),
+        )
+        .await
+        .expect("push");
+
+        assert!(!result.success);
+        assert!(!marker.exists());
+        let requests = seen.lock().expect("seen");
+        assert!(requests
+            .first()
+            .is_some_and(|request| request.detail.iter().any(|line| line.contains("pre-push"))));
+        let remote_heads = SyncCommand::new("git")
+            .args([
+                "--git-dir",
+                remote.to_str().expect("path"),
+                "branch",
+                "--list",
+            ])
+            .output()
+            .expect("git");
+        assert!(String::from_utf8_lossy(&remote_heads.stdout)
+            .trim()
+            .is_empty());
+    }
+
     #[tokio::test]
     async fn turning_the_repositorys_hooks_off_is_asked_about_on_its_own() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -759,6 +1066,9 @@ mod tests {
         );
     }
 
+    /// The remote is a second repository on this machine, which agent git
+    /// refuses to reach once the user has allowed the push: git would run
+    /// that repository's own hooks outside the sandbox.
     #[tokio::test]
     async fn a_push_runs_only_on_the_consent_the_user_gave_for_that_plan() {
         let (_root, work, remote) = repo_with_remote();
@@ -776,7 +1086,14 @@ mod tests {
         .await
         .expect("push");
 
-        assert!(result.success, "{}", result.output);
+        assert!(!result.success);
+        assert!(
+            result
+                .output
+                .contains("Local-path remotes aren't supported"),
+            "{}",
+            result.output
+        );
         let requests = seen.lock().expect("seen");
         assert_eq!(requests.len(), 1);
         assert!(matches!(
@@ -796,10 +1113,10 @@ mod tests {
 
         let landed = SyncCommand::new("git")
             .current_dir(&remote)
-            .args(["rev-parse", "refs/heads/main"])
+            .args(["rev-parse", "--verify", "refs/heads/main"])
             .output()
             .expect("git");
-        assert!(landed.status.success());
+        assert!(!landed.status.success());
     }
 
     #[tokio::test]

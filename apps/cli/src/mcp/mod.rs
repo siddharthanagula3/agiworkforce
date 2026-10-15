@@ -34,6 +34,7 @@ use agiworkforce_mcp::{
 };
 
 pub mod connection_pool;
+pub mod consent;
 pub mod elicitation;
 mod oauth_store;
 pub mod registry;
@@ -107,6 +108,22 @@ pub enum McpTransport {
         args: Vec<String>,
         #[serde(default)]
         env: HashMap<String, String>,
+        /// See [`LegacyStdioConfig::allow_local_network`].
+        #[serde(
+            default,
+            rename = "allowLocalNetwork",
+            skip_serializing_if = "std::ops::Not::not"
+        )]
+        allow_local_network: bool,
+        /// See [`LegacyStdioConfig::sandbox`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sandbox: Option<bool>,
+        /// See [`LegacyStdioConfig::cwd`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cwd: Option<String>,
+        /// See [`LegacyStdioConfig::origin`].
+        #[serde(skip)]
+        origin: McpServerOrigin,
     },
     Sse {
         url: String,
@@ -132,6 +149,37 @@ pub struct LegacyStdioConfig {
     pub args: Vec<String>,
     #[serde(default)]
     pub env: HashMap<String, String>,
+    /// The sandboxed server may reach services on this computer: loopback
+    /// addresses and Unix-domain sockets, such as a local database, Ollama, a
+    /// browser's debugging port or Docker. Off unless the server's entry
+    /// says so; a project server asks again when it is turned on.
+    #[serde(
+        default,
+        rename = "allowLocalNetwork",
+        skip_serializing_if = "std::ops::Not::not"
+    )]
+    pub allow_local_network: bool,
+    /// `false` starts the server outside the OS sandbox, in the CLI's config
+    /// folder rather than the project, so it reads nothing a sandboxed
+    /// command could have rewritten by a relative path, unless the project's
+    /// own MCP file names it or [`Self::cwd`] says otherwise; `true` starts
+    /// it inside. Unset, it follows where the server was configured: a
+    /// project's MCP file or plugin runs it sandboxed, since the project is
+    /// what a sandboxed command can rewrite, and the user's own config or a
+    /// plugin the user installed runs it outside. A project server asks
+    /// again when it is turned off, and a managed policy that requires the
+    /// sandbox overrides it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox: Option<bool>,
+    /// `"project"` starts a server from the user's own config or a plugin
+    /// in the project folder when it runs outside the sandbox, rather than
+    /// in the CLI's config folder. A project's own server starts there
+    /// anyway. No other value is accepted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    /// Which configuration named the server, set by the loader that read it.
+    #[serde(skip)]
+    pub origin: McpServerOrigin,
 }
 
 impl McpServerConfig {
@@ -143,6 +191,10 @@ impl McpServerConfig {
                 command: l.command,
                 args: l.args,
                 env: l.env,
+                allow_local_network: l.allow_local_network,
+                sandbox: l.sandbox,
+                cwd: l.cwd,
+                origin: l.origin,
             },
         }
     }
@@ -162,7 +214,68 @@ impl McpServerConfig {
             command: command.into(),
             args,
             env,
+            allow_local_network: false,
+            sandbox: None,
+            cwd: None,
+            origin: McpServerOrigin::default(),
         })
+    }
+
+    /// The same server with `sandboxed` as its sandbox setting when its entry
+    /// leaves that unset: the default for the scope it was configured in.
+    pub(crate) fn with_scope_default(self, sandboxed: bool) -> Self {
+        match self {
+            McpServerConfig::Legacy(mut legacy) => {
+                legacy.sandbox = legacy.sandbox.or(Some(sandboxed));
+                McpServerConfig::Legacy(legacy)
+            }
+            McpServerConfig::Tagged(McpTransport::Stdio {
+                command,
+                args,
+                env,
+                allow_local_network,
+                sandbox,
+                cwd,
+                origin,
+            }) => McpServerConfig::Tagged(McpTransport::Stdio {
+                command,
+                args,
+                env,
+                allow_local_network,
+                sandbox: sandbox.or(Some(sandboxed)),
+                cwd,
+                origin,
+            }),
+            remote => remote,
+        }
+    }
+
+    /// The same server, recorded as named by `origin`.
+    pub(crate) fn with_origin(self, origin: McpServerOrigin) -> Self {
+        match self {
+            McpServerConfig::Legacy(mut legacy) => {
+                legacy.origin = origin;
+                McpServerConfig::Legacy(legacy)
+            }
+            McpServerConfig::Tagged(McpTransport::Stdio {
+                command,
+                args,
+                env,
+                allow_local_network,
+                sandbox,
+                cwd,
+                ..
+            }) => McpServerConfig::Tagged(McpTransport::Stdio {
+                command,
+                args,
+                env,
+                allow_local_network,
+                sandbox,
+                cwd,
+                origin,
+            }),
+            remote => remote,
+        }
     }
 
     /// Convenience constructor for SSE configs.
@@ -283,43 +396,373 @@ pub struct McpPromptArgument {
 // Host capability adapters wired into agiworkforce_mcp::ClientHooks
 // ---------------------------------------------------------------------------
 
-/// Convert the CLI's manifest config shape into the engine's transport config.
-fn sandboxed_transport_config(config: &McpServerConfig) -> Result<TransportConfig> {
-    sandbox_transport(
-        to_transport_config(config),
-        crate::sandbox::sandbox_settings().sandbox_mcp_servers
-            && !crate::sandbox::sandbox_disabled(),
-    )
-}
-
-fn sandbox_transport(transport: TransportConfig, enabled: bool) -> Result<TransportConfig> {
-    if !enabled || !matches!(transport, TransportConfig::Stdio { .. }) {
-        return Ok(transport);
+/// Convert the CLI's manifest config shape into the engine's transport
+/// config. A stdio server runs under the full-read sandbox unless its entry,
+/// its scope's default, the user's environment or `--no-sandbox` turns that
+/// off; then it starts outside every writable root, in the folder
+/// [`starts_in_project`] chooses.
+///
+/// `project` is the folder the server's launch was approved for. A local
+/// server is sandboxed to it and started in it, never in whatever directory
+/// this process happens to be in: the files an approval pinned are that
+/// folder's, and a server started elsewhere would run other ones.
+fn sandboxed_transport_config(
+    config: &McpServerConfig,
+    project: Option<&std::path::Path>,
+) -> Result<SandboxedTransport> {
+    let transport = to_transport_config(config);
+    if !matches!(transport, TransportConfig::Stdio { .. }) {
+        return Ok(SandboxedTransport::unsandboxed(transport));
     }
-    let workspace = std::env::current_dir().context("MCP sandbox needs a working directory")?;
-    let manager = crate::sandbox::SandboxManager::for_command_execution(
-        workspace,
-        crate::sandbox::NetworkPolicy::Allow,
+    let project =
+        project.context("a local MCP server starts in a project folder, and none was given")?;
+    let transport = on_host_path(transport)?;
+    let in_project = starts_in_project(config)?;
+    if !mcp_server_sandboxed(
+        config,
+        crate::sandbox::sandbox_settings(),
+        crate::sandbox::sandbox_disabled(),
+    ) {
+        return outside_writable_roots(transport, in_project.then_some(project));
+    }
+    let (workspace, held) = server_workspace(project)?;
+    let mut sandboxed = sandbox_stdio_transport(
+        crate::sandbox::SandboxType::detect(),
+        &workspace,
+        project,
+        mcp_server_network(config),
+        transport,
+        in_project,
     )?;
-    wrap_stdio_transport(&manager, transport)
+    sandboxed.workspace = held;
+    Ok(sandboxed)
 }
 
-fn wrap_stdio_transport(
-    manager: &crate::sandbox::SandboxManager,
-    transport: TransportConfig,
-) -> Result<TransportConfig> {
+/// The folder a sandboxed server may write: its project, or, when the
+/// project is a folder no sandbox is given, such as the home folder, a
+/// private one made for this server and removed with it. The server still
+/// starts in the project either way.
+fn server_workspace(
+    project: &std::path::Path,
+) -> Result<(std::path::PathBuf, Option<tempfile::TempDir>)> {
+    let root = project
+        .canonicalize()
+        .unwrap_or_else(|_| project.to_path_buf());
+    if agiworkforce_sandbox_policy::is_safe_write_root(&root) {
+        return Ok((root, None));
+    }
+    let held = tempfile::Builder::new()
+        .prefix("agi-mcp-workspace-")
+        .tempdir()
+        .context("could not make a private workspace for a sandboxed MCP server")?;
+    let workspace = held
+        .path()
+        .canonicalize()
+        .unwrap_or_else(|_| held.path().to_path_buf());
+    Ok((workspace, Some(held)))
+}
+
+/// A stdio launch with its bare command resolved once, to the absolute path
+/// of the first program by that name on the host `PATH`, which leaves out
+/// every folder a sandbox can write, and with that `PATH` unless its entry
+/// sets one. Sandboxed or not, an `npx`, `uvx` or `node` left in a project's
+/// `.venv/bin` or `node_modules/.bin` is never the one that runs.
+#[cfg(unix)]
+fn on_host_path(transport: TransportConfig) -> Result<TransportConfig> {
     match transport {
-        TransportConfig::Stdio { command, args, env } => {
-            let (command, args) = crate::sandbox::sandboxed_program(manager, &command, &args)?;
-            Ok(TransportConfig::Stdio { command, args, env })
+        TransportConfig::Stdio {
+            command,
+            args,
+            mut env,
+            cwd,
+        } => {
+            let host_path = agiworkforce_sandbox_policy::host_path::host_path();
+            let command = host_program(&command, &host_path)?;
+            env.entry("PATH".to_string())
+                .or_insert_with(|| host_path.to_string_lossy().into_owned());
+            Ok(TransportConfig::Stdio {
+                command,
+                args,
+                env,
+                cwd,
+            })
         }
         remote => Ok(remote),
     }
 }
 
+/// Windows has no sandbox and no folder a sandboxed command wrote, so the
+/// command is found as the system finds it.
+#[cfg(not(unix))]
+fn on_host_path(transport: TransportConfig) -> Result<TransportConfig> {
+    Ok(transport)
+}
+
+/// The absolute program an approval of `command` covers: where a bare name
+/// resolves on the host `PATH` now. A consent pins it, so the same name
+/// resolving to another program asks again.
+pub(crate) fn resolved_program(command: &str) -> Option<String> {
+    #[cfg(unix)]
+    {
+        host_program(
+            command,
+            &agiworkforce_sandbox_policy::host_path::host_path(),
+        )
+        .ok()
+        .filter(|program| program != command)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = command;
+        None
+    }
+}
+
+/// A transport ready to open, and the private scratch directory of the
+/// sandboxed server it starts. The directory, with the caches the server
+/// filled, is removed when this is dropped, so the connection keeps it for
+/// as long as the server runs.
+struct SandboxedTransport {
+    transport: TransportConfig,
+    sandboxed: bool,
+    scratch: Option<tempfile::TempDir>,
+    /// The private workspace of a sandboxed server whose project no sandbox
+    /// may write, removed with the server like its scratch directory.
+    workspace: Option<tempfile::TempDir>,
+    /// The config folder an unsandboxed stdio server was started in.
+    started_in: Option<std::path::PathBuf>,
+}
+
+impl SandboxedTransport {
+    fn unsandboxed(transport: TransportConfig) -> Self {
+        Self {
+            transport,
+            sandboxed: false,
+            scratch: None,
+            workspace: None,
+            started_in: None,
+        }
+    }
+}
+
+/// Whether a stdio server that runs outside the sandbox starts in the
+/// project: one the project's own MCP file names, whose launch there the
+/// user approved, or one whose entry sets `"cwd": "project"`. Every other
+/// starts in the CLI's config folder, which no sandbox writes, so a
+/// relative program or module path cannot reach a file a sandboxed command
+/// left in the project.
+fn starts_in_project(config: &McpServerConfig) -> Result<bool> {
+    let McpTransport::Stdio { cwd, origin, .. } = config.as_transport() else {
+        return Ok(false);
+    };
+    match cwd.as_deref() {
+        None => Ok(origin == McpServerOrigin::Project),
+        Some(MCP_CWD_PROJECT) => Ok(true),
+        Some(other) => {
+            bail!("\"cwd\": {other:?} is not supported; the only value is \"{MCP_CWD_PROJECT}\"")
+        }
+    }
+}
+
+/// The one value a server's `"cwd"` accepts.
+const MCP_CWD_PROJECT: &str = "project";
+
+/// A server whose entry leaves `sandbox` unset is sandboxed here; the
+/// loaders of user-scoped servers fill in their unsandboxed default first.
+fn mcp_server_sandboxed(
+    config: &McpServerConfig,
+    settings: crate::sandbox::SandboxSettings,
+    sandbox_disabled: bool,
+) -> bool {
+    let configured = match config.as_transport() {
+        McpTransport::Stdio { sandbox, .. } => sandbox.unwrap_or(true),
+        McpTransport::Sse { .. } | McpTransport::Http { .. } => return false,
+    };
+    !sandbox_disabled && settings.mcp_servers.applies(configured)
+}
+
+/// What a sandboxed MCP server may reach. By default the internet, and on
+/// macOS not loopback or a local Unix-domain socket, such as tmux's or
+/// Docker's, through which it could drive a program outside the sandbox. On
+/// Linux bubblewrap has no address filter, so a long-lived server that keeps
+/// the network reaches loopback and Unix sockets there too. A server whose
+/// entry sets `allowLocalNetwork` reaches them on every platform.
+fn mcp_server_network(config: &McpServerConfig) -> crate::sandbox::NetworkPolicy {
+    match config.as_transport() {
+        McpTransport::Stdio {
+            allow_local_network: true,
+            ..
+        } => crate::sandbox::NetworkPolicy::Allow,
+        _ => crate::sandbox::NetworkPolicy::AllowExternal,
+    }
+}
+
+/// A filesystem server's chosen roots are writable in its sandbox, as on the
+/// desktop; every other directory argument stays read-only. The workspace is
+/// named first, so a root that is a link inside it is refused on the first
+/// launch too. The launch starts in `project`, which the sandbox wrapper
+/// hands on to the server it runs.
+fn sandbox_stdio_transport(
+    sandbox_type: crate::sandbox::SandboxType,
+    workspace: &std::path::Path,
+    project: &std::path::Path,
+    network: crate::sandbox::NetworkPolicy,
+    transport: TransportConfig,
+    in_project: bool,
+) -> Result<SandboxedTransport> {
+    match transport {
+        TransportConfig::Stdio {
+            command,
+            args,
+            env,
+            cwd,
+        } => {
+            if agiworkforce_sandbox_policy::is_safe_write_root(workspace) {
+                agiworkforce_worktree::register_workspace_root(workspace.to_path_buf());
+            }
+            match crate::sandbox::full_read_program_guarding(
+                sandbox_type,
+                workspace,
+                &crate::sandbox::filesystem_server_roots(&args),
+                network,
+                &crate::sandbox::credential_locations(),
+                |name| env.get(name).cloned(),
+                &command,
+                &args,
+            )? {
+                Some(launch) => Ok(SandboxedTransport {
+                    transport: TransportConfig::Stdio {
+                        command: launch.program,
+                        args: launch.args,
+                        env,
+                        cwd: Some(project.to_path_buf()),
+                    },
+                    sandboxed: true,
+                    scratch: launch.scratch,
+                    workspace: None,
+                    started_in: None,
+                }),
+                None => outside_writable_roots(
+                    TransportConfig::Stdio {
+                        command,
+                        args,
+                        env,
+                        cwd,
+                    },
+                    in_project.then_some(project),
+                ),
+            }
+        }
+        remote => Ok(SandboxedTransport::unsandboxed(remote)),
+    }
+}
+
+/// What is added to a sandboxed server's failure to start: the sandbox is
+/// the likeliest cause of a server that worked before, so the line says it
+/// ran there and names each way out.
+fn sandboxed_start_hint() -> String {
+    format!(
+        "it ran in the OS sandbox, which lets it write only the workspace and a private \
+         scratch folder. If it needs more, set \"sandbox\": false in its entry to run it \
+         outside, \"allowLocalNetwork\": true to let it reach services on this computer, or \
+         {}=0 to run every MCP server outside",
+        crate::sandbox::SANDBOX_MCP_ENV
+    )
+}
+
+/// A stdio server that runs unsandboxed starts in `project` when it is to
+/// start in the project, else in the CLI's config folder. Its command and
+/// `PATH` are the host's ([`on_host_path`]), wherever it starts.
+#[cfg(unix)]
+fn outside_writable_roots(
+    transport: TransportConfig,
+    project: Option<&std::path::Path>,
+) -> Result<SandboxedTransport> {
+    let TransportConfig::Stdio {
+        command, args, env, ..
+    } = on_host_path(transport)?
+    else {
+        bail!("only a local MCP server is started in a folder");
+    };
+    let dir = match project {
+        Some(project) => project.to_path_buf(),
+        None => crate::config::CliConfig::config_dir()
+            .context("an unsandboxed MCP server starts in the CLI's config folder")?,
+    };
+    let started_in = project.is_none().then(|| dir.clone());
+    Ok(SandboxedTransport {
+        started_in,
+        ..SandboxedTransport::unsandboxed(TransportConfig::Stdio {
+            command,
+            args,
+            env,
+            cwd: Some(dir),
+        })
+    })
+}
+
+/// What is added to an unsandboxed server's failure to start in the
+/// config folder: a relative path in its entry was read from there.
+fn unsandboxed_start_hint(started_in: &std::path::Path) -> String {
+    format!(
+        "started in {}; give absolute paths or set \"cwd\": \"{MCP_CWD_PROJECT}\"",
+        started_in.display()
+    )
+}
+
+/// `command` as the absolute path of the first program by that name on
+/// `path` outside every folder a sandbox can write. A command with a `/` in
+/// it names its own path and is kept.
+#[cfg(unix)]
+fn host_program(command: &str, path: &std::ffi::OsStr) -> Result<String> {
+    if command.contains('/') {
+        return Ok(command.to_string());
+    }
+    agiworkforce_sandbox_policy::host_path::find_program(
+        path,
+        command,
+        &agiworkforce_sandbox_policy::host_path::untrusted_roots(&[]),
+    )
+    .map(|program| program.to_string_lossy().into_owned())
+    .ok_or_else(|| {
+        anyhow::anyhow!(
+            "`{command}` was not found on PATH outside the folders a sandboxed command can \
+             write; give its absolute path as the server's command"
+        )
+    })
+}
+
+/// Windows has no sandbox, so nothing a sandboxed command wrote is in the
+/// project to load. A server that is to start in the project starts there,
+/// and every other starts where the CLI runs.
+#[cfg(not(unix))]
+fn outside_writable_roots(
+    transport: TransportConfig,
+    project: Option<&std::path::Path>,
+) -> Result<SandboxedTransport> {
+    Ok(SandboxedTransport::unsandboxed(match transport {
+        TransportConfig::Stdio {
+            command, args, env, ..
+        } => TransportConfig::Stdio {
+            command,
+            args,
+            env,
+            cwd: project.map(std::path::Path::to_path_buf),
+        },
+        remote => remote,
+    }))
+}
+
 fn to_transport_config(config: &McpServerConfig) -> TransportConfig {
     match config.as_transport() {
-        McpTransport::Stdio { command, args, env } => TransportConfig::Stdio { command, args, env },
+        McpTransport::Stdio {
+            command, args, env, ..
+        } => TransportConfig::Stdio {
+            command,
+            args,
+            env,
+            cwd: None,
+        },
         McpTransport::Sse { url, headers } => TransportConfig::Sse { url, headers },
         McpTransport::Http { url, headers, auth } => TransportConfig::Http {
             url,
@@ -465,10 +908,11 @@ impl ElicitationHandler for HookFiringElicitationHandler {
     }
 }
 
-/// Where a discovered MCP server was configured.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Where an MCP server was configured.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum McpServerOrigin {
     Project,
+    #[default]
     User,
     Plugin,
 }
@@ -577,13 +1021,12 @@ pub fn discover_servers(project_dir: &std::path::Path) -> Vec<DiscoveredMcpServe
     }
     push_all(project, McpServerOrigin::Project, &mut seen, &mut servers);
 
-    let mut user = HashMap::new();
-    if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
-        for filename in [".mcp.json", "mcp.json"] {
-            load_mcp_config_file_into(&config_dir.join(filename), &mut user, false);
-        }
-    }
-    push_all(user, McpServerOrigin::User, &mut seen, &mut servers);
+    push_all(
+        user_servers(),
+        McpServerOrigin::User,
+        &mut seen,
+        &mut servers,
+    );
 
     let mut plugins = crate::plugins::PluginsManager::new();
     if plugins.load_all(Some(project_dir)).is_ok() {
@@ -835,6 +1278,7 @@ fn build_client_hooks_with_browser(
         },
         client_metadata_url: client_metadata_document_url(),
         on_log: agiworkforce_mcp::hooks::noop_log(),
+        before_respawn: None,
     }
 }
 
@@ -843,6 +1287,29 @@ fn client_metadata_document_url() -> Option<String> {
         .unwrap_or_else(|_| crate::tier_cache::default_api_base().to_string());
     let base = crate::tier_cache::resolve_agi_api_base(&raw)?;
     agiworkforce_mcp::oauth::client_metadata_document_url(&base, "cli")
+}
+
+/// What the engine asks before it restarts a local server that stopped: for
+/// one a project declares, whether the launch is still the one the user
+/// approved. The engine restarts from the launch it saved, and the files
+/// that launch runs can have been edited since, so the approval is checked
+/// again there and not only when the session loaded its servers.
+fn respawn_check(
+    name: &str,
+    config: &McpServerConfig,
+    project: Option<&std::path::Path>,
+) -> Option<agiworkforce_mcp::RespawnCheck> {
+    let McpTransport::Stdio { origin, .. } = config.as_transport() else {
+        return None;
+    };
+    if origin == McpServerOrigin::User {
+        return None;
+    }
+    let project = project?.to_path_buf();
+    let (name, config) = (name.to_string(), config.clone());
+    Some(Arc::new(move || {
+        consent::respawn_allowed(&project, origin, &name, &config)
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -858,6 +1325,11 @@ pub struct McpConnection {
     timeouts: McpTimeouts,
     notifications: Option<tokio::sync::mpsc::Receiver<agiworkforce_mcp::McpNotification>>,
     recent_logs: std::sync::Mutex<std::collections::VecDeque<String>>,
+    /// The sandboxed server's scratch directory, removed when the
+    /// connection is dropped.
+    _scratch: Option<tempfile::TempDir>,
+    /// Its private workspace, when its project is not one a sandbox writes.
+    _workspace: Option<tempfile::TempDir>,
 }
 
 const RECENT_LOG_LINES: usize = 200;
@@ -869,9 +1341,15 @@ struct ListChanges {
 }
 
 impl McpConnection {
-    /// Start an MCP server and initialize the connection.
-    pub async fn connect(name: &str, config: &McpServerConfig) -> Result<Self> {
-        Self::connect_with_elicitation(name, config, Arc::new(AutoDeclineHandler)).await
+    /// Start an MCP server and initialize the connection. `project` is the
+    /// folder a local server starts in and is sandboxed to; a remote server
+    /// needs none.
+    pub async fn connect(
+        name: &str,
+        config: &McpServerConfig,
+        project: Option<&std::path::Path>,
+    ) -> Result<Self> {
+        Self::connect_with_elicitation(name, config, project, Arc::new(AutoDeclineHandler)).await
     }
 
     /// Start an MCP server with an explicitly owned elicitation surface.
@@ -880,6 +1358,7 @@ impl McpConnection {
     pub async fn connect_with_elicitation(
         name: &str,
         config: &McpServerConfig,
+        project: Option<&std::path::Path>,
         elicitation: Arc<dyn ElicitationHandler>,
     ) -> Result<Self> {
         if let Some(refusal) = crate::cloud::workspace_policy::mcp_server_refusal(
@@ -890,11 +1369,31 @@ impl McpConnection {
         {
             bail!(refusal);
         }
-        let transport = sandboxed_transport_config(config)
-            .with_context(|| format!("MCP server '{name}' must run sandboxed"))?;
+        let SandboxedTransport {
+            transport,
+            sandboxed,
+            scratch,
+            workspace,
+            started_in,
+        } = sandboxed_transport_config(config, project)
+            .with_context(|| format!("MCP server '{name}' could not be prepared to start"))?;
         let timeouts = McpTimeouts::default();
-        let hooks = build_client_hooks(elicitation);
-        let mut client = McpClient::connect(name, transport, timeouts.clone(), hooks).await?;
+        let hooks = ClientHooks {
+            before_respawn: respawn_check(name, config, project),
+            ..build_client_hooks(elicitation)
+        };
+        let mut client = match McpClient::connect(name, transport, timeouts.clone(), hooks).await {
+            Ok(client) => client,
+            Err(error) if sandboxed => {
+                return Err(anyhow::anyhow!("{error}; {}", sandboxed_start_hint()))
+            }
+            Err(error) => match started_in {
+                Some(dir) => {
+                    return Err(anyhow::anyhow!("{error}; {}", unsandboxed_start_hint(&dir)))
+                }
+                None => return Err(error.into()),
+            },
+        };
         let notifications = client.notifications();
         Ok(Self {
             server_name: name.to_string(),
@@ -902,6 +1401,8 @@ impl McpConnection {
             timeouts,
             notifications,
             recent_logs: std::sync::Mutex::new(std::collections::VecDeque::new()),
+            _scratch: scratch,
+            _workspace: workspace,
         })
     }
 
@@ -1091,6 +1592,9 @@ pub struct McpManager {
     tools: Vec<McpTool>,
     prompts: Vec<McpPrompt>,
     remote_servers: HashSet<String>,
+    /// The folder local servers start in and are sandboxed to: the one their
+    /// configs were loaded and approved for.
+    project_root: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -1316,22 +1820,46 @@ fn parse_mcp_config_contents(
     Ok(configs)
 }
 
-fn load_default_mcp_configs(configs: &mut HashMap<String, McpServerConfig>) {
+fn load_default_mcp_configs(
+    configs: &mut HashMap<String, McpServerConfig>,
+    project: Option<&std::path::Path>,
+) {
     // Project configs win over globals. Support both the historical `.mcp.json`
-    // name and the visible `mcp.json` that `agi init` creates.
-    for path in [
-        std::path::Path::new(".mcp.json"),
-        std::path::Path::new("mcp.json"),
-    ] {
-        load_mcp_config_file_into(path, configs, true);
+    // name and the visible `mcp.json` that `agi init` creates. A project server
+    // starts only with the user's consent to its exact launch, which no
+    // context without a terminal can give, so there it stays off. Only the
+    // interactive startup review tells the user; every other load just logs.
+    let project = project
+        .map(std::path::Path::to_path_buf)
+        .or_else(|| std::env::current_dir().ok());
+    if let Some(project) = project {
+        let mut project_servers = consent::project_servers(&project);
+        let withheld = consent::retain_consented(&project, &mut project_servers);
+        if !withheld.is_empty() {
+            tracing::warn!(project = %project.display(), servers = ?withheld, "project MCP servers withheld until approved");
+        }
+        configs.extend(project_servers);
     }
 
-    // Load from ~/.agiworkforce/.mcp.json and ~/.agiworkforce/mcp.json.
+    for (name, config) in user_servers() {
+        configs.entry(name).or_insert(config);
+    }
+}
+
+/// The servers the user's own `.mcp.json` and `mcp.json` in the CLI config
+/// folder name. They run outside the sandbox unless an entry says
+/// `"sandbox": true`: no sandboxed command can rewrite that folder.
+fn user_servers() -> HashMap<String, McpServerConfig> {
+    let mut servers = HashMap::new();
     if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
         for filename in [".mcp.json", "mcp.json"] {
-            load_mcp_config_file_into(&config_dir.join(filename), configs, false);
+            load_mcp_config_file_into(&config_dir.join(filename), &mut servers, false);
         }
     }
+    servers
+        .into_iter()
+        .map(|(name, config)| (name, config.with_scope_default(false)))
+        .collect()
 }
 
 fn load_explicit_mcp_configs(
@@ -1366,7 +1894,15 @@ impl McpManager {
             tools: Vec::new(),
             prompts: Vec::new(),
             remote_servers: HashSet::new(),
+            project_root: None,
         }
+    }
+
+    /// Name the folder this manager's local servers start in. Whoever loaded
+    /// the configs names the same folder here, so a server runs where its
+    /// launch was approved; without one no local server starts.
+    pub fn start_servers_in(&mut self, project: Option<std::path::PathBuf>) {
+        self.project_root = project;
     }
 
     #[cfg(test)]
@@ -1416,10 +1952,21 @@ impl McpManager {
     pub fn load_configs_with_options(
         options: &McpConfigLoadOptions,
     ) -> Result<HashMap<String, McpServerConfig>> {
+        Self::load_configs_in(options, None)
+    }
+
+    /// [`Self::load_configs_with_options`] for the project at `project`, or
+    /// with `None` the current directory. A host that serves a folder names
+    /// it, so the servers it loads are that folder's whatever directory the
+    /// process happens to be in.
+    pub fn load_configs_in(
+        options: &McpConfigLoadOptions,
+        project: Option<&std::path::Path>,
+    ) -> Result<HashMap<String, McpServerConfig>> {
         let mut configs = HashMap::new();
 
         if !options.strict {
-            load_default_mcp_configs(&mut configs);
+            load_default_mcp_configs(&mut configs, project);
         }
 
         load_explicit_mcp_configs(&mut configs, &options.explicit_paths)?;
@@ -1474,8 +2021,13 @@ impl McpManager {
                 }
                 continue;
             }
-            match McpConnection::connect_with_elicitation(name, config, Arc::clone(&elicitation))
-                .await
+            match McpConnection::connect_with_elicitation(
+                name,
+                config,
+                self.project_root.as_deref(),
+                Arc::clone(&elicitation),
+            )
+            .await
             {
                 Ok(mut conn) => match conn.list_tools().await {
                     Ok(tools) => {
@@ -1532,7 +2084,7 @@ impl McpManager {
                             eprintln!(
                                 "  MCP server '{}': failed to connect: {}",
                                 name,
-                                crate::terminal_text::sanitize_terminal_text(&e.to_string())
+                                crate::terminal_text::sanitize_terminal_text(&format!("{e:#}"))
                             );
                         }
                     }
@@ -2065,6 +2617,27 @@ mod tests {
         }
     }
 
+    #[test]
+    fn only_a_server_a_project_declares_is_checked_again_before_it_restarts() {
+        let project = tempfile::tempdir().unwrap();
+        let mine = McpServerConfig::stdio("node", vec!["server.js".to_string()], HashMap::new());
+        assert!(
+            respawn_check("mine", &mine, Some(project.path())).is_none(),
+            "the user's own server has no approval to check"
+        );
+        let remote = McpServerConfig::http("https://mcp.example.invalid/rpc", HashMap::new());
+        assert!(respawn_check("remote", &remote, Some(project.path())).is_none());
+
+        let theirs = mine.with_origin(McpServerOrigin::Project);
+        let still_allowed = respawn_check("theirs", &theirs, Some(project.path()))
+            .expect("a project server is checked");
+        let refused = still_allowed().expect_err("a launch nobody approved was restarted");
+        assert!(
+            refused.contains("no longer the one you approved"),
+            "{refused}"
+        );
+    }
+
     #[tokio::test]
     async fn client_hooks_use_the_injected_interactive_elicitation_handler() {
         let called = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -2133,33 +2706,514 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
+    #[cfg(target_os = "macos")]
+    fn seatbelt_wrapped(
+        network: crate::sandbox::NetworkPolicy,
+        transport: TransportConfig,
+    ) -> TransportConfig {
+        sandbox_stdio_transport(
+            crate::sandbox::SandboxType::MacosSeatbelt,
+            &std::env::temp_dir().canonicalize().unwrap(),
+            &std::env::temp_dir().canonicalize().unwrap(),
+            network,
+            transport,
+            false,
+        )
+        .unwrap()
+        .transport
+    }
+
+    #[cfg(target_os = "macos")]
+    fn seatbelt_profile_of(transport: TransportConfig) -> String {
+        let TransportConfig::Stdio { args, .. } = transport else {
+            panic!("stdio stays stdio");
+        };
+        args[args.iter().position(|arg| arg == "-p").unwrap() + 1].clone()
+    }
+
+    #[cfg(target_os = "macos")]
     #[test]
     fn a_sandboxed_stdio_server_launches_through_the_backend_and_keeps_its_env() {
-        let mut manager =
-            crate::sandbox::SandboxManager::full_auto(std::env::temp_dir().canonicalize().unwrap());
-        manager.sandbox_type = crate::sandbox::SandboxType::MacosSeatbelt;
         let env = HashMap::from([("TOKEN".to_string(), "server-scoped".to_string())]);
-        let wrapped = wrap_stdio_transport(
-            &manager,
+        let wrapped = seatbelt_wrapped(
+            crate::sandbox::NetworkPolicy::AllowExternal,
             TransportConfig::Stdio {
                 command: "uvx".to_string(),
                 args: vec!["mcp-server-git".to_string()],
                 env: env.clone(),
+                cwd: None,
             },
-        )
-        .unwrap();
+        );
         let TransportConfig::Stdio {
             command,
             args,
             env: wrapped_env,
+            ..
         } = wrapped
         else {
             panic!("stdio stays stdio");
         };
-        assert_eq!(command, "sandbox-exec");
+        assert_eq!(
+            Some(std::path::PathBuf::from(&command)),
+            agiworkforce_sandbox_policy::sandbox_launcher(
+                agiworkforce_sandbox_policy::SandboxBackend::MacosSeatbelt
+            )
+        );
         assert_eq!(&args[args.len() - 2..], &["uvx", "mcp-server-git"]);
         assert_eq!(wrapped_env, env);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_sandboxed_stdio_server_reads_anywhere_and_writes_only_its_workspace() {
+        let profile = seatbelt_profile_of(seatbelt_wrapped(
+            crate::sandbox::NetworkPolicy::AllowExternal,
+            to_transport_config(&McpServerConfig::stdio(
+                "node",
+                vec!["./server.js".to_string()],
+                HashMap::new(),
+            )),
+        ));
+        assert!(profile.contains("(allow file-read*)"), "{profile}");
+        let workspace = std::env::temp_dir().canonicalize().unwrap();
+        assert!(
+            profile.contains(&format!(
+                "(allow file-write* (subpath \"{}\"))",
+                workspace.display()
+            )),
+            "{profile}"
+        );
+        if let Some(home) = dirs::home_dir() {
+            assert!(
+                !profile.contains(&format!(
+                    "(allow file-write* (subpath \"{}\"))",
+                    home.display()
+                )),
+                "{profile}"
+            );
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_sandboxed_stdio_server_reaches_the_internet_but_no_local_socket() {
+        let profile = seatbelt_profile_of(seatbelt_wrapped(
+            mcp_server_network(&McpServerConfig::stdio("uvx", Vec::new(), HashMap::new())),
+            TransportConfig::Stdio {
+                command: "uvx".to_string(),
+                args: vec!["mcp-server-fetch".to_string()],
+                env: HashMap::new(),
+                cwd: None,
+            },
+        ));
+        assert!(profile.contains("(allow network-outbound)"), "{profile}");
+        assert!(
+            profile.contains("(deny network-outbound (subpath \"/\"))"),
+            "{profile}"
+        );
+        assert!(
+            profile.contains("(deny network-outbound (remote ip \"localhost:*\"))"),
+            "{profile}"
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn only_a_server_whose_entry_opts_in_reaches_services_on_this_computer() {
+        let plain: McpServerConfig =
+            serde_json::from_str(r#"{"command": "npx", "args": ["-y", "postgres-mcp"]}"#).unwrap();
+        assert_eq!(
+            mcp_server_network(&plain),
+            crate::sandbox::NetworkPolicy::AllowExternal
+        );
+        for opted_in in [
+            r#"{"command": "npx", "allowLocalNetwork": true}"#,
+            r#"{"transport": "stdio", "command": "ollama-mcp", "allowLocalNetwork": true}"#,
+        ] {
+            let config: McpServerConfig = serde_json::from_str(opted_in).unwrap();
+            assert_eq!(
+                mcp_server_network(&config),
+                crate::sandbox::NetworkPolicy::Allow,
+                "{opted_in}"
+            );
+            assert!(serde_json::to_string(&config)
+                .unwrap()
+                .contains("\"allowLocalNetwork\":true"));
+        }
+        assert!(
+            !serde_json::to_string(&plain)
+                .unwrap()
+                .contains("allowLocalNetwork"),
+            "an entry that never opted in is written back as it was"
+        );
+
+        let profile = seatbelt_profile_of(seatbelt_wrapped(
+            crate::sandbox::NetworkPolicy::Allow,
+            to_transport_config(&plain),
+        ));
+        assert!(
+            !profile.contains("(deny network-outbound (remote ip \"localhost:*\"))"),
+            "{profile}"
+        );
+    }
+
+    #[test]
+    fn a_stdio_server_is_sandboxed_unless_its_entry_or_the_user_opts_out() {
+        use crate::sandbox::{SandboxDefault, SandboxSettings};
+        let plain: McpServerConfig =
+            serde_json::from_str(r#"{"command": "node", "args": ["./server.js"]}"#).unwrap();
+        let opted_out: McpServerConfig = serde_json::from_str(
+            r#"{"transport": "stdio", "command": "node", "args": ["./server.js"], "sandbox": false}"#,
+        )
+        .unwrap();
+        let default = SandboxSettings::default();
+        let env_off = SandboxSettings {
+            mcp_servers: SandboxDefault::Off,
+            ..default
+        };
+        let required = SandboxSettings {
+            mcp_servers: SandboxDefault::Required,
+            ..default
+        };
+        assert!(mcp_server_sandboxed(&plain, default, false));
+        assert!(!mcp_server_sandboxed(&opted_out, default, false));
+        assert!(!mcp_server_sandboxed(&plain, env_off, false));
+        assert!(mcp_server_sandboxed(&opted_out, required, false));
+        assert!(!mcp_server_sandboxed(&plain, default, true));
+        assert!(!mcp_server_sandboxed(
+            &McpServerConfig::http("https://mcp.example.invalid/rpc", HashMap::new()),
+            required,
+            false
+        ));
+
+        assert!(!serde_json::to_string(&plain).unwrap().contains("sandbox"));
+        assert!(serde_json::to_string(&opted_out)
+            .unwrap()
+            .contains("\"sandbox\":false"));
+    }
+
+    #[test]
+    fn a_user_scoped_server_runs_outside_the_sandbox_unless_it_opts_in() {
+        use crate::sandbox::{SandboxDefault, SandboxSettings};
+        let user: McpServerConfig =
+            serde_json::from_str(r#"{"command": "node", "args": ["server.js"]}"#).unwrap();
+        let user = user.with_scope_default(false);
+        let opted_in: McpServerConfig = serde_json::from_str(
+            r#"{"transport": "stdio", "command": "node", "args": ["server.js"], "sandbox": true}"#,
+        )
+        .unwrap();
+        let opted_in = opted_in.with_scope_default(false);
+        let default = SandboxSettings::default();
+        let required = SandboxSettings {
+            mcp_servers: SandboxDefault::Required,
+            ..default
+        };
+        assert!(!mcp_server_sandboxed(&user, default, false));
+        assert!(mcp_server_sandboxed(&opted_in, default, false));
+        assert!(mcp_server_sandboxed(&user, required, false));
+
+        let project = McpServerConfig::stdio("node", vec!["server.js".to_string()], HashMap::new());
+        assert!(
+            mcp_server_sandboxed(&project, default, false),
+            "a project server with no setting stays sandboxed"
+        );
+        assert!(mcp_server_sandboxed(
+            &project.with_scope_default(true),
+            default,
+            false
+        ));
+    }
+
+    #[test]
+    fn a_sandboxed_start_failure_names_the_sandbox_and_every_opt_out() {
+        let hint = sandboxed_start_hint();
+        assert!(hint.contains("OS sandbox"), "{hint}");
+        assert!(hint.contains("\"sandbox\": false"), "{hint}");
+        assert!(hint.contains("\"allowLocalNetwork\": true"), "{hint}");
+        assert!(hint.contains("AGIWORKFORCE_SANDBOX_MCP=0"), "{hint}");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_filesystem_servers_chosen_roots_are_writable_in_its_sandbox() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path().canonicalize().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let elsewhere = elsewhere.path().canonicalize().unwrap();
+        let writes = |profile: &str, dir: &std::path::Path| {
+            profile.contains(&format!(
+                "(allow file-write* (subpath \"{}\"))",
+                dir.display()
+            ))
+        };
+        let profile = seatbelt_profile_of(seatbelt_wrapped(
+            crate::sandbox::NetworkPolicy::AllowExternal,
+            TransportConfig::Stdio {
+                command: "npx".to_string(),
+                args: vec![
+                    "-y".to_string(),
+                    "@modelcontextprotocol/server-filesystem".to_string(),
+                    root.to_string_lossy().into_owned(),
+                ],
+                env: HashMap::new(),
+                cwd: None,
+            },
+        ));
+        assert!(writes(&profile, &root), "{profile}");
+
+        let profile = seatbelt_profile_of(seatbelt_wrapped(
+            crate::sandbox::NetworkPolicy::AllowExternal,
+            TransportConfig::Stdio {
+                command: "npx".to_string(),
+                args: vec![
+                    "-y".to_string(),
+                    "some-other-server".to_string(),
+                    elsewhere.to_string_lossy().into_owned(),
+                ],
+                env: HashMap::new(),
+                cwd: None,
+            },
+        ));
+        assert!(!writes(&profile, &elsewhere), "{profile}");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_sandboxed_server_starts_in_its_project_not_where_the_cli_runs() {
+        let workspace = tempfile::tempdir().unwrap();
+        let workspace = workspace.path().canonicalize().unwrap();
+        let project = tempfile::tempdir().unwrap();
+        let sandboxed = sandbox_stdio_transport(
+            crate::sandbox::SandboxType::MacosSeatbelt,
+            &workspace,
+            project.path(),
+            crate::sandbox::NetworkPolicy::AllowExternal,
+            TransportConfig::Stdio {
+                command: "/usr/bin/node".to_string(),
+                args: vec!["./server.js".to_string()],
+                env: HashMap::new(),
+                cwd: None,
+            },
+            true,
+        )
+        .unwrap();
+        let TransportConfig::Stdio { args, cwd, .. } = sandboxed.transport else {
+            panic!("stdio stays stdio");
+        };
+        assert_eq!(
+            cwd.as_deref(),
+            Some(project.path()),
+            "the spawn names the project, so the sandbox wrapper and the server start there"
+        );
+        assert_eq!(&args[args.len() - 2..], &["/usr/bin/node", "./server.js"]);
+        assert_ne!(project.path(), std::env::current_dir().unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_local_server_with_no_project_to_start_in_is_refused_and_a_remote_one_is_not() {
+        let local = McpServerConfig::stdio("sh", Vec::new(), HashMap::new());
+        let error = sandboxed_transport_config(&local, None)
+            .err()
+            .expect("a local server needs a folder")
+            .to_string();
+        assert!(error.contains("none was given"), "{error}");
+
+        let remote = McpServerConfig::http("https://mcp.example.invalid/rpc", HashMap::new());
+        assert!(sandboxed_transport_config(&remote, None).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_bare_command_is_resolved_on_the_host_path_before_any_launch() {
+        let resolved = on_host_path(TransportConfig::Stdio {
+            command: "sh".to_string(),
+            args: Vec::new(),
+            env: HashMap::new(),
+            cwd: None,
+        })
+        .unwrap();
+        let TransportConfig::Stdio { command, env, .. } = resolved else {
+            panic!("stdio stays stdio");
+        };
+        assert!(std::path::Path::new(&command).is_absolute(), "{command}");
+        assert_eq!(resolved_program("sh").as_deref(), Some(command.as_str()));
+        assert_eq!(resolved_program(&command), None, "a path names itself");
+        assert_eq!(
+            env.get("PATH").map(String::as_str),
+            Some(
+                agiworkforce_sandbox_policy::host_path::host_path()
+                    .to_string_lossy()
+                    .as_ref()
+            )
+        );
+    }
+
+    #[test]
+    fn a_project_no_sandbox_may_write_gets_a_private_workspace_and_a_safe_one_is_its_own() {
+        let project = tempfile::tempdir().unwrap();
+        let (workspace, held) = server_workspace(project.path()).unwrap();
+        assert_eq!(workspace, project.path().canonicalize().unwrap());
+        assert!(held.is_none());
+
+        if let Some(home) = dirs::home_dir() {
+            let (workspace, held) = server_workspace(&home).unwrap();
+            assert_ne!(workspace, home.canonicalize().unwrap());
+            assert!(held.is_some_and(|held| held.path().is_dir()));
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_sandboxed_servers_scratch_directory_goes_when_its_transport_does() {
+        let sandboxed = sandbox_stdio_transport(
+            crate::sandbox::SandboxType::MacosSeatbelt,
+            &std::env::temp_dir().canonicalize().unwrap(),
+            &std::env::temp_dir().canonicalize().unwrap(),
+            crate::sandbox::NetworkPolicy::AllowExternal,
+            TransportConfig::Stdio {
+                command: "uvx".to_string(),
+                args: vec!["mcp-server-git".to_string()],
+                env: HashMap::new(),
+                cwd: None,
+            },
+            false,
+        )
+        .unwrap();
+        assert!(sandboxed.sandboxed);
+        let scratch = sandboxed
+            .scratch
+            .as_ref()
+            .expect("seatbelt gives the server a scratch directory")
+            .path()
+            .to_path_buf();
+        assert!(scratch.is_dir());
+        drop(sandboxed);
+        assert!(
+            !scratch.exists(),
+            "the scratch directory outlived the server"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unsandboxed_server_starts_in_the_config_folder_on_the_host_path() {
+        let started = outside_writable_roots(
+            to_transport_config(&McpServerConfig::stdio(
+                "sh",
+                vec!["./server.js".to_string()],
+                HashMap::new(),
+            )),
+            None,
+        )
+        .unwrap();
+        let config_dir = crate::config::CliConfig::config_dir().unwrap();
+        assert_eq!(started.started_in.as_deref(), Some(config_dir.as_path()));
+        let TransportConfig::Stdio {
+            command,
+            args,
+            env,
+            cwd,
+        } = started.transport
+        else {
+            panic!("stdio stays stdio");
+        };
+        assert_eq!(cwd.as_deref(), Some(config_dir.as_path()));
+        assert!(
+            std::path::Path::new(&command).is_absolute() && command.ends_with("/sh"),
+            "the bare command is resolved on the host PATH: {command}"
+        );
+        assert_eq!(args, ["./server.js"]);
+        assert_eq!(
+            env.get("PATH").map(String::as_str),
+            Some(
+                agiworkforce_sandbox_policy::host_path::host_path()
+                    .to_string_lossy()
+                    .as_ref()
+            )
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unsandboxed_project_server_starts_in_the_project_with_the_host_path() {
+        let project = tempfile::tempdir().unwrap();
+        let started = outside_writable_roots(
+            to_transport_config(&McpServerConfig::stdio(
+                "sh",
+                vec!["./server.js".to_string()],
+                HashMap::new(),
+            )),
+            Some(project.path()),
+        )
+        .unwrap();
+        assert_eq!(started.started_in, None);
+        let TransportConfig::Stdio { env, cwd, .. } = started.transport else {
+            panic!("stdio stays stdio");
+        };
+        assert_eq!(
+            cwd.as_deref(),
+            Some(project.path()),
+            "a project server starts in the project it was approved for, wherever the CLI runs"
+        );
+        assert_eq!(
+            env.get("PATH").map(String::as_str),
+            Some(
+                agiworkforce_sandbox_policy::host_path::host_path()
+                    .to_string_lossy()
+                    .as_ref()
+            )
+        );
+    }
+
+    #[test]
+    fn only_a_project_server_or_an_opted_in_entry_starts_in_the_project() {
+        let entry = |json: &str| serde_json::from_str::<McpServerConfig>(json).unwrap();
+        let plain = r#"{"command": "node", "args": ["server.js"], "sandbox": false}"#;
+        assert!(!starts_in_project(&entry(plain)).unwrap());
+        assert!(!starts_in_project(&entry(plain).with_origin(McpServerOrigin::Plugin)).unwrap());
+        assert!(starts_in_project(&entry(plain).with_origin(McpServerOrigin::Project)).unwrap());
+
+        let opted_in = r#"{"transport": "stdio", "command": "node", "cwd": "project"}"#;
+        assert!(starts_in_project(&entry(opted_in)).unwrap());
+        assert!(starts_in_project(&entry(opted_in).with_origin(McpServerOrigin::Plugin)).unwrap());
+        assert!(serde_json::to_string(&entry(opted_in))
+            .unwrap()
+            .contains("\"cwd\":\"project\""));
+
+        let error = starts_in_project(&entry(r#"{"command": "node", "cwd": "/srv"}"#))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("\"project\""), "{error}");
+    }
+
+    #[test]
+    fn an_unsandboxed_start_failure_names_the_folder_and_the_way_out() {
+        let hint = unsandboxed_start_hint(std::path::Path::new("/home/u/.agiworkforce"));
+        assert!(hint.contains("started in /home/u/.agiworkforce"), "{hint}");
+        assert!(hint.contains("absolute paths"), "{hint}");
+        assert!(hint.contains("\"cwd\": \"project\""), "{hint}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_program_planted_where_a_sandbox_writes_is_never_resolved() {
+        use std::os::unix::fs::PermissionsExt;
+        let planted = tempfile::tempdir().unwrap();
+        let program = planted.path().join("npx");
+        std::fs::write(&program, "#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let only_planted = std::env::join_paths([planted.path()]).unwrap();
+        let error = host_program("npx", &only_planted).unwrap_err().to_string();
+        assert!(error.contains("absolute path"), "{error}");
+
+        let planted_first =
+            std::env::join_paths([planted.path(), std::path::Path::new("/bin")]).unwrap();
+        assert_eq!(host_program("sh", &planted_first).unwrap(), "/bin/sh");
+        assert_eq!(
+            host_program("/opt/tools/server", &only_planted).unwrap(),
+            "/opt/tools/server"
+        );
     }
 
     #[test]
@@ -2168,21 +3222,37 @@ mod tests {
             McpServerConfig::http("https://mcp.example.invalid/rpc", HashMap::new()),
             McpServerConfig::sse("https://mcp.example.invalid/sse", HashMap::new()),
         ] {
-            let remote = sandbox_transport(to_transport_config(&config), true).unwrap();
+            let remote = sandbox_stdio_transport(
+                crate::sandbox::SandboxType::None,
+                &std::env::temp_dir(),
+                &std::env::temp_dir(),
+                mcp_server_network(&config),
+                to_transport_config(&config),
+                false,
+            )
+            .unwrap();
+            assert!(!remote.sandboxed);
             assert!(matches!(
-                remote,
+                remote.transport,
                 TransportConfig::Http { .. } | TransportConfig::Sse { .. }
             ));
         }
     }
 
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     #[test]
     fn stdio_transport_refuses_an_unavailable_sandbox() {
         let workspace = tempfile::tempdir().unwrap();
-        let mut manager = crate::sandbox::SandboxManager::full_auto(workspace.path().to_path_buf());
-        manager.sandbox_type = crate::sandbox::SandboxType::None;
         let config = McpServerConfig::stdio("uvx", vec![], HashMap::new());
-        assert!(wrap_stdio_transport(&manager, to_transport_config(&config)).is_err());
+        assert!(sandbox_stdio_transport(
+            crate::sandbox::SandboxType::None,
+            workspace.path(),
+            workspace.path(),
+            mcp_server_network(&config),
+            to_transport_config(&config),
+            false,
+        )
+        .is_err());
     }
 
     /// The VS Code extension over `agi app-server` loaded 11 MCP servers and
@@ -2612,9 +3682,14 @@ while True:
             command: "python3".to_string(),
             args: vec!["-u".to_string(), "-c".to_string(), script.to_string()],
             env: HashMap::new(),
+            allow_local_network: false,
+            sandbox: Some(false),
+            cwd: None,
+            origin: McpServerOrigin::User,
         });
 
-        let mut conn = McpConnection::connect("myserver", &config)
+        let project = tempfile::tempdir().expect("project");
+        let mut conn = McpConnection::connect("myserver", &config, Some(project.path()))
             .await
             .expect("connect");
 

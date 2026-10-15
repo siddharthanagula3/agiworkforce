@@ -1,7 +1,9 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
-use agiworkforce_app_server::{DeveloperSessionHost, DeveloperSessionHostError};
+use agiworkforce_app_server::{
+    DeveloperConnectionTrust, DeveloperSessionHost, DeveloperSessionHostError,
+};
 use agiworkforce_protocol::developer_session::{
     ActiveTurnSnapshot, AppServerClientInfo, AppServerNotification, ApprovalResponseParams,
     LocalModelListResponse, ModelListParams, PendingApprovalSnapshot, ThreadForkParams,
@@ -225,6 +227,7 @@ impl TuiRemoteHost {
             reversible: Some(risk.reversible),
             proposed_content: None,
             always_allow_saved: false,
+            proposed_execpolicy_amendment: None,
         };
         self.live().pending.push((request.id, snapshot.clone()));
         self.emit(
@@ -302,8 +305,9 @@ impl DeveloperSessionHost for TuiRemoteHost {
     async fn list_local_models(
         &self,
         params: ModelListParams,
+        trust: DeveloperConnectionTrust,
     ) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
-        self.inner.list_local_models(params).await
+        self.inner.list_local_models(params, trust).await
     }
 
     async fn resume_thread(
@@ -339,6 +343,7 @@ impl DeveloperSessionHost for TuiRemoteHost {
                 .iter()
                 .map(|(_, snapshot)| snapshot.clone())
                 .collect(),
+            pending_user_inputs: Vec::new(),
         });
         Ok(ThreadReconnectResponse {
             thread,

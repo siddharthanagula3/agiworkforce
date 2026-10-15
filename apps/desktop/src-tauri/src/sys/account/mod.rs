@@ -1,3 +1,4 @@
+pub mod app_mode;
 pub mod clerk_native;
 
 use crate::features::speech::wake::{RemoteSpeechGate, VoiceWake};
@@ -267,7 +268,77 @@ pub async fn account_poll_device_authorization(
 
     let body = serde_json::json!({ "device_code": device_code }).to_string();
     let client = state.get_client()?;
-    execute_device_authorization_request("/api/auth/device/token", body, client).await
+    let response =
+        execute_device_authorization_request("/api/auth/device/token", body, client).await?;
+    let (response, held) = withhold_refresh_token(response);
+    if let Some(held) = held {
+        *HELD_REFRESH_TOKEN
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(held);
+    }
+    Ok(response)
+}
+
+/// A refresh token that arrived with a device authorization and is waiting
+/// for the page to adopt the access token issued with it. Until then it is
+/// not the saved session's: a sign-in the person abandons must not replace
+/// the account that is signed in.
+struct HeldRefreshToken {
+    access_token_digest: String,
+    refresh_token: String,
+}
+
+fn access_token_digest(access_token: &str) -> String {
+    use sha2::{Digest, Sha256};
+
+    hex::encode(Sha256::digest(access_token.as_bytes()))
+}
+
+/// Takes the refresh token out of a device-token reply before the reply is
+/// handed to the webview. The refresh token is the long-lived credential, and
+/// any script in the page could read it there, so it never crosses IPC: the
+/// page gets the short-lived access token and asks
+/// [`account_refresh_session`] for the next one.
+fn withhold_refresh_token(
+    mut response: DeviceAuthorizationHttpResponse,
+) -> (DeviceAuthorizationHttpResponse, Option<HeldRefreshToken>) {
+    let Ok(serde_json::Value::Object(mut fields)) =
+        serde_json::from_str::<serde_json::Value>(&response.body)
+    else {
+        return (response, None);
+    };
+    let Some(refresh_token) = fields.remove("refresh_token") else {
+        return (response, None);
+    };
+    let access_token = fields
+        .get("access_token")
+        .and_then(serde_json::Value::as_str);
+    let held = match (refresh_token.as_str(), access_token) {
+        (Some(refresh_token), Some(access_token))
+            if validate_refresh_token_format(refresh_token).is_ok() =>
+        {
+            Some(HeldRefreshToken {
+                access_token_digest: access_token_digest(access_token),
+                refresh_token: refresh_token.to_string(),
+            })
+        }
+        _ => None,
+    };
+    response.body = serde_json::Value::Object(fields).to_string();
+    (response, held)
+}
+
+fn take_held_refresh_token_for(access_token: &str) -> Option<String> {
+    let mut held = HELD_REFRESH_TOKEN
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let adopted = held
+        .as_ref()
+        .is_some_and(|held| held.access_token_digest == access_token_digest(access_token));
+    if !adopted {
+        return None;
+    }
+    held.take().map(|held| held.refresh_token)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -565,12 +636,6 @@ impl ManagedAccessTokenState {
             generation: 0,
         }
     }
-
-    fn subject(&self) -> Option<String> {
-        self.identity
-            .as_ref()
-            .map(|identity| identity.subject.clone())
-    }
 }
 
 /// Native ownership proof captured when a Managed Cloud goal starts.
@@ -588,6 +653,10 @@ pub(crate) struct ManagedAuthBoundary {
 static ACCESS_TOKEN: RwLock<ManagedAccessTokenState> =
     RwLock::new(ManagedAccessTokenState::empty());
 static REFRESH_TOKEN: RwLock<Option<String>> = RwLock::new(None);
+static HELD_REFRESH_TOKEN: RwLock<Option<HeldRefreshToken>> = RwLock::new(None);
+/// The server rotates the refresh token on every exchange and treats a second
+/// use of one as a stolen credential, so exchanges never overlap.
+static REFRESH_EXCHANGE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 static API_BASE_URL_OVERRIDE: RwLock<Option<String>> = RwLock::new(None);
 const CLOUD_ACCESS_TOKEN_SECRET_KEY: &str = "cloud_account_access_token";
 const CLOUD_REFRESH_TOKEN_SECRET_KEY: &str = "cloud_account_refresh_token";
@@ -670,17 +739,6 @@ pub(crate) fn capture_managed_auth_boundary() -> Result<ManagedAuthBoundary, Str
         identity,
         generation: state.generation,
     })
-}
-
-/// Account subject (`sub`) proven by the access token that is currently
-/// installed. Authorization-sensitive scoping must derive the account from
-/// here rather than from a webview-supplied argument, so local data can only
-/// be pushed to, or pulled into, the account whose bearer token is used.
-pub fn current_account_subject() -> Option<String> {
-    ACCESS_TOKEN
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .subject()
 }
 
 /// Return the boundary inherited by the currently executing native goal.
@@ -809,11 +867,13 @@ fn delete_cloud_credential(
         .map_err(|_| "Could not clear the legacy Cloud credential".to_string())
 }
 
+const PRODUCTION_API_BASE_URL: &str = "https://agiworkforce.com";
+
 /// Get the API base URL for desktop -> backend calls.
 ///
 /// Priority:
 /// 1) In-memory override set by the frontend (best for local dev, where Vite reads `.env` but Rust does not)
-/// 2) `AGI_API_URL` environment variable
+/// 2) `AGI_API_URL` environment variable, when it passes the same allowlist
 /// 3) Production default
 pub fn get_api_base_url() -> String {
     {
@@ -825,18 +885,25 @@ pub fn get_api_base_url() -> String {
         }
     }
 
-    let raw =
-        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://agiworkforce.com".to_string());
-    raw.trim_end_matches('/').to_string()
+    api_base_url_from_environment(std::env::var("AGI_API_URL").ok())
+}
+
+fn api_base_url_from_environment(raw: Option<String>) -> String {
+    raw.map(|value| value.trim().trim_end_matches('/').to_string())
+        .filter(|value| validate_api_base_url(value).is_ok())
+        .unwrap_or_else(|| PRODUCTION_API_BASE_URL.to_string())
 }
 
 /// Validate that an API base URL is safe to use (prevents SSRF).
 ///
-/// Rules:
-/// - `https://` scheme is required, except for `http://localhost` and `http://127.0.0.1`
-/// - Domain must match the allowlist: `*.agiworkforce.com`, `localhost`, or `127.0.0.1`
+/// SECURITY: every bearer-carrying Rust call is sent to this base, so a
+/// loopback host is accepted in debug builds only. A release build that
+/// accepted one would hand the account token to any local listener.
 fn validate_api_base_url(url: &str) -> Result<(), String> {
-    // Parse the URL to extract scheme and host
+    validate_api_base_url_for_build(url, cfg!(debug_assertions))
+}
+
+fn validate_api_base_url_for_build(url: &str, allow_loopback: bool) -> Result<(), String> {
     let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
 
     let scheme = parsed.scheme();
@@ -849,17 +916,14 @@ fn validate_api_base_url(url: &str) -> Result<(), String> {
         return Err("API base URL must not contain credentials (userinfo)".to_string());
     }
 
-    let is_localhost = matches!(
-        host,
-        "localhost" | "127.0.0.1" | "::1" | "[::1]" | "0.0.0.0"
-    );
-
-    // Enforce https:// except for localhost / 127.0.0.1 / ::1 / 0.0.0.0
-    if scheme == "http" && !is_localhost {
-        return Err(
-            "API base URL must use https:// (http:// is only allowed for localhost, 127.0.0.1, ::1, and 0.0.0.0)"
-                .to_string(),
+    let is_localhost = allow_loopback
+        && matches!(
+            host,
+            "localhost" | "127.0.0.1" | "::1" | "[::1]" | "0.0.0.0"
         );
+
+    if scheme == "http" && !is_localhost {
+        return Err("API base URL must use https://".to_string());
     }
     if scheme != "http" && scheme != "https" {
         return Err(format!(
@@ -868,13 +932,11 @@ fn validate_api_base_url(url: &str) -> Result<(), String> {
         ));
     }
 
-    // Domain allowlist: *.agiworkforce.com, localhost, 127.0.0.1
     let allowed = is_localhost || host == "agiworkforce.com" || host.ends_with(".agiworkforce.com");
 
     if !allowed {
         return Err(format!(
-            "API base URL host '{}' is not in the allowlist. \
-             Allowed: *.agiworkforce.com, localhost, 127.0.0.1, ::1, 0.0.0.0",
+            "API base URL host '{}' is not in the allowlist. Allowed: *.agiworkforce.com",
             host
         ));
     }
@@ -967,13 +1029,84 @@ pub fn account_store_access_token(
     // Decode the ownership claims before persisting anything. Native managed
     // goal execution depends on `sub`/`sid` to distinguish an ordinary token
     // refresh from an account or session replacement.
-    managed_auth_session_identity(&accessToken)?;
-    store_cloud_access_token(
-        &OsCloudCredentialVault::for_app(&app),
-        secret_state.manager(),
-        &accessToken,
-    )?;
+    let identity = managed_auth_session_identity(&accessToken)?;
+    let previous = current_session_identity();
+    let vault = OsCloudCredentialVault::for_app(&app);
+    store_cloud_access_token(&vault, secret_state.manager(), &accessToken)?;
+    match refresh_token_change(
+        take_held_refresh_token_for(&accessToken),
+        previous.as_ref(),
+        &identity,
+    ) {
+        RefreshTokenChange::Adopt(refresh_token) => {
+            keep_cloud_refresh_token(&vault, secret_state.manager(), refresh_token)?;
+        }
+        RefreshTokenChange::Forget => {
+            forget_cloud_refresh_token(&vault, secret_state.manager())?;
+        }
+        RefreshTokenChange::Keep => {}
+    }
     install_access_token_in_memory(accessToken)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum RefreshTokenChange {
+    Adopt(String),
+    Forget,
+    Keep,
+}
+
+/// What adopting an access token does to the saved refresh token. One that
+/// arrived with this access token replaces it. An access token for another
+/// account or sign-in that brought none leaves the saved one belonging to a
+/// session that is gone, so it is forgotten rather than left to renew the
+/// wrong account later.
+fn refresh_token_change(
+    held: Option<String>,
+    previous: Option<&ManagedAuthSessionIdentity>,
+    adopted: &ManagedAuthSessionIdentity,
+) -> RefreshTokenChange {
+    match held {
+        Some(refresh_token) => RefreshTokenChange::Adopt(refresh_token),
+        None if previous.is_some_and(|previous| previous != adopted) => RefreshTokenChange::Forget,
+        None => RefreshTokenChange::Keep,
+    }
+}
+
+fn current_session_identity() -> Option<ManagedAuthSessionIdentity> {
+    ACCESS_TOKEN
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .identity
+        .clone()
+}
+
+fn keep_cloud_refresh_token(
+    vault: &dyn CloudCredentialVault,
+    secret_manager: &SecretManager,
+    refresh_token: String,
+) -> Result<(), String> {
+    store_cloud_refresh_token(vault, secret_manager, &refresh_token)?;
+    *REFRESH_TOKEN
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(refresh_token);
+    Ok(())
+}
+
+fn forget_cloud_refresh_token(
+    vault: &dyn CloudCredentialVault,
+    secret_manager: &SecretManager,
+) -> Result<(), String> {
+    delete_cloud_credential(
+        vault,
+        secret_manager,
+        CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT,
+        CLOUD_REFRESH_TOKEN_SECRET_KEY,
+    )?;
+    *REFRESH_TOKEN
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+    Ok(())
 }
 
 fn store_cloud_access_token(
@@ -1006,27 +1139,6 @@ fn validate_refresh_token_format(token: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Store refresh token from frontend (called when the app auth state changes).
-#[tauri::command]
-#[allow(non_snake_case)]
-pub fn account_store_refresh_token(
-    refreshToken: String,
-    app: AppHandle,
-    secret_state: State<'_, SecretManagerState>,
-) -> Result<(), String> {
-    validate_refresh_token_format(&refreshToken)?;
-    store_cloud_refresh_token(
-        &OsCloudCredentialVault::for_app(&app),
-        secret_state.manager(),
-        &refreshToken,
-    )?;
-    let mut token = REFRESH_TOKEN
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    *token = Some(refreshToken);
-    Ok(())
-}
-
 fn store_cloud_refresh_token(
     vault: &dyn CloudCredentialVault,
     secret_manager: &SecretManager,
@@ -1047,10 +1159,16 @@ pub fn account_clear_tokens(
     app: AppHandle,
     secret_state: State<'_, SecretManagerState>,
 ) -> Result<(), String> {
-    clear_cloud_tokens(
-        &OsCloudCredentialVault::for_app(&app),
-        secret_state.manager(),
-    )?;
+    clear_cloud_session(&app, secret_state.manager())
+}
+
+/// Removes the Cloud sign-in from the OS keyring, from the legacy database
+/// rows and from memory.
+pub(crate) fn clear_cloud_session(
+    app: &AppHandle,
+    secret_manager: &SecretManager,
+) -> Result<(), String> {
+    clear_cloud_tokens(&OsCloudCredentialVault::for_app(app), secret_manager)?;
     clear_access_token_in_memory();
     {
         let mut token = REFRESH_TOKEN
@@ -1058,6 +1176,9 @@ pub fn account_clear_tokens(
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         *token = None;
     }
+    *HELD_REFRESH_TOKEN
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
     Ok(())
 }
 
@@ -1095,20 +1216,213 @@ pub fn account_restore_access_token(
     )
 }
 
-/// Restore the OS-keyring Cloud refresh token after a Desktop process restart.
+/// What became of an attempt to renew the Cloud session. The page signs out
+/// only on `Rejected`: when the server could not be reached the saved session
+/// is kept, because a laptop that is offline has not been signed out, and a
+/// `Refused` renewal keeps it too, carrying the server's sentence, because a
+/// terms revision or an account notice does not revoke the device.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum SessionRenewal {
+    Renewed {
+        #[serde(rename = "accessToken")]
+        access_token: String,
+    },
+    SignedOut,
+    Rejected,
+    Refused {
+        reason: String,
+        code: String,
+    },
+    Unreachable {
+        reason: String,
+    },
+}
+
+/// Renews the Cloud session.
 ///
-/// The raw value crosses IPC only into the authenticated Desktop webview, which
-/// immediately exchanges it over the allowlisted AGI Cloud origin when the
-/// access token is near expiry. It is never logged or persisted in plaintext.
+/// The exchange happens here, against the registered Cloud origin, so the
+/// refresh token stays in the OS keyring and this process: the webview is
+/// handed only the short-lived access token. The rotated refresh token is
+/// saved before the access token is returned. The request is sent once and
+/// no redirect is followed, since either would hand the refresh token to
+/// the server a second time or to another origin.
 #[tauri::command]
-pub fn account_restore_refresh_token(
+pub async fn account_refresh_session(
     app: AppHandle,
     secret_state: State<'_, SecretManagerState>,
+) -> Result<SessionRenewal, String> {
+    let _one_exchange_at_a_time = REFRESH_EXCHANGE.lock().await;
+    let vault = OsCloudCredentialVault::for_app(&app);
+    let Some(refresh_token) = saved_cloud_refresh_token(&vault, secret_state.manager())? else {
+        return Ok(SessionRenewal::SignedOut);
+    };
+    let signed_in_as = current_session_identity();
+
+    let api_base = get_api_base_url();
+    validate_api_base_url(&api_base)?;
+    let mut request = build_device_authorization_request(
+        &api_base,
+        DEVICE_REFRESH_PATH,
+        serde_json::json!({ "refresh_token": refresh_token }).to_string(),
+    );
+    request.headers.insert(
+        CLIENT_VERSION_HEADER.to_string(),
+        env!("CARGO_PKG_VERSION").to_string(),
+    );
+    let response = match session_renewal_client()?.execute(request).await {
+        Ok(response) => response,
+        Err(error) => {
+            return Ok(SessionRenewal::Unreachable {
+                reason: format!("AGI Cloud could not be reached: {}", error),
+            })
+        }
+    };
+
+    let renewed = match renewed_cloud_session(response.status, &response.body) {
+        Ok(renewed) => renewed,
+        Err(RenewalRefusal::Rejected) => {
+            clear_cloud_session(&app, secret_state.manager())?;
+            return Ok(SessionRenewal::Rejected);
+        }
+        Err(RenewalRefusal::Refused { reason, code }) => {
+            return Ok(SessionRenewal::Refused { reason, code })
+        }
+        Err(RenewalRefusal::Unreachable(reason)) => {
+            return Ok(SessionRenewal::Unreachable { reason })
+        }
+    };
+    let Ok(identity) = managed_auth_session_identity(&renewed.access_token) else {
+        return Ok(SessionRenewal::Unreachable {
+            reason: INVALID_RENEWAL_REPLY.to_string(),
+        });
+    };
+    if signed_in_as.is_some_and(|signed_in_as| signed_in_as.subject != identity.subject) {
+        clear_cloud_session(&app, secret_state.manager())?;
+        return Ok(SessionRenewal::Rejected);
+    }
+
+    // A sign-out or another sign-in during the exchange changed which refresh
+    // token is the saved one. Saving this one now would bring back the
+    // session the person just left.
+    let still_the_saved_session = REFRESH_TOKEN
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .as_deref()
+        == Some(refresh_token.as_str());
+    if !still_the_saved_session {
+        return Ok(SessionRenewal::Unreachable {
+            reason: "The session changed while it was being renewed.".to_string(),
+        });
+    }
+
+    keep_cloud_refresh_token(&vault, secret_state.manager(), renewed.refresh_token)?;
+    store_cloud_access_token(&vault, secret_state.manager(), &renewed.access_token)?;
+    install_access_token_in_memory(renewed.access_token.clone())?;
+    Ok(SessionRenewal::Renewed {
+        access_token: renewed.access_token,
+    })
+}
+
+const DEVICE_REFRESH_PATH: &str = "/api/auth/device/refresh";
+
+const INVALID_RENEWAL_REPLY: &str =
+    "AGI Cloud returned an invalid reply when renewing the session.";
+
+static SESSION_RENEWAL_CLIENT: std::sync::OnceLock<ApiClient> = std::sync::OnceLock::new();
+
+fn session_renewal_client() -> Result<&'static ApiClient, String> {
+    if let Some(client) = SESSION_RENEWAL_CLIENT.get() {
+        return Ok(client);
+    }
+    let client = ApiClient::single_attempt_without_redirects()
+        .map_err(|e| format!("Failed to initialize the session renewal client: {}", e))?;
+    Ok(SESSION_RENEWAL_CLIENT.get_or_init(|| client))
+}
+
+struct RenewedCloudSession {
+    access_token: String,
+    refresh_token: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum RenewalRefusal {
+    Rejected,
+    Refused { reason: String, code: String },
+    Unreachable(String),
+}
+
+const REFUSED_RENEWAL_REASON: &str = "AGI Cloud did not renew your session.";
+const REFUSED_RENEWAL_CODE: &str = "refresh_unavailable";
+
+/// Reads the reply to a refresh exchange. Only 400 is the server saying the
+/// refresh token is no longer good: invalid, expired, revoked, or from a
+/// family it has marked compromised. 401 and 403 refuse this renewal, such as
+/// for terms that need accepting or an account notice, without revoking the
+/// token, so the saved session is kept and the server's sentence is shown.
+/// Every other failure says nothing about the token. No message repeats the
+/// body, which on success carries both tokens.
+fn renewed_cloud_session(status: u16, body: &str) -> Result<RenewedCloudSession, RenewalRefusal> {
+    match status {
+        200..=299 => {}
+        400 => return Err(RenewalRefusal::Rejected),
+        401 | 403 => return Err(refused_renewal(body)),
+        _ => {
+            return Err(RenewalRefusal::Unreachable(format!(
+                "AGI Cloud did not renew the session (status {}).",
+                status
+            )))
+        }
+    }
+    let invalid = || RenewalRefusal::Unreachable(INVALID_RENEWAL_REPLY.to_string());
+    let fields: serde_json::Value = serde_json::from_str(body).map_err(|_| invalid())?;
+    let field = |name: &str| {
+        fields
+            .get(name)
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+            .ok_or_else(invalid)
+    };
+    let access_token = field("access_token")?;
+    let refresh_token = field("refresh_token")?;
+    validate_token_format(&access_token, "Renewed access token").map_err(|_| invalid())?;
+    validate_refresh_token_format(&refresh_token).map_err(|_| invalid())?;
+    Ok(RenewedCloudSession {
+        access_token,
+        refresh_token,
+    })
+}
+
+fn refused_renewal(body: &str) -> RenewalRefusal {
+    let fields: serde_json::Value = serde_json::from_str(body).unwrap_or_default();
+    let text = |name: &str, fallback: &str| {
+        fields
+            .get(name)
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(fallback)
+            .to_string()
+    };
+    RenewalRefusal::Refused {
+        reason: text("error_description", REFUSED_RENEWAL_REASON),
+        code: text("error", REFUSED_RENEWAL_CODE),
+    }
+}
+
+/// The refresh token from memory, or from the OS keyring after a restart.
+fn saved_cloud_refresh_token(
+    vault: &dyn CloudCredentialVault,
+    secret_manager: &SecretManager,
 ) -> Result<Option<String>, String> {
-    restore_cloud_refresh_token(
-        &OsCloudCredentialVault::for_app(&app),
-        secret_state.manager(),
-    )
+    let in_memory = REFRESH_TOKEN
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+    match in_memory {
+        Some(refresh_token) => Ok(Some(refresh_token)),
+        None => restore_cloud_refresh_token(vault, secret_manager),
+    }
 }
 
 fn restore_cloud_access_token(
@@ -1163,6 +1477,7 @@ pub fn get_access_token() -> Result<String, String> {
 /// read lock, so a credential replacement cannot slip between validation and
 /// the provider attaching its bearer header.
 pub(crate) fn get_access_token_for_active_managed_boundary() -> Result<String, String> {
+    app_mode::require_cloud_app_mode()?;
     let expected = current_managed_auth_boundary();
     let state = ACCESS_TOKEN
         .read()
@@ -1195,15 +1510,6 @@ pub(crate) fn replace_access_token_for_managed_boundary_test(access_token: Optio
         }
         None => clear_access_token_in_memory(),
     }
-}
-
-pub fn get_refresh_token() -> Result<String, String> {
-    let token = REFRESH_TOKEN
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    token
-        .clone()
-        .ok_or_else(|| "No refresh token stored. Please sign in.".to_string())
 }
 
 /// Subscription information from credits API
@@ -1277,100 +1583,19 @@ pub async fn fetch_credit_balance(
     parse_json_response(&response)
 }
 
-// ---------------------------------------------------------------------------
-// Device Management
-// ---------------------------------------------------------------------------
-
-/// A connected device session visible in account settings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConnectedDevice {
-    /// Unique device identifier.
-    pub id: String,
-    /// Human-readable device name (e.g. "Siddhartha's MacBook Pro").
-    pub name: String,
-    /// Device category: "desktop", "mobile", or "browser".
-    pub device_type: String,
-    /// Operating system: "macos", "windows", "linux", "ios", "android".
-    pub platform: String,
-    /// ISO 8601 timestamp of the last heartbeat / activity.
-    pub last_seen: String,
-    /// `true` when this entry represents the device making the request.
-    pub current: bool,
-}
-
-/// Return the list of devices connected to the current account.
-///
-/// For now this returns at minimum the current device derived from
-/// environment signals.  When the backend API gains a `/api/devices`
-/// endpoint this will proxy through to it.
-#[tauri::command]
-pub async fn account_list_devices() -> Result<Vec<ConnectedDevice>, String> {
-    let hostname = std::env::var("HOSTNAME")
-        .or_else(|_| std::env::var("COMPUTERNAME"))
-        .unwrap_or_else(|_| "Desktop".to_string());
-
-    let platform = if cfg!(target_os = "macos") {
-        "macos"
-    } else if cfg!(target_os = "windows") {
-        "windows"
-    } else {
-        "linux"
-    };
-
-    let now = chrono::Utc::now().to_rfc3339();
-
-    let current_device = ConnectedDevice {
-        id: generate_device_fingerprint(&hostname),
-        name: hostname,
-        device_type: "desktop".to_string(),
-        platform: platform.to_string(),
-        last_seen: now,
-        current: true,
-    };
-
-    Ok(vec![current_device])
-}
-
-/// Disconnect / revoke a device session by its identifier.
-///
-/// FIX-029 (Sprint 5): the previous body validated input then returned
-/// `Ok(())` while doing nothing, callers got a green checkmark in the
-/// UI even though the device session was still live. Now we surface an
-/// explicit `not_implemented` error so the UI can render "Pending, full
-/// revocation lands with the device-management API". Once the backend
-/// exposes `/api/devices/:id/revoke`, this will forward the call.
-#[tauri::command]
-pub async fn account_disconnect_device(device_id: String) -> Result<(), String> {
-    // Validate device_id looks like a hex SHA-256 digest (64 hex chars).
-    if device_id.len() != 64 || !device_id.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(format!(
-            "Invalid device_id format: expected 64 hex characters, got {} characters",
-            device_id.len()
-        ));
-    }
-
-    // Check that the caller is not trying to disconnect the current device.
-    let hostname = std::env::var("HOSTNAME")
-        .or_else(|_| std::env::var("COMPUTERNAME"))
-        .unwrap_or_else(|_| "Desktop".to_string());
-    let current_fingerprint = generate_device_fingerprint(&hostname);
-
-    if device_id == current_fingerprint {
-        return Err("Cannot disconnect the current device. Sign out instead.".to_string());
-    }
-
-    Err("[ERR_NOT_IMPLEMENTED] Remote device revocation requires the device-management API. It is pending; sign out on the target device for now.".to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        build_device_authorization_request, delete_cloud_credential, load_cloud_credential,
-        managed_auth_session_identity, normalize_device_user_code, store_cloud_credential,
-        validate_api_base_url, CloudCredentialVault, CreditBalanceResponse,
-        ManagedAccessTokenState, OsCloudCredentialVault, UserProfile,
-        CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT, CLOUD_ACCESS_TOKEN_SECRET_KEY,
-        CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT, CLOUD_REFRESH_TOKEN_SECRET_KEY,
+        access_token_digest, api_base_url_from_environment, build_device_authorization_request,
+        delete_cloud_credential, forget_cloud_refresh_token, keep_cloud_refresh_token,
+        load_cloud_credential, normalize_device_user_code, refresh_token_change,
+        renewed_cloud_session, saved_cloud_refresh_token, store_cloud_credential,
+        validate_api_base_url, validate_api_base_url_for_build, withhold_refresh_token,
+        CloudCredentialVault, CreditBalanceResponse, DeviceAuthorizationHttpResponse,
+        ManagedAuthSessionIdentity, OsCloudCredentialVault, RefreshTokenChange, RenewalRefusal,
+        SessionRenewal, UserProfile, CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT,
+        CLOUD_ACCESS_TOKEN_SECRET_KEY, CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT,
+        CLOUD_REFRESH_TOKEN_SECRET_KEY, PRODUCTION_API_BASE_URL,
     };
     use crate::sys::api::HttpMethod;
     use crate::sys::security::SecretManager;
@@ -1621,12 +1846,67 @@ mod tests {
     // silent SSRF/allowlist bypass. These lock the invariant.
 
     #[test]
-    fn allows_agiworkforce_apex_subdomains_and_loopback() {
+    fn allows_agiworkforce_apex_and_subdomains() {
         assert!(validate_api_base_url("https://agiworkforce.com").is_ok());
         assert!(validate_api_base_url("https://www.agiworkforce.com").is_ok());
         assert!(validate_api_base_url("https://api.agiworkforce.com").is_ok());
-        assert!(validate_api_base_url("http://localhost").is_ok());
-        assert!(validate_api_base_url("http://127.0.0.1").is_ok());
+    }
+
+    const LOOPBACK_BASES: [&str; 8] = [
+        "http://localhost",
+        "http://localhost:3000",
+        "https://localhost",
+        "http://127.0.0.1",
+        "http://127.0.0.1:8787",
+        "http://[::1]",
+        "http://0.0.0.0",
+        "https://127.0.0.1",
+    ];
+
+    #[test]
+    fn a_release_build_rejects_every_loopback_base() {
+        for base in LOOPBACK_BASES {
+            assert!(
+                validate_api_base_url_for_build(base, false).is_err(),
+                "a release build must not send the account token to {base}"
+            );
+        }
+        assert!(validate_api_base_url_for_build("https://agiworkforce.com", false).is_ok());
+    }
+
+    #[test]
+    fn a_debug_build_accepts_loopback_bases_for_local_development() {
+        for base in LOOPBACK_BASES {
+            assert!(
+                validate_api_base_url_for_build(base, true).is_ok(),
+                "a debug build should reach a local server at {base}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_build_gate_follows_debug_assertions() {
+        assert_eq!(
+            validate_api_base_url("http://localhost").is_ok(),
+            cfg!(debug_assertions)
+        );
+    }
+
+    #[test]
+    fn an_environment_base_outside_the_allowlist_falls_back_to_production() {
+        assert_eq!(
+            api_base_url_from_environment(Some("https://evil.example".to_string())),
+            PRODUCTION_API_BASE_URL
+        );
+        assert_eq!(
+            api_base_url_from_environment(Some("not a url".to_string())),
+            PRODUCTION_API_BASE_URL
+        );
+        assert_eq!(api_base_url_from_environment(None), PRODUCTION_API_BASE_URL);
+        assert_eq!(
+            api_base_url_from_environment(Some("https://staging.agiworkforce.com/".to_string())),
+            "https://staging.agiworkforce.com"
+        );
     }
 
     #[test]
@@ -1744,25 +2024,6 @@ mod tests {
         assert!(invalid.is_err());
     }
 
-    #[test]
-    fn account_subject_comes_from_the_installed_token_claims() {
-        use base64::Engine;
-
-        let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .encode(serde_json::json!({ "sub": "account-a", "sid": "session-a" }).to_string());
-        let token = format!("header.{payload}.signature");
-        let identity =
-            managed_auth_session_identity(&token).expect("test token should carry a subject");
-        let signed_in = ManagedAccessTokenState {
-            token: Some(token),
-            identity: Some(identity),
-            generation: 1,
-        };
-
-        assert_eq!(signed_in.subject(), Some("account-a".to_string()));
-        assert_eq!(ManagedAccessTokenState::empty().subject(), None);
-    }
-
     fn profile_with_flags(flags: &str) -> UserProfile {
         serde_json::from_str(&format!(
             r#"{{
@@ -1800,5 +2061,249 @@ mod tests {
             wake.remote_block_reason().is_none(),
             "a profile that no longer closes dictation must reopen it"
         );
+    }
+
+    const ACCESS_TOKEN_SHAPE: &str = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEifQ.c2lnbmF0dXJl";
+    const REFRESH_TOKEN_SHAPE: &str = "opaque-refresh-token-with-sufficient-randomness";
+
+    fn identity(subject: &str, session: Option<&str>) -> ManagedAuthSessionIdentity {
+        ManagedAuthSessionIdentity {
+            subject: subject.to_string(),
+            session_id: session.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn the_refresh_token_is_taken_out_of_the_reply_the_page_receives() {
+        let reply = DeviceAuthorizationHttpResponse {
+            status: 200,
+            body: serde_json::json!({
+                "access_token": ACCESS_TOKEN_SHAPE,
+                "refresh_token": REFRESH_TOKEN_SHAPE,
+                "token_type": "Bearer",
+                "expires_in": 900
+            })
+            .to_string(),
+        };
+
+        let (for_the_page, held) = withhold_refresh_token(reply);
+
+        assert!(!for_the_page.body.contains(REFRESH_TOKEN_SHAPE));
+        let fields: serde_json::Value = serde_json::from_str(&for_the_page.body).unwrap();
+        assert!(fields.get("refresh_token").is_none());
+        assert_eq!(fields["access_token"], ACCESS_TOKEN_SHAPE);
+        assert_eq!(fields["expires_in"], 900);
+        let held = held.expect("the refresh token is held for the adoption");
+        assert_eq!(held.refresh_token, REFRESH_TOKEN_SHAPE);
+        assert_eq!(
+            held.access_token_digest,
+            access_token_digest(ACCESS_TOKEN_SHAPE)
+        );
+    }
+
+    #[test]
+    fn a_reply_without_a_refresh_token_passes_through_unchanged() {
+        for body in [
+            r#"{"error":"authorization_pending"}"#,
+            "<html>bad gateway</html>",
+            "",
+        ] {
+            let reply = DeviceAuthorizationHttpResponse {
+                status: 400,
+                body: body.to_string(),
+            };
+            let (for_the_page, held) = withhold_refresh_token(reply);
+            assert_eq!(for_the_page.body, body);
+            assert!(held.is_none());
+        }
+
+        let orphan = DeviceAuthorizationHttpResponse {
+            status: 200,
+            body: serde_json::json!({ "refresh_token": REFRESH_TOKEN_SHAPE }).to_string(),
+        };
+        let (for_the_page, held) = withhold_refresh_token(orphan);
+        assert!(!for_the_page.body.contains(REFRESH_TOKEN_SHAPE));
+        assert!(
+            held.is_none(),
+            "a refresh token with no access token belongs to nothing the page can adopt"
+        );
+    }
+
+    #[test]
+    fn adopting_an_access_token_adopts_keeps_or_forgets_the_refresh_token() {
+        let alice = identity("alice", Some("family-1"));
+        let alice_again = identity("alice", Some("family-2"));
+        let bob = identity("bob", Some("family-3"));
+
+        assert_eq!(
+            refresh_token_change(Some("next".to_string()), Some(&alice), &bob),
+            RefreshTokenChange::Adopt("next".to_string()),
+            "a sign-in that brought its own refresh token replaces the saved one"
+        );
+        assert_eq!(
+            refresh_token_change(None, Some(&alice), &alice),
+            RefreshTokenChange::Keep,
+            "a renewed access token for the same session keeps it"
+        );
+        assert_eq!(
+            refresh_token_change(None, None, &alice),
+            RefreshTokenChange::Keep
+        );
+        for replaced_by in [&bob, &alice_again] {
+            assert_eq!(
+                refresh_token_change(None, Some(&alice), replaced_by),
+                RefreshTokenChange::Forget,
+                "another account or sign-in must not be renewed with the old token"
+            );
+        }
+    }
+
+    #[test]
+    fn a_refresh_reply_is_renewed_rejected_or_unreachable() {
+        let rotated = serde_json::json!({
+            "access_token": ACCESS_TOKEN_SHAPE,
+            "refresh_token": REFRESH_TOKEN_SHAPE,
+            "expires_in": 900
+        })
+        .to_string();
+        let renewed = renewed_cloud_session(200, &rotated)
+            .ok()
+            .expect("a rotated session");
+        assert_eq!(renewed.access_token, ACCESS_TOKEN_SHAPE);
+        assert_eq!(renewed.refresh_token, REFRESH_TOKEN_SHAPE);
+
+        assert_eq!(
+            renewed_cloud_session(400, r#"{"error":"invalid_grant"}"#).err(),
+            Some(RenewalRefusal::Rejected),
+            "400 is the server refusing the refresh token"
+        );
+        for status in [401, 403] {
+            assert_eq!(
+                renewed_cloud_session(
+                    status,
+                    r#"{"error":"terms_acceptance_required","error_description":"Accept the terms."}"#
+                )
+                .err(),
+                Some(RenewalRefusal::Refused {
+                    reason: "Accept the terms.".to_string(),
+                    code: "terms_acceptance_required".to_string(),
+                }),
+                "{status} refuses this renewal and keeps the refresh token"
+            );
+            assert_eq!(
+                renewed_cloud_session(status, "{}").err(),
+                Some(RenewalRefusal::Refused {
+                    reason: super::REFUSED_RENEWAL_REASON.to_string(),
+                    code: super::REFUSED_RENEWAL_CODE.to_string(),
+                })
+            );
+        }
+        for status in [302, 307, 408, 429, 500, 502, 503] {
+            let Err(RenewalRefusal::Unreachable(reason)) = renewed_cloud_session(status, &rotated)
+            else {
+                panic!("{status} says nothing about the refresh token");
+            };
+            assert!(reason.contains(&status.to_string()), "{reason}");
+            assert!(!reason.contains(REFRESH_TOKEN_SHAPE));
+        }
+        for body in [
+            r#"{"access_token":"not-a-jwt","refresh_token":"x"}"#.to_string(),
+            serde_json::json!({ "access_token": ACCESS_TOKEN_SHAPE }).to_string(),
+            "<html>".to_string(),
+        ] {
+            let Err(RenewalRefusal::Unreachable(reason)) = renewed_cloud_session(200, &body) else {
+                panic!("a reply that cannot be read is not a refusal of the token");
+            };
+            assert!(reason.contains("invalid reply"), "{reason}");
+            assert!(!reason.contains(ACCESS_TOKEN_SHAPE));
+        }
+    }
+
+    #[test]
+    fn the_page_is_told_which_of_the_outcomes_happened_and_never_the_refresh_token() {
+        let renewed = serde_json::to_value(SessionRenewal::Renewed {
+            access_token: ACCESS_TOKEN_SHAPE.to_string(),
+        })
+        .unwrap();
+        assert_eq!(
+            renewed,
+            serde_json::json!({ "status": "renewed", "accessToken": ACCESS_TOKEN_SHAPE })
+        );
+        assert_eq!(
+            serde_json::to_value(SessionRenewal::SignedOut).unwrap(),
+            serde_json::json!({ "status": "signed_out" })
+        );
+        assert_eq!(
+            serde_json::to_value(SessionRenewal::Rejected).unwrap(),
+            serde_json::json!({ "status": "rejected" })
+        );
+        assert_eq!(
+            serde_json::to_value(SessionRenewal::Refused {
+                reason: "Accept the terms.".to_string(),
+                code: "terms_acceptance_required".to_string(),
+            })
+            .unwrap(),
+            serde_json::json!({
+                "status": "refused",
+                "reason": "Accept the terms.",
+                "code": "terms_acceptance_required"
+            })
+        );
+        assert_eq!(
+            serde_json::to_value(SessionRenewal::Unreachable {
+                reason: "offline".to_string()
+            })
+            .unwrap(),
+            serde_json::json!({ "status": "unreachable", "reason": "offline" })
+        );
+    }
+
+    #[test]
+    fn the_saved_refresh_token_is_kept_and_forgotten_in_the_vault() {
+        let vault = MemoryCredentialVault::default();
+        let manager = secret_manager();
+
+        keep_cloud_refresh_token(&vault, &manager, REFRESH_TOKEN_SHAPE.to_string()).unwrap();
+        assert_eq!(
+            vault
+                .load(CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT)
+                .unwrap()
+                .as_deref(),
+            Some(REFRESH_TOKEN_SHAPE)
+        );
+        assert_eq!(
+            saved_cloud_refresh_token(&vault, &manager)
+                .unwrap()
+                .as_deref(),
+            Some(REFRESH_TOKEN_SHAPE)
+        );
+
+        forget_cloud_refresh_token(&vault, &manager).unwrap();
+        assert!(vault
+            .load(CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT)
+            .unwrap()
+            .is_none());
+        assert!(saved_cloud_refresh_token(&vault, &manager)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn no_command_hands_the_refresh_token_to_the_page() {
+        let source = include_str!("mod.rs");
+        let production = source
+            .split("#[cfg(test)]\nmod tests")
+            .next()
+            .unwrap_or(source);
+        for removed in [
+            "pub fn account_restore_refresh_token",
+            "pub fn account_store_refresh_token",
+        ] {
+            assert!(!production.contains(removed), "{removed} is back");
+        }
+        let setup = include_str!("../../lib.rs");
+        assert!(setup.contains("crate::sys::account::account_refresh_session,"));
+        assert!(!setup.contains("account_restore_refresh_token"));
+        assert!(!setup.contains("account_store_refresh_token"));
     }
 }

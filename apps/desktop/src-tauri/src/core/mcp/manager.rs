@@ -95,7 +95,13 @@ impl McpServerManager {
                 .clone()
         };
 
-        match self.client.connect_server(name.to_string(), config).await {
+        let approved = crate::core::mcp::ApprovedLaunch::require(name, &config)
+            .map_err(McpError::InvalidConfig)?;
+        match self
+            .client
+            .connect_server(name.to_string(), config, approved)
+            .await
+        {
             Ok(_) => {
                 let mut servers = self.servers.write();
                 if let Some(server) = servers.get_mut(name) {
@@ -270,6 +276,7 @@ mod tests {
             env: HashMap::new(),
             enabled: true,
             transport: None,
+            allow_local_network: false,
         };
 
         manager.register_server("test".to_string(), config);
@@ -292,6 +299,7 @@ mod tests {
             env: HashMap::new(),
             enabled: true,
             transport: None,
+            allow_local_network: false,
         };
 
         manager.register_server("test".to_string(), config);

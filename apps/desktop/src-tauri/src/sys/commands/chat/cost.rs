@@ -1,6 +1,7 @@
 use chrono::{Datelike, Duration as ChronoDuration, TimeZone, Utc};
 use tauri::State;
 
+use crate::core::llm::daily_budget::{self, LOCAL_PROFILE_BUDGET_KEY, MONTHLY_BUDGET_SETTING_KEY};
 use crate::data::db::repository;
 
 use super::{AppDatabase, CostAnalyticsResponse, CostOverviewResponse};
@@ -14,8 +15,6 @@ pub fn chat_get_cost_overview(
         return Err("User ID cannot be empty".to_string());
     }
 
-    let conn = db.connection()?;
-
     let now = Utc::now();
     let today_start = Utc
         .with_ymd_and_hms(now.year(), now.month(), now.day(), 0, 0, 0)
@@ -26,15 +25,26 @@ pub fn chat_get_cost_overview(
         .single()
         .ok_or_else(|| "Failed to compute start-of-month".to_string())?;
 
-    let today_total = repository::sum_cost_since(&conn, today_start, &user_id)
-        .map_err(|e| format!("Failed to compute today's cost: {e}"))?;
-    let month_total = repository::sum_cost_since(&conn, month_start, &user_id)
-        .map_err(|e| format!("Failed to compute monthly cost: {e}"))?;
+    let (today_total, month_total, monthly_budget) = {
+        let conn = db.connection()?;
+        let today_total = repository::sum_cost_since(&conn, today_start, &user_id)
+            .map_err(|e| format!("Failed to compute today's cost: {e}"))?;
+        let month_total = repository::sum_cost_since(&conn, month_start, &user_id)
+            .map_err(|e| format!("Failed to compute monthly cost: {e}"))?;
+        let monthly_budget = repository::get_setting(&conn, MONTHLY_BUDGET_SETTING_KEY)
+            .ok()
+            .and_then(|setting| setting.value.parse::<f64>().ok());
+        (today_total, month_total, monthly_budget)
+    };
 
-    let monthly_budget = repository::get_setting(&conn, "billing.monthly_budget")
-        .ok()
-        .and_then(|setting| setting.value.parse::<f64>().ok());
-    let remaining_budget = monthly_budget.map(|budget| (budget - month_total).max(0.0));
+    // The spend guard shares this connection, so it is asked only after the
+    // lock above is released. What it reports is what the router enforces:
+    // every request against the user's own keys, agent runs included, where
+    // `month_total` is this account's chat messages alone.
+    let budget_spend = daily_budget::global()
+        .and_then(|guard| guard.spent_this_month(LOCAL_PROFILE_BUDGET_KEY).ok())
+        .unwrap_or(month_total);
+    let remaining_budget = monthly_budget.map(|budget| (budget - budget_spend).max(0.0));
 
     Ok(CostOverviewResponse {
         today_total,
@@ -148,12 +158,12 @@ pub fn chat_set_monthly_budget(
     match amount {
         Some(value) => repository::set_setting(
             &conn,
-            "billing.monthly_budget".to_string(),
+            MONTHLY_BUDGET_SETTING_KEY.to_string(),
             format!("{:.2}", value),
             false,
         )
         .map_err(|e| format!("Failed to save monthly budget: {e}"))?,
-        None => repository::delete_setting(&conn, "billing.monthly_budget")
+        None => repository::delete_setting(&conn, MONTHLY_BUDGET_SETTING_KEY)
             .map_err(|e| format!("Failed to clear monthly budget: {e}"))?,
     }
 

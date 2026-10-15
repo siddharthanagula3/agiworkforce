@@ -2,8 +2,6 @@
 pub use agiworkforce_sandbox_policy::SandboxPolicy;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
@@ -190,13 +188,21 @@ impl SandboxType {
     pub fn detect() -> Self {
         #[cfg(target_os = "macos")]
         {
-            if crate::process_tree::executable_exists("sandbox-exec") {
+            if agiworkforce_sandbox_policy::sandbox_launcher(
+                agiworkforce_sandbox_policy::SandboxBackend::MacosSeatbelt,
+            )
+            .is_some()
+            {
                 return Self::MacosSeatbelt;
             }
         }
         #[cfg(target_os = "linux")]
         {
-            if crate::process_tree::executable_exists("bwrap") {
+            if agiworkforce_sandbox_policy::sandbox_launcher(
+                agiworkforce_sandbox_policy::SandboxBackend::LinuxBubblewrap,
+            )
+            .is_some()
+            {
                 return Self::LinuxBubblewrap;
             }
         }
@@ -255,24 +261,7 @@ pub fn missing_sandbox_message(os: &str) -> String {
     }
 }
 
-/// Network access opt-in flag for sandboxed execution.
-///
-/// Default: network is denied. Callers that legitimately need outbound access
-/// (npm install, git clone, curl APIs) must pass an allowing policy explicitly.
-///
-/// `AllowExternal` is the policy a general network approval grants. It keeps
-/// the loopback interface blocked, so an approved `curl` cannot turn into a
-/// request against a service bound to the developer's own machine. Seatbelt
-/// enforces that in the profile; Bubblewrap has no address filter, so on Linux
-/// the enforcement is the caller-side destination check that refuses an
-/// internal target before any approval is offered.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum NetworkPolicy {
-    #[default]
-    Deny,
-    AllowExternal,
-    Allow,
-}
+pub use agiworkforce_sandbox_policy::NetworkPolicy;
 
 pub struct SandboxManager {
     pub sandbox_type: SandboxType,
@@ -281,24 +270,185 @@ pub struct SandboxManager {
     /// CRIT-1: controls whether outbound network is permitted inside the sandbox.
     /// Default is Deny, must be explicitly opted in.
     pub network_policy: NetworkPolicy,
+    /// Configuration a sandboxed command must not rewrite even inside the
+    /// workspace: what [`protected_paths_for`] names.
+    pub protected_paths: Vec<PathBuf>,
+}
+
+/// The project's hook, policy and MCP configuration, and the CLI's own config
+/// root, which the sandbox keeps read-only: a command that could rewrite them
+/// would choose what the next session runs outside the sandbox. A workspace
+/// inside the config root, such as a managed worktree's checkout, leaves the
+/// root out, since denying it would deny the whole workspace; nothing of the
+/// root outside that workspace is writable there anyway.
+///
+/// The directory host git reads its configuration from, and the one that
+/// holds each repository's recorded git settings and index locks, are named
+/// on their own, so they stay read-only even where the config root is left
+/// out, as in a managed worktree session, or moved by `AGIWORKFORCE_HOME`.
+///
+/// These are paths. The sandbox crate's profiles also deny every protected
+/// project entry by name below the workspace, hook managers' files included:
+/// always at its top folder, and at any depth outside a dependency or build
+/// tree.
+pub fn protected_paths_for(workspace_dir: &Path) -> Vec<PathBuf> {
+    let mut paths = agiworkforce_sandbox_policy::project_config_paths(workspace_dir);
+    let canonical = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let workspace = canonical(workspace_dir);
+    if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
+        if !workspace.starts_with(canonical(&config_dir)) {
+            paths.push(config_dir);
+        }
+    }
+    if let Some(git_config) = agiworkforce_worktree::host_git_config_dir() {
+        if !workspace.starts_with(canonical(&git_config)) {
+            paths.push(git_config);
+        }
+    }
+    if let Some(git_state) = crate::platform::runtime::git::git_state_dir() {
+        if !workspace.starts_with(canonical(&git_state)) {
+            paths.push(git_state);
+        }
+    }
+    paths
+}
+
+/// The folder sandboxed commands write to and run in when no other is named:
+/// the working directory, unless that is the filesystem root, the home folder
+/// or a folder above it, which no sandbox is given to write. Then it is a
+/// private agent workspace, and the sentence telling the user so comes back
+/// the first time, for the caller to show.
+pub fn command_workspace() -> Result<(PathBuf, Option<String>)> {
+    let cwd = current_dir_resolved();
+    match cwd {
+        Some(cwd) if agiworkforce_sandbox_policy::is_safe_write_root(&cwd) => Ok((cwd, None)),
+        cwd => {
+            let workspace = fallback_agent_workspace()?;
+            let notice = fallback_notice(cwd.as_deref(), &workspace);
+            Ok((workspace, notice))
+        }
+    }
+}
+
+/// [`command_workspace`] without the notice, for a launch the user does not
+/// watch, such as an MCP server's, or for registering the workspace.
+pub fn sandbox_workspace() -> Result<PathBuf> {
+    match current_dir_resolved() {
+        Some(cwd) if agiworkforce_sandbox_policy::is_safe_write_root(&cwd) => Ok(cwd),
+        _ => fallback_agent_workspace(),
+    }
+}
+
+fn current_dir_resolved() -> Option<PathBuf> {
+    std::env::current_dir()
+        .ok()
+        .map(|cwd| cwd.canonicalize().unwrap_or(cwd))
+}
+
+/// A private folder in the CLI's config root, for commands started where no
+/// sandbox may write.
+fn fallback_agent_workspace() -> Result<PathBuf> {
+    let workspace = private_child_dir(&crate::config::CliConfig::config_dir()?, "agent-workspace")?;
+    agiworkforce_worktree::register_workspace_root(workspace.clone());
+    Ok(workspace)
+}
+
+/// `parent/name` as a directory only this user writes, created owner-only
+/// when missing. A sandbox writes its own root, so it can replace one with a
+/// link, such as to the home folder, for the next launch to grant, or open
+/// it to other users. The parent is resolved and the last component never
+/// followed: a link, a directory another user owns or one that group or
+/// others can write is refused, as is anything [`is_safe_write_root`] is.
+///
+/// [`is_safe_write_root`]: agiworkforce_sandbox_policy::is_safe_write_root
+fn private_child_dir(parent: &Path, name: &str) -> Result<PathBuf> {
+    let parent = parent
+        .canonicalize()
+        .with_context(|| format!("resolve {}", parent.display()))?;
+    let dir = parent.join(name);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+        match std::fs::DirBuilder::new().mode(0o700).create(&dir) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => {
+                return Err(error).with_context(|| format!("create {}", dir.display()));
+            }
+        }
+        let metadata =
+            std::fs::symlink_metadata(&dir).with_context(|| format!("read {}", dir.display()))?;
+        if !metadata.is_dir() || metadata.uid() != nix::unistd::geteuid().as_raw() {
+            anyhow::bail!(
+                "{} is not a directory this user owns, so it is not used",
+                dir.display()
+            );
+        }
+        if metadata.mode() & 0o022 != 0 {
+            anyhow::bail!(
+                "{} is writable by other users, so it is not used; run chmod 700 {}",
+                dir.display(),
+                shell_quote(&dir.to_string_lossy())
+            );
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
+        if std::fs::symlink_metadata(&dir)
+            .with_context(|| format!("read {}", dir.display()))?
+            .file_type()
+            .is_symlink()
+        {
+            anyhow::bail!("{} is a link, so it is not used", dir.display());
+        }
+    }
+    if !agiworkforce_sandbox_policy::is_safe_write_root(&dir) {
+        anyhow::bail!(
+            "{} is the filesystem root, the home folder or above it, so no sandbox writes it",
+            dir.display()
+        );
+    }
+    Ok(dir)
+}
+
+static FALLBACK_ANNOUNCED: AtomicBool = AtomicBool::new(false);
+
+fn fallback_notice(cwd: Option<&Path>, workspace: &Path) -> Option<String> {
+    if FALLBACK_ANNOUNCED.swap(true, Ordering::Relaxed) {
+        return None;
+    }
+    let started = match cwd {
+        Some(cwd) => format!("{} is your home folder or above it", cwd.display()),
+        None => "the working directory could not be read".to_string(),
+    };
+    Some(format!(
+        "Note: {started}, which the sandbox never lets a command write, so commands run in \
+         and write to {} instead. Start agi in a project folder to work there.",
+        workspace.display()
+    ))
 }
 
 impl SandboxManager {
+    /// A workspace that is the filesystem root, the home folder or a folder
+    /// above it becomes the private agent workspace, and any such extra root
+    /// is dropped. When the agent workspace cannot be made, nothing is
+    /// writable.
     pub fn new(policy: SandboxPolicy, workspace_dir: PathBuf) -> Self {
+        let (policy, workspace_dir) = confine_to_safe_roots(policy, workspace_dir);
+        agiworkforce_worktree::add_sandbox_writable_roots(
+            std::iter::once(workspace_dir.clone()).chain(policy.writable_roots().iter().cloned()),
+        );
         Self {
             sandbox_type: SandboxType::detect(),
             policy,
+            protected_paths: protected_paths_for(&workspace_dir),
             workspace_dir,
             network_policy: NetworkPolicy::Deny,
         }
     }
     pub fn full_auto(workspace_dir: PathBuf) -> Self {
-        Self {
-            sandbox_type: SandboxType::detect(),
-            policy: SandboxPolicy::default(),
-            workspace_dir,
-            network_policy: NetworkPolicy::Deny,
-        }
+        Self::new(SandboxPolicy::default(), workspace_dir)
     }
     pub fn disabled() -> Self {
         eprintln!(
@@ -312,12 +462,56 @@ impl SandboxManager {
             policy: SandboxPolicy::DangerFullAccess,
             workspace_dir: std::env::current_dir().unwrap_or_default(),
             network_policy: NetworkPolicy::Allow,
+            protected_paths: Vec::new(),
         }
     }
     /// Builder: opt in to outbound network access from within the sandbox.
     pub fn with_network(mut self, policy: NetworkPolicy) -> Self {
         self.network_policy = policy;
         self
+    }
+
+    /// Builder: let the command write the [`shared_sandbox_cache`], when
+    /// there is one and the policy writes anything at all.
+    pub(crate) fn with_shared_cache(mut self) -> Self {
+        if let (Some(cache), SandboxPolicy::WorkspaceWrite { writable_roots }) =
+            (shared_sandbox_cache(), &mut self.policy)
+        {
+            agiworkforce_worktree::add_sandbox_writable_roots([cache.clone()]);
+            writable_roots.push(cache);
+        }
+        self
+    }
+
+    /// `command` with its package caches in the [`shared_sandbox_cache`],
+    /// as [`with_cache_env`] sets them, when this manager can write it;
+    /// otherwise `command` as it is.
+    pub(crate) fn shell_with_shared_cache(&self, command: &str) -> String {
+        let Some(cache) =
+            shared_sandbox_cache().filter(|cache| self.policy.writable_roots().contains(cache))
+        else {
+            return command.to_string();
+        };
+        let writable: Vec<PathBuf> = std::iter::once(self.workspace_dir.clone())
+            .chain(self.policy.writable_roots().iter().cloned())
+            .collect();
+        let (program, args) = with_cache_env(
+            "/bin/sh",
+            &["-c".to_string(), command.to_string()],
+            &cache,
+            &writable,
+            |name| std::env::var(name).ok(),
+        );
+        shell_join(&std::iter::once(program).chain(args).collect::<Vec<_>>())
+    }
+
+    fn spec(&self) -> agiworkforce_sandbox_policy::SandboxSpec<'_> {
+        agiworkforce_sandbox_policy::SandboxSpec {
+            policy: &self.policy,
+            workspace_dir: &self.workspace_dir,
+            network_policy: self.network_policy,
+            protected_paths: &self.protected_paths,
+        }
     }
 
     /// Build the manager used for normal shell command execution.
@@ -352,6 +546,42 @@ impl SandboxManager {
         Ok(manager)
     }
 }
+
+fn confine_to_safe_roots(
+    policy: SandboxPolicy,
+    workspace_dir: PathBuf,
+) -> (SandboxPolicy, PathBuf) {
+    let policy = match policy {
+        SandboxPolicy::WorkspaceWrite { writable_roots } => SandboxPolicy::WorkspaceWrite {
+            writable_roots: writable_roots
+                .into_iter()
+                .filter(|root| agiworkforce_sandbox_policy::is_safe_write_root(root))
+                .collect(),
+        },
+        other => other,
+    };
+    if agiworkforce_sandbox_policy::is_safe_write_root(&workspace_dir)
+        || matches!(policy, SandboxPolicy::DangerFullAccess)
+    {
+        return (policy, workspace_dir);
+    }
+    match fallback_agent_workspace() {
+        Ok(workspace) => (policy, workspace),
+        Err(error) => {
+            tracing::warn!(%error, "no agent workspace; the sandbox keeps everything read-only");
+            if !NO_WORKSPACE_ANNOUNCED.swap(true, Ordering::Relaxed) {
+                eprintln!(
+                    "{} {}. Sandboxed commands can write nothing until it is fixed.",
+                    crate::terminal_style::danger_header("warning:"),
+                    crate::terminal_text::sanitize_terminal_text(&format!("{error:#}"))
+                );
+            }
+            (SandboxPolicy::ReadOnly, workspace_dir)
+        }
+    }
+}
+
+static NO_WORKSPACE_ANNOUNCED: AtomicBool = AtomicBool::new(false);
 
 /// Whether the user asked for the sandbox to be off, before any policy applies.
 pub fn sandbox_disabled_requested() -> bool {
@@ -407,8 +637,48 @@ fn resolve_scrub_environment(settings_scrub: bool, secret_injection_allowed: boo
 pub struct SandboxSettings {
     pub forced: bool,
     pub scrub_environment: bool,
-    pub sandbox_user_hooks: bool,
-    pub sandbox_mcp_servers: bool,
+    pub user_hooks: SandboxDefault,
+    pub mcp_servers: SandboxDefault,
+}
+
+/// Whether the user's own hooks, or stdio MCP servers, run sandboxed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SandboxDefault {
+    /// Sandboxed unless the server's entry or the hooks file opts out.
+    #[default]
+    On,
+    /// The user's environment variable turned the sandbox off for them.
+    Off,
+    /// The managed policy requires the sandbox, so no opt-out applies.
+    Required,
+}
+
+impl SandboxDefault {
+    /// Whether one program runs sandboxed, given whether its own configuration
+    /// leaves the sandbox on.
+    pub fn applies(self, configured_sandboxed: bool) -> bool {
+        match self {
+            Self::Required => true,
+            Self::On => configured_sandboxed,
+            Self::Off => false,
+        }
+    }
+}
+
+/// Turns the sandbox off for the user's own hooks when set to `0`, `false`,
+/// `off` or `no`. It once turned the sandbox on, so any other value, such as
+/// the `1` that did, leaves it on.
+pub const SANDBOX_HOOKS_ENV: &str = "AGIWORKFORCE_SANDBOX_HOOKS";
+/// The same for stdio MCP servers.
+pub const SANDBOX_MCP_ENV: &str = "AGIWORKFORCE_SANDBOX_MCP";
+
+fn opted_out(value: Option<String>) -> bool {
+    value.is_some_and(|value| {
+        matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "0" | "false" | "off" | "no"
+        )
+    })
 }
 
 static SANDBOX_SETTINGS: std::sync::OnceLock<SandboxSettings> = std::sync::OnceLock::new();
@@ -426,20 +696,27 @@ pub fn sandbox_settings() -> SandboxSettings {
 fn load_sandbox_settings() -> SandboxSettings {
     resolve_sandbox_settings(
         &crate::features::hooks::managed::load_managed_sandbox_policy(),
-        |name| std::env::var_os(name).is_some(),
+        |name| std::env::var(name).ok(),
     )
 }
 
 pub fn resolve_sandbox_settings(
     managed: &crate::features::hooks::managed::ManagedSandboxPolicyState,
-    user_opted_in: impl Fn(&str) -> bool,
+    env: impl Fn(&str) -> Option<String>,
 ) -> SandboxSettings {
     use crate::features::hooks::managed::ManagedSandboxPolicyState;
+    let user_default = |name: &str| {
+        if opted_out(env(name)) {
+            SandboxDefault::Off
+        } else {
+            SandboxDefault::On
+        }
+    };
     let user = SandboxSettings {
         forced: false,
-        scrub_environment: user_opted_in("AGIWORKFORCE_SANDBOX_SCRUB_ENV"),
-        sandbox_user_hooks: user_opted_in("AGIWORKFORCE_SANDBOX_HOOKS"),
-        sandbox_mcp_servers: user_opted_in("AGIWORKFORCE_SANDBOX_MCP"),
+        scrub_environment: env("AGIWORKFORCE_SANDBOX_SCRUB_ENV").is_some(),
+        user_hooks: user_default(SANDBOX_HOOKS_ENV),
+        mcp_servers: user_default(SANDBOX_MCP_ENV),
     };
     let managed = match managed {
         ManagedSandboxPolicyState::Absent => return user,
@@ -452,45 +729,180 @@ pub fn resolve_sandbox_settings(
             return SandboxSettings {
                 forced: true,
                 scrub_environment: true,
-                sandbox_user_hooks: true,
-                sandbox_mcp_servers: true,
+                user_hooks: SandboxDefault::Required,
+                mcp_servers: SandboxDefault::Required,
             };
         }
         ManagedSandboxPolicyState::Loaded(policy) => policy,
     };
+    let required_or = |required: bool, user: SandboxDefault| {
+        if required {
+            SandboxDefault::Required
+        } else {
+            user
+        }
+    };
     SandboxSettings {
         forced: managed.forced,
         scrub_environment: managed.scrub_environment || user.scrub_environment,
-        sandbox_user_hooks: managed.sandbox_user_hooks || user.sandbox_user_hooks,
-        sandbox_mcp_servers: managed.sandbox_mcp_servers || user.sandbox_mcp_servers,
+        user_hooks: required_or(managed.sandbox_user_hooks, user.user_hooks),
+        mcp_servers: required_or(managed.sandbox_mcp_servers, user.mcp_servers),
     }
 }
 
+/// Set to anything, a sandboxed command is no longer given the variables
+/// whose names say they hold a credential. Off by default, as in Codex CLI:
+/// in a trusted workspace a command inherits this process's environment.
+pub const SANDBOX_FILTER_ENV: &str = "AGIWORKFORCE_SANDBOX_FILTER_ENV";
+
+/// With [`SANDBOX_FILTER_ENV`] set, the names of variables to pass all the
+/// same, separated by commas: `GITHUB_TOKEN,NPM_TOKEN` for a session that
+/// pushes or publishes from inside the sandbox. Both are read from this
+/// process's own environment, which a project cannot set, and neither
+/// changes what a scrubbed command is given.
+pub const SANDBOX_PASS_ENV: &str = "AGIWORKFORCE_SANDBOX_PASS_ENV";
+
+fn credential_filter_requested() -> bool {
+    static REQUESTED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *REQUESTED.get_or_init(|| std::env::var_os(SANDBOX_FILTER_ENV).is_some())
+}
+
+fn passed_credential_names() -> &'static [String] {
+    static NAMES: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        std::env::var(SANDBOX_PASS_ENV)
+            .map(|names| credential_names_in(&names))
+            .unwrap_or_default()
+    })
+}
+
+fn credential_names_in(list: &str) -> Vec<String> {
+    list.split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// What a sandboxed command is given of this process's environment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EnvironmentPolicy {
+    /// All of it, as any child process gets. The default in a trusted
+    /// workspace, and what Codex CLI does: a command sees the tokens in the
+    /// environment, its output goes back to the model, and one given the
+    /// network can send them out.
+    Inherited,
+    /// All of it but the credentials: what the one classifier a launch
+    /// consent uses calls a credential by its name
+    /// ([`agiworkforce_sandbox_policy::holds_a_credential`]), other than the
+    /// names the user passes through. A name that only might be a
+    /// credential, such as `AWS_ACCESS_KEY_ID`, and a credential inside an
+    /// address, such as a proxy's password, are still given.
+    WithoutCredentials,
+    /// The short list a scrubbed child keeps and nothing else: for an
+    /// untrusted workspace, a managed policy or the user's own setting.
+    Scrubbed,
+}
+
+/// A scrub outranks the filter, which outranks the default.
+fn resolve_environment_policy(scrub: bool, filter_credentials: bool) -> EnvironmentPolicy {
+    match (scrub, filter_credentials) {
+        (true, _) => EnvironmentPolicy::Scrubbed,
+        (false, true) => EnvironmentPolicy::WithoutCredentials,
+        (false, false) => EnvironmentPolicy::Inherited,
+    }
+}
+
+/// What `policy` gives a command of `variables`, with `passed` the names a
+/// credential filter lets through.
+fn environment_for_a_command(
+    variables: impl Iterator<Item = (std::ffi::OsString, std::ffi::OsString)>,
+    policy: EnvironmentPolicy,
+    passed: &[String],
+) -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
+    variables
+        .filter(|(name, value)| {
+            let Some(name) = name.to_str() else {
+                return policy == EnvironmentPolicy::Inherited;
+            };
+            match policy {
+                EnvironmentPolicy::Inherited => true,
+                EnvironmentPolicy::Scrubbed => {
+                    agiworkforce_mcp::INHERITED_ENV_ALLOWLIST.contains(&name)
+                }
+                EnvironmentPolicy::WithoutCredentials => {
+                    let credential = match value.to_str() {
+                        Some(value) => agiworkforce_sandbox_policy::holds_a_credential(name, value),
+                        None => agiworkforce_sandbox_policy::value_is_secret(name),
+                    };
+                    !credential
+                        || passed
+                            .iter()
+                            .any(|passed| passed.eq_ignore_ascii_case(name))
+                }
+            }
+        })
+        .collect()
+}
+
+/// Give `command`, which is about to be started sandboxed for
+/// `workspace_dir`, the environment a sandboxed command gets there: the one
+/// rule for `run_command`, a hook and anything else that starts a sandboxed
+/// child. In a trusted workspace with nothing set that is what it would
+/// inherit anyway; with [`SANDBOX_FILTER_ENV`] the credentials are left out;
+/// in an untrusted workspace, or under a scrub, only the short list is
+/// given. A caller that builds the command itself calls this before it sets
+/// a variable of its own; [`execute_sandboxed_with_input`] and the other
+/// executors here do it already.
+pub fn apply_sandboxed_environment(command: &mut tokio::process::Command, workspace_dir: &Path) {
+    apply_environment_policy(command, scrub_environment_for(workspace_dir));
+}
+
 fn apply_environment_policy(command: &mut tokio::process::Command, scrub: bool) {
-    if !scrub {
+    let policy = resolve_environment_policy(scrub, credential_filter_requested());
+    if policy == EnvironmentPolicy::Inherited {
         return;
     }
     command.env_clear();
-    for name in agiworkforce_mcp::INHERITED_ENV_ALLOWLIST {
-        if let Some(value) = std::env::var_os(name) {
-            command.env(name, value);
-        }
-    }
+    command.envs(environment_for_a_command(
+        std::env::vars_os(),
+        policy,
+        passed_credential_names(),
+    ));
+}
+
+/// The sandbox tool by absolute path. A bare name would be looked up on
+/// `PATH`, where a project's `.venv/bin` or `node_modules/.bin` can come
+/// first, and a `sandbox-exec` or `bwrap` a sandboxed command left there
+/// would then run on the host in the sandbox's place.
+fn launcher(backend: agiworkforce_sandbox_policy::SandboxBackend) -> Result<PathBuf> {
+    agiworkforce_sandbox_policy::sandbox_launcher(backend)
+        .ok_or_else(|| anyhow::anyhow!("{}", missing_sandbox_message(std::env::consts::OS)))
+}
+
+/// A program rewritten to run under the sandbox, ready to spawn. `scratch`
+/// is the program's private temporary directory, with its package caches;
+/// dropping this removes it, so the caller keeps it until the program exits.
+pub struct SandboxedLaunch {
+    pub program: String,
+    pub args: Vec<String>,
+    pub scratch: Option<tempfile::TempDir>,
 }
 
 /// Create the private scratch directory a Seatbelt-wrapped program writes its
 /// temporary files to.
-///
-/// The directory is not dropped here: the process this argv belongs to is
-/// spawned by the caller and outlives this call, so the OS temp sweep reclaims
-/// it rather than a `TempDir` guard.
-fn program_scratch_dir() -> Result<PathBuf> {
-    let scratch = tempfile::Builder::new()
+fn program_scratch_dir() -> Result<tempfile::TempDir> {
+    tempfile::Builder::new()
         .prefix("agi-sandbox-program-")
         .tempdir()
-        .map_err(|error| anyhow::anyhow!("failed to create sandbox scratch directory: {error}"))?
-        .keep();
-    Ok(scratch.canonicalize().unwrap_or(scratch))
+        .map_err(|error| anyhow::anyhow!("failed to create sandbox scratch directory: {error}"))
+}
+
+fn scratch_path(scratch: &tempfile::TempDir) -> PathBuf {
+    scratch
+        .path()
+        .canonicalize()
+        .unwrap_or_else(|_| scratch.path().to_path_buf())
 }
 
 /// Rewrite a program and its arguments so the sandbox backend launches it.
@@ -499,43 +911,357 @@ pub fn sandboxed_program(
     manager: &SandboxManager,
     program: &str,
     args: &[String],
-) -> Result<(String, Vec<String>)> {
-    match manager.sandbox_type {
-        SandboxType::MacosSeatbelt => {
-            let scratch_dir = program_scratch_dir()?;
-            let mut wrapped = vec![
-                "-p".to_string(),
-                seatbelt_profile(manager, Some(&scratch_dir))?,
-            ];
-            // The caller spawns this argv later, so TMPDIR travels through `env`
-            // rather than on a Command this function does not own.
-            let scratch_path = scratch_dir.to_str().ok_or_else(|| {
-                anyhow::anyhow!(
-                    "sandbox scratch directory is not valid UTF-8: {:?}",
-                    scratch_dir
-                )
-            })?;
-            wrapped.push("/usr/bin/env".to_string());
-            wrapped.push(format!("TMPDIR={scratch_path}"));
-            wrapped.push(program.to_string());
-            wrapped.extend(args.iter().cloned());
-            Ok(("sandbox-exec".to_string(), wrapped))
-        }
+) -> Result<SandboxedLaunch> {
+    let backend = match manager.sandbox_type {
+        SandboxType::MacosSeatbelt => agiworkforce_sandbox_policy::SandboxBackend::MacosSeatbelt,
         SandboxType::LinuxBubblewrap => {
-            let mut wrapped = bubblewrap_prefix(manager)?;
-            wrapped.push(program.to_string());
-            wrapped.extend(args.iter().cloned());
-            Ok(("bwrap".to_string(), wrapped))
+            warn_unprotected_once(
+                &agiworkforce_sandbox_policy::wrap::bubblewrap_unprotected_paths(&manager.spec())
+                    .map_err(anyhow::Error::msg)?,
+            );
+            agiworkforce_sandbox_policy::SandboxBackend::LinuxBubblewrap
         }
-        SandboxType::None => Err(anyhow::anyhow!(
-            "{}",
-            missing_sandbox_message(std::env::consts::OS)
-        )),
-        _ => Err(anyhow::anyhow!(
-            "Unhandled SandboxType variant {}, sandbox config is broken; refusing exec",
-            manager.sandbox_type.name()
-        )),
+        SandboxType::None => {
+            return Err(anyhow::anyhow!(
+                "{}",
+                missing_sandbox_message(std::env::consts::OS)
+            ))
+        }
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Unhandled SandboxType variant {}, sandbox config is broken; refusing exec",
+                manager.sandbox_type.name()
+            ))
+        }
+    };
+    let scratch = match backend {
+        agiworkforce_sandbox_policy::SandboxBackend::MacosSeatbelt => Some(program_scratch_dir()?),
+        agiworkforce_sandbox_policy::SandboxBackend::LinuxBubblewrap => None,
+    };
+    let (program, args) = agiworkforce_sandbox_policy::sandboxed_program(
+        backend,
+        &manager.spec(),
+        scratch.as_ref().map(scratch_path).as_deref(),
+        program,
+        args,
+    )
+    .map_err(anyhow::Error::msg)?;
+    Ok(SandboxedLaunch {
+        program,
+        args,
+        scratch,
+    })
+}
+
+/// Where cache variables point inside a full-read sandbox when
+/// [`shared_sandbox_cache`] has none: seatbelt's scratch directory, or under
+/// the private tmpfs bubblewrap mounts on /tmp.
+const BUBBLEWRAP_CACHE_BASE: &str = "/tmp/agiworkforce-cache";
+
+/// This user's own directory under the temp folder, owner-only. The temp
+/// folder is shared on Linux, so a directory there named for this app could
+/// belong to another user, or be a symlink; either is refused.
+#[cfg(unix)]
+fn private_temp_root() -> Option<PathBuf> {
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+    let uid = tempfile::tempfile()
+        .and_then(|probe| probe.metadata())
+        .map(|metadata| metadata.uid())
+        .ok()?;
+    let dir = std::env::temp_dir().join(format!("agiworkforce-{uid}"));
+    match std::fs::DirBuilder::new().mode(0o700).create(&dir) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(_) => return None,
     }
+    let metadata = std::fs::symlink_metadata(&dir).ok()?;
+    if !metadata.is_dir() || metadata.uid() != uid {
+        return None;
+    }
+    if metadata.mode() & 0o077 != 0 {
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).ok()?;
+    }
+    dir.canonicalize().ok()
+}
+
+/// The package caches every sandboxed hook and MCP server shares, so a
+/// sandboxed `npx`, `uvx`, `pip` or corepack shim does not download its
+/// packages again on every start and run past a hook's timeout. It lives in
+/// [`private_temp_root`] and is only ever handed to a sandbox: the host's own
+/// caches are never used, and no host program reads this one. A sandboxed
+/// program can poison it, so a later sandboxed run may load what an earlier
+/// one planted, but a host run never does: it is outside every host cache
+/// and, as a sandbox's writable root, off the host `PATH`. `None` when the
+/// directory cannot be made safely; each program then gets an empty cache of
+/// its own, as before.
+#[cfg(unix)]
+fn shared_sandbox_cache() -> Option<PathBuf> {
+    let cache = private_child_dir(&private_temp_root()?, "sandbox-cache").ok()?;
+    agiworkforce_worktree::add_sandbox_writable_roots([cache.clone()]);
+    Some(cache)
+}
+
+#[cfg(not(unix))]
+fn shared_sandbox_cache() -> Option<PathBuf> {
+    None
+}
+
+/// Cache locations for one sandboxed program, all under `base`: the
+/// [`shared_sandbox_cache`] or the program's private scratch space. The
+/// host's own `~/.npm`, uv, pnpm, corepack and pip caches hold programs a
+/// later host command runs, so none is shared.
+fn sandbox_cache_env(base: &Path) -> Vec<(&'static str, PathBuf)> {
+    vec![
+        ("XDG_CACHE_HOME", base.join("xdg")),
+        ("npm_config_cache", base.join("npm")),
+        ("COREPACK_HOME", base.join("corepack")),
+        ("PRE_COMMIT_HOME", base.join("pre-commit")),
+        ("UV_CACHE_DIR", base.join("uv")),
+        ("PIP_CACHE_DIR", base.join("pip")),
+    ]
+}
+
+/// `program args` behind `/bin/sh`, which sets each cache variable the
+/// caller's environment leaves unset or empty and then execs the program.
+/// A value the caller set is kept only when it names a directory inside
+/// `writable`; anywhere else the program could not write its cache, so the
+/// scratch default replaces it. `caller_value` reads the environment the
+/// program will inherit. The defaults travel as positional arguments, so no
+/// path is parsed as shell syntax.
+fn with_cache_env(
+    program: &str,
+    args: &[String],
+    base: &Path,
+    writable: &[PathBuf],
+    caller_value: impl Fn(&str) -> Option<String>,
+) -> (String, Vec<String>) {
+    let defaults = sandbox_cache_env(base);
+    let mut script = String::new();
+    for (index, (name, _)) in defaults.iter().enumerate() {
+        let name: &str = name;
+        let position = index + 1;
+        let replaced = caller_value(name)
+            .filter(|value| !value.is_empty())
+            .filter(|value| !writable_from_inside(Path::new(value), writable));
+        match replaced {
+            Some(value) => {
+                tracing::info!(
+                    variable = name,
+                    value = %value,
+                    "the sandbox cannot write this cache directory, so the sandboxed program uses a private one"
+                );
+                script.push_str(&format!("{name}=\"${position}\"; export {name}; "));
+            }
+            None => script.push_str(&format!(
+                "{name}=\"${{{name}:-${position}}}\"; export {name}; "
+            )),
+        }
+    }
+    script.push_str(&format!("shift {}; exec \"$@\"", defaults.len()));
+    let mut wrapped = vec!["-c".to_string(), script, "sh".to_string()];
+    wrapped.extend(
+        defaults
+            .iter()
+            .map(|(_, path)| path.to_string_lossy().into_owned()),
+    );
+    wrapped.push(program.to_string());
+    wrapped.extend(args.iter().cloned());
+    ("/bin/sh".to_string(), wrapped)
+}
+
+/// Whether a sandbox can write `path`, which is inside one of `writable`
+/// as the crate resolves it. A relative path never is: what it names depends
+/// on a working directory the sandboxed program may not share.
+fn writable_from_inside(path: &Path, writable: &[PathBuf]) -> bool {
+    path.is_absolute() && agiworkforce_sandbox_policy::host_path::inside_any(path, writable)
+}
+
+/// The filesystem MCP server's roots: the directories listed after its
+/// package name, which the user chose for it to work in. Any other server's
+/// directory arguments stay read-only, and so does a root that resolves to
+/// the home folder or above it. A root is followed only through links root
+/// owns, such as `/tmp` on macOS: any other link may be one a sandboxed
+/// command made in place of a folder, so the root is left out, the user is
+/// told once which real folder to configure instead, and the server keeps
+/// its other roots.
+pub fn filesystem_server_roots(args: &[String]) -> Vec<PathBuf> {
+    const PACKAGE: &str = "@modelcontextprotocol/server-filesystem";
+    let Some(package) = args.iter().position(|arg| {
+        arg == PACKAGE
+            || arg
+                .strip_prefix(PACKAGE)
+                .is_some_and(|version| version.starts_with('@'))
+    }) else {
+        return Vec::new();
+    };
+    let mut roots: Vec<PathBuf> = args[package + 1..]
+        .iter()
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute() && path.is_dir())
+        .filter_map(|path| std::path::absolute(path).ok())
+        .map(|path| path.components().collect::<PathBuf>())
+        .filter(|path| {
+            !path
+                .components()
+                .any(|component| component == std::path::Component::ParentDir)
+        })
+        .filter_map(|path| {
+            match agiworkforce_sandbox_policy::host_path::resolve_root_for_use(&path) {
+                Ok(root) => Some(root),
+                Err(refusal) => {
+                    announce_refused_root(&path, &refusal);
+                    None
+                }
+            }
+        })
+        .filter(|path| {
+            path.canonicalize()
+                .is_ok_and(|resolved| agiworkforce_sandbox_policy::is_safe_write_root(&resolved))
+        })
+        .collect();
+    roots.sort();
+    roots.dedup();
+    roots
+}
+
+static REFUSED_ROOTS_ANNOUNCED: std::sync::Mutex<std::collections::BTreeSet<PathBuf>> =
+    std::sync::Mutex::new(std::collections::BTreeSet::new());
+
+/// Tell the user, the first time only, why a filesystem server root was
+/// left out of its sandbox.
+fn announce_refused_root(root: &Path, refusal: &str) {
+    let first = REFUSED_ROOTS_ANNOUNCED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(root.to_path_buf());
+    if first {
+        eprintln!(
+            "{}",
+            crate::terminal_text::sanitize_terminal_text(&format!(
+                "Note: a filesystem server root is left out of its sandbox: {refusal}."
+            ))
+        );
+    }
+}
+
+/// Rewrite a long-lived program, such as a stdio MCP server, to run under the
+/// full-read sandbox the desktop gives its servers: it reads anywhere, writes
+/// only `workspace`, `extra_writable_roots` and a private scratch directory,
+/// and never the configuration [`protected_paths_for`] names. `Ok(None)` on a
+/// platform that has no sandbox at all (Windows), where the program runs as
+/// configured; on macOS and Linux a missing backend fails closed.
+/// `caller_value` reads the environment the program will inherit.
+pub fn full_read_program(
+    sandbox_type: SandboxType,
+    workspace: &Path,
+    extra_writable_roots: &[PathBuf],
+    network_policy: NetworkPolicy,
+    caller_value: impl Fn(&str) -> Option<String>,
+    program: &str,
+    args: &[String],
+) -> Result<Option<SandboxedLaunch>> {
+    full_read_program_guarding(
+        sandbox_type,
+        workspace,
+        extra_writable_roots,
+        network_policy,
+        &[],
+        caller_value,
+        program,
+        args,
+    )
+}
+
+/// Where this user's credentials are kept: the locations
+/// [`agiworkforce_sandbox_policy::credential_paths`] names under the home
+/// folder, and the CLI's own config folder, which holds its sign-in and
+/// every stored token.
+pub fn credential_locations() -> Vec<PathBuf> {
+    let mut locations: Vec<PathBuf> = dirs::home_dir()
+        .map(|home| agiworkforce_sandbox_policy::credential_paths(&home))
+        .unwrap_or_default();
+    locations.extend(crate::config::CliConfig::config_dir().ok());
+    locations
+}
+
+/// [`full_read_program`] for a program that must not read `unreadable`
+/// either. A stdio MCP server keeps the network and reads everywhere, so it
+/// is started with [`credential_locations`] here: it could otherwise send a
+/// key or a token out. A server that needs one of them, such as one that
+/// runs git over ssh, has to run outside the sandbox, which its entry and the
+/// user's approval of that decide.
+#[allow(clippy::too_many_arguments)]
+pub fn full_read_program_guarding(
+    sandbox_type: SandboxType,
+    workspace: &Path,
+    extra_writable_roots: &[PathBuf],
+    network_policy: NetworkPolicy,
+    unreadable: &[PathBuf],
+    caller_value: impl Fn(&str) -> Option<String>,
+    program: &str,
+    args: &[String],
+) -> Result<Option<SandboxedLaunch>> {
+    let backend = match sandbox_type {
+        SandboxType::MacosSeatbelt => agiworkforce_sandbox_policy::SandboxBackend::MacosSeatbelt,
+        SandboxType::LinuxBubblewrap => {
+            agiworkforce_sandbox_policy::SandboxBackend::LinuxBubblewrap
+        }
+        SandboxType::None if !cfg!(any(target_os = "macos", target_os = "linux")) => {
+            return Ok(None)
+        }
+        SandboxType::None | SandboxType::LinuxLandlock => {
+            return Err(anyhow::anyhow!(
+                "{}",
+                missing_sandbox_message(std::env::consts::OS)
+            ))
+        }
+    };
+    let shared_cache = shared_sandbox_cache();
+    let extra_writable_roots: Vec<PathBuf> = extra_writable_roots
+        .iter()
+        .cloned()
+        .chain(shared_cache.clone())
+        .collect();
+    let extra_writable_roots = extra_writable_roots.as_slice();
+    agiworkforce_worktree::add_sandbox_writable_roots(
+        std::iter::once(workspace.to_path_buf()).chain(extra_writable_roots.iter().cloned()),
+    );
+    let scratch = match backend {
+        agiworkforce_sandbox_policy::SandboxBackend::MacosSeatbelt => Some(program_scratch_dir()?),
+        agiworkforce_sandbox_policy::SandboxBackend::LinuxBubblewrap => None,
+    };
+    let scratch_dir = scratch.as_ref().map(scratch_path);
+    let cache_base = shared_cache
+        .or_else(|| scratch_dir.clone())
+        .unwrap_or_else(|| PathBuf::from(BUBBLEWRAP_CACHE_BASE));
+    let writable: Vec<PathBuf> = std::iter::once(workspace.to_path_buf())
+        .chain(extra_writable_roots.iter().cloned())
+        .chain(std::iter::once(
+            scratch_dir.clone().unwrap_or_else(|| PathBuf::from("/tmp")),
+        ))
+        .collect();
+    let (program, args) = with_cache_env(program, args, &cache_base, &writable, caller_value);
+    let spec = agiworkforce_sandbox_policy::FullReadSpec {
+        workspace_dir: workspace,
+        extra_writable_roots,
+        network_policy,
+    };
+    let wrapped = agiworkforce_sandbox_policy::full_read_program_guarding(
+        backend,
+        &spec,
+        &protected_paths_for(workspace),
+        unreadable,
+        scratch_dir.as_deref(),
+        &program,
+        &args,
+    )
+    .map_err(anyhow::Error::msg)?;
+    warn_unprotected_once(&wrapped.unprotected);
+    Ok(Some(SandboxedLaunch {
+        program: wrapped.command,
+        args: wrapped.args,
+        scratch,
+    }))
 }
 
 /// Quote one argv element for a POSIX shell.
@@ -572,171 +1298,29 @@ pub fn shell_join(args: &[String]) -> String {
         .join(" ")
 }
 
-/// Validate a workspace path before embedding it in a Seatbelt SBPL profile.
-///
-/// SECURITY (CRIT-2): the previous implementation used `to_string_lossy()` and
-/// interpolated the result raw into `format!(... "(allow file-read* (subpath \"{ws}\"))" ...)`.
-/// A workspace path `/tmp/x") (allow default) ;#` broke out of the string literal
-/// and injected an `(allow default)` rule, a complete macOS sandbox escape.
-///
-/// Apple provides no parameterised quoting mechanism for Seatbelt profiles.
-/// The only safe strategy is to reject any path character that is meaningful
-/// in SBPL or could break the string literal:
-///   - `"`, closes the string literal the path is embedded in
-///   - `(` / `)`, open/close s-expressions; could inject new rules even if `"` is intact
-///   - `\`, introduces escape sequences; the escaping strategy itself is
-///             implementation-defined and not guaranteed safe across macOS versions
-///   - Control chars (< 0x20): NUL terminates C strings; newline/CR split rules
-///   - Unicode line/paragraph separators (U+2028, U+2029): treated as newline by
-///             some parsers
-///   - Leading/trailing whitespace: would silently change the matched subpath
-///   - Root `/`: too broad (would allow write everywhere)
-///   - Empty or relative paths: rejected for correctness
 fn validate_and_escape_seatbelt_path(path: &Path) -> Result<String> {
-    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    let s = canonical
-        .to_str()
-        .ok_or_else(|| anyhow::anyhow!("workspace path is not valid UTF-8: {:?}", canonical))?;
-
-    if s.is_empty() {
-        anyhow::bail!("workspace path is empty");
-    }
-    if s == "/" {
-        // SECURITY: root path would grant file-write* everywhere, reject.
-        anyhow::bail!("workspace path '/' is too broad for sandboxed exec");
-    }
-    if !path.is_absolute() {
-        anyhow::bail!("workspace path must be absolute: {:?}", path);
-    }
-    if s != s.trim() {
-        anyhow::bail!(
-            "workspace path has leading or trailing whitespace: {:?}",
-            path
-        );
-    }
-    // Control chars including NUL (terminates C string) and newlines (split rules).
-    if s.chars().any(|c| (c as u32) < 0x20) {
-        anyhow::bail!(
-            "workspace path contains ASCII control character: {:?}",
-            path
-        );
-    }
-    // Unicode line/paragraph separators, some SBPL parsers treat as newlines.
-    if s.contains('\u{2028}') || s.contains('\u{2029}') {
-        anyhow::bail!(
-            "workspace path contains Unicode line/paragraph separator: {:?}",
-            path
-        );
-    }
-    // SECURITY: SBPL has no parameterised quoting. Reject all chars that could
-    // escape the string literal or inject new s-expressions.
-    const SBPL_SPECIAL: &[char] = &['"', '(', ')', '\\'];
-    for &ch in SBPL_SPECIAL {
-        if s.contains(ch) {
-            anyhow::bail!(
-                "workspace path contains SBPL-special character {:?} which cannot be \
-                 safely embedded in a Seatbelt profile: {:?}",
-                ch,
-                path
-            );
-        }
-    }
-
-    Ok(s.to_string())
+    agiworkforce_sandbox_policy::wrap::validate_and_escape_seatbelt_path(path)
+        .map_err(anyhow::Error::msg)
 }
 
+#[cfg(test)]
 fn writable_roots(manager: &SandboxManager) -> Result<Vec<PathBuf>> {
-    let configured = match &manager.policy {
-        SandboxPolicy::ReadOnly => return Ok(Vec::new()),
-        SandboxPolicy::WorkspaceWrite { writable_roots } => writable_roots,
-        SandboxPolicy::DangerFullAccess => return Ok(Vec::new()),
-    };
-
-    let mut roots = Vec::with_capacity(configured.len() + 1);
-    let mut seen = HashSet::new();
-    for root in std::iter::once(&manager.workspace_dir).chain(configured.iter()) {
-        if !root.is_absolute() {
-            anyhow::bail!("sandbox writable root must be absolute: {:?}", root);
-        }
-        if root == Path::new("/") {
-            anyhow::bail!("sandbox writable root '/' is too broad");
-        }
-        if seen.insert(root.clone()) {
-            roots.push(root.clone());
-        }
-    }
-    Ok(roots)
+    agiworkforce_sandbox_policy::wrap::writable_roots(&manager.spec())
+        .map(|roots| roots.into_iter().map(|root| root.named).collect())
+        .map_err(anyhow::Error::msg)
 }
 
-fn seatbelt_profile(manager: &SandboxManager, scratch_dir: Option<&Path>) -> Result<String> {
-    let ws = validate_and_escape_seatbelt_path(&manager.workspace_dir)?;
-
-    // SBPL is last-match-wins, so the loopback denial has to follow the allow.
-    let network_rules = match manager.network_policy {
-        NetworkPolicy::Allow => "(allow network-outbound)\n(allow network-inbound)\n",
-        NetworkPolicy::AllowExternal => {
-            "(allow network-outbound)\n(allow network-inbound)\n(deny network-outbound (remote ip \"localhost:*\"))\n"
-        }
-        NetworkPolicy::Deny => "",
-    };
-
-    let mut scratch_read_rules = String::new();
+fn command_profile(manager: &SandboxManager, scratch_dir: &Path) -> Result<String> {
+    let mut profile =
+        agiworkforce_sandbox_policy::wrap::seatbelt_profile(&manager.spec(), Some(scratch_dir))
+            .map_err(anyhow::Error::msg)?;
     if let Some(snapshot) = crate::shell_snapshot::applied_file() {
-        scratch_read_rules.push_str(&format!(
-            "(allow file-read* (literal \"{}\"))\n",
-            validate_and_escape_seatbelt_path(&snapshot)?
+        profile.push_str(&format!(
+            "\n(allow file-read* (literal \"{}\"))\n",
+            validate_and_escape_seatbelt_path(&snapshot)?,
         ));
     }
-    let mut write_rules = String::from("(allow file-write* (literal \"/dev/null\"))\n");
-    match &manager.policy {
-        // Both write policies get one private scratch directory rather than the
-        // whole of /tmp: a blanket `/tmp` write let a sandboxed command reach
-        // every other session's temporary files, and the tempfile crate,
-        // mktemp, python and node all honour TMPDIR.
-        SandboxPolicy::ReadOnly | SandboxPolicy::WorkspaceWrite { .. } => {
-            let scratch_dir = scratch_dir.ok_or_else(|| {
-                anyhow::anyhow!("Seatbelt execution requires a private scratch directory")
-            })?;
-            let scratch_dir = validate_and_escape_seatbelt_path(scratch_dir)?;
-            scratch_read_rules
-                .push_str(&format!("(allow file-read* (subpath \"{scratch_dir}\"))\n"));
-            write_rules.push_str(&format!(
-                "(allow file-write* (subpath \"{scratch_dir}\"))\n"
-            ));
-            for root in writable_roots(manager)? {
-                let root = validate_and_escape_seatbelt_path(&root)?;
-                scratch_read_rules.push_str(&format!("(allow file-read* (subpath \"{root}\"))\n"));
-                write_rules.push_str(&format!("(allow file-write* (subpath \"{root}\"))\n"));
-            }
-        }
-        SandboxPolicy::DangerFullAccess => {}
-    }
-
-    Ok(format!(
-        r#"(version 1)
-(deny default)
-(allow process-exec)
-(allow process-fork)
-(allow signal (target self))
-(allow sysctl-read)
-(allow mach-lookup)
-(allow system-socket)
-{network_rules}(allow file-read* (subpath "/usr") (subpath "/bin") (subpath "/sbin")
-                   (subpath "/Library") (subpath "/System")
-                   (subpath "/private/var/db") (subpath "/dev")
-                   ;; macOS resolves `sh` through this symlink directory
-                   ;; (/private/var/select/sh -> /bin/bash).
-                   (subpath "/private/var/select")
-                   (subpath "/etc")
-                   (literal "/") (subpath "/opt"))
-(allow file-read* (subpath "{ws}"))
-{scratch_read_rules}
-{write_rules}"#,
-        network_rules = network_rules,
-        ws = ws,
-        scratch_read_rules = scratch_read_rules,
-        write_rules = write_rules,
-    ))
+    Ok(profile)
 }
 
 fn bubblewrap_args(manager: &SandboxManager, invocation: &Invocation<'_>) -> Result<Vec<String>> {
@@ -773,90 +1357,47 @@ impl Invocation<'_> {
 }
 
 fn bubblewrap_prefix(manager: &SandboxManager) -> Result<Vec<String>> {
-    if !manager.workspace_dir.is_absolute() {
-        anyhow::bail!(
-            "sandbox workspace must be absolute: {:?}",
-            manager.workspace_dir
-        );
-    }
-    if manager.workspace_dir == Path::new("/") {
-        anyhow::bail!("sandbox workspace '/' is too broad");
-    }
-
-    let mut args = vec![
-        "--die-with-parent".to_string(),
-        "--unshare-pid".to_string(),
-        "--unshare-uts".to_string(),
-    ];
-    if manager.network_policy == NetworkPolicy::Deny {
-        args.push("--unshare-net".to_string());
-    }
-    for runtime in [
-        "/usr",
-        "/bin",
-        "/sbin",
-        "/lib",
-        "/lib64",
-        "/etc/ld.so.cache",
-        "/etc/passwd",
-        "/etc/group",
-        "/etc/nsswitch.conf",
-        "/etc/resolv.conf",
-        "/etc/hosts",
-        "/etc/ssl/certs",
-        "/etc/pki/tls/certs",
-    ] {
-        if Path::new(runtime).exists() {
-            args.extend([
-                "--ro-bind".to_string(),
-                runtime.to_string(),
-                runtime.to_string(),
-            ]);
-        }
-    }
-    args.extend([
-        "--setenv".to_string(),
-        "TMPDIR".to_string(),
-        "/tmp".to_string(),
-        "--tmpfs".to_string(),
-        "/tmp".to_string(),
-        "--dev".to_string(),
-        "/dev".to_string(),
-        "--proc".to_string(),
-        "/proc".to_string(),
-    ]);
-    if manager.policy == SandboxPolicy::ReadOnly {
-        let workspace = manager
-            .workspace_dir
-            .to_str()
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "sandbox workspace is not valid UTF-8: {:?}",
-                    manager.workspace_dir
-                )
-            })?
-            .to_string();
-        args.extend(["--ro-bind".to_string(), workspace.clone(), workspace]);
-    }
-    // Writable binds must follow the /tmp tmpfs mount. Otherwise a workspace
-    // below /tmp is shadowed by the later scratch mount.
-    for root in writable_roots(manager)? {
-        let root = root
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("sandbox writable root is not valid UTF-8: {:?}", root))?
-            .to_string();
-        args.extend(["--bind".to_string(), root.clone(), root]);
-    }
+    let spec = manager.spec();
+    warn_unprotected_once(
+        &agiworkforce_sandbox_policy::wrap::bubblewrap_unprotected_paths(&spec)
+            .map_err(anyhow::Error::msg)?,
+    );
+    let mut args =
+        agiworkforce_sandbox_policy::wrap::bubblewrap_prefix(&spec).map_err(anyhow::Error::msg)?;
     if let Some(snapshot) = crate::shell_snapshot::applied_file() {
+        if args.pop().as_deref() != Some("--") {
+            anyhow::bail!("sandbox prefix is missing its argument boundary");
+        }
         let snapshot = snapshot.canonicalize()?;
         let snapshot = snapshot
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("shell snapshot path is not UTF-8"))?
             .to_string();
         args.extend(["--ro-bind".to_string(), snapshot.clone(), snapshot]);
+        args.push("--".to_string());
     }
-    args.push("--".to_string());
     Ok(args)
+}
+
+/// Bubblewrap cannot keep a protected file read-only before it exists, and
+/// every command reports the same missing ones, so each is named once.
+fn warn_unprotected_once(unprotected: &[PathBuf]) {
+    static REPORTED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<PathBuf>>> =
+        std::sync::OnceLock::new();
+    let mut reported = REPORTED
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let new: Vec<&PathBuf> = unprotected
+        .iter()
+        .filter(|path| reported.insert((*path).clone()))
+        .collect();
+    if !new.is_empty() {
+        tracing::warn!(
+            paths = ?new,
+            "bubblewrap cannot keep these missing configuration paths read-only; a sandboxed command could create them"
+        );
+    }
 }
 
 pub async fn execute_sandboxed(
@@ -919,7 +1460,7 @@ pub(crate) fn background_command(
     invocation: Invocation<'_>,
     cwd: &Path,
     terminal: Option<&Path>,
-) -> Result<std::process::Command> {
+) -> Result<crate::terminals::PreparedCommand> {
     let unsandboxed = || match invocation {
         Invocation::Shell(script) => crate::process_tree::shell_command(script),
         Invocation::Program { program, args } => {
@@ -928,6 +1469,7 @@ pub(crate) fn background_command(
             command
         }
     };
+    let mut scratch = None;
     let mut command = match manager {
         None => {
             let mut command = unsandboxed();
@@ -944,24 +1486,29 @@ pub(crate) fn background_command(
             match manager.sandbox_type {
                 SandboxType::MacosSeatbelt => {
                     let scratch_dir = program_scratch_dir()?;
-                    let mut profile = seatbelt_profile(manager, Some(&scratch_dir))?;
+                    let scratch_dir_path = scratch_path(&scratch_dir);
+                    let mut profile = command_profile(manager, &scratch_dir_path)?;
                     if let Some(terminal) = terminal {
                         profile.push_str(&format!(
                             "(allow file-ioctl (literal \"{}\"))\n",
                             validate_and_escape_seatbelt_path(terminal)?
                         ));
                     }
-                    let mut command = tokio::process::Command::new("sandbox-exec");
+                    let mut command = tokio::process::Command::new(launcher(
+                        agiworkforce_sandbox_policy::SandboxBackend::MacosSeatbelt,
+                    )?);
                     apply_environment_policy(&mut command, scrub);
-                    command
-                        .arg("-p")
-                        .arg(profile)
-                        .args(invocation.argv())
-                        .env("TMPDIR", scratch_dir);
+                    command.arg("-p").arg(profile).args(invocation.argv()).envs(
+                        agiworkforce_sandbox_policy::wrap::seatbelt_environment(&scratch_dir_path)
+                            .map_err(anyhow::Error::msg)?,
+                    );
+                    scratch = Some(scratch_dir);
                     command
                 }
                 SandboxType::LinuxBubblewrap => {
-                    let mut command = tokio::process::Command::new("bwrap");
+                    let mut command = tokio::process::Command::new(launcher(
+                        agiworkforce_sandbox_policy::SandboxBackend::LinuxBubblewrap,
+                    )?);
                     apply_environment_policy(&mut command, scrub);
                     command.args(bubblewrap_args(manager, &invocation)?);
                     command
@@ -978,9 +1525,14 @@ pub(crate) fn background_command(
     };
     crate::interactive::mark_agent_spawned(&mut command);
     command.current_dir(cwd);
-    Ok(command.into_std())
+    Ok(crate::terminals::PreparedCommand {
+        command: command.into_std(),
+        scratch,
+    })
 }
 
+/// A sandboxed command's process group ends when the command exits, so
+/// nothing it left in the background keeps running beside host git.
 async fn execute_sandboxed_in_environment(
     manager: &SandboxManager,
     invocation: Invocation<'_>,
@@ -1017,26 +1569,29 @@ async fn execute_sandboxed_in_environment(
                 .map_err(|error| {
                     anyhow::anyhow!("failed to create sandbox scratch directory: {error}")
                 })?;
-            let profile = seatbelt_profile(manager, Some(scratch_dir.path()))?;
-            let mut scmd = tokio::process::Command::new("sandbox-exec");
+            let profile = command_profile(manager, scratch_dir.path())?;
+            let mut scmd = tokio::process::Command::new(launcher(
+                agiworkforce_sandbox_policy::SandboxBackend::MacosSeatbelt,
+            )?);
             apply_environment_policy(&mut scmd, scrub_environment);
             scmd.arg("-p").arg(&profile).args(&argv);
-            let scratch_path = scratch_dir
-                .path()
-                .canonicalize()
-                .unwrap_or_else(|_| scratch_dir.path().to_path_buf());
-            scmd.env("TMPDIR", scratch_path);
+            scmd.envs(
+                agiworkforce_sandbox_policy::wrap::seatbelt_environment(scratch_dir.path())
+                    .map_err(anyhow::Error::msg)?,
+            );
             crate::interactive::mark_agent_spawned(&mut scmd);
             if let Some(dir) = cwd {
                 scmd.current_dir(dir);
             }
-            crate::process_tree::output(scmd, stdin, timeout)
+            crate::process_tree::output_ending_group(scmd, stdin, timeout)
                 .await
                 .map_err(anyhow::Error::new)
                 .context("Seatbelt exec failed")
         }
         SandboxType::LinuxBubblewrap => {
-            let mut bcmd = tokio::process::Command::new("bwrap");
+            let mut bcmd = tokio::process::Command::new(launcher(
+                agiworkforce_sandbox_policy::SandboxBackend::LinuxBubblewrap,
+            )?);
             apply_environment_policy(&mut bcmd, scrub_environment);
             let bwrap_args = bubblewrap_args(manager, &invocation)?;
             bcmd.args(&bwrap_args);
@@ -1044,7 +1599,7 @@ async fn execute_sandboxed_in_environment(
             if let Some(dir) = cwd {
                 bcmd.current_dir(dir);
             }
-            crate::process_tree::output(bcmd, stdin, timeout)
+            crate::process_tree::output_ending_group(bcmd, stdin, timeout)
                 .await
                 .map_err(anyhow::Error::new)
                 .context("Bubblewrap exec failed")
@@ -1069,19 +1624,43 @@ mod environment_and_policy_tests {
     use super::*;
     use crate::features::hooks::managed::{ManagedSandboxPolicy, ManagedSandboxPolicyState};
 
+    fn env_of(pairs: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
+        move |name| {
+            pairs
+                .iter()
+                .find(|(key, _)| *key == name)
+                .map(|(_, value)| value.to_string())
+        }
+    }
+
     #[test]
-    fn user_opt_ins_apply_without_a_managed_policy_and_cannot_force() {
-        let settings = resolve_sandbox_settings(&ManagedSandboxPolicyState::Absent, |name| {
-            name == "AGIWORKFORCE_SANDBOX_HOOKS"
-        });
-        assert!(settings.sandbox_user_hooks);
-        assert!(!settings.scrub_environment);
-        assert!(!settings.sandbox_mcp_servers);
-        assert!(!settings.forced);
-        assert_eq!(
-            resolve_sandbox_settings(&ManagedSandboxPolicyState::Absent, |_| false),
-            SandboxSettings::default()
+    fn hooks_and_mcp_servers_are_sandboxed_by_default_and_a_user_can_opt_out() {
+        let settings = resolve_sandbox_settings(&ManagedSandboxPolicyState::Absent, |_| None);
+        assert_eq!(settings, SandboxSettings::default());
+        assert_eq!(settings.user_hooks, SandboxDefault::On);
+        assert_eq!(settings.mcp_servers, SandboxDefault::On);
+        assert!(settings.user_hooks.applies(true));
+        assert!(!settings.user_hooks.applies(false));
+
+        let opted_out = resolve_sandbox_settings(
+            &ManagedSandboxPolicyState::Absent,
+            env_of(&[(SANDBOX_HOOKS_ENV, "0"), (SANDBOX_MCP_ENV, "off")]),
         );
+        assert_eq!(opted_out.user_hooks, SandboxDefault::Off);
+        assert_eq!(opted_out.mcp_servers, SandboxDefault::Off);
+        assert!(!opted_out.mcp_servers.applies(true));
+        assert!(!opted_out.forced);
+        assert!(!opted_out.scrub_environment);
+    }
+
+    #[test]
+    fn the_value_that_once_opted_in_keeps_the_sandbox_on() {
+        let settings = resolve_sandbox_settings(
+            &ManagedSandboxPolicyState::Absent,
+            env_of(&[(SANDBOX_HOOKS_ENV, "1"), (SANDBOX_MCP_ENV, "")]),
+        );
+        assert_eq!(settings.user_hooks, SandboxDefault::On);
+        assert_eq!(settings.mcp_servers, SandboxDefault::On);
     }
 
     #[test]
@@ -1092,29 +1671,226 @@ mod environment_and_policy_tests {
             sandbox_user_hooks: false,
             sandbox_mcp_servers: true,
         });
-        let settings =
-            resolve_sandbox_settings(&managed, |name| name == "AGIWORKFORCE_SANDBOX_HOOKS");
+        let settings = resolve_sandbox_settings(
+            &managed,
+            env_of(&[(SANDBOX_HOOKS_ENV, "0"), (SANDBOX_MCP_ENV, "0")]),
+        );
         assert_eq!(
             settings,
             SandboxSettings {
                 forced: true,
                 scrub_environment: true,
-                sandbox_user_hooks: true,
-                sandbox_mcp_servers: true,
+                user_hooks: SandboxDefault::Off,
+                mcp_servers: SandboxDefault::Required,
             }
         );
+        assert!(settings.mcp_servers.applies(false));
     }
 
     #[test]
     fn an_unreadable_managed_policy_enforces_every_control() {
         let settings = resolve_sandbox_settings(
             &ManagedSandboxPolicyState::Invalid("bad json".to_string()),
-            |_| false,
+            |_| None,
         );
         assert!(settings.forced);
         assert!(settings.scrub_environment);
-        assert!(settings.sandbox_user_hooks);
-        assert!(settings.sandbox_mcp_servers);
+        assert_eq!(settings.user_hooks, SandboxDefault::Required);
+        assert_eq!(settings.mcp_servers, SandboxDefault::Required);
+    }
+
+    #[test]
+    fn a_workspace_at_or_above_home_becomes_the_agent_workspace() {
+        let Some(home) = dirs::home_dir() else {
+            return;
+        };
+        let home = home.canonicalize().unwrap_or(home);
+        let (policy, workspace) = confine_to_safe_roots(
+            SandboxPolicy::WorkspaceWrite {
+                writable_roots: vec![PathBuf::from("/"), home.join("project")],
+            },
+            home.clone(),
+        );
+        assert_ne!(workspace, home);
+        assert!(agiworkforce_sandbox_policy::is_safe_write_root(&workspace));
+        assert_eq!(policy.writable_roots(), &[home.join("project")]);
+
+        let project = tempfile::tempdir().unwrap();
+        let project = project.path().canonicalize().unwrap();
+        let (_, kept) = confine_to_safe_roots(SandboxPolicy::default(), project.clone());
+        assert_eq!(kept, project);
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn a_launcher_planted_on_path_is_never_the_one_that_runs() {
+        use std::os::unix::fs::PermissionsExt;
+        let planted = tempfile::tempdir().unwrap();
+        let planted_dir = planted.path().canonicalize().unwrap();
+        for name in ["sandbox-exec", "bwrap"] {
+            let path = planted_dir.join(name);
+            std::fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let original = std::env::var_os("PATH").unwrap_or_default();
+        let mut path = vec![planted_dir.clone()];
+        path.extend(std::env::split_paths(&original));
+        std::env::set_var("PATH", std::env::join_paths(path).unwrap());
+        let detected = SandboxType::detect();
+        let workspace = tempfile::tempdir().unwrap();
+        let workspace_path = workspace.path().canonicalize().unwrap();
+        let launch = full_read_program(
+            detected,
+            &workspace_path,
+            &[],
+            NetworkPolicy::Deny,
+            |_| None,
+            "true",
+            &[],
+        );
+        std::env::set_var("PATH", original);
+        let Ok(Some(launch)) = launch else {
+            return;
+        };
+        let program = Path::new(&launch.program);
+        assert!(program.is_absolute(), "{}", launch.program);
+        assert!(
+            !program.starts_with(&planted_dir) && !program.starts_with(planted.path()),
+            "the planted {} ran in the sandbox's place",
+            launch.program
+        );
+    }
+
+    #[test]
+    fn a_cache_directory_the_sandbox_cannot_write_is_replaced_with_the_scratch_one() {
+        let writable = tempfile::tempdir().unwrap();
+        let writable = writable.path().canonicalize().unwrap();
+        let inside = writable.join("npm").to_string_lossy().into_owned();
+        let (_, args) = with_cache_env(
+            "npx",
+            &[],
+            Path::new("/scratch"),
+            std::slice::from_ref(&writable),
+            |name| match name {
+                "npm_config_cache" => Some(inside.clone()),
+                "UV_CACHE_DIR" => Some("/somewhere/the/sandbox/cannot/write".to_string()),
+                _ => None,
+            },
+        );
+        let script = &args[1];
+        assert!(
+            script.contains("npm_config_cache=\"${npm_config_cache:-$2}\""),
+            "a writable caller value is kept: {script}"
+        );
+        assert!(
+            script.contains("UV_CACHE_DIR=\"$5\";"),
+            "an unwritable caller value is replaced: {script}"
+        );
+        assert!(script.contains("XDG_CACHE_HOME=\"${XDG_CACHE_HOME:-$1}\""));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn every_sandboxed_program_shares_one_private_cache_outside_the_hosts() {
+        use std::os::unix::fs::PermissionsExt;
+        let cache = shared_sandbox_cache().expect("a private sandbox cache");
+        assert_eq!(shared_sandbox_cache(), Some(cache.clone()), "one cache");
+        let root = private_temp_root().expect("a private temp root");
+        assert!(cache.starts_with(&root), "{}", cache.display());
+        let mode = std::fs::metadata(&root).unwrap().permissions().mode();
+        assert_eq!(mode & 0o077, 0, "owner-only: {mode:o}");
+        if let Some(home) = dirs::home_dir() {
+            assert!(!cache.starts_with(home.join(".npm")));
+            assert!(!cache.starts_with(home.join(".cache")));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_private_root_a_sandbox_replaced_or_opened_is_refused() {
+        use std::os::unix::fs::PermissionsExt;
+        let parent = tempfile::tempdir().unwrap();
+        let resolved = parent.path().canonicalize().unwrap();
+        let dir = resolved.join("agent-workspace");
+
+        let created = private_child_dir(parent.path(), "agent-workspace").expect("created");
+        assert_eq!(
+            created, dir,
+            "the parent is resolved, the leaf is not followed"
+        );
+        let mode = std::fs::metadata(&dir).unwrap().permissions().mode();
+        assert_eq!(mode & 0o077, 0, "created open to other users: {mode:o}");
+
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).unwrap();
+        assert!(private_child_dir(parent.path(), "agent-workspace").is_err());
+        std::fs::remove_dir(&dir).unwrap();
+
+        let home = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(home.path(), &dir).unwrap();
+        assert!(
+            private_child_dir(parent.path(), "agent-workspace").is_err(),
+            "a root replaced with a link was followed"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_plugin_hook_writes_its_packages_to_the_shared_cache() {
+        let cache = shared_sandbox_cache().expect("a private sandbox cache");
+        let workspace = tempfile::tempdir().unwrap();
+        let manager =
+            SandboxManager::full_auto(workspace.path().canonicalize().unwrap()).with_shared_cache();
+        assert!(manager.policy.writable_roots().contains(&cache));
+        let command = manager.shell_with_shared_cache("npx -y some-hook");
+        assert!(
+            command.contains(cache.join("npm").to_string_lossy().as_ref()),
+            "{command}"
+        );
+        assert!(command.ends_with("'npx -y some-hook'"), "{command}");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_sandboxed_program_gets_the_shared_cache_writable() {
+        let cache = shared_sandbox_cache().expect("a private sandbox cache");
+        let workspace = tempfile::tempdir().unwrap();
+        let workspace = workspace.path().canonicalize().unwrap();
+        let launch = full_read_program(
+            SandboxType::MacosSeatbelt,
+            &workspace,
+            &[],
+            NetworkPolicy::AllowExternal,
+            |_| None,
+            "npx",
+            &["-y".to_string(), "some-server".to_string()],
+        )
+        .expect("wrapped")
+        .expect("macOS has a sandbox");
+        let profile = &launch.args[launch.args.iter().position(|arg| arg == "-p").unwrap() + 1];
+        assert!(
+            profile.contains(&format!(
+                "(allow file-write* (subpath \"{}\"))",
+                cache.display()
+            )),
+            "{profile}"
+        );
+        let npm = cache.join("npm").to_string_lossy().into_owned();
+        assert!(launch.args.contains(&npm), "{:?}", launch.args);
+    }
+
+    #[test]
+    fn a_relative_or_outside_path_is_not_inside_a_writable_root() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path().canonicalize().unwrap();
+        assert!(writable_from_inside(
+            &root.join("not-yet").join("made"),
+            &[root.clone()]
+        ));
+        assert!(!writable_from_inside(
+            Path::new("relative/cache"),
+            &[root.clone()]
+        ));
+        assert!(!writable_from_inside(Path::new("/"), &[root]));
     }
 
     #[cfg(unix)]
@@ -1178,12 +1954,145 @@ mod environment_and_policy_tests {
                 "{name} survived the scrub"
             );
         }
-        let mut inherited = tokio::process::Command::new("env");
-        apply_environment_policy(&mut inherited, false);
-        assert_eq!(inherited.as_std().get_envs().count(), 0);
+    }
+
+    fn given(policy: EnvironmentPolicy, passed: &[&str]) -> Vec<String> {
+        let variables = [
+            ("PATH", "/usr/bin"),
+            ("HOME", "/Users/someone"),
+            ("EDITOR", "vi"),
+            ("GITHUB_TOKEN", "EXAMPLE"),
+            ("APPLE_PASSWORD", "EXAMPLE"),
+            ("OPENAI_API_KEY", "EXAMPLE"),
+            ("npm_config__authToken", "EXAMPLE"),
+            ("AWS_ACCESS_KEY_ID", "EXAMPLE"),
+            ("HTTPS_PROXY", "http://proxy.example:8080"),
+            ("SSH_AUTH_SOCK", "/tmp/agent.sock"),
+            ("NODE_OPTIONS", "--max-old-space-size=4096"),
+            ("PWD", "/Users/someone/project"),
+            ("MAX_OUTPUT_TOKENS", "32000"),
+            ("REQUIRE_AUTH", "true"),
+        ]
+        .into_iter()
+        .map(|(name, value)| (name.into(), value.into()));
+        let passed: Vec<String> = passed.iter().map(|name| name.to_string()).collect();
+        let mut names: Vec<String> = environment_for_a_command(variables, policy, &passed)
+            .into_iter()
+            .map(|(name, _)| name.to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn a_trusted_workspace_inherits_unless_the_filter_or_a_scrub_is_on() {
+        assert_eq!(
+            resolve_environment_policy(false, false),
+            EnvironmentPolicy::Inherited
+        );
+        assert_eq!(
+            resolve_environment_policy(false, true),
+            EnvironmentPolicy::WithoutCredentials
+        );
+        for filter in [false, true] {
+            assert_eq!(
+                resolve_environment_policy(true, filter),
+                EnvironmentPolicy::Scrubbed,
+                "a scrub outranks the filter"
+            );
+        }
+        assert_eq!(given(EnvironmentPolicy::Inherited, &[]).len(), 14);
+
+        let mut untouched = tokio::process::Command::new("env");
+        if resolve_environment_policy(false, credential_filter_requested())
+            == EnvironmentPolicy::Inherited
+        {
+            apply_environment_policy(&mut untouched, false);
+            assert_eq!(
+                untouched.as_std().get_envs().count(),
+                0,
+                "nothing is cleared or set, so the command inherits as any child does"
+            );
+        }
+    }
+
+    #[test]
+    fn the_filter_leaves_out_the_credentials_and_passes_the_ones_named() {
+        assert_eq!(
+            given(EnvironmentPolicy::WithoutCredentials, &[]),
+            [
+                "AWS_ACCESS_KEY_ID",
+                "EDITOR",
+                "HOME",
+                "HTTPS_PROXY",
+                "MAX_OUTPUT_TOKENS",
+                "NODE_OPTIONS",
+                "PATH",
+                "PWD",
+                "REQUIRE_AUTH",
+                "SSH_AUTH_SOCK"
+            ],
+            "a name that says it is a credential was handed to a sandboxed command"
+        );
+        assert_eq!(
+            given(
+                EnvironmentPolicy::WithoutCredentials,
+                &["github_token", "NOT_SET"]
+            ),
+            [
+                "AWS_ACCESS_KEY_ID",
+                "EDITOR",
+                "GITHUB_TOKEN",
+                "HOME",
+                "HTTPS_PROXY",
+                "MAX_OUTPUT_TOKENS",
+                "NODE_OPTIONS",
+                "PATH",
+                "PWD",
+                "REQUIRE_AUTH",
+                "SSH_AUTH_SOCK"
+            ],
+            "a variable the user named is passed through, and only that one"
+        );
+        assert_eq!(
+            given(EnvironmentPolicy::Scrubbed, &["GITHUB_TOKEN"]),
+            ["HOME", "PATH"],
+            "a scrubbed command keeps the short list whatever was named"
+        );
+        assert_eq!(
+            credential_names_in(" GITHUB_TOKEN, ,NPM_TOKEN,"),
+            ["GITHUB_TOKEN", "NPM_TOKEN"]
+        );
     }
 
     #[cfg(unix)]
+    #[test]
+    fn a_variable_whose_name_is_not_text_is_given_only_where_everything_is() {
+        use std::os::unix::ffi::OsStringExt;
+        let variables = || {
+            use std::ffi::OsString;
+            let odd = OsString::from_vec(vec![0x66, 0x6f, 0xff]);
+            [
+                (odd, OsString::from("x")),
+                (OsString::from("PATH"), OsString::from("/usr/bin")),
+            ]
+            .into_iter()
+        };
+        assert_eq!(
+            environment_for_a_command(variables(), EnvironmentPolicy::Inherited, &[]).len(),
+            2
+        );
+        for policy in [
+            EnvironmentPolicy::WithoutCredentials,
+            EnvironmentPolicy::Scrubbed,
+        ] {
+            let given = environment_for_a_command(variables(), policy, &[]);
+            assert_eq!(given.len(), 1, "{policy:?}");
+            assert_eq!(given[0].0, "PATH");
+        }
+    }
+
+    #[cfg(target_os = "macos")]
     #[test]
     fn a_wrapped_program_runs_directly_under_seatbelt() {
         let workspace = tempfile::tempdir().unwrap();
@@ -1191,8 +2100,14 @@ mod environment_and_policy_tests {
             .with_network(NetworkPolicy::Allow);
         let args = vec!["--stdio".to_string(), "a b".to_string()];
         manager.sandbox_type = SandboxType::MacosSeatbelt;
-        let (program, wrapped) = sandboxed_program(&manager, "npx", &args).unwrap();
-        assert_eq!(program, "sandbox-exec");
+        let launch = sandboxed_program(&manager, "npx", &args).unwrap();
+        assert_eq!(
+            Some(PathBuf::from(&launch.program)),
+            agiworkforce_sandbox_policy::sandbox_launcher(
+                agiworkforce_sandbox_policy::SandboxBackend::MacosSeatbelt
+            )
+        );
+        let wrapped = &launch.args;
         assert_eq!(wrapped[0], "-p");
         assert!(wrapped[1].contains("(deny default)"));
         assert_eq!(wrapped[2], "/usr/bin/env");
@@ -1202,17 +2117,35 @@ mod environment_and_policy_tests {
             "scratch dir missing: {scratch}"
         );
         assert!(wrapped[1].contains(&format!("(allow file-write* (subpath \"{scratch}\"))")));
-        assert_eq!(&wrapped[4..], &["npx", "--stdio", "a b"]);
+        let launched: Vec<&String> = wrapped[4..]
+            .iter()
+            .filter(|arg| !arg.starts_with("DEVELOPER_DIR="))
+            .collect();
+        assert_eq!(launched, ["npx", "--stdio", "a b"]);
+        let scratch = PathBuf::from(scratch);
+        drop(launch);
+        assert!(
+            !scratch.exists(),
+            "the scratch directory outlived its launch"
+        );
     }
 
+    #[cfg(target_os = "linux")]
     #[test]
     fn a_wrapped_program_runs_directly_under_bubblewrap() {
+        let Some(bwrap) = agiworkforce_sandbox_policy::sandbox_launcher(
+            agiworkforce_sandbox_policy::SandboxBackend::LinuxBubblewrap,
+        ) else {
+            return;
+        };
         let workspace = tempfile::tempdir().unwrap();
         let mut manager = SandboxManager::full_auto(workspace.path().to_path_buf());
         manager.sandbox_type = SandboxType::LinuxBubblewrap;
         let args = vec!["--stdio".to_string(), "a b".to_string()];
-        let (program, wrapped) = sandboxed_program(&manager, "npx", &args).unwrap();
-        assert_eq!(program, "bwrap");
+        let launch = sandboxed_program(&manager, "npx", &args).unwrap();
+        assert_eq!(PathBuf::from(&launch.program), bwrap);
+        assert!(Path::new(&launch.program).is_absolute());
+        let wrapped = &launch.args;
         let separator = wrapped.iter().position(|arg| arg == "--").unwrap();
         assert_eq!(&wrapped[separator + 1..], &["npx", "--stdio", "a b"]);
     }
@@ -1239,11 +2172,11 @@ mod environment_and_policy_tests {
             let run = |policy: &SandboxPolicy, script: &str| {
                 let mut manager = SandboxManager::new(policy.clone(), workspace_path.clone());
                 manager.sandbox_type = SandboxType::MacosSeatbelt;
-                let (program, args) =
+                let launch =
                     sandboxed_program(&manager, "/bin/sh", &["-c".to_string(), script.to_string()])
                         .unwrap_or_else(|error| panic!("{policy:?} could not be wrapped: {error}"));
-                let output = std::process::Command::new(&program)
-                    .args(&args)
+                let output = std::process::Command::new(&launch.program)
+                    .args(&launch.args)
                     .output()
                     .expect("launch sandbox-exec");
                 assert!(
@@ -1387,7 +2320,7 @@ mod tests {
         let cwd = std::env::temp_dir();
         let command =
             background_command(None, Invocation::Shell("true"), &cwd, None).expect("builds");
-        assert!(command.get_envs().any(|(name, value)| {
+        assert!(command.command.get_envs().any(|(name, value)| {
             name == crate::interactive::AGENT_SPAWNED_ENV && value == Some("1".as_ref())
         }));
     }
@@ -1423,32 +2356,31 @@ mod tests {
             .to_string()
     }
 
+    /// `/tmp` as the profile names it: resolved, as on macOS where it is a
+    /// link.
     #[cfg(unix)]
-    #[test]
-    fn sbpl_rejects_double_quote() {
-        let msg = reject("/tmp/ws\"injected");
-        assert!(msg.contains("SBPL-special"), "got: {msg}");
+    fn under_tmp(rest: &str) -> String {
+        let tmp = Path::new("/tmp").canonicalize().expect("/tmp");
+        format!("{}/{rest}", tmp.display())
     }
 
     #[cfg(unix)]
     #[test]
-    fn sbpl_rejects_open_paren() {
-        let msg = reject("/tmp/ws(inject");
-        assert!(msg.contains("SBPL-special"), "got: {msg}");
+    fn sbpl_escapes_double_quote() {
+        assert_eq!(accept("/tmp/ws\"injected"), under_tmp("ws\\\"injected"));
     }
 
     #[cfg(unix)]
     #[test]
-    fn sbpl_rejects_close_paren() {
-        let msg = reject("/tmp/ws)inject");
-        assert!(msg.contains("SBPL-special"), "got: {msg}");
+    fn sbpl_leaves_parentheses_which_mean_nothing_inside_a_string() {
+        assert_eq!(accept("/tmp/repo-main (1)"), under_tmp("repo-main (1)"));
+        assert_eq!(accept("/tmp/ws)inject("), under_tmp("ws)inject("));
     }
 
     #[cfg(unix)]
     #[test]
-    fn sbpl_rejects_backslash() {
-        let msg = reject("/tmp/ws\\inject");
-        assert!(msg.contains("SBPL-special"), "got: {msg}");
+    fn sbpl_escapes_backslash() {
+        assert_eq!(accept("/tmp/ws\\inject"), under_tmp("ws\\\\inject"));
     }
 
     #[cfg(unix)]
@@ -1534,29 +2466,30 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn sbpl_accepts_path_with_unicode_letters() {
-        // Non-ASCII Unicode that is not a control char or SBPL-special passes.
-        let result = accept("/home/用户/project");
-        assert_eq!(result, "/home/用户/project");
+        // Non-ASCII Unicode that is not a control char passes. The path is
+        // under `/tmp`, which is the same real folder on every Unix this runs
+        // on; `/home` is a link on macOS, and the answer is the resolved path.
+        assert_eq!(accept("/tmp/用户/project"), under_tmp("用户/project"));
     }
 
     #[cfg(unix)]
     #[test]
     fn sbpl_accepts_path_with_hyphen_and_underscore() {
         let result = accept("/tmp/my-workspace_v2");
-        assert_eq!(result, "/tmp/my-workspace_v2");
+        let tmp = Path::new("/tmp").canonicalize().expect("/tmp");
+        assert_eq!(result, tmp.join("my-workspace_v2").to_str().unwrap());
     }
 
     #[cfg(unix)]
     #[test]
     fn profile_with_hostile_path_keeps_deny_default_intact() {
-        // The PoC from the red-team report, verify it is rejected before
-        // it can reach format!().
-        let hostile = "/tmp/ws\") (allow default) ;#";
-        // With the new rejection strategy the path is refused outright.
-        let err = reject(hostile);
+        // The PoC from the red-team report. Its quote is escaped, so the
+        // string it sits in never closes and `(allow default)` stays text.
+        let spelled = accept("/tmp/ws\") (allow default) ;#");
+        assert_eq!(spelled, under_tmp("ws\\\") (allow default) ;#"));
         assert!(
-            err.contains("SBPL-special"),
-            "hostile PoC path must be rejected: {err}"
+            !spelled.replace("\\\"", "").contains('"'),
+            "an unescaped quote would close the string: {spelled}"
         );
     }
 
@@ -1611,15 +2544,19 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
-    fn workspace_write_policy_rejects_root_as_an_explicit_writable_root() {
+    fn workspace_write_policy_drops_root_as_an_explicit_writable_root() {
         let mgr = SandboxManager::new(
             SandboxPolicy::WorkspaceWrite {
                 writable_roots: vec![PathBuf::from("/")],
             },
             PathBuf::from("/tmp/workspace"),
         );
-        assert!(writable_roots(&mgr).is_err());
+        assert_eq!(
+            writable_roots(&mgr).expect("roots"),
+            vec![PathBuf::from("/tmp/workspace")]
+        );
     }
 
     #[cfg(target_os = "macos")]
@@ -1629,10 +2566,15 @@ mod tests {
             SandboxPolicy::ReadOnly,
             PathBuf::from("/tmp/developer-workspace"),
         );
-        let profile = seatbelt_profile(&mgr, Some(Path::new("/private/tmp/agi-read-only-scratch")))
+        let profile = command_profile(&mgr, Path::new("/private/tmp/agi-read-only-scratch"))
             .expect("profile");
-        assert!(profile.contains("(allow file-read* (subpath \"/tmp/developer-workspace\"))"));
-        assert!(!profile.contains("(allow file-write* (subpath \"/tmp/developer-workspace\"))"));
+        assert!(
+            profile.contains("(allow file-read* (subpath \"/private/tmp/developer-workspace\"))")
+        );
+        assert!(!profile.contains("(allow file-read*)\n"));
+        assert!(
+            !profile.contains("(allow file-write* (subpath \"/private/tmp/developer-workspace\"))")
+        );
         assert!(profile
             .contains("(allow file-write* (subpath \"/private/tmp/agi-read-only-scratch\"))"));
         assert!(!profile.contains("(allow file-write* (subpath \"/tmp\")"));
@@ -2028,6 +2970,7 @@ mod tests {
             policy: SandboxMode::ReadOnly.policy(),
             workspace_dir: PathBuf::from("/workspace"),
             network_policy: NetworkPolicy::Deny,
+            protected_paths: Vec::new(),
         };
         assert!(writable_roots(&manager).expect("roots").is_empty());
     }
@@ -2076,8 +3019,9 @@ mod tests {
             policy: SandboxPolicy::default(),
             workspace_dir: workspace.path().to_path_buf(),
             network_policy: network,
+            protected_paths: Vec::new(),
         };
-        let profile = seatbelt_profile(&manager, Some(scratch.path())).expect("profile");
+        let profile = command_profile(&manager, scratch.path()).expect("profile");
         (workspace, scratch, profile)
     }
 
@@ -2151,6 +3095,7 @@ mod tests {
             policy: SandboxPolicy::default(),
             workspace_dir: workspace.path().to_path_buf(),
             network_policy: NetworkPolicy::Deny,
+            protected_paths: Vec::new(),
         };
         let args = bubblewrap_prefix(&manager).expect("bwrap args");
         assert!(
@@ -2179,7 +3124,7 @@ mod tests {
                     "-c".to_string(),
                     "printf native-deny-child-reached".to_string(),
                 ];
-                let command = background_command(
+                let prepared = background_command(
                     Some(&manager),
                     Invocation::Program {
                         program: "/bin/sh",
@@ -2189,17 +3134,22 @@ mod tests {
                     None,
                 )
                 .expect("canonical Deny-policy child command");
-                assert_eq!(command.get_program(), std::ffi::OsStr::new("bwrap"));
-                assert!(command
+                assert_eq!(
+                    std::path::Path::new(prepared.command.get_program()).file_name(),
+                    Some(std::ffi::OsStr::new("bwrap"))
+                );
+                assert!(prepared
+                    .command
                     .get_args()
                     .any(|arg| arg == std::ffi::OsStr::new("--unshare-net")));
                 let output = crate::process_tree::output(
-                    tokio::process::Command::from(command),
+                    tokio::process::Command::from(prepared.command),
                     None,
                     Some(std::time::Duration::from_secs(30)),
                 )
                 .await
                 .expect("Deny-policy child launch");
+                drop(prepared.scratch);
                 assert!(
                     output.status.success(),
                     "Deny-policy child did not reach its sentinel: status={:?} stderr={}",
@@ -2221,6 +3171,7 @@ mod tests {
                 policy: SandboxPolicy::default(),
                 workspace_dir: workspace.path().to_path_buf(),
                 network_policy: network,
+                protected_paths: Vec::new(),
             };
             let args = bubblewrap_prefix(&manager).expect("bwrap args");
             assert!(
@@ -2228,6 +3179,114 @@ mod tests {
                 "{network:?} args must NOT include --unshare-net: {args:?}"
             );
         }
+    }
+
+    #[test]
+    fn host_git_configuration_stays_read_only_even_in_a_managed_worktree() {
+        let Some(git_config) = agiworkforce_worktree::host_git_config_dir() else {
+            return;
+        };
+        let project = tempfile::tempdir().expect("project");
+        assert!(protected_paths_for(project.path()).contains(&git_config));
+        let Ok(config_dir) = crate::config::CliConfig::config_dir() else {
+            return;
+        };
+        let managed = config_dir.join("worktrees").join("probe");
+        assert!(
+            protected_paths_for(&managed).contains(&git_config),
+            "a managed worktree session could rewrite host git's configuration"
+        );
+        let git_state = crate::platform::runtime::git::git_state_dir().unwrap();
+        assert!(
+            protected_paths_for(&managed).contains(&git_state),
+            "a managed worktree session could rewrite the recorded git settings"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn project_hook_and_mcp_configuration_stay_read_only_for_shell_commands() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let workspace_dir = workspace
+            .path()
+            .canonicalize()
+            .expect("canonical workspace");
+        std::fs::create_dir_all(workspace_dir.join(".agiworkforce")).unwrap();
+        let mut manager = SandboxManager::new(SandboxPolicy::default(), workspace_dir.clone());
+        for name in [".agiworkforce", ".mcp.json", "mcp.json", ".vscode/mcp.json"] {
+            assert!(
+                manager.protected_paths.contains(&workspace_dir.join(name)),
+                "{name} is not protected"
+            );
+        }
+
+        manager.sandbox_type = SandboxType::MacosSeatbelt;
+        let scratch = tempfile::tempdir().expect("scratch");
+        let profile = command_profile(&manager, scratch.path()).expect("profile");
+        for name in [".agiworkforce", ".mcp.json"] {
+            assert!(
+                profile.contains(&format!(
+                    "(deny file-write* (subpath \"{}\"))",
+                    workspace_dir.join(name).display()
+                )),
+                "{name} is writable:\n{profile}"
+            );
+        }
+        let allow = profile
+            .find(&format!(
+                "(allow file-write* (subpath \"{}\"))",
+                workspace_dir.display()
+            ))
+            .expect("workspace writable");
+        let first_denial = profile
+            .find("(deny file-write* (regex \"^")
+            .unwrap_or_else(|| panic!("no entry is denied below the workspace:\n{profile}"));
+        assert!(
+            first_denial > allow,
+            "the entries must be denied after the workspace allow"
+        );
+        let denied_anywhere: Vec<&str> = profile
+            .lines()
+            .filter(|line| line.starts_with("(deny file-write* (regex \"^"))
+            .filter_map(|line| line.rsplit_once("/(.*/)?("))
+            .flat_map(|(_, names)| names.trim_end_matches(")$\"))").split('|'))
+            .collect();
+        for (entry, name) in [
+            (".husky", "[.][hH][uU][sS][kK][yY](/.*)?"),
+            (
+                "lefthook.yml",
+                "[lL][eE][fF][tT][hH][oO][oO][kK][.][yY][mM][lL](/.*)?",
+            ),
+            (
+                "lefthook-local.yml",
+                "[lL][eE][fF][tT][hH][oO][oO][kK]-[lL][oO][cC][aA][lL][.][yY][mM][lL](/.*)?",
+            ),
+            ("a nested mcp.json", "[mM][cC][pP][.][jJ][sS][oO][nN](/.*)?"),
+            (
+                "the commands loaded as instructions",
+                "[.][cC][lL][aA][uU][dD][eE]/[cC][oO][mM][mM][aA][nN][dD][sS](/.*)?",
+            ),
+        ] {
+            assert!(
+                denied_anywhere.contains(&name),
+                "{entry} is writable by a shell command:\n{profile}"
+            );
+        }
+        assert!(
+            profile.lines().any(|line| {
+                line.starts_with("(deny file-write-create file-write-unlink (regex \"^")
+                    && line.ends_with("/(.*/)?([.][vV][sS][cC][oO][dD][eE])$\"))")
+            }),
+            ".vscode can be made or renamed around an mcp.json:\n{profile}"
+        );
+        assert!(!profile.contains("(allow file-read*)\n"));
+
+        manager.sandbox_type = SandboxType::LinuxBubblewrap;
+        let ws = workspace_dir.display();
+        assert!(bubblewrap_prefix(&manager)
+            .expect("bwrap args")
+            .join(" ")
+            .contains(&format!("--ro-bind {ws}/.agiworkforce {ws}/.agiworkforce")));
     }
 
     #[test]
@@ -2248,6 +3307,7 @@ mod tests {
             policy: SandboxPolicy::ReadOnly,
             workspace_dir: workspace.path().to_path_buf(),
             network_policy: NetworkPolicy::Deny,
+            protected_paths: Vec::new(),
         };
 
         let error = execute_sandboxed(&mgr, "printf hi", Some(workspace.path()))
@@ -2260,5 +3320,49 @@ mod tests {
             !msg.contains("sandbox config is broken"),
             "a missing sandbox backend must not be reported as a broken config: {msg}"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_filesystem_server_root_replaced_with_a_link_is_left_out() {
+        let tree = tempfile::tempdir().unwrap();
+        let tree = tree.path().canonicalize().unwrap();
+        let workspace = tree.join("workspace");
+        let docs = workspace.join("docs");
+        let notes = tree.join("notes");
+        let elsewhere = tree.join("elsewhere");
+        let scratch = tree.join("scratch");
+        for dir in [&docs, &notes, &elsewhere, &scratch] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        let args = vec![
+            "@modelcontextprotocol/server-filesystem".to_string(),
+            format!("{}/", docs.display()),
+            notes.to_string_lossy().into_owned(),
+        ];
+        assert_eq!(
+            filesystem_server_roots(&args),
+            vec![notes.clone(), docs.clone()],
+            "the roots come back sorted"
+        );
+
+        std::fs::remove_dir(&docs).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, &docs).unwrap();
+        let roots = filesystem_server_roots(&args);
+        assert_eq!(
+            roots,
+            vec![notes.clone()],
+            "the linked root is left out and the others stay"
+        );
+        let spec = agiworkforce_sandbox_policy::FullReadSpec {
+            workspace_dir: &workspace,
+            extra_writable_roots: &roots,
+            network_policy: NetworkPolicy::Deny,
+        };
+        let profile =
+            agiworkforce_sandbox_policy::full_read::full_read_seatbelt_profile(&spec, &scratch)
+                .expect("the server starts with its other roots");
+        assert!(!profile.contains(&format!("(subpath \"{}\")", elsewhere.display())));
+        assert!(agiworkforce_sandbox_policy::verify_writable_root(&docs).is_err());
     }
 }

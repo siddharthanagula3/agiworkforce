@@ -119,6 +119,8 @@ pub fn noop_log() -> LogSink {
     Arc::new(|_: &str| {})
 }
 
+pub type RespawnCheck = Arc<dyn Fn() -> Result<(), String> + Send + Sync>;
+
 #[derive(Clone)]
 pub struct ClientHooks {
     pub token_store: Arc<dyn TokenStore>,
@@ -127,6 +129,7 @@ pub struct ClientHooks {
     pub client_info: ClientInfo,
     pub client_metadata_url: Option<String>,
     pub on_log: LogSink,
+    pub before_respawn: Option<RespawnCheck>,
 }
 
 impl ClientHooks {

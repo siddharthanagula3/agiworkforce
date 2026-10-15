@@ -9,8 +9,6 @@
 //! - Knowledge tests: Knowledge base operations
 //! - Learning tests: Learning system behavior
 //! - Memory tests: AGI memory management
-//! - Outcome tracker tests: Outcome tracking and success rates
-//! - Process reasoning tests: Process type identification and reasoning
 //! - Resources tests: Resource management
 //! - Security tests: Security validation
 //! - Tool integration tests: Tool registry and capabilities
@@ -38,12 +36,6 @@ pub mod learning_tests;
 
 // AGI memory tests
 pub mod memory_tests;
-
-// Outcome tracking tests
-pub mod outcome_tracker_tests;
-
-// Process reasoning tests
-pub mod process_reasoning_tests;
 
 // Resource management tests
 pub mod resources_tests;

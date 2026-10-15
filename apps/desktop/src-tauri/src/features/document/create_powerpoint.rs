@@ -47,9 +47,7 @@ impl PresentationCreator {
                 .map_err(|e| Error::Generic(format!("Failed to create directory: {}", e)))?;
         }
 
-        let file = std::fs::File::create(output_path)
-            .map_err(|e| Error::Generic(format!("Failed to create file: {}", e)))?;
-        let mut zip = ZipWriter::new(file);
+        let mut zip = ZipWriter::new(std::io::Cursor::new(Vec::new()));
         let options = SimpleFileOptions::default();
 
         // [Content_Types].xml
@@ -161,8 +159,11 @@ impl PresentationCreator {
             }
         }
 
-        zip.finish()
+        let packed = zip
+            .finish()
             .map_err(|e| Error::Generic(format!("Failed to finalize PPTX: {}", e)))?;
+        crate::sys::utils::write_file_without_following(path, packed.get_ref())
+            .map_err(|e| Error::Generic(format!("Failed to create file: {}", e)))?;
 
         Ok(())
     }

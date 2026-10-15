@@ -514,13 +514,6 @@ pub fn close_floating_window(app: &tauri::AppHandle) -> Result<()> {
     Ok(())
 }
 
-/// Check if floating window exists and is visible
-pub fn is_floating_window_visible(app: &tauri::AppHandle) -> bool {
-    app.get_webview_window(FLOATING_WINDOW_LABEL)
-        .and_then(|w| w.is_visible().ok())
-        .unwrap_or(false)
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WindowCloseAction {
     CloseWindow,

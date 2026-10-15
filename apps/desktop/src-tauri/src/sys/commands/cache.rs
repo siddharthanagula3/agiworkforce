@@ -30,7 +30,6 @@ impl Default for CacheTypeStats {
 pub struct CacheStats {
     pub llm_cache: CacheTypeStats,
     pub tool_cache: CacheTypeStats,
-    pub codebase_cache: CacheTypeStats,
     pub total_size_mb: f64,
     pub total_savings_usd: f64,
 }
@@ -69,27 +68,20 @@ pub struct ProviderCacheBreakdown {
 }
 
 #[tauri::command]
-pub async fn cache_get_stats(
-    db: State<'_, AppDatabase>,
-    codebase_cache: State<'_, CodebaseCacheState>,
-) -> Result<CacheStats, String> {
+pub async fn cache_get_stats(db: State<'_, AppDatabase>) -> Result<CacheStats, String> {
     let conn = db.connection()?;
 
     let llm_stats = get_llm_cache_stats(&conn)?;
 
-    let codebase_stats = get_codebase_cache_stats(&codebase_cache)?;
-
     let tool_stats = CacheTypeStats::default();
 
-    let total_size_mb = llm_stats.size_mb + tool_stats.size_mb + codebase_stats.size_mb;
-    let total_savings_usd = llm_stats.savings_usd.unwrap_or(0.0)
-        + tool_stats.savings_usd.unwrap_or(0.0)
-        + codebase_stats.savings_usd.unwrap_or(0.0);
+    let total_size_mb = llm_stats.size_mb + tool_stats.size_mb;
+    let total_savings_usd =
+        llm_stats.savings_usd.unwrap_or(0.0) + tool_stats.savings_usd.unwrap_or(0.0);
 
     Ok(CacheStats {
         llm_cache: llm_stats,
         tool_cache: tool_stats,
-        codebase_cache: codebase_stats,
         total_size_mb,
         total_savings_usd,
     })
@@ -119,7 +111,6 @@ pub async fn cache_clear_by_type(
     cache_type: String,
     db: State<'_, AppDatabase>,
     llm_state: State<'_, LLMState>,
-    codebase_cache: State<'_, CodebaseCacheState>,
 ) -> Result<(), String> {
     match cache_type.as_str() {
         "llm" => {
@@ -143,15 +134,6 @@ pub async fn cache_clear_by_type(
             tracing::info!(
                 "Tool cache clear requested - tool caches are per-execution and auto-clear on completion"
             );
-            Ok(())
-        }
-        "codebase" => {
-            let deleted = codebase_cache
-                .0
-                .clear_all()
-                .map_err(|e| format!("Failed to clear codebase cache: {}", e))?;
-
-            tracing::info!("Codebase cache cleared ({} entries deleted)", deleted);
             Ok(())
         }
         _ => Err(format!("Unknown cache type: {}", cache_type)),
@@ -446,189 +428,4 @@ mod tests {
         assert_eq!(stats.savings_usd, Some(0.05));
         assert_eq!(stats.hits, 5);
     }
-}
-
-use crate::data::cache::CodebaseCache;
-use std::path::PathBuf;
-use std::sync::Arc;
-
-pub struct CodebaseCacheState(pub Arc<CodebaseCache>);
-
-#[tauri::command]
-pub async fn codebase_cache_get_stats(
-    cache: State<'_, CodebaseCacheState>,
-) -> Result<crate::data::cache::CacheStats, String> {
-    cache
-        .0
-        .get_stats()
-        .map_err(|e| format!("Failed to get cache stats: {}", e))
-}
-
-#[tauri::command]
-pub async fn codebase_cache_clear_project(
-    project_path: String,
-    cache: State<'_, CodebaseCacheState>,
-) -> Result<usize, String> {
-    let path = PathBuf::from(project_path);
-    cache
-        .0
-        .invalidate_project(&path)
-        .map_err(|e| format!("Failed to clear project cache: {}", e))
-}
-
-#[tauri::command]
-pub async fn codebase_cache_clear_file(
-    file_path: String,
-    cache: State<'_, CodebaseCacheState>,
-) -> Result<usize, String> {
-    let path = PathBuf::from(file_path);
-    cache
-        .0
-        .invalidate_file(&path)
-        .map_err(|e| format!("Failed to clear file cache: {}", e))
-}
-
-#[tauri::command]
-pub async fn codebase_cache_clear_all(
-    cache: State<'_, CodebaseCacheState>,
-) -> Result<usize, String> {
-    cache
-        .0
-        .clear_all()
-        .map_err(|e| format!("Failed to clear all cache: {}", e))
-}
-
-#[tauri::command]
-pub async fn codebase_cache_clear_expired(
-    cache: State<'_, CodebaseCacheState>,
-) -> Result<usize, String> {
-    cache
-        .0
-        .clear_expired()
-        .map_err(|e| format!("Failed to clear expired cache: {}", e))
-}
-
-#[tauri::command]
-pub async fn codebase_cache_get_file_tree(
-    project_path: String,
-    cache: State<'_, CodebaseCacheState>,
-) -> Result<Option<crate::data::cache::FileTree>, String> {
-    let path = PathBuf::from(project_path);
-    cache
-        .0
-        .get(crate::data::cache::CacheType::FileTree, &path, None)
-        .map_err(|e| format!("Failed to get file tree: {}", e))
-}
-
-#[tauri::command]
-pub async fn codebase_cache_set_file_tree(
-    project_path: String,
-    file_tree: crate::data::cache::FileTree,
-    cache: State<'_, CodebaseCacheState>,
-) -> Result<(), String> {
-    let path = PathBuf::from(project_path);
-    cache
-        .0
-        .set(
-            crate::data::cache::CacheType::FileTree,
-            &path,
-            None,
-            &file_tree,
-        )
-        .map_err(|e| format!("Failed to set file tree: {}", e))
-}
-
-#[tauri::command]
-pub async fn codebase_cache_get_symbols(
-    file_path: String,
-    file_hash: Option<String>,
-    cache: State<'_, CodebaseCacheState>,
-) -> Result<Option<crate::data::cache::SymbolTable>, String> {
-    let path = PathBuf::from(file_path);
-    cache
-        .0
-        .get(
-            crate::data::cache::CacheType::Symbols,
-            &path,
-            file_hash.as_deref(),
-        )
-        .map_err(|e| format!("Failed to get symbols: {}", e))
-}
-
-#[tauri::command]
-pub async fn codebase_cache_set_symbols(
-    file_path: String,
-    file_hash: Option<String>,
-    symbols: crate::data::cache::SymbolTable,
-    cache: State<'_, CodebaseCacheState>,
-) -> Result<(), String> {
-    let path = PathBuf::from(file_path);
-    cache
-        .0
-        .set(
-            crate::data::cache::CacheType::Symbols,
-            &path,
-            file_hash.as_deref(),
-            &symbols,
-        )
-        .map_err(|e| format!("Failed to set symbols: {}", e))
-}
-
-#[tauri::command]
-pub async fn codebase_cache_get_dependencies(
-    project_path: String,
-    cache: State<'_, CodebaseCacheState>,
-) -> Result<Option<crate::data::cache::DependencyGraph>, String> {
-    let path = PathBuf::from(project_path);
-    cache
-        .0
-        .get(crate::data::cache::CacheType::Dependencies, &path, None)
-        .map_err(|e| format!("Failed to get dependencies: {}", e))
-}
-
-#[tauri::command]
-pub async fn codebase_cache_set_dependencies(
-    project_path: String,
-    dependencies: crate::data::cache::DependencyGraph,
-    cache: State<'_, CodebaseCacheState>,
-) -> Result<(), String> {
-    let path = PathBuf::from(project_path);
-    cache
-        .0
-        .set(
-            crate::data::cache::CacheType::Dependencies,
-            &path,
-            None,
-            &dependencies,
-        )
-        .map_err(|e| format!("Failed to set dependencies: {}", e))
-}
-
-#[tauri::command]
-pub async fn codebase_cache_calculate_hash(content: Vec<u8>) -> Result<String, String> {
-    Ok(CodebaseCache::calculate_file_hash(&content))
-}
-
-/// Bug #80 fix: `hit_rate` and `miss_rate` are f64 percentages (0..100).
-/// Casting them directly to u64 with `as u64` truncates anything < 1.0 to 0.
-/// Use `.round() as u64` to get meaningful integer counts, and derive
-/// actual hit/miss counts from the rate * total_entries.
-fn get_codebase_cache_stats(cache: &State<CodebaseCacheState>) -> Result<CacheTypeStats, String> {
-    let stats = cache
-        .0
-        .get_stats()
-        .map_err(|e| format!("Failed to get codebase cache stats: {}", e))?;
-
-    let total = stats.total_entries as f64;
-    let hits_count = ((stats.hit_rate / 100.0) * total).round() as u64;
-    let misses_count = ((stats.miss_rate / 100.0) * total).round() as u64;
-
-    Ok(CacheTypeStats {
-        hits: hits_count,
-        misses: misses_count,
-        hit_rate: stats.hit_rate / 100.0, // normalize to 0..1 to match llm_cache convention
-        size_mb: stats.total_size_bytes as f64 / (1024.0 * 1024.0),
-        entries: stats.total_entries,
-        savings_usd: None,
-    })
 }

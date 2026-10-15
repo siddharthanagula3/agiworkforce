@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::agent::AgentSession;
 use crate::config::CliConfig;
-use crate::models::{ContentBlock, Message, MessageContent};
+use crate::models::{ContentBlock, MessageContent};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -244,38 +244,6 @@ fn delete_conversation_in_dir(id: &str, dir: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-/// Restore a saved conversation into an AgentSession.
-/// Replaces the session's messages, model, and token counts.
-pub fn restore_into_session(session: &mut AgentSession, conv: &SavedConversation) {
-    let original_model = session.model.clone();
-    let original_provider = session.provider.clone();
-    let original_privacy = session.privacy_mode;
-    if let Err(err) = session
-        .switch_model(&conv.model)
-        .and_then(|()| session.validate_privacy_boundary())
-    {
-        session.model = original_model;
-        session.provider = original_provider;
-        session.set_privacy_mode(original_privacy);
-        eprintln!(
-            "Saved conversation model `{}` cannot be restored into this trust boundary; keeping the current session unchanged. {}",
-            conv.model, err
-        );
-        return;
-    }
-
-    session.messages = conv
-        .messages
-        .iter()
-        .map(|m| Message::text(&m.role, &m.content))
-        .collect();
-    session.total_input_tokens = conv.total_input_tokens;
-    session.total_output_tokens = conv.total_output_tokens;
-
-    // Count user messages as turns (exclude system prompt)
-    session.turn_count = conv.messages.iter().filter(|m| m.role == "user").count() as u32;
-}
-
 /// Export the current session as a markdown string.
 ///
 /// Includes tool call information when messages contain `ToolUse` or
@@ -289,7 +257,7 @@ pub fn export_as_markdown(session: &AgentSession) -> String {
         session.total_input_tokens, session.total_output_tokens, session.turn_count
     ));
 
-    for msg in &session.messages {
+    for msg in &session.shown_messages() {
         match msg.role.as_str() {
             "system" => {
                 // Skip system prompt in export
@@ -422,7 +390,7 @@ pub fn export_as_json(session: &AgentSession) -> Result<String> {
     }
 
     let messages: Vec<ExportedMessage> = session
-        .messages
+        .shown_messages()
         .iter()
         .filter(|m| m.role != "system")
         .map(|m| ExportedMessage {
@@ -485,6 +453,7 @@ mod tests {
     use super::*;
     use crate::agent::AgentSession;
     use crate::context::SystemContext;
+    use crate::models::Message;
 
     fn test_ctx() -> SystemContext {
         SystemContext {
@@ -824,102 +793,5 @@ mod tests {
         assert_eq!(stats.tool_calls_count, 2);
         assert_eq!(stats.total_input_tokens, 50);
         assert_eq!(stats.total_output_tokens, 100);
-    }
-
-    #[test]
-    fn test_restore_into_session() {
-        let models = crate::model_catalog::models_for("anthropic");
-        let session_model = models
-            .first()
-            .expect("catalog must contain an Anthropic session model")
-            .id
-            .clone();
-        let restored_model = models
-            .iter()
-            .find(|model| model.id != session_model)
-            .expect("catalog must contain a distinct Anthropic restored model")
-            .id
-            .clone();
-        let conv = SavedConversation {
-            id: "20260317_120000".to_string(),
-            title: "Test restore".to_string(),
-            model: restored_model.clone(),
-            created_at: "2026-03-17T12:00:00Z".to_string(),
-            updated_at: "2026-03-17T12:00:00Z".to_string(),
-            messages: vec![
-                SavedMessage {
-                    role: "user".to_string(),
-                    content: "Question one".to_string(),
-                    timestamp: "2026-03-17T12:00:00Z".to_string(),
-                },
-                SavedMessage {
-                    role: "assistant".to_string(),
-                    content: "Answer one".to_string(),
-                    timestamp: "2026-03-17T12:00:01Z".to_string(),
-                },
-                SavedMessage {
-                    role: "user".to_string(),
-                    content: "Question two".to_string(),
-                    timestamp: "2026-03-17T12:00:02Z".to_string(),
-                },
-                SavedMessage {
-                    role: "assistant".to_string(),
-                    content: "Answer two".to_string(),
-                    timestamp: "2026-03-17T12:00:03Z".to_string(),
-                },
-            ],
-            total_input_tokens: 100,
-            total_output_tokens: 200,
-        };
-
-        let ctx = test_ctx();
-        let mut session = AgentSession::new(&session_model, &ctx, None);
-        restore_into_session(&mut session, &conv);
-
-        assert_eq!(session.model, restored_model);
-        assert_eq!(session.total_input_tokens, 100);
-        assert_eq!(session.total_output_tokens, 200);
-        // 2 user messages = 2 turns
-        assert_eq!(session.turn_count, 2);
-        assert_eq!(session.messages.len(), 4);
-        assert_eq!(session.messages[0].text_content(), "Question one");
-        assert_eq!(session.messages[3].text_content(), "Answer two");
-    }
-
-    #[test]
-    fn legacy_restore_cannot_replace_a_local_session_with_cloud_history() {
-        let cloud_model = catalog_cloud_model();
-        let conv = SavedConversation {
-            id: "legacy-cloud".to_string(),
-            title: "Legacy cloud conversation".to_string(),
-            model: cloud_model,
-            created_at: "2026-03-17T12:00:00Z".to_string(),
-            updated_at: "2026-03-17T12:00:00Z".to_string(),
-            messages: vec![SavedMessage {
-                role: "user".to_string(),
-                content: "legacy cloud secret".to_string(),
-                timestamp: "2026-03-17T12:00:00Z".to_string(),
-            }],
-            total_input_tokens: 100,
-            total_output_tokens: 200,
-        };
-        let mut session = AgentSession::new("fixture-local-model:latest", &test_ctx(), None);
-        session
-            .messages
-            .push(Message::text("user", "existing local transcript"));
-        let messages_before = serde_json::to_value(&session.messages).expect("serialize messages");
-
-        restore_into_session(&mut session, &conv);
-
-        assert_eq!(session.model, "fixture-local-model:latest");
-        assert_eq!(session.privacy_mode, crate::agent::PrivacyMode::Local);
-        assert_eq!(
-            serde_json::to_value(&session.messages).expect("serialize messages"),
-            messages_before
-        );
-        assert!(!session
-            .messages
-            .iter()
-            .any(|message| message.text_content().contains("legacy cloud secret")));
     }
 }

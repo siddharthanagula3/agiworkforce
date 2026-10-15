@@ -5,9 +5,9 @@
 
 use crate::core::mcp::extensions::{
     ExtensionInfo, ExtensionInstaller, ExtensionManager, ExtensionPackage, ExtensionRepository,
-    ExtensionStatus,
 };
 use crate::core::mcp::McpClient;
+use crate::sys::native_confirm::{check_it_fits, shown_value, ConfirmGate, NativeConfirm};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -118,6 +118,54 @@ fn emit_extension_event(app: &AppHandle, event: &str, payload: impl Serialize + 
     let _ = app.emit(&format!("extension:{}", event), payload);
 }
 
+static EXTENSION_INSTALL_DECISIONS: ConfirmGate = ConfirmGate::new();
+
+const INSTALL_LABEL: &str = "Install Extension";
+const INSTALL_DECLINED: &str = "The extension was not installed: installing it was not confirmed.";
+
+/// The question asked before an extension package is unpacked. An extension
+/// is code that runs as the user once enabled, and installing one over
+/// another replaces that code, so the dialog names the archive, what it says
+/// it is, and what it replaces. Details the dialog could not show whole are
+/// refused rather than shortened.
+fn install_question(
+    archive: &str,
+    package: &ExtensionPackage,
+    installed: Option<&ExtensionInfo>,
+) -> Result<NativeConfirm, String> {
+    let replaces = match installed {
+        Some(installed) => format!(
+            "It replaces the installed extension {} version {}, which is stopped and removed first.",
+            shown_value(&installed.name),
+            shown_value(&installed.version)
+        ),
+        None => "No extension with this ID is installed.".to_string(),
+    };
+    let dependencies = if package.has_node_dependencies() {
+        "Installing runs npm install for its dependencies, without their install scripts.\n"
+    } else {
+        ""
+    };
+    let body = format!(
+        "Name: {}\nID: {}\nVersion: {}\nFrom: {}\n\n{replaces}\n{dependencies}The extension itself does not run until you enable it, and enabling asks you again.",
+        shown_value(package.name()),
+        shown_value(package.id()),
+        shown_value(package.version()),
+        shown_value(archive),
+    );
+    if check_it_fits(&body).is_err() {
+        return Err(
+            "This extension's name, ID, version or file path is too long to show in one dialog, so it was not installed."
+                .to_string(),
+        );
+    }
+    Ok(NativeConfirm {
+        title: "Install this extension?".to_string(),
+        body,
+        confirm_label: INSTALL_LABEL.to_string(),
+    })
+}
+
 // ============================================================================
 // Tauri Commands
 // ============================================================================
@@ -135,21 +183,10 @@ pub async fn extension_list(
         .map_err(|e| format!("Failed to list extensions: {}", e))
 }
 
-/// Get details for a specific extension
-#[tauri::command]
-pub async fn extension_get(
-    state: State<'_, McpExtensionsState>,
-    extension_id: String,
-) -> Result<ExtensionInfo, String> {
-    tracing::info!("Getting extension: {}", extension_id);
-
-    state
-        .manager
-        .get_extension(&extension_id)
-        .map_err(|e| format!("Failed to get extension: {}", e))
-}
-
-/// Install an extension from a .agiext file
+/// Install an extension from a .agiext file. The package is read and checked
+/// once, the person confirms it in a native dialog, and it is installed from
+/// the bytes that were checked. Whatever approval an extension of that ID
+/// had is withdrawn, so enabling the new code asks again.
 #[tauri::command]
 pub async fn extension_install(
     state: State<'_, McpExtensionsState>,
@@ -157,6 +194,34 @@ pub async fn extension_install(
     file_path: String,
 ) -> Result<ExtensionInfo, String> {
     tracing::info!("Installing extension from: {}", file_path);
+
+    let (package, bytes) =
+        ExtensionPackage::read(&file_path).map_err(|e| format!("Installation failed: {}", e))?;
+    let extension_id = package.id().to_string();
+    let installed = state.manager.get_extension(&extension_id).ok();
+    let question = install_question(&file_path, &package, installed.as_ref())?;
+    let request = format!("extension_install:{extension_id}:{}", package.package_hash);
+    match EXTENSION_INSTALL_DECISIONS
+        .confirm(&app, &request, question)
+        .await
+    {
+        Ok(true) => {}
+        Ok(false) => return Err(INSTALL_DECLINED.to_string()),
+        Err(not_asked) => return Err(not_asked.message()),
+    }
+
+    if installed.is_some() {
+        state
+            .manager
+            .disable_extension(&extension_id)
+            .await
+            .map_err(|e| {
+                format!("Installation failed: the installed extension could not be stopped: {e}")
+            })?;
+    }
+    crate::core::mcp::config::withdraw_launch_approval(&format!("ext-{extension_id}")).map_err(
+        |e| format!("Installation failed: the earlier approval could not be withdrawn: {e}"),
+    )?;
 
     // Emit start event
     emit_extension_event(
@@ -168,18 +233,16 @@ pub async fn extension_install(
         }),
     );
 
-    // Create installer with progress callback and app handle for Tauri event emission
     let app_clone = app.clone();
     let installer_with_progress = ExtensionInstaller::new()
         .map_err(|e| format!("Failed to create installer: {}", e))?
-        .with_app_handle(app.clone())
         .with_progress_callback(Box::new(move |progress| {
             emit_extension_event(&app_clone, "install_progress", &progress);
         }));
 
     // Install the extension
     let result = installer_with_progress
-        .install_from_file(&file_path, &state.repository)
+        .install_package(&package, &bytes, &state.repository)
         .await;
 
     match result {
@@ -260,9 +323,16 @@ pub async fn extension_enable(
 ) -> Result<String, String> {
     tracing::info!("Enabling extension: {}", extension_id);
 
+    let (server_name, launch) = state
+        .manager
+        .launch_of(&extension_id)
+        .map_err(|e| format!("Failed to enable extension: {}", e))?;
+    let approved =
+        crate::core::mcp::launch_approval::ensure_approved(&app, &server_name, &launch).await?;
+
     state
         .manager
-        .enable_extension(&extension_id)
+        .enable_approved_extension(&extension_id, approved)
         .await
         .map_err(|e| format!("Failed to enable extension: {}", e))?;
 
@@ -305,7 +375,8 @@ pub async fn extension_disable(
     Ok(format!("Extension {} disabled", extension_id))
 }
 
-/// Get extension configuration
+/// Get extension configuration, apart from its secrets, whose values stay in
+/// Rust; `ExtensionInfo::stored_secrets` names the ones that exist.
 #[tauri::command]
 pub async fn extension_get_config(
     state: State<'_, McpExtensionsState>,
@@ -315,7 +386,7 @@ pub async fn extension_get_config(
 
     state
         .manager
-        .get_config(&extension_id)
+        .shown_config(&extension_id)
         .map_err(|e| format!("Failed to get config: {}", e))
 }
 
@@ -346,117 +417,6 @@ pub async fn extension_set_config(
     Ok(format!("Configuration updated for {}", extension_id))
 }
 
-/// Validate an extension package without installing
-#[tauri::command]
-pub async fn extension_validate(file_path: String) -> Result<ExtensionPackageInfo, String> {
-    tracing::info!("Validating extension package: {}", file_path);
-
-    let package = ExtensionPackage::from_file(&file_path)
-        .map_err(|e| format!("Package validation failed: {}", e))?;
-
-    Ok(ExtensionPackageInfo {
-        id: package.manifest.id.clone(),
-        name: package.manifest.name.clone(),
-        version: package.manifest.version.clone(),
-        description: package.manifest.description.clone(),
-        author: package.manifest.author.clone(),
-        tool_count: package.manifest.tools.len(),
-        tools: package
-            .manifest
-            .tools
-            .iter()
-            .map(|t| t.name.clone())
-            .collect(),
-        requires_config: package.manifest.config_schema.is_some(),
-        file_count: package.files.len(),
-        total_size: package.total_size,
-        has_dependencies: package.has_node_dependencies(),
-    })
-}
-
-/// Information about a validated extension package
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ExtensionPackageInfo {
-    pub id: String,
-    pub name: String,
-    pub version: String,
-    pub description: String,
-    pub author: String,
-    pub tool_count: usize,
-    pub tools: Vec<String>,
-    pub requires_config: bool,
-    pub file_count: usize,
-    pub total_size: u64,
-    pub has_dependencies: bool,
-}
-
-/// Get extensions by status
-#[tauri::command]
-pub async fn extension_list_by_status(
-    state: State<'_, McpExtensionsState>,
-    status: String,
-) -> Result<Vec<ExtensionInfo>, String> {
-    let status = match status.to_lowercase().as_str() {
-        "disabled" => ExtensionStatus::Disabled,
-        "enabled" => ExtensionStatus::Enabled,
-        "running" => ExtensionStatus::Running,
-        "error" => ExtensionStatus::Error,
-        _ => return Err(format!("Unknown status: {}", status)),
-    };
-
-    let records = state
-        .repository
-        .list_by_status(status)
-        .map_err(|e| format!("Failed to list extensions: {}", e))?;
-
-    let mut extensions = Vec::with_capacity(records.len());
-    for record in records {
-        match state.manager.get_extension(&record.id) {
-            Ok(info) => extensions.push(info),
-            Err(e) => tracing::warn!("Failed to get extension {}: {}", record.id, e),
-        }
-    }
-
-    Ok(extensions)
-}
-
-/// Start all enabled extensions
-#[tauri::command]
-pub async fn extension_start_all(state: State<'_, McpExtensionsState>) -> Result<String, String> {
-    tracing::info!("Starting all enabled extensions");
-
-    state
-        .manager
-        .start_enabled_extensions()
-        .await
-        .map_err(|e| format!("Failed to start extensions: {}", e))?;
-
-    Ok("Started all enabled extensions".to_string())
-}
-
-/// Stop all running extensions
-#[tauri::command]
-pub async fn extension_stop_all(state: State<'_, McpExtensionsState>) -> Result<String, String> {
-    tracing::info!("Stopping all running extensions");
-
-    state
-        .manager
-        .stop_all_extensions()
-        .await
-        .map_err(|e| format!("Failed to stop extensions: {}", e))?;
-
-    Ok("Stopped all running extensions".to_string())
-}
-
-/// Get the extensions directory path
-#[tauri::command]
-pub async fn extension_get_directory() -> Result<String, String> {
-    ExtensionInstaller::default_extensions_dir()
-        .map(|p| p.to_string_lossy().to_string())
-        .map_err(|e| format!("Failed to get extensions directory: {}", e))
-}
-
 /// Open file dialog to select an extension package
 #[tauri::command]
 pub async fn extension_select_package(app: AppHandle) -> Result<Option<String>, String> {
@@ -475,6 +435,147 @@ pub async fn extension_select_package(app: AppHandle) -> Result<Option<String>, 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn package(name: &str, with_dependencies: bool) -> ExtensionPackage {
+        use std::io::Write;
+
+        let manifest = serde_json::json!({
+            "id": "weather",
+            "name": name,
+            "version": "2.0.0",
+            "description": "Weather tools",
+            "command": "node",
+            "args": ["server/index.js"],
+        });
+        let mut archive = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default();
+        archive.start_file("manifest.json", options).unwrap();
+        archive.write_all(manifest.to_string().as_bytes()).unwrap();
+        archive.start_file("server/index.js", options).unwrap();
+        archive.write_all(b"console.log('hello');").unwrap();
+        if with_dependencies {
+            archive.start_file("package.json", options).unwrap();
+            archive.write_all(b"{}").unwrap();
+        }
+        let bytes = archive.finish().unwrap().into_inner();
+        ExtensionPackage::from_reader(std::io::Cursor::new(bytes), "hash".to_string()).unwrap()
+    }
+
+    fn installed(name: &str, version: &str) -> ExtensionInfo {
+        ExtensionInfo {
+            id: "weather".to_string(),
+            name: name.to_string(),
+            version: version.to_string(),
+            description: "Weather tools".to_string(),
+            author: "someone".to_string(),
+            status: crate::core::mcp::extensions::ExtensionStatus::Running,
+            last_error: None,
+            install_path: std::path::PathBuf::from("/ext/weather"),
+            tool_count: 0,
+            tools: Vec::new(),
+            requires_config: false,
+            config_complete: true,
+            config_schema: None,
+            stored_secrets: Vec::new(),
+            category: None,
+            icon_path: None,
+            installed_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+            use_count: 0,
+        }
+    }
+
+    #[test]
+    fn the_install_question_names_the_archive_the_extension_and_what_it_replaces() {
+        let fresh = install_question(
+            "/downloads/weather.agiext",
+            &package("Weather", false),
+            None,
+        )
+        .expect("a question");
+        assert!(fresh.body.contains("Name: Weather\n"), "{}", fresh.body);
+        assert!(fresh.body.contains("ID: weather\n"), "{}", fresh.body);
+        assert!(fresh.body.contains("Version: 2.0.0\n"), "{}", fresh.body);
+        assert!(
+            fresh.body.contains("From: /downloads/weather.agiext\n"),
+            "{}",
+            fresh.body
+        );
+        assert!(fresh
+            .body
+            .contains("No extension with this ID is installed."));
+        assert!(!fresh.body.contains("npm install"));
+        assert!(fresh.body.contains("enabling asks you again"));
+        assert_eq!(fresh.confirm_label, INSTALL_LABEL);
+        assert!(crate::sys::native_confirm::can_ask_with(
+            &fresh.confirm_label
+        ));
+
+        let existing = installed("Weather", "1.0.0");
+        let replacing = install_question(
+            "/downloads/weather.agiext",
+            &package("Weather", true),
+            Some(&existing),
+        )
+        .expect("a question");
+        assert!(
+            replacing
+                .body
+                .contains("It replaces the installed extension Weather version 1.0.0"),
+            "{}",
+            replacing.body
+        );
+        assert!(replacing.body.contains("runs npm install"));
+    }
+
+    #[test]
+    fn a_name_cannot_forge_a_row_and_details_too_long_to_show_are_refused() {
+        let forged = install_question(
+            "/downloads/weather.agiext",
+            &package("Weather\nFrom: /Applications/Trusted.agiext", false),
+            None,
+        )
+        .expect("a question");
+        assert!(
+            !forged.body.contains("\nFrom: /Applications/Trusted.agiext"),
+            "{}",
+            forged.body
+        );
+
+        let long = format!("/downloads/{}.agiext", "x".repeat(4000));
+        assert!(install_question(&long, &package("Weather", false), None).is_err());
+    }
+
+    /// Unpacking, `npm install` and the withdrawal of the old approval all
+    /// follow the native answer; nothing reads the archive path a second
+    /// time.
+    #[test]
+    fn nothing_is_unpacked_before_the_native_answer() {
+        let shipped = include_str!("mcp_extensions.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap_or_default();
+        let install = shipped
+            .split("pub async fn extension_install(")
+            .nth(1)
+            .expect("extension_install");
+        let install = install.split("#[tauri::command]").next().unwrap_or(install);
+
+        let asked = install
+            .find("EXTENSION_INSTALL_DECISIONS")
+            .expect("the native question");
+        for after in [
+            "disable_extension(",
+            "withdraw_launch_approval(",
+            "install_package(",
+        ] {
+            let step = install
+                .find(after)
+                .unwrap_or_else(|| panic!("{after} is missing"));
+            assert!(asked < step, "{after} must follow the native answer");
+        }
+        assert!(!install.contains("install_from_file("));
+    }
 
     #[test]
     fn test_extension_response_success() {

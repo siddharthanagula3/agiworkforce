@@ -1,32 +1,95 @@
-use tauri::{AppHandle, State};
+use std::sync::{Mutex, MutexGuard};
 
-use super::AppDatabase;
-#[cfg(any(windows, target_os = "macos"))]
-use crate::automation::inspector::UIInspector;
-use crate::automation::{
-    codegen::{CodeGenerator, CodeLanguage, GeneratedCode},
-    executor::{AutomationScript, ExecutionResult, ExecutorConfig, ExecutorService},
-    recorder::{
-        global_recorder, DiscardedRecording, RecordedAction, Recording, RecordingSession,
-        RecordingStatus,
-    },
-    types::{BasicElementInfo, DetailedElementInfo, ElementSelector},
-    InspectorService,
+use tauri::AppHandle;
+
+use crate::automation::recorder::{
+    global_recorder, DiscardedRecording, Recording, RecordingSession, RecordingStatus,
 };
+use crate::sys::native_confirm::{ConfirmGate, NativeConfirm};
 
-use crate::data::db::repository;
+const START_RECORDING_CONFIRM_LABEL: &str = "Start Recording";
+const START_RECORDING_REQUEST: &str = "start-recording";
+const RECORDING_DECLINED_MESSAGE: &str =
+    "Recording was not confirmed, so nothing is being recorded.";
+const RECORDING_NOT_CONFIRMED_MESSAGE: &str =
+    "This recording was not started with your confirmation, so it was discarded.";
 
-#[tauri::command]
-pub fn automation_record_start(app: AppHandle) -> Result<RecordingSession, String> {
-    let recorder = global_recorder();
-    let _ = recorder.set_app_handle(app);
-    recorder.start_recording().map_err(|e| e.to_string())
+/// One recording question at a time, and a wait after a no that grows while
+/// the noes keep coming.
+static RECORDING_DECISIONS: ConfirmGate = ConfirmGate::new();
+
+/// What the user's yes covers: the session it started and, once that session
+/// is stopped, the recording it produced. Nothing else is handed to the
+/// window.
+struct ConfirmedRecording {
+    session_id: Option<String>,
+    recording_id: Option<String>,
 }
 
+static CONFIRMED_RECORDING: Mutex<ConfirmedRecording> = Mutex::new(ConfirmedRecording {
+    session_id: None,
+    recording_id: None,
+});
+
+fn confirmed_recording() -> MutexGuard<'static, ConfirmedRecording> {
+    match CONFIRMED_RECORDING.lock() {
+        Ok(confirmed) => confirmed,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+fn is_the_confirmed_one(confirmed: Option<&str>, found: &str) -> bool {
+    confirmed == Some(found)
+}
+
+fn start_recording_question() -> NativeConfirm {
+    NativeConfirm {
+        title: "Record what you do on this computer?".to_string(),
+        body: "AGI Workforce will record every click and every key you press, in every app, until you stop the recording. Anything you type while it runs is recorded, passwords included.".to_string(),
+        confirm_label: START_RECORDING_CONFIRM_LABEL.to_string(),
+    }
+}
+
+/// Starts recording the user's clicks and keystrokes in every app. The
+/// recording is handed back to the window when it stops, so a script in the
+/// window could otherwise start one and read what was typed. The yes is taken
+/// in a native dialog; a recording already running is left as it is.
+#[tauri::command]
+pub async fn automation_record_start(app: AppHandle) -> Result<RecordingSession, String> {
+    let recorder = global_recorder();
+    if !recorder.is_recording() {
+        let confirmed = RECORDING_DECISIONS
+            .confirm(&app, START_RECORDING_REQUEST, start_recording_question())
+            .await
+            .map_err(|held| held.message())?;
+        if !confirmed {
+            return Err(RECORDING_DECLINED_MESSAGE.to_string());
+        }
+    }
+    let _ = recorder.set_app_handle(app);
+    let session = recorder.start_recording().map_err(|e| e.to_string())?;
+    *confirmed_recording() = ConfirmedRecording {
+        session_id: Some(session.session_id.clone()),
+        recording_id: None,
+    };
+    Ok(session)
+}
+
+/// Stops the session the user confirmed and hands its recording back. A
+/// session that was not started through that yes is discarded instead.
 #[tauri::command]
 pub fn automation_record_stop() -> Result<Recording, String> {
     let recorder = global_recorder();
-    recorder.stop_recording().map_err(|e| e.to_string())
+    if let Some(running) = recorder.get_status() {
+        let confirmed = confirmed_recording().session_id.clone();
+        if !is_the_confirmed_one(confirmed.as_deref(), &running.session_id) {
+            let _ = recorder.discard_recording();
+            return Err(RECORDING_NOT_CONFIRMED_MESSAGE.to_string());
+        }
+    }
+    let recording = recorder.stop_recording().map_err(|e| e.to_string())?;
+    confirmed_recording().recording_id = Some(recording.id.clone());
+    Ok(recording)
 }
 
 #[tauri::command]
@@ -49,36 +112,6 @@ pub fn automation_record_action_click(x: i32, y: i32, button: String) -> Result<
 }
 
 #[tauri::command]
-pub fn automation_record_action_type(text: String, x: i32, y: i32) -> Result<(), String> {
-    let recorder = global_recorder();
-    if recorder.is_recording() {
-        recorder.record_type(&text, x, y).map_err(|e| e.to_string())
-    } else {
-        Ok(())
-    }
-}
-
-#[tauri::command]
-pub fn automation_record_action_screenshot() -> Result<(), String> {
-    let recorder = global_recorder();
-    if recorder.is_recording() {
-        recorder.record_screenshot().map_err(|e| e.to_string())
-    } else {
-        Ok(())
-    }
-}
-
-#[tauri::command]
-pub fn automation_record_action_wait(duration_ms: u64) -> Result<(), String> {
-    let recorder = global_recorder();
-    if recorder.is_recording() {
-        recorder.record_wait(duration_ms).map_err(|e| e.to_string())
-    } else {
-        Ok(())
-    }
-}
-
-#[tauri::command]
 pub fn automation_record_action_narration(text: String) -> Result<(), String> {
     let recorder = global_recorder();
     if recorder.is_recording() {
@@ -95,19 +128,17 @@ pub fn automation_record_is_recording() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn automation_record_get_session() -> Result<Option<RecordingSession>, String> {
-    let recorder = global_recorder();
-    Ok(recorder.get_session())
-}
-
-#[tauri::command]
 pub fn automation_record_get_status() -> Result<Option<RecordingStatus>, String> {
     Ok(global_recorder().get_status())
 }
 
+/// The last recording, when it is the one the user's yes produced.
 #[tauri::command]
 pub fn automation_record_get_last() -> Result<Option<Recording>, String> {
-    Ok(global_recorder().get_last_recording())
+    let confirmed = confirmed_recording().recording_id.clone();
+    Ok(global_recorder()
+        .get_last_recording()
+        .filter(|recording| is_the_confirmed_one(confirmed.as_deref(), &recording.id)))
 }
 
 #[tauri::command]
@@ -117,384 +148,52 @@ pub fn automation_record_clear_last() -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn automation_inspect_element_at_point(x: i32, y: i32) -> Result<DetailedElementInfo, String> {
-    let inspector = InspectorService::new().map_err(|e| e.to_string())?;
-    inspector
-        .inspect_element_at_point(x, y)
-        .map_err(|e| e.to_string())
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[tauri::command]
-pub fn automation_inspect_element_by_id(element_id: String) -> Result<DetailedElementInfo, String> {
-    let inspector = InspectorService::new().map_err(|e| e.to_string())?;
-    inspector
-        .inspect_element_by_id(&element_id)
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub fn automation_find_element_by_selector(
-    selector: ElementSelector,
-) -> Result<Option<BasicElementInfo>, String> {
-    let inspector = InspectorService::new().map_err(|e| e.to_string())?;
-    let element_id = inspector
-        .find_element_by_selector(&selector)
-        .map_err(|e| e.to_string())?;
-
-    if let Some(id) = element_id {
-        let details = inspector
-            .inspect_element_by_id(&id)
-            .map_err(|e| e.to_string())?;
-
-        Ok(Some(BasicElementInfo {
-            id: details.id,
-            name: details.name,
-            class_name: details.class_name,
-            control_type: details.control_type,
-        }))
-    } else {
-        Ok(None)
-    }
-}
-
-#[tauri::command]
-pub fn automation_generate_selector(element_id: String) -> Result<Vec<ElementSelector>, String> {
-    let inspector = InspectorService::new().map_err(|e| e.to_string())?;
-    inspector
-        .generate_selector(&element_id)
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub fn automation_get_element_tree(
-    element_id: String,
-) -> Result<(Option<BasicElementInfo>, Vec<BasicElementInfo>), String> {
-    let inspector = InspectorService::new().map_err(|e| e.to_string())?;
-    inspector
-        .get_element_tree(&element_id)
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn automation_execute_script(
-    app: AppHandle,
-    script: AutomationScript,
-) -> Result<ExecutionResult, String> {
-    let config = ExecutorConfig::default();
-    let executor = ExecutorService::new(config).map_err(|e| e.to_string())?;
-    executor
-        .execute_script(script, Some(&app))
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn automation_save_script(
-    db: State<'_, AppDatabase>,
-    script: AutomationScript,
-) -> Result<(), String> {
-    let conn = db.connection()?;
-
-    let script_json = serde_json::to_string(&script).map_err(|e| e.to_string())?;
-
-    repository::set_setting(
-        &conn,
-        format!("automation_script_{}", script.id),
-        script_json,
-        false,
-    )
-    .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn automation_load_script(
-    db: State<'_, AppDatabase>,
-    script_id: String,
-) -> Result<AutomationScript, String> {
-    let conn = db.connection()?;
-
-    let setting = repository::get_setting(&conn, &format!("automation_script_{}", script_id))
-        .map_err(|e| e.to_string())?;
-
-    serde_json::from_str(&setting.value).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn automation_list_scripts(
-    db: State<'_, AppDatabase>,
-) -> Result<Vec<AutomationScript>, String> {
-    let conn = db.connection()?;
-
-    let settings = repository::list_settings(&conn).map_err(|e| e.to_string())?;
-
-    let mut scripts = Vec::new();
-    for setting in settings {
-        if setting.key.starts_with("automation_script_") {
-            if let Ok(script) = serde_json::from_str::<AutomationScript>(&setting.value) {
-                scripts.push(script);
-            }
-        }
+    #[test]
+    fn the_start_recording_button_is_one_the_native_dialog_can_ask_with() {
+        assert!(crate::sys::native_confirm::can_ask_with(
+            START_RECORDING_CONFIRM_LABEL
+        ));
+        let question = start_recording_question();
+        assert_eq!(question.confirm_label, START_RECORDING_CONFIRM_LABEL);
+        assert!(question.body.contains("passwords included"));
     }
 
-    scripts.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-
-    Ok(scripts)
-}
-
-#[tauri::command]
-pub async fn automation_delete_script(
-    db: State<'_, AppDatabase>,
-    script_id: String,
-) -> Result<(), String> {
-    let conn = db.connection()?;
-
-    repository::delete_setting(&conn, &format!("automation_script_{}", script_id))
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn automation_save_recording_as_script(
-    db: State<'_, AppDatabase>,
-    recording: Recording,
-    name: String,
-    description: String,
-    tags: Vec<String>,
-) -> Result<AutomationScript, String> {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    use uuid::Uuid;
-
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0);
-
-    let script_actions: Vec<crate::automation::executor::ScriptAction> = recording
-        .actions
-        .into_iter()
-        .map(|action| {
-            let coordinates =
-                action
-                    .target
-                    .map(|target| crate::automation::executor::Coordinates {
-                        x: target.x,
-                        y: target.y,
-                    });
-
-            crate::automation::executor::ScriptAction {
-                id: action.id,
-                action_type: format!("{:?}", action.action_type).to_lowercase(),
-                selector: None,
-                coordinates,
-                value: action.value,
-                duration: None,
-                condition: None,
-                repeat_count: None,
-            }
-        })
-        .collect();
-
-    let script = AutomationScript {
-        id: Uuid::new_v4().to_string(),
-        name,
-        description,
-        tags,
-        actions: script_actions,
-        created_at: now,
-        updated_at: now,
-        last_run_at: None,
-    };
-
-    let conn = db.connection()?;
-    let script_json = serde_json::to_string(&script).map_err(|e| e.to_string())?;
-
-    repository::set_setting(
-        &conn,
-        format!("automation_script_{}", script.id),
-        script_json,
-        false,
-    )
-    .map_err(|e| e.to_string())?;
-
-    Ok(script)
-}
-
-#[tauri::command]
-pub fn automation_generate_code(
-    script: AutomationScript,
-    language: CodeLanguage,
-) -> Result<GeneratedCode, String> {
-    CodeGenerator::generate(&script, language).map_err(|e| e.to_string())
-}
-
-// Bridge commands: match frontend invoke() names to existing implementations
-
-/// Frontend calls `list_automation_scripts` (no prefix)
-#[tauri::command]
-pub async fn list_automation_scripts(
-    db: State<'_, AppDatabase>,
-) -> Result<Vec<AutomationScript>, String> {
-    let conn = db.connection()?;
-
-    let settings = repository::list_settings(&conn).map_err(|e| e.to_string())?;
-
-    let mut scripts = Vec::new();
-    for setting in settings {
-        if setting.key.starts_with("automation_script_") {
-            if let Ok(script) = serde_json::from_str::<AutomationScript>(&setting.value) {
-                scripts.push(script);
-            }
-        }
+    #[test]
+    fn only_the_session_and_recording_the_user_confirmed_are_handed_back() {
+        assert!(is_the_confirmed_one(Some("session-1"), "session-1"));
+        assert!(!is_the_confirmed_one(Some("session-1"), "session-2"));
+        assert!(!is_the_confirmed_one(None, "session-1"));
     }
 
-    scripts.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    fn body_of<'a>(source: &'a str, signature: &str) -> &'a str {
+        source
+            .split(signature)
+            .nth(1)
+            .and_then(|rest| rest.split("\n}\n").next())
+            .unwrap_or_else(|| panic!("{signature} is missing"))
+    }
 
-    Ok(scripts)
-}
+    /// A recording starts only after the user's own yes, and a stop or a
+    /// read-back checks that yes before it returns what was typed.
+    #[test]
+    fn a_recording_is_confirmed_before_it_starts_and_before_it_is_handed_back() {
+        let source = include_str!("automation_enhanced.rs");
 
-/// Frontend calls `save_automation_script` with `{ script }`
-#[tauri::command]
-pub async fn save_automation_script(
-    db: State<'_, AppDatabase>,
-    script: AutomationScript,
-) -> Result<(), String> {
-    let conn = db.connection()?;
-
-    let script_json = serde_json::to_string(&script).map_err(|e| e.to_string())?;
-
-    repository::set_setting(
-        &conn,
-        format!("automation_script_{}", script.id),
-        script_json,
-        false,
-    )
-    .map_err(|e| e.to_string())
-}
-
-/// Frontend calls `delete_automation_script` with `{ script_id }`
-#[tauri::command]
-pub async fn delete_automation_script(
-    db: State<'_, AppDatabase>,
-    script_id: String,
-) -> Result<(), String> {
-    let conn = db.connection()?;
-
-    repository::delete_setting(&conn, &format!("automation_script_{}", script_id))
-        .map_err(|e| e.to_string())
-}
-
-/// Frontend calls `execute_automation_script` with `{ script_id, script }`
-#[tauri::command]
-pub async fn execute_automation_script(
-    app: AppHandle,
-    db: State<'_, AppDatabase>,
-    script_id: String,
-    script: Option<AutomationScript>,
-) -> Result<ExecutionResult, String> {
-    // Use the provided script directly, or load from DB by script_id
-    let target_script = match script {
-        Some(s) => s,
-        None => {
-            let conn = db.connection()?;
-            let setting =
-                repository::get_setting(&conn, &format!("automation_script_{}", script_id))
-                    .map_err(|e| e.to_string())?;
-            serde_json::from_str(&setting.value).map_err(|e| e.to_string())?
-        }
-    };
-
-    let config = ExecutorConfig::default();
-    let executor = ExecutorService::new(config).map_err(|e| e.to_string())?;
-    executor
-        .execute_script(target_script, Some(&app))
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// Frontend calls `save_recording_as_script` with `{ recording_id, name, description, tags, actions }`
-#[tauri::command]
-pub async fn save_recording_as_script(
-    db: State<'_, AppDatabase>,
-    recording_id: String,
-    name: String,
-    description: String,
-    tags: Vec<String>,
-    actions: Option<Vec<RecordedAction>>,
-) -> Result<AutomationScript, String> {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    use uuid::Uuid;
-
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0);
-
-    let script_actions: Vec<crate::automation::executor::ScriptAction> = actions
-        .unwrap_or_default()
-        .into_iter()
-        .map(|action| {
-            let coordinates =
-                action
-                    .target
-                    .map(|target| crate::automation::executor::Coordinates {
-                        x: target.x,
-                        y: target.y,
-                    });
-
-            crate::automation::executor::ScriptAction {
-                id: action.id,
-                action_type: format!("{:?}", action.action_type).to_lowercase(),
-                selector: None,
-                coordinates,
-                value: action.value,
-                duration: None,
-                condition: None,
-                repeat_count: None,
-            }
-        })
-        .collect();
-
-    let script = AutomationScript {
-        id: Uuid::new_v4().to_string(),
-        name,
-        description,
-        tags,
-        actions: script_actions,
-        created_at: now,
-        updated_at: now,
-        last_run_at: None,
-    };
-
-    let conn = db.connection()?;
-    let script_json = serde_json::to_string(&script).map_err(|e| e.to_string())?;
-
-    repository::set_setting(
-        &conn,
-        format!("automation_script_{}", script.id),
-        script_json,
-        false,
-    )
-    .map_err(|e| e.to_string())?;
-
-    // Also store the recording_id → script_id mapping for reference
-    let _ = repository::set_setting(
-        &conn,
-        format!("recording_script_map_{}", recording_id),
-        script.id.clone(),
-        false,
-    );
-
-    Ok(script)
-}
-
-#[tauri::command]
-pub fn inspect_element_at(x: f64, y: f64) -> Result<Option<serde_json::Value>, String> {
-    let inspector = InspectorService::new().map_err(|e| e.to_string())?;
-    match inspector.inspect_element_at_point(x as i32, y as i32) {
-        Ok(info) => {
-            let json = serde_json::to_value(info).map_err(|e| e.to_string())?;
-            Ok(Some(json))
-        }
-        Err(_) => Ok(None),
+        let start = body_of(source, "pub async fn automation_record_start(");
+        assert!(
+            start.find("RECORDING_DECISIONS").expect("asks")
+                < start.find(".start_recording()").expect("starts")
+        );
+        let stop = body_of(source, "pub fn automation_record_stop(");
+        assert!(
+            stop.find("is_the_confirmed_one(").expect("checks")
+                < stop.find(".stop_recording()").expect("stops")
+        );
+        let last = body_of(source, "pub fn automation_record_get_last(");
+        assert!(last.contains("is_the_confirmed_one("));
     }
 }

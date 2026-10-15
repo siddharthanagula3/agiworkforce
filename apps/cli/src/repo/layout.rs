@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use agiworkforce_protocol::code_domain::RepositoryRemote;
 use anyhow::{bail, Context, Result};
@@ -388,13 +387,14 @@ impl RepositoryLayout {
     }
 }
 
+fn git_output(dir: &Path, args: &[&str]) -> std::io::Result<std::process::Output> {
+    let mut command = agiworkforce_worktree::host_git();
+    command.arg("-C").arg(dir).args(args);
+    crate::platform::runtime::git::host_git_output(command)
+}
+
 fn git(dir: &Path, args: &[&str]) -> Option<String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .output()
-        .ok()?;
+    let output = git_output(dir, args).ok()?;
     if !output.status.success() {
         return None;
     }
@@ -403,12 +403,7 @@ fn git(dir: &Path, args: &[&str]) -> Option<String> {
 }
 
 fn git_raw(dir: &Path, args: &[&str]) -> Option<String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .output()
-        .ok()?;
+    let output = git_output(dir, args).ok()?;
     output
         .status
         .success()
@@ -671,11 +666,8 @@ pub fn initialize_repository(root: &Path, default_branch: &str) -> Result<Reposi
             existing.display()
         );
     }
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(["init", "-q", "-b", default_branch])
-        .output()
+    let output = git_output(root, &["init", "-q", "-b", default_branch])
+        .map_err(|error| anyhow::anyhow!(crate::platform::runtime::git::host_git_failure(&error)))
         .context("run git init")?;
     if !output.status.success() {
         bail!(
@@ -689,6 +681,7 @@ pub fn initialize_repository(root: &Path, default_branch: &str) -> Result<Reposi
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Command;
 
     fn remote(name: &str) -> RepositoryRemote {
         RepositoryRemote::new(name, &format!("https://example.test/{name}.git"))

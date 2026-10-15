@@ -12,6 +12,7 @@ use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
 
+pub mod endpoint;
 pub mod host;
 pub mod manifest;
 pub mod messages;

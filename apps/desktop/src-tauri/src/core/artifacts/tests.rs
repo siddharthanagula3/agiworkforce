@@ -115,31 +115,6 @@ fn test_artifact_rollback_invalid_version() {
 }
 
 #[test]
-fn test_artifact_streaming() {
-    let mut artifact = Artifact::new_streaming(
-        "test-id".to_string(),
-        "Streaming Test".to_string(),
-        ArtifactType::Code,
-        ArtifactMetadata::Code(CodeMetadata::default()),
-    );
-
-    assert_eq!(artifact.status, ArtifactStatus::Streaming);
-    assert_eq!(artifact.current_version, 0);
-    assert!(artifact.versions.is_empty());
-
-    artifact.append_content("fn ");
-    artifact.append_content("main() {}");
-
-    assert_eq!(artifact.content, "fn main() {}");
-
-    artifact.finalize_streaming(Some("Complete".to_string()));
-
-    assert_eq!(artifact.status, ArtifactStatus::Complete);
-    assert_eq!(artifact.current_version, 1);
-    assert_eq!(artifact.versions.len(), 1);
-}
-
-#[test]
 fn test_artifact_archive() {
     let mut artifact = Artifact::new(
         "test-id".to_string(),
@@ -170,26 +145,6 @@ fn test_artifact_mark_failed() {
 
     assert_eq!(artifact.status, ArtifactStatus::Failed);
     assert!(artifact.tags.contains(&"error:Network error".to_string()));
-}
-
-#[test]
-fn test_artifact_get_version_diff() {
-    let mut artifact = Artifact::new(
-        "test-id".to_string(),
-        "Test".to_string(),
-        ArtifactType::Document,
-        "Version 1".to_string(),
-        ArtifactMetadata::default(),
-    );
-
-    artifact.update_content("Version 2".to_string(), None);
-
-    let diff = artifact.get_version_diff(1, 2).unwrap();
-
-    assert_eq!(diff.from_version, 1);
-    assert_eq!(diff.to_version, 2);
-    assert_eq!(diff.from_content, "Version 1");
-    assert_eq!(diff.to_content, "Version 2");
 }
 
 #[test]

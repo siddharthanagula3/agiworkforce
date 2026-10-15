@@ -159,8 +159,10 @@ impl ExcelDocumentCreator {
             }
         }
 
-        workbook
-            .save(output_path)
+        let bytes = workbook
+            .save_to_buffer()
+            .map_err(|e| Error::Generic(format!("Failed to save workbook: {}", e)))?;
+        crate::sys::utils::write_file_without_following(Path::new(output_path), &bytes)
             .map_err(|e| Error::Generic(format!("Failed to save workbook: {}", e)))?;
 
         Ok(())

@@ -4,7 +4,6 @@ pub mod dom_operations;
 pub mod extension_bridge;
 pub mod playwright_bridge;
 pub mod semantic;
-pub mod session;
 pub mod tab_manager;
 
 pub use advanced::*;
@@ -13,11 +12,6 @@ pub use dom_operations::*;
 pub use extension_bridge::ExtensionBridge;
 pub use playwright_bridge::*;
 pub use semantic::*;
-pub use session::{
-    browser_session_capabilities, select_browser_session, BrowserDeclineReason, BrowserDeclined,
-    BrowserSelection, BrowserSessionCapability, BrowserSessionKind, BrowserSessionTarget,
-    BrowserSiteAccess, CLOUD_BROWSER_UNAVAILABLE,
-};
 pub use tab_manager::*;
 
 use std::sync::Arc;

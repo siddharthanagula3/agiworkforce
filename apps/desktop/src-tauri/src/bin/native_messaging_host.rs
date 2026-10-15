@@ -1,3 +1,4 @@
+use agiworkforce_desktop::integrations::native_messaging::endpoint;
 use agiworkforce_desktop::integrations::native_messaging::host::{
     extension_id_from_launch_origin, NativeMessagingHost,
 };
@@ -5,7 +6,6 @@ use agiworkforce_desktop::integrations::native_messaging::manifest::install_mani
 use agiworkforce_desktop::integrations::native_messaging::NativeResponse;
 use agiworkforce_desktop::integrations::realtime::RealtimeEvent;
 use futures::{SinkExt, StreamExt};
-use std::path::PathBuf;
 use tokio::time::{timeout, Duration};
 use tokio_tungstenite::tungstenite::Message;
 use url::Url;
@@ -20,35 +20,11 @@ fn parse_install_manifests_args() -> Option<Option<String>> {
     }
 }
 
-// Helper to find app data dir matching Tauri's logic
-#[cfg(target_os = "macos")]
-fn get_app_data_dir_candidates() -> Vec<PathBuf> {
-    let Some(home) = dirs::home_dir() else {
-        return Vec::new();
-    };
-
-    vec![
-        // Sandboxed release app path (preferred when running the notarized .app).
-        home.join(
-            "Library/Containers/com.agiworkforce.desktop/Data/Library/Application Support/com.agiworkforce.desktop",
-        ),
-        // Legacy/dev path used by unsandboxed runs.
-        home.join("Library/Application Support/com.agiworkforce.desktop"),
-    ]
-}
-
-#[cfg(not(target_os = "macos"))]
-fn get_app_data_dir_candidates() -> Vec<PathBuf> {
-    dirs::data_local_dir()
-        .map(|p| vec![p.join("com.agiworkforce.desktop")])
-        .unwrap_or_default()
-}
-
 fn read_realtime_token() -> Result<String, Box<dyn std::error::Error>> {
     let mut attempted_paths = Vec::new();
 
-    for dir in get_app_data_dir_candidates() {
-        let token_path = dir.join(".ipc_token");
+    for dir in endpoint::installed_app_data_dirs() {
+        let token_path = endpoint::token_path(&dir);
         attempted_paths.push(token_path.display().to_string());
 
         let token = match std::fs::read_to_string(&token_path) {
@@ -112,7 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Connect to the main app via WebSocket
-    let url = Url::parse("ws://127.0.0.1:8787").expect("Invalid Websocket URL");
+    let url = Url::parse(&endpoint::realtime_url())?;
     tracing::info!("Connecting to main app at {}", url);
 
     let (ws_stream, _) = match tokio_tungstenite::connect_async(url).await {

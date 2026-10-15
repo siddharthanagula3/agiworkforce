@@ -372,6 +372,7 @@ mod tests {
             body: "{}".to_string(),
             duration_ms: 1,
             success: true,
+            truncated: false,
         };
         assert_eq!(
             response_client_token(&response),
@@ -387,6 +388,7 @@ mod tests {
             body: "{}".to_string(),
             duration_ms: 1,
             success: true,
+            truncated: false,
         };
         assert_eq!(response_client_token(&response), None);
     }

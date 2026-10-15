@@ -117,18 +117,6 @@ impl FileWatcher {
         Ok(())
     }
 
-    pub fn get_watched_paths(&self) -> Result<Vec<String>, String> {
-        let watched = self
-            .watched_paths
-            .lock()
-            .map_err(|e| format!("Failed to lock watched paths: {}", e))?;
-
-        Ok(watched
-            .keys()
-            .map(|p| p.to_string_lossy().to_string())
-            .collect())
-    }
-
     pub fn unwatch_all(&mut self) -> Result<(), String> {
         let paths: Vec<PathBuf> = {
             let watched = self

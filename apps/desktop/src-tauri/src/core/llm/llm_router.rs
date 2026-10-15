@@ -99,19 +99,39 @@ impl Default for RetryConfig {
 /// that bypass `AutonomousAgent` entirely and would otherwise have no cost ceiling.
 pub(crate) const SESSION_COST_SAFETY_CAP: f64 = 50.0;
 
-/// Refuse a request once the profile's daily spend cap is reached.
+fn is_local_runtime_provider(provider: Provider) -> bool {
+    matches!(
+        provider,
+        Provider::Ollama | Provider::LmStudio | Provider::LlamaCpp | Provider::Vllm
+    )
+}
+
+/// Refuse a request once a spend ceiling the user set is reached: the daily
+/// cap, then the monthly budget.
 ///
 /// `SESSION_COST_SAFETY_CAP` resets whenever the router is rebuilt, so on its
-/// own it bounds one run rather than one day. This is the ceiling that
-/// persists across restarts. It is a no-op until `lib.rs::setup` installs the
-/// guard, and when SQLite cannot be read the guard reports zero spend and the
-/// call proceeds, the cap bounds runaway loops, it is not an availability gate.
-fn enforce_daily_budget() -> Result<()> {
-    let Some(budget) = daily_budget::global() else {
+/// own it bounds one run rather than one day. These are the ceilings that
+/// persist across restarts, and this is their only gate: chat, agents, Tasks
+/// and scheduled runs all dispatch through the two call sites below. It is a
+/// no-op until `lib.rs::setup` installs the guard, and when SQLite cannot be
+/// read the guard reports zero spend and the call proceeds, the ceilings bound
+/// runaway loops, they are not an availability gate. A Local runtime costs
+/// nothing, so a reached ceiling never takes it offline.
+fn enforce_spend_caps(
+    budget: Option<&daily_budget::DailyBudgetGuard>,
+    provider: Provider,
+) -> Result<()> {
+    if is_local_runtime_provider(provider) {
+        return Ok(());
+    }
+    let Some(budget) = budget else {
         return Ok(());
     };
     budget
         .check_or_reject(daily_budget::LOCAL_PROFILE_BUDGET_KEY)
+        .map_err(|exceeded| anyhow!("{exceeded}"))?;
+    budget
+        .check_monthly_or_reject(daily_budget::LOCAL_PROFILE_BUDGET_KEY)
         .map_err(|exceeded| anyhow!("{exceeded}"))
 }
 
@@ -503,11 +523,8 @@ pub(crate) fn local_only_no_candidate_message(requested: Option<Provider>) -> &'
      running and a local model is installed and selected, then try again."
 }
 
-fn provider_matches_trust_mode(provider: Provider, trust_mode: TrustMode) -> bool {
-    let is_local = matches!(
-        provider,
-        Provider::Ollama | Provider::LmStudio | Provider::LlamaCpp | Provider::Vllm
-    );
+pub(crate) fn provider_matches_trust_mode(provider: Provider, trust_mode: TrustMode) -> bool {
+    let is_local = is_local_runtime_provider(provider);
     match trust_mode {
         TrustMode::Local | TrustMode::OnDevice => is_local,
         TrustMode::Byok => !is_local && provider != Provider::ManagedCloud,
@@ -1042,6 +1059,16 @@ impl LLMRouter {
         self.providers.insert(provider, instance);
     }
 
+    pub fn remove_provider(&mut self, provider: Provider) {
+        self.providers.remove(&provider);
+    }
+
+    pub fn provider_base_url(&self, provider: Provider) -> Option<String> {
+        self.providers
+            .get(&provider)
+            .and_then(|instance| instance.base_url().map(str::to_string))
+    }
+
     /// Drop all provider clients while preserving router policy, cache, cost,
     /// and rate-limit state. Used after a proxy profile changes so no request
     /// can continue through an HTTP client built with stale network settings.
@@ -1149,19 +1176,6 @@ impl LLMRouter {
         tracker: Arc<crate::core::llm::fallback_chain::RateLimitTracker>,
     ) {
         self.rate_limit_tracker = Some(tracker);
-    }
-
-    pub fn rate_limit_tracker(
-        &self,
-    ) -> Option<Arc<crate::core::llm::fallback_chain::RateLimitTracker>> {
-        self.rate_limit_tracker.clone()
-    }
-
-    pub async fn is_provider_available(&self, provider: Provider) -> bool {
-        match self.providers.get(&provider) {
-            Some(instance) => instance.is_available().await,
-            None => false,
-        }
     }
 
     pub fn has_provider(&self, provider: Provider) -> bool {
@@ -1464,7 +1478,7 @@ impl LLMRouter {
             }
         }
 
-        enforce_daily_budget()?;
+        enforce_spend_caps(daily_budget::global(), candidate.provider)?;
 
         let provider = self
             .providers
@@ -1656,7 +1670,7 @@ impl LLMRouter {
                             tracker.record_rate_limit(
                                 candidate.provider,
                                 Some(&candidate.model),
-                                None,
+                                crate::core::llm::fallback_chain::parse_retry_after(&error_str),
                             );
                         }
                         last_error = Some(e);
@@ -2095,6 +2109,88 @@ impl LLMRouter {
     fn default_model(&self, provider: Provider, task: TaskCategory) -> String {
         super::models_config::get_task_model(&provider, task_category_to_routing_key(task))
             .to_string()
+    }
+}
+
+#[cfg(test)]
+mod spend_cap_tests {
+    use super::*;
+    use crate::core::llm::daily_budget::{
+        DailyBudgetGuard, LOCAL_PROFILE_BUDGET_KEY, MONTHLY_BUDGET_SETTING_KEY,
+    };
+
+    fn guard_with(monthly_budget: Option<&str>, spent_usd: f64) -> DailyBudgetGuard {
+        let conn = Connection::open_in_memory().expect("in-memory");
+        conn.execute(
+            "CREATE TABLE settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                encrypted INTEGER NOT NULL DEFAULT 0
+            )",
+            [],
+        )
+        .expect("settings");
+        if let Some(amount) = monthly_budget {
+            conn.execute(
+                "INSERT INTO settings (key, value, encrypted) VALUES (?1, ?2, 0)",
+                rusqlite::params![MONTHLY_BUDGET_SETTING_KEY, amount],
+            )
+            .expect("budget");
+        }
+        let guard = DailyBudgetGuard::new(Arc::new(Mutex::new(conn))).expect("guard");
+        guard
+            .record_actual(LOCAL_PROFILE_BUDGET_KEY, spent_usd)
+            .expect("spend");
+        guard
+    }
+
+    #[test]
+    fn an_agent_request_to_a_cloud_provider_over_the_monthly_budget_is_refused() {
+        let guard = guard_with(Some("10.00"), 12.0);
+
+        let refusal = enforce_spend_caps(Some(&guard), Provider::Anthropic)
+            .expect_err("the monthly budget is spent");
+        let message = refusal.to_string();
+        assert!(message.contains("Monthly LLM budget reached"), "{message}");
+        assert!(message.contains("Settings"), "{message}");
+    }
+
+    #[test]
+    fn a_local_request_is_never_refused_by_a_spent_budget() {
+        let over_monthly = guard_with(Some("10.00"), 12.0);
+        let over_daily = guard_with(None, 30.0);
+
+        for provider in [
+            Provider::Ollama,
+            Provider::LmStudio,
+            Provider::LlamaCpp,
+            Provider::Vllm,
+        ] {
+            enforce_spend_caps(Some(&over_monthly), provider).expect("local is free");
+            enforce_spend_caps(Some(&over_daily), provider).expect("local is free");
+        }
+    }
+
+    #[test]
+    fn a_reached_daily_cap_is_named_as_the_daily_cap() {
+        let guard = guard_with(Some("100.00"), 30.0);
+
+        let message = enforce_spend_caps(Some(&guard), Provider::OpenAI)
+            .expect_err("the daily cap is spent")
+            .to_string();
+        assert!(message.contains("Daily LLM spend cap reached"), "{message}");
+    }
+
+    #[test]
+    fn spend_under_both_ceilings_is_allowed() {
+        let guard = guard_with(Some("100.00"), 5.0);
+
+        enforce_spend_caps(Some(&guard), Provider::OpenAI).expect("under both");
+    }
+
+    #[test]
+    fn requests_proceed_before_the_guard_is_installed() {
+        enforce_spend_caps(None, Provider::OpenAI).expect("no guard yet");
     }
 }
 
@@ -2859,7 +2955,7 @@ impl LLMRouter {
                 ));
             }
 
-            enforce_daily_budget()?;
+            enforce_spend_caps(daily_budget::global(), candidate.provider)?;
 
             let prompt_tokens = TokenCounter::estimate_prompt_tokens(&request.messages);
             let estimated_input_cost = self.cost_calculator.calculate(
@@ -2949,7 +3045,7 @@ impl LLMRouter {
                             tracker.record_rate_limit(
                                 candidate.provider,
                                 Some(&candidate.model),
-                                None,
+                                crate::core::llm::fallback_chain::parse_retry_after(&error_str),
                             );
                         }
                         last_error = Some(anyhow!(error_str));

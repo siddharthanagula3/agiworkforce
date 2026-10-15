@@ -17,72 +17,78 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 
-use crate::automation::screen::capture_display;
+use crate::automation::screen::{capture_display, CapturedImage};
 
 use super::types::{ComputerUseAction, ComputerUseTask, TaskOutcome, TaskProgress};
 use super::window_manager::{ActiveWindow, WindowCoordinator};
 
-/// Window/app name fragments that mark the foreground surface as one whose
-/// pixels routinely contain secrets. Mirrors the sensitive-window list in
-/// `safety.rs` and extends it with the credential surfaces a screen capture
-/// would leak verbatim.
-const SENSITIVE_SURFACE_KEYWORDS: &[&str] = &[
-    "password",
-    "passphrase",
-    "credential",
-    "keychain",
-    "keyring",
-    "sign in",
-    "signin",
-    "log in",
-    "login",
-    "authenticator",
-    "one-time",
-    "one time code",
-    "otp",
-    "2fa",
-    "two-factor",
-    "verification code",
-    "security code",
-    "secret",
-    "api key",
-    "private key",
-    "seed phrase",
-    "recovery phrase",
-    "wallet",
-    "bank",
-    "checkout",
-    "payment",
-    "credit card",
-    "1password",
-    "bitwarden",
-    "lastpass",
-    "dashlane",
-    "keeper",
-    "vault",
-    "security preferences",
-    "system preferences",
-    "control panel",
-    "task manager",
-    "terminal",
-    "cmd.exe",
-    "powershell",
-];
+/// A capture is kept off disk when the app in front is on the canonical
+/// refuse-list, judged by bundle id first, or when its window or app name
+/// carries a sensitive fragment. The name and title can only add to the
+/// refuse-list, so a renamed window never moves a blocked app onto disk.
+fn is_sensitive_surface(window: &ActiveWindow) -> bool {
+    use super::app_permissions::{is_always_blocked_bundle, is_sensitive_title};
 
-fn is_sensitive_surface(app_name: &str, window_title: &str) -> bool {
-    let haystack = format!("{app_name} {window_title}").to_lowercase();
-    SENSITIVE_SURFACE_KEYWORDS
-        .iter()
-        .any(|keyword| haystack.contains(keyword))
+    window
+        .bundle_id
+        .as_deref()
+        .is_some_and(is_always_blocked_bundle)
+        || is_always_blocked_bundle(&window.app_name)
+        || is_sensitive_title(&window.window_title)
+        || is_sensitive_title(&window.app_name)
 }
 
 /// A foreground window we cannot identify is treated like a sensitive one:
 /// the capture stays in memory rather than being written to disk.
 fn may_persist_capture(active: Option<&ActiveWindow>) -> bool {
     match active {
-        Some(window) => !is_sensitive_surface(&window.app_name, &window.window_title),
+        Some(window) => !is_sensitive_surface(window),
         None => false,
     }
+}
+
+pub const CAPTURE_NEEDS_CONSENT: &str =
+    "A screen capture is saved only after computer use has been allowed on this device.";
+pub const CAPTURE_KEPT_OFF_DISK: &str = "The app in front can show secrets, or could not be identified, so this screen capture was not saved.";
+
+fn capture_write_refusal(
+    consented: bool,
+    active: Option<&ActiveWindow>,
+) -> std::result::Result<(), &'static str> {
+    if !consented {
+        return Err(CAPTURE_NEEDS_CONSENT);
+    }
+    if !may_persist_capture(active) {
+        return Err(CAPTURE_KEPT_OFF_DISK);
+    }
+    Ok(())
+}
+
+/// The gate a capture taken for an agent or a model passes before it is
+/// written to disk: computer use has been consented to, and the app in front
+/// is neither on the refuse-list nor showing a sensitive surface. It covers
+/// the run loop's session, the planner's `ui_screenshot`, script replay and
+/// agent tasks. A capture asked for from the window (`sys/commands/capture.rs`)
+/// is not judged here: it is the user's own screenshot, taken after a yes of
+/// its own that is separate from computer-use consent, and it shares only the
+/// owner-only folder and file modes.
+pub fn ensure_capture_may_be_written() -> std::result::Result<(), &'static str> {
+    capture_write_refusal(
+        super::consent::consent_is_live(),
+        WindowCoordinator::get_active_window().as_ref(),
+    )
+}
+
+/// Takes a capture and writes it owner-only into the app's own artifacts
+/// folder, never the shared temp directory. The gate runs before `capture`,
+/// so a refused capture is not taken at all.
+pub fn capture_to_disk(stem: &str, capture: impl FnOnce() -> Result<RgbaImage>) -> Result<PathBuf> {
+    ensure_capture_may_be_written().map_err(|refusal| anyhow::anyhow!(refusal))?;
+    let pixels = capture()?;
+    let path = crate::core::agi::executors::agent_artifacts_dir()?
+        .join(format!("{stem}_{}.png", uuid::Uuid::new_v4().simple()));
+    write_screenshot(&path, &pixels)?;
+    Ok(path)
 }
 
 /// Per-user, app-private location for screen captures. Never the shared OS
@@ -95,7 +101,8 @@ fn default_screenshot_dir() -> Option<PathBuf> {
     Some(base.join("computer-use").join("screenshots"))
 }
 
-fn prepare_screenshot_dir(dir: &Path) -> Result<()> {
+/// Creates `dir` readable by its owner only, and refuses a symlink in its place.
+pub fn prepare_screenshot_dir(dir: &Path) -> Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
@@ -125,7 +132,8 @@ fn prepare_screenshot_dir(dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn write_screenshot(path: &Path, pixels: &RgbaImage) -> Result<()> {
+/// Writes a new PNG readable by its owner only.
+pub fn write_screenshot(path: &Path, pixels: &RgbaImage) -> Result<()> {
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create_new(true);
 
@@ -393,19 +401,35 @@ impl ComputerUseSession {
         }
 
         if let Some(ref app) = self.app_handle {
-            let event_name = match &event {
-                SessionEvent::SessionStarted { .. } => "computer_use:session_started",
-                SessionEvent::ActionStarting { .. } => "computer_use:action_starting",
-                SessionEvent::ActionCompleted { .. } => "computer_use:action_completed",
-                SessionEvent::ProgressUpdate { .. } => "computer_use:progress_update",
-                SessionEvent::SessionCompleted { .. } => "computer_use:session_completed",
-                SessionEvent::SessionPaused { .. } => "computer_use:session_paused",
-                SessionEvent::SessionResumed { .. } => "computer_use:session_resumed",
-                SessionEvent::SessionCancelled { .. } => "computer_use:session_cancelled",
-                SessionEvent::Error { .. } => "computer_use:error",
+            let emitted = match &event {
+                SessionEvent::SessionStarted { .. } => {
+                    app.emit("computer_use:session_started", &event)
+                }
+                SessionEvent::ActionStarting { .. } => {
+                    app.emit("computer_use:action_starting", &event)
+                }
+                SessionEvent::ActionCompleted { .. } => {
+                    app.emit("computer_use:action_completed", &event)
+                }
+                SessionEvent::ProgressUpdate { .. } => {
+                    app.emit("computer_use:progress_update", &event)
+                }
+                SessionEvent::SessionCompleted { .. } => {
+                    app.emit("computer_use:session_completed", &event)
+                }
+                SessionEvent::SessionPaused { .. } => {
+                    app.emit("computer_use:session_paused", &event)
+                }
+                SessionEvent::SessionResumed { .. } => {
+                    app.emit("computer_use:session_resumed", &event)
+                }
+                SessionEvent::SessionCancelled { .. } => {
+                    app.emit("computer_use:session_cancelled", &event)
+                }
+                SessionEvent::Error { .. } => app.emit("computer_use:error", &event),
             };
 
-            if let Err(e) = app.emit(event_name, &event) {
+            if let Err(e) = emitted {
                 tracing::warn!("Failed to emit session event: {}", e);
             }
         }
@@ -428,19 +452,22 @@ impl ComputerUseSession {
         self.capture_screenshot(&format!("before_{}", self.action_index))
     }
 
-    /// Records the completion of an action.
+    /// Records the completion of an action. The frame after it is handed in,
+    /// taken by the caller through the front-app check, because the action
+    /// may have brought forward an app that must not be captured; the session
+    /// never takes that frame itself.
     pub fn record_action(
         &mut self,
         action: ComputerUseAction,
         before: Option<ScreenshotRef>,
+        after_frame: Option<CapturedImage>,
         success: bool,
         error: Option<String>,
         duration_ms: u64,
     ) -> Result<String> {
-        let after = if self.config.capture_after_action {
-            self.capture_screenshot(&format!("after_{}", self.action_index))?
-        } else {
-            None
+        let after = match after_frame.filter(|_| self.config.capture_after_action) {
+            Some(frame) => self.store_screenshot(&format!("after_{}", self.action_index), frame)?,
+            None => None,
         };
 
         let snapshot_id = format!("{}_{}", self.id, self.action_index);
@@ -481,10 +508,17 @@ impl ComputerUseSession {
     fn capture_screenshot(&self, suffix: &str) -> Result<Option<ScreenshotRef>> {
         let captured = capture_display(super::control::target_display())
             .context("Failed to capture screenshot")?;
+        self.store_screenshot(suffix, captured)
+    }
 
+    fn store_screenshot(
+        &self,
+        suffix: &str,
+        captured: CapturedImage,
+    ) -> Result<Option<ScreenshotRef>> {
         if self.config.persist_screenshots {
             if let Some(ref dir) = self.config.screenshot_dir {
-                if may_persist_capture(WindowCoordinator::get_active_window().as_ref()) {
+                if ensure_capture_may_be_written().is_ok() {
                     prepare_screenshot_dir(dir)?;
 
                     let path = dir.join(format!("{}_{}.png", self.id, suffix));
@@ -493,7 +527,7 @@ impl ComputerUseSession {
                 }
 
                 tracing::debug!(
-                    "Keeping computer-use capture in memory: foreground window is sensitive or unidentified"
+                    "Keeping computer-use capture in memory: no consent, or the foreground window is sensitive or unidentified"
                 );
             }
         }
@@ -785,23 +819,92 @@ mod tests {
         assert!(image::open(&path).is_ok());
     }
 
+    fn window(app_name: &str, window_title: &str, bundle_id: Option<&str>) -> ActiveWindow {
+        ActiveWindow {
+            app_name: app_name.to_string(),
+            window_title: window_title.to_string(),
+            bundle_id: bundle_id.map(str::to_string),
+        }
+    }
+
     #[test]
     fn sensitive_or_unidentified_foreground_window_blocks_persistence() {
-        assert!(is_sensitive_surface("Safari", "Sign in - Example Bank"));
-        assert!(is_sensitive_surface("1Password", ""));
-        assert!(!is_sensitive_surface("Notes", "Grocery list"));
-
+        for blocked in [
+            window("1Password", "", Some("com.1password.1password")),
+            window("Keychain Access", "", Some("com.apple.keychainaccess")),
+            window("Terminal", "zsh", Some("com.apple.Terminal")),
+            window("Coinbase", "", Some("com.coinbase.app")),
+            window("Robinhood.exe", "", None),
+        ] {
+            assert!(
+                !may_persist_capture(Some(&blocked)),
+                "{} was written to disk",
+                blocked.app_name
+            );
+        }
         assert!(!may_persist_capture(None));
-        assert!(!may_persist_capture(Some(&ActiveWindow {
-            app_name: "Chrome".to_string(),
-            window_title: "Enter your password".to_string(),
-            bundle_id: None,
-        })));
-        assert!(may_persist_capture(Some(&ActiveWindow {
-            app_name: "Notes".to_string(),
-            window_title: "Grocery list".to_string(),
-            bundle_id: None,
-        })));
+
+        assert!(may_persist_capture(Some(&window(
+            "Notes",
+            "Grocery list",
+            Some("com.apple.Notes")
+        ))));
+    }
+
+    /// Every writer shares this gate: no consent, a blocked app, a sensitive
+    /// title and an unidentified front app each keep a capture off disk.
+    #[test]
+    fn one_gate_decides_whether_any_capture_reaches_disk() {
+        let notes = window("Notes", "Grocery list", Some("com.apple.Notes"));
+        assert_eq!(capture_write_refusal(true, Some(&notes)), Ok(()));
+        assert_eq!(
+            capture_write_refusal(false, Some(&notes)),
+            Err(CAPTURE_NEEDS_CONSENT)
+        );
+        for refused in [
+            Some(window("1Password", "", Some("com.1password.1password"))),
+            Some(window("Safari", "Sign in", Some("com.apple.Safari"))),
+            None,
+        ] {
+            assert_eq!(
+                capture_write_refusal(true, refused.as_ref()),
+                Err(CAPTURE_KEPT_OFF_DISK)
+            );
+        }
+    }
+
+    /// The window title is free text any app or web page sets, so it neither
+    /// hides a blocked app nor marks an ordinary one sensitive.
+    #[test]
+    fn a_window_title_cannot_unblock_a_blocked_app() {
+        for title in ["Grocery list", "", "Untitled"] {
+            assert!(!may_persist_capture(Some(&window(
+                "1Password",
+                title,
+                Some("com.1password.1password")
+            ))));
+        }
+    }
+
+    /// A browser is not on the refuse-list, so the page it shows is the only
+    /// signal at capture time; a sign-in or bank page still stays off disk.
+    #[test]
+    fn a_browser_on_a_bank_or_sign_in_page_stays_off_disk() {
+        for title in [
+            "Sign in - Example Bank",
+            "Chase Bank - Accounts",
+            "Enter your password",
+        ] {
+            assert!(
+                !may_persist_capture(Some(&window("Safari", title, Some("com.apple.Safari")))),
+                "a browser showing '{title}' was written to disk"
+            );
+        }
+        assert!(may_persist_capture(Some(&window(
+            "Safari",
+            "Rust documentation",
+            Some("com.apple.Safari")
+        ))));
     }
 
     #[test]
@@ -888,6 +991,31 @@ mod tests {
         assert!(!session.is_cancelled());
     }
 
+    /// The action may have brought a blocked app forward, so a frame after it
+    /// exists only when the caller took one through the front-app check.
+    #[test]
+    fn the_session_never_takes_the_frame_after_an_action_itself() {
+        let config = SessionConfig {
+            emit_events: false,
+            capture_before_action: false,
+            capture_after_action: true,
+            ..Default::default()
+        };
+        let mut session = ComputerUseSession::new(create_test_task(), config);
+        let action = ComputerUseAction::Click {
+            x: 100,
+            y: 200,
+            button: super::super::types::MouseButton::Left,
+        };
+
+        session
+            .record_action(action, None, None, true, None, 5)
+            .unwrap();
+
+        let snapshot = session.last_snapshot().expect("the action is recorded");
+        assert!(snapshot.after_screenshot.is_none());
+    }
+
     #[test]
     fn test_session_lifecycle() {
         let task = create_test_task();
@@ -910,7 +1038,7 @@ mod tests {
         };
 
         session
-            .record_action(action.clone(), None, true, None, 50)
+            .record_action(action.clone(), None, None, true, None, 50)
             .unwrap();
 
         assert_eq!(session.action_count(), 1);

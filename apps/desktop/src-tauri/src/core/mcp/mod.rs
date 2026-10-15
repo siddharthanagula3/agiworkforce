@@ -6,16 +6,19 @@
 
 pub mod client;
 pub mod config;
+pub mod elicitation;
 pub mod error;
 pub mod events;
 pub mod extensions;
 pub mod health;
+pub mod launch_approval;
 pub mod logs;
 pub mod manager;
 pub mod manifest;
 pub mod oauth;
 pub mod protocol;
 pub mod registry;
+pub mod sandbox;
 pub mod schema_budget;
 pub mod server;
 pub mod session;
@@ -27,7 +30,7 @@ mod tests;
 
 pub use client::{McpClient, McpTool};
 pub use config::{
-    install_bundle, load_bundle, ConfigDecryptionError, McpBundle, McpServerConfig,
+    install_bundle, load_bundle, ApprovedLaunch, ConfigDecryptionError, McpBundle, McpServerConfig,
     McpServersConfig,
 };
 pub use error::{McpError, McpResult};
@@ -40,8 +43,8 @@ pub use health::{HealthStatus, McpHealthMonitor, ServerHealth};
 pub use manager::{ManagedServer, McpServerManager, ServerStatus};
 pub use protocol::{McpToolDefinition, ServerCapabilitiesV2, ToolCallResult, ToolContent};
 pub use registry::McpToolRegistry;
-pub use session::{ElicitationRequest, ElicitationResponse, McpSession};
-pub use tool_executor::{McpToolExecutor, ToolExecutionResult, ToolStats};
+pub use session::McpSession;
+pub use tool_executor::{McpToolExecutor, ToolExecutionResult};
 pub use transport::{
     HttpSseConfig, HttpSseTransport, McpTransport, StdioTransport, Transport, TransportConfig,
 };

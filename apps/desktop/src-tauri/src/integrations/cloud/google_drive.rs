@@ -310,9 +310,12 @@ impl GoogleDriveClient {
             .bytes()
             .await
             .map_err(|e| Error::Other(format!("Failed to read download response: {}", e)))?;
-        tokio::fs::write(local_path, bytes)
-            .await
-            .map_err(|e| Error::Other(format!("Failed to write downloaded file: {}", e)))?;
+        crate::sys::utils::write_file_without_following_async(
+            std::path::PathBuf::from(local_path),
+            bytes,
+        )
+        .await
+        .map_err(|e| Error::Other(format!("Failed to write downloaded file: {}", e)))?;
 
         Ok(())
     }

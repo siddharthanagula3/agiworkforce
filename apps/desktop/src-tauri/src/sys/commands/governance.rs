@@ -1,4 +1,3 @@
-use crate::data::db::Database;
 use crate::sys::error::Result;
 use crate::sys::security::{
     create_tool_execution_event, create_workflow_execution_event, ApprovalAction, ApprovalDecision,
@@ -7,28 +6,30 @@ use crate::sys::security::{
 };
 use tauri::State;
 
+use super::AppDatabase;
+
 #[tauri::command]
 pub async fn get_audit_events(
     filters: AuditFilters,
-    db: State<'_, Database>,
+    db: State<'_, AppDatabase>,
 ) -> Result<Vec<AuditEvent>> {
-    let conn = db.get_connection();
+    let conn = db.conn.clone();
     let logger = AuditLogger::new(conn)?;
 
     logger.get_events(filters)
 }
 
 #[tauri::command]
-pub async fn verify_audit_event(event_id: String, db: State<'_, Database>) -> Result<bool> {
-    let conn = db.get_connection();
+pub async fn verify_audit_event(event_id: String, db: State<'_, AppDatabase>) -> Result<bool> {
+    let conn = db.conn.clone();
     let logger = AuditLogger::new(conn)?;
 
     logger.verify_event(&event_id)
 }
 
 #[tauri::command]
-pub async fn verify_audit_integrity(db: State<'_, Database>) -> Result<AuditIntegrityReport> {
-    let conn = db.get_connection();
+pub async fn verify_audit_integrity(db: State<'_, AppDatabase>) -> Result<AuditIntegrityReport> {
+    let conn = db.conn.clone();
     let logger = AuditLogger::new(conn)?;
 
     logger.verify_all_events()
@@ -41,9 +42,9 @@ pub async fn log_tool_execution(
     tool_name: String,
     success: bool,
     metadata: Option<serde_json::Value>,
-    db: State<'_, Database>,
+    db: State<'_, AppDatabase>,
 ) -> Result<()> {
-    let conn = db.get_connection();
+    let conn = db.conn.clone();
     let logger = AuditLogger::new(conn)?;
 
     let event = create_tool_execution_event(user_id, team_id, tool_name, success, metadata);
@@ -58,9 +59,9 @@ pub async fn log_workflow_execution(
     workflow_id: String,
     status: String,
     metadata: Option<serde_json::Value>,
-    db: State<'_, Database>,
+    db: State<'_, AppDatabase>,
 ) -> Result<()> {
-    let conn = db.get_connection();
+    let conn = db.conn.clone();
     let logger = AuditLogger::new(conn)?;
 
     let audit_status = match status.as_str() {
@@ -86,9 +87,9 @@ pub async fn create_approval_request(
     risk_level: String,
     justification: Option<String>,
     timeout_minutes: i64,
-    db: State<'_, Database>,
+    db: State<'_, AppDatabase>,
 ) -> Result<String> {
-    let conn = db.get_connection();
+    let conn = db.conn.clone();
     let workflow = ApprovalWorkflow::new(conn);
 
     let risk = match risk_level.as_str() {
@@ -139,23 +140,12 @@ pub async fn create_approval_request(
 #[tauri::command]
 pub async fn get_pending_approvals(
     team_id: Option<String>,
-    db: State<'_, Database>,
+    db: State<'_, AppDatabase>,
 ) -> Result<Vec<ApprovalRequest>> {
-    let conn = db.get_connection();
+    let conn = db.conn.clone();
     let workflow = ApprovalWorkflow::new(conn);
 
     workflow.get_pending_approvals(team_id)
-}
-
-#[tauri::command]
-pub async fn get_approval_request(
-    request_id: String,
-    db: State<'_, Database>,
-) -> Result<ApprovalRequest> {
-    let conn = db.get_connection();
-    let workflow = ApprovalWorkflow::new(conn);
-
-    workflow.get_request(&request_id)
 }
 
 #[tauri::command]
@@ -163,9 +153,9 @@ pub async fn approve_request(
     request_id: String,
     reviewer_id: String,
     reason: Option<String>,
-    db: State<'_, Database>,
+    db: State<'_, AppDatabase>,
 ) -> Result<()> {
-    let conn = db.get_connection();
+    let conn = db.conn.clone();
     let workflow = ApprovalWorkflow::new(conn);
 
     let decision = ApprovalDecision::Approved { reason };
@@ -178,9 +168,9 @@ pub async fn reject_request(
     request_id: String,
     reviewer_id: String,
     reason: String,
-    db: State<'_, Database>,
+    db: State<'_, AppDatabase>,
 ) -> Result<()> {
-    let conn = db.get_connection();
+    let conn = db.conn.clone();
     let workflow = ApprovalWorkflow::new(conn);
 
     let decision = ApprovalDecision::Rejected { reason };
@@ -189,8 +179,8 @@ pub async fn reject_request(
 }
 
 #[tauri::command]
-pub async fn requires_approval(action: ApprovalAction, db: State<'_, Database>) -> Result<bool> {
-    let conn = db.get_connection();
+pub async fn requires_approval(action: ApprovalAction, db: State<'_, AppDatabase>) -> Result<bool> {
+    let conn = db.conn.clone();
     let workflow = ApprovalWorkflow::new(conn);
 
     Ok(workflow.requires_approval(&action))
@@ -199,9 +189,9 @@ pub async fn requires_approval(action: ApprovalAction, db: State<'_, Database>) 
 #[tauri::command]
 pub async fn calculate_risk_level(
     action: ApprovalAction,
-    db: State<'_, Database>,
+    db: State<'_, AppDatabase>,
 ) -> Result<String> {
-    let conn = db.get_connection();
+    let conn = db.conn.clone();
     let workflow = ApprovalWorkflow::new(conn);
 
     let risk = workflow.calculate_risk_level(&action);
@@ -212,17 +202,17 @@ pub async fn calculate_risk_level(
 #[tauri::command]
 pub async fn get_approval_statistics(
     team_id: Option<String>,
-    db: State<'_, Database>,
+    db: State<'_, AppDatabase>,
 ) -> Result<ApprovalStatistics> {
-    let conn = db.get_connection();
+    let conn = db.conn.clone();
     let workflow = ApprovalWorkflow::new(conn);
 
     workflow.get_statistics(team_id)
 }
 
 #[tauri::command]
-pub async fn expire_timed_out_requests(db: State<'_, Database>) -> Result<usize> {
-    let conn = db.get_connection();
+pub async fn expire_timed_out_requests(db: State<'_, AppDatabase>) -> Result<usize> {
+    let conn = db.conn.clone();
     let workflow = ApprovalWorkflow::new(conn);
 
     workflow.expire_timed_out_requests()

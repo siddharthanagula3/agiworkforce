@@ -15,7 +15,7 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
@@ -53,6 +53,10 @@ pub const NEVER_REMEMBERABLE: &[&str] = &[
     "execute_code",
     "code_execute",
     "file_write",
+    // The `file_write_text` and `file_write_binary` IPC commands are gone.
+    // Their names stay, like `playwright_evaluate` below, so a tool that
+    // reuses one cannot be remembered, and because migration v63 purged
+    // them and a test holds this list to that migration.
     "file_write_text",
     "file_write_binary",
     "file_open_with_default_app",
@@ -67,11 +71,20 @@ pub const NEVER_REMEMBERABLE: &[&str] = &[
     // Irreversible egress and destructive data primitives (audit
     // 2026-08-08): each one publishes or destroys data outside the app's
     // own store, so a single remembered click would hand an injected
-    // prompt a standing exfiltration or deletion channel.
+    // prompt a standing exfiltration or deletion channel. The `email_send`
+    // tool is gone; its name stays so a tool that reuses it cannot be
+    // remembered, and because a test loads a stale row for it.
     "email_send",
     "git_push",
     "cloud_upload",
     "db_execute",
+    // The same rule for a destination the model picks: each call can carry
+    // a body, a granted file or a query string to any public address, so
+    // one remembered click would be a standing channel out, in unattended
+    // runs too.
+    "api_call",
+    "api_upload",
+    "physical_scrape",
     // CLAUDE-SECURITY F2: the whole behaviour of these tools is the script the
     // caller wrote, so a remembered "always allow" would hand every later
     // injected script a standing channel into whatever page the browser is
@@ -81,6 +94,9 @@ pub const NEVER_REMEMBERABLE: &[&str] = &[
     "browser_execute_async_js",
     "browser_evaluate",
     "browser_execute_in_frame",
+    // The embedded MCP server's agent run. The task is whatever another local
+    // app sent this time, so each one is shown to the user before it starts.
+    "agi_run_task",
 ];
 
 pub const FOLDER_ACCESS_TOOL_NAME: &str = "folder_access";
@@ -204,7 +220,7 @@ mod contract_mapping_tests {
 /// safety regression, not just a UX papercut. Stored via the same
 /// `settings_v2` table / `SettingCategory::Security` category used by the
 /// rest of the app's user-set security preferences (see
-/// `data::settings::service::SettingsService::save_app_settings`).
+/// `data::settings::repository::upsert_setting`).
 const AGENT_MODE_SETTING_KEY: &str = "tool_confirmation.agent_mode";
 
 /// `settings_v2` key used to persist [`ToolConfirmationState::auto_approve_all`]
@@ -252,6 +268,48 @@ pub enum AgentMode {
     Autopilot,
 }
 
+/// What a folder approved this session lets a tool do there, as the consent
+/// prompt named it. Every grant reads; writing a file needs `modify`, and a
+/// command may write there with `modify` or `execute`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SessionFolderGrant {
+    pub modify: bool,
+    pub execute: bool,
+}
+
+impl SessionFolderGrant {
+    fn from_capabilities(capabilities: &[String]) -> Self {
+        Self {
+            modify: capabilities.iter().any(|capability| capability == "modify"),
+            execute: capabilities
+                .iter()
+                .any(|capability| capability == "execute"),
+        }
+    }
+
+    fn union(self, other: Self) -> Self {
+        Self {
+            modify: self.modify || other.modify,
+            execute: self.execute || other.execute,
+        }
+    }
+
+    pub fn lets_commands_write(self) -> bool {
+        self.modify || self.execute
+    }
+
+    fn is_read_only(self) -> bool {
+        !self.modify && !self.execute
+    }
+}
+
+/// Whether an approved folder request joins Allowed Directories, which grant
+/// changes and commands. A request to read only never does, whatever the
+/// renderer sent: it lasts for this session, as the prompt says.
+fn folder_grant_persists(remember_choice: bool, grant: SessionFolderGrant) -> bool {
+    remember_choice && !grant.is_read_only()
+}
+
 /// State for managing pending tool confirmation requests
 pub struct ToolConfirmationState {
     /// Map of request_id to oneshot sender for confirmation response
@@ -270,7 +328,7 @@ pub struct ToolConfirmationState {
     pub session_approved_tools: Arc<Mutex<HashSet<String>>>,
     /// Folder roots approved only for the current task/session.
     /// These never enter settings.json or the persistent MCP configuration.
-    session_allowed_paths: Arc<Mutex<HashSet<PathBuf>>>,
+    session_allowed_paths: Arc<Mutex<HashMap<PathBuf, SessionFolderGrant>>>,
     /// SQLite connection for persisting remembered choices across restarts.
     /// None in test builds / when no DB is available.
     db_conn: Option<Arc<StdMutex<Connection>>>,
@@ -286,7 +344,7 @@ impl ToolConfirmationState {
             auto_approve_all: Arc::new(AtomicBool::new(false)),
             agent_mode: Arc::new(Mutex::new(AgentMode::default())),
             session_approved_tools: Arc::new(Mutex::new(HashSet::new())),
-            session_allowed_paths: Arc::new(Mutex::new(HashSet::new())),
+            session_allowed_paths: Arc::new(Mutex::new(HashMap::new())),
             db_conn: None,
         }
     }
@@ -311,7 +369,7 @@ impl ToolConfirmationState {
             auto_approve_all: Arc::new(AtomicBool::new(false)),
             agent_mode: Arc::new(Mutex::new(AgentMode::Safe)),
             session_approved_tools: Arc::new(Mutex::new(HashSet::new())),
-            session_allowed_paths: Arc::new(Mutex::new(HashSet::new())),
+            session_allowed_paths: Arc::new(Mutex::new(HashMap::new())),
             db_conn: Some(db_conn.clone()),
         };
         state.load_choices_from_db(&db_conn);
@@ -481,31 +539,39 @@ impl ToolConfirmationState {
         *self.agent_mode.lock()
     }
 
-    /// Read-only tool allowlist shared by Safe and Plan modes.
-    const READ_ONLY_TOOLS: &'static [&'static str] = &[
-        "file_read",
-        "file_list",
-        "search_web",
-        "browser_get_text",
-        "browser_get_url",
-        "browser_get_title",
-        "ui_screenshot",
-        "image_analyze",
-        "image_ocr",
-        "email_fetch",
-        "calendar_list_events",
-        "db_query",
-        "document_read",
-        "document_search",
-        "code_analyze",
-        "code_search",
-        "grep_search",
-        "glob_search",
-        "git_status",
-        "llm_reason",
-        "list_scheduled_tasks",
-        "memory_search",
+    /// Chat-only tools Safe and Plan modes allow beside
+    /// `UNATTENDED_READ_ONLY_TOOLS`. They read on this device or record the
+    /// plan inside the conversation; the unattended list does not name them
+    /// because a goal run has no such tool. Nothing here contacts a host.
+    const CHAT_READ_AND_PLANNING_TOOLS: &'static [&'static str] = &[
+        "file_read_range",
+        "conversation_search",
+        "recent_chats",
+        "tool_search",
+        "todo_write",
+        "question",
     ];
+
+    /// Research a person is there to watch, which Safe and Plan modes allow
+    /// although an unattended goal may not: a search query and a look at an
+    /// image the person attached change nothing on this computer. Each keeps
+    /// its own guard policy, and `search_web` stays under the web search
+    /// capability, so turning that off still stops it in every mode.
+    const ATTENDED_RESEARCH_TOOLS: &'static [&'static str] = &["search_web", "image_analyze"];
+
+    /// What Safe and Plan modes may run: the unattended read-only list, the
+    /// chat-only reading and planning tools, and the two research tools.
+    fn safe_and_plan_tools() -> impl Iterator<Item = &'static str> {
+        crate::core::agi::executor::UNATTENDED_READ_ONLY_TOOLS
+            .iter()
+            .chain(Self::CHAT_READ_AND_PLANNING_TOOLS)
+            .chain(Self::ATTENDED_RESEARCH_TOOLS)
+            .copied()
+    }
+
+    fn is_read_only_tool(tool_name: &str) -> bool {
+        Self::safe_and_plan_tools().any(|tool| tool == tool_name)
+    }
 
     /// Exact-name allowlist for MCP read-only tool *base names* (the
     /// portion after `mcp__<server>__`). Matched against the parsed tool
@@ -623,7 +689,7 @@ impl ToolConfirmationState {
         match mode {
             AgentMode::Safe | AgentMode::Plan => {
                 // Direct allowlist match for native tools.
-                if Self::READ_ONLY_TOOLS.contains(&tool_name) {
+                if Self::is_read_only_tool(tool_name) {
                     return true;
                 }
                 // MCP tools: strict envelope parse + exact-name match.
@@ -673,17 +739,36 @@ impl ToolConfirmationState {
         info!("[ToolConfirmation] Cleared all session-scoped tool approvals");
     }
 
-    pub fn add_session_allowed_paths(&self, paths: &[String]) {
+    /// Records each folder exactly as the consent prompt showed and verified
+    /// it, never resolved again, with what the user allowed there.
+    pub fn add_session_allowed_paths(&self, paths: &[String], grant: SessionFolderGrant) {
         let mut session_paths = self.session_allowed_paths.lock();
         for path in paths {
-            let path = PathBuf::from(path);
-            let canonical = std::fs::canonicalize(&path).unwrap_or(path);
-            session_paths.insert(canonical);
+            let held = session_paths.entry(PathBuf::from(path)).or_default();
+            *held = held.union(grant);
         }
     }
 
-    pub fn get_session_allowed_paths(&self) -> Vec<PathBuf> {
-        self.session_allowed_paths.lock().iter().cloned().collect()
+    /// Every folder approved this session, each with what it allows.
+    pub fn get_session_folder_grants(&self) -> Vec<(PathBuf, SessionFolderGrant)> {
+        self.session_allowed_paths
+            .lock()
+            .iter()
+            .map(|(path, grant)| (path.clone(), *grant))
+            .collect()
+    }
+
+    /// The folders approved this session that `allows` accepts.
+    pub fn get_session_allowed_paths_where(
+        &self,
+        allows: impl Fn(SessionFolderGrant) -> bool,
+    ) -> Vec<PathBuf> {
+        self.session_allowed_paths
+            .lock()
+            .iter()
+            .filter(|(_, grant)| allows(**grant))
+            .map(|(path, _)| path.clone())
+            .collect()
     }
 
     /// Check if user has a remembered choice for this tool.
@@ -744,14 +829,22 @@ impl ToolConfirmationState {
         &self.tool_guard
     }
 
-    /// Update the allowed directories in the tool guard.
-    /// This is called when settings are loaded to sync user-configured directories.
+    /// Update the allowed directories in the tool guard, which also become
+    /// the filesystem MCP server's roots. That server writes wherever it
+    /// reaches, so a folder approved this session joins only when the user
+    /// allowed changes there.
+    ///
+    /// Every folder approved this session, read-only ones included, goes to
+    /// the guard's read set, so a read tool reaches a folder the user just
+    /// approved for reading while a tool that changes files still does not.
     pub fn update_allowed_paths(&self, paths: Vec<String>) {
         let mut path_bufs: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
-        path_bufs.extend(self.get_session_allowed_paths());
+        path_bufs.extend(self.get_session_allowed_paths_where(|grant| grant.modify));
         path_bufs.sort();
         path_bufs.dedup();
         self.tool_guard.set_allowed_paths(path_bufs);
+        self.tool_guard
+            .set_readable_paths(self.get_session_allowed_paths_where(|_| true));
         tracing::info!("Updated tool guard allowed paths");
     }
 
@@ -1069,6 +1162,44 @@ fn string_array_parameter(
     Ok(strings)
 }
 
+/// A canonical folder as the consent prompt shows it and the grant stores it:
+/// on Windows without the verbatim `\\?\` prefix wherever the plain path
+/// means the same folder. Containment is still decided on the canonical path.
+pub(crate) fn shown_spelling(canonical: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        dunce::simplified(canonical).to_path_buf()
+    }
+    #[cfg(not(windows))]
+    {
+        canonical.to_path_buf()
+    }
+}
+
+/// Refuses `shown`, a folder as the consent prompt named it, unless walking
+/// it through only the system's own links still arrives at that very
+/// spelling. The prompt names each folder in its canonical spelling, and
+/// what is granted is that string, never a fresh resolution: a folder
+/// swapped for a link, or one a recorded sandbox root moved under, while
+/// the user was deciding is refused rather than granted where it now leads.
+fn shown_folder_unchanged(shown: &Path) -> Result<(), String> {
+    let changed = |why: String| {
+        format!(
+            "The folder {} changed while you were deciding ({why}); ask again.",
+            shown.display()
+        )
+    };
+    let resolved =
+        agiworkforce_sandbox_policy::host_path::verify_read_root(shown).map_err(changed)?;
+    if shown_spelling(&resolved.canonical) != shown {
+        return Err(changed(format!(
+            "it now resolves to {}",
+            resolved.canonical.display()
+        )));
+    }
+    Ok(())
+}
+
 fn validated_folder_roots(request: &ToolConfirmationRequest) -> Result<Vec<String>, String> {
     if request.tool_name != FOLDER_ACCESS_TOOL_NAME {
         return Err("Pending request is not a folder access request".to_string());
@@ -1103,21 +1234,20 @@ fn validated_folder_roots(request: &ToolConfirmationRequest) -> Result<Vec<Strin
                     directory
                 ));
             }
-            let canonical = std::fs::canonicalize(&directory_path)
-                .map_err(|error| format!("Could not resolve folder '{}': {}", directory, error))?;
-            if !canonical.is_dir() {
+            shown_folder_unchanged(&directory_path)?;
+            if !directory_path.is_dir() {
                 return Err(format!(
                     "Folder access root is not a directory: {}",
                     directory
                 ));
             }
-            if crate::sys::security::blocked_paths::is_blocked(&canonical) {
+            if crate::sys::security::blocked_paths::is_blocked(&directory_path) {
                 return Err(format!(
                     "Folder access root is a protected system path: {}",
                     directory
                 ));
             }
-            Ok(canonical.to_string_lossy().to_string())
+            Ok(directory)
         })
         .collect::<Result<Vec<_>, String>>()?;
 
@@ -1191,6 +1321,13 @@ pub async fn respond_tool_confirmation(
         .map(|request| request.tool_name.as_str());
     let mut allowed_directories = None;
 
+    if let Some(name) = authoritative_tool_name
+        .filter(|name| approved && remember_choice && is_tool_remember_eligible(name))
+    {
+        confirm_always_allow(&app_handle, &state, name).await?;
+        still_pending(&state, &request_id)?;
+    }
+
     if approved
         && pending_request
             .as_ref()
@@ -1200,9 +1337,35 @@ pub async fn respond_tool_confirmation(
             .as_ref()
             .expect("folder access request checked above");
         let directories = validated_folder_roots(request)?;
+        let grant = SessionFolderGrant::from_capabilities(&string_array_parameter(
+            request,
+            "capabilities",
+        )?);
         let persistent_paths_for_mcp;
+        let remember_folders = folder_grant_persists(remember_choice, grant);
+        if remember_choice && !remember_folders {
+            info!(
+                "[ToolConfirmation] Read-only folder access for request {} is granted for this session only; it is not remembered",
+                request_id
+            );
+        }
 
-        if remember_choice {
+        if remember_folders {
+            let question = remember_folders_question(&directories, grant)?;
+            confirm_standing(
+                &app_handle,
+                &format!("remember_folders:{}", directories.join("\n")),
+                question,
+                REMEMBER_FOLDERS_DECLINED,
+            )
+            .await?;
+            still_pending(&state, &request_id)?;
+            for directory in &directories {
+                shown_folder_unchanged(Path::new(directory))?;
+            }
+        }
+
+        if remember_folders {
             let settings_state = app_handle
                 .try_state::<crate::sys::commands::settings::SettingsState>()
                 .ok_or_else(|| {
@@ -1216,10 +1379,10 @@ pub async fn respond_tool_confirmation(
             .await?;
             allowed_directories = Some(persisted.clone());
             persistent_paths_for_mcp = persisted.clone();
-            state.add_session_allowed_paths(&directories);
+            state.add_session_allowed_paths(&directories, grant);
             state.update_allowed_paths(persisted);
         } else {
-            state.add_session_allowed_paths(&directories);
+            state.add_session_allowed_paths(&directories, grant);
             let persistent = if let Some(settings_state) =
                 app_handle.try_state::<crate::sys::commands::settings::SettingsState>()
             {
@@ -1232,20 +1395,15 @@ pub async fn respond_tool_confirmation(
             } else {
                 Vec::new()
             };
-            let runtime_persistent = if persistent.is_empty() {
-                crate::sys::commands::settings::default_allowed_directories()
-            } else {
-                persistent
-            };
-            persistent_paths_for_mcp = runtime_persistent.clone();
-            state.update_allowed_paths(runtime_persistent);
+            persistent_paths_for_mcp = persistent.clone();
+            state.update_allowed_paths(persistent);
         }
 
         // Keep the live filesystem MCP server aligned with the effective
         // native grant. Session-only roots are deliberately not persisted.
         if let Some(mcp_state) = app_handle.try_state::<crate::sys::commands::mcp::McpState>() {
             let effective_paths = state.get_allowed_paths();
-            let persistent_sync = if remember_choice && !persistent_paths_for_mcp.is_empty() {
+            let persistent_sync = if remember_folders && !persistent_paths_for_mcp.is_empty() {
                 mcp_state
                     .update_filesystem_roots(&persistent_paths_for_mcp)
                     .await
@@ -1293,56 +1451,12 @@ pub async fn respond_tool_confirmation(
     })
 }
 
-/// Get the safety tier for a specific tool.
-/// Useful for the frontend to determine how to handle tool calls.
-#[tauri::command]
-pub fn get_tool_safety_tier(
-    tool_name: String,
-    state: State<'_, ToolConfirmationState>,
-) -> Result<ToolSafetyTierInfo, String> {
-    let guard = state.tool_guard();
-    let safety_tier = guard.get_safety_tier(&tool_name);
-    let risk_level = guard.get_risk_level(&tool_name);
-
-    Ok(ToolSafetyTierInfo {
-        tool_name,
-        safety_tier: format!("{:?}", safety_tier),
-        safety_tier_description: safety_tier.description().to_string(),
-        requires_user_action: safety_tier.requires_user_action(),
-        risk_level: risk_level.map(|r| format!("{:?}", r)),
-    })
-}
-
 /// Get remembered choices for tools.
 #[tauri::command]
 pub fn get_remembered_tool_choices(
     state: State<'_, ToolConfirmationState>,
 ) -> Result<HashMap<String, bool>, String> {
     Ok(state.remembered_choices.lock().clone())
-}
-
-/// Clear all remembered tool choices.
-#[tauri::command]
-pub fn clear_remembered_tool_choices(
-    state: State<'_, ToolConfirmationState>,
-) -> Result<(), String> {
-    state.clear_remembered_choices();
-    info!("[ToolConfirmation] Cleared all remembered tool choices");
-    Ok(())
-}
-
-/// Clear a specific remembered tool choice.
-#[tauri::command]
-pub fn clear_remembered_tool_choice(
-    tool_name: String,
-    state: State<'_, ToolConfirmationState>,
-) -> Result<(), String> {
-    state.forget_choice(&tool_name);
-    info!(
-        "[ToolConfirmation] Cleared remembered choice for tool: {}",
-        tool_name
-    );
-    Ok(())
 }
 
 /// Clear all session-scoped tool approvals.
@@ -1367,17 +1481,12 @@ pub async fn clear_session_tool_approvals(
     } else {
         Vec::new()
     };
-    let runtime_persistent = if persistent.is_empty() {
-        crate::sys::commands::settings::default_allowed_directories()
-    } else {
-        persistent
-    };
-    state.update_allowed_paths(runtime_persistent.clone());
+    state.update_allowed_paths(persistent.clone());
 
-    if !runtime_persistent.is_empty() {
+    if !persistent.is_empty() {
         if let Some(mcp_state) = app_handle.try_state::<crate::sys::commands::mcp::McpState>() {
             if let Err(error) = mcp_state
-                .update_filesystem_roots_for_session(&runtime_persistent)
+                .update_filesystem_roots_for_session(&persistent)
                 .await
             {
                 warn!(
@@ -1390,35 +1499,50 @@ pub async fn clear_session_tool_approvals(
     Ok(())
 }
 
-/// Get the count of pending confirmations.
-#[tauri::command]
-pub fn get_pending_confirmation_count(
-    state: State<'_, ToolConfirmationState>,
-) -> Result<usize, String> {
-    Ok(state.pending_count())
-}
-
-/// Cancel a pending confirmation (e.g., user closed the dialog without responding).
-#[tauri::command]
-pub fn cancel_tool_confirmation(
-    request_id: String,
-    state: State<'_, ToolConfirmationState>,
+/// `Err` unless every one of `paths` is a folder already granted, in the
+/// saved settings or in the tool guard, or one the person chose in the
+/// native picker. The page sends folder lists after it loads or saves
+/// settings and can send any path, so this is what stands between a path it
+/// names and a grant.
+pub async fn require_granted_folders<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    paths: &[String],
 ) -> Result<(), String> {
-    state.cancel_pending(&request_id);
-    info!(
-        "[ToolConfirmation] Cancelled pending confirmation: {}",
-        request_id
-    );
-    Ok(())
+    let mut granted = match app.try_state::<ToolConfirmationState>() {
+        Some(state) => state.get_allowed_paths(),
+        None => Vec::new(),
+    };
+    if let Some(settings_state) = app.try_state::<crate::sys::commands::settings::SettingsState>() {
+        granted.extend(
+            settings_state
+                .settings
+                .lock()
+                .await
+                .allowed_directories
+                .iter()
+                .cloned(),
+        );
+    }
+    crate::sys::picked_folders::require_granted_or_picked(&granted, paths)
 }
 
-/// Update the allowed directories in the security tool guard.
-/// This should be called after loading settings to sync user-configured directories.
+/// Replaces the folders the tool guard allows with a list that names only
+/// granted or picked folders. Taking folders away is always accepted, and a
+/// folder taken away has to be picked again before it can come back.
 #[tauri::command]
-pub fn update_allowed_directories(
+pub async fn update_allowed_directories(
     paths: Vec<String>,
     state: State<'_, ToolConfirmationState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
+    require_granted_folders(&app_handle, &paths).await?;
+    for removed in state
+        .get_allowed_paths()
+        .iter()
+        .filter(|held| !paths.contains(held))
+    {
+        crate::sys::picked_folders::forget(removed);
+    }
     state.update_allowed_paths(paths.clone());
     info!(
         "[ToolConfirmation] Updated allowed directories: {:?}",
@@ -1427,115 +1551,222 @@ pub fn update_allowed_directories(
     Ok(())
 }
 
-/// Get the current allowed directories from the security tool guard.
-/// Useful for debugging and verification.
-#[tauri::command]
-pub fn get_allowed_directories(
-    state: State<'_, ToolConfirmationState>,
-) -> Result<Vec<String>, String> {
-    Ok(state.get_allowed_paths())
+/// The one gate for every answer that lets tools run unasked from then on: a
+/// wider mode, auto-approve, a tool set to always allow, folders remembered.
+/// The page renders model output and can call any command, so none of these
+/// is answered there; each is asked in a native dialog whose text is built
+/// here.
+static STANDING_APPROVAL_DECISIONS: crate::sys::native_confirm::ConfirmGate =
+    crate::sys::native_confirm::ConfirmGate::new();
+
+const STILL_ASKED: &str =
+    "Tools from MCP servers keep their own permissions, and the few tools that must ask every time still ask.";
+const AUTO_APPROVE_LABEL: &str = "Stop Asking";
+const AUTO_APPROVE_DECLINED: &str = "Auto-approve was not confirmed, so tools still ask.";
+const BUILD_MODE_LABEL: &str = "Switch to Build";
+const AUTOPILOT_LABEL: &str = "Switch to Autopilot";
+const ALWAYS_ALLOW_TOOL_LABEL: &str = "Always Allow";
+const ALWAYS_ALLOW_TOOL_DECLINED: &str = "Always allow was not confirmed, so the tool still asks.";
+const REMEMBER_FOLDERS_LABEL: &str = "Remember Folders";
+const REMEMBER_FOLDERS_DECLINED: &str = "The folders were not remembered. Answer again, and leave Remember unticked to allow them for this session only.";
+const MAX_SHOWN_TOOL_NAME_CHARS: usize = 120;
+
+async fn confirm_standing<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    request: &str,
+    question: crate::sys::native_confirm::NativeConfirm,
+    declined: &str,
+) -> Result<(), String> {
+    match STANDING_APPROVAL_DECISIONS
+        .confirm(app, request, question)
+        .await
+    {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(declined.to_string()),
+        Err(not_asked) => Err(not_asked.message()),
+    }
 }
 
-/// FIX (audit 2026-05-20, §4, Autopilot mode-transition integrity envelope):
-/// the legacy code passed the mode-transition payload as an ad-hoc
-/// `serde_json::json!({...})` literal. JSON object iteration order was a
-/// `serde_json::Map` (HashMap-backed in some builds), and the payload had no
-/// integrity envelope distinguishing the warning text from the boolean flag.
-/// An XSS-compromised renderer could keep the warning, swap the
-/// `new_auto_approve: true` for a deceptively rendered "false" string, and
-/// trick the user into clicking approve on a different transition than the
-/// one they think they're approving.
-///
-/// `ModeTransitionPayload` is a typed envelope with:
-///   * canonical field order (struct definition order, serde-preserved),
-///   * a `summary_hash` (sha256 of the canonicalized envelope sans the hash)
-///     mirroring the FIX-F7 anti-tamper pattern used on tool args,
-///   * a `kind` discriminator the frontend can pin to the dialog template.
-///
-/// The hash is intentionally over the envelope minus the hash field so the
-/// frontend can recompute and compare. Any mutation in transit / in the
-/// renderer between request and confirmation will mismatch.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModeTransitionPayload {
-    /// Discriminator: e.g. "auto_approve_all" or "agent_mode:autopilot".
-    /// The frontend must verify this matches the dialog it is rendering.
-    pub kind: String,
-    /// Previous state, rendered as its canonical string form.
-    pub previous: String,
-    /// New state, rendered as its canonical string form.
-    pub new: String,
-    /// Boolean flag controlling whether this transition raises or lowers
-    /// the confirmation bar. Always true for the dangerous direction.
-    pub elevates_privilege: bool,
-    /// Free-form warning text the dialog must render verbatim.
-    pub warning: String,
-    /// `sha256(canonical_json(envelope_without_hash))` lowercase hex. The
-    /// frontend can recompute this and refuse to render if it disagrees.
-    pub summary_hash: String,
+/// A native question can outlast the request it is about, which expires on
+/// its own timer.
+fn still_pending(state: &ToolConfirmationState, request_id: &str) -> Result<(), String> {
+    if state.pending_request(request_id).is_some() {
+        Ok(())
+    } else {
+        Err("This request ended while you were deciding, so nothing was changed.".to_string())
+    }
 }
 
-impl ModeTransitionPayload {
-    pub fn new(
-        kind: impl Into<String>,
-        previous: impl Into<String>,
-        new: impl Into<String>,
-        elevates_privilege: bool,
-        warning: impl Into<String>,
-    ) -> Self {
-        use sha2::{Digest, Sha256};
-        let kind = kind.into();
-        let previous = previous.into();
-        let new = new.into();
-        let warning = warning.into();
-        // Canonical: hash the envelope WITHOUT the summary_hash field so the
-        // frontend can replicate the computation deterministically.
-        // BTreeMap serialization is alphabetical-key-ordered.
-        let mut canonical: std::collections::BTreeMap<&str, serde_json::Value> =
-            std::collections::BTreeMap::new();
-        canonical.insert("kind", serde_json::Value::String(kind.clone()));
-        canonical.insert("previous", serde_json::Value::String(previous.clone()));
-        canonical.insert("new", serde_json::Value::String(new.clone()));
-        canonical.insert(
-            "elevates_privilege",
-            serde_json::Value::Bool(elevates_privilege),
-        );
-        canonical.insert("warning", serde_json::Value::String(warning.clone()));
-        let canonical_json = serde_json::to_string(&canonical).unwrap_or_default();
-        let digest = Sha256::digest(canonical_json.as_bytes());
-        let summary_hash = hex::encode(digest);
-        Self {
-            kind,
-            previous,
-            new,
-            elevates_privilege,
-            warning,
-            summary_hash,
+/// A change of mode that lets more run than before.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ModeWidening {
+    ToBuild,
+    ToAutopilot,
+}
+
+fn mode_reach(mode: AgentMode) -> u8 {
+    match mode {
+        AgentMode::Safe | AgentMode::Plan => 0,
+        AgentMode::Build => 1,
+        AgentMode::Autopilot => 2,
+    }
+}
+
+/// What setting the mode to `next` widens, or `None` when it lets nothing
+/// more run and so needs no question. Setting Autopilot turns auto-approve
+/// on, so it widens whenever auto-approve is off, even from Autopilot.
+fn mode_widening(
+    previous: AgentMode,
+    next: AgentMode,
+    auto_approve_on: bool,
+) -> Option<ModeWidening> {
+    if next == AgentMode::Autopilot {
+        return (previous != AgentMode::Autopilot || !auto_approve_on)
+            .then_some(ModeWidening::ToAutopilot);
+    }
+    (mode_reach(next) > mode_reach(previous)).then_some(ModeWidening::ToBuild)
+}
+
+impl ModeWidening {
+    fn request(self) -> &'static str {
+        match self {
+            Self::ToBuild => "agent_mode:build",
+            Self::ToAutopilot => "agent_mode:autopilot",
         }
     }
 
-    /// Recompute the hash from the in-memory fields (useful for test +
-    /// future frontend round-trip verification via a Tauri command).
-    pub fn recompute_hash(&self) -> String {
-        Self::new(
-            self.kind.clone(),
-            self.previous.clone(),
-            self.new.clone(),
-            self.elevates_privilege,
-            self.warning.clone(),
-        )
-        .summary_hash
+    fn declined(self) -> &'static str {
+        match self {
+            Self::ToBuild => "Build mode was not confirmed, so the mode was not changed.",
+            Self::ToAutopilot => "Autopilot was not confirmed, so the mode was not changed.",
+        }
+    }
+
+    fn question(self) -> crate::sys::native_confirm::NativeConfirm {
+        match self {
+            Self::ToBuild => crate::sys::native_confirm::NativeConfirm {
+                title: "Switch to Build mode?".to_string(),
+                body: "Safe and Plan modes let the agent use only tools that read. Build mode lets it use every tool.\n\nTools the app rates as low risk, and any tool you set to always allow, then run without asking. The others ask each time."
+                    .to_string(),
+                confirm_label: BUILD_MODE_LABEL.to_string(),
+            },
+            Self::ToAutopilot => crate::sys::native_confirm::NativeConfirm {
+                title: "Switch to Autopilot?".to_string(),
+                body: format!(
+                    "Autopilot lets the agent use every tool and stops asking you before one runs.\n\n{STILL_ASKED}\n\nYou can switch back at any time."
+                ),
+                confirm_label: AUTOPILOT_LABEL.to_string(),
+            },
+        }
     }
 }
 
-/// Enable or disable global auto-approve mode.
-/// When enabled, all tool confirmation dialogs are bypassed and every tool
-/// call is automatically approved. Use with caution.
-///
-/// DESK-AUTO-APPROVE-ALL (audit 2026-05-06): enabling this mode is at least
-/// as powerful as `set_agent_mode(Autopilot)`, it silently bypasses ALL
-/// confirmation dialogs with no per-tool granularity. Enabling requires the
-/// same user confirmation dialog used by the Autopilot mode transition.
-/// Disabling (de-escalation) never needs confirmation.
+fn auto_approve_question() -> crate::sys::native_confirm::NativeConfirm {
+    crate::sys::native_confirm::NativeConfirm {
+        title: "Stop asking before tools run?".to_string(),
+        body: format!(
+            "Tool calls the agent makes will run without asking you first.\n\n{STILL_ASKED}\n\nYou can turn this off at any time."
+        ),
+        confirm_label: AUTO_APPROVE_LABEL.to_string(),
+    }
+}
+
+fn tool_name_shown_whole(name: &str) -> bool {
+    !name.trim().is_empty()
+        && name.chars().count() <= MAX_SHOWN_TOOL_NAME_CHARS
+        && crate::sys::native_confirm::shown_value(name) == name
+}
+
+/// The question for a tool to run unasked from now on. A tool that must ask
+/// every time has no such setting, and a name the dialog could not show
+/// whole and on one line is refused, so nobody confirms text that hides what
+/// it names.
+fn always_allow_tool_question(
+    guard: &ToolExecutionGuard,
+    tool_name: &str,
+) -> Result<crate::sys::native_confirm::NativeConfirm, String> {
+    if !tool_name_shown_whole(tool_name) {
+        return Err(
+            "This tool name cannot be shown in full, so it cannot be set to always allow."
+                .to_string(),
+        );
+    }
+    if !is_tool_remember_eligible(tool_name) {
+        return Err(format!(
+            "{tool_name} asks every time it runs, so no standing answer can be saved for it."
+        ));
+    }
+    let rated = match guard.get_risk_level(tool_name) {
+        Some(RiskLevel::Low) => "The app rates it low risk.",
+        Some(RiskLevel::Medium) => "The app rates it medium risk.",
+        Some(RiskLevel::High) => "The app rates it high risk.",
+        Some(RiskLevel::Critical) => "The app rates it critical risk.",
+        None => "The app has no risk rating for it.",
+    };
+    Ok(crate::sys::native_confirm::NativeConfirm {
+        title: "Always allow this tool?".to_string(),
+        body: format!(
+            "The agent will run the tool \"{tool_name}\" without asking you first: in chats, and in scheduled and background runs when you are not there. {rated}\n\nYou can set it back to Ask Each Time in Settings."
+        ),
+        confirm_label: ALWAYS_ALLOW_TOOL_LABEL.to_string(),
+    })
+}
+
+/// Asks before `tool_name` is set to always allow, unless it already is.
+async fn confirm_always_allow<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    state: &ToolConfirmationState,
+    tool_name: &str,
+) -> Result<(), String> {
+    if state.get_remembered_choice(tool_name) == Some(true) {
+        return Ok(());
+    }
+    let question = always_allow_tool_question(state.tool_guard(), tool_name)?;
+    confirm_standing(
+        app,
+        &format!("always_allow:{tool_name}"),
+        question,
+        ALWAYS_ALLOW_TOOL_DECLINED,
+    )
+    .await
+}
+
+/// The question for folders to join Allowed Directories. Every folder is
+/// shown; a list the dialog could not show whole is refused.
+fn remember_folders_question(
+    directories: &[String],
+    grant: SessionFolderGrant,
+) -> Result<crate::sys::native_confirm::NativeConfirm, String> {
+    let may = match (grant.modify, grant.execute) {
+        (true, true) => "read and change files and run commands",
+        (true, false) => "read and change files",
+        (false, true) => "read files and run commands",
+        (false, false) => "read files",
+    };
+    let folders = directories
+        .iter()
+        .map(|directory| crate::sys::native_confirm::shown_value(directory))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let body = format!(
+        "From now on, in every chat and run and without asking again, the agent may {may} in:\n\n{folders}\n\nThey are added to Allowed Directories in Settings, where you can remove them."
+    );
+    if crate::sys::native_confirm::check_it_fits(&body).is_err() {
+        return Err(
+            "These folders are too many or too long to show in one dialog, so they were not remembered. Allow them for this session only, or add them in Settings."
+                .to_string(),
+        );
+    }
+    Ok(crate::sys::native_confirm::NativeConfirm {
+        title: "Remember these folders?".to_string(),
+        body,
+        confirm_label: REMEMBER_FOLDERS_LABEL.to_string(),
+    })
+}
+
+/// Turns global auto-approve on or off. Turning it on stops the app from
+/// asking before tools run, so the person confirms it in a native dialog;
+/// turning it off never asks.
 #[tauri::command]
 pub async fn set_auto_approve_all(
     enabled: bool,
@@ -1544,26 +1775,13 @@ pub async fn set_auto_approve_all(
 ) -> Result<(), String> {
     let previous = state.is_auto_approve_all();
     if enabled && !previous {
-        // FIX (audit 2026-05-20, §4): build the typed integrity envelope
-        // instead of an ad-hoc json! literal. Frontend can recompute
-        // `summary_hash` to confirm what it renders matches what we sent.
-        let payload = ModeTransitionPayload::new(
-            "set_auto_approve_all",
-            "false",
-            "true",
-            true,
-            "Auto-approve bypasses ALL tool confirmation dialogs. Only enable for trusted, scoped tasks.",
-        );
-        let approved = request_confirmation_simple(
+        confirm_standing(
             &app_handle,
-            "set_auto_approve_all",
-            &serde_json::to_value(&payload)
-                .map_err(|e| format!("failed to serialize ModeTransitionPayload: {}", e))?,
+            "auto_approve_all",
+            auto_approve_question(),
+            AUTO_APPROVE_DECLINED,
         )
         .await?;
-        if !approved {
-            return Err("Auto-approve-all enable denied by user".to_string());
-        }
     }
     tracing::warn!(
         previous = previous,
@@ -1580,14 +1798,10 @@ pub fn get_auto_approve_all(state: State<'_, ToolConfirmationState>) -> Result<b
     Ok(state.is_auto_approve_all())
 }
 
-/// Set the agent execution mode (Safe / Build / Autopilot).
-///
-/// DESK-2 (audit 2026-05-03): transitioning into `Autopilot` requires a
-/// user confirmation through the same dialog used by every gated tool.
-/// The mode change is logged to tracing with the previous and new mode
-/// so audit log analysis can spot a hostile flip via XSS / prompt
-/// injection. Safe and Build are still no-confirmation transitions
-/// because they only ever raise the confirmation bar, never lower it.
+/// Sets the agent mode. A mode that lets more run than the one before it
+/// takes a native yes naming what stops being refused or asked; a narrower
+/// one never asks. Autopilot is the mode that does not ask before a tool
+/// runs, so entering it turns auto-approve on and leaving it turns it off.
 #[tauri::command]
 pub async fn set_agent_mode(
     mode: AgentMode,
@@ -1595,28 +1809,14 @@ pub async fn set_agent_mode(
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     let previous = state.get_agent_mode();
-    if matches!(mode, AgentMode::Autopilot) && !matches!(previous, AgentMode::Autopilot) {
-        // FIX (audit 2026-05-20, §4): typed integrity envelope (see
-        // ModeTransitionPayload). Carries a summary_hash the frontend can
-        // recompute to detect XSS-class swap-in-renderer attacks against the
-        // mode-transition dialog.
-        let payload = ModeTransitionPayload::new(
-            "set_agent_mode:autopilot",
-            format!("{:?}", previous),
-            "Autopilot",
-            true,
-            "Autopilot bypasses ALL tool confirmation dialogs. Only enable for trusted, scoped tasks.",
-        );
-        let approved = request_confirmation_simple(
+    if let Some(widening) = mode_widening(previous, mode, state.is_auto_approve_all()) {
+        confirm_standing(
             &app_handle,
-            "set_agent_mode:autopilot",
-            &serde_json::to_value(&payload)
-                .map_err(|e| format!("failed to serialize ModeTransitionPayload: {}", e))?,
+            widening.request(),
+            widening.question(),
+            widening.declined(),
         )
         .await?;
-        if !approved {
-            return Err("Autopilot mode change denied by user".to_string());
-        }
     }
     tracing::warn!(
         previous_mode = ?previous,
@@ -1624,6 +1824,11 @@ pub async fn set_agent_mode(
         "agent_mode_change",
     );
     state.set_agent_mode(mode);
+    if mode == AgentMode::Autopilot {
+        state.set_auto_approve_all(true);
+    } else if previous == AgentMode::Autopilot {
+        state.set_auto_approve_all(false);
+    }
     Ok(())
 }
 
@@ -1647,15 +1852,20 @@ pub struct ToolApprovalPolicy {
 
 /// Set the approval policy for a specific tool.
 ///
-/// Valid policies: `"ask"`, `"always_allow"`, `"always_deny"`.
+/// Valid policies: `"ask"`, `"always_allow"`, `"always_deny"`. Always allow
+/// is a standing grant that scheduled and background runs use too, so the
+/// person confirms it in a native dialog naming the tool; asking and denying
+/// are saved as requested.
 #[tauri::command]
-pub fn set_tool_approval_policy(
+pub async fn set_tool_approval_policy(
     tool_name: String,
     policy: String,
     state: State<'_, ToolConfirmationState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     match policy.as_str() {
         "always_allow" => {
+            confirm_always_allow(&app_handle, &state, &tool_name).await?;
             state.remember_choice(&tool_name, true);
             info!(
                 "[ToolConfirmation] Set policy for '{}': always_allow",
@@ -1663,6 +1873,11 @@ pub fn set_tool_approval_policy(
             );
         }
         "always_deny" => {
+            if !is_tool_remember_eligible(&tool_name) {
+                return Err(format!(
+                    "{tool_name} asks every time it runs, so no standing answer can be saved for it."
+                ));
+            }
             state.remember_choice(&tool_name, false);
             info!(
                 "[ToolConfirmation] Set policy for '{}': always_deny",
@@ -1686,68 +1901,9 @@ pub fn set_tool_approval_policy(
     Ok(())
 }
 
-/// Get the current approval policy for a specific tool.
-///
-/// Returns `"always_allow"`, `"always_deny"`, or `"ask"`.
-#[tauri::command]
-pub fn get_tool_approval_policy(
-    tool_name: String,
-    state: State<'_, ToolConfirmationState>,
-) -> Result<String, String> {
-    match state.get_remembered_choice(&tool_name) {
-        Some(true) => Ok("always_allow".to_string()),
-        Some(false) => Ok("always_deny".to_string()),
-        None => Ok("ask".to_string()),
-    }
-}
-
-/// Resolve a pending autonomous-agent task approval.
-///
-/// Called by the frontend when the user approves or rejects a task that is
-/// stuck in `TaskStatus::WaitingApproval`. This sends a boolean signal through
-/// the oneshot channel registered in `PENDING_TASK_APPROVALS`, waking the
-/// suspended agent task so it can resume execution (on approve) or fail
-/// gracefully (on reject).
-#[tauri::command]
-pub async fn resolve_task_approval(task_id: String, approved: bool) -> Result<(), String> {
-    use crate::core::agent::autonomous::PENDING_TASK_APPROVALS;
-
-    info!(
-        "[TaskApproval] User {} task {}",
-        if approved { "approved" } else { "rejected" },
-        task_id,
-    );
-
-    let sender = PENDING_TASK_APPROVALS
-        .remove(&task_id)
-        .map(|(_, tx)| tx)
-        .ok_or_else(|| {
-            format!(
-                "No pending approval found for task_id: {} (may have timed out)",
-                task_id
-            )
-        })?;
-
-    sender.send(approved).map_err(|_| {
-        format!(
-            "Failed to deliver approval signal for task {} (receiver dropped)",
-            task_id
-        )
-    })
-}
-
 // ============================================================================
 // Response Types
 // ============================================================================
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolSafetyTierInfo {
-    pub tool_name: String,
-    pub safety_tier: String,
-    pub safety_tier_description: String,
-    pub requires_user_action: bool,
-    pub risk_level: Option<String>,
-}
 
 // ============================================================================
 // Helper Functions for Tool Executor Integration
@@ -1869,9 +2025,13 @@ where
         return Ok(true);
     }
 
-    state
+    let _waiting_on_user = crate::sys::commands::chat::state::UserWaitGuard::start();
+    let approval = crate::ui::hooks::lifecycle::PendingApproval::announce(&request).await;
+    let outcome = state
         .await_confirmation(request, timeout_secs, surface)
-        .await
+        .await;
+    approval.resolve(matches!(outcome, Ok(true))).await;
+    outcome
 }
 
 /// Where one pending confirmation is shown and how its expiry is reported.
@@ -1957,6 +2117,8 @@ pub async fn request_tool_confirmation_no_mode_gate(
         return Ok(true);
     }
 
+    let approval = crate::ui::hooks::lifecycle::PendingApproval::announce(&request).await;
+
     // Register the pending confirmation
     let rx = state.register_pending_request(&request);
 
@@ -1966,6 +2128,7 @@ pub async fn request_tool_confirmation_no_mode_gate(
     // Emit the confirmation request event
     if let Err(e) = app_handle.emit("tool:confirmation_required", &summary) {
         state.cancel_pending(&request_id);
+        approval.resolve(false).await;
         return Err(format!("Failed to emit confirmation event: {}", e));
     }
 
@@ -1974,7 +2137,9 @@ pub async fn request_tool_confirmation_no_mode_gate(
         tool_name, request_id
     );
 
-    match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await {
+    let _waiting_on_user = crate::sys::commands::chat::state::UserWaitGuard::start();
+    let outcome = match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await
+    {
         Ok(Ok(response)) => {
             if response.remember_choice {
                 state.remember_choice(&tool_name, response.approved);
@@ -2007,7 +2172,9 @@ pub async fn request_tool_confirmation_no_mode_gate(
                 timeout_secs
             ))
         }
-    }
+    };
+    approval.resolve(matches!(outcome, Ok(true))).await;
+    outcome
 }
 
 /// Folder access is a separate capability boundary from tool approval.
@@ -2025,11 +2192,13 @@ pub async fn request_folder_access_confirmation(
     validated_folder_roots(&request)?;
 
     let request_id = request.request_id.clone();
+    let approval = crate::ui::hooks::lifecycle::PendingApproval::announce(&request).await;
     let rx = state.register_pending_request(&request);
     let summary = ToolConfirmationSummary::from(&request);
 
     if let Err(error) = app_handle.emit("tool:confirmation_required", &summary) {
         state.cancel_pending(&request_id);
+        approval.resolve(false).await;
         return Err(format!(
             "Failed to emit folder confirmation event: {}",
             error
@@ -2041,7 +2210,8 @@ pub async fn request_folder_access_confirmation(
         request_id
     );
 
-    match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await {
+    let outcome = match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await
+    {
         Ok(Ok(response)) => Ok(response.approved),
         Ok(Err(_)) => {
             state.cancel_pending(&request_id);
@@ -2061,7 +2231,9 @@ pub async fn request_folder_access_confirmation(
                 timeout_secs
             ))
         }
-    }
+    };
+    approval.resolve(matches!(outcome, Ok(true))).await;
+    outcome
 }
 
 /// Request confirmation from user for a tool execution (Simplified version).
@@ -2216,7 +2388,13 @@ mod tests {
             std::fs::canonicalize(persistent.path()).expect("canonical persistent folder");
         let session_path = std::fs::canonicalize(session.path()).expect("canonical session folder");
 
-        state.add_session_allowed_paths(&[session_path.to_string_lossy().to_string()]);
+        state.add_session_allowed_paths(
+            &[session_path.to_string_lossy().to_string()],
+            SessionFolderGrant {
+                modify: true,
+                execute: false,
+            },
+        );
         state.update_allowed_paths(vec![persistent_path.to_string_lossy().to_string()]);
         let effective = state.get_allowed_paths();
         assert!(effective.contains(&persistent_path.to_string_lossy().to_string()));
@@ -2228,6 +2406,136 @@ mod tests {
             state.get_allowed_paths(),
             vec![persistent_path.to_string_lossy().to_string()]
         );
+    }
+
+    #[test]
+    fn a_read_consent_grants_reading_only_and_the_shown_spelling_is_kept() {
+        let state = ToolConfirmationState::new();
+        let read_only = PathBuf::from("/shown/read-only");
+        let writable = PathBuf::from("/shown/writable");
+        state.add_session_allowed_paths(
+            &[read_only.to_string_lossy().to_string()],
+            SessionFolderGrant::from_capabilities(&["read".to_string()]),
+        );
+        state.add_session_allowed_paths(
+            &[writable.to_string_lossy().to_string()],
+            SessionFolderGrant::from_capabilities(&["execute".to_string()]),
+        );
+
+        let mut grants = state.get_session_folder_grants();
+        grants.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            grants,
+            vec![
+                (read_only.clone(), SessionFolderGrant::default()),
+                (
+                    writable.clone(),
+                    SessionFolderGrant {
+                        modify: false,
+                        execute: true,
+                    },
+                ),
+            ]
+        );
+        assert!(state
+            .get_session_allowed_paths_where(|grant| grant.modify)
+            .is_empty());
+        assert_eq!(
+            state.get_session_allowed_paths_where(SessionFolderGrant::lets_commands_write),
+            vec![writable.clone()]
+        );
+        state.update_allowed_paths(Vec::new());
+        assert!(
+            !state
+                .get_allowed_paths()
+                .contains(&read_only.to_string_lossy().to_string()),
+            "the filesystem MCP server writes, so it never gets a read-only folder"
+        );
+        assert!(
+            state.tool_guard().get_readable_paths().contains(&read_only),
+            "a read tool reaches a folder approved for reading"
+        );
+
+        state.add_session_allowed_paths(
+            &[read_only.to_string_lossy().to_string()],
+            SessionFolderGrant::from_capabilities(&["modify".to_string()]),
+        );
+        assert!(state
+            .get_session_allowed_paths_where(|grant| grant.modify)
+            .contains(&read_only));
+    }
+
+    #[test]
+    fn a_read_only_folder_request_is_never_remembered() {
+        let read = SessionFolderGrant::from_capabilities(&["read".to_string()]);
+        assert!(!folder_grant_persists(true, read));
+        assert!(!folder_grant_persists(false, read));
+        for capability in ["modify", "execute"] {
+            let grant = SessionFolderGrant::from_capabilities(&[
+                "read".to_string(),
+                capability.to_string(),
+            ]);
+            assert!(folder_grant_persists(true, grant), "{capability}");
+            assert!(!folder_grant_persists(false, grant), "{capability}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_session_grant_keeps_the_verified_spelling_and_never_resolves_it_again() {
+        let base = tempfile::tempdir().expect("temp folder");
+        let base = std::fs::canonicalize(base.path()).expect("canonical temp folder");
+        let real = base.join("real");
+        let link = base.join("link");
+        std::fs::create_dir(&real).expect("real folder");
+        std::os::unix::fs::symlink(&real, &link).expect("link");
+
+        let state = ToolConfirmationState::new();
+        state.add_session_allowed_paths(
+            &[link.to_string_lossy().to_string()],
+            SessionFolderGrant::default(),
+        );
+        assert_eq!(
+            state.get_session_allowed_paths_where(|_| true),
+            vec![link],
+            "the string the prompt showed is what is granted"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_shown_folder_swapped_for_a_link_before_approval_is_refused_not_resolved() {
+        let base = tempfile::tempdir().expect("temp folder");
+        let base = std::fs::canonicalize(base.path()).expect("canonical temp folder");
+        let shown = base.join("shown");
+        let elsewhere = base.join("elsewhere");
+        std::fs::create_dir(&shown).expect("shown folder");
+        std::fs::create_dir(&elsewhere).expect("other folder");
+        let request = ToolConfirmationRequest {
+            request_id: "folder-request-swapped".to_string(),
+            tool_name: FOLDER_ACCESS_TOOL_NAME.to_string(),
+            tool_description: "Allow file read".to_string(),
+            parameters: serde_json::json!({
+                "paths": [shown.join("notes.txt").to_string_lossy()],
+                "directories": [shown.to_string_lossy()],
+                "capabilities": ["read"],
+            }),
+            risk_level: crate::sys::security::tool_guard::RiskLevel::High,
+            safety_tier: ToolSafetyTier::RequiresExplicitApproval,
+            reason: "New folder".to_string(),
+            reversible: true,
+            undo_description: None,
+        };
+        assert_eq!(
+            validated_folder_roots(&request).expect("the shown folder is unchanged"),
+            vec![shown.to_string_lossy().to_string()],
+            "exactly the shown string is granted"
+        );
+
+        std::fs::remove_dir(&shown).expect("remove shown folder");
+        std::os::unix::fs::symlink(&elsewhere, &shown).expect("link in its place");
+        let error = validated_folder_roots(&request).expect_err("the folder changed");
+        assert!(error.contains("changed while you were deciding"), "{error}");
     }
 
     #[test]
@@ -2441,7 +2749,7 @@ mod tests {
             AgentMode::Safe
         ));
         assert!(ToolConfirmationState::is_tool_permitted_for_mode(
-            "search_web",
+            "git_diff",
             AgentMode::Safe
         ));
         assert!(ToolConfirmationState::is_tool_permitted_for_mode(
@@ -2465,6 +2773,101 @@ mod tests {
     }
 
     #[test]
+    fn safe_and_plan_modes_run_the_unattended_list_the_chat_tools_and_two_research_tools() {
+        use std::collections::BTreeSet;
+
+        assert_eq!(
+            ToolConfirmationState::ATTENDED_RESEARCH_TOOLS,
+            ["search_web", "image_analyze"]
+        );
+        let listed: BTreeSet<&str> = ToolConfirmationState::safe_and_plan_tools().collect();
+        // Written out, not built from the constants: a tool added to or taken
+        // off any of the three lists changes what Safe and Plan modes run, and
+        // this is where that shows.
+        let expected: BTreeSet<&str> = [
+            "background_agent_get",
+            "browser_extract",
+            "browser_get_attribute",
+            "browser_get_dom_snapshot",
+            "browser_get_element_state",
+            "browser_get_text",
+            "browser_get_title",
+            "browser_get_url",
+            "browser_query_all",
+            "browser_screenshot",
+            "browser_wait_for_interactive",
+            "browser_wait_for_navigation",
+            "browser_wait_for_selector",
+            "code_analyze",
+            "code_search",
+            "coding_checkpoint_list",
+            "conversation_search",
+            "document_detect_type",
+            "document_extract_text",
+            "document_get_metadata",
+            "document_read",
+            "document_search",
+            "file_list",
+            "file_read",
+            "file_read_binary",
+            "file_read_range",
+            "git_diff",
+            "git_list_branches",
+            "git_log",
+            "git_status",
+            "glob_search",
+            "grep_search",
+            "image_analyze",
+            "image_ocr",
+            "list_scheduled_tasks",
+            "llm_reason",
+            "memory_recall",
+            "memory_search",
+            "question",
+            "recent_chats",
+            "search_web",
+            "todo_write",
+            "tool_search",
+            "ui_read_value",
+            "ui_screenshot",
+            "undo_get_changes",
+            "undo_get_summary",
+            "worktree_list",
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(listed, expected);
+
+        for mode in [AgentMode::Safe, AgentMode::Plan] {
+            for tool in &listed {
+                assert!(
+                    ToolConfirmationState::is_tool_permitted_for_mode(tool, mode),
+                    "{tool} reads, plans or researches, so {mode:?} mode must run it"
+                );
+            }
+            for tool in [
+                "physical_scrape",
+                "api_call",
+                "browser_navigate",
+                "db_query",
+                "db_execute",
+                "skill",
+                "memory_forget",
+                "file_write",
+            ] {
+                assert!(
+                    !listed.contains(tool),
+                    "{tool} writes or fetches where the model points, so it is on no list"
+                );
+                assert!(
+                    !ToolConfirmationState::is_tool_permitted_for_mode(tool, mode),
+                    "{tool} must be refused in {mode:?} mode"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn test_tool_permitted_plan_mode() {
         // Plan mode allows the same read-only tools as Safe mode
         assert!(ToolConfirmationState::is_tool_permitted_for_mode(
@@ -2472,7 +2875,7 @@ mod tests {
             AgentMode::Plan
         ));
         assert!(ToolConfirmationState::is_tool_permitted_for_mode(
-            "search_web",
+            "git_log",
             AgentMode::Plan
         ));
         assert!(ToolConfirmationState::is_tool_permitted_for_mode(
@@ -2691,9 +3094,7 @@ mod agent_mode_persistence_tests {
 
     /// Build an in-memory SQLite DB with the full production schema
     /// (`settings_v2`, `remembered_tool_choices`, etc.) via the real
-    /// migration runner, matching the pattern used by other state
-    /// persistence tests in this codebase (see
-    /// `sys::commands::checkpoints::tests`).
+    /// migration runner, matching the other state persistence tests.
     fn migrated_db_conn() -> Arc<StdMutexAlias<Connection>> {
         let conn = Connection::open_in_memory().expect("open in-memory sqlite db");
         crate::data::db::migrations::run_migrations(&conn).expect("run migrations");
@@ -2848,9 +3249,13 @@ mod fix_f6_never_rememberable_alignment_tests {
         "git_push",
         "cloud_upload",
         "db_execute",
+        "api_call",
+        "api_upload",
+        "physical_scrape",
         "browser_execute_async_js",
         "browser_evaluate",
         "browser_execute_in_frame",
+        "agi_run_task",
     ];
 
     /// The subset that migration v63 deletes from `remembered_tool_choices`
@@ -3124,99 +3529,211 @@ mod mcp_envelope_parser_tests {
 }
 
 #[cfg(test)]
-mod mode_transition_envelope_tests {
-    //! FIX (audit 2026-05-20, §4): pin the typed mode-transition envelope.
-    //!
-    //! Three properties to nail down:
-    //!   1. `summary_hash` is non-empty and 64-char lowercase hex.
-    //!   2. Same inputs → same hash (deterministic).
-    //!   3. Mutating any field → different hash (anti-tamper).
-    use super::ModeTransitionPayload;
+mod standing_approval_tests {
+    use super::*;
+    use crate::sys::native_confirm::{can_ask_with, check_it_fits};
 
     #[test]
-    fn envelope_hash_is_sha256_hex() {
-        let p = ModeTransitionPayload::new(
-            "set_agent_mode:autopilot",
-            "Safe",
-            "Autopilot",
-            true,
-            "warning text",
+    fn only_a_mode_that_lets_more_run_is_asked_about() {
+        use AgentMode::{Autopilot, Build, Plan, Safe};
+
+        for (previous, next) in [
+            (Safe, Plan),
+            (Plan, Safe),
+            (Build, Build),
+            (Build, Safe),
+            (Build, Plan),
+            (Autopilot, Build),
+            (Autopilot, Safe),
+        ] {
+            for auto_approve_on in [false, true] {
+                assert_eq!(
+                    mode_widening(previous, next, auto_approve_on),
+                    None,
+                    "{previous:?} to {next:?} lets nothing more run"
+                );
+            }
+        }
+        for previous in [Safe, Plan] {
+            assert_eq!(
+                mode_widening(previous, Build, false),
+                Some(ModeWidening::ToBuild)
+            );
+        }
+        for previous in [Safe, Plan, Build] {
+            for auto_approve_on in [false, true] {
+                assert_eq!(
+                    mode_widening(previous, Autopilot, auto_approve_on),
+                    Some(ModeWidening::ToAutopilot)
+                );
+            }
+        }
+        assert_eq!(mode_widening(Autopilot, Autopilot, true), None);
+        assert_eq!(
+            mode_widening(Autopilot, Autopilot, false),
+            Some(ModeWidening::ToAutopilot),
+            "setting Autopilot turns auto-approve on, so it is asked about while that is off"
         );
-        assert_eq!(p.summary_hash.len(), 64);
-        assert!(p.summary_hash.chars().all(|c| c.is_ascii_hexdigit()));
-        assert_eq!(p.summary_hash, p.recompute_hash());
     }
 
     #[test]
-    fn envelope_hash_is_deterministic() {
-        let p1 =
-            ModeTransitionPayload::new("set_auto_approve_all", "false", "true", true, "warning");
-        let p2 =
-            ModeTransitionPayload::new("set_auto_approve_all", "false", "true", true, "warning");
-        assert_eq!(p1.summary_hash, p2.summary_hash);
+    fn each_question_can_be_asked_and_fits_the_dialog() {
+        let state = ToolConfirmationState::new();
+        let folders = remember_folders_question(
+            &["/Users/someone/code".to_string()],
+            SessionFolderGrant {
+                modify: true,
+                execute: true,
+            },
+        )
+        .expect("a question");
+        let tool = always_allow_tool_question(state.tool_guard(), "file_read").expect("a question");
+        for question in [
+            ModeWidening::ToBuild.question(),
+            ModeWidening::ToAutopilot.question(),
+            auto_approve_question(),
+            folders,
+            tool,
+        ] {
+            assert!(can_ask_with(&question.confirm_label), "{}", question.title);
+            assert!(check_it_fits(&question.body).is_ok(), "{}", question.title);
+        }
+        assert_ne!(
+            ModeWidening::ToBuild.request(),
+            ModeWidening::ToAutopilot.request()
+        );
     }
 
     #[test]
-    fn envelope_hash_changes_when_warning_swapped() {
-        // The XSS-renderer attack: keep `new` and `elevates_privilege` the
-        // same but mutate the warning so the user sees a different message
-        // than what was intended. Hash must diverge.
-        let original = ModeTransitionPayload::new(
-            "set_auto_approve_all",
-            "false",
-            "true",
-            true,
-            "Auto-approve bypasses ALL tool confirmation dialogs.",
+    fn always_allow_names_the_tool_and_the_runs_nobody_watches() {
+        let state = ToolConfirmationState::new();
+        let question =
+            always_allow_tool_question(state.tool_guard(), "file_read").expect("a question");
+
+        assert!(question.body.contains("\"file_read\""), "{}", question.body);
+        assert!(
+            question.body.contains("scheduled and background runs"),
+            "{}",
+            question.body
         );
-        let tampered = ModeTransitionPayload::new(
-            "set_auto_approve_all",
-            "false",
-            "true",
-            true,
-            "Click approve to continue.",
-        );
-        assert_ne!(original.summary_hash, tampered.summary_hash);
+        assert!(question.body.contains("without asking you first"));
     }
 
     #[test]
-    fn envelope_hash_changes_when_flag_flipped() {
-        // The most dangerous swap: flip `elevates_privilege` so the dialog
-        // looks like a de-escalation while we're actually elevating.
-        let elevate = ModeTransitionPayload::new(
-            "set_agent_mode:autopilot",
-            "Safe",
-            "Autopilot",
-            true,
-            "warning",
+    fn always_allow_is_refused_for_a_tool_that_must_ask_and_a_name_that_hides_itself() {
+        let state = ToolConfirmationState::new();
+        let guard = state.tool_guard();
+
+        for name in NEVER_REMEMBERABLE {
+            assert!(always_allow_tool_question(guard, name).is_err(), "{name}");
+        }
+        assert!(always_allow_tool_question(guard, "mcp__server__tool").is_err());
+        assert!(always_allow_tool_question(guard, "").is_err());
+        assert!(always_allow_tool_question(guard, "file_read\nAllow everything").is_err());
+        assert!(always_allow_tool_question(guard, "file\u{200B}_read").is_err());
+        assert!(
+            always_allow_tool_question(guard, &"x".repeat(MAX_SHOWN_TOOL_NAME_CHARS + 1)).is_err()
         );
-        let descend = ModeTransitionPayload::new(
-            "set_agent_mode:autopilot",
-            "Safe",
-            "Autopilot",
-            false,
-            "warning",
-        );
-        assert_ne!(elevate.summary_hash, descend.summary_hash);
     }
 
     #[test]
-    fn envelope_recompute_hash_matches_constructor_hash() {
-        // The contract the frontend relies on: parse the envelope, replay
-        // the canonical hash, compare to `summary_hash`. We pin it here.
-        let p = ModeTransitionPayload::new(
-            "set_agent_mode:autopilot",
-            "Plan",
-            "Autopilot",
-            true,
-            "Autopilot bypasses ALL tool confirmation dialogs.",
+    fn remembered_folders_are_each_shown_on_a_row_and_too_many_are_refused() {
+        let grant = SessionFolderGrant {
+            modify: true,
+            execute: false,
+        };
+        let question = remember_folders_question(
+            &[
+                "/Users/someone/code".to_string(),
+                "/Users/someone/notes\nevery folder".to_string(),
+            ],
+            grant,
+        )
+        .expect("a question");
+
+        assert!(
+            question.body.contains("may read and change files in:"),
+            "{}",
+            question.body
         );
-        let recomputed = ModeTransitionPayload::new(
-            p.kind.clone(),
-            p.previous.clone(),
-            p.new.clone(),
-            p.elevates_privilege,
-            p.warning.clone(),
+        assert!(question.body.contains("\n/Users/someone/code\n"));
+        assert!(
+            !question.body.contains("notes\nevery folder"),
+            "a line break inside a path is marked, not drawn"
         );
-        assert_eq!(p.summary_hash, recomputed.summary_hash);
+
+        let many: Vec<String> = (0..60)
+            .map(|index| format!("/Users/someone/folder-{index}"))
+            .collect();
+        assert!(remember_folders_question(&many, grant).is_err());
+    }
+
+    /// The text of the function that starts at `signature`, up to the brace
+    /// that closes it in the first column.
+    fn command_body(source: &'static str, signature: &str) -> &'static str {
+        let body = source.split(signature).nth(1).expect(signature);
+        body.split("\n}\n").next().unwrap_or(body)
+    }
+
+    fn comes_first(body: &str, question: &str, change: &str) {
+        let asked = body
+            .find(question)
+            .unwrap_or_else(|| panic!("{question} is missing"));
+        let changed = body
+            .find(change)
+            .unwrap_or_else(|| panic!("{change} is missing"));
+        assert!(asked < changed, "{question} must come before {change}");
+    }
+
+    /// The in-window confirmation these commands used could be answered by
+    /// the page itself, so the native question has to stay in front of each
+    /// write.
+    #[test]
+    fn a_standing_grant_is_asked_about_natively_before_it_is_written() {
+        const SOURCE: &str = include_str!("tool_confirmation.rs");
+
+        let auto = command_body(SOURCE, "pub async fn set_auto_approve_all(");
+        comes_first(
+            auto,
+            "confirm_standing(",
+            "state.set_auto_approve_all(enabled)",
+        );
+
+        let mode = command_body(SOURCE, "pub async fn set_agent_mode(");
+        comes_first(mode, "confirm_standing(", "state.set_agent_mode(mode)");
+        comes_first(
+            mode,
+            "confirm_standing(",
+            "state.set_auto_approve_all(true)",
+        );
+
+        let policy = command_body(SOURCE, "pub async fn set_tool_approval_policy(");
+        comes_first(
+            policy,
+            "confirm_always_allow(",
+            "state.remember_choice(&tool_name, true)",
+        );
+
+        let respond = command_body(SOURCE, "pub async fn respond_tool_confirmation(");
+        comes_first(respond, "confirm_always_allow(", "state.resolve_pending(");
+        comes_first(
+            respond,
+            "remember_folders_question(",
+            "add_allowed_directories_persisted(",
+        );
+
+        let folders = command_body(SOURCE, "pub async fn update_allowed_directories(");
+        comes_first(
+            folders,
+            "require_granted_folders(",
+            "state.update_allowed_paths(",
+        );
+
+        for body in [auto, mode, policy, respond, folders] {
+            assert!(
+                !body.contains("request_confirmation_simple("),
+                "a question the page draws is one the page can answer"
+            );
+        }
     }
 }

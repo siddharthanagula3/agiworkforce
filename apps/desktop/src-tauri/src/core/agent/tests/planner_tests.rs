@@ -632,9 +632,34 @@ I need to take a screenshot first.
         let router = Arc::new(RwLock::new(LLMRouter::new()));
         let planner = TaskPlanner::new(router).unwrap();
         let steps = planner
-            .plan_task("Take a screenshot and find the OK button")
+            .plan_task(
+                "Take a screenshot and find the OK button",
+                crate::core::llm::RouterPreferences::default(),
+            )
             .await
             .unwrap();
         assert!(!steps.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_model_that_cannot_be_reached_is_an_error_and_not_a_made_up_plan() {
+        let router = Arc::new(RwLock::new(LLMRouter::new()));
+        let planner = TaskPlanner::new(router).unwrap();
+
+        let planned = planner
+            .plan_task(
+                "Summarise the inbox",
+                crate::core::llm::RouterPreferences {
+                    trust_mode: Some(agiworkforce_model_registry::TrustMode::Local),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+        assert!(
+            planned.is_err(),
+            "with no model the planner invented {:?}",
+            planned.map(|steps| steps.len())
+        );
     }
 }

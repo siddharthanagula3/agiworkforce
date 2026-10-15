@@ -1,6 +1,5 @@
 use crate::data::db::models::{
-    Conversation, ConversationCostBreakdown, CostTimeseriesPoint, Message, MessageRole,
-    ProviderCostBreakdown,
+    Conversation, ConversationCostBreakdown, CostTimeseriesPoint, Message, ProviderCostBreakdown,
 };
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -128,24 +127,18 @@ pub struct CreateConversationRequest {
     pub project_id: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CreateMessageRequest {
-    pub conversation_id: i64,
-    pub user_id: String,
-    pub role: MessageRole,
+/// One earlier turn of a temporary chat. Only `user` and `assistant` turns are
+/// used; anything else is dropped rather than trusted as a system instruction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemporaryHistoryTurn {
+    pub role: String,
     pub content: String,
-    pub tokens: Option<i32>,
-    pub cost: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateConversationRequest {
     pub title: String,
     pub user_id: String,
-}
-
-fn default_auto_inject_skills() -> Option<bool> {
-    Some(true)
 }
 
 /// Exact user-selected native tool lane for one chat turn. This is separate
@@ -174,8 +167,6 @@ pub struct ChatSendMessageRequest {
     #[serde(default, alias = "modelOverride")]
     pub model_override: Option<String>,
     #[serde(default)]
-    pub strategy: Option<String>,
-    #[serde(default)]
     pub stream: Option<bool>,
     #[serde(default, alias = "enableTools")]
     pub enable_tools: Option<bool>,
@@ -183,10 +174,6 @@ pub struct ChatSendMessageRequest {
     pub tool_scope: Option<ChatToolScope>,
     #[serde(default, alias = "conversationMode")]
     pub conversation_mode: Option<String>,
-    #[serde(default, alias = "workflowHash")]
-    pub workflow_hash: Option<String>,
-    #[serde(default, alias = "taskMetadata")]
-    pub task_metadata: Option<TaskMetadata>,
 
     #[serde(default, alias = "focusMode")]
     pub focus_mode: Option<String>,
@@ -269,22 +256,17 @@ pub struct ChatSendMessageRequest {
     #[serde(default, alias = "incognito")]
     pub incognito: Option<bool>,
 
-    /// When true (or absent, default true), offer installed skills to the model for
-    /// this turn: a name+description catalog in the system prompt plus the `skill`
-    /// tool it must call to read any body (progressive disclosure).
-    ///
-    /// The name is kept for IPC compatibility (`autoInjectSkills` is already written
-    /// by the settings store and the MCP server bridge), but nothing is auto-injected
-    /// anymore, skill bodies are never placed in the prompt, only fetched on an
-    /// explicit model tool call. `false` withholds both the catalog and the tool.
-    #[serde(default = "default_auto_inject_skills", alias = "autoInjectSkills")]
-    pub auto_inject_skills: Option<bool>,
+    /// The earlier turns of a temporary chat, oldest first. A temporary chat is
+    /// never stored, so the renderer is the only place its history exists; it
+    /// is read for this one request and never written anywhere.
+    #[serde(default, alias = "temporaryHistory")]
+    pub temporary_history: Option<Vec<TemporaryHistoryTurn>>,
 
-    /// Whether the user explicitly selected a specific model (not an auto-routed selection).
-    /// Passed through from the frontend; currently informational, the backend does not
-    /// alter routing based on this flag, but it is preserved for analytics and future use.
-    #[serde(default, alias = "isExplicitModelSelection")]
-    pub is_explicit_model_selection: Option<bool>,
+    /// `Some(false)` withholds the skill catalog and the `skill` tool for this
+    /// turn. Set only in-process (the MCP server bridge); the renderer cannot
+    /// send it, so an IPC request always offers skills.
+    #[serde(skip)]
+    pub auto_inject_skills: Option<bool>,
 }
 
 /// Subset of model capabilities passed from the frontend to control tool filtering.
@@ -324,45 +306,6 @@ pub struct ChatAttachment {
 
     #[serde(default)]
     pub path: Option<String>,
-}
-
-/// Task metadata containing intent classification and routing decisions
-/// Passed from TypeScript frontend to Rust backend
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct TaskMetadata {
-    // Legacy fields (backward compatible)
-    #[serde(default)]
-    pub intents: Vec<String>,
-    #[serde(default)]
-    pub requires_vision: bool,
-    #[serde(default)]
-    pub token_estimate: Option<u32>,
-    #[serde(default)]
-    pub cost_priority: Option<String>,
-
-    // New intelligent routing fields (January 2026)
-    /// Primary classified intent type (chat, coding, image-gen, video-gen, search, etc.)
-    #[serde(default)]
-    pub intent_type: Option<String>,
-    /// Model category for routing (chat, image, video, search, tts, stt, music)
-    #[serde(default)]
-    pub model_category: Option<String>,
-    /// Selected model from intelligent routing
-    #[serde(default)]
-    pub selected_model: Option<String>,
-    /// Tool categories that should be available
-    #[serde(default)]
-    pub suggested_tool_categories: Option<Vec<String>>,
-    /// Whether tools should auto-execute (full autonomy mode)
-    #[serde(default)]
-    pub auto_execute_tools: Option<bool>,
-    /// Classification confidence (0-1)
-    #[serde(default)]
-    pub confidence: Option<f32>,
-    /// Routing reasoning for debugging
-    #[serde(default)]
-    pub routing_reason: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

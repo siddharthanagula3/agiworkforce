@@ -38,15 +38,10 @@ pub struct CollectorConfig {
     /// events to `analytics_events.json` inside this directory (the Tauri
     /// app-data directory). When `None` the local-file fallback is skipped.
     pub app_data_dir: Option<PathBuf>,
-    /// TRUST-BOUNDARY: when the session is in a Local trust boundary.
-    /// `Some("local")` (device-only) OR `Some("byok")` (user's own keys,
-    /// client-direct, no AGI compute), the collector silently drops all events
-    /// and flushes, mirroring the TS analytics.ts gate. Per the suite rule
-    /// "Local Mode (on-device + BYOK) = zero cloud telemetry", BYOK telemetry
-    /// must never reach our cloud. Only `Some("managed")` / other values
-    /// (including `None`, the pre-sync default) allow normal operation. Never
-    /// promote Local/BYOK events to the HTTP endpoint or the local file
-    /// regardless of `enabled`. See `is_local_trust_boundary`.
+    /// TRUST-BOUNDARY: the collector emits only while this is `Some("cloud")`
+    /// or `Some("managed")`. Every other value, including `None` before the
+    /// renderer has reported the app mode, is a Local boundary in which all
+    /// events and flushes are dropped. See `is_local_trust_boundary`.
     pub privacy_mode: Option<String>,
 }
 
@@ -57,7 +52,7 @@ impl Default for CollectorConfig {
             batch_size: 50,
             flush_interval_secs: 30,
             app_data_dir: None,
-            privacy_mode: None,
+            privacy_mode: Some("local".to_string()),
         }
     }
 }
@@ -108,14 +103,13 @@ impl TelemetryCollector {
         self.config.enabled && self.consent.is_granted() && !self.is_local_trust_boundary()
     }
 
-    /// True when the configured privacy mode is a Local trust boundary in which
-    /// NO telemetry may reach our cloud: `"local"` (device-only) or `"byok"`
-    /// (user-supplied keys, client-direct). Managed cloud and the `None`
-    /// pre-sync default are NOT Local boundaries here.
+    /// True unless the app mode was positively reported as Managed Cloud. An
+    /// unset or unrecognised mode fails closed to Local, so no telemetry can
+    /// reach our cloud before the renderer reports the mode.
     fn is_local_trust_boundary(&self) -> bool {
-        matches!(
+        !matches!(
             self.config.privacy_mode.as_deref(),
-            Some("local") | Some("byok")
+            Some("cloud") | Some("managed")
         )
     }
 
@@ -338,7 +332,7 @@ mod tests {
             batch_size,
             flush_interval_secs: 30,
             app_data_dir: None,
-            privacy_mode: None,
+            privacy_mode: Some("cloud".to_string()),
         }
     }
 
@@ -646,15 +640,38 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn none_mode_allows_track_when_enabled() {
-        let collector = consented(config(true, 100));
+    async fn an_unreported_or_unknown_mode_blocks_track_even_when_enabled() {
+        for mode in [None, Some(String::new()), Some("Cloud".to_string())] {
+            let mut cfg = config(true, 100);
+            cfg.privacy_mode = mode.clone();
+            let collector = consented(cfg);
+
+            collector
+                .track(event("test_event", collector.get_session_id()))
+                .await
+                .unwrap();
+
+            assert_eq!(
+                collector.get_event_count().await,
+                0,
+                "TRUST-BOUNDARY: mode {mode:?} must fail closed to Local"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn the_default_collector_config_is_a_local_boundary() {
+        let collector = consented(CollectorConfig {
+            enabled: true,
+            ..CollectorConfig::default()
+        });
 
         collector
             .track(event("test_event", collector.get_session_id()))
             .await
             .unwrap();
 
-        assert_eq!(collector.get_event_count().await, 1);
+        assert_eq!(collector.get_event_count().await, 0);
     }
 
     #[tokio::test]

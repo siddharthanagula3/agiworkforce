@@ -1,13 +1,10 @@
 // H17, Approval module tests.
 //
 // Tests that CAN run without AppHandle (sync):
-//  • `ApprovalRule` enum, construction and matching
 //  • `ApprovalScopeType` enum, serialisation
 //  • `ApprovalScope` construction
 //  • `ApprovalResolution` enum, construction
-//  • `ApprovalManager`, new(), should_approve() for auto-approve and manual paths
-//  • `ApprovalController`, new() (requires only a filesystem path), resolve() race detection,
-//    is_action_trusted()
+//  • `ApprovalController`, resolve() race detection, the workflow hash label
 //
 // Tests that need a Tauri AppHandle (request_approval emits events):
 //  • `test_approval_race_condition_prevention` (uses mock_app)
@@ -16,38 +13,9 @@
 #[cfg(test)]
 mod tests {
     use crate::core::agent::approval::*;
-    use crate::core::agent::{Action, AgentConfig, Task, TaskStatus, TaskStep};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
-    use tempfile::TempDir;
     use tokio::task;
-
-    // ------------------------------------------------------------------
-    // ApprovalRule, construction and Debug
-    // ------------------------------------------------------------------
-
-    #[test]
-    fn test_approval_rule_variants_are_constructable() {
-        let _pattern = ApprovalRule::PatternMatch {
-            pattern: "delete".to_string(),
-        };
-        let _no_fs = ApprovalRule::NoFileSystemOps;
-        let _no_net = ApprovalRule::NoNetworkOps;
-        let _ro = ApprovalRule::ReadOnly;
-        let _always = ApprovalRule::AlwaysRequire;
-    }
-
-    #[test]
-    fn test_approval_rule_pattern_match_stores_pattern() {
-        let rule = ApprovalRule::PatternMatch {
-            pattern: "rm -rf".to_string(),
-        };
-        if let ApprovalRule::PatternMatch { pattern } = &rule {
-            assert_eq!(pattern, "rm -rf");
-        } else {
-            panic!("Expected PatternMatch variant");
-        }
-    }
 
     // ------------------------------------------------------------------
     // ApprovalScopeType, serialisation
@@ -118,13 +86,21 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
-    fn test_approval_resolution_approved_trust_true() {
-        let r = ApprovalResolution::Approved { trust: true };
-        if let ApprovalResolution::Approved { trust } = &r {
-            assert!(*trust);
-        } else {
-            panic!("Expected Approved");
-        }
+    fn an_approval_from_the_window_cannot_carry_a_standing_grant() {
+        assert_eq!(ApprovalResolution::Approved, ApprovalResolution::Approved);
+
+        let controller = include_str!("../approval.rs");
+        assert!(!controller.contains("TrustedWorkflowStore"));
+        assert!(!controller.contains("record_trust"));
+        assert!(!controller.contains("Auto-approved"));
+
+        let command = include_str!("../../../sys/commands/agent.rs");
+        let resolve = command
+            .split("pub async fn agent_resolve_approval")
+            .nth(1)
+            .and_then(|rest| rest.split("pub async fn").next())
+            .expect("the approval command");
+        assert!(!resolve.contains("trust"));
     }
 
     #[test]
@@ -148,149 +124,12 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // ApprovalManager, should_approve() with auto_approve config
+    // ApprovalController, the workflow hash label
     // ------------------------------------------------------------------
-
-    fn make_read_only_task() -> Task {
-        Task {
-            id: "task_ro".to_string(),
-            description: "Take a screenshot of the screen".to_string(),
-            status: TaskStatus::Pending,
-            created_at: Instant::now(),
-            updated_at: Instant::now(),
-            steps: vec![TaskStep {
-                id: "s1".to_string(),
-                action: Action::Screenshot { region: None },
-                description: "Screenshot".to_string(),
-                expected_result: None,
-                timeout: Duration::from_secs(5),
-                retry_on_failure: false,
-            }],
-            current_step: 0,
-            max_retries: 3,
-            retry_count: 0,
-            replan_count: 0,
-            requires_approval: false,
-            auto_approve: true,
-        }
-    }
-
-    fn make_destructive_task() -> Task {
-        Task {
-            id: "task_del".to_string(),
-            description: "delete all temporary files".to_string(),
-            status: TaskStatus::Pending,
-            created_at: Instant::now(),
-            updated_at: Instant::now(),
-            steps: vec![TaskStep {
-                id: "s1".to_string(),
-                action: Action::ExecuteCommand {
-                    command: "rm".to_string(),
-                    args: vec!["-rf".to_string(), "/tmp/*".to_string()],
-                },
-                description: "Delete temp files".to_string(),
-                expected_result: None,
-                timeout: Duration::from_secs(30),
-                retry_on_failure: false,
-            }],
-            current_step: 0,
-            max_retries: 3,
-            retry_count: 0,
-            replan_count: 0,
-            requires_approval: true,
-            auto_approve: false,
-        }
-    }
-
-    #[tokio::test]
-    async fn test_approval_manager_auto_approve_task() {
-        let cfg = AgentConfig {
-            auto_approve: true,
-            ..AgentConfig::default()
-        };
-        let manager = ApprovalManager::new(cfg);
-        let task = make_read_only_task();
-        // task.auto_approve = true → should_approve returns true immediately
-        let result = manager.should_approve(&task).await.unwrap();
-        assert!(result, "Auto-approve task should be approved");
-    }
-
-    #[tokio::test]
-    async fn test_approval_manager_always_require_denies() {
-        // auto_approve=false on the config → AlwaysRequire rule is added
-        let cfg = AgentConfig {
-            auto_approve: false,
-            ..AgentConfig::default()
-        };
-        let manager = ApprovalManager::new(cfg);
-        // Task with auto_approve=false and requires_approval=true
-        let mut task = make_destructive_task();
-        task.auto_approve = false;
-        let result = manager.should_approve(&task).await.unwrap();
-        assert!(
-            !result,
-            "AlwaysRequire should deny tasks that are not auto-approved"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_approval_manager_task_auto_approve_overrides_config() {
-        // Config says auto_approve=false, but the task itself has auto_approve=true
-        let cfg = AgentConfig {
-            auto_approve: false,
-            ..AgentConfig::default()
-        };
-        let manager = ApprovalManager::new(cfg);
-        let mut task = make_read_only_task();
-        task.auto_approve = true;
-        let result = manager.should_approve(&task).await.unwrap();
-        // task.auto_approve=true → approved immediately (line 55 in approval.rs)
-        assert!(result);
-    }
-
-    // ------------------------------------------------------------------
-    // ApprovalController, construct from temp dir, is_action_trusted
-    // ------------------------------------------------------------------
-
-    #[tokio::test]
-    async fn test_approval_controller_new_from_temp_dir() {
-        let temp_dir = TempDir::new().unwrap();
-        let controller = ApprovalController::new(temp_dir.path().to_path_buf());
-        assert!(
-            controller.is_ok(),
-            "ApprovalController::new should succeed with a valid path"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_approval_controller_is_action_trusted_initially_false() {
-        let temp_dir = TempDir::new().unwrap();
-        let controller = ApprovalController::new(temp_dir.path().to_path_buf()).unwrap();
-        let trusted = controller
-            .is_action_trusted(Some("workflow_hash_abc"), "sig_xyz")
-            .await
-            .unwrap();
-        assert!(
-            !trusted,
-            "No actions should be trusted in a fresh controller"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_approval_controller_no_hash_returns_false() {
-        let temp_dir = TempDir::new().unwrap();
-        let controller = ApprovalController::new(temp_dir.path().to_path_buf()).unwrap();
-        let trusted = controller.is_action_trusted(None, "any_sig").await.unwrap();
-        assert!(
-            !trusted,
-            "Without a workflow hash, action must not be trusted"
-        );
-    }
 
     #[tokio::test]
     async fn test_approval_controller_set_and_get_current_hash() {
-        let temp_dir = TempDir::new().unwrap();
-        let controller = ApprovalController::new(temp_dir.path().to_path_buf()).unwrap();
+        let controller = ApprovalController::default();
 
         assert!(controller.current_hash().await.is_none());
 
@@ -306,39 +145,6 @@ mod tests {
         assert!(controller.current_hash().await.is_none());
     }
 
-    #[tokio::test]
-    async fn test_approval_controller_list_trusted_workflows_empty() {
-        let temp_dir = TempDir::new().unwrap();
-        let controller = ApprovalController::new(temp_dir.path().to_path_buf()).unwrap();
-        let workflows = controller.list_trusted_workflows().await.unwrap();
-        assert!(
-            workflows.is_empty(),
-            "No trusted workflows in a fresh controller"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_trust_store_concurrent_access() {
-        let temp_dir = TempDir::new().unwrap();
-        let controller = Arc::new(ApprovalController::new(temp_dir.path().to_path_buf()).unwrap());
-
-        let mut tasks = vec![];
-        for i in 0..10 {
-            let controller_clone = controller.clone();
-            let task = task::spawn(async move {
-                controller_clone
-                    .is_action_trusted(Some("workflow_hash"), &format!("signature_{}", i))
-                    .await
-            });
-            tasks.push(task);
-        }
-
-        for t in tasks {
-            let result = t.await.unwrap();
-            assert!(result.is_ok(), "Trust check should complete successfully");
-        }
-    }
-
     // ------------------------------------------------------------------
     // Async tests that use mock_app, kept from original because they DO
     // call real production code.
@@ -346,8 +152,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_approval_race_condition_prevention() {
-        let temp_dir = TempDir::new().unwrap();
-        let controller = Arc::new(ApprovalController::new(temp_dir.path().to_path_buf()).unwrap());
+        let controller = Arc::new(ApprovalController::default());
 
         let app = tauri::test::mock_app();
         let app_handle = app.handle().clone();
@@ -386,8 +191,8 @@ mod tests {
         let controller_clone1 = controller.clone();
         let controller_clone2 = controller.clone();
 
-        let resolution1 = ApprovalResolution::Approved { trust: false };
-        let resolution2 = ApprovalResolution::Approved { trust: true };
+        let resolution1 = ApprovalResolution::Approved;
+        let resolution2 = ApprovalResolution::Rejected { reason: None };
 
         let resolve_task1 = task::spawn(async move {
             controller_clone1
@@ -432,8 +237,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_approval_toctou_prevention() {
-        let temp_dir = TempDir::new().unwrap();
-        let controller = Arc::new(ApprovalController::new(temp_dir.path().to_path_buf()).unwrap());
+        let controller = Arc::new(ApprovalController::default());
 
         controller
             .set_current_hash(Some("test_workflow".to_string()))
@@ -474,7 +278,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
         let result = controller
-            .resolve("test_toctou", ApprovalResolution::Approved { trust: true })
+            .resolve("test_toctou", ApprovalResolution::Approved)
             .await;
         assert!(result.is_ok(), "First resolution should succeed");
 
@@ -484,13 +288,21 @@ mod tests {
             "Approval should complete successfully"
         );
 
-        let is_trusted = controller
-            .is_action_trusted(Some("test_workflow"), "delete_sig")
-            .await
-            .unwrap();
+        let app_handle_again = app_handle.clone();
+        let controller_again = controller.clone();
+        let asked_again = task::spawn(async move {
+            controller_again
+                .request_approval_with_timeout(
+                    &app_handle_again,
+                    payload,
+                    Duration::from_millis(100),
+                )
+                .await
+        });
+        let second = asked_again.await.unwrap().unwrap();
         assert!(
-            is_trusted,
-            "Action should be trusted after approval with trust=true"
+            matches!(second, ApprovalResolution::Rejected { .. }),
+            "the same action in the same workflow is asked again, and unanswered it is denied"
         );
     }
 
@@ -531,8 +343,7 @@ mod tests {
     async fn test_permission_required_envelope_carries_a_deadline() {
         use tauri::Listener;
 
-        let temp_dir = TempDir::new().unwrap();
-        let controller = Arc::new(ApprovalController::new(temp_dir.path().to_path_buf()).unwrap());
+        let controller = Arc::new(ApprovalController::default());
 
         let app = tauri::test::mock_app();
         let app_handle = app.handle().clone();
@@ -560,12 +371,12 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         controller
-            .resolve("envelope-1", ApprovalResolution::Approved { trust: false })
+            .resolve("envelope-1", ApprovalResolution::Approved)
             .await
             .expect("the request must be pending and answerable");
 
         let resolution = request.await.unwrap().unwrap();
-        assert_eq!(resolution, ApprovalResolution::Approved { trust: false });
+        assert_eq!(resolution, ApprovalResolution::Approved);
 
         let payload = captured
             .lock()
@@ -603,8 +414,7 @@ mod tests {
     /// of parking the suspended step on a `oneshot` receiver forever.
     #[tokio::test]
     async fn test_unanswered_approval_expires_to_a_terminal_denial() {
-        let temp_dir = TempDir::new().unwrap();
-        let controller = Arc::new(ApprovalController::new(temp_dir.path().to_path_buf()).unwrap());
+        let controller = Arc::new(ApprovalController::default());
 
         let app = tauri::test::mock_app();
         let app_handle = app.handle().clone();
@@ -642,7 +452,7 @@ mod tests {
 
         // The slot is gone, and the outcome is remembered as terminal.
         let late = controller
-            .resolve("expiry-1", ApprovalResolution::Approved { trust: false })
+            .resolve("expiry-1", ApprovalResolution::Approved)
             .await;
         let error = late.expect_err("an expired approval must not be approvable afterwards");
         assert!(
@@ -656,8 +466,7 @@ mod tests {
     /// future. That must release the pending slot, not leak it.
     #[tokio::test]
     async fn test_cancelled_request_releases_the_pending_slot() {
-        let temp_dir = TempDir::new().unwrap();
-        let controller = Arc::new(ApprovalController::new(temp_dir.path().to_path_buf()).unwrap());
+        let controller = Arc::new(ApprovalController::default());
 
         let app = tauri::test::mock_app();
         let app_handle = app.handle().clone();
@@ -674,7 +483,7 @@ mod tests {
         assert!(outer.is_err(), "the outer timeout should win here");
 
         let late = controller
-            .resolve("cancelled-1", ApprovalResolution::Approved { trust: false })
+            .resolve("cancelled-1", ApprovalResolution::Approved)
             .await;
         let error = late.expect_err("a cancelled request has no live waiter");
         assert!(
@@ -688,8 +497,7 @@ mod tests {
     /// error on a card the user already answered successfully.
     #[tokio::test]
     async fn test_duplicate_identical_decision_is_idempotent() {
-        let temp_dir = TempDir::new().unwrap();
-        let controller = Arc::new(ApprovalController::new(temp_dir.path().to_path_buf()).unwrap());
+        let controller = Arc::new(ApprovalController::default());
 
         let app = tauri::test::mock_app();
         let app_handle = app.handle().clone();
@@ -709,12 +517,12 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         controller
-            .resolve("dup-1", ApprovalResolution::Approved { trust: false })
+            .resolve("dup-1", ApprovalResolution::Approved)
             .await
             .expect("first click must be accepted");
 
         let second = controller
-            .resolve("dup-1", ApprovalResolution::Approved { trust: false })
+            .resolve("dup-1", ApprovalResolution::Approved)
             .await;
         assert!(
             second.is_ok(),
@@ -723,15 +531,14 @@ mod tests {
         );
 
         let resolution = request.await.unwrap().unwrap();
-        assert_eq!(resolution, ApprovalResolution::Approved { trust: false });
+        assert_eq!(resolution, ApprovalResolution::Approved);
     }
 
     /// Idempotency must not become "last writer wins": a decision that
     /// contradicts the one already applied has to be refused.
     #[tokio::test]
     async fn test_conflicting_decision_after_resolution_is_refused() {
-        let temp_dir = TempDir::new().unwrap();
-        let controller = Arc::new(ApprovalController::new(temp_dir.path().to_path_buf()).unwrap());
+        let controller = Arc::new(ApprovalController::default());
 
         let app = tauri::test::mock_app();
         let app_handle = app.handle().clone();
@@ -761,7 +568,7 @@ mod tests {
             .expect("first decision must be accepted");
 
         let flipped = controller
-            .resolve("conflict-1", ApprovalResolution::Approved { trust: true })
+            .resolve("conflict-1", ApprovalResolution::Approved)
             .await;
         let error = flipped.expect_err("a denial must not be upgradable to an approval");
         assert!(

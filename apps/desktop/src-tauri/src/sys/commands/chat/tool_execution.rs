@@ -1,5 +1,5 @@
 use crate::sys::commands::chat::state::{
-    is_tool_cancelled, should_stop_for_conversation, take_tool_cancelled,
+    is_tool_cancelled, plan_mode_refusal, should_stop_for_conversation, take_tool_cancelled,
 };
 use crate::sys::commands::chat::tool_events::{emit_tool_event, get_tool_display_info, ToolEvent};
 use crate::sys::commands::chat::tool_timeouts::{
@@ -9,6 +9,11 @@ use crate::sys::commands::chat::tools::{self, ChatToolResult};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tracing::{error, info};
+
+/// The output a chat tool step carries to the renderer; the full result still
+/// goes back to the model.
+const MAX_TOOL_OUTPUT_EVENT_CHARS: usize = 50_000;
+const SERVER_SIDE_RESULT: &str = "Tool executed server-side by provider; no local output.";
 
 pub(super) async fn execute_tool_calls_batch(
     tool_calls: &[crate::core::llm::sse_parser::StreamingToolCall],
@@ -40,6 +45,8 @@ pub(super) async fn execute_tool_calls_batch(
                 tool_name: tool_call.name.clone(),
                 display_name: display_info.display_name.clone(),
                 display_args: display_info.display_args.clone(),
+                arguments: serde_json::from_str(&tool_call.arguments)
+                    .unwrap_or_else(|_| serde_json::Value::String(tool_call.arguments.clone())),
                 iteration,
                 execution_source: exposure.execution_source.to_string(),
                 safety_tier: exposure.safety_tier.to_string(),
@@ -61,29 +68,13 @@ pub(super) async fn execute_tool_calls_batch(
                     id: tool_exec_id,
                     conversation_id,
                     message_id: frontend_message_id.to_string(),
+                    tool_name: tool_call.name.clone(),
                     success: true,
                     duration_ms: tool_started_at.elapsed().as_millis() as u64,
-                    result_preview: Some(
-                        "Tool executed server-side by provider; no local output.".to_string(),
-                    ),
+                    result_preview: Some(SERVER_SIDE_RESULT.to_string()),
+                    output: Some(SERVER_SIDE_RESULT.to_string()),
                     error: None,
                 },
-            );
-            let _ = app_handle.emit(
-                "chat:tool-result",
-                serde_json::json!({
-                    "conversation_id": conversation_id,
-                    "message_id": frontend_message_id,
-                    "tool_call_id": tool_call.id,
-                    "tool_name": tool_call.name,
-                    "success": true,
-                    "result": "Tool executed server-side by provider; no local output.",
-                    "result_data": {
-                        "success": true,
-                        "server_side": true,
-                        "status": "completed"
-                    }
-                }),
             );
             continue;
         }
@@ -91,17 +82,6 @@ pub(super) async fn execute_tool_calls_batch(
         info!(
             "[Chat] Executing tool: {} (id: {})",
             tool_call.name, tool_call.id
-        );
-
-        let _ = app_handle.emit(
-            "chat:tool-executing",
-            serde_json::json!({
-                "conversation_id": conversation_id,
-                "message_id": frontend_message_id,
-                "tool_call_id": tool_call.id,
-                "tool_name": tool_call.name,
-                "arguments": tool_call.arguments
-            }),
         );
 
         tracing::info!(
@@ -139,12 +119,19 @@ pub(super) async fn execute_tool_calls_batch(
         emit_tool_event(
             app_handle,
             &ToolEvent::Completed {
-                id: tool_exec_id,
+                id: tool_exec_id.clone(),
                 conversation_id,
                 message_id: frontend_message_id.to_string(),
+                tool_name: tool_call.name.clone(),
                 success,
                 duration_ms: tool_duration_ms,
                 result_preview: Some(result_content.chars().take(200).collect()),
+                output: Some(
+                    result_content
+                        .chars()
+                        .take(MAX_TOOL_OUTPUT_EVENT_CHARS)
+                        .collect(),
+                ),
                 error: if success {
                     None
                 } else {
@@ -159,21 +146,6 @@ pub(super) async fn execute_tool_calls_batch(
             tool_failure_summaries.push(format!("{}: {}", tool_call.name, summary));
         }
 
-        let result_data = serde_json::from_str::<serde_json::Value>(&result_content).ok();
-
-        let _ = app_handle.emit(
-            "chat:tool-result",
-            serde_json::json!({
-                "conversation_id": conversation_id,
-                "message_id": frontend_message_id,
-                "tool_call_id": tool_call.id,
-                "tool_name": tool_call.name,
-                "success": success,
-                "result": result_content.chars().take(50000).collect::<String>(),
-                "result_data": result_data
-            }),
-        );
-
         tool_results.push(ChatToolResult::new(
             tool_call.id.clone(),
             tool_call.name.clone(),
@@ -182,14 +154,15 @@ pub(super) async fn execute_tool_calls_batch(
         ));
 
         if success && is_media_generation_tool(&tool_call.name) {
-            let _ = app_handle.emit(
-                "chat:tool-progress",
-                serde_json::json!({
-                    "conversation_id": conversation_id,
-                    "tool_name": tool_call.name,
-                    "status": "processing_result",
-                    "message": "Processing generated image..."
-                }),
+            emit_tool_event(
+                app_handle,
+                &ToolEvent::Progress {
+                    id: tool_exec_id,
+                    conversation_id,
+                    message_id: frontend_message_id.to_string(),
+                    stdout_chunk: Some("Processing the generated image…".to_string()),
+                    progress_pct: None,
+                },
             );
         }
     }
@@ -215,6 +188,22 @@ pub(super) async fn execute_chat_tool_with_timeout(
     let normalized_tool_call_id = tool_call_id
         .map(str::trim)
         .filter(|value| !value.is_empty());
+
+    if let Some(refusal) = plan_mode_refusal(conversation_id, tool_name) {
+        info!(
+            "[Chat] Plan mode refused tool {} in conversation {}",
+            tool_name, conversation_id
+        );
+        let _ = app_handle.emit(
+            "tool:blocked_by_mode",
+            serde_json::json!({
+                "tool_name": tool_name,
+                "mode": "plan",
+                "hint": "Switch to Ask mode to let it run.",
+            }),
+        );
+        return Err(refusal);
+    }
 
     if let Some(tool_id) = normalized_tool_call_id {
         if take_tool_cancelled(tool_id) {

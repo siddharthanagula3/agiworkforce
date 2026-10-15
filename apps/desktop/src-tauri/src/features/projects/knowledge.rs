@@ -2,6 +2,7 @@ use anyhow::Result;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::{Mutex, MutexGuard};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeDocument {
@@ -43,15 +44,25 @@ pub struct ProjectMemory {
     pub access_count: u32,
 }
 
+/// The project knowledge store. One connection is opened, and the tables
+/// created, when the store is built; every call reuses that connection.
 pub struct KnowledgeBase {
-    db_path: PathBuf,
+    conn: Mutex<Connection>,
 }
 
 impl KnowledgeBase {
     pub fn new(db_path: PathBuf) -> Result<Self> {
-        let kb = Self { db_path };
-        kb.init_database()?;
-        Ok(kb)
+        let conn = Self::open(&db_path)?;
+        Self::init_database(&conn)?;
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
+    }
+
+    fn connection(&self) -> Result<MutexGuard<'_, Connection>> {
+        self.conn
+            .lock()
+            .map_err(|_| anyhow::anyhow!("knowledge store connection lock poisoned"))
     }
 
     /// Open a connection to the knowledge store.
@@ -65,19 +76,17 @@ impl KnowledgeBase {
     /// when startup has registered it; fall back to a keyed open of `db_path`
     /// only in isolated unit tests (no registration), where `db_path` is a
     /// throwaway temp file.
-    fn open(&self) -> Result<Connection> {
+    fn open(db_path: &std::path::Path) -> Result<Connection> {
         if crate::data::db::key_management::main_database_access_registered() {
             crate::data::db::key_management::open_registered_main_database_connection()
                 .map_err(|e| anyhow::anyhow!(e))
         } else {
-            crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            crate::data::db::encryption::open_keyed_connection(db_path)
                 .map_err(|e| anyhow::anyhow!(e))
         }
     }
 
-    fn init_database(&self) -> Result<()> {
-        let conn = self.open()?;
-
+    fn init_database(conn: &Connection) -> Result<()> {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS knowledge_documents (
                 id TEXT PRIMARY KEY,
@@ -156,7 +165,7 @@ impl KnowledgeBase {
     }
 
     pub fn add_document(&self, document: KnowledgeDocument) -> Result<()> {
-        let conn = self.open()?;
+        let conn = self.connection()?;
 
         conn.execute(
             "INSERT INTO knowledge_documents
@@ -179,7 +188,7 @@ impl KnowledgeBase {
     }
 
     pub fn add_chunk(&self, chunk: KnowledgeChunk) -> Result<()> {
-        let conn = self.open()?;
+        let conn = self.connection()?;
 
         let embedding_bytes = chunk
             .embedding
@@ -206,7 +215,7 @@ impl KnowledgeBase {
     }
 
     pub fn get_document(&self, document_id: &str) -> Result<Option<KnowledgeDocument>> {
-        let conn = self.open()?;
+        let conn = self.connection()?;
 
         let mut stmt = conn.prepare(
             "SELECT id, project_id, file_path, file_name, file_type, size, content, metadata, indexed_at, created_at
@@ -236,7 +245,7 @@ impl KnowledgeBase {
     }
 
     pub fn get_project_documents(&self, project_id: &str) -> Result<Vec<KnowledgeDocument>> {
-        let conn = self.open()?;
+        let conn = self.connection()?;
 
         let mut stmt = conn.prepare(
             "SELECT id, project_id, file_path, file_name, file_type, size, content, metadata, indexed_at, created_at
@@ -267,7 +276,7 @@ impl KnowledgeBase {
     }
 
     pub fn get_document_chunks(&self, document_id: &str) -> Result<Vec<KnowledgeChunk>> {
-        let conn = self.open()?;
+        let conn = self.connection()?;
 
         let mut stmt = conn.prepare(
             "SELECT id, document_id, project_id, content, chunk_index, embedding, metadata, created_at
@@ -304,7 +313,7 @@ impl KnowledgeBase {
 
     /// Get all knowledge chunks for a given project.
     pub fn get_project_chunks(&self, project_id: &str) -> Result<Vec<KnowledgeChunk>> {
-        let conn = self.open()?;
+        let conn = self.connection()?;
 
         let mut stmt = conn.prepare(
             "SELECT id, document_id, project_id, content, chunk_index, embedding, metadata, created_at
@@ -340,7 +349,7 @@ impl KnowledgeBase {
     }
 
     pub fn add_memory(&self, memory: ProjectMemory) -> Result<()> {
-        let conn = self.open()?;
+        let conn = self.connection()?;
 
         let embedding_bytes = memory
             .embedding
@@ -373,7 +382,7 @@ impl KnowledgeBase {
         project_id: &str,
         limit: usize,
     ) -> Result<Vec<ProjectMemory>> {
-        let conn = self.open()?;
+        let conn = self.connection()?;
 
         let mut stmt = conn.prepare(
             "SELECT id, project_id, content, memory_type, source, salience, embedding, created_at, last_accessed, access_count
@@ -414,7 +423,7 @@ impl KnowledgeBase {
     }
 
     pub fn update_memory_access(&self, memory_id: &str) -> Result<()> {
-        let conn = self.open()?;
+        let conn = self.connection()?;
 
         conn.execute(
             "UPDATE project_memory
@@ -428,9 +437,16 @@ impl KnowledgeBase {
         Ok(())
     }
 
+    /// Delete a document and its chunks. The connection does not enable
+    /// foreign keys, so the chunks are removed explicitly rather than by
+    /// cascade.
     pub fn delete_document(&self, document_id: &str) -> Result<()> {
-        let conn = self.open()?;
+        let conn = self.connection()?;
 
+        conn.execute(
+            "DELETE FROM knowledge_chunks WHERE document_id = ?1",
+            [document_id],
+        )?;
         conn.execute(
             "DELETE FROM knowledge_documents WHERE id = ?1",
             [document_id],
@@ -440,14 +456,18 @@ impl KnowledgeBase {
     }
 
     pub fn delete_memory(&self, memory_id: &str) -> Result<()> {
-        let conn = self.open()?;
+        let conn = self.connection()?;
         conn.execute("DELETE FROM project_memory WHERE id = ?1", [memory_id])?;
         Ok(())
     }
 
     pub fn clear_project_knowledge(&self, project_id: &str) -> Result<()> {
-        let conn = self.open()?;
+        let conn = self.connection()?;
 
+        conn.execute(
+            "DELETE FROM knowledge_chunks WHERE project_id = ?1",
+            [project_id],
+        )?;
         conn.execute(
             "DELETE FROM knowledge_documents WHERE project_id = ?1",
             [project_id],
@@ -478,7 +498,7 @@ mod tests {
     fn test_get_project_memories_reads_access_count_column() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("knowledge.db");
-        let kb = KnowledgeBase::new(db_path).unwrap();
+        let kb = KnowledgeBase::new(db_path.clone()).unwrap();
 
         // The knowledge DB is opened with open_keyed_connection (SQLCipher-encrypted
         // under bundled-sqlcipher-vendored-openssl). A plain Connection::open would
@@ -488,7 +508,7 @@ mod tests {
         // so the FK from project_memory(project_id) → projects(id) IS checked.
         // Satisfy it by creating the projects table via an encrypted connection
         // before inserting any memories.
-        let conn = crate::data::db::encryption::open_keyed_connection(&kb.db_path)
+        let conn = crate::data::db::encryption::open_keyed_connection(&db_path)
             .expect("open keyed connection for test setup");
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY);

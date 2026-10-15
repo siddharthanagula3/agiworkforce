@@ -1,8 +1,5 @@
 pub mod api_tools_impl;
 pub mod audio_processing;
-pub mod checkpoint;
-pub mod checkpoint_manager;
-pub mod checkpoint_store;
 pub mod comparator;
 pub mod conversation_summarizer;
 pub mod core;
@@ -12,39 +9,24 @@ pub mod knowledge;
 pub mod learning;
 pub mod memory;
 pub mod memory_manager;
-pub mod memory_persistence;
 pub mod orchestrator;
 /// Example orchestrator configurations for reference and testing
 // Used by: reference implementations and integration tests
 pub mod orchestrator_examples;
-pub mod outcome_tracker;
 pub mod planner;
 pub mod planner_memory_integration;
-pub mod process_ontology;
-pub mod process_reasoning;
 pub mod project_memory;
 pub mod reflection;
 pub mod resources;
 pub mod sandbox;
 pub mod semantic_search;
-pub mod templates;
 pub mod tools;
 
 #[cfg(test)]
 mod tests;
 
-pub use checkpoint::{
-    Checkpoint, CheckpointConfig, CheckpointContextEntry, CheckpointId, CheckpointListResponse,
-    CheckpointMetadata, CheckpointReason, CheckpointSummary, CreateCheckpointRequest,
-    ResumableExecution, TaskId,
-};
-pub use checkpoint_manager::{CheckpointManager, CheckpointedExecution, ExecutionMetrics};
-pub use checkpoint_store::CheckpointStore;
 pub use comparator::{ExecutionResult, ResultComparator, ScoredResult};
-pub use conversation_summarizer::{
-    ConversationSummarizer, ExtractedMemory, ExtractionResult, HttpSummaryLLM, SummarizationRun,
-    SummarizationStatus, SummaryLLM, DEFAULT_EXTRACTION_PROMPT,
-};
+pub use conversation_summarizer::{ConversationSummarizer, SummarizationOutcome};
 pub use core::AGICore;
 pub use executor::AGIExecutor;
 pub use knowledge::KnowledgeBase;
@@ -55,24 +37,13 @@ pub use memory_manager::{
     DailyLogEntry, DecayCandidate, DecayConfig, DecayResult, LogEntryType, MemoryCategory,
     MemoryEntry, MemoryManager, MemoryStats,
 };
-pub use memory_persistence::MemoryCategory as PersistentMemoryCategory;
-pub use memory_persistence::{
-    ConversationSummaryCandidate, HybridSearchResult, ImportResult, MemoryExport, MemoryStore,
-    PersistentMemory, SearchFilter, SummarizationStats, SummarizerConfig, DEFAULT_EMBEDDING_DIM,
-    FTS_SEARCH_WEIGHT, MAX_CONTENT_LENGTH_BEFORE_SUMMARY, SUMMARIZATION_INTERVAL_HOURS,
-    VECTOR_SEARCH_WEIGHT,
-};
 pub use orchestrator::{
     AgentOrchestrator, AgentResult, AgentState, AgentStatus, CoordinationPattern, FileGuard,
     ResourceLock, UiGuard,
 };
-pub use outcome_tracker::{OutcomeTracker, ProcessSuccessRate, TrackedOutcome};
 pub use planner::AGIPlanner;
-pub use process_ontology::{ProcessOntology, ProcessTemplate};
-pub use process_reasoning::{Outcome, OutcomeScore, ProcessReasoning, ProcessType, Strategy};
 pub use project_memory::{
-    ArchitecturalDecision, CodingStyle, ProjectContext, ProjectMemory, ProjectMemoryManager,
-    ProjectMemoryType,
+    ArchitecturalDecision, ProjectMemory, ProjectMemoryManager, ProjectMemoryType,
 };
 pub use reflection::{
     Correction, CorrectionType, ExecutionAssessment, FailedStep, FailureCategory, FailurePattern,
@@ -81,21 +52,15 @@ pub use reflection::{
 pub use resources::ResourceManager;
 pub use sandbox::{CodeExecutionResult, ExecutionConfig, Sandbox, SandboxManager};
 pub use semantic_search::{IndexStats, SemanticSearchConfig, SemanticSearchResult, TfIdfIndex};
-pub use templates::{
-    get_builtin_templates, AgentTemplate, DifficultyLevel, TemplateCategory, TemplateManager,
-    WorkflowDefinition, WorkflowStep,
-};
 pub use tools::{
     SkillTool, SkillToolInput, Tool, ToolCapability, ToolRegistry, ToolResult, SKILL_TOOL_ID,
 };
 
 // Export the new modular executor architecture
 pub use executors::{
-    ApiExecutor, BrowserExecutor, CalendarExecutor, CloudExecutor, CodeExecutor, DatabaseExecutor,
-    EmailExecutor, ExecutorContext, ExecutorRegistry, FileExecutor, GitExecutor, LlmExecutor,
-    McpExecutor, McpExecutorExt, McpExecutorStats, McpToolResult, OcrExecutor, OutcomeExecutor,
-    OutcomeMeasurement, OutcomeSummary, ProductivityExecutor, SearchExecutor, TerminalExecutor,
-    ToolExecutor, UiExecutor,
+    ApiExecutor, BrowserExecutor, CloudExecutor, CodeExecutor, DatabaseExecutor, ExecutorContext,
+    ExecutorRegistry, FileExecutor, GitExecutor, LlmExecutor, OcrExecutor, ProductivityExecutor,
+    SearchExecutor, TerminalExecutor, ToolExecutor, UiExecutor,
 };
 
 use serde::{Deserialize, Serialize};
@@ -192,8 +157,8 @@ pub struct Goal {
     /// TRUST BOUNDARY (desktop-trust-boundary-01): the active session's
     /// execution boundary at goal-submission time. Threaded into every
     /// `RouterPreferences` built while planning/executing this goal (see
-    /// `core/agi/planner.rs`, `process_reasoning.rs`, and the
-    /// `core/agi/executors/*` tool executors) so `LLMRouter::candidates`
+    /// `core/agi/planner.rs` and the `core/agi/executors/*` tool executors)
+    /// so `LLMRouter::candidates`
     /// enforces Local/BYOK/ManagedCloud instead of falling through to its
     /// fail-closed Local default. `None` still fails closed to Local via
     /// `llm_router::effective_trust_mode`, this field does not itself
@@ -390,8 +355,7 @@ mod char_boundary_tests {
     }
 
     #[test]
-    fn multibyte_code_generator_cap_2000() {
-        // code_generator.rs:187,357, &content[..2000]
+    fn multibyte_content_cap_2000() {
         let code = "🦀".repeat(600); // 600 * 4 = 2400 bytes > 2000
         assert_char_safe(&code, 2000);
         let end = floor_char_boundary(&code, 2000);

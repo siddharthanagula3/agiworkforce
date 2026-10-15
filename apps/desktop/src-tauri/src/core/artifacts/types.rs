@@ -336,60 +336,6 @@ impl Artifact {
         }
     }
 
-    /// Create a new artifact that is being streamed
-    pub fn new_streaming(
-        id: String,
-        title: String,
-        artifact_type: ArtifactType,
-        metadata: ArtifactMetadata,
-    ) -> Self {
-        let now = Utc::now();
-
-        Self {
-            id,
-            title,
-            artifact_type,
-            render_type: artifact_type.to_string(),
-            content: String::new(),
-            metadata,
-            conversation_id: None,
-            message_id: None,
-            status: ArtifactStatus::Streaming,
-            versions: Vec::new(),
-            current_version: 0,
-            created_at: now,
-            updated_at: now,
-            tags: Vec::new(),
-            pinned: false,
-        }
-    }
-
-    /// Append content during streaming
-    pub fn append_content(&mut self, delta: &str) {
-        self.content.push_str(delta);
-        self.updated_at = Utc::now();
-    }
-
-    /// Finalize streaming and create initial version
-    pub fn finalize_streaming(&mut self, change_description: Option<String>) {
-        let now = Utc::now();
-        let content_hash = Self::hash_content(&self.content);
-
-        let version = ArtifactVersion {
-            version: 1,
-            content: self.content.clone(),
-            created_at: now,
-            change_description: change_description.or(Some("Initial version".to_string())),
-            size_bytes: self.content.len(),
-            content_hash,
-        };
-
-        self.versions.push(version);
-        self.current_version = 1;
-        self.status = ArtifactStatus::Complete;
-        self.updated_at = now;
-    }
-
     /// Update content and create a new version
     pub fn update_content(&mut self, content: String, change_description: Option<String>) {
         let now = Utc::now();
@@ -438,26 +384,6 @@ impl Artifact {
         Ok(())
     }
 
-    /// Get a specific version
-    pub fn get_version(&self, version: u32) -> Option<&ArtifactVersion> {
-        self.versions.iter().find(|v| v.version == version)
-    }
-
-    /// Get the diff between two versions
-    pub fn get_version_diff(&self, from_version: u32, to_version: u32) -> Option<VersionDiff> {
-        let from = self.get_version(from_version)?;
-        let to = self.get_version(to_version)?;
-
-        Some(VersionDiff {
-            from_version,
-            to_version,
-            from_content: from.content.clone(),
-            to_content: to.content.clone(),
-            from_timestamp: from.created_at,
-            to_timestamp: to.created_at,
-        })
-    }
-
     /// Mark the artifact as failed
     pub fn mark_failed(&mut self, reason: Option<String>) {
         self.status = ArtifactStatus::Failed;
@@ -488,17 +414,6 @@ impl Artifact {
         content.hash(&mut hasher);
         format!("{:x}", hasher.finish())
     }
-}
-
-/// Diff between two artifact versions
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VersionDiff {
-    pub from_version: u32,
-    pub to_version: u32,
-    pub from_content: String,
-    pub to_content: String,
-    pub from_timestamp: DateTime<Utc>,
-    pub to_timestamp: DateTime<Utc>,
 }
 
 /// Request to create a new artifact

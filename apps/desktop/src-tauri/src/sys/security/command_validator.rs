@@ -575,11 +575,308 @@ pub fn reject_if_root() -> ValidationResult {
 /// `exec_gate::PROMPT_PATTERNS`. `Forbidden` also returns `true` so a caller
 /// that only consults this gate still confirms, although forbidden commands
 /// are hard-blocked by `validate_command` before execution.
+///
+/// Git verbs that publish, delete a branch, or throw away work also confirm,
+/// whatever the execpolicy decision: `git push` and `git branch -D` read as
+/// harmless strings to a substring list.
 pub fn requires_confirmation(command: &str) -> bool {
-    !matches!(
-        super::exec_gate::evaluate_command(command),
-        agiworkforce_execpolicy::Decision::Allow
-    )
+    is_destructive_git(command)
+        || !matches!(
+            super::exec_gate::evaluate_command(command),
+            agiworkforce_execpolicy::Decision::Allow
+        )
+}
+
+/// True when any command of a compound line is a destructive git verb, so
+/// `cd repo && git push --force` and `env X=1 git push` confirm like
+/// `git push` does. A `bash -c '<line>'` string and a `$(...)` or backtick
+/// substitution are parsed the same way.
+fn is_destructive_git(command: &str) -> bool {
+    is_destructive_git_at_depth(command, 0)
+}
+
+/// Deeper nesting of `sh -c` strings and substitutions than this is treated as
+/// destructive instead of followed further.
+const MAX_SHELL_NESTING: usize = 4;
+
+fn is_destructive_git_at_depth(command: &str, depth: usize) -> bool {
+    if depth > MAX_SHELL_NESTING {
+        return true;
+    }
+    if command_substitutions(command)
+        .iter()
+        .any(|inner| is_destructive_git_at_depth(inner, depth + 1))
+    {
+        return true;
+    }
+    shell_segments(command).iter().any(|segment| {
+        let argv = shlex::split(segment)
+            .unwrap_or_else(|| segment.split_whitespace().map(str::to_string).collect());
+        let argv = strip_command_wrappers(&argv);
+        is_destructive_git_argv(argv)
+            || shell_command_string(argv)
+                .is_some_and(|line| is_destructive_git_at_depth(line, depth + 1))
+    })
+}
+
+/// The bodies of every `$(...)` and backtick substitution in `command`. A
+/// substitution inside single quotes is not run by the shell, but is returned
+/// too: a false confirmation costs a click, a missed one costs work.
+fn command_substitutions(command: &str) -> Vec<String> {
+    let chars: Vec<char> = command.chars().collect();
+    let mut bodies = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '$' && chars.get(i + 1) == Some(&'(') {
+            let mut level = 1;
+            let mut j = i + 2;
+            while j < chars.len() && level > 0 {
+                match chars[j] {
+                    '(' => level += 1,
+                    ')' => level -= 1,
+                    _ => {}
+                }
+                j += 1;
+            }
+            let end = if level == 0 { j - 1 } else { j };
+            bodies.push(chars[i + 2..end].iter().collect());
+            i += 2;
+        } else if chars[i] == '`' {
+            let end = chars[i + 1..]
+                .iter()
+                .position(|&c| c == '`')
+                .map_or(chars.len(), |offset| i + 1 + offset);
+            bodies.push(chars[i + 1..end].iter().collect());
+            i = end + 1;
+        } else {
+            i += 1;
+        }
+    }
+    bodies
+}
+
+/// The command line a `bash|sh|zsh|dash|ksh -c '<line>'` invocation runs.
+fn shell_command_string(argv: &[String]) -> Option<&str> {
+    let program = argv.first()?.rsplit(['/', '\\']).next()?;
+    if !matches!(program, "bash" | "sh" | "zsh" | "dash" | "ksh") {
+        return None;
+    }
+    let mut args = argv[1..].iter();
+    while let Some(arg) = args.next() {
+        if arg == "--" {
+            return None;
+        }
+        let is_c_flag = arg.starts_with('-') && !arg.starts_with("--") && arg.contains('c');
+        if is_c_flag {
+            return args.next().map(String::as_str);
+        }
+        if !arg.starts_with('-') {
+            return None;
+        }
+    }
+    None
+}
+
+/// Splits a command line at the shell's command separators (`&&`, `||`, `;`,
+/// `|`, `&` and newlines), leaving quoted and escaped separators in place, and
+/// drops the parentheses and braces of a subshell or group around a segment.
+fn shell_segments(command: &str) -> Vec<String> {
+    let mut segments = Vec::new();
+    let mut current = String::new();
+    let mut quote: Option<char> = None;
+    let mut chars = command.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match quote {
+            Some(open) => {
+                current.push(ch);
+                if ch == open {
+                    quote = None;
+                } else if ch == '\\' && open == '"' {
+                    if let Some(next) = chars.next() {
+                        current.push(next);
+                    }
+                }
+            }
+            None => match ch {
+                '\'' | '"' => {
+                    quote = Some(ch);
+                    current.push(ch);
+                }
+                '\\' => {
+                    current.push(ch);
+                    if let Some(next) = chars.next() {
+                        current.push(next);
+                    }
+                }
+                ';' | '|' | '&' | '\n' | '\r' => {
+                    if matches!(ch, '|' | '&') && chars.peek() == Some(&ch) {
+                        chars.next();
+                    }
+                    segments.push(std::mem::take(&mut current));
+                }
+                _ => current.push(ch),
+            },
+        }
+    }
+    segments.push(current);
+    segments
+        .into_iter()
+        .map(|segment| {
+            segment
+                .trim()
+                .trim_start_matches(['(', '{'])
+                .trim_end_matches([')', '}'])
+                .trim()
+                .to_string()
+        })
+        .filter(|segment| !segment.is_empty())
+        .collect()
+}
+
+/// Drops leading `NAME=value` assignments and the `env`, `command`, `sudo`,
+/// `nohup`, `time`, `exec`, `xargs`, `timeout` and `nice` wrappers with their
+/// options, leaving the program they run.
+fn strip_command_wrappers(argv: &[String]) -> &[String] {
+    let is_assignment = |arg: &str| {
+        arg.split_once('=').is_some_and(|(name, _)| {
+            !name.is_empty()
+                && !name.starts_with(|c: char| c.is_ascii_digit())
+                && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        })
+    };
+    let mut rest = argv;
+    loop {
+        let Some(first) = rest.first() else {
+            return rest;
+        };
+        let program = first.rsplit(['/', '\\']).next().unwrap_or(first);
+        let (options_with_values, leading_operands): (&[&str], usize) = match program {
+            _ if is_assignment(first.as_str()) => {
+                rest = &rest[1..];
+                continue;
+            }
+            "env" => (
+                &["-u", "--unset", "-C", "--chdir", "-S", "--split-string"],
+                0,
+            ),
+            "sudo" => (
+                &["-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t", "-U", "-T"],
+                0,
+            ),
+            "command" | "nohup" => (&[], 0),
+            "time" => (&["-f", "--format", "-o", "--output"], 0),
+            "exec" => (&["-a"], 0),
+            "nice" => (&["-n", "--adjustment"], 0),
+            "timeout" => (&["-s", "--signal", "-k", "--kill-after"], 1),
+            "xargs" => (
+                &[
+                    "-a",
+                    "-d",
+                    "-E",
+                    "-e",
+                    "-I",
+                    "-i",
+                    "-L",
+                    "-l",
+                    "-n",
+                    "-P",
+                    "-s",
+                    "--arg-file",
+                    "--delimiter",
+                    "--max-args",
+                    "--max-procs",
+                    "--max-lines",
+                    "--max-chars",
+                ],
+                0,
+            ),
+            _ => return rest,
+        };
+        rest = &rest[1..];
+        while let Some(arg) = rest.first() {
+            if arg == "--" {
+                rest = &rest[1..];
+                break;
+            }
+            if options_with_values.contains(&arg.as_str()) {
+                rest = rest.get(2..).unwrap_or_default();
+            } else if arg.starts_with('-') || (program == "env" && is_assignment(arg.as_str())) {
+                rest = &rest[1..];
+            } else {
+                break;
+            }
+        }
+        rest = rest.get(leading_operands..).unwrap_or_default();
+    }
+}
+
+fn is_destructive_git_argv(argv: &[String]) -> bool {
+    let mut args = argv.iter().map(|arg| arg.as_str());
+    let Some(program) = args.next() else {
+        return false;
+    };
+    let program = program.rsplit(['/', '\\']).next().unwrap_or(program);
+    if !program.eq_ignore_ascii_case("git") && !program.eq_ignore_ascii_case("git.exe") {
+        return false;
+    }
+
+    let mut subcommand = None;
+    let mut rest: Vec<&str> = Vec::new();
+    let mut skip_value = false;
+    for arg in args {
+        if subcommand.is_some() {
+            rest.push(arg);
+        } else if skip_value {
+            skip_value = false;
+        } else if arg == "-C" || arg == "-c" || arg == "--git-dir" || arg == "--work-tree" {
+            skip_value = true;
+        } else if !arg.starts_with('-') {
+            subcommand = Some(arg);
+        }
+    }
+    let has = |flags: &[&str]| rest.iter().any(|arg| flags.contains(arg));
+
+    match subcommand {
+        Some("push") | Some("clean") | Some("restore") => true,
+        Some("branch") => has(&["-d", "-D", "--delete", "-M", "-C", "--force", "-f"]),
+        Some("reset") => has(&["--hard", "--merge", "--keep"]),
+        Some("checkout") => {
+            has(&["--", ".", "-f", "--force", "--discard-changes"])
+                || checkout_overwrites_paths(&rest)
+        }
+        Some("switch") => has(&["--", ".", "-f", "--force", "--discard-changes"]),
+        Some("stash") => has(&["drop", "clear"]),
+        _ => false,
+    }
+}
+
+/// True when `git checkout` is given file paths, which overwrites them from
+/// the index or a commit, rather than a branch to move to.
+///
+/// Without the repository a branch name and a path cannot be told apart, so the
+/// rule leans toward confirming: with no `-b`/`-B`/`--orphan`/`--detach`
+/// (those only name a new or detached head), more than one operand means the
+/// first is a commit and the rest are paths, and a single operand that
+/// contains `/` or `.` reads as a path. A bare word such as `main` or
+/// `feature-x` is a branch. Whether the operand exists on disk is not used:
+/// the command's working directory is not the validator's, and git itself
+/// refuses a name that is both a branch and a file unless `--` is given.
+fn checkout_overwrites_paths(args: &[&str]) -> bool {
+    let creates_or_detaches = args.iter().any(|arg| {
+        matches!(
+            *arg,
+            "-b" | "-B" | "--orphan" | "--detach" | "-d" | "-t" | "--track"
+        )
+    });
+    if creates_or_detaches {
+        return false;
+    }
+    let operands: Vec<&&str> = args.iter().filter(|arg| !arg.starts_with('-')).collect();
+    match operands.as_slice() {
+        [] => false,
+        [only] => only.contains(['/', '.']),
+        _ => true,
+    }
 }
 
 #[cfg(test)]
@@ -695,6 +992,148 @@ mod tests {
         assert!(requires_confirmation("git reset --hard"));
         assert!(!requires_confirmation("ls -la"));
         assert!(!requires_confirmation("git status"));
+    }
+
+    #[test]
+    fn destructive_git_verbs_always_confirm() {
+        for command in [
+            "git push",
+            "git push --force origin main",
+            "git push -f",
+            "git -C /repo push origin feature",
+            "git branch -D feature",
+            "git branch --delete feature",
+            "git reset --hard",
+            "git reset --hard HEAD~1",
+            "git checkout -- src/main.rs",
+            "git checkout .",
+            "git restore src/main.rs",
+            "git clean -n",
+            "git clean -fdx",
+            "/usr/bin/git push",
+            "git stash drop",
+        ] {
+            assert!(requires_confirmation(command), "{command} must confirm");
+        }
+    }
+
+    #[test]
+    fn destructive_git_behind_more_wrappers_confirms() {
+        for command in [
+            "time git push",
+            "exec git reset --hard",
+            "echo x | xargs git clean -fd",
+            "xargs -n 1 git push",
+            "timeout 30 git push origin main",
+            "timeout -s KILL 30 git push",
+            "nice git push",
+            "nice -n 10 git reset --hard",
+            "env FOO=bar git push",
+            "command git push",
+        ] {
+            assert!(requires_confirmation(command), "{command} must confirm");
+        }
+    }
+
+    #[test]
+    fn destructive_git_inside_a_shell_string_or_substitution_confirms() {
+        for command in [
+            "bash -c 'git push --force'",
+            "sh -c \"cd r && git reset --hard\"",
+            "zsh -lc 'git clean -fdx'",
+            "sudo bash -c 'git push'",
+            "bash -c \"sh -c 'git push'\"",
+            "echo $(git push)",
+            "echo `git reset --hard`",
+            "echo \"$(cd r && git branch -D x)\"",
+            "echo $(echo $(echo $(echo $(echo $(echo hi)))))",
+        ] {
+            assert!(requires_confirmation(command), "{command} must confirm");
+        }
+        assert!(!is_destructive_git("bash -c 'git status'"));
+        assert!(!is_destructive_git("echo $(git rev-parse HEAD)"));
+    }
+
+    #[test]
+    fn git_checkout_confirms_for_paths_and_not_for_branches() {
+        for command in [
+            "git checkout src/main.rs",
+            "git checkout README.md",
+            "git checkout HEAD file",
+            "git checkout main -- src",
+            "git checkout -- src/main.rs",
+            "git checkout --force main",
+            "git switch --discard-changes main",
+            "git restore src/main.rs",
+        ] {
+            assert!(requires_confirmation(command), "{command} must confirm");
+        }
+        for command in [
+            "git checkout main",
+            "git checkout feature-x",
+            "git checkout -b feature-x",
+            "git checkout -b feature/x origin/main",
+            "git checkout HEAD~1",
+            "git switch main",
+            "git switch -c feature",
+        ] {
+            assert!(!is_destructive_git(command), "{command} must not confirm");
+        }
+    }
+
+    #[test]
+    fn destructive_git_inside_a_compound_or_wrapped_command_confirms() {
+        for command in [
+            "cd r && git push --force",
+            "env X=1 git push",
+            "true; git reset --hard",
+            "git status || git clean -fdx",
+            "ls | git stash drop",
+            "echo done\ngit branch -D feature",
+            "GIT_SSH_COMMAND=ssh git push origin main",
+            "sudo -u build git reset --hard",
+            "nohup git push &",
+            "command git restore .",
+            "env -i PATH=/usr/bin /usr/bin/git push",
+            "(cd repo && git push)",
+        ] {
+            assert!(requires_confirmation(command), "{command} must confirm");
+        }
+    }
+
+    #[test]
+    fn separators_inside_quotes_do_not_split_a_command() {
+        assert_eq!(
+            shell_segments("git commit -m 'fix; then git push' && ls"),
+            vec![
+                "git commit -m 'fix; then git push'".to_string(),
+                "ls".to_string()
+            ]
+        );
+        assert!(!is_destructive_git("git commit -m \"a && git push\""));
+        assert!(!is_destructive_git("env X=1 git status && cd repo"));
+    }
+
+    #[test]
+    fn non_destructive_git_verbs_do_not_confirm() {
+        for command in [
+            "git status",
+            "git diff",
+            "git log --oneline",
+            "git add src/main.rs",
+            "git commit -m message",
+            "git branch",
+            "git branch feature",
+            "git checkout feature",
+            "git reset HEAD -- src/main.rs",
+            "git fetch",
+            "git stash",
+        ] {
+            assert!(
+                !requires_confirmation(command),
+                "{command} must not confirm"
+            );
+        }
     }
 
     #[test]

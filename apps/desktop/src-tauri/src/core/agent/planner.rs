@@ -1,7 +1,6 @@
 use super::*;
-use crate::core::llm::LLMRouter;
+use crate::core::llm::{LLMRouter, RouterPreferences};
 use anyhow::{anyhow, Result};
-use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -14,8 +13,15 @@ impl TaskPlanner {
         Ok(Self { router })
     }
 
-    pub async fn plan_task(&self, description: &str) -> Result<Vec<TaskStep>> {
-        tracing::info!("[Planner] Planning task: {}", description);
+    /// Asks the model for a plan inside the run's trust boundary. A model
+    /// that cannot be reached is an error for the caller to report: there is
+    /// no stand-in plan, because steps nobody planned are not the task.
+    pub async fn plan_task(
+        &self,
+        description: &str,
+        preferences: RouterPreferences,
+    ) -> Result<Vec<TaskStep>> {
+        tracing::info!("[Planner] Planning task");
 
         let prompt = format!(
             r#"You are AGI Workforce's task planner - an autonomous AI that helps non-technical users automate tasks on their computer.
@@ -97,16 +103,13 @@ The user wants to open Notepad and type "Hello".
             description
         );
 
-        let response = match self.router.read().await.send_message(&prompt, None).await {
-            Ok(res) => res,
-            Err(e) => {
-                tracing::warn!(
-                    "[Planner] LLM planning failed: {}. Falling back to basic plan.",
-                    e
-                );
-                self.generate_basic_plan(description).await?
-            }
-        };
+        let response = self
+            .router
+            .read()
+            .await
+            .send_message(&prompt, Some(preferences))
+            .await
+            .map_err(|e| anyhow!("{}", e))?;
 
         self.parse_plan(&response)
     }
@@ -115,35 +118,6 @@ The user wants to open Notepad and type "Hello".
     /// Used by the autonomous agent's `replan_on_failure` method.
     pub fn parse_plan_response(&self, response: &str) -> Result<Vec<TaskStep>> {
         self.parse_plan(response)
-    }
-
-    async fn generate_basic_plan(&self, description: &str) -> Result<String> {
-        let steps = vec![
-            json!({
-                "id": "step_1",
-                "action": {
-                    "type": "Screenshot",
-                    "region": null
-                },
-                "description": format!("Take screenshot to understand current state for: {}", description),
-                "expected_result": "Screenshot captured",
-                "timeout": 5,
-                "retry_on_failure": false
-            }),
-            json!({
-                "id": "step_2",
-                "action": {
-                    "type": "SearchText",
-                    "query": description
-                },
-                "description": format!("Search for relevant UI elements related to: {}", description),
-                "expected_result": "Elements found",
-                "timeout": 10,
-                "retry_on_failure": true
-            }),
-        ];
-
-        Ok(serde_json::to_string(&steps)?)
     }
 
     fn parse_plan(&self, response: &str) -> Result<Vec<TaskStep>> {

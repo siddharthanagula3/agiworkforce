@@ -1,28 +1,25 @@
 //! Background Agents System for AGI Workforce
 //!
-//! This module implements a background agent system inspired by Cursor's "&" prefix pattern.
-//! Background agents allow users to push active conversations to the background,
-//! continue working while agents complete tasks, and receive notifications on completion.
+//! Agents that work on a goal while the user keeps chatting. They are started
+//! by the model's background-agent tool and by automation triggers; the user is
+//! notified on completion and can pause, resume or cancel one.
 //!
 //! # Features
 //!
 //! - Isolated execution context per background agent
 //! - Progress tracking and status monitoring
 //! - Desktop notifications on completion
-//! - Resume/takeover capability
+//! - Pause, resume and cancel
 //! - Persistence across app restarts
 //! - Up to 8 parallel background agents
 //!
 //! # Usage
 //!
 //! ```ignore
-//! // Push current conversation to background (from frontend)
-//! await invoke('background_agent_push', { input: { conversationId: '...', goal: '...' } });
-//!
 //! // List all background agents
 //! await invoke('background_agent_list');
 //!
-//! // Resume/take over an agent
+//! // Resume a paused agent
 //! await invoke('background_agent_resume', { agentId: '...' });
 //! ```
 
@@ -32,14 +29,20 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{mpsc, Mutex, RwLock};
 use uuid::Uuid;
 
-use crate::automation::AutomationService;
-use crate::core::agent::autonomous::AutonomousAgent;
+use crate::core::agent::autonomous::{
+    AutonomousAgent, RunControl, RunEnd, RunReport, StepProgress, StopReason,
+};
 use crate::core::agent::AgentConfig;
 use crate::core::llm::LLMRouter;
+use crate::sys::commands::notification_center::{
+    deliver_notification, CreateNotificationInput, NotificationCenterState, NotificationPriority,
+    NotificationRoute, NotificationType,
+};
+use agiworkforce_model_registry::TrustMode;
 
 /// Maximum number of concurrent background agents allowed.
 pub const MAX_BACKGROUND_AGENTS: usize = 8;
@@ -63,7 +66,8 @@ pub enum BackgroundAgentStatus {
     Failed,
     /// Agent was cancelled by the user.
     Cancelled,
-    /// Agent was taken over by the user (resumed to foreground).
+    /// A run an earlier build let the person take over. Nothing sets it now;
+    /// it stays because the table's status check and stored runs name it.
     TakenOver,
 }
 
@@ -110,6 +114,9 @@ pub struct AgentProgress {
     pub percentage: u8,
     /// Elapsed time in seconds.
     pub elapsed_secs: u64,
+    /// Whether the run is parked until the person approves its start.
+    #[serde(default)]
+    pub awaiting_approval: bool,
 }
 
 impl Default for AgentProgress {
@@ -120,6 +127,7 @@ impl Default for AgentProgress {
             current_step_description: "Starting...".to_string(),
             percentage: 0,
             elapsed_secs: 0,
+            awaiting_approval: false,
         }
     }
 }
@@ -154,6 +162,9 @@ pub struct BackgroundAgentContext {
     pub active_mcp_servers: Vec<String>,
     /// Custom instructions at the time of push.
     pub custom_instructions: Option<String>,
+    /// The boundary the app was in when the run was created. The run's
+    /// model calls stay inside it however the app is switched afterwards.
+    pub boundary: Option<TrustMode>,
 }
 
 /// A message in the conversation snapshot.
@@ -236,6 +247,11 @@ impl BackgroundAgent {
         )
     }
 
+    /// Whether this run is parked for approval and has not been started.
+    pub fn is_parked(&self) -> bool {
+        self.status == BackgroundAgentStatus::Paused && self.progress.awaiting_approval
+    }
+
     /// Check if the agent can be resumed.
     pub fn can_resume(&self) -> bool {
         matches!(
@@ -297,12 +313,12 @@ impl BackgroundAgent {
             self.status = BackgroundAgentStatus::Paused;
         }
     }
+}
 
-    /// Mark the agent as taken over (resumed to foreground).
-    pub fn take_over(&mut self) {
-        self.status = BackgroundAgentStatus::TakenOver;
-        self.completed_at = Some(Utc::now());
-    }
+fn mark_interrupted(agent: &mut BackgroundAgent) {
+    agent.status = BackgroundAgentStatus::Paused;
+    agent.progress.current_step_description =
+        "Interrupted when the app closed. Resume to run it again.".to_string();
 }
 
 /// Command to control a running background agent.
@@ -314,8 +330,8 @@ pub enum AgentCommand {
     Resume,
     /// Cancel the agent.
     Cancel,
-    /// Take over the agent (resume to foreground).
-    TakeOver,
+    /// Stop the run because the app is closing.
+    Interrupt,
 }
 
 /// Handle for controlling a running background agent.
@@ -324,6 +340,8 @@ pub struct AgentHandle {
     pub command_tx: mpsc::Sender<AgentCommand>,
     /// The agent ID.
     pub agent_id: String,
+    /// The task driving the run; it ends when the run has ended.
+    pub done: tokio::task::JoinHandle<()>,
 }
 
 /// Manager for background agents.
@@ -337,8 +355,8 @@ pub struct BackgroundAgentManager {
     handles: Arc<Mutex<HashMap<String, AgentHandle>>>,
     /// Database connection for persistence.
     // std::sync::Mutex wraps a rusqlite Connection (not Send-safe with tokio::sync::Mutex).
-    // DB reads in load_persisted_agents use spawn_blocking. Short writes (persist_agent,
-    // delete_agent_from_db) are sync to allow calling under async RwLock guards.
+    // DB reads in load_persisted_agents use spawn_blocking. Short writes (persist_agent)
+    // are sync to allow calling under async RwLock guards.
     db_conn: Arc<std::sync::Mutex<Connection>>,
     /// Tauri app handle for notifications and events.
     app_handle: Option<AppHandle>,
@@ -346,8 +364,6 @@ pub struct BackgroundAgentManager {
     queue: Arc<RwLock<Vec<String>>>,
     /// LLM router for the autonomous agent (None if not yet available).
     router: Option<Arc<RwLock<LLMRouter>>>,
-    /// Automation service for the autonomous agent (None if not yet available).
-    automation: Option<Arc<AutomationService>>,
 }
 
 impl BackgroundAgentManager {
@@ -355,7 +371,6 @@ impl BackgroundAgentManager {
     pub fn new(
         db_conn: Arc<std::sync::Mutex<Connection>>,
         router: Option<Arc<RwLock<LLMRouter>>>,
-        automation: Option<Arc<AutomationService>>,
     ) -> Self {
         Self {
             agents: Arc::new(RwLock::new(HashMap::new())),
@@ -364,7 +379,6 @@ impl BackgroundAgentManager {
             app_handle: None,
             queue: Arc::new(RwLock::new(Vec::new())),
             router,
-            automation,
         }
     }
 
@@ -375,6 +389,7 @@ impl BackgroundAgentManager {
 
     /// Initialize the manager, loading persisted agents from the database.
     pub async fn initialize(&self) -> anyhow::Result<()> {
+        self.prune_finished_runs().await;
         self.load_persisted_agents().await?;
         self.resume_queued_agents().await?;
         Ok(())
@@ -391,7 +406,7 @@ impl BackgroundAgentManager {
         priority: u8,
     ) -> anyhow::Result<String> {
         // Check if we're at capacity
-        let running_count = self.count_active_agents().await;
+        let running_count = self.occupied_places().await;
         if running_count >= MAX_BACKGROUND_AGENTS {
             return Err(anyhow::anyhow!(
                 "Maximum number of background agents ({}) reached. Please wait for one to complete or cancel an existing agent.",
@@ -399,6 +414,8 @@ impl BackgroundAgentManager {
             ));
         }
 
+        let context = in_run_boundary(context, crate::sys::account::app_mode::is_cloud_app_mode())
+            .map_err(|refusal| anyhow::anyhow!(refusal))?;
         let agent = BackgroundAgent::new(conversation_id, goal.clone(), context, priority);
         let agent_id = agent.id.clone();
 
@@ -452,6 +469,46 @@ impl BackgroundAgentManager {
         Ok(agent_id)
     }
 
+    /// Park a run, paused, until the user resumes it, and tell the user it
+    /// is waiting.
+    ///
+    /// A caller that needs the user's consent before a run starts parks the
+    /// run here instead of queueing it. A parked run takes none of the
+    /// running places. Its trigger counts it as its live run, so the trigger
+    /// starts nothing else until this one is resumed or cancelled.
+    pub async fn push_awaiting_approval(
+        &self,
+        conversation_id: String,
+        goal: String,
+        context: BackgroundAgentContext,
+        priority: u8,
+    ) -> anyhow::Result<String> {
+        let context = in_run_boundary(context, crate::sys::account::app_mode::is_cloud_app_mode())
+            .map_err(|refusal| anyhow::anyhow!(refusal))?;
+        let mut agent = BackgroundAgent::new(conversation_id, goal, context, priority);
+        agent.status = BackgroundAgentStatus::Paused;
+        agent.progress.awaiting_approval = true;
+        agent.progress.current_step_description = "Waiting for your approval to start".to_string();
+        let agent_id = agent.id.clone();
+
+        self.agents
+            .write()
+            .await
+            .insert(agent_id.clone(), agent.clone());
+        self.persist_agent(&agent)?;
+        self.emit_agent_event("background_agent:created", &agent_id, None)?;
+        self.emit_agent_event("background_agent:paused", &agent_id, None)?;
+        if let Some(ref app) = self.app_handle {
+            deliver_agent_notice(
+                app,
+                &agent_id,
+                awaiting_approval_notice(&agent_id, &agent.goal),
+            )
+            .await;
+        }
+        Ok(agent_id)
+    }
+
     /// Get the status of a background agent.
     pub async fn get_agent(&self, agent_id: &str) -> Option<BackgroundAgent> {
         let agents = self.agents.read().await;
@@ -483,9 +540,19 @@ impl BackgroundAgentManager {
         agents.values().filter(|a| !a.is_terminal()).count()
     }
 
-    /// Pause a running background agent.
+    /// Runs that take one of the `MAX_BACKGROUND_AGENTS` places: every run
+    /// that has not ended, except those parked for approval.
+    async fn occupied_places(&self) -> usize {
+        let agents = self.agents.read().await;
+        agents
+            .values()
+            .filter(|agent| !agent.is_terminal() && !agent.is_parked())
+            .count()
+    }
+
+    /// Pause a running background agent. The run stays alive, holds at its
+    /// next step, and goes on from there when resumed.
     pub async fn pause_agent(&self, agent_id: &str) -> anyhow::Result<()> {
-        // Send pause command if agent is running
         {
             let handles = self.handles.lock().await;
             if let Some(handle) = handles.get(agent_id) {
@@ -493,7 +560,6 @@ impl BackgroundAgentManager {
             }
         }
 
-        // Update status
         {
             let mut agents = self.agents.write().await;
             if let Some(agent) = agents.get_mut(agent_id) {
@@ -506,9 +572,10 @@ impl BackgroundAgentManager {
         Ok(())
     }
 
-    /// Resume a paused background agent.
+    /// Resume a paused background agent. A run paused while it was running
+    /// goes on from the step it stopped at; a run that was parked for
+    /// approval, or restored after the app closed, starts from its first step.
     pub async fn resume_agent(&self, agent_id: &str) -> anyhow::Result<()> {
-        // Check if agent exists and can be resumed
         {
             let agents = self.agents.read().await;
             let agent = agents
@@ -524,8 +591,28 @@ impl BackgroundAgentManager {
             }
         }
 
-        // Add back to queue for processing
-        {
+        let live_run = {
+            let handles = self.handles.lock().await;
+            match handles.get(agent_id) {
+                Some(handle) => handle.command_tx.send(AgentCommand::Resume).await.is_ok(),
+                None => false,
+            }
+        };
+
+        if live_run {
+            let mut agents = self.agents.write().await;
+            if let Some(agent) = agents.get_mut(agent_id) {
+                agent.status = BackgroundAgentStatus::Running;
+                self.persist_agent(agent)?;
+            }
+        } else {
+            {
+                let mut agents = self.agents.write().await;
+                if let Some(agent) = agents.get_mut(agent_id) {
+                    agent.progress.awaiting_approval = false;
+                    agent.progress.current_step_description = "Starting...".to_string();
+                }
+            }
             let mut queue = self.queue.write().await;
             if !queue.contains(&agent_id.to_string()) {
                 queue.push(agent_id.to_string());
@@ -534,208 +621,85 @@ impl BackgroundAgentManager {
 
         self.emit_agent_event("background_agent:resumed", agent_id, None)?;
 
-        // Trigger queue processing
-        self.process_queue().await?;
+        if !live_run {
+            self.process_queue().await?;
+        }
 
         Ok(())
     }
 
-    /// Cancel a background agent.
-    pub async fn cancel_agent(&self, agent_id: &str) -> anyhow::Result<()> {
-        // Send cancel command if agent is running
+    /// Tells a live run to stop and waits, for a bounded time, until the task
+    /// driving it has ended, so the state reported next is true. A task that
+    /// outlasts the wait is dropped, which ends everything it was doing.
+    async fn stop_run(&self, agent_id: &str, command: AgentCommand) -> bool {
+        let handle = self.handles.lock().await.remove(agent_id);
+        let Some(mut handle) = handle else {
+            return false;
+        };
+        let _ = handle.command_tx.send(command).await;
+        if tokio::time::timeout(RUN_STOP_GRACE * 2, &mut handle.done)
+            .await
+            .is_err()
         {
-            let handles = self.handles.lock().await;
-            if let Some(handle) = handles.get(agent_id) {
-                let _ = handle.command_tx.send(AgentCommand::Cancel).await;
+            tracing::warn!(
+                "[BackgroundAgent] Agent {} did not stop in time and was dropped",
+                agent_id
+            );
+            handle.done.abort();
+            let _ = handle.done.await;
+        }
+        true
+    }
+
+    /// Stops every live run because the app is closing and leaves each one
+    /// that was running marked as interrupted, to be resumed next launch.
+    pub async fn interrupt_all_runs(&self) {
+        let live: Vec<String> = self.handles.lock().await.keys().cloned().collect();
+        for agent_id in live {
+            self.stop_run(&agent_id, AgentCommand::Interrupt).await;
+            let mut agents = self.agents.write().await;
+            if let Some(agent) = agents.get_mut(&agent_id) {
+                if agent.status == BackgroundAgentStatus::Running {
+                    mark_interrupted(agent);
+                }
+                if let Err(error) = self.persist_agent(agent) {
+                    tracing::warn!(
+                        "[BackgroundAgent] Failed to save interrupted agent {}: {}",
+                        agent_id,
+                        error
+                    );
+                }
             }
         }
+    }
 
-        // Update status
+    /// Cancel a background agent. A live run has ended before this returns.
+    pub async fn cancel_agent(&self, agent_id: &str) -> anyhow::Result<()> {
+        self.stop_run(agent_id, AgentCommand::Cancel).await;
+
         {
             let mut agents = self.agents.write().await;
             if let Some(agent) = agents.get_mut(agent_id) {
-                agent.cancel();
-                self.persist_agent(agent)?;
+                if !agent.is_terminal() {
+                    agent.cancel();
+                    self.persist_agent(agent)?;
+                }
             }
         }
 
-        // Remove from queue
         {
             let mut queue = self.queue.write().await;
             queue.retain(|id| id != agent_id);
-        }
-
-        // Remove handle
-        {
-            let mut handles = self.handles.lock().await;
-            handles.remove(agent_id);
         }
 
         self.emit_agent_event("background_agent:cancelled", agent_id, None)?;
         Ok(())
     }
 
-    /// Take over a background agent (bring it back to the foreground).
-    ///
-    /// Returns the agent's context so the frontend can restore the conversation.
-    pub async fn take_over_agent(
-        &self,
-        agent_id: &str,
-    ) -> anyhow::Result<(BackgroundAgent, BackgroundAgentContext)> {
-        // Send takeover command if agent is running
-        {
-            let handles = self.handles.lock().await;
-            if let Some(handle) = handles.get(agent_id) {
-                let _ = handle.command_tx.send(AgentCommand::TakeOver).await;
-            }
-        }
-
-        // Get agent and update status
-        let (agent, context) = {
-            let mut agents = self.agents.write().await;
-            let agent = agents
-                .get_mut(agent_id)
-                .ok_or_else(|| anyhow::anyhow!("Agent not found: {}", agent_id))?;
-
-            agent.take_over();
-            let context = agent.context.clone();
-            self.persist_agent(agent)?;
-            (agent.clone(), context)
-        };
-
-        // Remove from queue
-        {
-            let mut queue = self.queue.write().await;
-            queue.retain(|id| id != agent_id);
-        }
-
-        // Remove handle
-        {
-            let mut handles = self.handles.lock().await;
-            handles.remove(agent_id);
-        }
-
-        self.emit_agent_event("background_agent:taken_over", agent_id, None)?;
-
-        Ok((agent, context))
-    }
-
-    /// Update agent progress.
-    pub async fn update_progress(
-        &self,
-        agent_id: &str,
-        current_step: usize,
-        total_steps: usize,
-        description: String,
-    ) -> anyhow::Result<()> {
-        {
-            let mut agents = self.agents.write().await;
-            if let Some(agent) = agents.get_mut(agent_id) {
-                agent.update_progress(current_step, total_steps, description);
-                self.persist_agent(agent)?;
-            }
-        }
-
-        self.emit_agent_event("background_agent:progress", agent_id, None)?;
-        Ok(())
-    }
-
-    /// Mark an agent as completed with a summary.
-    pub async fn complete_agent(
-        &self,
-        agent_id: &str,
-        summary: AgentSummary,
-    ) -> anyhow::Result<()> {
-        let goal = {
-            let mut agents = self.agents.write().await;
-            let agent = agents
-                .get_mut(agent_id)
-                .ok_or_else(|| anyhow::anyhow!("Agent not found: {}", agent_id))?;
-
-            agent.complete(summary.clone());
-            self.persist_agent(agent)?;
-            agent.goal.clone()
-        };
-
-        // Remove handle
-        {
-            let mut handles = self.handles.lock().await;
-            handles.remove(agent_id);
-        }
-
-        // Send notification
-        self.send_completion_notification(agent_id, &goal, &summary)
-            .await?;
-
-        self.emit_agent_event("background_agent:completed", agent_id, None)?;
-
-        // Process queue to start next agent
-        self.process_queue().await?;
-
-        Ok(())
-    }
-
-    /// Mark an agent as failed.
-    pub async fn fail_agent(&self, agent_id: &str, error: String) -> anyhow::Result<()> {
-        let goal = {
-            let mut agents = self.agents.write().await;
-            let agent = agents
-                .get_mut(agent_id)
-                .ok_or_else(|| anyhow::anyhow!("Agent not found: {}", agent_id))?;
-
-            agent.fail(error.clone());
-            self.persist_agent(agent)?;
-            agent.goal.clone()
-        };
-
-        // Remove handle
-        {
-            let mut handles = self.handles.lock().await;
-            handles.remove(agent_id);
-        }
-
-        // Send notification
-        self.send_failure_notification(agent_id, &goal, &error)
-            .await?;
-
-        self.emit_agent_event("background_agent:failed", agent_id, Some(&error))?;
-
-        // Process queue to start next agent
-        self.process_queue().await?;
-
-        Ok(())
-    }
-
-    /// Clean up old completed agents (older than 24 hours).
-    pub async fn cleanup_old_agents(&self) -> anyhow::Result<usize> {
-        let cutoff = Utc::now() - chrono::Duration::hours(24);
-        let mut removed_count = 0;
-
-        let ids_to_remove: Vec<String> = {
-            let agents = self.agents.read().await;
-            agents
-                .iter()
-                .filter(|(_, a)| {
-                    a.is_terminal() && a.completed_at.map(|t| t < cutoff).unwrap_or(false)
-                })
-                .map(|(id, _)| id.clone())
-                .collect()
-        };
-
-        for id in ids_to_remove {
-            {
-                let mut agents = self.agents.write().await;
-                agents.remove(&id);
-            }
-            self.delete_agent_from_db(&id)?;
-            removed_count += 1;
-        }
-
-        if removed_count > 0 {
-            tracing::info!("[BackgroundAgent] Cleaned up {} old agents", removed_count);
-        }
-
-        Ok(removed_count)
+    /// Drops finished runs past their keep: from the table, where a run's
+    /// goal can hold a large event body, and from memory.
+    async fn prune_finished_runs(&self) {
+        prune_finished(&self.agents, &self.db_conn).await;
     }
 
     // === Private helper methods ===
@@ -783,46 +747,43 @@ impl BackgroundAgentManager {
             agent.clone()
         };
 
-        // Create command channel
         let (command_tx, command_rx) = mpsc::channel::<AgentCommand>(16);
 
-        // Store handle
-        {
-            let mut handles = self.handles.lock().await;
-            handles.insert(
-                agent_id.to_string(),
-                AgentHandle {
-                    command_tx,
-                    agent_id: agent_id.to_string(),
-                },
-            );
-        }
-
-        // Spawn execution task
         let agent_id_owned = agent_id.to_string();
         let agents = Arc::clone(&self.agents);
         let db_conn = Arc::clone(&self.db_conn);
         let app_handle = self.app_handle.clone();
         let timeout_secs = agent.timeout_secs;
         let router = self.router.clone();
-        let automation = self.automation.clone();
         let handles_clone = Arc::clone(&self.handles);
 
-        tokio::spawn(async move {
-            execute_background_agent(
-                agent_id_owned,
-                agent,
-                command_rx,
-                agents,
-                db_conn,
-                app_handle,
-                timeout_secs,
-                router,
-                automation,
-                handles_clone,
-            )
-            .await
-        });
+        // The run removes its own handle when it ends, so the handle goes in
+        // while the lock is held: a run that ends at once waits for it.
+        {
+            let mut handles = self.handles.lock().await;
+            let done = tokio::spawn(async move {
+                execute_background_agent(
+                    agent_id_owned,
+                    agent,
+                    command_rx,
+                    agents,
+                    db_conn,
+                    app_handle,
+                    timeout_secs,
+                    router,
+                    handles_clone,
+                )
+                .await
+            });
+            handles.insert(
+                agent_id.to_string(),
+                AgentHandle {
+                    command_tx,
+                    agent_id: agent_id.to_string(),
+                    done,
+                },
+            );
+        }
 
         self.emit_agent_event("background_agent:started", agent_id, None)?;
 
@@ -843,10 +804,11 @@ impl BackgroundAgentManager {
                             error, created_at, started_at, completed_at, context_json, priority, timeout_secs
                      FROM background_agents
                      WHERE status NOT IN ('completed', 'failed', 'cancelled', 'taken_over')
-                        OR completed_at > datetime('now', '-24 hours')",
+                        OR completed_at > ?1",
                 )?;
+                let shown_since = (Utc::now() - chrono::Duration::hours(24)).to_rfc3339();
 
-                let rows = stmt.query_map([], |row| {
+                let rows = stmt.query_map([shown_since], |row| {
                     Ok((
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
@@ -928,8 +890,7 @@ impl BackgroundAgentManager {
                     timeout_secs,
                 };
 
-                // Collect non-terminal agents to be queued
-                if !agent.is_terminal() && agent.status != BackgroundAgentStatus::Running {
+                if agent.status == BackgroundAgentStatus::Queued {
                     queued_ids.push(id.clone());
                 }
 
@@ -957,20 +918,37 @@ impl BackgroundAgentManager {
         Ok(())
     }
 
-    /// Resume queued agents after initialization.
+    /// Settles the runs left over from the last launch, then starts what is
+    /// queued.
+    ///
+    /// A run that was going when the app closed has no task behind it now
+    /// and lost its place. One a person started is paused, to run again from
+    /// its first step if they resume it. One a trigger started is ended: the
+    /// trigger counts a run that has not ended as still going and would never
+    /// fire again, and its next firing starts a fresh run anyway.
     async fn resume_queued_agents(&self) -> anyhow::Result<()> {
-        // Reset any "running" agents to "queued" (they were interrupted by restart)
+        let mut interrupted = Vec::new();
         {
             let mut agents = self.agents.write().await;
             for agent in agents.values_mut() {
-                if agent.status == BackgroundAgentStatus::Running {
-                    agent.status = BackgroundAgentStatus::Queued;
-                    let _ = self.persist_agent(agent);
-                }
+                let Some(notice) = settle_restored_run(agent) else {
+                    continue;
+                };
+                let _ = self.persist_agent(agent);
+                interrupted.push((agent.id.clone(), notice));
+            }
+        }
+        for (agent_id, notice) in interrupted {
+            let _ = self.emit_agent_event("background_agent:interrupted", &agent_id, None);
+            if let Some(ref app) = self.app_handle {
+                tokio::spawn(deliver_agent_notice_when_ready(
+                    app.clone(),
+                    agent_id,
+                    notice,
+                ));
             }
         }
 
-        // Process the queue
         self.process_queue().await?;
 
         Ok(())
@@ -1020,21 +998,6 @@ impl BackgroundAgentManager {
         Ok(())
     }
 
-    /// Delete an agent from the database.
-    ///
-    /// Uses `std::sync::Mutex` because `rusqlite::Connection` is `!Send`.
-    /// Lock is held briefly for a single DELETE statement.
-    fn delete_agent_from_db(&self, agent_id: &str) -> anyhow::Result<()> {
-        let conn = self
-            .db_conn
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Failed to acquire database lock: {}", e))?;
-
-        conn.execute("DELETE FROM background_agents WHERE id = ?1", [agent_id])?;
-
-        Ok(())
-    }
-
     /// Emit an event to the frontend.
     fn emit_agent_event(
         &self,
@@ -1051,74 +1014,225 @@ impl BackgroundAgentManager {
         }
         Ok(())
     }
+}
 
-    /// Send a desktop notification when an agent completes.
-    async fn send_completion_notification(
-        &self,
-        agent_id: &str,
-        goal: &str,
-        summary: &AgentSummary,
-    ) -> anyhow::Result<()> {
-        if let Some(ref app) = self.app_handle {
-            use tauri_plugin_notification::NotificationExt;
+const OPEN_BACKGROUND_AGENT_LABEL: &str = "Open background agent";
 
-            let title = if summary.goal_achieved {
-                "Background Task Completed"
-            } else {
-                "Background Task Partially Completed"
-            };
+/// Long enough to carry a refusal or a missing-permission sentence whole.
+const FAILURE_REASON_CHARS: usize = 240;
 
-            let body = if summary.description.is_empty() {
-                format!("Task: {}", truncate_string(goal, 100))
-            } else {
-                truncate_string(&summary.description, 150).to_string()
-            };
+fn completion_notice(
+    agent_id: &str,
+    goal: &str,
+    summary: &AgentSummary,
+) -> CreateNotificationInput {
+    let title = if summary.goal_achieved {
+        "Background Task Completed"
+    } else {
+        "Background Task Partially Completed"
+    };
+    let message = if summary.description.is_empty() {
+        format!("Task: {}", truncate_string(goal, 100))
+    } else {
+        truncate_string(&summary.description, 150).to_string()
+    };
+    agent_notice(
+        agent_id,
+        title,
+        message,
+        NotificationType::TaskComplete,
+        NotificationPriority::Normal,
+    )
+}
 
-            if let Err(e) = app.notification().builder().title(title).body(&body).show() {
-                tracing::warn!(
-                    "[BackgroundAgent] Failed to show completion notification for {}: {}",
-                    agent_id,
-                    e
-                );
-            }
-        }
-        Ok(())
+fn failure_notice(agent_id: &str, goal: &str, error: &str) -> CreateNotificationInput {
+    agent_notice(
+        agent_id,
+        "Background Task Failed",
+        format!(
+            "Task: {}\nError: {}",
+            truncate_string(goal, 60),
+            truncate_string(error, FAILURE_REASON_CHARS)
+        ),
+        NotificationType::TaskFailed,
+        NotificationPriority::High,
+    )
+}
+
+/// Whether the panel that answers this is already on screen is not known
+/// here, so a parked run always raises it.
+fn awaiting_approval_notice(agent_id: &str, goal: &str) -> CreateNotificationInput {
+    agent_notice(
+        agent_id,
+        "Background Task Waiting for You",
+        format!(
+            "Task: {}\nIt will not start until you resume it. While it waits its trigger starts nothing else: later firings are counted on the trigger and do not run. Open it to start or cancel it.",
+            truncate_string(goal, 60)
+        ),
+        NotificationType::AgentActivity,
+        NotificationPriority::High,
+    )
+}
+
+pub(crate) const TRIGGER_RUN_PREFIX: &str = "trigger:";
+
+const INTERRUPTED_TRIGGER_RUN: &str =
+    "Interrupted when the app closed before it finished. Its trigger starts a new run the next time it fires.";
+
+/// What becomes of a run found unfinished at launch, with the notice to
+/// raise for it, or `None` for a run that needs nothing: one that is queued,
+/// finished, parked for approval, or paused by a person who can resume it.
+fn settle_restored_run(agent: &mut BackgroundAgent) -> Option<CreateNotificationInput> {
+    if agent.is_terminal() || agent.status == BackgroundAgentStatus::Queued || agent.is_parked() {
+        return None;
     }
+    if agent.conversation_id.starts_with(TRIGGER_RUN_PREFIX) {
+        agent.fail(INTERRUPTED_TRIGGER_RUN.to_string());
+        return Some(interrupted_trigger_notice(&agent.id, &agent.goal));
+    }
+    if agent.status == BackgroundAgentStatus::Running {
+        mark_interrupted(agent);
+        return Some(interrupted_notice(&agent.id, &agent.goal));
+    }
+    None
+}
 
-    /// Send a desktop notification when an agent fails.
-    async fn send_failure_notification(
-        &self,
-        agent_id: &str,
-        goal: &str,
-        error: &str,
-    ) -> anyhow::Result<()> {
-        if let Some(ref app) = self.app_handle {
-            use tauri_plugin_notification::NotificationExt;
+fn interrupted_trigger_notice(agent_id: &str, goal: &str) -> CreateNotificationInput {
+    agent_notice(
+        agent_id,
+        "Background Task Interrupted",
+        format!(
+            "Task: {}\nThe app closed while it was running. Its trigger starts a new run the next time it fires.",
+            truncate_string(goal, 60)
+        ),
+        NotificationType::AgentActivity,
+        NotificationPriority::Normal,
+    )
+}
 
-            let title = "Background Task Failed";
-            let body = format!(
-                "Task: {}\nError: {}",
-                truncate_string(goal, 60),
-                truncate_string(error, 80)
-            );
+fn interrupted_notice(agent_id: &str, goal: &str) -> CreateNotificationInput {
+    agent_notice(
+        agent_id,
+        "Background Task Interrupted",
+        format!(
+            "Task: {}\nThe app closed while it was running. Open it and resume to run it again from its first step.",
+            truncate_string(goal, 60)
+        ),
+        NotificationType::AgentActivity,
+        NotificationPriority::Normal,
+    )
+}
 
-            if let Err(e) = app.notification().builder().title(title).body(&body).show() {
-                tracing::warn!(
-                    "[BackgroundAgent] Failed to show failure notification for {}: {}",
-                    agent_id,
-                    e
-                );
-            }
-        }
-        Ok(())
+fn agent_notice(
+    agent_id: &str,
+    title: &str,
+    message: String,
+    notification_type: NotificationType,
+    priority: NotificationPriority,
+) -> CreateNotificationInput {
+    CreateNotificationInput {
+        title: title.to_string(),
+        message,
+        notification_type,
+        priority,
+        action_url: Some(NotificationRoute::BackgroundAgent(agent_id).action_url()),
+        action_label: Some(OPEN_BACKGROUND_AGENT_LABEL.to_string()),
+        icon: None,
+        metadata: Some(serde_json::json!({ "backgroundAgentId": agent_id })),
+        dismissible: true,
+        expires_at: None,
     }
 }
 
-/// Execute a background agent using the real `AutonomousAgent` LLM+tool loop.
+/// Raises a background agent's finished or failed notice through the
+/// notification center, so the user's settings apply, the notice is kept in the
+/// list, and a click selects the agent. This is the only place a background
+/// agent notifies from; the renderer raises none of its own.
+async fn deliver_agent_notice(app: &AppHandle, agent_id: &str, input: CreateNotificationInput) {
+    let Some(state) = app.try_state::<NotificationCenterState>() else {
+        return;
+    };
+    if let Err(reason) = deliver_notification(app, &state, input).await {
+        tracing::info!(
+            "[BackgroundAgent] Notification for agent {} not delivered: {}",
+            agent_id,
+            reason
+        );
+    }
+}
+
+const NOTICE_CENTER_WAIT: Duration = Duration::from_millis(250);
+const NOTICE_CENTER_ATTEMPTS: usize = 40;
+
+/// Startup restores agents before the notification center is managed, so a
+/// notice raised from there waits for it instead of being dropped.
+async fn deliver_agent_notice_when_ready(
+    app: AppHandle,
+    agent_id: String,
+    input: CreateNotificationInput,
+) {
+    for _ in 0..NOTICE_CENTER_ATTEMPTS {
+        if app.try_state::<NotificationCenterState>().is_some() {
+            break;
+        }
+        tokio::time::sleep(NOTICE_CENTER_WAIT).await;
+    }
+    deliver_agent_notice(&app, &agent_id, input).await;
+}
+
+/// How long a run is given to wind down after it is told to stop before the
+/// task driving it is dropped outright.
+const RUN_STOP_GRACE: Duration = Duration::from_secs(10);
+
+/// A run's time limit, counted only while the run is not paused.
+struct RunClock {
+    remaining: Duration,
+    running_since: Option<tokio::time::Instant>,
+}
+
+impl RunClock {
+    fn new(limit: Duration) -> Self {
+        Self {
+            remaining: limit,
+            running_since: Some(tokio::time::Instant::now()),
+        }
+    }
+
+    fn pause(&mut self) {
+        if let Some(since) = self.running_since.take() {
+            self.remaining = self.remaining.saturating_sub(since.elapsed());
+        }
+    }
+
+    fn resume(&mut self) {
+        if self.running_since.is_none() {
+            self.running_since = Some(tokio::time::Instant::now());
+        }
+    }
+
+    /// Resolves when the limit is used up, and never while paused.
+    async fn expired(&self) {
+        match self.running_since {
+            Some(since) => tokio::time::sleep_until(since + self.remaining).await,
+            None => std::future::pending().await,
+        }
+    }
+}
+
+async fn reached(deadline: Option<tokio::time::Instant>) {
+    match deadline {
+        Some(deadline) => tokio::time::sleep_until(deadline).await,
+        None => std::future::pending().await,
+    }
+}
+
+/// Runs one background agent to its end and reports that end once.
 ///
-/// This function runs in a separate task and handles the actual execution
-/// of the agent's goal, responding to commands (pause, cancel, etc.).
-/// It prevents OS sleep for the duration of the run via `SleepPrevention`.
+/// The run is one future driven from here, not a task of its own, so a stop
+/// leaves nothing running behind it. Commands reach the run through
+/// `control`: a pause holds it at the next step and a resume lets it go on
+/// from there, and cancel, app quit and the time limit stop it.
+/// It prevents OS sleep while the run is not paused.
 async fn execute_background_agent(
     agent_id: String,
     agent: BackgroundAgent,
@@ -1128,7 +1242,6 @@ async fn execute_background_agent(
     app_handle: Option<AppHandle>,
     timeout_secs: u64,
     router: Option<Arc<RwLock<LLMRouter>>>,
-    automation: Option<Arc<AutomationService>>,
     handles: Arc<Mutex<HashMap<String, AgentHandle>>>,
 ) {
     tracing::info!(
@@ -1137,214 +1250,139 @@ async fn execute_background_agent(
         agent.goal
     );
 
-    // Prevent OS sleep while this agent runs
-    let _sleep_guard = crate::sys::power::SleepPrevention::enable();
-
-    // Build AutonomousAgent if router + automation are available
-    let autonomous = match (router, automation) {
-        (Some(r), Some(a)) => {
-            let config = AgentConfig {
-                auto_approve: true,
-                // P1: Explicit cost caps for background agents (run unattended)
-                max_cost_per_task: 5.0,
-                max_session_cost: 50.0,
-                ..Default::default()
-            };
-            match AutonomousAgent::new(config, a, r) {
-                Ok(mut ag) => {
-                    if let Some(ref handle) = app_handle {
-                        ag.set_app_handle(handle.clone());
-                    }
-                    ag
-                }
-                Err(e) => {
-                    tracing::error!("[BackgroundAgent] Failed to create AutonomousAgent: {}", e);
-                    let mut agents_lock = agents.write().await;
-                    if let Some(a) = agents_lock.get_mut(&agent_id) {
-                        a.fail(format!("Failed to initialize agent: {e}"));
-                        let db = db_conn.clone();
-                        let agent_snapshot = a.clone();
-                        // Fire-and-forget: task runs on blocking pool regardless of handle.
-                        drop(tokio::task::spawn_blocking(move || {
-                            persist_agent_to_db(&db, &agent_snapshot)
-                        }));
-                    }
-                    return;
-                }
-            }
-        }
-        _ => {
-            tracing::warn!(
-                "[BackgroundAgent] No router/automation available for agent {}; \
-                 cannot execute real tasks.",
-                agent_id
-            );
-            let mut agents_lock = agents.write().await;
-            if let Some(a) = agents_lock.get_mut(&agent_id) {
-                a.fail("No LLM router or automation service available".to_string());
-                let db = db_conn.clone();
-                let agent_snapshot = a.clone();
-                // Fire-and-forget: task runs on blocking pool regardless of handle.
-                drop(tokio::task::spawn_blocking(move || {
-                    persist_agent_to_db(&db, &agent_snapshot)
-                }));
-            }
-            return;
-        }
-    };
-
-    // Note: start_agent_execution() already called agent.start() (sets Running + started_at)
-    // and emitted "background_agent:started" before spawning this task. No duplicate here.
-
-    // Run with timeout and command cancellation.
-    // Track whether the command branch was a Pause (reversible) vs Cancel (terminal).
-    let timeout_duration = Duration::from_secs(if timeout_secs == 0 {
-        86400 // fallback: 24h if zero
-    } else {
-        timeout_secs
-    });
-
     let goal = agent.goal.clone();
+    let planned_goal = goal_with_instructions(&goal, agent.context.custom_instructions.as_deref());
+    let prepared = prepare_run(&agent, router, app_handle.as_ref()).await;
+    let outcome = match prepared {
+        Err(reason) => {
+            tracing::warn!(
+                "[BackgroundAgent] Agent {} could not start: {}",
+                agent_id,
+                reason
+            );
+            RunOutcome::CouldNotStart(reason)
+        }
+        Ok((autonomous, managed)) => {
+            let control = RunControl::new();
+            let mut clock = RunClock::new(Duration::from_secs(if timeout_secs == 0 {
+                DEFAULT_AGENT_TIMEOUT_SECS
+            } else {
+                timeout_secs
+            }));
+            let mut sleep_guard = Some(crate::sys::power::SleepPrevention::enable());
+            let mut commands_open = true;
+            let mut stop_deadline = None;
+            let mut progress = control.progress();
+            let mut progress_open = true;
 
-    // Command branch returns Ok(true) for Pause, Ok(false) for Cancel/TakeOver/disconnect.
-    let (cmd_handle, cmd_result): (
-        tokio::task::JoinHandle<()>,
-        tokio::sync::oneshot::Receiver<bool>,
-    ) = {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        let handle = tokio::spawn(async move {
+            let run = crate::sys::account::scope_managed_auth_boundary(
+                managed,
+                autonomous.run_goal(planned_goal, &control),
+            );
+            tokio::pin!(run);
             loop {
-                match command_rx.recv().await {
-                    Some(AgentCommand::Pause) => {
-                        let _ = tx.send(true); // true = paused
-                        break;
+                tokio::select! {
+                    end = &mut run => break outcome_of(end),
+                    command = command_rx.recv(), if commands_open => match command {
+                        Some(AgentCommand::Pause) => {
+                            control.pause();
+                            clock.pause();
+                            sleep_guard = None;
+                        }
+                        Some(AgentCommand::Resume) => {
+                            control.resume();
+                            clock.resume();
+                            if sleep_guard.is_none() {
+                                sleep_guard = Some(crate::sys::power::SleepPrevention::enable());
+                            }
+                        }
+                        Some(AgentCommand::Interrupt) => control.stop(StopReason::AppClosing),
+                        Some(AgentCommand::Cancel) => control.stop(StopReason::Cancelled),
+                        None => {
+                            commands_open = false;
+                            control.stop(StopReason::Cancelled);
+                        }
+                    },
+                    changed = progress.changed(), if progress_open => {
+                        progress_open = changed.is_ok();
+                        let latest = progress.borrow_and_update().clone();
+                        if let Some(step) = latest {
+                            record_progress(&agents, &db_conn, app_handle.as_ref(), &agent_id, step)
+                                .await;
+                        }
                     }
-                    Some(AgentCommand::Cancel) | Some(AgentCommand::TakeOver) | None => {
-                        let _ = tx.send(false); // false = cancelled
-                        break;
+                    _ = clock.expired(), if control.stop_reason().is_none() => {
+                        control.stop(StopReason::TimeLimit);
                     }
-                    Some(AgentCommand::Resume) => continue,
+                    _ = reached(stop_deadline) => {
+                        break stopped_outcome(
+                            control.stop_reason().unwrap_or(StopReason::Cancelled),
+                        );
+                    }
+                }
+                if stop_deadline.is_none() && control.stop_reason().is_some() {
+                    stop_deadline = Some(tokio::time::Instant::now() + RUN_STOP_GRACE);
                 }
             }
-        });
-        (handle, rx)
+        }
     };
 
-    enum RunOutcome {
-        Finished(Result<String, anyhow::Error>),
-        Paused,
-        Cancelled,
-        TimedOut,
-    }
-
-    let outcome = tokio::select! {
-        r = autonomous.run_goal(goal.clone()) => RunOutcome::Finished(r),
-        cmd = cmd_result => match cmd {
-            Ok(true)  => RunOutcome::Paused,
-            _         => RunOutcome::Cancelled,
-        },
-        _ = tokio::time::sleep(timeout_duration) => RunOutcome::TimedOut,
-    };
-
-    // Clean up: abort the command listener if it's still running
-    cmd_handle.abort();
-
-    // NOTE: When Paused or Cancelled, the `run_goal` future is dropped but any
-    // tokio::spawn subtasks inside AutonomousAgent may continue briefly until
-    // they hit an await point. A full CancellationToken-based approach is needed
-    // for true cooperative cancellation (tracked for a future release).
-
-    // Write markdown summary file (for Finished outcomes)
-    let result_for_summary = match &outcome {
-        RunOutcome::Finished(r) => Some(r),
-        _ => None,
-    };
-    let summary_path = result_for_summary
-        .map(|r| write_agent_summary(&agent_id, &goal, r))
-        .unwrap_or(None);
-
-    // Update final status and emit event
+    // Every run ends here, whether it finished, failed, was stopped or never
+    // started: one record update, one event and at most one notice. A run
+    // the manager cancelled or interrupted is recorded and
+    // announced by the manager, once this function has returned.
+    let failure = failure_reason(&outcome, timeout_secs);
     {
         let mut agents_lock = agents.write().await;
         if let Some(a) = agents_lock.get_mut(&agent_id) {
-            match &outcome {
-                RunOutcome::Finished(Ok(_)) => {
+            let recorded = match &outcome {
+                RunOutcome::Completed(report) => {
                     a.status = BackgroundAgentStatus::Completed;
                     a.completed_at = Some(Utc::now());
-                    a.summary = Some(AgentSummary {
-                        description: format!("Successfully completed: {}", goal),
-                        files_changed: summary_path
-                            .as_deref()
-                            .map(|p| vec![p.to_string()])
-                            .unwrap_or_default(),
-                        actions_taken: vec![format!("Completed goal: {}", goal)],
-                        warnings: Vec::new(),
-                        goal_achieved: true,
-                    });
+                    a.summary = Some(summary_of(&goal, report));
+                    true
                 }
-                RunOutcome::Paused => {
-                    a.status = BackgroundAgentStatus::Paused;
+                RunOutcome::Failed(_) | RunOutcome::TimedOut | RunOutcome::CouldNotStart(_) => {
+                    a.fail(failure.clone().unwrap_or_default());
+                    true
                 }
-                RunOutcome::Cancelled => {
-                    a.cancel();
-                }
-                RunOutcome::TimedOut => {
-                    a.fail(format!("Agent timed out after {} seconds", timeout_secs));
-                }
-                RunOutcome::Finished(Err(e)) => {
-                    a.fail(e.to_string());
-                }
+                RunOutcome::Cancelled | RunOutcome::Interrupted => false,
+            };
+            if recorded {
+                save_in_order(&db_conn, a).await;
             }
-            let db = db_conn.clone();
-            let agent_snapshot = a.clone();
-            // Fire-and-forget: task runs on blocking pool regardless of handle.
-            drop(tokio::task::spawn_blocking(move || {
-                persist_agent_to_db(&db, &agent_snapshot)
-            }));
         }
     }
+    prune_finished(&agents, &db_conn).await;
 
-    // Emit frontend event
     if let Some(ref app) = app_handle {
         let emit_result = match &outcome {
-            RunOutcome::Finished(Ok(_)) => app.emit(
+            RunOutcome::Completed(report) => app.emit(
                 "background_agent:completed",
                 serde_json::json!({
                     "agentId": agent_id,
                     "goal": goal,
-                    "summaryPath": summary_path,
+                    "summary": report.summary,
                 }),
             ),
-            RunOutcome::Paused => app.emit(
-                "background_agent:paused",
-                serde_json::json!({ "agentId": agent_id }),
-            ),
-            RunOutcome::Cancelled => app.emit(
-                "background_agent:cancelled",
-                serde_json::json!({
-                    "agentId": agent_id,
-                    "goal": goal,
-                }),
-            ),
-            RunOutcome::TimedOut => app.emit(
-                "background_agent:failed",
-                serde_json::json!({
-                    "agentId": agent_id,
-                    "goal": goal,
-                    "error": format!("Timed out after {} seconds", timeout_secs),
-                }),
-            ),
-            RunOutcome::Finished(Err(e)) => app.emit(
-                "background_agent:failed",
-                serde_json::json!({
-                    "agentId": agent_id,
-                    "goal": goal,
-                    "error": e.to_string(),
-                }),
-            ),
+            RunOutcome::Failed(_) | RunOutcome::TimedOut | RunOutcome::CouldNotStart(_) => app
+                .emit(
+                    "background_agent:failed",
+                    serde_json::json!({
+                        "agentId": agent_id,
+                        "goal": goal,
+                        "error": failure,
+                        "message": failure,
+                    }),
+                ),
+            RunOutcome::Cancelled | RunOutcome::Interrupted => Ok(()),
         };
         if let Err(e) = emit_result {
             tracing::warn!("Failed to emit background_agent event: {}", e);
+        }
+
+        if let Some(notice) = ending_notice(&agent_id, &goal, &outcome, timeout_secs) {
+            deliver_agent_notice(app, &agent_id, notice).await;
         }
     }
 
@@ -1358,56 +1396,364 @@ async fn execute_background_agent(
         "[BackgroundAgent] Agent {} finished: {}",
         agent_id,
         match &outcome {
-            RunOutcome::Finished(Ok(_)) => "completed",
-            RunOutcome::Paused => "paused",
+            RunOutcome::Completed(_) => "completed",
+            RunOutcome::Failed(_) => "failed",
             RunOutcome::Cancelled => "cancelled",
             RunOutcome::TimedOut => "timed_out",
-            RunOutcome::Finished(Err(_)) => "failed",
+            RunOutcome::Interrupted => "interrupted",
+            RunOutcome::CouldNotStart(_) => "could_not_start",
         }
     );
-    // _sleep_guard drops here -> OS sleep re-enabled
 }
 
-/// Write a markdown summary file to the user's Desktop.
-/// Returns the file path if successful.
-fn write_agent_summary(
+/// Saves a run's record while the record's lock is held and waits for the
+/// write. Every writer of a run takes that lock, so its writes reach the
+/// table in the order they were made and a late progress write cannot land
+/// on top of the run's ending.
+async fn save_in_order(db_conn: &Arc<std::sync::Mutex<Connection>>, agent: &BackgroundAgent) {
+    let db = db_conn.clone();
+    let snapshot = agent.clone();
+    let saved = tokio::task::spawn_blocking(move || persist_agent_to_db(&db, &snapshot)).await;
+    match saved {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            tracing::warn!(
+                "[BackgroundAgent] Failed to save agent {}: {}",
+                agent.id,
+                error
+            )
+        }
+        Err(error) => {
+            tracing::warn!(
+                "[BackgroundAgent] Saving agent {} did not finish: {}",
+                agent.id,
+                error
+            )
+        }
+    }
+}
+
+/// Puts the step a run has reached into its record and tells the panel.
+async fn record_progress(
+    agents: &Arc<RwLock<HashMap<String, BackgroundAgent>>>,
+    db_conn: &Arc<std::sync::Mutex<Connection>>,
+    app_handle: Option<&AppHandle>,
+    agent_id: &str,
+    step: StepProgress,
+) {
+    {
+        let mut agents_lock = agents.write().await;
+        let Some(agent) = agents_lock.get_mut(agent_id) else {
+            return;
+        };
+        agent.update_progress(step.step, step.total, step.description);
+        save_in_order(db_conn, agent).await;
+    }
+    if let Some(app) = app_handle {
+        if let Err(e) = app.emit(
+            "background_agent:progress",
+            serde_json::json!({ "agentId": agent_id }),
+        ) {
+            tracing::warn!("Failed to emit background_agent:progress: {}", e);
+        }
+    }
+}
+
+/// How long a finished run is kept, and how many are kept at most.
+const FINISHED_RUN_KEEP_DAYS: i64 = 30;
+const FINISHED_RUNS_KEPT: usize = 100;
+
+/// The finished runs past their keep: older than the age limit, or beyond the
+/// newest `FINISHED_RUNS_KEPT`. Deleted from the table and returned by id.
+fn delete_finished_past_keep(
+    conn: &Connection,
+    now: DateTime<Utc>,
+) -> rusqlite::Result<Vec<String>> {
+    const FINISHED: &str = "status IN ('completed', 'failed', 'cancelled', 'taken_over')";
+    let cutoff = (now - chrono::Duration::days(FINISHED_RUN_KEEP_DAYS)).to_rfc3339();
+    let mut statement = conn.prepare(&format!(
+        "SELECT id FROM background_agents
+         WHERE {FINISHED}
+           AND (completed_at IS NULL OR completed_at < ?1
+                OR id NOT IN (
+                    SELECT id FROM background_agents
+                    WHERE {FINISHED}
+                    ORDER BY completed_at DESC
+                    LIMIT ?2))"
+    ))?;
+    let past_keep = statement
+        .query_map(
+            rusqlite::params![cutoff, FINISHED_RUNS_KEPT as i64],
+            |row| row.get::<_, String>(0),
+        )?
+        .collect::<rusqlite::Result<Vec<String>>>()?;
+    for id in &past_keep {
+        conn.execute("DELETE FROM background_agents WHERE id = ?1", [id])?;
+    }
+    Ok(past_keep)
+}
+
+async fn prune_finished(
+    agents: &Arc<RwLock<HashMap<String, BackgroundAgent>>>,
+    db_conn: &Arc<std::sync::Mutex<Connection>>,
+) {
+    let db = db_conn.clone();
+    let pruned = tokio::task::spawn_blocking(move || {
+        let conn = db
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire database lock: {}", e))?;
+        delete_finished_past_keep(&conn, Utc::now()).map_err(anyhow::Error::from)
+    })
+    .await;
+    match pruned {
+        Ok(Ok(ids)) if !ids.is_empty() => {
+            let mut agents_lock = agents.write().await;
+            for id in &ids {
+                agents_lock.remove(id);
+            }
+            tracing::info!("[BackgroundAgent] Dropped {} finished runs", ids.len());
+        }
+        Ok(Ok(_)) => {}
+        Ok(Err(error)) => {
+            tracing::warn!("[BackgroundAgent] Pruning finished runs failed: {}", error)
+        }
+        Err(error) => tracing::warn!(
+            "[BackgroundAgent] Pruning finished runs did not finish: {}",
+            error
+        ),
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum RunOutcome {
+    Completed(RunReport),
+    Failed(String),
+    Cancelled,
+    TimedOut,
+    Interrupted,
+    CouldNotStart(String),
+}
+
+fn outcome_of(end: RunEnd) -> RunOutcome {
+    match end {
+        RunEnd::Completed(report) => RunOutcome::Completed(report),
+        RunEnd::Failed(reason) => RunOutcome::Failed(reason),
+        RunEnd::Stopped(reason) => stopped_outcome(reason),
+    }
+}
+
+fn stopped_outcome(reason: StopReason) -> RunOutcome {
+    match reason {
+        StopReason::Cancelled => RunOutcome::Cancelled,
+        StopReason::TimeLimit => RunOutcome::TimedOut,
+        StopReason::AppClosing => RunOutcome::Interrupted,
+    }
+}
+
+/// The record's summary of a finished run: what the run itself reported.
+/// It is kept in the agent record and nowhere else; a run writes no file of
+/// its own, because a file dropped in a watched folder would start the next
+/// run.
+fn summary_of(goal: &str, report: &RunReport) -> AgentSummary {
+    AgentSummary {
+        description: if report.summary.trim().is_empty() {
+            format!("Finished with nothing to report: {goal}")
+        } else {
+            report.summary.clone()
+        },
+        files_changed: Vec::new(),
+        actions_taken: report.steps.clone(),
+        warnings: report.notes.clone(),
+        goal_achieved: true,
+    }
+}
+
+const MODELS_NOT_READY: &str =
+    "Models are not available yet, so the task could not start. Try it again in a moment.";
+
+/// The boundary of a run started outside any chat: the one the app is in at
+/// that moment. The app has no BYOK mode of its own; BYOK is entered only by
+/// a conversation the person forked with consent.
+fn run_boundary(cloud_app_mode: bool) -> TrustMode {
+    if cloud_app_mode {
+        TrustMode::ManagedCloud
+    } else {
+        TrustMode::Local
+    }
+}
+
+const BYOK_RUN_REFUSED: &str =
+    "Background runs work in Local or AGI Cloud mode. This one was started from a chat that uses your own provider key, so it was not started. It is not run on a local model or on AGI Cloud instead.";
+
+/// Records the boundary a run keeps: the one its caller read from the chat
+/// it was started in, or the app's when it was started outside one. A run
+/// cannot name the provider a BYOK chat chose, so a BYOK run is refused here
+/// rather than sent anywhere else.
+fn in_run_boundary(
+    mut context: BackgroundAgentContext,
+    cloud_app_mode: bool,
+) -> Result<BackgroundAgentContext, String> {
+    let boundary = context
+        .boundary
+        .unwrap_or_else(|| run_boundary(cloud_app_mode));
+    if boundary == TrustMode::Byok {
+        return Err(BYOK_RUN_REFUSED.to_string());
+    }
+    context.boundary = Some(boundary);
+    Ok(context)
+}
+
+/// The boundary a run's model calls stay inside: the one it was created in,
+/// however the app has been switched since. A run with none recorded stays
+/// on this computer, and one recorded as BYOK does not start.
+fn boundary_of(context: &BackgroundAgentContext) -> Result<TrustMode, String> {
+    match context.boundary {
+        Some(TrustMode::ManagedCloud) => Ok(TrustMode::ManagedCloud),
+        Some(TrustMode::Byok) => Err(BYOK_RUN_REFUSED.to_string()),
+        Some(TrustMode::Local) | Some(TrustMode::OnDevice) | None => Ok(TrustMode::Local),
+    }
+}
+
+const CLOUD_RUN_NEEDS_CLOUD_MODE: &str =
+    "This run was started in Cloud mode and the app is now in Local mode. Switch to Cloud to run it. It is not run on a local model instead.";
+
+const CLOUD_RUN_NEEDS_SIGN_IN: &str =
+    "This run was started in Cloud mode, so it uses AGI Cloud. Sign in to run it. It is not run on a local model instead.";
+
+/// The signed-in account a Cloud run's model calls are tied to, or why the
+/// run cannot start. A Local run has none.
+fn managed_boundary_for(
+    trust_mode: TrustMode,
+    cloud_app_mode: bool,
+) -> Result<Option<crate::sys::account::ManagedAuthBoundary>, String> {
+    if trust_mode != TrustMode::ManagedCloud {
+        return Ok(None);
+    }
+    if !cloud_app_mode {
+        return Err(CLOUD_RUN_NEEDS_CLOUD_MODE.to_string());
+    }
+    crate::sys::account::capture_managed_auth_boundary()
+        .map(Some)
+        .map_err(|_| CLOUD_RUN_NEEDS_SIGN_IN.to_string())
+}
+
+/// The goal as the planner reads it: the goal, then the instructions the
+/// run was started with, when it was given any.
+fn goal_with_instructions(goal: &str, instructions: Option<&str>) -> String {
+    match instructions.map(str::trim).filter(|text| !text.is_empty()) {
+        Some(instructions) => format!("{goal}\n\nInstructions for this run:\n{instructions}"),
+        None => goal.to_string(),
+    }
+}
+
+/// The folder the run was started in, checked against the folders the person
+/// has granted, or why the run cannot start there. Each file step is still
+/// held to the granted folders on its own.
+async fn working_folder_for(
+    app_handle: Option<&AppHandle>,
+    context: &BackgroundAgentContext,
+) -> Result<Option<std::path::PathBuf>, String> {
+    let Some(folder) = context
+        .working_directory
+        .as_deref()
+        .map(str::trim)
+        .filter(|folder| !folder.is_empty())
+    else {
+        return Ok(None);
+    };
+    let refused = || {
+        format!(
+            "The run was started in '{folder}', which is not inside a folder you have granted, so it did not start. Open that folder as the project or allow it in Settings, then start the run again."
+        )
+    };
+    let granted = crate::core::agi::executors::granted_folders_for(app_handle, &[])
+        .await
+        .map_err(|_| refused())?;
+    let canonical = std::fs::canonicalize(folder).map_err(|_| refused())?;
+    if granted.contains(&canonical) {
+        Ok(Some(canonical))
+    } else {
+        Err(refused())
+    }
+}
+
+/// Builds the agent for one run, or says why the run cannot start. No step
+/// an agent can take uses the desktop-control service, so a run does not wait
+/// on the Accessibility permission.
+fn build_autonomous_agent(
+    router: Option<Arc<RwLock<LLMRouter>>>,
+    app_handle: Option<&AppHandle>,
+    trust_mode: TrustMode,
+    working_folder: Option<std::path::PathBuf>,
+) -> Result<AutonomousAgent, String> {
+    let router = router.ok_or_else(|| MODELS_NOT_READY.to_string())?;
+    let config = AgentConfig {
+        // P1: Explicit cost caps for background agents (run unattended)
+        max_cost_per_task: 5.0,
+        max_session_cost: 50.0,
+        ..Default::default()
+    };
+    let mut agent = AutonomousAgent::new(config, router, trust_mode)
+        .map_err(|error| format!("The task could not be set up: {error}"))?;
+    if let Some(app) = app_handle {
+        agent.set_app_handle(app.clone());
+    }
+    if let Some(folder) = working_folder {
+        agent.set_working_folder(folder);
+    }
+    Ok(agent)
+}
+
+/// Everything a run needs before its first step, or why it cannot start.
+async fn prepare_run(
+    agent: &BackgroundAgent,
+    router: Option<Arc<RwLock<LLMRouter>>>,
+    app_handle: Option<&AppHandle>,
+) -> Result<
+    (
+        AutonomousAgent,
+        Option<crate::sys::account::ManagedAuthBoundary>,
+    ),
+    String,
+> {
+    let trust_mode = boundary_of(&agent.context)?;
+    let managed = managed_boundary_for(
+        trust_mode,
+        crate::sys::account::app_mode::is_cloud_app_mode(),
+    )?;
+    let folder = working_folder_for(app_handle, &agent.context).await?;
+    let autonomous = build_autonomous_agent(router, app_handle, trust_mode, folder)?;
+    Ok((autonomous, managed))
+}
+
+/// Why a run failed, in the words the person reads, or `None` when it did not.
+fn failure_reason(outcome: &RunOutcome, timeout_secs: u64) -> Option<String> {
+    match outcome {
+        RunOutcome::Failed(reason) | RunOutcome::CouldNotStart(reason) => Some(reason.clone()),
+        RunOutcome::TimedOut => Some(format!(
+            "It ran for {timeout_secs} seconds without finishing and was stopped."
+        )),
+        RunOutcome::Completed(_) | RunOutcome::Cancelled | RunOutcome::Interrupted => None,
+    }
+}
+
+/// The one notice a run's ending raises. Cancelling is done by the person
+/// from the panel or a chat approval, and a run cut off by the app closing
+/// is reported when the app comes back, so neither raises one here.
+fn ending_notice(
     agent_id: &str,
     goal: &str,
-    result: &Result<String, anyhow::Error>,
-) -> Option<String> {
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .ok()?;
-    let date = Utc::now().format("%Y-%m-%d").to_string();
-    let short_id = &agent_id[..agent_id.len().min(8)];
-    let filename = format!("agi-run-{}-{}.md", date, short_id);
-    let path = std::path::PathBuf::from(&home)
-        .join("Desktop")
-        .join(&filename);
-
-    let status_str = match result {
-        Ok(_) => "Completed".to_string(),
-        Err(e) => format!("Failed: {}", e),
-    };
-
-    let content = format!(
-        "# AGI Workforce Run Report\n\n\
-         **Goal:** {}\n\n\
-         **Finished:** {}\n\n\
-         **Status:** {}\n",
-        goal,
-        Utc::now().to_rfc3339(),
-        status_str,
-    );
-
-    match std::fs::write(&path, content) {
-        Ok(()) => {
-            tracing::info!("[BackgroundAgent] Summary written to {}", path.display());
-            Some(path.to_string_lossy().to_string())
+    outcome: &RunOutcome,
+    timeout_secs: u64,
+) -> Option<CreateNotificationInput> {
+    match outcome {
+        RunOutcome::Completed(report) => {
+            Some(completion_notice(agent_id, goal, &summary_of(goal, report)))
         }
-        Err(e) => {
-            tracing::warn!("[BackgroundAgent] Failed to write summary: {}", e);
-            None
+        RunOutcome::Cancelled | RunOutcome::Interrupted => None,
+        RunOutcome::Failed(_) | RunOutcome::TimedOut | RunOutcome::CouldNotStart(_) => {
+            failure_reason(outcome, timeout_secs)
+                .map(|reason| failure_notice(agent_id, goal, &reason))
         }
     }
 }
@@ -1514,7 +1860,707 @@ mod tests {
         )
         .unwrap();
 
-        BackgroundAgentManager::new(Arc::new(std::sync::Mutex::new(conn)), None, None)
+        BackgroundAgentManager::new(Arc::new(std::sync::Mutex::new(conn)), None)
+    }
+
+    #[test]
+    fn agent_notices_go_through_the_notification_center() {
+        let source = include_str!("background_agent.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+        assert!(
+            !production.contains("tauri_plugin_notification"),
+            "a background agent must not raise an OS notification of its own"
+        );
+        assert!(production.contains("deliver_notification"));
+    }
+
+    #[test]
+    fn a_finished_agent_notice_selects_that_agent_and_can_be_gated() {
+        let summary = AgentSummary {
+            description: "Wrote the weekly report".to_string(),
+            files_changed: Vec::new(),
+            actions_taken: Vec::new(),
+            warnings: Vec::new(),
+            goal_achieved: true,
+        };
+        let notice = completion_notice("agent-7", "Write the weekly report", &summary);
+
+        assert_eq!(notice.title, "Background Task Completed");
+        assert_eq!(notice.message, "Wrote the weekly report");
+        assert_eq!(notice.notification_type, NotificationType::TaskComplete);
+        assert_eq!(
+            notice.action_url.as_deref(),
+            Some("background-agent:agent-7")
+        );
+
+        let partial = AgentSummary {
+            description: String::new(),
+            goal_achieved: false,
+            ..summary
+        };
+        let notice = completion_notice("agent-7", "Write the weekly report", &partial);
+        assert_eq!(notice.title, "Background Task Partially Completed");
+        assert_eq!(notice.message, "Task: Write the weekly report");
+    }
+
+    #[test]
+    fn a_failed_agent_notice_is_a_high_priority_failure_for_that_agent() {
+        let notice = failure_notice("agent-9", "Sync the inbox", "The provider refused");
+
+        assert_eq!(notice.title, "Background Task Failed");
+        assert_eq!(
+            notice.message,
+            "Task: Sync the inbox\nError: The provider refused"
+        );
+        assert_eq!(notice.notification_type, NotificationType::TaskFailed);
+        assert_eq!(notice.priority, NotificationPriority::High);
+        assert_eq!(
+            notice.action_url.as_deref(),
+            Some("background-agent:agent-9")
+        );
+    }
+
+    const NAVIGATION_REFUSED: &str = "Task failed: Not run unattended: 'browser_navigate' needs your approval, and nobody was here to give it. Run it from chat, or save an 'Always allow' for this tool in Settings.";
+
+    fn failed(reason: &str) -> RunOutcome {
+        RunOutcome::Failed(reason.to_string())
+    }
+
+    #[test]
+    fn every_failed_ending_raises_one_notice_that_says_why_and_opens_the_run() {
+        for (outcome, reason) in [
+            (
+                failed("Task failed: Step step_2 failed: the page did not load"),
+                "the page did not load",
+            ),
+            (
+                failed("The agent stopped at its step limit (100 rounds)."),
+                "step limit",
+            ),
+            (
+                failed("The agent stopped at its spending limit: it had spent $50.10 of $50.00."),
+                "spending limit",
+            ),
+            (failed(NAVIGATION_REFUSED), "save an 'Always allow'"),
+            (RunOutcome::TimedOut, "600 seconds without finishing"),
+            (
+                RunOutcome::CouldNotStart(
+                    "The task could not be set up: the planner is unavailable".to_string(),
+                ),
+                "could not be set up",
+            ),
+            (
+                RunOutcome::CouldNotStart(MODELS_NOT_READY.to_string()),
+                "Models are not available yet",
+            ),
+        ] {
+            let notice = ending_notice("agent-3", "Sync the inbox", &outcome, 600)
+                .expect("a run that failed or never started raises a notice");
+
+            assert_eq!(notice.title, "Background Task Failed");
+            assert_eq!(notice.notification_type, NotificationType::TaskFailed);
+            assert_eq!(notice.priority, NotificationPriority::High);
+            assert_eq!(
+                notice.action_url.as_deref(),
+                Some("background-agent:agent-3")
+            );
+            assert!(notice.message.contains(reason), "{}", notice.message);
+            let whole_reason = failure_reason(&outcome, 600).expect("a failed run has a reason");
+            assert!(
+                notice.message.ends_with(&whole_reason),
+                "the reason is not cut short: {}",
+                notice.message
+            );
+        }
+    }
+
+    #[test]
+    fn a_finished_run_reports_what_it_found_not_its_goal() {
+        let report = RunReport {
+            summary: "Three unread messages from Dana about the March invoice.".to_string(),
+            steps: vec!["Read the inbox: 3 unread".to_string()],
+            notes: vec!["The plan change the model asked for was not adopted: x".to_string()],
+        };
+        let outcome = RunOutcome::Completed(report.clone());
+
+        let notice = ending_notice("agent-3", "Sync the inbox", &outcome, 600)
+            .expect("a finished run raises a notice");
+
+        assert_eq!(notice.title, "Background Task Completed");
+        assert_eq!(notice.message, report.summary);
+        assert_eq!(notice.notification_type, NotificationType::TaskComplete);
+        assert_eq!(
+            notice.action_url.as_deref(),
+            Some("background-agent:agent-3")
+        );
+        assert_eq!(failure_reason(&outcome, 600), None);
+
+        let record = summary_of("Sync the inbox", &report);
+        assert_eq!(record.description, report.summary);
+        assert_eq!(record.actions_taken, report.steps);
+        assert_eq!(record.warnings, report.notes);
+        assert!(record.files_changed.is_empty());
+    }
+
+    #[test]
+    fn a_run_with_nothing_to_report_says_so() {
+        let record = summary_of("Sync the inbox", &RunReport::default());
+
+        assert_eq!(
+            record.description,
+            "Finished with nothing to report: Sync the inbox"
+        );
+    }
+
+    #[test]
+    fn a_run_writes_no_file_of_its_own() {
+        let source = include_str!("background_agent.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+
+        assert!(!production.contains("fs::write"));
+        assert!(!production.contains("\"Desktop\""));
+    }
+
+    #[test]
+    fn a_run_the_manager_stopped_raises_no_notice_from_the_run() {
+        for outcome in [RunOutcome::Cancelled, RunOutcome::Interrupted] {
+            assert!(ending_notice("agent-3", "Sync the inbox", &outcome, 600).is_none());
+            assert_eq!(failure_reason(&outcome, 600), None);
+        }
+    }
+
+    #[test]
+    fn each_way_a_run_stops_has_one_outcome() {
+        assert_eq!(
+            outcome_of(RunEnd::Stopped(StopReason::Cancelled)),
+            RunOutcome::Cancelled
+        );
+        assert_eq!(
+            outcome_of(RunEnd::Stopped(StopReason::TimeLimit)),
+            RunOutcome::TimedOut
+        );
+        assert_eq!(
+            outcome_of(RunEnd::Stopped(StopReason::AppClosing)),
+            RunOutcome::Interrupted
+        );
+        assert_eq!(
+            outcome_of(RunEnd::Failed("Step s2 failed".to_string())),
+            RunOutcome::Failed("Step s2 failed".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn the_time_limit_does_not_run_while_the_run_is_paused() {
+        let mut clock = RunClock::new(Duration::from_millis(200));
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        clock.pause();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(400), clock.expired())
+                .await
+                .is_err(),
+            "a paused run timed out"
+        );
+
+        clock.resume();
+        tokio::time::timeout(Duration::from_millis(400), clock.expired())
+            .await
+            .expect("the limit runs out once the run goes on");
+    }
+
+    #[test]
+    fn a_run_parked_for_approval_says_what_waits_on_it_and_opens_the_run() {
+        let notice = awaiting_approval_notice("agent-4", "Sync the inbox");
+
+        assert_eq!(notice.title, "Background Task Waiting for You");
+        assert!(notice.message.contains("Sync the inbox"));
+        assert!(notice
+            .message
+            .contains("will not start until you resume it"));
+        assert!(notice
+            .message
+            .contains("later firings are counted on the trigger and do not run"));
+        assert_eq!(notice.priority, NotificationPriority::High);
+        assert_eq!(
+            notice.action_url.as_deref(),
+            Some("background-agent:agent-4")
+        );
+    }
+
+    async fn park(manager: &BackgroundAgentManager, trigger: &str, goal: &str) -> String {
+        manager
+            .push_awaiting_approval(
+                trigger.to_string(),
+                goal.to_string(),
+                BackgroundAgentContext::default(),
+                0,
+            )
+            .await
+            .expect("a run is parked without an app handle too")
+    }
+
+    #[tokio::test]
+    async fn a_parked_run_is_marked_as_waiting_and_records_its_boundary() {
+        let manager = create_test_manager();
+
+        let parked_id = park(&manager, "trigger:t1", "Sync the inbox at 01:00").await;
+
+        let parked = manager.get_agent(&parked_id).await.expect("parked run");
+        assert_eq!(parked.status, BackgroundAgentStatus::Paused);
+        assert!(parked.progress.awaiting_approval);
+        assert!(parked.is_parked());
+        assert_eq!(
+            parked.progress.current_step_description,
+            "Waiting for your approval to start"
+        );
+        assert!(parked.context.boundary.is_some());
+
+        let source = include_str!("background_agent.rs");
+        let parking = source
+            .split("pub async fn push_awaiting_approval")
+            .nth(1)
+            .and_then(|rest| rest.split("pub async fn get_agent").next())
+            .expect("the parking function");
+        assert_eq!(parking.matches("awaiting_approval_notice(").count(), 1);
+    }
+
+    #[tokio::test]
+    async fn parked_runs_take_none_of_the_running_places() {
+        let manager = create_test_manager();
+        for trigger in 0..MAX_BACKGROUND_AGENTS + 2 {
+            park(&manager, &format!("trigger:t{trigger}"), "Sync the inbox").await;
+        }
+
+        assert_eq!(manager.occupied_places().await, 0);
+        manager
+            .push_to_background(
+                "conv_1".to_string(),
+                "Write the report".to_string(),
+                BackgroundAgentContext::default(),
+                0,
+            )
+            .await
+            .expect("a run can still be started with every trigger parked");
+    }
+
+    /// A stand-in for a live run: it records each command and ends a moment
+    /// after it is told to stop.
+    async fn live_run(
+        manager: &BackgroundAgentManager,
+        status: BackgroundAgentStatus,
+    ) -> (
+        String,
+        Arc<std::sync::Mutex<Vec<AgentCommand>>>,
+        Arc<std::sync::atomic::AtomicBool>,
+    ) {
+        let mut agent = BackgroundAgent::new(
+            "conv_live".to_string(),
+            "Write the report".to_string(),
+            BackgroundAgentContext::default(),
+            0,
+        );
+        agent.status = status;
+        let agent_id = agent.id.clone();
+        manager.agents.write().await.insert(agent_id.clone(), agent);
+
+        let (command_tx, mut command_rx) = mpsc::channel::<AgentCommand>(16);
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let ended = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (seen_by_run, ended_by_run) = (Arc::clone(&seen), Arc::clone(&ended));
+        let done = tokio::spawn(async move {
+            while let Some(command) = command_rx.recv().await {
+                let stops = !matches!(command, AgentCommand::Pause | AgentCommand::Resume);
+                seen_by_run.lock().unwrap().push(command);
+                if stops {
+                    break;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            ended_by_run.store(true, std::sync::atomic::Ordering::SeqCst);
+        });
+        manager.handles.lock().await.insert(
+            agent_id.clone(),
+            AgentHandle {
+                command_tx,
+                agent_id: agent_id.clone(),
+                done,
+            },
+        );
+        (agent_id, seen, ended)
+    }
+
+    #[tokio::test]
+    async fn cancel_reports_cancelled_only_after_the_run_has_ended() {
+        let manager = create_test_manager();
+        let (agent_id, seen, ended) = live_run(&manager, BackgroundAgentStatus::Running).await;
+
+        manager.cancel_agent(&agent_id).await.expect("cancel");
+
+        assert!(
+            ended.load(std::sync::atomic::Ordering::SeqCst),
+            "cancel returned while the run was still going"
+        );
+        assert!(matches!(
+            seen.lock().unwrap().as_slice(),
+            [AgentCommand::Cancel]
+        ));
+        let cancelled = manager.get_agent(&agent_id).await.expect("agent");
+        assert_eq!(cancelled.status, BackgroundAgentStatus::Cancelled);
+        assert!(manager.handles.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn resuming_a_paused_live_run_continues_it_and_starts_no_second_run() {
+        let manager = create_test_manager();
+        let (agent_id, seen, ended) = live_run(&manager, BackgroundAgentStatus::Running).await;
+
+        manager.pause_agent(&agent_id).await.expect("pause");
+        assert_eq!(
+            manager.get_agent(&agent_id).await.expect("agent").status,
+            BackgroundAgentStatus::Paused
+        );
+        manager.resume_agent(&agent_id).await.expect("resume");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        assert!(matches!(
+            seen.lock().unwrap().as_slice(),
+            [AgentCommand::Pause, AgentCommand::Resume]
+        ));
+        assert_eq!(
+            manager.get_agent(&agent_id).await.expect("agent").status,
+            BackgroundAgentStatus::Running
+        );
+        assert!(
+            manager.queue.read().await.is_empty(),
+            "the run was queued to start again"
+        );
+        assert_eq!(manager.handles.lock().await.len(), 1);
+        assert!(!ended.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn closing_the_app_stops_live_runs_and_leaves_them_to_resume() {
+        let manager = create_test_manager();
+        let (agent_id, seen, ended) = live_run(&manager, BackgroundAgentStatus::Running).await;
+
+        manager.interrupt_all_runs().await;
+
+        assert!(ended.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(matches!(
+            seen.lock().unwrap().as_slice(),
+            [AgentCommand::Interrupt]
+        ));
+        let interrupted = manager.get_agent(&agent_id).await.expect("agent");
+        assert_eq!(interrupted.status, BackgroundAgentStatus::Paused);
+        assert!(interrupted
+            .progress
+            .current_step_description
+            .contains("Interrupted when the app closed"));
+    }
+
+    #[test]
+    fn a_run_cut_off_by_the_app_closing_is_reported_and_opens_the_run() {
+        let notice = interrupted_notice("agent-5", "Sync the inbox");
+
+        assert_eq!(notice.title, "Background Task Interrupted");
+        assert!(notice.message.contains("Sync the inbox"));
+        assert!(notice
+            .message
+            .contains("The app closed while it was running"));
+        assert_eq!(
+            notice.action_url.as_deref(),
+            Some("background-agent:agent-5")
+        );
+    }
+
+    #[test]
+    fn a_run_that_cannot_start_says_which_part_is_missing() {
+        assert_eq!(
+            build_autonomous_agent(None, None, TrustMode::Local, None).err(),
+            Some(MODELS_NOT_READY.to_string())
+        );
+    }
+
+    #[test]
+    fn a_run_keeps_the_boundary_it_was_created_in() {
+        assert_eq!(run_boundary(false), TrustMode::Local);
+        assert_eq!(run_boundary(true), TrustMode::ManagedCloud);
+
+        let created = |boundary: Option<TrustMode>, cloud_app_mode: bool| {
+            let context = BackgroundAgentContext {
+                boundary,
+                ..Default::default()
+            };
+            in_run_boundary(context, cloud_app_mode).map(|context| context.boundary)
+        };
+        assert_eq!(created(None, false), Ok(Some(TrustMode::Local)));
+        assert_eq!(created(None, true), Ok(Some(TrustMode::ManagedCloud)));
+        assert_eq!(
+            created(Some(TrustMode::Local), true),
+            Ok(Some(TrustMode::Local)),
+            "a Local chat's run stays Local while the app is in Cloud mode"
+        );
+        assert_eq!(
+            created(Some(TrustMode::ManagedCloud), false),
+            Ok(Some(TrustMode::ManagedCloud))
+        );
+
+        let mut context = BackgroundAgentContext::default();
+        assert_eq!(boundary_of(&context), Ok(TrustMode::Local));
+        context.boundary = Some(TrustMode::ManagedCloud);
+        assert_eq!(boundary_of(&context), Ok(TrustMode::ManagedCloud));
+
+        assert!(matches!(
+            managed_boundary_for(TrustMode::Local, true),
+            Ok(None)
+        ));
+        assert_eq!(
+            managed_boundary_for(TrustMode::ManagedCloud, false).err(),
+            Some(CLOUD_RUN_NEEDS_CLOUD_MODE.to_string())
+        );
+
+        let source = include_str!("background_agent.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+        assert!(production.contains("scope_managed_auth_boundary("));
+    }
+
+    #[tokio::test]
+    async fn a_run_from_a_byok_chat_is_refused_and_goes_nowhere_else() {
+        let byok = || BackgroundAgentContext {
+            boundary: Some(TrustMode::Byok),
+            ..Default::default()
+        };
+        for cloud_app_mode in [false, true] {
+            assert_eq!(
+                in_run_boundary(byok(), cloud_app_mode).map(|context| context.boundary),
+                Err(BYOK_RUN_REFUSED.to_string())
+            );
+        }
+        assert_eq!(boundary_of(&byok()), Err(BYOK_RUN_REFUSED.to_string()));
+
+        let manager = create_test_manager();
+        let started = manager
+            .push_to_background("conv_1".to_string(), "Sync".to_string(), byok(), 0)
+            .await
+            .expect_err("a BYOK run is not started");
+        assert_eq!(started.to_string(), BYOK_RUN_REFUSED);
+        let parked = manager
+            .push_awaiting_approval("trigger:t1".to_string(), "Sync".to_string(), byok(), 0)
+            .await
+            .expect_err("a BYOK run is not parked");
+        assert_eq!(parked.to_string(), BYOK_RUN_REFUSED);
+        assert!(manager.list_agents().await.is_empty());
+    }
+
+    #[test]
+    fn the_instructions_a_run_was_started_with_reach_the_planner() {
+        assert_eq!(
+            goal_with_instructions("Sync the inbox", None),
+            "Sync the inbox"
+        );
+        assert_eq!(
+            goal_with_instructions("Sync the inbox", Some("   ")),
+            "Sync the inbox"
+        );
+        assert_eq!(
+            goal_with_instructions("Sync the inbox", Some(" Skip newsletters. ")),
+            "Sync the inbox\n\nInstructions for this run:\nSkip newsletters."
+        );
+    }
+
+    #[tokio::test]
+    async fn a_run_started_in_a_folder_that_is_not_granted_does_not_start() {
+        assert_eq!(
+            working_folder_for(None, &BackgroundAgentContext::default()).await,
+            Ok(None)
+        );
+
+        let outside = tempdir().unwrap();
+        let context = BackgroundAgentContext {
+            working_directory: Some(outside.path().to_string_lossy().into_owned()),
+            ..Default::default()
+        };
+        let refusal = working_folder_for(None, &context)
+            .await
+            .expect_err("no folder is granted without the app");
+        assert!(
+            refusal.contains("not inside a folder you have granted"),
+            "{refusal}"
+        );
+    }
+
+    fn restored(conversation: &str, status: BackgroundAgentStatus) -> BackgroundAgent {
+        let mut agent = BackgroundAgent::new(
+            conversation.to_string(),
+            "Sync the inbox".to_string(),
+            BackgroundAgentContext::default(),
+            0,
+        );
+        agent.status = status;
+        agent
+    }
+
+    #[test]
+    fn a_trigger_run_cut_off_by_a_restart_is_ended_so_its_trigger_fires_again() {
+        for status in [
+            BackgroundAgentStatus::Running,
+            BackgroundAgentStatus::Paused,
+        ] {
+            let mut agent = restored("trigger:t1", status);
+
+            let notice = settle_restored_run(&mut agent).expect("the person is told");
+
+            assert_eq!(agent.status, BackgroundAgentStatus::Failed);
+            assert!(agent.is_terminal());
+            assert!(agent.completed_at.is_some());
+            assert_eq!(agent.error.as_deref(), Some(INTERRUPTED_TRIGGER_RUN));
+            assert!(notice.message.contains("Its trigger starts a new run"));
+        }
+    }
+
+    #[test]
+    fn a_trigger_run_waiting_for_approval_stays_parked_across_a_restart() {
+        let mut agent = restored("trigger:t1", BackgroundAgentStatus::Paused);
+        agent.progress.awaiting_approval = true;
+
+        assert!(settle_restored_run(&mut agent).is_none());
+        assert!(agent.is_parked());
+    }
+
+    #[test]
+    fn a_run_a_person_started_is_paused_by_a_restart_and_can_be_resumed() {
+        let mut running = restored("conv_1", BackgroundAgentStatus::Running);
+        assert!(settle_restored_run(&mut running).is_some());
+        assert_eq!(running.status, BackgroundAgentStatus::Paused);
+        assert!(running.can_resume());
+
+        let mut paused = restored("conv_1", BackgroundAgentStatus::Paused);
+        assert!(settle_restored_run(&mut paused).is_none());
+        assert_eq!(paused.status, BackgroundAgentStatus::Paused);
+
+        let mut queued = restored("trigger:t1", BackgroundAgentStatus::Queued);
+        assert!(settle_restored_run(&mut queued).is_none());
+        assert_eq!(queued.status, BackgroundAgentStatus::Queued);
+    }
+
+    #[test]
+    fn a_trigger_run_is_known_by_the_prefix_its_trigger_gives_it() {
+        let triggers = include_str!("triggers.rs");
+
+        assert!(triggers.contains(&format!(
+            "format!(\"{TRIGGER_RUN_PREFIX}{{}}\", trigger_id)"
+        )));
+    }
+
+    fn stored_run(conn: &Connection, id: &str, status: &str, completed_at: Option<DateTime<Utc>>) {
+        conn.execute(
+            "INSERT INTO background_agents
+             (id, conversation_id, goal, status, progress_json, created_at, completed_at, context_json)
+             VALUES (?1, 'conv', 'goal', ?2, '{}', ?3, ?4, '{}')",
+            rusqlite::params![
+                id,
+                status,
+                Utc::now().to_rfc3339(),
+                completed_at.map(|at| at.to_rfc3339())
+            ],
+        )
+        .unwrap();
+    }
+
+    fn stored_ids(conn: &Connection) -> Vec<String> {
+        let mut statement = conn.prepare("SELECT id FROM background_agents").unwrap();
+        let mut ids = statement
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<String>>>()
+            .unwrap();
+        ids.sort();
+        ids
+    }
+
+    #[test]
+    fn finished_runs_past_their_age_are_deleted_and_unfinished_ones_never_are() {
+        let manager = create_test_manager();
+        let conn = manager.db_conn.lock().unwrap();
+        let now = Utc::now();
+        let too_old = now - chrono::Duration::days(FINISHED_RUN_KEEP_DAYS + 1);
+        stored_run(&conn, "ended-long-ago", "completed", Some(too_old));
+        stored_run(&conn, "ended-with-no-date", "cancelled", None);
+        stored_run(
+            &conn,
+            "ended-yesterday",
+            "failed",
+            Some(now - chrono::Duration::days(1)),
+        );
+        stored_run(&conn, "paused-long-ago", "paused", None);
+
+        let mut deleted = delete_finished_past_keep(&conn, now).unwrap();
+        deleted.sort();
+
+        assert_eq!(deleted, vec!["ended-long-ago", "ended-with-no-date"]);
+        assert_eq!(
+            stored_ids(&conn),
+            vec!["ended-yesterday", "paused-long-ago"]
+        );
+    }
+
+    #[test]
+    fn only_the_newest_finished_runs_are_kept() {
+        let manager = create_test_manager();
+        let conn = manager.db_conn.lock().unwrap();
+        let now = Utc::now();
+        for age in 0..FINISHED_RUNS_KEPT + 3 {
+            stored_run(
+                &conn,
+                &format!("run-{age:03}"),
+                "completed",
+                Some(now - chrono::Duration::minutes(age as i64 + 1)),
+            );
+        }
+        stored_run(&conn, "still-running", "running", None);
+
+        let mut deleted = delete_finished_past_keep(&conn, now).unwrap();
+        deleted.sort();
+
+        assert_eq!(deleted, vec!["run-100", "run-101", "run-102"]);
+        assert_eq!(stored_ids(&conn).len(), FINISHED_RUNS_KEPT + 1);
+    }
+
+    #[tokio::test]
+    async fn a_run_dropped_from_the_table_is_dropped_from_memory_too() {
+        let manager = create_test_manager();
+        let mut agent = restored("conv_1", BackgroundAgentStatus::Cancelled);
+        agent.completed_at = Some(Utc::now() - chrono::Duration::days(FINISHED_RUN_KEEP_DAYS + 1));
+        let agent_id = agent.id.clone();
+        manager.persist_agent(&agent).unwrap();
+        manager.agents.write().await.insert(agent_id.clone(), agent);
+
+        manager.prune_finished_runs().await;
+
+        assert!(manager.get_agent(&agent_id).await.is_none());
+        assert!(stored_ids(&manager.db_conn.lock().unwrap()).is_empty());
+    }
+
+    #[test]
+    fn a_run_saves_each_change_before_it_makes_the_next() {
+        let source = include_str!("background_agent.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+        let run = production
+            .split("async fn execute_background_agent")
+            .nth(1)
+            .expect("the run function");
+
+        assert!(!run.contains("drop(tokio::task::spawn_blocking"));
+        assert_eq!(run.matches("save_in_order(").count(), 3);
+    }
+
+    #[test]
+    fn a_run_does_not_wait_on_the_desktop_control_service() {
+        let source = include_str!("background_agent.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+
+        assert!(!production.contains("AutomationService"));
+        assert!(!production.contains("shared_service"));
     }
 
     #[test]
@@ -1637,6 +2683,69 @@ mod tests {
             .await;
 
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn an_agent_awaiting_approval_does_not_start() {
+        let manager = create_test_manager();
+
+        let agent_id = manager
+            .push_awaiting_approval(
+                "trigger:t1".to_string(),
+                "Summarise the inbox".to_string(),
+                BackgroundAgentContext::default(),
+                0,
+            )
+            .await
+            .unwrap();
+
+        let agent = manager.get_agent(&agent_id).await.unwrap();
+        assert_eq!(agent.status, BackgroundAgentStatus::Paused);
+        assert!(agent.started_at.is_none());
+        assert!(manager.queue.read().await.is_empty());
+    }
+
+    #[test]
+    fn an_interrupted_run_is_paused_for_the_user() {
+        let mut agent = BackgroundAgent::new(
+            "conv_1".to_string(),
+            "Refactor".to_string(),
+            BackgroundAgentContext::default(),
+            0,
+        );
+        agent.start();
+
+        mark_interrupted(&mut agent);
+
+        assert_eq!(agent.status, BackgroundAgentStatus::Paused);
+        assert!(agent.can_resume());
+        assert!(agent
+            .progress
+            .current_step_description
+            .contains("Interrupted"));
+    }
+
+    #[tokio::test]
+    async fn a_paused_agent_is_not_queued_after_a_restart() {
+        let manager = create_test_manager();
+        let agent_id = manager
+            .push_awaiting_approval(
+                "conv_paused".to_string(),
+                "Wait for me".to_string(),
+                BackgroundAgentContext::default(),
+                0,
+            )
+            .await
+            .unwrap();
+
+        let reloaded = BackgroundAgentManager::new(manager.db_conn.clone(), None);
+        reloaded.load_persisted_agents().await.unwrap();
+
+        assert_eq!(
+            reloaded.get_agent(&agent_id).await.unwrap().status,
+            BackgroundAgentStatus::Paused
+        );
+        assert!(reloaded.queue.read().await.is_empty());
     }
 
     #[test]

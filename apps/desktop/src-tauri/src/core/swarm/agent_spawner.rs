@@ -6,8 +6,7 @@
 //! - Circuit breaker pattern for fault tolerance
 
 use super::{constants, task_decomposer::Subtask, AgentHealth, SwarmError, SwarmResultType};
-use crate::automation::AutomationService;
-use crate::core::agi::{AGIConfig, AGICore, Goal, Priority, ResourceLimits};
+use crate::core::agi::{AGIConfig, AGICore, Constraint, Goal, Priority, ResourceLimits};
 use crate::core::llm::LLMRouter;
 use crate::sys::account::{current_managed_auth_boundary, scope_managed_auth_boundary};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -28,6 +27,11 @@ use uuid::Uuid;
 /// wait is a poll, bounded by the sub-agent's `operation_timeout`, which
 /// cancels the goal when the budget is spent.
 const GOAL_COMPLETION_POLL_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Marks the goal a sub-agent runs for one subtask. `agentTaskStore.ts` keeps
+/// goals with this prefix off the Tasks list; the parent row shows them through
+/// the `swarm:subtask_*` events.
+pub const SUB_GOAL_ID_PREFIX: &str = "swarm-subgoal-";
 
 /// Configuration for a sub-agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -246,6 +250,9 @@ pub struct AgentTask {
     /// submits so fan-out cannot silently widen (or lose) the boundary the
     /// user selected; absent, the router fails closed to Local.
     pub trust_mode: Option<agiworkforce_model_registry::TrustMode>,
+    /// The parent goal's constraints. Each sub-agent's mini-`Goal` carries
+    /// them, so fan-out cannot shed a limit or the unattended approval policy.
+    pub constraints: Vec<Constraint>,
     /// Channel to send result back.
     pub result_sender: oneshot::Sender<AgentTaskResult>,
 }
@@ -282,6 +289,7 @@ enum SettledGoal {
     Outcome(SubtaskOutcome),
     SubmitFailed(anyhow::Error),
     OutOfTime,
+    Stopped,
 }
 
 /// Maps an engine task state onto the outcome the swarm reports for a subtask.
@@ -317,8 +325,6 @@ fn goal_outcome(task_state: AgentTaskState) -> Option<SubtaskOutcome> {
 pub struct AgentSpawner {
     /// LLM router for agent operations.
     router: Arc<tokio::sync::RwLock<LLMRouter>>,
-    /// Automation service for UI/system operations.
-    automation: Arc<AutomationService>,
     /// Application handle for events.
     app_handle: Option<tauri::AppHandle>,
     /// Active agents indexed by ID.
@@ -341,13 +347,11 @@ impl AgentSpawner {
     /// Creates a new agent spawner.
     pub fn new(
         router: Arc<tokio::sync::RwLock<LLMRouter>>,
-        automation: Arc<AutomationService>,
         app_handle: Option<tauri::AppHandle>,
         max_agents: usize,
     ) -> Self {
         Self {
             router,
-            automation,
             app_handle,
             agents: Arc::new(RwLock::new(HashMap::new())),
             handles: Arc::new(RwLock::new(HashMap::new())),
@@ -468,7 +472,6 @@ impl AgentSpawner {
         config: SubAgentConfig,
     ) -> tokio::task::JoinHandle<()> {
         let router = self.router.clone();
-        let automation = self.automation.clone();
         let app_handle = self.app_handle.clone();
         let managed_auth_boundary = current_managed_auth_boundary();
 
@@ -501,10 +504,11 @@ impl AgentSpawner {
                         &agent_id,
                         &task.subtask,
                         task.trust_mode,
+                        &task.constraints,
                         router.clone(),
-                        automation.clone(),
                         app_handle.clone(),
                         config.operation_timeout,
+                        &stop_signal,
                     )
                     .await;
 
@@ -560,12 +564,17 @@ impl AgentSpawner {
     /// Builds the mini-`Goal` a sub-agent submits for a subtask, carrying the
     /// parent goal's trust boundary so every sub-goal LLM call is gated the
     /// same way the originating goal was.
+    ///
+    /// The id is namespaced under the parent goal: decomposers reuse subtask
+    /// ids such as `subtask_1` from run to run, and the renderer tells a
+    /// swarm's internal goals from user tasks by [`SUB_GOAL_ID_PREFIX`].
     pub(crate) fn subtask_goal(
         subtask: &Subtask,
         trust_mode: Option<agiworkforce_model_registry::TrustMode>,
+        constraints: &[Constraint],
     ) -> Goal {
         Goal {
-            id: subtask.id.clone(),
+            id: format!("{SUB_GOAL_ID_PREFIX}{}--{}", subtask.goal_id, subtask.id),
             description: subtask.description.clone(),
             priority: match subtask.priority {
                 super::SubtaskPriority::Low => Priority::Low,
@@ -574,7 +583,7 @@ impl AgentSpawner {
                 super::SubtaskPriority::Critical => Priority::Critical,
             },
             deadline: None,
-            constraints: Vec::new(),
+            constraints: constraints.to_vec(),
             success_criteria: vec![format!("Complete: {}", subtask.description)],
             trust_mode,
         }
@@ -619,10 +628,11 @@ impl AgentSpawner {
         agent_id: &str,
         subtask: &Subtask,
         trust_mode: Option<agiworkforce_model_registry::TrustMode>,
+        constraints: &[Constraint],
         router: Arc<tokio::sync::RwLock<LLMRouter>>,
-        automation: Arc<AutomationService>,
         app_handle: Option<tauri::AppHandle>,
         timeout: Duration,
+        stop_signal: &AtomicBool,
     ) -> Result<serde_json::Value> {
         tracing::debug!(
             "[Agent {}] Executing subtask: {} ({})",
@@ -632,7 +642,7 @@ impl AgentSpawner {
         );
 
         // Create a mini-goal for this subtask
-        let goal = Self::subtask_goal(subtask, trust_mode);
+        let goal = Self::subtask_goal(subtask, trust_mode, constraints);
         let goal_id = goal.id.clone();
 
         // Create a lightweight AGI core for this subtask
@@ -651,13 +661,16 @@ impl AgentSpawner {
             enable_multimodal: false,
         };
 
-        let core = AGICore::new(agi_config, router.clone(), automation.clone(), app_handle)?;
+        let core = AGICore::new(agi_config, router.clone(), app_handle)?;
 
-        let settled = Self::settle_goal(
-            timeout,
-            GOAL_COMPLETION_POLL_INTERVAL,
-            core.submit_goal(goal),
-            || core.get_task_state(&goal_id),
+        let settled = Self::settle_unless_stopped(
+            Self::settle_goal(
+                timeout,
+                GOAL_COMPLETION_POLL_INTERVAL,
+                core.submit_goal(goal),
+                || core.get_task_state(&goal_id),
+            ),
+            stop_signal,
         )
         .await;
 
@@ -711,6 +724,42 @@ impl AgentSpawner {
                 }
                 Err(anyhow::anyhow!("Subtask timed out"))
             }
+            SettledGoal::Stopped => {
+                tracing::info!(
+                    "[Agent {}] Subtask {} stopped with its swarm",
+                    agent_id,
+                    subtask.id
+                );
+                if let Err(error) = core.cancel_goal(&goal_id).await {
+                    tracing::debug!(
+                        "[Agent {}] Could not cancel stopped goal {}: {}",
+                        agent_id,
+                        goal_id,
+                        error
+                    );
+                }
+                Err(anyhow::anyhow!("Subtask was cancelled"))
+            }
+        }
+    }
+
+    /// Waits for the sub-goal to settle, unless the agent is asked to stop
+    /// first. The caller cancels the sub-goal it was waiting on.
+    async fn settle_unless_stopped<Settling>(
+        settling: Settling,
+        stop_signal: &AtomicBool,
+    ) -> SettledGoal
+    where
+        Settling: Future<Output = SettledGoal>,
+    {
+        let stopped = async {
+            while !stop_signal.load(Ordering::SeqCst) {
+                tokio::time::sleep(GOAL_COMPLETION_POLL_INTERVAL).await;
+            }
+        };
+        tokio::select! {
+            settled = settling => settled,
+            () = stopped => SettledGoal::Stopped,
         }
     }
 
@@ -756,6 +805,14 @@ impl AgentSpawner {
     }
 
     /// Terminates all agents, aborting their task loops immediately.
+    /// Asks every agent to stop without aborting it, so each one cancels the
+    /// sub-goal it is working on before its loop ends.
+    pub fn stop_all(&self) {
+        for agent in self.agents.read().values() {
+            agent.stop();
+        }
+    }
+
     pub fn terminate_all(&self) {
         let mut agents = self.agents.write();
         let mut handles = self.handles.write();
@@ -1024,6 +1081,45 @@ mod tests {
         assert!(matches!(
             settled,
             SettledGoal::Outcome(SubtaskOutcome::Failed(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_a_stop_ends_the_wait_on_a_goal_that_is_still_running() {
+        let stop_signal = AtomicBool::new(true);
+
+        let settled = AgentSpawner::settle_unless_stopped(
+            AgentSpawner::settle_goal(
+                TEST_SUBTASK_BUDGET,
+                TEST_POLL_INTERVAL,
+                submission_accepted(),
+                || Some(AgentTaskState::Running),
+            ),
+            &stop_signal,
+        )
+        .await;
+
+        assert!(matches!(settled, SettledGoal::Stopped));
+    }
+
+    #[tokio::test]
+    async fn test_a_goal_that_settles_is_reported_while_no_stop_is_requested() {
+        let stop_signal = AtomicBool::new(false);
+
+        let settled = AgentSpawner::settle_unless_stopped(
+            AgentSpawner::settle_goal(
+                TEST_SUBTASK_BUDGET,
+                TEST_POLL_INTERVAL,
+                submission_accepted(),
+                || Some(AgentTaskState::ReadyForReview),
+            ),
+            &stop_signal,
+        )
+        .await;
+
+        assert!(matches!(
+            settled,
+            SettledGoal::Outcome(SubtaskOutcome::Succeeded)
         ));
     }
 

@@ -12,6 +12,7 @@ pub mod mention_popup;
 pub mod model_picker;
 pub mod question_overlay;
 pub mod screen_renderers;
+pub mod scroll_gate;
 pub mod session_picker;
 pub mod skills_toggle;
 pub mod statusline_setup;

@@ -1,16 +1,15 @@
+use crate::integrations::native_messaging::endpoint;
 use crate::integrations::realtime::RealtimeEvent;
 use crate::sys::error::{Error, Result};
 use base64::Engine;
 use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use url::Url;
 
-const REALTIME_URL: &str = "ws://127.0.0.1:8787";
 const REALTIME_RESPONSE_TIMEOUT_MS: u64 = 15_000;
 const REALTIME_AUTH_TIMEOUT_MS: u64 = 4_000;
 const REALTIME_MAX_RETRIES: u32 = 3;
@@ -797,10 +796,11 @@ async fn send_native_message_via_realtime(payload: Value) -> Result<Value> {
 async fn send_native_message_once(payload: Value) -> Result<Value> {
     let token = read_realtime_token()?;
     let request_id = uuid::Uuid::new_v4().to_string();
-    let url = Url::parse(REALTIME_URL).map_err(|e| {
+    let realtime_url = endpoint::realtime_url();
+    let url = Url::parse(&realtime_url).map_err(|e| {
         Error::Generic(format!(
             "{} Invalid realtime websocket URL '{}': {}",
-            EXT_BRIDGE_CONFIG_ERROR_PREFIX, REALTIME_URL, e
+            EXT_BRIDGE_CONFIG_ERROR_PREFIX, realtime_url, e
         ))
     })?;
 
@@ -815,7 +815,7 @@ async fn send_native_message_once(payload: Value) -> Result<Value> {
             {
                 Error::Generic(format!(
                     "Could not reach desktop realtime bridge at {}. Ensure the desktop app is running, then retry.",
-                    REALTIME_URL
+                    realtime_url
                 ))
             } else {
                 Error::Generic(format!("Failed to connect to realtime websocket: {}", err_text))
@@ -969,13 +969,13 @@ async fn send_native_message_once(payload: Value) -> Result<Value> {
 }
 
 fn read_realtime_token() -> Result<String> {
-    let app_dir = resolve_app_data_dir().ok_or_else(|| {
+    let app_dir = crate::sys::utils::app_data_dir().map_err(|error| {
         Error::Generic(format!(
-            "{} Unable to resolve app data directory for realtime token lookup",
-            EXT_BRIDGE_CONFIG_ERROR_PREFIX
+            "{} Unable to resolve app data directory for realtime token lookup: {}",
+            EXT_BRIDGE_CONFIG_ERROR_PREFIX, error
         ))
     })?;
-    let token_path = app_dir.join(".ipc_token");
+    let token_path = endpoint::token_path(&app_dir);
     if !token_path.exists() {
         return Err(Error::Generic(format!(
             "{} Missing realtime auth token at {}. Start or restart the desktop app to regenerate .ipc_token.",
@@ -1058,34 +1058,6 @@ fn sanitize_realtime_bridge_error(error: Error) -> Error {
             Error::Generic(message)
         }
         other => other,
-    }
-}
-
-fn resolve_app_data_dir() -> Option<PathBuf> {
-    #[cfg(target_os = "macos")]
-    {
-        let home = dirs::home_dir()?;
-        let container_dir = home.join(
-            "Library/Containers/com.agiworkforce.desktop/Data/Library/Application Support/com.agiworkforce.desktop",
-        );
-        let legacy_dir = home.join("Library/Application Support/com.agiworkforce.desktop");
-
-        if container_dir.join(".ipc_token").exists() {
-            return Some(container_dir);
-        }
-        if legacy_dir.join(".ipc_token").exists() {
-            return Some(legacy_dir);
-        }
-        if container_dir.exists() {
-            return Some(container_dir);
-        }
-
-        Some(legacy_dir)
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        dirs::data_local_dir().map(|dir| dir.join("com.agiworkforce.desktop"))
     }
 }
 

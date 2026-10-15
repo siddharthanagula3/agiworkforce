@@ -1,16 +1,17 @@
-use crate::core::mcp::config::{open_mcp_settings_db, upsert_settings_v2_value};
-use crate::core::mcp::{
-    emit_mcp_event, McpClient, McpEvent, McpHealthMonitor, McpServerConfig, McpServersConfig,
-    McpToolExecutor, McpToolRegistry, ToolExecutionResult, ToolStats,
+use crate::core::mcp::config::{
+    active_credential_scope, mcp_credential_row, oauth_placeholder_providers,
+    oauth_token_expires_soon, open_mcp_settings_db, upsert_settings_v2_value,
+    validate_credential_names,
 };
-use crate::sys::commands::auth::{get_session_user_id, SessionState};
+use crate::core::mcp::{
+    emit_mcp_event, ApprovedLaunch, McpClient, McpEvent, McpHealthMonitor, McpServerConfig,
+    McpServersConfig, McpToolExecutor, McpToolRegistry,
+};
 use crate::sys::commands::connector_permissions::{
     encryption_from_state, resolve_permission, PermissionLevel,
 };
 use crate::sys::commands::master_password::MasterPasswordState;
-use crate::sys::commands::tool_confirmation::{
-    request_tool_confirmation, request_tool_confirmation_no_mode_gate, ToolConfirmationState,
-};
+use crate::sys::commands::tool_confirmation::{request_tool_confirmation, ToolConfirmationState};
 use crate::sys::security::tool_guard::{RiskLevel, ToolConfirmationRequest, ToolSafetyTier};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -28,6 +29,7 @@ pub struct McpState {
     pub config: Arc<Mutex<McpServersConfig>>,
     pub persist_lock: Arc<TokioMutex<()>>,
     pub health_monitor: Arc<McpHealthMonitor>,
+    oauth_refresh_lock: Arc<TokioMutex<()>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,6 +57,16 @@ async fn build_runtime_server_config(
     let mut scoped = McpServersConfig {
         mcp_servers: HashMap::from([(server_name.to_string(), server_config)]),
     };
+    match open_mcp_settings_db() {
+        Ok(conn) => {
+            raw_config.adopt_legacy_credentials_of(&conn, &active_credential_scope(), server_name)
+        }
+        Err(error) => tracing::warn!(
+            "[MCP] Stored credentials of '{}' were not checked for their current rows: {}",
+            server_name,
+            error
+        ),
+    }
     scoped
         .inject_credentials()
         .await
@@ -69,11 +81,11 @@ async fn build_runtime_server_config(
 
 async fn pin_oauth_token_endpoint(
     state: &McpState,
+    mut approved_config: McpServersConfig,
     server_name: &str,
 ) -> Result<McpServersConfig, String> {
     use crate::core::mcp::transport::TransportConfig;
-    let snapshot = state.config.lock().clone();
-    let url = match snapshot
+    let url = match approved_config
         .mcp_servers
         .get(server_name)
         .and_then(|server| server.transport.as_ref())
@@ -83,7 +95,7 @@ async fn pin_oauth_token_endpoint(
         {
             http.url.clone()
         }
-        _ => return Ok(snapshot),
+        _ => return Ok(approved_config),
     };
     let token_url = agiworkforce_mcp::oauth::discover_token_endpoint(&url)
         .await
@@ -93,22 +105,30 @@ async fn pin_oauth_token_endpoint(
                 server_name, e
             )
         })?;
+    pin_token_url(&mut approved_config, server_name, &url, &token_url);
     let updated = {
         let mut config = state.config.lock();
-        if let Some(TransportConfig::Http(http)) = config
-            .mcp_servers
-            .get_mut(server_name)
-            .and_then(|server| server.transport.as_mut())
-        {
-            http.oauth_token_url = Some(token_url);
-        }
+        pin_token_url(&mut config, server_name, &url, &token_url);
         config.clone()
     };
     state
         .persist_config_snapshot(&updated)
         .await
         .map_err(|e| format!("Failed to save MCP config: {}", e))?;
-    Ok(updated)
+    Ok(approved_config)
+}
+
+fn pin_token_url(config: &mut McpServersConfig, server_name: &str, url: &str, token_url: &str) {
+    use crate::core::mcp::transport::TransportConfig;
+    if let Some(TransportConfig::Http(http)) = config
+        .mcp_servers
+        .get_mut(server_name)
+        .and_then(|server| server.transport.as_mut())
+    {
+        if http.url == url && http.oauth_token_url.is_none() {
+            http.oauth_token_url = Some(token_url.to_string());
+        }
+    }
 }
 
 fn resolve_config_location() -> Result<McpConfigLocation, String> {
@@ -124,7 +144,7 @@ fn resolve_config_location() -> Result<McpConfigLocation, String> {
             "global".to_string()
         },
         project_folder,
-        exists: config_path.exists(),
+        exists: McpServersConfig::has_config_file(&config_path),
     })
 }
 
@@ -178,6 +198,16 @@ fn restore_redacted_env_values(
     }
 }
 
+/// A reload replaces the configured servers, so those are disconnected. The
+/// servers of installed extensions come from no configuration file and stay
+/// connected across it.
+fn servers_to_disconnect(connected: Vec<String>, extension_servers: &[String]) -> Vec<String> {
+    connected
+        .into_iter()
+        .filter(|server_name| !extension_servers.contains(server_name))
+        .collect()
+}
+
 impl Default for McpState {
     fn default() -> Self {
         Self::new()
@@ -202,7 +232,131 @@ impl McpState {
             config,
             persist_lock,
             health_monitor,
+            oauth_refresh_lock: Arc::new(TokioMutex::new(())),
         }
+    }
+
+    /// A connected server receives its OAuth token once, at spawn or connect.
+    /// When that token is about to expire, refresh it and reconnect the server
+    /// so the next call carries the new credential instead of failing with 401.
+    pub async fn refresh_expiring_oauth_session(
+        &self,
+        app: &tauri::AppHandle,
+        server_name: &str,
+    ) -> Result<(), String> {
+        let _refresh_guard = self.oauth_refresh_lock.lock().await;
+
+        if !self
+            .client
+            .get_connected_servers()
+            .iter()
+            .any(|name| name == server_name)
+        {
+            return Ok(());
+        }
+
+        let raw_config = self.config.lock().clone();
+        let Some(server_config) = raw_config.mcp_servers.get(server_name) else {
+            return Ok(());
+        };
+        let expiring: Vec<String> = oauth_placeholder_providers(server_config)
+            .into_iter()
+            .filter(|provider| oauth_token_expires_soon(provider))
+            .collect();
+        if expiring.is_empty() {
+            return Ok(());
+        }
+
+        let runtime_config = build_runtime_server_config(&raw_config, server_name).await?;
+        if let Some(provider) = expiring
+            .iter()
+            .find(|provider| oauth_token_expires_soon(provider))
+        {
+            return Err(format!(
+                "The {} sign-in for MCP server '{}' has expired and could not be refreshed. Reconnect it in Connectors.",
+                provider, server_name
+            ));
+        }
+
+        self.restart_server(
+            app,
+            server_name,
+            runtime_config,
+            "after refreshing its sign-in",
+        )
+        .await
+    }
+
+    /// Stops a connected server and starts it again from `runtime_config`,
+    /// telling the window about both changes.
+    async fn restart_server(
+        &self,
+        app: &tauri::AppHandle,
+        server_name: &str,
+        runtime_config: McpServerConfig,
+        reason: &str,
+    ) -> Result<(), String> {
+        // A restart by the app asks nobody, so it goes ahead only for a
+        // launch that is approved as it is now; one that is not is left
+        // running as it was rather than stopped and not started again.
+        let configured = self.config.lock().mcp_servers.get(server_name).cloned();
+        let approved = match configured {
+            Some(configured) => ApprovedLaunch::require(server_name, &configured)?,
+            None => {
+                return Err(format!(
+                    "Server '{}' not found in configuration",
+                    server_name
+                ))
+            }
+        };
+
+        self.client
+            .disconnect_server(server_name)
+            .await
+            .map_err(|e| format!("Failed to restart MCP server '{}': {}", server_name, e))?;
+
+        if let Err(err) = self
+            .client
+            .connect_server(server_name.to_string(), runtime_config, approved)
+            .await
+        {
+            let message = format!(
+                "Failed to reconnect MCP server '{}' {}: {}",
+                server_name, reason, err
+            );
+            emit_mcp_event(
+                app,
+                McpEvent::ServerConnectionChanged {
+                    server_name: server_name.to_string(),
+                    connected: false,
+                    error: Some(message.clone()),
+                },
+            );
+            return Err(message);
+        }
+
+        tracing::info!("Reconnected MCP server '{}' {}", server_name, reason);
+        emit_mcp_event(
+            app,
+            McpEvent::ServerConnectionChanged {
+                server_name: server_name.to_string(),
+                connected: true,
+                error: None,
+            },
+        );
+        let tool_count = self
+            .client
+            .list_server_tools(server_name)
+            .map(|tools| tools.len())
+            .unwrap_or(0);
+        emit_mcp_event(
+            app,
+            McpEvent::ToolsUpdated {
+                server_name: server_name.to_string(),
+                tool_count,
+            },
+        );
+        Ok(())
     }
 
     pub fn start_health_monitoring(&self, app_handle: tauri::AppHandle) {
@@ -228,10 +382,20 @@ impl McpState {
         let config_path = McpServersConfig::default_config_path()
             .map_err(|e| format!("Failed to get config path: {}", e))?;
 
-        let mut raw_config = if config_path.exists() {
-            McpServersConfig::from_file(&config_path)
+        let project_folder = McpServersConfig::active_project_folder_from_env();
+        let mut raw_config = if McpServersConfig::has_config_file(&config_path) {
+            let mut loaded = McpServersConfig::from_file(&config_path)
                 .await
-                .map_err(|e| format!("Failed to load MCP config: {}", e))?
+                .map_err(|e| format!("Failed to load MCP config: {}", e))?;
+            if let Some(project_root) = project_folder.as_deref() {
+                let disabled = loaded.disable_unconsented_project_servers(project_root);
+                if disabled > 0 {
+                    tracing::info!(
+                        "[MCP] {disabled} server(s) in the project MCP config stay off until enabled in the app"
+                    );
+                }
+            }
+            loaded
         } else {
             // Seed new config files (including project MCP config targets) from current in-memory state.
             let seed_config = self.config.lock().clone();
@@ -252,7 +416,17 @@ impl McpState {
 
         let mut warnings: Vec<String> = Vec::new();
 
-        for server_name in self.client.get_connected_servers() {
+        let extension_servers = {
+            use tauri::Manager;
+
+            app.try_state::<crate::sys::commands::mcp_extensions::McpExtensionsState>()
+                .map(|extensions| extensions.manager.running_server_names())
+                .unwrap_or_default()
+        };
+        let configured_servers =
+            servers_to_disconnect(self.client.get_connected_servers(), &extension_servers);
+
+        for server_name in configured_servers {
             match self.client.disconnect_server(&server_name).await {
                 Ok(_) => {
                     emit_mcp_event(
@@ -352,11 +526,10 @@ impl McpState {
             let mut config = self.config.lock();
             if let Some(server_config) = config.mcp_servers.get_mut("filesystem") {
                 // Get current roots (all args after the package name)
-                let package_name = "@modelcontextprotocol/server-filesystem";
                 let current_args: Vec<String> = server_config.args.clone();
                 let current_roots: Vec<String> = current_args
                     .into_iter()
-                    .skip_while(|arg| arg != package_name)
+                    .skip_while(|arg| arg != FILESYSTEM_PACKAGE)
                     .skip(1)
                     .collect();
 
@@ -367,7 +540,7 @@ impl McpState {
                 }
 
                 // Rebuild args: keep command and package, replace roots
-                server_config.args = vec!["-y".to_string(), package_name.to_string()];
+                server_config.args = vec!["-y".to_string(), FILESYSTEM_PACKAGE.to_string()];
                 server_config.args.extend(new_roots.iter().cloned());
 
                 tracing::info!(
@@ -395,6 +568,7 @@ impl McpState {
         // server into a running process. In particular, the packaged filesystem
         // entry uses npx, which may contact npm and install code. Only preserve a
         // connection that the user had already started explicitly.
+        let running = self.client.started_launch("filesystem");
         let was_connected = self
             .client
             .get_connected_servers()
@@ -413,9 +587,19 @@ impl McpState {
         // connection. `enabled` is configuration state, not execution consent.
         if let Some(config) = server_config {
             if was_connected {
+                // It was running, so it had been approved. It restarts
+                // only as that same launch with the folders the user granted
+                // elsewhere; anything else changed stays stopped until the
+                // user connects and approves it.
+                let approved = ApprovedLaunch::continuing(
+                    "filesystem",
+                    running.as_ref(),
+                    &config,
+                    &apart_from_filesystem_roots,
+                )?;
                 match self
                     .client
-                    .connect_server("filesystem".to_string(), config)
+                    .connect_server("filesystem".to_string(), config, approved)
                     .await
                 {
                     Ok(_) => {
@@ -453,6 +637,18 @@ impl McpState {
     }
 }
 
+const FILESYSTEM_PACKAGE: &str = "@modelcontextprotocol/server-filesystem";
+
+/// The filesystem server's launch without the folders it is given: its
+/// arguments up to and including the package name.
+fn apart_from_filesystem_roots(server: &McpServerConfig) -> McpServerConfig {
+    let mut launch = server.clone();
+    if let Some(package) = launch.args.iter().position(|arg| arg == FILESYSTEM_PACKAGE) {
+        launch.args.truncate(package + 1);
+    }
+    launch
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpServerInfo {
@@ -461,6 +657,24 @@ pub struct McpServerInfo {
     pub connected: bool,
     pub tool_count: usize,
     pub command: String,
+    /// Runs on this computer (stdio) rather than at a remote URL.
+    pub local: bool,
+    /// Local and inside the OS sandbox, i.e. the user has not opted it out.
+    pub sandboxed: bool,
+    /// Why a server the user let out of the sandbox is being kept in it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox_notice: Option<String>,
+    /// The user's own stored secrets this server names and is handed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub receives_secrets: Vec<crate::core::mcp::config::StoredSecretReference>,
+    /// For a server from the open project's MCP file: the files whose
+    /// content the approval of it covers. Editing one asks again.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub approval_covers_files: Vec<String>,
+    /// For such a server: why its files cannot be pinned, so that it is
+    /// approved one start at a time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_notice: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -473,236 +687,96 @@ pub struct McpToolInfo {
     pub parameters: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RegistryPackage {
-    pub id: String,
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version: Option<String>,
-    pub description: String,
-    pub author: String,
-    pub category: String,
-    pub npm_package: Option<String>,
-    pub github: Option<String>,
-    pub tools: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rating: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub downloads: Option<u32>,
-    pub installed: bool,
-}
-
-/// Get available MCP servers catalog
-///
-/// Returns a catalog of well-known MCP servers that can be installed.
-/// Shows which servers are already configured and their connection status.
-#[tauri::command]
-pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<RegistryPackage>, String> {
-    let config = state.config.lock();
-    let installed_servers: HashSet<String> = config.mcp_servers.keys().cloned().collect();
-
-    // Define well-known MCP server templates available for installation.
-    // Do not attach marketplace metrics here; the desktop app has no live source
-    // for package ratings, download counts, or current package versions.
-    let available_servers = vec![
-        (
-            "filesystem",
-            "Filesystem",
-            "Secure read/write access to local filesystem",
-            "@modelcontextprotocol/server-filesystem",
-            vec![
-                "read_text_file",
-                "read_media_file",
-                "read_multiple_files",
-                "write_file",
-                "edit_file",
-                "create_directory",
-                "list_directory",
-                "list_directory_with_sizes",
-                "move_file",
-                "search_files",
-                "directory_tree",
-                "get_file_info",
-                "list_allowed_directories",
-            ],
-            "automation",
-        ),
-        (
-            "git",
-            "Git",
-            "Git repository operations and version control",
-            "mcp-server-git",
-            vec![
-                "git_status",
-                "git_diff_unstaged",
-                "git_diff_staged",
-                "git_diff",
-                "git_commit",
-                "git_add",
-                "git_reset",
-                "git_log",
-                "git_create_branch",
-                "git_checkout",
-                "git_show",
-                "git_branch",
-            ],
-            "development",
-        ),
-        (
-            "github",
-            "GitHub",
-            "Interact with GitHub repositories, issues, and pull requests",
-            "@modelcontextprotocol/server-github",
-            vec![
-                "create_issue",
-                "list_issues",
-                "create_pull_request",
-                "list_prs",
-                "get_file_contents",
-                "push_files",
-            ],
-            "development",
-        ),
-        (
-            "google-drive",
-            "Google Drive",
-            "Access and manage Google Drive files and folders",
-            "@modelcontextprotocol/server-gdrive",
-            vec![
-                "list_files",
-                "read_file",
-                "upload_file",
-                "create_folder",
-                "search_files",
-            ],
-            "data",
-        ),
-        (
-            "slack",
-            "Slack",
-            "Send messages and interact with Slack channels",
-            "@modelcontextprotocol/server-slack",
-            vec![
-                "post_message",
-                "list_channels",
-                "get_channel_history",
-                "create_channel",
-            ],
-            "productivity",
-        ),
-        (
-            "terminal",
-            "Terminal",
-            "Execute shell commands through an MCP terminal server",
-            "@modelcontextprotocol/server-shell",
-            vec!["execute_command", "run_script"],
-            "automation",
-        ),
-        (
-            "stripe",
-            "Stripe",
-            "Access Stripe payment data and manage subscriptions",
-            "@modelcontextprotocol/server-stripe",
-            vec!["list_customers", "get_payment", "list_subscriptions"],
-            "integration",
-        ),
-        (
-            "postgres",
-            "PostgreSQL",
-            "Query PostgreSQL databases with read-only access",
-            "@modelcontextprotocol/server-postgres",
-            vec!["query", "list_tables", "describe_table", "get_schema"],
-            "data",
-        ),
-        (
-            "memory",
-            "Memory",
-            "Persistent knowledge graph storage for long-term context",
-            "@modelcontextprotocol/server-memory",
-            vec![
-                "store_entity",
-                "retrieve_entities",
-                "create_relation",
-                "search_knowledge",
-            ],
-            "data",
-        ),
-        (
-            "time",
-            "Time",
-            "Current time, timezones, and date calculations",
-            "@modelcontextprotocol/server-time",
-            vec![
-                "current_time",
-                "convert_timezone",
-                "add_duration",
-                "format_date",
-            ],
-            "productivity",
-        ),
-    ];
-
-    let mut registry: Vec<RegistryPackage> = available_servers
-        .into_iter()
-        .map(
-            |(id, name, description, npm_package, tools, category)| RegistryPackage {
-                id: format!("mcp-{}", id),
-                name: name.to_string(),
-                version: None,
-                description: description.to_string(),
-                author: "Model Context Protocol".to_string(),
-                category: category.to_string(),
-                npm_package: Some(npm_package.to_string()),
-                github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
-                tools: tools.into_iter().map(String::from).collect(),
-                rating: None,
-                downloads: None,
-                installed: installed_servers.contains(id),
-            },
-        )
-        .collect();
-
-    let known_ids: HashSet<String> = registry.iter().map(|pkg| pkg.id.clone()).collect();
-
-    for (name, server_config) in &config.mcp_servers {
-        let id = format!("mcp-{}", name);
-        if known_ids.contains(&id) {
-            continue;
-        }
-
-        registry.push(RegistryPackage {
-            id,
-            name: name.clone(),
-            version: None,
-            description: format!(
-                "User-configured MCP server (command: {} {})",
-                server_config.command,
-                server_config.args.join(" ")
-            ),
-            author: "Local configuration".to_string(),
-            category: "integration".to_string(),
-            npm_package: None,
-            github: None,
-            tools: Vec::new(),
-            rating: None,
-            downloads: None,
-            installed: true,
-        });
-    }
-
-    Ok(registry)
-}
-
 #[tauri::command]
 pub async fn mcp_initialize(
     state: State<'_, McpState>,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
     tracing::info!("Initializing MCP system");
+    state.client.elicitation().attach(app.clone());
     let message = state.reload_active_config(&app).await?;
     state.start_health_monitoring(app.clone());
     Ok(message)
+}
+
+/// Answer a server's `elicitation/create` prompt: accept with form content,
+/// continue after opening a URL request's link, decline, or cancel.
+#[tauri::command]
+pub async fn mcp_respond_elicitation(
+    state: State<'_, McpState>,
+    answer: crate::core::mcp::elicitation::ElicitationAnswer,
+) -> Result<(), String> {
+    state.client.elicitation().respond(answer)
+}
+
+/// Open a URL-mode prompt's address in the system browser. Continuing with
+/// `mcp_respond_elicitation` is refused until this has happened.
+#[tauri::command]
+pub async fn mcp_open_elicitation_url(
+    state: State<'_, McpState>,
+    id: String,
+) -> Result<(), String> {
+    state.client.elicitation().open_url(&id)
+}
+
+/// Prompts still waiting for an answer, so a window that opens or reloads
+/// mid-request can show them.
+#[tauri::command]
+pub async fn mcp_list_pending_elicitations(
+    state: State<'_, McpState>,
+) -> Result<Vec<crate::core::mcp::elicitation::ElicitationPrompt>, String> {
+    Ok(state.client.elicitation().pending_prompts())
+}
+
+/// Turn the OS sandbox off or back on for one local server. Turning it off
+/// is confirmed in a native dialog that names what the server can then do;
+/// a connected server restarts so the change applies at once.
+#[tauri::command]
+pub async fn mcp_set_server_sandbox(
+    state: State<'_, McpState>,
+    app: tauri::AppHandle,
+    name: String,
+    sandboxed: bool,
+) -> Result<(), String> {
+    let raw_config = state.config.lock().clone();
+    let server = raw_config
+        .mcp_servers
+        .get(&name)
+        .ok_or_else(|| format!("Server '{}' not found in configuration", name))?
+        .clone();
+    if matches!(
+        server.transport,
+        Some(crate::core::mcp::transport::TransportConfig::Http(_))
+    ) {
+        return Err(
+            "Remote servers do not run on this computer, so there is no sandbox to change."
+                .to_string(),
+        );
+    }
+
+    if !sandboxed {
+        if let Some(reason) =
+            crate::core::mcp::sandbox::unsandboxed_refusal(&server.command, &server.args)
+        {
+            return Err(reason);
+        }
+        crate::core::mcp::launch_approval::confirm_sandbox_off(&app, &name, &server).await?;
+    }
+
+    crate::core::mcp::sandbox::set_server_unsandboxed(
+        &name,
+        &server.command,
+        &server.args,
+        !sandboxed,
+    )?;
+
+    if state.client.get_connected_servers().contains(&name) {
+        let runtime_config = build_runtime_server_config(&raw_config, &name).await?;
+        state
+            .restart_server(&app, &name, runtime_config, "with its new sandbox setting")
+            .await?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -710,26 +784,62 @@ pub async fn mcp_list_servers(state: State<'_, McpState>) -> Result<Vec<McpServe
     let config = state.config.lock();
     let stats = state.client.get_stats();
     let connected: HashSet<String> = state.client.get_connected_servers().into_iter().collect();
+    let project_root = McpServersConfig::active_project_folder_from_env();
 
     let servers: Vec<McpServerInfo> = config
         .mcp_servers
         .iter()
-        .map(|(name, server_config)| McpServerInfo {
-            name: name.clone(),
-            enabled: server_config.enabled,
-            connected: connected.contains(name),
-            tool_count: stats.get(name).copied().unwrap_or(0),
-            command: format!("{} {}", server_config.command, server_config.args.join(" ")),
+        .map(|(name, server_config)| {
+            let local = !matches!(
+                server_config.transport,
+                Some(crate::core::mcp::transport::TransportConfig::Http(_))
+            );
+            let (approval_covers_files, approval_notice) = match project_root
+                .as_deref()
+                .and_then(|root| crate::core::mcp::config::project_approval_coverage(root, name))
+            {
+                Some(Ok(files)) => (files, None),
+                Some(Err(notice)) => (Vec::new(), Some(notice)),
+                None => (Vec::new(), None),
+            };
+            McpServerInfo {
+                name: name.clone(),
+                enabled: server_config.enabled,
+                connected: connected.contains(name),
+                tool_count: stats.get(name).copied().unwrap_or(0),
+                command: format!("{} {}", server_config.command, server_config.args.join(" ")),
+                local,
+                sandboxed: local
+                    && !crate::core::mcp::sandbox::server_runs_unsandboxed(
+                        name,
+                        &server_config.command,
+                        &server_config.args,
+                    ),
+                sandbox_notice: local
+                    .then(|| {
+                        crate::core::mcp::sandbox::contained_reason(
+                            name,
+                            &server_config.command,
+                            &server_config.args,
+                        )
+                    })
+                    .flatten(),
+                receives_secrets: crate::core::mcp::config::stored_secret_references(server_config),
+                approval_covers_files,
+                approval_notice,
+            }
         })
         .collect();
 
     Ok(servers)
 }
 
+/// Starts a server. A launch the user has approved as it is now starts
+/// without a question; any other, new or changed, is put to the user in a
+/// native dialog first, and a server that is switched off does not start.
 #[tauri::command]
 pub async fn mcp_connect_server(
     state: State<'_, McpState>,
-    confirmation_state: State<'_, ToolConfirmationState>,
     app: tauri::AppHandle,
     name: String,
 ) -> Result<String, String> {
@@ -744,50 +854,15 @@ pub async fn mcp_connect_server(
         .ok_or_else(|| format!("Server '{}' not found in configuration", name))?
         .clone();
 
-    let connection_target = match raw_server_config.transport.as_ref() {
-        Some(crate::core::mcp::transport::TransportConfig::Http(http)) => {
-            format!("remote endpoint {}", http.url)
-        }
-        _ => format!(
-            "local command {} {}",
-            raw_server_config.command,
-            raw_server_config.args.join(" ")
-        ),
-    };
-    let confirmation = ToolConfirmationRequest {
-        request_id: uuid::Uuid::new_v4().to_string(),
-        tool_name: "mcp_connect_server".to_string(),
-        tool_description: format!("Connect to MCP server '{}' ({})", name, connection_target),
-        parameters: serde_json::json!({
-            "server": name.clone(),
-            "target": connection_target,
-        }),
-        risk_level: RiskLevel::High,
-        safety_tier: ToolSafetyTier::RequiresExplicitApproval,
-        reason: "Connecting an MCP server may execute external commands and load third-party code."
-            .to_string(),
-        reversible: true,
-        undo_description: Some("Disconnect the MCP server".to_string()),
-    };
-
-    // MCP server connection is a user-initiated Settings action, not an agent
-    // tool call. Skip the agent-mode gate (which blocks non-read-only tools in
-    // Safe mode) and go straight to auto-approve / remembered-choice / dialog.
     let approved =
-        request_tool_confirmation_no_mode_gate(&app, &confirmation_state, confirmation, 120)
-            .await
-            .map_err(|e| e.to_string())?;
+        crate::core::mcp::launch_approval::ensure_approved(&app, &name, &raw_server_config).await?;
 
-    if !approved {
-        return Err("MCP server connection cancelled".to_string());
-    }
-
-    let raw_config = pin_oauth_token_endpoint(&state, &name).await?;
+    let raw_config = pin_oauth_token_endpoint(&state, raw_config, &name).await?;
     let server_config = build_runtime_server_config(&raw_config, &name).await?;
 
     state
         .client
-        .sign_in_and_connect(name.clone(), server_config)
+        .sign_in_and_connect(name.clone(), server_config, approved)
         .await
         .map_err(|e| format!("Failed to connect: {}", e))?;
 
@@ -941,6 +1016,8 @@ pub async fn mcp_call_tool(
             "Rate limit exceeded for MCP tool execution. Please wait a moment and try again (limit: 60 tool calls per minute).".to_string()
         })?;
 
+    crate::ui::hooks::gate_tool_use(&tool_id, arguments.clone()).await?;
+
     // Generate correlation ID for request tracing
     let correlation_id = uuid::Uuid::new_v4().to_string();
 
@@ -989,11 +1066,8 @@ pub async fn mcp_call_tool(
     let enc = encryption_from_state(&mp_state);
     // destructive: heuristically flag write/delete tools; conservative default is false
     // (the stored value overrides this at read time when the user has set a permission).
-    let is_destructive = bare_tool_name.contains("delete")
-        || bare_tool_name.contains("write")
-        || bare_tool_name.contains("create")
-        || bare_tool_name.contains("update")
-        || bare_tool_name.contains("remove");
+    let is_destructive =
+        crate::sys::commands::connector_permissions::tool_name_looks_destructive(&bare_tool_name);
 
     let perm = resolve_permission(&enc, &connector_id, &bare_tool_name, is_destructive);
 
@@ -1066,6 +1140,10 @@ pub async fn mcp_call_tool(
         }
     }
 
+    state
+        .refresh_expiring_oauth_session(&app, &server_name)
+        .await?;
+
     // Emit tool execution started event
     emit_mcp_event(
         &app,
@@ -1084,8 +1162,8 @@ pub async fn mcp_call_tool(
 
     let start_time = std::time::Instant::now();
 
-    // Route the live execution path through McpToolExecutor so timeout, history,
-    // and execution stats all share one source of truth.
+    // Route the live execution path through McpToolExecutor so the timeout
+    // has one source of truth.
     let result = state.tool_executor.execute_tool(&tool_id, arguments).await;
 
     // Handle timeout vs actual result
@@ -1196,11 +1274,26 @@ pub async fn mcp_update_config(
             }
         })
         .collect();
+    let credential_scope = active_credential_scope();
+    let orphaned_credential_rows: Vec<String> = existing_config
+        .mcp_servers
+        .iter()
+        .filter(|(server_name, _)| !parsed_config.mcp_servers.contains_key(*server_name))
+        .flat_map(|(server_name, removed)| {
+            parsed_config.credential_rows_left_by(&credential_scope, server_name, removed)
+        })
+        .collect();
     state.persist_config_snapshot(&parsed_config).await?;
 
     *state.config.lock() = parsed_config;
 
     let mut warnings: Vec<String> = Vec::new();
+    if let Err(error) = forget_credential_rows(&orphaned_credential_rows) {
+        warnings.push(format!(
+            "failed to delete the stored credentials of removed servers: {}",
+            error
+        ));
+    }
     for server_name in servers_to_disconnect {
         match state.client.disconnect_server(&server_name).await {
             Ok(_) => {
@@ -1274,6 +1367,26 @@ async fn set_server_enabled(
         }
         let snapshot = state.config.lock().clone();
         state.persist_config_snapshot(&snapshot).await?;
+
+        // Switching a server on is where its launch is approved, and that is
+        // decided in the native dialog. A no leaves it off.
+        let switched_on = snapshot.mcp_servers.get(trimmed).cloned();
+        let approval = match &switched_on {
+            Some(server) => {
+                crate::core::mcp::launch_approval::ensure_approved(&app, trimmed, server)
+                    .await
+                    .map(|_| ())
+            }
+            None => Err(format!("Server '{}' not found in configuration", trimmed)),
+        };
+        if let Err(refusal) = approval {
+            if let Some(entry) = state.config.lock().mcp_servers.get_mut(trimmed) {
+                entry.enabled = false;
+            }
+            let reverted = state.config.lock().clone();
+            state.persist_config_snapshot(&reverted).await?;
+            return Err(refusal);
+        }
 
         if state
             .client
@@ -1359,6 +1472,9 @@ async fn set_server_enabled(
         }
         let snapshot = state.config.lock().clone();
         state.persist_config_snapshot(&snapshot).await?;
+        if let Err(error) = crate::core::mcp::config::withdraw_launch_approval(trimmed) {
+            tracing::warn!("[MCP] Could not withdraw the approval of '{trimmed}': {error}");
+        }
 
         emit_mcp_event(
             &app,
@@ -1385,63 +1501,12 @@ pub async fn mcp_get_stats(state: State<'_, McpState>) -> Result<HashMap<String,
 }
 
 #[tauri::command]
-pub async fn mcp_get_execution_history(
-    state: State<'_, McpState>,
-    limit: Option<usize>,
-) -> Result<Vec<ToolExecutionResult>, String> {
-    let bounded_limit = limit.unwrap_or(20).min(100);
-    let mut history = state.tool_executor.get_recent_history(bounded_limit);
-    history.reverse();
-    Ok(history)
-}
-
-#[tauri::command]
-pub async fn mcp_get_tool_execution_stats(
-    state: State<'_, McpState>,
-) -> Result<Vec<ToolStats>, String> {
-    let mut stats = state.tool_executor.get_all_stats();
-    stats.sort_by(|left, right| {
-        right
-            .total_executions
-            .cmp(&left.total_executions)
-            .then_with(|| right.failed_executions.cmp(&left.failed_executions))
-            .then_with(|| {
-                right
-                    .last_execution
-                    .unwrap_or_default()
-                    .cmp(&left.last_execution.unwrap_or_default())
-            })
-    });
-    Ok(stats)
-}
-
-#[tauri::command]
 pub async fn mcp_get_server_logs(
     #[allow(non_snake_case)] serverName: String,
     lines: Option<usize>,
     _state: State<'_, McpState>,
 ) -> Result<Vec<String>, String> {
     Ok(crate::core::mcp::logs::get_server_logs(&serverName, lines))
-}
-
-/// Store a credential in encrypted database storage
-#[tauri::command]
-pub async fn mcp_store_credential(
-    session: State<'_, SessionState>,
-    server_name: String,
-    key: String,
-    value: String,
-) -> Result<String, String> {
-    let user_id = get_session_user_id(&session)?;
-    if user_id == "default" {
-        return Err("Authentication required to modify MCP credentials".to_string());
-    }
-    mcp_set_credential(session, server_name, key, value).await
-}
-
-#[tauri::command]
-pub async fn mcp_get_tool_schemas(state: State<'_, McpState>) -> Result<Vec<Value>, String> {
-    Ok(state.registry.get_all_openai_functions())
 }
 
 #[tauri::command]
@@ -1451,37 +1516,136 @@ pub async fn mcp_get_health(
     Ok(state.health_monitor.refresh_connected_health().await)
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpCredentialSlot {
+    pub server_name: String,
+    pub key: String,
+    pub stored: bool,
+}
+
+/// The credentials the configured servers read from the credential store,
+/// and whether each one has a stored value. Values are never returned.
 #[tauri::command]
-pub async fn mcp_check_server_health(
+pub async fn mcp_list_credential_slots(
     state: State<'_, McpState>,
-    server_name: String,
-) -> Result<crate::core::mcp::ServerHealth, String> {
-    let health = state.health_monitor.check_server_health(&server_name).await;
-    Ok(health)
+) -> Result<Vec<McpCredentialSlot>, String> {
+    let config = state.config.lock().clone();
+    let keys = config.credential_store_keys();
+    if keys.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let scope = active_credential_scope();
+    let conn = open_mcp_settings_db()?;
+    let mut slots = Vec::with_capacity(keys.len());
+    for (server_name, key) in keys {
+        config.adopt_legacy_credential(&conn, &scope, &server_name, &key)?;
+        let stored = credential_row_exists(&conn, &mcp_credential_row(&scope, &server_name, &key))?;
+        slots.push(McpCredentialSlot {
+            server_name,
+            key,
+            stored,
+        });
+    }
+    Ok(slots)
+}
+
+fn credential_row_exists(conn: &rusqlite::Connection, row: &str) -> Result<bool, String> {
+    use rusqlite::OptionalExtension;
+
+    conn.query_row(
+        "SELECT 1 FROM settings_v2 WHERE key = ?1",
+        rusqlite::params![row],
+        |_| Ok(()),
+    )
+    .optional()
+    .map(|row| row.is_some())
+    .map_err(|e| format!("Failed to read credential state: {}", e))
+}
+
+fn delete_credential_rows(conn: &rusqlite::Connection, rows: &[String]) -> Result<usize, String> {
+    let mut deleted = 0;
+    for row in rows {
+        deleted += conn
+            .execute(
+                "DELETE FROM settings_v2 WHERE key = ?1",
+                rusqlite::params![row],
+            )
+            .map_err(|e| format!("Failed to delete credential: {}", e))?;
+    }
+    Ok(deleted)
+}
+
+pub(crate) fn forget_credential_rows(rows: &[String]) -> Result<usize, String> {
+    if rows.is_empty() {
+        return Ok(0);
+    }
+    let conn = open_mcp_settings_db()?;
+    delete_credential_rows(&conn, rows)
+}
+
+fn authorize_credential_delete(
+    config: &McpServersConfig,
+    conn: &rusqlite::Connection,
+    scope: &str,
+    server_name: &str,
+    key: &str,
+) -> Result<(), String> {
+    let Err(refusal) = require_declared_credential_slot(config, server_name, key) else {
+        return Ok(());
+    };
+    for row in config.deletable_credential_rows(scope, server_name, key) {
+        if credential_row_exists(conn, &row)? {
+            return Ok(());
+        }
+    }
+    Err(refusal)
+}
+
+fn require_declared_credential_slot(
+    config: &McpServersConfig,
+    server_name: &str,
+    key: &str,
+) -> Result<(), String> {
+    if !config.mcp_servers.contains_key(server_name) {
+        return Err(format!("MCP server '{server_name}' is not configured"));
+    }
+    let declared = config
+        .credential_store_keys()
+        .iter()
+        .any(|(slot_server, slot_key)| slot_server == server_name && slot_key == key);
+    if !declared {
+        return Err(format!(
+            "MCP server '{server_name}' does not read '{key}' from the credential store"
+        ));
+    }
+    Ok(())
 }
 
 /// Set a credential for an MCP server (stores in encrypted database)
 #[tauri::command]
 pub async fn mcp_set_credential(
-    session: State<'_, SessionState>,
+    state: State<'_, McpState>,
     server_name: String,
     key: String,
     value: String,
 ) -> Result<String, String> {
-    let user_id = get_session_user_id(&session)?;
-    if user_id == "default" {
-        return Err("Authentication required to modify MCP credentials".to_string());
-    }
-
     use crate::core::mcp::config::encrypt_mcp_credential;
+
+    validate_credential_names(&server_name, &key)?;
+    let config = state.config.lock().clone();
+    require_declared_credential_slot(&config, &server_name, &key)?;
 
     // Encrypt the credential
     let encrypted =
         encrypt_mcp_credential(&value).ok_or_else(|| "Failed to encrypt credential".to_string())?;
 
+    let scope = active_credential_scope();
     let conn = open_mcp_settings_db()?;
 
-    let cred_key = format!("mcp_credential_{}_{}", server_name, key);
+    config.adopt_legacy_credential(&conn, &scope, &server_name, &key)?;
+    let cred_key = mcp_credential_row(&scope, &server_name, &key);
     upsert_settings_v2_value(&conn, &cred_key, &encrypted, "security", true)?;
 
     tracing::info!(
@@ -1495,24 +1659,19 @@ pub async fn mcp_set_credential(
 /// Delete a credential for an MCP server from encrypted database
 #[tauri::command]
 pub async fn mcp_delete_credential(
-    session: State<'_, SessionState>,
+    state: State<'_, McpState>,
     server_name: String,
     key: String,
 ) -> Result<String, String> {
-    let user_id = get_session_user_id(&session)?;
-    if user_id == "default" {
-        return Err("Authentication required to modify MCP credentials".to_string());
-    }
-
+    let scope = active_credential_scope();
+    let config = state.config.lock().clone();
     let conn = open_mcp_settings_db()?;
+    authorize_credential_delete(&config, &conn, &scope, &server_name, &key)?;
 
-    let cred_key = format!("mcp_credential_{}_{}", server_name, key);
-
-    conn.execute(
-        "DELETE FROM settings_v2 WHERE key = ?1",
-        rusqlite::params![cred_key],
-    )
-    .map_err(|e| format!("Failed to delete credential: {}", e))?;
+    delete_credential_rows(
+        &conn,
+        &config.deletable_credential_rows(&scope, &server_name, &key),
+    )?;
 
     tracing::info!(
         "Credential deleted for MCP server: {} / {}",
@@ -1520,242 +1679,6 @@ pub async fn mcp_delete_credential(
         key
     );
     Ok(format!("Credential deleted for {} / {}", server_name, key))
-}
-
-/// Install an MCP server from the registry
-///
-/// Adds the server to the MCP configuration with default settings.
-/// The server is initially disabled and must be enabled by the user.
-#[tauri::command]
-pub async fn mcp_install_server(
-    state: State<'_, McpState>,
-    confirmation_state: State<'_, ToolConfirmationState>,
-    app: tauri::AppHandle,
-    server_id: String,
-) -> Result<String, String> {
-    tracing::info!("Installing MCP server: {}", server_id);
-
-    // Extract server name from registry ID (format: "mcp-{name}")
-    let server_name = server_id
-        .strip_prefix("mcp-")
-        .ok_or_else(|| format!("Invalid server ID format: {}", server_id))?
-        .to_string();
-
-    // Check if already installed
-    {
-        let config = state.config.lock();
-        if config.mcp_servers.contains_key(&server_name) {
-            return Err(format!("Server '{}' is already installed", server_name));
-        }
-    }
-
-    // Define server configurations based on registry
-    let server_config = match server_name.as_str() {
-        "filesystem" => McpServerConfig {
-            command: "npx".to_string(),
-            args: vec![
-                "-y".to_string(),
-                "@modelcontextprotocol/server-filesystem".to_string(),
-                ".".to_string(),
-            ],
-            env: HashMap::new(),
-            enabled: false, // User must enable after installation
-            transport: None,
-        },
-        "git" => McpServerConfig {
-            // The current official Git reference server is a Python package.
-            // There is no @modelcontextprotocol/server-git npm package.
-            command: "uvx".to_string(),
-            args: vec![
-                "mcp-server-git".to_string(),
-                "--repository".to_string(),
-                ".".to_string(),
-            ],
-            env: HashMap::new(),
-            enabled: false,
-            transport: None,
-        },
-        "github" => McpServerConfig {
-            command: "npx".to_string(),
-            args: vec![
-                "-y".to_string(),
-                "@modelcontextprotocol/server-github".to_string(),
-            ],
-            env: {
-                let mut env = HashMap::new();
-                env.insert(
-                    "GITHUB_PERSONAL_ACCESS_TOKEN".to_string(),
-                    "<from_oauth:github>".to_string(),
-                );
-                env
-            },
-            enabled: false,
-            transport: None,
-        },
-        "google-drive" => McpServerConfig {
-            command: "npx".to_string(),
-            args: vec![
-                "-y".to_string(),
-                "@modelcontextprotocol/server-gdrive".to_string(),
-            ],
-            env: {
-                let mut env = HashMap::new();
-                env.insert(
-                    "GOOGLE_ACCESS_TOKEN".to_string(),
-                    "<from_oauth:google>".to_string(),
-                );
-                env
-            },
-            enabled: false,
-            transport: None,
-        },
-        "slack" => McpServerConfig {
-            command: "npx".to_string(),
-            args: vec![
-                "-y".to_string(),
-                "@modelcontextprotocol/server-slack".to_string(),
-            ],
-            env: {
-                let mut env = HashMap::new();
-                env.insert(
-                    "SLACK_BOT_TOKEN".to_string(),
-                    "<from_oauth:slack>".to_string(),
-                );
-                env
-            },
-            enabled: false,
-            transport: None,
-        },
-        "terminal" => McpServerConfig {
-            command: "npx".to_string(),
-            args: vec![
-                "-y".to_string(),
-                "@modelcontextprotocol/server-shell".to_string(),
-            ],
-            env: HashMap::new(),
-            enabled: false,
-            transport: None,
-        },
-        "stripe" => McpServerConfig {
-            command: "npx".to_string(),
-            args: vec![
-                "-y".to_string(),
-                "@modelcontextprotocol/server-stripe".to_string(),
-            ],
-            env: {
-                let mut env = HashMap::new();
-                env.insert(
-                    "STRIPE_SECRET_KEY".to_string(),
-                    "<from_credential_manager>".to_string(),
-                );
-                env
-            },
-            enabled: false,
-            transport: None,
-        },
-        "postgres" => McpServerConfig {
-            command: "npx".to_string(),
-            args: vec![
-                "-y".to_string(),
-                "@modelcontextprotocol/server-postgres".to_string(),
-            ],
-            env: {
-                let mut env = HashMap::new();
-                env.insert(
-                    "POSTGRES_CONNECTION_STRING".to_string(),
-                    "<from_credential_manager>".to_string(),
-                );
-                env
-            },
-            enabled: false,
-            transport: None,
-        },
-        "memory" => McpServerConfig {
-            command: "npx".to_string(),
-            args: vec![
-                "-y".to_string(),
-                "@modelcontextprotocol/server-memory".to_string(),
-            ],
-            env: HashMap::new(),
-            enabled: false,
-            transport: None,
-        },
-        "time" => McpServerConfig {
-            command: "npx".to_string(),
-            args: vec![
-                "-y".to_string(),
-                "@modelcontextprotocol/server-time".to_string(),
-            ],
-            env: HashMap::new(),
-            enabled: false,
-            transport: None,
-        },
-        _ => {
-            return Err(format!(
-                "Unknown server '{}'. Only registry servers can be installed via this command.",
-                server_name
-            ));
-        }
-    };
-
-    let confirmation = ToolConfirmationRequest {
-        request_id: uuid::Uuid::new_v4().to_string(),
-        tool_name: "mcp_install_server".to_string(),
-        tool_description: format!(
-            "Install MCP server '{}' (command: {} {})",
-            server_name,
-            server_config.command,
-            server_config.args.join(" ")
-        ),
-        parameters: serde_json::json!({
-            "server": server_name.clone(),
-            "command": server_config.command.clone(),
-            "args": server_config.args.clone(),
-        }),
-        risk_level: RiskLevel::High,
-        safety_tier: ToolSafetyTier::RequiresExplicitApproval,
-        reason:
-            "Installing an MCP server adds a new executable command to the local MCP configuration."
-                .to_string(),
-        reversible: true,
-        undo_description: Some("Remove the MCP server configuration".to_string()),
-    };
-
-    let approved = request_tool_confirmation(&app, &confirmation_state, confirmation, 120)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if !approved {
-        return Err("MCP server installation cancelled".to_string());
-    }
-
-    // Add to configuration
-    let updated_config = {
-        let mut config = state.config.lock();
-        config
-            .mcp_servers
-            .insert(server_name.clone(), server_config);
-        config.clone()
-    };
-
-    // Save configuration to disk
-    state.persist_config_snapshot(&updated_config).await?;
-
-    tracing::info!("Successfully installed MCP server: {}", server_name);
-
-    emit_mcp_event(
-        &app,
-        McpEvent::ServerConnectionChanged {
-            server_name: server_name.clone(),
-            connected: false,
-            error: None,
-        },
-    );
-
-    Ok(format!(
-        "Server '{}' installed successfully. Enable it in settings to start using it.",
-        server_name
-    ))
 }
 
 /// Update the filesystem MCP server allowed directories.
@@ -1767,11 +1690,13 @@ pub async fn mcp_install_server(
 #[tauri::command]
 pub async fn mcp_update_filesystem_directories(
     state: State<'_, McpState>,
+    app: tauri::AppHandle,
     directories: Vec<String>,
 ) -> Result<String, String> {
     if directories.is_empty() {
         return Err("At least one directory must be provided".to_string());
     }
+    crate::sys::commands::tool_confirmation::require_granted_folders(&app, &directories).await?;
 
     tracing::info!(
         "[MCP] Updating filesystem server with directories: {:?}",
@@ -1791,6 +1716,85 @@ pub async fn mcp_update_filesystem_directories(
 #[cfg(test)]
 mod filesystem_root_update_tests {
     use super::*;
+
+    fn filesystem_launch(roots: &[&str]) -> McpServerConfig {
+        let mut args = vec!["-y".to_string(), FILESYSTEM_PACKAGE.to_string()];
+        args.extend(roots.iter().map(|root| root.to_string()));
+        McpServerConfig {
+            command: "npx".to_string(),
+            args,
+            env: HashMap::new(),
+            enabled: true,
+            transport: None,
+            allow_local_network: false,
+        }
+    }
+
+    fn same_apart_from_roots(one: &McpServerConfig, other: &McpServerConfig) -> bool {
+        serde_json::to_value(apart_from_filesystem_roots(one)).unwrap()
+            == serde_json::to_value(apart_from_filesystem_roots(other)).unwrap()
+    }
+
+    #[test]
+    fn only_the_folders_are_set_aside_when_two_filesystem_launches_are_compared() {
+        let running = filesystem_launch(&["/Users/someone/code"]);
+
+        assert!(same_apart_from_roots(
+            &running,
+            &filesystem_launch(&["/Users/someone/code", "/Users/someone/notes"])
+        ));
+        assert!(same_apart_from_roots(&running, &filesystem_launch(&[])));
+
+        let mut other_command = filesystem_launch(&["/Users/someone/code"]);
+        other_command.command = "/tmp/anything".to_string();
+        assert!(!same_apart_from_roots(&running, &other_command));
+
+        let mut other_environment = filesystem_launch(&["/Users/someone/code"]);
+        other_environment.env.insert(
+            "NODE_OPTIONS".to_string(),
+            "--require /tmp/x.js".to_string(),
+        );
+        assert!(!same_apart_from_roots(&running, &other_environment));
+
+        let mut flag_before_package = filesystem_launch(&["/Users/someone/code"]);
+        flag_before_package
+            .args
+            .insert(0, "--registry=https://example.test".to_string());
+        assert!(!same_apart_from_roots(&running, &flag_before_package));
+
+        let mut other_package = filesystem_launch(&[]);
+        other_package.args = vec!["-y".to_string(), "some-other-package".to_string()];
+        assert!(
+            !same_apart_from_roots(&running, &other_package),
+            "a launch that does not name the package has no folders to set aside"
+        );
+    }
+
+    /// The restart used to be approved from whatever the configuration said
+    /// at that moment, which the page can rewrite under a running server.
+    #[test]
+    fn the_restart_is_held_to_the_launch_the_server_was_started_as() {
+        let shipped = include_str!("mcp.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap_or_default();
+        let update = shipped
+            .split("async fn update_filesystem_roots_inner(")
+            .nth(1)
+            .expect("update_filesystem_roots_inner");
+
+        let started = update
+            .find("self.client.started_launch(\"filesystem\")")
+            .expect("the started launch is read");
+        let stopped = update
+            .find("disconnect_server(\"filesystem\")")
+            .expect("the server is stopped");
+        let continued = update
+            .find("ApprovedLaunch::continuing(")
+            .expect("the restart is checked");
+        assert!(started < stopped && stopped < continued);
+        assert!(update.contains("running.as_ref(),"));
+    }
 
     #[tokio::test]
     async fn disconnected_legacy_enabled_filesystem_server_stays_disconnected_after_root_update() {
@@ -1830,5 +1834,430 @@ mod filesystem_root_update_tests {
                 root,
             ]
         );
+    }
+}
+
+#[cfg(test)]
+mod reload_tests {
+    use super::servers_to_disconnect;
+
+    #[test]
+    fn a_reload_disconnects_configured_servers_and_keeps_extension_servers() {
+        let connected = vec![
+            "filesystem".to_string(),
+            "ext-notes".to_string(),
+            "github".to_string(),
+        ];
+
+        assert_eq!(
+            servers_to_disconnect(connected.clone(), &["ext-notes".to_string()]),
+            vec!["filesystem".to_string(), "github".to_string()]
+        );
+        assert_eq!(servers_to_disconnect(connected.clone(), &[]), connected);
+    }
+
+    #[test]
+    fn a_configured_server_is_not_kept_just_for_looking_like_an_extension() {
+        assert_eq!(
+            servers_to_disconnect(vec!["ext-lookalike".to_string()], &[]),
+            vec!["ext-lookalike".to_string()]
+        );
+    }
+}
+
+#[cfg(test)]
+mod credential_slot_tests {
+    use super::{
+        authorize_credential_delete, credential_row_exists, delete_credential_rows,
+        require_declared_credential_slot, McpServersConfig,
+    };
+    use crate::core::mcp::config::{
+        credential_scope, mcp_credential_row, upsert_settings_v2_value, validate_credential_names,
+    };
+
+    const GITHUB_LEGACY_ROW: &str = "mcp_credential_github_GITHUB_PERSONAL_ACCESS_TOKEN";
+
+    fn settings_db_with(rows: &[&str]) -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().expect("in-memory database");
+        conn.execute(
+            "CREATE TABLE settings_v2 (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                category TEXT NOT NULL,
+                encrypted INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .expect("settings table");
+        for row in rows {
+            upsert_settings_v2_value(
+                &conn,
+                row,
+                &format!("ciphertext of {row}"),
+                "security",
+                true,
+            )
+            .expect("stored credential");
+        }
+        conn
+    }
+
+    fn stored_value(conn: &rusqlite::Connection, row: &str) -> Option<String> {
+        use rusqlite::OptionalExtension;
+
+        conn.query_row(
+            "SELECT value FROM settings_v2 WHERE key = ?1",
+            rusqlite::params![row],
+            |found| found.get(0),
+        )
+        .optional()
+        .expect("readable settings")
+    }
+
+    fn colliding() -> McpServersConfig {
+        serde_json::from_str(
+            r#"{
+                "mcpServers": {
+                    "github": {
+                        "command": "npx",
+                        "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "<from_credential_manager>" }
+                    },
+                    "github_GITHUB_PERSONAL": {
+                        "command": "./planted",
+                        "env": { "ACCESS_TOKEN": "<from_credential_manager>" }
+                    }
+                }
+            }"#,
+        )
+        .expect("config parses")
+    }
+
+    #[test]
+    fn servers_whose_names_and_slots_concatenate_alike_never_share_a_row() {
+        let scope = credential_scope(None);
+        let github = mcp_credential_row(&scope, "github", "GITHUB_PERSONAL_ACCESS_TOKEN");
+        let planted = mcp_credential_row(&scope, "github_GITHUB_PERSONAL", "ACCESS_TOKEN");
+
+        assert_eq!(
+            github,
+            "mcp_secret/user/676974687562/GITHUB_PERSONAL_ACCESS_TOKEN"
+        );
+        assert_ne!(github, planted);
+        assert_ne!(
+            mcp_credential_row(&scope, "a", "b/c"),
+            mcp_credential_row(&scope, "a/b", "c")
+        );
+        assert!(!github.starts_with("mcp_credential_"));
+    }
+
+    #[test]
+    fn a_colliding_server_cannot_adopt_another_servers_stored_credential() {
+        let scope = credential_scope(None);
+        let conn = settings_db_with(&[GITHUB_LEGACY_ROW]);
+        let config = colliding();
+
+        assert_eq!(
+            config.adopt_legacy_credential(&conn, &scope, "github_GITHUB_PERSONAL", "ACCESS_TOKEN"),
+            Ok(false)
+        );
+        assert_eq!(
+            config.adopt_legacy_credential(&conn, &scope, "github", "GITHUB_PERSONAL_ACCESS_TOKEN"),
+            Ok(false),
+            "a row two configured servers spell belongs to neither"
+        );
+        let planted_row = mcp_credential_row(&scope, "github_GITHUB_PERSONAL", "ACCESS_TOKEN");
+        assert_eq!(stored_value(&conn, &planted_row), None);
+        assert!(stored_value(&conn, GITHUB_LEGACY_ROW).is_some());
+
+        let mut alone = colliding();
+        alone.mcp_servers.remove("github_GITHUB_PERSONAL");
+        assert_eq!(
+            alone.adopt_legacy_credential(&conn, &scope, "github", "GITHUB_PERSONAL_ACCESS_TOKEN"),
+            Ok(true)
+        );
+        let github_row = mcp_credential_row(&scope, "github", "GITHUB_PERSONAL_ACCESS_TOKEN");
+        assert_eq!(
+            stored_value(&conn, &github_row),
+            Some(format!("ciphertext of {GITHUB_LEGACY_ROW}"))
+        );
+        assert_eq!(stored_value(&conn, GITHUB_LEGACY_ROW), None);
+        assert_eq!(
+            colliding().adopt_legacy_credential(
+                &conn,
+                &scope,
+                "github_GITHUB_PERSONAL",
+                "ACCESS_TOKEN"
+            ),
+            Ok(false)
+        );
+        assert_eq!(stored_value(&conn, &planted_row), None);
+    }
+
+    #[test]
+    fn a_slot_the_server_does_not_declare_adopts_nothing() {
+        let scope = credential_scope(None);
+        let conn = settings_db_with(&[GITHUB_LEGACY_ROW]);
+        let mut config = colliding();
+        config.mcp_servers.remove("github");
+
+        assert_eq!(
+            config.adopt_legacy_credential(&conn, &scope, "github", "GITHUB_PERSONAL_ACCESS_TOKEN"),
+            Ok(false),
+            "a server that is not configured adopts nothing"
+        );
+        assert_eq!(
+            config.adopt_legacy_credential(&conn, &scope, "github_GITHUB_PERSONAL", "OTHER"),
+            Ok(false)
+        );
+        assert!(stored_value(&conn, GITHUB_LEGACY_ROW).is_some());
+    }
+
+    #[test]
+    fn a_project_config_reads_only_what_was_stored_for_its_own_folder() {
+        let user = credential_scope(None);
+        let project = credential_scope(Some("/work/repo"));
+        let other_project = credential_scope(Some("/work/other"));
+        let user_row = mcp_credential_row(&user, "github", "GITHUB_PERSONAL_ACCESS_TOKEN");
+        let project_row = mcp_credential_row(&project, "github", "GITHUB_PERSONAL_ACCESS_TOKEN");
+        let other_row =
+            mcp_credential_row(&other_project, "github", "GITHUB_PERSONAL_ACCESS_TOKEN");
+        assert_ne!(user_row, project_row);
+        assert_ne!(project_row, other_row);
+
+        let conn = settings_db_with(&[GITHUB_LEGACY_ROW, user_row.as_str()]);
+        let mut config = colliding();
+        config.mcp_servers.remove("github_GITHUB_PERSONAL");
+
+        assert_eq!(
+            config.adopt_legacy_credential(
+                &conn,
+                &project,
+                "github",
+                "GITHUB_PERSONAL_ACCESS_TOKEN"
+            ),
+            Ok(false)
+        );
+        assert_eq!(credential_row_exists(&conn, &project_row), Ok(false));
+        assert!(stored_value(&conn, GITHUB_LEGACY_ROW).is_some());
+        assert_eq!(
+            config.deletable_credential_rows(&project, "github", "GITHUB_PERSONAL_ACCESS_TOKEN"),
+            vec![project_row]
+        );
+    }
+
+    #[test]
+    fn names_that_cannot_be_stored_are_refused_on_save() {
+        assert_eq!(
+            validate_credential_names("github", "GITHUB_PERSONAL_ACCESS_TOKEN"),
+            Ok(())
+        );
+        for (server_name, key) in [
+            ("", "KEY"),
+            ("   ", "KEY"),
+            ("github", ""),
+            ("git\nhub", "KEY"),
+            ("github", "KEY\u{0}"),
+        ] {
+            assert!(
+                validate_credential_names(server_name, key).is_err(),
+                "{server_name:?} / {key:?}"
+            );
+        }
+        assert!(validate_credential_names(&"s".repeat(257), "KEY").is_err());
+        assert!(validate_credential_names("github", &"K".repeat(257)).is_err());
+    }
+
+    #[test]
+    fn removing_a_server_deletes_its_stored_credentials_and_no_other() {
+        let scope = credential_scope(None);
+        let project = credential_scope(Some("/work/repo"));
+        let mut config = configured();
+        config.mcp_servers.insert(
+            "stripe_LOG".to_string(),
+            serde_json::from_str(
+                r#"{ "command": "npx", "env": { "LEVEL": "<from_credential_manager>" } }"#,
+            )
+            .expect("server parses"),
+        );
+        let stripe_row = mcp_credential_row(&scope, "stripe", "STRIPE_SECRET_KEY");
+        let stripe_project_row = mcp_credential_row(&project, "stripe", "STRIPE_SECRET_KEY");
+        let github_row = mcp_credential_row(&scope, "github", "GITHUB_PERSONAL_ACCESS_TOKEN");
+        let conn = settings_db_with(&[
+            stripe_row.as_str(),
+            stripe_project_row.as_str(),
+            github_row.as_str(),
+            "mcp_credential_stripe_bearer_token",
+            "mcp_credential_stripe_LOG_LEVEL",
+        ]);
+
+        let removed = config.mcp_servers.remove("stripe").expect("configured");
+        let rows = config.credential_rows_left_by(&scope, "stripe", &removed);
+
+        assert!(rows.contains(&stripe_row));
+        assert!(rows.contains(&"mcp_credential_stripe_bearer_token".to_string()));
+        assert!(
+            !rows.contains(&"mcp_credential_stripe_LOG_LEVEL".to_string()),
+            "stripe_LOG still spells that row"
+        );
+        assert_eq!(delete_credential_rows(&conn, &rows), Ok(2));
+        assert_eq!(credential_row_exists(&conn, &stripe_row), Ok(false));
+        assert_eq!(
+            credential_row_exists(&conn, "mcp_credential_stripe_bearer_token"),
+            Ok(false)
+        );
+        assert_eq!(credential_row_exists(&conn, &stripe_project_row), Ok(true));
+        assert_eq!(credential_row_exists(&conn, &github_row), Ok(true));
+        assert_eq!(
+            credential_row_exists(&conn, "mcp_credential_stripe_LOG_LEVEL"),
+            Ok(true)
+        );
+    }
+
+    #[test]
+    fn a_stored_credential_of_a_removed_server_can_still_be_deleted() {
+        let scope = credential_scope(None);
+        let config = configured();
+        let postgres_row = mcp_credential_row(&scope, "postgres", "POSTGRES_CONNECTION_STRING");
+        let conn = settings_db_with(&[postgres_row.as_str(), "mcp_credential_mysql_MYSQL_URL"]);
+
+        assert_eq!(
+            authorize_credential_delete(
+                &config,
+                &conn,
+                &scope,
+                "postgres",
+                "POSTGRES_CONNECTION_STRING"
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            authorize_credential_delete(&config, &conn, &scope, "mysql", "MYSQL_URL"),
+            Ok(()),
+            "a row stored before scopes that no configured server spells"
+        );
+        assert_eq!(
+            authorize_credential_delete(&config, &conn, &scope, "stripe", "STRIPE_SECRET_KEY"),
+            Ok(())
+        );
+
+        let refusal = authorize_credential_delete(&config, &conn, &scope, "postgres", "OTHER_KEY")
+            .expect_err("nothing stored");
+        assert!(
+            refusal.contains("'postgres' is not configured"),
+            "{refusal}"
+        );
+        assert!(require_declared_credential_slot(
+            &config,
+            "postgres",
+            "POSTGRES_CONNECTION_STRING"
+        )
+        .is_err());
+    }
+
+    fn configured() -> McpServersConfig {
+        serde_json::from_str(
+            r#"{
+                "mcpServers": {
+                    "stripe": {
+                        "command": "npx",
+                        "env": {
+                            "STRIPE_SECRET_KEY": "<from_credential_manager>",
+                            "LOG_LEVEL": "debug"
+                        }
+                    },
+                    "github": {
+                        "command": "npx",
+                        "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "<from_oauth:github>" }
+                    }
+                }
+            }"#,
+        )
+        .expect("config parses")
+    }
+
+    #[test]
+    fn a_declared_slot_of_a_configured_server_is_accepted() {
+        assert_eq!(
+            require_declared_credential_slot(&configured(), "stripe", "STRIPE_SECRET_KEY"),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn a_server_that_is_not_configured_is_refused() {
+        let refusal =
+            require_declared_credential_slot(&configured(), "postgres", "STRIPE_SECRET_KEY")
+                .expect_err("unknown server");
+        assert!(
+            refusal.contains("'postgres' is not configured"),
+            "{refusal}"
+        );
+    }
+
+    #[test]
+    fn a_key_the_server_does_not_read_from_the_credential_store_is_refused() {
+        let config = configured();
+        for (server, key) in [
+            ("stripe", "LOG_LEVEL"),
+            ("stripe", "STRIPE_WEBHOOK_SECRET"),
+            ("stripe", "GITHUB_PERSONAL_ACCESS_TOKEN"),
+            ("github", "GITHUB_PERSONAL_ACCESS_TOKEN"),
+            ("stripe", ""),
+        ] {
+            let refusal = require_declared_credential_slot(&config, server, key)
+                .expect_err("undeclared slot");
+            assert!(
+                refusal.contains("does not read"),
+                "{server}/{key}: {refusal}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_name_that_only_concatenates_to_a_declared_slot_is_refused() {
+        let config: McpServersConfig = serde_json::from_str(
+            r#"{
+                "mcpServers": {
+                    "notes": {
+                        "command": "npx",
+                        "env": { "API_TOKEN": "<from_credential_manager>" }
+                    }
+                }
+            }"#,
+        )
+        .expect("config parses");
+
+        assert!(require_declared_credential_slot(&config, "notes_API", "TOKEN").is_err());
+        assert!(require_declared_credential_slot(&config, "notes", "API_TOKEN").is_ok());
+    }
+}
+
+#[cfg(test)]
+mod server_info_shape_tests {
+    use super::McpServerInfo;
+
+    /// `src/types/mcp.ts` reads the server list by these names; the connector
+    /// health list showed "undefined tools" while it read `tool_count`.
+    #[test]
+    fn a_listed_server_reports_its_tool_count_as_the_settings_ui_reads_it() {
+        let listed = serde_json::to_value(McpServerInfo {
+            name: "github".to_string(),
+            enabled: true,
+            connected: true,
+            tool_count: 4,
+            command: "npx server".to_string(),
+            local: true,
+            sandboxed: true,
+            sandbox_notice: None,
+            receives_secrets: Vec::new(),
+            approval_covers_files: Vec::new(),
+            approval_notice: None,
+        })
+        .unwrap();
+
+        assert_eq!(listed["toolCount"], 4);
+        assert!(listed.get("tool_count").is_none());
     }
 }

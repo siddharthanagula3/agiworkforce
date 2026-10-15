@@ -53,6 +53,7 @@ pub fn hooks_with(
         client_info: client_info(),
         client_metadata_url: None,
         on_log: noop_log(),
+        before_respawn: None,
     }
 }
 

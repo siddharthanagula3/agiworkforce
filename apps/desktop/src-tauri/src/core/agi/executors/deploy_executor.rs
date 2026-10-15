@@ -144,7 +144,12 @@ async fn execute_deploy_project(
             source_path
         ));
     }
-    if !source.is_dir() {
+    let granted = context.granted_folders().await?;
+    let canonical = granted.readable_path(source, "deploy_project")?;
+    let source_path = canonical
+        .to_str()
+        .ok_or_else(|| anyhow!("The path '{}' is not valid UTF-8", canonical.display()))?;
+    if !canonical.is_dir() {
         return Err(anyhow!(
             "'{}' is not a directory. deploy_project requires a project directory.",
             source_path

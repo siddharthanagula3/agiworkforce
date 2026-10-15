@@ -144,7 +144,12 @@ async fn execute_upload(
             local_path
         ));
     }
-    if !local_path_buf.is_file() {
+    let granted = context.granted_folders().await?;
+    let canonical = granted.readable_path(local_path_buf, "cloud_upload")?;
+    let local_path = canonical
+        .to_str()
+        .ok_or_else(|| anyhow!("The path '{}' is not valid UTF-8", canonical.display()))?;
+    if !canonical.is_file() {
         return Err(anyhow!(
             "'{}' is not a file. Use cloud_create_folder for directories.",
             local_path
@@ -267,6 +272,11 @@ async fn execute_download(
             ));
         }
     }
+    let granted = context.granted_folders().await?;
+    let canonical = granted.writable_new_path(local_path_buf, "cloud_download")?;
+    let local_path = canonical
+        .to_str()
+        .ok_or_else(|| anyhow!("The path '{}' is not valid UTF-8", canonical.display()))?;
 
     let Some(ref app) = context.app_handle else {
         return Err(anyhow!(

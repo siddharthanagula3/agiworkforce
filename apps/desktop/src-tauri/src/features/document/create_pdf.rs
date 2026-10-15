@@ -317,7 +317,7 @@ impl PdfDocumentCreator {
         doc.with_pages(pages);
 
         let bytes = doc.save(&PdfSaveOptions::default(), &mut Vec::new());
-        std::fs::write(output_path, bytes)
+        crate::sys::utils::write_file_without_following(Path::new(output_path), &bytes)
             .map_err(|e| Error::Generic(format!("Failed to save PDF: {}", e)))?;
 
         Ok(())

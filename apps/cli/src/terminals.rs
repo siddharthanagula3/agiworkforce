@@ -170,6 +170,12 @@ pub(crate) struct BackgroundCommand {
     input_state: Mutex<InputState>,
     output: Mutex<OutputLog>,
     tree: Mutex<Option<DetachedProcessTree>>,
+    scratch: Mutex<Option<tempfile::TempDir>>,
+}
+
+pub(crate) struct PreparedCommand {
+    pub(crate) command: std::process::Command,
+    pub(crate) scratch: Option<tempfile::TempDir>,
 }
 
 struct Spawned {
@@ -177,6 +183,7 @@ struct Spawned {
     input: Option<Box<dyn Write + Send>>,
     outputs: Vec<Box<dyn Read + Send>>,
     terminal: bool,
+    scratch: Option<tempfile::TempDir>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -229,10 +236,11 @@ impl BackgroundCommand {
         } else {
             CommandState::Exited(code)
         };
-        self.status.send_modify(|status| status.state = state);
         lock(&self.input).take();
         *lock(&self.input_state) = InputState::default();
         lock(&self.tree).take();
+        lock(&self.scratch).take();
+        self.status.send_modify(|status| status.state = state);
     }
 
     fn kill(&self) {
@@ -256,7 +264,7 @@ impl BackgroundCommand {
 
 pub(crate) fn start(
     command_line: &str,
-    build: impl FnOnce(Option<&Path>) -> Result<std::process::Command>,
+    build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>,
 ) -> Result<Arc<BackgroundCommand>> {
     let spawned = spawn(build)?;
     let mut child = spawned.child;
@@ -276,6 +284,7 @@ pub(crate) fn start(
         input_state: Mutex::new(InputState::default()),
         output: Mutex::new(OutputLog::default()),
         tree: Mutex::new(Some(DetachedProcessTree::track(Some(child.id())))),
+        scratch: Mutex::new(spawned.scratch),
     });
     for mut source in spawned.outputs {
         let owner = Arc::clone(&command);
@@ -317,7 +326,7 @@ pub(crate) fn start(
 }
 
 #[cfg(unix)]
-fn spawn(build: impl FnOnce(Option<&Path>) -> Result<std::process::Command>) -> Result<Spawned> {
+fn spawn(build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>) -> Result<Spawned> {
     use nix::fcntl::{fcntl, FcntlArg, FdFlag};
     use std::process::Stdio;
 
@@ -333,7 +342,10 @@ fn spawn(build: impl FnOnce(Option<&Path>) -> Result<std::process::Command>) -> 
             .context("keeping the pseudo-terminal out of other commands")?;
     }
     let device = nix::unistd::ttyname(&pty.slave).context("naming the pseudo-terminal")?;
-    let mut command = build(Some(&device))?;
+    let PreparedCommand {
+        mut command,
+        scratch,
+    } = build(Some(&device))?;
     command
         .stdin(Stdio::from(pty.slave.try_clone()?))
         .stdout(Stdio::from(pty.slave.try_clone()?))
@@ -342,15 +354,16 @@ fn spawn(build: impl FnOnce(Option<&Path>) -> Result<std::process::Command>) -> 
         .env("PAGER", "cat")
         .env("GIT_PAGER", "cat");
     attach_terminal(&mut command);
-    let child = command.spawn().context("starting the command")?;
-    drop(command);
     let master = std::fs::File::from(pty.master);
     let reader = master.try_clone().context("reading the pseudo-terminal")?;
+    let child = command.spawn().context("starting the command")?;
+    drop(command);
     Ok(Spawned {
         child,
         input: Some(Box::new(master)),
         outputs: vec![Box::new(reader)],
         terminal: true,
+        scratch,
     })
 }
 
@@ -371,10 +384,13 @@ fn attach_terminal(command: &mut std::process::Command) {
 }
 
 #[cfg(not(unix))]
-fn spawn(build: impl FnOnce(Option<&Path>) -> Result<std::process::Command>) -> Result<Spawned> {
+fn spawn(build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>) -> Result<Spawned> {
     use std::process::Stdio;
 
-    let mut command = build(None)?;
+    let PreparedCommand {
+        mut command,
+        scratch,
+    } = build(None)?;
     command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -401,6 +417,7 @@ fn spawn(build: impl FnOnce(Option<&Path>) -> Result<std::process::Command>) -> 
         input,
         outputs,
         terminal: false,
+        scratch,
     })
 }
 
@@ -521,6 +538,87 @@ fn plain_text(bytes: &[u8]) -> String {
 mod input_tests {
     use super::*;
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn background_scratch_lives_until_the_owned_child_finishes() {
+        let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let scratch = tempfile::tempdir().expect("owned scratch");
+        let path = scratch.path().to_path_buf();
+        let command = start("scratch lifetime fixture", |_| {
+            let mut command = std::process::Command::new("/bin/sh");
+            command
+                .env_clear()
+                .env("OWNED_SCRATCH", &path)
+                .args(["-c", "read answer; test -d \"$OWNED_SCRATCH\""]);
+            Ok(PreparedCommand {
+                command,
+                scratch: Some(scratch),
+            })
+        })
+        .expect("owned fixture child");
+        let existed_while_running = path.is_dir();
+        let observed = tokio::time::timeout(Duration::from_secs(5), async {
+            prepare_input(command.clone(), "finish\n")
+                .await?
+                .send()
+                .await?;
+            let mut status = command.status.subscribe();
+            while status.borrow().state == CommandState::Running {
+                status.changed().await?;
+            }
+            let state = status.borrow().state;
+            Ok::<_, anyhow::Error>(state)
+        })
+        .await;
+        if command.state() == CommandState::Running {
+            command.kill();
+        }
+        let mut stopped = command.status.subscribe();
+        let cleanup = tokio::time::timeout(Duration::from_secs(5), async {
+            while stopped.borrow().state == CommandState::Running {
+                stopped.changed().await?;
+            }
+            Ok::<_, anyhow::Error>(())
+        })
+        .await;
+        cleanup
+            .expect("bounded child cleanup")
+            .expect("child cleanup");
+        assert!(existed_while_running);
+        assert_eq!(
+            observed
+                .expect("bounded fixture")
+                .expect("fixture exchange"),
+            CommandState::Exited(Some(0))
+        );
+        assert!(
+            !path.exists(),
+            "completed child retained its private scratch"
+        );
+    }
+
+    #[test]
+    fn a_failed_background_spawn_releases_its_owned_scratch() {
+        let scratch = tempfile::tempdir().expect("owned scratch");
+        let path = scratch.path().to_path_buf();
+        let outcome = spawn(|_| {
+            Ok(PreparedCommand {
+                command: std::process::Command::new(path.join("missing-fixture-program")),
+                scratch: Some(scratch),
+            })
+        });
+        let error = match outcome {
+            Err(error) => error,
+            Ok(mut unexpected) => {
+                let _ = unexpected.child.kill();
+                let _ = unexpected.child.wait();
+                panic!("missing fixture program unexpectedly started");
+            }
+        };
+        assert!(error.to_string().contains("starting the command"));
+        assert!(!path.exists(), "failed launch retained its private scratch");
+    }
+
     fn command(writer: Box<dyn Write + Send>) -> Arc<BackgroundCommand> {
         let (status, _) = watch::channel(Status {
             state: CommandState::Running,
@@ -538,6 +636,7 @@ mod input_tests {
             input_state: Mutex::new(InputState::default()),
             output: Mutex::new(OutputLog::default()),
             tree: Mutex::new(None),
+            scratch: Mutex::new(None),
         })
     }
 

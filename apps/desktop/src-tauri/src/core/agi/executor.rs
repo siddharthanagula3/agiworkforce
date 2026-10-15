@@ -1,21 +1,17 @@
 use super::*;
-use crate::automation::AutomationService;
 use crate::core::agent::ChangeTracker;
 use crate::core::agi::executors::{ExecutorContext, ExecutorRegistry};
-use crate::core::agi::outcome_tracker::OutcomeTracker;
 use crate::core::agi::planner::PlanStep;
-use crate::core::agi::process_reasoning::ProcessReasoning;
-use crate::core::agi::reflection::ReflectionEngine;
 use crate::core::llm::LLMRouter;
 use crate::data::cache::ToolResultCache;
 use crate::sys::account::{current_managed_auth_boundary, scope_managed_auth_boundary};
 use crate::sys::commands::tool_confirmation::{
-    enforce_agent_mode_gate, request_tool_confirmation, ToolConfirmationState,
+    enforce_agent_mode_gate, is_tool_remember_eligible, request_tool_confirmation,
+    ToolConfirmationState,
 };
 use crate::sys::security::ToolExecutionGuard;
 use crate::ui::events::tool_stream::{emit_tool_completed, emit_tool_error, emit_tool_started};
 use anyhow::{anyhow, Result};
-use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -97,6 +93,148 @@ pub(crate) async fn require_tool_approval<R: tauri::Runtime>(
     }
 }
 
+/// Marks a goal that runs with no user at the app, such as a scheduled task.
+pub const UNATTENDED_CONSTRAINT: &str = "unattended";
+
+/// Opens every refusal of a tool that an unattended goal had nobody to ask
+/// about. Whoever started the goal collects the refusals by this prefix.
+pub const UNATTENDED_DENIAL_PREFIX: &str = "Not run unattended:";
+
+pub fn unattended_constraint() -> Constraint {
+    Constraint {
+        name: UNATTENDED_CONSTRAINT.to_string(),
+        value: ConstraintValue::Custom {
+            key: UNATTENDED_CONSTRAINT.to_string(),
+            value: true.to_string(),
+        },
+    }
+}
+
+fn goal_is_unattended(goal: &Goal) -> bool {
+    goal.constraints
+        .iter()
+        .any(|constraint| match &constraint.value {
+            ConstraintValue::Custom { key, value } => {
+                key == UNATTENDED_CONSTRAINT && value == "true"
+            }
+            _ => false,
+        })
+}
+
+/// Every tool a run nobody is watching may use with no stored allow. Each one
+/// only reads this computer or a page the browser already has open: it writes
+/// nothing, moves no input, and contacts no host. `llm_reason` and
+/// `code_analyze` send text to the model the run is already planned by and to
+/// nowhere else. A tool that fetches, searches, downloads, uploads, navigates
+/// or writes is absent on purpose, because unattended it is an exfiltration
+/// or tampering channel; it runs only on the user's stored "Always allow".
+pub(crate) const UNATTENDED_READ_ONLY_TOOLS: &[&str] = &[
+    "file_read",
+    "file_read_binary",
+    "file_list",
+    "document_read",
+    "document_extract_text",
+    "document_get_metadata",
+    "document_detect_type",
+    "document_search",
+    "grep_search",
+    "glob_search",
+    "code_search",
+    "git_status",
+    "git_diff",
+    "git_log",
+    "git_list_branches",
+    "worktree_list",
+    "undo_get_summary",
+    "undo_get_changes",
+    "coding_checkpoint_list",
+    "memory_recall",
+    "memory_search",
+    "list_scheduled_tasks",
+    "background_agent_get",
+    "ui_screenshot",
+    "ui_read_value",
+    "image_ocr",
+    "browser_get_text",
+    "browser_get_attribute",
+    "browser_get_element_state",
+    "browser_get_url",
+    "browser_get_title",
+    "browser_wait_for_selector",
+    "browser_wait_for_interactive",
+    "browser_wait_for_navigation",
+    "browser_extract",
+    "browser_query_all",
+    "browser_get_dom_snapshot",
+    "browser_screenshot",
+    "llm_reason",
+    "code_analyze",
+];
+
+/// Being on the list is necessary, not sufficient: a tool the guard later
+/// raises to an approval tier stops running unattended without a list edit.
+pub(crate) fn runs_unattended_without_an_allow(
+    guard: &ToolExecutionGuard,
+    tool_name: &str,
+) -> bool {
+    UNATTENDED_READ_ONLY_TOOLS.contains(&tool_name)
+        && !guard.get_safety_tier(tool_name).requires_user_action()
+}
+
+/// The approval gate for a goal nobody is watching.
+///
+/// It runs the same mode gate and honours the same stored per-tool choices as
+/// [`require_tool_approval`], but never opens the dialog: a tool outside
+/// [`UNATTENDED_READ_ONLY_TOOLS`] is refused at once and by name. A session
+/// approval or the auto-approve switch does not stand in, because both were
+/// given to a person who was there to see what ran.
+pub(crate) fn unattended_tool_approval<R: tauri::Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+    tool_name: &str,
+) -> Result<()> {
+    use tauri::Manager;
+
+    // A capability switched off holds wherever the assistant acts, before any
+    // stored allow is consulted: "Terminal: off" outranks "always allow".
+    if let Some(off) =
+        crate::sys::commands::capabilities::capability_refusal_now(app_handle, tool_name)
+    {
+        return Err(anyhow!("{UNATTENDED_DENIAL_PREFIX} {off}"));
+    }
+
+    let Some(confirmation_state) = app_handle.try_state::<ToolConfirmationState>() else {
+        return Err(anyhow!(
+            "{UNATTENDED_DENIAL_PREFIX} '{tool_name}' was refused because the approval service is unavailable."
+        ));
+    };
+
+    enforce_agent_mode_gate(app_handle, &confirmation_state, tool_name)
+        .map_err(|blocked| anyhow!("{UNATTENDED_DENIAL_PREFIX} {blocked}"))?;
+
+    match confirmation_state.get_remembered_choice(tool_name) {
+        Some(true) => return Ok(()),
+        Some(false) => {
+            return Err(anyhow!(
+                "{UNATTENDED_DENIAL_PREFIX} '{tool_name}' is blocked by a stored denial policy. Change it in tool approval settings."
+            ))
+        }
+        None => {}
+    }
+
+    if runs_unattended_without_an_allow(confirmation_state.tool_guard(), tool_name) {
+        return Ok(());
+    }
+
+    let remedy = if is_tool_remember_eligible(tool_name) {
+        "Run it from chat, or save an 'Always allow' for this tool in Settings."
+    } else {
+        "This tool is asked about every time, so run it from chat."
+    };
+    Err(anyhow!(
+        "{UNATTENDED_DENIAL_PREFIX} '{tool_name}' needs your approval, and nobody was here to give it. {remedy}"
+    ))
+}
+
 /// The AGI Executor handles tool execution with security validation,
 /// caching, and integration with the modular executor architecture.
 ///
@@ -110,8 +248,6 @@ pub(crate) async fn require_tool_approval<R: tauri::Runtime>(
 /// - `BrowserExecutor`: browser_navigate, browser_click, browser_extract
 /// - `DatabaseExecutor`: db_query, db_execute, db_transaction_*
 /// - `GitExecutor`: git_status, git_init, git_add, git_commit, git_push, git_clone
-/// - `EmailExecutor`: email_send, email_fetch
-/// - `CalendarExecutor`: calendar_create_event, calendar_list_events
 /// - `CloudExecutor`: cloud_upload, cloud_download
 /// - `SearchExecutor`: search_web
 /// - `TerminalExecutor`: terminal_execute
@@ -132,16 +268,37 @@ pub(crate) async fn require_tool_approval<R: tauri::Runtime>(
 pub struct AGIExecutor {
     tool_registry: Arc<ToolRegistry>,
     _resource_manager: Arc<ResourceManager>,
-    automation: Arc<AutomationService>,
     router: Arc<tokio::sync::RwLock<LLMRouter>>,
     app_handle: Option<tauri::AppHandle>,
     tool_cache: Arc<ToolResultCache>,
-    process_reasoning: Option<Arc<ProcessReasoning>>,
-    outcome_tracker: Option<Arc<OutcomeTracker>>,
-    reflection_engine: Option<Arc<ReflectionEngine>>,
     security_guard: Arc<ToolExecutionGuard>,
     change_tracker: Option<Arc<ChangeTracker>>,
     executor_registry: ExecutorRegistry,
+}
+
+/// The folder a run's relative paths are read against: the project the
+/// person opened. Without one a relative path stays relative and the guard
+/// refuses it.
+pub(crate) async fn run_project_folder(
+    app_handle: Option<&tauri::AppHandle>,
+) -> Option<std::path::PathBuf> {
+    use tauri::Manager;
+
+    let project =
+        app_handle?.try_state::<crate::sys::commands::project_context::ProjectContextState>()?;
+    project.get_folder().await.map(std::path::PathBuf::from)
+}
+
+/// A planned call with its path arguments made absolute, once, before the
+/// approval, the cache, the hook, the guard and the tool read it.
+fn in_project_folder(
+    tool_name: &str,
+    parameters: &HashMap<String, serde_json::Value>,
+    project_folder: Option<&std::path::Path>,
+) -> HashMap<String, serde_json::Value> {
+    let mut resolved = parameters.clone();
+    ToolExecutionGuard::resolve_path_arguments(tool_name, &mut resolved, project_folder);
+    resolved
 }
 
 impl AGIExecutor {
@@ -151,64 +308,24 @@ impl AGIExecutor {
     ///
     /// * `tool_registry` - Registry of available AGI tools
     /// * `resource_manager` - Manager for resource limits
-    /// * `automation` - Automation service for UI/browser operations
     /// * `router` - LLM router for reasoning operations
     /// * `app_handle` - Optional Tauri app handle for UI events
     /// * `change_tracker` - Optional tracker for undo capability
     pub fn new(
         tool_registry: Arc<ToolRegistry>,
         resource_manager: Arc<ResourceManager>,
-        automation: Arc<AutomationService>,
         router: Arc<tokio::sync::RwLock<LLMRouter>>,
         app_handle: Option<tauri::AppHandle>,
-        reflection_engine: Option<Arc<ReflectionEngine>>,
         change_tracker: Option<Arc<ChangeTracker>>,
     ) -> Result<Self> {
-        let executor_registry = ExecutorRegistry::new(automation.clone(), router.clone());
+        let executor_registry = ExecutorRegistry::new(router.clone());
 
         Ok(Self {
             tool_registry,
             _resource_manager: resource_manager,
-            automation,
             router,
             app_handle,
             tool_cache: Arc::new(ToolResultCache::new()),
-            process_reasoning: None,
-            outcome_tracker: None,
-            reflection_engine,
-            security_guard: Arc::new(ToolExecutionGuard::new()),
-            change_tracker,
-            executor_registry,
-        })
-    }
-
-    /// Creates an AGIExecutor with process reasoning capabilities.
-    ///
-    /// This constructor enables outcome tracking and process type identification,
-    /// allowing the executor to learn from execution patterns.
-    pub fn with_process_reasoning(
-        tool_registry: Arc<ToolRegistry>,
-        resource_manager: Arc<ResourceManager>,
-        automation: Arc<AutomationService>,
-        router: Arc<tokio::sync::RwLock<LLMRouter>>,
-        app_handle: Option<tauri::AppHandle>,
-        process_reasoning: Arc<ProcessReasoning>,
-        outcome_tracker: Arc<OutcomeTracker>,
-        reflection_engine: Option<Arc<ReflectionEngine>>,
-        change_tracker: Option<Arc<ChangeTracker>>,
-    ) -> Result<Self> {
-        let executor_registry = ExecutorRegistry::new(automation.clone(), router.clone());
-
-        Ok(Self {
-            tool_registry,
-            _resource_manager: resource_manager,
-            automation,
-            router,
-            app_handle,
-            tool_cache: Arc::new(ToolResultCache::new()),
-            process_reasoning: Some(process_reasoning),
-            outcome_tracker: Some(outcome_tracker),
-            reflection_engine,
             security_guard: Arc::new(ToolExecutionGuard::new()),
             change_tracker,
             executor_registry,
@@ -223,24 +340,19 @@ impl AGIExecutor {
     pub fn with_cache_capacity(
         tool_registry: Arc<ToolRegistry>,
         resource_manager: Arc<ResourceManager>,
-        automation: Arc<AutomationService>,
         router: Arc<tokio::sync::RwLock<LLMRouter>>,
         app_handle: Option<tauri::AppHandle>,
         cache_size_bytes: usize,
         change_tracker: Option<Arc<ChangeTracker>>,
     ) -> Result<Self> {
-        let executor_registry = ExecutorRegistry::new(automation.clone(), router.clone());
+        let executor_registry = ExecutorRegistry::new(router.clone());
 
         Ok(Self {
             tool_registry,
             _resource_manager: resource_manager,
-            automation,
             router,
             app_handle,
             tool_cache: Arc::new(ToolResultCache::with_capacity(cache_size_bytes)),
-            process_reasoning: None,
-            outcome_tracker: None,
-            reflection_engine: None,
             security_guard: Arc::new(ToolExecutionGuard::new()),
             change_tracker,
             executor_registry,
@@ -262,57 +374,6 @@ impl AGIExecutor {
     /// Returns the number of entries pruned.
     pub fn prune_cache(&self) -> Result<usize> {
         self.tool_cache.prune_expired()
-    }
-
-    /// Get the list of allowed directories for file operations.
-    ///
-    /// This is used to prevent path traversal attacks by ensuring all file
-    /// operations are restricted to explicitly allowed directories.
-    ///
-    /// Returns an empty Vec if no restrictions are configured (backwards compatibility),
-    /// which will trigger a security warning but allow access.
-    ///
-    // Used by: fallback tools not yet migrated to ExecutorRegistry
-    fn _get_allowed_directories(&self) -> Vec<std::path::PathBuf> {
-        // Try to get allowed directories from settings via app_handle
-        if let Some(ref app) = self.app_handle {
-            use tauri::Manager;
-
-            // Try to get from settings state if available
-            if let Some(settings_state) =
-                app.try_state::<crate::sys::commands::settings::SettingsState>()
-            {
-                if let Ok(settings) = settings_state.settings.try_lock() {
-                    // Return allowed directories from settings if configured and non-empty
-                    if !settings.allowed_directories.is_empty() {
-                        return settings
-                            .allowed_directories
-                            .iter()
-                            .filter_map(|p| std::fs::canonicalize(p).ok())
-                            .collect();
-                    }
-                }
-            }
-        }
-
-        // Fallback: Return common safe directories as defaults
-        // This provides reasonable security while maintaining backwards compatibility
-        let mut defaults = Vec::new();
-
-        // User's home directory
-        if let Some(home) = dirs::home_dir() {
-            defaults.push(home);
-        }
-
-        // Current working directory
-        if let Ok(cwd) = std::env::current_dir() {
-            defaults.push(cwd);
-        }
-
-        // Temp directory (for sandbox operations)
-        defaults.push(std::env::temp_dir());
-
-        defaults
     }
 
     /// Normalizes a step ID, generating a UUID if empty.
@@ -415,9 +476,13 @@ impl AGIExecutor {
     ) -> Result<serde_json::Value> {
         let tool_name = tool.id.as_str();
 
+        let project_folder = run_project_folder(self.app_handle.as_ref()).await;
+        let parameters = &in_project_folder(tool_name, parameters, project_folder.as_deref());
+
         // Approval precedes the cache lookup: a cached result must not let a
         // later, unapproved call inherit an earlier approval.
-        self.ensure_tool_approved(tool_name, parameters).await?;
+        self.ensure_tool_approved(tool_name, parameters, &context.goal)
+            .await?;
 
         // Check cache first
         if let Some(cached_result) = self.tool_cache.get(tool_name, parameters) {
@@ -447,19 +512,17 @@ impl AGIExecutor {
 
     /// Run the human-approval gate for a planned tool call.
     ///
-    /// Without an app handle there is no one to ask, so every tool whose safety
-    /// tier needs a human decision is refused rather than run unattended.
+    /// Without an app handle, or for a goal marked unattended, there is no one
+    /// to ask, so every tool whose safety tier needs a human decision is
+    /// refused rather than run.
     async fn ensure_tool_approved(
         &self,
         tool_name: &str,
         parameters: &HashMap<String, serde_json::Value>,
+        goal: &Goal,
     ) -> Result<()> {
         let Some(ref app_handle) = self.app_handle else {
-            if self
-                .security_guard
-                .get_safety_tier(tool_name)
-                .requires_user_action()
-            {
+            if !runs_unattended_without_an_allow(&self.security_guard, tool_name) {
                 tracing::error!(
                     "[Executor] No app handle to request approval, refusing '{}'",
                     tool_name
@@ -471,6 +534,18 @@ impl AGIExecutor {
             }
             return Ok(());
         };
+
+        if goal_is_unattended(goal) {
+            return unattended_tool_approval(app_handle, tool_name);
+        }
+
+        // Before the approval prompt and the cache, so a capability that is
+        // off neither asks the person nor answers from an earlier result.
+        if let Some(off) =
+            crate::sys::commands::capabilities::capability_refusal(app_handle, tool_name).await
+        {
+            return Err(anyhow!(off));
+        }
 
         let params_json = serde_json::to_value(parameters)?;
         let description = self
@@ -508,14 +583,35 @@ impl AGIExecutor {
             );
         }
 
-        // Emit pre-tool-use hook
-        crate::ui::hooks::emit_event(crate::ui::hooks::HookEvent::pre_tool_use(
+        // A pre-tool-use hook can refuse the call before anything runs.
+        let refusal = crate::ui::hooks::gate_event(crate::ui::hooks::HookEvent::pre_tool_use(
             session_id.clone(),
             tool_name.to_string(),
             tool_name.to_string(),
             parameters.clone(),
         ))
         .await;
+        if let Some(reason) = refusal {
+            let message = format!("A PreToolUse hook blocked this tool: {reason}");
+            if let Some(ref app_handle) = self.app_handle {
+                emit_tool_error(
+                    app_handle,
+                    &tool_id,
+                    &message,
+                    start_time.elapsed().as_millis() as u64,
+                    false,
+                );
+            }
+            crate::ui::hooks::emit_event(crate::ui::hooks::HookEvent::tool_error(
+                session_id,
+                tool_name.to_string(),
+                tool_name.to_string(),
+                parameters.clone(),
+                message.clone(),
+            ))
+            .await;
+            return Err(anyhow::anyhow!(message));
+        }
 
         // Security validation, through the app-managed guard when there is
         // one, so rate limits and allowed paths are shared with the chat tool
@@ -582,13 +678,13 @@ impl AGIExecutor {
         let result = if let Some(executor) = self.executor_registry.get_executor(tool_name) {
             let exec_context = ExecutorContext {
                 app_handle: self.app_handle.clone(),
-                automation: self.automation.clone(),
                 router: self.router.clone(),
                 tool_cache: self.tool_cache.clone(),
                 security_guard: self.security_guard.clone(),
                 change_tracker: self.change_tracker.clone(),
                 session_id: session_id.clone(),
                 tool_id: tool_id.clone(),
+                granted_directories: Vec::new(),
             };
 
             executor
@@ -809,7 +905,6 @@ impl AGIExecutor {
 
         for plan in plans {
             let tool_registry = self.tool_registry.clone();
-            let automation = self.automation.clone();
             let router = self.router.clone();
             let tool_cache = self.tool_cache.clone();
 
@@ -862,18 +957,11 @@ impl AGIExecutor {
                         }
                     };
 
-                    // Parallel workers call `execute_step` directly. Process
-                    // reasoning and outcome tracking are only consumed by
-                    // `execute_goal_with_outcomes`; constructing them here
-                    // created an unmigrated relative SQLite database and could
-                    // fail the plan before a single step ran.
                     let mut executor = match AGIExecutor::new(
                         tool_registry,
                         Arc::new(resource_manager),
-                        automation,
                         router.clone(),
                         app_handle,
-                        None, // No reflection engine for parallel sub-tasks for now
                         None, // No change tracker for parallel execution
                     ) {
                         Ok(ex) => ex,
@@ -946,307 +1034,67 @@ impl AGIExecutor {
 
         Ok(execution_results)
     }
-
-    /// Executes a goal with outcome tracking.
-    ///
-    /// This method identifies the process type, defines expected outcomes,
-    /// executes the plan, and tracks whether outcomes were achieved.
-    pub async fn execute_goal_with_outcomes(
-        &self,
-        goal: &Goal,
-        plan: &planner::Plan,
-        context: &ExecutionContext,
-    ) -> Result<ExecutionResultWithOutcomes> {
-        use tokio::time::Instant;
-
-        let start_time = Instant::now();
-
-        // Identify process type if process reasoning is available
-        let process_type = if let Some(ref pr) = self.process_reasoning {
-            match pr.identify_process_type(goal).await {
-                Ok(pt) => {
-                    tracing::info!(
-                        "[Executor] Identified process type: {:?} for goal {}",
-                        pt,
-                        goal.id
-                    );
-                    Some(pt)
-                }
-                Err(e) => {
-                    tracing::warn!("[Executor] Failed to identify process type: {}", e);
-                    None
-                }
-            }
-        } else {
-            None
-        };
-
-        // Define expected outcomes based on process type
-        let expected_outcomes =
-            if let (Some(pt), Some(ref pr)) = (process_type, &self.process_reasoning) {
-                pr.define_outcomes(pt, goal)
-            } else {
-                vec![]
-            };
-
-        // Execute the plan
-        let mut steps_completed = 0;
-        let mut steps_failed = 0;
-        let mut output = serde_json::json!({});
-        let mut error_msg = None;
-
-        for step in &plan.steps {
-            match self.execute_step(step, context).await {
-                Ok(result) => {
-                    steps_completed += 1;
-                    output = result;
-
-                    // REFLECTION POINT: Success
-                    if let Some(ref _reflection) = self.reflection_engine {
-                        // We could also reflect on success to optimize future runs,
-                        // but prioritizing failure for now.
-                        tracing::debug!("[Executor] Step {} succeeded", step.id);
-                    }
-                }
-                Err(e) => {
-                    steps_failed += 1;
-                    error_msg = Some(e.to_string());
-                    tracing::error!("[Executor] Step execution failed: {}", e);
-
-                    // REFLECTION POINT: Failure
-                    if let Some(ref reflection) = self.reflection_engine {
-                        tracing::info!(
-                            "[Executor] Triggering reflection for failed step: {}",
-                            step.id
-                        );
-
-                        // Create a synthetic plan for reflection context since we don't have the full object here
-                        let plan = planner::Plan {
-                            goal_id: goal.id.clone(),
-                            steps: vec![], // Placeholder
-                            estimated_duration: std::time::Duration::from_secs(0),
-                            estimated_resources: crate::core::agi::ResourceUsage {
-                                cpu_percent: 0.0,
-                                memory_mb: 0,
-                                network_mb: 0.0,
-                            },
-                        };
-
-                        match reflection.reflect(goal, context, &plan).await {
-                            Ok(insight) => {
-                                tracing::info!("[Executor] Reflection Insight: {:?}", insight);
-
-                                // Log actionable corrections from the reflection
-                                for correction in &insight.corrections {
-                                    tracing::info!(
-                                        "[Executor] Correction for step '{}': {:?}, {}",
-                                        correction.for_step_id,
-                                        correction.correction_type,
-                                        correction.description,
-                                    );
-                                }
-
-                                // Log derived sub-goals for future planning
-                                for sub_goal in &insight.sub_goals {
-                                    tracing::info!(
-                                        "[Executor] Sub-goal derived: {} (priority: {})",
-                                        sub_goal.description,
-                                        sub_goal.priority,
-                                    );
-                                }
-
-                                // Store the reflection for future use
-                                if let Err(store_err) = reflection.store_reflection(&insight).await
-                                {
-                                    tracing::warn!(
-                                        "[Executor] Failed to store reflection: {}",
-                                        store_err
-                                    );
-                                }
-                            }
-                            Err(re) => {
-                                tracing::warn!("[Executor] Reflection failed: {}", re);
-                            }
-                        }
-                    }
-
-                    break;
-                }
-            }
-        }
-
-        let execution_time_ms = start_time.elapsed().as_millis() as u64;
-        let success = steps_failed == 0 && steps_completed > 0;
-
-        // Track outcomes
-        let mut tracked_outcomes = vec![];
-        if let Some(ref tracker) = self.outcome_tracker {
-            for mut outcome in expected_outcomes {
-                let actual_value = self.measure_outcome(&outcome, context).await?;
-                outcome.actual_value = Some(actual_value);
-
-                outcome.achieved = match outcome.metric_name.as_str() {
-                    // For time-based metrics, lower is better
-                    "processing_time" | "response_time" | "deployment_time" => {
-                        actual_value <= outcome.target_value
-                    }
-
-                    // For quality metrics, higher is better
-                    "data_accuracy" | "response_quality" | "test_coverage" | "completion_rate" => {
-                        actual_value >= outcome.target_value
-                    }
-
-                    // For count metrics, higher is better
-                    "invoices_processed" | "tickets_resolved" | "records_processed" => {
-                        actual_value >= outcome.target_value
-                    }
-
-                    // For error rate metrics, lower is better
-                    "false_positive_rate" | "rollback_needed" => {
-                        actual_value <= outcome.target_value
-                    }
-
-                    // Default: higher is better
-                    _ => actual_value >= outcome.target_value,
-                };
-
-                if let Err(e) = tracker.track_outcome(goal.id.clone(), outcome.clone()) {
-                    tracing::warn!("[Executor] Failed to track outcome: {}", e);
-                } else {
-                    tracked_outcomes.push(outcome);
-                }
-            }
-        }
-
-        // Calculate outcome score
-        let outcome_score = if let Some(ref pr) = self.process_reasoning {
-            process_type.map(|pt| pr.evaluate_outcome(pt, &tracked_outcomes, context))
-        } else {
-            None
-        };
-
-        Ok(ExecutionResultWithOutcomes {
-            success,
-            output,
-            execution_time_ms,
-            steps_completed,
-            steps_failed,
-            error: error_msg,
-            process_type,
-            tracked_outcomes,
-            outcome_score,
-        })
-    }
-
-    /// Measures the actual value of an outcome metric.
-    async fn measure_outcome(
-        &self,
-        outcome: &crate::core::agi::process_reasoning::Outcome,
-        context: &ExecutionContext,
-    ) -> Result<f64> {
-        match outcome.metric_name.as_str() {
-            // Time-based metrics: sum of execution times
-            "processing_time" | "response_time" | "deployment_time" => {
-                let total_time_ms: u64 = context
-                    .tool_results
-                    .iter()
-                    .map(|r| r.execution_time_ms)
-                    .sum();
-                Ok(total_time_ms as f64 / 1000.0)
-            }
-
-            // Accuracy metrics: success rate
-            "data_accuracy" | "categorization_accuracy" | "response_quality" => {
-                let total = context.tool_results.len();
-                if total == 0 {
-                    return Ok(0.0);
-                }
-                let successful = context.tool_results.iter().filter(|r| r.success).count();
-                Ok(successful as f64 / total as f64)
-            }
-
-            // Count metrics: number of successful operations
-            "invoices_processed" | "tickets_resolved" | "records_processed"
-            | "emails_categorized" | "leads_scored" | "posts_scheduled" => {
-                let successful = context.tool_results.iter().filter(|r| r.success).count();
-                Ok(successful as f64)
-            }
-
-            // Coverage metrics: success rate
-            "test_coverage" | "documentation_completeness" | "completion_rate" => {
-                let total = context.tool_results.len();
-                if total == 0 {
-                    return Ok(0.0);
-                }
-                let successful = context.tool_results.iter().filter(|r| r.success).count();
-                Ok(successful as f64 / total as f64)
-            }
-
-            // Error rate metrics: failure rate
-            "false_positive_rate" => {
-                let total = context.tool_results.len();
-                if total == 0 {
-                    return Ok(0.0);
-                }
-                let failed = context.tool_results.iter().filter(|r| !r.success).count();
-                Ok(failed as f64 / total as f64)
-            }
-
-            // Binary metrics: all succeeded or not
-            "deployment_success" | "rollback_needed" => {
-                let all_succeeded = context.tool_results.iter().all(|r| r.success);
-                Ok(if all_succeeded { 1.0 } else { 0.0 })
-            }
-
-            // Test pass rate
-            "tests_passed" => {
-                let total = context.tool_results.len();
-                if total == 0 {
-                    return Ok(0.0);
-                }
-                let passed = context.tool_results.iter().filter(|r| r.success).count();
-                Ok(passed as f64 / total as f64)
-            }
-
-            // Default: success rate
-            _ => {
-                let total = context.tool_results.len();
-                if total == 0 {
-                    return Ok(0.0);
-                }
-                let successful = context.tool_results.iter().filter(|r| r.success).count();
-                Ok(successful as f64 / total as f64)
-            }
-        }
-    }
-}
-
-/// Result of executing a goal with outcome tracking.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExecutionResultWithOutcomes {
-    /// Whether the execution succeeded overall.
-    pub success: bool,
-    /// The output from the final step.
-    pub output: serde_json::Value,
-    /// Total execution time in milliseconds.
-    pub execution_time_ms: u64,
-    /// Number of steps completed successfully.
-    pub steps_completed: usize,
-    /// Number of steps that failed.
-    pub steps_failed: usize,
-    /// Error message if execution failed.
-    pub error: Option<String>,
-    /// Identified process type (if process reasoning was enabled).
-    pub process_type: Option<crate::core::agi::ProcessType>,
-    /// Outcomes that were tracked during execution.
-    pub tracked_outcomes: Vec<crate::core::agi::process_reasoning::Outcome>,
-    /// Overall outcome score (if process reasoning was enabled).
-    pub outcome_score: Option<crate::core::agi::process_reasoning::OutcomeScore>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_relative_path_in_a_goal_step_is_resolved_inside_the_project_before_any_gate() {
+        let project = tempfile::tempdir().expect("tempdir");
+        let guard = ToolExecutionGuard::new();
+        let call = |path: &str| HashMap::from([("path".to_string(), serde_json::json!(path))]);
+
+        let stated = call("src/a.ts");
+        assert!(
+            guard
+                .validate_before_folder_consent("file_read", &serde_json::json!(stated))
+                .await
+                .is_err(),
+            "the guard never guesses what a relative path is relative to"
+        );
+
+        let resolved = in_project_folder("file_read", &stated, Some(project.path()));
+        assert_eq!(
+            resolved["path"],
+            serde_json::json!(project.path().join("src/a.ts").to_string_lossy())
+        );
+        guard
+            .validate_before_folder_consent("file_read", &serde_json::json!(resolved))
+            .await
+            .expect("the path the tool will open passes the guard");
+
+        for escaping in ["../outside.txt", "src/../../outside.txt"] {
+            let resolved = in_project_folder("file_write", &call(escaping), Some(project.path()));
+            assert!(
+                matches!(
+                    guard
+                        .validate_tool_call("file_write", &serde_json::json!(resolved))
+                        .await,
+                    Err(crate::sys::security::tool_guard::SecurityError::PathTraversal(_))
+                ),
+                "{escaping} leaves the project"
+            );
+        }
+
+        let edits = HashMap::from([(
+            "edits".to_string(),
+            serde_json::json!([{ "path": "src/a.ts", "old_text": "a", "new_text": "b" }]),
+        )]);
+        let resolved = in_project_folder("multi_edit", &edits, Some(project.path()));
+        assert_eq!(
+            resolved["edits"][0]["path"],
+            serde_json::json!(project.path().join("src/a.ts").to_string_lossy())
+        );
+
+        assert_eq!(
+            in_project_folder("file_read", &stated, None),
+            stated,
+            "with no project open the path is left for the guard to refuse"
+        );
+        assert_eq!(run_project_folder(None).await, None);
+    }
 
     #[test]
     fn test_normalized_step_id_empty() {
@@ -1315,9 +1163,7 @@ mod tests {
             AGIExecutor::new(
                 tool_registry,
                 resource_manager,
-                Arc::new(AutomationService::new().expect("automation service")),
                 Arc::new(tokio::sync::RwLock::new(LLMRouter::new())),
-                None,
                 None,
                 None,
             )
@@ -1411,6 +1257,219 @@ mod tests {
                     "{tool_name} was refused for the wrong reason: {error}"
                 );
             }
+        }
+
+        #[test]
+        fn an_unattended_goal_is_refused_a_tool_that_would_prompt_and_told_which() {
+            let app = managed_app(AgentMode::Build);
+
+            let error = unattended_tool_approval(app.handle(), "browser_navigate")
+                .expect_err("nobody is there to approve it")
+                .to_string();
+
+            assert!(error.starts_with(UNATTENDED_DENIAL_PREFIX), "{error}");
+            assert!(error.contains("'browser_navigate'"), "{error}");
+            assert!(error.contains("nobody was here"), "{error}");
+        }
+
+        #[test]
+        fn an_unattended_goal_runs_read_only_tools_and_tools_the_user_always_allows() {
+            let app = managed_app(AgentMode::Build);
+            remember(&app, "browser_navigate", true);
+
+            unattended_tool_approval(app.handle(), "file_read")
+                .expect("a read-only tool never prompts");
+            unattended_tool_approval(app.handle(), "browser_navigate")
+                .expect("a stored approval is the user's standing answer");
+        }
+
+        #[test]
+        fn an_unattended_goal_cannot_reach_the_network_or_write_without_a_stored_allow() {
+            let app = managed_app(AgentMode::Build);
+
+            for tool_name in [
+                "api_download",
+                "cloud_download",
+                "search_web",
+                "physical_scrape",
+                "api_call",
+                "api_upload",
+                "browser_navigate",
+                "email_send",
+                "mcp__remote__fetch",
+                "memory_remember",
+                "create_artifact",
+                "schedule_reminder",
+                "ui_scroll",
+                "browser_hover",
+                "db_transaction_rollback",
+                "a_tool_with_no_policy",
+            ] {
+                let refusal = unattended_tool_approval(app.handle(), tool_name)
+                    .err()
+                    .map(|error| error.to_string());
+                assert!(
+                    refusal
+                        .as_deref()
+                        .is_some_and(|error| error.starts_with(UNATTENDED_DENIAL_PREFIX)),
+                    "'{tool_name}' sends data out or changes something: {refusal:?}"
+                );
+            }
+
+            remember(&app, "api_download", true);
+            unattended_tool_approval(app.handle(), "api_download")
+                .expect("a stored allow is the user's standing answer");
+        }
+
+        fn switch_off(app: &tauri::App<tauri::test::MockRuntime>, capability: &str) {
+            use crate::sys::commands::capabilities::{CapabilityState, SavedSwitches};
+            use tauri::Manager;
+
+            app.handle()
+                .manage(CapabilityState::from_saved(SavedSwitches::Saved(
+                    HashMap::from([(capability.to_string(), false)]),
+                )));
+        }
+
+        #[test]
+        fn a_capability_that_is_off_refuses_an_unattended_step_whatever_was_allowed() {
+            let app = managed_app(AgentMode::Build);
+            switch_off(&app, "fileOperations");
+
+            let refusal = unattended_tool_approval(app.handle(), "file_read")
+                .expect_err("Files is off, so even a read-only file tool does not run")
+                .to_string();
+            assert!(refusal.starts_with(UNATTENDED_DENIAL_PREFIX), "{refusal}");
+            assert!(refusal.contains("Files is turned off"), "{refusal}");
+
+            remember(&app, "api_download", true);
+            unattended_tool_approval(app.handle(), "api_download")
+                .expect("another capability's tool keeps its stored allow");
+            unattended_tool_approval(app.handle(), "git_status")
+                .expect("a read-only tool under a capability that is on still runs");
+        }
+
+        #[test]
+        fn a_stored_allow_does_not_outrank_a_capability_that_is_off() {
+            let app = managed_app(AgentMode::Build);
+            switch_off(&app, "webSearch");
+            remember(&app, "api_download", true);
+
+            let refusal = unattended_tool_approval(app.handle(), "api_download")
+                .expect_err("Web search and web requests is off")
+                .to_string();
+            assert!(
+                refusal.contains("Web search and web requests is turned off"),
+                "{refusal}"
+            );
+        }
+
+        #[tokio::test]
+        async fn an_attended_goal_run_asks_the_same_capability_question() {
+            use crate::sys::commands::capabilities::capability_refusal;
+
+            let app = managed_app(AgentMode::Build);
+            switch_off(&app, "terminalAccess");
+
+            let refusal = capability_refusal(app.handle(), "terminal_execute")
+                .await
+                .expect("Terminal is off");
+            assert!(refusal.starts_with("Terminal is turned off"), "{refusal}");
+            assert!(capability_refusal(app.handle(), "test_run").await.is_some());
+            assert_eq!(capability_refusal(app.handle(), "file_read").await, None);
+            assert_eq!(capability_refusal(app.handle(), "todo_write").await, None);
+        }
+
+        #[test]
+        fn every_tool_that_runs_unattended_is_one_the_guard_never_asks_about() {
+            let guard = ToolExecutionGuard::new();
+
+            for tool_name in UNATTENDED_READ_ONLY_TOOLS {
+                assert!(
+                    runs_unattended_without_an_allow(&guard, tool_name),
+                    "'{tool_name}' is listed as read-only but the guard asks about it"
+                );
+            }
+        }
+
+        #[test]
+        fn downloads_ask_before_they_run() {
+            let guard = ToolExecutionGuard::new();
+
+            for tool_name in ["api_download", "cloud_download"] {
+                assert!(
+                    guard.get_safety_tier(tool_name).requires_user_action(),
+                    "'{tool_name}' fetches a remote body and writes it to disk"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn a_run_with_no_user_session_gets_the_same_read_only_list() {
+            let executor = headless_executor();
+            let goal = execution_context().goal;
+
+            executor
+                .ensure_tool_approved("file_read", &HashMap::new(), &goal)
+                .await
+                .expect("a local read needs nobody");
+            for tool_name in ["api_download", "search_web", "cloud_download"] {
+                executor
+                    .ensure_tool_approved(tool_name, &HashMap::new(), &goal)
+                    .await
+                    .expect_err("nobody is there to approve a request to another host");
+            }
+        }
+
+        #[test]
+        fn auto_approve_and_session_approvals_do_not_answer_for_an_unattended_goal() {
+            use tauri::Manager;
+
+            let app = managed_app(AgentMode::Autopilot);
+            let state = app.handle().state::<ToolConfirmationState>();
+            state.set_auto_approve_all(true);
+            state.approve_for_session("browser_navigate");
+
+            assert!(unattended_tool_approval(app.handle(), "browser_navigate").is_err());
+        }
+
+        #[test]
+        fn a_tool_that_can_never_be_remembered_is_always_refused_unattended() {
+            let app = managed_app(AgentMode::Build);
+            remember(&app, "terminal_execute", true);
+
+            let error = unattended_tool_approval(app.handle(), "terminal_execute")
+                .expect_err("a shell command is only as safe as this run's argument")
+                .to_string();
+
+            assert!(error.contains("'terminal_execute'"), "{error}");
+            assert!(error.contains("run it from chat"), "{error}");
+            assert!(!error.contains("Always allow"), "{error}");
+        }
+
+        #[test]
+        fn the_refusal_offers_always_allow_only_where_settings_can_store_one() {
+            let app = managed_app(AgentMode::Build);
+
+            let error = unattended_tool_approval(app.handle(), "browser_navigate")
+                .expect_err("nobody is there to approve it")
+                .to_string();
+
+            assert!(
+                error.ends_with(
+                    "Run it from chat, or save an 'Always allow' for this tool in Settings."
+                ),
+                "{error}"
+            );
+        }
+
+        #[test]
+        fn an_unattended_goal_is_recognised_by_its_constraint() {
+            let mut goal = execution_context().goal;
+            assert!(!goal_is_unattended(&goal));
+
+            goal.constraints.push(unattended_constraint());
+            assert!(goal_is_unattended(&goal));
         }
 
         #[tokio::test]

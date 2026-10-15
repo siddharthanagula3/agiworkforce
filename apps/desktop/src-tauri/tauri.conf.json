@@ -43,7 +43,8 @@
       },
       "capabilities": [
         "default",
-        "recorder-hud"
+        "recorder-hud",
+        "floating"
       ]
     }
   },

@@ -1,4 +1,4 @@
-use crate::data::analytics::{ProcessMetrics, ROIReport, ToolMetrics, TrendPoint, UserMetrics};
+use crate::data::analytics::{ProcessMetrics, ROIReport, ToolMetrics, UserMetrics};
 use serde_json;
 use std::collections::HashMap;
 
@@ -139,51 +139,6 @@ impl ReportGenerator {
         csv
     }
 
-    pub fn generate_user_csv(&self, users: &[UserMetrics]) -> String {
-        let mut csv = String::from(
-            "User ID,Automation Count,Goal Count,Time Saved (h),Cost Savings ($),
-             Most Used Tool,Most Used Process,Avg Success Rate %\n",
-        );
-
-        for user in users {
-            csv.push_str(&format!(
-                "{},{},{},{:.2},{:.2},{},{},{:.2}\n",
-                user.user_id,
-                user.automation_count,
-                user.goal_count,
-                user.time_saved_hours,
-                user.cost_savings_usd,
-                user.most_used_tool,
-                user.most_used_process,
-                user.avg_success_rate
-            ));
-        }
-
-        csv
-    }
-
-    pub fn generate_tool_csv(&self, tools: &[ToolMetrics]) -> String {
-        let mut csv = String::from(
-            "Tool Name,Usage Count,Success Count,Failure Count,Success Rate %,
-             Avg Execution Time (ms),Time Saved (h)\n",
-        );
-
-        for tool in tools {
-            csv.push_str(&format!(
-                "{},{},{},{},{:.2},{:.2},{:.2}\n",
-                tool.tool_name,
-                tool.usage_count,
-                tool.success_count,
-                tool.failure_count,
-                tool.success_rate,
-                tool.avg_execution_time_ms,
-                tool.total_time_saved_hours
-            ));
-        }
-
-        csv
-    }
-
     pub fn generate_json_export(
         &self,
         roi: &ROIReport,
@@ -202,41 +157,6 @@ impl ReportGenerator {
         );
 
         serde_json::to_string_pretty(&data)
-    }
-
-    pub fn generate_trend_report(&self, metric_name: &str, trends: &[TrendPoint]) -> String {
-        let mut report = format!("# {} Trend Analysis\n\n", metric_name);
-        report.push_str("| Date | Value |\n");
-        report.push_str("|------|-------|\n");
-
-        for trend in trends {
-            report.push_str(&format!("| {} | {:.2} |\n", trend.date, trend.value));
-        }
-
-        if trends.len() >= 2 {
-            let first_value = trends.first().map(|t| t.value).unwrap_or(0.0);
-            let last_value = trends.last().map(|t| t.value).unwrap_or(0.0);
-            let change = last_value - first_value;
-            let change_percent = if first_value > 0.0 {
-                (change / first_value) * 100.0
-            } else {
-                0.0
-            };
-
-            report.push_str(&format!(
-                "\n**Trend Direction**: {} ({:+.2}%)\n",
-                if change > 0.0 {
-                    "↑ Increasing"
-                } else if change < 0.0 {
-                    "↓ Decreasing"
-                } else {
-                    "→ Stable"
-                },
-                change_percent
-            ));
-        }
-
-        report
     }
 
     pub fn generate_process_report(&self, process: &ProcessMetrics) -> String {
@@ -282,88 +202,6 @@ impl ReportGenerator {
         } else {
             "Unknown".to_string()
         }
-    }
-
-    pub fn generate_comparison_report(
-        &self,
-        period1_roi: &ROIReport,
-        period2_roi: &ROIReport,
-        period1_name: &str,
-        period2_name: &str,
-    ) -> String {
-        let time_saved_change = period2_roi.time_saved_hours - period1_roi.time_saved_hours;
-        let cost_change = period2_roi.cost_savings_usd - period1_roi.cost_savings_usd;
-        let success_rate1 = if period1_roi.total_automations > 0 {
-            (period1_roi.successful_executions as f64 / period1_roi.total_automations as f64)
-                * 100.0
-        } else {
-            0.0
-        };
-        let success_rate2 = if period2_roi.total_automations > 0 {
-            (period2_roi.successful_executions as f64 / period2_roi.total_automations as f64)
-                * 100.0
-        } else {
-            0.0
-        };
-
-        format!(
-            "# Comparison Report: {} vs {}\n\n
-             ## Time Saved\n
-             - {}: {:.1} hours\n
-             - {}: {:.1} hours\n
-             - **Change**: {:+.1} hours ({:+.1}%)\n\n
-             ## Cost Savings\n
-             - {}: ${:.2}\n
-             - {}: ${:.2}\n
-             - **Change**: ${:+.2} ({:+.1}%)\n\n
-             ## Success Rate\n
-             - {}: {:.1}%\n
-             - {}: {:.1}%\n
-             - **Change**: {:+.1}%\n\n
-             ## Automation Volume\n
-             - {}: {} executions\n
-             - {}: {} executions\n
-             - **Change**: {:+} executions ({:+.1}%)\n",
-            period1_name,
-            period2_name,
-            period1_name,
-            period1_roi.time_saved_hours,
-            period2_name,
-            period2_roi.time_saved_hours,
-            time_saved_change,
-            if period1_roi.time_saved_hours > 0.0 {
-                (time_saved_change / period1_roi.time_saved_hours) * 100.0
-            } else {
-                0.0
-            },
-            period1_name,
-            period1_roi.cost_savings_usd,
-            period2_name,
-            period2_roi.cost_savings_usd,
-            cost_change,
-            if period1_roi.cost_savings_usd > 0.0 {
-                (cost_change / period1_roi.cost_savings_usd) * 100.0
-            } else {
-                0.0
-            },
-            period1_name,
-            success_rate1,
-            period2_name,
-            success_rate2,
-            success_rate2 - success_rate1,
-            period1_name,
-            period1_roi.total_automations,
-            period2_name,
-            period2_roi.total_automations,
-            period2_roi.total_automations as i64 - period1_roi.total_automations as i64,
-            if period1_roi.total_automations > 0 {
-                ((period2_roi.total_automations as f64 - period1_roi.total_automations as f64)
-                    / period1_roi.total_automations as f64)
-                    * 100.0
-            } else {
-                0.0
-            }
-        )
     }
 }
 

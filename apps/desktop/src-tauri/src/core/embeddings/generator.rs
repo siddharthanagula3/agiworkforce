@@ -184,9 +184,9 @@ impl EmbeddingGenerator {
 
     async fn generate_fastembed(&self, _text: &str) -> Result<Vector> {
         Err(anyhow!(
-            "Local embedding generation via fastembed is not available. To generate embeddings locally, \
-             install and start Ollama (https://ollama.com), then install a model whose runtime metadata declares embedding capability. \
-             Alternatively, configure an OpenAI or Google API key in Settings for cloud-based embeddings."
+            "No local embedding model is available. Embeddings are generated on this device only: \
+             install and start Ollama (https://ollama.com), then install a model whose runtime \
+             metadata declares embedding capability."
         ))
     }
 

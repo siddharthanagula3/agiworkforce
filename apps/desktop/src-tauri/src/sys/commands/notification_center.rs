@@ -1,20 +1,44 @@
 //! In-app notification center commands.
 //!
-//! Provides a persistent notification center for the desktop app with support for:
-//! - Listing notifications with pagination and filtering
-//! - Marking notifications as read
-//! - Deleting notifications
-//! - Notification settings (sounds, badges, etc.)
-//!
-//! This is separate from the OS-level desktop notifications (notifications.rs).
-//! The notification center stores notifications in SQLite for persistence.
+//! Every notification the app raises goes through `deliver_notification`, which
+//! applies the user's settings, stores the item and raises the OS notification.
+//! The settings and the most recent items are kept in `settings_v2`.
 
+use crate::data::settings::{SettingCategory, SettingValue, SettingsService};
+use crate::sys::commands::settings_v2::SettingsServiceState;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
 use uuid::Uuid;
+
+const SETTINGS_KEY: &str = "notification_center.settings";
+const ITEMS_KEY: &str = "notification_center.items";
+const MAX_NOTIFICATIONS: usize = 200;
+
+/// Where a click on a notification takes the user. The renderer resolves these
+/// in `features/notifications/notificationRoutes.ts`; a route it does not know
+/// is not clickable.
+pub enum NotificationRoute<'a> {
+    Trigger(&'a str),
+    Schedule(&'a str),
+    BackgroundAgent(&'a str),
+    AgentTasks,
+    Settings(&'a str),
+}
+
+impl NotificationRoute<'_> {
+    pub fn action_url(&self) -> String {
+        match self {
+            Self::Trigger(id) => format!("trigger:{id}"),
+            Self::Schedule(id) => format!("schedule:{id}"),
+            Self::BackgroundAgent(id) => format!("background-agent:{id}"),
+            Self::AgentTasks => "agent-tasks:all".to_string(),
+            Self::Settings(tab) => format!("settings:{tab}"),
+        }
+    }
+}
 
 /// Notification priority levels.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -58,6 +82,7 @@ pub enum NotificationType {
 
 /// An in-app notification.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Notification {
     /// Unique identifier.
     pub id: String,
@@ -92,6 +117,7 @@ pub struct Notification {
 
 /// Input for creating a new notification.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateNotificationInput {
     pub title: String,
     pub message: String,
@@ -113,7 +139,8 @@ fn default_dismissible() -> bool {
 }
 
 /// Notification settings for the user.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct NotificationSettings {
     /// Whether notifications are enabled.
     pub enabled: bool,
@@ -150,6 +177,7 @@ impl Default for NotificationSettings {
 
 /// Notification list response with pagination info.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NotificationListResponse {
     pub notifications: Vec<Notification>,
     pub total: usize,
@@ -161,36 +189,100 @@ pub struct NotificationListResponse {
 
 /// State for the notification center.
 pub struct NotificationCenterState {
-    /// In-memory notification storage (in production, use SQLite).
     notifications: Arc<Mutex<Vec<Notification>>>,
-    /// User notification settings.
     settings: Arc<Mutex<NotificationSettings>>,
 }
 
 impl NotificationCenterState {
-    /// Create a new notification center state.
     pub fn new() -> Self {
+        Self::with(NotificationSettings::default(), Vec::new())
+    }
+
+    fn with(settings: NotificationSettings, notifications: Vec<Notification>) -> Self {
         Self {
-            notifications: Arc::new(Mutex::new(Vec::new())),
-            settings: Arc::new(Mutex::new(NotificationSettings::default())),
+            notifications: Arc::new(Mutex::new(notifications)),
+            settings: Arc::new(Mutex::new(settings)),
         }
     }
 
-    /// Add a notification to the store.
+    /// Reads back what the last session saved. A missing or unreadable row
+    /// falls back to the defaults rather than blocking startup.
+    pub fn restore(app: &AppHandle) -> Self {
+        let Some(settings_state) = app.try_state::<SettingsServiceState>() else {
+            return Self::new();
+        };
+        let Ok(service) = settings_state.service.lock() else {
+            return Self::new();
+        };
+        Self::with(
+            stored_settings(&service),
+            stored_notifications(&service, Utc::now()),
+        )
+    }
+
     pub async fn add_notification(&self, notification: Notification) {
         let mut notifications = self.notifications.lock().await;
         notifications.insert(0, notification);
-
-        // Keep only the last 1000 notifications
-        if notifications.len() > 1000 {
-            notifications.truncate(1000);
-        }
+        notifications.truncate(MAX_NOTIFICATIONS);
     }
 
-    /// Get unread count.
     pub async fn get_unread_count(&self) -> usize {
         let notifications = self.notifications.lock().await;
         notifications.iter().filter(|n| !n.read).count()
+    }
+}
+
+fn stored_json<T: serde::de::DeserializeOwned>(service: &SettingsService, key: &str) -> Option<T> {
+    match service.get(key).ok()? {
+        SettingValue::Json(value) => serde_json::from_value(value).ok(),
+        SettingValue::String(raw) => serde_json::from_str(&raw).ok(),
+        _ => None,
+    }
+}
+
+fn stored_settings(service: &SettingsService) -> NotificationSettings {
+    stored_json(service, SETTINGS_KEY).unwrap_or_default()
+}
+
+fn stored_notifications(service: &SettingsService, now: DateTime<Utc>) -> Vec<Notification> {
+    let mut notifications: Vec<Notification> = stored_json(service, ITEMS_KEY).unwrap_or_default();
+    notifications.retain(|n| n.expires_at.is_none_or(|expires_at| expires_at >= now));
+    notifications.truncate(MAX_NOTIFICATIONS);
+    notifications
+}
+
+fn save_json<T: Serialize>(service: &SettingsService, key: &str, value: &T) -> Result<(), String> {
+    let json = serde_json::to_value(value).map_err(|e| e.to_string())?;
+    service
+        .set(
+            key.to_string(),
+            SettingValue::Json(json),
+            SettingCategory::System,
+            false,
+        )
+        .map_err(|e| e.to_string())
+}
+
+fn save_settings(app: &AppHandle, settings: &NotificationSettings) -> Result<(), String> {
+    let settings_state = app
+        .try_state::<SettingsServiceState>()
+        .ok_or_else(|| "Settings storage is unavailable".to_string())?;
+    let service = settings_state
+        .service
+        .lock()
+        .map_err(|e| format!("Lock error: {e}"))?;
+    save_json(&service, SETTINGS_KEY, settings)
+}
+
+fn save_notifications(app: &AppHandle, notifications: &[Notification]) {
+    let Some(settings_state) = app.try_state::<SettingsServiceState>() else {
+        return;
+    };
+    let Ok(service) = settings_state.service.lock() else {
+        return;
+    };
+    if let Err(error) = save_json(&service, ITEMS_KEY, &notifications) {
+        tracing::warn!("[NotificationCenter] The notification list was not saved: {error}");
     }
 }
 
@@ -300,6 +392,8 @@ pub async fn notification_mark_read(
             notification.read_at = Some(Utc::now());
 
             let unread_count = notifications.iter().filter(|n| !n.read).count();
+            save_notifications(&app, &notifications);
+            sync_badge(&app, &state, unread_count).await;
             let _ = app.emit("notification:unread_count", unread_count);
 
             tracing::info!("Marked notification {} as read", notification_id);
@@ -333,6 +427,8 @@ pub async fn notification_mark_all_read(
         }
     }
 
+    save_notifications(&app, &notifications);
+    sync_badge(&app, &state, 0).await;
     let _ = app.emit("notification:unread_count", 0usize);
 
     tracing::info!("Marked {} notifications as read", count);
@@ -361,6 +457,8 @@ pub async fn notification_delete(
 
     if notifications.len() < original_len {
         let unread_count = notifications.iter().filter(|n| !n.read).count();
+        save_notifications(&app, &notifications);
+        sync_badge(&app, &state, unread_count).await;
         let _ = app.emit("notification:unread_count", unread_count);
         let _ = app.emit("notification:deleted", &notification_id);
 
@@ -389,7 +487,7 @@ pub async fn notification_delete_all_read(
     let deleted_count = original_len - notifications.len();
 
     if deleted_count > 0 {
-        let _ = app.emit("notification:cleared", deleted_count);
+        save_notifications(&app, &notifications);
         tracing::info!("Deleted {} read notifications", deleted_count);
     }
 
@@ -425,22 +523,23 @@ pub async fn notification_set_settings(
     state: State<'_, NotificationCenterState>,
 ) -> Result<(), String> {
     let mut current_settings = state.settings.lock().await;
+    save_settings(&app, &settings)?;
     *current_settings = settings.clone();
+    drop(current_settings);
 
-    let _ = app.emit("notification:settings_changed", &settings);
+    let unread_count = state.get_unread_count().await;
+    apply_badge_count(&app, badge_count(&settings, unread_count));
 
     tracing::info!("Updated notification settings");
     Ok(())
 }
 
-/// Why the user's settings refuse this notification, or `None` when it may be delivered.
-///
-/// `now_hhmm` is the local wall clock in `HH:MM` so the DND window is decidable
-/// without a clock, and so every emitter is judged by the same rule.
-pub fn suppression_reason(
+/// Why the user's settings keep this notification out altogether, or `None`
+/// when it is recorded. The master switch and a type the user turned off both
+/// mean "do not tell me about this": nothing is stored and nothing is shown.
+pub fn refusal_reason(
     settings: &NotificationSettings,
     notification_type: &NotificationType,
-    now_hhmm: &str,
 ) -> Option<String> {
     if !settings.enabled {
         return Some("Notifications are disabled".to_string());
@@ -453,6 +552,17 @@ pub fn suppression_reason(
         ));
     }
 
+    None
+}
+
+/// Why do-not-disturb holds back the alert for a notification right now, or
+/// `None` when it may interrupt. Do-not-disturb means "not now", not "never":
+/// the notification is still stored and counted on the badge, and only the OS
+/// notification and its sound are skipped.
+///
+/// `now_hhmm` is the local wall clock in `HH:MM` so the window is decidable
+/// without a clock, and so every emitter is judged by the same rule.
+pub fn do_not_disturb_reason(settings: &NotificationSettings, now_hhmm: &str) -> Option<String> {
     if !settings.do_not_disturb {
         return None;
     }
@@ -487,36 +597,49 @@ pub struct DeliveryPlan {
     pub badge_count: Option<i64>,
 }
 
-pub fn delivery_plan(settings: &NotificationSettings, unread_count: usize) -> DeliveryPlan {
+fn badge_count(settings: &NotificationSettings, unread_count: usize) -> Option<i64> {
+    settings
+        .badge_enabled
+        .then_some(i64::try_from(unread_count).unwrap_or(i64::MAX))
+}
+
+/// `quiet` is true while do-not-disturb holds: the badge still counts the
+/// notification, and nothing interrupts.
+pub fn delivery_plan(
+    settings: &NotificationSettings,
+    quiet: bool,
+    unread_count: usize,
+) -> DeliveryPlan {
     DeliveryPlan {
-        os_notification: settings.desktop_notifications,
-        sound: settings.sound_enabled,
-        badge_count: settings
-            .badge_enabled
-            .then_some(i64::try_from(unread_count).unwrap_or(i64::MAX)),
+        os_notification: settings.desktop_notifications && !quiet,
+        sound: settings.sound_enabled && !quiet,
+        badge_count: badge_count(settings, unread_count),
     }
 }
 
-/// Deliver a notification through the notification center, honoring the user's
-/// master switch, per-type toggles, DND window, sound and badge settings. Every
-/// in-app emitter must go through here rather than raising an OS notification of
-/// its own.
+/// Deliver a notification through the notification center. Every in-app
+/// emitter must go through here rather than raising an OS notification of its
+/// own.
+///
+/// The rule: the master switch or a type turned off refuses the notification
+/// outright (`Err`, nothing stored). Otherwise it is stored, sent to the list
+/// and counted on the badge; do-not-disturb, the desktop-notification switch
+/// and the sound switch only decide whether it also interrupts.
 pub async fn deliver_notification(
     app: &AppHandle,
     state: &NotificationCenterState,
     input: CreateNotificationInput,
 ) -> Result<Notification, String> {
-    let guard = state.settings.lock().await;
-    let now_hhmm = chrono::Local::now().format("%H:%M").to_string();
-    if let Some(reason) = suppression_reason(&guard, &input.notification_type, &now_hhmm) {
+    let settings = state.settings.lock().await.clone();
+    if let Some(reason) = refusal_reason(&settings, &input.notification_type) {
         return Err(reason);
     }
-    let settings = guard.clone();
-    drop(guard);
+    let now_hhmm = chrono::Local::now().format("%H:%M").to_string();
+    let quiet = do_not_disturb_reason(&settings, &now_hhmm).is_some();
 
     let notification = store_notification(app, state, input).await?;
 
-    let plan = delivery_plan(&settings, state.get_unread_count().await);
+    let plan = delivery_plan(&settings, quiet, state.get_unread_count().await);
     if plan.os_notification {
         show_os_notification(app, &notification.title, &notification.message, plan.sound);
     }
@@ -538,40 +661,18 @@ fn show_os_notification(app: &AppHandle, title: &str, body: &str, sound: bool) {
 
 const DEFAULT_NOTIFICATION_SOUND: &str = "default";
 
-fn apply_badge_count(app: &AppHandle, count: Option<i64>) {
-    use tauri::Manager;
+async fn sync_badge(app: &AppHandle, state: &NotificationCenterState, unread_count: usize) {
+    let settings = state.settings.lock().await.clone();
+    apply_badge_count(app, badge_count(&settings, unread_count));
+}
 
+fn apply_badge_count(app: &AppHandle, count: Option<i64>) {
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
     if let Err(e) = window.set_badge_count(count) {
         tracing::warn!("[NotificationCenter] Failed to set badge count: {}", e);
     }
-}
-
-/// Create a new notification (internal use or for testing).
-///
-/// # Arguments
-///
-/// * `input` - The notification creation input.
-///
-/// # Returns
-///
-/// Returns the created notification.
-#[tauri::command]
-pub async fn notification_create(
-    input: CreateNotificationInput,
-    app: AppHandle,
-    state: State<'_, NotificationCenterState>,
-) -> Result<Notification, String> {
-    let settings = state.settings.lock().await;
-    let now_hhmm = chrono::Local::now().format("%H:%M").to_string();
-    if let Some(reason) = suppression_reason(&settings, &input.notification_type, &now_hhmm) {
-        return Err(reason);
-    }
-    drop(settings);
-
-    store_notification(&app, &state, input).await
 }
 
 async fn store_notification(
@@ -603,6 +704,7 @@ async fn store_notification(
     };
 
     state.add_notification(notification.clone()).await;
+    save_notifications(app, &state.notifications.lock().await);
 
     let unread_count = state.get_unread_count().await;
     let _ = app.emit("notification:new", &notification);
@@ -676,6 +778,138 @@ mod tests {
         assert!(json.contains("Test Message"));
     }
 
+    fn settings_service() -> SettingsService {
+        let conn = rusqlite::Connection::open_in_memory().expect("in-memory settings database");
+        conn.execute(
+            "CREATE TABLE settings_v2 (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                category TEXT NOT NULL,
+                encrypted INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .expect("create settings table");
+        SettingsService::new(Arc::new(std::sync::Mutex::new(conn))).expect("settings service")
+    }
+
+    fn notification(id: &str, expires_at: Option<DateTime<Utc>>) -> Notification {
+        Notification {
+            id: id.to_string(),
+            title: "Title".to_string(),
+            message: "Message".to_string(),
+            notification_type: NotificationType::Info,
+            priority: NotificationPriority::Normal,
+            read: false,
+            created_at: Utc::now(),
+            read_at: None,
+            action_url: Some(NotificationRoute::Schedule("job-1").action_url()),
+            action_label: None,
+            icon: None,
+            metadata: None,
+            dismissible: true,
+            expires_at,
+        }
+    }
+
+    #[test]
+    fn saved_settings_come_back_after_a_restart() {
+        let service = settings_service();
+        let chosen = settings_with(|s| {
+            s.enabled = false;
+            s.sound_enabled = false;
+            s.enabled_types = vec![NotificationType::Reminder];
+        });
+        save_json(&service, SETTINGS_KEY, &chosen).expect("save settings");
+        service.clear_cache();
+
+        assert_eq!(stored_settings(&service), chosen);
+    }
+
+    #[test]
+    fn missing_or_unreadable_settings_fall_back_to_the_defaults() {
+        let service = settings_service();
+        assert_eq!(stored_settings(&service), NotificationSettings::default());
+
+        service
+            .set(
+                SETTINGS_KEY.to_string(),
+                SettingValue::String("not json".to_string()),
+                SettingCategory::System,
+                false,
+            )
+            .expect("write a malformed row");
+        service.clear_cache();
+        assert_eq!(stored_settings(&service), NotificationSettings::default());
+    }
+
+    #[test]
+    fn saved_notifications_come_back_without_the_expired_ones() {
+        let service = settings_service();
+        let now = Utc::now();
+        let saved = vec![
+            notification("kept", None),
+            notification("expired", Some(now - chrono::Duration::minutes(1))),
+            notification("still-valid", Some(now + chrono::Duration::hours(1))),
+        ];
+        save_json(&service, ITEMS_KEY, &saved).expect("save notifications");
+        service.clear_cache();
+
+        let restored: Vec<String> = stored_notifications(&service, now)
+            .into_iter()
+            .map(|n| n.id)
+            .collect();
+        assert_eq!(restored, ["kept", "still-valid"]);
+    }
+
+    #[tokio::test]
+    async fn the_list_keeps_only_the_most_recent_notifications() {
+        let state = NotificationCenterState::new();
+        for index in 0..MAX_NOTIFICATIONS + 5 {
+            state
+                .add_notification(notification(&index.to_string(), None))
+                .await;
+        }
+        let notifications = state.notifications.lock().await;
+        assert_eq!(notifications.len(), MAX_NOTIFICATIONS);
+        assert_eq!(notifications[0].id, (MAX_NOTIFICATIONS + 4).to_string());
+    }
+
+    #[test]
+    fn the_renderer_reads_camel_case_fields() {
+        let json = serde_json::to_value(notification("n1", None)).expect("serialize");
+        assert_eq!(json["actionUrl"], "schedule:job-1");
+        assert!(json.get("createdAt").is_some());
+        assert_eq!(json["type"], "info");
+
+        let settings = serde_json::to_value(NotificationSettings::default()).expect("serialize");
+        assert_eq!(settings["desktopNotifications"], true);
+        assert_eq!(settings["enabledTypes"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn every_route_names_a_destination_the_renderer_resolves() {
+        assert_eq!(NotificationRoute::Trigger("t1").action_url(), "trigger:t1");
+        assert_eq!(
+            NotificationRoute::Schedule("j1").action_url(),
+            "schedule:j1"
+        );
+        assert_eq!(
+            NotificationRoute::BackgroundAgent("a1").action_url(),
+            "background-agent:a1"
+        );
+        assert_eq!(
+            NotificationRoute::AgentTasks.action_url(),
+            "agent-tasks:all"
+        );
+        assert_eq!(
+            NotificationRoute::Settings("privacy").action_url(),
+            "settings:privacy"
+        );
+    }
+
     fn settings_with(mutate: impl FnOnce(&mut NotificationSettings)) -> NotificationSettings {
         let mut settings = NotificationSettings::default();
         mutate(&mut settings);
@@ -683,23 +917,33 @@ mod tests {
     }
 
     #[test]
-    fn the_master_switch_suppresses_every_type() {
+    fn the_master_switch_refuses_every_type() {
         let settings = settings_with(|s| s.enabled = false);
         assert_eq!(
-            suppression_reason(&settings, &NotificationType::AgentActivity, "12:00"),
+            refusal_reason(&settings, &NotificationType::AgentActivity),
             Some("Notifications are disabled".to_string())
         );
     }
 
     #[test]
-    fn a_group_toggle_suppresses_only_the_groups_left_out() {
+    fn a_group_toggle_refuses_only_the_groups_left_out() {
         let settings = settings_with(|s| s.enabled_types = vec![NotificationType::Reminder]);
-        assert!(suppression_reason(&settings, &NotificationType::AgentActivity, "12:00").is_some());
-        assert!(suppression_reason(&settings, &NotificationType::Reminder, "12:00").is_none());
+        assert!(refusal_reason(&settings, &NotificationType::AgentActivity).is_some());
+        assert!(refusal_reason(&settings, &NotificationType::Reminder).is_none());
     }
 
     #[test]
-    fn the_dnd_window_suppresses_inside_it_and_allows_outside_it() {
+    fn do_not_disturb_never_refuses_a_notification() {
+        let settings = settings_with(|s| s.do_not_disturb = true);
+        assert_eq!(
+            refusal_reason(&settings, &NotificationType::TaskFailed),
+            None
+        );
+        assert!(do_not_disturb_reason(&settings, "03:00").is_some());
+    }
+
+    #[test]
+    fn the_dnd_window_holds_inside_it_and_not_outside_it() {
         let overnight = settings_with(|s| {
             s.do_not_disturb = true;
             s.dnd_start_time = Some("22:00".to_string());
@@ -707,13 +951,13 @@ mod tests {
         });
         for inside in ["22:00", "23:30", "00:15", "06:00"] {
             assert!(
-                suppression_reason(&overnight, &NotificationType::Info, inside).is_some(),
+                do_not_disturb_reason(&overnight, inside).is_some(),
                 "{inside} is inside the overnight window"
             );
         }
         for outside in ["06:01", "12:00", "21:59"] {
             assert!(
-                suppression_reason(&overnight, &NotificationType::Info, outside).is_none(),
+                do_not_disturb_reason(&overnight, outside).is_none(),
                 "{outside} is outside the overnight window"
             );
         }
@@ -723,13 +967,13 @@ mod tests {
             s.dnd_start_time = Some("09:00".to_string());
             s.dnd_end_time = Some("17:00".to_string());
         });
-        assert!(suppression_reason(&daytime, &NotificationType::Info, "12:00").is_some());
-        assert!(suppression_reason(&daytime, &NotificationType::Info, "08:59").is_none());
+        assert!(do_not_disturb_reason(&daytime, "12:00").is_some());
+        assert!(do_not_disturb_reason(&daytime, "08:59").is_none());
     }
 
     #[test]
     fn the_sound_and_badge_settings_reach_the_delivery_plan() {
-        let all_on = delivery_plan(&NotificationSettings::default(), 7);
+        let all_on = delivery_plan(&NotificationSettings::default(), false, 7);
         assert_eq!(
             all_on,
             DeliveryPlan {
@@ -745,6 +989,7 @@ mod tests {
                 s.badge_enabled = false;
                 s.desktop_notifications = false;
             }),
+            false,
             7,
         );
         assert_eq!(
@@ -758,10 +1003,47 @@ mod tests {
     }
 
     #[test]
-    fn dnd_without_a_window_suppresses_around_the_clock() {
+    fn do_not_disturb_keeps_the_badge_and_drops_only_the_interruption() {
+        let quiet = delivery_plan(&NotificationSettings::default(), true, 3);
+        assert_eq!(
+            quiet,
+            DeliveryPlan {
+                os_notification: false,
+                sound: false,
+                badge_count: Some(3),
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn a_notification_held_by_do_not_disturb_is_still_in_the_list() {
+        let state =
+            NotificationCenterState::with(settings_with(|s| s.do_not_disturb = true), Vec::new());
+        let settings = state.settings.lock().await.clone();
+        assert_eq!(
+            refusal_reason(&settings, &NotificationType::TaskFailed),
+            None
+        );
+
+        state
+            .add_notification(notification("scheduled-task-failed", None))
+            .await;
+        assert_eq!(state.get_unread_count().await, 1);
+        assert_eq!(
+            delivery_plan(&settings, true, state.get_unread_count().await),
+            DeliveryPlan {
+                os_notification: false,
+                sound: false,
+                badge_count: Some(1),
+            }
+        );
+    }
+
+    #[test]
+    fn dnd_without_a_window_holds_around_the_clock() {
         let settings = settings_with(|s| s.do_not_disturb = true);
         assert_eq!(
-            suppression_reason(&settings, &NotificationType::Info, "03:00"),
+            do_not_disturb_reason(&settings, "03:00"),
             Some("Do not disturb mode is enabled".to_string())
         );
     }

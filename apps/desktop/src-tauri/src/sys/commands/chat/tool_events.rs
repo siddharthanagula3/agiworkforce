@@ -45,6 +45,8 @@ pub enum ToolEvent {
         tool_name: String,
         display_name: String,
         display_args: String,
+        /// The call's arguments as the model sent them, for the chat's tool step.
+        arguments: serde_json::Value,
         iteration: usize,
         execution_source: String,
         safety_tier: String,
@@ -66,9 +68,12 @@ pub enum ToolEvent {
         id: String,
         conversation_id: i64,
         message_id: String,
+        tool_name: String,
         success: bool,
         duration_ms: u64,
         result_preview: Option<String>,
+        /// The tool's output, capped, for the chat's tool step.
+        output: Option<String>,
         error: Option<String>,
     },
 }

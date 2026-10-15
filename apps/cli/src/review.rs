@@ -3,6 +3,7 @@ use crate::config::CliConfig;
 use crate::context::SystemContext;
 use crate::terminal_style as ts;
 use crate::terminal_text::sanitize_terminal_text;
+use agiworkforce_worktree::config_guard::ConfigUse;
 use anyhow::Result;
 use colored::Colorize;
 
@@ -177,37 +178,74 @@ fn format_review_markdown(review: &ReviewOutput) -> String {
     out
 }
 
+/// The diff to review, read with host git hardened and with no diff driver or
+/// text conversion the repository's configuration names, since those run
+/// programs outside the sandbox, and without looking inside submodules, whose
+/// `.git` file a sandboxed command can point at a git directory it wrote. A
+/// filter or signing program still could run, so the repository's settings
+/// are checked first.
 async fn gather_diff(opts: &ReviewOptions) -> Result<String> {
     if let Some(ref pull_request) = opts.pull_request {
         return run_gh(&["pr", "diff", pull_request], None).await;
     }
+    const NO_DRIVERS: [&str; 3] = [
+        "--no-ext-diff",
+        "--no-textconv",
+        "--ignore-submodules=dirty",
+    ];
+    let cwd = std::env::current_dir()?;
+    let uses = if opts.commit.is_some() {
+        ConfigUse::SHOW
+    } else {
+        ConfigUse::DIFF
+    };
+    for (flag, value) in [("--commit", &opts.commit), ("--base", &opts.base_branch)] {
+        if value.as_deref().is_some_and(|value| value.starts_with('-')) {
+            anyhow::bail!("{flag} names a revision, so it must not start with '-'");
+        }
+    }
+    crate::platform::runtime::git::check_repository_config(&cwd, uses).await?;
     if let Some(ref c) = opts.commit {
-        let o = tokio::process::Command::new("git")
-            .args(["show", "--patch", c])
-            .output()
-            .await?;
+        let mut command = agiworkforce_worktree::host_git_async();
+        command
+            .args(["show", "--patch"])
+            .args(NO_DRIVERS)
+            .arg("--end-of-options")
+            .arg(c);
+        let o = review_git(command).await?;
         return Ok(String::from_utf8_lossy(&o.stdout).to_string());
     }
     if let Some(ref b) = opts.base_branch {
-        let o = tokio::process::Command::new("git")
-            .args(["diff", &format!("{}...HEAD", b)])
-            .output()
-            .await?;
+        let mut command = agiworkforce_worktree::host_git_async();
+        command
+            .arg("diff")
+            .args(NO_DRIVERS)
+            .arg("--end-of-options")
+            .arg(format!("{}...HEAD", b));
+        let o = review_git(command).await?;
         return Ok(String::from_utf8_lossy(&o.stdout).to_string());
     }
-    let staged = tokio::process::Command::new("git")
-        .args(["diff", "--cached"])
-        .output()
-        .await?;
-    let unstaged = tokio::process::Command::new("git")
-        .args(["diff"])
-        .output()
-        .await?;
+    let mut staged = agiworkforce_worktree::host_git_async();
+    staged.args(["diff", "--cached"]).args(NO_DRIVERS);
+    let staged = review_git(staged).await?;
+    let mut unstaged = agiworkforce_worktree::host_git_async();
+    unstaged.arg("diff").args(NO_DRIVERS);
+    let unstaged = review_git(unstaged).await?;
     Ok(format!(
         "{}{}",
         String::from_utf8_lossy(&staged.stdout),
         String::from_utf8_lossy(&unstaged.stdout)
     ))
+}
+
+async fn review_git(command: tokio::process::Command) -> Result<std::process::Output> {
+    crate::process_tree::output(
+        command,
+        None,
+        Some(crate::platform::runtime::git::GIT_OPERATION_TIMEOUT),
+    )
+    .await
+    .map_err(|error| anyhow::anyhow!(crate::platform::runtime::git::host_git_failure(&error)))
 }
 
 /// Truncate `s` to at most `max_bytes`, never splitting a multi-byte UTF-8
@@ -346,6 +384,31 @@ mod tests {
         assert_eq!(review.issues[0].description, "desc");
         assert_eq!(review.issues[0].suggestion.as_deref(), Some("sug"));
         assert_eq!(review.suggestions[0], "tip");
+    }
+
+    #[tokio::test]
+    async fn a_revision_shaped_as_an_option_is_refused_before_git_runs() {
+        for (commit, base) in [
+            (Some("--output=/tmp/planted".to_string()), None),
+            (None, Some("--upload-pack=./planted.sh".to_string())),
+        ] {
+            let opts = ReviewOptions {
+                uncommitted: false,
+                base_branch: base,
+                commit,
+                pull_request: None,
+                post: false,
+                instructions: None,
+                model: None,
+            };
+            let refused = gather_diff(&opts)
+                .await
+                .expect_err("an option is not a revision");
+            assert!(
+                refused.to_string().contains("must not start with '-'"),
+                "{refused}"
+            );
+        }
     }
 
     #[test]

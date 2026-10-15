@@ -34,7 +34,10 @@ fn config_for_event(event_name: &str) -> HooksConfig {
     };
     let mut hooks = HashMap::new();
     hooks.insert(event_name.to_string(), vec![hook]);
-    HooksConfig { hooks }
+    HooksConfig {
+        hooks,
+        sandbox: Some(false),
+    }
 }
 
 fn minimal_input(event_name: &str) -> HookInput {

@@ -1,5 +1,4 @@
 use super::*;
-use crate::automation::AutomationService;
 use crate::core::llm::LLMRouter;
 use crate::features::document::pdf::PdfHandler;
 use crate::sys::commands::chat::ChatAttachment;
@@ -218,6 +217,9 @@ fn sync_terminal_state(agent: &mut AgentInstance) {
     }
 }
 
+/// Cloning gives another handle to the same agents, locks and knowledge base,
+/// so a long run can hold a handle instead of the global lock.
+#[derive(Clone)]
 pub struct AgentOrchestrator {
     max_agents: usize,
     agents: Arc<TokioMutex<HashMap<String, AgentInstance>>>,
@@ -225,7 +227,6 @@ pub struct AgentOrchestrator {
     knowledge_base: Arc<KnowledgeBase>,
     config: AGIConfig,
     router: Arc<tokio::sync::RwLock<LLMRouter>>,
-    automation: Arc<AutomationService>,
     app_handle: Option<tauri::AppHandle>,
 }
 
@@ -234,7 +235,6 @@ impl AgentOrchestrator {
         max_agents: usize,
         config: AGIConfig,
         router: Arc<tokio::sync::RwLock<LLMRouter>>,
-        automation: Arc<AutomationService>,
         app_handle: Option<tauri::AppHandle>,
     ) -> Result<Self> {
         let knowledge_base = Arc::new(KnowledgeBase::new(config.knowledge_memory_mb)?);
@@ -246,7 +246,6 @@ impl AgentOrchestrator {
             knowledge_base,
             config,
             router,
-            automation,
             app_handle,
         })
     }
@@ -279,7 +278,6 @@ impl AgentOrchestrator {
         let core = AGICore::new(
             self.config.clone(),
             self.router.clone(),
-            self.automation.clone(),
             self.app_handle.clone(),
         )?;
 
@@ -457,15 +455,6 @@ impl AgentOrchestrator {
                     .unwrap_or(0),
             );
 
-            if let Some(ref app) = self.app_handle {
-                let _ = app.emit(
-                    "agent:cancelled",
-                    serde_json::json!({
-                        "agent_id": id,
-                    }),
-                );
-            }
-
             Ok(())
         } else {
             Err(anyhow!("Agent {} not found", id))
@@ -489,15 +478,6 @@ impl AgentOrchestrator {
             agent.core.pause();
 
             agent.status.status = AgentState::Paused;
-
-            if let Some(ref app) = self.app_handle {
-                let _ = app.emit(
-                    "agent:paused",
-                    serde_json::json!({
-                        "agent_id": id,
-                    }),
-                );
-            }
 
             Ok(())
         } else {
@@ -523,15 +503,6 @@ impl AgentOrchestrator {
 
             agent.status.status = AgentState::Running;
 
-            if let Some(ref app) = self.app_handle {
-                let _ = app.emit(
-                    "agent:resumed",
-                    serde_json::json!({
-                        "agent_id": id,
-                    }),
-                );
-            }
-
             Ok(())
         } else {
             Err(anyhow!("Agent {} not found", id))
@@ -542,22 +513,23 @@ impl AgentOrchestrator {
     /// to avoid TOCTOU race conditions where new agents could be spawned
     /// between getting the list and cancelling.
     pub async fn cancel_all_agents(&self) -> Result<()> {
-        // Process agents one at a time to avoid TOCTOU issues
-        // Each iteration gets a fresh view of the agent list
-        loop {
-            let agent_id: Option<String> = {
-                let agents = self.agents.lock().await;
-                agents.keys().next().cloned()
-            };
+        let live_agent_ids: Vec<String> = {
+            let mut agents = self.agents.lock().await;
+            agents
+                .iter_mut()
+                .filter_map(|(id, agent)| {
+                    sync_terminal_state(agent);
+                    matches!(
+                        agent.status.status,
+                        AgentState::Running | AgentState::Paused | AgentState::Idle
+                    )
+                    .then(|| id.clone())
+                })
+                .collect()
+        };
 
-            match agent_id {
-                Some(id) => {
-                    // Ignore errors for individual cancellations
-                    // (agent might have already completed/been removed)
-                    let _ = self.cancel_agent(&id).await;
-                }
-                None => break,
-            }
+        for id in live_agent_ids {
+            let _ = self.cancel_agent(&id).await;
         }
 
         Ok(())
@@ -651,6 +623,46 @@ impl AgentOrchestrator {
 
     pub fn get_knowledge_base(&self) -> Arc<KnowledgeBase> {
         self.knowledge_base.clone()
+    }
+
+    /// The distinct errors of an agent's failed tool calls that open with
+    /// `prefix`, in the order they happened.
+    pub async fn tool_errors_starting_with(&self, id: &str, prefix: &str) -> Vec<String> {
+        let agents = self.agents.lock().await;
+        let Some(context) = agents
+            .get(id)
+            .and_then(|agent| agent.core.get_goal_status(&agent.goal.id))
+        else {
+            return Vec::new();
+        };
+
+        let mut errors: Vec<String> = Vec::new();
+        for error in context
+            .tool_results
+            .iter()
+            .filter_map(|result| result.error.as_ref())
+            .filter(|error| error.starts_with(prefix))
+        {
+            if !errors.contains(error) {
+                errors.push(error.clone());
+            }
+        }
+        errors
+    }
+
+    pub async fn remove_finished_agent(&self, id: &str) -> bool {
+        let mut agents = self.agents.lock().await;
+        let finished = agents.get_mut(id).is_some_and(|agent| {
+            sync_terminal_state(agent);
+            matches!(
+                agent.status.status,
+                AgentState::Completed | AgentState::Failed
+            )
+        });
+        if finished {
+            agents.remove(id);
+        }
+        finished
     }
 
     pub async fn cleanup_completed(&self) -> Result<usize> {
@@ -859,15 +871,6 @@ impl AgentOrchestrator {
                  It may still be running in the background."
                     .to_string()
             };
-
-            if let Some(ref app) = self.app_handle {
-                let _ = app.emit(
-                    "agent:cancelled",
-                    serde_json::json!({
-                        "agent_id": &agent_id,
-                    }),
-                );
-            }
         }
         agents.remove(&agent_id);
 
@@ -878,7 +881,6 @@ impl AgentOrchestrator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::automation::{input::ClipboardManager, PlatformDriver};
     use crate::core::llm::{LLMProvider, LLMRequest, LLMResponse, Provider};
     use agiworkforce_model_registry::TrustMode;
     use std::error::Error;
@@ -965,17 +967,10 @@ mod tests {
                 stopped: stopped.clone(),
             }),
         );
-        let automation = Arc::new(AutomationService {
-            native: PlatformDriver::new().expect("native automation constructor"),
-            keyboard: TokioMutex::new(None),
-            mouse: TokioMutex::new(None),
-            clipboard: TokioMutex::new(ClipboardManager::default()),
-        });
         let orchestrator = AgentOrchestrator::new(
             1,
             AGIConfig::default(),
             Arc::new(tokio::sync::RwLock::new(router)),
-            automation,
             None,
         )
         .expect("isolated orchestrator");

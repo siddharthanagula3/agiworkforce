@@ -3,7 +3,7 @@
 //! Uses machine-derived keys for encryption instead of OS keyring.
 
 use crate::data::settings::{
-    models::{AppSettings, Setting, SettingCategory, SettingValue},
+    models::{Setting, SettingCategory, SettingValue},
     repository,
     validation::{self, ValidationError},
 };
@@ -294,25 +294,6 @@ impl SettingsService {
         Ok(())
     }
 
-    pub fn get_by_category(
-        &self,
-        category: SettingCategory,
-    ) -> Result<Vec<Setting>, SettingsServiceError> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
-        Ok(repository::get_settings_by_category(&conn, category)?)
-    }
-
-    pub fn list_all(&self) -> Result<Vec<Setting>, SettingsServiceError> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
-        Ok(repository::list_all_settings(&conn)?)
-    }
-
     pub fn clear_cache(&self) {
         // DAT-002: parking_lot RwLock doesn't use poisoning, so no error handling needed
         self.cache.write().clear();
@@ -358,124 +339,6 @@ impl SettingsService {
             _ => {}
         }
 
-        Ok(())
-    }
-
-    /// Save API key to database (encrypted)
-    pub fn save_api_key(&self, provider: &str, key: &str) -> Result<(), SettingsServiceError> {
-        validation::validate_api_key(provider, key)?;
-
-        self.set(
-            format!("api_key_{}", provider),
-            SettingValue::String(key.to_string()),
-            SettingCategory::Security,
-            true, // Always encrypt API keys
-        )
-    }
-
-    /// Get API key from database (decrypted)
-    pub fn get_api_key(&self, provider: &str) -> Result<String, SettingsServiceError> {
-        let value = self.get(&format!("api_key_{}", provider))?;
-        value
-            .as_string()
-            .map(|s| s.to_string())
-            .ok_or_else(|| SettingsServiceError::InvalidType(format!("api_key_{}", provider)))
-    }
-
-    pub fn load_app_settings(&self) -> Result<AppSettings, SettingsServiceError> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| SettingsServiceError::LockError(e.to_string()))?;
-        let all_settings = repository::list_all_settings(&conn)?;
-
-        let mut app_settings = AppSettings::default();
-
-        for setting in all_settings {
-            let stored_value = setting.get_value()?;
-            let value = if setting.encrypted {
-                let encrypted_str = stored_value
-                    .as_string()
-                    .ok_or_else(|| SettingsServiceError::InvalidType(setting.key.clone()))?
-                    .to_owned();
-                let (decrypted, rewrap_required) =
-                    self.decrypt_rotating(&setting.key, &encrypted_str)?;
-                if rewrap_required {
-                    self.rewrap_setting(&conn, &setting, &decrypted);
-                }
-                SettingValue::from_json_string(&decrypted)?
-            } else {
-                stored_value
-            };
-
-            match setting.key.as_str() {
-                "default_provider" => {
-                    if let Some(s) = value.as_string() {
-                        app_settings.default_provider = s.to_string();
-                    }
-                }
-                "default_model" => {
-                    if let Some(s) = value.as_string() {
-                        app_settings.default_model = s.to_string();
-                    }
-                }
-                "ui_preferences" => {
-                    if let Some(json) = value.as_json() {
-                        app_settings.ui_preferences = serde_json::from_value(json.clone())?;
-                    }
-                }
-                "window_preferences" => {
-                    if let Some(json) = value.as_json() {
-                        app_settings.window_preferences = serde_json::from_value(json.clone())?;
-                    }
-                }
-                "security_settings" => {
-                    if let Some(json) = value.as_json() {
-                        app_settings.security_settings = serde_json::from_value(json.clone())?;
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        Ok(app_settings)
-    }
-
-    pub fn save_app_settings(&self, settings: &AppSettings) -> Result<(), SettingsServiceError> {
-        let batch = vec![
-            (
-                "default_provider".to_string(),
-                SettingValue::String(settings.default_provider.clone()),
-                SettingCategory::Llm,
-                false,
-            ),
-            (
-                "default_model".to_string(),
-                SettingValue::String(settings.default_model.clone()),
-                SettingCategory::Llm,
-                false,
-            ),
-            (
-                "ui_preferences".to_string(),
-                SettingValue::Json(serde_json::to_value(&settings.ui_preferences)?),
-                SettingCategory::Ui,
-                false,
-            ),
-            (
-                "window_preferences".to_string(),
-                SettingValue::Json(serde_json::to_value(&settings.window_preferences)?),
-                SettingCategory::Window,
-                false,
-            ),
-            (
-                "security_settings".to_string(),
-                SettingValue::Json(serde_json::to_value(&settings.security_settings)?),
-                SettingCategory::Security,
-                false,
-            ),
-        ];
-
-        self.set_batch(batch)?;
         Ok(())
     }
 }

@@ -1,15 +1,8 @@
-pub mod calendar;
-pub mod canvas;
-pub mod clipboard;
-pub mod communications;
 pub mod document;
-pub mod messaging;
 pub mod productivity;
 pub mod projects;
 pub mod search;
 pub mod speech;
-pub mod tasks;
-pub mod teams;
 pub mod terminal;
 pub mod tests;
 pub mod webhooks;

@@ -16,6 +16,20 @@ pub struct RecordedAction {
     pub target: Option<ElementTarget>,
     pub value: Option<String>,
     pub metadata: Option<serde_json::Value>,
+    /// The app the step acted in (bundle id, else name), captured when it was
+    /// recorded so a replay can name it to the per-app gate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app: Option<String>,
+}
+
+/// The app drawn under a pointer step, read before the click can move focus.
+fn app_at(x: i32, y: i32) -> Option<String> {
+    crate::automation::computer_use::app_at_point(x, y).map(|app| app.identifier())
+}
+
+/// The app a keystroke goes to.
+fn app_in_focus() -> Option<String> {
+    crate::automation::computer_use::app_with_keyboard_focus().map(|app| app.identifier())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -234,6 +248,7 @@ impl RecorderService {
             }),
             value: None,
             metadata: None,
+            app: app_at(x, y),
         })
     }
 
@@ -251,6 +266,7 @@ impl RecorderService {
             }),
             value: Some(text.to_string()),
             metadata: None,
+            app: app_in_focus(),
         })
     }
 
@@ -267,28 +283,7 @@ impl RecorderService {
             target: None,
             value: Some(format!("{:?}+{}", modifiers, key)),
             metadata: Some(metadata),
-        })
-    }
-
-    pub fn record_screenshot(&self) -> Result<()> {
-        self.record_action(RecordedAction {
-            id: Uuid::new_v4().to_string(),
-            action_type: ActionType::Screenshot,
-            timestamp_ms: self.get_elapsed_ms()?,
-            target: None,
-            value: None,
-            metadata: None,
-        })
-    }
-
-    pub fn record_wait(&self, duration_ms: u64) -> Result<()> {
-        self.record_action(RecordedAction {
-            id: Uuid::new_v4().to_string(),
-            action_type: ActionType::Wait,
-            timestamp_ms: self.get_elapsed_ms()?,
-            target: None,
-            value: Some(duration_ms.to_string()),
-            metadata: None,
+            app: app_in_focus(),
         })
     }
 
@@ -313,6 +308,7 @@ impl RecorderService {
             }),
             value: Some(format!("({}, {}) -> ({}, {})", from_x, from_y, to_x, to_y)),
             metadata: Some(metadata),
+            app: app_at(from_x, from_y),
         })
     }
 
@@ -333,6 +329,7 @@ impl RecorderService {
                 "delta_x": delta_x,
                 "delta_y": delta_y,
             })),
+            app: app_at(x, y),
         })
     }
 
@@ -352,6 +349,7 @@ impl RecorderService {
                 "source": "microphone",
                 "transcription": "local_whisper",
             })),
+            app: None,
         })
     }
 
@@ -361,10 +359,6 @@ impl RecorderService {
             .ok()
             .and_then(|s| s.session.as_ref().map(|sess| sess.is_recording))
             .unwrap_or(false)
-    }
-
-    pub fn get_session(&self) -> Option<RecordingSession> {
-        self.state.lock().ok().and_then(|s| s.session.clone())
     }
 
     pub fn get_status(&self) -> Option<RecordingStatus> {

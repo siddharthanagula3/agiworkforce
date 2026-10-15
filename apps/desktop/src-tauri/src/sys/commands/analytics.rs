@@ -1,4 +1,3 @@
-use crate::sys::commands::auth::{get_session_user_id, SessionState};
 use crate::sys::telemetry::{
     AnalyticsMetricsCollector, AppMetrics, SystemMetrics, TelemetryCollector, TelemetryEvent,
 };
@@ -269,8 +268,8 @@ pub async fn analytics_get_feature_usage(
 }
 
 use crate::data::analytics::{
-    MetricsAggregator, ProcessMetrics, ROICalculator, ROIReport, ReportGenerator,
-    ScheduledReportGenerator, ToolMetrics, TrendPoint, UserMetrics,
+    MetricsAggregator, ProcessMetrics, ROICalculator, ROIReport, ReportGenerator, ToolMetrics,
+    TrendPoint, UserMetrics,
 };
 use crate::sys::commands::AppDatabase;
 
@@ -361,22 +360,6 @@ pub async fn analytics_get_metric_trends(
 
 // AUDIT-ANALYTICS-087 fix: Aliases for specific trend commands
 #[tauri::command]
-pub async fn analytics_get_time_saved_trend(
-    days: usize,
-    state: State<'_, AppDatabase>,
-) -> Result<Vec<TrendPoint>, String> {
-    analytics_get_metric_trends("time_saved".to_string(), days, state).await
-}
-
-#[tauri::command]
-pub async fn analytics_get_cost_saved_trend(
-    days: usize,
-    state: State<'_, AppDatabase>,
-) -> Result<Vec<TrendPoint>, String> {
-    analytics_get_metric_trends("cost_saved".to_string(), days, state).await
-}
-
-#[tauri::command]
 pub async fn analytics_export_report(
     format: String,
     start_date: i64,
@@ -435,93 +418,28 @@ pub async fn analytics_export_report(
 }
 
 #[tauri::command]
-pub async fn analytics_generate_weekly_report(
-    session: State<'_, SessionState>,
-    state: State<'_, AppDatabase>,
-) -> Result<String, String> {
-    let user_id = get_session_user_id(&session)?;
-    let db = create_analytics_db_connection(&state);
-    let generator = ScheduledReportGenerator::new(db);
-
-    generator.generate_weekly_report(&user_id).await
-}
-
-#[tauri::command]
-pub async fn analytics_generate_monthly_report(
-    session: State<'_, SessionState>,
-    state: State<'_, AppDatabase>,
-) -> Result<String, String> {
-    let user_id = get_session_user_id(&session)?;
-    let db = create_analytics_db_connection(&state);
-    let generator = ScheduledReportGenerator::new(db);
-
-    generator.generate_monthly_report(&user_id).await
-}
-
-#[tauri::command]
-pub async fn analytics_get_top_processes(
-    start_date: i64,
-    end_date: i64,
-    limit: usize,
-    state: State<'_, AppDatabase>,
-) -> Result<Vec<ProcessMetrics>, String> {
-    let db = create_analytics_db_connection(&state);
-    let aggregator = MetricsAggregator::new(db);
-
-    aggregator
-        .get_top_processes(start_date, end_date, limit)
-        .await
-        .map_err(|e| format!("Failed to get top processes: {}", e))
-}
-
-#[tauri::command]
-pub async fn analytics_save_snapshot(
-    team_id: Option<String>,
-    start_date: i64,
-    end_date: i64,
-    session: State<'_, SessionState>,
-    state: State<'_, AppDatabase>,
-) -> Result<String, String> {
-    let user_id = get_session_user_id(&session)?;
-    let db = create_analytics_db_connection(&state);
-    let calculator = ROICalculator::new(db);
-
-    let roi = calculator
-        .calculate_roi(start_date, end_date)
-        .await
-        .map_err(|e| format!("Failed to calculate ROI: {}", e))?;
-
-    calculator
-        .save_snapshot(&user_id, team_id.as_deref(), &roi)
-        .await
-        .map_err(|e| format!("Failed to save snapshot: {}", e))
-}
-
-#[tauri::command]
 pub async fn track_workflow_view(
     workflow_id: String,
-    session: State<'_, SessionState>,
     state: State<'_, TelemetryState>,
 ) -> Result<(), String> {
-    let user_id = get_session_user_id(&session)?;
     let collector = state.collector.read().await;
 
     if !collector.is_enabled() {
         return Ok(());
     }
 
+    let user_id = collector.get_user_id().await;
     drop(collector);
 
     let mut properties = std::collections::HashMap::new();
     properties.insert("workflow_id".to_string(), serde_json::json!(workflow_id));
-    properties.insert("user_id".to_string(), serde_json::json!(&user_id));
 
     let event = TelemetryEvent {
         name: "workflow_view".to_string(),
         properties,
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
         session_id: state.collector.read().await.get_session_id(),
-        user_id: Some(user_id),
+        user_id,
     };
 
     let collector = state.collector.write().await;
@@ -529,44 +447,6 @@ pub async fn track_workflow_view(
         .track(event)
         .await
         .map_err(|e| format!("Failed to track workflow view: {}", e))
-}
-
-#[tauri::command]
-pub async fn acknowledge_milestone(
-    milestone_id: String,
-    session: State<'_, SessionState>,
-    state: State<'_, TelemetryState>,
-) -> Result<(), String> {
-    let user_id = get_session_user_id(&session)?;
-    let collector = state.collector.read().await;
-
-    if !collector.is_enabled() {
-        return Ok(());
-    }
-
-    drop(collector);
-
-    let mut properties = std::collections::HashMap::new();
-    properties.insert("milestone_id".to_string(), serde_json::json!(milestone_id));
-    properties.insert("user_id".to_string(), serde_json::json!(&user_id));
-    properties.insert(
-        "acknowledged_at".to_string(),
-        serde_json::json!(chrono::Utc::now().to_rfc3339()),
-    );
-
-    let event = TelemetryEvent {
-        name: "milestone_acknowledged".to_string(),
-        properties,
-        timestamp: chrono::Utc::now().timestamp_millis() as u64,
-        session_id: state.collector.read().await.get_session_id(),
-        user_id: Some(user_id),
-    };
-
-    let collector = state.collector.write().await;
-    collector
-        .track(event)
-        .await
-        .map_err(|e| format!("Failed to acknowledge milestone: {}", e))
 }
 
 #[cfg(test)]
@@ -582,11 +462,36 @@ mod tests {
             batch_size: 10,
             flush_interval_secs: 30,
             app_data_dir: None,
-            privacy_mode: None,
+            privacy_mode: Some("cloud".to_string()),
         };
         let collector = TelemetryCollector::new(config);
         let metrics_collector = AnalyticsMetricsCollector::new();
         TelemetryState::new(collector, metrics_collector)
+    }
+
+    /// `src/services/analytics.ts` sends this object as `event`. The struct is
+    /// also what `analytics_events.json` holds, so its names stay snake_case.
+    #[test]
+    fn an_event_from_the_ui_is_read() {
+        let event: TelemetryEvent = serde_json::from_value(serde_json::json!({
+            "name": "app_opened",
+            "properties": { "source": "unit-test" },
+            "timestamp": 1_790_000_000_000_u64,
+            "session_id": "session-1",
+            "user_id": "user-1",
+        }))
+        .expect("event as the UI sends it");
+        assert_eq!(event.session_id, "session-1");
+        assert_eq!(event.user_id.as_deref(), Some("user-1"));
+
+        let anonymous: TelemetryEvent = serde_json::from_value(serde_json::json!({
+            "name": "app_opened",
+            "properties": {},
+            "timestamp": 1_790_000_000_000_u64,
+            "session_id": "session-1",
+        }))
+        .expect("event with no user");
+        assert_eq!(anonymous.user_id, None);
     }
 
     #[tokio::test]

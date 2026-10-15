@@ -2,16 +2,86 @@
 //!
 //! `y/n/s` keys record Approve/Reject/Skip decisions per file; ↑↓ move the
 //! cursor across files; Enter finalizes and returns Submit(approved_count).
+//!
+//! The file under the cursor is shown with its whole path and its whole
+//! diff, which PageUp, PageDown, Home and End scroll. ←→ step through its
+//! hunks, and `y/n/s` then decide the hunk shown. `y` approves a file or a
+//! hunk only after the end of what is shown has been drawn.
 
 #![allow(dead_code)]
 
+use std::cell::Cell;
 use std::collections::HashMap;
+use std::ops::Range;
 use std::path::PathBuf;
 
+use super::approval_overlay::wrap_cols;
 use super::interactive::{InteractiveView, KeyAction, ViewAction};
+use super::scroll_gate::ScrollGate;
 use crate::diff_model::FileChangeKind;
 use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::pad_to_cols;
+
+const INNER_COLS: usize = 60;
+const TEXT_COLS: usize = 58;
+const FILE_COLS: usize = 57;
+/// The rows a draw is laid out for until the host says how many it has.
+const DEFAULT_ROWS: usize = 24;
+/// Both borders, the rule under the file list, the blank row and the two
+/// rows of hints.
+const CHROME_ROWS: usize = 6;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Mark {
+    Path,
+    Added,
+    Removed,
+    Hunk,
+    Context,
+}
+
+impl Mark {
+    fn of(line: &str) -> Self {
+        if line.starts_with("@@") {
+            Self::Hunk
+        } else if line.starts_with('+') {
+            Self::Added
+        } else if line.starts_with('-') {
+            Self::Removed
+        } else {
+            Self::Context
+        }
+    }
+}
+
+enum Row {
+    Border(String),
+    File { index: usize, text: String },
+    Diff(Mark, String),
+    Note(String),
+    Status(String),
+    Warning(String),
+}
+
+/// One draw: the files listed, and the file under the cursor in full with
+/// the number of its rows that fit.
+struct Shape {
+    listed: Range<usize>,
+    body: Vec<(Mark, String)>,
+    viewport: usize,
+}
+
+fn top_border() -> String {
+    let title = "─ Diff Review ";
+    format!(
+        "┌{title}{}┐",
+        "─".repeat(INNER_COLS - title.chars().count())
+    )
+}
+
+fn bottom_border() -> String {
+    format!("└{}┘", "─".repeat(INNER_COLS))
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReviewDecision {
@@ -125,6 +195,14 @@ pub struct DiffReviewView {
     pub hunk_decisions: HashMap<(PathBuf, usize), ReviewDecision>,
     pending_discard: Option<(PathBuf, usize)>,
     done: bool,
+    /// For each file, where its diff is scrolled to and whether its end has
+    /// been drawn.
+    previews: Vec<ScrollGate>,
+    /// The same for each hunk of each file, for the hunk shown on its own.
+    hunk_gates: Vec<Vec<ScrollGate>>,
+    rows: Cell<u16>,
+    /// `y` was pressed on a diff that had not been drawn to its end.
+    refused_unread: bool,
 }
 
 impl DiffReviewView {
@@ -132,11 +210,23 @@ impl DiffReviewView {
         Self {
             decisions: HashMap::new(),
             cursor: 0,
+            previews: files.iter().map(|_| ScrollGate::default()).collect(),
+            hunk_gates: files
+                .iter()
+                .map(|file| {
+                    file.hunk_patches
+                        .iter()
+                        .map(|_| ScrollGate::default())
+                        .collect()
+                })
+                .collect(),
             files,
             hunk: None,
             hunk_decisions: HashMap::new(),
             pending_discard: None,
             done: false,
+            rows: Cell::new(0),
+            refused_unread: false,
         }
     }
 
@@ -144,6 +234,7 @@ impl DiffReviewView {
         if self.cursor > 0 {
             self.cursor -= 1;
             self.hunk = None;
+            self.refused_unread = false;
         }
     }
 
@@ -151,6 +242,7 @@ impl DiffReviewView {
         if self.cursor + 1 < self.files.len() {
             self.cursor += 1;
             self.hunk = None;
+            self.refused_unread = false;
         }
     }
 
@@ -170,6 +262,7 @@ impl DiffReviewView {
             None => 0,
             Some(index) => (index + 1).min(count - 1),
         });
+        self.refused_unread = false;
     }
 
     fn previous_hunk(&mut self) {
@@ -177,6 +270,7 @@ impl DiffReviewView {
             None | Some(0) => None,
             Some(index) => Some(index - 1),
         };
+        self.refused_unread = false;
     }
 
     fn set_decision(&mut self, decision: ReviewDecision) {
@@ -299,62 +393,202 @@ impl DiffReviewView {
         }
     }
 
-    fn preview_rows(&self) -> usize {
-        if self.hunk.is_some() {
-            12
+    fn preview(&self) -> Option<&ScrollGate> {
+        match self.hunk {
+            Some(index) => self.hunk_gates.get(self.cursor)?.get(index),
+            None => self.previews.get(self.cursor),
+        }
+    }
+
+    fn preview_mut(&mut self) -> Option<&mut ScrollGate> {
+        match self.hunk {
+            Some(index) => self.hunk_gates.get_mut(self.cursor)?.get_mut(index),
+            None => self.previews.get_mut(self.cursor),
+        }
+    }
+
+    /// What is under the cursor in full: the file's path, then every line of
+    /// its diff or of the hunk shown, wrapped so nothing is cut off.
+    fn body(&self) -> Vec<(Mark, String)> {
+        let Some(file) = self.files.get(self.cursor) else {
+            return Vec::new();
+        };
+        let mut body: Vec<(Mark, String)> = wrap_cols(
+            sanitize_terminal_text(&file.path.display().to_string()).as_ref(),
+            TEXT_COLS,
+        )
+        .into_iter()
+        .map(|row| (Mark::Path, row))
+        .collect();
+        for line in self.current_hunks() {
+            let line = sanitize_terminal_text(line);
+            let mark = Mark::of(&line);
+            body.extend(
+                wrap_cols(&line, TEXT_COLS)
+                    .into_iter()
+                    .map(|row| (mark, row)),
+            );
+        }
+        body
+    }
+
+    fn shape(&self) -> Option<Shape> {
+        let rows = match self.rows.get() {
+            0 => DEFAULT_ROWS,
+            rows => usize::from(rows),
+        };
+        let status_rows = usize::from(self.hunk_status().is_some());
+        let free = rows.checked_sub(CHROME_ROWS + status_rows)?;
+        let list_rows = self.files.len().min((free / 3).max(1));
+        let first = self
+            .cursor
+            .saturating_sub(list_rows / 2)
+            .min(self.files.len().saturating_sub(list_rows));
+        let body = self.body();
+        let room = free.checked_sub(list_rows)?;
+        let viewport = if body.len() <= room {
+            body.len()
         } else {
-            3
+            room.checked_sub(1).filter(|rows| *rows > 0)?
+        };
+        Some(Shape {
+            listed: first..first + list_rows,
+            body,
+            viewport,
+        })
+    }
+
+    fn decision_label(&self, index: usize) -> &'static str {
+        self.files
+            .get(index)
+            .and_then(|file| self.file_label(file))
+            .unwrap_or("[ ] Pending   ")
+    }
+
+    fn file_row(&self, index: usize) -> String {
+        let file = &self.files[index];
+        let name = sanitize_terminal_text(
+            file.path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("?"),
+        );
+        pad_to_cols(
+            &format!(
+                "{}  {}  {name}  +{} -{}",
+                self.decision_label(index),
+                file.kind.code(),
+                file.additions,
+                file.deletions
+            ),
+            FILE_COLS,
+        )
+    }
+
+    fn rows(&self) -> Vec<Row> {
+        let mut rows = vec![Row::Border(top_border())];
+        if self.files.is_empty() {
+            rows.push(Row::Note("  (no files to review)".to_string()));
+            rows.push(Row::Note(String::new()));
+            rows.push(Row::Note("  Enter finalize   Esc cancel".to_string()));
+            rows.push(Row::Border(bottom_border()));
+            return rows;
+        }
+        let (Some(preview), Some(shape)) = (self.preview(), self.shape()) else {
+            if let Some(preview) = self.preview() {
+                preview.nothing_drawn();
+            }
+            rows.push(Row::Warning(
+                "  This window is too small to review a diff.".to_string(),
+            ));
+            rows.push(Row::Note(
+                "  Enlarge it, or press Esc to close.".to_string(),
+            ));
+            rows.push(Row::Border(bottom_border()));
+            return rows;
+        };
+
+        for index in shape.listed.clone() {
+            rows.push(Row::File {
+                index,
+                text: self.file_row(index),
+            });
+        }
+        let rule = if shape.listed.len() < self.files.len() {
+            format!(
+                "── files {}-{} of {} ",
+                shape.listed.start + 1,
+                shape.listed.end,
+                self.files.len()
+            )
+        } else {
+            String::new()
+        };
+        rows.push(Row::Note(format!(
+            " {rule}{}",
+            "─".repeat(TEXT_COLS.saturating_sub(rule.chars().count()))
+        )));
+
+        if let Some(status) = self.hunk_status() {
+            rows.push(Row::Status(format!("  {status}")));
+        }
+        let window = preview.window(shape.body.len(), shape.viewport);
+        for (mark, text) in &shape.body[window] {
+            rows.push(Row::Diff(*mark, text.clone()));
+        }
+        if let Some(position) = preview.position_label() {
+            if preview.end_was_shown() {
+                rows.push(Row::Note(format!("  {position}")));
+            } else {
+                let text = format!("  {position} \u{b7} read to the end before approving");
+                rows.push(if self.refused_unread {
+                    Row::Warning(text)
+                } else {
+                    Row::Note(text)
+                });
+            }
+        }
+
+        rows.push(Row::Note(String::new()));
+        rows.push(Row::Note(
+            if preview.overflows() {
+                "  y/n/s decide   ↑↓ file   PgUp/PgDn diff   Enter done"
+            } else {
+                "  y approve   n reject   s skip   ↑↓ navigate   Enter done"
+            }
+            .to_string(),
+        ));
+        rows.push(Row::Note(
+            "  ←→ hunk · n unstages · d twice discards an unstaged hunk".to_string(),
+        ));
+        rows.push(Row::Border(bottom_border()));
+        rows
+    }
+
+    fn cursor_mark(&self, index: usize) -> &'static str {
+        if index == self.cursor {
+            "❯"
+        } else {
+            " "
         }
     }
 }
 
 impl InteractiveView for DiffReviewView {
     fn render(&self) -> String {
-        let mut out =
-            String::from("┌─ Diff Review ─────────────────────────────────────────────┐\n");
-
-        if self.files.is_empty() {
-            out.push_str("│  (no files to review)                                      │\n");
-            out.push_str("│                                                            │\n");
-            out.push_str("│  Enter finalize   Esc cancel                               │\n");
-            out.push_str("└────────────────────────────────────────────────────────────┘\n");
-            return out;
-        }
-
-        // File list
-        for (i, file) in self.files.iter().enumerate() {
-            let cursor = if i == self.cursor { "❯" } else { " " };
-            let decision_str = self.file_label(file).unwrap_or("[ ] Pending   ");
-            let name = sanitize_terminal_text(
-                file.path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("?"),
-            );
-            let stat = format!("+{} -{}", file.additions, file.deletions);
-            let row = pad_to_cols(
-                &format!("{decision_str}  {}  {name}  {stat}", file.kind.code()),
-                58,
-            );
-            out.push_str(&format!("│ {cursor} {row}│\n"));
-        }
-
-        out.push_str("│ ──────────────────────────────────────────────────────────  │\n");
-
-        // Hunk preview for current file
-        if let Some(status) = self.hunk_status() {
-            out.push_str(&format!("│  {}│\n", pad_to_cols(&status, 58)));
-        }
-        for hunk in self.current_hunks().iter().take(self.preview_rows()) {
-            let hunk = pad_to_cols(sanitize_terminal_text(hunk).as_ref(), 58);
-            out.push_str(&format!("│  {hunk}│\n"));
-        }
-
-        out.push_str("│                                                            │\n");
-        out.push_str("│  y approve   n reject   s skip   ↑↓ navigate   Enter done  │\n");
-        out.push_str("│  ←→ hunk · n unstages · d twice discards an unstaged hunk  │\n");
-        out.push_str("└────────────────────────────────────────────────────────────┘\n");
-        out
+        self.rows()
+            .iter()
+            .map(|row| match row {
+                Row::Border(line) => format!("{line}\n"),
+                Row::File { index, text } => {
+                    format!("│ {} {text}│\n", self.cursor_mark(*index))
+                }
+                Row::Diff(_, text) => format!("│  {}│\n", pad_to_cols(text, TEXT_COLS)),
+                Row::Note(text) | Row::Status(text) | Row::Warning(text) => {
+                    format!("│{}│\n", pad_to_cols(text, INNER_COLS))
+                }
+            })
+            .collect()
     }
 
     fn render_styled(&self) -> Option<Vec<ratatui::text::Line<'static>>> {
@@ -365,107 +599,89 @@ impl InteractiveView for DiffReviewView {
         use ratatui::text::{Line, Span};
 
         let border = Style::default().fg(ui_muted());
-        let bs = |s: &str| Line::from(Span::styled(s.to_string(), border));
-        let mut out: Vec<Line<'static>> = Vec::new();
+        let edge = || Span::styled("│".to_string(), border);
+        let lines = self
+            .rows()
+            .into_iter()
+            .map(|row| match row {
+                Row::Border(line) => Line::from(Span::styled(line, border)),
+                Row::File { index, text } => {
+                    let decision = self.decision_label(index);
+                    let color = match self
+                        .files
+                        .get(index)
+                        .and_then(|file| self.decisions.get(&file.path))
+                    {
+                        Some(ReviewDecision::Approve) => ui_success(),
+                        Some(ReviewDecision::Reject) => ui_danger(),
+                        Some(ReviewDecision::Skip) => ui_warning(),
+                        Some(ReviewDecision::Discard) => ui_danger(),
+                        None if self
+                            .files
+                            .get(index)
+                            .and_then(|file| self.file_label(file))
+                            .is_some() =>
+                        {
+                            ui_accent()
+                        }
+                        None => ui_muted(),
+                    };
+                    // The label is ASCII, so its byte length is its width.
+                    let (label, rest) = text.split_at(decision.len().min(text.len()));
+                    Line::from(vec![
+                        edge(),
+                        Span::raw(" ".to_string()),
+                        Span::styled(
+                            self.cursor_mark(index).to_string(),
+                            Style::default().fg(ui_accent()),
+                        ),
+                        Span::raw(" ".to_string()),
+                        Span::styled(label.to_string(), Style::default().fg(color)),
+                        Span::raw(rest.to_string()),
+                        edge(),
+                    ])
+                }
+                Row::Diff(mark, text) => {
+                    let style = match mark {
+                        Mark::Added => Style::default().fg(ui_success()),
+                        Mark::Removed => Style::default().fg(ui_danger()),
+                        Mark::Hunk | Mark::Path => Style::default().fg(ui_accent()),
+                        Mark::Context => Style::default(),
+                    };
+                    Line::from(vec![
+                        edge(),
+                        Span::raw("  ".to_string()),
+                        Span::styled(pad_to_cols(&text, TEXT_COLS), style),
+                        edge(),
+                    ])
+                }
+                Row::Note(text) => Line::from(Span::styled(
+                    format!("│{}│", pad_to_cols(&text, INNER_COLS)),
+                    border,
+                )),
+                Row::Status(text) => Line::from(vec![
+                    edge(),
+                    Span::styled(
+                        pad_to_cols(&text, INNER_COLS),
+                        Style::default().fg(ui_accent()),
+                    ),
+                    edge(),
+                ]),
+                Row::Warning(text) => Line::from(vec![
+                    edge(),
+                    Span::styled(
+                        pad_to_cols(&text, INNER_COLS),
+                        Style::default().fg(ui_warning()),
+                    ),
+                    edge(),
+                ]),
+            })
+            .collect();
+        Some(lines)
+    }
 
-        out.push(bs(
-            "┌─ Diff Review ─────────────────────────────────────────────┐",
-        ));
-
-        if self.files.is_empty() {
-            out.push(bs(
-                "│  (no files to review)                                      │",
-            ));
-            out.push(bs(
-                "│                                                            │",
-            ));
-            out.push(bs(
-                "│  Enter finalize   Esc cancel                               │",
-            ));
-            out.push(bs(
-                "└────────────────────────────────────────────────────────────┘",
-            ));
-            return Some(out);
-        }
-
-        // File list, decision label colored by outcome, cursor accented.
-        for (i, file) in self.files.iter().enumerate() {
-            let cursor = if i == self.cursor { "❯" } else { " " };
-            let (decision_str, dec_color) = match self.decisions.get(&file.path) {
-                Some(ReviewDecision::Approve) => ("[y] Approved", ui_success()),
-                Some(ReviewDecision::Reject) => ("[n] Rejected", ui_danger()),
-                Some(ReviewDecision::Skip) => ("[s] Skipped ", ui_warning()),
-                Some(ReviewDecision::Discard) => ("[d] Discard ", ui_danger()),
-                None if self.file_label(file).is_some() => ("[~] By hunk ", ui_accent()),
-                None => ("[ ] Pending   ", ui_muted()),
-            };
-            let name = sanitize_terminal_text(
-                file.path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("?"),
-            );
-            let stat = format!("+{} -{}", file.additions, file.deletions);
-            let row = pad_to_cols(
-                &format!("{decision_str}  {}  {name}  {stat}", file.kind.code()),
-                58,
-            );
-            // Color just the leading decision label (ASCII → byte len == char count).
-            let dlen = decision_str.len().min(row.len());
-            let (dec_part, rest_part) = row.split_at(dlen);
-            out.push(Line::from(vec![
-                Span::styled("│ ".to_string(), border),
-                Span::styled(cursor.to_string(), Style::default().fg(ui_accent())),
-                Span::raw(" ".to_string()),
-                Span::styled(dec_part.to_string(), Style::default().fg(dec_color)),
-                Span::raw(rest_part.to_string()),
-                Span::styled("│".to_string(), border),
-            ]));
-        }
-
-        out.push(bs(
-            "│ ──────────────────────────────────────────────────────────  │",
-        ));
-
-        // Hunk preview, +added green, -removed red, @@ headers accented.
-        if let Some(status) = self.hunk_status() {
-            out.push(Line::from(vec![
-                Span::styled("│  ".to_string(), border),
-                Span::styled(pad_to_cols(&status, 58), Style::default().fg(ui_accent())),
-                Span::styled("│".to_string(), border),
-            ]));
-        }
-        for hunk in self.current_hunks().iter().take(self.preview_rows()) {
-            let hunk = pad_to_cols(sanitize_terminal_text(hunk).as_ref(), 58);
-            let style = if hunk.starts_with('+') {
-                Style::default().fg(ui_success())
-            } else if hunk.starts_with('-') {
-                Style::default().fg(ui_danger())
-            } else if hunk.starts_with("@@") {
-                Style::default().fg(ui_accent())
-            } else {
-                Style::default()
-            };
-            out.push(Line::from(vec![
-                Span::styled("│  ".to_string(), border),
-                Span::styled(hunk, style),
-                Span::styled("│".to_string(), border),
-            ]));
-        }
-
-        out.push(bs(
-            "│                                                            │",
-        ));
-        out.push(bs(
-            "│  y approve   n reject   s skip   ↑↓ navigate   Enter done  │",
-        ));
-        out.push(bs(
-            "│  ←→ hunk · n unstages · d twice discards an unstaged hunk  │",
-        ));
-        out.push(bs(
-            "└────────────────────────────────────────────────────────────┘",
-        ));
-        Some(out)
+    fn fit_rows(&self, rows: u16) {
+        self.rows.set(rows);
     }
 
     fn handle_key(&mut self, key: KeyAction) -> ViewAction {
@@ -474,7 +690,11 @@ impl InteractiveView for DiffReviewView {
         }
         match key {
             KeyAction::Char('y') | KeyAction::Char('Y') => {
-                self.set_decision(ReviewDecision::Approve);
+                if self.preview().is_some_and(ScrollGate::end_was_shown) {
+                    self.set_decision(ReviewDecision::Approve);
+                } else {
+                    self.refused_unread = true;
+                }
                 ViewAction::Continue
             }
             KeyAction::Char('n') | KeyAction::Char('N') => {
@@ -503,6 +723,12 @@ impl InteractiveView for DiffReviewView {
             }
             KeyAction::Down => {
                 self.move_down();
+                ViewAction::Continue
+            }
+            KeyAction::PageUp | KeyAction::PageDown | KeyAction::Home | KeyAction::End => {
+                if let Some(preview) = self.preview_mut() {
+                    preview.scroll_key(key);
+                }
                 ViewAction::Continue
             }
             KeyAction::Enter => {
@@ -550,6 +776,7 @@ mod tests {
             FileDiff::new("c.rs", vec![], 1, 0),
         ];
         let mut view = DiffReviewView::new(files);
+        view.render();
         view.handle_key(KeyAction::Char('y')); // approve a (cursor 0)
         view.handle_key(KeyAction::Down);
         view.handle_key(KeyAction::Char('n')); // reject b
@@ -611,6 +838,24 @@ mod tests {
         view.handle_key(KeyAction::Char('d'));
         view.handle_key(KeyAction::Char('d'));
         assert!(view.outcome().discard_hunks.is_empty());
+    }
+
+    #[test]
+    fn a_hunk_is_approved_only_after_it_has_been_drawn() {
+        let mut view = hunk_view();
+        view.handle_key(KeyAction::Right);
+        view.handle_key(KeyAction::Right);
+        view.handle_key(KeyAction::Char('y'));
+        assert!(view.outcome().stage_hunks.is_empty(), "nothing drawn yet");
+
+        let text = view.render();
+        assert!(text.contains("hunk 2 of 2 (unstaged)"), "{text}");
+        assert!(text.contains("@@ -9 +9 @@"), "{text}");
+        view.handle_key(KeyAction::Char('y'));
+        assert_eq!(
+            view.outcome().stage_hunks,
+            vec!["unstaged-patch".to_string()]
+        );
     }
 
     fn make_view() -> DiffReviewView {
@@ -684,6 +929,7 @@ mod tests {
     #[test]
     fn y_records_approve_for_current_file() {
         let mut view = make_view();
+        view.render();
         let action = view.handle_key(KeyAction::Char('y'));
         assert_eq!(action, ViewAction::Continue);
         let path = PathBuf::from("src/main.rs");
@@ -720,8 +966,10 @@ mod tests {
     #[test]
     fn enter_returns_approved_count_and_marks_done() {
         let mut view = make_view();
+        view.render();
         view.handle_key(KeyAction::Char('y')); // approve file 0
         view.handle_key(KeyAction::Down);
+        view.render();
         view.handle_key(KeyAction::Char('y')); // approve file 1
         view.handle_key(KeyAction::Down);
         view.handle_key(KeyAction::Char('n')); // reject file 2
@@ -781,6 +1029,123 @@ mod tests {
                 "{what} kept the screen-clear CSI: {rendered:?}"
             );
         }
+    }
+
+    fn long_diff(lines: usize) -> FileDiff {
+        FileDiff::new(
+            "src/deep/module/handler.rs",
+            (1..=lines).map(|n| format!("+added line {n}")).collect(),
+            lines,
+            0,
+        )
+    }
+
+    #[test]
+    fn every_row_of_the_box_is_the_same_width() {
+        for view in [
+            make_view(),
+            DiffReviewView::new(vec![]),
+            DiffReviewView::new(vec![long_diff(200)]),
+        ] {
+            let text = view.render();
+            for line in text.lines() {
+                assert_eq!(crate::tui::display_width(line), 62, "{line:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_file_is_approved_only_after_its_whole_diff_has_been_drawn() {
+        let mut view = DiffReviewView::new(vec![long_diff(200), long_diff(2)]);
+        let path = PathBuf::from("src/deep/module/handler.rs");
+
+        view.handle_key(KeyAction::Char('y'));
+        assert!(view.decisions.is_empty(), "nothing has been drawn yet");
+
+        view.fit_rows(24);
+        let text = view.render();
+        assert!(text.contains("src/deep/module/handler.rs"), "{text}");
+        assert!(text.contains("lines 1-15 of 201"), "{text}");
+        assert!(text.contains("Enter done"), "{text}");
+        assert!(
+            text.contains("+added line 14") && !text.contains("+added line 15"),
+            "{text}"
+        );
+        assert_eq!(text.lines().count(), 24);
+
+        view.handle_key(KeyAction::Char('y'));
+        assert!(
+            view.decisions.is_empty(),
+            "the end of the diff was not shown"
+        );
+        assert!(view.render().contains("read to the end before approving"));
+
+        view.handle_key(KeyAction::PageDown);
+        assert!(view.render().contains("lines 15-29 of 201"));
+        view.handle_key(KeyAction::End);
+        let text = view.render();
+        assert!(text.contains("+added line 200"), "{text}");
+        view.handle_key(KeyAction::Char('y'));
+        assert_eq!(view.decisions.get(&path), Some(&ReviewDecision::Approve));
+    }
+
+    #[test]
+    fn rejecting_and_skipping_never_wait_for_the_diff() {
+        let mut view = DiffReviewView::new(vec![long_diff(200)]);
+        view.handle_key(KeyAction::Char('n'));
+        assert_eq!(
+            view.decisions
+                .get(&PathBuf::from("src/deep/module/handler.rs")),
+            Some(&ReviewDecision::Reject)
+        );
+        view.handle_key(KeyAction::Char('s'));
+        assert_eq!(
+            view.decisions
+                .get(&PathBuf::from("src/deep/module/handler.rs")),
+            Some(&ReviewDecision::Skip)
+        );
+    }
+
+    #[test]
+    fn a_long_line_wraps_instead_of_being_cut_short() {
+        let view = DiffReviewView::new(vec![FileDiff::new(
+            "a.rs",
+            vec![format!("+{}TAIL_MARKER", "x".repeat(100))],
+            1,
+            0,
+        )]);
+        assert!(view.render().contains("TAIL_MARKER"));
+    }
+
+    #[test]
+    fn a_long_file_list_keeps_the_cursor_and_the_controls_in_view() {
+        let files: Vec<FileDiff> = (0..40)
+            .map(|n| FileDiff::new(format!("file_{n:02}.rs"), vec![], 1, 0))
+            .collect();
+        let mut view = DiffReviewView::new(files);
+        view.fit_rows(20);
+        for _ in 0..30 {
+            view.handle_key(KeyAction::Down);
+        }
+        let text = view.render();
+        assert_eq!(text.lines().count(), 11, "{text}");
+        assert!(text.contains("❯ [ ] Pending     M  file_30.rs"), "{text}");
+        assert!(text.contains("files 29-32 of 40"), "{text}");
+        assert!(text.contains("Enter done"), "{text}");
+    }
+
+    #[test]
+    fn a_window_too_small_for_a_diff_approves_nothing() {
+        let mut view = DiffReviewView::new(vec![long_diff(3)]);
+        view.fit_rows(5);
+        assert!(view.render().contains("too small"));
+        view.handle_key(KeyAction::Char('y'));
+        assert!(view.decisions.is_empty());
+
+        view.fit_rows(24);
+        view.render();
+        view.handle_key(KeyAction::Char('y'));
+        assert_eq!(view.approved_count(), 1);
     }
 
     #[test]

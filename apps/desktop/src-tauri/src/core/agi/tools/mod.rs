@@ -183,9 +183,16 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "ui_click".to_string(),
             name: "Click UI Element".to_string(),
-            description: "Click on a desktop UI target by coordinates, native element_id, or visible text".to_string(),
+            description: "Click in one named app. Name it in `app`; it is brought to the front first. Target a control by its visible text (preferred), by native element_id, or by screen coordinates that lie on that app's window.".to_string(),
             capabilities: vec![ToolCapability::UIAutomation],
             parameters: vec![
+                ToolParameter {
+                    name: "app".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: crate::automation::computer_use::TARGET_APP_PARAMETER.to_string(),
+                    default: None,
+                },
                 ToolParameter {
                     name: "target".to_string(),
                     parameter_type: ParameterType::Object,
@@ -212,9 +219,16 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "ui_type".to_string(),
             name: "Type Text".to_string(),
-            description: "Type text into a desktop UI target by coordinates, native element_id, or visible text".to_string(),
+            description: "Type text into one named app. Name it in `app`; it is brought to the front first. Focus the field by its visible text (preferred), by native element_id, or by screen coordinates that lie on that app's window, then type.".to_string(),
             capabilities: vec![ToolCapability::UIAutomation, ToolCapability::TextProcessing],
             parameters: vec![
+                ToolParameter {
+                    name: "app".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: crate::automation::computer_use::TARGET_APP_PARAMETER.to_string(),
+                    default: None,
+                },
                 ToolParameter {
                     name: "target".to_string(),
                     parameter_type: ParameterType::Object,
@@ -1312,7 +1326,7 @@ impl ToolRegistry {
                 ToolParameter {
                     name: "method".to_string(),
                     parameter_type: ParameterType::String,
-                    required: true,
+                    required: false,
                     description: "HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS)".to_string(),
                     default: Some(serde_json::Value::String("GET".to_string())),
                 },
@@ -1699,240 +1713,6 @@ impl ToolRegistry {
         })?;
 
         self.register_tool(Tool {
-            id: "email_send".to_string(),
-            name: "Send Email".to_string(),
-            description: "Send an email via SMTP".to_string(),
-            capabilities: vec![
-                ToolCapability::NetworkOperation,
-                ToolCapability::TextProcessing,
-            ],
-            parameters: vec![
-                ToolParameter {
-                    name: "account_id".to_string(),
-                    parameter_type: ParameterType::Integer,
-                    required: true,
-                    description: "Connected email account ID".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "to".to_string(),
-                    parameter_type: ParameterType::Array,
-                    required: true,
-                    description: "Recipient email addresses. Each item may be a string or {email, name} object".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "cc".to_string(),
-                    parameter_type: ParameterType::Array,
-                    required: false,
-                    description: "CC recipients as strings or {email, name} objects".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "bcc".to_string(),
-                    parameter_type: ParameterType::Array,
-                    required: false,
-                    description: "BCC recipients as strings or {email, name} objects".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "subject".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Email subject".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "body".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Plain text email body".to_string(),
-                    default: None,
-                },
-            ],
-            estimated_resources: ResourceUsage {
-                cpu_percent: 2.0,
-                memory_mb: 20,
-                network_mb: 0.1,
-            },
-            dependencies: vec![],
-        })?;
-
-        self.register_tool(Tool {
-            id: "email_fetch".to_string(),
-            name: "Fetch Emails".to_string(),
-            description: "Fetch emails from inbox".to_string(),
-            capabilities: vec![
-                ToolCapability::NetworkOperation,
-                ToolCapability::TextProcessing,
-            ],
-            parameters: vec![
-                ToolParameter {
-                    name: "account_id".to_string(),
-                    parameter_type: ParameterType::Integer,
-                    required: true,
-                    description: "Email account ID".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "folder".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Folder to fetch from, such as INBOX".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "limit".to_string(),
-                    parameter_type: ParameterType::Integer,
-                    required: false,
-                    description: "Maximum number of emails to fetch".to_string(),
-                    default: Some(serde_json::Value::Number(serde_json::Number::from(10))),
-                },
-            ],
-            estimated_resources: ResourceUsage {
-                cpu_percent: 3.0,
-                memory_mb: 50,
-                network_mb: 1.0,
-            },
-            dependencies: vec![],
-        })?;
-
-        self.register_tool(Tool {
-            id: "calendar_create_event".to_string(),
-            name: "Create Calendar Event".to_string(),
-            description: "Create a calendar event".to_string(),
-            capabilities: vec![
-                ToolCapability::NetworkOperation,
-                ToolCapability::SystemOperation,
-            ],
-            parameters: vec![
-                ToolParameter {
-                    name: "account_id".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Calendar account ID".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "calendar_id".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Calendar ID within the connected account".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "title".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Event title".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "start_time".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Event start time as RFC3339, for example 2026-06-04T15:00:00Z"
-                        .to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "end_time".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Event end time as RFC3339".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "description".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Event description".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "location".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Event location".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "attendees".to_string(),
-                    parameter_type: ParameterType::Array,
-                    required: false,
-                    description: "Attendee email addresses".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "timezone".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Timezone label for event rendering, default UTC".to_string(),
-                    default: None,
-                },
-            ],
-            estimated_resources: ResourceUsage {
-                cpu_percent: 2.0,
-                memory_mb: 30,
-                network_mb: 0.5,
-            },
-            dependencies: vec![],
-        })?;
-
-        self.register_tool(Tool {
-            id: "calendar_list_events".to_string(),
-            name: "List Calendar Events".to_string(),
-            description: "List calendar events".to_string(),
-            capabilities: vec![
-                ToolCapability::NetworkOperation,
-                ToolCapability::DataAnalysis,
-            ],
-            parameters: vec![
-                ToolParameter {
-                    name: "account_id".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Calendar account ID".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "calendar_id".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Calendar ID within the connected account".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "start_time".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Range start time as RFC3339".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "end_time".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Range end time as RFC3339".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "max_results".to_string(),
-                    parameter_type: ParameterType::Integer,
-                    required: false,
-                    description: "Maximum number of events to fetch, 1 to 250".to_string(),
-                    default: Some(serde_json::Value::Number(serde_json::Number::from(10))),
-                },
-            ],
-            estimated_resources: ResourceUsage {
-                cpu_percent: 2.0,
-                memory_mb: 30,
-                network_mb: 0.5,
-            },
-            dependencies: vec![],
-        })?;
-
-        self.register_tool(Tool {
             id: "cloud_upload".to_string(),
             name: "Upload to Cloud".to_string(),
             description: "Upload file to cloud storage".to_string(),
@@ -2061,6 +1841,49 @@ impl ToolRegistry {
                     parameter_type: ParameterType::Array,
                     required: false,
                     description: "Optional task tags".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Optional id for the new task".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "assignee".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Optional assignee id in the provider".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "assignee_name".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Optional assignee display name".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "project_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Optional project, board or database id in the provider"
+                        .to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "project_name".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Optional project display name".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "url".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Optional link to attach to the task".to_string(),
                     default: None,
                 },
             ],
@@ -3242,7 +3065,7 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "physical_scrape".to_string(),
             name: "Physical Web Scrape".to_string(),
-            description: "Physically scrape a webpage by navigating, selecting all content, and copying to clipboard. Works on sites that block normal scraping.".to_string(),
+            description: "Fetch one public web page over HTTP and return its readable text. Asks before each request. For REST endpoints use api_call; to find pages use search_web.".to_string(),
             capabilities: vec![
                 ToolCapability::BrowserAutomation,
                 ToolCapability::UIAutomation,
@@ -3255,13 +3078,6 @@ impl ToolRegistry {
                     required: true,
                     description: "URL to scrape".to_string(),
                     default: None,
-                },
-                ToolParameter {
-                    name: "wait_ms".to_string(),
-                    parameter_type: ParameterType::Integer,
-                    required: false,
-                    description: "Milliseconds to wait for page load (defaults to 3000)".to_string(),
-                    default: Some(serde_json::json!(3000)),
                 },
             ],
             estimated_resources: ResourceUsage {
@@ -3569,41 +3385,6 @@ impl ToolRegistry {
             estimated_resources: ResourceUsage {
                 cpu_percent: 2.0,
                 memory_mb: 20,
-                network_mb: 0.0,
-            },
-            dependencies: vec![],
-        })?;
-
-        // ── Format file ───────────────────────────────────────────────────────
-        self.register_tool(Tool {
-            id: "format_file".to_string(),
-            name: "Format File".to_string(),
-            description: "Run the appropriate code formatter on a file after editing. \
-                Detects the formatter from the file extension and project config \
-                (prettier, biome, rustfmt, ruff, black, gofmt, clang-format, shfmt, etc.). \
-                Always call this after writing or editing code files."
-                .to_string(),
-            capabilities: vec![ToolCapability::FileWrite, ToolCapability::CodeAnalysis],
-            parameters: vec![
-                ToolParameter {
-                    name: "path".to_string(),
-                    parameter_type: ParameterType::FilePath,
-                    required: true,
-                    description: "Absolute path to the file to format".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "project_root".to_string(),
-                    parameter_type: ParameterType::FilePath,
-                    required: false,
-                    description: "Project root (used to detect project-local formatters)"
-                        .to_string(),
-                    default: None,
-                },
-            ],
-            estimated_resources: ResourceUsage {
-                cpu_percent: 20.0,
-                memory_mb: 100,
                 network_mb: 0.0,
             },
             dependencies: vec![],

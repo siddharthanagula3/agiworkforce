@@ -16,7 +16,7 @@ use ts_rs::TS;
 use crate::agent_events::{
     AGENT_EVENT_SCHEMA_VERSION, AgentEvent, AgentEventApprovalRiskLevel, AgentEventEnvelope,
 };
-use crate::protocol::ReviewDecision;
+use crate::protocol::{ExecPolicyAmendment, ReviewDecision};
 use crate::task_state::{AgentTaskState, AgentTaskStateChanged};
 use crate::user_input::UserInput;
 
@@ -57,6 +57,7 @@ pub mod method {
     pub const THREAD_READ: &str = "thread/read";
     pub const THREAD_RESUME: &str = "thread/resume";
     pub const THREAD_FORK: &str = "thread/fork";
+    pub const THREAD_COMPACT: &str = "thread/compact";
     pub const THREAD_HANDOFF: &str = "thread/handoff";
     pub const THREAD_HANDOFF_ACCEPT: &str = "thread/handoff/accept";
     pub const THREAD_ARCHIVE: &str = "thread/archive";
@@ -75,6 +76,8 @@ pub mod method {
     pub const TURN_INTERRUPT: &str = "turn/interrupt";
     pub const TURN_AGENT_EVENT: &str = "turn/agent_event";
     pub const APPROVAL_RESPOND: &str = "approval/respond";
+    pub const USER_INPUT_REQUESTED: &str = "userInput/requested";
+    pub const USER_INPUT_RESPOND: &str = "userInput/respond";
     pub const TASK_STATE_CHANGED: &str = "task/state_changed";
     pub const SHUTDOWN: &str = "shutdown";
     pub const ACCOUNT_STATUS: &str = "account/status";
@@ -101,6 +104,8 @@ pub mod method {
     pub const MCP_AUTH_REQUIRED: &str = "mcp/authRequired";
     pub const MCP_ADD: &str = "mcp/add";
     pub const MCP_REMOVE: &str = "mcp/remove";
+    pub const MCP_APPROVAL_READ: &str = "mcp/approval/read";
+    pub const MCP_APPROVAL_GRANT: &str = "mcp/approval/grant";
     pub const HOOKS_LIST: &str = "hooks/list";
     pub const HOOKS_ADD: &str = "hooks/add";
     pub const HOOKS_REMOVE: &str = "hooks/remove";
@@ -124,6 +129,20 @@ pub mod method {
     pub const PLAN_DECIDE: &str = "plan/decide";
     pub const GIT_PULL_REQUEST_PLAN: &str = "git/pullRequest/plan";
     pub const GIT_PULL_REQUEST: &str = "git/pullRequest";
+    pub const MANAGED_WORKTREE_CREATE: &str = "worktree/managed/create";
+    pub const MANAGED_WORKTREE_LIST: &str = "worktree/managed/list";
+    pub const WORKTREE_DELETE: &str = "worktree/managed/delete";
+    pub const WORKTREE_PIN: &str = "worktree/managed/pin";
+    pub const WORKTREE_KEEP: &str = "worktree/managed/keep";
+    pub const WORKTREE_APPLY_TO_LOCAL: &str = "worktree/managed/applyToLocal";
+    pub const WORKTREE_SETUP_RUN: &str = "worktree/managed/setup/run";
+    pub const WORKTREE_SETUP_LOG: &str = "worktree/managed/setup/log";
+    pub const WORKTREE_SETUP_FINISHED: &str = "worktree/managed/setup/finished";
+    pub const CHECKPOINT_LIST: &str = "checkpoint/list";
+    pub const CHECKPOINT_DIFF: &str = "checkpoint/diff";
+    pub const CHECKPOINT_REVERT: &str = "checkpoint/revert";
+    pub const CHECKPOINT_STAGE: &str = "checkpoint/stage";
+    pub const THREAD_REVERT: &str = "thread/revert";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -282,6 +301,11 @@ fn is_false(value: &bool) -> bool {
     !*value
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde skip_serializing_if requires fn(&T) -> bool.
+fn is_zero(value: &u32) -> bool {
+    *value == 0
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
@@ -289,6 +313,11 @@ pub struct InitializeParams {
     pub client_info: AppServerClientInfo,
     #[serde(default, skip_serializing_if = "is_false")]
     pub experimental_api: bool,
+    /// The client renders `userInput/requested` and answers it with
+    /// `userInput/respond`. A host puts the agent's questions only to a client
+    /// that says so; for any other client `ask_user` is refused at once.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub user_input: bool,
     /// Wire version this client speaks. Omitted by pre-negotiation clients,
     /// which are answered with [`LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -409,6 +438,33 @@ pub struct AppServerCapabilities {
     pub plan_decisions: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub pull_requests: bool,
+    /// `thread/fork` honours `throughTurnId`. A host without it ignores the
+    /// field and copies the whole conversation, so a client offers a branch
+    /// from a turn only when this is true.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub fork_through_turn: bool,
+    /// `thread/compact` summarizes the conversation the model reads, from a
+    /// turn on or the older part of all of it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub thread_compact: bool,
+    /// A `turn/start` that names no `agentMode` runs in the thread's last
+    /// saved mode, which is never bypass: bypass ends with the turn that
+    /// named it. A host without this keeps whatever the last turn ran in, so
+    /// a client names a mode on every turn it sends there.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub bypass_per_turn: bool,
+    /// `thread/revert` honours `restore`. A host without it ignores the field
+    /// and rewinds both, so a client offers code-only and conversation-only
+    /// only when this is true.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub revert_restore: bool,
+    /// `mcp/approval/read` and `mcp/approval/grant` let a client ask its user
+    /// about a project server that `mcp/list` reports as `needs_approval`.
+    /// Without them such a server can be approved only in a terminal.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub mcp_approval: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub managed_worktrees: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -614,6 +670,12 @@ pub struct DeveloperMessage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub index: Option<u32>,
+    /// The turn this message belongs to, where the host checkpointed that turn
+    /// and the conversation can still rewind to it. Absent otherwise, and in
+    /// every transcript stored before turns were recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub turn_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -918,6 +980,12 @@ pub struct PendingApprovalSnapshot {
     pub proposed_content: Option<String>,
     #[serde(default)]
     pub always_allow_saved: bool,
+    /// The command rule the host offers for an "always allow" answer. That
+    /// answer must send exactly this prefix; absent, the command can only be
+    /// approved once or for the session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub proposed_execpolicy_amendment: Option<ExecPolicyAmendment>,
 }
 
 /// Everything a client needs to render a turn it joined mid-flight.
@@ -935,6 +1003,19 @@ pub struct ActiveTurnSnapshot {
     /// account for.
     pub next_event_sequence: u64,
     pub pending_approvals: Vec<PendingApprovalSnapshot>,
+    /// Questions the agent asked that are still waiting for an answer.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending_user_inputs: Vec<PendingUserInputSnapshot>,
+}
+
+/// A question as `userInput/requested` announced it, for a client that joins
+/// the turn after it was asked.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PendingUserInputSnapshot {
+    pub request_id: String,
+    pub question: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1180,6 +1261,40 @@ pub struct ThreadForkParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub through_message_index: Option<u32>,
+    /// Carry the conversation only through the end of this turn. Absent, the
+    /// fork carries all of it. Files in the workspace are never changed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub through_turn_id: Option<String>,
+}
+
+/// Summarize what the model reads of a thread. With `fromTurnId`, the turns
+/// before it stay word for word and can still be rewound to, and that turn
+/// onward becomes one summary; without it, the older part of the whole
+/// conversation does. `thread/read` still returns every message; only the
+/// model's context changes. The summarized turns can no longer be rewound
+/// to, so a user-facing caller confirms first.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadCompactParams {
+    pub thread_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub from_turn_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadCompactResponse {
+    pub thread_id: String,
+    /// False when nothing was old enough to summarize; the thread is then
+    /// unchanged.
+    pub compacted: bool,
+    pub messages_summarized: u32,
+    pub tokens_before: u32,
+    pub tokens_after: u32,
 }
 
 /// Per-turn permission posture selected by an interactive developer surface.
@@ -1725,6 +1840,11 @@ pub struct TurnEndedNotification {
     pub failure: Option<TurnFailure>,
     #[serde(default)]
     pub managed_request_ids: Vec<String>,
+    /// Follow-ups steered into the turn that it ended before delivering, the
+    /// newest last. A client that sent them puts them back where the user can
+    /// send them again.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub unsent_steers: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1751,11 +1871,70 @@ pub struct ApprovalResponseParams {
     pub edited_content: Option<String>,
 }
 
+/// A question the agent asked mid-turn, as `userInput/requested` announces it.
+/// The turn waits on `userInput/respond` until the question is answered,
+/// cancelled, interrupted or timed out.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct UserInputRequestedParams {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub request_id: String,
+    pub question: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct UserInputResponseParams {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub request_id: String,
+    /// `None` cancels the question; the agent is told no answer was given.
+    #[serde(default)]
+    pub answer: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct AcknowledgedResponse {
     pub acknowledged: bool,
+}
+
+/// Params of `thread/delete`. The archives of worktrees the thread owned may
+/// hold the only copy of uncommitted work, so they are kept unless the user
+/// confirmed losing them and the client says so here. A discard also works on
+/// a thread that is already deleted, which is how a client drops the archives
+/// an earlier delete reported as kept. Only a trusted connection may discard:
+/// process stdio, or a WebSocket whose upgrade carried the app-server token;
+/// any other connection is refused with -32006.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadDeleteParams {
+    pub thread_id: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub discard_worktree_archives: bool,
+}
+
+/// What deleting a thread did beyond removing it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadDeleteResponse {
+    pub acknowledged: bool,
+    /// Archive refs of the thread's worktrees that were kept. Each holds
+    /// everything a removed worktree had, committed or not.
+    #[serde(default)]
+    pub kept_worktree_archives: Vec<String>,
+    /// Archive refs removed because the client asked for it.
+    #[serde(default)]
+    pub removed_worktree_archives: Vec<String>,
+    /// Worktrees the thread owned, now free for another session to claim.
+    #[serde(default)]
+    pub released_worktrees: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -1963,6 +2142,14 @@ pub struct SkillSummary {
 #[ts(rename_all = "camelCase")]
 pub struct SkillListResponse {
     pub skills: Vec<SkillSummary>,
+    /// What identifies the skills this workspace supplies itself, as they
+    /// are now: the ones in its skills folder and the ones its own plugins
+    /// declare. Absent when it supplies none. A client that asks its user to
+    /// allow them sends this back with the yes, so the yes is to what was
+    /// listed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub project_skills_digest: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1977,9 +2164,18 @@ pub struct SkillSetEnabledParams {
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct SkillConsentParams {
-    /// Granting consent lets this workspace's `.agiworkforce/skills` load on
-    /// every run of either surface; revoking deletes that record.
+    /// Granting consent lets the skills this workspace supplies load on
+    /// every run of either surface, until one of them changes; revoking
+    /// deletes that record.
     pub granted: bool,
+    /// With `granted`, the `projectSkillsDigest` that `skills/list` returned
+    /// for the skills the user was shown. A grant whose digest is no longer
+    /// the current one records nothing and is refused with
+    /// [`MCP_APPROVAL_STALE_ERROR_CODE`], its `data` the list as it is now.
+    /// Not read when revoking.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub digest: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2056,6 +2252,10 @@ pub enum McpServerConfiguredStatus {
     /// A remote server with neither a stored token nor a credential header.
     NeedsAuth,
     Blocked,
+    /// A server the project's own files name whose launch the user has not
+    /// approved for this project, so the host does not start it. Approval is
+    /// given in a terminal, where the exact command is shown.
+    NeedsApproval,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2200,6 +2400,183 @@ pub struct McpServerToolsResponse {
     pub resources: Vec<McpResourceSummary>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
+}
+
+/// Params of `mcp/approval/read`: the project server, as `mcp/list` names
+/// it, whose launch the user is to be asked about.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpApprovalReadParams {
+    pub name: String,
+    pub scope: McpServerScope,
+}
+
+/// How a launch that awaits approval is contained.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum McpApprovalSandbox {
+    /// Inside the OS sandbox.
+    Sandboxed,
+    /// Inside it although its entry asks to leave: nothing an approval could
+    /// check pins the code it runs.
+    KeptSandboxed,
+    /// Only inside it, and the tool that makes one is not installed here, so
+    /// it does not start yet.
+    Unavailable,
+    /// Outside it, because its entry asks.
+    OptedOut,
+    /// Outside it, because the sandbox is off for this run.
+    TurnedOff,
+    /// Outside it, because this system has none.
+    NoSandbox,
+}
+
+/// What a launch that awaits approval can reach over the network.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum McpApprovalNetwork {
+    /// The internet, and not services on this computer.
+    Internet,
+    /// The internet and services on this computer.
+    InternetAndLocal,
+    /// Everything the user can: nothing confines it.
+    Unconfined,
+}
+
+/// One environment variable a server's entry sets. `value` is there only
+/// where it can be shown: whole, or for an endpoint as where it points.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpApprovalEnv {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub value: Option<String>,
+    /// Set when the entry sets this variable and it is not passed to the
+    /// server: it would load code no approval of the launch covers. The
+    /// approval does not pin it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub not_passed: bool,
+}
+
+/// What an approval covers, field by field: everything `fingerprint` pins
+/// that can be shown. A local server has `program`, `sandbox` and `network`;
+/// a remote one has `url`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpApprovalLaunch {
+    /// The folder the approval is recorded for.
+    pub project: String,
+    /// The program that runs: the absolute path a bare command resolves to
+    /// on the host `PATH`, or the command as its entry writes it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub program: Option<String>,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: Vec<McpApprovalEnv>,
+    /// The folder the server starts in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub working_folder: Option<String>,
+    /// The files whose content the approval pins, as the launch names them
+    /// from the project. A change to one asks again; no other file the
+    /// server loads is checked.
+    #[serde(default)]
+    pub files: Vec<String>,
+    /// Whether this launch is asked about at every start. Something it runs
+    /// could not be checked, so no approval of it is kept past the run it
+    /// was given in. A client reads this, never the wording of `files`,
+    /// which a file's name could imitate.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub asked_at_every_start: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub sandbox: Option<McpApprovalSandbox>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub network: Option<McpApprovalNetwork>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub url: Option<String>,
+    /// The names of the headers a remote server's entry sends. Their values
+    /// hold credentials and are never shown.
+    #[serde(default)]
+    pub header_names: Vec<String>,
+    /// Where a remote server's entry sends the user to sign in, when it
+    /// names that itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub authorize_url: Option<String>,
+    /// Where a remote server's entry sends the sign-in code for a token,
+    /// when it names that itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub token_url: Option<String>,
+    /// The access a remote server's entry asks the sign-in for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub oauth_scope: Option<String>,
+    /// The client a remote server's entry signs in as, when it names one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub oauth_client_id: Option<String>,
+    /// Where a remote server's entry has the sign-in send the user back,
+    /// when it names that itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub oauth_redirect_uri: Option<String>,
+    /// Whether a remote server's entry holds a client secret for the
+    /// sign-in. The approval pins it; its value is never sent.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub oauth_client_secret_set: bool,
+}
+
+/// What a client asks its user before a project server may start. The
+/// client shows `question` as it is, with `launch` beside it, in a window the
+/// page it hosts cannot draw or answer, and sends `fingerprint` back with a
+/// yes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpApprovalRequest {
+    pub name: String,
+    pub scope: McpServerScope,
+    /// The command or URL, where and with what rights it starts, and what an
+    /// approval leaves unchecked, ending in the question itself.
+    pub question: String,
+    /// The hash of the launch `question` describes.
+    pub fingerprint: String,
+    /// The same launch in parts. A host older than this field sends none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub launch: Option<McpApprovalLaunch>,
+}
+
+/// JSON-RPC error code for a yes that no longer names what is there, so
+/// nothing was approved: an `mcp/approval/grant` whose launch is no longer
+/// the one `fingerprint` names, with `data` the [`McpApprovalRequest`] for
+/// the launch as it is now, or a `skills/consent` whose skills are no longer
+/// the ones `digest` names, with `data` the [`SkillListResponse`] as it is
+/// now. Either is shown again before it is asked about again.
+pub const MCP_APPROVAL_STALE_ERROR_CODE: i32 = -32012;
+
+/// Params of `mcp/approval/grant`: the user said yes to the launch
+/// `mcp/approval/read` described as `fingerprint`. A launch that changed
+/// since is refused, so nothing is approved that was not shown.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpApprovalGrantParams {
+    pub name: String,
+    pub scope: McpServerScope,
+    pub fingerprint: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -3274,6 +3651,448 @@ impl DeveloperSessionHandoff {
     }
 }
 
+/// Where a new worktree starts.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+#[ts(rename_all = "snake_case", tag = "kind")]
+pub enum WorktreeStartPoint {
+    /// A commit-ish such as `HEAD` or `origin/main`, checked out detached.
+    Ref { name: String },
+    /// HEAD plus every uncommitted change in the repository, tracked or not.
+    WorkingTree,
+}
+
+/// Params of `worktree/managed/create`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ManagedWorktreeCreateParams {
+    pub start: WorktreeStartPoint,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub label: Option<String>,
+}
+
+/// The repository's worktree setup script. It is arbitrary code, so it runs
+/// only once the user has approved this exact content, named by its hash.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeSetupScript {
+    pub path: String,
+    pub sha256: String,
+    /// The user approved this content before, so it may run without asking.
+    pub approved: bool,
+}
+
+/// A worktree the host made for one coding session.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ManagedWorktreeSummary {
+    pub id: String,
+    /// The checkout a session in this worktree runs in.
+    pub path: String,
+    pub repository_root: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub label: Option<String>,
+    pub start: WorktreeStartPoint,
+    pub base_commit: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub head: Option<String>,
+    pub created_at: String,
+    /// The one session this worktree belongs to, once it has claimed it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub thread_id: Option<String>,
+    /// That session as the store recorded it, so a client can list it without
+    /// starting a host in the worktree.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub thread: Option<ThreadSummary>,
+    /// Cleanup never removes a pinned worktree.
+    pub pinned: bool,
+    /// A host is serving it, so cleanup and delete leave it alone.
+    pub active: bool,
+    /// The checkout directory is gone and only the record remains.
+    pub missing: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub setup_exit_code: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub setup_ran_at: Option<String>,
+}
+
+/// A worktree removed after its contents were kept on a ref.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeArchive {
+    pub worktree_id: String,
+    /// Holds everything the worktree had, committed or not, when removed.
+    pub snapshot_ref: String,
+    pub snapshot_commit: String,
+}
+
+/// A `.worktreeinclude` match that was not copied, and why.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeRefusedFile {
+    pub path: String,
+    pub reason: String,
+}
+
+/// An older worktree cleanup could not archive, left exactly as it was.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeCleanupFailure {
+    /// Empty when the worktrees could not be listed at all.
+    pub worktree_id: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeCreateResponse {
+    pub worktree: ManagedWorktreeSummary,
+    /// Files `.worktreeinclude` named that were copied in.
+    pub copied_files: Vec<String>,
+    pub refused_files: Vec<WorktreeRefusedFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub setup_script: Option<WorktreeSetupScript>,
+    /// Older worktrees archived to stay within the keep count.
+    pub archived: Vec<WorktreeArchive>,
+    /// Older worktrees cleanup could not archive. The new worktree was made.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cleanup_failures: Vec<WorktreeCleanupFailure>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ManagedWorktreeListResponse {
+    /// Newest first.
+    pub worktrees: Vec<ManagedWorktreeSummary>,
+    /// How many of the newest worktrees cleanup keeps.
+    pub keep: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub setup_script: Option<WorktreeSetupScript>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeIdParams {
+    pub worktree_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreePinParams {
+    pub worktree_id: String,
+    pub pinned: bool,
+}
+
+/// Params of `worktree/managed/keep`: the new keep count, or none to read it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeKeepParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub keep: Option<u32>,
+}
+
+/// How many of the newest worktrees cleanup keeps, after any change.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeKeepResponse {
+    pub keep: u32,
+    /// The largest count the host accepts.
+    pub max_keep: u32,
+}
+
+/// Params of `worktree/managed/applyToLocal`. With `preview`, nothing is written.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeApplyParams {
+    pub worktree_id: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub preview: bool,
+}
+
+/// What apply-to-local did to each file the session changed. Applied files
+/// matched where the worktree started; skipped files already matched the
+/// worktree; conflicted files were changed locally and were left untouched.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeApplyResponse {
+    pub applied: Vec<String>,
+    pub skipped: Vec<String>,
+    pub conflicted: Vec<String>,
+    pub preview: bool,
+}
+
+/// Params of `worktree/managed/setup/run`: the hash of the content the user approved.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeSetupRunParams {
+    pub worktree_id: String,
+    pub sha256: String,
+}
+
+/// Params of `worktree/managed/setup/finished`. `worktree/managed/setup/run` only starts the
+/// script, because a connection answers one request at a time and an install
+/// can run for minutes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeSetupFinishedNotification {
+    pub worktree_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub thread_id: Option<String>,
+    /// Absent when the script was killed by a signal or could not start.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub exit_code: Option<i32>,
+    pub succeeded: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum WorktreeSetupStream {
+    Stdout,
+    Stderr,
+}
+
+/// Params of `worktree/managed/setup/log`, streamed while a setup script runs.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorktreeSetupLogNotification {
+    pub worktree_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub thread_id: Option<String>,
+    pub stream: WorktreeSetupStream,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum CheckpointFileStatus {
+    Added,
+    Modified,
+    Deleted,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct CheckpointFile {
+    pub path: String,
+    pub status: CheckpointFileStatus,
+    pub binary: bool,
+}
+
+/// One turn's checkpoint: the whole workspace before it began and after it
+/// ended, including changes a shell command or a subagent made.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TurnCheckpointSummary {
+    pub turn_id: String,
+    /// One-based position of the turn in the thread.
+    pub index: u32,
+    pub started_at: String,
+    /// Absent while the turn runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub finished_at: Option<String>,
+    pub files: Vec<CheckpointFile>,
+    /// Untracked files too large to snapshot, which neither this turn's review
+    /// nor a rewind covers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skipped_files: Vec<String>,
+    /// The conversation can rewind with the files. False once the transcript
+    /// was compacted past this turn, when only a fresh session could.
+    pub rewindable: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct CheckpointListResponse {
+    pub thread_id: String,
+    /// False when the workspace is not a git repository.
+    pub available: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub unavailable_reason: Option<String>,
+    /// Oldest first.
+    pub turns: Vec<TurnCheckpointSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct CheckpointTurnParams {
+    pub thread_id: String,
+    pub turn_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct CheckpointHunk {
+    pub index: u32,
+    /// The `@@` line.
+    pub header: String,
+    /// The hunk as unified-diff text, `@@` line included.
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct CheckpointFileDiff {
+    pub path: String,
+    pub status: CheckpointFileStatus,
+    pub binary: bool,
+    /// Empty for a binary file, which is taken or left whole.
+    pub hunks: Vec<CheckpointHunk>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct CheckpointDiffResponse {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub index: u32,
+    pub files: Vec<CheckpointFileDiff>,
+}
+
+/// One file of a turn, narrowed to some of its hunks or, with none named,
+/// the whole file.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct CheckpointSection {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hunks: Vec<u32>,
+}
+
+/// Params of `checkpoint/revert` and `checkpoint/stage`. With `preview`,
+/// nothing changes and the answer says what would.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct CheckpointSectionsParams {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub sections: Vec<CheckpointSection>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub preview: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct CheckpointSectionConflict {
+    pub path: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct CheckpointSectionsResponse {
+    pub applied: Vec<String>,
+    /// Sections the files have moved on from, left exactly as they are.
+    pub conflicted: Vec<CheckpointSectionConflict>,
+    pub preview: bool,
+}
+
+/// What a `thread/revert` puts back as it was before the turn.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub enum ThreadRevertRestore {
+    #[default]
+    Both,
+    Code,
+    Conversation,
+}
+
+impl ThreadRevertRestore {
+    pub fn restores_code(self) -> bool {
+        matches!(self, Self::Both | Self::Code)
+    }
+
+    pub fn restores_conversation(self) -> bool {
+        matches!(self, Self::Both | Self::Conversation)
+    }
+
+    #[allow(clippy::trivially_copy_pass_by_ref)] // serde skip_serializing_if requires fn(&T) -> bool.
+    fn is_both(&self) -> bool {
+        *self == Self::Both
+    }
+}
+
+/// Params of `thread/revert`: rewind the files, the conversation or both to
+/// just before `turn_id` began. With `preview`, nothing changes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadRevertParams {
+    pub thread_id: String,
+    pub turn_id: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub preview: bool,
+    #[serde(default, skip_serializing_if = "ThreadRevertRestore::is_both")]
+    pub restore: ThreadRevertRestore,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadRevertResponse {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub preview: bool,
+    /// Every file whose current content the rewind replaces or deletes,
+    /// whoever last changed it.
+    pub files: Vec<String>,
+    /// Untracked files too large to snapshot, which the rewind leaves as they
+    /// are.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skipped_files: Vec<String>,
+    /// Messages dropped from the conversation, this turn's and every later one's.
+    pub messages_removed: u32,
+    /// Where the workspace as it stood before the rewind was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub recovery_ref: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3281,6 +4100,144 @@ mod tests {
         AGENT_EVENT_SCHEMA_VERSION, AgentEvent, AgentEventToolCategory,
         AgentEventToolExecutionStart,
     };
+
+    #[test]
+    fn basic_worktree_wire_shapes_remain_unchanged() {
+        let request = serde_json::json!({ "name": "review-topic" });
+        let params: WorktreeCreateParams = serde_json::from_value(request.clone()).unwrap();
+        assert_eq!(params.name.as_deref(), Some("review-topic"));
+        assert_eq!(serde_json::to_value(params).unwrap(), request);
+
+        let response = serde_json::json!({
+            "worktrees": [{
+                "name": "review-topic",
+                "path": "/workspace/review-topic",
+                "branch": "review-topic",
+                "hasWork": true
+            }]
+        });
+        let result: WorktreeListResponse = serde_json::from_value(response.clone()).unwrap();
+        assert_eq!(result.worktrees.len(), 1);
+        assert!(result.worktrees[0].has_work);
+        assert_eq!(serde_json::to_value(result).unwrap(), response);
+    }
+
+    #[test]
+    fn managed_worktree_creation_requires_its_explicit_start_and_capability() {
+        let request = serde_json::json!({
+            "start": { "kind": "working_tree" },
+            "label": "review-topic"
+        });
+        let params: ManagedWorktreeCreateParams = serde_json::from_value(request.clone()).unwrap();
+        assert_eq!(params.start, WorktreeStartPoint::WorkingTree);
+        assert_eq!(serde_json::to_value(params).unwrap(), request);
+        assert!(
+            serde_json::from_value::<ManagedWorktreeCreateParams>(
+                serde_json::json!({ "name": "review-topic" })
+            )
+            .is_err()
+        );
+        assert_ne!(method::WORKTREE_CREATE, method::MANAGED_WORKTREE_CREATE);
+        assert_ne!(method::WORKTREE_LIST, method::MANAGED_WORKTREE_LIST);
+        let capabilities: AppServerCapabilities = serde_json::from_value(serde_json::json!({
+            "threads": true,
+            "turns": true,
+            "streaming": false,
+            "approvals": false,
+            "tools": false,
+            "mcp": false,
+            "checkpoints": false,
+            "worktrees": true,
+            "models": false
+        }))
+        .unwrap();
+        assert!(capabilities.worktrees);
+        assert!(!capabilities.managed_worktrees);
+        assert!(
+            serde_json::to_value(capabilities)
+                .unwrap()
+                .get("managedWorktrees")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn thread_deletion_keeps_legacy_request_and_acknowledgement_shapes() {
+        let request: ThreadDeleteParams =
+            serde_json::from_value(serde_json::json!({ "threadId": "thread-fixture" })).unwrap();
+        assert!(!request.discard_worktree_archives);
+        let response: ThreadDeleteResponse =
+            serde_json::from_value(serde_json::json!({ "acknowledged": true })).unwrap();
+        assert!(response.acknowledged);
+        assert!(response.kept_worktree_archives.is_empty());
+        assert!(response.removed_worktree_archives.is_empty());
+        let old_client: AcknowledgedResponse =
+            serde_json::from_value(serde_json::to_value(response).unwrap()).unwrap();
+        assert!(old_client.acknowledged);
+    }
+
+    #[test]
+    fn an_mcp_approval_request_reads_with_or_without_its_launch_in_parts() {
+        let older: McpApprovalRequest = serde_json::from_value(serde_json::json!({
+            "name": "docs",
+            "scope": "project",
+            "question": "Allow it?",
+            "fingerprint": "abc",
+        }))
+        .expect("a host older than `launch` still parses");
+        assert_eq!(older.launch, None);
+        assert!(
+            serde_json::to_value(&older)
+                .expect("serialize")
+                .get("launch")
+                .is_none(),
+            "an absent launch was written as null"
+        );
+
+        let request = McpApprovalRequest {
+            launch: Some(McpApprovalLaunch {
+                project: "/work/app".to_string(),
+                program: Some("/usr/bin/node".to_string()),
+                args: vec!["server.js".to_string()],
+                env: vec![
+                    McpApprovalEnv {
+                        name: "API_TOKEN".to_string(),
+                        ..McpApprovalEnv::default()
+                    },
+                    McpApprovalEnv {
+                        name: "LOG_LEVEL".to_string(),
+                        value: Some("debug".to_string()),
+                        not_passed: false,
+                    },
+                ],
+                working_folder: Some("/work/app".to_string()),
+                files: vec!["server.js".to_string()],
+                sandbox: Some(McpApprovalSandbox::KeptSandboxed),
+                network: Some(McpApprovalNetwork::InternetAndLocal),
+                ..McpApprovalLaunch::default()
+            }),
+            ..older
+        };
+        let wire = serde_json::to_value(&request).expect("serialize");
+        assert_eq!(
+            wire["launch"],
+            serde_json::json!({
+                "project": "/work/app",
+                "program": "/usr/bin/node",
+                "args": ["server.js"],
+                "env": [{ "name": "API_TOKEN" }, { "name": "LOG_LEVEL", "value": "debug" }],
+                "workingFolder": "/work/app",
+                "files": ["server.js"],
+                "sandbox": "kept_sandboxed",
+                "network": "internet_and_local",
+                "headerNames": [],
+            })
+        );
+        assert_eq!(
+            serde_json::from_value::<McpApprovalRequest>(wire).expect("round trip"),
+            request
+        );
+    }
 
     #[test]
     fn developer_session_v8_wraps_canonical_agent_events() {
@@ -3601,6 +4558,7 @@ mod tests {
                 reversible: Some(false),
                 proposed_content: None,
                 always_allow_saved: false,
+                proposed_execpolicy_amendment: None,
             }],
             last_turn: Some(HandoffLastTurn {
                 turn_id: "turn-9".to_string(),
@@ -3933,5 +4891,48 @@ mod tests {
             Err(HandoffRefusal::TrustModeUnknown)
         );
         assert!(!HandoffRefusal::TrustModeUnknown.label().is_empty());
+    }
+
+    #[test]
+    fn a_user_input_answer_round_trips_and_a_missing_one_cancels() {
+        let answered: UserInputResponseParams = serde_json::from_value(serde_json::json!({
+            "threadId": "thread-1",
+            "turnId": "turn-1",
+            "requestId": "q-1",
+            "answer": "main",
+        }))
+        .expect("answer");
+        assert_eq!(answered.answer.as_deref(), Some("main"));
+        assert_eq!(
+            serde_json::to_value(&answered).expect("serialize")["answer"],
+            "main"
+        );
+
+        for cancelled in [
+            serde_json::json!({ "threadId": "t", "turnId": "u", "requestId": "q", "answer": null }),
+            serde_json::json!({ "threadId": "t", "turnId": "u", "requestId": "q" }),
+        ] {
+            let params: UserInputResponseParams =
+                serde_json::from_value(cancelled).expect("cancel");
+            assert_eq!(params.answer, None);
+        }
+
+        let requested = UserInputRequestedParams {
+            thread_id: "thread-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            request_id: "q-1".to_string(),
+            question: "Which branch?".to_string(),
+        };
+        assert_eq!(
+            serde_json::to_value(&requested).expect("serialize"),
+            serde_json::json!({
+                "threadId": "thread-1",
+                "turnId": "turn-1",
+                "requestId": "q-1",
+                "question": "Which branch?",
+            })
+        );
+        assert_eq!(method::USER_INPUT_REQUESTED, "userInput/requested");
+        assert_eq!(method::USER_INPUT_RESPOND, "userInput/respond");
     }
 }

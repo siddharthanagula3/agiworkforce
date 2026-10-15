@@ -14,98 +14,6 @@ pub struct SessionContext {
     pub cwd: String,
 }
 
-const MAX_ENV_KEY_LEN: usize = 256;
-
-pub fn validate_env_key(key: &str) -> Result<()> {
-    let mut chars = key.chars();
-    let shape_ok = matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_')
-        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
-    if !shape_ok || key.len() > MAX_ENV_KEY_LEN {
-        return Err(Error::Other(format!(
-            "Invalid environment variable name {:?}: names must match [A-Za-z_][A-Za-z0-9_]*",
-            key
-        )));
-    }
-    Ok(())
-}
-
-/// The rendered assignment is typed into a LIVE line editor, so a value's bytes
-/// are consumed by readline/PSReadLine as keystrokes before any shell parser
-/// sees them, and quoting cannot reach them. Control bytes are editing commands
-/// there: `\x18\x05` is readline's `edit-and-execute-command`, which hands the
-/// rest of the value to $EDITOR as keystrokes and then EXECUTES the edited
-/// buffer, with no newline anywhere in the value. Bytes above ASCII are no
-/// safer -- with `convert-meta` on (readline's default whenever the locale is
-/// not 8-bit clean, which is what a GUI app inherits when it is launched
-/// without LANG) each one arrives as ESC + byte and reaches meta bindings such
-/// as `shell-expand-line`, which performs command substitution. Printable ASCII
-/// is the only alphabet that self-inserts under every one of those settings.
-pub fn validate_env_value(value: &str) -> Result<()> {
-    if let Some(rejected) = value.chars().find(|c| !matches!(c, ' '..='~')) {
-        return Err(Error::Other(format!(
-            "Invalid environment variable value: {:?} is not printable ASCII, and the terminal's line editor would read it as a keystroke rather than text",
-            rejected
-        )));
-    }
-    Ok(())
-}
-
-fn posix_single_quote(value: &str) -> String {
-    // Backslash does not escape inside POSIX single quotes; the only way to emit
-    // one is to close the quote, add an escaped quote, and reopen.
-    value.replace('\'', r#"'"'"'"#)
-}
-
-pub fn set_env_command(shell_type: &ShellType, key: &str, value: &str) -> Result<String> {
-    validate_env_key(key)?;
-    validate_env_value(value)?;
-
-    Ok(match shell_type {
-        ShellType::PowerShell => format!("$env:{}='{}'", key, value.replace('\'', "''")),
-        ShellType::Cmd => {
-            // cmd.exe offers no escape that survives inside `set`: a quote ends the
-            // quoted assignment and %VAR% / !VAR! re-expand into command position,
-            // so such values are refused rather than quoted.
-            if value.contains(['"', '%', '!']) {
-                return Err(Error::Other(
-                    "Environment variable values containing \", % or ! are not supported on cmd.exe"
-                        .to_string(),
-                ));
-            }
-            format!("set \"{}={}\"", key, value)
-        }
-        // Fish is the one shell here whose single quotes honour backslash
-        // escapes, so the POSIX form leaves `export FOO='C:\'` unterminated and
-        // hangs the prompt on a continuation.
-        ShellType::Fish => format!(
-            "export {}='{}'",
-            key,
-            value.replace('\\', r"\\").replace('\'', r"\'")
-        ),
-        _ => format!("export {}='{}'", key, posix_single_quote(value)),
-    })
-}
-
-pub fn get_env_command(shell_type: &ShellType, key: &str) -> Result<String> {
-    validate_env_key(key)?;
-
-    Ok(match shell_type {
-        ShellType::PowerShell => format!("echo $env:{}", key),
-        ShellType::Cmd => format!("echo %{}%", key),
-        _ => format!("echo ${}", key),
-    })
-}
-
-pub fn unset_env_command(shell_type: &ShellType, key: &str) -> Result<String> {
-    validate_env_key(key)?;
-
-    Ok(match shell_type {
-        ShellType::PowerShell => format!("Remove-Item Env:{}", key),
-        ShellType::Cmd => format!("set {}=", key),
-        _ => format!("unset {}", key),
-    })
-}
-
 #[derive(Clone)]
 pub struct SessionManager {
     sessions: Arc<Mutex<HashMap<String, Arc<Mutex<PtySession>>>>>,
@@ -217,9 +125,30 @@ impl SessionManager {
         }
     }
 
-    pub async fn list_sessions(&self) -> Vec<String> {
+    pub async fn live_session_count(&self) -> usize {
         let sessions = self.sessions.lock().await;
-        sessions.keys().cloned().collect()
+        let mut live = 0;
+        for session in sessions.values() {
+            if session.lock().await.is_alive() {
+                live += 1;
+            }
+        }
+        live
+    }
+
+    pub async fn kill_all_trees(&self) -> usize {
+        let drained: Vec<(String, Arc<Mutex<PtySession>>)> =
+            self.sessions.lock().await.drain().collect();
+        let mut killed = 0;
+        for (session_id, session) in drained {
+            match session.lock().await.kill_tree() {
+                Ok(()) => killed += 1,
+                Err(error) => {
+                    tracing::warn!("Failed to end terminal session {session_id}: {error}");
+                }
+            }
+        }
+        killed
     }
 
     pub async fn get_session_context(&self, session_id: &str) -> Result<SessionContext> {
@@ -237,115 +166,6 @@ impl SessionManager {
             shell_type: session.shell_type.clone(),
             cwd: session.cwd.clone(),
         })
-    }
-
-    /// Set an environment variable in the terminal session
-    pub async fn set_env(&self, session_id: &str, key: &str, value: &str) -> Result<()> {
-        let sessions = self.sessions.lock().await;
-
-        let session_arc = sessions
-            .get(session_id)
-            .cloned()
-            .ok_or_else(|| Error::Other(format!("Session not found: {}", session_id)))?;
-
-        drop(sessions);
-
-        let mut session = session_arc.lock().await;
-
-        let command = set_env_command(&session.shell_type, key, value)?;
-
-        session.execute_command(&command)?;
-        tracing::debug!("Set environment variable {} in session {}", key, session_id);
-        Ok(())
-    }
-
-    /// Get an environment variable from the terminal session
-    pub async fn get_env(&self, session_id: &str, key: &str) -> Result<Option<String>> {
-        let sessions = self.sessions.lock().await;
-
-        let session_arc = sessions
-            .get(session_id)
-            .cloned()
-            .ok_or_else(|| Error::Other(format!("Session not found: {}", session_id)))?;
-
-        drop(sessions);
-
-        let mut session = session_arc.lock().await;
-
-        let command = get_env_command(&session.shell_type, key)?;
-
-        let output = session.execute_command(&command)?;
-
-        // If output is empty, the variable is not set
-        if output.trim().is_empty() {
-            return Ok(None);
-        }
-
-        Ok(Some(output.trim().to_string()))
-    }
-
-    /// List all environment variables in the terminal session
-    pub async fn list_env(&self, session_id: &str) -> Result<Vec<(String, String)>> {
-        let sessions = self.sessions.lock().await;
-
-        let session_arc = sessions
-            .get(session_id)
-            .cloned()
-            .ok_or_else(|| Error::Other(format!("Session not found: {}", session_id)))?;
-
-        drop(sessions);
-
-        let mut session = session_arc.lock().await;
-
-        // Use the appropriate command to list all environment variables per shell
-        let env_cmd = match session.shell_type {
-            ShellType::PowerShell => {
-                "Get-ChildItem Env: | ForEach-Object { \"$($_.Name)=$($_.Value)\" }"
-            }
-            ShellType::Cmd => "set",
-            _ => "env",
-        };
-        let output = session.execute_command(env_cmd)?;
-
-        let mut env_vars = Vec::new();
-        for line in output.lines() {
-            if let Some((key, value)) = line.split_once('=') {
-                if !key.is_empty() {
-                    env_vars.push((key.to_string(), value.to_string()));
-                }
-            }
-        }
-
-        tracing::debug!(
-            "Listed {} environment variables in session {}",
-            env_vars.len(),
-            session_id
-        );
-        Ok(env_vars)
-    }
-
-    /// Unset an environment variable in the terminal session
-    pub async fn unset_env(&self, session_id: &str, key: &str) -> Result<()> {
-        let sessions = self.sessions.lock().await;
-
-        let session_arc = sessions
-            .get(session_id)
-            .cloned()
-            .ok_or_else(|| Error::Other(format!("Session not found: {}", session_id)))?;
-
-        drop(sessions);
-
-        let mut session = session_arc.lock().await;
-
-        let command = unset_env_command(&session.shell_type, key)?;
-
-        session.execute_command(&command)?;
-        tracing::debug!(
-            "Unset environment variable {} in session {}",
-            key,
-            session_id
-        );
-        Ok(())
     }
 
     /// Clear command history in the terminal session

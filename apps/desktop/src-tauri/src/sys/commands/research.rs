@@ -6,7 +6,6 @@
 //! ## Events Emitted
 //!
 //! - `research:progress` - Progress updates during research
-//! - `research:completed` - Research completed successfully
 //! - `research:error` - Research failed with error
 
 use crate::core::research::{
@@ -219,6 +218,7 @@ pub async fn research_start(
     if query.is_empty() {
         return Err("Please provide a research topic or question.".to_string());
     }
+    crate::ui::hooks::gate_user_prompt("research", query).await?;
 
     // Get configuration
     let base_config = state.config.read().await.clone();
@@ -290,38 +290,6 @@ pub async fn research_start(
                 result.metadata.sources_cited,
                 result.metadata.duration_secs
             );
-
-            if let Some(task_id) = request.task_id.clone() {
-                for finding in &result.key_findings {
-                    let _ = app.emit(
-                        "research:finding_added",
-                        serde_json::json!({
-                            "task_id": task_id,
-                            "finding": finding,
-                        }),
-                    );
-                }
-
-                for citation in &result.citations {
-                    let domain = citation
-                        .url
-                        .as_deref()
-                        .and_then(|url| url::Url::parse(url).ok())
-                        .and_then(|parsed| parsed.domain().map(|d| d.to_string()));
-
-                    let _ = app.emit(
-                        "research:source_added",
-                        serde_json::json!({
-                            "task_id": task_id,
-                            "source": {
-                                "title": citation.title.clone(),
-                                "url": citation.url.clone().unwrap_or_default(),
-                                "domain": domain
-                            }
-                        }),
-                    );
-                }
-            }
 
             Ok(result.into())
         }

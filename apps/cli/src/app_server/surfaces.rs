@@ -18,8 +18,8 @@ use agiworkforce_protocol::developer_session::{
     PermissionsAddParams, PermissionsListResponse, PluginInstallParams, PluginListResponse,
     PluginRemoveParams, PluginScope, PluginSummary, PluginUpdateResponse, ProviderKeySummary,
     ProvidersListResponse, SavedPermission, SavedPermissionDecision, SavedPermissionKind,
-    SettingsReadResponse, SettingsWriteParams, SkillCatalogScope, SkillConsentResponse,
-    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSummary,
+    SettingsReadResponse, SettingsWriteParams, SkillCatalogScope, SkillConsentParams,
+    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSummary,
     SlashCommandListResponse, SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
     TrustListResponse, TrustedFolder,
 };
@@ -108,7 +108,8 @@ pub fn list_skills(workspace_root: &Path) -> SkillListResponse {
         .into_iter()
         .map(|definition| definition.name)
         .collect();
-    let skills = skills::skill_catalog(workspace_root)
+    let (catalog, project_skills_digest) = skills::skill_catalog_with_digest(workspace_root);
+    let skills = catalog
         .into_iter()
         .map(|entry| SkillSummary {
             missing_tools: skills::missing_tool_dependencies(&entry.skill, &available_tools),
@@ -123,7 +124,10 @@ pub fn list_skills(workspace_root: &Path) -> SkillListResponse {
             consented: entry.consented,
         })
         .collect();
-    SkillListResponse { skills }
+    SkillListResponse {
+        skills,
+        project_skills_digest,
+    }
 }
 
 pub fn set_skill_enabled(
@@ -147,23 +151,38 @@ pub fn project_skills_dir(workspace_root: &Path) -> PathBuf {
 
 pub fn set_skill_consent(
     workspace_root: &Path,
-    granted: bool,
+    params: SkillConsentParams,
 ) -> Result<SkillConsentResponse, DeveloperSessionHostError> {
-    let dir = project_skills_dir(workspace_root);
-    if granted {
-        if !dir.exists() {
-            return Err(DeveloperSessionHostError::not_found(format!(
-                "This workspace has no project skills at {}",
-                display(&dir)
-            )));
+    if params.granted {
+        let Some(shown) = params.digest.as_deref() else {
+            return Err(DeveloperSessionHostError::invalid_request(
+                "Allowing a workspace's skills needs the projectSkillsDigest that skills/list returned for the skills the user was shown",
+            ));
+        };
+        match skills::grant_project_skills_consent(workspace_root, shown) {
+            Ok(()) => {}
+            Err(skills::SkillConsentRefusal::NothingToAllow) => {
+                return Err(DeveloperSessionHostError::not_found(format!(
+                    "This workspace supplies no skills of its own under {}",
+                    display(&project_skills_dir(workspace_root))
+                )));
+            }
+            Err(skills::SkillConsentRefusal::Changed) => {
+                return Err(DeveloperSessionHostError::skills_consent_stale(
+                    "This workspace's skills changed while they were being reviewed, so nothing was allowed",
+                    list_skills(workspace_root),
+                ));
+            }
+            Err(skills::SkillConsentRefusal::Unsaved(error)) => return Err(internal(error)),
         }
-        skills::grant_project_skills_consent(&dir).map_err(internal)?;
     } else {
-        skills::revoke_project_skills_consent(&dir).map_err(internal)?;
+        skills::revoke_project_skills_consent(workspace_root).map_err(internal)?;
     }
     Ok(SkillConsentResponse {
-        consented: skills::project_skills_consent_recorded(&dir),
-        path: display(&skills::project_skills_consent_path(&dir)),
+        consented: skills::project_skills_consent_recorded(workspace_root),
+        path: skills::project_skills_consent_path()
+            .map(|path| display(&path))
+            .unwrap_or_default(),
     })
 }
 
@@ -247,20 +266,42 @@ fn mcp_status(state: McpCredentialState) -> McpServerConfiguredStatus {
 }
 
 pub fn list_mcp_servers(workspace_root: &Path) -> McpServerListResponse {
+    list_mcp_servers_for(workspace_root, true)
+}
+
+/// The servers as a connection may see them. One that did not prove it is
+/// the owner's is not told whether a server is signed in.
+pub fn list_mcp_servers_for(
+    workspace_root: &Path,
+    shows_credentials: bool,
+) -> McpServerListResponse {
+    let unapproved = crate::mcp::consent::awaiting_approval(workspace_root);
     let servers = crate::mcp::discover_servers(workspace_root)
         .into_iter()
         .map(|server| {
             let policy_refusal = crate::mcp::policy_refusal(&server.name, &server.config);
+            let awaits_approval = match server.origin {
+                McpServerOrigin::Project => unapproved.contains(&(false, server.name.clone())),
+                McpServerOrigin::Plugin => unapproved.contains(&(true, server.name.clone())),
+                McpServerOrigin::User => false,
+            };
             McpServerSummary {
                 transport: server.config.transport_kind().to_string(),
                 scope: mcp_scope(server.origin),
                 status: if policy_refusal.is_some() {
                     McpServerConfiguredStatus::Blocked
-                } else {
+                } else if awaits_approval {
+                    McpServerConfiguredStatus::NeedsApproval
+                } else if shows_credentials {
                     mcp_status(server.credential)
+                } else {
+                    McpServerConfiguredStatus::Configured
                 },
                 policy_refusal,
-                url: server.url,
+                url: server
+                    .url
+                    .as_deref()
+                    .map(crate::mcp::consent::shown_endpoint),
                 name: server.name,
             }
         })
@@ -342,6 +383,13 @@ fn read_instruction_file(path: &Path) -> Option<String> {
     std::fs::read_to_string(path).ok()
 }
 
+/// The project's instruction file, read only where it is a regular file
+/// inside the project: it is repository content, and this answers a
+/// connection that may only read.
+fn read_project_instruction_file(workspace_root: &Path, path: &Path) -> Option<String> {
+    crate::project_text::read_within(workspace_root, path)
+}
+
 fn effort_from_config(raw: &str) -> Option<DeveloperReasoningEffort> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "low" => Some(DeveloperReasoningEffort::Low),
@@ -408,7 +456,7 @@ pub fn read_settings(
             .as_deref()
             .and_then(permission_mode_from_config),
         user_instructions: read_instruction_file(&user_path),
-        project_instructions: read_instruction_file(&project_path),
+        project_instructions: read_project_instruction_file(workspace_root, &project_path),
         user_instructions_path: display(&user_path),
         project_instructions_path: display(&project_path),
         config_path: CliConfig::config_path()
@@ -662,7 +710,8 @@ pub async fn test_mcp_server(
     let started = std::time::Instant::now();
     let outcome = tokio::time::timeout(limit, async {
         let mut connection =
-            crate::mcp::McpConnection::connect(&server.name, &server.config).await?;
+            crate::mcp::McpConnection::connect(&server.name, &server.config, Some(workspace_root))
+                .await?;
         let tools = connection.list_tools().await;
         let _ = connection.shutdown().await;
         tools
@@ -736,7 +785,8 @@ pub async fn inspect_mcp_server(
     let server = startable_server(workspace_root, name).await?;
     let outcome = tokio::time::timeout(limit, async {
         let mut connection =
-            crate::mcp::McpConnection::connect(&server.name, &server.config).await?;
+            crate::mcp::McpConnection::connect(&server.name, &server.config, Some(workspace_root))
+                .await?;
         let report = inspect_connection(&server.name, &mut connection, false).await;
         let _ = connection.shutdown().await;
         anyhow::Ok(report)
@@ -770,7 +820,8 @@ pub async fn mcp_server_tools(
     let server = startable_server(workspace_root, name).await?;
     let listed = tokio::time::timeout(limit, async {
         let mut connection =
-            crate::mcp::McpConnection::connect(&server.name, &server.config).await?;
+            crate::mcp::McpConnection::connect(&server.name, &server.config, Some(workspace_root))
+                .await?;
         let tools = connection.list_tools().await;
         let prompts = connection.list_prompts().await;
         let resources = if connection.serves_resources() {
@@ -1632,6 +1683,30 @@ mod tests {
             );
         }
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn project_instructions_are_read_only_where_they_are_a_file_inside_the_project() {
+        let project = tempdir().expect("project");
+        let outside = tempdir().expect("outside");
+        std::fs::write(outside.path().join("id_rsa"), "a private key").expect("write key");
+        let path = project_instructions_path(project.path());
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("create folder");
+
+        std::os::unix::fs::symlink(outside.path().join("id_rsa"), &path).expect("link");
+        assert_eq!(
+            read_project_instruction_file(project.path(), &path),
+            None,
+            "a committed link handed a read-only connection a file from outside the project"
+        );
+
+        std::fs::remove_file(&path).expect("remove link");
+        std::fs::write(&path, "be brief").expect("write instructions");
+        assert_eq!(
+            read_project_instruction_file(project.path(), &path).as_deref(),
+            Some("be brief")
+        );
+    }
 }
 
 #[cfg(test)]
@@ -1722,11 +1797,14 @@ mod workspace_mcp_refusal_tests {
                         assert!(error.to_string().contains("allows only listed MCP hosts"));
                     }
                     let config = server_configs().remove("blocked-local-fixture").unwrap();
-                    let error =
-                        crate::mcp::McpConnection::connect("blocked-local-fixture", &config)
-                            .await
-                            .err()
-                            .expect("transport must remain blocked");
+                    let error = crate::mcp::McpConnection::connect(
+                        "blocked-local-fixture",
+                        &config,
+                        Some(root),
+                    )
+                    .await
+                    .err()
+                    .expect("transport must remain blocked");
                     assert!(error.to_string().contains("allows only listed MCP hosts"));
                 });
             })

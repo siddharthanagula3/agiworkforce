@@ -5,7 +5,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 82;
+const CURRENT_VERSION: i32 = 89;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -665,6 +665,34 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 82 {
         run_migration_in_transaction(conn, 82, apply_migration_v82)?;
+    }
+
+    if current_version < 83 {
+        run_migration_in_transaction(conn, 83, apply_migration_v83)?;
+    }
+
+    if current_version < 84 {
+        run_migration_in_transaction(conn, 84, apply_migration_v84)?;
+    }
+
+    if current_version < 85 {
+        run_migration_in_transaction(conn, 85, apply_migration_v85)?;
+    }
+
+    if current_version < 86 {
+        run_migration_in_transaction(conn, 86, apply_migration_v86)?;
+    }
+
+    if current_version < 87 {
+        run_migration_in_transaction(conn, 87, apply_migration_v87)?;
+    }
+
+    if current_version < 88 {
+        run_migration_in_transaction(conn, 88, apply_migration_v88)?;
+    }
+
+    if current_version < 89 {
+        run_migration_in_transaction(conn, 89, apply_migration_v89)?;
     }
 
     Ok(())
@@ -6482,6 +6510,269 @@ fn apply_migration_v82(conn: &Connection) -> Result<()> {
     )
 }
 
+/// Migration v83: keep what a Local chat showed across a restart.
+///
+/// Pins lived only in renderer storage, and a reloaded turn lost its tool
+/// timeline, reasoning and attachment list because no column held them.
+/// `tool_calls` already exists from v9 and is reused for the timeline.
+/// `client_id` records the id the renderer gave a message, so an edit or
+/// regenerate can delete the rows of a turn it has never reloaded.
+///
+/// The FTS insert and delete triggers from v45 are re-asserted and every
+/// message the index is missing is backfilled, so rows written before the
+/// index existed become searchable.
+fn apply_migration_v83(conn: &Connection) -> Result<()> {
+    ensure_column(
+        conn,
+        "conversations",
+        "pinned",
+        "pinned INTEGER NOT NULL DEFAULT 0",
+    )?;
+    ensure_column(conn, "messages", "thinking", "thinking TEXT")?;
+    ensure_column(conn, "messages", "attachments", "attachments TEXT")?;
+    ensure_column(conn, "messages", "client_id", "client_id TEXT")?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_conversation_client_id \
+         ON messages(conversation_id, client_id) WHERE client_id IS NOT NULL",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_conversations_user_mode_updated \
+         ON conversations(user_id, app_mode, updated_at DESC, id DESC)",
+        [],
+    )?;
+
+    if !table_exists(conn, "messages_fts")? {
+        return Ok(());
+    }
+    conn.execute_batch(
+        "CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
+            INSERT INTO messages_fts(message_id, conversation_id, content, sender, message_type, timestamp)
+            VALUES (CAST(new.id AS TEXT), CAST(new.conversation_id AS TEXT), new.content, new.role, 'text', new.created_at);
+        END;
+        CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
+            DELETE FROM messages_fts WHERE message_id = CAST(old.id AS TEXT);
+        END;
+        INSERT INTO messages_fts(message_id, conversation_id, content, sender, message_type, timestamp)
+        SELECT CAST(m.id AS TEXT), CAST(m.conversation_id AS TEXT), m.content, m.role, 'text', m.created_at
+        FROM messages m
+        WHERE CAST(m.id AS TEXT) NOT IN (SELECT message_id FROM messages_fts);",
+    )
+}
+
+/// Migration v84: instructions a user sets for one conversation, and how far
+/// the scheduled memory extractor has read each conversation. Both rows go
+/// when their conversation is deleted.
+fn apply_migration_v84(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS conversation_instructions (
+            conversation_id INTEGER PRIMARY KEY
+                REFERENCES conversations(id) ON DELETE CASCADE,
+            instructions TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS memory_summarization_progress (
+            conversation_id INTEGER PRIMARY KEY
+                REFERENCES conversations(id) ON DELETE CASCADE,
+            last_message_id INTEGER NOT NULL,
+            summarized_at TEXT NOT NULL
+        );",
+    )?;
+    Ok(())
+}
+
+/// Migration v85: a Local chat branched into a new chat remembers where it
+/// came from, so the reply it branched at can page between the original and
+/// its branches; and a reply keeps the thumbs feedback the user gave it.
+fn apply_migration_v85(conn: &Connection) -> Result<()> {
+    ensure_column(
+        conn,
+        "conversations",
+        "branched_from_conversation_id",
+        "branched_from_conversation_id INTEGER",
+    )?;
+    ensure_column(
+        conn,
+        "conversations",
+        "branched_from_message_id",
+        "branched_from_message_id INTEGER",
+    )?;
+    ensure_column(
+        conn,
+        "conversations",
+        "branch_point_message_id",
+        "branch_point_message_id INTEGER",
+    )?;
+    ensure_column(conn, "messages", "feedback", "feedback TEXT")?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_conversations_branch_source \
+         ON conversations(branched_from_conversation_id, branched_from_message_id) \
+         WHERE branched_from_conversation_id IS NOT NULL",
+        [],
+    )?;
+    Ok(())
+}
+
+/// Migration v87: compaction keeps the messages it summarizes. Each is marked
+/// with `compacted_into`, the id of the summary that replaced it in the
+/// model's history; the transcript, search and export still show it. Deleting
+/// a summary, by any path, returns its messages to the history in the same
+/// transaction, so none stays hidden behind a summary that is gone.
+fn apply_migration_v87(conn: &Connection) -> Result<()> {
+    ensure_column(conn, "messages", "compacted_into", "compacted_into INTEGER")?;
+    ensure_column(conn, "messages", "deleted_at_utc", "deleted_at_utc TEXT")?;
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_messages_compacted_into
+            ON messages(compacted_into) WHERE compacted_into IS NOT NULL;
+        CREATE TRIGGER IF NOT EXISTS messages_summary_deleted AFTER DELETE ON messages BEGIN
+            UPDATE messages SET compacted_into = NULL WHERE compacted_into = old.id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS messages_summary_tombstoned
+        AFTER UPDATE OF deleted_at_utc ON messages WHEN new.deleted_at_utc IS NOT NULL BEGIN
+            UPDATE messages SET compacted_into = NULL WHERE compacted_into = new.id;
+        END;",
+    )
+}
+
+/// Migration v88: a Local turn keeps the web sources it drew on. They reached
+/// the renderer only as a live event, so a reopened chat showed an answer
+/// with none of the links it was written from.
+fn apply_migration_v88(conn: &Connection) -> Result<()> {
+    ensure_column(conn, "messages", "sources", "sources TEXT")
+}
+
+/// OS keyring service an earlier build kept IMAP and SMTP passwords under, one
+/// entry per account named by its email address. A row whose
+/// `password_encrypted` is the marker has its secret there and not in the row.
+const RETIRED_EMAIL_KEYRING_SERVICE: &str = "agiworkforce-email";
+const RETIRED_EMAIL_KEYRING_MARKER: &str = "__KEYRING__";
+
+struct PurgedAccountCredentials {
+    accounts: usize,
+    messages: usize,
+    keyring_entries: usize,
+}
+
+/// Migration v89: the desktop email, Gmail and calendar clients are deleted
+/// and nothing is left that can disconnect an account, so what they stored is
+/// removed: `email_accounts` (IMAP and SMTP passwords), `gmail_accounts`
+/// (OAuth tokens and client secrets) and `calendar_accounts` (OAuth tokens and
+/// client settings), with the keyring entry of each email account that kept
+/// its password there. The mail those accounts downloaded goes first and by
+/// name (`email_attachments`, `emails`, then the `emails_fts` index), because
+/// the cascade from `email_accounts` only runs on a connection with foreign
+/// keys on. No other table and no other keyring service is read.
+fn apply_migration_v89(conn: &Connection) -> Result<()> {
+    let purged = purge_retired_account_credentials(conn, delete_retired_email_keyring_entry)?;
+    tracing::info!(
+        accounts = purged.accounts,
+        messages = purged.messages,
+        keyring_entries = purged.keyring_entries,
+        "Deleted the credentials stored by the removed email, Gmail and calendar clients"
+    );
+    Ok(())
+}
+
+fn purge_retired_account_credentials(
+    conn: &Connection,
+    delete_keyring_entry: impl Fn(&str) -> bool,
+) -> Result<PurgedAccountCredentials> {
+    let mut purged = PurgedAccountCredentials {
+        accounts: 0,
+        messages: 0,
+        keyring_entries: 0,
+    };
+
+    if table_exists(conn, "email_attachments")? {
+        conn.execute("DELETE FROM email_attachments", [])?;
+    }
+    if table_exists(conn, "emails")? {
+        purged.messages += conn.execute("DELETE FROM emails", [])?;
+    }
+    if table_exists(conn, "emails_fts")? {
+        conn.execute(
+            "INSERT INTO emails_fts(emails_fts) VALUES ('delete-all')",
+            [],
+        )?;
+    }
+    if table_exists(conn, "email_accounts")? {
+        let mut statement =
+            conn.prepare("SELECT email FROM email_accounts WHERE password_encrypted = ?1")?;
+        let keyring_emails = statement
+            .query_map([RETIRED_EMAIL_KEYRING_MARKER], |row| {
+                row.get::<_, String>(0)
+            })?
+            .collect::<Result<Vec<_>>>()?;
+        for email in keyring_emails {
+            if delete_keyring_entry(&email) {
+                purged.keyring_entries += 1;
+            }
+        }
+        purged.accounts += conn.execute("DELETE FROM email_accounts", [])?;
+    }
+    if table_exists(conn, "gmail_accounts")? {
+        purged.accounts += conn.execute("DELETE FROM gmail_accounts", [])?;
+    }
+    if table_exists(conn, "calendar_accounts")? {
+        purged.accounts += conn.execute("DELETE FROM calendar_accounts", [])?;
+    }
+
+    Ok(purged)
+}
+
+/// A keyring that refuses is logged and not retried: the row that named the
+/// entry is deleted either way, and the entry holds nothing this build reads.
+fn delete_retired_email_keyring_entry(email: &str) -> bool {
+    let deleted = keyring::Entry::new(RETIRED_EMAIL_KEYRING_SERVICE, email)
+        .and_then(|entry| entry.delete_credential());
+    match deleted {
+        Ok(()) => true,
+        Err(keyring::Error::NoEntry) => false,
+        Err(error) => {
+            tracing::warn!(%error, "Could not delete a retired email keyring entry");
+            false
+        }
+    }
+}
+
+/// Migration v86: an edit or a regenerate marks the rows it replaces with
+/// `superseded_key` instead of deleting them, so a crash before the new turn
+/// finishes cannot lose them, and the turns running now are recorded in
+/// `chat_turns_in_flight` by id only, inside the encrypted database.
+///
+/// The FTS update trigger is replaced by one that fires only when `content`
+/// changes. v45 created it for every column, and `CREATE TRIGGER IF NOT
+/// EXISTS` in v83 could not replace it on an upgraded database.
+fn apply_migration_v86(conn: &Connection) -> Result<()> {
+    ensure_column(conn, "messages", "superseded_key", "superseded_key TEXT")?;
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_messages_superseded_key
+            ON messages(superseded_key) WHERE superseded_key IS NOT NULL;
+        CREATE TABLE IF NOT EXISTS chat_turns_in_flight (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL
+                REFERENCES conversations(id) ON DELETE CASCADE,
+            user_message_id INTEGER NOT NULL,
+            launch_id TEXT NOT NULL,
+            started_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_chat_turns_in_flight_conversation
+            ON chat_turns_in_flight(conversation_id);",
+    )?;
+
+    if !table_exists(conn, "messages_fts")? {
+        return Ok(());
+    }
+    conn.execute_batch(
+        "DROP TRIGGER IF EXISTS messages_fts_au;
+        CREATE TRIGGER messages_fts_au AFTER UPDATE OF content ON messages BEGIN
+            DELETE FROM messages_fts WHERE message_id = CAST(old.id AS TEXT);
+            INSERT INTO messages_fts(message_id, conversation_id, content, sender, message_type, timestamp)
+            VALUES (CAST(new.id AS TEXT), CAST(new.conversation_id AS TEXT), new.content, new.role, 'text', new.created_at);
+        END;",
+    )
+}
+
 fn rewrap_machine_only_column(
     conn: &Connection,
     table: &str,
@@ -6958,6 +7249,133 @@ mod tests {
             .unwrap();
 
         assert_eq!(fk_enabled, 1);
+    }
+
+    /// v88 adds the column a turn's sources are stored in, on a fresh database
+    /// and on one that already has it.
+    #[test]
+    fn migration_v88_adds_the_message_sources_column_and_is_repeatable() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        assert!(table_has_column(&conn, "messages", "sources").unwrap());
+
+        apply_migration_v88(&conn).unwrap();
+        assert!(table_has_column(&conn, "messages", "sources").unwrap());
+    }
+
+    /// v83 stores pins and turn detail, and backfills the message search index
+    /// for rows written while it was missing, without duplicating indexed rows.
+    #[test]
+    fn migration_v83_adds_chat_state_columns_and_backfills_the_search_index() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        for (table, column) in [
+            ("conversations", "pinned"),
+            ("messages", "thinking"),
+            ("messages", "attachments"),
+            ("messages", "client_id"),
+        ] {
+            assert!(
+                table_has_column(&conn, table, column).unwrap(),
+                "{table}.{column} missing"
+            );
+        }
+        if !table_exists(&conn, "messages_fts").unwrap() {
+            return;
+        }
+
+        conn.execute(
+            "INSERT INTO conversations (title, user_id) VALUES ('Search', 'user')",
+            [],
+        )
+        .unwrap();
+        let conversation_id = conn.last_insert_rowid();
+        for content in ["indexed by the trigger", "written before the index existed"] {
+            conn.execute(
+                "INSERT INTO messages (conversation_id, user_id, role, content) VALUES (?1, 'user', 'user', ?2)",
+                params![conversation_id, content],
+            )
+            .unwrap();
+        }
+        let missing_id = conn.last_insert_rowid();
+        conn.execute(
+            "DELETE FROM messages_fts WHERE message_id = CAST(?1 AS TEXT)",
+            params![missing_id],
+        )
+        .unwrap();
+
+        apply_migration_v83(&conn).unwrap();
+
+        let indexed: i64 = conn
+            .query_row("SELECT COUNT(*) FROM messages_fts", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(indexed, 2);
+        let found: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM messages_fts WHERE messages_fts MATCH 'existed'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(found, 1);
+    }
+
+    /// v86 adds the superseded mark and the in-flight turn table, and leaves an
+    /// FTS update trigger that ignores changes to columns other than `content`,
+    /// also on a database whose v45 trigger fired on every column.
+    #[test]
+    fn migration_v86_marks_superseded_rows_and_narrows_the_search_trigger() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        assert!(table_has_column(&conn, "messages", "superseded_key").unwrap());
+        assert!(table_exists(&conn, "chat_turns_in_flight").unwrap());
+        if !table_exists(&conn, "messages_fts").unwrap() {
+            return;
+        }
+
+        conn.execute_batch(
+            "DROP TRIGGER messages_fts_au;
+            CREATE TRIGGER messages_fts_au AFTER UPDATE ON messages BEGIN
+                DELETE FROM messages_fts WHERE message_id = CAST(old.id AS TEXT);
+            END;",
+        )
+        .unwrap();
+        apply_migration_v86(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO conversations (title, user_id) VALUES ('Search', 'user')",
+            [],
+        )
+        .unwrap();
+        let conversation_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO messages (conversation_id, user_id, role, content) VALUES (?1, 'user', 'user', 'first draft')",
+            params![conversation_id],
+        )
+        .unwrap();
+        let message_id = conn.last_insert_rowid();
+        conn.execute(
+            "UPDATE messages SET superseded_key = 'edit' WHERE id = ?1",
+            params![message_id],
+        )
+        .unwrap();
+        let indexed = |term: &str| -> i64 {
+            conn.query_row(
+                "SELECT COUNT(*) FROM messages_fts WHERE messages_fts MATCH ?1",
+                params![term],
+                |row| row.get(0),
+            )
+            .unwrap()
+        };
+        assert_eq!(indexed("draft"), 1);
+
+        conn.execute(
+            "UPDATE messages SET content = 'second version' WHERE id = ?1",
+            params![message_id],
+        )
+        .unwrap();
+        assert_eq!(indexed("draft"), 0);
+        assert_eq!(indexed("second"), 1);
     }
 
     /// The real-world v67 path is an UPGRADE of an existing v66 install with live
@@ -7445,6 +7863,143 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM auth_sessions", [], |row| row.get(0))
             .unwrap();
         assert_eq!(row_count, 1);
+    }
+
+    /// Migration v89 deletes what the removed email, Gmail and calendar clients
+    /// stored, asks the keyring only for accounts whose password lived there,
+    /// and leaves every other secret alone.
+    #[test]
+    fn migration_v89_deletes_retired_account_credentials_and_nothing_else() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE gmail_accounts (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                token_encrypted TEXT NOT NULL,
+                client_secret_encrypted TEXT NOT NULL
+            );
+            INSERT INTO gmail_accounts (id, email, token_encrypted, client_secret_encrypted)
+                VALUES ('gmail-1', 'gmail@example.com', 'token-ciphertext', 'secret-ciphertext');
+            INSERT INTO email_accounts (provider, email, imap_host, imap_port, smtp_host,
+                                        smtp_port, password_encrypted, created_at)
+                VALUES ('custom', 'keyring@example.com', 'imap.example.com', 993,
+                        'smtp.example.com', 587, '__KEYRING__', 1),
+                       ('custom', 'database@example.com', 'imap.example.com', 993,
+                        'smtp.example.com', 587, 'password-ciphertext', 1);
+            INSERT INTO calendar_accounts (id, provider, account_email, token_json, config_json,
+                                           created_at, updated_at)
+                VALUES ('calendar-1', 'google', 'calendar@example.com', 'token-ciphertext',
+                        'client-settings', 1, 1);
+            INSERT INTO settings (key, value, encrypted)
+                VALUES ('provider_api_key', 'api-key-ciphertext', 1);",
+        )
+        .unwrap();
+
+        let asked = std::cell::RefCell::new(Vec::new());
+        let purged = purge_retired_account_credentials(&conn, |email| {
+            asked.borrow_mut().push(email.to_string());
+            true
+        })
+        .unwrap();
+
+        assert_eq!(asked.into_inner(), vec!["keyring@example.com".to_string()]);
+        assert_eq!(purged.accounts, 4);
+        assert_eq!(purged.keyring_entries, 1);
+        for table in ["email_accounts", "gmail_accounts", "calendar_accounts"] {
+            let remaining: i64 = conn
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })
+                .unwrap();
+            assert_eq!(remaining, 0, "{table} still holds credentials");
+        }
+        let other_secret: String = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'provider_api_key'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(other_secret, "api-key-ciphertext");
+
+        let again = purge_retired_account_credentials(&conn, |_| {
+            panic!("a second run has no account left to ask the keyring about")
+        })
+        .unwrap();
+        assert_eq!(again.accounts, 0);
+        assert_eq!(again.messages, 0);
+        assert_eq!(again.keyring_entries, 0);
+    }
+
+    /// With foreign keys off, deleting an account cascades to nothing, so the
+    /// mail it downloaded has to be deleted by name.
+    #[test]
+    fn migration_v89_deletes_downloaded_mail_where_foreign_keys_are_off() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        conn.execute_batch(
+            "PRAGMA foreign_keys = OFF;
+            INSERT INTO email_accounts (provider, email, imap_host, imap_port, smtp_host,
+                                        smtp_port, password_encrypted, created_at)
+                VALUES ('custom', 'database@example.com', 'imap.example.com', 993,
+                        'smtp.example.com', 587, 'password-ciphertext', 1);
+            INSERT INTO emails (id, account_id, message_id, subject, from_email, to_emails,
+                                date, body_text, size, created_at)
+                VALUES ('mail-1',
+                        (SELECT id FROM email_accounts WHERE email = 'database@example.com'),
+                        '<1@example.com>', 'Quarterly numbers', 'sender@example.com',
+                        'database@example.com', 1, 'confidential forecast', 21, 1),
+                       ('mail-orphan', 9999, '<2@example.com>', 'Left behind',
+                        'sender@example.com', 'gone@example.com', 1, 'orphaned body', 13, 1);
+            INSERT INTO email_attachments (email_id, filename, content_type, size, created_at)
+                VALUES ('mail-1', 'forecast.pdf', 'application/pdf', 10, 1),
+                       ('mail-gone', 'orphan.pdf', 'application/pdf', 10, 1);",
+        )
+        .unwrap();
+        let foreign_keys: i64 = conn
+            .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(foreign_keys, 0);
+
+        let purged = purge_retired_account_credentials(&conn, |_| true).unwrap();
+
+        assert_eq!(purged.accounts, 1);
+        assert_eq!(purged.messages, 2);
+        for table in ["email_accounts", "emails", "email_attachments"] {
+            let remaining: i64 = conn
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })
+                .unwrap();
+            assert_eq!(remaining, 0, "{table} still holds mail");
+        }
+        let indexed: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM emails_fts WHERE emails_fts MATCH 'forecast OR orphaned'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(indexed, 0);
+
+        let again = purge_retired_account_credentials(&conn, |_| true).unwrap();
+        assert_eq!(again.accounts, 0);
+        assert_eq!(again.messages, 0);
+    }
+
+    /// A database that never had `gmail_accounts`, which was created outside
+    /// the chain on first use, migrates without it.
+    #[test]
+    fn migration_v89_runs_where_the_gmail_table_was_never_created() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        let purged = purge_retired_account_credentials(&conn, |_| true).unwrap();
+
+        assert_eq!(purged.accounts, 0);
+        assert_eq!(purged.messages, 0);
+        assert_eq!(purged.keyring_entries, 0);
     }
 
     /// FIX-F6 (audit 2026-05-19): pin the behaviour of migration v63, it

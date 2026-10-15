@@ -1,25 +1,12 @@
 //! Memory integration for LLM context injection
 //!
-//! This module provides utilities for loading and formatting memories into LLM system prompts
-//! and context. It handles:
-//! - Loading project-specific memories
-//! - Detecting decision statements in chat
-//! - Formatting memories as context for the LLM
-//! - Maintaining memory importance and relevance
+//! Loads account and exact-folder project memories and formats them as bounded,
+//! untrusted context for the LLM system prompt.
 
 use crate::core::agi::memory_manager::{MemoryCategory, MemoryEntry, MemoryManager};
 use crate::core::agi::project_memory::{ProjectMemory, ProjectMemoryManager, ProjectMemoryType};
 use crate::sys::error::Result;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::sync::LazyLock;
-
-static DECISION_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
-    vec![
-        Regex::new(r"(?i)(decided|decided to|we(?:'ll| will)|let's|i(?:'ll| will)|use|implement|adopt|switch to|migrate to|prefer|choose)").expect("valid decision regex"),
-        Regex::new(r"(?i)(architecture|tech stack|technology stack|style guide|coding standard|convention|pattern)").expect("valid architecture regex"),
-    ]
-});
 
 const MAX_MEMORY_CONTEXT_DATA_CHARS: usize = 8_000;
 const MAX_MEMORY_TOPIC_CHARS: usize = 200;
@@ -91,34 +78,15 @@ pub struct MemorySummary {
     pub total_importance_weight: i32,
 }
 
-/// Decision detection result
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DecisionDetectionResult {
-    /// Whether a decision was detected
-    pub is_decision: bool,
-    /// The extracted decision topic
-    pub topic: Option<String>,
-    /// The decision content
-    pub content: String,
-    /// Detected importance (1-10)
-    pub importance: i32,
-}
-
 /// Memory injector for LLM context
 pub struct MemoryInjector {
     config: MemoryInjectionConfig,
-    decision_patterns: Vec<Regex>,
 }
 
 impl MemoryInjector {
     /// Create a new memory injector with default configuration
     pub fn new(config: MemoryInjectionConfig) -> Result<Self> {
-        let decision_patterns = DECISION_PATTERNS.clone();
-
-        Ok(Self {
-            config,
-            decision_patterns,
-        })
+        Ok(Self { config })
     }
 
     /// Load memories for a project folder
@@ -191,55 +159,6 @@ impl MemoryInjector {
             has_relevant_memories: has_relevant,
             summary,
         })
-    }
-
-    /// Detect if a message contains a decision statement
-    pub fn detect_decision(&self, message: &str) -> DecisionDetectionResult {
-        let mut is_decision = false;
-        let mut max_importance = 5;
-
-        // Check for decision patterns
-        for pattern in &self.decision_patterns {
-            if pattern.is_match(message) {
-                is_decision = true;
-                max_importance = 8; // High importance for detected decisions
-                break;
-            }
-        }
-
-        // Extract topic from message (first few words)
-        let words: Vec<&str> = message.split_whitespace().collect();
-        let topic = if words.len() > 2 {
-            words[0..3.min(words.len())]
-                .join("_")
-                .to_lowercase()
-                .replace(" ", "_")
-        } else {
-            message
-                .chars()
-                .take(20)
-                .collect::<String>()
-                .replace(" ", "_")
-        };
-
-        // Boost importance for architectural decisions
-        let importance = if message.to_lowercase().contains("architecture")
-            || message.to_lowercase().contains("design")
-            || message.to_lowercase().contains("pattern")
-        {
-            9
-        } else if is_decision {
-            max_importance
-        } else {
-            5
-        };
-
-        DecisionDetectionResult {
-            is_decision,
-            topic: if is_decision { Some(topic) } else { None },
-            content: message.to_string(),
-            importance,
-        }
     }
 
     /// Format memories as context for LLM inclusion
@@ -345,16 +264,6 @@ impl MemoryInjector {
         }
         injection.context.clone()
     }
-
-    /// Set the configuration
-    pub fn set_config(&mut self, config: MemoryInjectionConfig) {
-        self.config = config;
-    }
-
-    /// Get the current configuration
-    pub fn get_config(&self) -> &MemoryInjectionConfig {
-        &self.config
-    }
 }
 
 fn project_memory_as_entry(memory: ProjectMemory) -> MemoryEntry {
@@ -407,25 +316,6 @@ fn project_memory_prompt_content(memory_type: &ProjectMemoryType, content: &str)
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_decision_detection() {
-        let injector = MemoryInjector::new(MemoryInjectionConfig::default()).unwrap();
-
-        let decision_msg = "We decided to use Rust for the backend";
-        let result = injector.detect_decision(decision_msg);
-        assert!(result.is_decision);
-        assert!(result.importance >= 7);
-
-        let arch_msg = "Architecture: Microservices pattern";
-        let result = injector.detect_decision(arch_msg);
-        assert!(result.is_decision);
-        assert!(result.importance >= 8);
-
-        let regular_msg = "Hello, how are you?";
-        let result = injector.detect_decision(regular_msg);
-        assert!(!result.is_decision);
-    }
 
     #[test]
     fn test_format_memories() {

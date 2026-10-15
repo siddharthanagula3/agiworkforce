@@ -651,12 +651,16 @@ impl McpClient {
                     "[{}] Connection lost, attempting reconnect...",
                     self.server_name
                 );
-                self.reconnect().await.with_context(|| {
-                    format!(
-                        "[{}] Failed to reconnect after connection error",
-                        self.server_name
-                    )
-                })?;
+                match self.reconnect().await {
+                    Ok(()) => {}
+                    Err(refused) if refused.is::<RespawnRefused>() => return Err(refused),
+                    Err(error) => {
+                        return Err(error.context(format!(
+                            "[{}] Failed to reconnect after connection error",
+                            self.server_name
+                        )));
+                    }
+                }
                 self.dispatch(method, params, timeout).await
             }
             outcome => outcome,
@@ -977,6 +981,16 @@ impl McpClient {
     }
 
     async fn reopen(&mut self) -> Result<()> {
+        if matches!(self.transport_config, TransportConfig::Stdio { .. })
+            && let Some(still_allowed) = &self.hooks.before_respawn
+            && let Err(reason) = still_allowed()
+        {
+            return Err(RespawnRefused(format!(
+                "[{}] MCP server not restarted: {reason}",
+                self.server_name
+            ))
+            .into());
+        }
         self.stderr_buf = Arc::new(StderrBuffer::new(&self.timeouts));
         self.conn = open_conn(
             &self.server_name,
@@ -1115,6 +1129,10 @@ async fn open_conn(
     })
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+struct RespawnRefused(String);
+
 fn with_meta(params: Value, meta: Value) -> Value {
     let mut object = match params {
         Value::Object(object) => object,
@@ -1149,6 +1167,7 @@ mod tests {
             },
             client_metadata_url: None,
             on_log: noop_log(),
+            before_respawn: None,
         }
     }
 
@@ -1254,37 +1273,16 @@ mod tests {
     fn filter_manifest_env(
         manifest_env: &HashMap<String, String>,
     ) -> (HashMap<String, String>, Vec<String>) {
-        const BLOCKED: &[&str] = &[
-            "DYLD_INSERT_LIBRARIES",
-            "DYLD_LIBRARY_PATH",
-            "DYLD_FORCE_FLAT_NAMESPACE",
-            "LD_PRELOAD",
-            "LD_LIBRARY_PATH",
-            "LD_AUDIT",
-            "NODE_OPTIONS",
-            "PYTHONPATH",
-            "RUBYLIB",
-            "PERL5LIB",
-            "http_proxy",
-            "https_proxy",
-            "HTTP_PROXY",
-            "HTTPS_PROXY",
-            "ALL_PROXY",
-            "all_proxy",
-        ];
-        let mut allowed = HashMap::new();
-        let mut blocked_keys = Vec::new();
-        for (k, v) in manifest_env {
-            let key_upper = k.to_uppercase();
-            let is_blocked =
-                BLOCKED.iter().any(|b| b.eq_ignore_ascii_case(k)) || key_upper.ends_with("_PROXY");
-            if is_blocked {
-                blocked_keys.push(k.clone());
-            } else {
-                allowed.insert(k.clone(), v.clone());
-            }
-        }
-        (allowed, blocked_keys)
+        let (passed, withheld): (Vec<_>, Vec<_>) = manifest_env
+            .iter()
+            .partition(|(name, _)| crate::manifest_var_is_passed(name));
+        (
+            passed
+                .into_iter()
+                .map(|(name, value)| (name.clone(), value.clone()))
+                .collect(),
+            withheld.into_iter().map(|(name, _)| name.clone()).collect(),
+        )
     }
 
     fn manifest_env(pairs: &[(&str, &str)]) -> HashMap<String, String> {
@@ -1319,30 +1317,39 @@ mod tests {
     }
 
     #[test]
-    fn env_blocks_http_proxy_family() {
+    fn env_passes_a_proxy_the_entry_sets() {
         for var in &[
             "HTTP_PROXY",
             "HTTPS_PROXY",
             "http_proxy",
             "https_proxy",
             "ALL_PROXY",
+            "NO_PROXY",
         ] {
-            let env = manifest_env(&[(var, "http://attacker.com")]);
+            let env = manifest_env(&[(var, "http://proxy.example.invalid:8080")]);
             let (allowed, blocked) = filter_manifest_env(&env);
-            assert!(!allowed.contains_key(*var), "{var} should be blocked");
             assert!(
-                blocked.iter().any(|k| k.eq_ignore_ascii_case(var)),
-                "{var} not in blocked list"
+                allowed.contains_key(*var),
+                "{var} is the only way a server behind a proxy reaches the network"
             );
+            assert!(blocked.is_empty());
         }
     }
 
     #[test]
-    fn env_blocks_custom_proxy_suffix() {
-        let env = manifest_env(&[("MY_CUSTOM_PROXY", "http://attacker.com")]);
-        let (allowed, blocked) = filter_manifest_env(&env);
-        assert!(!allowed.contains_key("MY_CUSTOM_PROXY"));
-        assert!(blocked.contains(&"MY_CUSTOM_PROXY".to_string()));
+    fn env_withholds_every_variable_that_loads_code_and_says_so_to_the_host() {
+        for var in crate::WITHHELD_MANIFEST_VARS {
+            assert!(!crate::manifest_var_is_passed(var), "{var}");
+            assert!(!crate::manifest_var_is_passed(&var.to_lowercase()), "{var}");
+        }
+        assert!(crate::manifest_var_is_passed("PATH"));
+        assert!(crate::manifest_var_is_passed("API_TOKEN"));
+        for loads_a_file_nothing_pins in ["BASH_ENV", "NODE_PATH", "RUBYOPT", "PERL5OPT"] {
+            assert!(
+                !crate::manifest_var_is_passed(loads_a_file_nothing_pins),
+                "{loads_a_file_nothing_pins} was passed with its value pinned and the file it names not"
+            );
+        }
     }
 
     #[test]

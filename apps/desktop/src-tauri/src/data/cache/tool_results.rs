@@ -52,12 +52,6 @@ impl Default for ToolCacheTTLConfig {
         configs.insert("document_read".to_string(), Duration::from_secs(300));
         configs.insert("document_search".to_string(), Duration::from_secs(300));
 
-        configs.insert("email_send".to_string(), Duration::from_secs(0));
-        configs.insert("email_fetch".to_string(), Duration::from_secs(120));
-
-        configs.insert("calendar_create_event".to_string(), Duration::from_secs(0));
-        configs.insert("calendar_list_events".to_string(), Duration::from_secs(120));
-
         configs.insert("cloud_upload".to_string(), Duration::from_secs(0));
         configs.insert("cloud_download".to_string(), Duration::from_secs(300));
 

@@ -85,11 +85,6 @@ pub struct ExtensionInstaller {
 
     /// Optional progress callback
     progress_callback: Option<ProgressCallback>,
-
-    /// Optional Tauri app handle for emitting progress events directly.
-    /// When set, `emit_progress` sends `extension:install-progress` events
-    /// to the frontend in addition to calling `progress_callback`.
-    app_handle: Option<tauri::AppHandle>,
 }
 
 impl ExtensionInstaller {
@@ -99,7 +94,6 @@ impl ExtensionInstaller {
         Ok(Self {
             extensions_dir,
             progress_callback: None,
-            app_handle: None,
         })
     }
 
@@ -108,19 +102,12 @@ impl ExtensionInstaller {
         Self {
             extensions_dir,
             progress_callback: None,
-            app_handle: None,
         }
     }
 
     /// Set a progress callback
     pub fn with_progress_callback(mut self, callback: ProgressCallback) -> Self {
         self.progress_callback = Some(callback);
-        self
-    }
-
-    /// Set a Tauri app handle so progress events are emitted to the frontend.
-    pub fn with_app_handle(mut self, handle: tauri::AppHandle) -> Self {
-        self.app_handle = Some(handle);
         self
     }
 
@@ -150,9 +137,6 @@ impl ExtensionInstaller {
         path: P,
         repository: &ExtensionRepository,
     ) -> ExtensionResult<InstallResult> {
-        let path = path.as_ref();
-
-        // Phase 1: Validate package
         self.emit_progress(InstallProgress {
             extension_id: "unknown".to_string(),
             phase: InstallPhase::Validating,
@@ -160,7 +144,18 @@ impl ExtensionInstaller {
             message: "Validating extension package...".to_string(),
         });
 
-        let package = ExtensionPackage::from_file(path)?;
+        let (package, bytes) = ExtensionPackage::read(path)?;
+        self.install_package(&package, &bytes, repository).await
+    }
+
+    /// Install a package that was already read and checked, from the bytes
+    /// it was checked from ([`ExtensionPackage::read`]).
+    pub async fn install_package(
+        &self,
+        package: &ExtensionPackage,
+        bytes: &[u8],
+        repository: &ExtensionRepository,
+    ) -> ExtensionResult<InstallResult> {
         let extension_id = package.id().to_string();
 
         self.emit_progress(InstallProgress {
@@ -185,7 +180,7 @@ impl ExtensionInstaller {
             message: "Extracting extension files...".to_string(),
         });
 
-        let install_path = self.extract_package(path, &package)?;
+        let install_path = self.extract_package(bytes, package)?;
 
         self.emit_progress(InstallProgress {
             extension_id: extension_id.clone(),
@@ -253,7 +248,7 @@ impl ExtensionInstaller {
             message: "Finalizing installation...".to_string(),
         });
 
-        self.copy_icon(&install_path, &package)?;
+        self.copy_icon(&install_path, package)?;
 
         self.emit_progress(InstallProgress {
             extension_id: extension_id.clone(),
@@ -268,17 +263,17 @@ impl ExtensionInstaller {
 
         Ok(InstallResult {
             extension_id,
-            name: package.manifest.name,
-            version: package.manifest.version,
+            name: package.manifest.name.clone(),
+            version: package.manifest.version.clone(),
             install_path,
             was_update,
         })
     }
 
-    /// Extract the package to the extensions directory
-    fn extract_package<P: AsRef<Path>>(
+    /// Extract the package, held in `bytes`, to the extensions directory
+    fn extract_package(
         &self,
-        package_path: P,
+        bytes: &[u8],
         package: &ExtensionPackage,
     ) -> ExtensionResult<PathBuf> {
         let extension_id = package.id();
@@ -300,9 +295,7 @@ impl ExtensionInstaller {
             ))
         })?;
 
-        // Open and extract the ZIP
-        let file = std::fs::File::open(package_path.as_ref())?;
-        let mut archive = ZipArchive::new(file)?;
+        let mut archive = ZipArchive::new(std::io::Cursor::new(bytes))?;
         let total_entries = archive.len();
 
         for i in 0..total_entries {
@@ -531,7 +524,7 @@ impl ExtensionInstaller {
         Ok(())
     }
 
-    /// Emit a progress update via Tauri event and/or callback.
+    /// Report a progress update to the installer's callback.
     fn emit_progress(&self, progress: InstallProgress) {
         tracing::debug!(
             "Install progress: {} - {:?} {}%",
@@ -539,14 +532,6 @@ impl ExtensionInstaller {
             progress.phase,
             progress.progress
         );
-
-        // Emit Tauri event to frontend when app_handle is available
-        if let Some(ref app_handle) = self.app_handle {
-            use tauri::Emitter;
-            if let Err(e) = app_handle.emit("extension:install-progress", &progress) {
-                tracing::warn!("Failed to emit extension:install-progress event: {}", e);
-            }
-        }
 
         if let Some(ref callback) = self.progress_callback {
             callback(progress);
@@ -607,7 +592,6 @@ impl Default for ExtensionInstaller {
             Self {
                 extensions_dir: fallback,
                 progress_callback: None,
-                app_handle: None,
             }
         })
     }
@@ -688,8 +672,8 @@ mod tests {
     ) -> (ExtensionInstaller, ExtensionPackage, PathBuf) {
         let package_path = create_package_with_icon(temp_dir, icon, ship_icon_file);
         let installer = ExtensionInstaller::with_dir(temp_dir.join("extensions"));
-        let package = ExtensionPackage::from_file(&package_path).unwrap();
-        let install_path = installer.extract_package(&package_path, &package).unwrap();
+        let (package, bytes) = ExtensionPackage::read(&package_path).unwrap();
+        let install_path = installer.extract_package(&bytes, &package).unwrap();
         (installer, package, install_path)
     }
 
@@ -779,12 +763,45 @@ mod tests {
         let package_path = create_test_package(temp_dir.path());
 
         let installer = ExtensionInstaller::with_dir(temp_dir.path().join("extensions"));
-        let package = ExtensionPackage::from_file(&package_path).unwrap();
+        let (package, bytes) = ExtensionPackage::read(&package_path).unwrap();
 
-        let install_path = installer.extract_package(&package_path, &package).unwrap();
+        let install_path = installer.extract_package(&bytes, &package).unwrap();
 
         assert!(install_path.exists());
         assert!(install_path.join("manifest.json").exists());
         assert!(install_path.join("server/index.js").exists());
+    }
+
+    /// The archive is read once. A file swapped in at the same path after
+    /// the package was checked is not what gets extracted.
+    #[tokio::test]
+    async fn what_was_checked_is_what_is_extracted_even_if_the_file_is_replaced() {
+        let temp_dir = tempdir().unwrap();
+        let package_path = create_test_package(temp_dir.path());
+        let installer = ExtensionInstaller::with_dir(temp_dir.path().join("extensions"));
+        let (package, bytes) = ExtensionPackage::read(&package_path).unwrap();
+
+        let file = std::fs::File::create(&package_path).unwrap();
+        let mut zip = ZipWriter::new(file);
+        let options = SimpleFileOptions::default();
+        zip.start_file("manifest.json", options).unwrap();
+        zip.write_all(br#"{"id":"test-extension","name":"Swapped","version":"9.9.9","description":"swapped","command":"node","args":["server/index.js"]}"#)
+            .unwrap();
+        zip.start_file("server/index.js", options).unwrap();
+        zip.write_all(b"console.log('swapped');").unwrap();
+        zip.finish().unwrap();
+
+        let install_path = installer.extract_package(&bytes, &package).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(install_path.join("server/index.js")).unwrap(),
+            "console.log('hello');"
+        );
+        assert_ne!(
+            ExtensionPackage::from_file(&package_path)
+                .unwrap()
+                .package_hash,
+            package.package_hash
+        );
     }
 }

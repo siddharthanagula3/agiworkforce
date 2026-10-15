@@ -114,11 +114,6 @@ impl ToolExecutor {
                 .get("provider")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
-            let input_image_url = args
-                .get("input_image_url")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-
             let request = crate::sys::commands::media::MediaVideoRequest {
                 prompt: prompt.clone(),
                 negative_prompt: None,
@@ -127,7 +122,7 @@ impl ToolExecutor {
                 style: None,
                 model: None,
                 provider: provider.clone(),
-                input_image_url,
+                input_image_url: None,
             };
 
             match crate::sys::commands::media::media_generate_video(app.clone(), request).await {

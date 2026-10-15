@@ -2,7 +2,6 @@ use crate::data::db::models::PermissionType;
 use crate::sys::commands::settings::SettingsState;
 use crate::sys::commands::AppDatabase;
 
-use base64::{engine::general_purpose, Engine as _};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -10,16 +9,6 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use tauri::{AppHandle, Manager};
 use tracing::{debug, info, warn};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileMetadata {
-    pub size: u64,
-    pub is_file: bool,
-    pub is_dir: bool,
-    pub created: i64,
-    pub modified: i64,
-    pub readonly: bool,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DirEntry {
@@ -170,47 +159,6 @@ fn validate_read_path(path: &str) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
-/// Validate a path for WRITE. Same guarantees as `validate_read_path`
-/// (canonicalize + reject `..` + blacklist + blocked-paths denylist), returning
-/// the canonical path so callers write to the resolved path (not the raw,
-/// symlink-followable input). The denylist matters at least as much for writes:
-/// it prevents writing to `~/.ssh`, `~/.aws/credentials`, shell rc files, etc.
-fn validate_write_path(path: &str) -> Result<PathBuf, String> {
-    let canonical = validate_path_security(path)?;
-    if crate::sys::security::blocked_paths::is_blocked(&canonical) {
-        return Err(format!(
-            "Access denied: path is on the blocked-paths denylist: {}",
-            path
-        ));
-    }
-    Ok(canonical)
-}
-
-// AUDIT-003-014 fix: Escape glob special characters in path strings.
-// This prevents directory names containing glob metacharacters from being
-// interpreted as patterns, which could lead to unintended file access.
-fn escape_glob_special_chars(path: &str) -> String {
-    let mut escaped = String::with_capacity(path.len() * 2);
-    for c in path.chars() {
-        match c {
-            // Glob metacharacters that need escaping
-            '*' | '?' | '[' | ']' | '{' | '}' => {
-                escaped.push('[');
-                escaped.push(c);
-                escaped.push(']');
-            }
-            // Escape backslash on non-Windows (on Windows it's a path separator)
-            '\\' if !cfg!(windows) => {
-                escaped.push('[');
-                escaped.push('\\');
-                escaped.push(']');
-            }
-            _ => escaped.push(c),
-        }
-    }
-    escaped
-}
-
 /// FIX-016 (Sprint 2): the previous implementation walked a substring
 /// blacklist via `path_lower.contains(blocked)`, which produced both
 /// false positives (`events.txt` blocked because it contained `.ent`-ish
@@ -299,6 +247,22 @@ pub(crate) fn is_path_allowed(canonical_path: &str, allowed_dirs: &[PathBuf]) ->
     })
 }
 
+/// The folders the user has granted, each as the filesystem resolves it now:
+/// the list every path a command is handed is tested against with
+/// [`is_path_allowed`]. `None` when the settings cannot be read, which a
+/// caller treats as nothing granted.
+pub(crate) async fn granted_directories(app: &AppHandle) -> Option<Vec<PathBuf>> {
+    let settings_state = app.try_state::<SettingsState>()?;
+    let settings = settings_state.settings.lock().await;
+    Some(
+        settings
+            .allowed_directories
+            .iter()
+            .map(|dir| std::fs::canonicalize(dir).unwrap_or_else(|_| PathBuf::from(dir)))
+            .collect(),
+    )
+}
+
 async fn check_file_permission(
     path: &str,
     operation: FileOperation,
@@ -346,26 +310,21 @@ async fn check_file_permission(
     }
 
     let allowed_dirs = if let Some(app_handle) = app {
-        if let Some(settings_state) = app_handle.try_state::<SettingsState>() {
-            let settings = settings_state.settings.lock().await;
-            if settings.allowed_directories.is_empty() {
+        match granted_directories(app_handle).await {
+            Some(dirs) if dirs.is_empty() => {
                 warn!("No allowed directories configured; denying file operation");
                 return Ok(false);
             }
-
-            settings
-                .allowed_directories
-                .iter()
-                .map(|dir| std::fs::canonicalize(dir).unwrap_or_else(|_| PathBuf::from(dir)))
-                .collect::<Vec<_>>()
-        } else {
-            // M9: SettingsState is unavailable, fail closed rather than
-            // falling back to the entire home directory. Returning false here
-            // ensures no file operation is permitted without explicit configuration.
-            tracing::warn!(
-                "SettingsState unavailable for AppHandle, denying file operation as fail-safe"
-            );
-            return Ok(false);
+            Some(dirs) => dirs,
+            None => {
+                // M9: SettingsState is unavailable, fail closed rather than
+                // falling back to the entire home directory. Returning false here
+                // ensures no file operation is permitted without explicit configuration.
+                tracing::warn!(
+                    "SettingsState unavailable for AppHandle, denying file operation as fail-safe"
+                );
+                return Ok(false);
+            }
         }
     } else {
         // M9: No AppHandle at all, same fail-closed policy.
@@ -381,6 +340,28 @@ async fn check_file_permission(
     }
 
     Ok(true)
+}
+
+/// The test `file_read` applies, for a page command outside this module that
+/// is handed a path: it must lie in a folder the person granted, which
+/// includes the open project folder, and off the denylist. The refusal is the
+/// sentence the person reads.
+pub(crate) async fn require_granted_path(
+    app: &AppHandle,
+    path: &str,
+    operation: FileOperation,
+) -> Result<PathBuf, String> {
+    let canonical = validate_read_path(path)?;
+    let Some(database) = app.try_state::<AppDatabase>() else {
+        return Err("The local database is unavailable, so no file can be opened.".to_string());
+    };
+    if check_file_permission(path, operation, &database, Some(app)).await? {
+        Ok(canonical)
+    } else {
+        Err(format!(
+            "{path} is outside the folders you have allowed. Add its folder in Settings, Allowed Directories, or open it as the project folder."
+        ))
+    }
 }
 
 async fn log_file_operation(
@@ -730,199 +711,6 @@ pub async fn file_rename(
 }
 
 #[tauri::command]
-pub async fn file_copy(
-    app: AppHandle,
-    src: String,
-    dest: String,
-    state: tauri::State<'_, AppDatabase>,
-) -> Result<(), String> {
-    debug!("Copying file: {} -> {}", src, dest);
-
-    let canonical_src = validate_path_security(&src)?;
-    let canonical_dest = validate_path_security(&dest)?;
-    let canonical_src_str = canonical_src.to_string_lossy().to_string();
-    let canonical_dest_str = canonical_dest.to_string_lossy().to_string();
-
-    match fs::metadata(&canonical_src) {
-        Ok(metadata) => {
-            if !metadata.is_file() {
-                return Err(format!("Source is not a file: {}", src));
-            }
-
-            if metadata.len() > 1_000_000_000 {
-                return Err(format!(
-                    "File too large to copy: {} bytes. Maximum is 1GB",
-                    metadata.len()
-                ));
-            }
-        }
-        Err(_) => return Err(format!("Source file does not exist: {}", src)),
-    }
-
-    if canonical_dest.exists() {
-        return Err(format!(
-            "Destination already exists: {}. Cannot overwrite",
-            dest
-        ));
-    }
-
-    if !check_file_permission(&canonical_src_str, FileOperation::Read, &state, Some(&app)).await? {
-        return Err("Permission denied for source file".to_string());
-    }
-    if !check_file_permission(
-        &canonical_dest_str,
-        FileOperation::Write,
-        &state,
-        Some(&app),
-    )
-    .await?
-    {
-        return Err("Permission denied for destination file".to_string());
-    }
-
-    match fs::copy(&canonical_src, &canonical_dest) {
-        Ok(_) => {
-            log_file_operation(
-                &canonical_dest_str,
-                FileOperation::Write,
-                true,
-                None,
-                &state,
-            )
-            .await?;
-            info!(
-                "Successfully copied file: {} -> {}",
-                canonical_src_str, canonical_dest_str
-            );
-            Ok(())
-        }
-        Err(e) => {
-            let error = format!("Failed to copy file: {}", e);
-            Err(error)
-        }
-    }
-}
-
-#[tauri::command]
-pub async fn file_move(
-    app: AppHandle,
-    src: String,
-    dest: String,
-    state: tauri::State<'_, AppDatabase>,
-) -> Result<(), String> {
-    debug!("Moving file: {} -> {}", src, dest);
-
-    let canonical_src = validate_path_security(&src)?;
-    let canonical_dest = validate_path_security(&dest)?;
-    let canonical_src_str = canonical_src.to_string_lossy().to_string();
-    let canonical_dest_str = canonical_dest.to_string_lossy().to_string();
-
-    match fs::metadata(&canonical_src) {
-        Ok(metadata) => {
-            if !metadata.is_file() {
-                return Err(format!("Source is not a file: {}", src));
-            }
-
-            if metadata.len() > 1_000_000_000 {
-                return Err(format!(
-                    "File too large to move: {} bytes. Maximum is 1GB",
-                    metadata.len()
-                ));
-            }
-        }
-        Err(_) => return Err(format!("Source file does not exist: {}", src)),
-    }
-
-    if canonical_dest.exists() {
-        return Err(format!(
-            "Destination already exists: {}. Cannot overwrite",
-            dest
-        ));
-    }
-
-    if !check_file_permission(
-        &canonical_src_str,
-        FileOperation::Delete,
-        &state,
-        Some(&app),
-    )
-    .await?
-    {
-        return Err("Permission denied for source file".to_string());
-    }
-    if !check_file_permission(
-        &canonical_dest_str,
-        FileOperation::Write,
-        &state,
-        Some(&app),
-    )
-    .await?
-    {
-        return Err("Permission denied for destination file".to_string());
-    }
-
-    if let Some(parent) = canonical_dest.parent() {
-        if !parent.exists() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create destination directory: {}", e))?;
-        }
-    }
-
-    match fs::rename(&canonical_src, &canonical_dest) {
-        Ok(_) => {
-            log_file_operation(
-                &canonical_src_str,
-                FileOperation::Delete,
-                true,
-                None,
-                &state,
-            )
-            .await?;
-            log_file_operation(
-                &canonical_dest_str,
-                FileOperation::Write,
-                true,
-                None,
-                &state,
-            )
-            .await?;
-            info!(
-                "Successfully moved file: {} -> {}",
-                canonical_src_str, canonical_dest_str
-            );
-            Ok(())
-        }
-        Err(_) => {
-            fs::copy(&canonical_src, &canonical_dest)
-                .map_err(|e| format!("Failed to copy file: {}", e))?;
-            fs::remove_file(&canonical_src)
-                .map_err(|e| format!("Failed to delete source file: {}", e))?;
-            log_file_operation(
-                &canonical_src_str,
-                FileOperation::Delete,
-                true,
-                None,
-                &state,
-            )
-            .await?;
-            log_file_operation(
-                &canonical_dest_str,
-                FileOperation::Write,
-                true,
-                None,
-                &state,
-            )
-            .await?;
-            info!(
-                "Successfully moved file: {} -> {}",
-                canonical_src_str, canonical_dest_str
-            );
-            Ok(())
-        }
-    }
-}
-
-#[tauri::command]
 pub async fn file_exists(path: String) -> Result<bool, String> {
     let canonical_path = validate_path_security(&path)?;
 
@@ -953,8 +741,8 @@ pub async fn file_open_with_default_app(
     }
 
     // FIX-F4 (audit 2026-05-19): block executable extensions so an LLM that
-    // dropped a malicious binary via file_write_binary (now HITL-gated per
-    // FIX-F2) cannot chain into `open` to execute it. macOS `open` will
+    // dropped a malicious binary through a file write cannot chain into
+    // `open` to execute it. macOS `open` will
     // launch .app bundles; Windows Start-Process will execute .exe/.bat/.cmd
     // /.ps1; Linux xdg-open can execute .desktop files.
     const EXEC_EXTENSIONS: &[&str] = &[
@@ -987,74 +775,12 @@ pub async fn file_open_with_default_app(
         return Err("Permission denied".to_string());
     }
 
-    #[cfg(target_os = "macos")]
-    let mut command = {
-        let mut cmd = std::process::Command::new("open");
-        cmd.arg(&canonical_str);
-        cmd
-    };
-
-    #[cfg(target_os = "windows")]
-    let mut command = {
-        let mut cmd = std::process::Command::new("powershell");
-        cmd.args([
-            "-NoProfile",
-            "-Command",
-            "Start-Process",
-            "-FilePath",
-            &canonical_str,
-        ]);
-        cmd
-    };
-
-    #[cfg(target_os = "linux")]
-    let mut command = {
-        let mut cmd = std::process::Command::new("xdg-open");
-        cmd.arg(&canonical_str);
-        cmd
-    };
-
-    command
-        .spawn()
+    open::that_detached(&canonical_path)
         .map_err(|e| format!("Failed to launch default app: {}", e))?;
 
     log_file_operation(&canonical_str, FileOperation::Execute, true, None, &state).await?;
     info!("Opened path with default app: {}", canonical_str);
     Ok(())
-}
-
-#[tauri::command]
-pub async fn file_metadata(path: String) -> Result<FileMetadata, String> {
-    debug!("Getting metadata for: {}", path);
-
-    let canonical_path = validate_path_security(&path)?;
-    let canonical_str = canonical_path.to_string_lossy().to_string();
-
-    let metadata = fs::metadata(&canonical_path)
-        .map_err(|e| format!("Failed to get metadata for '{}': {}", canonical_str, e))?;
-
-    let created = metadata
-        .created()
-        .unwrap_or(SystemTime::UNIX_EPOCH)
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-
-    let modified = metadata
-        .modified()
-        .unwrap_or(SystemTime::UNIX_EPOCH)
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-
-    Ok(FileMetadata {
-        size: metadata.len(),
-        is_file: metadata.is_file(),
-        is_dir: metadata.is_dir(),
-        created,
-        modified,
-        readonly: metadata.permissions().readonly(),
-    })
 }
 
 #[tauri::command]
@@ -1206,415 +932,6 @@ pub async fn dir_delete(
     }
 }
 
-#[tauri::command]
-pub async fn dir_traverse(
-    app: AppHandle,
-    path: String,
-    glob_pattern: String,
-    state: tauri::State<'_, AppDatabase>,
-) -> Result<Vec<String>, String> {
-    debug!(
-        "Traversing directory: {} with pattern: {}",
-        path, glob_pattern
-    );
-
-    let canonical_path = validate_path_security(&path)?;
-    let canonical_str = canonical_path.to_string_lossy().to_string();
-
-    if glob_pattern.contains("..") {
-        return Err("Glob pattern cannot contain directory traversal (..)".to_string());
-    }
-    if glob_pattern.len() > 1000 {
-        return Err(format!(
-            "Glob pattern too long: {} characters. Maximum is 1000",
-            glob_pattern.len()
-        ));
-    }
-
-    match fs::metadata(&canonical_path) {
-        Ok(metadata) => {
-            if !metadata.is_dir() {
-                return Err(format!("Path is not a directory: {}", path));
-            }
-        }
-        Err(_) => return Err(format!("Directory does not exist: {}", path)),
-    }
-
-    if !check_file_permission(&canonical_str, FileOperation::Read, &state, Some(&app)).await? {
-        return Err("Permission denied".to_string());
-    }
-
-    // AUDIT-003-014 fix: Escape glob special characters in the base path to prevent
-    // unintended pattern matching. Special characters in the base path should be
-    // treated literally, not as glob metacharacters.
-    let escaped_path = escape_glob_special_chars(&canonical_str);
-
-    let full_pattern = if glob_pattern.is_empty() {
-        format!("{}*", escaped_path)
-    } else {
-        format!("{}/{}", escaped_path, glob_pattern)
-    };
-
-    let mut results = Vec::new();
-    const MAX_RESULTS: usize = 10_000;
-
-    match glob::glob(&full_pattern) {
-        Ok(paths) => {
-            for (index, entry) in paths.enumerate() {
-                if index >= MAX_RESULTS {
-                    warn!("Glob result limit reached: {} files", MAX_RESULTS);
-                    break;
-                }
-
-                match entry {
-                    Ok(path_buf) => {
-                        results.push(path_buf.to_string_lossy().to_string());
-                    }
-                    Err(e) => {
-                        warn!("Glob error: {}", e);
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            return Err(format!("Glob search failed: {}", e));
-        }
-    }
-    Ok(results)
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// file_read_range, Read with line-number offset + limit
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Response for a ranged file read.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FileReadRangeResult {
-    /// The lines requested (joined with newlines), prefixed with line numbers.
-    pub content: String,
-    /// 1-indexed line number of the first returned line.
-    pub start_line: usize,
-    /// 1-indexed line number of the last returned line.
-    pub end_line: usize,
-    /// Total number of lines in the file.
-    pub total_lines: usize,
-    /// True when there are more lines beyond `end_line`.
-    pub has_more: bool,
-}
-
-/// Read a file with a line-number offset and limit.
-///
-/// Each returned line is prefixed with its 1-based line number: `"42: <content>"`.
-/// This lets the agent navigate large files without loading them entirely
-/// into context.
-///
-/// # Arguments
-/// * `path`, Absolute or relative path to the file.
-/// * `offset`, 1-indexed line number to start from (default 1).
-/// * `limit`, Maximum number of lines to return (default 2000, max 5000).
-#[tauri::command]
-pub async fn file_read_range(
-    app: AppHandle,
-    path: String,
-    offset: Option<usize>,
-    limit: Option<usize>,
-    state: tauri::State<'_, AppDatabase>,
-) -> Result<FileReadRangeResult, String> {
-    debug!(
-        "Reading file with range: {} offset={:?} limit={:?}",
-        path, offset, limit
-    );
-
-    let canonical = validate_read_path(&path)?;
-    let canonical_str = canonical.to_string_lossy().to_string();
-
-    match fs::metadata(&canonical) {
-        Ok(metadata) => {
-            if metadata.len() > 100_000_000 {
-                return Err(format!(
-                    "File too large: {} bytes. Maximum is 100MB for safety",
-                    metadata.len()
-                ));
-            }
-            if !metadata.is_file() {
-                return Err(format!("Path is not a file: {}", path));
-            }
-        }
-        Err(e) => return Err(format!("Failed to access file metadata: {}", e)),
-    }
-
-    if !check_file_permission(&canonical_str, FileOperation::Read, &state, Some(&app)).await? {
-        return Err("Permission denied".to_string());
-    }
-
-    let content_str =
-        fs::read_to_string(&canonical).map_err(|e| format!("Failed to read file: {}", e))?;
-
-    log_file_operation(&path, FileOperation::Read, true, None, &state).await?;
-
-    let all_lines: Vec<&str> = content_str.lines().collect();
-    let total_lines = all_lines.len();
-
-    // Clamp offset to valid range (1-indexed input → 0-indexed internal).
-    let start_0 = offset.unwrap_or(1).saturating_sub(1).min(total_lines);
-    let max_limit = 5000usize;
-    let take = limit.unwrap_or(2000).min(max_limit);
-
-    let end_exclusive = (start_0 + take).min(total_lines);
-    let selected = &all_lines[start_0..end_exclusive];
-
-    // Prefix each line with its 1-based line number.
-    let content = selected
-        .iter()
-        .enumerate()
-        .map(|(i, line)| format!("{}: {}", start_0 + i + 1, line))
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    Ok(FileReadRangeResult {
-        content,
-        start_line: start_0 + 1,
-        end_line: end_exclusive,
-        total_lines,
-        has_more: end_exclusive < total_lines,
-    })
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileContextContent {
-    pub content: String,
-    pub size: u64,
-    pub line_count: usize,
-    pub language: Option<String>,
-    pub excerpt: String,
-}
-
-fn detect_language(path: &str) -> Option<String> {
-    let extension = Path::new(path)
-        .extension()
-        .and_then(|s| s.to_str())
-        .map(|s| s.to_lowercase())?;
-
-    let language = match extension.as_str() {
-        "rs" => "rust",
-        "js" => "javascript",
-        "ts" => "typescript",
-        "tsx" => "typescript",
-        "jsx" => "javascript",
-        "py" => "python",
-        "go" => "go",
-        "java" => "java",
-        "cpp" | "cc" | "cxx" => "cpp",
-        "c" => "c",
-        "h" | "hpp" => "cpp",
-        "cs" => "csharp",
-        "rb" => "ruby",
-        "php" => "php",
-        "swift" => "swift",
-        "kt" => "kotlin",
-        "scala" => "scala",
-        "sh" | "bash" => "bash",
-        "ps1" => "powershell",
-        "sql" => "sql",
-        "html" | "htm" => "html",
-        "css" => "css",
-        "scss" | "sass" => "scss",
-        "json" => "json",
-        "xml" => "xml",
-        "yaml" | "yml" => "yaml",
-        "toml" => "toml",
-        "md" | "markdown" => "markdown",
-        "txt" => "text",
-        _ => return None,
-    };
-
-    Some(language.to_string())
-}
-
-#[tauri::command]
-pub async fn fs_read_file_content(
-    app: AppHandle,
-    file_path: String,
-    state: tauri::State<'_, AppDatabase>,
-) -> Result<FileContextContent, String> {
-    debug!("Reading file content for context: {}", file_path);
-
-    let canonical = validate_read_path(&file_path)?;
-    let canonical_str = canonical.to_string_lossy().to_string();
-
-    match fs::metadata(&canonical) {
-        Ok(metadata) => {
-            if !metadata.is_file() {
-                return Err(format!("Path is not a file: {}", file_path));
-            }
-
-            // Smaller safety cap for context reads (prevents huge file ingestion)
-            if metadata.len() > 10_000_000 {
-                return Err(format!(
-                    "File too large for context read: {} bytes. Maximum is 10MB",
-                    metadata.len()
-                ));
-            }
-        }
-        Err(e) => return Err(format!("Failed to access file metadata: {}", e)),
-    }
-
-    if !check_file_permission(&canonical_str, FileOperation::Read, &state, Some(&app)).await? {
-        let error = "Permission denied".to_string();
-        log_file_operation(
-            &file_path,
-            FileOperation::Read,
-            false,
-            Some(error.clone()),
-            &state,
-        )
-        .await?;
-        return Err(error);
-    }
-
-    let content = match fs::read_to_string(&canonical) {
-        Ok(content) => content,
-        Err(e) => {
-            let error = format!("Failed to read file: {}", e);
-            log_file_operation(
-                &file_path,
-                FileOperation::Read,
-                false,
-                Some(error.clone()),
-                &state,
-            )
-            .await?;
-            return Err(error);
-        }
-    };
-
-    let metadata =
-        fs::metadata(&canonical).map_err(|e| format!("Failed to get file metadata: {}", e))?;
-    let size = metadata.len();
-
-    let line_count = content.lines().count();
-
-    let language = detect_language(&file_path);
-
-    let excerpt = if content.len() > 500 {
-        format!(
-            "{}...",
-            &content[..crate::core::agi::floor_char_boundary(&content, 500)]
-        )
-    } else {
-        content.clone()
-    };
-
-    log_file_operation(&file_path, FileOperation::Read, true, None, &state).await?;
-
-    Ok(FileContextContent {
-        content,
-        size,
-        line_count,
-        language,
-        excerpt,
-    })
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkspaceFile {
-    pub path: String,
-    pub name: String,
-    pub size: u64,
-    pub is_file: bool,
-    pub is_dir: bool,
-    pub extension: Option<String>,
-    pub language: Option<String>,
-}
-
-#[tauri::command]
-pub async fn fs_get_workspace_files(
-    app: AppHandle,
-    workspace_path: String,
-    state: tauri::State<'_, AppDatabase>,
-) -> Result<Vec<WorkspaceFile>, String> {
-    debug!("Getting workspace files: {}", workspace_path);
-
-    let _ = validate_path_security(&workspace_path)?;
-
-    match fs::metadata(&workspace_path) {
-        Ok(metadata) => {
-            if !metadata.is_dir() {
-                return Err(format!("Path is not a directory: {}", workspace_path));
-            }
-        }
-        Err(_) => return Err(format!("Directory does not exist: {}", workspace_path)),
-    }
-
-    if !check_file_permission(&workspace_path, FileOperation::Read, &state, Some(&app)).await? {
-        return Err("Permission denied".to_string());
-    }
-
-    let entries =
-        fs::read_dir(&workspace_path).map_err(|e| format!("Failed to read directory: {}", e))?;
-
-    let mut files = Vec::new();
-
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
-        let path = entry.path();
-        let path_str = path.to_str().unwrap_or("").to_string();
-
-        let name = entry.file_name().to_str().unwrap_or("").to_string();
-        if name.starts_with('.')
-            || name == "node_modules"
-            || name == "target"
-            || name == "dist"
-            || name == "build"
-        {
-            continue;
-        }
-
-        let metadata = match entry.metadata() {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
-
-        let is_file = metadata.is_file();
-        let is_dir = metadata.is_dir();
-        let size = metadata.len();
-
-        let extension = path
-            .extension()
-            .and_then(|s| s.to_str())
-            .map(|s| s.to_string());
-
-        let language = if is_file {
-            detect_language(&path_str)
-        } else {
-            None
-        };
-
-        files.push(WorkspaceFile {
-            path: path_str,
-            name,
-            size,
-            is_file,
-            is_dir,
-            extension,
-            language,
-        });
-    }
-
-    files.sort_by(|a, b| {
-        if a.is_dir && !b.is_dir {
-            std::cmp::Ordering::Less
-        } else if !a.is_dir && b.is_dir {
-            std::cmp::Ordering::Greater
-        } else {
-            a.name.to_lowercase().cmp(&b.name.to_lowercase())
-        }
-    });
-
-    Ok(files)
-}
-
 #[cfg(test)]
 mod fix_016_blacklist_tests {
     //! FIX-016 (Sprint 2): pin the canonical-path-aware blacklist
@@ -1706,22 +1023,6 @@ mod tests {
             .unwrap());
     }
 
-    #[tokio::test]
-    async fn test_file_metadata() {
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("test.txt");
-
-        fs::write(&file_path, "test content").unwrap();
-
-        let metadata = file_metadata(file_path.to_str().unwrap().to_string())
-            .await
-            .unwrap();
-
-        assert!(metadata.is_file);
-        assert!(!metadata.is_dir);
-        assert_eq!(metadata.size, 12);
-    }
-
     #[test]
     fn test_blacklist_check() {
         assert!(is_blacklisted_path("C:\\Windows\\System32\\kernel32.dll"));
@@ -1778,437 +1079,4 @@ mod fix_f3_path_allowed_prefix_tests {
         assert!(is_path_allowed("C:\\Users\\foo\\file.txt", &allowed));
         assert!(!is_path_allowed("C:\\Users\\foobar\\file.txt", &allowed));
     }
-}
-
-#[tauri::command]
-pub async fn file_read_text(
-    app: AppHandle,
-    file_path: String,
-    state: tauri::State<'_, AppDatabase>,
-) -> Result<String, String> {
-    let canonical = validate_read_path(&file_path)?;
-    let canonical_str = canonical.to_string_lossy().to_string();
-
-    if !check_file_permission(&canonical_str, FileOperation::Read, &state, Some(&app)).await? {
-        let error = "Permission denied".to_string();
-        log_file_operation(
-            &file_path,
-            FileOperation::Read,
-            false,
-            Some(error.clone()),
-            &state,
-        )
-        .await?;
-        return Err(error);
-    }
-
-    match fs::read_to_string(&canonical) {
-        Ok(content) => {
-            log_file_operation(&file_path, FileOperation::Read, true, None, &state).await?;
-            Ok(content)
-        }
-        Err(e) => {
-            let error = format!("Failed to read file: {}", e);
-            log_file_operation(
-                &file_path,
-                FileOperation::Read,
-                false,
-                Some(error.clone()),
-                &state,
-            )
-            .await?;
-            Err(error)
-        }
-    }
-}
-
-#[tauri::command]
-pub async fn file_write_text(
-    app: AppHandle,
-    file_path: String,
-    content: String,
-    state: tauri::State<'_, AppDatabase>,
-) -> Result<(), String> {
-    let canonical = validate_write_path(&file_path)?;
-    let canonical_str = canonical.to_string_lossy().to_string();
-
-    if content.len() > 100_000_000 {
-        return Err(format!(
-            "Content too large: {} bytes. Maximum is 100MB",
-            content.len()
-        ));
-    }
-
-    // FIX-F2 (audit 2026-05-19): mirror of file_write HITL gate so the
-    // _text variant cannot bypass confirmation.
-    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
-        &app,
-        "file_write_text",
-        &serde_json::json!({ "path": file_path, "size_bytes": content.len() }),
-    )
-    .await?
-    {
-        return Err("Operation denied by user".to_string());
-    }
-
-    if !check_file_permission(&canonical_str, FileOperation::Write, &state, Some(&app)).await? {
-        let error = "Permission denied".to_string();
-        log_file_operation(
-            &file_path,
-            FileOperation::Write,
-            false,
-            Some(error.clone()),
-            &state,
-        )
-        .await?;
-        return Err(error);
-    }
-
-    if let Some(parent) = canonical.parent() {
-        if !parent.exists() {
-            fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
-        }
-    }
-
-    match fs::write(&canonical, content) {
-        Ok(_) => {
-            log_file_operation(&file_path, FileOperation::Write, true, None, &state).await?;
-            Ok(())
-        }
-        Err(e) => {
-            let error = format!("Failed to write file: {}", e);
-            log_file_operation(
-                &file_path,
-                FileOperation::Write,
-                false,
-                Some(error.clone()),
-                &state,
-            )
-            .await?;
-            Err(error)
-        }
-    }
-}
-
-#[tauri::command]
-pub async fn file_read_binary(
-    app: AppHandle,
-    file_path: String,
-    state: tauri::State<'_, AppDatabase>,
-) -> Result<String, String> {
-    let canonical = validate_read_path(&file_path)?;
-    let canonical_str = canonical.to_string_lossy().to_string();
-
-    if !check_file_permission(&canonical_str, FileOperation::Read, &state, Some(&app)).await? {
-        let error = "Permission denied".to_string();
-        log_file_operation(
-            &file_path,
-            FileOperation::Read,
-            false,
-            Some(error.clone()),
-            &state,
-        )
-        .await?;
-        return Err(error);
-    }
-
-    match fs::read(&canonical) {
-        Ok(data) => {
-            log_file_operation(&file_path, FileOperation::Read, true, None, &state).await?;
-            Ok(general_purpose::STANDARD.encode(&data))
-        }
-        Err(e) => {
-            let error = format!("Failed to read file: {}", e);
-            log_file_operation(
-                &file_path,
-                FileOperation::Read,
-                false,
-                Some(error.clone()),
-                &state,
-            )
-            .await?;
-            Err(error)
-        }
-    }
-}
-
-#[tauri::command]
-pub async fn file_write_binary(
-    app: AppHandle,
-    file_path: String,
-    base64_content: String,
-    state: tauri::State<'_, AppDatabase>,
-) -> Result<(), String> {
-    let canonical = validate_write_path(&file_path)?;
-    let canonical_str = canonical.to_string_lossy().to_string();
-
-    if base64_content.len() > 134_000_000 {
-        return Err("Content too large. Maximum is 100MB decoded".to_string());
-    }
-
-    // FIX-F2 (audit 2026-05-19): mirror of file_write HITL gate. Binary
-    // writes are the higher-risk variant since they can drop arbitrary
-    // executable content; pair this with the file_open_with_default_app
-    // extension blocklist (FIX-F4) so the chain can't reach `open`.
-    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
-        &app,
-        "file_write_binary",
-        &serde_json::json!({ "path": file_path, "encoded_size_bytes": base64_content.len() }),
-    )
-    .await?
-    {
-        return Err("Operation denied by user".to_string());
-    }
-
-    if !check_file_permission(&canonical_str, FileOperation::Write, &state, Some(&app)).await? {
-        let error = "Permission denied".to_string();
-        log_file_operation(
-            &file_path,
-            FileOperation::Write,
-            false,
-            Some(error.clone()),
-            &state,
-        )
-        .await?;
-        return Err(error);
-    }
-
-    let data = general_purpose::STANDARD
-        .decode(&base64_content)
-        .map_err(|e| format!("Failed to decode base64: {}", e))?;
-
-    if let Some(parent) = canonical.parent() {
-        if !parent.exists() {
-            fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
-        }
-    }
-
-    match fs::write(&canonical, data) {
-        Ok(_) => {
-            log_file_operation(&file_path, FileOperation::Write, true, None, &state).await?;
-            Ok(())
-        }
-        Err(e) => {
-            let error = format!("Failed to write file: {}", e);
-            log_file_operation(
-                &file_path,
-                FileOperation::Write,
-                false,
-                Some(error.clone()),
-                &state,
-            )
-            .await?;
-            Err(error)
-        }
-    }
-}
-
-#[tauri::command]
-pub async fn file_get_metadata(file_path: String) -> Result<FileMetadata, String> {
-    let _ = validate_path_security(&file_path)?;
-
-    let metadata =
-        fs::metadata(&file_path).map_err(|e| format!("Failed to get metadata: {}", e))?;
-
-    let created = metadata
-        .created()
-        .unwrap_or(SystemTime::UNIX_EPOCH)
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-
-    let modified = metadata
-        .modified()
-        .unwrap_or(SystemTime::UNIX_EPOCH)
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-
-    Ok(FileMetadata {
-        size: metadata.len(),
-        is_file: metadata.is_file(),
-        is_dir: metadata.is_dir(),
-        created,
-        modified,
-        readonly: metadata.permissions().readonly(),
-    })
-}
-
-#[tauri::command]
-pub async fn undo_file_operation(
-    app: AppHandle,
-    operation: String,
-    path: String,
-    content: Option<String>,
-    state: tauri::State<'_, AppDatabase>,
-) -> Result<(), String> {
-    info!("Undo file operation: {} on {}", operation, path);
-
-    let canonical_path = validate_path_security(&path)?;
-    let canonical_str = canonical_path.to_string_lossy().to_string();
-
-    match operation.as_str() {
-        "restore" => {
-            let content = content.ok_or("Content required for restore operation")?;
-
-            if content.len() > 100_000_000 {
-                return Err(format!(
-                    "Content too large: {} bytes. Maximum is 100MB",
-                    content.len()
-                ));
-            }
-
-            if !check_file_permission(&canonical_str, FileOperation::Write, &state, Some(&app))
-                .await?
-            {
-                return Err("Permission denied".to_string());
-            }
-
-            if let Some(parent) = canonical_path.parent() {
-                if !parent.exists() {
-                    fs::create_dir_all(parent)
-                        .map_err(|e| format!("Failed to create parent directory: {}", e))?;
-                }
-            }
-
-            fs::write(&canonical_path, content)
-                .map_err(|e| format!("Failed to restore file: {}", e))?;
-            log_file_operation(&canonical_str, FileOperation::Write, true, None, &state).await?;
-            info!("Successfully restored file: {}", canonical_str);
-            Ok(())
-        }
-        "delete" => {
-            if !check_file_permission(&canonical_str, FileOperation::Delete, &state, Some(&app))
-                .await?
-            {
-                return Err("Permission denied".to_string());
-            }
-
-            if canonical_path.exists() {
-                fs::remove_file(&canonical_path)
-                    .map_err(|e| format!("Failed to delete file: {}", e))?;
-                log_file_operation(&canonical_str, FileOperation::Delete, true, None, &state)
-                    .await?;
-                info!("Successfully deleted file: {}", canonical_str);
-            }
-            Ok(())
-        }
-        "create" => {
-            let content = content.ok_or("Content required for create operation")?;
-
-            if content.len() > 100_000_000 {
-                return Err(format!(
-                    "Content too large: {} bytes. Maximum is 100MB",
-                    content.len()
-                ));
-            }
-
-            if !check_file_permission(&canonical_str, FileOperation::Write, &state, Some(&app))
-                .await?
-            {
-                return Err("Permission denied".to_string());
-            }
-
-            if let Some(parent) = canonical_path.parent() {
-                if !parent.exists() {
-                    fs::create_dir_all(parent)
-                        .map_err(|e| format!("Failed to create parent directory: {}", e))?;
-                }
-            }
-
-            fs::write(&canonical_path, content)
-                .map_err(|e| format!("Failed to create file: {}", e))?;
-            log_file_operation(&canonical_str, FileOperation::Write, true, None, &state).await?;
-            info!("Successfully created file: {}", canonical_str);
-            Ok(())
-        }
-        _ => Err(format!("Unknown undo operation: {}", operation)),
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Chat attachment upload
-// ---------------------------------------------------------------------------
-
-/// Returned to the frontend after a chat file attachment is stored locally.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileUploadResult {
-    pub id: String,
-    pub name: String,
-    pub url: String,
-    pub mime_type: String,
-    pub size: u64,
-}
-
-/// Save a base64-encoded file (from the chat composer) into the app's
-/// `uploads/` directory and return a stable file-ref for use in messages.
-///
-/// The frontend encodes the file as a `data:<mime>;base64,<b64>` data URL.
-/// We strip the header, decode the bytes, and write them to disk.
-/// The returned `url` is a `file://` path that Tauri's asset protocol
-/// can serve back to the webview.
-#[tauri::command]
-pub async fn upload_file(
-    app: AppHandle,
-    name: String,
-    mime_type: String,
-    data_url: String,
-    size: u64,
-) -> Result<FileUploadResult, String> {
-    use base64::engine::general_purpose::STANDARD as B64;
-
-    // Strip data URL header: "data:<mime>;base64,<data>"
-    let b64_data = data_url
-        .split_once(',')
-        .map(|(_, data)| data)
-        .ok_or("Invalid data URL: missing comma separator")?;
-
-    let bytes = B64
-        .decode(b64_data)
-        .map_err(|e| format!("Base64 decode failed: {e}"))?;
-
-    // Resolve uploads directory inside app data dir.
-    let uploads_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Could not resolve app data dir: {e}"))?
-        .join("uploads");
-
-    fs::create_dir_all(&uploads_dir).map_err(|e| format!("Failed to create uploads dir: {e}"))?;
-
-    // Use a UUID-prefixed filename to avoid collisions.
-    let id = uuid::Uuid::new_v4().to_string();
-    let sanitized_name = name
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '.' || c == '-' || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>();
-    let file_name = format!("{id}_{sanitized_name}");
-    let dest: PathBuf = uploads_dir.join(&file_name);
-
-    fs::write(&dest, &bytes).map_err(|e| format!("Failed to write upload: {e}"))?;
-
-    // Return a file:// URL so Tauri's asset protocol can read it.
-    let url = format!("file://{}", dest.to_string_lossy());
-    let actual_size = bytes.len() as u64;
-
-    info!(
-        "[upload_file] Saved attachment '{}' ({} bytes) → {}",
-        name,
-        actual_size,
-        dest.display()
-    );
-
-    Ok(FileUploadResult {
-        id,
-        name: sanitized_name,
-        url,
-        mime_type,
-        size: if actual_size > 0 { actual_size } else { size },
-    })
 }

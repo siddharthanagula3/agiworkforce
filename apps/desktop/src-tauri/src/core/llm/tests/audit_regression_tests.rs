@@ -245,26 +245,6 @@ mod r3_app_state_default {
 }
 
 // ---------------------------------------------------------------------------
-// R4, EmbeddingService::new_degraded does not panic
-//
-// The service creates temp dirs and in-process resources; it must not panic
-// even in a CI environment with no GPU or model files.
-// ---------------------------------------------------------------------------
-mod r4_embedding_service_degraded {
-    use crate::core::embeddings::EmbeddingService;
-
-    #[test]
-    fn embedding_service_new_degraded_does_not_panic() {
-        let result = EmbeddingService::new_degraded();
-        assert!(
-            result.is_ok(),
-            "EmbeddingService::new_degraded() must not fail: {:?}",
-            result.err()
-        );
-    }
-}
-
-// ---------------------------------------------------------------------------
 // R5, ContextCompactor ordering: recent messages are kept, old ones compacted
 //
 // Regression for the bug where the split_at index was inverted and old

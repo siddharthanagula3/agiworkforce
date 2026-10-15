@@ -1,9 +1,7 @@
 use super::{
-    retry_with_policy, AGIError, Categorizable, ErrorContext, RecoveryManager, Result, RetryPolicy,
-    ToolError,
+    retry_with_policy, AGIError, ErrorContext, RecoveryManager, Result, RetryPolicy, ToolError,
 };
 use std::sync::Arc;
-use tauri::Emitter;
 
 pub async fn execute_tool_with_recovery<F, Fut, T>(
     tool_name: &str,
@@ -65,10 +63,6 @@ pub fn convert_tool_error(tool_name: &str, error: impl std::error::Error) -> AGI
         "ui_screenshot" | "ui_click" | "ui_type" => {
             AGIError::ToolError(ToolError::UIAutomationError(error_msg))
         }
-        "email_send" | "email_fetch" => AGIError::ToolError(ToolError::EmailError(error_msg)),
-        "calendar_create_event" | "calendar_list_events" => {
-            AGIError::ToolError(ToolError::CalendarError(error_msg))
-        }
         "cloud_upload" | "cloud_download" => AGIError::ToolError(ToolError::CloudError(error_msg)),
         "code_execute" => AGIError::ToolError(ToolError::CodeExecutionError(error_msg)),
         "image_ocr" => AGIError::ToolError(ToolError::OCRError(error_msg)),
@@ -76,36 +70,8 @@ pub fn convert_tool_error(tool_name: &str, error: impl std::error::Error) -> AGI
     }
 }
 
-pub async fn emit_error_event(
-    app_handle: &tauri::AppHandle,
-    error_context: &ErrorContext,
-) -> Result<()> {
-    use serde_json::json;
-
-    let payload = json!({
-        "error_id": error_context.id,
-        "error_type": format!("{:?}", error_context.error),
-        "message": error_context.error.to_string(),
-        "category": format!("{:?}", error_context.category),
-        "is_retryable": error_context.error.is_retryable(),
-        "user_message": error_context.user_message,
-        "suggested_action": error_context.suggested_action,
-        "step": error_context.step,
-        "tool": error_context.tool,
-        "recovery_attempts": error_context.recovery_attempts,
-        "timestamp": error_context.timestamp,
-    });
-
-    app_handle
-        .emit("agi:error", payload)
-        .map_err(|e| AGIError::FatalError(format!("Failed to emit error event: {}", e)))?;
-
-    Ok(())
-}
-
 pub struct EnhancedExecutionContext {
     pub recovery_manager: Arc<RecoveryManager>,
-    pub app_handle: Option<tauri::AppHandle>,
     pub max_recovery_attempts: u32,
 }
 
@@ -113,19 +79,12 @@ impl EnhancedExecutionContext {
     pub fn new() -> Self {
         Self {
             recovery_manager: Arc::new(RecoveryManager::new()),
-            app_handle: None,
             max_recovery_attempts: 3,
         }
     }
 
-    pub fn with_app_handle(mut self, app_handle: tauri::AppHandle) -> Self {
-        self.app_handle = Some(app_handle);
-        self
-    }
-
     pub async fn execute_step_with_recovery<F, Fut, T>(
         &self,
-        step_name: &str,
         tool_name: &str,
         operation: F,
     ) -> Result<T>
@@ -133,19 +92,7 @@ impl EnhancedExecutionContext {
         F: Fn() -> Fut + Clone,
         Fut: std::future::Future<Output = Result<T>>,
     {
-        let result = execute_tool_with_recovery(tool_name, operation, &self.recovery_manager).await;
-
-        if let Err(ref error) = result {
-            let context = ErrorContext::new(error.clone())
-                .with_step(step_name.to_string())
-                .with_tool(tool_name.to_string());
-
-            if let Some(ref app_handle) = self.app_handle {
-                let _ = emit_error_event(app_handle, &context).await;
-            }
-        }
-
-        result
+        execute_tool_with_recovery(tool_name, operation, &self.recovery_manager).await
     }
 }
 
@@ -203,9 +150,7 @@ mod tests {
 
         let operation = || async { Ok::<_, AGIError>("test".to_string()) };
 
-        let result = ctx
-            .execute_step_with_recovery("test_step", "test_tool", operation)
-            .await;
+        let result = ctx.execute_step_with_recovery("test_tool", operation).await;
 
         assert!(result.is_ok());
     }

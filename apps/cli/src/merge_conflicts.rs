@@ -4,7 +4,6 @@
 use std::fmt;
 use std::path::Component;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use anyhow::{anyhow, Context, Result};
 
@@ -481,12 +480,9 @@ pub fn resolution_patch(
 // Repository side: stages, staging, tests.
 
 fn git_stdout(root: &Path, args: &[&str]) -> Option<String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(args)
-        .output()
-        .ok()?;
+    let mut command = agiworkforce_worktree::host_git();
+    command.arg("-C").arg(root).args(args);
+    let output = crate::platform::runtime::git::host_git_output(command).ok()?;
     output
         .status
         .success()
@@ -528,10 +524,11 @@ pub fn read_conflict_stages(root: &Path, relative_path: &Path) -> ConflictStages
     }
 }
 
-/// Stage a resolved file. Refuses while conflict markers remain, so a partial
-/// resolution can never be recorded as a finished one.
-pub async fn stage_resolution(root: &Path, relative_path: &Path) -> Result<()> {
-    let absolute = root.join(relative_path);
+/// Stage a resolved file through `git`, whose hooks the caller already put
+/// through the tool's hook gate. Refuses while conflict markers remain, so a
+/// partial resolution can never be recorded as a finished one.
+pub async fn stage_resolution(git: &GitApi, relative_path: &Path) -> Result<()> {
+    let absolute = git.root().join(relative_path);
     let text = std::fs::read_to_string(&absolute)
         .with_context(|| format!("reading {} to stage it", absolute.display()))?;
     if has_conflict_markers(&text) {
@@ -540,9 +537,7 @@ pub async fn stage_resolution(root: &Path, relative_path: &Path) -> Result<()> {
             relative_path.display()
         ));
     }
-    GitApi::at(root.to_path_buf())
-        .stage(&[relative_path.to_path_buf()])
-        .await?;
+    git.stage(&[relative_path.to_path_buf()]).await?;
     Ok(())
 }
 
@@ -626,13 +621,36 @@ pub struct TestRun {
 }
 
 /// Run the detected test command from `root`, or report that none is declared.
+///
+/// The command runs as `run_command` runs one: under the sandbox, writing
+/// only below `root`, with no network. Its approval is an ordinary command
+/// approval, which a client may let a page or a paired phone answer because
+/// such a command is confined; run outside the sandbox, the same approval
+/// would have let a repository's test script do anything the user can. A
+/// session started without the sandbox runs it directly, as it runs every
+/// command.
 pub async fn run_post_resolution_tests(root: &Path) -> Result<Option<TestRun>> {
     let Some(test) = detect_test_command(root) else {
         return Ok(None);
     };
-    let mut command = tokio::process::Command::new(&test.program);
-    command.args(&test.args).current_dir(root);
-    let output = crate::process_tree::output(command, None, Some(TEST_TIMEOUT)).await?;
+    let output = if crate::sandbox::sandbox_disabled() {
+        let mut command = tokio::process::Command::new(&test.program);
+        command.args(&test.args).current_dir(root);
+        crate::process_tree::output(command, None, Some(TEST_TIMEOUT)).await?
+    } else {
+        let manager = crate::sandbox::SandboxManager::for_command_execution(
+            root.to_path_buf(),
+            crate::sandbox::NetworkPolicy::Deny,
+        )?;
+        crate::sandbox::execute_sandboxed_program_with_timeout(
+            &manager,
+            &test.program,
+            &test.args,
+            Some(root),
+            Some(TEST_TIMEOUT),
+        )
+        .await?
+    };
     let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
     text.push_str(&String::from_utf8_lossy(&output.stderr));
     Ok(Some(TestRun {
@@ -675,14 +693,16 @@ impl ResolutionOutcome {
     }
 }
 
-/// Resolve one conflicted file end to end: render the resolution, apply it as a
-/// patch, stage it, and run the repository's test command.
+/// Resolve one conflicted file end to end in `git`'s repository: render the
+/// resolution, apply it as a patch, stage it, and run the repository's test
+/// command.
 pub async fn resolve_conflicted_file(
-    root: &Path,
+    git: &GitApi,
     relative_path: &Path,
     resolutions: &[(usize, Resolution)],
     run_tests: bool,
 ) -> Result<ResolutionOutcome> {
+    let root = git.root();
     validate_conflict_path(root, relative_path)?;
     let conflicts = conflicted_paths(root).await?;
     if !conflicts
@@ -714,7 +734,7 @@ pub async fn resolve_conflicted_file(
         ));
     }
 
-    stage_resolution(root, relative_path).await?;
+    stage_resolution(git, relative_path).await?;
     let tests = if run_tests {
         run_post_resolution_tests(root).await?
     } else {
@@ -756,12 +776,19 @@ fn validate_conflict_path(root: &Path, relative_path: &Path) -> Result<()> {
             relative_path.display()
         ));
     }
-    Ok(())
+    match crate::path_security::instruction_folder_refusal(
+        &relative_path.to_string_lossy(),
+        &canonical_path,
+    ) {
+        Some(refusal) => Err(anyhow!(refusal)),
+        None => Ok(()),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Command;
 
     const DIFF3: &str = "head\n<<<<<<< HEAD\nours one\nours two\n||||||| base\nbase one\n=======\ntheirs one\n>>>>>>> feature\ntail\n";
 
@@ -953,7 +980,7 @@ mod tests {
         let relative = Path::new("app.txt");
 
         let outcome = resolve_conflicted_file(
-            &root,
+            &GitApi::at(&root),
             relative,
             &[(1, Resolution::Custom(vec!["merged".to_string()]))],
             false,
@@ -976,7 +1003,7 @@ mod tests {
         let dir = conflicted_repo();
         let root = dir.path().canonicalize().unwrap();
 
-        let error = stage_resolution(&root, Path::new("app.txt"))
+        let error = stage_resolution(&GitApi::at(&root), Path::new("app.txt"))
             .await
             .expect_err("markers block staging");
 

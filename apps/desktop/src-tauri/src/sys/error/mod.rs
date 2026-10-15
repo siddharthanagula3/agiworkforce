@@ -3,21 +3,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub mod categorization;
-pub mod commands;
 pub mod integration;
 pub mod recovery;
 pub mod retry;
 pub mod translator;
 
 pub use categorization::{Categorizable, ErrorCategory};
-pub use commands::{
-    abort_execution, clear_error_contexts, get_all_error_contexts, get_error_context,
-    get_recovery_suggestion, retry_failed_step, skip_failed_step, ErrorContextResponse,
-    ErrorContextStore,
-};
-pub use integration::{
-    convert_tool_error, emit_error_event, execute_tool_with_recovery, EnhancedExecutionContext,
-};
+pub use integration::{convert_tool_error, execute_tool_with_recovery, EnhancedExecutionContext};
 pub use recovery::{RecoveryAction, RecoveryManager, RecoveryStrategy};
 pub use retry::{retry_with_policy, BackoffStrategy, RetryPolicy};
 pub use translator::{translate_mcp_error, ErrorTranslator, FriendlyError, FriendlyErrorCategory};
@@ -73,12 +65,6 @@ pub enum AGIError {
     #[error("Command timed out: {0}")]
     CommandTimeout(String),
 
-    #[error("Email send error: {0}")]
-    EmailSend(String),
-
-    #[error("Email parsing error: {0}")]
-    EmailParse(String),
-
     #[error("Invalid path: {0}")]
     InvalidPath(String),
 }
@@ -113,12 +99,6 @@ pub enum ToolError {
 
     #[error("UI automation failed: {0}")]
     UIAutomationError(String),
-
-    #[error("Email operation failed: {0}")]
-    EmailError(String),
-
-    #[error("Calendar operation failed: {0}")]
-    CalendarError(String),
 
     #[error("Cloud storage error: {0}")]
     CloudError(String),

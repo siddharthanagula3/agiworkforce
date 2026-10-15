@@ -1,5 +1,5 @@
 use super::*;
-use crate::sys::security::egress_policy::PublicHttpClient;
+use crate::sys::api::{ApiClient, ApiRequest};
 use regex::Regex;
 use std::sync::LazyLock;
 
@@ -158,6 +158,8 @@ const SEARCH_RESULTS_TAG: &str = "untrusted_web_results";
 
 /// Fence tag for a scraped page body.
 const SCRAPED_PAGE_TAG: &str = "untrusted_web_page";
+
+const SCRAPE_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 /// Wrap untrusted web text in a named fence, neutralizing any copy of the fence
 /// markers inside the body so a hostile page cannot close the fence and continue as
@@ -375,6 +377,24 @@ impl ToolExecutor {
                     .and_then(|v| v.as_u64())
                     .unwrap_or(normalized.len() as u64);
 
+                if let (Some(app_handle), Some(conversation_id)) =
+                    (&self.app_handle, self.conversation_id)
+                {
+                    use crate::sys::commands::chat::sources::{
+                        emit_chat_sources, web_search_sources, ChatSourceKind, ChatSourcesEvent,
+                    };
+                    emit_chat_sources(
+                        app_handle,
+                        ChatSourcesEvent {
+                            conversation_id,
+                            kind: ChatSourceKind::WebSearch,
+                            tool_call_id: Some(tool_id.to_string()),
+                            query: Some(query.clone()),
+                            sources: web_search_sources(&normalized),
+                        },
+                    );
+                }
+
                 if let Some(app_handle) = &self.app_handle {
                     emit_tool_progress(
                         app_handle,
@@ -424,29 +444,29 @@ impl ToolExecutor {
             .get("url")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing url parameter"))?;
-        let selector = args.get("selector").and_then(|v| v.as_str());
 
         // Use a real browser user agent to avoid bot detection
-        let client = PublicHttpClient::with_builder(
-            reqwest::Client::builder()
-                .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
-        )
-            .map_err(|e| anyhow!("Failed to create client: {}", e))?;
-
-        let response = client
-            .get(url)
-            .map_err(|error| anyhow!("Scrape destination blocked: {error}"))?
-            .header(
-                "Accept",
-                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            )
-            .header("Accept-Language", "en-US,en;q=0.5")
-            .send()
+        let response = ApiClient::public()
+            .map_err(|e| anyhow!("Failed to create client: {}", e))?
+            .execute(ApiRequest {
+                url: url.to_string(),
+                headers: HashMap::from([
+                    ("User-Agent".to_string(), SCRAPE_USER_AGENT.to_string()),
+                    (
+                        "Accept".to_string(),
+                        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                            .to_string(),
+                    ),
+                    ("Accept-Language".to_string(), "en-US,en;q=0.5".to_string()),
+                ]),
+                ..Default::default()
+            })
             .await
             .map_err(|e| anyhow!("Scrape request failed: {}", e))?;
 
-        let status = response.status().as_u16();
-        let raw_body = response.text().await.unwrap_or_default();
+        let status = response.status;
+        let body_was_cut = response.truncated;
+        let raw_body = response.body;
         let raw_len = raw_body.len();
 
         // Extract readable text from HTML responses instead of returning raw HTML
@@ -457,15 +477,10 @@ impl ToolExecutor {
         };
         let (content, was_html, truncated) = process_response_body(&raw_body, 15000);
 
-        let extracted = if let Some(sel) = selector {
-            format!(
-                "Selector '{}' requested. Text content extracted from page.",
-                sel
-            )
-        } else if was_html {
-            "Text content extracted from HTML page.".to_string()
+        let extracted = if was_html {
+            "Text content extracted from HTML page."
         } else {
-            "Raw content returned.".to_string()
+            "Raw content returned."
         };
 
         // The title comes from the page too, so it is fenced with the body rather
@@ -484,17 +499,14 @@ impl ToolExecutor {
                 "extracted": extracted,
                 "content_length": raw_len,
                 "was_html": was_html,
-                "truncated": truncated
+                "truncated": truncated || body_was_cut
             }),
             error: if status >= 400 {
                 Some(format!("HTTP {}", status))
             } else {
                 None
             },
-            metadata: HashMap::from([
-                ("url".to_string(), json!(url)),
-                ("selector".to_string(), json!(selector)),
-            ]),
+            metadata: HashMap::from([("url".to_string(), json!(url))]),
         })
     }
 }
@@ -519,8 +531,8 @@ mod tests {
             "citation_id": "cite-1",
         })];
 
-        // Assert on the serialized payload, since that is exactly what
-        // `FunctionResult::to_message_content` hands the model.
+        // Assert on the serialized payload, since that is what the model is
+        // handed.
         let payload = search_success_payload("safe query", &results, 1, "duckduckgo", 42, 7);
         let sent_to_model = serde_json::to_string_pretty(&payload).expect("payload serializes");
 

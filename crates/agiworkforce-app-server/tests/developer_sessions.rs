@@ -1,6 +1,6 @@
 use agiworkforce_app_server::{
     DeveloperConnectionTrust, DeveloperSessionHost, DeveloperSessionHostError,
-    DeveloperSessionProcessor,
+    DeveloperSessionProcessor, TurnClient,
 };
 use agiworkforce_protocol::agent_events::{
     AgentEventApprovalRiskLevel, AGENT_EVENT_SCHEMA_VERSION,
@@ -16,20 +16,22 @@ use agiworkforce_protocol::developer_session::{
     HandoffLastTurn, HandoffLocalResource, HandoffOrigin, HandoffPosture, HandoffStart,
     HandoffTurnState, HandoffWorkspace, HookConfigScope, HookListResponse, HookSummary,
     InitializeParams, InitializeResponse, InstructionFile, InstructionFileKind,
-    LocalModelListResponse, LocalModelProvider, LocalModelSummary, McpLoginParams,
-    McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse, McpServerScope,
-    McpServerSummary, ModelListParams, PendingApprovalSnapshot, PluginListResponse, PluginScope,
-    PluginSetEnabledParams, PluginSummary, ProtocolVersionUnsupportedData, SettingsReadResponse,
-    SettingsWriteParams, SkillCatalogScope, SkillConsentParams, SkillConsentResponse,
-    SkillListResponse, SkillSetEnabledParams, SkillSummary, SlashCommandListResponse,
-    SlashCommandResultKind, SlashCommandRunParams, SlashCommandRunResponse, SlashCommandSummary,
+    LocalModelListResponse, LocalModelProvider, LocalModelSummary, ManagedWorktreeCreateParams,
+    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
+    McpServerScope, McpServerSummary, ModelListParams, PendingApprovalSnapshot, PluginListResponse,
+    PluginScope, PluginSetEnabledParams, PluginSummary, ProtocolVersionUnsupportedData,
+    SettingsReadResponse, SettingsWriteParams, SkillCatalogScope, SkillConsentParams,
+    SkillConsentResponse, SkillListResponse, SkillSetEnabledParams, SkillSummary,
+    SlashCommandListResponse, SlashCommandResultKind, SlashCommandRunParams,
+    SlashCommandRunResponse, SlashCommandSummary, ThreadDeleteParams, ThreadDeleteResponse,
     ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams,
     ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse,
     ThreadStartParams, ThreadStartResponse, ThreadStatus, ThreadSummary, ThreadWriterConflictData,
     TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnStatus, TurnSteerParams,
-    TurnSummary, DEVELOPER_SESSION_PROTOCOL_VERSION, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
-    MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
-    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
+    TurnSummary, WorktreeCreateResponse, DEVELOPER_SESSION_PROTOCOL_VERSION,
+    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
+    PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
+    THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
@@ -49,7 +51,7 @@ enum Call {
     Read(ThreadIdParams),
     Fork(ThreadForkParams),
     Archive(ThreadIdParams),
-    Delete(ThreadIdParams),
+    Delete(ThreadDeleteParams),
     Reconnect(ThreadIdParams),
     ReleaseWriter(ThreadIdParams),
     TakeOverWriter(ThreadIdParams),
@@ -62,8 +64,12 @@ enum Call {
 
 struct FakeHost {
     calls: Mutex<Vec<Call>>,
+    turn_clients: Mutex<Vec<TurnClient>>,
     notifications: broadcast::Sender<AppServerNotification>,
     shutdown_gate: Mutex<Option<oneshot::Receiver<()>>>,
+    worktree_gate: Mutex<Option<oneshot::Receiver<()>>>,
+    worktree_panics: std::sync::atomic::AtomicBool,
+    managed_worktree_calls: std::sync::atomic::AtomicUsize,
 }
 
 impl FakeHost {
@@ -71,8 +77,12 @@ impl FakeHost {
         let (notifications, _) = broadcast::channel(16);
         Self {
             calls: Mutex::new(Vec::new()),
+            turn_clients: Mutex::new(Vec::new()),
             notifications,
             shutdown_gate: Mutex::new(None),
+            worktree_gate: Mutex::new(None),
+            worktree_panics: std::sync::atomic::AtomicBool::new(false),
+            managed_worktree_calls: std::sync::atomic::AtomicUsize::new(0),
         }
     }
 }
@@ -130,11 +140,17 @@ impl DeveloperSessionHost for FakeHost {
 
     async fn list_local_models(
         &self,
-        _params: ModelListParams,
+        params: ModelListParams,
+        trust: DeveloperConnectionTrust,
     ) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
+        let id = match (trust, params.refresh) {
+            (DeveloperConnectionTrust::Untrusted, _) => "cached-for-a-read-only-caller",
+            (DeveloperConnectionTrust::LoopbackOwner, true) => "probed-local-model",
+            (DeveloperConnectionTrust::LoopbackOwner, false) => "fixture-local-model",
+        };
         Ok(LocalModelListResponse {
             models: vec![LocalModelSummary {
-                id: "fixture-local-model".to_string(),
+                id: id.to_string(),
                 provider: LocalModelProvider::Ollama,
             }],
             host_models: Vec::new(),
@@ -183,7 +199,10 @@ impl DeveloperSessionHost for FakeHost {
         Ok(())
     }
 
-    async fn delete_thread(&self, params: ThreadIdParams) -> Result<(), DeveloperSessionHostError> {
+    async fn delete_thread(
+        &self,
+        params: ThreadDeleteParams,
+    ) -> Result<ThreadDeleteResponse, DeveloperSessionHostError> {
         self.calls.lock().await.push(Call::Delete(params.clone()));
         if params.thread_id == "held-thread" {
             return Err(DeveloperSessionHostError::writer_conflict(
@@ -201,7 +220,41 @@ impl DeveloperSessionHost for FakeHost {
                 },
             ));
         }
-        Ok(())
+        let archive = "refs/agiworkforce/worktree-archive/thread-1/0a1b2c3d".to_string();
+        Ok(ThreadDeleteResponse {
+            acknowledged: true,
+            kept_worktree_archives: if params.discard_worktree_archives {
+                Vec::new()
+            } else {
+                vec![archive.clone()]
+            },
+            removed_worktree_archives: if params.discard_worktree_archives {
+                vec![archive]
+            } else {
+                Vec::new()
+            },
+            released_worktrees: vec!["0a1b2c3d".to_string()],
+        })
+    }
+
+    async fn create_managed_worktree(
+        &self,
+        _params: ManagedWorktreeCreateParams,
+    ) -> Result<WorktreeCreateResponse, DeveloperSessionHostError> {
+        self.managed_worktree_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if let Some(gate) = self.worktree_gate.lock().await.take() {
+            let _ = gate.await;
+        }
+        if self
+            .worktree_panics
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            panic!("the fixture's worktree host panicked");
+        }
+        Err(DeveloperSessionHostError::conflict(
+            "the fixture makes no worktree",
+        ))
     }
 
     async fn reconnect_thread(
@@ -225,7 +278,9 @@ impl DeveloperSessionHost for FakeHost {
                     reversible: Some(true),
                     proposed_content: None,
                     always_allow_saved: false,
+                    proposed_execpolicy_amendment: None,
                 }],
+                pending_user_inputs: Vec::new(),
             }),
         })
     }
@@ -252,6 +307,15 @@ impl DeveloperSessionHost for FakeHost {
     ) -> Result<TurnSummary, DeveloperSessionHostError> {
         self.calls.lock().await.push(Call::StartTurn(params));
         Ok(turn())
+    }
+
+    async fn start_turn_for(
+        &self,
+        params: TurnStartParams,
+        client: TurnClient,
+    ) -> Result<TurnSummary, DeveloperSessionHostError> {
+        self.turn_clients.lock().await.push(client);
+        self.start_turn(params).await
     }
 
     async fn steer_turn(
@@ -310,6 +374,7 @@ fn initialize_at(protocol_version: Option<u32>) -> AppServerRequest {
                 version: "0.3.0".to_string(),
             },
             experimental_api: false,
+            user_input: false,
             protocol_version,
         },
     )
@@ -357,6 +422,77 @@ fn capabilities() -> AppServerCapabilities {
         questions: false,
         plan_decisions: false,
         pull_requests: false,
+        fork_through_turn: false,
+        thread_compact: false,
+        bypass_per_turn: false,
+        revert_restore: false,
+        mcp_approval: false,
+        managed_worktrees: true,
+    }
+}
+
+#[tokio::test]
+async fn a_turn_carries_whether_its_client_said_it_answers_questions() {
+    for declared in [false, true] {
+        let host = Arc::new(FakeHost::new());
+        let mut processor = DeveloperSessionProcessor::new(host.clone(), capabilities());
+        let mut handshake = serde_json::to_value(initialize()).expect("initialize json");
+        if declared {
+            handshake["params"]["userInput"] = serde_json::Value::Bool(true);
+        }
+        processor
+            .process(serde_json::from_value(handshake).expect("initialize request"))
+            .await;
+
+        processor
+            .process(request(
+                2,
+                method::TURN_START,
+                serde_json::json!({
+                    "threadId": "thread-1",
+                    "input": [{"type": "text", "text": "fix it"}]
+                }),
+            ))
+            .await;
+
+        assert_eq!(
+            *host.turn_clients.lock().await,
+            vec![TurnClient {
+                answers_user_input: declared
+            }]
+        );
+    }
+}
+
+#[tokio::test]
+async fn managed_worktree_dispatch_requires_the_advertised_capability() {
+    for advertised in [false, true] {
+        let host = Arc::new(FakeHost::new());
+        let mut offered = capabilities();
+        offered.managed_worktrees = advertised;
+        let mut processor = DeveloperSessionProcessor::new(host.clone(), offered);
+        let handshake = processor.process(initialize()).await;
+        let result = handshake.result.expect("initialize response");
+        assert_eq!(
+            result["capabilities"]["managedWorktrees"]
+                .as_bool()
+                .unwrap_or(false),
+            advertised
+        );
+        let response = processor
+            .process(request(
+                2,
+                method::MANAGED_WORKTREE_CREATE,
+                serde_json::json!({ "start": { "kind": "working_tree" } }),
+            ))
+            .await;
+        let error = response.error.expect("the fixture creates no checkout");
+        assert_eq!(error.code, if advertised { -32009 } else { -32010 });
+        assert_eq!(
+            host.managed_worktree_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            usize::from(advertised)
+        );
     }
 }
 
@@ -496,9 +632,30 @@ async fn session_lifecycle_and_writer_methods_route_to_the_host_with_typed_resul
     let deleted = processor
         .process(request(2, method::THREAD_DELETE, thread_id()))
         .await;
+    let deleted: ThreadDeleteResponse =
+        serde_json::from_value(deleted.result.expect("delete result")).expect("typed");
+    assert!(deleted.acknowledged);
+    assert_eq!(deleted.kept_worktree_archives.len(), 1);
+    assert!(deleted.removed_worktree_archives.is_empty());
     let acknowledged: AcknowledgedResponse =
-        serde_json::from_value(deleted.result.expect("delete result")).expect("ack");
+        serde_json::from_value(serde_json::to_value(&deleted).expect("serialize delete result"))
+            .expect("an older client still reads the acknowledgement");
     assert!(acknowledged.acknowledged);
+
+    let confirmed = processor
+        .process(request(
+            7,
+            method::THREAD_DELETE,
+            ThreadDeleteParams {
+                thread_id: "thread-1".to_string(),
+                discard_worktree_archives: true,
+            },
+        ))
+        .await;
+    let confirmed: ThreadDeleteResponse =
+        serde_json::from_value(confirmed.result.expect("delete result")).expect("typed");
+    assert!(confirmed.kept_worktree_archives.is_empty());
+    assert_eq!(confirmed.removed_worktree_archives.len(), 1);
 
     let reconnected = processor
         .process(request(3, method::THREAD_RECONNECT, thread_id()))
@@ -536,16 +693,21 @@ async fn session_lifecycle_and_writer_methods_route_to_the_host_with_typed_resul
         serde_json::from_value(error.data.expect("conflict names the writer")).expect("typed");
     assert_eq!(data.writer.holder_label, "AGI CLI (pid 42)");
 
+    let delete = |thread_id: &str, discard_worktree_archives: bool| {
+        Call::Delete(ThreadDeleteParams {
+            thread_id: thread_id.to_string(),
+            discard_worktree_archives,
+        })
+    };
     assert_eq!(
         host.calls.lock().await.as_slice(),
         &[
-            Call::Delete(thread_id()),
+            delete("thread-1", false),
+            delete("thread-1", true),
             Call::Reconnect(thread_id()),
             Call::ReleaseWriter(thread_id()),
             Call::TakeOverWriter(thread_id()),
-            Call::Delete(ThreadIdParams {
-                thread_id: "held-thread".to_string(),
-            }),
+            delete("held-thread", false),
         ]
     );
 }
@@ -722,6 +884,7 @@ async fn routes_thread_turn_and_control_methods_to_one_host() {
                 thread_id: "thread-1".to_string(),
                 title: None,
                 through_message_index: None,
+                through_turn_id: None,
             },
         ))
         .await;
@@ -1067,6 +1230,7 @@ impl DeveloperSessionHost for SurfaceHost {
     async fn list_local_models(
         &self,
         _params: ModelListParams,
+        _trust: DeveloperConnectionTrust,
     ) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
         Ok(LocalModelListResponse {
             models: Vec::new(),
@@ -1218,6 +1382,7 @@ impl DeveloperSessionHost for SurfaceHost {
                 missing_tools: Vec::new(),
                 missing_env_vars: Vec::new(),
             }],
+            project_skills_digest: None,
         })
     }
 
@@ -1260,7 +1425,10 @@ impl DeveloperSessionHost for SurfaceHost {
         self.list_plugins().await
     }
 
-    async fn list_mcp_servers(&self) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+    async fn list_mcp_servers(
+        &self,
+        _trust: DeveloperConnectionTrust,
+    ) -> Result<McpServerListResponse, DeveloperSessionHostError> {
         Ok(McpServerListResponse {
             servers: vec![McpServerSummary {
                 name: "github".to_string(),
@@ -1553,6 +1721,570 @@ async fn every_v8_method_dispatches_and_returns_its_typed_shape() {
 }
 
 #[tokio::test]
+async fn a_setup_script_cannot_be_started_from_a_query_token_connection() {
+    let mut processor = DeveloperSessionProcessor::new_with_trust(
+        Arc::new(SurfaceHost::new()),
+        capabilities(),
+        DeveloperConnectionTrust::Untrusted,
+    );
+    processor.process(initialize()).await;
+
+    let refused = processor
+        .process(request(
+            2,
+            method::WORKTREE_SETUP_RUN,
+            serde_json::json!({ "worktreeId": "0a1b2c3d", "sha256": "00" }),
+        ))
+        .await;
+
+    assert_eq!(
+        refused.error.expect("setup run must be refused").code,
+        -32006
+    );
+}
+
+#[tokio::test]
+async fn worktree_archives_cannot_be_discarded_from_a_query_token_connection() {
+    let host = Arc::new(FakeHost::new());
+    let mut processor = DeveloperSessionProcessor::new_with_trust(
+        host.clone(),
+        capabilities(),
+        DeveloperConnectionTrust::Untrusted,
+    );
+    processor.process(initialize()).await;
+
+    let refused = processor
+        .process(request(
+            2,
+            method::THREAD_DELETE,
+            ThreadDeleteParams {
+                thread_id: "thread-1".to_string(),
+                discard_worktree_archives: true,
+            },
+        ))
+        .await;
+    assert_eq!(
+        refused.error.expect("a discard must be refused").code,
+        -32006
+    );
+    assert!(host.calls.lock().await.is_empty());
+
+    let kept = processor
+        .process(request(
+            3,
+            method::THREAD_DELETE,
+            ThreadDeleteParams {
+                thread_id: "thread-1".to_string(),
+                discard_worktree_archives: false,
+            },
+        ))
+        .await;
+    assert_eq!(
+        kept.error
+            .expect("deleting a thread changes state, with or without its archives")
+            .code,
+        -32006
+    );
+    assert!(host.calls.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn a_bypass_turn_cannot_be_started_from_a_query_token_connection() {
+    let host = Arc::new(FakeHost::new());
+    let mut processor = DeveloperSessionProcessor::new_with_trust(
+        host.clone(),
+        capabilities(),
+        DeveloperConnectionTrust::Untrusted,
+    );
+    processor.process(initialize()).await;
+    let start = |id: i64, agent_mode| {
+        request(
+            id,
+            method::TURN_START,
+            TurnStartParams {
+                thread_id: "thread-1".to_string(),
+                input: Vec::new(),
+                model: None,
+                routing_task_type: None,
+                cwd: None,
+                agent_mode,
+                reasoning_effort: None,
+                context_files: None,
+                client_turn_id: None,
+                max_turns: None,
+                routing_profile: None,
+                cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
+            },
+        )
+    };
+
+    let refused = processor
+        .process(start(
+            2,
+            Some(agiworkforce_protocol::developer_session::DeveloperAgentMode::Bypass),
+        ))
+        .await;
+    assert_eq!(
+        refused
+            .error
+            .expect("a turn with every approval off must be refused")
+            .code,
+        -32006
+    );
+    assert!(host.calls.lock().await.is_empty());
+
+    let asked = processor
+        .process(start(
+            3,
+            Some(agiworkforce_protocol::developer_session::DeveloperAgentMode::Ask),
+        ))
+        .await;
+    assert_eq!(
+        asked.error.expect("a turn in any mode changes state").code,
+        -32006
+    );
+    assert!(host.calls.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn an_always_allow_rule_cannot_be_saved_from_a_query_token_connection() {
+    let host = Arc::new(FakeHost::new());
+    let mut processor = DeveloperSessionProcessor::new_with_trust(
+        host.clone(),
+        capabilities(),
+        DeveloperConnectionTrust::Untrusted,
+    );
+    processor.process(initialize()).await;
+    let answer = |id: i64, decision| {
+        request(
+            id,
+            method::APPROVAL_RESPOND,
+            ApprovalResponseParams {
+                thread_id: "thread-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                request_id: "approval-1".to_string(),
+                decision,
+                note: None,
+                edited_content: None,
+            },
+        )
+    };
+
+    let refused = processor
+        .process(answer(
+            2,
+            agiworkforce_protocol::protocol::ReviewDecision::ApprovedExecpolicyAmendment {
+                proposed_execpolicy_amendment: vec!["cargo".to_string(), "test".to_string()].into(),
+            },
+        ))
+        .await;
+    assert_eq!(
+        refused
+            .error
+            .expect("a persistent rule must be refused")
+            .code,
+        -32006
+    );
+    assert!(host.calls.lock().await.is_empty());
+
+    for (id, decision) in [
+        (3, agiworkforce_protocol::protocol::ReviewDecision::Approved),
+        (
+            4,
+            agiworkforce_protocol::protocol::ReviewDecision::ApprovedForSession,
+        ),
+    ] {
+        let refused = processor.process(answer(id, decision)).await;
+        assert_eq!(
+            refused
+                .error
+                .expect("nothing says the request is one this connection may allow")
+                .code,
+            -32006
+        );
+    }
+    assert!(host.calls.lock().await.is_empty());
+
+    for (id, decision) in [
+        (5, agiworkforce_protocol::protocol::ReviewDecision::Denied),
+        (6, agiworkforce_protocol::protocol::ReviewDecision::Abort),
+    ] {
+        let denied = processor.process(answer(id, decision)).await;
+        assert_eq!(
+            denied
+                .error
+                .expect("answering an approval is not a read, whatever the answer")
+                .code,
+            -32006
+        );
+    }
+    assert!(host.calls.lock().await.is_empty());
+}
+
+/// The table is the rule: a method that is not in it, or that is in it as
+/// anything but a read, is refused on a connection that did not prove
+/// ownership. A method added to the protocol without a classification fails
+/// here instead of arriving open.
+#[test]
+fn every_protocol_method_is_classified_once() {
+    let source = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../agiworkforce-protocol/src/developer_session.rs"),
+    )
+    .expect("protocol source");
+    let module = source
+        .split_once("pub mod method {")
+        .and_then(|(_, rest)| rest.split_once("\n}\n"))
+        .map(|(module, _)| module)
+        .expect("the method module");
+    let declared: Vec<&str> = module
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("pub const "))
+        .filter_map(|line| line.split_once(": &str = \""))
+        .filter_map(|(_, value)| value.strip_suffix("\";"))
+        .collect();
+    assert!(declared.len() > 50, "{declared:?}");
+
+    for name in &declared {
+        assert!(
+            agiworkforce_app_server::method_effect(name).is_some(),
+            "{name} has no classification in METHOD_EFFECTS"
+        );
+    }
+    let mut classified: Vec<&str> = agiworkforce_app_server::METHOD_EFFECTS
+        .iter()
+        .map(|(name, _)| *name)
+        .collect();
+    assert_eq!(classified.len(), declared.len());
+    classified.sort_unstable();
+    classified.dedup();
+    assert_eq!(
+        classified.len(),
+        declared.len(),
+        "a method is classified twice"
+    );
+    assert_eq!(
+        agiworkforce_app_server::method_effect("thread/unknown"),
+        None
+    );
+}
+
+#[tokio::test]
+async fn a_query_token_connection_reads_and_does_nothing_else() {
+    use agiworkforce_app_server::MethodEffect;
+
+    let host = Arc::new(FakeHost::new());
+    let mut processor = DeveloperSessionProcessor::new_with_trust(
+        host.clone(),
+        capabilities(),
+        DeveloperConnectionTrust::Untrusted,
+    );
+    processor.process(initialize()).await;
+
+    let mut id = 1;
+    for (name, effect) in agiworkforce_app_server::METHOD_EFFECTS {
+        if *effect == MethodEffect::ReadOnly {
+            continue;
+        }
+        id += 1;
+        let refused = processor
+            .process(request(id, name, serde_json::json!({})))
+            .await;
+        assert_eq!(
+            refused
+                .error
+                .unwrap_or_else(|| panic!("{name} was not refused"))
+                .code,
+            -32006,
+            "{name}"
+        );
+    }
+    for name in [
+        method::MCP_APPROVAL_READ,
+        method::MCP_APPROVAL_GRANT,
+        method::SETTINGS_WRITE,
+        method::SKILLS_CONSENT,
+        method::PLUGINS_SET_ENABLED,
+        method::WORKTREE_APPLY_TO_LOCAL,
+        method::CHECKPOINT_REVERT,
+        method::THREAD_REVERT,
+    ] {
+        assert_ne!(
+            agiworkforce_app_server::method_effect(name),
+            Some(MethodEffect::ReadOnly),
+            "{name}"
+        );
+    }
+    let unknown = processor
+        .process(request(900, "thread/not-a-method", serde_json::json!({})))
+        .await;
+    assert_eq!(unknown.error.expect("an unclassified method").code, -32006);
+    assert!(host.calls.lock().await.is_empty());
+
+    let listed = processor
+        .process(request(
+            901,
+            method::THREAD_LIST,
+            ThreadListParams::default(),
+        ))
+        .await;
+    assert!(listed.error.is_none(), "{listed:?}");
+}
+
+#[tokio::test]
+async fn a_query_token_connection_reads_the_account_from_the_cache_only() {
+    let refreshed = serde_json::json!({ "refresh": true });
+    for (trust, cached) in [
+        (DeveloperConnectionTrust::Untrusted, true),
+        (DeveloperConnectionTrust::LoopbackOwner, false),
+    ] {
+        let mut processor = DeveloperSessionProcessor::new_with_trust(
+            Arc::new(SurfaceHost::new()),
+            capabilities(),
+            trust,
+        );
+        processor.process(initialize()).await;
+
+        let account = result_of(
+            processor
+                .process(request(2, method::ACCOUNT_STATUS, refreshed.clone()))
+                .await,
+        );
+        assert_eq!(
+            account["cached"],
+            serde_json::json!(cached),
+            "{trust:?} asked for a refresh"
+        );
+        let unasked = result_of(
+            processor
+                .process(request(3, method::ACCOUNT_STATUS, serde_json::json!({})))
+                .await,
+        );
+        assert_eq!(unasked["cached"], serde_json::json!(true), "{trust:?}");
+    }
+}
+
+#[tokio::test]
+async fn a_query_token_connection_lists_models_without_probing_for_them() {
+    let refreshed = serde_json::json!({ "refresh": true });
+    for (trust, refreshed_answer, answer) in [
+        (
+            DeveloperConnectionTrust::Untrusted,
+            "cached-for-a-read-only-caller",
+            "cached-for-a-read-only-caller",
+        ),
+        (
+            DeveloperConnectionTrust::LoopbackOwner,
+            "probed-local-model",
+            "fixture-local-model",
+        ),
+    ] {
+        let mut processor = DeveloperSessionProcessor::new_with_trust(
+            Arc::new(FakeHost::new()),
+            capabilities(),
+            trust,
+        );
+        processor.process(initialize()).await;
+
+        let models = result_of(
+            processor
+                .process(request(2, method::MODEL_LIST, refreshed.clone()))
+                .await,
+        );
+        assert_eq!(
+            models["models"][0]["id"],
+            serde_json::json!(refreshed_answer),
+            "{trust:?} asked for a refresh, and the host is told who asks"
+        );
+        let unasked = result_of(
+            processor
+                .process(request(3, method::MODEL_LIST, serde_json::json!({})))
+                .await,
+        );
+        assert_eq!(
+            unasked["models"][0]["id"],
+            serde_json::json!(answer),
+            "{trust:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn the_owners_connection_is_not_held_to_reads() {
+    let host = Arc::new(FakeHost::new());
+    let mut processor = DeveloperSessionProcessor::new(host.clone(), capabilities());
+    processor.process(initialize()).await;
+
+    let deleted = processor
+        .process(request(
+            2,
+            method::THREAD_DELETE,
+            ThreadDeleteParams {
+                thread_id: "thread-1".to_string(),
+                discard_worktree_archives: true,
+            },
+        ))
+        .await;
+    assert!(deleted.error.is_none(), "{deleted:?}");
+    assert_eq!(host.calls.lock().await.len(), 1);
+}
+
+#[tokio::test]
+async fn the_owners_connection_still_allows_a_request() {
+    let host = Arc::new(FakeHost::new());
+    let mut processor = DeveloperSessionProcessor::new(host.clone(), capabilities());
+    processor.process(initialize()).await;
+
+    let allowed = processor
+        .process(request(
+            2,
+            method::APPROVAL_RESPOND,
+            ApprovalResponseParams {
+                thread_id: "thread-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                request_id: "approval-1".to_string(),
+                decision: agiworkforce_protocol::protocol::ReviewDecision::ApprovedForSession,
+                note: None,
+                edited_content: None,
+            },
+        ))
+        .await;
+    assert!(allowed.error.is_none(), "{allowed:?}");
+    assert_eq!(host.calls.lock().await.len(), 1);
+}
+
+async fn next_response_id(
+    responses: &mut tokio::io::Lines<BufReader<tokio::io::DuplexStream>>,
+) -> Value {
+    let line = tokio::time::timeout(std::time::Duration::from_secs(5), responses.next_line())
+        .await
+        .expect("a response arrives")
+        .expect("read response")
+        .expect("response line");
+    serde_json::from_str::<Value>(&line).expect("json")["id"].clone()
+}
+
+#[tokio::test]
+async fn a_long_worktree_request_does_not_hold_up_an_approval_on_the_same_connection() {
+    let host = Arc::new(FakeHost::new());
+    let (release_worktree, worktree_gate) = oneshot::channel();
+    *host.worktree_gate.lock().await = Some(worktree_gate);
+    let (mut request_writer, request_reader) = tokio::io::duplex(64 * 1024);
+    let (response_reader, response_writer) = tokio::io::duplex(64 * 1024);
+    let server = tokio::spawn(agiworkforce_app_server::serve_developer_session_io(
+        request_reader,
+        response_writer,
+        host.clone(),
+        capabilities(),
+    ));
+    let mut responses = BufReader::new(response_reader).lines();
+    let send = |request: AppServerRequest| {
+        format!(
+            "{}\n",
+            serde_json::to_string(&request).expect("serialize request")
+        )
+    };
+
+    request_writer
+        .write_all(send(initialize()).as_bytes())
+        .await
+        .unwrap();
+    assert_eq!(next_response_id(&mut responses).await, serde_json::json!(1));
+    request_writer
+        .write_all(
+            send(request(
+                2,
+                method::MANAGED_WORKTREE_CREATE,
+                serde_json::json!({ "start": { "kind": "working_tree" } }),
+            ))
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+    request_writer
+        .write_all(
+            send(request(
+                3,
+                method::APPROVAL_RESPOND,
+                ApprovalResponseParams {
+                    thread_id: "thread-1".to_string(),
+                    turn_id: "turn-1".to_string(),
+                    request_id: "approval-1".to_string(),
+                    decision: agiworkforce_protocol::protocol::ReviewDecision::Approved,
+                    note: None,
+                    edited_content: None,
+                },
+            ))
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        next_response_id(&mut responses).await,
+        serde_json::json!(3),
+        "the approval is answered while the worktree request still runs"
+    );
+    release_worktree.send(()).unwrap();
+    assert_eq!(next_response_id(&mut responses).await, serde_json::json!(2));
+
+    drop(request_writer);
+    server.await.unwrap().unwrap();
+}
+
+/// Tests unwind, so this covers debug and test builds only: a release build
+/// aborts on the panic and the client sees the connection close instead.
+#[tokio::test]
+async fn a_detached_request_whose_host_panics_is_still_answered() {
+    let host = Arc::new(FakeHost::new());
+    host.worktree_panics
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let (mut request_writer, request_reader) = tokio::io::duplex(64 * 1024);
+    let (response_reader, response_writer) = tokio::io::duplex(64 * 1024);
+    let server = tokio::spawn(agiworkforce_app_server::serve_developer_session_io(
+        request_reader,
+        response_writer,
+        host.clone(),
+        capabilities(),
+    ));
+    let mut responses = BufReader::new(response_reader).lines();
+    for request in [
+        initialize(),
+        request(
+            2,
+            method::MANAGED_WORKTREE_CREATE,
+            serde_json::json!({ "start": { "kind": "working_tree" } }),
+        ),
+    ] {
+        let line = format!(
+            "{}\n",
+            serde_json::to_string(&request).expect("serialize request")
+        );
+        request_writer.write_all(line.as_bytes()).await.unwrap();
+    }
+
+    let mut answered = None;
+    for _ in 0..2 {
+        let line = tokio::time::timeout(std::time::Duration::from_secs(5), responses.next_line())
+            .await
+            .expect("a response arrives")
+            .expect("read response")
+            .expect("response line");
+        let response = serde_json::from_str::<Value>(&line).expect("json");
+        if response["id"] == serde_json::json!(2) {
+            answered = Some(response);
+        }
+    }
+    let answered = answered.expect("the panicked request is answered");
+    assert_eq!(answered["error"]["code"], serde_json::json!(-32603));
+
+    drop(request_writer);
+    server.await.unwrap().unwrap();
+}
+
+#[tokio::test]
 async fn account_token_is_refused_on_a_connection_that_did_not_prove_header_auth() {
     let mut processor = DeveloperSessionProcessor::new_with_trust(
         Arc::new(SurfaceHost::new()),
@@ -1687,6 +2419,31 @@ async fn an_unauthenticated_websocket_never_reaches_the_account_surface() {
     );
 
     server.abort();
+}
+
+#[tokio::test]
+async fn the_library_refuses_a_public_bind_whatever_the_caller_checked() {
+    let outcome = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        agiworkforce_app_server::run_developer_session_websocket(
+            "0.0.0.0:0".parse().expect("public address"),
+            agiworkforce_app_server::WebSocketSecurity {
+                auth_token: Some("secret-token".to_string()),
+                allowed_origins: Vec::new(),
+                allow_query_token: false,
+                allow_public_listen: false,
+            },
+            Arc::new(SurfaceHost::new()),
+            capabilities(),
+        ),
+    )
+    .await
+    .expect("a public bind must be refused, not served");
+
+    assert!(outcome
+        .expect_err("public listen without opt-in")
+        .to_string()
+        .contains("non-loopback"));
 }
 
 #[tokio::test]
@@ -1907,6 +2664,7 @@ fn handoff_record(to: HandoffEnvironment) -> DeveloperSessionHandoff {
             reversible: Some(true),
             proposed_content: None,
             always_allow_saved: false,
+            proposed_execpolicy_amendment: None,
         }],
         last_turn: Some(HandoffLastTurn {
             turn_id: "turn-9".to_string(),
@@ -1942,6 +2700,7 @@ impl DeveloperSessionHost for HandoffHost {
     async fn list_local_models(
         &self,
         _params: ModelListParams,
+        _trust: DeveloperConnectionTrust,
     ) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
         Ok(LocalModelListResponse {
             models: Vec::new(),
@@ -2164,4 +2923,104 @@ async fn a_host_without_handoff_support_answers_unavailable_rather_than_method_n
         );
         assert!(error.message.contains(name), "{}", error.message);
     }
+}
+
+/// Worktree and checkpoint methods are dispatchable on every host. One that
+/// does not keep worktrees or checkpoints says so by name, and malformed
+/// params are refused before the host is asked.
+#[tokio::test]
+async fn worktree_and_checkpoint_methods_dispatch_and_answer_unavailable_without_a_host() {
+    let mut processor = surface_processor().await;
+    let thread = serde_json::json!({ "threadId": "thread-1" });
+    let turn = serde_json::json!({ "threadId": "thread-1", "turnId": "turn-1" });
+    let sections = serde_json::json!({
+        "threadId": "thread-1",
+        "turnId": "turn-1",
+        "sections": [{ "path": "src/lib.rs", "hunks": [0] }],
+        "preview": true
+    });
+    for (id, name, params) in [
+        (
+            2,
+            method::MANAGED_WORKTREE_CREATE,
+            serde_json::json!({ "start": { "kind": "ref", "name": "HEAD" } }),
+        ),
+        (3, method::MANAGED_WORKTREE_LIST, Value::Null),
+        (
+            4,
+            method::WORKTREE_DELETE,
+            serde_json::json!({ "worktreeId": "0a1b2c3d" }),
+        ),
+        (
+            5,
+            method::WORKTREE_PIN,
+            serde_json::json!({ "worktreeId": "0a1b2c3d", "pinned": true }),
+        ),
+        (
+            6,
+            method::WORKTREE_APPLY_TO_LOCAL,
+            serde_json::json!({ "worktreeId": "0a1b2c3d", "preview": true }),
+        ),
+        (
+            7,
+            method::WORKTREE_SETUP_RUN,
+            serde_json::json!({ "worktreeId": "0a1b2c3d", "sha256": "abc" }),
+        ),
+        (8, method::CHECKPOINT_LIST, thread.clone()),
+        (14, method::WORKTREE_KEEP, serde_json::json!({ "keep": 5 })),
+        (9, method::CHECKPOINT_DIFF, turn.clone()),
+        (10, method::CHECKPOINT_REVERT, sections.clone()),
+        (11, method::CHECKPOINT_STAGE, sections),
+        (
+            12,
+            method::THREAD_REVERT,
+            serde_json::json!({ "threadId": "thread-1", "turnId": "turn-1", "preview": true }),
+        ),
+    ] {
+        let error = processor
+            .process(request(id, name, params))
+            .await
+            .error
+            .unwrap_or_else(|| panic!("{name} must answer"));
+        assert_eq!(error.code, -32010, "{name}: {}", error.message);
+        assert!(error.message.contains(name), "{}", error.message);
+    }
+
+    let malformed = processor
+        .process(request(
+            13,
+            method::MANAGED_WORKTREE_CREATE,
+            serde_json::json!({ "start": { "kind": "somewhere" } }),
+        ))
+        .await
+        .error
+        .expect("an unknown start point is refused");
+    assert_eq!(malformed.code, -32602);
+}
+
+#[test]
+fn a_stale_mcp_approval_has_its_own_code_and_carries_the_launch_as_it_is_now() {
+    use agiworkforce_protocol::developer_session::{
+        McpApprovalRequest, McpServerScope, MCP_APPROVAL_STALE_ERROR_CODE,
+    };
+
+    let current = McpApprovalRequest {
+        name: "docs".to_string(),
+        scope: McpServerScope::Project,
+        question: "Allow it?".to_string(),
+        fingerprint: "as-it-is-now".to_string(),
+        launch: None,
+    };
+    let stale = DeveloperSessionHostError::mcp_approval_stale("it changed", current.clone());
+
+    assert_eq!(stale.code(), MCP_APPROVAL_STALE_ERROR_CODE);
+    assert_ne!(
+        stale.code(),
+        DeveloperSessionHostError::conflict("already approved").code(),
+        "a client could not tell a changed launch from one already approved"
+    );
+    let carried: McpApprovalRequest =
+        serde_json::from_value(stale.data().cloned().expect("the launch as it is now"))
+            .expect("typed");
+    assert_eq!(carried, current);
 }

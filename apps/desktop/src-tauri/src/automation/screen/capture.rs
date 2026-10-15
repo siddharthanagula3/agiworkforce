@@ -20,11 +20,9 @@ use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
 #[cfg(windows)]
 use windows::Win32::Graphics::Gdi::{
     BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC, GetDIBits,
-    ReleaseDC, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HBITMAP,
-    HGDIOBJ, RGBQUAD, SRCCOPY,
+    ReleaseDC, SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, RGBQUAD,
+    SRCCOPY,
 };
-#[cfg(windows)]
-use windows::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard};
 #[cfg(windows)]
 use windows::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -491,136 +489,6 @@ pub fn capture_window(hwnd: isize) -> Result<CapturedImage> {
         screen_index,
         display,
     })
-}
-
-#[cfg(windows)]
-pub fn paste_from_clipboard() -> Result<CapturedImage> {
-    const CF_BITMAP: u32 = 2;
-
-    unsafe {
-        if OpenClipboard(HWND(0)).is_err() {
-            return Err(anyhow!("Failed to open clipboard"));
-        }
-
-        let clipboard_data = GetClipboardData(CF_BITMAP);
-
-        let handle = match clipboard_data {
-            Ok(h) if !h.is_invalid() => h,
-            _ => {
-                CloseClipboard().ok();
-                return Err(anyhow!("No bitmap data in clipboard"));
-            }
-        };
-
-        let bitmap_handle = HBITMAP(handle.0);
-
-        let screen_dc = GetDC(HWND(0));
-        if screen_dc.is_invalid() {
-            CloseClipboard().ok();
-            return Err(anyhow!("Failed to get screen DC"));
-        }
-
-        let mem_dc = CreateCompatibleDC(screen_dc);
-        if mem_dc.is_invalid() {
-            ReleaseDC(HWND(0), screen_dc);
-            CloseClipboard().ok();
-            return Err(anyhow!("Failed to create compatible DC"));
-        }
-
-        let old_bitmap = SelectObject(mem_dc, HGDIOBJ(bitmap_handle.0));
-
-        let mut bmi = BITMAPINFO {
-            bmiHeader: BITMAPINFOHEADER {
-                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-                biWidth: 0,
-                biHeight: 0,
-                biPlanes: 1,
-                biBitCount: 32,
-                biCompression: BI_RGB.0,
-                biSizeImage: 0,
-                biXPelsPerMeter: 0,
-                biYPelsPerMeter: 0,
-                biClrUsed: 0,
-                biClrImportant: 0,
-            },
-            bmiColors: [RGBQUAD {
-                rgbBlue: 0,
-                rgbRed: 0,
-                rgbGreen: 0,
-                rgbReserved: 0,
-            }; 1],
-        };
-
-        if GetDIBits(mem_dc, bitmap_handle, 0, 0, None, &mut bmi, DIB_RGB_COLORS) == 0 {
-            SelectObject(mem_dc, old_bitmap);
-            let _ = DeleteDC(mem_dc);
-            ReleaseDC(HWND(0), screen_dc);
-            CloseClipboard().ok();
-            return Err(anyhow!("Failed to get bitmap info"));
-        }
-
-        let extent = match bitmap_extent(bmi.bmiHeader.biWidth, bmi.bmiHeader.biHeight) {
-            Ok(extent) => extent,
-            Err(error) => {
-                SelectObject(mem_dc, old_bitmap);
-                let _ = DeleteDC(mem_dc);
-                ReleaseDC(HWND(0), screen_dc);
-                CloseClipboard().ok();
-                return Err(error);
-            }
-        };
-        let width = extent.width;
-        let height = extent.height;
-
-        bmi.bmiHeader.biHeight = -(height as i32);
-        bmi.bmiHeader.biCompression = BI_RGB.0;
-        bmi.bmiHeader.biBitCount = 32;
-
-        let mut buffer = vec![0u8; extent.buffer_len];
-
-        let result = GetDIBits(
-            mem_dc,
-            bitmap_handle,
-            0,
-            height,
-            Some(buffer.as_mut_ptr() as *mut _),
-            &mut bmi,
-            DIB_RGB_COLORS,
-        );
-
-        SelectObject(mem_dc, old_bitmap);
-        let _ = DeleteDC(mem_dc);
-        ReleaseDC(HWND(0), screen_dc);
-        CloseClipboard().ok();
-
-        if result == 0 {
-            return Err(anyhow!("Failed to get bitmap bits"));
-        }
-
-        for i in (0..buffer.len()).step_by(4) {
-            buffer.swap(i, i + 2);
-        }
-
-        let pixels = RgbaImage::from_raw(width, height, buffer)
-            .ok_or_else(|| anyhow!("Failed to create image from raw data"))?;
-
-        let displays = list_displays()?;
-        let display = displays
-            .first()
-            .cloned()
-            .ok_or_else(|| anyhow!("No display found"))?;
-
-        Ok(CapturedImage {
-            pixels,
-            screen_index: 0,
-            display,
-        })
-    }
-}
-
-#[cfg(not(windows))]
-pub fn paste_from_clipboard() -> Result<CapturedImage> {
-    Err(anyhow!("Clipboard paste is only supported on Windows"))
 }
 
 #[cfg(test)]

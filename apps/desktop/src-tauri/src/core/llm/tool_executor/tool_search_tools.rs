@@ -34,8 +34,11 @@ impl ToolExecutor {
             .and_then(Value::as_bool)
             .unwrap_or(true);
 
-        let mut all_tools = self.registry.list_tools();
-        all_tools.sort_by(|a, b| a.id.cmp(&b.id));
+        let switches = self.app_handle.as_ref().and_then(|app| {
+            use tauri::Manager;
+            app.try_state::<crate::sys::commands::capabilities::CapabilityState>()
+        });
+        let all_tools = searchable_tools(self.registry.list_tools(), switches.as_deref());
         let total_tools = all_tools.len();
 
         let matches = if let Some(selection) = query.strip_prefix("select:") {
@@ -153,6 +156,21 @@ impl ToolExecutor {
     }
 }
 
+/// The tools a search may return: what chat offers, less every tool under a
+/// capability that is off, so a search never hands back a tool the next call
+/// would be refused.
+fn searchable_tools(
+    mut tools: Vec<Tool>,
+    switches: Option<&crate::sys::commands::capabilities::CapabilityState>,
+) -> Vec<Tool> {
+    tools.retain(|tool| crate::sys::commands::chat::tools::not_offered_in_chat(&tool.id).is_none());
+    if let Some(switches) = switches {
+        tools.retain(|tool| switches.tool_refusal_now(&tool.id).is_none());
+    }
+    tools.sort_by(|a, b| a.id.cmp(&b.id));
+    tools
+}
+
 fn score_tool_match(tool: &Tool, terms: &[&str]) -> i32 {
     let id = normalize_search_text(&tool.id);
     let name = normalize_search_text(&tool.name);
@@ -199,4 +217,34 @@ fn normalize_search_text(value: &str) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sys::commands::capabilities::{tool_to_capability, CapabilityState, SavedSwitches};
+
+    fn registry_tools() -> Vec<Tool> {
+        let registry = ToolRegistry::new().expect("registry");
+        registry.register_all_tools().expect("register all tools");
+        registry.list_tools()
+    }
+
+    #[test]
+    fn a_search_returns_no_tool_under_a_capability_that_is_off() {
+        let files_off = CapabilityState::from_saved(SavedSwitches::Saved(HashMap::from([(
+            "fileOperations".to_string(),
+            false,
+        )])));
+
+        let found = searchable_tools(registry_tools(), Some(&files_off));
+        assert!(found
+            .iter()
+            .all(|tool| tool_to_capability(&tool.id) != Some("fileOperations")));
+        assert!(found.iter().any(|tool| tool.id == "terminal_execute"));
+        assert!(found.iter().all(|tool| tool.id != "db_query"));
+
+        let all_on = searchable_tools(registry_tools(), None);
+        assert!(all_on.iter().any(|tool| tool.id == "file_read"));
+    }
 }

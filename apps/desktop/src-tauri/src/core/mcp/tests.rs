@@ -93,11 +93,18 @@ while True:
             env: HashMap::new(),
             enabled: true,
             transport: None,
+            allow_local_network: false,
         };
 
-        let session = McpSession::connect("py-smoke".to_string(), config, false)
-            .await
-            .expect("connect via engine stdio transport");
+        let session = McpSession::connect(
+            "py-smoke".to_string(),
+            config,
+            false,
+            std::sync::Arc::new(crate::core::mcp::elicitation::ElicitationBroker::new()),
+            crate::core::mcp::ApprovedLaunch::assumed_in_tests(),
+        )
+        .await
+        .expect("connect via engine stdio transport");
         assert_eq!(session.transport_type(), "stdio");
 
         let negotiated = session.negotiated();
@@ -255,11 +262,18 @@ server.serve_forever()
                 url: format!("http://127.0.0.1:{port}"),
                 ..Default::default()
             }))),
+            allow_local_network: false,
         };
 
-        let session = McpSession::connect("py-http-smoke".to_string(), config, false)
-            .await
-            .expect("connect via engine http transport");
+        let session = McpSession::connect(
+            "py-http-smoke".to_string(),
+            config,
+            false,
+            std::sync::Arc::new(crate::core::mcp::elicitation::ElicitationBroker::new()),
+            crate::core::mcp::ApprovedLaunch::assumed_in_tests(),
+        )
+        .await
+        .expect("connect via engine http transport");
         assert_eq!(session.transport_type(), "http-sse");
 
         let negotiated = session.negotiated();
@@ -426,6 +440,7 @@ mod unit_tests {
             env: HashMap::from([("KEY".to_string(), "value".to_string())]),
             enabled: true,
             transport: None,
+            allow_local_network: false,
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -507,11 +522,18 @@ mod unit_tests {
             env: HashMap::new(),
             enabled: true,
             transport: None,
+            allow_local_network: false,
         };
 
-        let session = McpSession::connect("filesystem".to_string(), config, false)
-            .await
-            .unwrap();
+        let session = McpSession::connect(
+            "filesystem".to_string(),
+            config,
+            false,
+            std::sync::Arc::new(crate::core::mcp::elicitation::ElicitationBroker::new()),
+            crate::core::mcp::ApprovedLaunch::assumed_in_tests(),
+        )
+        .await
+        .unwrap();
 
         let negotiated = session.negotiated();
         assert!(!negotiated.server_info.name.is_empty());
@@ -544,10 +566,15 @@ mod unit_tests {
             env: HashMap::new(),
             enabled: true,
             transport: None,
+            allow_local_network: false,
         };
 
         client
-            .connect_server("filesystem".to_string(), fs_config)
+            .connect_server(
+                "filesystem".to_string(),
+                fs_config,
+                crate::core::mcp::ApprovedLaunch::assumed_in_tests(),
+            )
             .await
             .unwrap();
 
@@ -836,13 +863,16 @@ mod credential_tests {
     /// Test credential key format for database storage
     #[test]
     fn test_credential_key_format() {
-        let server_name = "github";
-        let env_key = "GITHUB_PERSONAL_ACCESS_TOKEN";
-        let cred_key = format!("mcp_credential_{}_{}", server_name, env_key);
+        let scope = crate::core::mcp::config::credential_scope(None);
+        let cred_key = crate::core::mcp::config::mcp_credential_row(
+            &scope,
+            "github",
+            "GITHUB_PERSONAL_ACCESS_TOKEN",
+        );
 
         assert_eq!(
             cred_key,
-            "mcp_credential_github_GITHUB_PERSONAL_ACCESS_TOKEN"
+            "mcp_secret/user/676974687562/GITHUB_PERSONAL_ACCESS_TOKEN"
         );
     }
 
@@ -878,6 +908,7 @@ mod credential_tests {
             env,
             enabled: false,
             transport: None,
+            allow_local_network: false,
         };
 
         let token_value = config.env.get("GITHUB_PERSONAL_ACCESS_TOKEN").unwrap();
@@ -902,6 +933,7 @@ mod credential_tests {
             env,
             enabled: false,
             transport: None,
+            allow_local_network: false,
         };
 
         let key_value = config.env.get("STRIPE_SECRET_KEY").unwrap();
@@ -942,6 +974,7 @@ mod credential_tests {
             env,
             enabled: true,
             transport: None,
+            allow_local_network: false,
         };
 
         let json = serde_json::to_string(&original).unwrap();

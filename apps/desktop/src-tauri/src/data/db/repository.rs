@@ -2,10 +2,10 @@ use chrono::{DateTime, Duration, TimeZone, Utc};
 use rusqlite::{params, Connection, Result, Row};
 
 use super::models::{
-    AutomationHistory, Conversation, ConversationBranch, ConversationCostBreakdown,
-    CostTimeseriesPoint, Message, MessageRole, OverlayEvent, OverlayEventType,
-    PaginatedOverlayEvents, ProviderCostBreakdown, Setting, TaskType, TokenUsage,
-    DEFAULT_BRANCH_ID,
+    AutomationHistory, Conversation, ConversationBranchGroup, ConversationCostBreakdown,
+    ConversationListItem, CostTimeseriesPoint, Message, MessageRole, MessageWithDetail,
+    OverlayEvent, OverlayEventType, PaginatedOverlayEvents, ProviderCostBreakdown, Setting,
+    TaskType, TokenUsage, COMPACTION_SUMMARIZED, COMPACTION_SUMMARY,
 };
 
 /// Validates a provider or model name string (M12).
@@ -135,34 +135,42 @@ pub fn list_conversations(
     Ok(conversations)
 }
 
-/// List conversations scoped to a specific app mode ("local" or "cloud").
+/// One page of the history list, newest first, with the archived and pinned
+/// flags the sidebar renders.
 ///
 /// This is the PREFERRED query for all UI-facing conversation list calls.
-/// It enforces the hard Local/Cloud boundary so each mode shows only its own
-/// history, conversations created in Local mode never appear in Cloud mode
-/// and vice-versa.
+/// With `app_mode` it enforces the hard Local/Cloud boundary so each mode shows
+/// only its own history; without it every conversation of the user is listed.
+/// `id` breaks `updated_at` ties so consecutive pages never repeat or skip a row.
 pub fn list_conversations_by_mode(
     conn: &Connection,
     limit: i64,
     offset: i64,
     user_id: &str,
-    app_mode: &str,
-) -> Result<Vec<Conversation>> {
-    let safe_mode = match app_mode {
+    app_mode: Option<&str>,
+) -> Result<Vec<ConversationListItem>> {
+    let safe_mode = app_mode.map(|mode| match mode {
         "cloud" => "cloud",
         _ => "local",
-    };
+    });
     let mut stmt = conn.prepare(
-        "SELECT id, title, created_at, updated_at, user_id, execution_mode, project_id
+        "SELECT id, title, created_at, updated_at, user_id, execution_mode, project_id,
+                COALESCE(archived, 0), COALESCE(pinned, 0)
          FROM conversations
          WHERE user_id = ?3
-           AND (app_mode = ?4 OR app_mode IS NULL)
-         ORDER BY updated_at DESC
+           AND (?4 IS NULL OR app_mode = ?4 OR app_mode IS NULL)
+         ORDER BY updated_at DESC, id DESC
          LIMIT ?1 OFFSET ?2",
     )?;
 
     let conversations = stmt
-        .query_map(params![limit, offset, user_id, safe_mode], map_conversation)?
+        .query_map(params![limit, offset, user_id, safe_mode], |row| {
+            Ok(ConversationListItem {
+                conversation: map_conversation(row)?,
+                archived: row.get::<_, i64>(7)? != 0,
+                pinned: row.get::<_, i64>(8)? != 0,
+            })
+        })?
         .collect::<Result<Vec<_>>>()?;
 
     Ok(conversations)
@@ -185,6 +193,7 @@ pub fn update_conversation_title(
 }
 
 /// Set the `archived` flag on a conversation (1 = archived, 0 = active).
+/// Archiving also unpins, so a restored chat returns to Recents unpinned.
 pub fn archive_conversation(
     conn: &Connection,
     id: i64,
@@ -193,8 +202,49 @@ pub fn archive_conversation(
 ) -> Result<()> {
     let flag: i32 = if archived { 1 } else { 0 };
     let updated = conn.execute(
-        "UPDATE conversations SET archived = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2 AND user_id = ?3",
+        "UPDATE conversations
+         SET archived = ?1,
+             pinned = CASE WHEN ?1 = 1 THEN 0 ELSE COALESCE(pinned, 0) END,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?2 AND user_id = ?3",
         params![flag, id, user_id],
+    )?;
+    if updated == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
+/// Set the `pinned` flag on a conversation. Pinning leaves `updated_at` alone so
+/// the chat keeps its place in Recents.
+pub fn set_conversation_pinned(
+    conn: &Connection,
+    id: i64,
+    user_id: &str,
+    pinned: bool,
+) -> Result<()> {
+    let updated = conn.execute(
+        "UPDATE conversations SET pinned = ?1 WHERE id = ?2 AND user_id = ?3",
+        params![i32::from(pinned), id, user_id],
+    )?;
+    if updated == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
+/// Move a conversation into a project, or out of every project with `None`.
+/// A blank id is stored as NULL so "no project" has one representation.
+pub fn set_conversation_project(
+    conn: &Connection,
+    id: i64,
+    user_id: &str,
+    project_id: Option<&str>,
+) -> Result<()> {
+    let safe_project_id = project_id.map(str::trim).filter(|s| !s.is_empty());
+    let updated = conn.execute(
+        "UPDATE conversations SET project_id = ?1 WHERE id = ?2 AND user_id = ?3",
+        params![safe_project_id, id, user_id],
     )?;
     if updated == 0 {
         return Err(rusqlite::Error::QueryReturnedNoRows);
@@ -223,17 +273,24 @@ fn map_conversation(row: &Row) -> Result<Conversation> {
 }
 
 pub fn create_message(conn: &Connection, message: &Message) -> Result<i64> {
-    // Use a transaction to ensure atomicity of update + insert
     let tx = conn.unchecked_transaction()?;
+    let last_id = insert_message(&tx, message)?;
+    tx.commit()?;
+    Ok(last_id)
+}
 
-    tx.execute(
+/// Stores a message on a connection whose caller already holds the
+/// transaction. SQLite refuses a second BEGIN, so a caller inside its own
+/// transaction uses this instead of [`create_message`].
+pub fn insert_message(conn: &Connection, message: &Message) -> Result<i64> {
+    conn.execute(
         "UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?1 AND user_id = ?2",
         params![message.conversation_id, message.user_id],
     )?;
 
-    tx.execute(
-        "INSERT INTO messages (conversation_id, user_id, role, content, tokens, cost, provider, model, parent_message_id, branch_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+    conn.execute(
+        "INSERT INTO messages (conversation_id, user_id, role, content, tokens, cost, provider, model)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             message.conversation_id,
             message.user_id,
@@ -243,14 +300,10 @@ pub fn create_message(conn: &Connection, message: &Message) -> Result<i64> {
             message.cost,
             message.provider,
             message.model,
-            message.parent_message_id,
-            message.branch_id.as_deref().unwrap_or(DEFAULT_BRANCH_ID),
         ],
     )?;
 
-    let last_id = tx.last_insert_rowid();
-    tx.commit()?;
-    Ok(last_id)
+    Ok(conn.last_insert_rowid())
 }
 
 /// Fetches a single message by its primary key.
@@ -271,38 +324,20 @@ pub fn get_message(conn: &Connection, id: i64) -> Result<Message> {
     )
 }
 
+/// The messages the model sees: a message compaction summarized is left out,
+/// as its summary stands in for it. The transcript lists it with
+/// [`list_messages_with_detail`].
 pub fn list_messages(conn: &Connection, conversation_id: i64) -> Result<Vec<Message>> {
-    list_messages_by_branch(conn, conversation_id, None)
-}
-
-pub fn list_messages_by_branch(
-    conn: &Connection,
-    conversation_id: i64,
-    branch_id: Option<&str>,
-) -> Result<Vec<Message>> {
-    if let Some(bid) = branch_id {
-        let mut stmt = conn.prepare(
-            "SELECT id, conversation_id, user_id, role, content, tokens, cost, provider, model, created_at, parent_message_id, branch_id
-             FROM messages
-             WHERE conversation_id = ?1 AND branch_id = ?2
-             ORDER BY created_at ASC, id ASC",
-        )?;
-        let messages = stmt
-            .query_map(params![conversation_id, bid], map_message)?
-            .collect::<Result<Vec<_>>>()?;
-        Ok(messages)
-    } else {
-        let mut stmt = conn.prepare(
-            "SELECT id, conversation_id, user_id, role, content, tokens, cost, provider, model, created_at, parent_message_id, branch_id
-             FROM messages
-             WHERE conversation_id = ?1
-             ORDER BY created_at ASC, id ASC",
-        )?;
-        let messages = stmt
-            .query_map(params![conversation_id], map_message)?
-            .collect::<Result<Vec<_>>>()?;
-        Ok(messages)
-    }
+    let mut stmt = conn.prepare(
+        "SELECT id, conversation_id, user_id, role, content, tokens, cost, provider, model, created_at, parent_message_id, branch_id
+         FROM messages
+         WHERE conversation_id = ?1 AND superseded_key IS NULL AND compacted_into IS NULL
+         ORDER BY created_at ASC, id ASC",
+    )?;
+    let messages = stmt
+        .query_map(params![conversation_id], map_message)?
+        .collect::<Result<Vec<_>>>()?;
+    Ok(messages)
 }
 
 /// Deletes a message by its primary key.
@@ -314,6 +349,120 @@ pub fn list_messages_by_branch(
 pub fn delete_message(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM messages WHERE id = ?1", params![id])?;
     Ok(())
+}
+
+/// Which row of a conversation a delete names: the stored id, or the id the
+/// renderer gave the message when it was sent.
+pub enum MessageRef<'a> {
+    Id(i64),
+    ClientId(&'a str),
+}
+
+/// Deletes one message of a conversation the user owns. Returns the number of
+/// rows removed, 0 when the message was already gone.
+pub fn delete_message_for_user(
+    conn: &Connection,
+    conversation_id: i64,
+    message: MessageRef<'_>,
+    user_id: &str,
+) -> Result<usize> {
+    match message {
+        MessageRef::Id(id) => conn.execute(
+            "DELETE FROM messages
+             WHERE id = ?1
+               AND conversation_id = ?2
+               AND conversation_id IN (SELECT id FROM conversations WHERE user_id = ?3)",
+            params![id, conversation_id, user_id],
+        ),
+        MessageRef::ClientId(client_id) => conn.execute(
+            "DELETE FROM messages
+             WHERE client_id = ?1
+               AND conversation_id = ?2
+               AND conversation_id IN (SELECT id FROM conversations WHERE user_id = ?3)",
+            params![client_id, conversation_id, user_id],
+        ),
+    }
+}
+
+/// Stores the turn detail rendered live for one message. A `None` field keeps
+/// what is already stored, so the user row and the assistant row can each be
+/// written separately.
+pub fn update_message_detail(
+    conn: &Connection,
+    message_id: i64,
+    user_id: &str,
+    client_id: Option<&str>,
+    tool_calls: Option<&str>,
+    thinking: Option<&str>,
+    attachments: Option<&str>,
+    sources: Option<&str>,
+) -> Result<()> {
+    let updated = conn.execute(
+        "UPDATE messages
+         SET client_id = COALESCE(?1, client_id),
+             tool_calls = COALESCE(?2, tool_calls),
+             thinking = COALESCE(?3, thinking),
+             attachments = COALESCE(?4, attachments),
+             sources = COALESCE(?7, sources)
+         WHERE id = ?5
+           AND conversation_id IN (SELECT id FROM conversations WHERE user_id = ?6)",
+        params![
+            client_id,
+            tool_calls,
+            thinking,
+            attachments,
+            message_id,
+            user_id,
+            sources
+        ],
+    )?;
+    if updated == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
+/// Lists a conversation's messages with their stored turn detail. Detail that
+/// no longer parses as JSON is dropped rather than failing the whole load.
+pub fn list_messages_with_detail(
+    conn: &Connection,
+    conversation_id: i64,
+) -> Result<Vec<MessageWithDetail>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, conversation_id, user_id, role, content, tokens, cost, provider, model, created_at, parent_message_id, branch_id,
+                tool_calls, thinking, attachments, feedback,
+                compacted_into IS NOT NULL,
+                EXISTS(SELECT 1 FROM messages summarized WHERE summarized.compacted_into = messages.id),
+                sources
+         FROM messages
+         WHERE conversation_id = ?1 AND superseded_key IS NULL
+         ORDER BY created_at ASC, id ASC",
+    )?;
+    let messages = stmt
+        .query_map(params![conversation_id], |row| {
+            let parse_json = |index: usize| -> Result<Option<serde_json::Value>> {
+                Ok(row
+                    .get::<_, Option<String>>(index)?
+                    .and_then(|raw| serde_json::from_str(&raw).ok()))
+            };
+            Ok(MessageWithDetail {
+                message: map_message(row)?,
+                tool_calls: parse_json(12)?,
+                thinking: row.get(13)?,
+                attachments: parse_json(14)?,
+                sources: parse_json(18)?,
+                feedback: row.get(15)?,
+                compaction: if row.get::<_, bool>(16)? {
+                    Some(COMPACTION_SUMMARIZED.to_string())
+                } else if row.get::<_, bool>(17)? {
+                    Some(COMPACTION_SUMMARY.to_string())
+                } else {
+                    None
+                },
+            })
+        })?
+        .collect::<Result<Vec<_>>>()?;
+    Ok(messages)
 }
 
 pub fn update_message_content(conn: &Connection, id: i64, content: String) -> Result<Message> {
@@ -348,74 +497,246 @@ fn map_message(row: &Row) -> Result<Message> {
     })
 }
 
-// =============================================================================
-// Conversation Branching
-// =============================================================================
-
-fn map_branch(row: &Row) -> Result<ConversationBranch> {
-    Ok(ConversationBranch {
-        id: row.get(0)?,
-        conversation_id: row.get(1)?,
-        parent_branch_id: row.get(2)?,
-        fork_point_message_id: row.get(3)?,
-        name: row.get(4)?,
-        created_at: parse_datetime(&row.get::<_, String>(5)?),
+/// Whether compaction replaced message `id` in the model's history
+/// (`"summarized"`) or made it to stand in for such messages (`"summary"`).
+pub fn message_compaction(conn: &Connection, id: i64) -> Result<Option<&'static str>> {
+    let (summarized, summary): (bool, bool) = conn.query_row(
+        "SELECT compacted_into IS NOT NULL,
+                EXISTS(SELECT 1 FROM messages summarized WHERE summarized.compacted_into = messages.id)
+         FROM messages WHERE id = ?1",
+        params![id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    Ok(if summarized {
+        Some(COMPACTION_SUMMARIZED)
+    } else if summary {
+        Some(COMPACTION_SUMMARY)
+    } else {
+        None
     })
 }
 
-/// Creates a new branch record. Returns the branch id.
-pub fn create_branch(
+/// The error for an edit, retry or branch aimed at a message compaction
+/// summarized, or at its summary: replacing either would hide the summarized
+/// messages from the model for good.
+pub fn compaction_refusal(action: &str) -> rusqlite::Error {
+    rusqlite::Error::InvalidParameterName(format!(
+        "a message that was summarized, or its summary, cannot be {action}; use a later message"
+    ))
+}
+
+// =============================================================================
+// Branching into a new conversation
+// =============================================================================
+
+fn resolve_message_id(
     conn: &Connection,
     conversation_id: i64,
-    parent_branch_id: Option<&str>,
-    fork_point_message_id: Option<i64>,
-    name: &str,
-    branch_id: &str,
-) -> Result<ConversationBranch> {
-    conn.execute(
-        "INSERT INTO conversation_branches (id, conversation_id, parent_branch_id, fork_point_message_id, name)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![branch_id, conversation_id, parent_branch_id, fork_point_message_id, name],
-    )?;
-    conn.query_row(
-        "SELECT id, conversation_id, parent_branch_id, fork_point_message_id, name, created_at
-         FROM conversation_branches WHERE id = ?1",
-        params![branch_id],
-        map_branch,
-    )
+    message: &MessageRef<'_>,
+) -> Result<i64> {
+    match message {
+        MessageRef::Id(id) => conn.query_row(
+            "SELECT id FROM messages WHERE id = ?1 AND conversation_id = ?2",
+            params![id, conversation_id],
+            |row| row.get(0),
+        ),
+        MessageRef::ClientId(client_id) => conn.query_row(
+            "SELECT id FROM messages WHERE client_id = ?1 AND conversation_id = ?2
+             ORDER BY id DESC LIMIT 1",
+            params![client_id, conversation_id],
+            |row| row.get(0),
+        ),
+    }
 }
 
-/// Returns all branches for a conversation.
-pub fn list_branches(conn: &Connection, conversation_id: i64) -> Result<Vec<ConversationBranch>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, conversation_id, parent_branch_id, fork_point_message_id, name, created_at
-         FROM conversation_branches
-         WHERE conversation_id = ?1
-         ORDER BY created_at ASC",
+/// Copies a conversation up to and including one message into a new
+/// conversation, in one transaction, and records where it branched from.
+/// Returns the new conversation id.
+pub fn branch_conversation(
+    conn: &Connection,
+    source_id: i64,
+    user_id: &str,
+    through: MessageRef<'_>,
+) -> Result<i64> {
+    let tx = conn.unchecked_transaction()?;
+    let source = get_conversation(&tx, source_id, user_id)?;
+    let fork_message_id = resolve_message_id(&tx, source_id, &through)?;
+    if message_compaction(&tx, fork_message_id)? == Some(COMPACTION_SUMMARIZED) {
+        return Err(compaction_refusal("branched from"));
+    }
+    let (fork_created_at, app_mode): (String, Option<String>) = tx.query_row(
+        "SELECT m.created_at, c.app_mode
+         FROM messages m JOIN conversations c ON c.id = m.conversation_id
+         WHERE m.id = ?1",
+        params![fork_message_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
     )?;
-    let branches = stmt
-        .query_map(params![conversation_id], map_branch)?
-        .collect::<Result<Vec<_>>>()?;
-    Ok(branches)
-}
 
-/// Deletes a branch and all its messages. Refuses to delete 'main'.
-pub fn delete_branch(conn: &Connection, conversation_id: i64, branch_id: &str) -> Result<()> {
-    if branch_id == DEFAULT_BRANCH_ID {
+    tx.execute(
+        "INSERT INTO conversations
+            (title, user_id, app_mode, execution_mode, project_id,
+             branched_from_conversation_id, branched_from_message_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            source.title,
+            user_id,
+            app_mode,
+            source.execution_mode,
+            source.project_id,
+            source_id,
+            fork_message_id
+        ],
+    )?;
+    let branch_id = tx.last_insert_rowid();
+
+    let copied = tx.execute(
+        "INSERT INTO messages
+            (conversation_id, user_id, role, content, tokens, cost, provider, model, created_at,
+             tool_calls, thinking, attachments, feedback, sources)
+         SELECT ?1, user_id, role, content, tokens, cost, provider, model, created_at,
+                tool_calls, thinking, attachments, feedback, sources
+         FROM messages
+         WHERE conversation_id = ?2
+           AND superseded_key IS NULL
+           AND compacted_into IS NULL
+           AND (created_at < ?3 OR (created_at = ?3 AND id <= ?4))
+         ORDER BY created_at ASC, id ASC",
+        params![branch_id, source_id, fork_created_at, fork_message_id],
+    )?;
+    if copied == 0 {
         return Err(rusqlite::Error::InvalidParameterName(
-            "Cannot delete the 'main' branch".to_string(),
+            "the branch would hold no message".to_string(),
         ));
     }
-    let tx = conn.unchecked_transaction()?;
+    let branch_point_id = tx.last_insert_rowid();
     tx.execute(
-        "DELETE FROM messages WHERE conversation_id = ?1 AND branch_id = ?2",
-        params![conversation_id, branch_id],
+        "UPDATE conversations SET branch_point_message_id = ?1 WHERE id = ?2",
+        params![branch_point_id, branch_id],
     )?;
-    tx.execute(
-        "DELETE FROM conversation_branches WHERE conversation_id = ?1 AND id = ?2",
-        params![conversation_id, branch_id],
+    tx.commit()?;
+    Ok(branch_id)
+}
+
+fn branch_siblings(
+    conn: &Connection,
+    source_id: i64,
+    fork_message_id: i64,
+    user_id: &str,
+) -> Result<Vec<i64>> {
+    let mut ids: Vec<i64> = conn
+        .query_row(
+            "SELECT id FROM conversations WHERE id = ?1 AND user_id = ?2",
+            params![source_id, user_id],
+            |row| row.get(0),
+        )
+        .map(|id| vec![id])
+        .or_else(|error| match error {
+            rusqlite::Error::QueryReturnedNoRows => Ok(Vec::new()),
+            other => Err(other),
+        })?;
+    let mut stmt = conn.prepare(
+        "SELECT id FROM conversations
+         WHERE branched_from_conversation_id = ?1
+           AND branched_from_message_id = ?2
+           AND user_id = ?3
+         ORDER BY created_at ASC, id ASC",
     )?;
-    tx.commit()
+    let branches = stmt
+        .query_map(params![source_id, fork_message_id, user_id], |row| {
+            row.get(0)
+        })?
+        .collect::<Result<Vec<i64>>>()?;
+    ids.extend(branches);
+    Ok(ids)
+}
+
+/// The places in a conversation where it and other chats share a history: each
+/// message the user branched at, and, for a branch, the message it was branched
+/// from. Each group lists the sibling conversations in a stable order.
+pub fn list_branch_groups(
+    conn: &Connection,
+    conversation_id: i64,
+    user_id: &str,
+) -> Result<Vec<ConversationBranchGroup>> {
+    let mut groups = Vec::new();
+
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT c.branched_from_message_id, m.client_id
+         FROM conversations c
+         LEFT JOIN messages m ON m.id = c.branched_from_message_id
+         WHERE c.branched_from_conversation_id = ?1 AND c.user_id = ?2
+           AND c.branched_from_message_id IS NOT NULL",
+    )?;
+    let forks = stmt
+        .query_map(params![conversation_id, user_id], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, Option<String>>(1)?))
+        })?
+        .collect::<Result<Vec<_>>>()?;
+    for (fork_message_id, client_id) in forks {
+        let conversation_ids = branch_siblings(conn, conversation_id, fork_message_id, user_id)?;
+        groups.push(ConversationBranchGroup {
+            message_id: fork_message_id,
+            client_id,
+            active_index: 0,
+            conversation_ids,
+        });
+    }
+
+    let lineage: Option<(Option<i64>, Option<i64>, Option<i64>)> = conn
+        .query_row(
+            "SELECT branched_from_conversation_id, branched_from_message_id, branch_point_message_id
+             FROM conversations WHERE id = ?1 AND user_id = ?2",
+            params![conversation_id, user_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .map(Some)
+        .or_else(|error| match error {
+            rusqlite::Error::QueryReturnedNoRows => Ok(None),
+            other => Err(other),
+        })?;
+    if let Some((Some(source_id), Some(fork_message_id), Some(branch_point_id))) = lineage {
+        let conversation_ids = branch_siblings(conn, source_id, fork_message_id, user_id)?;
+        if let Some(active_index) = conversation_ids
+            .iter()
+            .position(|id| *id == conversation_id)
+        {
+            groups.push(ConversationBranchGroup {
+                message_id: branch_point_id,
+                client_id: None,
+                active_index,
+                conversation_ids,
+            });
+        }
+    }
+
+    Ok(groups)
+}
+
+/// Records the thumbs feedback on one message of a conversation the user owns;
+/// `None` clears it.
+pub fn set_message_feedback(
+    conn: &Connection,
+    conversation_id: i64,
+    message: MessageRef<'_>,
+    user_id: &str,
+    feedback: Option<&str>,
+) -> Result<()> {
+    if !matches!(feedback, None | Some("up") | Some("down")) {
+        return Err(rusqlite::Error::InvalidParameterName(
+            "feedback must be up, down or none".to_string(),
+        ));
+    }
+    let message_id = resolve_message_id(conn, conversation_id, &message)?;
+    let updated = conn.execute(
+        "UPDATE messages SET feedback = ?1
+         WHERE id = ?2
+           AND conversation_id IN (SELECT id FROM conversations WHERE user_id = ?3)",
+        params![feedback, message_id, user_id],
+    )?;
+    if updated == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
 }
 
 pub fn sum_cost_since(conn: &Connection, since: DateTime<Utc>, user_id: &str) -> Result<f64> {
@@ -997,6 +1318,178 @@ mod tests {
 
         delete_conversation(&conn, id, test_user_id).unwrap();
         assert!(get_conversation(&conn, id, test_user_id).is_err());
+    }
+
+    #[test]
+    fn list_pages_carry_archive_pin_and_project_and_never_repeat() {
+        let conn = setup_test_db();
+        let user = "user-a";
+        let mut ids = Vec::new();
+        for index in 0..5 {
+            ids.push(
+                create_conversation_with_mode(
+                    &conn,
+                    format!("Chat {index}"),
+                    user.to_string(),
+                    "local",
+                )
+                .unwrap(),
+            );
+        }
+        create_conversation_with_mode(&conn, "Cloud".to_string(), user.to_string(), "cloud")
+            .unwrap();
+        archive_conversation(&conn, ids[0], user, true).unwrap();
+        set_conversation_pinned(&conn, ids[1], user, true).unwrap();
+        set_conversation_project(&conn, ids[2], user, Some("project-1")).unwrap();
+        assert!(set_conversation_pinned(&conn, ids[1], "user-b", true).is_err());
+
+        let first = list_conversations_by_mode(&conn, 3, 0, user, Some("local")).unwrap();
+        let second = list_conversations_by_mode(&conn, 3, 3, user, Some("local")).unwrap();
+        let all: Vec<_> = first.iter().chain(second.iter()).collect();
+        assert_eq!(all.len(), 5);
+        let mut seen: Vec<i64> = all.iter().map(|item| item.conversation.id).collect();
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen.len(), 5, "a page repeated or skipped a conversation");
+
+        let find = |id: i64| all.iter().find(|item| item.conversation.id == id).unwrap();
+        assert!(find(ids[0]).archived);
+        assert!(find(ids[1]).pinned);
+        assert_eq!(
+            find(ids[2]).conversation.project_id.as_deref(),
+            Some("project-1")
+        );
+
+        set_conversation_project(&conn, ids[2], user, None).unwrap();
+        assert_eq!(
+            get_conversation(&conn, ids[2], user).unwrap().project_id,
+            None
+        );
+        assert_eq!(
+            list_conversations_by_mode(&conn, 10, 0, user, None)
+                .unwrap()
+                .len(),
+            6
+        );
+    }
+
+    #[test]
+    fn message_detail_round_trips_and_client_id_deletes_only_the_owner_rows() {
+        let conn = setup_test_db();
+        let user = "user-a";
+        let conv_id = create_conversation(&conn, "Detail".to_string(), user.to_string()).unwrap();
+        let message_id = create_message(
+            &conn,
+            &Message::new(
+                conv_id,
+                user.to_string(),
+                MessageRole::Assistant,
+                "Done".to_string(),
+            ),
+        )
+        .unwrap();
+
+        update_message_detail(
+            &conn,
+            message_id,
+            user,
+            Some("client-1"),
+            Some(r#"[{"id":"t1","name":"web_search","args":{},"status":"completed"}]"#),
+            Some("Checked the docs first."),
+            None,
+            Some(
+                r#"[{"id":"t1","query":"rust async","results":[{"url":"https://tokio.rs/","title":"Tokio"}],"resultCount":1}]"#,
+            ),
+        )
+        .unwrap();
+        assert!(update_message_detail(
+            &conn,
+            message_id,
+            "user-b",
+            None,
+            None,
+            Some("x"),
+            None,
+            None
+        )
+        .is_err());
+        update_message_detail(&conn, message_id, user, None, None, None, None, None).unwrap();
+
+        let stored = list_messages_with_detail(&conn, conv_id).unwrap();
+        assert_eq!(stored.len(), 1);
+        assert_eq!(
+            stored[0].thinking.as_deref(),
+            Some("Checked the docs first.")
+        );
+        assert_eq!(
+            stored[0]
+                .tool_calls
+                .as_ref()
+                .and_then(|calls| calls[0]["name"].as_str()),
+            Some("web_search")
+        );
+        assert!(stored[0].attachments.is_none());
+        assert_eq!(
+            stored[0]
+                .sources
+                .as_ref()
+                .and_then(|searches| searches[0]["results"][0]["url"].as_str()),
+            Some("https://tokio.rs/"),
+            "a later detail write that carries no sources must keep the stored ones"
+        );
+
+        assert_eq!(
+            delete_message_for_user(&conn, conv_id, MessageRef::ClientId("client-1"), "user-b")
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            delete_message_for_user(&conn, conv_id, MessageRef::ClientId("client-1"), user)
+                .unwrap(),
+            1
+        );
+        assert!(list_messages(&conn, conv_id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn feedback_is_stored_cleared_and_validated() {
+        let conn = setup_test_db();
+        let conv_id = create_conversation(&conn, "Rate".to_string(), "user".to_string()).unwrap();
+        let reply = create_message(
+            &conn,
+            &Message::new(
+                conv_id,
+                "user".to_string(),
+                MessageRole::Assistant,
+                "ok".to_string(),
+            ),
+        )
+        .unwrap();
+
+        set_message_feedback(&conn, conv_id, MessageRef::Id(reply), "user", Some("down")).unwrap();
+        assert_eq!(
+            list_messages_with_detail(&conn, conv_id).unwrap()[0]
+                .feedback
+                .as_deref(),
+            Some("down")
+        );
+        assert!(
+            set_message_feedback(&conn, conv_id, MessageRef::Id(reply), "user", Some("meh"))
+                .is_err()
+        );
+        assert!(set_message_feedback(
+            &conn,
+            conv_id,
+            MessageRef::Id(reply),
+            "intruder",
+            Some("up")
+        )
+        .is_err());
+        set_message_feedback(&conn, conv_id, MessageRef::Id(reply), "user", None).unwrap();
+        assert_eq!(
+            list_messages_with_detail(&conn, conv_id).unwrap()[0].feedback,
+            None
+        );
     }
 
     #[test]

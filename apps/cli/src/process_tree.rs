@@ -416,8 +416,16 @@ fn is_executable_file(path: &Path) -> bool {
     path.is_file()
 }
 
+/// The shell host commands run through. On Unix it is named by absolute
+/// path: a bare `sh` is looked up on `PATH`, where a project's `.venv/bin`
+/// can come first with an `sh` a sandboxed command left there.
+#[cfg(unix)]
+pub(crate) const HOST_SHELL: &str = "/bin/sh";
+#[cfg(not(unix))]
+pub(crate) const HOST_SHELL: &str = "sh";
+
 pub(crate) fn shell_command(script: &str) -> Command {
-    let mut command = Command::new("sh");
+    let mut command = Command::new(HOST_SHELL);
     command.arg("-c");
     #[cfg(windows)]
     {
@@ -441,9 +449,42 @@ pub(crate) fn shell_command(script: &str) -> Command {
 /// be reaped before returning `TimedOut`; cancellation caused by caller drop is
 /// completed by the detached supervisor.
 pub(crate) async fn output(
+    command: Command,
+    stdin: Option<Vec<u8>>,
+    timeout: Option<Duration>,
+) -> io::Result<Output> {
+    output_in_group(command, stdin, timeout, GroupEnd::WithCaller).await
+}
+
+/// [`output`], and when the direct child exits, the rest of its process
+/// group is killed too, so nothing it started in the background outlives the
+/// command. A sandboxed command uses this: a process it left running could
+/// rewrite a repository's configuration after host git has checked it. On
+/// macOS a process that calls `setsid` leaves the group and survives this;
+/// the sandbox still confines it, but host git's checks cannot assume it is
+/// gone.
+pub(crate) async fn output_ending_group(
+    command: Command,
+    stdin: Option<Vec<u8>>,
+    timeout: Option<Duration>,
+) -> io::Result<Output> {
+    output_in_group(command, stdin, timeout, GroupEnd::WithChild).await
+}
+
+/// When the rest of a child's process group is killed.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum GroupEnd {
+    /// On a timeout or a dropped caller only.
+    WithCaller,
+    /// Also as soon as the direct child exits.
+    WithChild,
+}
+
+async fn output_in_group(
     mut command: Command,
     stdin: Option<Vec<u8>>,
     timeout: Option<Duration>,
+    group_end: GroupEnd,
 ) -> io::Result<Output> {
     command
         .stdin(if stdin.is_some() {
@@ -487,6 +528,7 @@ pub(crate) async fn output(
         let result = supervise(
             child,
             process_id,
+            group_end,
             cancel_receiver,
             deadline,
             stdin_task,
@@ -520,9 +562,11 @@ fn configure_lifecycle(command: &mut Command) {
     command.creation_flags(0x0000_0200);
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn supervise(
     mut child: Child,
     process_id: Option<u32>,
+    group_end: GroupEnd,
     cancel_receiver: oneshot::Receiver<()>,
     deadline: Option<Instant>,
     mut stdin_task: Option<JoinHandle<()>>,
@@ -549,6 +593,11 @@ async fn supervise(
         }
         status = child.wait() => status?,
     };
+    if group_end == GroupEnd::WithChild {
+        // The group outlives its leader while any member runs, so its id
+        // cannot be reused before this signal reaches what is left.
+        signal_process_tree(process_id).await;
+    }
 
     let stdout_event = tokio::select! {
         biased;
@@ -828,6 +877,12 @@ mod tests {
     use nix::unistd::Pid;
     use std::path::Path;
 
+    #[test]
+    fn host_shell_commands_name_the_shell_by_absolute_path() {
+        let command = shell_command("true");
+        assert_eq!(command.as_std().get_program(), "/bin/sh");
+    }
+
     #[tokio::test]
     async fn a_pipe_past_its_limit_is_drained_so_the_child_still_finishes() {
         let _guard = CHILD_SPAWNING_TESTS.lock().await;
@@ -928,6 +983,46 @@ mod tests {
         assert!(
             !sentinel.exists(),
             "dropped interactive child wrote its delayed sentinel"
+        );
+        assert_processes_absent(&process_ids);
+    }
+
+    #[tokio::test]
+    async fn a_command_that_ends_its_group_leaves_nothing_running_in_the_background() {
+        let _serial = super::CHILD_SPAWNING_TESTS.lock().await;
+        let temp = tempfile::tempdir().expect("temp directory");
+        let backgrounded = |name: &str| {
+            let sentinel = temp.path().join(format!("{name}-sentinel"));
+            let pid_file = temp.path().join(format!("{name}-pids"));
+            let mut command = Command::new("sh");
+            command.arg("-c").arg(format!(
+                "sh -c 'sleep 0.7; printf leaked > {}' >/dev/null 2>&1 & \
+                 printf '%s\\n%s\\n' \"$$\" \"$!\" > {}",
+                crate::sandbox::shell_quote(&sentinel.to_string_lossy()),
+                crate::sandbox::shell_quote(&pid_file.to_string_lossy()),
+            ));
+            (command, sentinel, pid_file)
+        };
+
+        let (command, left_running, _) = backgrounded("plain");
+        output(command, None, Some(Duration::from_secs(5)))
+            .await
+            .expect("the plain command finishes");
+        let (command, sentinel, pid_file) = backgrounded("ended");
+        output_ending_group(command, None, Some(Duration::from_secs(5)))
+            .await
+            .expect("the command finishes");
+
+        let process_ids = read_process_ids(&pid_file).await;
+        wait_for_processes_to_exit(&process_ids).await;
+        tokio::time::sleep(Duration::from_millis(900)).await;
+        assert!(
+            left_running.exists(),
+            "without ending the group the background process runs on, so the check is real"
+        );
+        assert!(
+            !sentinel.exists(),
+            "a background process outlived the command that started it"
         );
         assert_processes_absent(&process_ids);
     }

@@ -429,7 +429,7 @@ pub fn decrypt_file_with_key(
         })
         .ok_or_else(|| "Decryption failed".to_string())?;
 
-    fs::write(output_path, plaintext)
+    crate::sys::utils::write_file_without_following(std::path::Path::new(output_path), &plaintext)
         .map_err(|e| format!("Failed to write decrypted file: {}", e))?;
 
     Ok(())

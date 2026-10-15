@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 
 // ---------------------------------------------------------------------------
@@ -532,6 +532,17 @@ pub enum PluginInstallOutcome {
 
 const AGIWORKFORCE_DIR: &str = ".agiworkforce";
 const PLUGINS_DIR: &str = "plugins";
+const UPDATE_PENDING: &str = "an update to it was pulled and has not been approved; \
+     run `agi marketplace update` to review it";
+
+/// The file that marks a plugin in `plugins_dir` as holding an update nobody
+/// has decided on. It is written before the update is pulled and removed
+/// once the update is kept or put back, so a run that ends in between leaves
+/// the plugin off instead of running what was never approved. It holds the
+/// commit the person last agreed to.
+pub fn pending_update_marker(plugins_dir: &Path, name: &str) -> PathBuf {
+    plugins_dir.join(format!("{name}.update-pending"))
+}
 const DISABLED_PLUGINS_FILE: &str = "disabled-plugins.json";
 const MAX_PLUGIN_NAME_BYTES: usize = 128;
 
@@ -709,13 +720,18 @@ impl PluginsManager {
                 .map(|m| sanitize_manifest_paths(&path, &name, "skills", &m.skills))
                 .unwrap_or_default();
 
-            let compatibility_error = manifest
+            let refusal = manifest
                 .as_ref()
-                .and_then(|m| check_plugin_compatibility(m).err());
-            if let Some(error) = &compatibility_error {
+                .and_then(|m| check_plugin_compatibility(m).err())
+                .or_else(|| {
+                    pending_update_marker(dir, &name)
+                        .exists()
+                        .then(|| UPDATE_PENDING.to_string())
+                });
+            if let Some(error) = &refusal {
                 eprintln!("[plugins] plugin '{}' is disabled: {}", name, error);
             }
-            let enabled = !disabled.contains(&name) && compatibility_error.is_none();
+            let enabled = !disabled.contains(&name) && refusal.is_none();
             self.plugins.push(LoadedPlugin {
                 config_name: name,
                 manifest_name: manifest.as_ref().and_then(|m| m.name.clone()),
@@ -731,7 +747,7 @@ impl PluginsManager {
                     .as_ref()
                     .map(|m| m.apps.clone())
                     .unwrap_or_default(),
-                error: compatibility_error,
+                error: refusal,
                 format,
                 manifest_commands,
                 manifest_agents,
@@ -774,8 +790,30 @@ impl PluginsManager {
     /// back to the legacy stdio shape using `command`/`args`/`env`. Plugins
     /// with neither a command nor an SSE transport are skipped.
     pub fn mcp_configs(&self) -> HashMap<String, crate::mcp::McpServerConfig> {
+        self.mcp_configs_where(|_| true)
+    }
+
+    /// [`Self::mcp_configs`] split into the servers of plugins the user
+    /// installed and those of plugins in the project's own
+    /// `.agiworkforce/plugins`, which a sandboxed command can write.
+    pub fn mcp_configs_by_scope(
+        &self,
+    ) -> (
+        HashMap<String, crate::mcp::McpServerConfig>,
+        HashMap<String, crate::mcp::McpServerConfig>,
+    ) {
+        (
+            self.mcp_configs_where(|plugin| !plugin.from_project_dir),
+            self.mcp_configs_where(|plugin| plugin.from_project_dir),
+        )
+    }
+
+    fn mcp_configs_where(
+        &self,
+        keep: impl Fn(&LoadedPlugin) -> bool,
+    ) -> HashMap<String, crate::mcp::McpServerConfig> {
         let mut out = HashMap::new();
-        for p in self.enabled_plugins() {
+        for p in self.enabled_plugins().filter(|plugin| keep(plugin)) {
             for (name, cfg) in &p.mcp_servers {
                 if let Err(error) = crate::mcp::registry::ensure_no_rule_separator(name) {
                     eprintln!("[plugins] {error}, skipping");
@@ -844,13 +882,25 @@ impl PluginsManager {
                             // No command + no recognized transport, skip.
                             continue;
                         }
+                        // A plugin the user installed runs its server outside
+                        // the sandbox unless its manifest says `"sandbox": true`.
+                        // A project's plugin, which a sandboxed command can
+                        // rewrite, always runs it inside.
+                        let sandboxed = p.from_project_dir
+                            || cfg
+                                .extra
+                                .get("sandbox")
+                                .and_then(serde_json::Value::as_bool)
+                                .unwrap_or(false);
                         out.insert(
                             name.clone(),
                             crate::mcp::McpServerConfig::stdio(
                                 cfg.command.clone(),
                                 cfg.args.clone(),
                                 cfg.env.clone(),
-                            ),
+                            )
+                            .with_scope_default(sandboxed)
+                            .with_origin(crate::mcp::McpServerOrigin::Plugin),
                         );
                     }
                     Some(other) => {
@@ -1035,17 +1085,17 @@ impl PluginsManager {
         let copy_outcome = match req.source {
             PluginSource::Local(src) => copy_dir(&src, &target).map_err(|e| format!("{}", e)),
             PluginSource::Git { url, branch } => {
-                let mut cmd = std::process::Command::new("git");
+                let mut cmd = agiworkforce_worktree::host_git();
                 cmd.arg("clone").arg("--depth").arg("1");
                 if let Some(b) = branch {
                     cmd.args(["--branch", &b]);
                 }
                 // `--` keeps git from reading the URL or the target path as options.
                 cmd.arg("--").arg(&url).arg(&target);
-                match cmd.output() {
+                match crate::platform::runtime::git::host_git_network_output(cmd) {
                     Ok(o) if o.status.success() => Ok(()),
                     Ok(o) => Err(String::from_utf8_lossy(&o.stderr).to_string()),
-                    Err(e) => Err(format!("{}", e)),
+                    Err(e) => Err(crate::platform::runtime::git::host_git_failure(&e)),
                 }
             }
         };
@@ -1145,14 +1195,15 @@ fn verify_plugin_integrity(target: &Path, integrity: &PluginIntegrity) -> Result
     match integrity {
         PluginIntegrity::PublisherSignature => Ok(()),
         PluginIntegrity::PinnedSha256(expected) => {
-            let actual = hash_dir_tree_sha256(target).map_err(|e| e.to_string())?;
+            let actual = plugin_content_sha256(target).map_err(|e| e.to_string())?;
             if actual.eq_ignore_ascii_case(expected.trim_start_matches("sha256:")) {
                 Ok(())
             } else {
                 Err(format!(
-                    "integrity mismatch: expected sha256:{}, got sha256:{}",
+                    "integrity mismatch: expected sha256:{}, got sha256:{}. The digest covers {}.",
                     expected.trim_start_matches("sha256:"),
-                    actual
+                    actual,
+                    CONTENT_DIGEST_COVERS
                 ))
             }
         }
@@ -1165,34 +1216,219 @@ fn verify_plugin_integrity(target: &Path, integrity: &PluginIntegrity) -> Result
     }
 }
 
-fn hash_dir_tree_sha256(root: &Path) -> std::io::Result<String> {
+/// What [`plugin_content_sha256`] hashes, as the help and a mismatch say it.
+pub const CONTENT_DIGEST_COVERS: &str = "every file and link under the plugin folder except \
+     `.git`, in path order: its path, its git mode (100644, 100755 or 120000) and its bytes, \
+     which for a link are its target and not the file it points to";
+
+const CONTENT_DIGEST_DOMAIN: &[u8] = b"agiworkforce-plugin-content/v1\n";
+
+/// The digest `--integrity sha256:` pins: the content git tracks, and nothing
+/// git keeps for itself. `.git` differs between two clones of one commit, so
+/// hashing it would give every clone its own digest. A file's mode is the one
+/// git records, so a checkout under another umask hashes the same; where the
+/// platform has no executable bit every file is 100644.
+pub fn plugin_content_sha256(root: &Path) -> std::io::Result<String> {
     use sha2::{Digest, Sha256};
-    let mut entries: Vec<PathBuf> = Vec::new();
-    collect_files(root, &mut entries)?;
+
+    let mut entries: Vec<(Vec<u8>, PathBuf)> = Vec::new();
+    collect_tracked_entries(root, root, &mut entries)?;
     entries.sort();
     let mut hasher = Sha256::new();
-    for entry in entries {
-        let rel = entry.strip_prefix(root).unwrap_or(&entry);
-        hasher.update(rel.to_string_lossy().as_bytes());
+    hasher.update(CONTENT_DIGEST_DOMAIN);
+    for (name, path) in entries {
+        let metadata = std::fs::symlink_metadata(&path)?;
+        let bytes = if metadata.file_type().is_symlink() {
+            os_bytes(std::fs::read_link(&path)?.as_os_str())
+        } else {
+            std::fs::read(&path)?
+        };
+        hasher.update(git_mode(&metadata));
+        hasher.update([b' ']);
+        hasher.update(&name);
         hasher.update([0u8]);
-        let bytes = std::fs::read(&entry)?;
+        hasher.update(bytes.len().to_string().as_bytes());
+        hasher.update([0u8]);
         hasher.update(&bytes);
-        hasher.update([0u8]);
     }
     Ok(crate::hex::encode(&hasher.finalize()))
 }
 
-fn collect_files(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
+fn collect_tracked_entries(
+    root: &Path,
+    dir: &Path,
+    out: &mut Vec<(Vec<u8>, PathBuf)>,
+) -> std::io::Result<()> {
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
-        let ft = entry.file_type()?;
-        if ft.is_dir() {
-            collect_files(&entry.path(), out)?;
-        } else if ft.is_file() {
-            out.push(entry.path());
+        if entry.file_name() == ".git" {
+            continue;
+        }
+        let path = entry.path();
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            collect_tracked_entries(root, &path, out)?;
+        } else if file_type.is_file() || file_type.is_symlink() {
+            out.push((tracked_name(root, &path), path));
         }
     }
     Ok(())
+}
+
+/// A path below `root` as git names it: its components joined by `/`.
+fn tracked_name(root: &Path, path: &Path) -> Vec<u8> {
+    let mut name = Vec::new();
+    for component in path.strip_prefix(root).unwrap_or(path).components() {
+        if !name.is_empty() {
+            name.push(b'/');
+        }
+        name.extend_from_slice(&os_bytes(component.as_os_str()));
+    }
+    name
+}
+
+#[cfg(unix)]
+fn os_bytes(text: &std::ffi::OsStr) -> Vec<u8> {
+    use std::os::unix::ffi::OsStrExt;
+    text.as_bytes().to_vec()
+}
+
+#[cfg(not(unix))]
+fn os_bytes(text: &std::ffi::OsStr) -> Vec<u8> {
+    text.to_string_lossy().into_owned().into_bytes()
+}
+
+fn git_mode(metadata: &std::fs::Metadata) -> &'static [u8] {
+    if metadata.file_type().is_symlink() {
+        return b"120000";
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if metadata.permissions().mode() & 0o100 != 0 {
+            return b"100755";
+        }
+    }
+    b"100644"
+}
+
+/// One thing a plugin adds that runs code or instructs the model, with a
+/// fingerprint of everything it is declared with: a hook with its arguments
+/// and filters, an MCP server with its launch, a skill, command or agent
+/// with the bytes of its files.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PluginCapability {
+    pub label: String,
+    fingerprint: String,
+}
+
+fn canonical_json(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::Object(fields) => {
+            let mut keys: Vec<&String> = fields.keys().collect();
+            keys.sort();
+            let members: Vec<String> = keys
+                .into_iter()
+                .map(|key| {
+                    format!(
+                        "{}:{}",
+                        serde_json::Value::String(key.clone()),
+                        canonical_json(&fields[key])
+                    )
+                })
+                .collect();
+            format!("{{{}}}", members.join(","))
+        }
+        serde_json::Value::Array(items) => format!(
+            "[{}]",
+            items
+                .iter()
+                .map(canonical_json)
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        scalar => scalar.to_string(),
+    }
+}
+
+fn declared_path_fingerprint(root: &Path, relative: &Path) -> String {
+    use sha2::{Digest, Sha256};
+
+    if let Err(error) = safe_manifest_relative_path(root, relative) {
+        return format!("rejected: {error}");
+    }
+    let path = root.join(relative);
+    let digest = match std::fs::metadata(&path) {
+        Ok(metadata) if metadata.is_dir() => plugin_content_sha256(&path),
+        Ok(_) => std::fs::read(&path).map(|bytes| crate::hex::encode(&Sha256::digest(&bytes))),
+        Err(error) => Err(error),
+    };
+    digest.unwrap_or_else(|error| format!("unreadable: {error}"))
+}
+
+/// Everything the plugin at `root` declares that runs code or instructs the
+/// model.
+pub fn plugin_capabilities(root: &Path) -> BTreeSet<PluginCapability> {
+    let mut found = BTreeSet::new();
+    let Some((manifest, _)) = load_manifest_for(root) else {
+        return found;
+    };
+    if let Some(declared) = &manifest.hooks {
+        let by_event = declared.get("hooks").unwrap_or(declared);
+        for (event, hooks) in by_event.as_object().into_iter().flatten() {
+            for hook in hooks.as_array().into_iter().flatten() {
+                let shown = serde_json::from_value::<crate::hooks::Hook>(hook.clone())
+                    .map(|parsed| parsed.display_command())
+                    .unwrap_or_else(|_| hook.to_string());
+                found.insert(PluginCapability {
+                    label: format!("hook under {event}: {shown}"),
+                    fingerprint: canonical_json(hook),
+                });
+            }
+        }
+    }
+    for (name, server) in &manifest.mcp_servers {
+        found.insert(PluginCapability {
+            label: format!("MCP server {name}"),
+            fingerprint: serde_json::to_value(server)
+                .map(|value| canonical_json(&value))
+                .unwrap_or_default(),
+        });
+    }
+    for (kind, declared) in [
+        ("skill", &manifest.skills),
+        ("command", &manifest.commands),
+        ("agent", &manifest.agents),
+    ] {
+        for relative in declared {
+            found.insert(PluginCapability {
+                label: format!("{kind} {}", relative.display()),
+                fingerprint: declared_path_fingerprint(root, relative),
+            });
+        }
+    }
+    found
+}
+
+/// What `after` declares that `before` did not, each as `new …` or
+/// `changed …`. These are what a person has not yet agreed to.
+pub fn unapproved_capabilities(
+    before: &BTreeSet<PluginCapability>,
+    after: &BTreeSet<PluginCapability>,
+) -> Vec<String> {
+    after
+        .difference(before)
+        .map(|capability| {
+            let known = before
+                .iter()
+                .any(|earlier| earlier.label == capability.label);
+            format!(
+                "{} {}",
+                if known { "changed" } else { "new" },
+                capability.label
+            )
+        })
+        .collect()
 }
 
 /// Pull `headers = { ... }` out of an MCP server config's catch-all `extra`
@@ -1370,17 +1606,39 @@ pub fn load_manifest_for(plugin_root: &Path) -> Option<(PluginManifest, Manifest
     None
 }
 
+/// Copy a plugin folder. A link is copied as the link it is, never as what
+/// it points to: following it would pull files from outside the source into
+/// the install, and the installed folder would no longer hash as the source
+/// does.
 fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
     std::fs::create_dir_all(dst)?;
     for entry in std::fs::read_dir(src)? {
         let e = entry?;
         let d = dst.join(e.file_name());
-        if e.path().is_dir() {
+        let file_type = e.file_type()?;
+        if file_type.is_symlink() {
+            copy_link(&e.path(), &d)?;
+        } else if file_type.is_dir() {
             copy_dir(&e.path(), &d)?;
         } else {
             std::fs::copy(e.path(), d)?;
         }
     }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn copy_link(link: &Path, copy: &Path) -> Result<()> {
+    std::os::unix::fs::symlink(std::fs::read_link(link)?, copy)?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn copy_link(link: &Path, _copy: &Path) -> Result<()> {
+    eprintln!(
+        "[plugins] skipping link during plugin copy: {}",
+        link.display()
+    );
     Ok(())
 }
 
@@ -1907,7 +2165,234 @@ mod tests {
             PluginIntegrity::PinnedSha256(format!("sha256:{}", "0".repeat(64))),
             policy(trusting_acme()),
         );
-        assert!(refusal(outcome).contains("integrity mismatch"));
+        let error = refusal(outcome);
+        assert!(error.contains("integrity mismatch"), "{error}");
+        assert!(
+            error.contains("except `.git`"),
+            "a mismatch says what the digest covers: {error}"
+        );
+    }
+
+    #[test]
+    fn the_content_digest_ignores_git_and_is_the_same_for_two_copies() {
+        let first = tempfile::tempdir().unwrap();
+        let second = tempfile::tempdir().unwrap();
+        for (root, pack) in [(first.path(), "pack-1"), (second.path(), "pack-2")] {
+            write_test_plugin(root);
+            std::fs::create_dir_all(root.join("scripts")).unwrap();
+            std::fs::write(root.join("scripts").join("run.sh"), "echo hi\n").unwrap();
+            std::fs::create_dir_all(root.join(".git").join("objects")).unwrap();
+            std::fs::write(root.join(".git").join("objects").join(pack), pack).unwrap();
+            std::fs::write(root.join(".git").join("index"), pack).unwrap();
+        }
+        let digest = plugin_content_sha256(first.path()).unwrap();
+        assert_eq!(digest.len(), 64);
+        assert_eq!(
+            digest,
+            plugin_content_sha256(second.path()).unwrap(),
+            "two clones of one commit differ only inside .git"
+        );
+
+        std::fs::write(second.path().join("scripts").join("run.sh"), "echo bye\n").unwrap();
+        assert_ne!(digest, plugin_content_sha256(second.path()).unwrap());
+    }
+
+    #[test]
+    fn the_content_digest_covers_where_the_bytes_are_and_not_only_the_bytes() {
+        fn digest_of(files: &[(&str, &str)]) -> String {
+            let root = tempfile::tempdir().unwrap();
+            for (name, content) in files {
+                std::fs::write(root.path().join(name), content).unwrap();
+            }
+            plugin_content_sha256(root.path()).unwrap()
+        }
+        assert_eq!(
+            digest_of(&[("b.txt", "2"), ("a.txt", "1")]),
+            digest_of(&[("a.txt", "1"), ("b.txt", "2")]),
+            "the order files were written in does not matter"
+        );
+        assert_ne!(
+            digest_of(&[("one.txt", "x")]),
+            digest_of(&[("two.txt", "x")])
+        );
+        assert_ne!(
+            digest_of(&[("a.txt", "12"), ("b.txt", "")]),
+            digest_of(&[("a.txt", "1"), ("b.txt", "2")])
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_content_digest_covers_the_executable_bit_and_keeps_a_link_as_a_link() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+
+        let root = tempfile::tempdir().unwrap();
+        let script = root.path().join("run.sh");
+        std::fs::write(&script, "echo hi\n").unwrap();
+        let mode = |bits: u32| {
+            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(bits)).unwrap();
+            plugin_content_sha256(root.path()).unwrap()
+        };
+        let plain = mode(0o644);
+        let executable = mode(0o755);
+        assert_ne!(plain, executable);
+        assert_eq!(mode(0o664), plain, "a umask does not change the digest");
+        assert_eq!(mode(0o700), executable);
+
+        let outside = tempfile::tempdir().unwrap();
+        let target = outside.path().join("secret.txt");
+        std::fs::write(&target, "one").unwrap();
+        let link = root.path().join("link");
+        symlink(&target, &link).unwrap();
+        let linked = plugin_content_sha256(root.path()).unwrap();
+        std::fs::write(&target, "two").unwrap();
+        assert_eq!(
+            linked,
+            plugin_content_sha256(root.path()).unwrap(),
+            "a link is hashed as its target path, not as the file it points to"
+        );
+
+        std::fs::remove_file(&link).unwrap();
+        std::fs::write(&link, target.to_string_lossy().as_bytes()).unwrap();
+        assert_ne!(
+            linked,
+            plugin_content_sha256(root.path()).unwrap(),
+            "a file holding the same bytes is not the link"
+        );
+    }
+
+    #[test]
+    fn a_pinned_digest_matches_whatever_the_git_folder_holds() {
+        let source = tempfile::tempdir().unwrap();
+        write_test_plugin(source.path());
+        std::fs::create_dir_all(source.path().join(".git")).unwrap();
+        std::fs::write(source.path().join(".git").join("HEAD"), "ref: one\n").unwrap();
+        let pin = format!("sha256:{}", plugin_content_sha256(source.path()).unwrap());
+        std::fs::write(source.path().join(".git").join("HEAD"), "ref: two\n").unwrap();
+
+        let (_home, outcome) = local_install(
+            source.path(),
+            PluginIntegrity::PinnedSha256(pin),
+            PluginSignaturePolicy::default(),
+        );
+        assert_eq!(installed_state(outcome), PluginSignatureState::Unsigned);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_local_install_copies_a_link_as_a_link() {
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("secret.txt"), "secret").unwrap();
+        let source = tempfile::tempdir().unwrap();
+        write_test_plugin(source.path());
+        std::os::unix::fs::symlink(
+            outside.path().join("secret.txt"),
+            source.path().join("leak.txt"),
+        )
+        .unwrap();
+        let pin = format!("sha256:{}", plugin_content_sha256(source.path()).unwrap());
+
+        let (home, outcome) = local_install(
+            source.path(),
+            PluginIntegrity::PinnedSha256(pin),
+            PluginSignaturePolicy::default(),
+        );
+        installed_state(outcome);
+        let copied = home
+            .path()
+            .join("plugins")
+            .join("signed-plugin")
+            .join("leak.txt");
+        assert!(std::fs::symlink_metadata(&copied)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+    }
+
+    #[test]
+    fn a_plugin_holding_an_undecided_update_loads_off() {
+        let home = tempfile::tempdir().unwrap();
+        let plugins_dir = home.path().join("plugins");
+        write_test_manifest(
+            &plugins_dir.join("acme"),
+            r#"{"name":"acme","hooks":{"Stop":[{"command":"notify.sh"}]}}"#,
+        );
+        let mut manager = PluginsManager {
+            global_dir: plugins_dir.clone(),
+            plugins: Vec::new(),
+        };
+        manager.load_all(None).unwrap();
+        assert_eq!(manager.hook_configs().len(), 1);
+
+        std::fs::write(pending_update_marker(&plugins_dir, "acme"), "0".repeat(40)).unwrap();
+        let loaded = manager.load_all(None).unwrap();
+        assert_eq!(loaded.len(), 1, "the marker is not a plugin of its own");
+        assert!(!loaded[0].enabled);
+        assert!(loaded[0]
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("has not been approved"));
+        assert!(manager.hook_configs().is_empty());
+
+        std::fs::remove_file(pending_update_marker(&plugins_dir, "acme")).unwrap();
+        manager.load_all(None).unwrap();
+        assert_eq!(manager.hook_configs().len(), 1);
+    }
+
+    #[test]
+    fn a_changed_plugin_names_what_nobody_has_agreed_to_yet() {
+        let root = tempfile::tempdir().unwrap();
+        let skill = root.path().join("skills").join("SKILL.md");
+        std::fs::create_dir_all(skill.parent().unwrap()).unwrap();
+        std::fs::write(&skill, "v1").unwrap();
+        let declare = |hooks: &str, servers: &str| {
+            write_test_manifest(
+                root.path(),
+                &format!(
+                    r#"{{"name": "acme", "skills": ["skills/SKILL.md"], "hooks": {hooks}, "mcpServers": {servers}}}"#
+                ),
+            );
+            plugin_capabilities(root.path())
+        };
+        let guard = r#"{"PreToolUse": [{"command": "sh", "args": ["guard.sh"]}]}"#;
+        let files = r#"{"files": {"command": "node", "args": ["server.js"]}}"#;
+
+        let before = declare(guard, files);
+        assert_eq!(before.len(), 3, "{before:?}");
+        assert!(unapproved_capabilities(&before, &before).is_empty());
+        assert!(unapproved_capabilities(&before, &declare(guard, files)).is_empty());
+
+        assert_eq!(
+            unapproved_capabilities(
+                &before,
+                &declare(
+                    r#"{"PreToolUse": [{"command": "sh", "args": ["guard.sh"], "timeout": 60}]}"#,
+                    files
+                )
+            ),
+            vec!["changed hook under PreToolUse: sh guard.sh".to_string()]
+        );
+
+        std::fs::write(&skill, "v2").unwrap();
+        let mut pending = unapproved_capabilities(
+            &before,
+            &declare(
+                r#"{"PreToolUse": [{"command": "sh", "args": ["other.sh"]}], "Stop": [{"command": "notify.sh"}]}"#,
+                r#"{"files": {"command": "node", "args": ["server.js", "--all"]}, "web": {"command": "npx"}}"#,
+            ),
+        );
+        pending.sort();
+        assert_eq!(
+            pending,
+            vec![
+                "changed MCP server files".to_string(),
+                "changed skill skills/SKILL.md".to_string(),
+                "new MCP server web".to_string(),
+                "new hook under PreToolUse: sh other.sh".to_string(),
+                "new hook under Stop: notify.sh".to_string(),
+            ]
+        );
     }
 
     #[test]

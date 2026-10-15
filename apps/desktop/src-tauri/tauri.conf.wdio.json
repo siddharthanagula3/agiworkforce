@@ -3,6 +3,14 @@
   "identifier": "com.agiworkforce.desktop.wdio",
   "productName": "AGI Workforce WDIO",
   "app": {
-    "withGlobalTauri": true
+    "withGlobalTauri": true,
+    "security": {
+      "capabilities": [
+        "default",
+        "recorder-hud",
+        "floating",
+        "wdio"
+      ]
+    }
   }
 }

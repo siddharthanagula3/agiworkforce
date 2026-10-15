@@ -23,6 +23,36 @@ use std::sync::Arc;
 /// Prefix added to encrypted config values to distinguish them from plaintext.
 const ENCRYPTED_VALUE_PREFIX: &str = "enc:v1:";
 
+/// The variable an extension's launch carries a hash of its code in: the
+/// package it was installed from and the files in its install folder that
+/// the launch runs, as they are on disk. The approval of a launch covers its
+/// environment, so replacing the package or one of those files makes it a
+/// launch nobody has approved yet.
+const CODE_DIGEST_VARIABLE: &str = "AGI_EXTENSION_FILES_SHA256";
+
+/// One hash over the package an extension came from and the launch files in
+/// its install folder. A file that cannot be read is hashed as absent, so
+/// one that disappears or appears changes the result.
+fn code_digest(package_hash: &str, launch_files: &[PathBuf]) -> String {
+    use sha2::{Digest, Sha256};
+
+    let mut hasher = Sha256::new();
+    hasher.update(package_hash.as_bytes());
+    for file in launch_files {
+        hasher.update([0]);
+        hasher.update(file.to_string_lossy().as_bytes());
+        match std::fs::read(file) {
+            Ok(content) => {
+                hasher.update([1]);
+                hasher.update((content.len() as u64).to_le_bytes());
+                hasher.update(&content);
+            }
+            Err(_) => hasher.update([2]),
+        }
+    }
+    hex::encode(hasher.finalize())
+}
+
 /// Information about an installed extension
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -65,6 +95,10 @@ pub struct ExtensionInfo {
 
     /// Configuration schema (if any)
     pub config_schema: Option<serde_json::Value>,
+
+    /// The names of the configuration values kept as secrets. Their values
+    /// are never sent to the page.
+    pub stored_secrets: Vec<String>,
 
     /// Category
     pub category: Option<String>,
@@ -146,15 +180,66 @@ impl ExtensionManager {
     ///
     /// This starts the extension's MCP server and registers it with the MCP client.
     pub async fn enable_extension(&self, id: &str) -> ExtensionResult<()> {
+        if self.is_running(id) {
+            return Ok(());
+        }
+        self.start_extension(id, None).await
+    }
+
+    /// Enable an extension the user has just approved in the native dialog.
+    /// The approval is handed in because one that holds for a single start
+    /// leaves nothing on record to find.
+    pub async fn enable_approved_extension(
+        &self,
+        id: &str,
+        approved: crate::core::mcp::ApprovedLaunch,
+    ) -> ExtensionResult<()> {
+        if self.is_running(id) {
+            return Ok(());
+        }
+        self.start_extension(id, Some(approved)).await
+    }
+
+    /// The server an extension would start, by name and launch, for the
+    /// caller that asks the user to approve it before enabling it.
+    pub fn launch_of(&self, id: &str) -> ExtensionResult<(String, McpServerConfig)> {
         let record = self
             .repository
             .get(id)?
             .ok_or_else(|| ExtensionError::NotFound(id.to_string()))?;
+        let manifest: ExtensionManifest = serde_json::from_str(&record.manifest_json)?;
+        Ok((
+            format!("ext-{}", id),
+            self.build_server_config(&manifest, &record)?,
+        ))
+    }
 
-        // Check if already enabled/running
-        if record.status == ExtensionStatus::Enabled || record.status == ExtensionStatus::Running {
-            return Ok(());
-        }
+    /// Whether this process has the extension's server connected. The stored
+    /// status alone cannot say: it still reads `Running` after a restart.
+    fn is_running(&self, id: &str) -> bool {
+        self.running_servers.read().contains_key(id)
+    }
+
+    /// The MCP server names of the extensions this process started. A reload
+    /// of the configured servers must leave these connected: they are not in
+    /// the configuration it reloads.
+    pub fn running_server_names(&self) -> Vec<String> {
+        self.running_servers
+            .read()
+            .values()
+            .map(|info| info.server_name.clone())
+            .collect()
+    }
+
+    async fn start_extension(
+        &self,
+        id: &str,
+        approved: Option<crate::core::mcp::ApprovedLaunch>,
+    ) -> ExtensionResult<()> {
+        let record = self
+            .repository
+            .get(id)?
+            .ok_or_else(|| ExtensionError::NotFound(id.to_string()))?;
 
         // Parse manifest
         let manifest: ExtensionManifest = serde_json::from_str(&record.manifest_json)?;
@@ -172,10 +257,16 @@ impl ExtensionManager {
         // Build MCP server configuration
         let server_config = self.build_server_config(&manifest, &record)?;
 
-        // Connect to MCP
+        // An extension's server starts only as the launch the user approved:
+        // at app start nobody is there to ask, and enabling one asks first.
         let server_name = format!("ext-{}", id);
+        let approved = match approved {
+            Some(approved) => approved,
+            None => crate::core::mcp::ApprovedLaunch::require(&server_name, &server_config)
+                .map_err(ExtensionError::StartFailed)?,
+        };
         self.mcp_client
-            .connect_server(server_name.clone(), server_config)
+            .connect_server(server_name.clone(), server_config, approved)
             .await
             .map_err(|e| ExtensionError::StartFailed(e.to_string()))?;
 
@@ -250,6 +341,17 @@ impl ExtensionManager {
 
         // Parse manifest for validation
         let manifest: ExtensionManifest = serde_json::from_str(&record.manifest_json)?;
+
+        // The page is never given a stored secret, so it has none to send
+        // back: one it left out is kept as it is, and one it sent replaces
+        // what was stored.
+        let mut config = config;
+        let sensitive_keys = Self::sensitive_keys(&manifest);
+        for (key, value) in self.get_config(id)? {
+            if !config.contains_key(&key) && Self::holds_secret(&sensitive_keys, &key, &value) {
+                config.insert(key, value);
+            }
+        }
 
         // Validate configuration against schema
         if manifest.config_schema.is_some() {
@@ -326,6 +428,54 @@ impl ExtensionManager {
         Ok(Self::decrypt_sensitive_values(&manifest, raw_config))
     }
 
+    /// Whether a configuration entry is kept as a secret: the same rule
+    /// [`Self::encrypt_sensitive_values`] encrypts by, and a value that is
+    /// still encrypted because it could not be decrypted.
+    fn holds_secret(
+        sensitive_keys: &std::collections::HashSet<String>,
+        key: &str,
+        value: &serde_json::Value,
+    ) -> bool {
+        sensitive_keys.contains(key)
+            || value.as_str().is_some_and(|text| {
+                text.starts_with(ENCRYPTED_VALUE_PREFIX) || Self::looks_like_api_key(text)
+            })
+    }
+
+    /// A configuration split into what the page may be given and the names,
+    /// in order, of the secrets held back.
+    fn apart_from_secrets(
+        manifest: &ExtensionManifest,
+        config: HashMap<String, serde_json::Value>,
+    ) -> (HashMap<String, serde_json::Value>, Vec<String>) {
+        let sensitive_keys = Self::sensitive_keys(manifest);
+        let mut shown = HashMap::new();
+        let mut secrets = Vec::new();
+        for (key, value) in config {
+            if Self::holds_secret(&sensitive_keys, &key, &value) {
+                secrets.push(key);
+            } else {
+                shown.insert(key, value);
+            }
+        }
+        secrets.sort();
+        (shown, secrets)
+    }
+
+    /// The configuration as the page is given it: every value but the
+    /// secrets. The page renders model output, so a secret it held would be
+    /// one a script in it could read; [`ExtensionInfo::stored_secrets`]
+    /// names the ones that exist.
+    pub fn shown_config(&self, id: &str) -> ExtensionResult<HashMap<String, serde_json::Value>> {
+        let record = self
+            .repository
+            .get(id)?
+            .ok_or_else(|| ExtensionError::NotFound(id.to_string()))?;
+        let manifest: ExtensionManifest = serde_json::from_str(&record.manifest_json)?;
+        let (shown, _) = Self::apart_from_secrets(&manifest, self.get_config(id)?);
+        Ok(shown)
+    }
+
     /// Uninstall an extension
     pub async fn uninstall_extension(&self, id: &str) -> ExtensionResult<()> {
         // Disable first if running
@@ -367,6 +517,7 @@ impl ExtensionManager {
 
         let requires_config = manifest.config_schema.is_some();
         let config_complete = self.is_config_complete(&manifest, &config);
+        let (_, stored_secrets) = Self::apart_from_secrets(&manifest, config);
 
         let icon_path = if record.install_path.join("icon.png").exists() {
             Some(record.install_path.join("icon.png"))
@@ -391,6 +542,7 @@ impl ExtensionManager {
                 .config_schema
                 .as_ref()
                 .and_then(|s| serde_json::to_value(s).ok()),
+            stored_secrets,
             category: manifest.category,
             icon_path,
             installed_at: record.installed_at.to_rfc3339(),
@@ -446,6 +598,7 @@ impl ExtensionManager {
                     .unwrap_or_else(|| "node".to_string());
 
                 // Adjust paths to be relative to install directory
+                let mut launch_files = Vec::new();
                 let mut args: Vec<String> = manifest
                     .args
                     .iter()
@@ -454,7 +607,10 @@ impl ExtensionManager {
                             || arg.ends_with(".js")
                             || arg.ends_with(".py")
                         {
-                            record.install_path.join(arg).to_string_lossy().to_string()
+                            let file = record.install_path.join(arg);
+                            let arg = file.to_string_lossy().to_string();
+                            launch_files.push(file);
+                            arg
                         } else {
                             arg.clone()
                         }
@@ -463,14 +619,15 @@ impl ExtensionManager {
 
                 // If no args and it's a node project, add server/index.js
                 if args.is_empty() && command == "node" {
-                    args.push(
-                        record
-                            .install_path
-                            .join("server/index.js")
-                            .to_string_lossy()
-                            .to_string(),
-                    );
+                    let file = record.install_path.join("server/index.js");
+                    args.push(file.to_string_lossy().to_string());
+                    launch_files.push(file);
                 }
+
+                env.insert(
+                    CODE_DIGEST_VARIABLE.to_string(),
+                    code_digest(&record.package_hash, &launch_files),
+                );
 
                 (command, args)
             }
@@ -516,6 +673,7 @@ impl ExtensionManager {
             env,
             enabled: true,
             transport,
+            allow_local_network: false,
         })
     }
 
@@ -749,45 +907,41 @@ impl ExtensionManager {
         Ok(())
     }
 
-    /// Get list of enabled extensions that should auto-start
+    /// The extensions the user left on: stored as `Running` by the last
+    /// successful start, or as `Enabled`.
     pub fn get_auto_start_extensions(&self) -> ExtensionResult<Vec<String>> {
-        let records = self.repository.list_by_status(ExtensionStatus::Enabled)?;
-        Ok(records.into_iter().map(|r| r.id).collect())
+        let mut ids = Vec::new();
+        for status in [ExtensionStatus::Enabled, ExtensionStatus::Running] {
+            ids.extend(
+                self.repository
+                    .list_by_status(status)?
+                    .into_iter()
+                    .map(|record| record.id),
+            );
+        }
+        Ok(ids)
     }
 
-    /// Start all enabled extensions
-    pub async fn start_enabled_extensions(&self) -> ExtensionResult<()> {
-        let extension_ids = self.get_auto_start_extensions()?;
+    /// Starts every extension the user left on. One that fails is marked
+    /// `Error` with its reason and returned; the rest still start.
+    pub async fn start_enabled_extensions(&self) -> ExtensionResult<Vec<(String, String)>> {
+        let mut failures = Vec::new();
 
-        for id in extension_ids {
-            if let Err(e) = self.enable_extension(&id).await {
-                tracing::error!("Failed to start extension {}: {}", id, e);
-                // Update status to error but continue with other extensions
-                let _ = self.repository.update_status(
-                    &id,
-                    ExtensionStatus::Error,
-                    Some(&e.to_string()),
-                );
+        for id in self.get_auto_start_extensions()? {
+            if self.is_running(&id) {
+                continue;
+            }
+            if let Err(error) = self.start_extension(&id, None).await {
+                let reason = error.to_string();
+                tracing::error!("Failed to start extension {}: {}", id, reason);
+                let _ = self
+                    .repository
+                    .update_status(&id, ExtensionStatus::Error, Some(&reason));
+                failures.push((id, reason));
             }
         }
 
-        Ok(())
-    }
-
-    /// Stop all running extensions
-    pub async fn stop_all_extensions(&self) -> ExtensionResult<()> {
-        let running_ids: Vec<String> = {
-            let running = self.running_servers.read();
-            running.keys().cloned().collect()
-        };
-
-        for id in running_ids {
-            if let Err(e) = self.disable_extension(&id).await {
-                tracing::error!("Failed to stop extension {}: {}", id, e);
-            }
-        }
-
-        Ok(())
+        Ok(failures)
     }
 }
 
@@ -1286,6 +1440,204 @@ mod tests {
         assert!(
             !raw_token.contains("sk-legacy-plaintext-key"),
             "After migration, plaintext must not remain in database"
+        );
+    }
+
+    fn manager_with_configurable_extension() -> ExtensionManager {
+        let manager = create_test_manager();
+        let manifest_json = serde_json::json!({
+            "id": "test-ext",
+            "name": "Test",
+            "version": "1.0.0",
+            "description": "test",
+            "command": "node",
+            "configSchema": {
+                "type": "object",
+                "properties": {
+                    "apiKey": { "type": "string", "sensitive": true, "required": true },
+                    "workspace": { "type": "string", "sensitive": false }
+                },
+                "required": ["apiKey"]
+            }
+        });
+        let mut record = stored_extension("test-ext", ExtensionStatus::Disabled);
+        record.manifest_json = manifest_json.to_string();
+        manager.repository.insert(&record).unwrap();
+        manager
+    }
+
+    fn text(value: &str) -> serde_json::Value {
+        serde_json::Value::String(value.to_string())
+    }
+
+    #[test]
+    fn the_page_is_given_every_value_but_the_secrets_and_only_their_names() {
+        let manager = manager_with_configurable_extension();
+        manager
+            .set_config(
+                "test-ext",
+                HashMap::from([
+                    ("apiKey".to_string(), text("plain-words-not-a-key-shape")),
+                    ("workspace".to_string(), text("my-workspace")),
+                ]),
+            )
+            .unwrap();
+
+        let shown = manager.shown_config("test-ext").unwrap();
+        assert_eq!(shown.get("workspace"), Some(&text("my-workspace")));
+        assert!(!shown.contains_key("apiKey"));
+
+        let info = manager.get_extension("test-ext").unwrap();
+        assert_eq!(info.stored_secrets, vec!["apiKey".to_string()]);
+        let sent = serde_json::to_string(&info).unwrap();
+        assert!(sent.contains("\"storedSecrets\":[\"apiKey\"]"), "{sent}");
+        assert!(!sent.contains("plain-words-not-a-key-shape"), "{sent}");
+    }
+
+    #[test]
+    fn a_stored_secret_the_page_did_not_send_is_kept_and_one_it_sent_replaces_it() {
+        let manager = manager_with_configurable_extension();
+        manager
+            .set_config(
+                "test-ext",
+                HashMap::from([
+                    ("apiKey".to_string(), text("first-secret")),
+                    ("workspace".to_string(), text("one")),
+                ]),
+            )
+            .unwrap();
+
+        manager
+            .set_config(
+                "test-ext",
+                HashMap::from([("workspace".to_string(), text("two"))]),
+            )
+            .expect("the required secret is already stored");
+        let kept = manager.get_config("test-ext").unwrap();
+        assert_eq!(kept.get("apiKey"), Some(&text("first-secret")));
+        assert_eq!(kept.get("workspace"), Some(&text("two")));
+
+        manager
+            .set_config(
+                "test-ext",
+                HashMap::from([("apiKey".to_string(), text("second-secret"))]),
+            )
+            .unwrap();
+        let replaced = manager.get_config("test-ext").unwrap();
+        assert_eq!(replaced.get("apiKey"), Some(&text("second-secret")));
+        assert!(
+            !replaced.contains_key("workspace"),
+            "a value that is not a secret is saved as sent"
+        );
+        let raw = manager.repository.get_config("test-ext").unwrap();
+        assert!(raw["apiKey"]
+            .as_str()
+            .unwrap()
+            .starts_with(ENCRYPTED_VALUE_PREFIX));
+    }
+
+    #[test]
+    fn the_launch_carries_a_hash_that_changes_with_the_package_and_with_the_entry_file() {
+        let folder = tempfile::tempdir().unwrap();
+        let manager = create_test_manager();
+        let manifest_json = serde_json::json!({
+            "id": "coded",
+            "name": "Coded",
+            "version": "1.0.0",
+            "description": "test",
+            "command": "node",
+            "args": ["server/index.js"]
+        });
+        let mut record = stored_extension("coded", ExtensionStatus::Disabled);
+        record.manifest_json = manifest_json.to_string();
+        record.install_path = folder.path().to_path_buf();
+        manager.repository.insert(&record).unwrap();
+        std::fs::create_dir_all(folder.path().join("server")).unwrap();
+        std::fs::write(folder.path().join("server/index.js"), "first").unwrap();
+
+        let digest = |manager: &ExtensionManager| {
+            let (name, launch) = manager.launch_of("coded").unwrap();
+            assert_eq!(name, "ext-coded");
+            launch.env[CODE_DIGEST_VARIABLE].clone()
+        };
+        let first = digest(&manager);
+        assert_eq!(first.len(), 64);
+        assert_eq!(
+            digest(&manager),
+            first,
+            "an unchanged launch hashes the same"
+        );
+
+        std::fs::write(folder.path().join("server/index.js"), "second").unwrap();
+        let edited = digest(&manager);
+        assert_ne!(edited, first, "an edited entry file is a different launch");
+
+        record.package_hash = "another package".to_string();
+        manager.repository.update(&record).unwrap();
+        assert_ne!(digest(&manager), edited, "so is another package");
+
+        std::fs::remove_file(folder.path().join("server/index.js")).unwrap();
+        assert_ne!(
+            code_digest("p", &[folder.path().join("server/index.js")]),
+            code_digest("p", &[])
+        );
+    }
+
+    fn stored_extension(id: &str, status: ExtensionStatus) -> ExtensionRecord {
+        ExtensionRecord {
+            id: id.to_string(),
+            name: id.to_string(),
+            version: "1.0.0".to_string(),
+            description: "test".to_string(),
+            author: "test".to_string(),
+            install_path: std::path::PathBuf::from("/tmp").join(id),
+            manifest_json: "not a manifest".to_string(),
+            status,
+            last_error: None,
+            config_json: None,
+            package_hash: "hash".to_string(),
+            installed_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            last_started_at: None,
+            use_count: 0,
+        }
+    }
+
+    #[tokio::test]
+    async fn an_extension_left_on_is_started_at_launch_and_its_failure_is_recorded() {
+        let manager = create_test_manager();
+        manager
+            .repository
+            .insert(&stored_extension("left-on", ExtensionStatus::Running))
+            .unwrap();
+        manager
+            .repository
+            .insert(&stored_extension("switched-off", ExtensionStatus::Disabled))
+            .unwrap();
+
+        let failures = manager.start_enabled_extensions().await.unwrap();
+
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].0, "left-on");
+        let left_on = manager.repository.get("left-on").unwrap().unwrap();
+        assert_eq!(left_on.status, ExtensionStatus::Error);
+        assert_eq!(left_on.last_error.as_deref(), Some(failures[0].1.as_str()));
+        let switched_off = manager.repository.get("switched-off").unwrap().unwrap();
+        assert_eq!(switched_off.status, ExtensionStatus::Disabled);
+    }
+
+    #[tokio::test]
+    async fn a_stored_running_status_does_not_stop_the_user_from_enabling_after_a_restart() {
+        let manager = create_test_manager();
+        manager
+            .repository
+            .insert(&stored_extension("left-on", ExtensionStatus::Running))
+            .unwrap();
+
+        assert!(!manager.is_running("left-on"));
+        assert!(
+            manager.enable_extension("left-on").await.is_err(),
+            "enabling must try to start it, not report success from the stored status"
         );
     }
 }

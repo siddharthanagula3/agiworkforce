@@ -16,6 +16,7 @@ use crate::core::mcp::{emit_mcp_event, HttpSseConfig, McpEvent, McpServerConfig,
 use crate::sys::commands::mcp::McpState;
 use crate::sys::security::aead_nonce::random_nonce;
 use crate::sys::security::machine_key::{derive_key, KeyPurpose};
+use crate::sys::security::vault_credentials;
 use aes_gcm::{
     aead::{Aead, OsRng},
     Aes256Gcm, KeyInit, Nonce,
@@ -892,27 +893,7 @@ fn get_stored_credential(provider: McpOAuthProvider, key: &str) -> Result<String
         )
         .map_err(|_| format!("Credential {} not found", key))?;
 
-    // Decrypt using the same mechanism as tokens
-    let key_bytes = derive_key(KeyPurpose::McpCredentials);
-    let cipher = Aes256Gcm::new_from_slice(&key_bytes)
-        .map_err(|e| format!("Failed to create cipher: {}", e))?;
-
-    let combined = general_purpose::STANDARD
-        .decode(&encrypted)
-        .map_err(|e| format!("Failed to decode: {}", e))?;
-
-    if combined.len() < 12 {
-        return Err("Invalid encrypted data".to_string());
-    }
-
-    let (nonce_bytes, ciphertext) = combined.split_at(12);
-    let nonce = Nonce::from_slice(nonce_bytes);
-
-    let plaintext = cipher
-        .decrypt(nonce, ciphertext)
-        .map_err(|e| format!("Decryption failed: {}", e))?;
-
-    String::from_utf8(plaintext).map_err(|e| format!("Invalid UTF-8: {}", e))
+    vault_credentials::open(vault_credentials::global(), &encrypted)
 }
 
 // ============================================================================
@@ -1583,15 +1564,31 @@ pub async fn mcp_oauth_disconnect(
             }
 
             // Remove from persistent config
-            let config_snapshot = {
+            let (config_snapshot, orphaned_credential_rows) = {
                 let mut config = mcp_state.config.lock();
-                config.mcp_servers.remove(&server_name);
-                config.clone()
+                let rows = match config.mcp_servers.remove(&server_name) {
+                    Some(removed) => config.credential_rows_left_by(
+                        &crate::core::mcp::config::active_credential_scope(),
+                        &server_name,
+                        &removed,
+                    ),
+                    None => Vec::new(),
+                };
+                (config.clone(), rows)
             };
             mcp_state
                 .persist_config_snapshot(&config_snapshot)
                 .await
                 .map_err(|e| format!("Failed to save MCP config after disconnect: {}", e))?;
+            if let Err(error) =
+                crate::sys::commands::mcp::forget_credential_rows(&orphaned_credential_rows)
+            {
+                tracing::warn!(
+                    "Stored credentials of '{}' were not deleted: {}",
+                    server_name,
+                    error
+                );
+            }
 
             emit_mcp_event(
                 &app_handle,
@@ -1642,6 +1639,7 @@ pub async fn mcp_oauth_disconnect(
 pub async fn mcp_oauth_refresh(
     provider: String,
     state: tauri::State<'_, McpOAuthState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<OAuthTokenResponse, String> {
     let oauth_provider = McpOAuthProvider::from_str(&provider)
         .ok_or_else(|| format!("Unknown provider: {}", provider))?;
@@ -1725,11 +1723,40 @@ pub async fn mcp_oauth_refresh(
         oauth_provider.as_str()
     );
 
+    reconnect_connected_connectors_for_provider(oauth_provider.as_str(), &app_handle).await;
+
     Ok(OAuthTokenResponse {
         provider: oauth_provider.as_str().to_string(),
         connected: true,
         expires_at,
     })
+}
+
+/// Running connector servers received the old token at spawn; restart them so
+/// they pick up the refreshed one.
+async fn reconnect_connected_connectors_for_provider(
+    provider: &str,
+    app_handle: &tauri::AppHandle,
+) {
+    let Some(mcp_state) = app_handle.try_state::<McpState>() else {
+        return;
+    };
+    let connected = mcp_state.client.get_connected_servers();
+    for (connector_id, mapping) in CONNECTOR_MCP_MAPPINGS {
+        let uses_provider = matches!(
+            mapping.credential_source,
+            ConnectorCredentialSource::OAuth { provider: p } if p == provider
+        );
+        if uses_provider && connected.iter().any(|name| name == mapping.server_name) {
+            if let Err(e) = connect_connector_internal(connector_id, app_handle).await {
+                tracing::warn!(
+                    "Failed to reconnect connector '{}' after token refresh: {}",
+                    connector_id,
+                    e
+                );
+            }
+        }
+    }
 }
 
 /// Get the access token for a provider (for MCP server use)
@@ -1752,22 +1779,23 @@ pub fn get_access_token(provider: McpOAuthProvider) -> Result<String, String> {
     Ok(tokens.access_token)
 }
 
-/// Store client credentials for a provider
+/// Store client credentials for a provider.
+///
+/// They are sealed under the per-install key, never the master password: a
+/// token refresh needs them beside the refresh token, and refreshes run while
+/// the vault is locked.
 #[tauri::command]
 pub async fn mcp_oauth_set_credentials(
     provider: String,
     client_id: String,
     client_secret: String,
-    encryption: tauri::State<'_, crate::sys::security::MasterPasswordEncryption>,
 ) -> Result<(), String> {
     let oauth_provider = McpOAuthProvider::from_str(&provider)
         .ok_or_else(|| format!("Unknown provider: {}", provider))?;
 
     let conn = open_mcp_settings_db()?;
-    let helper = Some(encryption.inner());
 
-    // Encrypt and store client_id (FIX-001, uses master-password key when configured)
-    let encrypted_id = encrypt_credential(helper, &client_id)?;
+    let encrypted_id = vault_credentials::seal_with_install_key(&client_id)?;
     let id_key = format!("mcp_oauth_config_{}_client_id", oauth_provider.as_str());
     upsert_settings_v2_value(&conn, &id_key, &encrypted_id, "security", true)
         .map_err(|e| format!("Failed to store client_id: {}", e))?;
@@ -1786,8 +1814,7 @@ pub async fn mcp_oauth_set_credentials(
         )
         .map_err(|e| format!("Failed to clear client_secret: {}", e))?;
     } else {
-        // Encrypt and store client_secret (FIX-001, uses master-password key when configured)
-        let encrypted_secret = encrypt_credential(helper, &client_secret)?;
+        let encrypted_secret = vault_credentials::seal_with_install_key(&client_secret)?;
         upsert_settings_v2_value(&conn, &secret_key, &encrypted_secret, "security", true)
             .map_err(|e| format!("Failed to store client_secret: {}", e))?;
     }
@@ -1840,76 +1867,15 @@ pub async fn mcp_oauth_credentials_status(provider: String) -> Result<serde_json
     Ok(serde_json::json!({ "configured": configured }))
 }
 
-/// Encrypt a single credential value.
-///
-/// FIX-001 (Sprint 1): when the user has set up a master password and the
-/// vault is unlocked, derives the AES-256-GCM key from the master password
-/// (HKDF-SHA256 over Argon2id-derived material). When the vault is
-/// configured but locked, returns an error so the caller can prompt for
-/// unlock instead of silently writing under a different key. When no
-/// master password is configured, falls back to the machine-key derivation
-/// preserving pre-FIX-001 behavior so existing installs aren't broken.
-fn encrypt_credential(
-    helper: Option<&crate::sys::security::MasterPasswordEncryption>,
-    value: &str,
-) -> Result<String, String> {
-    if let Some(helper) = helper {
-        if helper.is_configured() {
-            return helper
-                .encrypt(KeyPurpose::McpCredentials, value)
-                .map_err(|e| match e {
-                    crate::sys::security::MasterPasswordError::AppLocked => {
-                        "Master password is set up but the vault is locked. Unlock the vault before storing credentials.".to_string()
-                    }
-                    other => format!("Failed to encrypt with master password: {other}"),
-                });
-        }
-    }
-
-    encrypt_credential_machine_only(value)
-}
-
-fn encrypt_credential_machine_only(value: &str) -> Result<String, String> {
-    let key = derive_key(KeyPurpose::McpCredentials);
-    let cipher =
-        Aes256Gcm::new_from_slice(&key).map_err(|e| format!("Failed to create cipher: {}", e))?;
-
-    let nonce = random_nonce();
-
-    let ciphertext = cipher
-        .encrypt(&nonce, value.as_bytes())
-        .map_err(|e| format!("Encryption failed: {}", e))?;
-
-    let mut combined = nonce.to_vec();
-    combined.extend_from_slice(&ciphertext);
-
-    Ok(general_purpose::STANDARD.encode(combined))
-}
-
 // ============================================================================
 // Helper Functions
 // ============================================================================
 
-/// Open a URL in the default browser using platform-specific commands
+/// Opens a URL in the default browser. The URL comes from a server's own
+/// metadata, so it is handed to the opener as one argument and never to a
+/// shell, where `&` would start a second command.
 fn open_url_in_browser(url: &str) -> Result<(), std::io::Error> {
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open").arg(url).spawn()?;
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", url])
-            .spawn()?;
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        std::process::Command::new("xdg-open").arg(url).spawn()?;
-    }
-
-    Ok(())
+    open::that_detached(url)
 }
 
 /// Fetch user info from the provider
@@ -2270,12 +2236,13 @@ async fn connect_connector_internal(
                     oauth_token_url: token_url.map(str::to_string),
                     ..Default::default()
                 }))),
+                allow_local_network: false,
             };
             (config.clone(), config, true)
         }
         _ => {
             let (server_config, persisted_config) =
-                stdio_connector_configs(connector_id, &mapping, app_handle)?;
+                stdio_connector_configs(connector_id, &mapping, app_handle).await?;
             (server_config, persisted_config, false)
         }
     };
@@ -2286,6 +2253,12 @@ async fn connect_connector_internal(
         .ok_or_else(|| "MCP state not initialized".to_string())?;
 
     let server_name = mapping.server_name.to_string();
+    let approved = crate::core::mcp::launch_approval::ensure_approved(
+        app_handle,
+        &server_name,
+        &persisted_config,
+    )
+    .await?;
     let was_connected = mcp_state
         .client
         .get_connected_servers()
@@ -2343,12 +2316,12 @@ async fn connect_connector_internal(
     let connected = if interactive {
         mcp_state
             .client
-            .sign_in_and_connect(server_name.clone(), server_config)
+            .sign_in_and_connect(server_name.clone(), server_config, approved)
             .await
     } else {
         mcp_state
             .client
-            .connect_server(server_name.clone(), server_config)
+            .connect_server(server_name.clone(), server_config, approved)
             .await
     };
     if let Err(err) = connected {
@@ -2417,7 +2390,7 @@ async fn connect_connector_internal(
     Ok(())
 }
 
-fn stdio_connector_configs(
+async fn stdio_connector_configs(
     connector_id: &str,
     mapping: &ConnectorMcpMapping,
     app_handle: &tauri::AppHandle,
@@ -2427,14 +2400,22 @@ fn stdio_connector_configs(
     let mut persisted_env = HashMap::new();
     match &mapping.credential_source {
         ConnectorCredentialSource::OAuth { provider } => {
-            // Try to get OAuth token from stored tokens
             let oauth_provider_str = *provider;
-            match retrieve_tokens_by_id(oauth_provider_str) {
-                Ok(Some(tokens)) => {
+            let access_token = match crate::core::mcp::config::fresh_oauth_access_token(
+                oauth_provider_str,
+            )
+            .await
+            {
+                Ok(token) => Ok(Some(token)),
+                Err(_) => retrieve_tokens_by_id(oauth_provider_str)
+                    .map(|tokens| tokens.map(|tokens| tokens.access_token)),
+            };
+            match access_token {
+                Ok(Some(access_token)) => {
                     let placeholder = format!("<from_oauth:{}>", oauth_provider_str);
                     persisted_env.insert(mapping.env_keys[0].0.to_string(), placeholder);
 
-                    runtime_env.insert(mapping.env_keys[0].0.to_string(), tokens.access_token);
+                    runtime_env.insert(mapping.env_keys[0].0.to_string(), access_token);
                 }
                 Ok(None) => {
                     return Err(format!(
@@ -2475,6 +2456,7 @@ fn stdio_connector_configs(
         env: runtime_env,
         enabled: true,
         transport: None,
+        allow_local_network: false,
     };
     let persisted_config = McpServerConfig {
         command: mapping.command.to_string(),
@@ -2482,6 +2464,7 @@ fn stdio_connector_configs(
         env: persisted_env,
         enabled: true,
         transport: None,
+        allow_local_network: false,
     };
 
     Ok((server_config, persisted_config))
@@ -2498,7 +2481,7 @@ pub async fn save_api_key(
     let conn = open_mcp_settings_db()?;
 
     // Encrypt the API key before storing (FIX-001, uses master-password key when configured)
-    let encrypted = encrypt_credential(Some(encryption.inner()), &key)?;
+    let encrypted = vault_credentials::seal(Some(encryption.inner()), &key)?;
     let setting_key = format!("api_key_{}", provider);
 
     upsert_settings_v2_value(&conn, &setting_key, &encrypted, "security", true)
@@ -2604,65 +2587,51 @@ pub(crate) fn retrieve_api_key(
             )
         })?;
 
-    decrypt_credential_value(helper, &encrypted)
-}
-
-/// Decrypt a credential value stored in settings_v2.
-///
-/// FIX-001 (Sprint 1): if a master-password helper is supplied AND the
-/// vault is unlocked, try master-password-derived decryption first. On
-/// failure (the row was written under the legacy machine-only key), fall
-/// back to machine-key decryption so existing installs remain readable
-/// across the migration window. New writes always use master-password
-/// encryption when the vault is configured.
-fn decrypt_credential_value(
-    helper: Option<&crate::sys::security::MasterPasswordEncryption>,
-    encrypted: &str,
-) -> Result<String, String> {
-    if let Some(helper) = helper {
-        if helper.is_configured() && helper.is_unlocked() {
-            if let Ok(plaintext) = helper.decrypt(KeyPurpose::McpCredentials, encrypted) {
-                return Ok(plaintext);
-            }
-        }
-    }
-
-    decrypt_credential_value_machine_only(encrypted)
-}
-
-/// Public alias of [`decrypt_credential_value_machine_only`] for the
-/// vault migration command, exposed so `master_password.rs` can read
-/// legacy rows without re-implementing the AES-GCM unpacking.
-pub(crate) fn decrypt_legacy_machine_credential(encrypted: &str) -> Result<String, String> {
-    decrypt_credential_value_machine_only(encrypted)
-}
-
-fn decrypt_credential_value_machine_only(encrypted: &str) -> Result<String, String> {
-    let key = derive_key(KeyPurpose::McpCredentials);
-    let cipher =
-        Aes256Gcm::new_from_slice(&key).map_err(|e| format!("Failed to create cipher: {}", e))?;
-
-    let combined = general_purpose::STANDARD
-        .decode(encrypted)
-        .map_err(|e| format!("Failed to decode: {}", e))?;
-
-    if combined.len() < 12 {
-        return Err("Invalid encrypted data".to_string());
-    }
-
-    let (nonce_bytes, ciphertext) = combined.split_at(12);
-    let nonce = Nonce::from_slice(nonce_bytes);
-
-    let plaintext = cipher
-        .decrypt(nonce, ciphertext)
-        .map_err(|e| format!("Decryption failed: {}", e))?;
-
-    String::from_utf8(plaintext).map_err(|e| format!("Invalid UTF-8: {}", e))
+    vault_credentials::open(helper, &encrypted)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `src/api/mcp.ts` reads these replies by these names; a connected
+    /// account showed no name and the sign-in page never opened while it read
+    /// them in snake_case.
+    #[test]
+    fn the_oauth_replies_carry_the_names_the_settings_ui_reads() {
+        let started = serde_json::to_value(OAuthStartResponse {
+            auth_url: "https://provider.example/authorize".to_string(),
+            state: "state-1".to_string(),
+        })
+        .unwrap();
+        assert_eq!(started["authUrl"], "https://provider.example/authorize");
+
+        let status = serde_json::to_value(OAuthConnectionStatus {
+            connected: true,
+            user_info: Some(UserInfo {
+                id: "1".to_string(),
+                name: Some("Ada".to_string()),
+                email: None,
+                avatar_url: Some("https://provider.example/ada.png".to_string()),
+            }),
+            expires_at: Some(1_790_000_000),
+        })
+        .unwrap();
+        assert_eq!(status["userInfo"]["name"], "Ada");
+        assert_eq!(
+            status["userInfo"]["avatarUrl"],
+            "https://provider.example/ada.png"
+        );
+        assert_eq!(status["expiresAt"], 1_790_000_000_i64);
+
+        let token = serde_json::to_value(OAuthTokenResponse {
+            provider: "github".to_string(),
+            connected: true,
+            expires_at: Some(1_790_000_000),
+        })
+        .unwrap();
+        assert_eq!(token["expiresAt"], 1_790_000_000_i64);
+    }
 
     #[test]
     fn test_provider_parsing() {
@@ -2757,15 +2726,12 @@ mod tests {
     /// the previous `AGIWORKFORCE_APP_DATA_DIR` afterwards, regardless of
     /// whether `body` succeeds or panics-via-assert.
     /// `AGIWORKFORCE_APP_DATA_DIR` is process-global, so two of these running
-    /// concurrently would each point the other at the wrong temp directory.
-    static APP_DATA_DIR_GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-
-    async fn with_temp_settings_db<F, Fut, T>(body: F) -> T
-    where
-        F: FnOnce(rusqlite::Connection) -> Fut,
-        Fut: std::future::Future<Output = T>,
-    {
-        let _serialized = APP_DATA_DIR_GUARD.lock().await;
+    /// concurrently would each point the other at the wrong temp directory;
+    /// [`crate::sys::utils::APP_DATA_DIR_ENV_LOCK`] serializes them.
+    fn with_temp_settings_db<T>(body: impl FnOnce(rusqlite::Connection) -> T) -> T {
+        let _serialized = crate::sys::utils::APP_DATA_DIR_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let previous = std::env::var("AGIWORKFORCE_APP_DATA_DIR").ok();
         std::env::set_var("AGIWORKFORCE_APP_DATA_DIR", temp_dir.path());
@@ -2783,7 +2749,7 @@ mod tests {
         )
         .expect("prepare settings_v2 schema");
 
-        let result = body(conn).await;
+        let result = body(conn);
 
         match previous {
             Some(value) => std::env::set_var("AGIWORKFORCE_APP_DATA_DIR", value),
@@ -2800,9 +2766,9 @@ mod tests {
     /// been called and no MCP server was ever provisioned. This test proves
     /// credentials alone are no longer sufficient: with an empty configured-
     /// servers set, none of them should be reported as connected.
-    #[tokio::test]
-    async fn credentials_alone_do_not_report_connected_without_a_configured_server() {
-        let providers = with_temp_settings_db(|conn| async move {
+    #[test]
+    fn credentials_alone_do_not_report_connected_without_a_configured_server() {
+        let providers = with_temp_settings_db(|conn| {
             let stored_tokens = StoredTokens {
                 access_token: "test-access".to_string(),
                 refresh_token: Some("test-refresh".to_string()),
@@ -2821,8 +2787,7 @@ mod tests {
                 KNOWN_CONNECTOR_PROVIDERS,
             )
             .expect("resolve connected providers")
-        })
-        .await;
+        });
 
         assert!(!providers.contains(&"gmail".to_string()));
         assert!(!providers.contains(&"google_calendar".to_string()));
@@ -2835,9 +2800,9 @@ mod tests {
     /// resolves as connected. Also confirms Google's legacy
     /// `mcp_oauth_tokens_google_drive` alias still resolves through
     /// `has_stored_tokens_for_provider`.
-    #[tokio::test]
-    async fn provider_is_connected_once_credentials_and_a_configured_server_both_exist() {
-        let providers = with_temp_settings_db(|conn| async move {
+    #[test]
+    fn provider_is_connected_once_credentials_and_a_configured_server_both_exist() {
+        let providers = with_temp_settings_db(|conn| {
             let stored_tokens = StoredTokens {
                 access_token: "test-access".to_string(),
                 refresh_token: Some("test-refresh".to_string()),
@@ -2858,8 +2823,7 @@ mod tests {
                 KNOWN_CONNECTOR_PROVIDERS,
             )
             .expect("resolve connected providers")
-        })
-        .await;
+        });
 
         assert!(providers.contains(&"gmail".to_string()));
         // google_calendar/google_drive share the same Google credentials but
@@ -2873,13 +2837,13 @@ mod tests {
     /// (e.g. a legacy/never-implemented catalog id) can never be reported as
     /// connected, even if a stray credential row exists for it, this is the
     /// core structural fix for DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01.
-    #[tokio::test]
-    async fn provider_with_no_mcp_mapping_is_never_reported_connected() {
+    #[test]
+    fn provider_with_no_mcp_mapping_is_never_reported_connected() {
         assert!(get_connector_mcp_mapping("hubspot").is_none());
         assert!(get_connector_mcp_mapping("google_sheets").is_none());
         assert!(get_connector_mcp_mapping("context7").is_none());
 
-        let providers = with_temp_settings_db(|conn| async move {
+        let providers = with_temp_settings_db(|conn| {
             let key = "api_key_hubspot".to_string();
             upsert_settings_v2_value(&conn, &key, "encrypted-placeholder", "security", true)
                 .expect("store stray api key");
@@ -2897,8 +2861,7 @@ mod tests {
                 KNOWN_CONNECTOR_PROVIDERS,
             )
             .expect("resolve connected providers")
-        })
-        .await;
+        });
 
         assert!(!providers.contains(&"hubspot".to_string()));
     }
@@ -2909,9 +2872,9 @@ mod tests {
     /// even though it has no `get_connector_mcp_mapping` entry and no
     /// OAuth/API-key credential row, those only apply to catalog
     /// connectors, not user-added remote MCP servers.
-    #[tokio::test]
-    async fn live_custom_mcp_server_is_reported_connected_without_catalog_credentials() {
-        let providers = with_temp_settings_db(|conn| async move {
+    #[test]
+    fn live_custom_mcp_server_is_reported_connected_without_catalog_credentials() {
+        let providers = with_temp_settings_db(|conn| {
             let mut configured_servers = std::collections::HashSet::new();
             configured_servers.insert("custom-acme-mcp".to_string());
             configured_servers.insert("connector-something-else".to_string());
@@ -2924,8 +2887,7 @@ mod tests {
                 KNOWN_CONNECTOR_PROVIDERS,
             )
             .expect("resolve connected providers")
-        })
-        .await;
+        });
 
         assert!(providers.contains(&"custom-acme-mcp".to_string()));
         // A non-custom, non-catalog server name must still never resolve.
@@ -2933,9 +2895,9 @@ mod tests {
         assert!(!providers.contains(&"connector-something-else".to_string()));
     }
 
-    #[tokio::test]
-    async fn configured_custom_mcp_server_is_not_connected_until_live() {
-        let providers = with_temp_settings_db(|conn| async move {
+    #[test]
+    fn configured_custom_mcp_server_is_not_connected_until_live() {
+        let providers = with_temp_settings_db(|conn| {
             let mut configured_servers = std::collections::HashSet::new();
             configured_servers.insert("custom-saved-only".to_string());
             let live_connected_servers = std::collections::HashSet::new();
@@ -2947,8 +2909,7 @@ mod tests {
                 KNOWN_CONNECTOR_PROVIDERS,
             )
             .expect("resolve connected providers")
-        })
-        .await;
+        });
 
         assert!(!providers.contains(&"custom-saved-only".to_string()));
     }
@@ -2987,5 +2948,332 @@ mod tests {
                 "id '{drifted}' should not be advertised as supported yet"
             );
         }
+    }
+
+    const VAULT_FIXTURE_PASSPHRASE: &str = "Alpha-Beta-Unique-Phrase-9"; // gitleaks:allow
+
+    struct VaultProfile {
+        db: Arc<std::sync::Mutex<rusqlite::Connection>>,
+        manager: Arc<std::sync::Mutex<crate::sys::security::MasterPasswordManager>>,
+        vault: crate::sys::security::MasterPasswordEncryption,
+    }
+
+    impl VaultProfile {
+        fn with_unlocked_vault() -> Self {
+            let db = rusqlite::Connection::open_in_memory().unwrap();
+            db.execute(
+                "CREATE TABLE settings_v2 (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    encrypted INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )",
+                [],
+            )
+            .unwrap();
+
+            let manager = crate::sys::security::MasterPasswordManager::new(Arc::new(
+                std::sync::Mutex::new(rusqlite::Connection::open_in_memory().unwrap()),
+            ));
+            manager.init_table().unwrap();
+            manager.setup(VAULT_FIXTURE_PASSPHRASE).unwrap();
+            let manager = Arc::new(std::sync::Mutex::new(manager));
+
+            Self {
+                db: Arc::new(std::sync::Mutex::new(db)),
+                vault: crate::sys::security::MasterPasswordEncryption::new(manager.clone()),
+                manager,
+            }
+        }
+
+        fn store(&self, key: &str, value: &str, encrypted: bool) {
+            upsert_settings_v2_value(&self.db.lock().unwrap(), key, value, "security", encrypted)
+                .unwrap();
+        }
+
+        fn stored(&self, key: &str) -> String {
+            self.db
+                .lock()
+                .unwrap()
+                .query_row(
+                    "SELECT value FROM settings_v2 WHERE key = ?1",
+                    [key],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        }
+
+        fn migrate(
+            &self,
+        ) -> Result<crate::sys::commands::master_password::VaultMigrationReport, String> {
+            crate::sys::commands::master_password::migrate_vault_owned_settings(
+                &mut self.db.lock().unwrap(),
+                &self.vault,
+            )
+        }
+
+        fn lock_vault(&self) {
+            self.manager.lock().unwrap().lock();
+            assert!(!self.vault.is_unlocked());
+        }
+    }
+
+    const FIXTURE_API_KEY_ROW: &str = "api_key_fixtureprovider";
+    const SECOND_FIXTURE_API_KEY_ROW: &str = "api_key_secondprovider";
+    const FIXTURE_APP_SECRET_ROW: &str = "mcp_oauth_config_github_client_secret";
+    const FIXTURE_TOKEN_SET_ROW: &str = "mcp_oauth_tokens_github";
+    const FIXTURE_ACCESS_TOKEN_ROW: &str = "mcp_oauth_github_access_token";
+    const FIXTURE_REFRESH_TOKEN_ROW: &str = "mcp_oauth_github_refresh_token";
+    const FIXTURE_CONSENT_ROW: &str = "computer_use.fixture_consent";
+    const FIXTURE_AGENT_MODE_ROW: &str = "tool_confirmation.agent_mode";
+    const FIXTURE_EXPIRY_ROW: &str = "mcp_oauth_github_expires_at";
+
+    fn fixture_token_set() -> StoredTokens {
+        StoredTokens {
+            access_token: "fixture-access-token".to_string(),
+            refresh_token: Some("fixture-refresh-token".to_string()),
+            expires_at: Some(4_102_444_800),
+            scope: None,
+            user_info: None,
+        }
+    }
+
+    /// One row of every family that lives in `settings_v2` under
+    /// `category = 'security'`, each written the way its own writer writes it
+    /// before a master password exists.
+    fn store_every_security_family(profile: &VaultProfile) -> String {
+        use crate::core::mcp::config::{encrypt_mcp_credential, mcp_credential_row};
+        use crate::data::settings::{SettingCategory, SettingValue, SettingsService};
+
+        profile.store(
+            FIXTURE_API_KEY_ROW,
+            &vault_credentials::seal(None, "fixture-provider-key").unwrap(),
+            true,
+        );
+        profile.store(
+            FIXTURE_APP_SECRET_ROW,
+            &vault_credentials::seal(None, "fixture-client-secret").unwrap(),
+            true,
+        );
+
+        let server_credential_row = mcp_credential_row("user", "fixture-server", "TOKEN");
+        profile.store(
+            &server_credential_row,
+            &encrypt_mcp_credential("fixture-server-credential").unwrap(),
+            true,
+        );
+        profile.store(
+            FIXTURE_TOKEN_SET_ROW,
+            &encrypt_tokens(&fixture_token_set()).unwrap(),
+            true,
+        );
+        profile.store(
+            FIXTURE_ACCESS_TOKEN_ROW,
+            &encrypt_oauth_token("fixture-access-token").unwrap(),
+            true,
+        );
+        profile.store(
+            FIXTURE_REFRESH_TOKEN_ROW,
+            &encrypt_oauth_token("fixture-refresh-token").unwrap(),
+            true,
+        );
+
+        SettingsService::new(profile.db.clone())
+            .unwrap()
+            .set(
+                FIXTURE_CONSENT_ROW.to_string(),
+                SettingValue::String("granted".to_string()),
+                SettingCategory::Security,
+                true,
+            )
+            .unwrap();
+
+        profile.store(FIXTURE_AGENT_MODE_ROW, "\"safe\"", false);
+        profile.store(FIXTURE_EXPIRY_ROW, "4102444800", false);
+        server_credential_row
+    }
+
+    #[test]
+    fn migrating_leaves_every_security_row_family_readable_by_its_own_reader() {
+        use crate::core::mcp::config::decrypt_mcp_credential;
+        use crate::data::settings::{SettingValue, SettingsService};
+
+        let profile = VaultProfile::with_unlocked_vault();
+        let server_credential_row = store_every_security_family(&profile);
+        let untouched_rows = [
+            server_credential_row.as_str(),
+            FIXTURE_APP_SECRET_ROW,
+            FIXTURE_TOKEN_SET_ROW,
+            FIXTURE_ACCESS_TOKEN_ROW,
+            FIXTURE_REFRESH_TOKEN_ROW,
+            FIXTURE_CONSENT_ROW,
+            FIXTURE_AGENT_MODE_ROW,
+            FIXTURE_EXPIRY_ROW,
+        ];
+        let before: Vec<String> = untouched_rows
+            .iter()
+            .map(|row| profile.stored(row))
+            .collect();
+
+        let report = profile.migrate().expect("migration");
+        assert_eq!(report.api_keys_migrated, 1);
+        assert_eq!(report.rows_skipped_already_modern, 0);
+        assert_eq!(report.rows_skipped_undecryptable, 0);
+
+        let api_key = profile.stored(FIXTURE_API_KEY_ROW);
+        assert_eq!(
+            vault_credentials::open(Some(&profile.vault), &api_key).unwrap(),
+            "fixture-provider-key"
+        );
+        assert!(
+            vault_credentials::open_with_install_key(&api_key).is_err(),
+            "the provider key is sealed under the master password"
+        );
+        let after: Vec<String> = untouched_rows
+            .iter()
+            .map(|row| profile.stored(row))
+            .collect();
+        assert_eq!(after, before, "install-key rows are never rewritten");
+
+        assert_eq!(
+            decrypt_mcp_credential(&profile.stored(&server_credential_row)).unwrap(),
+            "fixture-server-credential"
+        );
+        assert_eq!(
+            decrypt_tokens(&profile.stored(FIXTURE_TOKEN_SET_ROW))
+                .unwrap()
+                .access_token,
+            "fixture-access-token"
+        );
+        assert_eq!(
+            decrypt_mcp_credential(&profile.stored(FIXTURE_ACCESS_TOKEN_ROW)).unwrap(),
+            "fixture-access-token"
+        );
+        assert_eq!(
+            decrypt_mcp_credential(&profile.stored(FIXTURE_REFRESH_TOKEN_ROW)).unwrap(),
+            "fixture-refresh-token"
+        );
+        assert_eq!(
+            SettingsService::new(profile.db.clone())
+                .unwrap()
+                .get(FIXTURE_CONSENT_ROW)
+                .unwrap(),
+            SettingValue::String("granted".to_string())
+        );
+
+        profile.lock_vault();
+        assert_eq!(
+            vault_credentials::open(Some(&profile.vault), &api_key).unwrap_err(),
+            vault_credentials::VAULT_LOCKED_MESSAGE
+        );
+        assert_eq!(
+            decrypt_mcp_credential(&profile.stored(&server_credential_row)).unwrap(),
+            "fixture-server-credential",
+            "MCP server credentials stay readable while the vault is locked"
+        );
+        assert_eq!(
+            vault_credentials::open(
+                Some(&profile.vault),
+                &profile.stored(FIXTURE_APP_SECRET_ROW)
+            )
+            .unwrap(),
+            "fixture-client-secret",
+            "connector app credentials stay readable while the vault is locked"
+        );
+        assert_eq!(
+            decrypt_tokens(&profile.stored(FIXTURE_TOKEN_SET_ROW))
+                .unwrap()
+                .refresh_token
+                .as_deref(),
+            Some("fixture-refresh-token"),
+            "connector sign-ins stay readable while the vault is locked"
+        );
+    }
+
+    #[test]
+    fn migrating_twice_changes_nothing_the_second_time() {
+        let profile = VaultProfile::with_unlocked_vault();
+        store_every_security_family(&profile);
+        profile.store(FIXTURE_API_KEY_ROW, "not a ciphertext", true);
+        profile.store(
+            SECOND_FIXTURE_API_KEY_ROW,
+            &vault_credentials::seal(None, "fixture-second-provider-key").unwrap(),
+            true,
+        );
+
+        let first = profile.migrate().expect("first migration");
+        assert_eq!(first.api_keys_migrated, 1);
+        assert_eq!(first.rows_skipped_undecryptable, 1);
+        assert_eq!(profile.stored(FIXTURE_API_KEY_ROW), "not a ciphertext");
+
+        let sealed = profile.stored(SECOND_FIXTURE_API_KEY_ROW);
+        let second = profile.migrate().expect("second migration");
+        assert_eq!(second.api_keys_migrated, 0);
+        assert_eq!(second.rows_skipped_already_modern, 1);
+        assert_eq!(second.rows_skipped_undecryptable, 1);
+        assert_eq!(profile.stored(SECOND_FIXTURE_API_KEY_ROW), sealed);
+    }
+
+    #[test]
+    fn a_failed_migration_leaves_every_row_as_it_was() {
+        let profile = VaultProfile::with_unlocked_vault();
+        store_every_security_family(&profile);
+        profile.store(
+            SECOND_FIXTURE_API_KEY_ROW,
+            &vault_credentials::seal(None, "fixture-second-provider-key").unwrap(),
+            true,
+        );
+        let api_key_before = profile.stored(FIXTURE_API_KEY_ROW);
+        let second_api_key_before = profile.stored(SECOND_FIXTURE_API_KEY_ROW);
+        profile
+            .db
+            .lock()
+            .unwrap()
+            .execute_batch(
+                "CREATE TRIGGER refuse_second_api_key_update
+                 BEFORE UPDATE ON settings_v2
+                 WHEN NEW.key = 'api_key_secondprovider'
+                 BEGIN
+                     SELECT RAISE(ABORT, 'fixture write failure');
+                 END;",
+            )
+            .unwrap();
+
+        let failure = profile.migrate().expect_err("the second write is refused");
+        assert!(failure.contains("nothing was changed"), "{failure}");
+
+        assert_eq!(profile.stored(FIXTURE_API_KEY_ROW), api_key_before);
+        assert_eq!(
+            profile.stored(SECOND_FIXTURE_API_KEY_ROW),
+            second_api_key_before
+        );
+        assert_eq!(
+            vault_credentials::open_with_install_key(&profile.stored(FIXTURE_API_KEY_ROW)).unwrap(),
+            "fixture-provider-key"
+        );
+    }
+
+    #[test]
+    fn a_connector_app_credential_is_readable_while_locked_unless_an_older_build_sealed_it() {
+        let profile = VaultProfile::with_unlocked_vault();
+        let saved = vault_credentials::seal_with_install_key("fixture-client-secret").unwrap();
+        let sealed_by_an_older_build =
+            vault_credentials::seal(Some(&profile.vault), "fixture-client-secret").unwrap();
+
+        assert_eq!(
+            vault_credentials::open(Some(&profile.vault), &sealed_by_an_older_build).unwrap(),
+            "fixture-client-secret"
+        );
+        profile.lock_vault();
+        assert_eq!(
+            vault_credentials::open(Some(&profile.vault), &saved).unwrap(),
+            "fixture-client-secret"
+        );
+        assert_eq!(
+            vault_credentials::open(Some(&profile.vault), &sealed_by_an_older_build).unwrap_err(),
+            vault_credentials::VAULT_LOCKED_MESSAGE
+        );
     }
 }

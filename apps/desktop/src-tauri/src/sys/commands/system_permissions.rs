@@ -1,27 +1,92 @@
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tauri::State;
 
-use crate::automation::AutomationService;
+/// How a desktop-control capability becomes usable on this platform.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CapabilitySupport {
+    /// The operating system gates it behind a grant the user gives.
+    NeedsGrant,
+    /// The operating system has no such grant; it works without one.
+    NoGrantNeeded,
+    /// This build has no driver for it on this platform.
+    Unsupported,
+}
+
+/// What desktop control can do on this platform, apart from which grants the
+/// user has given.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlatformAutomationSupport {
+    pub accessibility: CapabilitySupport,
+    pub screen_recording: CapabilitySupport,
+    pub input_monitoring: CapabilitySupport,
+    /// The program window listing and switching need and this computer lacks,
+    /// or `None` when window control is available.
+    pub window_control_missing_program: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutomationPermissions {
+    /// `false` only while a grant the user can give is missing. Where the
+    /// platform has no such grant these are `true`; `support` says whether
+    /// the capability exists at all.
     pub accessibility: bool,
     pub screen_recording: bool,
     pub input_monitoring: bool,
-    /// The app creates this service during startup only after Accessibility is
-    /// already granted. A newly granted OS permission is therefore not enough
-    /// to launch Tasks until the app has restarted.
+    /// Whether desktop control can start now. The service is built on first
+    /// use once Accessibility is granted, so a fresh grant needs no restart.
     pub automation_service_ready: bool,
+    pub support: PlatformAutomationSupport,
 }
 
-/// Check the current macOS automation permission statuses.
-/// On non-macOS platforms, returns true for all (no-op).
+const LINUX_WINDOW_CONTROL_PROGRAM: &str = "wmctrl";
+
+fn platform_support(
+    os: &str,
+    has_accessibility_driver: bool,
+    program_installed: impl Fn(&str) -> bool,
+) -> PlatformAutomationSupport {
+    let grants = if os == "macos" {
+        CapabilitySupport::NeedsGrant
+    } else {
+        CapabilitySupport::NoGrantNeeded
+    };
+    PlatformAutomationSupport {
+        accessibility: if has_accessibility_driver {
+            grants
+        } else {
+            CapabilitySupport::Unsupported
+        },
+        screen_recording: grants,
+        input_monitoring: grants,
+        window_control_missing_program: (os == "linux"
+            && !program_installed(LINUX_WINDOW_CONTROL_PROGRAM))
+        .then(|| LINUX_WINDOW_CONTROL_PROGRAM.to_string()),
+    }
+}
+
+fn program_on_path(name: &str) -> bool {
+    std::env::var_os("PATH").is_some_and(|path| {
+        agiworkforce_sandbox_policy::host_path::find_program(&path, name, &[]).is_some()
+    })
+}
+
+fn current_platform_support() -> PlatformAutomationSupport {
+    platform_support(
+        std::env::consts::OS,
+        crate::automation::accessibility_backend().is_some(),
+        program_on_path,
+    )
+}
+
+/// Reports which automation grants the user has given and what this platform
+/// supports. Windows and Linux have no grants to give, so the three flags are
+/// `true` there and `support` carries the real capability.
 #[tauri::command]
 pub async fn check_automation_permissions(
-    automation: State<'_, Option<Arc<AutomationService>>>,
+    app: tauri::AppHandle,
 ) -> Result<AutomationPermissions, String> {
-    let automation_service_ready = automation.inner().is_some();
+    let automation_service_ready = crate::automation::shared_service(&app).is_ok();
+    let support = current_platform_support();
 
     #[cfg(target_os = "macos")]
     {
@@ -33,6 +98,7 @@ pub async fn check_automation_permissions(
             screen_recording,
             input_monitoring,
             automation_service_ready,
+            support,
         })
     }
 
@@ -43,6 +109,7 @@ pub async fn check_automation_permissions(
             screen_recording: true,
             input_monitoring: true,
             automation_service_ready,
+            support,
         })
     }
 }
@@ -82,7 +149,7 @@ pub async fn request_automation_permission(kind: String) -> Result<(), String> {
     #[cfg(not(target_os = "macos"))]
     {
         let _ = kind;
-        Ok(())
+        Err("This platform has no system permission to grant for desktop control.".to_string())
     }
 }
 
@@ -117,4 +184,57 @@ fn check_input_monitoring() -> bool {
     const K_IOHID_REQUEST_TYPE_LISTEN_EVENT: u32 = 1;
     const K_IOHID_ACCESS_TYPE_GRANTED: u32 = 0;
     unsafe { IOHIDCheckAccess(K_IOHID_REQUEST_TYPE_LISTEN_EVENT) == K_IOHID_ACCESS_TYPE_GRANTED }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn macos_gates_every_capability_behind_a_grant() {
+        let support = platform_support("macos", true, |_| false);
+        assert_eq!(support.accessibility, CapabilitySupport::NeedsGrant);
+        assert_eq!(support.screen_recording, CapabilitySupport::NeedsGrant);
+        assert_eq!(support.input_monitoring, CapabilitySupport::NeedsGrant);
+        assert_eq!(support.window_control_missing_program, None);
+    }
+
+    #[test]
+    fn windows_needs_no_grant_and_is_not_reported_as_granted() {
+        let support = platform_support("windows", true, |_| false);
+        assert_eq!(support.accessibility, CapabilitySupport::NoGrantNeeded);
+        assert_eq!(support.screen_recording, CapabilitySupport::NoGrantNeeded);
+        assert_eq!(support.window_control_missing_program, None);
+    }
+
+    #[test]
+    fn linux_has_no_element_level_control() {
+        let support = platform_support("linux", false, |_| true);
+        assert_eq!(support.accessibility, CapabilitySupport::Unsupported);
+        assert_eq!(support.screen_recording, CapabilitySupport::NoGrantNeeded);
+        assert_eq!(support.window_control_missing_program, None);
+    }
+
+    #[test]
+    fn linux_window_control_names_the_program_it_is_missing() {
+        let asked = std::cell::RefCell::new(Vec::new());
+        let support = platform_support("linux", false, |program| {
+            asked.borrow_mut().push(program.to_string());
+            false
+        });
+        assert_eq!(
+            support.window_control_missing_program.as_deref(),
+            Some("wmctrl")
+        );
+        assert_eq!(*asked.borrow(), ["wmctrl"]);
+    }
+
+    #[test]
+    fn the_running_platform_reports_the_driver_it_was_built_with() {
+        let support = current_platform_support();
+        assert_eq!(
+            support.accessibility == CapabilitySupport::Unsupported,
+            crate::automation::accessibility_backend().is_none()
+        );
+    }
 }

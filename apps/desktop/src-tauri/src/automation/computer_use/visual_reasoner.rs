@@ -20,7 +20,46 @@ use crate::core::llm::{
     ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest,
 };
 
+use super::run_start::FrontAppState;
+use super::target_app::TargetApp;
 use super::types::{ElementBounds, ScreenAnalysis, ScreenElement};
+
+const CAPTURE_NEEDS_APP_HANDLE: &str =
+    "The screen is not captured without the desktop app handle to check the app in front.";
+const OWN_WINDOW_NOT_CAPTURED: &str =
+    "AGI Workforce is in front, and its own window is never captured for a model.";
+
+/// A capture that was not taken because of the app in front. A wait or a
+/// retry that polls the screen must stop on this, not try again: the reason
+/// is the one the run loop ends with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaptureRefused(pub String);
+
+impl std::fmt::Display for CaptureRefused {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for CaptureRefused {}
+
+fn unless_refused<T>(frame: Result<T>) -> Result<Option<T>> {
+    match frame {
+        Ok(frame) => Ok(Some(frame)),
+        Err(error) if error.downcast_ref::<CaptureRefused>().is_some() => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+/// `None` is the answer when there is no app handle to ask with, which refuses.
+fn capture_refusal(front: Option<FrontAppState>) -> Option<CaptureRefused> {
+    match front {
+        Some(FrontAppState::Allowed) => None,
+        Some(FrontAppState::OwnApp) => Some(CaptureRefused(OWN_WINDOW_NOT_CAPTURED.to_string())),
+        Some(FrontAppState::Refused(reason)) => Some(CaptureRefused(reason)),
+        None => Some(CaptureRefused(CAPTURE_NEEDS_APP_HANDLE.to_string())),
+    }
+}
 
 /// Configuration for the visual reasoner.
 #[derive(Debug, Clone)]
@@ -84,6 +123,9 @@ pub struct ScreenObservation {
     pub image_base64: String,
     /// When this observation was made.
     pub timestamp: Instant,
+    /// The app that was in front when the frame was taken. A plan made on
+    /// this observation is for that app, and its input goes nowhere else.
+    pub front_app: Option<TargetApp>,
 }
 
 /// The Visual Reasoner analyzes screenshots to understand screen content.
@@ -92,6 +134,7 @@ pub struct VisualReasoner {
     config: VisualReasonerConfig,
     /// Cached last observation for quick reference.
     last_observation: Mutex<Option<ScreenObservation>>,
+    app_handle: Option<tauri::AppHandle>,
 }
 
 impl VisualReasoner {
@@ -101,7 +144,60 @@ impl VisualReasoner {
             llm_router,
             config,
             last_observation: Mutex::new(None),
+            app_handle: None,
         }
+    }
+
+    pub fn set_app_handle(&mut self, app_handle: tauri::AppHandle) {
+        self.app_handle = Some(app_handle);
+    }
+
+    /// The gate in front of every frame this reasoner takes. The run loop
+    /// settles the front app once per iteration, but a wait polls the screen
+    /// for seconds after that, so the app in front is judged again here, at
+    /// the capture itself, where no caller can skip it.
+    /// Returns the app in front, which is the one a frame taken now shows.
+    pub(super) async fn ensure_front_app_may_be_captured(&self) -> Result<TargetApp> {
+        let (state, front) = match self.app_handle.as_ref() {
+            Some(handle) => {
+                let (state, front) = super::targeted_input::judged_front_app(handle).await;
+                (Some(state), front)
+            }
+            None => (None, None),
+        };
+        if let Some(refused) = capture_refusal(state) {
+            return Err(anyhow::Error::new(refused));
+        }
+        front
+            .ok_or_else(|| anyhow::Error::new(CaptureRefused(CAPTURE_NEEDS_APP_HANDLE.to_string())))
+    }
+
+    async fn capture_frame(&self) -> Result<CapturedImage> {
+        Ok(self.capture_frame_of_front_app().await?.0)
+    }
+
+    /// A frame with the identity of the app it shows. The app in front is
+    /// read on both sides of the capture; if it changed in between, the frame
+    /// cannot be attributed to either app and is not used.
+    async fn capture_frame_of_front_app(&self) -> Result<(CapturedImage, TargetApp)> {
+        let before = self.ensure_front_app_may_be_captured().await?;
+        let frame = capture_display(super::control::target_display())
+            .context("Failed to capture screen")?;
+        let after = self.ensure_front_app_may_be_captured().await?;
+        if !super::target_app::same_app(&before, &after) {
+            return Err(anyhow::Error::new(CaptureRefused(format!(
+                "The app in front changed from '{}' to '{}' while the screen was captured, so that frame was not used.",
+                before.name, after.name
+            ))));
+        }
+        Ok((frame, after))
+    }
+
+    /// The frame kept after an action, through the same gate: an action can
+    /// bring another app forward, so the one in front is judged again. A
+    /// refusal skips the frame and the task goes on.
+    pub(super) async fn capture_frame_unless_refused(&self) -> Result<Option<CapturedImage>> {
+        unless_refused(self.capture_frame().await)
     }
 
     /// Creates a visual reasoner with default configuration.
@@ -118,6 +214,8 @@ impl VisualReasoner {
 
     /// Captures and analyzes the current screen state.
     pub async fn observe_screen(&self) -> Result<ScreenObservation> {
+        self.ensure_front_app_may_be_captured().await?;
+
         // Check cache first
         if self.config.enable_caching {
             let cached = self.last_observation.lock().await;
@@ -129,8 +227,7 @@ impl VisualReasoner {
         }
 
         // Capture new screenshot
-        let screenshot = capture_display(super::control::target_display())
-            .context("Failed to capture screen")?;
+        let (screenshot, front_app) = self.capture_frame_of_front_app().await?;
 
         // Convert to optimized base64 for LLM
         let image_base64 = self.prepare_image_for_llm(&screenshot.pixels)?;
@@ -143,6 +240,7 @@ impl VisualReasoner {
             analysis,
             image_base64,
             timestamp: Instant::now(),
+            front_app: Some(front_app),
         };
 
         // Update cache
@@ -156,6 +254,7 @@ impl VisualReasoner {
 
     /// Captures and analyzes a specific region of the screen.
     pub async fn observe_region(&self, bounds: ElementBounds) -> Result<ScreenObservation> {
+        let front_app = self.ensure_front_app_may_be_captured().await?;
         let region = capture_region(bounds.left, bounds.top, bounds.width, bounds.height)
             .context("Failed to capture region")?;
 
@@ -174,6 +273,7 @@ impl VisualReasoner {
             analysis,
             image_base64,
             timestamp: Instant::now(),
+            front_app: Some(front_app),
         })
     }
 
@@ -384,12 +484,12 @@ If not found:
         let start = Instant::now();
         let check_interval = Duration::from_millis(200);
 
-        let mut last_screenshot = capture_display(super::control::target_display())?.pixels;
+        let mut last_screenshot = self.capture_frame().await?.pixels;
 
         while start.elapsed() < timeout_duration {
             tokio::time::sleep(check_interval).await;
 
-            let current = capture_display(super::control::target_display())?.pixels;
+            let current = self.capture_frame().await?.pixels;
             let changes = self.detect_changes(&last_screenshot, &current);
 
             if !changes.has_changes {
@@ -690,6 +790,48 @@ pub struct ChangeDetection {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_refused_frame_is_skipped_and_a_failed_capture_is_still_an_error() {
+        let refused: Result<u8> = Err(anyhow::Error::new(CaptureRefused(
+            "'Robinhood' is always blocked".to_string(),
+        )));
+        let failed: Result<u8> =
+            Err(anyhow::anyhow!("no display")).context("Failed to capture screen");
+
+        assert_eq!(unless_refused(refused).unwrap(), None);
+        assert_eq!(unless_refused(Ok(7_u8)).unwrap(), Some(7));
+        assert!(unless_refused(failed).is_err());
+    }
+
+    /// A wait polls the screen long after the run loop last judged the front
+    /// app, so the capture itself refuses: a refuse-listed app, this app's own
+    /// window, and a reasoner with no way to ask all stop a frame being taken.
+    #[test]
+    fn a_frame_is_taken_only_when_the_front_app_is_allowed() {
+        assert_eq!(capture_refusal(Some(FrontAppState::Allowed)), None);
+        let blocked = "'Robinhood' is always blocked".to_string();
+        assert_eq!(
+            capture_refusal(Some(FrontAppState::Refused(blocked.clone()))),
+            Some(CaptureRefused(blocked))
+        );
+        assert_eq!(
+            capture_refusal(Some(FrontAppState::OwnApp)),
+            Some(CaptureRefused(OWN_WINDOW_NOT_CAPTURED.to_string()))
+        );
+        assert!(capture_refusal(None).is_some());
+    }
+
+    /// The refusal survives being carried as an `anyhow` error, which is how a
+    /// polling wait tells it apart from a capture that merely failed.
+    #[test]
+    fn a_refused_capture_is_recognisable_to_a_polling_wait() {
+        let refused = anyhow::Error::new(CaptureRefused("blocked".to_string()));
+        assert!(refused.downcast_ref::<CaptureRefused>().is_some());
+        assert!(anyhow::anyhow!("capture failed")
+            .downcast_ref::<CaptureRefused>()
+            .is_none());
+    }
 
     #[test]
     fn test_config_defaults() {

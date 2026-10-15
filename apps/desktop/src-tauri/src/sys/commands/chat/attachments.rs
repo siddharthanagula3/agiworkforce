@@ -1,21 +1,19 @@
 use crate::core::llm::{ContentPart, ImageDetail, ImageFormat, ImageInput};
 use crate::features::document::extract_office_text;
-use crate::sys::commands::chat::intent::should_attach_screen_context;
 use crate::sys::commands::chat::prompt_context::model_likely_supports_vision;
 use crate::sys::commands::chat::state::MAX_FILE_EXTRACT_CHARS;
 use crate::sys::commands::chat::types::ChatAttachment;
 use base64::Engine;
 use tracing::{debug, info, warn};
 
-/// Process image attachments into multimodal content parts.
-/// If no explicit attachments contain images but the user message implies screen context,
-/// attempts to capture the primary screen.
+/// Process image attachments into multimodal content parts. Only what the
+/// user attached is sent: the screen is never captured from the wording of a
+/// message.
 pub(super) fn process_multimodal_attachments(
     attachments: Option<&Vec<ChatAttachment>>,
     model: &str,
-    content: &str,
 ) -> Option<Vec<ContentPart>> {
-    let mut multimodal_parts: Option<Vec<ContentPart>> = if let Some(attachments) = attachments {
+    if let Some(attachments) = attachments {
         if !attachments.is_empty() {
             if model_likely_supports_vision(model) {
                 let parts = convert_attachments_to_content_parts(attachments);
@@ -42,47 +40,30 @@ pub(super) fn process_multimodal_attachments(
         }
     } else {
         None
-    };
-
-    if multimodal_parts.is_none() && should_attach_screen_context(content) {
-        if model_likely_supports_vision(model) {
-            use crate::automation::screen::capture_primary_screen;
-            use image::{DynamicImage, ImageFormat as ImageOutputFormat};
-            use std::io::Cursor;
-
-            match capture_primary_screen() {
-                Ok(capture) => {
-                    let mut png_bytes = Vec::new();
-                    let dynamic = DynamicImage::ImageRgba8(capture.pixels);
-                    if dynamic
-                        .write_to(&mut Cursor::new(&mut png_bytes), ImageOutputFormat::Png)
-                        .is_ok()
-                    {
-                        multimodal_parts = Some(vec![ContentPart::Image {
-                            image: ImageInput {
-                                data: png_bytes,
-                                format: ImageFormat::Png,
-                                detail: ImageDetail::Auto,
-                            },
-                        }]);
-                        info!("[Chat] Attached screen context for vision request");
-                    } else {
-                        warn!("[Chat] Failed to encode screen capture");
-                    }
-                }
-                Err(error) => {
-                    warn!("[Chat] Failed to capture screen context: {}", error);
-                }
-            }
-        } else {
-            warn!(
-                "[Chat] Screen context requested but model '{}' may not support vision",
-                model
-            );
-        }
     }
+}
 
-    multimodal_parts
+/// When images are attached but the routed model cannot read them, the notice
+/// to show the user; the images are left out of the request either way.
+pub(super) fn unreadable_image_notice(
+    attachments: Option<&Vec<ChatAttachment>>,
+    model: &str,
+) -> Option<String> {
+    let images = attachments?
+        .iter()
+        .filter(|attachment| attachment.attachment_type == "image")
+        .count();
+    if images == 0 || model_likely_supports_vision(model) {
+        return None;
+    }
+    let (skipped, include) = if images == 1 {
+        ("the attached image was".to_string(), "it")
+    } else {
+        (format!("the {images} attached images were"), "them")
+    };
+    Some(format!(
+        "{model} cannot read images, so {skipped} not sent with this message. Choose a model that supports images to include {include}."
+    ))
 }
 
 /// Extract text from document attachments and build a system message with the contents.
@@ -234,16 +215,7 @@ pub(super) fn extract_text_from_attachments(
             match base64::engine::general_purpose::STANDARD.decode(base64_data) {
                 Ok(bytes) => match String::from_utf8(bytes) {
                     Ok(text) => {
-                        let truncated = if text.len() > MAX_FILE_EXTRACT_CHARS {
-                            format!(
-                                "{}\n\n... [File truncated - showing first {} characters of {}]",
-                                &text[..MAX_FILE_EXTRACT_CHARS],
-                                MAX_FILE_EXTRACT_CHARS,
-                                text.len()
-                            )
-                        } else {
-                            text
-                        };
+                        let truncated = truncate_extracted(text, "File");
                         info!(
                             "[Chat] Extracted text from '{}' ({} chars)",
                             attachment.name,
@@ -275,15 +247,7 @@ pub(super) fn extract_text_from_attachments(
             match base64::engine::general_purpose::STANDARD.decode(base64_data) {
                 Ok(bytes) => match extract_pdf_text(&bytes) {
                     Ok(text) if !text.trim().is_empty() => {
-                        let truncated = if text.len() > MAX_FILE_EXTRACT_CHARS {
-                            format!(
-                                "{}\n\n... [PDF truncated - showing first {} characters]",
-                                &text[..MAX_FILE_EXTRACT_CHARS],
-                                MAX_FILE_EXTRACT_CHARS
-                            )
-                        } else {
-                            text
-                        };
+                        let truncated = truncate_extracted(text, "PDF");
                         info!(
                             "[Chat] Extracted text from PDF '{}' ({} chars)",
                             attachment.name,
@@ -535,6 +499,49 @@ mod tests {
             content: Some(base64::engine::general_purpose::STANDARD.encode(text)),
             path: None,
         }
+    }
+
+    #[test]
+    fn truncates_long_multibyte_text_on_a_char_boundary() {
+        // The leading byte puts the cut point inside a two-byte character.
+        let text = format!("a{}", "é".repeat(MAX_FILE_EXTRACT_CHARS));
+        let extracted = extract_text_from_attachments(&[text_attachment("accents.txt", &text)]);
+
+        assert_eq!(extracted.len(), 1);
+        let (kept, notice) = extracted[0]
+            .1
+            .split_once("\n\n... [File truncated")
+            .expect("truncation notice");
+        assert!(kept.len() <= MAX_FILE_EXTRACT_CHARS);
+        assert!(kept
+            .strip_prefix('a')
+            .is_some_and(|rest| rest.chars().all(|c| c == 'é')));
+        assert!(notice.contains(&text.len().to_string()));
+    }
+
+    #[test]
+    fn unreadable_image_notice_names_skipped_images_only_for_text_models() {
+        let image = ChatAttachment {
+            id: "img".to_string(),
+            attachment_type: "image".to_string(),
+            name: "a.png".to_string(),
+            mime_type: Some("image/png".to_string()),
+            content: None,
+            path: None,
+        };
+        let attachments = vec![image.clone(), image];
+        let notice =
+            unreadable_image_notice(Some(&attachments), "fixture-text-only-model").expect("notice");
+        assert!(notice.contains("the 2 attached images were not sent"));
+        assert!(notice.ends_with("to include them."));
+        let one = vec![attachments[0].clone()];
+        let single =
+            unreadable_image_notice(Some(&one), "fixture-text-only-model").expect("notice");
+        assert!(single.contains("the attached image was not sent"));
+        assert!(single.ends_with("to include it."));
+        assert!(unreadable_image_notice(None, "fixture-text-only-model").is_none());
+        let files = vec![text_attachment("notes.txt", "hi")];
+        assert!(unreadable_image_notice(Some(&files), "fixture-text-only-model").is_none());
     }
 
     #[test]

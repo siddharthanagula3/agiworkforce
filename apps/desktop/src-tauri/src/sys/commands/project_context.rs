@@ -10,7 +10,7 @@ use crate::core::mcp::config::PROJECT_FOLDER_ENV_VAR;
 use crate::sys::commands::mcp::McpState;
 use crate::sys::commands::settings::SettingsState;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{Manager, State};
 use tokio::sync::RwLock;
@@ -36,11 +36,7 @@ pub struct ProjectContextState {
 impl ProjectContextState {
     pub fn new() -> Self {
         Self {
-            context: Arc::new(RwLock::new(ProjectContext {
-                folder: None,
-                name: None,
-                is_valid: false,
-            })),
+            context: Arc::new(RwLock::new(ProjectContext::default())),
         }
     }
 
@@ -59,11 +55,18 @@ impl ProjectContextState {
         }
     }
 
-    /// Set the project folder directly (for internal use)
-    /// Validates the path and updates the context
-    pub async fn set_folder(&self, path: String) {
+    /// Restore a project folder chosen before, such as the one a
+    /// conversation keeps, without resolving it again. Only the system's own
+    /// links, such as `/tmp` on macOS, are followed on its way: a folder
+    /// reached through any other link, which a sandboxed command could have
+    /// made since it was chosen, or one that no longer resolves where it did
+    /// when a sandbox was first given it, is marked invalid and the user is
+    /// asked to choose it again rather than it being followed. A folder that
+    /// no longer exists is marked invalid too.
+    pub async fn set_folder(&self, path: String) -> Result<(), String> {
         let path_buf = PathBuf::from(&path);
-        let is_valid = path_buf.exists() && path_buf.is_dir();
+        let changed = !cfg!(windows) && restored_folder_changed(&path_buf);
+        let is_valid = !changed && path_buf.is_dir();
         let name = path_buf
             .file_name()
             .and_then(|n| n.to_str())
@@ -71,27 +74,55 @@ impl ProjectContextState {
 
         if is_valid {
             std::env::set_var(PROJECT_FOLDER_ENV_VAR, &path);
+            register_project_workspace(&path);
         } else {
             std::env::remove_var(PROJECT_FOLDER_ENV_VAR);
         }
 
         let mut ctx = self.context.write().await;
-        ctx.folder = Some(path);
+        ctx.folder = Some(path.clone());
         ctx.name = name;
         ctx.is_valid = is_valid;
 
+        if changed {
+            warn!("[ProjectContext] restored folder is not its real folder: {path}");
+            return Err(format!(
+                "The project folder changed; choose it again: {path}"
+            ));
+        }
         if is_valid {
             debug!("[ProjectContext] Internal set_folder: {:?}", ctx.folder);
         } else {
             warn!("[ProjectContext] set_folder path invalid: {:?}", ctx.folder);
         }
+        Ok(())
     }
+}
+
+/// Whether `path` now leads through a link a command could have made, or
+/// resolves elsewhere than where a sandbox was first given it.
+fn restored_folder_changed(path: &Path) -> bool {
+    agiworkforce_sandbox_policy::host_path::verify_read_root(path).is_err()
 }
 
 impl Default for ProjectContextState {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// The folder the user chose, resolved once, now: every later launch uses
+/// this path as written and follows no link on its way, so a folder chosen
+/// through a link, such as `~/Dropbox`, works like any other. A folder a
+/// sandbox was given before that now resolves elsewhere is refused rather
+/// than followed. Windows keeps the spelling, which has no sandbox to make a
+/// link and whose canonical form is a verbatim `\\?\` path.
+fn chosen_folder(path: String) -> Result<String, String> {
+    if cfg!(windows) {
+        return Ok(path);
+    }
+    let resolved = agiworkforce_sandbox_policy::host_path::resolve_chosen_root(Path::new(&path))?;
+    Ok(resolved.into_os_string().into_string().unwrap_or(path))
 }
 
 fn normalize_path_for_compare(path: &str) -> String {
@@ -126,6 +157,21 @@ pub async fn project_context_set_folder(
     mcp_state: State<'_, McpState>,
     app_handle: tauri::AppHandle,
 ) -> Result<ProjectContext, String> {
+    // Setting a project folder grants it. The page may name only a folder
+    // already granted, or the one a native picker returned in this process.
+    if let Some(requested) = path.as_ref() {
+        let granted = settings_state
+            .settings
+            .lock()
+            .await
+            .allowed_directories
+            .clone();
+        crate::sys::picked_folders::require_granted_or_picked(
+            &granted,
+            std::slice::from_ref(requested),
+        )?;
+    }
+    let path = path.map(chosen_folder).transpose()?;
     if let Some(ref p) = path {
         // Validate path exists is a directory
         let path_buf = PathBuf::from(p);
@@ -169,6 +215,7 @@ pub async fn project_context_set_folder(
         // Switch MCP config source to project-local MCP config immediately.
         let previous_scope = std::env::var(PROJECT_FOLDER_ENV_VAR).ok();
         std::env::set_var(PROJECT_FOLDER_ENV_VAR, p);
+        register_project_workspace(p);
         if let Err(e) = mcp_state.reload_active_config(&app_handle).await {
             // Restore previous scope if switching fails.
             if let Some(previous) = previous_scope {
@@ -240,6 +287,8 @@ pub async fn project_context_set_folder(
             );
         }
 
+        crate::sys::commands::skills::set_skill_workspace(&app_handle, Some(path_buf.as_path()));
+
         let mut ctx = state.context.write().await;
         ctx.folder = Some(p.clone());
         ctx.name = name;
@@ -260,10 +309,9 @@ pub async fn project_context_set_folder(
                 e
             ));
         }
+        crate::sys::commands::skills::set_skill_workspace(&app_handle, None);
         let mut ctx = state.context.write().await;
-        ctx.folder = None;
-        ctx.name = None;
-        ctx.is_valid = false;
+        *ctx = ProjectContext::default();
         Ok(ctx.clone())
     }
 }
@@ -612,150 +660,15 @@ pub fn project_context_list_files_internal_sync(
     Ok(files)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Project instruction file auto-load  (CLAUDE.md / AGENTS.md / MEMORY.md)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Names of instruction files we look for, in priority order.
-/// First found wins (per directory level).
-const INSTRUCTION_FILE_NAMES: &[&str] = &[
-    "CLAUDE.md",
-    "AGENTS.md",
-    "MEMORY.md",
-    ".cursorrules",
-    "COPILOT_INSTRUCTIONS.md",
-];
-
-/// A loaded project instruction file.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProjectInstructionFile {
-    /// Absolute path to the file.
-    pub path: String,
-    /// Filename (e.g. "CLAUDE.md").
-    pub filename: String,
-    /// Full content of the file.
-    pub content: String,
-    /// Source scope ("workspace" | "global").
-    pub scope: String,
-}
-
-/// Load project instruction files (CLAUDE.md / AGENTS.md / MEMORY.md) from:
-/// 1. The active project folder (workspace-local, highest priority)
-/// 2. `~/.config/agiworkforce/` (global fallback)
-/// 3. `~/.claude/` (Claude Code compatibility)
-/// 4. `~/.codex/` (Codex compatibility)
-///
-/// The caller (LLM router / context builder) should prepend these contents to
-/// the system prompt so the agent understands the project's conventions.
-#[tauri::command]
-pub async fn project_load_instructions(
-    state: tauri::State<'_, ProjectContextState>,
-) -> Result<Vec<ProjectInstructionFile>, String> {
-    let folder = state.get_folder().await;
-    let mut results: Vec<ProjectInstructionFile> = Vec::new();
-
-    // 1. Workspace-local, walk from project root up to git root (max 5 levels).
-    if let Some(ref project_dir) = folder {
-        let mut current = PathBuf::from(project_dir);
-        let mut levels = 0;
-        loop {
-            for name in INSTRUCTION_FILE_NAMES {
-                let candidate = current.join(name);
-                if candidate.is_file() {
-                    if let Ok(content) = std::fs::read_to_string(&candidate) {
-                        if !content.trim().is_empty() {
-                            // Avoid duplicates (same path already added from a child dir).
-                            let path_str = candidate.to_string_lossy().to_string();
-                            if !results.iter().any(|r| r.path == path_str) {
-                                results.push(ProjectInstructionFile {
-                                    path: path_str,
-                                    filename: name.to_string(),
-                                    content,
-                                    scope: "workspace".to_string(),
-                                });
-                            }
-                        }
-                    }
-                    break; // Only one file per directory level.
-                }
-            }
-
-            // Stop at git root or after 5 levels.
-            if current.join(".git").exists() || levels >= 5 {
-                break;
-            }
-
-            match current.parent() {
-                Some(p) => {
-                    current = p.to_path_buf();
-                    levels += 1;
-                }
-                None => break,
-            }
-        }
+/// Name the project folder to host git as a workspace a sandboxed command
+/// can write, unless it is the home folder or above it, which no sandbox
+/// writes.
+fn register_project_workspace(path: &str) {
+    let path = PathBuf::from(path);
+    let path = path.canonicalize().unwrap_or(path);
+    if agiworkforce_sandbox_policy::is_safe_write_root(&path) {
+        agiworkforce_worktree::register_workspace_root(path);
     }
-
-    // 2. Global config directories.
-    let global_dirs: Vec<(PathBuf, &str)> = {
-        let mut dirs = Vec::new();
-        if let Some(home) = dirs::home_dir() {
-            dirs.push((home.join(".config").join("agiworkforce"), "global"));
-            dirs.push((home.join(".claude"), "global"));
-            dirs.push((home.join(".codex"), "global"));
-        }
-        dirs
-    };
-
-    for (dir, scope) in &global_dirs {
-        if !dir.is_dir() {
-            continue;
-        }
-        for name in INSTRUCTION_FILE_NAMES {
-            let candidate = dir.join(name);
-            if candidate.is_file() {
-                if let Ok(content) = std::fs::read_to_string(&candidate) {
-                    if !content.trim().is_empty() {
-                        let path_str = candidate.to_string_lossy().to_string();
-                        if !results.iter().any(|r| r.path == path_str) {
-                            results.push(ProjectInstructionFile {
-                                path: path_str,
-                                filename: name.to_string(),
-                                content,
-                                scope: scope.to_string(),
-                            });
-                        }
-                    }
-                }
-                break;
-            }
-        }
-    }
-
-    info!(
-        "[project_load_instructions] loaded {} instruction file(s)",
-        results.len()
-    );
-
-    Ok(results)
-}
-
-/// Check whether a project instruction file exists in the current project folder.
-/// Useful for the frontend to show a badge or prompt the user to create one.
-#[tauri::command]
-pub async fn project_has_instructions(
-    state: tauri::State<'_, ProjectContextState>,
-) -> Result<bool, String> {
-    let folder = state.get_folder().await;
-    if let Some(ref dir) = folder {
-        let root = PathBuf::from(dir);
-        for name in INSTRUCTION_FILE_NAMES {
-            if root.join(name).is_file() {
-                return Ok(true);
-            }
-        }
-    }
-    Ok(false)
 }
 
 #[cfg(test)]
@@ -763,6 +676,76 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_restored_folder_that_is_now_a_users_link_is_marked_invalid() {
+        let _env = crate::sys::utils::APP_DATA_DIR_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let tree = tempdir().unwrap();
+        let tree = tree.path().canonicalize().unwrap();
+        let project = tree.join("project");
+        let elsewhere = tree.join("elsewhere");
+        fs::create_dir(&project).unwrap();
+        fs::create_dir(&elsewhere).unwrap();
+        let state = ProjectContextState::new();
+        let restored = project.to_string_lossy().into_owned();
+        state.set_folder(restored.clone()).await.unwrap();
+        assert_eq!(state.get_folder().await, Some(restored.clone()));
+
+        fs::rename(&project, tree.join("moved")).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, &project).unwrap();
+        let error = state
+            .set_folder(restored.clone())
+            .await
+            .expect_err("a folder that now leads elsewhere is not followed");
+        assert!(error.contains("choose it again"), "{error}");
+        assert_eq!(state.get_folder().await, None);
+        let ctx = state.get_context().await;
+        assert_eq!(ctx.folder, Some(restored));
+        assert!(!ctx.is_valid);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_restored_folder_through_the_systems_own_links_stays_valid() {
+        assert!(!restored_folder_changed(Path::new("/tmp")));
+        assert!(!restored_folder_changed(Path::new("/private/tmp/")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_chosen_through_a_link_is_stored_as_its_real_folder() {
+        let exe = std::env::current_exe().unwrap().canonicalize().unwrap();
+        let tree = exe
+            .parent()
+            .unwrap()
+            .join(format!("agi-chosen-folder-{}", uuid::Uuid::new_v4()));
+        let real = tree.join("real");
+        let link = tree.join("link");
+        fs::create_dir_all(&real).unwrap();
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let outside_roots = !agiworkforce_sandbox_policy::host_path::inside_any(
+            &tree,
+            &agiworkforce_sandbox_policy::host_path::untrusted_roots(&[]),
+        );
+        if outside_roots {
+            assert_eq!(
+                chosen_folder(link.to_string_lossy().into_owned()).unwrap(),
+                real.to_string_lossy()
+            );
+        }
+        let _ = fs::remove_dir_all(&tree);
+
+        let temp = tempdir().unwrap();
+        let temp = temp.path().canonicalize().unwrap();
+        fs::create_dir(temp.join("real")).unwrap();
+        std::os::unix::fs::symlink(temp.join("real"), temp.join("link")).unwrap();
+        let error = chosen_folder(temp.join("link").to_string_lossy().into_owned())
+            .expect_err("a link a sandbox could have planted is not followed at choice");
+        assert!(error.contains("goes through a link"), "{error}");
+    }
 
     // Regression guard for CTX-004 / AGI-DOC-0018 BK-11.01 (AC-19): equal-count
     // file types must order deterministically by extension name, independent of

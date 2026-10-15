@@ -43,6 +43,19 @@ impl StartupRecoveryInfo {
         }
     }
 
+    /// A service every session depends on could not start. Nothing stored
+    /// was changed, so retrying once the cause is fixed is safe.
+    pub fn essential_service(service: &str) -> Self {
+        Self {
+            code: "SERVICE_INITIALIZATION".to_string(),
+            title: "AGI could not finish starting".to_string(),
+            message: format!(
+                "{service} could not be started, so the app stopped before opening. Retry first, then export diagnostics if the problem continues."
+            ),
+            data_preserved: true,
+        }
+    }
+
     pub fn database_initialization() -> Self {
         Self {
             code: "DB_INITIALIZATION".to_string(),
@@ -121,6 +134,74 @@ impl From<RecoveryAction> for UpgradeStatus {
             },
         }
     }
+}
+
+/// A feature whose service could not start, which the app runs without.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DegradedService {
+    pub feature: &'static str,
+    pub reason: String,
+}
+
+/// The title and message that tell the user which features are off, or
+/// `None` when everything started.
+pub fn degraded_services_notice(services: &[DegradedService]) -> Option<(String, String)> {
+    if services.is_empty() {
+        return None;
+    }
+    let listed = services
+        .iter()
+        .map(|service| service.feature)
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some((
+        "Some features are off for this session".to_string(),
+        format!(
+            "These could not start and stay unavailable until you restart the app: {listed}. Everything else works as usual."
+        ),
+    ))
+}
+
+/// Logs why each feature is off and raises one notification naming them.
+pub fn report_degraded_services(app: &AppHandle, services: Vec<DegradedService>) {
+    use crate::sys::commands::notification_center::{
+        deliver_notification, CreateNotificationInput, NotificationCenterState,
+        NotificationPriority, NotificationType,
+    };
+
+    let Some((title, message)) = degraded_services_notice(&services) else {
+        return;
+    };
+    for service in &services {
+        tracing::error!(
+            "[startup] {} is unavailable this session: {}",
+            service.feature,
+            service.reason
+        );
+    }
+
+    let features: Vec<&'static str> = services.iter().map(|service| service.feature).collect();
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let Some(state) = app.try_state::<NotificationCenterState>() else {
+            return;
+        };
+        let input = CreateNotificationInput {
+            title,
+            message,
+            notification_type: NotificationType::Warning,
+            priority: NotificationPriority::High,
+            action_url: None,
+            action_label: None,
+            icon: None,
+            metadata: Some(serde_json::json!({ "source": "startup", "features": features })),
+            dismissible: true,
+            expires_at: None,
+        };
+        if let Err(reason) = deliver_notification(&app, &state, input).await {
+            tracing::info!("[startup] notice about unavailable features held back: {reason}");
+        }
+    });
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -303,6 +384,42 @@ fn build_diagnostics(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nothing_degraded_raises_no_notice() {
+        assert_eq!(degraded_services_notice(&[]), None);
+    }
+
+    #[test]
+    fn the_notice_names_each_feature_and_keeps_the_cause_out_of_it() {
+        let raw_cause = "unable to open /Users/private-user/agiworkforce.db";
+        let (title, message) = degraded_services_notice(&[
+            DegradedService {
+                feature: "API requests",
+                reason: raw_cause.to_string(),
+            },
+            DegradedService {
+                feature: "Automation triggers",
+                reason: raw_cause.to_string(),
+            },
+        ])
+        .expect("a degraded service must be reported");
+
+        assert_eq!(title, "Some features are off for this session");
+        assert!(message.contains("API requests, Automation triggers"));
+        assert!(!message.contains(raw_cause));
+    }
+
+    #[test]
+    fn an_essential_service_failure_says_what_stopped_and_that_data_is_intact() {
+        let info = StartupRecoveryInfo::essential_service("Settings storage");
+
+        assert_eq!(info.code, "SERVICE_INITIALIZATION");
+        assert!(info
+            .message
+            .starts_with("Settings storage could not be started"));
+        assert!(info.data_preserved);
+    }
 
     #[test]
     fn recovery_info_never_exposes_source_errors() {

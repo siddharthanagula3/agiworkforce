@@ -3,18 +3,8 @@
 //! SQLite-backed persistence for artifacts and their version history.
 //! The in-memory ArtifactStore remains the primary cache; this module
 //! provides durable storage so artifacts survive app restarts.
-//!
-//! CLOUD SYNC HOOK: `save_artifact_to_db` (1) derives `app_mode` from the
-//! parent conversation immediately after INSERT/UPDATE so that cloud-conversation
-//! artifacts carry `app_mode='cloud'`, then (2) calls `mark_artifact_for_push`
-//! which sets `cloud_id`, `conversation_cloud_id`, and `needs_push=1` gated on
-//! `WHERE app_mode='cloud'`. Local/BYOK artifacts are never touched.
-//! Gate enforcement point: the `UPDATE artifacts SET app_mode = ...` SQL in
-//! `save_artifact_to_db` (mechanism) + `cloud_sync::mark_artifact_for_push`
-//! (backstop WHERE clause).
 
 use super::types::*;
-use crate::data::cloud_sync;
 use rusqlite::{params, Connection};
 use std::collections::HashSet;
 
@@ -96,40 +86,6 @@ pub fn save_artifact_to_db(conn: &Connection, artifact: &Artifact) -> Result<(),
         ],
     )
     .map_err(|e| format!("Failed to save artifact: {}", e))?;
-
-    // Derive app_mode from the parent conversation so that cloud-conversation artifacts
-    // are flagged 'cloud' immediately. This is the mechanism that makes mark_artifact_for_push
-    // effective, the WHERE app_mode='cloud' guard there is the backstop, not the trigger.
-    // Artifacts without a conversation_id (orphan) stay 'local' (the column default).
-    conn.execute(
-        "UPDATE artifacts \
-         SET app_mode = COALESCE( \
-             (SELECT c.app_mode FROM conversations c \
-              WHERE c.id = CAST(artifacts.conversation_id AS INTEGER)), \
-             'local' \
-         ) \
-         WHERE id = ?1",
-        params![artifact.id],
-    )
-    .map_err(|e| {
-        format!(
-            "Failed to derive artifact app_mode from conversation: {}",
-            e
-        )
-    })?;
-
-    // CLOUD SYNC HOOK: mark for push if this artifact belongs to a cloud conversation.
-    // The gate is entirely inside mark_artifact_for_push (WHERE app_mode='cloud') so
-    // local/BYOK artifacts are never touched, no mode state needed here.
-    if let Err(e) = cloud_sync::mark_artifact_for_push(conn, &artifact.id) {
-        // Non-fatal: log and continue. A missed mark will be retried on the next
-        // save (or caught by the next sync's gather pass if cloud_id is already set).
-        tracing::warn!(
-            artifact_id = %artifact.id,
-            error = %e,
-            "Failed to mark artifact for cloud push, will retry on next sync"
-        );
-    }
 
     Ok(())
 }
@@ -332,17 +288,16 @@ pub fn link_artifacts_to_message_in_db(
         .unchecked_transaction()
         .map_err(|error| format!("Failed to begin artifact link transaction: {error}"))?;
 
-    let message_cloud_id: Option<String> = tx
-        .query_row(
-            "SELECT cloud_id FROM messages WHERE id = ?1 AND conversation_id = ?2",
-            params![message_id, conversation_id],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|error| format!("Failed to validate artifact message owner: {error}"))?
-        .ok_or_else(|| {
-            format!("Message {message_id} does not belong to conversation {conversation_id}")
-        })?;
+    tx.query_row(
+        "SELECT 1 FROM messages WHERE id = ?1 AND conversation_id = ?2",
+        params![message_id, conversation_id],
+        |row| row.get::<_, i64>(0),
+    )
+    .optional()
+    .map_err(|error| format!("Failed to validate artifact message owner: {error}"))?
+    .ok_or_else(|| {
+        format!("Message {message_id} does not belong to conversation {conversation_id}")
+    })?;
 
     for artifact_id in &unique_ids {
         let row = tx
@@ -376,18 +331,8 @@ pub fn link_artifacts_to_message_in_db(
 
     for artifact_id in &unique_ids {
         tx.execute(
-            "UPDATE artifacts \
-             SET message_id = ?1, \
-                 message_cloud_id = CASE \
-                     WHEN app_mode = 'cloud' THEN ?2 \
-                     ELSE NULL \
-                 END, \
-                 needs_push = CASE \
-                     WHEN app_mode = 'cloud' AND ?2 IS NOT NULL THEN 1 \
-                     ELSE needs_push \
-                 END \
-             WHERE id = ?3",
-            params![message_id, message_cloud_id, artifact_id],
+            "UPDATE artifacts SET message_id = ?1 WHERE id = ?2",
+            params![message_id, artifact_id],
         )
         .map_err(|error| format!("Failed to link artifact {artifact_id}: {error}"))?;
     }
@@ -785,61 +730,6 @@ mod tests {
     }
 
     #[test]
-    fn cloud_message_link_persists_portable_owner_and_requeues_artifact_sync() {
-        let conn = fresh_db();
-        let conversation_cloud_id = "019b7ba6-6d81-7000-8000-000000000010";
-        let message_cloud_id = "019b7ba6-6d81-7000-8000-000000000011";
-        conn.execute(
-            "INSERT INTO conversations \
-             (title, user_id, app_mode, cloud_id, created_at, updated_at) \
-             VALUES ('Cloud artifacts', 'u1', 'cloud', ?1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-            params![conversation_cloud_id],
-        )
-        .unwrap();
-        let conversation_id = conn.last_insert_rowid();
-        conn.execute(
-            "INSERT INTO messages \
-             (conversation_id, conversation_cloud_id, user_id, role, content, cloud_id) \
-             VALUES (?1, ?2, 'u1', 'assistant', 'Created it', ?3)",
-            params![conversation_id, conversation_cloud_id, message_cloud_id],
-        )
-        .unwrap();
-        let message_id = conn.last_insert_rowid();
-
-        let artifact = make_artifact("cloud-link-artifact", Some(conversation_id));
-        save_artifact_to_db(&conn, &artifact).unwrap();
-        // Simulate the early artifact push being acknowledged before stream-end
-        // has associated it with the assistant message.
-        conn.execute(
-            "UPDATE artifacts SET needs_push = 0 WHERE id = ?1",
-            params![artifact.id],
-        )
-        .unwrap();
-
-        link_artifacts_to_message_in_db(
-            &conn,
-            conversation_id,
-            message_id,
-            std::slice::from_ref(&artifact.id),
-        )
-        .unwrap();
-
-        let owner: (Option<i64>, Option<String>, i64) = conn
-            .query_row(
-                "SELECT message_id, message_cloud_id, needs_push FROM artifacts WHERE id = ?1",
-                params![artifact.id],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-            )
-            .unwrap();
-        assert_eq!(owner.0, Some(message_id));
-        assert_eq!(owner.1.as_deref(), Some(message_cloud_id));
-        assert_eq!(
-            owner.2, 1,
-            "late ownership must be pushed after the early artifact ack"
-        );
-    }
-
-    #[test]
     fn conversation_reload_is_not_truncated_at_the_startup_cache_limit() {
         let conn = fresh_db();
         conn.execute(
@@ -918,101 +808,5 @@ mod tests {
             ArtifactMetadata::Code(metadata) => assert_eq!(metadata.language, "tsx"),
             other => panic!("expected recovered code metadata, got {other:?}"),
         }
-    }
-
-    /// save_artifact_to_db under a CLOUD conversation: app_mode must be 'cloud',
-    /// needs_push=1, cloud_id set, conversation_cloud_id set, exercising the
-    /// real code path (not a raw INSERT) so the derive-from-conversation UPDATE
-    /// and mark_artifact_for_push hook are both verified.
-    #[test]
-    fn save_artifact_under_cloud_conversation_marks_for_push() {
-        let conn = fresh_db();
-
-        // Create a cloud conversation with a cloud_id.
-        conn.execute(
-            "INSERT INTO conversations (title, user_id, app_mode, created_at, updated_at) \
-             VALUES ('CloudConv', 'u1', 'cloud', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-            [],
-        )
-        .unwrap();
-        let conv_id: i64 = conn.last_insert_rowid();
-        // Give it a cloud_id (simulates mark_conversation_for_push having run).
-        let conv_cloud_id = "conv-cloud-persist-test-1";
-        conn.execute(
-            "UPDATE conversations SET cloud_id = ?1 WHERE id = ?2",
-            params![conv_cloud_id, conv_id],
-        )
-        .unwrap();
-
-        // Use the real save_artifact_to_db path (not a raw INSERT).
-        let artifact = make_artifact("persist-test-art-1", Some(conv_id));
-        save_artifact_to_db(&conn, &artifact).expect("save_artifact_to_db must not fail");
-
-        let (app_mode, needs_push, cloud_id, conv_cid): (
-            String,
-            i64,
-            Option<String>,
-            Option<String>,
-        ) = conn
-            .query_row(
-                "SELECT app_mode, needs_push, cloud_id, conversation_cloud_id \
-                 FROM artifacts WHERE id = 'persist-test-art-1'",
-                [],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
-            )
-            .unwrap();
-
-        assert_eq!(
-            app_mode, "cloud",
-            "artifact under a cloud conversation must inherit app_mode='cloud'"
-        );
-        assert_eq!(
-            needs_push, 1,
-            "cloud artifact must have needs_push=1 after save"
-        );
-        assert!(
-            cloud_id.is_some(),
-            "cloud artifact must have cloud_id set after save"
-        );
-        assert_eq!(
-            conv_cid.as_deref(),
-            Some(conv_cloud_id),
-            "conversation_cloud_id must be populated from parent conversation"
-        );
-    }
-
-    /// save_artifact_to_db under a LOCAL conversation: app_mode must stay 'local',
-    /// needs_push=0, cloud_id NULL, the real path must never sync local artifacts.
-    #[test]
-    fn save_artifact_under_local_conversation_stays_local() {
-        let conn = fresh_db();
-
-        // Create a local conversation (default app_mode).
-        conn.execute(
-            "INSERT INTO conversations (title, user_id, created_at, updated_at) \
-             VALUES ('LocalConv', 'u1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-            [],
-        )
-        .unwrap();
-        let conv_id: i64 = conn.last_insert_rowid();
-
-        // Use the real save_artifact_to_db path.
-        let artifact = make_artifact("persist-test-art-2", Some(conv_id));
-        save_artifact_to_db(&conn, &artifact).expect("save_artifact_to_db must not fail");
-
-        let (app_mode, needs_push, cloud_id): (String, i64, Option<String>) = conn
-            .query_row(
-                "SELECT app_mode, needs_push, cloud_id FROM artifacts WHERE id = 'persist-test-art-2'",
-                [],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-            )
-            .unwrap();
-
-        assert_eq!(
-            app_mode, "local",
-            "artifact under a local conversation must stay app_mode='local'"
-        );
-        assert_eq!(needs_push, 0, "local artifact must NOT have needs_push=1");
-        assert!(cloud_id.is_none(), "local artifact must NOT get a cloud_id");
     }
 }

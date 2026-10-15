@@ -1,8 +1,8 @@
 use super::*;
 
 impl ToolExecutor {
-    /// Execute the `todo_write` tool: validate a list of todo items and emit them
-    /// to the frontend via the `todo:update` Tauri event channel.
+    /// Execute the `todo_write` tool: validate a list of todo items. The chat
+    /// renders the list from the call's arguments, so the result only confirms it.
     ///
     /// Expected arguments:
     /// - `todos` (Array, required): Array of objects with `id?`, `title`/`description`,
@@ -94,24 +94,6 @@ impl ToolExecutor {
                 "title": title.trim(),
                 "status": status
             }));
-        }
-
-        let payload = json!({ "todos": validated_todos });
-
-        // Emit to frontend via Tauri event channel
-        if let Some(ref app_handle) = self.app_handle {
-            if let Err(e) = app_handle.emit("todo:update", &payload) {
-                tracing::error!("Failed to emit todo:update event: {}", e);
-                return Ok(ToolResult {
-                    success: false,
-                    data: json!({
-                        "success": false,
-                        "error": format!("Failed to emit todo event: {}", e)
-                    }),
-                    error: Some(format!("Failed to emit todo event: {}", e)),
-                    metadata: HashMap::from([("tool_name".to_string(), json!("todo_write"))]),
-                });
-            }
         }
 
         let count = validated_todos.len();

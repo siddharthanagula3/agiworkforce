@@ -110,6 +110,10 @@ pub fn register_additional_workspace_root_path(
     Ok(canonical)
 }
 
+/// How many symlink hops to follow. Real paths resolve in one; the cap is only
+/// so a link cycle cannot spin here forever.
+const MAX_DENYLIST_LINK_HOPS: usize = 16;
+
 fn network_root_refusal(path: &Path, launch_dir: Option<&Path>) -> Option<String> {
     let host = match reached_network_host(path, MAX_DENYLIST_LINK_HOPS) {
         Ok(Some(host)) => host,
@@ -268,20 +272,34 @@ pub fn clear_additional_workspace_roots_for_tests() {
 /// Every entry must be a directory some loader in this crate reads as trusted
 /// instructions. The match is a substring one, so a bare `.claude/commands`
 /// covers the project root and the `~/.claude/commands` user root alike.
-const AGENT_INSTRUCTION_DIRS: &[&str] = &[
-    ".agiworkforce/rules",
-    ".agiworkforce/commands",
-    ".claude/commands",
-    ".agiworkforce/prompts/claude",
-];
+///
+/// The list is the sandbox crate's, which denies a sandboxed command the same
+/// folders: a file tool refusing a file under `.claude/commands` meant little while
+/// `run_command` could write it.
+const AGENT_INSTRUCTION_DIRS: [&str; 4] = agiworkforce_sandbox_policy::AGENT_INSTRUCTION_PATHS;
+
+/// True when writing `path` would change a file that chooses what runs on
+/// this machine: git metadata, the project's AGI and MCP configuration, or a
+/// hook manager's files. The list is the sandbox crate's, so the approval gate
+/// and the sandbox profile cannot disagree about it. `root` is the project;
+/// without one the workspace paths are validated against stands in.
+pub fn controls_what_runs(root: Option<&Path>, path: &Path) -> bool {
+    let root = root
+        .map(Path::to_path_buf)
+        .unwrap_or_else(validation_workspace);
+    agiworkforce_sandbox_policy::is_protected_project_path(&root, path)
+}
 
 /// True when `path` lands inside a directory the agent must not author.
 fn is_agent_instruction_path(path: &Path) -> bool {
     // Compare with forward slashes so the check behaves the same on Windows,
-    // and case-insensitively because macOS and Windows default to
-    // case-insensitive filesystems: `.AGIWORKFORCE/RULES/x.md` is the very same
+    // and as a filesystem that ignores case compares names, because macOS and
+    // Windows default to one: `.AGIWORKFORCE/RULES/x.md` is the very same
     // directory `memory.rs` globs, so it has to be the very same denial.
-    let normalized = path.to_string_lossy().replace('\\', "/").to_lowercase();
+    // Lower-casing is not that comparison: APFS opens `commands` for a name
+    // spelled with a long s, which the sandbox crate's fold also reads as `s`.
+    let normalized =
+        agiworkforce_sandbox_policy::folded(&path.to_string_lossy().replace('\\', "/"));
     let components: Vec<&str> = normalized
         .split('/')
         .filter(|part| !part.is_empty())
@@ -363,15 +381,16 @@ pub fn is_protected_path_with_cwd(path: &Path, cwd: &Path) -> bool {
     if is_checkpoint_internal_path(&absolute) {
         return true;
     }
-    [absolute.clone(), resolve_for_denylist(&absolute)]
-        .iter()
-        .any(|candidate| {
-            let relative = roots
-                .iter()
-                .find_map(|root| candidate.strip_prefix(root).ok())
-                .unwrap_or(candidate);
-            names_protected_location(relative)
-        })
+    let Ok(landing) = write_landing(&absolute) else {
+        return true;
+    };
+    [absolute.clone(), landing].iter().any(|candidate| {
+        let relative = roots
+            .iter()
+            .find_map(|root| candidate.strip_prefix(root).ok())
+            .unwrap_or(candidate);
+        names_protected_location(relative)
+    })
 }
 
 pub(crate) fn is_checkpoint_internal_path(path: &Path) -> bool {
@@ -380,7 +399,7 @@ pub(crate) fn is_checkpoint_internal_path(path: &Path) -> bool {
     } else {
         validation_workspace().join(path)
     };
-    [absolute.clone(), resolve_for_denylist(&absolute)]
+    [absolute.clone(), resolve_existing_prefix(&absolute)]
         .iter()
         .any(|candidate| {
             candidate.components().any(|component| {
@@ -479,78 +498,129 @@ fn names_protected_location(path: &Path) -> bool {
     })
 }
 
-/// Canonicalize the deepest existing ancestor of `path` and re-attach the
-/// components below it.
-///
-/// Resolves every symlink that `realpath` can resolve, i.e. every one whose
-/// target exists. A symlink whose target does not exist yet survives this
-/// untouched, see `resolve_for_denylist`, which is why that wrapper exists.
-fn resolve_existing_prefix(path: &Path) -> PathBuf {
-    for ancestor in path.ancestors() {
-        let Ok(canonical) = ancestor.canonicalize() else {
-            continue;
-        };
-        let below = path
-            .strip_prefix(ancestor)
-            .unwrap_or_else(|_| Path::new(""));
-        return if below.as_os_str().is_empty() {
-            canonical
-        } else {
-            canonical.join(below)
-        };
+/// Why an agent may not write `target`, named `named` by whoever asked, or
+/// `None` when it may: the one refusal for a write that would land in a
+/// folder loaded as trusted instructions ([`AGENT_INSTRUCTION_DIRS`]),
+/// wherever the write comes from. `target` is followed through its links
+/// first, and a path whose links never settle is refused as well.
+pub fn instruction_folder_refusal(named: &str, target: &Path) -> Option<String> {
+    match write_landing(target) {
+        Ok(landing) if !is_agent_instruction_path(&landing) => None,
+        Ok(_) => Some(format!(
+            "Refusing to write {named}: this directory is loaded as trusted, always-on \
+             instructions for every future session, so an agent write here would rewrite the \
+             agent's own instructions. Edit it yourself if that is intended."
+        )),
+        Err(refusal) => Some(refusal),
     }
-    // Reached when no ancestor exists on disk. An absolute path always ends its
-    // ancestor walk at a root that canonicalizes, so in practice this is the
-    // relative-path case, where the raw spelling is all there is to judge.
-    path.to_path_buf()
 }
 
-/// How many symlink hops to follow. Real paths resolve in one; the cap is only
-/// so a link cycle cannot spin here forever.
-const MAX_DENYLIST_LINK_HOPS: usize = 16;
+/// Whether reading the file a tool named `named` would read one the
+/// credential-file policy covers: the one check every read path makes.
+///
+/// The name alone is not what is read. `notes -> .env` is an ordinary name
+/// for a credential file, so the name is judged and so is where a read of it
+/// lands, each as written and as a filesystem that ignores case compares it.
+/// A path whose links never settle is treated as covered.
+pub fn reads_a_credential_file(named: &str) -> bool {
+    let path = Path::new(named);
+    let cwd = validation_workspace();
+    let absolute = if path.is_relative() {
+        cwd.join(path)
+    } else {
+        path.to_path_buf()
+    };
+    let Ok(landing) = agiworkforce_sandbox_policy::landing_path(&absolute) else {
+        return true;
+    };
+    let inside = agiworkforce_sandbox_policy::landing_path(&cwd)
+        .ok()
+        .and_then(|cwd| landing.strip_prefix(cwd).ok().map(Path::to_path_buf));
+    let landed = inside.unwrap_or(landing).to_string_lossy().into_owned();
+    let sensitive = [named, landed.as_str()].into_iter().any(|spelling| {
+        crate::sensitive_files::is_sensitive_file(spelling)
+            || crate::sensitive_files::is_sensitive_file(&agiworkforce_sandbox_policy::folded(
+                spelling,
+            ))
+    });
+    sensitive
+}
 
-/// Resolve `path` to the location a write to it would actually land on.
+/// Whether `path`, a file named below a project, is one the credential-file
+/// policy covers, as written or as a filesystem that ignores case compares
+/// it. This is the test the sandbox crate's reader of project-supplied files
+/// ([`agiworkforce_sandbox_policy::read_file_within`]) is given, which asks
+/// it about a file's own name and about the name the file leads to, so an
+/// instruction file linked to `.env` is refused by the same policy
+/// `read_file` applies.
+pub fn names_a_credential_file(path: &Path) -> bool {
+    let name = path.to_string_lossy();
+    crate::sensitive_files::is_sensitive_file(&name)
+        || crate::sensitive_files::is_sensitive_file(&agiworkforce_sandbox_policy::folded(&name))
+}
+
+/// Where the program `name` is on this machine, looked for only in the
+/// folders of `PATH` that no sandboxed command can write, and never taken
+/// from a file that resolves into one of those. A tool the CLI runs itself,
+/// outside any sandbox, is found this way: a bare name is otherwise resolved
+/// on the whole `PATH`, where a project's `node_modules/.bin` or `.venv/bin`
+/// may come first and hold a program a sandboxed command left there.
+pub fn host_program(name: &str) -> Option<PathBuf> {
+    let untrusted = untrusted_program_folders();
+    agiworkforce_sandbox_policy::host_path::find_program(
+        &agiworkforce_sandbox_policy::host_path::host_path_within(&untrusted),
+        name,
+        &untrusted,
+    )
+}
+
+/// Whether `program` is a file a sandboxed command could have written or
+/// replaced: one that is, or resolves, inside the working directory, a
+/// workspace root or a temporary folder. Such a file is never run on the
+/// host to ask what it is.
+pub fn program_is_untrusted(program: &Path) -> bool {
+    agiworkforce_sandbox_policy::host_path::inside_any(program, &untrusted_program_folders())
+}
+
+/// The folders a sandboxed command can write: the ones the sandbox crate
+/// keeps, and the session's workspace when a sandbox may be given it. A
+/// session started in the home folder writes a private workspace instead, and
+/// the toolchains installed under home stay trusted.
+fn untrusted_program_folders() -> Vec<PathBuf> {
+    let workspace = validation_workspace();
+    let extra: Vec<&Path> = std::iter::once(workspace.as_path())
+        .filter(|workspace| agiworkforce_sandbox_policy::is_safe_write_root(workspace))
+        .collect();
+    agiworkforce_sandbox_policy::host_path::untrusted_roots(&extra)
+}
+
+/// `path` with every link on it followed, as far as that can be told; a path
+/// whose links loop keeps its spelling. For naming a file, never for
+/// deciding whether a write is allowed: that is [`write_landing`].
+fn resolve_existing_prefix(path: &Path) -> PathBuf {
+    agiworkforce_sandbox_policy::landing_path(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+/// Where a write to `path` would actually land.
 ///
-/// The denylist matches on text, and `validate_workspace_path_with_cwd` hands
-/// back a not-yet-created file spelled exactly as the caller spelled it. Two
-/// spellings reach an instruction directory without ever containing its name:
-/// a different casing, where the filesystem is case-insensitive, and a symlink
-/// somewhere inside the project.
-///
-/// Canonicalizing the existing prefix collapses both, but only for a link
-/// whose target already exists. A link whose target is still absent is what an
-/// attacker actually commits, and it is invisible to both `exists` and
-/// `canonicalize`: the ancestor walk pops the link's own name and re-attaches
-/// it as raw text, dropping exactly the indirection it was meant to resolve.
-/// `tokio::fs::write` at the four write sites opens with `O_CREAT` and follows
-/// it regardless, materializing the target. So a dangling leaf link is read
-/// here by hand, with `symlink_metadata`, which does not follow, and its target
-/// resolved the same way, repeatedly, for chained links.
-fn resolve_for_denylist(path: &Path) -> PathBuf {
-    let mut resolved = resolve_existing_prefix(path);
-    for _ in 0..MAX_DENYLIST_LINK_HOPS {
-        let is_dangling_link = std::fs::symlink_metadata(&resolved)
-            .map(|meta| meta.file_type().is_symlink())
-            .unwrap_or(false);
-        if !is_dangling_link {
-            return resolved;
-        }
-        let Ok(target) = std::fs::read_link(&resolved) else {
-            return resolved;
-        };
-        let next = if target.is_absolute() {
-            target
-        } else {
-            // A relative link target is relative to the directory holding the
-            // link, not to the process cwd.
-            resolved
-                .parent()
-                .unwrap_or_else(|| Path::new(""))
-                .join(target)
-        };
-        resolved = resolve_existing_prefix(&next);
-    }
-    resolved
+/// The denylist matches on text, and two spellings reach an instruction
+/// directory without ever containing its name: a different casing, where the
+/// filesystem is case-insensitive, and a symlink somewhere inside the
+/// project. A link whose target is still absent is what an attacker actually
+/// commits, and it is invisible to both `exists` and `canonicalize`, while a
+/// write opens it with `O_CREAT` and follows it regardless, materializing the
+/// target. The sandbox crate's resolver follows every link by hand, a
+/// dangling one at the end of the path or in the middle of it included, and
+/// is the same one the protected-path gate and the sandbox profiles judge a
+/// path by. A path whose links never settle is refused: nothing can say
+/// where a write to it lands.
+fn write_landing(path: &Path) -> std::result::Result<PathBuf, String> {
+    agiworkforce_sandbox_policy::landing_path(path).map_err(|_| {
+        format!(
+            "Path goes through a loop of symbolic links: {}",
+            path.display()
+        )
+    })
 }
 
 /// Containment check plus the agent-instruction denylist.
@@ -567,14 +637,10 @@ pub fn validate_workspace_write_path_with_cwd(
     cwd: &Path,
 ) -> std::result::Result<PathBuf, String> {
     let validated = validate_workspace_path_with_cwd(path_str, cwd)?;
-    if is_agent_instruction_path(&resolve_for_denylist(&validated)) {
-        return Err(format!(
-            "Refusing to write {path_str}: this directory is loaded as trusted, always-on \
-             instructions for every future session, so an agent write here would rewrite the \
-             agent's own instructions. Edit it yourself if that is intended."
-        ));
+    match instruction_folder_refusal(path_str, &validated) {
+        Some(refusal) => Err(refusal),
+        None => Ok(validated),
     }
-    Ok(validated)
 }
 
 pub fn validate_workspace_path(path_str: &str) -> std::result::Result<PathBuf, String> {
@@ -620,7 +686,7 @@ pub fn validate_workspace_path_with_cwd(
 
     // A path with nothing at it yet is judged by where a write to it would land:
     // through any dangling link, with the `..` in the unresolved tail applied.
-    let landing = lexically_normalized(&resolve_for_denylist(&absolute));
+    let landing = lexically_normalized(&write_landing(&absolute)?);
 
     let mut existing_parent = landing.as_path();
     while !existing_parent.exists() {
@@ -642,7 +708,13 @@ pub fn validate_workspace_path_with_cwd(
         ));
     }
 
-    Ok(absolute)
+    // A dangling link is handed back as the file it points at. The file
+    // tools open the last component without following a link, so that one
+    // put there after this check is refused; the link's own name would be
+    // refused with it.
+    let names_a_link =
+        std::fs::symlink_metadata(&absolute).is_ok_and(|found| found.file_type().is_symlink());
+    Ok(if names_a_link { landing } else { absolute })
 }
 
 /// Collapse `.` and `..` textually. Applied only after the existing prefix is
@@ -1267,6 +1339,191 @@ mod agent_instruction_denylist_tests {
             tmp.path()
         )
         .is_ok());
+    }
+
+    /// The project files MCP servers are loaded from are named in the MCP
+    /// module, and the files a sandbox and the approval gate protect are named
+    /// in the sandbox crate. A file loaded from and not protected could be
+    /// rewritten by a sandboxed command, so the first list is held inside the
+    /// second.
+    #[test]
+    fn every_project_file_mcp_servers_load_from_is_protected() {
+        for file in crate::mcp::consent::PROJECT_CONFIG_FILES {
+            assert!(
+                agiworkforce_sandbox_policy::PROJECT_CONFIG_PATHS.contains(&file),
+                "{file} is loaded from a project and is not in the protected list"
+            );
+            assert!(controls_what_runs(
+                Some(Path::new("/project")),
+                Path::new(file)
+            ));
+        }
+    }
+
+    #[test]
+    fn a_credential_file_is_named_as_the_filesystem_reads_the_name() {
+        for name in [
+            ".env",
+            "apps/web/.env.local",
+            ".ENV",
+            ".\u{17f}sh/id_ed25519",
+            "certs/\u{17f}erver.pem",
+            ".aws/credentials",
+        ] {
+            assert!(names_a_credential_file(Path::new(name)), "{name:?}");
+        }
+        for name in [
+            "AGENTS.md",
+            ".agiworkforce/rules/style.md",
+            "docs/environment.md",
+        ] {
+            assert!(!names_a_credential_file(Path::new(name)), "{name:?}");
+        }
+    }
+
+    #[test]
+    fn the_instruction_folders_are_the_ones_a_sandbox_denies() {
+        assert_eq!(
+            AGENT_INSTRUCTION_DIRS,
+            agiworkforce_sandbox_policy::AGENT_INSTRUCTION_PATHS
+        );
+        assert!(AGENT_INSTRUCTION_DIRS.contains(&".claude/commands"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_host_program_is_never_taken_from_a_folder_a_sandbox_writes() {
+        let shell = host_program("sh").expect("sh is on the host PATH");
+        assert!(shell.is_absolute());
+        assert!(!program_is_untrusted(&shell), "{}", shell.display());
+        assert_eq!(host_program("agi-program-that-does-not-exist"), None);
+
+        let planted = tempfile::tempdir().expect("tempdir");
+        let program = planted.path().join("rg");
+        fs::write(&program, "#!/bin/sh\n").expect("write program");
+        assert!(
+            program_is_untrusted(&program),
+            "a program in a temporary folder would be run on the host"
+        );
+        assert!(!program_is_untrusted(Path::new("/usr/bin/git")));
+    }
+
+    /// APFS opens `commands` for a name spelled with a long s, the sharp s as
+    /// `ss` and a ligature as its letters. Lower-casing leaves all three as
+    /// they are, so the folder read as some other folder while it was absent.
+    #[test]
+    fn an_instruction_folder_spelled_as_the_filesystem_folds_it_is_refused() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        for spelled in [
+            ".claude/command\u{17f}/x.md",
+            ".CLAUDE/Command\u{17f}/x.md",
+            ".agiworkforce/rule\u{17f}/x.md",
+            ".agiworkforce/prompt\u{17f}/claude/x.md",
+            ".agiworkforce/command\u{17f}/deep/x.md",
+            ".\u{ff41}giworkforce/rules/x.md",
+        ] {
+            let target = tmp.path().join(spelled);
+            assert!(
+                validate_workspace_write_path_with_cwd(
+                    target.to_str().expect("utf8 path"),
+                    tmp.path()
+                )
+                .is_err(),
+                "{spelled:?} is the instruction folder on a volume that ignores case"
+            );
+        }
+        let ordinary = tmp.path().join("docs/command\u{17f}/x.md");
+        assert!(validate_workspace_write_path_with_cwd(
+            ordinary.to_str().expect("utf8 path"),
+            tmp.path()
+        )
+        .is_ok());
+    }
+
+    /// The name a read is asked for is not the file it reads.
+    #[cfg(unix)]
+    #[test]
+    fn a_read_through_a_link_to_a_credential_file_is_a_read_of_that_file() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        fs::write(tmp.path().join(".env"), "TOKEN=EXAMPLE").expect("env file");
+        fs::write(tmp.path().join("notes.txt"), "notes").expect("notes");
+        std::os::unix::fs::symlink(".env", tmp.path().join("settings.txt")).expect("link");
+        std::os::unix::fs::symlink(".env.later", tmp.path().join("soon.txt")).expect("dangling");
+        std::os::unix::fs::symlink("b", tmp.path().join("a")).expect("a to b");
+        std::os::unix::fs::symlink("a", tmp.path().join("b")).expect("b to a");
+        let named = |name: &str| tmp.path().join(name).to_string_lossy().into_owned();
+
+        for covered in [
+            ".env",
+            "settings.txt",
+            "soon.txt",
+            "a",
+            ".ENV",
+            "id_r\u{17f}a",
+        ] {
+            assert!(reads_a_credential_file(&named(covered)), "{covered}");
+        }
+        for ordinary in ["notes.txt", "src/main.rs", "missing.txt"] {
+            assert!(!reads_a_credential_file(&named(ordinary)), "{ordinary}");
+        }
+        assert!(reads_a_credential_file(".env"));
+        assert!(!reads_a_credential_file("README.md"));
+    }
+
+    /// A link in the middle of the path whose target does not exist yet is as
+    /// invisible to `canonicalize` as one at its end.
+    #[cfg(unix)]
+    #[test]
+    fn rules_file_write_denied_through_a_dangling_link_in_the_middle_of_the_path() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        fs::create_dir_all(tmp.path().join(".agiworkforce")).expect("create config dir");
+        std::os::unix::fs::symlink(
+            Path::new(".agiworkforce").join("rules"),
+            tmp.path().join("docs"),
+        )
+        .expect("create dangling symlink");
+        let target = tmp.path().join("docs").join("injected.md");
+
+        assert!(
+            validate_workspace_write_path_with_cwd(target.to_str().expect("utf8 path"), tmp.path())
+                .is_err(),
+            "the rules folder does not exist yet, and the write would create it"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_loop_of_links_is_refused_for_reads_and_writes() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::os::unix::fs::symlink("b", tmp.path().join("a")).expect("a to b");
+        std::os::unix::fs::symlink("a", tmp.path().join("b")).expect("b to a");
+        let target = tmp.path().join("a");
+        let target = target.to_str().expect("utf8 path");
+
+        for refusal in [
+            validate_workspace_path_with_cwd(target, tmp.path()),
+            validate_workspace_write_path_with_cwd(target, tmp.path()),
+        ] {
+            let refusal = refusal.expect_err("nothing says where a loop lands");
+            assert!(refusal.contains("loop of symbolic links"), "{refusal}");
+        }
+    }
+
+    /// The write opens the last component without following a link, so a
+    /// dangling link is handed back as the file it points at.
+    #[cfg(unix)]
+    #[test]
+    fn a_dangling_link_to_an_ordinary_file_validates_as_that_file() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path().canonicalize().expect("canonical root");
+        fs::create_dir_all(root.join("docs")).expect("create docs");
+        std::os::unix::fs::symlink(Path::new("docs").join("notes.md"), root.join("NOTES.md"))
+            .expect("create symlink");
+
+        let validated = validate_workspace_write_path_with_cwd("NOTES.md", &root)
+            .expect("an ordinary target is allowed");
+
+        assert_eq!(validated, root.join("docs").join("notes.md"));
     }
 
     #[test]

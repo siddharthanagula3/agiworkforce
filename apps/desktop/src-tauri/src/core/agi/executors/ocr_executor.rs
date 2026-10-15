@@ -31,7 +31,7 @@
 //! // result: { "success": true, "text": "Extracted text...", "confidence": 0.95 }
 //! ```
 
-use super::{ExecutorContext, ToolExecutor};
+use super::{ExecutorContext, GrantedFolders, ToolExecutor};
 use crate::core::agi::ExecutionContext;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -119,39 +119,13 @@ impl OcrExecutor {
     /// - Canonicalizes the path to resolve symlinks and `..` components
     /// - Validates the canonicalized path is within allowed directories
     /// - Logs security violations for audit trail
-    fn validate_path_security(
-        path: &Path,
-        context: &ExecutorContext,
-    ) -> Result<std::path::PathBuf> {
+    fn validate_path_security(path: &Path, granted: &GrantedFolders) -> Result<std::path::PathBuf> {
         // Canonicalize the path to resolve symlinks and prevent path traversal
         let canonical_path = std::fs::canonicalize(path)
             .map_err(|e| anyhow!("Invalid or inaccessible path '{}': {}", path.display(), e))?;
 
-        // Validate the path is within allowed directories
-        let allowed_directories = context.get_allowed_directories();
-        let path_allowed = if allowed_directories.is_empty() {
-            tracing::warn!(
-                "[OcrExecutor] No allowed_directories configured - OCR access unrestricted. \
-                Consider configuring allowed directories for security."
-            );
-            true
-        } else {
-            allowed_directories
-                .iter()
-                .any(|allowed_dir| canonical_path.starts_with(allowed_dir))
-        };
-
-        if !path_allowed {
-            tracing::error!(
-                "[OcrExecutor] Path access blocked: '{}' resolved to '{}' which is outside allowed directories",
-                path.display(),
-                canonical_path.display()
-            );
-            return Err(anyhow!(
-                "Access denied: image path '{}' is outside allowed directories",
-                path.display()
-            ));
-        }
+        // Validate the path is within allowed directories and off the secrets denylist
+        granted.require_reachable(path, &canonical_path, "image_ocr")?;
 
         Ok(canonical_path)
     }
@@ -199,7 +173,8 @@ impl OcrExecutor {
         Self::validate_image_path(path)?;
 
         // Security: validate path is within allowed directories
-        let canonical_path = Self::validate_path_security(path, context)?;
+        let granted = context.granted_folders().await?;
+        let canonical_path = Self::validate_path_security(path, &granted)?;
         let canonical_path_str = canonical_path.to_string_lossy().to_string();
 
         // Emit progress event
@@ -293,16 +268,13 @@ mod tests {
 
         ExecutorContext {
             app_handle: None,
-            automation: Arc::new(
-                crate::automation::AutomationService::new()
-                    .expect("Failed to create AutomationService for tests"),
-            ),
             router: Arc::new(tokio::sync::RwLock::new(crate::core::llm::LLMRouter::new())),
             tool_cache: Arc::new(crate::data::cache::ToolResultCache::new()),
             security_guard: Arc::new(crate::sys::security::ToolExecutionGuard::new()),
             change_tracker: None,
             session_id: "test_session".to_string(),
             tool_id: "test_tool".to_string(),
+            granted_directories: vec![std::env::temp_dir()],
         }
     }
 

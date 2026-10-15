@@ -1,16 +1,27 @@
-use crate::core::llm::LLMRouter;
+use crate::core::llm::{LLMRouter, RouterPreferences};
 use crate::features::terminal::SessionManager;
 use crate::sys::error::{Error, Result};
 use std::sync::Arc;
-use tokio::process::Command;
+use tokio::sync::RwLock;
+
+/// Terminal sessions are Local: prompts carry the working directory, error
+/// output and staged diffs, so they never leave the device for a BYOK or
+/// managed provider.
+fn local_only() -> RouterPreferences {
+    RouterPreferences {
+        local_only: true,
+        trust_mode: Some(agiworkforce_model_registry::TrustMode::Local),
+        ..RouterPreferences::default()
+    }
+}
 
 pub struct TerminalAI {
-    router: Arc<LLMRouter>,
+    router: Arc<RwLock<LLMRouter>>,
     session_manager: Arc<SessionManager>,
 }
 
 impl TerminalAI {
-    pub fn new(router: Arc<LLMRouter>, session_manager: Arc<SessionManager>) -> Self {
+    pub fn new(router: Arc<RwLock<LLMRouter>>, session_manager: Arc<SessionManager>) -> Self {
         Self {
             router,
             session_manager,
@@ -51,7 +62,9 @@ Command:"#,
 
         let response = self
             .router
-            .send_message(&prompt, None)
+            .read()
+            .await
+            .send_message(&prompt, Some(local_only()))
             .await
             .map_err(|e| Error::Other(format!("LLM request failed: {}", e)))?;
 
@@ -103,7 +116,9 @@ Keep explanation concise and actionable."#,
 
         let response = self
             .router
-            .send_message(&prompt, None)
+            .read()
+            .await
+            .send_message(&prompt, Some(local_only()))
             .await
             .map_err(|e| Error::Other(format!("LLM request failed: {}", e)))?;
 
@@ -111,10 +126,30 @@ Keep explanation concise and actionable."#,
         Ok(response.trim().to_string())
     }
 
+    /// Commit what is staged with a message the local model writes. Host git
+    /// runs hardened, outside any sandbox, in a folder a sandboxed command
+    /// may have written: the repository's settings are checked as for any
+    /// desktop commit, no diff driver or submodule is read, and no commit
+    /// hook runs, which the result says when the repository has any.
     pub async fn smart_commit(&self, session_id: &str) -> Result<String> {
-        let diff_output = self
-            .run_git_command(session_id, vec!["diff".to_string(), "--cached".to_string()])
-            .await?;
+        let cwd = self
+            .session_manager
+            .get_session_context(session_id)
+            .await?
+            .cwd;
+        let checked = cwd.clone();
+        tokio::task::spawn_blocking(move || {
+            agiworkforce_worktree::config_guard::check_repository_config_blocking(
+                std::path::Path::new(&checked),
+                agiworkforce_worktree::config_guard::ConfigUse::COMMIT,
+                false,
+            )
+        })
+        .await
+        .map_err(|e| Error::Other(format!("Failed to check the repository: {e}")))?
+        .map_err(|error| Error::Other(crate::sys::commands::git::desktop_git_error(error)))?;
+
+        let diff_output = run_git(&cwd, &STAGED_DIFF).await?;
 
         if diff_output.trim().is_empty() {
             return Err(Error::Other(
@@ -122,16 +157,7 @@ Keep explanation concise and actionable."#,
             ));
         }
 
-        let files_output = self
-            .run_git_command(
-                session_id,
-                vec![
-                    "diff".to_string(),
-                    "--cached".to_string(),
-                    "--name-only".to_string(),
-                ],
-            )
-            .await?;
+        let files_output = run_git(&cwd, &STAGED_NAMES).await?;
 
         if files_output.trim().is_empty() {
             return Err(Error::Other(
@@ -168,7 +194,9 @@ Generate the commit message:"#,
 
         let response = self
             .router
-            .send_message(&prompt, None)
+            .read()
+            .await
+            .send_message(&prompt, Some(local_only()))
             .await
             .map_err(|e| Error::Other(format!("LLM request failed: {}", e)))?;
 
@@ -179,19 +207,18 @@ Generate the commit message:"#,
             commit_message.trim()
         );
 
-        let commit_output = self
-            .run_git_command(
-                session_id,
-                vec![
-                    "commit".to_string(),
-                    "-m".to_string(),
-                    full_message.to_string(),
-                ],
-            )
-            .await?;
+        let hooks_skipped = has_commit_hooks(&cwd).await;
+        let commit_output = run_git(&cwd, &["commit", "-m", full_message.as_str()]).await?;
 
         tracing::info!("AI smart commit executed: {}", commit_message);
-        Ok(format!("{}\n\n{}", commit_message, commit_output))
+        let mut result = format!("{}\n\n{}", commit_message, commit_output);
+        if hooks_skipped {
+            result.push_str(
+                "\n\nThe repository's commit hooks were not run. Run `git commit` yourself \
+                 if they must check this commit.",
+            );
+        }
+        Ok(result)
     }
 
     pub async fn suggest_improvements(
@@ -227,7 +254,9 @@ Response:"#,
 
         let response = self
             .router
-            .send_message(&prompt, None)
+            .read()
+            .await
+            .send_message(&prompt, Some(local_only()))
             .await
             .map_err(|e| Error::Other(format!("LLM request failed: {}", e)))?;
 
@@ -239,36 +268,32 @@ Response:"#,
             Ok(Some(analysis.to_string()))
         }
     }
-
-    async fn run_git_command(&self, session_id: &str, args: Vec<String>) -> Result<String> {
-        let context = self.session_manager.get_session_context(session_id).await?;
-
-        if args.is_empty() {
-            return Err(Error::Other("Git command missing arguments".to_string()));
-        }
-
-        run_and_capture(
-            "git",
-            &args,
-            &context.cwd,
-            &format!("git {}", args.join(" ")),
-        )
-        .await
-    }
 }
 
-async fn run_and_capture(
-    program: &str,
-    args: &[String],
-    cwd: &str,
-    command_label: &str,
-) -> Result<String> {
-    let output = Command::new(program)
-        .args(args)
-        .current_dir(cwd)
-        .output()
+/// The staged patch, with no diff driver, text conversion or submodule read.
+const STAGED_DIFF: [&str; 5] = [
+    "diff",
+    "--cached",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--ignore-submodules=dirty",
+];
+const STAGED_NAMES: [&str; 4] = [
+    "diff",
+    "--cached",
+    "--name-only",
+    "--ignore-submodules=dirty",
+];
+
+/// `git args` in `cwd` through hardened host git: no hooks, monitor,
+/// editor or pager the repository names.
+async fn run_git(cwd: &str, args: &[&str]) -> Result<String> {
+    let label = format!("git {}", args.first().copied().unwrap_or_default());
+    let mut command = agiworkforce_worktree::host_git_async();
+    command.args(args).current_dir(cwd);
+    let output = crate::sys::commands::git::host_git_output_async(command)
         .await
-        .map_err(|e| Error::Other(format!("Failed to run {}: {}", command_label, e)))?;
+        .map_err(|e| Error::Other(format!("Failed to run {label}: {e}")))?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -290,6 +315,63 @@ async fn run_and_capture(
         Ok(stderr.trim().to_string())
     } else {
         Ok(stdout.trim().to_string())
+    }
+}
+
+/// Whether the user's own `git commit` here would run a hook: a runnable
+/// file other than a sample in the hooks directory git resolves, or a hook
+/// set in configuration. Read with the repository's hooks setting, so only
+/// listing happens; nothing runs.
+async fn has_commit_hooks(cwd: &str) -> bool {
+    let read = |args: &'static [&'static str]| {
+        let mut command = agiworkforce_worktree::host_git_keeping_hooks_async();
+        command.args(args).current_dir(cwd);
+        command
+    };
+    let configured = crate::sys::commands::git::host_git_output_async(read(&[
+        "config",
+        "--get-regexp",
+        "^hook\\.",
+    ]))
+    .await
+    .is_ok_and(|output| output.status.success() && !output.stdout.is_empty());
+    if configured {
+        return true;
+    }
+    let Ok(output) = crate::sys::commands::git::host_git_output_async(read(&[
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-path",
+        "hooks",
+    ]))
+    .await
+    else {
+        return false;
+    };
+    let dir = std::path::PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
+    std::fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().any(|entry| {
+            let path = entry.path();
+            let sample = path
+                .extension()
+                .is_some_and(|extension| extension == "sample");
+            !sample && runnable(&path)
+        })
+    })
+}
+
+fn runnable(path: &std::path::Path) -> bool {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return false;
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        meta.is_file() && meta.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        meta.is_file()
     }
 }
 

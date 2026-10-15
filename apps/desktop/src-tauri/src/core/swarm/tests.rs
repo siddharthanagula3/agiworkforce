@@ -295,6 +295,32 @@ mod orchestrator_tests {
     }
 }
 
+mod active_run_tests {
+    use super::*;
+    use crate::core::llm::LLMRouter;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn a_tracked_run_can_be_stopped_until_it_is_dropped() {
+        let router = Arc::new(tokio::sync::RwLock::new(LLMRouter::new()));
+        let orchestrator = Arc::new(
+            SwarmOrchestrator::new(SwarmConfig::default(), router, None)
+                .expect("orchestrator builds without an app handle"),
+        );
+        let goal_id = format!("goal_{}", uuid::Uuid::new_v4());
+
+        assert!(!stop_swarm_run(&goal_id), "no run is tracked yet");
+
+        let run = ActiveSwarmRun::track(&goal_id, orchestrator.clone());
+        assert!(!orchestrator.stop_requested());
+        assert!(stop_swarm_run(&goal_id));
+        assert!(orchestrator.stop_requested());
+
+        drop(run);
+        assert!(!stop_swarm_run(&goal_id), "a finished run is forgotten");
+    }
+}
+
 mod agent_spawner_tests {
     use super::*;
     use agent_spawner::*;
@@ -526,11 +552,78 @@ mod trust_boundary_tests {
             "AgentTask must carry the parent goal's boundary"
         );
 
-        let mini_goal = AgentSpawner::subtask_goal(&task.subtask, task.trust_mode);
+        let mini_goal =
+            AgentSpawner::subtask_goal(&task.subtask, task.trust_mode, &task.constraints);
         assert_eq!(
             mini_goal.trust_mode,
             Some(TrustMode::ManagedCloud),
             "sub-goal must inherit the parent goal's boundary"
+        );
+        assert_eq!(
+            mini_goal.id, "swarm-subgoal-parent_goal--subtask_1",
+            "the renderer keeps sub-goals off the Tasks list by this id shape"
+        );
+    }
+
+    #[test]
+    fn a_subtask_inherits_every_parent_constraint_the_unattended_flag_included() {
+        use crate::core::agi::executor::{unattended_constraint, UNATTENDED_CONSTRAINT};
+        use crate::core::agi::{Constraint, ConstraintValue};
+
+        let custom = |key: &str, value: &str| Constraint {
+            name: key.to_string(),
+            value: ConstraintValue::Custom {
+                key: key.to_string(),
+                value: value.to_string(),
+            },
+        };
+        let parent = crate::core::agi::Goal {
+            id: "parent_goal".to_string(),
+            description: "Parent goal".to_string(),
+            priority: crate::core::agi::Priority::Medium,
+            deadline: None,
+            constraints: vec![
+                custom("max_steps", "5"),
+                custom("execution_model", "fixture-model"),
+                custom("execution_provider", "fixture-provider"),
+                unattended_constraint(),
+            ],
+            success_criteria: Vec::new(),
+            trust_mode: None,
+        };
+        let subtask = Subtask::new(
+            "subtask_1",
+            "Sub work",
+            SubtaskType::Computation,
+            parent.id.clone(),
+        );
+
+        let (tx, _rx) = tokio::sync::oneshot::channel();
+        let task = SwarmOrchestrator::agent_task(&parent, subtask, tx);
+        let mini_goal =
+            AgentSpawner::subtask_goal(&task.subtask, task.trust_mode, &task.constraints);
+
+        let carried: Vec<(&str, &str)> = mini_goal
+            .constraints
+            .iter()
+            .filter_map(|constraint| match &constraint.value {
+                ConstraintValue::Custom { key, value } => Some((key.as_str(), value.as_str())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            carried,
+            vec![
+                ("max_steps", "5"),
+                ("execution_model", "fixture-model"),
+                ("execution_provider", "fixture-provider"),
+                (UNATTENDED_CONSTRAINT, "true"),
+            ],
+            "fan-out must not shed a limit or the unattended approval policy"
+        );
+        assert_eq!(
+            mini_goal.execution_target(),
+            Some(("fixture-model", "fixture-provider"))
         );
     }
 }

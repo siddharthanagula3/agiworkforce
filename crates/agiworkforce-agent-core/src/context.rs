@@ -253,24 +253,113 @@ pub async fn compact_context(
         system_count,
         config.preserve_recent_messages.max(1),
     );
-    let prefix = &pruned[system_count..split_index];
-    if prefix.is_empty() {
+    // What stays ahead of the summary, and where the kept tail begins. With
+    // whole turns to summarize that is the system prompt and a turn's first
+    // message. A history that is one long turn has none: its ask stays, and
+    // the summary takes the tool rounds between it and the recent ones.
+    let (summary_index, split_index) = if split_index > system_count {
+        (system_count, split_index)
+    } else {
         let after = budget(&pruned, config, None);
-        return ContextCompactionResult {
-            compacted: pruned_any,
-            messages: pruned,
-            messages_compacted: 0,
-            before,
-            after,
-            summary_source: SummarySource::None,
-            stages,
-        };
+        let inside_the_turn = after
+            .needs_compaction()
+            .then(|| {
+                split_index_inside_turn(
+                    &pruned,
+                    system_count,
+                    config.preserve_recent_messages.max(1),
+                )
+            })
+            .flatten();
+        match inside_the_turn {
+            Some(split_index) => (system_count + 1, split_index),
+            None => {
+                return ContextCompactionResult {
+                    compacted: pruned_any,
+                    messages: pruned,
+                    messages_compacted: 0,
+                    before,
+                    after,
+                    summary_source: SummarySource::None,
+                    stages,
+                };
+            }
+        }
+    };
+    let within_one_turn = summary_index > system_count;
+    let prefix = &pruned[summary_index..split_index];
+    let (summary, summary_source) = summarize(prefix, config, summarizer).await;
+    let mut messages_compacted = prefix.len();
+
+    let mut compacted = Vec::with_capacity(pruned.len() - prefix.len() + 1);
+    compacted.extend_from_slice(&pruned[..summary_index]);
+    compacted.push(summary_message(&summary));
+    compacted.extend_from_slice(&pruned[split_index..]);
+
+    let drop_oldest: fn(&mut Vec<Message>, usize) -> bool = if within_one_turn {
+        remove_oldest_kept_round
+    } else {
+        remove_oldest_recent_turn
+    };
+    let mut after = budget(&compacted, config, None);
+    while after.used_tokens > before.target_tokens && drop_oldest(&mut compacted, summary_index) {
+        after = budget(&compacted, config, None);
     }
 
+    // Whole turns are gone and one is left that is still too long: its ask
+    // stays, and its own early tool rounds get a summary of their own rather
+    // than being dropped unread.
+    if !within_one_turn && after.used_tokens > before.target_tokens {
+        let opening = summary_index + 1;
+        if let Some(cut) =
+            split_index_inside_turn(&compacted, opening, config.preserve_recent_messages.max(1))
+        {
+            let rounds = compacted[opening + 1..cut].to_vec();
+            let (inner, _) = summarize(&rounds, config, summarizer).await;
+            compacted.drain(opening + 1..cut);
+            compacted.insert(opening + 1, summary_message(&inner));
+            messages_compacted += rounds.len();
+            after = budget(&compacted, config, None);
+            while after.used_tokens > before.target_tokens
+                && remove_oldest_kept_round(&mut compacted, opening + 1)
+            {
+                after = budget(&compacted, config, None);
+            }
+            if after.used_tokens > before.target_tokens {
+                truncate_summary_to_target(&mut compacted, opening + 1, before.target_tokens);
+                after = budget(&compacted, config, None);
+            }
+        }
+    }
+
+    if after.used_tokens > before.target_tokens {
+        truncate_summary_to_target(&mut compacted, summary_index, before.target_tokens);
+        after = budget(&compacted, config, None);
+    }
+
+    ContextCompactionResult {
+        messages: compacted,
+        compacted: true,
+        messages_compacted,
+        before,
+        after,
+        summary_source,
+        stages,
+    }
+}
+
+/// One summary of `messages`, from the model when it gives a usable one and
+/// built from the messages themselves when it does not, or when its answer
+/// is no shorter than what it stands in for.
+async fn summarize(
+    messages: &[Message],
+    config: &ContextCompactionConfig,
+    summarizer: Option<&dyn ContextSummarizer>,
+) -> (String, SummarySource) {
     let (mut summary, mut summary_source) = match summarizer {
         Some(summarizer) => match summarizer
             .summarize(SummaryRequest {
-                messages: prefix.to_vec(),
+                messages: messages.to_vec(),
                 instruction: config.summary_instruction.clone(),
                 content_is_untrusted: true,
             })
@@ -280,51 +369,25 @@ pub async fn compact_context(
                 (defang_summary_markers(summary.trim()), SummarySource::Model)
             }
             Ok(_) | Err(_) => (
-                deterministic_summary(prefix),
+                deterministic_summary(messages),
                 SummarySource::DeterministicFallback,
             ),
         },
         None => (
-            deterministic_summary(prefix),
+            deterministic_summary(messages),
             SummarySource::DeterministicFallback,
         ),
     };
 
-    let prefix_tokens = estimate_context_tokens(prefix);
-    if estimate_text_tokens(&summary) >= prefix_tokens {
-        summary = deterministic_summary(prefix)
+    let replaced_tokens = estimate_context_tokens(messages);
+    if estimate_text_tokens(&summary) >= replaced_tokens {
+        summary = deterministic_summary(messages)
             .chars()
-            .take(prefix_tokens.saturating_mul(2).max(256))
+            .take(replaced_tokens.saturating_mul(2).max(256))
             .collect();
         summary_source = SummarySource::DeterministicFallback;
     }
-
-    let mut compacted = Vec::with_capacity(pruned.len() - prefix.len() + 1);
-    compacted.extend_from_slice(&pruned[..system_count]);
-    compacted.push(summary_message(&summary));
-    compacted.extend_from_slice(&pruned[split_index..]);
-
-    let mut after = budget(&compacted, config, None);
-    while after.used_tokens > before.target_tokens
-        && remove_oldest_recent_turn(&mut compacted, system_count)
-    {
-        after = budget(&compacted, config, None);
-    }
-
-    if after.used_tokens > before.target_tokens {
-        truncate_summary_to_target(&mut compacted, system_count, before.target_tokens);
-        after = budget(&compacted, config, None);
-    }
-
-    ContextCompactionResult {
-        messages: compacted,
-        compacted: true,
-        messages_compacted: prefix.len(),
-        before,
-        after,
-        summary_source,
-        stages,
-    }
+    (summary, summary_source)
 }
 
 fn budget(
@@ -401,11 +464,75 @@ fn split_index_at_turn_boundary(
 ) -> usize {
     let mut index =
         first_conversation_index.max(messages.len().saturating_sub(preserve_recent_messages));
-    while index > first_conversation_index && messages.get(index).is_some_and(|m| m.role != "user")
+    while index > first_conversation_index
+        && messages
+            .get(index)
+            .is_some_and(|message| !starts_a_turn(message))
     {
         index -= 1;
     }
     index
+}
+
+/// Where to cut a history that is one turn: at an assistant message, so no
+/// tool result is parted from its call, with the turn's own first message and
+/// at least one message after it left for the summary. `None` when the turn
+/// does not open the conversation or is too short to have a middle.
+fn split_index_inside_turn(
+    messages: &[Message],
+    opening: usize,
+    preserve_recent_messages: usize,
+) -> Option<usize> {
+    if !messages.get(opening).is_some_and(starts_a_turn) {
+        return None;
+    }
+    let earliest = opening + 2;
+    let wanted = earliest.max(messages.len().saturating_sub(preserve_recent_messages));
+    let speaks = |index: &usize| {
+        messages
+            .get(*index)
+            .is_some_and(|message| message.role == "assistant")
+    };
+    (earliest..=wanted)
+        .rev()
+        .find(speaks)
+        .or_else(|| (wanted..messages.len()).find(speaks))
+}
+
+/// Drop the oldest tool round still kept after an in-turn summary: the
+/// assistant message the tail begins with and the results that answer it.
+/// False once one round is all that is left.
+fn remove_oldest_kept_round(messages: &mut Vec<Message>, summary_index: usize) -> bool {
+    let first = summary_index + 1;
+    // A message steered into the turn is the user's own text. A round is
+    // dropped up to it and it is never dropped itself.
+    if messages.get(first).is_some_and(starts_a_turn) {
+        return false;
+    }
+    let Some(next) = (first + 1..messages.len())
+        .find(|index| messages[*index].role == "assistant" || starts_a_turn(&messages[*index]))
+    else {
+        return false;
+    };
+    messages.drain(first..next);
+    true
+}
+
+/// Whether what follows can stand without what came before it. Tool results
+/// travel as `user` messages, and one kept without the call it answers is a
+/// history a provider refuses, so only a person's own message starts a turn.
+fn starts_a_turn(message: &Message) -> bool {
+    message.role == "user" && !holds_a_tool_result(message)
+}
+
+fn holds_a_tool_result(message: &Message) -> bool {
+    matches!(
+        &message.content,
+        MessageContent::Blocks(blocks)
+            if blocks
+                .iter()
+                .any(|block| matches!(block, ContentBlock::ToolResult { .. }))
+    )
 }
 
 fn deterministic_summary(messages: &[Message]) -> String {
@@ -500,8 +627,15 @@ fn remove_oldest_recent_turn(messages: &mut Vec<Message>, system_count: usize) -
     }
 
     let mut end = first_recent + 1;
-    while end < messages.len() - 1 && messages[end].role != "user" {
+    while end < messages.len() - 1 && !starts_a_turn(&messages[end]) {
         end += 1;
+    }
+    // No later turn begins: what is left is one turn, and it is cut from the
+    // inside by its own summary, never drained down to its last message.
+    if !starts_a_turn(&messages[end])
+        && (starts_a_turn(&messages[first_recent]) || holds_a_tool_result(&messages[end]))
+    {
+        return false;
     }
     messages.drain(first_recent..end);
     true
@@ -605,6 +739,270 @@ mod tests {
             .trim_end_matches(END_UNTRUSTED_SUMMARY_MARKER);
         assert!(!body.contains("[END"));
         assert!(!body.contains("[UNTRUSTED"));
+    }
+
+    fn tool_loop_history() -> Vec<Message> {
+        let call = |id: &str| {
+            Message::blocks(
+                "assistant",
+                vec![ContentBlock::ToolUse {
+                    id: id.to_string(),
+                    name: "read_file".to_string(),
+                    input: serde_json::json!({ "path": "src/lib.rs" }),
+                }],
+            )
+        };
+        let result = |id: &str| {
+            Message::blocks(
+                "user",
+                vec![ContentBlock::ToolResult {
+                    tool_use_id: id.to_string(),
+                    content: "x".repeat(600),
+                    is_error: false,
+                }],
+            )
+        };
+        vec![
+            Message::text("system", "trusted system policy"),
+            Message::text("user", "an earlier request"),
+            Message::text("assistant", "an earlier answer"),
+            Message::text("user", "read the library"),
+            call("call-1"),
+            result("call-1"),
+            call("call-2"),
+            result("call-2"),
+            Message::text("assistant", "here is what it does"),
+        ]
+    }
+
+    fn orphan_results(messages: &[Message]) -> Vec<String> {
+        let mut called = std::collections::HashSet::new();
+        let mut orphans = Vec::new();
+        for message in messages {
+            let MessageContent::Blocks(blocks) = &message.content else {
+                continue;
+            };
+            for block in blocks {
+                match block {
+                    ContentBlock::ToolUse { id, .. } => {
+                        called.insert(id.clone());
+                    }
+                    ContentBlock::ToolResult { tool_use_id, .. } => {
+                        if !called.contains(tool_use_id) {
+                            orphans.push(tool_use_id.clone());
+                        }
+                    }
+                    ContentBlock::Text { .. }
+                    | ContentBlock::Image { .. }
+                    | ContentBlock::Document { .. }
+                    | ContentBlock::Unknown => {}
+                }
+            }
+        }
+        orphans
+    }
+
+    #[tokio::test]
+    async fn one_long_turn_is_summarized_between_its_ask_and_its_recent_rounds() {
+        let mut history = vec![
+            Message::text("system", "trusted system policy"),
+            Message::text("user", "refactor the importer"),
+        ];
+        for round in 0..12 {
+            let id = format!("call-{round}");
+            history.push(Message::blocks(
+                "assistant",
+                vec![ContentBlock::ToolUse {
+                    id: id.clone(),
+                    name: "read_file".to_string(),
+                    input: serde_json::json!({ "path": format!("src/part_{round}.rs") }),
+                }],
+            ));
+            history.push(Message::blocks(
+                "user",
+                vec![ContentBlock::ToolResult {
+                    tool_use_id: id,
+                    content: "y".repeat(400),
+                    is_error: false,
+                }],
+            ));
+        }
+        let config = ContextCompactionConfig {
+            context_window_tokens: 1_200,
+            reserved_output_tokens: 100,
+            preserve_recent_messages: 4,
+            ..ContextCompactionConfig::default()
+        };
+        let before = budget(&history, &config, None);
+        assert!(before.needs_compaction());
+
+        let result = compact_context(&history, &config, None, None).await;
+
+        assert!(
+            result.messages_compacted > 0,
+            "a history that is one long turn was pruned and nothing else, so it stays over budget on every send"
+        );
+        assert_eq!(result.messages[1].text_content(), "refactor the importer");
+        assert!(
+            result.messages[2]
+                .text_content()
+                .starts_with(UNTRUSTED_SUMMARY_MARKER)
+        );
+        assert_eq!(result.messages[3].role, "assistant");
+        assert_eq!(orphan_results(&result.messages), Vec::<String>::new());
+        assert!(result.after.used_tokens < before.used_tokens);
+    }
+
+    #[tokio::test]
+    async fn a_long_last_turn_is_summarized_from_the_inside_and_keeps_its_ask() {
+        let mut history = vec![
+            Message::text("system", "trusted system policy"),
+            Message::text("user", "an earlier request"),
+            Message::text("assistant", "an earlier answer"),
+            Message::text("user", "now refactor the importer"),
+        ];
+        for round in 0..12 {
+            let id = format!("call-{round}");
+            history.push(Message::blocks(
+                "assistant",
+                vec![ContentBlock::ToolUse {
+                    id: id.clone(),
+                    name: "read_file".to_string(),
+                    input: serde_json::json!({ "path": format!("src/part_{round}.rs") }),
+                }],
+            ));
+            history.push(Message::blocks(
+                "user",
+                vec![ContentBlock::ToolResult {
+                    tool_use_id: id,
+                    content: "y".repeat(400),
+                    is_error: false,
+                }],
+            ));
+        }
+        history.push(Message::text("assistant", "the importer is refactored"));
+        let config = ContextCompactionConfig {
+            context_window_tokens: 1_200,
+            reserved_output_tokens: 100,
+            preserve_recent_messages: 4,
+            ..ContextCompactionConfig::default()
+        };
+
+        let result = compact_context(&history, &config, None, None).await;
+
+        let texts: Vec<String> = result.messages.iter().map(Message::text_content).collect();
+        assert!(
+            texts.iter().any(|text| text == "now refactor the importer"),
+            "the last turn was drained down to its final reply, and its ask with it: {texts:?}"
+        );
+        assert_eq!(
+            texts
+                .iter()
+                .filter(|text| text.starts_with(UNTRUSTED_SUMMARY_MARKER))
+                .count(),
+            2,
+            "the turn's early tool rounds were dropped without a summary"
+        );
+        assert_eq!(
+            texts.last().map(String::as_str),
+            Some("the importer is refactored")
+        );
+        assert_eq!(orphan_results(&result.messages), Vec::<String>::new());
+        assert_eq!(result.messages_compacted, 2 + 20);
+    }
+
+    #[tokio::test]
+    async fn a_history_with_nothing_to_summarize_reports_that_it_summarized_nothing() {
+        let history = vec![
+            Message::text("system", "trusted system policy"),
+            Message::text("user", "a short ask"),
+            Message::text("assistant", "a short answer"),
+        ];
+        let config = ContextCompactionConfig {
+            compaction_fraction: 0.0,
+            ..ContextCompactionConfig::default()
+        };
+
+        let result = compact_context(&history, &config, None, None).await;
+
+        assert_eq!(result.messages_compacted, 0);
+        assert_eq!(result.summary_source, SummarySource::None);
+        assert_eq!(result.messages.len(), history.len());
+    }
+
+    #[tokio::test]
+    async fn what_is_kept_after_a_summary_never_starts_with_a_tool_result() {
+        for preserve_recent_messages in 1..=6 {
+            let config = ContextCompactionConfig {
+                context_window_tokens: 900,
+                reserved_output_tokens: 100,
+                compaction_fraction: 0.0,
+                preserve_recent_messages,
+                ..ContextCompactionConfig::default()
+            };
+
+            let result = compact_context(&tool_loop_history(), &config, None, None).await;
+
+            assert_eq!(
+                orphan_results(&result.messages),
+                Vec::<String>::new(),
+                "keeping {preserve_recent_messages} left a tool result without its call"
+            );
+        }
+    }
+
+    #[test]
+    fn a_message_steered_into_a_long_turn_is_never_dropped_with_a_tool_round() {
+        let call = |id: &str| {
+            Message::blocks(
+                "assistant",
+                vec![ContentBlock::ToolUse {
+                    id: id.to_string(),
+                    name: "read_file".to_string(),
+                    input: serde_json::json!({ "path": "src/lib.rs" }),
+                }],
+            )
+        };
+        let result = |id: &str| {
+            Message::blocks(
+                "user",
+                vec![ContentBlock::ToolResult {
+                    tool_use_id: id.to_string(),
+                    content: "output".to_string(),
+                    is_error: false,
+                }],
+            )
+        };
+        let mut messages = vec![
+            Message::text("system", "trusted system policy"),
+            Message::text("user", "refactor the importer"),
+            summary_message("the early rounds"),
+            call("call-1"),
+            result("call-1"),
+            Message::text("user", "and keep the old name"),
+            call("call-2"),
+            result("call-2"),
+            Message::text("assistant", "done"),
+        ];
+
+        assert!(remove_oldest_kept_round(&mut messages, 2));
+        assert_eq!(messages[3].text_content(), "and keep the old name");
+        assert!(
+            !remove_oldest_kept_round(&mut messages, 2),
+            "the user's steered message was dropped without a summary"
+        );
+        assert_eq!(messages.len(), 7);
+        assert_eq!(orphan_results(&messages), Vec::<String>::new());
+    }
+
+    #[test]
+    fn trimming_the_kept_turns_never_cuts_between_a_call_and_its_result() {
+        let mut messages = tool_loop_history();
+        messages.insert(1, summary_message("what came before"));
+
+        while remove_oldest_recent_turn(&mut messages, 1) {
+            assert_eq!(orphan_results(&messages), Vec::<String>::new());
+        }
     }
 
     #[tokio::test]

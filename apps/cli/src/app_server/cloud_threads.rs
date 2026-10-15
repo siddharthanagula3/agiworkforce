@@ -115,6 +115,7 @@ pub async fn read(session_id: &str) -> Result<ThreadReadResponse, DeveloperSessi
             role: message.role.clone(),
             text: message.text_content(),
             index: u32::try_from(index).ok(),
+            turn_id: None,
         })
         .collect();
     Ok(ThreadReadResponse {

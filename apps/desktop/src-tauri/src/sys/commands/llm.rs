@@ -17,17 +17,26 @@ use std::time::Duration;
 use tauri::State;
 use tokio::sync::RwLock;
 
+use crate::core::llm::providers::direct_api_provider::{default_base_url, local_runtime_label};
 use crate::core::llm::OLLAMA_DEFAULT_BASE_URL;
 
-/// Default LM Studio base URL (OpenAI-compatible server). Configurable via
-/// `llm_configure_provider("lmstudio", ...)`.
-const LMSTUDIO_DEFAULT_BASE_URL: &str = "http://localhost:1234/v1";
-/// Default llama.cpp `llama-server` base URL (OpenAI-compatible server). Configurable
-/// via `llm_configure_provider("llamacpp", ...)`.
-const LLAMACPP_DEFAULT_BASE_URL: &str = "http://localhost:8080/v1";
-/// Default vLLM base URL (OpenAI-compatible server). Configurable via
-/// `llm_configure_provider("vllm", ...)`.
-const VLLM_DEFAULT_BASE_URL: &str = "http://localhost:8000/v1";
+/// The URL a Local runtime is actually reached at: the one registered in the
+/// router (what chat sends to), or the runtime's default when none is
+/// registered yet, which is also what chat registers lazily.
+fn local_runtime_base_url(router: &LLMRouter, provider: Provider) -> String {
+    router
+        .provider_base_url(provider)
+        .unwrap_or_else(|| match provider {
+            Provider::Ollama => OLLAMA_DEFAULT_BASE_URL.to_string(),
+            other => default_base_url(other).unwrap_or_default().to_string(),
+        })
+}
+
+/// The Ollama URL the user configured, as chat reaches it, for local work
+/// outside chat such as embeddings and memory extraction.
+pub async fn configured_ollama_url(router: &RwLock<LLMRouter>) -> String {
+    local_runtime_base_url(&*router.read().await, Provider::Ollama)
+}
 
 fn create_llm_command_client(timeout_secs: u64) -> Result<reqwest::Client, String> {
     create_http_client(&HttpClientConfig {
@@ -81,6 +90,10 @@ impl RateLimitState {
 /// can be matched when registered via `llm_configure_provider`. The router
 /// will fall back to ManagedCloud automatically when the specific provider
 /// is not registered.
+/// Prefix of the error a helper call returns when its trust boundary leaves
+/// no provider to send to. Callers use it to fall back without AI.
+const NO_CANDIDATES_ERROR_CODE: &str = "[ERR_NO_CANDIDATES]";
+
 fn resolve_provider_for_routing(s: &str) -> Option<Provider> {
     Provider::from_string(s)
 }
@@ -210,6 +223,13 @@ pub async fn llm_send_message(
             "[ERR_RATE_LIMIT] You are sending messages too quickly. Please wait a moment and try again (limit: 30 requests per minute).".to_string()
         })?;
 
+    route_plain_llm_request(&state.router, request).await
+}
+
+async fn route_plain_llm_request(
+    router: &RwLock<LLMRouter>,
+    request: LLMSendMessageRequest,
+) -> Result<LLMResponse, String> {
     if request.messages.is_empty() {
         return Err("Messages array cannot be empty".to_string());
     }
@@ -262,6 +282,7 @@ pub async fn llm_send_message(
 
     if request.prefer_cloud_credits || is_managed_cloud_request {
         use crate::sys::account::get_access_token;
+        crate::sys::account::app_mode::require_cloud_app_mode()?;
         if get_access_token().is_err() {
             return Err(
                 "[ERR_AUTH_REQUIRED] Please sign in to use cloud credits. Your session may have expired.".to_string()
@@ -302,15 +323,17 @@ pub async fn llm_send_message(
     };
 
     let candidates = {
-        let router = state.router.read().await;
+        let router = router.read().await;
         router.candidates(&llm_request, &preferences)
     };
 
     if candidates.is_empty() {
-        // Fallback logic: If the requested provider (e.g. OpenAI) is not configured,
-        // but Managed Cloud IS available, redirect to Managed Cloud.
-        let router = state.router.read().await;
-        let managed_cloud_available = router.has_provider(Provider::ManagedCloud);
+        // SECURITY: the redirect below is reachable only when the request's
+        // own trust mode is Managed Cloud. A Local or BYOK request that names
+        // an unconfigured provider ends here with no candidate.
+        let router = router.read().await;
+        let managed_cloud_available =
+            managed_cloud_only && router.has_provider(Provider::ManagedCloud);
 
         if let (true, Some(requested)) = (managed_cloud_available, provider_name.as_ref()) {
             tracing::info!(
@@ -326,16 +349,6 @@ pub async fn llm_send_message(
                 reason: "fallback-redirect-to-managed-cloud",
                 strategy: None,
             };
-
-            // Need to drop the read lock before we can invoke (invoke might need locks internally?)
-            // Actually `invoke_candidate` takes &self, so read lock is fine if we are careful.
-            // But `candidates` variable assumes we dropped the lock?
-            // In the original code:
-            // let candidates = { let router = state.router.read().await; router.candidates(...) };
-            // So the lock is dropped here. We need to re-acquire.
-
-            // Since we can't easily append to `candidates` (it's immutable local var in valid scope, but empty),
-            // let's just proceed with this fallback candidate.
 
             let res = router
                 .invoke_candidate(&fallback_candidate, &llm_request)
@@ -365,6 +378,17 @@ pub async fn llm_send_message(
             }
         }
 
+        if !managed_cloud_only {
+            let reason = if matches!(
+                request.trust_mode,
+                Some(agiworkforce_model_registry::TrustMode::Byok)
+            ) {
+                "The selected BYOK provider is not configured."
+            } else {
+                crate::core::llm::llm_router::local_only_no_candidate_message(provider)
+            };
+            return Err(format!("{NO_CANDIDATES_ERROR_CODE} {reason}"));
+        }
         if let Some(name) = provider_name {
             return Err(format!(
                 "Provider '{}' is not configured. Please sign in to use Managed Cloud.",
@@ -381,7 +405,7 @@ pub async fn llm_send_message(
 
     for candidate in candidates {
         let res = {
-            let router = state.router.read().await;
+            let router = router.read().await;
             router.invoke_candidate(&candidate, &llm_request).await
         };
         match res {
@@ -460,11 +484,254 @@ pub async fn llm_send_message(
     Err("All providers failed with unknown errors.".to_string())
 }
 
+/// Where the user has agreed, in a native dialog, that a saved key may be
+/// sent besides its provider's own endpoint: `provider address` pairs. Only
+/// this module writes the row, and no page-callable command writes
+/// `settings_v2`.
+const SAVED_KEY_DESTINATIONS_SETTING: &str = "llm.saved_key_destinations";
+const SEND_SAVED_KEY_CONFIRM_LABEL: &str = "Send Saved Key";
+/// One such question at a time, and a wait after a no that grows while the
+/// noes keep coming.
+static SAVED_KEY_DESTINATION_DECISIONS: crate::sys::native_confirm::ConfirmGate =
+    crate::sys::native_confirm::ConfirmGate::new();
+
+/// The server a base URL names, as `host`, or `host:port` when the port is
+/// not the scheme's own. Every loopback spelling is `localhost`, so
+/// `127.0.0.1` and `localhost` are one place.
+fn destination_of(base_url: &str) -> Option<String> {
+    let parsed = reqwest::Url::parse(base_url.trim()).ok()?;
+    let host = match parsed.host()? {
+        url::Host::Domain(domain) if domain.eq_ignore_ascii_case("localhost") => {
+            "localhost".to_string()
+        }
+        url::Host::Domain(domain) => domain.to_ascii_lowercase(),
+        url::Host::Ipv4(address) if address.is_loopback() => "localhost".to_string(),
+        url::Host::Ipv6(address) if address.is_loopback() => "localhost".to_string(),
+        url::Host::Ipv4(address) => address.to_string(),
+        url::Host::Ipv6(address) => format!("[{address}]"),
+    };
+    Some(match parsed.port() {
+        Some(port) => format!("{host}:{port}"),
+        None => host,
+    })
+}
+
+/// The server a provider's registered endpoint names. Azure has none: every
+/// Azure deployment address is the user's own.
+fn registered_destination(provider: Provider) -> Option<String> {
+    default_base_url(provider).and_then(destination_of)
+}
+
+fn provider_name(provider: Provider) -> &'static str {
+    local_runtime_label(provider).unwrap_or_else(|| provider.as_string())
+}
+
+fn saved_key_destination_entry(provider: Provider, destination: &str) -> String {
+    format!("{} {}", provider.as_string(), destination)
+}
+
+/// A row that is missing or does not parse remembers nothing, so the
+/// question is asked again.
+fn remembered_saved_key_destinations(conn: &rusqlite::Connection) -> Vec<String> {
+    conn.query_row(
+        "SELECT value FROM settings_v2 WHERE key = ?1",
+        [SAVED_KEY_DESTINATIONS_SETTING],
+        |row| row.get::<_, String>(0),
+    )
+    .ok()
+    .and_then(|stored| serde_json::from_str::<Vec<String>>(&stored).ok())
+    .unwrap_or_default()
+}
+
+fn remember_saved_key_destination(
+    conn: &rusqlite::Connection,
+    provider: Provider,
+    destination: &str,
+) -> Result<(), String> {
+    let mut remembered = remembered_saved_key_destinations(conn);
+    let entry = saved_key_destination_entry(provider, destination);
+    if !remembered.contains(&entry) {
+        remembered.push(entry);
+    }
+    let stored = serde_json::to_string(&remembered)
+        .map_err(|e| format!("Failed to remember where the saved key may go: {e}"))?;
+    crate::core::mcp::config::upsert_settings_v2_value(
+        conn,
+        SAVED_KEY_DESTINATIONS_SETTING,
+        &stored,
+        "security",
+        false,
+    )
+}
+
+/// Removing a provider's saved key ends what was agreed for it, so a key
+/// saved later is asked about afresh.
+fn forget_saved_key_destinations(
+    conn: &rusqlite::Connection,
+    provider: Provider,
+) -> Result<(), String> {
+    let remembered = remembered_saved_key_destinations(conn);
+    let own = format!("{} ", provider.as_string());
+    let kept: Vec<String> = remembered
+        .iter()
+        .filter(|entry| !entry.starts_with(&own))
+        .cloned()
+        .collect();
+    if kept.len() == remembered.len() {
+        return Ok(());
+    }
+    let stored = serde_json::to_string(&kept)
+        .map_err(|e| format!("Failed to forget where the saved key may go: {e}"))?;
+    crate::core::mcp::config::upsert_settings_v2_value(
+        conn,
+        SAVED_KEY_DESTINATIONS_SETTING,
+        &stored,
+        "security",
+        false,
+    )
+}
+
+/// The question for sending a saved key somewhere other than its provider's
+/// registered endpoint. Every fact in it comes from this side: the provider,
+/// the address the request named, and the endpoint the key normally goes to.
+fn saved_key_destination_question(
+    provider: Provider,
+    destination: &str,
+) -> Result<crate::sys::native_confirm::NativeConfirm, String> {
+    let name = provider_name(provider);
+    let usual = registered_destination(provider)
+        .map(|usual| format!(" instead of {usual}"))
+        .unwrap_or_default();
+    let body = format!(
+        "Your saved {name} key will be sent to {}{usual}, with every request made through {name}.\n\nSay yes only if you entered this address yourself.",
+        crate::sys::native_confirm::shown_value(destination)
+    );
+    crate::sys::native_confirm::check_it_fits(&body).map_err(|rows| {
+        format!(
+            "The address is too long to show in full ({rows} rows), so the saved {name} key was not sent there."
+        )
+    })?;
+    Ok(crate::sys::native_confirm::NativeConfirm {
+        title: format!("Send your saved {name} key to another server?"),
+        body,
+        confirm_label: SEND_SAVED_KEY_CONFIRM_LABEL.to_string(),
+    })
+}
+
+/// Providers left unconnected because their saved key would have gone to an
+/// address the user has not agreed to, keyed by provider id, with the address.
+/// The status command reports it, so the Models row can say why and offer the
+/// reconnect that asks.
+static SAVED_KEYS_AWAITING_CONFIRMATION: std::sync::Mutex<
+    std::collections::BTreeMap<String, String>,
+> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+fn awaiting_confirmation(
+) -> std::sync::MutexGuard<'static, std::collections::BTreeMap<String, String>> {
+    match SAVED_KEYS_AWAITING_CONFIRMATION.lock() {
+        Ok(awaiting) => awaiting,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+fn saved_key_awaits_confirmation(provider: Provider) -> Option<String> {
+    awaiting_confirmation().get(provider.as_string()).cloned()
+}
+
+fn reconnect_to_confirm_message(destination: &str) -> String {
+    format!("Reconnect to confirm sending your saved key to {destination}.")
+}
+
+/// What to do with a saved key and the address a registration names.
+#[derive(Debug, PartialEq, Eq)]
+enum SavedKeyDestination {
+    /// The provider's own endpoint, or an address already agreed to.
+    Allowed,
+    /// Somewhere else: only the user can agree, and only when asked.
+    NeedsConfirmation(String),
+}
+
+fn saved_key_destination(
+    provider: Provider,
+    base_url: Option<&str>,
+    remembered: &[String],
+) -> Result<SavedKeyDestination, String> {
+    let Some(custom) = base_url.map(str::trim).filter(|url| !url.is_empty()) else {
+        return Ok(SavedKeyDestination::Allowed);
+    };
+    let name = provider_name(provider);
+    let destination = destination_of(custom)
+        .ok_or_else(|| format!("That is not an address the saved {name} key can be sent to."))?;
+    if registered_destination(provider).as_deref() == Some(destination.as_str())
+        || remembered.contains(&saved_key_destination_entry(provider, &destination))
+    {
+        return Ok(SavedKeyDestination::Allowed);
+    }
+    Ok(SavedKeyDestination::NeedsConfirmation(destination))
+}
+
+/// A saved key goes to its provider's registered endpoint without a
+/// question. Anywhere else, the window naming the address is not enough.
+///
+/// The native question is raised only for something the person just did
+/// (`asked_by_user`): the reconnect or save-key button of the provider's row.
+/// Settings rehydration at start, a re-registration after the vault or the
+/// proxy changes, and every other background path never raise it. They leave
+/// the provider unconnected and record why, for the row to show.
+async fn allow_saved_key_destination(
+    app: &tauri::AppHandle,
+    provider: Provider,
+    base_url: Option<&str>,
+    asked_by_user: bool,
+) -> Result<(), String> {
+    let remembered = {
+        let conn = crate::core::mcp::config::open_mcp_settings_db()?;
+        remembered_saved_key_destinations(&conn)
+    };
+    let destination = match saved_key_destination(provider, base_url, &remembered)? {
+        SavedKeyDestination::Allowed => {
+            awaiting_confirmation().remove(provider.as_string());
+            return Ok(());
+        }
+        SavedKeyDestination::NeedsConfirmation(destination) => destination,
+    };
+
+    awaiting_confirmation().insert(provider.as_string().to_string(), destination.clone());
+    if !asked_by_user {
+        return Err(reconnect_to_confirm_message(&destination));
+    }
+
+    let name = provider_name(provider);
+    let question = saved_key_destination_question(provider, &destination)?;
+    let entry = saved_key_destination_entry(provider, &destination);
+    let confirmed = SAVED_KEY_DESTINATION_DECISIONS
+        .confirm(app, &entry, question)
+        .await
+        .map_err(|held| held.message())?;
+    if !confirmed {
+        return Err(format!(
+            "Sending the saved {name} key to {destination} was not confirmed, so {name} was not connected."
+        ));
+    }
+    let conn = crate::core::mcp::config::open_mcp_settings_db()?;
+    remember_saved_key_destination(&conn, provider, &destination)?;
+    awaiting_confirmation().remove(provider.as_string());
+    Ok(())
+}
+
+/// `user_initiated` says the person just pressed connect, reconnect or save
+/// key for this provider. It is the only case in which a native question may
+/// be raised; without it a saved key that would go somewhere unconfirmed
+/// leaves the provider unconnected.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn llm_configure_provider(
+    app: tauri::AppHandle,
     provider: String,
     api_key: Option<String>,
     base_url: Option<String>,
+    allow_private_network: Option<bool>,
+    user_initiated: Option<bool>,
     state: State<'_, LLMState>,
     encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
 ) -> Result<(), String> {
@@ -472,67 +739,81 @@ pub async fn llm_configure_provider(
         return Err("Provider name cannot be empty".to_string());
     }
 
-    let mut router = state.router.write().await;
+    let allow_private_network = allow_private_network.unwrap_or(false);
+    let asked_by_user = user_initiated.unwrap_or(false);
 
     match provider.as_str() {
         "ollama" => {
-            // Reject malformed URLs here rather than letting them silently reach
-            // OllamaProvider::is_available(), where a bad value (e.g. a stray
-            // partial string left over from an in-progress settings edit) makes
-            // every request URL-builder error, is_available() collapses that into
-            // a plain `false`, and the router reports the generic "no local
-            // provider reachable", a deeply confusing failure with no link back
-            // to the actual bad setting.
-            if let Some(ref url) = base_url {
-                let parsed = url
-                    .parse::<reqwest::Url>()
-                    .map_err(|e| format!("Invalid Ollama URL '{}': {}", url, e))?;
-                if !matches!(parsed.scheme(), "http" | "https") {
-                    return Err(format!(
-                        "Invalid Ollama URL '{}': must start with http:// or https://",
-                        url
-                    ));
-                }
-            }
-            let ollama = OllamaProvider::new(base_url)
-                .map_err(|e| format!("Failed to create Ollama provider: {}", e))?;
-            router.set_ollama(Box::new(ollama));
+            // Validated here rather than at send time: a bad or off-machine URL
+            // would otherwise surface as a generic "no local provider reachable".
+            let ollama = OllamaProvider::new_local_runtime(base_url, allow_private_network)
+                .map_err(|e| format!("Failed to configure Ollama: {}", e))?;
+            state.router.write().await.set_ollama(Box::new(ollama));
             Ok(())
         }
         "lmstudio" | "llamacpp" | "vllm" => {
-            // LM Studio, llama.cpp, and vLLM are local OpenAI-compatible runtimes routed
-            // through DirectApiProvider. Like Ollama, no API key is required, reject
-            // malformed URLs here (same validation gate as the "ollama" branch above)
-            // rather than letting them silently reach `is_available()`, which would
-            // collapse a bad value into a plain `false` with no link back to the actual
-            // bad setting.
-            if let Some(ref url) = base_url {
-                let parsed = url
-                    .parse::<reqwest::Url>()
-                    .map_err(|e| format!("Invalid {} URL '{}': {}", provider, url, e))?;
-                if !matches!(parsed.scheme(), "http" | "https") {
-                    return Err(format!(
-                        "Invalid {} URL '{}': must start with http:// or https://",
-                        provider, url
-                    ));
-                }
-            }
             let provider_enum = match provider.as_str() {
                 "lmstudio" => Provider::LmStudio,
                 "llamacpp" => Provider::LlamaCpp,
                 _ => Provider::Vllm,
             };
-            let direct =
-                DirectApiProvider::new(provider_enum, api_key.unwrap_or_default(), base_url)
-                    .map_err(|e| format!("Failed to create {} provider: {}", provider, e))?;
-            router.set_provider(provider_enum, Box::new(direct));
+            // A server started with an API key (`vllm serve --api-key`) refuses
+            // requests without it. A key passed in this call goes where this
+            // call says; a saved one goes to this computer's default address,
+            // or to another address only after the user has agreed to it.
+            let local_key = match api_key.filter(|key| !key.is_empty()) {
+                Some(key) => {
+                    awaiting_confirmation().remove(provider_enum.as_string());
+                    Some(key)
+                }
+                None => {
+                    let saved = crate::sys::commands::mcp_oauth::retrieve_api_key(
+                        Some(encryption.inner()),
+                        provider_enum.as_string(),
+                    )
+                    .ok()
+                    .filter(|key| !key.is_empty());
+                    if saved.is_some() {
+                        if let Err(refusal) = allow_saved_key_destination(
+                            &app,
+                            provider_enum,
+                            base_url.as_deref(),
+                            asked_by_user,
+                        )
+                        .await
+                        {
+                            state.router.write().await.remove_provider(provider_enum);
+                            return Err(refusal);
+                        }
+                    } else {
+                        awaiting_confirmation().remove(provider_enum.as_string());
+                    }
+                    saved
+                }
+            };
+            let direct = DirectApiProvider::new_local_runtime(
+                provider_enum,
+                local_key,
+                base_url,
+                allow_private_network,
+            )
+            .map_err(|e| format!("Failed to configure {}: {}", provider, e))?;
+            state
+                .router
+                .write()
+                .await
+                .set_provider(provider_enum, Box::new(direct));
             Ok(())
         }
         "managed_cloud" | "managedcloud" | "cloud" => {
             // ManagedCloud doesn't need an API key - it uses the access token from keyring
             let managed = ManagedCloudProvider::new()
                 .map_err(|e| format!("Failed to create ManagedCloud provider: {}", e))?;
-            router.set_managed_cloud(Box::new(managed));
+            state
+                .router
+                .write()
+                .await
+                .set_managed_cloud(Box::new(managed));
             Ok(())
         }
         _ => {
@@ -540,29 +821,47 @@ pub async fn llm_configure_provider(
             let provider_enum = Provider::from_string(&provider)
                 .ok_or_else(|| format!("Unknown provider: {}", provider))?;
 
-            // Try the explicitly passed api_key first, then fall back to the
-            // encrypted key stored in the MCP settings database (FIX-001.
-            // pass through the master-password helper so the lookup tries
-            // the vault key first before falling back to machine-key).
-            let resolved_key = api_key
-                .filter(|k| !k.is_empty())
-                .or_else(|| {
-                    crate::sys::commands::mcp_oauth::retrieve_api_key(
+            // A key passed in this call goes where this call says. A saved
+            // key goes to the provider's registered endpoint, or to another
+            // address only after the user has agreed to it natively.
+            let resolved_key = match api_key.filter(|k| !k.is_empty()) {
+                Some(key) => {
+                    awaiting_confirmation().remove(provider_enum.as_string());
+                    key
+                }
+                None => {
+                    let saved = crate::sys::commands::mcp_oauth::retrieve_api_key(
                         Some(encryption.inner()),
                         provider_enum.as_string(),
                     )
-                    .ok()
-                })
-                .ok_or_else(|| {
-                    format!(
-                        "No API key provided for '{}'. Please add your API key in Settings \u{2192} Models.",
-                        provider
+                    .map_err(|_| {
+                        format!(
+                            "No API key provided for '{}'. Please add your API key in Settings \u{2192} Models.",
+                            provider
+                        )
+                    })?;
+                    if let Err(refusal) = allow_saved_key_destination(
+                        &app,
+                        provider_enum,
+                        base_url.as_deref(),
+                        asked_by_user,
                     )
-                })?;
+                    .await
+                    {
+                        state.router.write().await.remove_provider(provider_enum);
+                        return Err(refusal);
+                    }
+                    saved
+                }
+            };
 
             let direct = DirectApiProvider::new(provider_enum, resolved_key, base_url)
                 .map_err(|e| format!("Failed to create {} provider: {}", provider, e))?;
-            router.set_provider(provider_enum, Box::new(direct));
+            state
+                .router
+                .write()
+                .await
+                .set_provider(provider_enum, Box::new(direct));
 
             tracing::info!(
                 "Registered BYOK DirectApiProvider for '{}'",
@@ -591,49 +890,13 @@ pub async fn rehydrate_byok_providers(
     router: &Arc<RwLock<LLMRouter>>,
     encryption: &crate::sys::security::MasterPasswordEncryption,
 ) {
-    // Fetch all settings_v2 keys and filter the `api_key_<provider>` prefix in
-    // Rust (rather than a SQL LIKE pattern) so a literal underscore in the
-    // prefix can't be misread as the SQL LIKE single-character wildcard.
-    let provider_ids = match crate::core::mcp::config::open_mcp_settings_db() {
-        Ok(conn) => match conn.prepare("SELECT key FROM settings_v2") {
-            Ok(mut stmt) => match stmt.query_map([], |row| row.get::<_, String>(0)) {
-                Ok(rows) => rows
-                    .filter_map(Result::ok)
-                    .filter_map(|key| key.strip_prefix("api_key_").map(str::to_string))
-                    .collect::<Vec<_>>(),
-                Err(e) => {
-                    tracing::warn!("BYOK rehydration: failed to read stored keys: {}", e);
-                    Vec::new()
-                }
-            },
-            Err(e) => {
-                tracing::warn!("BYOK rehydration: failed to query settings_v2: {}", e);
-                Vec::new()
-            }
-        },
-        Err(e) => {
-            tracing::warn!("BYOK rehydration: failed to open settings DB: {}", e);
-            Vec::new()
-        }
-    };
+    let provider_ids = saved_key_provider_ids();
 
     for provider_id in provider_ids {
         let Some(provider_enum) = Provider::from_string(&provider_id) else {
             continue;
         };
-        // Ollama has no API key; ManagedCloud uses access tokens, not
-        // settings_v2 keys; local runtimes (LM Studio/llama.cpp/vLLM) are
-        // re-registered by the frontend's settings rehydration / lazy
-        // `ensure_*_provider` on first Local-mode send, mirrors the
-        // equivalent skip in `save_api_key`.
-        if matches!(
-            provider_enum,
-            Provider::Ollama
-                | Provider::ManagedCloud
-                | Provider::LmStudio
-                | Provider::LlamaCpp
-                | Provider::Vllm
-        ) {
+        if !is_byok_provider(provider_enum) {
             continue;
         }
 
@@ -670,6 +933,271 @@ pub async fn rehydrate_byok_providers(
     }
 }
 
+/// The `<provider>` of every `api_key_<provider>` row in `settings_v2`.
+///
+/// All keys are fetched and the prefix is filtered in Rust (rather than a SQL
+/// LIKE pattern) so a literal underscore in the prefix can't be misread as
+/// the SQL LIKE single-character wildcard.
+fn saved_key_provider_ids() -> Vec<String> {
+    match crate::core::mcp::config::open_mcp_settings_db() {
+        Ok(conn) => match conn.prepare("SELECT key FROM settings_v2") {
+            Ok(mut stmt) => match stmt.query_map([], |row| row.get::<_, String>(0)) {
+                Ok(rows) => rows
+                    .filter_map(Result::ok)
+                    .filter_map(|key| key.strip_prefix("api_key_").map(str::to_string))
+                    .collect::<Vec<_>>(),
+                Err(e) => {
+                    tracing::warn!("Failed to read stored provider keys: {}", e);
+                    Vec::new()
+                }
+            },
+            Err(e) => {
+                tracing::warn!("Failed to query settings_v2 for provider keys: {}", e);
+                Vec::new()
+            }
+        },
+        Err(e) => {
+            tracing::warn!("Failed to open settings DB for provider keys: {}", e);
+            Vec::new()
+        }
+    }
+}
+
+fn saved_key_providers() -> Vec<Provider> {
+    saved_key_provider_ids()
+        .iter()
+        .map(String::as_str)
+        .filter_map(Provider::from_string)
+        .filter(|provider| can_hold_saved_key(*provider))
+        .collect()
+}
+
+fn remove_saved_key_providers(router: &mut LLMRouter, saved: &[Provider]) {
+    for provider in saved {
+        router.remove_provider(*provider);
+    }
+}
+
+/// Forget every provider that was registered with a saved key, then restore
+/// the ones whose key can still be read with the vault locked.
+///
+/// Called when the vault locks. A registered provider holds its key in
+/// memory, so leaving it in the router would keep a vault-protected key
+/// usable after the lock. What is left afterwards is exactly what a launch
+/// with a locked vault registers: providers whose keys are not sealed under
+/// the master password. The rest return on the next unlock.
+pub async fn forget_locked_providers(
+    router: &Arc<RwLock<LLMRouter>>,
+    encryption: &crate::sys::security::MasterPasswordEncryption,
+) {
+    let saved = saved_key_providers();
+    remove_saved_key_providers(&mut *router.write().await, &saved);
+    rehydrate_byok_providers(router, encryption).await;
+}
+
+fn locked_saved_keys(encryption: &crate::sys::security::MasterPasswordEncryption) -> Vec<String> {
+    if !encryption.is_configured() || encryption.is_unlocked() {
+        return Vec::new();
+    }
+    let mut locked = saved_key_providers()
+        .into_iter()
+        .filter(|provider| {
+            crate::sys::commands::mcp_oauth::retrieve_api_key(
+                Some(encryption),
+                provider.as_string(),
+            )
+            .is_err()
+        })
+        .map(|provider| provider.as_string().to_string())
+        .collect::<Vec<_>>();
+    locked.sort();
+    locked.dedup();
+    locked
+}
+
+/// Providers whose saved key is sealed under the master password and cannot
+/// be used until the vault is unlocked, so Settings can say "locked" instead
+/// of "not configured". Empty when no master password is set or the vault is
+/// open.
+#[tauri::command]
+pub async fn llm_list_locked_api_keys(
+    encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
+) -> Result<Vec<String>, String> {
+    Ok(locked_saved_keys(encryption.inner()))
+}
+
+/// Providers whose requests leave the device with the user's own key. Ollama
+/// and the other Local runtimes take no key, and Managed Cloud authenticates
+/// with the account token, so none of them is ever a BYOK key row.
+fn is_byok_provider(provider: Provider) -> bool {
+    !matches!(
+        provider,
+        Provider::Ollama
+            | Provider::ManagedCloud
+            | Provider::LmStudio
+            | Provider::LlamaCpp
+            | Provider::Vllm
+    )
+}
+
+/// Providers that can hold a key saved on this device: every BYOK provider,
+/// and LM Studio, llama.cpp and vLLM, whose servers can be started with one.
+/// Ollama takes no key and Managed Cloud uses the account token.
+fn can_hold_saved_key(provider: Provider) -> bool {
+    !matches!(provider, Provider::Ollama | Provider::ManagedCloud)
+}
+
+/// Providers with an API key saved on this device, so Settings can show them
+/// as configured after a restart. The keys themselves are never returned.
+#[tauri::command]
+pub async fn llm_list_saved_api_keys() -> Result<Vec<String>, String> {
+    let conn = crate::core::mcp::config::open_mcp_settings_db()?;
+    let mut stmt = conn
+        .prepare("SELECT key FROM settings_v2")
+        .map_err(|e| format!("Failed to read saved provider keys: {}", e))?;
+    let mut providers = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| format!("Failed to read saved provider keys: {}", e))?
+        .filter_map(Result::ok)
+        .filter_map(|key| key.strip_prefix("api_key_").and_then(Provider::from_string))
+        .filter(|provider| can_hold_saved_key(*provider))
+        .map(|provider| provider.as_string().to_string())
+        .collect::<Vec<_>>();
+    providers.sort();
+    providers.dedup();
+    Ok(providers)
+}
+
+/// Delete a saved provider key and stop routing to that provider at once.
+/// BYOK chats that used it keep their history but cannot send until a key is
+/// saved again.
+#[tauri::command]
+pub async fn llm_delete_api_key(
+    provider: String,
+    state: State<'_, LLMState>,
+) -> Result<(), String> {
+    let provider_enum = Provider::from_string(&provider)
+        .filter(|candidate| can_hold_saved_key(*candidate))
+        .ok_or_else(|| format!("'{}' has no API key to remove", provider))?;
+    let mut setting_keys = vec![format!("api_key_{}", provider_enum.as_string())];
+    if provider != provider_enum.as_string() {
+        setting_keys.push(format!("api_key_{}", provider));
+    }
+    {
+        let conn = crate::core::mcp::config::open_mcp_settings_db()?;
+        for setting_key in setting_keys {
+            conn.execute(
+                "DELETE FROM settings_v2 WHERE key = ?1",
+                rusqlite::params![setting_key],
+            )
+            .map_err(|e| {
+                format!(
+                    "Failed to remove the {} key: {}",
+                    provider_enum.as_string(),
+                    e
+                )
+            })?;
+        }
+        forget_saved_key_destinations(&conn, provider_enum)?;
+    }
+    awaiting_confirmation().remove(provider_enum.as_string());
+    state.router.write().await.remove_provider(provider_enum);
+    tracing::info!("Removed the saved key for '{}'", provider_enum.as_string());
+    Ok(())
+}
+
+const MAX_BYOK_FORK_MESSAGES: usize = 1000;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ByokForkMessage {
+    pub role: String,
+    pub content: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ByokForkRequest {
+    pub user_id: String,
+    pub title: String,
+    #[serde(default)]
+    pub project_id: Option<String>,
+    pub messages: Vec<ByokForkMessage>,
+}
+
+/// Store a consented Local-to-BYOK fork as its own BYOK conversation and
+/// return its id. Only the context the user approved in the fork dialog
+/// arrives here, already redacted; the Local conversation it came from is not
+/// touched (AGENTS.md section 6).
+#[tauri::command]
+pub fn llm_create_byok_fork(
+    db: State<'_, AppDatabase>,
+    request: ByokForkRequest,
+) -> Result<i64, String> {
+    let conn = db.connection()?;
+    create_byok_fork(&conn, &request)
+}
+
+fn create_byok_fork(conn: &rusqlite::Connection, request: &ByokForkRequest) -> Result<i64, String> {
+    use crate::data::db::models::{Message, MessageRole};
+    use crate::data::db::repository;
+
+    let user_id = request.user_id.trim();
+    if user_id.is_empty() {
+        return Err("User ID cannot be empty".to_string());
+    }
+    if request.messages.is_empty() {
+        return Err("A BYOK fork needs at least one approved message".to_string());
+    }
+    if request.messages.len() > MAX_BYOK_FORK_MESSAGES {
+        return Err(format!(
+            "A BYOK fork can carry at most {} messages",
+            MAX_BYOK_FORK_MESSAGES
+        ));
+    }
+    let roles = request
+        .messages
+        .iter()
+        .map(|message| match message.role.as_str() {
+            "user" => Ok(MessageRole::User),
+            "assistant" => Ok(MessageRole::Assistant),
+            other => Err(format!(
+                "Unsupported message role '{}' in a BYOK fork",
+                other
+            )),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let title = match request.title.trim() {
+        "" => "BYOK fork",
+        title => title,
+    };
+
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let conversation_id = repository::create_conversation_with_execution_mode(
+        &tx,
+        title.to_string(),
+        user_id.to_string(),
+        "local",
+        crate::sys::commands::chat::ChatExecutionMode::Byok.as_str(),
+        request.project_id.as_deref(),
+    )
+    .map_err(|e| format!("Failed to create the BYOK conversation: {e}"))?;
+    for (message, role) in request.messages.iter().zip(roles) {
+        repository::insert_message(
+            &tx,
+            &Message::new(
+                conversation_id,
+                user_id.to_string(),
+                role,
+                message.content.clone(),
+            ),
+        )
+        .map_err(|e| format!("Failed to copy approved context into the fork: {e}"))?;
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(conversation_id)
+}
+
 #[tauri::command]
 pub async fn llm_set_default_provider(
     provider: String,
@@ -688,30 +1216,36 @@ pub async fn llm_set_default_provider(
     Ok(())
 }
 
-/// Auto-initialize ManagedCloud provider if user is authenticated
-/// This ensures ManagedCloud is available for Pro/Max users who prefer cloud credits
-#[tauri::command]
-pub async fn llm_ensure_managed_cloud(state: State<'_, LLMState>) -> Result<bool, String> {
-    use crate::sys::account::get_access_token;
-
-    // Check if user has access token (is authenticated)
-    match get_access_token() {
-        Ok(_) => {
-            // User is authenticated, register ManagedCloud provider
-            match ManagedCloudProvider::new() {
-                Ok(provider) => {
-                    let mut router = state.router.write().await;
-                    router.set_managed_cloud(Box::new(provider));
-                    Ok(true)
-                }
-                Err(_) => Ok(false),
-            }
+/// Keep the router's ManagedCloud registration equal to "the app is in Cloud
+/// mode and signed in". Outside that state the provider is removed, so a mode
+/// switch or a sign-out leaves nothing that could carry the account token.
+/// Returns whether the provider is registered afterwards.
+pub(crate) async fn reconcile_managed_cloud_provider(router: &RwLock<LLMRouter>) -> bool {
+    // The mode and credential are read under the router lock, so concurrent
+    // reconciliations apply in order and the last one reflects the live mode.
+    let mut router = router.write().await;
+    let provider = if crate::sys::account::get_access_token().is_ok() {
+        ManagedCloudProvider::new().ok()
+    } else {
+        None
+    };
+    match provider {
+        Some(provider) => {
+            router.set_managed_cloud(Box::new(provider));
+            true
         }
-        Err(_) => {
-            // User not authenticated, ManagedCloud won't be available
-            Ok(false)
+        None => {
+            router.remove_provider(Provider::ManagedCloud);
+            false
         }
     }
+}
+
+/// Register ManagedCloud for a signed-in Cloud session, and remove it in any
+/// other state.
+#[tauri::command]
+pub async fn llm_ensure_managed_cloud(state: State<'_, LLMState>) -> Result<bool, String> {
+    Ok(reconcile_managed_cloud_provider(&state.router).await)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -745,6 +1279,10 @@ pub struct ProviderStatus {
     pub rate_limit_remaining: Option<u32>,
     pub rate_limit_reset: Option<String>,
     pub ollama_running: Option<bool>,
+    /// The address this provider's saved key would be sent to, when it is not
+    /// connected because the user has not agreed to that yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved_key_awaits_confirmation: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -809,7 +1347,8 @@ pub async fn llm_get_available_models(
     }
 
     if router.has_provider(Provider::Ollama) {
-        match llm_list_ollama_models().await {
+        match list_ollama_models_internal(&local_runtime_base_url(&router, Provider::Ollama)).await
+        {
             Ok(ollama_models) => {
                 // Only add Ollama models if we actually found some
                 if !ollama_models.is_empty() {
@@ -828,7 +1367,12 @@ pub async fn llm_get_available_models(
     // only shown when the local server is actually reachable and reports installed
     // models (never a fake availability badge).
     if router.has_provider(Provider::LmStudio) {
-        match llm_list_lmstudio_models().await {
+        match list_local_runtime_models(
+            &local_runtime_base_url(&router, Provider::LmStudio),
+            Provider::LmStudio,
+        )
+        .await
+        {
             Ok(models) => {
                 if !models.is_empty() {
                     available_models.extend(models);
@@ -839,7 +1383,12 @@ pub async fn llm_get_available_models(
     }
 
     if router.has_provider(Provider::LlamaCpp) {
-        match llm_list_llamacpp_models().await {
+        match list_local_runtime_models(
+            &local_runtime_base_url(&router, Provider::LlamaCpp),
+            Provider::LlamaCpp,
+        )
+        .await
+        {
             Ok(models) => {
                 if !models.is_empty() {
                     available_models.extend(models);
@@ -850,7 +1399,12 @@ pub async fn llm_get_available_models(
     }
 
     if router.has_provider(Provider::Vllm) {
-        match llm_list_vllm_models().await {
+        match list_local_runtime_models(
+            &local_runtime_base_url(&router, Provider::Vllm),
+            Provider::Vllm,
+        )
+        .await
+        {
             Ok(models) => {
                 if !models.is_empty() {
                     available_models.extend(models);
@@ -887,6 +1441,21 @@ pub async fn llm_check_provider_status(
     provider: String,
     state: State<'_, LLMState>,
 ) -> Result<ProviderStatus, String> {
+    if let Some(destination) =
+        Provider::from_string(&provider).and_then(saved_key_awaits_confirmation)
+    {
+        return Ok(ProviderStatus {
+            provider,
+            available: false,
+            configured: false,
+            error: Some(reconnect_to_confirm_message(&destination)),
+            rate_limit_remaining: None,
+            rate_limit_reset: None,
+            ollama_running: None,
+            saved_key_awaits_confirmation: Some(destination),
+        });
+    }
+
     let router = state.router.read().await;
 
     // Local runtimes (Ollama, LM Studio, llama.cpp, vLLM) are "available" purely
@@ -907,7 +1476,10 @@ pub async fn llm_check_provider_status(
     if provider == "ollama" {
         let client = create_llm_command_client(5)?;
         match client
-            .get(format!("{}/api/tags", OLLAMA_DEFAULT_BASE_URL))
+            .get(format!(
+                "{}/api/tags",
+                local_runtime_base_url(&router, Provider::Ollama)
+            ))
             .timeout(std::time::Duration::from_secs(2))
             .send()
             .await
@@ -920,11 +1492,12 @@ pub async fn llm_check_provider_status(
             }
         }
     } else if provider == "lmstudio" || provider == "llamacpp" || provider == "vllm" {
-        let base_url = match provider.as_str() {
-            "lmstudio" => LMSTUDIO_DEFAULT_BASE_URL,
-            "llamacpp" => LLAMACPP_DEFAULT_BASE_URL,
-            _ => VLLM_DEFAULT_BASE_URL,
+        let runtime = match provider.as_str() {
+            "lmstudio" => Provider::LmStudio,
+            "llamacpp" => Provider::LlamaCpp,
+            _ => Provider::Vllm,
         };
+        let base_url = local_runtime_base_url(&router, runtime);
         let client = create_llm_command_client(5)?;
         match client
             .get(format!("{}/models", base_url))
@@ -975,6 +1548,7 @@ pub async fn llm_check_provider_status(
         rate_limit_remaining: None,
         rate_limit_reset: None,
         ollama_running,
+        saved_key_awaits_confirmation: None,
     })
 }
 
@@ -1092,21 +1666,17 @@ struct LlmOllamaTagsResponse {
     models: Vec<LlmOllamaModel>,
 }
 
+/// List the models installed in the Ollama server chat is configured to use.
 #[tauri::command]
-pub async fn llm_list_ollama_models() -> Result<Vec<ModelInfo>, String> {
-    list_ollama_models_internal().await
+pub async fn llm_list_ollama_models(state: State<'_, LLMState>) -> Result<Vec<ModelInfo>, String> {
+    let base_url = local_runtime_base_url(&*state.router.read().await, Provider::Ollama);
+    list_ollama_models_internal(&base_url).await
 }
 
-/// AUDIT-COMMAND-075 fix: Alias for llm_list_ollama_models for frontend compatibility
-#[tauri::command]
-pub async fn llm_get_ollama_models() -> Result<Vec<ModelInfo>, String> {
-    list_ollama_models_internal().await
-}
-
-async fn list_ollama_models_internal() -> Result<Vec<ModelInfo>, String> {
+async fn list_ollama_models_internal(base_url: &str) -> Result<Vec<ModelInfo>, String> {
     let client = create_llm_command_client(10)?;
     let response = client
-        .get(format!("{}/api/tags", OLLAMA_DEFAULT_BASE_URL))
+        .get(format!("{}/api/tags", base_url))
         .timeout(Duration::from_secs(5))
         .send()
         .await
@@ -1136,7 +1706,7 @@ async fn list_ollama_models_internal() -> Result<Vec<ModelInfo>, String> {
         .join(" · ");
         let capabilities = crate::core::llm::capability_detection::detect_ollama_capabilities(
             &client,
-            OLLAMA_DEFAULT_BASE_URL,
+            base_url,
             &model.name,
         )
         .await;
@@ -1224,28 +1794,232 @@ async fn list_openai_compat_models_internal(
         .collect())
 }
 
-/// List models currently loaded/served by LM Studio (`GET /v1/models`).
-/// Returns `Err` if LM Studio isn't running or isn't reachable at the configured URL.
-/// callers must not synthesize a fallback list (no fake availability).
-#[tauri::command]
-pub async fn llm_list_lmstudio_models() -> Result<Vec<ModelInfo>, String> {
-    list_openai_compat_models_internal(LMSTUDIO_DEFAULT_BASE_URL, Provider::LmStudio, "LM Studio")
-        .await
+/// List models served by an OpenAI-compatible Local runtime at the URL chat
+/// uses. Returns `Err` when the server is not reachable there; callers must not
+/// synthesize a fallback list.
+async fn list_local_runtime_models(
+    base_url: &str,
+    provider: Provider,
+) -> Result<Vec<ModelInfo>, String> {
+    let label = local_runtime_label(provider)
+        .ok_or_else(|| format!("{} is not a Local runtime", provider.as_string()))?;
+    list_openai_compat_models_internal(base_url, provider, label).await
 }
 
-/// List models currently loaded/served by llama.cpp's `llama-server` (`GET /v1/models`).
-#[tauri::command]
-pub async fn llm_list_llamacpp_models() -> Result<Vec<ModelInfo>, String> {
-    list_openai_compat_models_internal(LLAMACPP_DEFAULT_BASE_URL, Provider::LlamaCpp, "llama.cpp")
-        .await
+async fn list_registered_local_runtime_models(
+    state: &LLMState,
+    provider: Provider,
+) -> Result<Vec<ModelInfo>, String> {
+    let base_url = local_runtime_base_url(&*state.router.read().await, provider);
+    list_local_runtime_models(&base_url, provider).await
 }
 
-/// List models currently loaded/served by vLLM (`GET /v1/models`).
-/// Returns `Err` if vLLM isn't running or isn't reachable at the configured URL.
-/// callers must not synthesize a fallback list (no fake availability).
 #[tauri::command]
-pub async fn llm_list_vllm_models() -> Result<Vec<ModelInfo>, String> {
-    list_openai_compat_models_internal(VLLM_DEFAULT_BASE_URL, Provider::Vllm, "vLLM").await
+pub async fn llm_list_lmstudio_models(
+    state: State<'_, LLMState>,
+) -> Result<Vec<ModelInfo>, String> {
+    list_registered_local_runtime_models(&state, Provider::LmStudio).await
+}
+
+#[tauri::command]
+pub async fn llm_list_llamacpp_models(
+    state: State<'_, LLMState>,
+) -> Result<Vec<ModelInfo>, String> {
+    list_registered_local_runtime_models(&state, Provider::LlamaCpp).await
+}
+
+#[tauri::command]
+pub async fn llm_list_vllm_models(state: State<'_, LLMState>) -> Result<Vec<ModelInfo>, String> {
+    list_registered_local_runtime_models(&state, Provider::Vllm).await
+}
+
+const LMSTUDIO_MANAGEMENT_UNAVAILABLE: &str = "This LM Studio server has no model management API. Loading and unloading models from here needs LM Studio 0.4.0 or newer.";
+const LMSTUDIO_LIST_TIMEOUT_SECS: u64 = 10;
+const LMSTUDIO_UNLOAD_TIMEOUT_SECS: u64 = 60;
+const LMSTUDIO_LOAD_TIMEOUT_SECS: u64 = 600;
+const LMSTUDIO_CHAT_MODEL_KIND: &str = "llm";
+
+/// A chat model LM Studio has on disk, with the instances of it that are in
+/// memory, from LM Studio's `GET /api/v1/models`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LmStudioModelState {
+    pub key: String,
+    pub display_name: String,
+    pub size_bytes: u64,
+    pub loaded_instance_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LmStudioModelsResponse {
+    #[serde(default)]
+    models: Vec<LmStudioModelEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LmStudioModelEntry {
+    key: String,
+    #[serde(default, rename = "type")]
+    kind: String,
+    #[serde(default)]
+    display_name: Option<String>,
+    #[serde(default)]
+    size_bytes: u64,
+    #[serde(default)]
+    loaded_instances: Vec<LmStudioLoadedInstance>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LmStudioLoadedInstance {
+    id: String,
+}
+
+fn lmstudio_model_states(response: LmStudioModelsResponse) -> Vec<LmStudioModelState> {
+    response
+        .models
+        .into_iter()
+        .filter(|model| model.kind == LMSTUDIO_CHAT_MODEL_KIND)
+        .map(|model| LmStudioModelState {
+            display_name: model
+                .display_name
+                .filter(|name| !name.trim().is_empty())
+                .unwrap_or_else(|| model.key.clone()),
+            key: model.key,
+            size_bytes: model.size_bytes,
+            loaded_instance_ids: model
+                .loaded_instances
+                .into_iter()
+                .map(|instance| instance.id)
+                .collect(),
+        })
+        .collect()
+}
+
+/// LM Studio serves chat at `<root>/v1` and model management at
+/// `<root>/api/v1`, so the management root is the chat URL without `/v1`.
+fn lmstudio_management_root(chat_base_url: &str) -> String {
+    let trimmed = chat_base_url.trim().trim_end_matches('/');
+    trimmed.strip_suffix("/v1").unwrap_or(trimmed).to_string()
+}
+
+async fn lmstudio_management_request(
+    state: &LLMState,
+    encryption: &crate::sys::security::MasterPasswordEncryption,
+    method: reqwest::Method,
+    path: &str,
+    body: Option<serde_json::Value>,
+    timeout_secs: u64,
+) -> Result<reqwest::Response, String> {
+    let server_key = crate::sys::commands::mcp_oauth::retrieve_api_key(
+        Some(encryption),
+        Provider::LmStudio.as_string(),
+    )
+    .ok()
+    .filter(|key| !key.is_empty());
+    let root = lmstudio_management_root(&local_runtime_base_url(
+        &*state.router.read().await,
+        Provider::LmStudio,
+    ));
+
+    let client = create_llm_command_client(timeout_secs)?;
+    let mut request = client.request(method, format!("{root}/api/v1/{path}"));
+    if let Some(key) = server_key {
+        request = request.bearer_auth(key);
+    }
+    if let Some(body) = body {
+        request = request.json(&body);
+    }
+    request
+        .send()
+        .await
+        .map_err(|e| format!("Failed to connect to LM Studio: {e}"))
+}
+
+async fn lmstudio_failure(response: reqwest::Response) -> String {
+    let status = response.status();
+    let detail = response.text().await.unwrap_or_default();
+    format!("LM Studio returned {status}: {}", detail.trim())
+}
+
+/// List LM Studio's chat models and which of them are in memory.
+#[tauri::command]
+pub async fn llm_lmstudio_list_model_states(
+    state: State<'_, LLMState>,
+    encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
+) -> Result<Vec<LmStudioModelState>, String> {
+    let response = lmstudio_management_request(
+        &state,
+        encryption.inner(),
+        reqwest::Method::GET,
+        "models",
+        None,
+        LMSTUDIO_LIST_TIMEOUT_SECS,
+    )
+    .await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(LMSTUDIO_MANAGEMENT_UNAVAILABLE.to_string());
+    }
+    if !response.status().is_success() {
+        return Err(lmstudio_failure(response).await);
+    }
+
+    let parsed: LmStudioModelsResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse the LM Studio model list: {e}"))?;
+    Ok(lmstudio_model_states(parsed))
+}
+
+/// Load a model into LM Studio's memory.
+#[tauri::command]
+pub async fn llm_lmstudio_load_model(
+    model: String,
+    state: State<'_, LLMState>,
+    encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
+) -> Result<(), String> {
+    if model.trim().is_empty() {
+        return Err("Model name cannot be empty".to_string());
+    }
+    let response = lmstudio_management_request(
+        &state,
+        encryption.inner(),
+        reqwest::Method::POST,
+        "models/load",
+        Some(serde_json::json!({ "model": model.trim() })),
+        LMSTUDIO_LOAD_TIMEOUT_SECS,
+    )
+    .await?;
+
+    if !response.status().is_success() {
+        return Err(lmstudio_failure(response).await);
+    }
+    Ok(())
+}
+
+/// Unload one loaded instance from LM Studio's memory.
+#[tauri::command]
+pub async fn llm_lmstudio_unload_model(
+    instance_id: String,
+    state: State<'_, LLMState>,
+    encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
+) -> Result<(), String> {
+    if instance_id.trim().is_empty() {
+        return Err("Model instance cannot be empty".to_string());
+    }
+    let response = lmstudio_management_request(
+        &state,
+        encryption.inner(),
+        reqwest::Method::POST,
+        "models/unload",
+        Some(serde_json::json!({ "instance_id": instance_id.trim() })),
+        LMSTUDIO_UNLOAD_TIMEOUT_SECS,
+    )
+    .await?;
+
+    if !response.status().is_success() {
+        return Err(lmstudio_failure(response).await);
+    }
+    Ok(())
 }
 
 // --- OpenRouter live model catalog ------------------------------------------
@@ -1369,58 +2143,6 @@ pub async fn router_suggestions(
     })
 }
 
-/// Returns capability metadata for a given model.
-///
-/// Ollama capability detection queries `/api/show` and is cached. Known cloud
-/// model capabilities come from the generated model registry in the renderer;
-/// this runtime probe must never synthesize provider-wide defaults.
-#[tauri::command]
-pub async fn get_model_capabilities(
-    provider: String,
-    model_id: String,
-    base_url: Option<String>,
-) -> Result<serde_json::Value, String> {
-    if provider.eq_ignore_ascii_case("ollama") {
-        let url = base_url
-            .filter(|u| !u.is_empty())
-            .unwrap_or_else(|| OLLAMA_DEFAULT_BASE_URL.to_string());
-
-        let client = create_llm_command_client(10)?;
-
-        let caps = crate::core::llm::capability_detection::detect_ollama_capabilities(
-            &client, &url, &model_id,
-        )
-        .await;
-
-        let tool_mode = if caps.supports_tools {
-            "native"
-        } else {
-            "prompt_injection"
-        };
-
-        Ok(serde_json::json!({
-            "supports_tools": caps.supports_tools,
-            "supports_vision": caps.supports_vision,
-            "supports_streaming": true,
-            "supports_thinking": false,
-            "context_length": caps.context_length,
-            "tool_mode": tool_mode,
-        }))
-    } else {
-        Err(format!(
-            "Runtime capability probing is unsupported for provider {provider}; use the generated model registry for {model_id}"
-        ))
-    }
-}
-
-/// Clears the in-memory Ollama capability cache so that subsequent
-/// `get_model_capabilities` calls re-query `/api/show`.
-#[tauri::command]
-pub async fn clear_model_capability_cache() -> Result<(), String> {
-    crate::core::llm::capability_detection::clear_capability_cache().await;
-    Ok(())
-}
-
 /// Reset the session cost accumulator to zero.
 ///
 /// The LLM router tracks cumulative cost across all invocations in a session.
@@ -1479,6 +2201,109 @@ mod tests {
     }
 
     #[test]
+    fn locking_forgets_providers_registered_from_a_saved_key_and_keeps_the_rest() {
+        let mut router = LLMRouter::new();
+        for provider in [Provider::OpenAI, Provider::LmStudio, Provider::Anthropic] {
+            router.set_provider(
+                provider,
+                Box::new(MockProvider {
+                    calls: Arc::new(AtomicUsize::new(0)),
+                }),
+            );
+        }
+
+        remove_saved_key_providers(&mut router, &[Provider::OpenAI, Provider::LmStudio]);
+
+        assert!(!router.has_provider(Provider::OpenAI));
+        assert!(!router.has_provider(Provider::LmStudio));
+        assert!(router.has_provider(Provider::Anthropic));
+    }
+
+    #[test]
+    fn nothing_is_reported_locked_without_a_locked_vault() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let manager =
+            crate::sys::security::MasterPasswordManager::new(Arc::new(std::sync::Mutex::new(conn)));
+        manager.init_table().unwrap();
+        let manager = Arc::new(std::sync::Mutex::new(manager));
+        let encryption = crate::sys::security::MasterPasswordEncryption::new(manager.clone());
+
+        assert!(locked_saved_keys(&encryption).is_empty());
+
+        manager
+            .lock()
+            .unwrap()
+            .setup("Alpha-Beta-Unique-Phrase-9") // gitleaks:allow
+            .unwrap();
+        assert!(encryption.is_unlocked());
+        assert!(locked_saved_keys(&encryption).is_empty());
+    }
+
+    #[test]
+    fn lmstudio_management_root_drops_the_chat_suffix() {
+        assert_eq!(
+            lmstudio_management_root("http://localhost:1234/v1"),
+            "http://localhost:1234"
+        );
+        assert_eq!(
+            lmstudio_management_root("http://localhost:1234/v1/"),
+            "http://localhost:1234"
+        );
+        assert_eq!(
+            lmstudio_management_root("http://192.168.1.20:1234"),
+            "http://192.168.1.20:1234"
+        );
+    }
+
+    #[test]
+    fn lmstudio_model_states_list_chat_models_and_their_loaded_instances() {
+        let parsed: LmStudioModelsResponse = serde_json::from_value(serde_json::json!({
+            "models": [
+                {
+                    "type": "llm",
+                    "key": "fixture/chat-model",
+                    "display_name": "Fixture Chat",
+                    "size_bytes": 17_990_911_801_u64,
+                    "loaded_instances": [{ "id": "fixture/chat-model", "config": { "context_length": 4096 } }]
+                },
+                {
+                    "type": "llm",
+                    "key": "fixture/idle-model",
+                    "display_name": "",
+                    "size_bytes": 1_000,
+                    "loaded_instances": []
+                },
+                {
+                    "type": "embedding",
+                    "key": "fixture/embedding-model",
+                    "display_name": "Fixture Embedding",
+                    "size_bytes": 2_000,
+                    "loaded_instances": []
+                }
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(
+            lmstudio_model_states(parsed),
+            vec![
+                LmStudioModelState {
+                    key: "fixture/chat-model".to_string(),
+                    display_name: "Fixture Chat".to_string(),
+                    size_bytes: 17_990_911_801,
+                    loaded_instance_ids: vec!["fixture/chat-model".to_string()],
+                },
+                LmStudioModelState {
+                    key: "fixture/idle-model".to_string(),
+                    display_name: "fixture/idle-model".to_string(),
+                    size_bytes: 1_000,
+                    loaded_instance_ids: Vec::new(),
+                },
+            ]
+        );
+    }
+
+    #[test]
     fn managed_cloud_registration_does_not_advertise_unconfigured_byok_providers() {
         let mut router = LLMRouter::new();
         router.set_managed_cloud(Box::new(MockProvider {
@@ -1496,17 +2321,6 @@ mod tests {
         assert!(
             !catalog_provider_is_available(&router, Provider::Anthropic),
             "ManagedCloud must not make an unconfigured Anthropic BYOK route appear available"
-        );
-    }
-
-    #[tokio::test]
-    async fn capability_probe_rejects_cloud_models_instead_of_inventing_defaults() {
-        let result =
-            get_model_capabilities("openai".to_string(), openai_catalog_model(), None).await;
-
-        assert!(
-            result.is_err(),
-            "known cloud-model capabilities must come from the generated registry"
         );
     }
 
@@ -1563,6 +2377,115 @@ mod tests {
             request.trust_mode,
             Some(agiworkforce_model_registry::TrustMode::ManagedCloud)
         );
+    }
+
+    fn helper_request(
+        provider: &str,
+        trust_mode: Option<agiworkforce_model_registry::TrustMode>,
+    ) -> LLMSendMessageRequest {
+        LLMSendMessageRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "um clean this up".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: None,
+            provider: Some(provider.to_string()),
+            temperature: None,
+            max_tokens: Some(64),
+            prefer_cloud_credits: false,
+            trust_mode,
+        }
+    }
+
+    async fn router_with_only_managed_cloud(calls: &Arc<AtomicUsize>) -> RwLock<LLMRouter> {
+        let router = RwLock::new(LLMRouter::new());
+        router
+            .write()
+            .await
+            .set_managed_cloud(Box::new(MockProvider {
+                calls: calls.clone(),
+            }));
+        router
+    }
+
+    #[tokio::test]
+    async fn a_local_or_byok_helper_request_for_an_unconfigured_provider_never_reaches_managed_cloud(
+    ) {
+        use agiworkforce_model_registry::TrustMode;
+
+        let _mode = crate::sys::account::app_mode::AppModeTestGuard::local().await;
+        let managed_calls = Arc::new(AtomicUsize::new(0));
+        let router = router_with_only_managed_cloud(&managed_calls).await;
+
+        for trust_mode in [None, Some(TrustMode::Local), Some(TrustMode::Byok)] {
+            let error = route_plain_llm_request(&router, helper_request("anthropic", trust_mode))
+                .await
+                .expect_err("an unconfigured provider leaves no candidate inside the boundary");
+            assert!(
+                error.starts_with(NO_CANDIDATES_ERROR_CODE),
+                "trust mode {trust_mode:?} must end with no candidates, got: {error}"
+            );
+        }
+
+        assert_eq!(
+            managed_calls.load(Ordering::SeqCst),
+            0,
+            "a Local or BYOK helper request must never invoke Managed Cloud"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_managed_helper_request_is_what_the_redirect_serves() {
+        use agiworkforce_model_registry::TrustMode;
+
+        let _mode = crate::sys::account::app_mode::AppModeTestGuard::cloud().await;
+        let managed_calls = Arc::new(AtomicUsize::new(0));
+        let router = router_with_only_managed_cloud(&managed_calls).await;
+
+        let response = route_plain_llm_request(
+            &router,
+            helper_request("anthropic", Some(TrustMode::ManagedCloud)),
+        )
+        .await
+        .expect("a Managed Cloud request may be served by Managed Cloud");
+
+        assert_eq!(response.content, "echo: um clean this up");
+        assert_eq!(managed_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn a_local_process_refuses_a_helper_request_that_names_managed_cloud() {
+        let _mode = crate::sys::account::app_mode::AppModeTestGuard::local().await;
+        let managed_calls = Arc::new(AtomicUsize::new(0));
+        let router = router_with_only_managed_cloud(&managed_calls).await;
+
+        let error = route_plain_llm_request(
+            &router,
+            helper_request(
+                "managed_cloud",
+                Some(agiworkforce_model_registry::TrustMode::ManagedCloud),
+            ),
+        )
+        .await
+        .expect_err("a Local process must not serve a Managed Cloud request");
+
+        assert_eq!(error, crate::sys::account::app_mode::LOCAL_MODE_REFUSAL);
+        assert_eq!(managed_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn leaving_cloud_removes_the_managed_cloud_provider_from_the_router() {
+        let _mode = crate::sys::account::app_mode::AppModeTestGuard::local().await;
+        let router = router_with_only_managed_cloud(&Arc::new(AtomicUsize::new(0))).await;
+        assert!(router.read().await.has_provider(Provider::ManagedCloud));
+
+        let registered = reconcile_managed_cloud_provider(&router).await;
+
+        assert!(!registered);
+        assert!(!router.read().await.has_provider(Provider::ManagedCloud));
     }
 
     #[tokio::test]
@@ -1720,5 +2643,319 @@ mod tests {
             .collect();
         assert_eq!(models.len(), 1, "audio-output model should be filtered out");
         assert_eq!(models[0].id, "fixture-provider/fixture-chat-model:free");
+    }
+
+    fn fork_request(messages: Vec<(&str, &str)>) -> ByokForkRequest {
+        ByokForkRequest {
+            user_id: "fork-user".to_string(),
+            title: "Trip plan (BYOK fork)".to_string(),
+            project_id: None,
+            messages: messages
+                .into_iter()
+                .map(|(role, content)| ByokForkMessage {
+                    role: role.to_string(),
+                    content: content.to_string(),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn byok_fork_is_stored_as_its_own_byok_conversation() {
+        use crate::data::db::{repository, Database};
+
+        let db = Database::in_memory().expect("in-memory db");
+        let conn_handle = db.get_connection();
+        let conn = conn_handle.lock().expect("db lock");
+        let request = fork_request(vec![
+            ("user", "Plan a trip"),
+            ("assistant", "Here is a plan"),
+        ]);
+
+        let id = create_byok_fork(&conn, &request).expect("fork should be stored");
+
+        let conversation = repository::get_conversation(&conn, id, "fork-user").expect("stored");
+        assert_eq!(conversation.execution_mode, "byok");
+        let messages = repository::list_messages(&conn, id).expect("messages");
+        assert_eq!(
+            messages
+                .iter()
+                .map(|message| message.content.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Plan a trip", "Here is a plan"]
+        );
+    }
+
+    #[test]
+    fn byok_fork_refuses_empty_context_and_system_messages() {
+        use crate::data::db::{repository, Database};
+
+        let db = Database::in_memory().expect("in-memory db");
+        let conn_handle = db.get_connection();
+        let conn = conn_handle.lock().expect("db lock");
+
+        assert!(create_byok_fork(&conn, &fork_request(vec![])).is_err());
+        assert!(create_byok_fork(&conn, &fork_request(vec![("system", "secret prompt")])).is_err());
+        let conversations =
+            repository::list_conversations(&conn, 10, 0, "fork-user").expect("list conversations");
+        assert!(
+            conversations.is_empty(),
+            "a refused fork must not leave a conversation behind"
+        );
+    }
+
+    #[test]
+    fn byok_provider_set_excludes_local_runtimes_and_managed_cloud() {
+        for provider in [
+            Provider::Ollama,
+            Provider::LmStudio,
+            Provider::LlamaCpp,
+            Provider::Vllm,
+            Provider::ManagedCloud,
+        ] {
+            assert!(!is_byok_provider(provider), "{}", provider.as_string());
+        }
+        assert!(is_byok_provider(Provider::OpenAI));
+        assert!(is_byok_provider(Provider::OpenRouter));
+    }
+
+    #[test]
+    fn a_local_runtime_key_can_be_listed_and_removed() {
+        for provider in [Provider::LmStudio, Provider::LlamaCpp, Provider::Vllm] {
+            assert!(can_hold_saved_key(provider), "{}", provider.as_string());
+        }
+        assert!(can_hold_saved_key(Provider::OpenAI));
+        assert!(!can_hold_saved_key(Provider::Ollama));
+        assert!(!can_hold_saved_key(Provider::ManagedCloud));
+    }
+}
+
+#[cfg(test)]
+mod saved_key_destination_tests {
+    use super::*;
+
+    fn settings() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE settings_v2 (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                category TEXT NOT NULL,
+                encrypted INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn a_destination_is_the_host_and_any_port_that_is_not_the_schemes_own() {
+        assert_eq!(
+            destination_of("https://api.example.com/v1").as_deref(),
+            Some("api.example.com")
+        );
+        assert_eq!(
+            destination_of(" https://API.Example.com:8443/v1 ").as_deref(),
+            Some("api.example.com:8443")
+        );
+        assert_eq!(
+            destination_of("http://192.168.1.20:8000/v1").as_deref(),
+            Some("192.168.1.20:8000")
+        );
+        assert_eq!(destination_of("not a url"), None);
+    }
+
+    #[test]
+    fn every_loopback_spelling_is_one_place() {
+        for spelling in [
+            "http://localhost:1234/v1",
+            "http://LOCALHOST:1234/v1",
+            "http://127.0.0.1:1234/v1",
+            "http://[::1]:1234/v1",
+        ] {
+            assert_eq!(
+                destination_of(spelling).as_deref(),
+                Some("localhost:1234"),
+                "{spelling}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_providers_own_endpoint_is_its_registered_destination() {
+        for provider in [Provider::OpenAI, Provider::Anthropic, Provider::LmStudio] {
+            let registered = registered_destination(provider).expect("a registered endpoint");
+            assert_eq!(
+                default_base_url(provider)
+                    .and_then(destination_of)
+                    .as_deref(),
+                Some(registered.as_str())
+            );
+        }
+        assert_eq!(
+            registered_destination(Provider::LmStudio),
+            destination_of("http://127.0.0.1:1234/v1")
+        );
+        assert_ne!(
+            registered_destination(Provider::LmStudio),
+            destination_of("http://127.0.0.1:8080/v1"),
+            "another port on this computer is another server"
+        );
+        assert_eq!(registered_destination(Provider::Azure), None);
+    }
+
+    #[test]
+    fn the_question_names_the_provider_the_address_and_the_usual_endpoint() {
+        let question =
+            saved_key_destination_question(Provider::OpenAI, "collector.example.net").unwrap();
+        let usual = registered_destination(Provider::OpenAI).unwrap();
+
+        assert!(question.title.contains("openai"), "{}", question.title);
+        assert!(question.body.contains("collector.example.net"));
+        assert!(question.body.contains(&format!("instead of {usual}")));
+        assert!(question.body.contains("with every request"));
+        assert!(crate::sys::native_confirm::can_ask_with(
+            &question.confirm_label
+        ));
+
+        let azure =
+            saved_key_destination_question(Provider::Azure, "mine.openai.azure.com").unwrap();
+        assert!(!azure.body.contains("instead of"));
+        let local = saved_key_destination_question(Provider::Vllm, "192.168.1.20:8000").unwrap();
+        assert!(local.title.contains("vLLM"), "{}", local.title);
+    }
+
+    #[test]
+    fn a_confirmed_destination_is_remembered_for_that_provider_and_address_only() {
+        let conn = settings();
+        assert!(remembered_saved_key_destinations(&conn).is_empty());
+
+        remember_saved_key_destination(&conn, Provider::Vllm, "192.168.1.20:8000").unwrap();
+        remember_saved_key_destination(&conn, Provider::Vllm, "192.168.1.20:8000").unwrap();
+
+        let remembered = remembered_saved_key_destinations(&conn);
+        assert_eq!(
+            remembered,
+            vec![saved_key_destination_entry(
+                Provider::Vllm,
+                "192.168.1.20:8000"
+            )]
+        );
+        assert!(!remembered.contains(&saved_key_destination_entry(
+            Provider::LmStudio,
+            "192.168.1.20:8000"
+        )));
+        assert!(!remembered.contains(&saved_key_destination_entry(
+            Provider::Vllm,
+            "192.168.1.21:8000"
+        )));
+    }
+
+    #[test]
+    fn a_saved_key_needs_no_question_for_the_registered_endpoint_or_an_agreed_address() {
+        let agreed = vec![saved_key_destination_entry(
+            Provider::Vllm,
+            "192.168.1.20:8000",
+        )];
+        let nothing_agreed: Vec<String> = Vec::new();
+
+        for (base_url, remembered) in [
+            (None, &nothing_agreed),
+            (Some("   "), &nothing_agreed),
+            (Some("http://localhost:8000/v1"), &nothing_agreed),
+            (Some("http://127.0.0.1:8000/v1"), &nothing_agreed),
+            (Some("http://192.168.1.20:8000/v1"), &agreed),
+        ] {
+            assert_eq!(
+                saved_key_destination(Provider::Vllm, base_url, remembered),
+                Ok(SavedKeyDestination::Allowed),
+                "{base_url:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_saved_key_and_any_other_address_needs_the_user_whatever_else_is_agreed() {
+        let agreed = vec![
+            saved_key_destination_entry(Provider::Vllm, "192.168.1.20:8000"),
+            saved_key_destination_entry(Provider::LmStudio, "192.168.1.21:8000"),
+        ];
+
+        assert_eq!(
+            saved_key_destination(Provider::Vllm, Some("http://192.168.1.21:8000/v1"), &agreed),
+            Ok(SavedKeyDestination::NeedsConfirmation(
+                "192.168.1.21:8000".to_string()
+            )),
+            "an address agreed for another runtime is not agreed for this one"
+        );
+        assert_eq!(
+            saved_key_destination(
+                Provider::OpenAI,
+                Some("https://collector.example.net/v1"),
+                &agreed
+            ),
+            Ok(SavedKeyDestination::NeedsConfirmation(
+                "collector.example.net".to_string()
+            ))
+        );
+        assert!(saved_key_destination(Provider::OpenAI, Some("not a url"), &agreed).is_err());
+    }
+
+    #[test]
+    fn a_provider_left_unconnected_says_which_address_awaits_the_user() {
+        assert_eq!(saved_key_awaits_confirmation(Provider::Cohere), None);
+
+        awaiting_confirmation().insert(
+            Provider::Cohere.as_string().to_string(),
+            "collector.example.net".to_string(),
+        );
+        assert_eq!(
+            saved_key_awaits_confirmation(Provider::Cohere).as_deref(),
+            Some("collector.example.net")
+        );
+        assert_eq!(
+            reconnect_to_confirm_message("collector.example.net"),
+            "Reconnect to confirm sending your saved key to collector.example.net."
+        );
+
+        awaiting_confirmation().remove(Provider::Cohere.as_string());
+        assert_eq!(saved_key_awaits_confirmation(Provider::Cohere), None);
+    }
+
+    #[test]
+    fn removing_a_providers_key_forgets_what_was_agreed_for_it_and_nothing_else() {
+        let conn = settings();
+        remember_saved_key_destination(&conn, Provider::Vllm, "192.168.1.20:8000").unwrap();
+        remember_saved_key_destination(&conn, Provider::Vllm, "192.168.1.21:8000").unwrap();
+        remember_saved_key_destination(&conn, Provider::LmStudio, "192.168.1.20:1234").unwrap();
+
+        forget_saved_key_destinations(&conn, Provider::Vllm).unwrap();
+        forget_saved_key_destinations(&conn, Provider::Vllm).unwrap();
+
+        assert_eq!(
+            remembered_saved_key_destinations(&conn),
+            vec![saved_key_destination_entry(
+                Provider::LmStudio,
+                "192.168.1.20:1234"
+            )]
+        );
+    }
+
+    #[test]
+    fn a_remembered_row_that_does_not_parse_remembers_nothing() {
+        let conn = settings();
+        crate::core::mcp::config::upsert_settings_v2_value(
+            &conn,
+            SAVED_KEY_DESTINATIONS_SETTING,
+            "not json",
+            "security",
+            false,
+        )
+        .unwrap();
+
+        assert!(remembered_saved_key_destinations(&conn).is_empty());
     }
 }

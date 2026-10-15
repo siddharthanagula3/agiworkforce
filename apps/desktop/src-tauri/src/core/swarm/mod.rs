@@ -41,7 +41,7 @@
 //! use swarm::{SwarmOrchestrator, SwarmConfig};
 //!
 //! let config = SwarmConfig::default();
-//! let orchestrator = SwarmOrchestrator::new(config, router, automation, app_handle)?;
+//! let orchestrator = SwarmOrchestrator::new(config, router, app_handle)?;
 //!
 //! // Submit a complex task for parallel execution
 //! let result = orchestrator.execute_swarm_task(goal).await?;
@@ -65,9 +65,46 @@ pub use task_decomposer::{
     DependencyGraph, ParallelizationHint, Subtask, SubtaskType, TaskDecomposer,
 };
 
+use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
+
+static ACTIVE_RUNS: Lazy<Mutex<HashMap<String, Arc<SwarmOrchestrator>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+/// Keeps a swarm run reachable by its goal id for as long as it is in flight,
+/// so a cancel can stop it. Dropping the value forgets the run.
+pub struct ActiveSwarmRun {
+    goal_id: String,
+}
+
+impl ActiveSwarmRun {
+    pub fn track(goal_id: &str, orchestrator: Arc<SwarmOrchestrator>) -> Self {
+        ACTIVE_RUNS.lock().insert(goal_id.to_string(), orchestrator);
+        Self {
+            goal_id: goal_id.to_string(),
+        }
+    }
+}
+
+impl Drop for ActiveSwarmRun {
+    fn drop(&mut self) {
+        ACTIVE_RUNS.lock().remove(&self.goal_id);
+    }
+}
+
+/// Stops the swarm run working on `goal_id`. Returns whether one was in flight.
+pub fn stop_swarm_run(goal_id: &str) -> bool {
+    let Some(orchestrator) = ACTIVE_RUNS.lock().get(goal_id).cloned() else {
+        return false;
+    };
+    orchestrator.stop();
+    true
+}
 
 /// Errors that can occur in the swarm system.
 #[derive(Error, Debug)]

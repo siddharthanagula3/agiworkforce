@@ -1,16 +1,11 @@
 use once_cell::sync::Lazy;
-use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::State;
-use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
-
-use enigo::{Button, Coordinate, Direction, Enigo, Keyboard, Mouse, Settings};
-use xcap::Monitor;
 
 use crate::automation::computer_use::consent::{
     consent_prompt_on_screen, load_consent, persist_consent, process_scope, revoke_consent,
@@ -18,105 +13,17 @@ use crate::automation::computer_use::consent::{
 };
 use crate::automation::computer_use::ComputerUseConsent;
 use crate::automation::computer_use::{
-    zoom_region, AppPermission, AppPermissionManager, ComputerUseAgent, ComputerUseConfig,
-    ComputerUseTask, ExecutionState, InterpolationMethod, PermissionStatus, Region, TaskOutcome,
-    ZoomAction, ZoomLevel, ALWAYS_BLOCKED_BUNDLE_IDS,
+    classify_start_apps, describe_app_permission_block, ActiveWindow, AppPermission,
+    AppPermissionManager, ComputerUseAgent, ComputerUseConfig, ComputerUseSafetyLayer,
+    ComputerUseTask, ExecutionState, PermissionStatus, SafetyConfig, StartCandidate, TargetApp,
+    TaskOutcome, ALWAYS_BLOCKED_BUNDLE_IDS,
 };
 use crate::automation::os_lock::lock_os_automation;
 use crate::core::llm::Provider;
 use crate::sys::commands::llm::LLMState;
 use crate::sys::commands::settings_v2::SettingsServiceState;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ScreenCapture {
-    pub image_data: String,
-    pub width: u32,
-    pub height: u32,
-    pub timestamp: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ComputerAction {
-    pub action_type: ActionType,
-    pub coordinates: Option<(i32, i32)>,
-    pub text: Option<String>,
-    pub key: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ActionType {
-    Click,
-    DoubleClick,
-    RightClick,
-    MoveMouse,
-    Type,
-    KeyPress,
-    Screenshot,
-    Scroll,
-    Zoom,
-}
-
-/// Request structure for zoom region operation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ZoomRegionRequest {
-    /// X coordinate of the region's top-left corner.
-    pub x: i32,
-    /// Y coordinate of the region's top-left corner.
-    pub y: i32,
-    /// Width of the region in pixels.
-    pub width: u32,
-    /// Height of the region in pixels.
-    pub height: u32,
-    /// Zoom level: 2.0 (2x), 4.0 (4x), or 8.0 (8x).
-    #[serde(default = "default_zoom")]
-    pub zoom_level: f32,
-    /// Interpolation method: "nearest", "bilinear", "lanczos3", "catmull_rom".
-    #[serde(default)]
-    pub interpolation: Option<String>,
-    /// Optional path to save the zoomed image.
-    #[serde(default)]
-    pub save_path: Option<String>,
-}
-
-fn default_zoom() -> f32 {
-    2.0
-}
-
-/// Response structure for zoom region operation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ZoomRegionResponse {
-    /// Base64-encoded PNG of the zoomed region.
-    pub image_data: String,
-    /// Width of the zoomed image.
-    pub width: u32,
-    /// Height of the zoomed image.
-    pub height: u32,
-    /// Scale factor that was applied.
-    pub scale_factor: f32,
-    /// Original region coordinates.
-    pub original_x: i32,
-    pub original_y: i32,
-    pub original_width: u32,
-    pub original_height: u32,
-    /// Processing time in milliseconds.
-    pub processing_time_ms: u64,
-    /// Path where image was saved (if requested).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub saved_path: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ComputerUseSession {
-    pub id: String,
-    pub actions: Vec<ComputerAction>,
-    pub screenshots: Vec<ScreenCapture>,
-    pub started_at: u64,
-}
-
 pub struct ComputerUseState {
-    pub sessions: Arc<Mutex<Vec<ComputerUseSession>>>,
-    pub current_session: Arc<Mutex<Option<String>>>,
     opa_executions: HashMap<String, OpaExecutionControl>,
     opa_cancelled_before_start: HashSet<String>,
     opa_completed_executions: VecDeque<String>,
@@ -140,8 +47,6 @@ impl OpaExecutionControl {
 impl ComputerUseState {
     pub fn new() -> Self {
         Self {
-            sessions: Arc::new(Mutex::new(Vec::new())),
-            current_session: Arc::new(Mutex::new(None)),
             opa_executions: HashMap::new(),
             opa_cancelled_before_start: HashSet::new(),
             opa_completed_executions: VecDeque::new(),
@@ -160,7 +65,11 @@ const CONSENT_PROMPT_BUSY_ERROR: &str = "The computer-use consent request is ope
 const AUTOMATION_NOT_SUSPENDED_ERROR: &str = "Computer use cannot ask for permission right now: this app could not pause its own pointer and keyboard control while the request is open. Try again, or restart AGI Workforce.";
 const CONSENT_PROMPT_TITLE: &str = "Allow AGI Workforce to control this computer?";
 const CONSENT_PROMPT_BODY: &str = "AGI Workforce is asking to watch this screen and to move the pointer, type, and click on your behalf. The permission lasts until you turn computer use off in Settings or quit AGI Workforce. Allow this only if you just started a computer-use task yourself.";
+const CONSENT_PROMPT_ALLOW_LABEL: &str = "Allow";
 const CONSENT_PROMPT_COOLDOWN: Duration = Duration::from_secs(30);
+const DESKTOP_GATE_UNAVAILABLE_ERROR: &str = "Desktop control is unavailable: its safety checks did not start, so no app can be checked before it is used.";
+const SELF_CONTROL_REFUSED_ERROR: &str =
+    "AGI Workforce does not click or type into its own window. Name another app to use.";
 
 static CONSENT_PROMPT: Lazy<ConsentPrompt> = Lazy::new(ConsentPrompt::default);
 
@@ -231,9 +140,8 @@ impl ConsentPrompt {
 /// A grant is minted only by the native prompt below, which is answered on the
 /// desktop rather than in the webview, and while that prompt is on screen the
 /// whole process is barred from synthesizing input at it: commands refuse
-/// through this gate, and everything else, the script executor, the agent
-/// loops, the LLM UI tools, stalls on the OS-automation lock the prompt
-/// holds.
+/// through this gate, and everything else, the agent loops and the LLM UI
+/// tools, stalls on the OS-automation lock the prompt holds.
 pub(crate) async fn require_consent(
     app_handle: &tauri::AppHandle,
     settings: &SettingsServiceState,
@@ -245,14 +153,155 @@ pub(crate) async fn require_consent(
     .await
 }
 
-/// Runs `action` only once `gate` has allowed it, so a refused gate can never
-/// be a step the action already took.
-pub(crate) async fn run_when_consented<T, E>(
-    gate: impl Future<Output = Result<(), E>>,
-    action: impl Future<Output = Result<T, E>>,
-) -> Result<T, E> {
-    gate.await?;
-    action.await
+/// The chat `ui_*` tools act outside an observe-plan-act run, so each action
+/// passes the gates a run step passes: device consent, the user's takeover, a
+/// run that already owns the desktop, and the per-app registry with its
+/// refuse-list, judged against the app the action is aimed at. `run_id` is the
+/// observe-plan-act run a routed step belongs to, which owns the desktop
+/// already and so is not refused as a second owner.
+pub(crate) async fn authorize_desktop_action(
+    app_handle: &tauri::AppHandle,
+    target: &TargetApp,
+    run_id: Option<&str>,
+) -> Result<(), String> {
+    use tauri::Manager as _;
+
+    let settings = app_handle
+        .try_state::<SettingsServiceState>()
+        .ok_or_else(|| CONSENT_REQUIRED_ERROR.to_string())?;
+    require_consent(app_handle, settings.inner()).await?;
+
+    crate::automation::computer_use::control::ensure_agent_in_control()
+        .map_err(|e| e.to_string())?;
+
+    let runs = app_handle
+        .try_state::<Arc<Mutex<ComputerUseState>>>()
+        .ok_or_else(|| DESKTOP_GATE_UNAVAILABLE_ERROR.to_string())?;
+    if let Some(active) = runs
+        .lock()
+        .await
+        .opa_executions
+        .keys()
+        .find(|active| Some(active.as_str()) != run_id)
+    {
+        return Err(format!(
+            "computer-use execution '{active}' already owns desktop control"
+        ));
+    }
+
+    refuse_app(app_handle, target).await
+}
+
+/// Judges the app found in front immediately before input is sent, so an app
+/// that took focus after the target was brought forward is caught.
+pub(crate) async fn confirm_target_in_front(
+    app_handle: &tauri::AppHandle,
+    target: &TargetApp,
+    front: Option<TargetApp>,
+) -> Result<(), String> {
+    crate::automation::computer_use::control::ensure_agent_in_control()
+        .map_err(|e| e.to_string())?;
+    let front = target_still_in_front(target, front)?;
+    refuse_app(app_handle, &front).await
+}
+
+fn target_still_in_front(
+    target: &TargetApp,
+    front: Option<TargetApp>,
+) -> Result<TargetApp, String> {
+    match front {
+        Some(front) if front.pid == target.pid => Ok(front),
+        _ => Err(format!(
+            "'{}' is no longer the app in front, so nothing was clicked or typed.",
+            target.name
+        )),
+    }
+}
+
+/// Judges an app that is not running, or is known only by a name: the
+/// refuse-list and the per-app registry by name. An app nobody approved is
+/// refused, so a run cannot launch or raise one to get it on screen.
+pub(crate) async fn refuse_app_named(
+    app_handle: &tauri::AppHandle,
+    app_name: &str,
+) -> Result<(), String> {
+    use tauri::Manager as _;
+
+    let permissions = app_handle
+        .try_state::<Arc<AppPermissionManager>>()
+        .ok_or_else(|| DESKTOP_GATE_UNAVAILABLE_ERROR.to_string())?;
+    refuse_app_window(
+        permissions.inner().clone(),
+        Some(ActiveWindow {
+            app_name: app_name.to_string(),
+            window_title: String::new(),
+            bundle_id: None,
+        }),
+        &app_handle.config().identifier,
+    )
+    .await
+}
+
+/// Whether `app` is this app, by process or by bundle id.
+pub(crate) fn is_own_app(app_handle: &tauri::AppHandle, app: &TargetApp) -> bool {
+    u32::try_from(app.pid).ok() == Some(std::process::id())
+        || app.bundle_id.as_deref() == Some(app_handle.config().identifier.as_str())
+}
+
+/// The running apps a run could start in, for the first step planned without
+/// a screenshot.
+pub(crate) async fn start_candidates(
+    app_handle: &tauri::AppHandle,
+    running: Vec<TargetApp>,
+) -> Result<Vec<StartCandidate>, String> {
+    use tauri::Manager as _;
+
+    let permissions = app_handle
+        .try_state::<Arc<AppPermissionManager>>()
+        .ok_or_else(|| DESKTOP_GATE_UNAVAILABLE_ERROR.to_string())?;
+    Ok(classify_start_apps(permissions.inner(), running, |app| {
+        is_own_app(app_handle, app)
+    })
+    .await)
+}
+
+pub(crate) async fn refuse_app(
+    app_handle: &tauri::AppHandle,
+    app: &TargetApp,
+) -> Result<(), String> {
+    use tauri::Manager as _;
+
+    if is_own_app(app_handle, app) {
+        return Err(SELF_CONTROL_REFUSED_ERROR.to_string());
+    }
+    let permissions = app_handle
+        .try_state::<Arc<AppPermissionManager>>()
+        .ok_or_else(|| DESKTOP_GATE_UNAVAILABLE_ERROR.to_string())?;
+    refuse_app_window(
+        permissions.inner().clone(),
+        Some(app.as_active_window()),
+        &app_handle.config().identifier,
+    )
+    .await
+}
+
+async fn refuse_app_window(
+    permissions: Arc<AppPermissionManager>,
+    window: Option<ActiveWindow>,
+    own_bundle_id: &str,
+) -> Result<(), String> {
+    if window
+        .as_ref()
+        .and_then(|window| window.bundle_id.as_deref())
+        .is_some_and(|bundle_id| bundle_id == own_bundle_id)
+    {
+        return Err(SELF_CONTROL_REFUSED_ERROR.to_string());
+    }
+    let gate = ComputerUseSafetyLayer::with_app_permissions(SafetyConfig::default(), permissions);
+    match gate.check_foreground_app(window).await {
+        None => Ok(()),
+        Some(reason) => Err(describe_app_permission_block(&reason)),
+    }
 }
 
 async fn require_consent_via<P, F>(
@@ -292,9 +341,9 @@ where
 }
 
 /// F20 (audit 2026-08-21, recovery): refusing synthetic input command by
-/// command only holds while every emitter is a command. The script executor,
-/// the autonomous agent loop and the LLM UI tools all reach `MouseSimulator`
-/// without one, so the prompt instead takes the process-wide OS-automation lock
+/// command only holds while every emitter is a command. The autonomous agent
+/// loop and the LLM UI tools both reach `MouseSimulator` without one, so the
+/// prompt instead takes the process-wide OS-automation lock
 /// that every synthetic click, keystroke, clipboard write and screen capture in
 /// this process has to take. While the user is deciding there is no thread left
 /// that can press the dialog's buttons, and none that can photograph where they
@@ -353,20 +402,15 @@ fn refuse_while_prompt_is_open(prompt_gate: &ConsentPrompt) -> Result<(), String
 }
 
 async fn native_consent_prompt(app_handle: tauri::AppHandle) -> bool {
-    tokio::task::spawn_blocking(move || {
-        app_handle
-            .dialog()
-            .message(CONSENT_PROMPT_BODY)
-            .title(CONSENT_PROMPT_TITLE)
-            .kind(MessageDialogKind::Warning)
-            .buttons(MessageDialogButtons::OkCancelCustom(
-                "Allow".to_string(),
-                "Don't allow".to_string(),
-            ))
-            .blocking_show()
-    })
+    crate::sys::native_confirm::confirm(
+        &app_handle,
+        crate::sys::native_confirm::NativeConfirm {
+            title: CONSENT_PROMPT_TITLE.to_string(),
+            body: CONSENT_PROMPT_BODY.to_string(),
+            confirm_label: CONSENT_PROMPT_ALLOW_LABEL.to_string(),
+        },
+    )
     .await
-    .unwrap_or(false)
 }
 
 fn consent_granted(scope: &ConsentScope, settings: &SettingsServiceState) -> Result<bool, String> {
@@ -397,672 +441,6 @@ fn clear_consent(scope: &ConsentScope, settings: &SettingsServiceState) -> Resul
         .map_err(|e| format!("Failed to clear computer-use consent: {e}"))?;
     revoke_consent(scope, &service)
         .map_err(|e| format!("Failed to clear computer-use consent: {e}"))
-}
-
-#[tauri::command]
-pub async fn computer_use_start_session(
-    state: State<'_, Arc<Mutex<ComputerUseState>>>,
-    app_handle: tauri::AppHandle,
-    settings: State<'_, SettingsServiceState>,
-) -> Result<String, String> {
-    require_consent(&app_handle, &settings).await?;
-    let computer_state = state.lock().await;
-    let session_id = uuid::Uuid::new_v4().to_string();
-
-    let session = ComputerUseSession {
-        id: session_id.clone(),
-        actions: Vec::new(),
-        screenshots: Vec::new(),
-        started_at: current_timestamp(),
-    };
-
-    let mut sessions = computer_state.sessions.lock().await;
-    sessions.push(session);
-
-    let mut current = computer_state.current_session.lock().await;
-    *current = Some(session_id.clone());
-
-    tracing::info!("Started computer use session: {}", session_id);
-    Ok(session_id)
-}
-
-/// Internal screen-capture worker, does the actual work without any
-/// confirmation gate. Used by both the gated IPC entry point
-/// (`computer_use_capture_screen`) and the dispatcher
-/// (`computer_use_execute_tool`), which has its own dispatch-level gate.
-/// Calling this from a non-IPC code path bypasses the user-confirmation
-/// gate, so any new caller MUST justify why bypass is acceptable.
-async fn capture_screen_inner(
-    state: &Arc<Mutex<ComputerUseState>>,
-) -> Result<ScreenCapture, String> {
-    tracing::info!("Capturing screen");
-
-    let monitors = Monitor::all().map_err(|e| format!("Failed to list monitors: {}", e))?;
-    let monitor = monitors.first().ok_or("No monitors found")?;
-
-    let image = monitor
-        .capture_image()
-        .map_err(|e| format!("Failed to capture screen: {}", e))?;
-
-    let width = image.width();
-    let height = image.height();
-
-    let mut png_bytes = Vec::new();
-    {
-        let mut cursor = std::io::Cursor::new(&mut png_bytes);
-        use image::ImageEncoder;
-        image::codecs::png::PngEncoder::new(&mut cursor)
-            .write_image(
-                image.as_raw(),
-                width,
-                height,
-                image::ColorType::Rgba8.into(),
-            )
-            .map_err(|e| format!("Failed to encode image: {}", e))?;
-    }
-
-    use base64::{engine::general_purpose, Engine as _};
-    let image_data = general_purpose::STANDARD.encode(&png_bytes);
-
-    let capture = ScreenCapture {
-        image_data,
-        width,
-        height,
-        timestamp: current_timestamp(),
-    };
-
-    let computer_state = state.lock().await;
-    if let Some(session_id) = computer_state.current_session.lock().await.as_ref() {
-        let mut sessions = computer_state.sessions.lock().await;
-        if let Some(session) = sessions.iter_mut().find(|s| &s.id == session_id) {
-            session.screenshots.push(capture.clone());
-        }
-    }
-
-    Ok(capture)
-}
-
-/// SEV-DESK-09 fix: gate the IPC entry point on `require_confirmation`
-/// to match the click/move_mouse/type_text pattern at lines 296-343.
-/// The dispatcher path (`computer_use_execute_tool`) calls
-/// `capture_screen_inner` directly because it gates `screenshot` once
-/// at the dispatch level (line 403); double-prompting would be hostile.
-/// A direct frontend `invoke('computer_use_capture_screen', ...)` from
-/// a prompt-injected LLM no longer bypasses confirmation.
-#[tauri::command]
-pub async fn computer_use_capture_screen(
-    state: State<'_, Arc<Mutex<ComputerUseState>>>,
-    app_handle: tauri::AppHandle,
-    settings: State<'_, SettingsServiceState>,
-) -> Result<ScreenCapture, String> {
-    require_consent(&app_handle, &settings).await?;
-    require_confirmation(
-        &app_handle,
-        "computer_use_capture_screen",
-        serde_json::json!({}),
-    )
-    .await?;
-    capture_screen_inner(state.inner()).await
-}
-
-/// FIX-003 (Sprint 2): every `computer_use_*` IPC routes through
-/// `tool_confirmation::request_confirmation_simple` before touching the
-/// real OS input layer. Mirrors the gate that `terminal.rs:60-90` and
-/// `git.rs:307+` already enforce. Without this gate, an indirect prompt
-/// injection (PDF, web page, email contents) could drive the agent to
-/// click anywhere or type anything with zero user opportunity to refuse.
-async fn require_confirmation(
-    app_handle: &tauri::AppHandle,
-    tool_name: &'static str,
-    args: serde_json::Value,
-) -> Result<(), String> {
-    let approved = crate::sys::commands::tool_confirmation::request_confirmation_simple(
-        app_handle, tool_name, &args,
-    )
-    .await?;
-    if !approved {
-        return Err(format!(
-            "{tool_name} denied by user. Re-issue the request or grant approval to retry."
-        ));
-    }
-    Ok(())
-}
-
-// DESK-9 (audit 2026-05-03): the previous implementation had
-// `computer_use_execute_tool` calling other `#[tauri::command]` fns
-// directly in Rust. That's unsupported Tauri API misuse, those
-// functions are wrapped by the IPC layer and not meant to be invoked
-// without going through `invoke()`. Refactor: move the OS-interaction
-// + record-action logic into private `perform_*_inner` helpers, and
-// have BOTH the IPC command and execute_tool call those.
-
-async fn click_inner(x: i32, y: i32, state: &Arc<Mutex<ComputerUseState>>) -> Result<(), String> {
-    tracing::info!("Clicking at ({}, {})", x, y);
-    perform_click(x, y).map_err(|e| format!("Failed to click: {}", e))?;
-    let computer_state = state.lock().await;
-    record_action(
-        &computer_state,
-        ComputerAction {
-            action_type: ActionType::Click,
-            coordinates: Some((x, y)),
-            text: None,
-            key: None,
-        },
-    )
-    .await;
-    Ok(())
-}
-
-async fn move_mouse_inner(
-    x: i32,
-    y: i32,
-    state: &Arc<Mutex<ComputerUseState>>,
-) -> Result<(), String> {
-    tracing::info!("Moving mouse to ({}, {})", x, y);
-    perform_move(x, y).map_err(|e| format!("Failed to move mouse: {}", e))?;
-    let computer_state = state.lock().await;
-    record_action(
-        &computer_state,
-        ComputerAction {
-            action_type: ActionType::MoveMouse,
-            coordinates: Some((x, y)),
-            text: None,
-            key: None,
-        },
-    )
-    .await;
-    Ok(())
-}
-
-async fn type_text_inner(text: String, state: &Arc<Mutex<ComputerUseState>>) -> Result<(), String> {
-    // FIX-003: replaced `tracing::info!("Typing text: {}", text)`, the
-    // previous form spilled raw passwords into the log pipeline.
-    tracing::info!("Typing {} chars", text.chars().count());
-    perform_type(&text).map_err(|e| format!("Failed to type text: {}", e))?;
-    let computer_state = state.lock().await;
-    record_action(
-        &computer_state,
-        ComputerAction {
-            action_type: ActionType::Type,
-            coordinates: None,
-            text: Some(text),
-            key: None,
-        },
-    )
-    .await;
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn computer_use_click(
-    x: i32,
-    y: i32,
-    state: State<'_, Arc<Mutex<ComputerUseState>>>,
-    app_handle: tauri::AppHandle,
-    settings: State<'_, SettingsServiceState>,
-) -> Result<(), String> {
-    require_consent(&app_handle, &settings).await?;
-    require_confirmation(
-        &app_handle,
-        "computer_use_click",
-        serde_json::json!({ "x": x, "y": y }),
-    )
-    .await?;
-    click_inner(x, y, state.inner()).await
-}
-
-#[tauri::command]
-pub async fn computer_use_move_mouse(
-    x: i32,
-    y: i32,
-    state: State<'_, Arc<Mutex<ComputerUseState>>>,
-    app_handle: tauri::AppHandle,
-    settings: State<'_, SettingsServiceState>,
-) -> Result<(), String> {
-    require_consent(&app_handle, &settings).await?;
-    require_confirmation(
-        &app_handle,
-        "computer_use_move_mouse",
-        serde_json::json!({ "x": x, "y": y }),
-    )
-    .await?;
-    move_mouse_inner(x, y, state.inner()).await
-}
-
-#[tauri::command]
-pub async fn computer_use_type_text(
-    text: String,
-    state: State<'_, Arc<Mutex<ComputerUseState>>>,
-    app_handle: tauri::AppHandle,
-    settings: State<'_, SettingsServiceState>,
-) -> Result<(), String> {
-    require_consent(&app_handle, &settings).await?;
-    require_confirmation(
-        &app_handle,
-        "computer_use_type_text",
-        // Surface only the length to the approval prompt, the literal
-        // text could contain credentials the model captured from the
-        // user's clipboard or a previous tool call.
-        serde_json::json!({ "chars": text.chars().count() }),
-    )
-    .await?;
-    type_text_inner(text, state.inner()).await
-}
-
-#[tauri::command]
-pub async fn computer_use_get_session(
-    session_id: String,
-    state: State<'_, Arc<Mutex<ComputerUseState>>>,
-) -> Result<ComputerUseSession, String> {
-    let computer_state = state.lock().await;
-    let sessions = computer_state.sessions.lock().await;
-
-    sessions
-        .iter()
-        .find(|s| s.id == session_id)
-        .cloned()
-        .ok_or_else(|| format!("Session not found: {}", session_id))
-}
-
-#[tauri::command]
-pub async fn computer_use_list_sessions(
-    state: State<'_, Arc<Mutex<ComputerUseState>>>,
-) -> Result<Vec<ComputerUseSession>, String> {
-    let computer_state = state.lock().await;
-    let sessions = computer_state.sessions.lock().await;
-    Ok(sessions.clone())
-}
-
-#[tauri::command]
-pub async fn computer_use_execute_tool(
-    tool_name: String,
-    args: serde_json::Value,
-    state: State<'_, Arc<Mutex<ComputerUseState>>>,
-    app_handle: tauri::AppHandle,
-    settings: State<'_, SettingsServiceState>,
-) -> Result<serde_json::Value, String> {
-    require_consent(&app_handle, &settings).await?;
-    tracing::info!("Executing computer use tool: {}", tool_name);
-
-    // FIX-003 (Sprint 2): replaced the previous raw `match tool_name`
-    // with an explicit allow-list. Anything outside this set is refused
-    // before any state lookup so we don't leak the existence of internal
-    // helpers via error messages.
-    const ALLOWED_TOOLS: &[&str] = &[
-        "screenshot",
-        "click",
-        "type",
-        "move_mouse",
-        "zoom",
-        "zoom_at_point",
-    ];
-    if !ALLOWED_TOOLS.contains(&tool_name.as_str()) {
-        return Err(format!(
-            "Unknown computer-use tool: '{tool_name}'. Allowed: {}",
-            ALLOWED_TOOLS.join(", ")
-        ));
-    }
-
-    // DESK-1 (audit 2026-05-03): require_confirmation at the dispatch
-    // entry point so EVERY branch is gated, including `zoom` and
-    // `zoom_at_point` which previously fell through to functions that
-    // didn't gate themselves. Zoom/zoom_at_point are screen-capture
-    // primitives and an indirect prompt-injection that maps screen
-    // contents must be visible to the user.
-    require_confirmation(
-        &app_handle,
-        "computer_use_execute_tool",
-        serde_json::json!({ "tool": tool_name, "args": args }),
-    )
-    .await?;
-
-    match tool_name.as_str() {
-        "screenshot" => {
-            // SEV-DESK-09: dispatcher already gated above (line 403); call the
-            // inner worker directly to avoid a second confirmation prompt.
-            let capture = capture_screen_inner(state.inner()).await?;
-            serde_json::to_value(capture).map_err(|e| format!("Serialization error: {}", e))
-        }
-        "click" => {
-            let x = args["x"].as_i64().ok_or("Missing x coordinate")? as i32;
-            let y = args["y"].as_i64().ok_or("Missing y coordinate")? as i32;
-            // DESK-9: call the helper directly instead of a Tauri command.
-            click_inner(x, y, state.inner()).await?;
-            Ok(serde_json::json!({"success": true}))
-        }
-        "type" => {
-            let text = args["text"].as_str().ok_or("Missing text")?;
-            type_text_inner(text.to_string(), state.inner()).await?;
-            Ok(serde_json::json!({"success": true}))
-        }
-        "move_mouse" => {
-            let x = args["x"].as_i64().ok_or("Missing x coordinate")? as i32;
-            let y = args["y"].as_i64().ok_or("Missing y coordinate")? as i32;
-            move_mouse_inner(x, y, state.inner()).await?;
-            Ok(serde_json::json!({"success": true}))
-        }
-        "zoom" => {
-            let x = args["x"].as_i64().ok_or("Missing x coordinate")? as i32;
-            let y = args["y"].as_i64().ok_or("Missing y coordinate")? as i32;
-            let width = args["width"].as_u64().ok_or("Missing width")? as u32;
-            let height = args["height"].as_u64().ok_or("Missing height")? as u32;
-            let zoom_level = args["zoom_level"].as_f64().unwrap_or(2.0) as f32;
-            let interpolation = args["interpolation"].as_str().map(String::from);
-            let save_path = args["save_path"].as_str().map(String::from);
-
-            let request = ZoomRegionRequest {
-                x,
-                y,
-                width,
-                height,
-                zoom_level,
-                interpolation,
-                save_path,
-            };
-
-            // Dispatcher is already gated above (~line 429); call inner directly.
-            let result = zoom_region_inner(request, state.inner()).await?;
-            serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
-        }
-        "zoom_at_point" => {
-            let x = args["x"].as_i64().ok_or("Missing x coordinate")? as i32;
-            let y = args["y"].as_i64().ok_or("Missing y coordinate")? as i32;
-            let context_size = args["context_size"].as_u64().map(|v| v as u32);
-            let zoom_level = args["zoom_level"].as_f64().map(|v| v as f32);
-
-            let size = context_size.unwrap_or(100);
-            let level = zoom_level.unwrap_or(4.0);
-            let half = (size / 2) as i32;
-            let req = ZoomRegionRequest {
-                x: x - half,
-                y: y - half,
-                width: size,
-                height: size,
-                zoom_level: level,
-                interpolation: None,
-                save_path: None,
-            };
-            // Dispatcher is already gated above (~line 429); call inner directly.
-            let result = zoom_region_inner(req, state.inner()).await?;
-            serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
-        }
-        _ => Err(format!("Unknown tool: {}", tool_name)),
-    }
-}
-
-/// Records an action to the current session for audit/replay purposes
-async fn record_action(state: &ComputerUseState, action: ComputerAction) {
-    if let Some(session_id) = state.current_session.lock().await.as_ref() {
-        let mut sessions = state.sessions.lock().await;
-        if let Some(session) = sessions.iter_mut().find(|s| &s.id == session_id) {
-            session.actions.push(action);
-        }
-    }
-}
-
-fn current_timestamp() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or(std::time::Duration::ZERO)
-        .as_secs()
-}
-
-/// FIX-025 (Sprint 5): on Linux we can't reliably synthesize OS input
-/// without an AT-SPI or libei integration that hasn't been built yet.
-/// Returning a clear error instead of letting `enigo` silently no-op
-/// (X11 sessions) or panic (pure Wayland) lets the frontend surface a
-/// "Computer use is not supported on Linux yet" banner instead of the
-/// agent thinking it succeeded. macOS + Windows continue to work.
-fn ensure_supported_platform() -> Result<(), anyhow::Error> {
-    #[cfg(target_os = "linux")]
-    {
-        Err(anyhow::anyhow!(
-            "Computer use is not supported on Linux yet. Run the agent on macOS or Windows for click/type/move actions."
-        ))
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        Ok(())
-    }
-}
-
-fn perform_click(x: i32, y: i32) -> Result<(), anyhow::Error> {
-    ensure_supported_platform()?;
-    let mut enigo = Enigo::new(&Settings::default())?;
-    enigo.move_mouse(x, y, Coordinate::Abs)?;
-    enigo.button(Button::Left, Direction::Click)?;
-    Ok(())
-}
-
-fn perform_move(x: i32, y: i32) -> Result<(), anyhow::Error> {
-    ensure_supported_platform()?;
-    let mut enigo = Enigo::new(&Settings::default())?;
-    enigo.move_mouse(x, y, Coordinate::Abs)?;
-    Ok(())
-}
-
-fn perform_type(text: &str) -> Result<(), anyhow::Error> {
-    ensure_supported_platform()?;
-    let mut enigo = Enigo::new(&Settings::default())?;
-    enigo.text(text)?;
-    Ok(())
-}
-
-/// Zoom into a screen region for detailed inspection.
-///
-/// Captures the specified region from the screen and scales it up
-/// for improved element detection and OCR accuracy.
-///
-/// # Arguments
-///
-/// * `request` - The zoom request containing region coordinates and zoom level
-///
-/// # Returns
-///
-/// A `ZoomRegionResponse` containing the zoomed image and metadata.
-///
-/// # Examples
-///
-/// ```typescript
-/// // From frontend:
-/// const result = await invoke('computer_use_zoom_region', {
-///   request: {
-///     x: 100,
-///     y: 200,
-///     width: 50,
-///     height: 30,
-///     zoom_level: 4.0,
-///   }
-/// });
-/// // result.image_data contains base64 PNG of 200x120 zoomed image
-/// ```
-///
-/// DESK-ZOOM-REGION-UNGATED (audit 2026-05-06): zoom captures screen pixels.
-/// identical privacy surface to `computer_use_capture_screen`. This command
-/// now requires the same `require_confirmation` gate. The inner work is
-/// extracted to `zoom_region_inner` so the execute_tool dispatcher (already
-/// gated at dispatch level, ~line 429) and `computer_use_zoom_at_point` can
-/// call it without a second confirmation dialog.
-#[tauri::command]
-pub async fn computer_use_zoom_region(
-    request: ZoomRegionRequest,
-    state: State<'_, Arc<Mutex<ComputerUseState>>>,
-    app_handle: tauri::AppHandle,
-    settings: State<'_, SettingsServiceState>,
-) -> Result<ZoomRegionResponse, String> {
-    require_consent(&app_handle, &settings).await?;
-    require_confirmation(
-        &app_handle,
-        "computer_use_zoom_region",
-        serde_json::json!({
-            "x": request.x,
-            "y": request.y,
-            "width": request.width,
-            "height": request.height,
-            "zoom_level": request.zoom_level,
-        }),
-    )
-    .await?;
-
-    zoom_region_inner(request, state.inner()).await
-}
-
-/// Inner zoom implementation, no confirmation gate.
-///
-/// Callers that are already behind a confirmation gate may call this directly:
-/// - `computer_use_zoom_region` (gated immediately above)
-/// - `computer_use_zoom_at_point` (gated inside that command)
-/// - `computer_use_execute_tool` dispatcher (gated at dispatch level, ~line 429)
-///
-/// Any new caller NOT already behind a gate MUST add one before calling this.
-async fn zoom_region_inner(
-    request: ZoomRegionRequest,
-    state: &Arc<Mutex<ComputerUseState>>,
-) -> Result<ZoomRegionResponse, String> {
-    tracing::info!(
-        "Zooming region at ({}, {}) size {}x{} with {}x magnification",
-        request.x,
-        request.y,
-        request.width,
-        request.height,
-        request.zoom_level
-    );
-
-    // Validate zoom level
-    let zoom_level = request.zoom_level.clamp(1.0, 16.0);
-
-    // Parse interpolation method
-    let interpolation = match request.interpolation.as_deref() {
-        Some("nearest") => InterpolationMethod::Nearest,
-        Some("lanczos3") => InterpolationMethod::Lanczos3,
-        Some("catmull_rom") => InterpolationMethod::CatmullRom,
-        _ => InterpolationMethod::Bilinear,
-    };
-
-    // Create zoom action
-    let mut action = ZoomAction::new(
-        Region::new(request.x, request.y, request.width, request.height),
-        ZoomLevel::from_factor(zoom_level),
-    )
-    .with_interpolation(interpolation);
-
-    if let Some(path) = request.save_path.clone() {
-        // SECURITY: confine the screenshot to an app-controlled screenshots dir.
-        // Treat save_path as a FILENAME only (strip any directory/traversal
-        // components) so a model can't write a PNG to an arbitrary location.
-        let file_name = std::path::Path::new(&path)
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "zoom.png".to_string());
-        let screenshots_dir = crate::sys::utils::app_data_dir()
-            .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
-            .join("screenshots");
-        std::fs::create_dir_all(&screenshots_dir)
-            .map_err(|e| format!("Failed to create screenshots dir: {}", e))?;
-        let confined = screenshots_dir.join(file_name);
-        action = action.with_save_path(confined.to_string_lossy().to_string());
-    }
-
-    // Perform zoom
-    let result = zoom_region(&action).map_err(|e| format!("Failed to zoom region: {}", e))?;
-
-    // Record action to session
-    let computer_state = state.lock().await;
-    record_action(
-        &computer_state,
-        ComputerAction {
-            action_type: ActionType::Zoom,
-            coordinates: Some((request.x, request.y)),
-            text: Some(format!(
-                "{}x zoom of {}x{} region",
-                zoom_level, request.width, request.height
-            )),
-            key: None,
-        },
-    )
-    .await;
-
-    Ok(ZoomRegionResponse {
-        image_data: result.image_base64,
-        width: result.width,
-        height: result.height,
-        scale_factor: result.scale_factor,
-        original_x: result.original_region.x,
-        original_y: result.original_region.y,
-        original_width: result.original_region.width,
-        original_height: result.original_region.height,
-        processing_time_ms: result.processing_time_ms,
-        saved_path: result.saved_path,
-    })
-}
-
-/// Zoom around a specific point on the screen.
-///
-/// Creates a square region centered on the given coordinates and zooms in.
-/// Useful when you know the target point but not the exact element bounds.
-///
-/// # Arguments
-///
-/// * `x` - X coordinate to center on
-/// * `y` - Y coordinate to center on
-/// * `context_size` - Size of the region around the point (default: 100 pixels)
-/// * `zoom_level` - Zoom factor (2.0, 4.0, or 8.0)
-#[tauri::command]
-pub async fn computer_use_zoom_at_point(
-    x: i32,
-    y: i32,
-    context_size: Option<u32>,
-    zoom_level: Option<f32>,
-    state: State<'_, Arc<Mutex<ComputerUseState>>>,
-    app_handle: tauri::AppHandle,
-    settings: State<'_, SettingsServiceState>,
-) -> Result<ZoomRegionResponse, String> {
-    require_consent(&app_handle, &settings).await?;
-    let size = context_size.unwrap_or(100);
-    let level = zoom_level.unwrap_or(4.0);
-
-    let half = (size / 2) as i32;
-    let request = ZoomRegionRequest {
-        x: x - half,
-        y: y - half,
-        width: size,
-        height: size,
-        zoom_level: level,
-        interpolation: None,
-        save_path: None,
-    };
-
-    require_confirmation(
-        &app_handle,
-        "computer_use_zoom_at_point",
-        serde_json::json!({
-            "x": request.x,
-            "y": request.y,
-            "width": request.width,
-            "height": request.height,
-            "zoom_level": request.zoom_level,
-        }),
-    )
-    .await?;
-
-    zoom_region_inner(request, state.inner()).await
-}
-
-/// Suggest an appropriate zoom level based on element dimensions.
-///
-/// Smaller elements need higher zoom levels for accurate inspection.
-///
-/// # Arguments
-///
-/// * `width` - Element width in pixels
-/// * `height` - Element height in pixels
-///
-/// # Returns
-///
-/// Recommended zoom level (2.0, 4.0, or 8.0)
-#[tauri::command]
-pub fn computer_use_suggest_zoom_level(width: u32, height: u32) -> f32 {
-    crate::automation::computer_use::suggest_zoom_level(width, height).scale_factor()
 }
 
 /// TRUST BOUNDARY (desktop-trust-boundary-01): rejects OPA submissions whose
@@ -1293,7 +671,13 @@ pub async fn computer_use_execute_opa_task(
     permissions_state: State<'_, Arc<AppPermissionManager>>,
     settings: State<'_, SettingsServiceState>,
 ) -> Result<serde_json::Value, String> {
+    if let Some(off) =
+        crate::sys::commands::capabilities::capability_refusal(&app_handle, "computer_use").await
+    {
+        return Err(off);
+    }
     require_consent(&app_handle, &settings).await?;
+    crate::ui::hooks::gate_user_prompt("computer-use", &description).await?;
 
     let router = llm_state.router.clone();
 
@@ -1379,13 +763,152 @@ pub async fn app_permissions_list(
     Ok(permissions_state.list_permissions().await)
 }
 
+/// Letting an app be used, or lifting a block on one, is decided by the user
+/// in a dialog the operating system draws. The settings page renders model
+/// output, and a script in it could otherwise allow any app it named.
+const ALLOW_APP_CONFIRM_LABEL: &str = "Allow App";
+const UNBLOCK_APP_CONFIRM_LABEL: &str = "Stop Blocking";
+const APP_PERMISSION_DECLINED_MESSAGE: &str =
+    "The change was not confirmed, so the app's permission is as it was.";
+const APP_ALWAYS_BLOCKED_MESSAGE: &str =
+    "This app is on the list computer use never touches, so its permission cannot be loosened.";
+const APP_NOT_SHOWN_WHOLE_MESSAGE: &str =
+    "This app's name or identifier cannot be shown in full, so its permission cannot be loosened.";
+const NO_APP_IDENTIFIER: &str = "none reported";
+const MAX_SHOWN_APP_TEXT_CHARS: usize = 120;
+
+/// One app-permission question at a time, and a wait after a no that grows
+/// while the noes keep coming.
+static APP_PERMISSION_DECISIONS: crate::sys::native_confirm::ConfirmGate =
+    crate::sys::native_confirm::ConfirmGate::new();
+
+/// The app a looser permission would be for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PermissionSubject {
+    name: String,
+    bundle_id: Option<String>,
+}
+
+/// Who a looser permission is for, from what this process can see rather
+/// than from what the window sent. Where running apps can be listed the app
+/// has to be running, and its own name and bundle id replace the ones
+/// supplied, so a request cannot pair one app's name with another's
+/// identifier. Elsewhere there is no list to check against: the supplied name
+/// and identifier are used as they are, and the dialog shows both.
+fn permission_subject(
+    app_name: &str,
+    bundle_id: Option<&str>,
+) -> Result<PermissionSubject, String> {
+    if cfg!(target_os = "macos") {
+        let app =
+            crate::automation::computer_use::resolve_target_app(bundle_id.unwrap_or(app_name))?;
+        return Ok(PermissionSubject {
+            name: app.name,
+            bundle_id: app.bundle_id,
+        });
+    }
+    Ok(PermissionSubject {
+        name: app_name.to_string(),
+        bundle_id: bundle_id.map(String::from),
+    })
+}
+
+fn shown_app_text(text: &str) -> Option<String> {
+    let shown = crate::sys::native_confirm::shown_value(text);
+    (shown.chars().count() <= MAX_SHOWN_APP_TEXT_CHARS).then_some(shown)
+}
+
+/// The question for a looser permission. An app is allowed only under a name
+/// and identifier the dialog shows exactly as they are stored; lifting a
+/// block may show them with their hidden characters marked, since the stored
+/// entry is what is being removed.
+fn looser_permission_question(
+    subject: &PermissionSubject,
+    requested: PermissionStatus,
+) -> Result<crate::sys::native_confirm::NativeConfirm, String> {
+    let name = shown_app_text(&subject.name);
+    let identifier = match subject.bundle_id.as_deref() {
+        Some(bundle_id) => shown_app_text(bundle_id),
+        None => Some(NO_APP_IDENTIFIER.to_string()),
+    };
+    let (Some(name), Some(identifier)) = (name, identifier) else {
+        return Err(APP_NOT_SHOWN_WHOLE_MESSAGE.to_string());
+    };
+
+    if requested == PermissionStatus::Allowed {
+        let marked = name != subject.name
+            || subject
+                .bundle_id
+                .as_deref()
+                .is_some_and(|bundle_id| identifier != bundle_id);
+        if marked {
+            return Err(APP_NOT_SHOWN_WHOLE_MESSAGE.to_string());
+        }
+        return Ok(crate::sys::native_confirm::NativeConfirm {
+            title: "Allow computer control of this app?".to_string(),
+            body: format!(
+                "AGI Workforce will be able to watch \"{name}\" and to click and type in it during computer-use tasks, without asking again.\n\nApp: {name}\nIdentifier: {identifier}\n\nYou can change this in Settings, under Computer Use."
+            ),
+            confirm_label: ALLOW_APP_CONFIRM_LABEL.to_string(),
+        });
+    }
+
+    Ok(crate::sys::native_confirm::NativeConfirm {
+        title: "Stop blocking this app?".to_string(),
+        body: format!(
+            "\"{name}\" is blocked for computer use. Without the block it still cannot be used until you allow it, but it is no longer refused outright.\n\nApp: {name}\nIdentifier: {identifier}"
+        ),
+        confirm_label: UNBLOCK_APP_CONFIRM_LABEL.to_string(),
+    })
+}
+
+/// Asks, unless the app already has this much latitude under the name and
+/// identifier this process found for it.
+async fn confirm_looser_permission(
+    app_handle: &tauri::AppHandle,
+    permissions: &AppPermissionManager,
+    subject: &PermissionSubject,
+    requested: PermissionStatus,
+) -> Result<(), String> {
+    use crate::automation::computer_use::is_always_blocked_bundle;
+
+    if is_always_blocked_bundle(&subject.name)
+        || subject
+            .bundle_id
+            .as_deref()
+            .is_some_and(is_always_blocked_bundle)
+    {
+        return Err(APP_ALWAYS_BLOCKED_MESSAGE.to_string());
+    }
+    if !permissions
+        .loosens(&subject.name, subject.bundle_id.as_deref(), requested)
+        .await
+    {
+        return Ok(());
+    }
+
+    let question = looser_permission_question(subject, requested)?;
+    let request = format!(
+        "{requested:?}\n{}\n{}",
+        subject.name,
+        subject.bundle_id.as_deref().unwrap_or_default()
+    );
+    let confirmed = APP_PERMISSION_DECISIONS
+        .confirm(app_handle, &request, question)
+        .await
+        .map_err(|held| held.message())?;
+    if confirmed {
+        Ok(())
+    } else {
+        Err(APP_PERMISSION_DECLINED_MESSAGE.to_string())
+    }
+}
+
 /// Sets the permission status for an app (allow / deny / ask).
 ///
-/// `bundle_id` is optional but recommended on macOS, it lets the gate
-/// match against `frontmostApplication.bundleIdentifier` rather than the
-/// localized display name.
-///
-/// `status` accepts: `allowed`, `denied`, or `ask`.
+/// `status` accepts: `allowed`, `denied`, or `ask`. A change that lets the
+/// app be used more than it can be now is confirmed in a native dialog that
+/// names the app; one that restricts it is stored as sent.
 #[tauri::command]
 pub async fn app_permissions_set(
     app_name: String,
@@ -1394,7 +917,7 @@ pub async fn app_permissions_set(
     app_handle: tauri::AppHandle,
     permissions_state: State<'_, Arc<AppPermissionManager>>,
 ) -> Result<(), String> {
-    let parsed = match status.to_lowercase().as_str() {
+    let requested = match status.to_lowercase().as_str() {
         "allowed" | "allow" => PermissionStatus::Allowed,
         "denied" | "deny" | "block" | "blocked" => PermissionStatus::Denied,
         "ask" | "ask_every_time" | "askeverytime" => PermissionStatus::AskEveryTime,
@@ -1405,24 +928,63 @@ pub async fn app_permissions_set(
         }
     };
 
-    permissions_state
-        .set_permission_with_bundle(&app_name, bundle_id.as_deref(), parsed)
-        .await;
+    let permissions = permissions_state.inner();
+    let given_bundle_id = bundle_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|bundle_id| !bundle_id.is_empty());
+    let subject = if permissions
+        .loosens(&app_name, given_bundle_id, requested)
+        .await
+    {
+        let subject = permission_subject(&app_name, given_bundle_id)?;
+        confirm_looser_permission(&app_handle, permissions, &subject, requested).await?;
+        subject
+    } else {
+        PermissionSubject {
+            bundle_id: given_bundle_id.map(String::from),
+            name: app_name,
+        }
+    };
 
-    persist_permissions(&app_handle, permissions_state.inner()).await;
+    permissions
+        .set_permission_with_bundle(&subject.name, subject.bundle_id.as_deref(), requested)
+        .await;
+    persist_permissions(&app_handle, permissions).await;
     Ok(())
 }
 
 /// Removes a per-app permission entry, reverting it to `AskEveryTime` on
-/// next encounter.
+/// next encounter. Removing a block is a looser permission and is confirmed
+/// in a native dialog; removing anything else is not.
 #[tauri::command]
 pub async fn app_permissions_remove(
     app_name: String,
     app_handle: tauri::AppHandle,
     permissions_state: State<'_, Arc<AppPermissionManager>>,
 ) -> Result<(), String> {
-    permissions_state.remove_permission(&app_name).await;
-    persist_permissions(&app_handle, permissions_state.inner()).await;
+    let permissions = permissions_state.inner();
+    let blocked = permissions
+        .entry(&app_name)
+        .await
+        .filter(|entry| entry.status == PermissionStatus::Denied);
+    if let Some(blocked) = blocked {
+        let subject = PermissionSubject {
+            name: blocked.app_name,
+            bundle_id: blocked.bundle_id,
+        };
+        let question = looser_permission_question(&subject, PermissionStatus::AskEveryTime)?;
+        let confirmed = APP_PERMISSION_DECISIONS
+            .confirm(&app_handle, &format!("remove\n{}", subject.name), question)
+            .await
+            .map_err(|held| held.message())?;
+        if !confirmed {
+            return Err(APP_PERMISSION_DECLINED_MESSAGE.to_string());
+        }
+    }
+
+    permissions.remove_permission(&app_name).await;
+    persist_permissions(&app_handle, permissions).await;
     Ok(())
 }
 
@@ -1477,42 +1039,52 @@ pub fn app_permissions_active_window() -> Option<crate::automation::computer_use
 }
 
 #[tauri::command]
-pub fn computer_use_list_displays() -> Result<Vec<crate::automation::screen::ScreenInfo>, String> {
-    crate::automation::screen::list_displays().map_err(|e| format!("Failed to list displays: {e}"))
-}
-
-#[tauri::command]
-pub fn computer_use_set_target_display(
-    display_id: Option<u32>,
-) -> Result<crate::automation::screen::ScreenInfo, String> {
-    crate::automation::computer_use::control::set_target_display(display_id)
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 pub fn computer_use_take_over() -> crate::automation::computer_use::ControlState {
     tracing::info!("User took over screen control from the agent");
     crate::automation::computer_use::control::take_over()
 }
 
-#[tauri::command]
-pub fn computer_use_hand_back() -> crate::automation::computer_use::ControlState {
-    tracing::info!("User handed screen control back to the agent");
-    crate::automation::computer_use::control::hand_back()
+const HAND_BACK_CONFIRM_LABEL: &str = "Hand Back";
+const HAND_BACK_REQUEST: &str = "hand-back";
+const HAND_BACK_DECLINED_MESSAGE: &str =
+    "Handing control back was not confirmed, so the screen is still yours.";
+
+/// One hand-back question at a time, and a wait after a no that grows while
+/// the noes keep coming.
+static HAND_BACK_DECISIONS: crate::sys::native_confirm::ConfirmGate =
+    crate::sys::native_confirm::ConfirmGate::new();
+
+fn hand_back_question() -> crate::sys::native_confirm::NativeConfirm {
+    crate::sys::native_confirm::NativeConfirm {
+        title: "Hand screen control back to AGI Workforce?".to_string(),
+        body: "You took over the screen, so nothing can move the pointer or type. Handing control back lets computer-use tasks click and type again in the apps you allowed.".to_string(),
+        confirm_label: HAND_BACK_CONFIRM_LABEL.to_string(),
+    }
 }
 
+/// Resuming control after the user took over is the user's decision alone. A
+/// click on "Hand back" in the window reaches this command exactly as a
+/// script calling it would, and nothing here can tell the two apart, so the
+/// yes is taken in a native dialog. Nothing is asked when the screen was
+/// never taken over, because nothing changes.
 #[tauri::command]
-pub async fn computer_use_stop_session(
-    state: State<'_, Arc<Mutex<ComputerUseState>>>,
-    session_id: String,
-) -> Result<(), String> {
-    let computer_state = state.lock().await;
-    let mut current = computer_state.current_session.lock().await;
-    if current.as_deref() == Some(&session_id) {
-        *current = None;
-        tracing::info!("Stopped computer use session: {}", session_id);
+pub async fn computer_use_hand_back(
+    app_handle: tauri::AppHandle,
+) -> Result<crate::automation::computer_use::ControlState, String> {
+    use crate::automation::computer_use::control;
+
+    if !control::is_taken_over() {
+        return Ok(control::control_state());
     }
-    Ok(())
+    let confirmed = HAND_BACK_DECISIONS
+        .confirm(&app_handle, HAND_BACK_REQUEST, hand_back_question())
+        .await
+        .map_err(|held| held.message())?;
+    if !confirmed {
+        return Err(HAND_BACK_DECLINED_MESSAGE.to_string());
+    }
+    tracing::info!("User handed screen control back to the agent");
+    Ok(control::hand_back())
 }
 
 #[cfg(test)]
@@ -1523,6 +1095,134 @@ mod tests {
     use crate::sys::commands::chat::types::ChatExecutionMode;
     use rusqlite::Connection;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    fn subject(name: &str, bundle_id: Option<&str>) -> PermissionSubject {
+        PermissionSubject {
+            name: name.to_string(),
+            bundle_id: bundle_id.map(String::from),
+        }
+    }
+
+    #[test]
+    fn the_app_permission_and_hand_back_buttons_are_ones_the_native_dialog_can_ask_with() {
+        for label in [
+            ALLOW_APP_CONFIRM_LABEL,
+            UNBLOCK_APP_CONFIRM_LABEL,
+            HAND_BACK_CONFIRM_LABEL,
+        ] {
+            assert!(crate::sys::native_confirm::can_ask_with(label), "{label}");
+        }
+        assert_eq!(hand_back_question().confirm_label, HAND_BACK_CONFIRM_LABEL);
+    }
+
+    #[test]
+    fn the_question_for_allowing_an_app_names_it_and_its_identifier() {
+        let question = looser_permission_question(
+            &subject("Notes", Some("com.apple.Notes")),
+            PermissionStatus::Allowed,
+        )
+        .expect("a question for an app that can be shown");
+
+        assert_eq!(question.confirm_label, ALLOW_APP_CONFIRM_LABEL);
+        assert!(question.body.contains("App: Notes"), "{}", question.body);
+        assert!(
+            question.body.contains("Identifier: com.apple.Notes"),
+            "{}",
+            question.body
+        );
+    }
+
+    #[test]
+    fn an_app_whose_name_or_identifier_hides_part_of_itself_cannot_be_allowed() {
+        let too_long = "N".repeat(MAX_SHOWN_APP_TEXT_CHARS + 1);
+        for name in [
+            "Notes\u{200B}",
+            "Notes\nIdentifier: com.apple.Notes",
+            "",
+            too_long.as_str(),
+        ] {
+            assert_eq!(
+                looser_permission_question(&subject(name, None), PermissionStatus::Allowed)
+                    .unwrap_err(),
+                APP_NOT_SHOWN_WHOLE_MESSAGE,
+                "{name:?}"
+            );
+        }
+        assert_eq!(
+            looser_permission_question(
+                &subject("Notes", Some("com.apple.Notes\u{202E}")),
+                PermissionStatus::Allowed
+            )
+            .unwrap_err(),
+            APP_NOT_SHOWN_WHOLE_MESSAGE
+        );
+    }
+
+    #[test]
+    fn lifting_a_block_shows_the_stored_entry_with_its_hidden_characters_marked() {
+        let question = looser_permission_question(
+            &subject("Notes\u{200B}", None),
+            PermissionStatus::AskEveryTime,
+        )
+        .expect("a stored block can always be named");
+
+        assert_eq!(question.confirm_label, UNBLOCK_APP_CONFIRM_LABEL);
+        assert!(
+            question.body.contains("App: Notes\u{FFFD}"),
+            "{}",
+            question.body
+        );
+        assert!(
+            question.body.contains("Identifier: none reported"),
+            "{}",
+            question.body
+        );
+    }
+
+    /// The window cannot be trusted to have asked: each of these commands
+    /// takes the user's yes itself, before the change it guards.
+    #[test]
+    fn a_looser_app_permission_and_a_hand_back_are_confirmed_before_they_take_effect() {
+        let source = include_str!("computer_use.rs");
+        let body_of = |signature: &str| {
+            source
+                .split(signature)
+                .nth(1)
+                .and_then(|rest| rest.split("\n}\n").next())
+                .unwrap_or_else(|| panic!("{signature} is missing"))
+        };
+
+        let set = body_of("pub async fn app_permissions_set(");
+        assert!(
+            set.find("confirm_looser_permission(").expect("set asks")
+                < set
+                    .find(".set_permission_with_bundle(")
+                    .expect("set stores")
+        );
+        let remove = body_of("pub async fn app_permissions_remove(");
+        assert!(
+            remove
+                .find("APP_PERMISSION_DECISIONS")
+                .expect("remove asks")
+                < remove.find(".remove_permission(").expect("remove removes")
+        );
+        let hand_back = body_of("pub async fn computer_use_hand_back(");
+        assert!(
+            hand_back
+                .find("HAND_BACK_DECISIONS")
+                .expect("hand-back asks")
+                < hand_back
+                    .find("control::hand_back()")
+                    .expect("hand-back resumes")
+        );
+    }
+
+    #[test]
+    fn the_allow_button_is_one_the_native_dialog_can_ask_with() {
+        assert!(crate::sys::native_confirm::can_ask_with(
+            CONSENT_PROMPT_ALLOW_LABEL
+        ));
+    }
 
     fn settings_state() -> SettingsServiceState {
         let conn = Connection::open_in_memory().expect("in-memory settings database");
@@ -1702,10 +1402,9 @@ mod tests {
     }
 
     /// F20 (audit 2026-08-21, recovery): the refusal above is blind to every
-    /// caller that never passes through a command, the script executor behind
-    /// `automation_execute_script`, the autonomous agent loop, the LLM UI
-    /// tools, and each of them can drive a real click at the dialog's "Allow"
-    /// button. All of them have to take the process-wide OS-automation lock
+    /// caller that never passes through a command, the autonomous agent loop
+    /// and the LLM UI tools, and each of them can drive a real click at the
+    /// dialog's "Allow" button. Both have to take the process-wide OS-automation lock
     /// first, so the prompt holds it: the probe stands in for that click and
     /// must not reach the OS until the user has answered.
     #[tokio::test]
@@ -1741,31 +1440,6 @@ mod tests {
             .expect("probe thread")
             .join()
             .expect("probe thread");
-    }
-
-    /// The gate is only a gate while it runs first.
-    #[tokio::test]
-    async fn a_refused_gate_never_reaches_the_action() {
-        let performed = Arc::new(AtomicBool::new(false));
-        let action = {
-            let performed = Arc::clone(&performed);
-            async move {
-                performed.store(true, Ordering::SeqCst);
-                Ok(())
-            }
-        };
-
-        let refusal = run_when_consented(
-            std::future::ready(Err(CONSENT_REQUIRED_ERROR.to_string())),
-            action,
-        )
-        .await
-        .expect_err("a refused gate must refuse the action");
-        assert_eq!(refusal, CONSENT_REQUIRED_ERROR);
-        assert!(
-            !performed.load(Ordering::SeqCst),
-            "the action must not run before consent is verified"
-        );
     }
 
     #[tokio::test]
@@ -1862,23 +1536,130 @@ mod tests {
     #[test]
     fn every_acting_computer_use_command_opens_with_the_consent_gate() {
         const SOURCE: &str = include_str!("computer_use.rs");
-        for command in [
-            "pub async fn computer_use_start_session(",
-            "pub async fn computer_use_capture_screen(",
-            "pub async fn computer_use_click(",
-            "pub async fn computer_use_move_mouse(",
-            "pub async fn computer_use_type_text(",
-            "pub async fn computer_use_execute_tool(",
-            "pub async fn computer_use_zoom_region(",
-            "pub async fn computer_use_zoom_at_point(",
-            "pub async fn computer_use_execute_opa_task(",
-        ] {
+        for command in ["pub async fn computer_use_execute_opa_task("] {
             assert_eq!(
                 first_statement_of(SOURCE, command),
                 "require_consent(&app_handle, &settings).await?;",
                 "{command} must refuse to act before it checks persisted computer-use consent"
             );
         }
+    }
+
+    fn front(app_name: &str, bundle_id: &str) -> Option<ActiveWindow> {
+        Some(ActiveWindow {
+            app_name: app_name.to_string(),
+            window_title: String::new(),
+            bundle_id: Some(bundle_id.to_string()),
+        })
+    }
+
+    /// The chat `ui_*` tools used to act on whatever app was in front with no
+    /// per-app check at all; they now refuse exactly what a run step refuses,
+    /// and also this app's own window, where a synthetic click could answer
+    /// one of its own approval prompts.
+    #[tokio::test]
+    async fn chat_desktop_actions_pass_the_same_per_app_gate_as_a_run() {
+        const OWN: &str = "com.agiworkforce.test";
+        let permissions = Arc::new(AppPermissionManager::new());
+        permissions
+            .set_permission_with_bundle("Notes", Some("com.apple.Notes"), PermissionStatus::Allowed)
+            .await;
+        permissions
+            .set_permission_with_bundle(
+                "Robinhood",
+                Some("com.robinhood.app"),
+                PermissionStatus::Allowed,
+            )
+            .await;
+        permissions
+            .set_permission_with_bundle("Mail", Some("com.apple.mail"), PermissionStatus::Denied)
+            .await;
+
+        let allowed =
+            refuse_app_window(permissions.clone(), front("Notes", "com.apple.Notes"), OWN).await;
+        assert_eq!(allowed, Ok(()));
+
+        for (refused, why) in [
+            (
+                front("Robinhood", "com.robinhood.app"),
+                "the finance refuse-list",
+            ),
+            (front("Mail", "com.apple.mail"), "an app the user denied"),
+            (
+                front("Calendar", "com.apple.iCal"),
+                "an app nobody approved",
+            ),
+            (None, "an app that cannot be identified"),
+        ] {
+            assert!(
+                refuse_app_window(permissions.clone(), refused, OWN)
+                    .await
+                    .is_err(),
+                "a chat desktop action reached {why}"
+            );
+        }
+
+        assert_eq!(
+            refuse_app_window(permissions, front("AGI Workforce", OWN), OWN).await,
+            Err(SELF_CONTROL_REFUSED_ERROR.to_string())
+        );
+    }
+
+    /// Launching or focusing an app is how a run gets it on screen, so an app
+    /// known only by name is held to the refuse-list and the registry too.
+    #[tokio::test]
+    async fn an_app_known_only_by_name_is_refused_unless_approved() {
+        const OWN: &str = "com.agiworkforce.test";
+        let named = |name: &str| {
+            Some(ActiveWindow {
+                app_name: name.to_string(),
+                window_title: String::new(),
+                bundle_id: None,
+            })
+        };
+        let permissions = Arc::new(AppPermissionManager::new());
+        permissions
+            .set_permission("Notes", PermissionStatus::Allowed)
+            .await;
+        permissions
+            .set_permission("Robinhood", PermissionStatus::Allowed)
+            .await;
+
+        assert_eq!(
+            refuse_app_window(permissions.clone(), named("Notes"), OWN).await,
+            Ok(())
+        );
+        for refused in ["Robinhood", "Bitwarden", "Terminal", "Calendar"] {
+            assert!(
+                refuse_app_window(permissions.clone(), named(refused), OWN)
+                    .await
+                    .is_err(),
+                "{refused} could be launched or raised"
+            );
+        }
+    }
+
+    /// Input goes to whatever is in front, so a different app taking focus
+    /// between the target's activation and the keystroke must stop the action.
+    #[test]
+    fn input_waits_for_the_target_to_still_be_in_front() {
+        let target = TargetApp {
+            pid: 10,
+            name: "Notes".to_string(),
+            bundle_id: Some("com.apple.Notes".to_string()),
+        };
+        let interloper = TargetApp {
+            pid: 11,
+            name: "Mail".to_string(),
+            bundle_id: Some("com.apple.mail".to_string()),
+        };
+
+        assert_eq!(
+            target_still_in_front(&target, Some(target.clone())),
+            Ok(target.clone())
+        );
+        assert!(target_still_in_front(&target, Some(interloper)).is_err());
+        assert!(target_still_in_front(&target, None).is_err());
     }
 
     /// The gate is only worth the name while the webview cannot answer it for

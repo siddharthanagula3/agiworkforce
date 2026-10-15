@@ -34,6 +34,10 @@ const RECENT_FIRST: usize = 10;
 /// Depth limit for the non-git fallback walk.
 const MAX_WALK_DEPTH: usize = 12;
 
+/// How long the first `@` keystroke waits for `git ls-files` on the
+/// terminal's thread before it falls back to the bounded walk.
+const LIST_FILES_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
 /// One rankable mention candidate: the workspace-relative path, plus the file
 /// name so a query can be scored against the name alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,20 +96,19 @@ pub fn workspace_file_candidates(root: &Path) -> Vec<MentionCandidate> {
 
 /// `git ls-files` over the cached and untracked-but-not-ignored sets, which is
 /// exactly "files a user could mean, minus what `.gitignore` excludes".
-/// `None` when this is not a git work tree or git is unavailable.
+/// `None` when this is not a git work tree, git is unavailable, or git does not
+/// finish within [`LIST_FILES_TIMEOUT`].
 fn git_tracked_and_untracked(root: &Path) -> Option<Vec<String>> {
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args([
-            "ls-files",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-            "-z",
-        ])
-        .output()
-        .ok()?;
+    let mut command = agiworkforce_worktree::host_git();
+    command.arg("-C").arg(root).args([
+        "ls-files",
+        "--cached",
+        "--others",
+        "--exclude-standard",
+        "-z",
+    ]);
+    let output =
+        agiworkforce_worktree::host_git_output_blocking(command, LIST_FILES_TIMEOUT).ok()?;
     if !output.status.success() {
         return None;
     }
@@ -328,7 +331,9 @@ pub fn expand_mentions(text: &str, root: &Path, include_contents: bool) -> Menti
                 .push((mention, "not a file in this workspace".to_string()));
             continue;
         }
-        if crate::sensitive_files::is_sensitive_file(&mention) {
+        if crate::sensitive_files::is_sensitive_file(&mention)
+            || crate::path_security::reads_a_credential_file(&root.join(&mention).to_string_lossy())
+        {
             expansion.skipped.push((
                 mention,
                 "holds credentials, only the path was sent".to_string(),
@@ -499,6 +504,29 @@ mod tests {
         owned.into_iter().map(MentionCandidate::new).collect()
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_gitignore_that_never_ends_falls_back_to_the_walk_in_bounded_time() {
+        let root = tempfile::tempdir().unwrap();
+        let init = std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(root.path())
+            .status()
+            .unwrap();
+        assert!(init.success());
+        std::fs::write(root.path().join("main.rs"), "fn main() {}").unwrap();
+        let fifo = std::process::Command::new("mkfifo")
+            .arg(root.path().join(".gitignore"))
+            .status()
+            .unwrap();
+        assert!(fifo.success());
+
+        let started = std::time::Instant::now();
+        let found = workspace_file_candidates(root.path());
+        assert!(started.elapsed() < LIST_FILES_TIMEOUT * 4);
+        assert!(found.iter().any(|candidate| candidate.path == "main.rs"));
+    }
+
     #[test]
     fn the_limit_is_honoured() {
         let all = candidates(&["a.rs", "ab.rs", "abc.rs", "abcd.rs"]);
@@ -555,6 +583,26 @@ mod tests {
         assert!(expanded.prompt.ends_with("summarise @note.txt"));
         assert_eq!(expanded.inlined, vec!["note.txt".to_string()]);
         assert!(expanded.skipped.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_to_a_credential_file_is_not_inlined_under_its_other_name() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join(".env"), "API_KEY=do-not-inline").expect("write");
+        std::os::unix::fs::symlink(".env", dir.path().join("notes.txt")).expect("link");
+
+        let expanded = expand_mentions("summarise @notes.txt", dir.path(), true);
+
+        assert!(!expanded.prompt.contains("do-not-inline"));
+        assert!(expanded.inlined.is_empty());
+        assert_eq!(
+            expanded.skipped,
+            vec![(
+                "notes.txt".to_string(),
+                "holds credentials, only the path was sent".to_string()
+            )]
+        );
     }
 
     #[test]
