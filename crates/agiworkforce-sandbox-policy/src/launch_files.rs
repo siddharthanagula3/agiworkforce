@@ -248,7 +248,12 @@ fn resolve(base: Option<&Path>, token: &str) -> Option<PathBuf> {
 }
 
 fn label(token: &str, file: &str) -> String {
-    Path::new(token).join(file).to_string_lossy().into_owned()
+    path_label(&Path::new(token).join(file))
+}
+
+fn path_label(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace(std::path::MAIN_SEPARATOR, "/")
 }
 
 fn python_module(args: &[String]) -> Option<&str> {
@@ -1183,7 +1188,7 @@ fn python_module_files(base: &Path, module: &str) -> Vec<(String, PathBuf)> {
             relative.iter().map(move |file| {
                 let inside = Path::new(root).join(file);
                 (
-                    format!("-m {module}: {}", inside.to_string_lossy()),
+                    format!("-m {module}: {}", path_label(&inside)),
                     base.join(&inside),
                 )
             })
