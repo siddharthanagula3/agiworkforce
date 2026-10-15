@@ -2552,14 +2552,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
 
   // The project-detail composer is itself a Send control, not a prefill
-  // shortcut. Claim its handoff only after Clerk resolves, then acknowledge it
-  // when the user row is durable (before provider egress). The ref closes React
-  // Strict Mode replay while the claim is in flight; a pre-commit failure puts
-  // the exact text back in the composer instead of losing it.
+  // shortcut. Claim its handoff only after Clerk resolves and the plan request
+  // has settled (and, on Free, the model promotion has been read), then
+  // acknowledge it when the user row is durable (before provider egress). The
+  // ref closes React Strict Mode replay while the claim is in flight; a
+  // pre-commit failure puts the exact text back in the composer instead of
+  // losing it.
   const projectHandoffInFlightRef = useRef<string | null>(null);
   const projectHandoffModelRestoredRef = useRef<string | null>(null);
+  const planRequestFailed = useBillingStore((state) => state.error !== null);
+  const projectHandoffModelRulesSettled =
+    (billingPolicyReady || planRequestFailed) && (!isWebsiteFreeTrial || freeModelPromotionReady);
   useEffect(() => {
-    if (!authLoaded || !userId) return;
+    if (!authLoaded || !userId || !projectHandoffModelRulesSettled) return;
     try {
       const handoff = readProjectChatHandoff(sessionStorage, urlProjectId);
       if (!handoff) return;
@@ -2577,7 +2582,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         projectDefaultModelAppliedRef.current = `${handoff.projectId}:${activeProjectDefaultModelId}`;
         if (
           projectHandoffModelRestoredRef.current !== handoff.id &&
-          useModelStore.getState().selectedModelId !== snapshotModelId
+          selectedModelId !== snapshotModelId
         ) {
           projectHandoffModelRestoredRef.current = handoff.id;
           setSelectedModelId(snapshotModelId);
@@ -2614,6 +2619,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   }, [
     activeProjectDefaultModelId,
     authLoaded,
+    projectHandoffModelRulesSettled,
+    selectedModelId,
     sendContent,
     setSelectedModelId,
     urlProjectId,

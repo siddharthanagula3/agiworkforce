@@ -1,9 +1,11 @@
 import { render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FREE_MODEL_PROMOTION_PATH } from '@agiworkforce/cloud-contracts';
 import {
   BILLING_PLAN_CAPABILITY_TIERS,
   canUseBillingPlanCapability,
   getBillingPlanPricing,
+  MODEL_FAMILY_REGISTRY,
   normalizeBillingPlanTier,
   type BillingPlanTier,
   type CloudWorkMode,
@@ -248,10 +250,12 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+import promotionConfig from '@/config/free-model-promotion.json';
 import {
   PROJECT_CHAT_HANDOFF_KEY,
   saveProjectChatHandoff,
 } from '@/features/projects/lib/project-chat-handoff';
+import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { AVAILABLE_MODELS, useModelStore } from '@shared/stores/model-store';
@@ -259,6 +263,11 @@ import { AVAILABLE_MODELS, useModelStore } from '@shared/stores/model-store';
 const FREE_TIER = normalizeBillingPlanTier(null);
 const WORK_TIER = BILLING_PLAN_CAPABILITY_TIERS.agi_work[0]!;
 const PROJECT_DRAFT = 'Draft an invitation to the workshop on 15 October.';
+const PROMOTED_MODEL = Object.values(MODEL_FAMILY_REGISTRY).find(
+  (family) =>
+    family.provider === promotionConfig.provider && family.tier === promotionConfig.modelFamilyTier,
+)?.activeModelId;
+const PROMOTION_ENDS_AT = new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000).toISOString();
 
 function signInOnPlan(tier: BillingPlanTier) {
   const planLabel = getBillingPlanPricing(tier).label;
@@ -302,12 +311,17 @@ describe('the first message sent from a project page', () => {
     sessionStorage.removeItem(PROJECT_CHAT_HANDOFF_KEY);
     vi.stubGlobal(
       'fetch',
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({}), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          }),
+      vi.fn(async (url: string) =>
+        String(url) === FREE_MODEL_PROMOTION_PATH
+          ? new Response(
+              JSON.stringify({
+                promotion: { modelId: PROMOTED_MODEL, endsAt: PROMOTION_ENDS_AT },
+              }),
+            )
+          : new Response(JSON.stringify({}), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }),
       ),
     );
   });
@@ -320,6 +334,7 @@ describe('the first message sent from a project page', () => {
       subscription: null,
       initialized: false,
       isLoading: true,
+      error: null,
     });
   });
 
@@ -346,6 +361,50 @@ describe('the first message sent from a project page', () => {
     sendFromProjectPage('chat');
 
     expect(await modeOfTheProjectTurn()).toBe('chat');
+  });
+
+  it('sends the promoted free model a Free account chose, after the promotion is read', async () => {
+    expect(PROMOTED_MODEL).toBeDefined();
+    expect(PROMOTED_MODEL).not.toBe(FREE_TRIAL_MODEL);
+    signInOnPlan(FREE_TIER);
+    useModelStore.getState().setSelectedModelId(PROMOTED_MODEL!);
+    saveProjectChatHandoff(sessionStorage, {
+      content: PROJECT_DRAFT,
+      projectId: PROJECT_ID,
+      modelId: PROMOTED_MODEL!,
+      meta: { workMode: 'chat', projectId: PROJECT_ID, memoryEnabled: true },
+    });
+
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
+    const [content, options] = mocks.sendMessage.mock.calls[0]!;
+    expect(content).toBe(PROJECT_DRAFT);
+    expect(options?.model).toBe(PROMOTED_MODEL);
+    expect(options?.workMode).toBe('chat');
+    expect(mocks.toastError).not.toHaveBeenCalled();
+  });
+
+  it('still sends the snapshotted model when the plan request failed', async () => {
+    useBillingStore.setState({
+      user: null,
+      subscription: null,
+      initialized: true,
+      isLoading: false,
+      unauthenticated: false,
+      error: '/api/me returned 503',
+    });
+    const [snapshot] = AVAILABLE_MODELS.map((model) => model.id);
+    useModelStore.getState().setSelectedModelId(snapshot!);
+    saveProjectChatHandoff(sessionStorage, {
+      content: PROJECT_DRAFT,
+      projectId: PROJECT_ID,
+      modelId: snapshot!,
+      meta: { workMode: 'chat', projectId: PROJECT_ID, memoryEnabled: true },
+    });
+
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
+    expect(mocks.sendMessage.mock.calls[0]![1]?.model).toBe(snapshot);
   });
 
   it('restores the model snapshotted with the handoff', async () => {
