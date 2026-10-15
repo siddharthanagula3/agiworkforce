@@ -140,11 +140,12 @@ async function sniffBinary(absolute: string, size: number): Promise<boolean> {
 /**
  * A read names the path twice as a write does: once to judge it and once to
  * open it, and a command that may rename inside the folder can put a link
- * where the judged file was in between. So a read opens without following a
- * link in the last component, and returns nothing until what it opened is
- * the file or folder the check approved: its folder still resolves to
- * itself, and the name still leads to this very inode. Every byte then comes
- * from the handle, never from the path again.
+ * where any judged name was in between. So a read opens the path one name at
+ * a time from the workspace root without following a link at any of them,
+ * and returns nothing until what it opened is the file or folder the check
+ * approved: its folder still resolves to itself, and the name still leads to
+ * this very inode. Every byte then comes from the handle, never from the path
+ * again.
  */
 export const OPEN_FILE_FOR_CHECKED_READ = NONBLOCKING_READ | (constants.O_NOFOLLOW ?? 0);
 const OPEN_FOLDER_FOR_CHECKED_READ = OPEN_FILE_FOR_CHECKED_READ | (constants.O_DIRECTORY ?? 0);
@@ -156,6 +157,48 @@ function notWhereCheckedForRead(relativePath: string): PathRefused {
   );
 }
 
+/** The held folder's own name, once it is shown to lead back to that folder. */
+async function heldFolderName(folder: fs.FileHandle): Promise<string | null> {
+  const stat = await folder.stat({ bigint: true });
+  const held = heldFolderPath(folder, stat);
+  if (held === null) return null;
+  const named = await fs.stat(held, { bigint: true }).catch(() => null);
+  return named !== null && named.dev === stat.dev && named.ino === stat.ino ? held : null;
+}
+
+/**
+ * `O_NOFOLLOW` guards only the last name of a path: a folder on the way that
+ * was swapped for a link is walked through, and a later look by path can be
+ * answered by the folder swapped back. So each name is looked up inside the
+ * folder already held, through that folder's own name, which no rename can
+ * move, and none is followed if it is a link. Where the system keeps no such
+ * name the whole path is opened and only the checks after the open stand.
+ */
+async function openBeneathRoot(
+  absolute: string,
+  relativePath: string,
+  flags: number,
+): Promise<fs.FileHandle> {
+  const names = relativePath.split(/[\\/]+/u).filter((name) => name !== '' && name !== '.');
+  const rootPath = names.reduce((folder) => path.dirname(folder), absolute);
+  const leaf = names.pop();
+  if (leaf === undefined || !KEEPS_HELD_FOLDER_NAMES) return fs.open(absolute, flags);
+  let folder = await fs.open(rootPath, OPEN_FOLDER_FOR_CHECKED_READ);
+  try {
+    let held = await heldFolderName(folder);
+    for (const name of names) {
+      if (held === null) break;
+      const above = folder;
+      folder = await fs.open(path.join(held, name), OPEN_FOLDER_FOR_CHECKED_READ);
+      await above.close();
+      held = await heldFolderName(folder);
+    }
+    return await fs.open(held === null ? absolute : path.join(held, leaf), flags);
+  } finally {
+    await folder.close();
+  }
+}
+
 export async function openChecked(
   absolute: string,
   relativePath: string,
@@ -163,7 +206,7 @@ export async function openChecked(
 ): Promise<{ handle: fs.FileHandle; stat: BigIntStats }> {
   let handle: fs.FileHandle;
   try {
-    handle = await fs.open(absolute, flags);
+    handle = await openBeneathRoot(absolute, relativePath, flags);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code ?? '';
     if (REPLACED_BEFORE_OPEN.includes(code)) throw notWhereCheckedForRead(relativePath);
@@ -197,6 +240,8 @@ async function readFrom(handle: fs.FileHandle, length: number): Promise<Buffer> 
   }
   return buffer.subarray(0, read);
 }
+
+const KEEPS_HELD_FOLDER_NAMES = process.platform === 'darwin' || process.platform === 'linux';
 
 /**
  * A path that leads to the folder a handle holds whatever is renamed around

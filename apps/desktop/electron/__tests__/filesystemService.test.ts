@@ -1,9 +1,9 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, promises as fs } from 'node:fs';
+import { existsSync, promises as fs, renameSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_TEXT_READ_BYTES, type WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
 import {
   WriteConflict,
@@ -851,6 +851,79 @@ describe.skipIf(process.platform === 'win32')('while a command renames inside th
     expect(seen.leaked).toEqual([]);
     expect(seen.inside).toBeGreaterThan(50);
   }, 15_000);
+
+  // The race above found this on Linux only by luck of timing. Here the
+  // renames fall the worst way every time: the folder on the way is a link to
+  // the outside whenever a call names what is in it, and the real folder
+  // whenever a call names anything else. Opening the file by path, then resolving
+  // its folder and naming the file again, was fooled by exactly this.
+  describe('when a folder on the way is a link only while what is in it is named', () => {
+    const interposed = ['open', 'lstat', 'realpath', 'stat'] as const;
+    let folder: string;
+    let outside: string;
+    let linked: boolean;
+    let armed: boolean;
+
+    const place = (link: boolean) => {
+      if (!armed || link === linked) return;
+      if (link) {
+        renameSync(path.join(folder, 'd'), path.join(folder, 'dreal'));
+        renameSync(path.join(folder, 'dlink'), path.join(folder, 'd'));
+      } else {
+        renameSync(path.join(folder, 'd'), path.join(folder, 'dlink'));
+        renameSync(path.join(folder, 'dreal'), path.join(folder, 'd'));
+      }
+      linked = link;
+    };
+
+    beforeEach(async () => {
+      folder = await fs.mkdtemp(path.join(sandbox, 'swapped-'));
+      outside = await fs.mkdtemp(path.join(path.dirname(sandbox), 'agi-swapped-outside-'));
+      await fs.mkdir(path.join(folder, 'd'));
+      await fs.writeFile(path.join(folder, 'd', 'f.txt'), 'inside');
+      await fs.writeFile(path.join(outside, 'f.txt'), 'OUTSIDE-SECRET');
+      await fs.mkdir(path.join(folder, 'd', 'sub'));
+      await fs.mkdir(path.join(outside, 'sub'));
+      await fs.writeFile(path.join(outside, 'sub', 'only-outside.txt'), 'x');
+      await fs.symlink(outside, path.join(folder, 'dlink'));
+      linked = false;
+      armed = false;
+      for (const name of interposed) {
+        const original = fs[name] as (...args: unknown[]) => Promise<unknown>;
+        vi.spyOn(fs, name).mockImplementation(((...args: unknown[]) => {
+          if (name === 'open') armed = true;
+          place(['f.txt', 'sub'].includes(path.basename(String(args[0]))));
+          return original.apply(fs, args);
+        }) as never);
+      }
+    });
+
+    afterEach(async () => {
+      vi.restoreAllMocks();
+      await fs.rm(outside, { recursive: true, force: true });
+    });
+
+    const inside = (): WorkspaceRoot => ({ ...root, id: 'swapped', path: folder });
+
+    it('refuses the text read rather than return the outside file', async () => {
+      const read = readTextFile(inside(), 'd/f.txt').then((content) => content.text);
+      await expect(read).rejects.toMatchObject({ reason: 'traversal' });
+    });
+
+    it('refuses the byte read rather than return the outside file', async () => {
+      const read = readBinaryFile(inside(), 'd/f.txt').then((content) =>
+        Buffer.from(content.base64, 'base64').toString(),
+      );
+      await expect(read).rejects.toMatchObject({ reason: 'traversal' });
+    });
+
+    it('refuses the listing rather than list the outside folder', async () => {
+      const listed = listDirectory(inside(), 'd/sub').then((entries) =>
+        entries.map((entry) => entry.name),
+      );
+      await expect(listed).rejects.toMatchObject({ reason: 'traversal' });
+    });
+  });
 });
 
 describe('a path that is not a regular file', () => {
