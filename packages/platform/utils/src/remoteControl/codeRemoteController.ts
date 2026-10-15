@@ -128,6 +128,7 @@ interface ThreadState {
   testRuns: RemoteCodeTestRun[];
   toolHistory: RemoteCodeToolRecord[];
   queuedGuidance: string[];
+  eventsDuringReads: Set<DeveloperSessionEvent[]>;
 }
 
 function threadKey(rootId: string, threadId: string): string {
@@ -146,6 +147,74 @@ function statusFor(state: ThreadState | undefined, persisted: string): RemoteCod
     return persisted;
   }
   return 'unknown';
+}
+
+function pendingApprovalFrom(
+  event: Extract<DeveloperSessionEvent, { type: 'approval-requested' }>,
+): RemoteCodePendingApproval {
+  return {
+    turnId: event.turnId,
+    requestId: event.requestId,
+    summary: safeText(event.summary, REMOTE_CODE_LIMITS.messageLength),
+    detail: safeText(event.detail, REMOTE_CODE_LIMITS.messageLength),
+  };
+}
+
+function pendingQuestionFrom(
+  event: Extract<DeveloperSessionEvent, { type: 'user-input-requested' }>,
+): RemoteCodePendingQuestion {
+  return {
+    turnId: event.turnId,
+    requestId: event.requestId,
+    question: clipRemoteText(event.question, REMOTE_CODE_LIMITS.messageLength).text,
+  };
+}
+
+/**
+ * Applies what the events that arrived while a snapshot was being read did to
+ * the turn, its approvals and its questions. The read may have been taken
+ * before or after any of them, so only effects that land the same either way
+ * are reapplied: output is rebuilt only from a turn whose start is among them.
+ */
+function reapplyEventsAfterSnapshot(state: ThreadState, events: DeveloperSessionEvent[]): void {
+  let rebuiltTurn: string | null = null;
+  for (const event of events) {
+    switch (event.type) {
+      case 'turn-started':
+        state.activeTurnId = event.turnId;
+        state.partialResponse = '';
+        rebuiltTurn = event.turnId;
+        break;
+      case 'output-delta':
+        if (event.turnId === rebuiltTurn) {
+          state.partialResponse = clipRemoteText(
+            state.partialResponse + event.delta,
+            REMOTE_CODE_LIMITS.partialResponseLength,
+          ).text;
+        }
+        break;
+      case 'approval-requested':
+        state.pendingApprovals.set(event.requestId, pendingApprovalFrom(event));
+        break;
+      case 'approval-answered':
+        state.pendingApprovals.delete(event.requestId);
+        break;
+      case 'user-input-requested':
+        state.pendingQuestions.set(event.requestId, pendingQuestionFrom(event));
+        break;
+      case 'user-input-answered':
+        state.pendingQuestions.delete(event.requestId);
+        break;
+      case 'turn-finished':
+      case 'runtime-stopped':
+        state.activeTurnId = null;
+        state.partialResponse = '';
+        state.pendingApprovals.clear();
+        state.pendingQuestions.clear();
+        rebuiltTurn = null;
+        break;
+    }
+  }
 }
 
 function boundedText(value: unknown, maxLength?: number): string | null {
@@ -268,6 +337,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         testRuns: [],
         toolHistory: [],
         queuedGuidance: [],
+        eventsDuringReads: new Set(),
       };
       threads.set(key, state);
     }
@@ -349,9 +419,18 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
    * merged into it. Session events are not relayed while no phone is
    * connected, so a turn that ended in that time would otherwise stay
    * "running" here for good, and every later message would wait behind it.
+   * Events that arrive during the read are applied again on top of it, so an
+   * older read cannot bring back an approval that was answered meanwhile.
    */
   async function publishSnapshot(state: ThreadState): Promise<void> {
-    const activity = await deps.readActivity(state.rootId, state.threadId);
+    const arrived: DeveloperSessionEvent[] = [];
+    state.eventsDuringReads.add(arrived);
+    let activity: DeveloperSessionActivity;
+    try {
+      activity = await deps.readActivity(state.rootId, state.threadId);
+    } finally {
+      state.eventsDuringReads.delete(arrived);
+    }
     const running = activity.activeTurn;
     state.activeTurnId = running?.turnId ?? null;
     state.partialResponse = running?.partialResponse ?? '';
@@ -380,6 +459,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         });
       }
     }
+    reapplyEventsAfterSnapshot(state, arrived);
     const fileChanges: RemoteCodeFileChange[] = activity.fileChanges
       .flatMap((change) => (change.kind === 'deleted' ? [] : [{ ...change, kind: change.kind }]))
       .slice(-REMOTE_CODE_LIMITS.fileChanges)
@@ -863,6 +943,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       logger.warn('[remote-control] runtime stopped', event.message);
       for (const state of threads.values()) {
         if (state.rootId !== rootId) continue;
+        for (const arrived of state.eventsDuringReads) arrived.push(event);
         state.activeTurnId = null;
         state.pendingApprovals.clear();
         state.pendingQuestions.clear();
@@ -881,6 +962,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
     }
 
     const state = stateFor(rootId, event.threadId);
+    for (const arrived of state.eventsDuringReads) arrived.push(event);
     switch (event.type) {
       case 'turn-started':
         state.activeTurnId = event.turnId;
@@ -933,12 +1015,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         return;
       }
       case 'approval-requested': {
-        const approval: RemoteCodePendingApproval = {
-          turnId: event.turnId,
-          requestId: event.requestId,
-          summary: safeText(event.summary, REMOTE_CODE_LIMITS.messageLength),
-          detail: safeText(event.detail, REMOTE_CODE_LIMITS.messageLength),
-        };
+        const approval = pendingApprovalFrom(event);
         state.pendingApprovals.set(event.requestId, approval);
         await sendEvent(state, { type: 'approval-requested', ...approval });
         const task = dispatchFor(rootId, event.threadId);
@@ -952,11 +1029,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         return;
       }
       case 'user-input-requested': {
-        const question: RemoteCodePendingQuestion = {
-          turnId: event.turnId,
-          requestId: event.requestId,
-          question: clipRemoteText(event.question, REMOTE_CODE_LIMITS.messageLength).text,
-        };
+        const question = pendingQuestionFrom(event);
         state.pendingQuestions.set(event.requestId, question);
         await sendEvent(state, { type: 'user-input-requested', ...question });
         return;

@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DeveloperSessionList } from '@agiworkforce/local-runtime-contract';
+import type {
+  DeveloperSessionEvent,
+  DeveloperSessionList,
+} from '@agiworkforce/local-runtime-contract';
 import {
   REMOTE_CODE_LIMITS,
   parseRemoteCodeEvent,
@@ -1040,5 +1043,255 @@ describe('remote control of a developer session', () => {
     expect(JSON.stringify(snapshot).length).toBeLessThanOrEqual(40_000);
     expect(messages.at(-1)?.text.startsWith('29:')).toBe(true);
     expect(messages.length).toBeLessThan(12);
+  });
+});
+
+describe('a snapshot replaces the turn and approvals the controller remembered', () => {
+  const RUNNING = {
+    turnId: 'turn-7',
+    partialResponse: 'Editing retry.ts',
+    pendingApprovals: [{ requestId: 'ap-1', summary: 'Run pnpm test', detail: 'shell' }],
+  };
+
+  const APPROVAL_ASKED: DeveloperSessionEvent = {
+    type: 'approval-requested',
+    threadId: 'thread-1',
+    turnId: 'turn-7',
+    requestId: 'ap-1',
+    kind: 'command',
+    summary: 'Run pnpm test',
+    detail: 'shell',
+    command: 'pnpm test',
+    riskLevel: null,
+    reversible: null,
+  };
+
+  function attach(controller: ReturnType<typeof createCodeRemoteController>) {
+    return controller.handleControl(
+      'code.session.attach',
+      request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+    );
+  }
+
+  function respond(controller: ReturnType<typeof createCodeRemoteController>, approvalId: string) {
+    return controller.handleControl(
+      'code.approval.respond',
+      request('approve', {
+        rootId: 'root-1',
+        threadId: 'thread-1',
+        turnId: 'turn-7',
+        approvalRequestId: approvalId,
+        approved: true,
+      }),
+    );
+  }
+
+  function lastSnapshot() {
+    return sent.filter((entry) => entry.action === 'code.session.snapshot').at(-1)?.payload;
+  }
+
+  async function listedStatus(controller: ReturnType<typeof createCodeRemoteController>) {
+    await controller.handleControl('code.sessions.list', request('list'));
+    const list = sent.filter((entry) => entry.action === 'code.sessions').at(-1)?.payload;
+    return (list?.['sessions'] as Array<{ threadId: string; status: string }>).find(
+      (entry) => entry.threadId === 'thread-1',
+    )?.status;
+  }
+
+  function heldRead(stale: DeveloperSessionActivity) {
+    let release: () => void = () => undefined;
+    deps.readActivity = vi
+      .fn<CodeRemoteDependencies['readActivity']>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = () => resolve(stale);
+          }),
+      )
+      .mockImplementation(async () => activity());
+    return () => release();
+  }
+
+  it('drops an approval the same turn no longer waits on', async () => {
+    deps.readActivity = vi.fn(async () => activity({ activeTurn: RUNNING }));
+    const controller = createCodeRemoteController(deps);
+    await attach(controller);
+    deps.readActivity = vi.fn(async () =>
+      activity({ activeTurn: { ...RUNNING, pendingApprovals: [] } }),
+    );
+    await attach(controller);
+
+    expect(lastSnapshot()).toMatchObject({
+      status: 'running',
+      activeTurnId: 'turn-7',
+      pendingApprovals: [],
+    });
+    expect(await listedStatus(controller)).toBe('running');
+    await respond(controller, 'ap-1');
+    expect(deps.answerApproval).not.toHaveBeenCalled();
+  });
+
+  it('carries no approval from an earlier turn into the one now running', async () => {
+    deps.readActivity = vi.fn(async () => activity({ activeTurn: RUNNING }));
+    const controller = createCodeRemoteController(deps);
+    await attach(controller);
+    deps.readActivity = vi.fn(async () =>
+      activity({
+        activeTurn: {
+          turnId: 'turn-8',
+          partialResponse: 'Adding a test',
+          pendingApprovals: [{ requestId: 'ap-2', summary: 'Write file', detail: 'fs' }],
+        },
+      }),
+    );
+    await attach(controller);
+
+    expect(lastSnapshot()).toMatchObject({
+      status: 'awaiting_approval',
+      activeTurnId: 'turn-8',
+      partialResponse: 'Adding a test',
+      pendingApprovals: [{ turnId: 'turn-8', requestId: 'ap-2' }],
+    });
+    await respond(controller, 'ap-1');
+    expect(deps.answerApproval).not.toHaveBeenCalled();
+  });
+
+  it('shows no approval when the computer reports no running turn after a missed finish', async () => {
+    deps.readActivity = vi.fn(async () => activity({ activeTurn: RUNNING }));
+    const controller = createCodeRemoteController(deps);
+    await attach(controller);
+    deps.readActivity = vi.fn(async () => activity());
+    await attach(controller);
+
+    expect(lastSnapshot()).toMatchObject({
+      status: 'idle',
+      activeTurnId: null,
+      pendingApprovals: [],
+    });
+    expect(await listedStatus(controller)).not.toBe('awaiting_approval');
+  });
+
+  it('does not bring back an approval answered while the snapshot was being read', async () => {
+    const release = heldRead(activity({ activeTurn: RUNNING }));
+    const controller = createCodeRemoteController(deps);
+    const attaching = attach(controller);
+    await controller.handleSessionEvent('root-1', APPROVAL_ASKED);
+    await controller.handleSessionEvent('root-1', {
+      type: 'approval-answered',
+      threadId: 'thread-1',
+      turnId: 'turn-7',
+      requestId: 'ap-1',
+      decision: 'approve_once',
+      approved: true,
+    });
+    release();
+    await attaching;
+
+    expect(lastSnapshot()).toMatchObject({
+      status: 'running',
+      activeTurnId: 'turn-7',
+      pendingApprovals: [],
+    });
+    await respond(controller, 'ap-1');
+    expect(deps.answerApproval).not.toHaveBeenCalled();
+  });
+
+  it('keeps an approval asked for while an older snapshot was being read', async () => {
+    const release = heldRead(activity({ activeTurn: { ...RUNNING, pendingApprovals: [] } }));
+    const controller = createCodeRemoteController(deps);
+    const attaching = attach(controller);
+    await controller.handleSessionEvent('root-1', APPROVAL_ASKED);
+    release();
+    await attaching;
+
+    expect(lastSnapshot()).toMatchObject({
+      status: 'awaiting_approval',
+      pendingApprovals: [{ turnId: 'turn-7', requestId: 'ap-1', summary: 'Run pnpm test' }],
+    });
+    await respond(controller, 'ap-1');
+    expect(deps.answerApproval).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a turn that finished while the snapshot was being read finished', async () => {
+    const release = heldRead(activity({ activeTurn: RUNNING }));
+    const controller = createCodeRemoteController(deps);
+    const attaching = attach(controller);
+    await controller.handleSessionEvent('root-1', {
+      type: 'turn-finished',
+      threadId: 'thread-1',
+      turnId: 'turn-7',
+      outcome: 'completed',
+      response: 'Done.',
+      failure: null,
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+    release();
+    await attaching;
+
+    expect(lastSnapshot()).toMatchObject({
+      status: 'idle',
+      activeTurnId: null,
+      partialResponse: '',
+      pendingApprovals: [],
+    });
+    expect(await listedStatus(controller)).not.toBe('awaiting_approval');
+    await respond(controller, 'ap-1');
+    expect(deps.answerApproval).not.toHaveBeenCalled();
+  });
+
+  it('shows the turn that started while the snapshot was being read, with only its own output', async () => {
+    const release = heldRead(activity({ activeTurn: RUNNING }));
+    const controller = createCodeRemoteController(deps);
+    const attaching = attach(controller);
+    await controller.handleSessionEvent('root-1', {
+      type: 'turn-finished',
+      threadId: 'thread-1',
+      turnId: 'turn-7',
+      outcome: 'completed',
+      response: 'Done.',
+      failure: null,
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+    await controller.handleSessionEvent('root-1', {
+      type: 'turn-started',
+      threadId: 'thread-1',
+      turnId: 'turn-8',
+    });
+    await controller.handleSessionEvent('root-1', {
+      type: 'output-delta',
+      threadId: 'thread-1',
+      turnId: 'turn-8',
+      delta: 'Adding a test',
+    });
+    release();
+    await attaching;
+
+    expect(lastSnapshot()).toMatchObject({
+      status: 'running',
+      activeTurnId: 'turn-8',
+      partialResponse: 'Adding a test',
+      pendingApprovals: [],
+    });
+  });
+
+  it('does not repeat output the snapshot may already hold when its turn began before the read', async () => {
+    const release = heldRead(activity({ activeTurn: { ...RUNNING, pendingApprovals: [] } }));
+    const controller = createCodeRemoteController(deps);
+    const attaching = attach(controller);
+    await controller.handleSessionEvent('root-1', {
+      type: 'output-delta',
+      threadId: 'thread-1',
+      turnId: 'turn-7',
+      delta: ' and its test',
+    });
+    release();
+    await attaching;
+
+    expect(lastSnapshot()).toMatchObject({
+      activeTurnId: 'turn-7',
+      partialResponse: 'Editing retry.ts',
+    });
   });
 });
