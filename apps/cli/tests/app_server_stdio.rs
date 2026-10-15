@@ -79,6 +79,36 @@ async fn thread_start_does_not_wait_for_a_stalled_mcp_server() {
         env!("CARGO_PKG_VERSION")
     );
 
+    // A project's MCP file launches nothing until its exact launch is
+    // approved, so approve the stalled server the way a client does; without
+    // it discovery never starts the server whose stall is under test.
+    send(
+        &mut stdin,
+        json!({
+            "id": 10,
+            "method": "mcp/approval/read",
+            "params": { "name": "stalled", "scope": "project" }
+        }),
+    )
+    .await;
+    let asked = next_response(&mut lines).await;
+    assert!(asked.get("error").is_none(), "{asked}");
+    send(
+        &mut stdin,
+        json!({
+            "id": 11,
+            "method": "mcp/approval/grant",
+            "params": {
+                "name": "stalled",
+                "scope": "project",
+                "fingerprint": asked["result"]["fingerprint"]
+            }
+        }),
+    )
+    .await;
+    let granted = next_response(&mut lines).await;
+    assert!(granted.get("error").is_none(), "{granted}");
+
     send(
         &mut stdin,
         json!({
