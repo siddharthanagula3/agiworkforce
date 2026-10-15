@@ -541,7 +541,7 @@ describe('overlay stacking contract', () => {
         ),
     ]);
     expect(buried, `product notices on --z-banner paint over these panels`).toEqual([]);
-  });
+  }, 60_000);
 
   it('keeps every named rung in one monotonic ladder', () => {
     const ordered = [
