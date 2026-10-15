@@ -7157,6 +7157,17 @@ function hasUnconfirmedStreamCancellation(): boolean {
   });
 }
 
+function settleObservedStreamCancellation(streamId: string): void {
+  const cancellation = pendingStreamCancellations.get(streamId);
+  if (cancellation?.timer) clearTimeout(cancellation.timer);
+  pendingStreamCancellations.delete(streamId);
+  const assistant = _ctx.messages.find((message) => message.id === streamId);
+  if (!assistant?.streamCancellation) return;
+  delete assistant.streamCancellation;
+  delete assistant.errorText;
+  delete assistant.error;
+}
+
 async function requestStreamCancellation(streamId: string): Promise<void> {
   const previous = pendingStreamCancellations.get(streamId);
   if (previous && !ownsStreamCancellation(previous))
@@ -7254,10 +7265,9 @@ async function requestStreamCancellation(streamId: string): Promise<void> {
           );
         }
         const confirmed =
-          response.cancellationConfirmed === true &&
-          (!cloudRun ||
-            (response.cloudRun &&
-              response.cloudRun.state !== undefined &&
+          response.cancellationConfirmed !== false &&
+          (response.cloudRun === undefined ||
+            (response.cloudRun.state !== undefined &&
               TERMINAL_AGENT_TASK_STATES.has(response.cloudRun.state)));
         if (!confirmed) {
           throw new Error(
@@ -7738,6 +7748,7 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
         observed.state !== undefined &&
         TERMINAL_AGENT_TASK_STATES.has(observed.state)
       ) {
+        settleObservedStreamCancellation(streamId);
         completeStop();
         return;
       }
@@ -13686,7 +13697,6 @@ function buildUI(): void {
   });
   drawerMenu.appendChild(extensionSettingsRow);
   for (const group of drawerGroups) {
-    if (!import.meta.env.DEV && group.label !== t('spMenuPairing')) continue;
     const row = el('button', { class: 'sp-drawer-row', type: 'button', role: 'menuitem' });
     row.appendChild(el('span', { class: 'sp-drawer-row-label' }, group.label));
     const rowChevron = el('span', { class: 'sp-drawer-row-chevron' });
@@ -14965,7 +14975,9 @@ function buildUI(): void {
     }
     createShortcutOverlay.setAttribute('aria-hidden', 'false');
     createShortcutOverlay.classList.add('open');
-    setTimeout(() => scNameInput.focus(), 50);
+    setTimeout(() => {
+      if (!createShortcutModal.contains(document.activeElement)) scNameInput.focus();
+    }, 50);
   }
   function closeCreateShortcutModal(): void {
     createShortcutOverlay.classList.remove('open');

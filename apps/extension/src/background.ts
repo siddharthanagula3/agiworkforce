@@ -3950,20 +3950,25 @@ async function handleMessageAsync(
             active.cancelNotified = true;
             active.controller.abort();
           }
+          const cancelledRun = {
+            ...cloudRun,
+            state: cancellation.run.state,
+            cancellationRequestedAt: cancellation.run.cancellationRequestedAt,
+            lastSequence: Math.max(cloudRun.lastSequence, cancellation.run.lastEventSequence),
+          };
           await broadcastManagedChatChunk(owner, cancelMsg.clientInstanceId, cancelMsg.id, {
             text: '',
             done: true,
             ...(cancellation.run.state === 'cancelled'
               ? { error: 'Cancelled.', errorCode: 'cancelled' }
               : {}),
-            cloudRun: {
-              ...cloudRun,
-              state: cancellation.run.state,
-              cancellationRequestedAt: cancellation.run.cancellationRequestedAt,
-              lastSequence: Math.max(cloudRun.lastSequence, cancellation.run.lastEventSequence),
-            },
+            cloudRun: cancelledRun,
           });
-          return { success: true };
+          return {
+            success: true,
+            cancellationConfirmed: true,
+            cloudRun: cancelledRun,
+          } as ExtensionResponse;
         } catch {
           return {
             success: false,

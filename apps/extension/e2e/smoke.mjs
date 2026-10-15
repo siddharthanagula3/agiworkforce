@@ -1004,7 +1004,7 @@ try {
     if (
       drawerMenuRows.title !== 'Menu' ||
       drawerMenuRows.rows.join('|') !==
-        'Chat|Automate|Projects|Artifacts|Tools|Desktop pairing|Settings|Help'
+        'Chat|Automate|Projects|Artifacts|Tools|Desktop connection|Settings|Help'
     ) {
       fail(`drawer menu: unexpected rows ${JSON.stringify(drawerMenuRows)}`);
     }
