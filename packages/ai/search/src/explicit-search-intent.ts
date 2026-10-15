@@ -76,23 +76,30 @@ const SOURCE_PHRASES: readonly string[] = [
   'source it',
 ];
 
+/**
+ * "Link the source chat" asks for a link to something the user already has, a
+ * conversation, message or file of their own, not for sources from the web.
+ */
+const PRIVATE_SOURCE_NOUN = String.raw`(?:chats?|conversations?|threads?|messages?|memor(?:y|ies)|files?|documents?|notes?|projects?)`;
+
 function escapeForPattern(phrase: string): string {
   return phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function buildPhrasePattern(phrases: readonly string[]): RegExp {
+function buildPhrasePattern(phrases: readonly string[], notFollowedBy?: string): RegExp {
   const alternation = phrases
     .map(escapeForPattern)
     .sort((a, b) => b.length - a.length)
     .join('|');
-  return new RegExp(`(?<![\\p{L}\\p{N}_])(?:${alternation})(?![\\p{L}\\p{N}_])`, 'iu');
+  const follower = notFollowedBy ? `(?!\\s+${notFollowedBy}(?![\\p{L}\\p{N}_]))` : '';
+  return new RegExp(`(?<![\\p{L}\\p{N}_])(?:${alternation})(?![\\p{L}\\p{N}_])${follower}`, 'iu');
 }
 
 const SEARCH_VERB_PATTERN = buildPhrasePattern(SEARCH_VERB_PHRASES);
 const RECENCY_PATTERN = buildPhrasePattern(RECENCY_PHRASES);
-const SOURCE_PATTERN = buildPhrasePattern(SOURCE_PHRASES);
+const SOURCE_PATTERN = buildPhrasePattern(SOURCE_PHRASES, PRIVATE_SOURCE_NOUN);
 const SEARCH_OPT_OUT_PATTERN =
-  /\b(?:do\s+not|don't|dont|never|avoid|without|no)\s+(?:(?:use|perform|performing)\s+)?(?:(?:a|the)\s+)?(?:web\s+search(?:es)?|search(?:ing)?\s+(?:(?:the|on)\s+)?(?:web|internet|online)|browse(?:ing)?\s+(?:the\s+)?web|look(?:ing)?\s+(?:it|this|that)\s+up)\b/iu;
+  /\b(?:do\s+not|don't|dont|never|avoid|without|no)\s+(?:(?:use|perform|performing)\s+)?(?:(?:a|the)\s+)?(?:web\s+search(?:es)?|search(?:ing)?\s+(?:(?:the|on)\s+)?(?:(?:public\s+)?(?:web|internet)|online)|browse(?:ing)?\s+(?:the\s+)?(?:public\s+)?web|look(?:ing)?\s+(?:it|this|that)\s+up)\b/iu;
 const LONG_DASHES = String.fromCharCode(0x2013, 0x2014);
 const REFUSAL_CLAUSE_START = String.raw`(?:^|[.;:!?,()\n*>\u2022${LONG_DASHES}]|(?<![\p{L}\p{N}])-)[^\S\n]*(?:(?:and|but|so|also|please|again)\s+)?`;
 const REFUSAL_CLAUSE_END = String.raw`(?=\s*(?:$|[.,;:!?()\n*\u2026${LONG_DASHES}])|\s+-\s|\s+(?:or|nor|and(?!\s+replace\b)|but|just|please|yet|(?:is\s+)?(?:needed|required|necessary|allowed)|at\s+all|this\s+time)\b)`;
@@ -105,10 +112,10 @@ const REFUSED_SEARCH_NOUN = String.raw`(?:(?:web|internet|online|external|live)\
 const REFUSED_OTHER_ACTIONS = String.raw`(?!\s+(?:just|only|simply|hesitate|forget|fail|worry|be\s+afraid)\b)\s(?:[^.;:!?,\n${LONG_DASHES}]{1,80}?|[^.;:!?\n${LONG_DASHES}]{1,80}?,)\s(?:or|nor)\s+`;
 
 const SEARCH_REFUSAL_FORMS: Readonly<Record<string, string>> = {
-  namedTarget: String.raw`\b(?:${REFUSING_MODAL}|${REFUSING_AUXILIARY}|avoid|without|no)\s+(?:(?:use|perform|performing)\s+)?(?:(?:a|the)\s+)?(?:web\s+search(?:es)?|search(?:ing)?\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:web|internet|online)|brows(?:e|ing)\s+(?:the\s+)?web|look(?:ing)?\s+(?:(?:it|this|that|anything)\s+up|up\s+anything)|googl(?:e|ing)\s+(?:it|this|that)|check(?:ing)?\s+(?:online|the\s+web))\b`,
+  namedTarget: String.raw`\b(?:${REFUSING_MODAL}|${REFUSING_AUXILIARY}|avoid|without|no)\s+(?:(?:use|perform|performing)\s+)?(?:(?:a|the)\s+)?(?:web\s+search(?:es)?|search(?:ing)?\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:(?:public\s+)?(?:web|internet)|online)|brows(?:e|ing)\s+(?:the\s+)?(?:public\s+)?web|look(?:ing)?\s+(?:(?:it|this|that|anything)\s+up|up\s+anything)|googl(?:e|ing)\s+(?:it|this|that)|check(?:ing)?\s+(?:online|the\s+web))\b`,
   bareAction: String.raw`(?:${REFUSING_COMMAND}\s+(?:search|browse|google)|\b(?:without|avoid)\s+(?:searching|browsing|googling))(?:\s+(?:for\s+)?anything)?${REFUSAL_CLAUSE_END}`,
   toolUse: String.raw`(?:${REFUSING_COMMAND}\s+(?:use|run|do|perform)|\b(?:without|no|avoid)\s+(?:using|running|doing|performing))\s+(?:(?:a|an|any|the|your)\s+)?(?:(?:web|internet|online)\s+)?search(?:es)?(?:\s+tools?)?${REFUSAL_CLAUSE_END}`,
-  listedAction: String.raw`\s(?:or|nor)\s+(?<=${REFUSING_IMPERATIVE}${REFUSED_OTHER_ACTIONS})(?:search(?:\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:web|internet|online))?|browse(?:\s+the\s+web)?|google|look\s+(?:it|this|that|anything)\s+up)(?:\s+(?:for\s+)?anything)?${REFUSAL_CLAUSE_END}`,
+  listedAction: String.raw`\s(?:or|nor)\s+(?<=${REFUSING_IMPERATIVE}${REFUSED_OTHER_ACTIONS})(?:search(?:\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:(?:public\s+)?(?:web|internet)|online))?|browse(?:\s+the\s+(?:public\s+)?web)?|google|look\s+(?:it|this|that|anything)\s+up)(?:\s+(?:for\s+)?anything)?${REFUSAL_CLAUSE_END}`,
   bareNoun: String.raw`${REFUSAL_CLAUSE_START}no\s+${REFUSED_SEARCH_NOUN}(?:\s+(?:for|on)\s+(?:this|that)(?:\s+one)?|\s+for\s+now|\s+today|\s+here)?${REFUSAL_CLAUSE_END}`,
   listedBeforeLastItem: String.raw`${REFUSAL_CLAUSE_START}no\s+(?:${REFUSED_LIST_ITEM}\s*,\s*){1,6}${REFUSED_SEARCH_NOUN}(?:\s*,\s*${REFUSED_LIST_ITEM}){0,6}(?:\s*,)?\s+(?:or|nor)\s+(?=[\p{L}\p{N}])`,
   listedLast: String.raw`${REFUSAL_CLAUSE_START}no\s+(?:${REFUSED_LIST_ITEM}\s*,\s*){0,6}${REFUSED_LIST_ITEM}(?:\s*,)?\s+(?:or|nor|and\s+no)\s+${REFUSED_SEARCH_NOUN}${REFUSAL_CLAUSE_END}`,
@@ -128,7 +135,7 @@ const REFUSED_ITEM_TRAILING_QUALIFIER =
 const REFUSED_ITEM_LEADING_FILLER =
   /^(?:(?:use|using|run|running|call|calling|do|doing|perform|performing|make|making|execute|executing|access|accessing|invoke|invoking|any|a|an|the|your|some|external|outside|other|extra|additional)\s+)+/u;
 const REFUSED_WEB_SEARCH_ITEM =
-  /^(?:(?:(?:web|internet|online|live|public)\s+)?(?:search(?:es|ing)?|brows(?:e|ing)|googl(?:e|ing))(?:\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:web|internet|online))?(?:\s+tools?)?|(?:the\s+)?(?:web|internet)|look(?:ing)?\s+(?:(?:it|this|that|anything)\s+up|up\s+anything)|check(?:ing)?\s+(?:online|the\s+web))$/u;
+  /^(?:(?:(?:web|internet|online|live|public)\s+)?(?:search(?:es|ing)?|brows(?:e|ing)|googl(?:e|ing))(?:\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:(?:public\s+)?(?:web|internet)|online))?(?:\s+tools?)?|(?:the\s+)?(?:public\s+)?(?:web|internet)|look(?:ing)?\s+(?:(?:it|this|that|anything)\s+up|up\s+anything)|check(?:ing)?\s+(?:online|the\s+web))$/u;
 const PRIVATE_SCOPE_ONLY_PATTERN =
   /\b(?:(?:only|just)\s+(?:search|use|check|look\s+(?:in|at|through)|draw\s+on)|(?:search|use|check)\s+only(?:\s+(?:in|through))?)\s+(?:my|our)\s+(?:own\s+)?(?:private\s+)?(?:(?:past|earlier|previous|prior|old|saved|other)\s+)?(?:chats?|conversations?|(?:chat\s+)?history|memor(?:y|ies)|files?|documents?|notes?)\b/iu;
 

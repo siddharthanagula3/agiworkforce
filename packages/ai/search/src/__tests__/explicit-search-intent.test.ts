@@ -48,6 +48,30 @@ describe('detectExplicitWebSearchIntent', () => {
     expect(detectExplicitWebSearchIntent('answer and give me the link')).toBe('sources');
   });
 
+  it('reads a request to link a chat, message or file the user owns as no request for web sources', () => {
+    for (const text of [
+      'Find our Velvet Kestrel discussion and identify/link the source chat if available.',
+      'Link the source conversation for that decision.',
+      'Answer from my notes and link to the source document.',
+      'Which message said that? Link the source message.',
+    ]) {
+      expect(detectExplicitWebSearchIntent(text)).toBeNull();
+    }
+    expect(detectExplicitWebSearchIntent('Summarise the RFC and link the source.')).toBe('sources');
+    expect(detectExplicitWebSearchIntent('Explain it and link to the source page.')).toBe(
+      'sources',
+    );
+  });
+
+  it.each([
+    ['a long gap after a source phrase', `link the source${' '.repeat(150_000)}x`],
+    ['many source phrases naming a chat', `${'link the source chat, '.repeat(20_000)}end`],
+  ])('reads a pasted message with %s in linear time', (_shape, text) => {
+    const startedAt = performance.now();
+    detectExplicitWebSearchIntent(text);
+    expect(performance.now() - startedAt).toBeLessThan(2000);
+  });
+
   it('prefers the search verb when a turn carries more than one signal', () => {
     expect(detectExplicitWebSearchIntent('search the web for the latest, cite sources')).toBe(
       'search_verb',
@@ -192,6 +216,14 @@ describe('hasExplicitWebSearchOptOut', () => {
     ],
     ['private history scope', 'Search only my private history for the picnic plan.'],
     ['past chats scope', 'Only search my past chats for the agreed colour.'],
+    [
+      'MEM-6 H3',
+      'AUDIT R12 CHAT HISTORY RETRIEVAL CONTROL. Use only earlier conversation excerpts available in this chat, never saved memories or project files. Find our synthetic Velvet Kestrel excursion and Cobalt Otter workshop discussions. For each, give the agreed code, item count, day, and coordinator, and identify/link the source chat if available. Also check the Ivory Lynx regatta, which may have no discussion. Say unavailable when you cannot retrieve a fact; do not infer or invent it. Do not browse the public web, run code, call external services, or save memories. Keep the answer brief.',
+    ],
+    [
+      'MEM-6 H5',
+      'Cobalt Otter workshop: search earlier conversations in this project for this synthetic AUDIT R12 discussion. Give its agreed code, item count, day, and coordinator, and identify/link the source chat if available. Also check our standalone Velvet Kestrel excursion and the possibly nonexistent Ivory Lynx regatta, with the same fields. Use prior chat excerpts only, not saved memory or project files. Say unavailable when not retrievable; do not guess. Do not browse the public web, run code, call external services, or save memories.',
+    ],
   ])('recognises the opt-out in audit prompt %s', (_fixture, prompt) => {
     expect(hasExplicitWebSearchOptOut(prompt)).toBe(true);
     expect(detectExplicitWebSearchIntent(prompt)).toBeNull();
@@ -268,6 +300,10 @@ describe('hasExplicitWebSearchOptOut', () => {
     'Do not search…',
     'Summarise this \n\nNo search',
     'Line one\r\n\r\nNo search\r\n',
+    'Do not browse the public web.',
+    "Don't search the public web, answer from my notes.",
+    'Answer without searching the public internet.',
+    'Do not run code or browse the public web.',
   ])('reads %j as a refusal', (text) => {
     expect(hasExplicitWebSearchOptOut(text)).toBe(true);
     expect(detectExplicitWebSearchIntent(text)).toBeNull();
@@ -378,6 +414,11 @@ describe('hasExplicitWebSearchOptOut', () => {
     ['a run of indented blank lines', `${'\n '.repeat(60_000)}x`],
     ['blank lines inside the text', `Summarise this log.\n${'\n'.repeat(60_000)}end of log`],
     ['many refused alternatives that are not a search', `Do not a${' or searchx'.repeat(15_000)}`],
+    ['a long gap after the public qualifier', `Do not browse the public${' '.repeat(150_000)}x`],
+    [
+      'a long gap after a public search qualifier',
+      `Do not search the public${' '.repeat(150_000)}x`,
+    ],
   ])('reads a pasted message with %s in linear time', (_shape, text) => {
     const startedAt = performance.now();
     expect(hasExplicitWebSearchOptOut(text)).toBe(false);
