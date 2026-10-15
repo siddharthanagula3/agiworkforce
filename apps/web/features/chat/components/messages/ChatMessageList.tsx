@@ -91,6 +91,7 @@ const STREAM_ERROR_REASON_BY_CAUSE: Readonly<Record<IncompleteTurnCause, string>
   timeout: 'the model took too long to respond.',
   modelRestriction: 'the selected model could not complete this request.',
   contextLength: 'this conversation is too long for the selected model.',
+  messageLength: 'this message is too long for the selected model.',
   outputLimit: "the answer reached this model's maximum length and stopped there.",
   attachment: 'this model could not read one of the attachments.',
   toolCall: 'the model produced a tool call this request could not accept.',

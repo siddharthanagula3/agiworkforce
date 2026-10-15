@@ -329,6 +329,7 @@ import {
   ManagedUsageRequestError,
   createManagedUsageErrorBody,
   estimateMicrousdOf,
+  finalizeManagedUsageRequest,
   fingerprintManagedUsageRequest,
   parseManagedUsageIdempotencyKey,
   reserveManagedUsageRequest,
@@ -3012,6 +3013,25 @@ export function applyFreeModelPromotion(
     .filter((effort): effort is Effort => effort !== undefined)
     .sort((left, right) => EFFORT_ORDER.indexOf(left) - EFFORT_ORDER.indexOf(right));
   chatRequest.effort = cheapest;
+}
+
+export const MESSAGE_TOO_LONG_CODE = 'message_too_long';
+
+function messageTooLongResponse(): ProcessFailure {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        error: {
+          message:
+            'This message is too long for the selected model. Shorten it or send it in parts, or choose a model with a larger context window.',
+          type: 'invalid_request_error',
+          code: MESSAGE_TOO_LONG_CODE,
+        },
+      },
+      { status: 400 },
+    ),
+  };
 }
 
 function freeModelPromotionLimitResponse(): ProcessFailure {
@@ -6163,6 +6183,33 @@ async function processAdmittedRequest(
         : {}),
     }),
   );
+  if (contextTrim?.latestUserMessageOverflow) {
+    logger.warn(
+      {
+        userId,
+        requestId,
+        model: chatRequest.model,
+        estimatedTokensAfter: contextTrim.estimatedTokensAfter,
+        budgetTokens: contextTrim.budgetTokens,
+      },
+      'Turn refused before the provider: the latest user message does not fit the selected model',
+    );
+    if (managedUsage) {
+      await finalizeManagedUsageRequest({
+        ...managedUsage,
+        outcome: 'failed',
+        attempt: { outcome: 'failed', errorClass: MESSAGE_TOO_LONG_CODE },
+        actualCostCents: 0,
+      }).catch((error: unknown) => {
+        logger.error(
+          { error, userId, requestId },
+          'Managed chat reservation release could not be persisted',
+        );
+      });
+    }
+    return messageTooLongResponse();
+  }
+
   const sentCitations =
     referenceMessage && referenceBeforeFit !== undefined
       ? citationsSentAfterFit(

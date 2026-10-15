@@ -28,8 +28,13 @@ export interface ContextTrimResult {
   estimatedTokensBefore: number;
   estimatedTokensAfter: number;
   budgetTokens: number;
-  /** Still over budget once everything shrinkable was cut; protected instructions were sent whole. */
+  /** Still over budget once everything shrinkable was cut; protected instructions and the latest user message were left whole. */
   protectedOverflow?: true;
+  /**
+   * The overflow is the latest user message: everything else fits once it is
+   * left out, so no fit can send it and the turn is refused before the provider.
+   */
+  latestUserMessageOverflow?: true;
 }
 
 /**
@@ -222,7 +227,22 @@ export function applyDroppedSpanReplacement(
   messages.push(...next);
 
   const protectedOverflow = running > plan.budgetTokens;
-  if (protectedOverflow) {
+  const latestUserMessageTokens = latestUserMessage ? measure(latestUserMessage) : 0;
+  const latestUserMessageOverflow =
+    protectedOverflow &&
+    latestUserMessage !== null &&
+    running - latestUserMessageTokens <= plan.budgetTokens;
+  if (latestUserMessageOverflow) {
+    logger.warn(
+      {
+        model,
+        estimatedTokensAfter: running,
+        budgetTokens: plan.budgetTokens,
+        latestUserMessageTokens,
+      },
+      '[context-window] the latest user message is longer than the model context window leaves room for',
+    );
+  } else if (protectedOverflow) {
     logger.warn(
       { model, estimatedTokensAfter: running, budgetTokens: plan.budgetTokens },
       '[context-window] protected instructions exceed the budget left after fitting; sent whole',
@@ -236,6 +256,7 @@ export function applyDroppedSpanReplacement(
     estimatedTokensAfter: running,
     budgetTokens: plan.budgetTokens,
     ...(protectedOverflow ? { protectedOverflow: true as const } : {}),
+    ...(latestUserMessageOverflow ? { latestUserMessageOverflow: true as const } : {}),
   };
 }
 
@@ -257,7 +278,9 @@ export function trimMessagesToContextWindow(
   );
   logger.info(
     { model, ...result },
-    '[context-window] trimmed conversation history to fit the resolved model context window',
+    result.protectedOverflow
+      ? '[context-window] trimmed conversation history, and it still exceeds the resolved model context window'
+      : '[context-window] trimmed conversation history to fit the resolved model context window',
   );
   return result;
 }

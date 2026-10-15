@@ -50,6 +50,7 @@ export type IncompleteTurnCause =
   | 'timeout'
   | 'modelRestriction'
   | 'contextLength'
+  | 'messageLength'
   | 'outputLimit'
   | 'attachment'
   | 'toolCall'
@@ -85,6 +86,7 @@ export const INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE: Readonly<Record<string, Incomp
   model_not_found: 'modelRestriction',
   model_not_available: 'planRestriction',
   context_length_exceeded: 'contextLength',
+  message_too_long: 'messageLength',
   max_output_tokens_exceeded: 'outputLimit',
   attachment_too_large: 'attachment',
   unsupported_attachment: 'attachment',
@@ -113,6 +115,8 @@ const INCOMPLETE_TURN_MESSAGE_BY_CAUSE: Readonly<Record<IncompleteTurnCause, str
     'The selected model could not complete this request. Retry, or choose a different model.',
   contextLength:
     'This conversation is too long for the selected model. Start a new chat, remove some attachments, or choose a model with a larger context window.',
+  messageLength:
+    'This message is too long for the selected model. Shorten it or send it in parts, or choose a model with a larger context window.',
   outputLimit:
     "The answer reached this model's maximum length and stopped there. Ask for a shorter answer, or split the request.",
   attachment:

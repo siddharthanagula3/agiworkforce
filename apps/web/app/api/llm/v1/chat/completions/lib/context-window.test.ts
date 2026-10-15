@@ -184,6 +184,25 @@ describe('protected instructions during the final fit', () => {
     expect(messages[1]?.content).toBe(question);
     expect(result?.truncatedMessages).toBe(0);
     expect(result?.protectedOverflow).toBe(true);
+    expect(result?.latestUserMessageOverflow).toBe(true);
+  });
+
+  it('names the latest user message as the overflow once the older turns are cut to nothing', () => {
+    const question = 'q'.repeat(3_000);
+    const messages: TrimmableMessage[] = [
+      { role: 'system', content: POLICY },
+      { role: 'user', content: 'an earlier question' },
+      { role: 'assistant', content: 'a'.repeat(2_000) },
+      { role: 'user', content: question },
+    ];
+
+    const result = trimMessagesToContextWindow(messages, WIDE_TEST_MODEL, 100, {
+      budgetTokens: 1_200,
+      measure: bytes,
+    });
+
+    expect(messages.at(-1)?.content).toBe(question);
+    expect(result?.latestUserMessageOverflow).toBe(true);
   });
 
   it('cuts the reference block and never the latest user message (PC-F08)', () => {
@@ -238,6 +257,7 @@ describe('protected instructions during the final fit', () => {
 
     expect(messages[0]?.content).toBe(POLICY);
     expect(result?.protectedOverflow).toBe(true);
+    expect(result?.latestUserMessageOverflow).toBeUndefined();
     expect(result!.estimatedTokensAfter).toBeGreaterThan(result!.budgetTokens);
   });
 });

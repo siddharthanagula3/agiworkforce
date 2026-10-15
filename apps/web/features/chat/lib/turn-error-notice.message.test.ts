@@ -90,9 +90,19 @@ describe('failures a reader has to tell apart to act on', () => {
     expect(text).not.toBe(INCOMPLETE_TURN_DEFAULT_MESSAGE);
   });
 
+  it('tells a reader an over-long message to shorten it, not to start a new chat (PC-F08)', () => {
+    const text = incompleteTurnNoticeMessage(
+      assistantMessage({ metadata: { errorCode: 'message_too_long' } }),
+    );
+
+    expect(text).toMatch(/this message is too long for the selected model/i);
+    expect(text).not.toMatch(/new chat|conversation/i);
+  });
+
   it('never gives two different failures the same sentence', () => {
     const codes = [
       'context_length_exceeded',
+      'message_too_long',
       'max_output_tokens_exceeded',
       'unsupported_attachment',
       'content_filter',

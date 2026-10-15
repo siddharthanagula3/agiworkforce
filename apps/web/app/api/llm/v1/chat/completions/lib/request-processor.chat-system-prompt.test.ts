@@ -51,6 +51,7 @@ const mocks = vi.hoisted(() => ({
   persistRoutingDecision: vi.fn(),
   organizationId: vi.fn((): string | null => null),
   turnContext: vi.fn(),
+  finalizeManagedUsage: vi.fn(),
 }));
 
 const turnContextService = vi.hoisted(() => ({
@@ -88,7 +89,11 @@ vi.mock('@/lib/server/user-identity', async (importOriginal) => {
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => {
   const actual = await importOriginal<ScanModule4>();
-  return { ...actual, reserveManagedUsageRequest: mocks.reserveManagedUsage };
+  return {
+    ...actual,
+    reserveManagedUsageRequest: mocks.reserveManagedUsage,
+    finalizeManagedUsageRequest: mocks.finalizeManagedUsage,
+  };
 });
 
 vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => {
@@ -878,5 +883,55 @@ describe('the past chats a turn shows after the final fit (PC-F08)', () => {
     if (!result.ok) return;
     expect(result.contextTrim?.truncatedMessages).toBe(1);
     expect(result.pastChatSources?.map((source) => source.messageId)).toEqual(['message-a']);
+  });
+});
+
+describe('a latest message longer than the selected model can read (PC-F08)', () => {
+  const userTextOnly = (message: { role: string; content: string }) =>
+    message.role === 'user' ? message.content.length : 0;
+
+  it('is refused before any model request with copy about the message, not the conversation', async () => {
+    mocks.finalizeManagedUsage.mockResolvedValue({});
+    finalFit.sizing = { budgetTokens: 1_000, measure: userTextOnly };
+
+    const result = await processRequest(
+      chatRequestFor('chat-system-prompt-message-too-long', {
+        messages: [{ role: 'user', content: `Summarise this log. ${'x'.repeat(5_000)}` }],
+      }),
+      auth(),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.response.status).toBe(400);
+    const { error } = (await result.response.json()) as {
+      error: { code: string; message: string };
+    };
+    expect(error.code).toBe('message_too_long');
+    expect(error.message).toContain('This message is too long for the selected model');
+    expect(error.message).not.toMatch(/new chat|conversation is too long/i);
+    expect(mocks.finalizeManagedUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+    );
+  });
+
+  it('still serves a turn whose overflow is the instructions, not the message', async () => {
+    finalFit.sizing = {
+      budgetTokens: 1_000,
+      measure: (message) => (message.role === 'system' ? 5_000 : userTextOnly(message)),
+    };
+
+    const result = await processRequest(
+      chatRequestFor('chat-system-prompt-instructions-overflow', {
+        messages: [{ role: 'user', content: 'A short question.' }],
+      }),
+      auth(),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.contextTrim?.protectedOverflow).toBe(true);
+    expect(result.contextTrim?.latestUserMessageOverflow).toBeUndefined();
+    expect(mocks.finalizeManagedUsage).not.toHaveBeenCalled();
   });
 });

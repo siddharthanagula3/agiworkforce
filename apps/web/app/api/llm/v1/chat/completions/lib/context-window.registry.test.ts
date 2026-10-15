@@ -90,6 +90,7 @@ describe('context validation covers every model a chat turn can be served by', (
       expect(oversizedTurn[1]?.content, key).toBe(pasted);
       expect(fitted!.truncatedMessages, key).toBe(0);
       expect(fitted!.protectedOverflow, key).toBe(true);
+      expect(fitted!.latestUserMessageOverflow, key).toBe(true);
       expect(fitted!.estimatedTokensAfter, key).toBeGreaterThan(fitted!.budgetTokens);
     }
   });

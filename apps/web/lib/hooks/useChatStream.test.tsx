@@ -3880,6 +3880,24 @@ describe('useChatStream', () => {
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
+  it('does not tell a reader to retry or start a new chat for a message the model cannot read (PC-F08)', async () => {
+    const refusal =
+      'This message is too long for the selected model. Shorten it or send it in parts.';
+    mockLlmErrorResponse({ error: { code: 'message_too_long', message: refusal } }, 400);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { result } = renderHook(() => useChatStream());
+
+    await act(async () => {
+      await result.current.sendMessage('hello', { conversationId: TEMP_CONVERSATION.id });
+    });
+
+    const assistantMessage = useChatStore
+      .getState()
+      .messages.find((message) => message.role === 'assistant');
+    expect(assistantMessage?.content).toBe(`Error: ${refusal}`);
+    expect(assistantMessage?.metadata?.errorCode).toBe('message_too_long');
+  });
+
   it('keeps the classified error code on the failed message for the incomplete-turn notice', async () => {
     mockLlmErrorResponse({
       error: {

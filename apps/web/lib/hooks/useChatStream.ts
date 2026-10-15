@@ -1,6 +1,7 @@
 'use client';
 
 import { FREE_QUOTA_EXHAUSTED_CODE } from '@/features/models/lib/free-quota-types';
+import { INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE } from '@/features/chat/lib/turn-error-notice';
 import type { FreeLimit } from '@agiworkforce/cloud-contracts';
 import { readFreeLimit } from '@/features/chat/lib/freeLimitRecovery';
 import { trackMessageSave } from '@/features/chat/lib/pending-message-saves';
@@ -617,6 +618,9 @@ function readStreamErrorFrame(raw: unknown): StreamErrorInfo | undefined {
 
 function buildAssistantErrorContent(message: string, code?: string): string {
   if (code === FREE_QUOTA_EXHAUSTED_CODE) return message;
+  if (code && INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE[code] === 'messageLength') {
+    return `Error: ${message}`;
+  }
   return `Error: ${message}\n\nTry again, or start a new chat if this response is stuck.`;
 }
 
