@@ -37,10 +37,10 @@
     "privacy": {
       "route": "/privacy",
       "slug": "privacy",
-      "current": "2026-10-13",
+      "current": "2026-10-15",
       "versions": [
         {
-          "date": "2026-10-13",
+          "date": "2026-10-15",
           "summary": "Changes who can receive a Free plan chat on the default model. It was Alibaba Cloud Model Studio, at its international endpoint in Singapore, or OpenRouter’s free router; it is now Alibaba Cloud Model Studio or OpenAI, and a turn that needs tools, web search or code execution is answered by OpenAI. OpenRouter’s free router no longer answers Free plan chats, so the sentence about its providers training on what you send is removed. The summary at the top says the Free plan runs on a model AGI chooses within a small usage allowance. OpenRouter still carries the Qwen and Zhipu models when AGI holds no key of its own and is still the failover for other chat models.",
           "status": "current",
           "published": null
@@ -161,10 +161,10 @@
     "subprocessors": {
       "route": "/subprocessors",
       "slug": "subprocessors",
-      "current": "2026-10-13",
+      "current": "2026-10-15",
       "versions": [
         {
-          "date": "2026-10-13",
+          "date": "2026-10-15",
           "summary": "OpenRouter no longer answers Free plan chats on the default model, so that use is removed from its row; it still carries the Qwen and Zhipu models when AGI holds no key of its own and is still the failover for other chat models. A Free plan chat on the default model now goes to OpenAI or to Alibaba Cloud Model Studio, and the model providers row says so. No subprocessor is added or removed.",
           "status": "current",
           "published": null
@@ -430,10 +430,10 @@
     "indiaPrivacy": {
       "route": "/privacy/india",
       "slug": "privacy-india",
-      "current": "2026-10-13",
+      "current": "2026-10-15",
       "versions": [
         {
-          "date": "2026-10-13",
+          "date": "2026-10-15",
           "summary": "Changes who can receive a Free plan chat on the default model: Alibaba Cloud Model Studio, at its international endpoint in Singapore, or OpenAI, where it said OpenRouter’s free router. OpenRouter’s free router no longer answers Free plan chats.",
           "status": "current",
           "published": null
@@ -474,10 +474,10 @@
     "dataUse": {
       "route": "/data-use",
       "slug": "data-use",
-      "current": "2026-10-13",
+      "current": "2026-10-15",
       "versions": [
         {
-          "date": "2026-10-13",
+          "date": "2026-10-15",
           "summary": "Changes who can receive a Free plan chat on the default model: Alibaba Cloud Model Studio, at its international endpoint in Singapore, or OpenAI, where it said OpenRouter’s free router. OpenRouter’s free router no longer answers Free plan chats. Nothing else about how your data is used changed.",
           "status": "current",
           "published": null
