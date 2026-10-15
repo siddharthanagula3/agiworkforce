@@ -1039,6 +1039,7 @@ pub(crate) mod test_support {
         run(&["config", "user.email", "test@example.invalid"]);
         run(&["config", "user.name", "Test"]);
         run(&["config", "commit.gpgsign", "false"]);
+        run(&["config", "core.autocrlf", "false"]);
         std::fs::write(dir.join("README.md"), "hello\n").unwrap();
         run(&["add", "."]);
         run(&["commit", "-q", "-m", "init"]);

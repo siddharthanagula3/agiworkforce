@@ -1507,7 +1507,7 @@ local\0file:{}\0credential.helper\nstore\0",
             .expect("an untrusted-configuration refusal");
         assert_eq!(refusal.settings[0].key, "filter.x.clean");
         assert!(!refusal.settings[0].recorded);
-        assert!(refusal.settings[0].origin.ends_with(".git/config"));
+        assert!(Path::new(&refusal.settings[0].origin).ends_with(".git/config"));
         assert!(refused.to_string().contains("/trust grant"));
         let elsewhere = refusal.message("Remove it from the repository's configuration.");
         assert!(elsewhere.contains("filter.x.clean"));

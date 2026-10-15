@@ -1991,8 +1991,7 @@ mod tests {
         std::fs::write(installed.join("server"), "planted").unwrap();
         std::fs::write(installed.join("tsx"), "tsx").unwrap();
         std::fs::write(project.0.join("x.ts"), "code").unwrap();
-        let local = Path::new(LOCAL_PROGRAMS);
-        let label = |program: &str| local.join(program).to_string_lossy().into_owned();
+        let label = |program: &str| format!("{LOCAL_PROGRAMS}/{program}");
 
         for (command, arguments) in [
             ("npx", vec!["-y", "@scope/server@1.0.0", "--stdio"]),
