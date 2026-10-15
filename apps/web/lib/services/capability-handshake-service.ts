@@ -65,8 +65,11 @@ import {
   type PlatformCapability,
   type RevenueContext,
   type SyncedAppSurface,
+  type WorkspaceFeature,
+  type WorkspaceFeatureAccess,
 } from '@agiworkforce/types';
 import type { EffectiveCapabilityDocumentWire } from '@agiworkforce/cloud-contracts';
+import type { CloudCodeExecutionPolicy } from '@/lib/server/code-execution-policy';
 import {
   getPlanSessionUsageBudgetCents,
   getPlanUsageBudgetCents,
@@ -168,6 +171,42 @@ function buildSettingsLayerGrant(
     return { layer: 'settings', sourceId: 'settings:none-configured', granted };
   }
   return { layer: 'settings', sourceId: sources.join(';'), granted, denialReasons };
+}
+
+/** The workspace features an administrator can turn off, each with the capability it closes. */
+export const WORKSPACE_FEATURE_CAPABILITIES: ReadonlyArray<
+  readonly [WorkspaceFeature, PlatformCapability]
+> = [
+  ['research', 'canUseDeepResearch'],
+  ['work', 'canUseAgiWork'],
+  ['skills', 'canUseSkills'],
+  ['plugins', 'canUsePlugins'],
+];
+
+export function workspaceDisabledCapabilities(
+  featureAccess: WorkspaceFeatureAccess | null | undefined,
+): PlatformCapability[] {
+  return featureAccess
+    ? WORKSPACE_FEATURE_CAPABILITIES.filter(([feature]) => featureAccess[feature] === false).map(
+        ([, capability]) => capability,
+      )
+    : [];
+}
+
+/** A read that failed proves no opt-out, so only an account that turned code runs off closes them. */
+export function userDisabledCapabilities(
+  codeExecution: CloudCodeExecutionPolicy,
+): PlatformCapability[] {
+  return !codeExecution.allowed && codeExecution.reason === 'disabled'
+    ? ['canUseCloudExecution']
+    : [];
+}
+
+/** What the settings layer subtracts, grouped by who switched it off. */
+export interface CapabilityExclusions {
+  readonly closedCapabilities: readonly PlatformCapability[];
+  readonly userDisabledCapabilities: readonly PlatformCapability[];
+  readonly workspaceDisabledCapabilities: readonly PlatformCapability[];
 }
 
 export interface CapabilityLimitResets {

@@ -14,12 +14,19 @@ const FIXTURE = path.resolve(
 
 const evalFacts = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Record<string, readonly string[]>;
 
+const NO_EXCLUSIONS = {
+  closedCapabilities: [],
+  userDisabledCapabilities: [],
+  workspaceDisabledCapabilities: [],
+};
+
 function facts(tier: string, surface = 'web', cloudExecutionDeploymentEnabled = true) {
   return productCapabilityFacts({
     userId: 'user-1',
     tier,
     surface,
     cloudExecutionDeploymentEnabled,
+    exclusions: NO_EXCLUSIONS,
   });
 }
 
@@ -48,5 +55,34 @@ describe('the product capabilities the chat prompt describes', () => {
 
   it('reads an unknown surface as web rather than granting it more', () => {
     expect(facts('free', 'chrome')).toEqual(facts('free', 'web'));
+  });
+
+  it('leaves out what an operator, the account or its workspace switched off', () => {
+    const open = facts('pro');
+    for (const capability of ['canUseWebSearch', 'canUseCloudExecution', 'canUseDeepResearch']) {
+      expect(open).toContain(capability);
+    }
+
+    const narrowed = productCapabilityFacts({
+      userId: 'user-1',
+      tier: 'pro',
+      surface: 'web',
+      cloudExecutionDeploymentEnabled: true,
+      exclusions: {
+        closedCapabilities: ['canUseWebSearch'],
+        userDisabledCapabilities: ['canUseCloudExecution'],
+        workspaceDisabledCapabilities: ['canUseDeepResearch'],
+      },
+    });
+
+    expect(narrowed).not.toContain('canUseWebSearch');
+    expect(narrowed).not.toContain('canUseCloudExecution');
+    expect(narrowed).not.toContain('canUseDeepResearch');
+    expect(narrowed).toEqual(
+      open.filter(
+        (capability) =>
+          !['canUseWebSearch', 'canUseCloudExecution', 'canUseDeepResearch'].includes(capability),
+      ),
+    );
   });
 });

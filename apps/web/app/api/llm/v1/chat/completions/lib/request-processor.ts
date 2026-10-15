@@ -426,6 +426,7 @@ import {
 } from '@/lib/required-tool-call';
 import {
   buildCapabilityPreamble,
+  chatSystemPromptDescribesProductCapabilities,
   chatSystemPromptDescribesSetup,
   servingModelFor,
   type ChatSetup,
@@ -457,7 +458,17 @@ import { moderateManagedPrompt } from '@/lib/moderation';
 import { timePhase } from '@/lib/observability/phase-timer';
 import { assertCapabilityAvailable, readKillSwitchGate } from '@/lib/feature-flags/capability-gate';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
-import { FAST_MODE_CAPABILITY, WORK_CAPABILITY } from '@/lib/feature-flags/kill-switches';
+import {
+  FAST_MODE_CAPABILITY,
+  WORK_CAPABILITY,
+  platformCapabilitiesOf,
+} from '@/lib/feature-flags/kill-switches';
+import { resolveCloudCodeExecutionPolicy } from '@/lib/server/code-execution-policy';
+import {
+  userDisabledCapabilities,
+  workspaceDisabledCapabilities,
+  type CapabilityExclusions,
+} from '@/lib/services/capability-handshake-service';
 import { PAID_UPGRADE_ACCESS_NOTE } from '@/lib/billing/paid-upgrade-copy';
 import { CHAT_TURN_PHASE } from './turn-phases';
 import {
@@ -1740,6 +1751,47 @@ function chatConnectorsSetup(input: {
   if (input.switchedOffForChat) return 'off';
   if (input.lockdown === true) return 'locked_down';
   return input.lockdown === null || input.allowedForTurn === false ? 'unavailable' : 'on';
+}
+
+/**
+ * What an operator, the account and its workspace switched off, read as
+ * `/api/me` reads it, so the product overview offers nothing the app shows as
+ * off. A switch or setting that could not be read is listed as shipped, as
+ * `/api/me` lists it; the turn's own tool gates still decide what can run.
+ */
+async function productCapabilityExclusions(input: {
+  request: NextRequest;
+  userId: string;
+  planTier: string | null;
+  surface: CloudChatSurface;
+  scoped: UserScopedDb;
+  workspaceControls: ResolvedWorkspaceControls | null;
+}): Promise<CapabilityExclusions> {
+  const [gate, codeExecution] = await Promise.all([
+    readKillSwitchGate(
+      buildFlagSubject(input.request, {
+        userId: input.userId,
+        workspaceId: input.scoped.organizationId,
+        role: null,
+        plan: input.planTier,
+        surface: input.surface,
+      }),
+    ).catch((error: unknown) => {
+      logger.warn(
+        { error, userId: input.userId },
+        'Kill-switch gate unreadable; the product overview lists capabilities as shipped',
+      );
+      return null;
+    }),
+    resolveCloudCodeExecutionPolicy(input.scoped.db, input.userId),
+  ]);
+  return {
+    closedCapabilities: platformCapabilitiesOf(gate?.closedCapabilities ?? []),
+    userDisabledCapabilities: userDisabledCapabilities(codeExecution),
+    workspaceDisabledCapabilities: workspaceDisabledCapabilities(
+      input.workspaceControls?.featureAccess,
+    ),
+  };
 }
 
 function chatSetupFor(input: {
@@ -5865,12 +5917,6 @@ async function processAdmittedRequest(
       memoryOnForChat: chatRequest.memory_enabled !== false,
       contextAssembled: turnContext !== null,
     });
-    const productCapabilities = productCapabilityFacts({
-      userId,
-      tier: subscription.plan_tier,
-      surface: chatSurface,
-      cloudExecutionDeploymentEnabled: e2bProvisioningReady(),
-    });
     const customInstructionsRead = await timePhase(
       CHAT_TURN_PHASE.customInstructions,
       () => customInstructionsPromise ?? Promise.resolve({ readable: true as const, text: null }),
@@ -5879,6 +5925,22 @@ async function processAdmittedRequest(
       ? customInstructionsRead.text
       : null;
     const promptSelection = { variants: rolloutInputs.promptVariants };
+    const productCapabilities = chatSystemPromptDescribesProductCapabilities(promptSelection)
+      ? productCapabilityFacts({
+          userId,
+          tier: subscription.plan_tier,
+          surface: chatSurface,
+          cloudExecutionDeploymentEnabled: e2bProvisioningReady(),
+          exclusions: await productCapabilityExclusions({
+            request,
+            userId,
+            planTier: subscription.plan_tier,
+            surface: chatSurface,
+            scoped: await scopedDbPromise,
+            workspaceControls,
+          }),
+        })
+      : undefined;
     const toolsSupported = resolvedModelCaps?.tools !== false;
     const describesConnectors =
       toolsSupported &&
@@ -5907,8 +5969,10 @@ async function processAdmittedRequest(
       attachmentSandboxPaths: stagedAttachmentPaths(turnAttachments),
       memory: turnMemory,
       artifacts: true,
-      artifactConnectors: productArtifactConnectors(subscription.plan_tier, productCapabilities),
-      productCapabilities,
+      artifactConnectors:
+        productCapabilities !== undefined &&
+        productArtifactConnectors(subscription.plan_tier, productCapabilities),
+      ...(productCapabilities ? { productCapabilities } : {}),
       promptSelection,
       servingModel: servingModelFor(chatRequest.model, modelSelection),
       chatSetup: chatSetupFor({

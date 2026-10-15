@@ -24,7 +24,6 @@ import {
   SYNCED_APP_SURFACES,
   type PlatformCapability,
   type SyncedAppSurface,
-  type WorkspaceFeature,
   seatTypeField,
   wirePlanOf,
 } from '@agiworkforce/types';
@@ -37,8 +36,11 @@ import type {
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
 import { webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import {
+  WORKSPACE_FEATURE_CAPABILITIES,
   buildMeCapabilityHandshake,
   toWireCapabilityHandshake,
+  userDisabledCapabilities,
+  workspaceDisabledCapabilities,
 } from '@/lib/services/capability-handshake-service';
 import { resolveSubscriptionBillingSource } from '@/lib/server/subscription-billing-owner';
 import { getCapabilityLimitResets } from '@/lib/server/capability-limit-resets';
@@ -88,44 +90,20 @@ async function closedFeatures(
   }));
 }
 
-const WORKSPACE_FEATURE_CAPABILITIES: ReadonlyArray<
-  readonly [WorkspaceFeature, PlatformCapability]
-> = [
-  ['research', 'canUseDeepResearch'],
-  ['work', 'canUseAgiWork'],
-  ['skills', 'canUseSkills'],
-  ['plugins', 'canUsePlugins'],
-];
-
 async function workspaceCapabilityDecisions(
   userId: string,
   request: NextRequest,
 ): Promise<{ disabled: PlatformCapability[]; unreadable: PlatformCapability[] }> {
   try {
     const effective = await resolveEffectiveWorkspaceControls(getNeonDb(), userId, request);
-    const featureAccess = effective?.controls.featureAccess;
     return {
-      disabled: featureAccess
-        ? WORKSPACE_FEATURE_CAPABILITIES.filter(
-            ([feature]) => featureAccess[feature] === false,
-          ).map(([, capability]) => capability)
-        : [],
+      disabled: workspaceDisabledCapabilities(effective?.controls.featureAccess),
       unreadable: [],
     };
   } catch (error) {
     logger.error({ userId, error }, 'Workspace controls unreadable; their capabilities are closed');
     return { disabled: [], unreadable: WORKSPACE_FEATURE_CAPABILITIES.map(([, c]) => c) };
   }
-}
-
-async function userDisabledCapabilities(
-  db: DatabaseAdapter,
-  userId: string,
-): Promise<PlatformCapability[]> {
-  const codeExecution = await resolveCloudCodeExecutionPolicy(db, userId);
-  return !codeExecution.allowed && codeExecution.reason === 'disabled'
-    ? ['canUseCloudExecution']
-    : [];
 }
 
 const PatchMeSchema = z.object({
@@ -297,7 +275,9 @@ async function handleGetMe(request: NextRequest) {
         ...(killSwitches?.closedCapabilities ?? []),
         ...workspaceCapabilities.unreadable,
       ]),
-      userDisabledCapabilities: await userDisabledCapabilities(db, userId),
+      userDisabledCapabilities: userDisabledCapabilities(
+        await resolveCloudCodeExecutionPolicy(db, userId),
+      ),
       workspaceDisabledCapabilities: workspaceCapabilities.disabled,
       resets: await getCapabilityLimitResets(db, userId, subscription?.current_period_end ?? null),
     });

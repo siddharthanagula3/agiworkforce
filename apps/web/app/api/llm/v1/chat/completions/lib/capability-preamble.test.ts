@@ -5,7 +5,11 @@ import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
 
 import { createManagedOfficeFileToolDefinition } from '@/lib/services/managed-office-file-service';
 
-import { buildCapabilityPreamble, extractToolNames } from './capability-preamble';
+import {
+  buildCapabilityPreamble,
+  chatSystemPromptDescribesProductCapabilities,
+  extractToolNames,
+} from './capability-preamble';
 
 describe('capability preamble', () => {
   it('extracts function and provider-native tools without duplicates', () => {
@@ -477,5 +481,15 @@ describe('capability preamble', () => {
         }),
       ).toBe(plain);
     });
+  });
+});
+
+describe('chatSystemPromptDescribesProductCapabilities', () => {
+  it('is true only for a version that renders the product overview', () => {
+    const select = (version: number) => ({ variants: { 'chat.system': version } });
+
+    expect(chatSystemPromptDescribesProductCapabilities(select(7))).toBe(true);
+    expect(chatSystemPromptDescribesProductCapabilities(select(6))).toBe(false);
+    expect(chatSystemPromptDescribesProductCapabilities(select(9))).toBe(false);
   });
 });

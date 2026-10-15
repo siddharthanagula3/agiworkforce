@@ -7,6 +7,7 @@ import {
 import {
   ALL_PLATFORM_CAPABILITIES,
   CAPABILITY_DOCUMENT_VERSION_UNRESOLVED,
+  DEFAULT_WORKSPACE_FEATURE_ACCESS,
   SYNCED_APP_SURFACES,
   resolveCapabilityDecision,
 } from '@agiworkforce/types';
@@ -15,6 +16,8 @@ import {
   buildMeCapabilityHandshake,
   isMeCapabilityHandshakeStale,
   toWireCapabilityHandshake,
+  userDisabledCapabilities,
+  workspaceDisabledCapabilities,
 } from './capability-handshake-service';
 
 type TypesModule = typeof import('@agiworkforce/types');
@@ -486,5 +489,27 @@ describe('buildMeCapabilityHandshake, connectors before they launch', () => {
       );
     }
     expect(locked.version).not.toBe(released.version);
+  });
+});
+
+describe('the exclusions /api/me and the chat prompt both hand the handshake', () => {
+  it('names the capability each workspace feature switch closes', () => {
+    expect(
+      workspaceDisabledCapabilities({
+        ...DEFAULT_WORKSPACE_FEATURE_ACCESS,
+        research: false,
+        plugins: false,
+      }),
+    ).toEqual(['canUseDeepResearch', 'canUsePlugins']);
+    expect(workspaceDisabledCapabilities(DEFAULT_WORKSPACE_FEATURE_ACCESS)).toEqual([]);
+    expect(workspaceDisabledCapabilities(null)).toEqual([]);
+  });
+
+  it('closes cloud code runs only when the account turned them off', () => {
+    expect(userDisabledCapabilities({ allowed: false, reason: 'disabled' })).toEqual([
+      'canUseCloudExecution',
+    ]);
+    expect(userDisabledCapabilities({ allowed: false, reason: 'unavailable' })).toEqual([]);
+    expect(userDisabledCapabilities({ allowed: true })).toEqual([]);
   });
 });

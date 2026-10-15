@@ -305,6 +305,17 @@ export function chatSystemPromptDescribesSetup(options: ResolvePromptOptions = {
   return resolveChatSystemPrompt(options).sections['setup_heading'] !== undefined;
 }
 
+/** Only a version without the setup block renders the product overview, and only if it has one. */
+export function chatSystemPromptDescribesProductCapabilities(
+  options: ResolvePromptOptions = {},
+): boolean {
+  const { sections } = resolveChatSystemPrompt(options);
+  return (
+    sections['setup_heading'] === undefined &&
+    sections['product_capabilities_heading'] !== undefined
+  );
+}
+
 export function capabilityPreambleStamp(options: ResolvePromptOptions = {}): string {
   return resolvePrompt(CHAT_SYSTEM_PROMPT_ID, options).stamp;
 }

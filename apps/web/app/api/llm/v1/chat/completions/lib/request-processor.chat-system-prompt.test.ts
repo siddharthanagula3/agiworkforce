@@ -734,3 +734,65 @@ describe("the project's other chats a project chat receives under chat prompt v1
     expect((await result.response.json()).error.code).toBe('project_context_load_failed');
   });
 });
+
+describe('the product overview chat prompt v7 renders for the turn (PC-F05)', () => {
+  const v7 = chatSystemPromptSections(7);
+  const overviewLine = (capability: string) =>
+    `- ${chatSystemPromptSection(v7, `product_capability.${capability}`)}`;
+
+  beforeEach(() => {
+    mocks.promptFlags.mockResolvedValue(chatSystemFlag(7));
+    vi.stubEnv('AGI_E2B_EXECUTION', '1');
+    vi.stubEnv('E2B_API_KEY', 'e2b-test-key');
+  });
+
+  it('lists Deep Research, web search and code runs when nothing switched them off', async () => {
+    const joined = await systemText('chat-system-prompt-pcf05-open');
+
+    for (const capability of ['canUseDeepResearch', 'canUseWebSearch', 'canUseCloudExecution']) {
+      expect(joined).toContain(overviewLine(capability));
+    }
+  });
+
+  it('leaves out a feature the workspace administrator turned off', async () => {
+    const joined = await systemText(
+      'chat-system-prompt-pcf05-workspace',
+      {},
+      {
+        workspaceControls: {
+          ...DEFAULT_WORKSPACE_CONTROLS,
+          appliedOverrideIds: [],
+          featureAccess: { ...DEFAULT_WORKSPACE_CONTROLS.featureAccess, research: false },
+        },
+      },
+    );
+
+    expect(joined).not.toContain(overviewLine('canUseDeepResearch'));
+    expect(joined).toContain(overviewLine('canUseWebSearch'));
+  });
+
+  it('leaves out a capability an operator switched off', async () => {
+    const key = capabilityKillSwitchKey('canUseWebSearch');
+    mocks.killSwitches.mockReturnValue({
+      [key]: { key, variant: 'off', enabled: false, reason: 'rule', ruleId: 'cohort', version: 1 },
+    });
+
+    const joined = await systemText('chat-system-prompt-pcf05-operator');
+
+    expect(joined).not.toContain(overviewLine('canUseWebSearch'));
+    expect(joined).toContain(overviewLine('canUseDeepResearch'));
+  });
+
+  it('leaves out code runs the account turned off in its own settings', async () => {
+    mocks.scopedQuery.mockImplementation(async (sql: string) =>
+      sql.includes('from public.user_settings')
+        ? [{ settings: { capabilities: { cloudCodeExecution: false } } }]
+        : [],
+    );
+
+    const joined = await systemText('chat-system-prompt-pcf05-user');
+
+    expect(joined).not.toContain(overviewLine('canUseCloudExecution'));
+    expect(joined).toContain(overviewLine('canUseDeepResearch'));
+  });
+});
