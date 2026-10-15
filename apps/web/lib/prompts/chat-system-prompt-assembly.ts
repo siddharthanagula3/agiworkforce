@@ -64,6 +64,8 @@ export interface ChatTurnState {
   readonly sourceLinks?: boolean;
   /** The client renders a fenced email or writing block as a card. */
   readonly writingCards?: boolean;
+  /** The client publishes artifacts as hosted pages, where the artifact app runtime runs. */
+  readonly artifactApps?: boolean;
 }
 
 export interface ChatTurnClock {
@@ -428,6 +430,10 @@ export function assembleChatSystemPrompt(
   if (state.artifactRuntime !== false) {
     blocks.push(section('artifact_runtime'));
     if (state.artifactConnectors) blocks.push(section('artifact_runtime_connectors'));
+  }
+  if (state.artifactApps) {
+    blocks.push(section('artifact_apps'));
+    if (state.artifactConnectors) blocks.push(section('artifact_apps_connectors'));
   }
 
   if (state.codeExecutionUnavailable) blocks.push(section('code_execution_unavailable'));

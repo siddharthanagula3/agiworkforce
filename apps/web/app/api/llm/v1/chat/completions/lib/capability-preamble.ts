@@ -156,6 +156,8 @@ export interface CapabilityPreambleInput {
   sourceLinks?: boolean;
   /** The client renders a fenced email or writing block as a card. */
   writingCards?: boolean;
+  /** The client publishes artifacts as hosted pages, where the artifact app runtime runs. */
+  artifactApps?: boolean;
   /** Selects the prompt version; absent, the manifest pin serves. */
   promptSelection?: ResolvePromptOptions;
   servingModel?: ServingModel | null;
@@ -341,6 +343,7 @@ function buildPublishedCapabilityPreamble(
       ...(input.productCapabilities ? { productCapabilities: input.productCapabilities } : {}),
       ...(input.sourceLinks ? { sourceLinks: true } : {}),
       ...(input.writingCards ? { writingCards: true } : {}),
+      ...(input.artifactApps ? { artifactApps: true } : {}),
       ...carried,
     },
     {

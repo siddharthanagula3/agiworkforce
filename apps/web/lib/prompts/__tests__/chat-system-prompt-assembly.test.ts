@@ -213,3 +213,24 @@ describe('the email and writing cards a version describes', () => {
     );
   });
 });
+
+describe('the artifact app runtime a version describes', () => {
+  const withApps = {
+    ...merged,
+    artifact_apps: 'APP RUNTIME',
+    artifact_apps_connectors: 'APP CONNECTORS',
+  };
+
+  it('describes the runtime only where the client publishes artifacts as hosted apps', () => {
+    expect(body(withApps, { artifactApps: true })).toContain('APP RUNTIME');
+    expect(body(withApps, {})).not.toContain('APP RUNTIME');
+    expect(body(withApps, { artifactConnectors: true })).not.toContain('APP CONNECTORS');
+  });
+
+  it('adds the connected apps option only where connectors are released for the plan', () => {
+    expect(body(withApps, { artifactApps: true })).not.toContain('APP CONNECTORS');
+    expect(body(withApps, { artifactApps: true, artifactConnectors: true })).toContain(
+      'APP RUNTIME\n\nAPP CONNECTORS',
+    );
+  });
+});
