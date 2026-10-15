@@ -85,4 +85,33 @@ test.describe('the transcript never widens the page', () => {
       }
     });
   }
+
+  test('a user bubble holding one unbroken token keeps both edges inside the column', async ({
+    page,
+  }) => {
+    await page.goto('/chat');
+
+    const composer = page.getByRole('textbox').first();
+    await expect(composer).toBeVisible({ timeout: 20000 });
+    await composer.fill('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_'.repeat(8));
+    await composer.press('Enter');
+
+    const bubble = page.locator('[data-role="user"] .user-bubble').last();
+    await expect(bubble).toBeVisible({ timeout: 30000 });
+
+    const edges = await bubble.evaluate((element) => {
+      const column = element.closest('.message-inner') as HTMLElement;
+      const box = element.getBoundingClientRect();
+      const bounds = column.getBoundingClientRect();
+      return {
+        left: box.left,
+        right: box.right,
+        columnLeft: bounds.left,
+        columnRight: bounds.right,
+      };
+    });
+    expect(edges.left).toBeGreaterThanOrEqual(0);
+    expect(edges.left).toBeGreaterThanOrEqual(edges.columnLeft - 1);
+    expect(edges.right).toBeLessThanOrEqual(edges.columnRight + 1);
+  });
 });

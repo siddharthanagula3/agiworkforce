@@ -114,6 +114,17 @@ describe('project chat handoff', () => {
     expect(readProjectChatHandoff(storage, 'project-1')).toBeNull();
   });
 
+  it('snapshots the selected model into the handoff', () => {
+    const storage = memoryStorage();
+    saveProjectChatHandoff(storage, {
+      content: 'Plan',
+      projectId: 'project-1',
+      modelId: 'model-snapshot',
+      meta,
+    });
+    expect(readProjectChatHandoff(storage, 'project-1')?.modelId).toBe('model-snapshot');
+  });
+
   it('deletes and refuses a stale cross-project handoff', () => {
     const storage = memoryStorage();
     saveProjectChatHandoff(storage, {

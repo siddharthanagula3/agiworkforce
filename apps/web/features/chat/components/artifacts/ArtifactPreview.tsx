@@ -995,7 +995,9 @@ export function ArtifactPreview({
         filename = `${artifact.title || 'artifact'}.html`;
         break;
       case 'md': {
-        const markdown = `# ${artifact.title || 'Artifact'}\n\n\`\`\`${artifact.language || artifact.type}\n${content}\n\`\`\``;
+        const markdown = isMarkdownDoc
+          ? content
+          : `# ${artifact.title || 'Artifact'}\n\n\`\`\`${artifact.language || artifact.type}\n${content}\n\`\`\``;
         blob = new Blob([markdown], { type: 'text/markdown' });
         filename = `${artifact.title || 'artifact'}.md`;
         break;
@@ -1030,13 +1032,16 @@ export function ArtifactPreview({
   const artifactSourceFile = useCallback((): File => {
     const title = artifact.title || 'artifact';
     const language = (artifact.language || artifact.type || 'txt').toLowerCase();
+    if (isMarkdownDoc) {
+      return new File([activeContent], `${title}.md`, { type: 'text/markdown' });
+    }
     const sourceName = `${title}.${language}`;
     if (isSupportedChatAttachment(sourceName, '')) {
       return new File([activeContent], sourceName, { type: 'text/plain' });
     }
     const markdown = `# ${title}\n\n\`\`\`${language}\n${activeContent}\n\`\`\``;
     return new File([markdown], `${title}.md`, { type: 'text/markdown' });
-  }, [activeContent, artifact.language, artifact.title, artifact.type]);
+  }, [activeContent, artifact.language, artifact.title, artifact.type, isMarkdownDoc]);
 
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
   const [savingToLibrary, setSavingToLibrary] = useState(false);

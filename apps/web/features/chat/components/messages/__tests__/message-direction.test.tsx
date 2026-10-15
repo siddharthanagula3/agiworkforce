@@ -12,8 +12,8 @@ describe('message content direction', () => {
   });
 
   it('aligns with a logical property so alignment follows direction', () => {
-    expect(SOURCE).toContain('break-words text-start');
-    expect(SOURCE).not.toContain('break-words text-left');
+    expect(SOURCE).toContain('wrap-anywhere text-start');
+    expect(SOURCE).not.toContain('wrap-anywhere text-left');
   });
 
   // `overflow-wrap-anywhere` was never a Tailwind utility, so it emitted no CSS

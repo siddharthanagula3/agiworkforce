@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImageGenerationCard, ShareModal, imageDownloadFilename } from './ImageGenerationCard';
 import { IMAGE_MODELS, resolveImageGenerationRequestOptions } from '../lib/imageGenerationOptions';
 
-const { admissionFor } = vi.hoisted(() => ({ admissionFor: vi.fn() }));
+const { admissionFor, toastError } = vi.hoisted(() => ({
+  admissionFor: vi.fn(),
+  toastError: vi.fn(),
+}));
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: toastError } }));
 
 vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
   useMediaModelAvailability: () => ({
@@ -368,6 +373,41 @@ describe('ShareModal link', () => {
   });
 });
 
+describe('ShareModal download', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    toastError.mockClear();
+  });
+
+  it('reports a failed fetch instead of retrying the same URL through a link', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 429, headers: new Headers() }) as Response),
+    );
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    render(<ShareModal imageUrl="/api/files/abc" prompt="a red apple" onClose={() => {}} />);
+    fireEvent.click(screen.getByLabelText('Download image'));
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    expect(click).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to a direct link only when object URLs are unsupported', async () => {
+    const original = URL.createObjectURL;
+    Object.defineProperty(URL, 'createObjectURL', { value: undefined, configurable: true });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    try {
+      render(<ShareModal imageUrl="/api/files/abc" prompt="a red apple" onClose={() => {}} />);
+      fireEvent.click(screen.getByLabelText('Download image'));
+      await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+      expect(toastError).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(URL, 'createObjectURL', { value: original, configurable: true });
+    }
+  });
+});
+
 describe('ImageGenerationCard revision requests', () => {
   const SOURCE_BYTES = 'source-image-bytes';
   const SOURCE_BASE64 = Buffer.from(SOURCE_BYTES).toString('base64');
@@ -412,6 +452,82 @@ describe('ImageGenerationCard revision requests', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('edits the version on screen, not the latest one', async () => {
+    admissionFor.mockReturnValue({
+      model_id: OPENAI_IMAGE_MODEL_ID,
+      kind: 'image',
+      state: 'enabled',
+      supports_edit: true,
+    });
+    const onRegenerate = vi.fn().mockResolvedValue('/api/files/next');
+    render(
+      <ImageGenerationCard
+        imageUrl="/api/files/latest"
+        isGenerating={false}
+        prompt="Draw a star"
+        aspectRatio="1:1"
+        modelId={OPENAI_IMAGE_MODEL_ID}
+        onRegenerate={onRegenerate}
+        previousVersions={[
+          { imageUrl: '/api/files/first', prompt: 'Draw a circle', model: OPENAI_IMAGE_MODEL_ID },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Previous version' }));
+    fireEvent.click(screen.getByRole('button', { name: /new version/i }));
+
+    fireEvent.change(screen.getByPlaceholderText('Describe a change to this image...'), {
+      target: { value: 'add a moon' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply this change to the image' }));
+
+    await waitFor(() =>
+      expect(onRegenerate).toHaveBeenCalledWith(
+        expect.objectContaining({ prompt: 'Draw a circle. Edit: add a moon' }),
+      ),
+    );
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/files/first', expect.anything());
+  });
+
+  it('keeps the typed change and the attached mask when the revision fails', async () => {
+    const onRegenerate = renderEditPanel(true);
+    onRegenerate.mockRejectedValueOnce(new Error('Provider unavailable'));
+    attachMask();
+    const input = screen.getByPlaceholderText('Describe a change to this image...');
+    fireEvent.change(input, { target: { value: 'add a moon' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply this change to the image' }));
+
+    await waitFor(() => expect(onRegenerate).toHaveBeenCalledTimes(1));
+    await screen.findByRole('alert');
+    expect(input).toHaveValue('add a moon');
+    expect(screen.getByText('mask.png')).toBeVisible();
+  });
+
+  it('keeps the previous shape selected when a reframe fails', async () => {
+    const onRegenerate = renderEditPanel(true);
+    onRegenerate.mockRejectedValueOnce(new Error('Provider unavailable'));
+    vi.stubGlobal('createImageBitmap', async () => ({ width: 100, height: 100, close: vi.fn() }));
+    const context = { drawImage: vi.fn(), fillRect: vi.fn(), fillStyle: '' };
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as never);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback) =>
+      callback(new Blob(['x'], { type: 'image/png' })),
+    );
+    const trigger = screen.getByRole('button', { name: 'Aspect ratio' });
+    const before = trigger.textContent;
+    fireEvent.click(trigger);
+    const other = screen
+      .getAllByRole('menuitemradio')
+      .find(
+        (item) =>
+          item.getAttribute('aria-checked') === 'false' && !/Auto/.test(item.textContent ?? ''),
+      );
+    fireEvent.click(other!);
+
+    await waitFor(() => expect(onRegenerate).toHaveBeenCalledTimes(1));
+    await screen.findByRole('alert');
+    expect(trigger.textContent).toBe(before);
   });
 
   it('sends a prompt edit with the generated image as the source', async () => {
@@ -495,5 +611,25 @@ describe('ImageGenerationCard revision requests', () => {
         modelId: OPENAI_IMAGE_MODEL_ID,
       }),
     );
+  });
+});
+
+describe('ImageGenerationCard load failure', () => {
+  it('offers a bounded retry and keeps the download action after the image fails to load', () => {
+    const { container } = render(
+      <ImageGenerationCard imageUrl="/api/files/abc" prompt="a red apple" />,
+    );
+
+    for (let failure = 0; failure < 2; failure += 1) {
+      fireEvent.error(container.querySelector('img') as HTMLImageElement);
+      expect(screen.getByText('Image failed to load')).toBeVisible();
+      expect(screen.getByRole('button', { name: 'More actions' })).toBeVisible();
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      expect(container.querySelector('img')).not.toBeNull();
+    }
+
+    fireEvent.error(container.querySelector('img') as HTMLImageElement);
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'More actions' })).toBeVisible();
   });
 });

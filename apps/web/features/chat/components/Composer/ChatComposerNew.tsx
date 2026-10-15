@@ -5291,7 +5291,9 @@ const ChatComposerNewComponent = ({
                   isTurnActive && !imageMode && !videoMode
                     ? TURN_ACTIVE_PLACEHOLDER
                     : imageMode
-                      ? 'Describe or edit an image'
+                      ? imageModelSupportsEdit
+                        ? 'Describe or edit an image'
+                        : 'Describe the image you want'
                       : videoMode
                         ? 'Describe the video you want'
                         : // AUDIT-FIX shell-nav-ia-gap-03: the work-mode axis now

@@ -154,6 +154,21 @@ describe('MessageBubble', () => {
       expect(container.querySelector('.user-bubble')).toBeInTheDocument();
     });
 
+    it('bounds the user bubble so one unbroken token cannot outgrow the column', () => {
+      const { container } = render(
+        <MessageBubble
+          message={makeMessage({ content: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_'.repeat(4) })}
+        />,
+      );
+      const bubble = container.querySelector('.user-bubble') as HTMLElement;
+      expect(bubble.className).toContain('wrap-anywhere');
+      expect(bubble.className).toContain('max-w-full');
+      expect(bubble.className).not.toContain('max-w-none');
+      expect(bubble.parentElement?.className).toContain('min-w-0');
+      expect(bubble.parentElement?.className).toContain('max-w-full');
+      expect(container.querySelector('.message-body')?.className).toContain('min-w-0');
+    });
+
     it('applies flex-row-reverse for right-alignment', () => {
       const { container } = render(<MessageBubble message={makeMessage({ role: 'user' })} />);
       // The .group container should be the outer motion div
@@ -584,6 +599,38 @@ describe('MessageBubble', () => {
         'href',
         'https://cdn.example.com/clip.mp4',
       );
+    });
+
+    it('offers a bounded retry and keeps the download link when the video fails to load', async () => {
+      const user = userEvent.setup();
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: false,
+            metadata: {
+              toolType: 'video-generation',
+              videoUrl: 'https://cdn.example.com/clip.mp4',
+            },
+          })}
+        />,
+      );
+
+      for (let failure = 0; failure < 2; failure += 1) {
+        fireEvent.error(document.querySelector('video') as HTMLVideoElement);
+        expect(screen.getByText('Video failed to load')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Download video' })).toHaveAttribute(
+          'href',
+          'https://cdn.example.com/clip.mp4',
+        );
+        await user.click(screen.getByRole('button', { name: 'Retry' }));
+        expect(document.querySelector('video')).not.toBeNull();
+      }
+
+      fireEvent.error(document.querySelector('video') as HTMLVideoElement);
+      expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+      expect(screen.getByRole('link', { name: 'Download video' })).toBeInTheDocument();
     });
 
     /**
@@ -2329,6 +2376,24 @@ describe('MessageBubble', () => {
       expect(noOutputNotice()).toBeInTheDocument();
     });
 
+    it('stays quiet while the turn is paused for connector input', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: false,
+            metadata: {
+              tools: [
+                { id: 'tool-1', name: 'connector_lookup', status: 'awaiting_input', input: {} },
+              ],
+            },
+          } as never)}
+        />,
+      );
+      expect(noOutputNotice()).toBeNull();
+    });
+
     /**
      * Observed live on 2026-09-08: a project turn reached for code execution,
      * stopped for approval, and rendered this notice while the header read
@@ -2702,6 +2767,24 @@ describe('MessageBubble', () => {
       expect(
         screen.queryByText(/web search didn't return results for this turn/i),
       ).not.toBeInTheDocument();
+    });
+
+    it('says the answer came from saved memories, not the own-knowledge notice, on a memory-grounded turn', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'You prefer window seats.',
+            metadata: {
+              webSearchRequested: true,
+              webSearchAskedInText: true,
+              memoryCitations: { count: 1, memories: [] },
+            },
+          })}
+        />,
+      );
+      expect(screen.getByText(/this answer came from your saved memories/i)).toBeInTheDocument();
+      expect(notInvokedNotice()).not.toBeInTheDocument();
     });
 
     it('offers a one-click resend that requires the search', async () => {

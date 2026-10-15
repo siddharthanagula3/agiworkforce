@@ -24,6 +24,7 @@ import type { GeneratedFileKind } from '@agiworkforce/types';
 import { Popover, PopoverContent, PopoverTrigger, Spinner } from '@agiworkforce/ui';
 import { iconKindFor } from '@agiworkforce/unified-chat';
 import { cn } from '@shared/lib/utils';
+import { httpStatusMessage, toUserMessage } from '@/lib/user-error-message';
 
 export const COMPOSER_FILES_MENU_TESTID = 'composer-files-menu';
 export const COMPOSER_FILES_SEARCH_LABEL = 'Search library files';
@@ -96,9 +97,41 @@ export async function fetchRecentLibraryFiles(
   return body.items ?? [];
 }
 
+export class LibraryFileError extends Error {
+  readonly status: number;
+  readonly retryAfterSeconds: number | null;
+
+  constructor(status: number, retryAfterSeconds: number | null) {
+    super(libraryFileErrorMessage(status, retryAfterSeconds));
+    this.name = 'LibraryFileError';
+    this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+function libraryFileErrorMessage(status: number, retryAfterSeconds: number | null): string {
+  if (status === 429 && retryAfterSeconds !== null) {
+    const unit = retryAfterSeconds === 1 ? 'second' : 'seconds';
+    return `You are going a little fast. Try again in ${retryAfterSeconds} ${unit}.`;
+  }
+  return httpStatusMessage(status) ?? `HTTP ${status}`;
+}
+
+function parseRetryAfterSeconds(header: string | null): number | null {
+  if (!header) return null;
+  const value = header.trim();
+  const seconds = /^\d+$/.test(value) ? Number(value) : (Date.parse(value) - Date.now()) / 1000;
+  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : null;
+}
+
 export async function libraryItemToFile(item: LibraryItem): Promise<File> {
   const response = await fetch(item.uri, { credentials: 'include' });
-  if (!response.ok) throw new Error(`library file failed: ${response.status}`);
+  if (!response.ok) {
+    throw new LibraryFileError(
+      response.status,
+      parseRetryAfterSeconds(response.headers.get('Retry-After')),
+    );
+  }
   const blob = await response.blob();
   return new File([blob], item.file_name, { type: item.mime_type || blob.type });
 }
@@ -193,8 +226,8 @@ export function ComposerFilesMenu({
     try {
       onAttach(await libraryItemToFile(item));
       setOpen(false);
-    } catch {
-      setAttachError(COMPOSER_FILES_ATTACH_FAILED_COPY);
+    } catch (caught) {
+      setAttachError(toUserMessage(caught, COMPOSER_FILES_ATTACH_FAILED_COPY));
     } finally {
       setAttachingId(null);
     }

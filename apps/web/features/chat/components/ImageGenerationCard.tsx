@@ -114,31 +114,29 @@ export function imageDownloadFilename(filenameBase: string, mimeType: string): s
   return `${filenameBase}.${extension}`;
 }
 
+function saveByLink(href: string, download: string) {
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = download;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 async function downloadImage(url: string, filenameBase = 'image') {
+  if (typeof fetch !== 'function' || typeof URL.createObjectURL !== 'function') {
+    saveByLink(url, filenameBase);
+    return;
+  }
   try {
-    // Fetch both authenticated /api/files URLs and data: URIs so the filename
-    // comes from the bytes' real Content-Type rather than a hardcoded suffix.
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`Image download failed with HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
     const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = objectUrl;
-    a.download = imageDownloadFilename(filenameBase, blob.type);
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    saveByLink(objectUrl, imageDownloadFilename(filenameBase, blob.type));
     setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-  } catch {
-    // Fallback: let the browser handle it natively
-    const a = document.createElement('a');
-    a.href = url;
-    // With no trustworthy response MIME, omit the extension instead of
-    // mislabeling JPEG/WebP bytes as PNG.
-    a.download = filenameBase;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  } catch (caught) {
+    toast.error(toUserMessage(caught, 'That image could not be downloaded. Try again.'));
   }
 }
 
@@ -457,8 +455,8 @@ function EditPanel({
   const titleText = currentPrompt.length > 36 ? currentPrompt.slice(0, 36) + '...' : currentPrompt;
 
   const runRevision = useCallback(
-    async (request: ImageRevisionRequest) => {
-      if (!onRegenerate || retryBlocked) return;
+    async (request: ImageRevisionRequest): Promise<boolean> => {
+      if (!onRegenerate || retryBlocked) return false;
       setGenerating(true);
       setGenError(null);
       setRevisionAnnouncement('');
@@ -469,9 +467,11 @@ function EditPanel({
         setCurrentPrompt(request.prompt);
         setRevisionAnnouncement('The new version of this image is ready');
         onImageUpdated(newUrl, request.aspectRatio, request.prompt);
+        return true;
       } catch (err) {
         const msg = toUserMessage(err, 'Could not generate a new image. Try again.');
         setGenError(msg.includes('upgrade') || msg.includes('403') ? 'Upgrade required' : msg);
+        return false;
       } finally {
         setGenerating(false);
       }
@@ -504,11 +504,19 @@ function EditPanel({
   const handleAspectChange = useCallback(
     async (newAspect: ImageAspectRatio) => {
       setShowAspectMenu(false);
-      setCurrentAspect(newAspect);
       let edit: ImageEditRequest | null = null;
       if (supportsEdit && newAspect !== 'auto') {
         try {
-          edit = await buildReframeEdit(currentUrl, newAspect);
+          const prepared = await buildReframeEdit(currentUrl, newAspect);
+          if (prepared.kind === 'same-ratio') {
+            setCurrentAspect(newAspect);
+            return;
+          }
+          if (prepared.kind === 'unsupported') {
+            setGenError('This browser cannot prepare the image for reframing.');
+            return;
+          }
+          edit = prepared.edit;
         } catch (err) {
           setGenError(toUserMessage(err, 'Could not prepare this image for reframing. Try again.'));
           return;
@@ -529,8 +537,9 @@ function EditPanel({
     if (!text || !onRegenerate || retryBlocked) return;
     const combinedPrompt = `${currentPrompt}. Edit: ${text}`;
     if (!supportsEdit) {
-      setEditText('');
-      await runRevision({ prompt: combinedPrompt, aspectRatio: currentAspect, modelId });
+      if (await runRevision({ prompt: combinedPrompt, aspectRatio: currentAspect, modelId })) {
+        setEditText('');
+      }
       return;
     }
     setGenerating(true);
@@ -544,11 +553,18 @@ function EditPanel({
       return;
     }
     setGenerating(false);
-    setEditText('');
-    setMaskFile(null);
-    setSelecting(false);
-    clearSelection();
-    await runRevision({ prompt: combinedPrompt, aspectRatio: currentAspect, modelId, edit });
+    const revised = await runRevision({
+      prompt: combinedPrompt,
+      aspectRatio: currentAspect,
+      modelId,
+      edit,
+    });
+    if (revised) {
+      setEditText('');
+      setMaskFile(null);
+      setSelecting(false);
+      clearSelection();
+    }
   }, [
     editText,
     onRegenerate,
@@ -752,8 +768,8 @@ function EditPanel({
           <p className="px-1 text-caption leading-snug text-muted-foreground">
             {supportsEdit
               ? selecting
-                ? 'Paint over the part to change, then describe the change. Only that part is redrawn.'
-                : 'Describing a change edits the image above. Select an area to redraw only part of it, or pick a new shape to extend it.'
+                ? 'Paint over the part to change, then describe the change. The area guides the edit, so nearby content may change too. Check the rest of the image.'
+                : 'Describing a change edits the image above. Select an area to focus the change on part of it, or pick a new shape to extend it.'
               : 'Describing a change generates a new image from the updated description. The image above is not modified.'}
           </p>
 
@@ -785,14 +801,19 @@ function EditPanel({
                     if (selecting) clearSelection();
                     setSelecting((value) => !value);
                   }}
-                  disabled={generating || retryBlocked}
+                  disabled={generating || retryBlocked || (Boolean(maskFile) && !selecting)}
+                  title={
+                    maskFile && !selecting
+                      ? 'Remove the attached mask to paint an area instead'
+                      : undefined
+                  }
                   aria-pressed={selecting}
                   className={cn(
                     'flex h-7 items-center rounded-lg border px-2.5 text-xs transition-colors',
                     selecting
                       ? 'border-primary/40 bg-primary/10 text-primary'
                       : 'border-border/40 text-muted-foreground',
-                    generating || retryBlocked
+                    generating || retryBlocked || (maskFile && !selecting)
                       ? 'cursor-not-allowed opacity-50'
                       : 'hover:bg-muted/60 hover:text-foreground',
                   )}
@@ -822,11 +843,15 @@ function EditPanel({
                 <button
                   type="button"
                   onClick={() => maskInputRef.current?.click()}
-                  disabled={generating || retryBlocked}
-                  title="Attach a PNG the same size as this image, transparent where the model should redraw"
+                  disabled={generating || retryBlocked || selecting}
+                  title={
+                    selecting
+                      ? 'Cancel the area selection to attach a mask instead'
+                      : 'Attach a PNG the same size as this image, transparent where the model should redraw'
+                  }
                   className={cn(
                     'flex h-7 items-center rounded-lg border border-border/40 px-2.5 text-xs text-muted-foreground transition-colors',
-                    generating || retryBlocked
+                    generating || retryBlocked || selecting
                       ? 'cursor-not-allowed opacity-50'
                       : 'hover:bg-muted/60 hover:text-foreground',
                   )}
@@ -910,6 +935,8 @@ function EditPanel({
 // State B: Result card (inline image + overlay controls)
 // ---------------------------------------------------------------------------
 
+const MEDIA_MAX_RETRIES = 2;
+
 interface ResultCardProps {
   imageUrl: string;
   prompt: string;
@@ -933,6 +960,7 @@ function ResultCard({
 }: ResultCardProps) {
   const modelLabel = getImageModelLabel(modelId);
   const [imgError, setImgError] = useState(false);
+  const [imgAttempt, setImgAttempt] = useState(0);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const [showMore, setShowMore] = useState(false);
@@ -985,11 +1013,28 @@ function ResultCard({
       {/* Image with overlay controls */}
       <div className="group relative overflow-hidden rounded-2xl border border-border/30 bg-muted/20">
         {imgError ? (
-          <div className="flex h-[280px] items-center justify-center text-sm text-muted-foreground">
+          <div
+            className="flex h-[280px] flex-col items-center justify-center gap-3 text-sm text-muted-foreground"
+            role="status"
+            aria-live="polite"
+          >
             Image failed to load
+            {imgAttempt < MEDIA_MAX_RETRIES ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setImgAttempt((current) => current + 1);
+                  setImgError(false);
+                }}
+                className="rounded-full border border-border/60 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/60"
+              >
+                Retry
+              </button>
+            ) : null}
           </div>
         ) : (
           <img
+            key={imgAttempt}
             src={imageUrl}
             alt={prompt}
             className="w-full object-contain"
@@ -1235,12 +1280,6 @@ export function ImageGenerationCard({
   // State A: generating. The copy deliberately reflects observable state and
   // elapsed time; rotating pseudo-stages such as "Painting details" and
   // "Almost there" implied provider telemetry we do not receive.
-  const displayedAssetId = mediaAssetIdFromUrl(liveUrl ?? imageUrl);
-  const keepableAssetId =
-    inTemporaryChat && displayedAssetId && displayedAssetId !== keptAssetId
-      ? displayedAssetId
-      : null;
-
   if (!imageUrl && isGenerating) {
     return <GeneratingCard aspectRatio={aspectRatio} capHeight modelId={modelId} />;
   }
@@ -1289,14 +1328,22 @@ export function ImageGenerationCard({
   const versionCount = earlierVersions.length + 1;
   const versionIndex = viewedVersion ?? versionCount - 1;
   const shownVersion = viewedVersion === null ? undefined : earlierVersions[viewedVersion];
+  const selectedUrl = shownVersion?.imageUrl ?? liveUrl ?? imageUrl;
+  const selectedPrompt = shownVersion?.prompt ?? livePrompt;
+  const selectedAspect = shownVersion?.aspect
+    ? (shownVersion.aspect as ImageAspectRatio)
+    : liveAspect;
+  const selectedAssetId = mediaAssetIdFromUrl(selectedUrl);
+  const selectedKeepableAssetId =
+    inTemporaryChat && selectedAssetId && selectedAssetId !== keptAssetId ? selectedAssetId : null;
 
   // State B/C/D: image ready
   return (
     <>
       {/* State B: Result card */}
       <ResultCard
-        imageUrl={shownVersion?.imageUrl ?? liveUrl ?? imageUrl}
-        prompt={shownVersion?.prompt ?? livePrompt}
+        imageUrl={selectedUrl}
+        prompt={selectedPrompt}
         modelId={shownVersion ? shownVersion.model : modelId}
         {...(shownVersion
           ? shownVersion.aspect
@@ -1318,12 +1365,12 @@ export function ImageGenerationCard({
           : {})}
         {...(onRegenerate ? { onEdit: () => setShowEdit(true) } : {})}
         onShare={() => setShowShare(true)}
-        {...(keepableAssetId
+        {...(selectedKeepableAssetId
           ? {
               onKeep: () => {
-                void keepTemporaryChatMedia(keepableAssetId)
+                void keepTemporaryChatMedia(selectedKeepableAssetId)
                   .then(() => {
-                    setKeptAssetId(keepableAssetId);
+                    setKeptAssetId(selectedKeepableAssetId);
                     toast.success('Saved to your Library. It stays after this chat is gone.');
                   })
                   .catch((error: unknown) =>
@@ -1339,9 +1386,9 @@ export function ImageGenerationCard({
       {/* State C: revision panel (portals into the layout) */}
       {showEdit && (
         <EditPanel
-          imageUrl={liveUrl ?? imageUrl}
-          prompt={livePrompt}
-          aspectRatio={liveAspect}
+          imageUrl={selectedUrl}
+          prompt={selectedPrompt}
+          aspectRatio={selectedAspect}
           modelId={modelId}
           retryBlocked={retryBlocked}
           retryLabel={retryLabel}
@@ -1358,8 +1405,8 @@ export function ImageGenerationCard({
       {/* State D: Share modal */}
       {showShare && (
         <ShareModal
-          imageUrl={liveUrl ?? imageUrl}
-          prompt={livePrompt}
+          imageUrl={selectedUrl}
+          prompt={selectedPrompt}
           onClose={() => setShowShare(false)}
         />
       )}

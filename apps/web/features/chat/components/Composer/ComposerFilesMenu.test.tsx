@@ -10,6 +10,7 @@ import {
   ComposerFilesMenu,
   LIBRARY_PATH,
   libraryFileGlyph,
+  LibraryFileError,
   libraryItemToFile,
   libraryListHref,
   type ComposerFilesMenuProps,
@@ -89,6 +90,25 @@ describe('library requests', () => {
     expect(file.size).toBe('pdf-bytes'.length);
   });
 
+  it('keeps the status and Retry-After of a refused library file', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 429,
+          headers: new Headers({ 'Retry-After': '12' }),
+        }),
+      ),
+    );
+    const failure = await libraryItemToFile(item('deck')).catch((caught: unknown) => caught);
+    expect(failure).toBeInstanceOf(LibraryFileError);
+    expect(failure).toMatchObject({ status: 429, retryAfterSeconds: 12 });
+    expect((failure as Error).message).toBe(
+      'You are going a little fast. Try again in 12 seconds.',
+    );
+  });
+
   it('picks a glyph by kind and treats video by its mime type', () => {
     expect(libraryFileGlyph({ file_name: 'a.png', mime_type: 'image/png' })).toBeTruthy();
     expect(libraryFileGlyph({ file_name: 'a.mp4', mime_type: 'video/mp4' })).not.toBe(
@@ -137,6 +157,28 @@ describe('ComposerFilesMenu populated', () => {
     expect(file.name).toBe('deck.pdf');
     expect(file.type).toBe('application/pdf');
     expect(calls).toContain('/api/files/deck');
+  });
+
+  it('shows wait copy and keeps the menu and selection when the file fetch is rate limited', async () => {
+    stubLibrary([item('deck')]);
+    const original = globalThis.fetch as unknown as (input: string) => Promise<unknown>;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string) =>
+        input.startsWith('/api/files')
+          ? Promise.resolve({
+              ok: false,
+              status: 429,
+              headers: new Headers({ 'Retry-After': '30' }),
+            })
+          : original(input),
+      ),
+    );
+    const props = renderMenu();
+    fireEvent.click(await screen.findByRole('button', { name: 'Attach deck.pdf' }));
+    expect(await screen.findByText(/Try again in 30 seconds/)).toBeTruthy();
+    expect(props.onAttach).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Attach deck.pdf' })).toBeTruthy();
   });
 
   it('clicks the device file input from Upload from device', async () => {

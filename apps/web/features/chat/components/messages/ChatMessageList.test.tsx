@@ -595,6 +595,51 @@ describe('ChatMessageList rendering', () => {
       expect(screen.getByRole('status')).not.toHaveTextContent('Response complete');
     });
   });
+
+  it('stays generating while the conversation stream is open, whatever the reply row says', async () => {
+    const thread = [
+      makeMessage({ id: 'u1', role: 'user', content: 'look it up' }),
+      makeMessage({
+        id: 'a1',
+        role: 'assistant',
+        content: 'Searching for it:',
+        isStreaming: false,
+        metadata: { finishReason: 'length' },
+      }),
+    ];
+    const continueButton = () =>
+      screen.queryByRole('button', { name: /continue generating this response/i });
+    const { rerender } = render(
+      <ChatMessageList
+        messages={thread}
+        isLoading={false}
+        isConversationStreaming
+        onContinue={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Generating response');
+    });
+    expect(screen.getByRole('log')).toHaveAttribute('aria-busy', 'true');
+    expect(continueButton()).not.toBeInTheDocument();
+
+    act(() => {
+      rerender(
+        <ChatMessageList
+          messages={thread}
+          isLoading={false}
+          isConversationStreaming={false}
+          onContinue={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Response complete');
+    });
+    expect(continueButton()).toBeInTheDocument();
+  });
 });
 
 describe('ChatMessageList actions', () => {

@@ -347,6 +347,7 @@ interface Attachment {
 const MAX_INLINE_GENERATED_TEXT_BYTES = 2 * 1024 * 1024;
 const TURN_FAILED_LEAD = 'Response failed';
 const USER_MESSAGE_COLLAPSE_HEIGHT_PX = 320;
+const VIDEO_MAX_RETRIES = 2;
 
 const CONNECTOR_STEP_MARK_CLASS =
   'h-5 w-5 rounded-md shadow-none [&>img]:max-h-3.5 [&>img]:max-w-3.5 [&>svg]:h-3.5 [&>svg]:w-3.5';
@@ -825,6 +826,7 @@ const MessageBubbleComponent = function MessageBubble({
   const [showThinking, setShowThinking] = useState(false);
   const [showContributions, setShowContributions] = useState(false);
   const [videoError, setVideoError] = useState(false);
+  const [videoAttempt, setVideoAttempt] = useState(0);
   // Attachment image rendering (claude.ai parity): the opened lightbox image and
   // the set of attachment ids whose <img> failed to load (broken-image fallback).
   const [lightboxAttachment, setLightboxAttachment] = useState<Attachment | null>(null);
@@ -1957,6 +1959,7 @@ const MessageBubbleComponent = function MessageBubble({
     // Observed live on a project turn whose header read "Approvals (1 pending)"
     // and whose activity row carried Approve and Reject, under this notice.
     if (hasOpenApprovalDecision(message.metadata?.agentActivity)) return false;
+    if (asksForInput) return false;
     if (hasStreamError({ metadata: message.metadata })) return false;
     // The persisted "no text" placeholder is a zero-width space, not "". Written
     // as escapes: the literal characters are invisible in review and in a diff,
@@ -1989,6 +1992,7 @@ const MessageBubbleComponent = function MessageBubble({
     );
   }, [
     isUser,
+    asksForInput,
     message.isStreaming,
     message.metadata,
     cleanedContent,
@@ -2180,7 +2184,7 @@ const MessageBubbleComponent = function MessageBubble({
   // one: a toggle left on is a standing preference, and reporting its empty
   // result on a question that was never about the web is noise with a Retry
   // attached.
-  const searchNotice = useMemo<'no-results' | 'not-invoked' | null>(() => {
+  const searchNotice = useMemo<'no-results' | 'not-invoked' | 'memory-grounded' | null>(() => {
     if (isUser || message.isStreaming) return null;
     if (message.metadata?.webSearchRequested !== true) return null;
     if (producedNoVisibleOutput) return null;
@@ -2189,7 +2193,12 @@ const MessageBubbleComponent = function MessageBubble({
     if (message.metadata?.webSearchAskedInText !== true) return null;
     if (hasUnavailableWebSearch(canonicalActivity)) return null;
     if (message.metadata?.tools?.some((tool) => tool.status === 'awaiting_approval')) return null;
-    if (!turnAttemptedSearch) return turnRanAnyTool ? null : 'not-invoked';
+    if (!turnAttemptedSearch) {
+      if (turnRanAnyTool) return null;
+      return (message.metadata?.memoryCitations?.count ?? 0) > 0
+        ? 'memory-grounded'
+        : 'not-invoked';
+    }
     return searchSources.length > 0 ? null : 'no-results';
   }, [
     isUser,
@@ -2291,7 +2300,7 @@ const MessageBubbleComponent = function MessageBubble({
         <div
           className={cn(
             'message-body',
-            isUser ? 'flex max-w-[75%] flex-col items-end' : 'flex-1 min-w-0',
+            isUser ? 'flex min-w-0 max-w-[75%] flex-col items-end' : 'flex-1 min-w-0',
             isEditing && 'w-full max-w-full items-stretch',
           )}
         >
@@ -2535,15 +2544,16 @@ const MessageBubbleComponent = function MessageBubble({
             <InteractiveCardBlock cards={leadingInteractiveCards} assistantText={cleanedContent} />
           ) : null}
 
-          <div className="relative">
+          <div className={cn('relative min-w-0', isUser && 'max-w-full')}>
             <div
               ref={userContentRef}
               dir="auto"
               data-streaming={!isUser && proseIsStreaming ? 'true' : undefined}
               className={cn(
-                'prose dark:prose-invert max-w-none',
+                'prose dark:prose-invert',
+                isUser ? 'max-w-full' : 'max-w-none',
                 'message-text',
-                'break-words text-start',
+                'wrap-anywhere text-start',
                 // `w-fit` resolves against the min-content width, which
                 // `break-words` alone does not shrink, so one unbroken URL made
                 // the bubble wider than its column and hung off the left edge.
@@ -2589,6 +2599,7 @@ const MessageBubbleComponent = function MessageBubble({
                       citations={citationsByMarker}
                       trustedImageUrls={trustedImageUrls}
                       announce={false}
+                      footnoteScope={`${message.id}lead`}
                     />
                   ) : (
                     <CodeBlockEditorContext.Provider value={isUser ? null : openCodeBlockInEditor}>
@@ -2598,6 +2609,7 @@ const MessageBubbleComponent = function MessageBubble({
                         trustedImageUrls={trustedImageUrls}
                         linkifyNumericCitations={canLinkNumericCitations}
                         literalHtml={isUser}
+                        footnoteScope={`${message.id}lead`}
                       />
                     </CodeBlockEditorContext.Provider>
                   );
@@ -2877,7 +2889,7 @@ const MessageBubbleComponent = function MessageBubble({
             <div
               dir="auto"
               data-testid="message-trailing-prose"
-              className="prose dark:prose-invert message-text mt-3 max-w-none break-words text-start"
+              className="prose dark:prose-invert message-text mt-3 max-w-none wrap-anywhere text-start"
             >
               {proseIsStreaming ? (
                 <StreamingMarkdownContent
@@ -2886,6 +2898,7 @@ const MessageBubbleComponent = function MessageBubble({
                   citations={citationsByMarker}
                   trustedImageUrls={trustedImageUrls}
                   announce={false}
+                  footnoteScope={`${message.id}tail`}
                 />
               ) : (
                 <CodeBlockEditorContext.Provider value={openCodeBlockInEditor}>
@@ -2894,6 +2907,7 @@ const MessageBubbleComponent = function MessageBubble({
                     citations={canLinkNumericCitations ? citationsByMarker : searchSources}
                     trustedImageUrls={trustedImageUrls}
                     linkifyNumericCitations={canLinkNumericCitations}
+                    footnoteScope={`${message.id}tail`}
                   />
                 </CodeBlockEditorContext.Provider>
               )}
@@ -3052,11 +3066,31 @@ const MessageBubbleComponent = function MessageBubble({
               <div className="mt-4 flex flex-col gap-2">
                 {videoError ? (
                   <div
-                    className="flex items-center justify-center p-8 bg-muted/50 text-muted-foreground rounded-xl"
+                    className="flex flex-col items-center justify-center gap-3 p-8 bg-muted/50 text-muted-foreground rounded-xl"
                     role="status"
                     aria-live="polite"
                   >
                     <span className="text-sm">Video failed to load</span>
+                    {videoAttempt < VIDEO_MAX_RETRIES ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setVideoAttempt((current) => current + 1);
+                          setVideoError(false);
+                        }}
+                      >
+                        Retry
+                      </Button>
+                    ) : null}
+                    <a
+                      href={message.metadata.videoUrl}
+                      download
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Download video
+                    </a>
                   </div>
                 ) : (
                   <>
@@ -3071,6 +3105,7 @@ const MessageBubbleComponent = function MessageBubble({
                       {/* The native controls carry their own names; the player
                           itself otherwise reads as a bare "video". */}
                       <video
+                        key={videoAttempt}
                         src={message.metadata.videoUrl}
                         controls
                         playsInline
@@ -3321,7 +3356,9 @@ const MessageBubbleComponent = function MessageBubble({
                 message={
                   searchNotice === 'no-results'
                     ? "Web search didn't return results for this turn, so the answer relies on the model's own knowledge."
-                    : "The answer used the model's own knowledge. Ask to search the web for current sources."
+                    : searchNotice === 'memory-grounded'
+                      ? 'This answer came from your saved memories, not the web. Ask to search the web for current sources.'
+                      : "The answer used the model's own knowledge. Ask to search the web for current sources."
                 }
                 action={
                   onRegenerate

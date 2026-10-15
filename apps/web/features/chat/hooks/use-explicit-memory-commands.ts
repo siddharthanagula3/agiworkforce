@@ -19,7 +19,16 @@ const MEMORY_COMMAND_KIND_HINT: ReadonlyArray<[MemoryCommandKind, RegExp]> = [
   ['forget', /\bforget\b/i],
   ['remember', /\bremember/i],
 ];
-const MEMORY_UNAVAILABLE_MESSAGE = 'Memory did not answer, so nothing was changed.';
+const MEMORY_UNAVAILABLE_MESSAGE =
+  'Memory did not answer, so it is unknown whether anything was saved or deleted. Check Memory in Settings.';
+const STATUS_RECEIPTS: Readonly<Record<ManagedMemoryCommandStatus, string>> = {
+  stored: 'Saved to memory.',
+  already_known: 'Already in memory, so nothing changed.',
+  refused: 'Not saved: memory is off, or this is something memory does not keep.',
+  forgotten: 'Deleted the matching memories.',
+  nothing_to_forget: 'No saved memory matched, so nothing was deleted.',
+  confirmation_required: 'Waiting for your confirmation before anything is deleted.',
+};
 const SETTLED_STATUSES = new Set(['stored', 'already_known', 'forgotten']);
 
 type MemoryCommandKind = 'remember' | 'forget';
@@ -63,13 +72,15 @@ export function useExplicitMemoryCommands(): {
 
   const announce = useCallback(
     (result: ManagedMemoryCommandResponse) => {
-      if (!result.message) return;
+      const receipt =
+        result.message ?? (result.status ? STATUS_RECEIPTS[result.status] : undefined);
+      if (!receipt) return;
       if (result.status && SETTLED_STATUSES.has(result.status)) {
-        toast.success(result.message);
+        toast.success(receipt);
         void hydrateMemories();
         return;
       }
-      toast(result.message);
+      toast(receipt);
     },
     [hydrateMemories],
   );

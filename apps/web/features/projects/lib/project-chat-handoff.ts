@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { ComposerSendMeta } from '@/features/chat/components/Composer/ChatComposerNew';
 import { CHAT_OUTPUT_FORMATS } from '@/lib/chat-output-format';
+import { useModelStore } from '@shared/stores/model-store';
 
 export const PROJECT_CHAT_HANDOFF_KEY = 'agi.project.pendingHandoff.v1';
 
@@ -15,6 +16,7 @@ const ProjectChatHandoffSchema = z.object({
   projectId: z.string().min(1).max(200),
   attachmentCount: z.number().int().min(0).max(20),
   skillId: z.string().min(1).max(200).optional(),
+  modelId: z.string().min(1).max(200).optional(),
   meta: z.object({
     workMode: z.enum(['chat', 'agiwork']),
     projectId: z.string().min(1).max(200).nullable(),
@@ -117,6 +119,7 @@ export function saveProjectChatHandoff(
     projectId: string;
     attachments?: File[];
     skillId?: string;
+    modelId?: string;
     meta: ComposerSendMeta;
   },
 ): string {
@@ -129,6 +132,7 @@ export function saveProjectChatHandoff(
     projectId: input.projectId,
     attachmentCount: input.attachments?.length ?? 0,
     skillId: input.skillId,
+    modelId: input.modelId ?? (useModelStore.getState().selectedModelId || undefined),
     meta: { ...input.meta, projectId: input.projectId },
   });
   if (input.attachments?.length) pendingAttachments.set(id, [...input.attachments]);

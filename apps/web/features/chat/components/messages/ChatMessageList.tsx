@@ -1315,11 +1315,12 @@ const ChatMessageListComponent = ({
   );
 
   const showTypingIndicator = isLoading && messages.length > 0 && !lastMessage?.isStreaming;
+  const isGenerating = Boolean(isLoading || isConversationStreaming || lastMessage?.isStreaming);
 
   // A user Stop is not a truncation to keep appending to (Continue) -- it
   // routes to its own notice below instead, offering Try again.
   const showContinue = Boolean(
-    onContinue && !isLoading && !isStoppedTurn(lastMessage) && isMessageContinuable(lastMessage),
+    onContinue && !isGenerating && !isStoppedTurn(lastMessage) && isMessageContinuable(lastMessage),
   );
 
   /**
@@ -1329,7 +1330,7 @@ const ChatMessageListComponent = ({
    * an aborted stream leaves no stream-error, refusal or truncation marker of
    * its own, but checks explicitly rather than relying on that.
    */
-  const showStoppedNotice = Boolean(onRegenerate && !isLoading && isStoppedTurn(lastMessage));
+  const showStoppedNotice = Boolean(onRegenerate && !isGenerating && isStoppedTurn(lastMessage));
 
   /**
    * Mid-stream provider failure (additive `x_stream_error`, see
@@ -1345,8 +1346,7 @@ const ChatMessageListComponent = ({
    */
   const showStreamErrorNotice = Boolean(
     onRegenerate &&
-    !isLoading &&
-    !lastMessage?.isStreaming &&
+    !isGenerating &&
     !showContinue &&
     !showStoppedNotice &&
     hasStreamError(lastMessage),
@@ -1361,8 +1361,7 @@ const ChatMessageListComponent = ({
    * inside it is conditional.
    */
   const showRefusalNotice = Boolean(
-    !isLoading &&
-    !lastMessage?.isStreaming &&
+    !isGenerating &&
     lastMessage?.role === 'assistant' &&
     !showContinue &&
     !showStoppedNotice &&
@@ -1419,9 +1418,8 @@ const ChatMessageListComponent = ({
     followUpSuggestionsEnabled &&
     (enableFollowUpSuggestions || lastTurnSearched) &&
     onSendMessage &&
-    !isLoading &&
+    !isGenerating &&
     lastMessage?.role === 'assistant' &&
-    !lastMessage?.isStreaming &&
     lastMessage.content.length > 20 &&
     !lastTurnFailed,
   );
@@ -1702,7 +1700,6 @@ const ChatMessageListComponent = ({
     scrollToBottomFast('auto');
   }, [estimatedContentHeight, messages.length, scrollToBottomFast, userScrolledUp, viewportHeight]);
 
-  const isGenerating = Boolean(isLoading || lastMessage?.isStreaming);
   const awaitingApproval =
     isGenerating && readAgentActivityStatus(lastMessage) === 'awaiting-approval';
   const [streamAnnouncement, setStreamAnnouncement] = useState('');

@@ -29,10 +29,25 @@ export async function pptxToSlidesMarkdown(data: ArrayBuffer): Promise<string> {
   for (const slide of slides) {
     const xml = await zip.file(slide.path)?.async('string');
     if (!xml) continue;
-    const paragraphs = elementsByLocalName(parseXml(xml), 'p').map(paragraphText).filter(Boolean);
-    const [title, ...body] = paragraphs;
+    const titles: string[] = [];
+    const body: string[] = [];
+    const footers: string[] = [];
+    for (const shape of elementsByLocalName(parseXml(xml), 'sp')) {
+      const placeholder = elementsByLocalName(shape, 'ph')[0]?.getAttribute('type') ?? null;
+      const lines = elementsByLocalName(shape, 'p').map(paragraphText).filter(Boolean);
+      if (placeholder === 'title' || placeholder === 'ctrTitle') titles.push(...lines);
+      else if (placeholder === 'ftr') footers.push(...lines);
+      else if (placeholder !== 'dt' && placeholder !== 'sldNum') body.push(...lines);
+    }
+    const [firstBody, ...restBody] = body;
+    const title = titles.length > 0 ? titles.join(' ') : firstBody;
+    const bullets = titles.length > 0 ? body : restBody;
     rendered.push(
-      [`# ${title ?? `Slide ${slide.match[1]}`}`, ...body.map((line) => `- ${line}`)].join('\n'),
+      [
+        `# ${title ?? `Slide ${slide.match[1]}`}`,
+        ...bullets.map((line) => `- ${line}`),
+        ...footers.map((line) => `_${line}_`),
+      ].join('\n'),
     );
   }
   return rendered.join('\n\n---\n\n');
@@ -46,6 +61,8 @@ function columnIndex(reference: string): number {
 function csvCell(value: string): string {
   return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
+
+export const XLSX_NOT_CALCULATED = 'not calculated';
 
 export async function xlsxFirstSheetToCsv(data: ArrayBuffer): Promise<string> {
   const zip = await JSZip.loadAsync(data);
@@ -66,15 +83,19 @@ export async function xlsxFirstSheetToCsv(data: ArrayBuffer): Promise<string> {
     for (const cell of elementsByLocalName(row, 'c')) {
       const index = columnIndex(cell.getAttribute('r') ?? '');
       const type = cell.getAttribute('t');
-      const raw = elementsByLocalName(cell, 'v')[0]?.textContent ?? '';
+      const cachedNode = elementsByLocalName(cell, 'v')[0];
+      const raw = cachedNode?.textContent ?? '';
+      const hasFormula = elementsByLocalName(cell, 'f').length > 0;
       const value =
-        type === 's'
-          ? (shared[Number(raw)] ?? '')
-          : type === 'inlineStr'
-            ? elementsByLocalName(cell, 't')
-                .map((node) => node.textContent ?? '')
-                .join('')
-            : raw;
+        hasFormula && (!cachedNode || raw === '')
+          ? XLSX_NOT_CALCULATED
+          : type === 's'
+            ? (shared[Number(raw)] ?? '')
+            : type === 'inlineStr'
+              ? elementsByLocalName(cell, 't')
+                  .map((node) => node.textContent ?? '')
+                  .join('')
+              : raw;
       cells[index] = value;
     }
     rows.push(Array.from(cells, (value) => value ?? ''));

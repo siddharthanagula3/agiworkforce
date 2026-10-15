@@ -239,6 +239,33 @@ describe('chat artifacts sidecar store', () => {
     ]);
   });
 
+  it('keeps a saved local edit over the cloud copy and records it as a new version', () => {
+    const store = useArtifactsStore.getState();
+    const base = {
+      id: 'artifact-cloud',
+      type: 'html' as const,
+      title: 'Cloud artifact',
+      language: 'html',
+      messageId: 'msg-cloud',
+      conversationId: 'conv-cloud',
+    };
+    store.upsertArtifact({ ...base, content: '<main>Derived</main>' });
+    store.applyCloudArtifactDeltas([cloudDelta()]);
+    store.upsertArtifact({ ...base, content: '<main>Edited here</main>', createdAt: new Date() });
+
+    const state = useArtifactsStore.getState();
+    expect(state.getConversationArtifacts('conv-cloud')).toEqual([
+      expect.objectContaining({ id: 'artifact-cloud', content: '<main>Edited here</main>' }),
+    ]);
+    expect(state.artifacts.find((a) => a.id === 'artifact-cloud')?.content).toBe(
+      '<main>Edited here</main>',
+    );
+    expect(state.getArtifactVersions('artifact-cloud').map((v) => v.content)).toEqual([
+      '<main>Derived</main>',
+      '<main>Edited here</main>',
+    ]);
+  });
+
   it('keeps a pulled tombstone so a derived artifact cannot reappear', () => {
     const store = useArtifactsStore.getState();
     store.addArtifactForMessage(

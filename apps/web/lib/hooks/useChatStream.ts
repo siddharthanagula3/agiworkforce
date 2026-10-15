@@ -3456,6 +3456,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             }
           }
 
+          // A finish frame ends one provider step; a tool-using turn sends one per
+          // step. Only the terminator, end of stream, abort or error ends the turn.
           if (parsed.choices?.[0]?.finish_reason || parsed.type === 'message_stop') {
             const reason = parsed.choices?.[0]?.finish_reason;
             if (typeof reason === 'string' && reason) {
@@ -3463,7 +3465,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             }
             flushContentBuffer(true);
             coalescedAppends.flush();
-            updateMessage(assistantMessageId, { isStreaming: false }, conversationId);
           }
         } catch {
           // Ignore parse errors for incomplete chunks.

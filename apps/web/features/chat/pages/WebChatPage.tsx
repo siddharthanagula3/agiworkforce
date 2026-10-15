@@ -2557,6 +2557,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // Strict Mode replay while the claim is in flight; a pre-commit failure puts
   // the exact text back in the composer instead of losing it.
   const projectHandoffInFlightRef = useRef<string | null>(null);
+  const projectHandoffModelRestoredRef = useRef<string | null>(null);
   useEffect(() => {
     if (!authLoaded || !userId) return;
     try {
@@ -2569,6 +2570,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         setComposerPrefill(handoff.content);
         toast.error('Reattach the project files, then send again. No model was called.');
         return;
+      }
+
+      if (handoff.modelId && isSelectableModelId(handoff.modelId)) {
+        const snapshotModelId = resolveSelectableModelId(handoff.modelId);
+        projectDefaultModelAppliedRef.current = `${handoff.projectId}:${activeProjectDefaultModelId}`;
+        if (
+          projectHandoffModelRestoredRef.current !== handoff.id &&
+          useModelStore.getState().selectedModelId !== snapshotModelId
+        ) {
+          projectHandoffModelRestoredRef.current = handoff.id;
+          setSelectedModelId(snapshotModelId);
+          return;
+        }
       }
 
       projectHandoffInFlightRef.current = handoff.id;
@@ -2597,7 +2611,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       // The source handler refuses navigation when storage is unavailable. If
       // it becomes unavailable after navigation, keep the destination usable.
     }
-  }, [authLoaded, sendContent, urlProjectId, userId]);
+  }, [
+    activeProjectDefaultModelId,
+    authLoaded,
+    sendContent,
+    setSelectedModelId,
+    urlProjectId,
+    userId,
+  ]);
 
   const { generateImage, startVideoGeneration, watchVideoGeneration } = useMediaGeneration();
 

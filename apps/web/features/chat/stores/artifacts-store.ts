@@ -109,7 +109,15 @@ function clearSideMap(): void {
 }
 
 function mergedArtifacts(): SharedArtifact[] {
-  return mergeCloudArtifacts(_sharedArtifactStore.getState().artifacts, _cloudArtifacts);
+  const shared = _sharedArtifactStore.getState();
+  const merged = mergeCloudArtifacts(shared.artifacts, _cloudArtifacts);
+  return merged.map((visible) => {
+    const local = shared.artifacts.find((artifact) => artifact.id === visible.id);
+    const cloud = cloudCopyOf(visible.id);
+    if (!local || !cloud || cloud.deletedAt) return visible;
+    const editedHere = shared.getArtifactVersions(local.id).length > 1;
+    return editedHere && supersedesCloudCopy(local, cloud) ? local : visible;
+  });
 }
 
 function notifyArtifactSubscribers(): void {
@@ -911,14 +919,10 @@ const actions = {
 type Selector<T> = (state: ArtifactsStoreReturn) => T;
 
 function buildStoreSlice(): ArtifactsStoreReturn {
-  const {
-    artifacts: sharedArtifacts,
-    selectedArtifactId,
-    panelOpen,
-    editRequestedArtifactId,
-  } = _sharedArtifactStore.getState();
+  const { selectedArtifactId, panelOpen, editRequestedArtifactId } =
+    _sharedArtifactStore.getState();
   return {
-    artifacts: mergeCloudArtifacts(sharedArtifacts, _cloudArtifacts).map(toArtifact),
+    artifacts: mergedArtifacts().map(toArtifact),
     selectedArtifactId,
     panelOpen,
     editRequestedArtifactId,

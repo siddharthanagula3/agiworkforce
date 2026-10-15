@@ -16,6 +16,7 @@ type ScanModule4 = typeof import('@agiworkforce/unified-chat');
 type ScanModule5 = typeof import('../../components/ConversationTitleMenu');
 
 type SendMessageOptions = {
+  model?: string;
   workMode?: CloudWorkMode;
   onTurnCommitted?: () => void;
 };
@@ -253,6 +254,7 @@ import {
 } from '@/features/projects/lib/project-chat-handoff';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
+import { AVAILABLE_MODELS, useModelStore } from '@shared/stores/model-store';
 
 const FREE_TIER = normalizeBillingPlanTier(null);
 const WORK_TIER = BILLING_PLAN_CAPABILITY_TIERS.agi_work[0]!;
@@ -344,5 +346,22 @@ describe('the first message sent from a project page', () => {
     sendFromProjectPage('chat');
 
     expect(await modeOfTheProjectTurn()).toBe('chat');
+  });
+
+  it('restores the model snapshotted with the handoff', async () => {
+    signInOnPlan(WORK_TIER);
+    const [current, other] = AVAILABLE_MODELS.map((model) => model.id);
+    useModelStore.getState().setSelectedModelId(current!);
+    saveProjectChatHandoff(sessionStorage, {
+      content: PROJECT_DRAFT,
+      projectId: PROJECT_ID,
+      modelId: other!,
+      meta: { workMode: 'chat', projectId: PROJECT_ID, memoryEnabled: true },
+    });
+
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
+    expect(useModelStore.getState().selectedModelId).toBe(other);
+    expect(mocks.sendMessage.mock.calls[0]![1]?.model).toBe(other);
   });
 });

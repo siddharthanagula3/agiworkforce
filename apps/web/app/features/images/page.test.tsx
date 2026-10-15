@@ -273,6 +273,7 @@ describe('ImageScene preview', () => {
 
     expect(sceneText(composer, '.agi-app-placeholder')).toBe('Describe or edit an image');
     expect(COMPOSER_SOURCE).toContain("? 'Describe or edit an image'");
+    expect(COMPOSER_SOURCE).toContain(": 'Describe the image you want'");
     expect(sceneTexts(composer, '.agi-image-pills .agi-image-pill')).toEqual(
       ['Image', aspect, 'Style', ...(edits ? ['Transparent'] : [])].filter(Boolean),
     );

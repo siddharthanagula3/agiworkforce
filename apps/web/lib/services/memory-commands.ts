@@ -266,7 +266,8 @@ const MEMORY_COMMAND_TURN_OUTCOMES: Readonly<Record<MemoryCommandTurnStatus, str
     'The app is asking the user to confirm the deletion, so nothing has been deleted yet. Do not say it was forgotten.',
   nothing_to_forget: 'No saved memory matched, so nothing was deleted.',
   forgotten: 'The matching memories were deleted.',
-  failed: 'Memory did not respond, so nothing changed. Do not say it was saved or deleted.',
+  failed:
+    'Memory did not respond, so it is unknown whether anything was saved or deleted. Do not say it was saved, deleted, or that nothing changed.',
 };
 
 export function memoryCommandTurnNote(

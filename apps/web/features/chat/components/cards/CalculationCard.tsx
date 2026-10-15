@@ -16,11 +16,14 @@ import {
 } from './card-extras';
 import 'katex/dist/katex.min.css';
 
+const LATEX_ENVIRONMENT_TAG = /\\(?:begin|end)\{[^}]*\}(?:\{[^}]*\})?/g;
+
 interface ParsedCalculation {
   title: string;
   description: string;
   formulas: Array<{ label: string; expression: string; isLatex: boolean }>;
   result: string;
+  resultIsLatex: boolean;
   resultLabel: string;
   steps: Array<{ label: string; value: string }>;
   unit: string;
@@ -31,6 +34,7 @@ function parseCalculation(content: string): ParsedCalculation {
   let title = '';
   let description = '';
   let result = '';
+  let resultIsLatex = false;
   let resultLabel = 'Result';
   let unit = '';
   const formulas: ParsedCalculation['formulas'] = [];
@@ -136,9 +140,17 @@ function parseCalculation(content: string): ParsedCalculation {
   if (!result && formulas.length > 0) {
     const lastFormula = formulas[formulas.length - 1];
     if (lastFormula) {
-      const eqParts = lastFormula.expression.split('=');
+      const lastLine =
+        lastFormula.expression
+          .replace(LATEX_ENVIRONMENT_TAG, '')
+          .split('\\\\')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .pop() ?? '';
+      const eqParts = lastLine.split('=');
       if (eqParts.length >= 2) {
-        result = (eqParts[eqParts.length - 1] ?? '').trim();
+        result = (eqParts[eqParts.length - 1] ?? '').replace(/&/g, '').trim();
+        resultIsLatex = lastFormula.isLatex;
       }
     }
   }
@@ -148,6 +160,7 @@ function parseCalculation(content: string): ParsedCalculation {
     description,
     formulas,
     result,
+    resultIsLatex,
     resultLabel,
     steps,
     unit,
@@ -155,7 +168,15 @@ function parseCalculation(content: string): ParsedCalculation {
   };
 }
 
-function FormulaDisplay({ expression, isLatex }: { expression: string; isLatex: boolean }) {
+function FormulaDisplay({
+  expression,
+  isLatex,
+  displayMode = true,
+}: {
+  expression: string;
+  isLatex: boolean;
+  displayMode?: boolean;
+}) {
   const rendered = useMemo(() => {
     if (!isLatex) return null;
     try {
@@ -163,17 +184,17 @@ function FormulaDisplay({ expression, isLatex }: { expression: string; isLatex: 
       const katex = require('katex');
       return katex.renderToString(expression, {
         throwOnError: false,
-        displayMode: true,
+        displayMode,
       });
     } catch {
       return null;
     }
-  }, [expression, isLatex]);
+  }, [expression, isLatex, displayMode]);
 
   if (rendered) {
     return (
       <div
-        className="formula-katex overflow-x-auto py-2 text-center"
+        className={cn('formula-katex overflow-x-auto', displayMode && 'py-2 text-center')}
         // llm-guardrail-allow: KaTeX emits markup, so the string cannot be text-rendered; it is
         // sanitized on the line below before it reaches the DOM.
         dangerouslySetInnerHTML={{
@@ -295,7 +316,13 @@ export function CalculationCard({ content }: CalculationCardProps) {
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 {calc.resultLabel}
               </p>
-              <p className="mt-1 text-2xl font-bold tracking-tight">{calc.result}</p>
+              <div className="mt-1 text-2xl font-bold tracking-tight">
+                {calc.resultIsLatex ? (
+                  <FormulaDisplay expression={calc.result} isLatex displayMode={false} />
+                ) : (
+                  calc.result
+                )}
+              </div>
               {calc.unit && (
                 <Badge variant="secondary" className="mt-1.5 text-xs font-normal">
                   {calc.unit}

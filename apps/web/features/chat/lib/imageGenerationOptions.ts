@@ -251,11 +251,14 @@ function canvasPngBase64(canvas: HTMLCanvasElement): Promise<string> {
   );
 }
 
+export type ReframeEditResult =
+  { kind: 'edit'; edit: ImageEditRequest } | { kind: 'same-ratio' } | { kind: 'unsupported' };
+
 export async function buildReframeEdit(
   imageUrl: string,
   aspectRatio: ManagedMediaImageAspectRatio,
-): Promise<ImageEditRequest | null> {
-  if (typeof createImageBitmap !== 'function') return null;
+): Promise<ReframeEditResult> {
+  if (typeof createImageBitmap !== 'function') return { kind: 'unsupported' };
   const response = await fetch(imageUrl, { credentials: 'same-origin' });
   if (!response.ok) throw new Error('The generated image could not be read for reframing.');
   const bitmap = await createImageBitmap(await response.blob());
@@ -264,7 +267,7 @@ export async function buildReframeEdit(
   const current = bitmap.width / bitmap.height;
   if (Math.abs(target - current) <= REFRAME_RATIO_TOLERANCE) {
     bitmap.close();
-    return null;
+    return { kind: 'same-ratio' };
   }
   const width = target > current ? Math.round(bitmap.height * target) : bitmap.width;
   const height = target > current ? bitmap.height : Math.round(bitmap.width / target);
@@ -281,7 +284,7 @@ export async function buildReframeEdit(
   const maskContext = mask.getContext('2d');
   if (!sourceContext || !maskContext) {
     bitmap.close();
-    return null;
+    return { kind: 'unsupported' };
   }
   sourceContext.drawImage(bitmap, left, top);
   maskContext.fillStyle = 'black';
@@ -292,7 +295,7 @@ export async function buildReframeEdit(
     canvasPngBase64(source),
     canvasPngBase64(mask),
   ]);
-  return { operation: 'outpaint', sourceImageBase64, maskImageBase64 };
+  return { kind: 'edit', edit: { operation: 'outpaint', sourceImageBase64, maskImageBase64 } };
 }
 
 export async function readImageUrlAsBase64(url: string): Promise<string> {

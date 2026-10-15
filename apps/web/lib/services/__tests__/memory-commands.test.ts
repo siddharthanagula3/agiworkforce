@@ -240,3 +240,16 @@ describe('runMemoryCommand', () => {
     expect(params[0]).toBe('user-1');
   });
 });
+
+describe('memoryCommandTurnNote', () => {
+  it('tells the model a failed command has an unknown outcome, never that nothing changed', async () => {
+    const { memoryCommandTurnNote } = await import('@/lib/services/memory-commands');
+    const note = memoryCommandTurnNote('Remember that I like tea', {
+      kind: 'remember',
+      status: 'failed',
+    });
+
+    expect(note).toContain('unknown whether anything was saved or deleted');
+    expect(note).not.toContain('so nothing changed');
+  });
+});

@@ -151,9 +151,11 @@ export function SandboxedIframe({
   const [useFallback, setUseFallback] = useState(false);
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sandboxConnectedRef = useRef(false);
+  const postedPayloadRef = useRef<ArtifactRenderPayload | null>(null);
 
   useEffect(() => {
     sandboxConnectedRef.current = false;
+    postedPayloadRef.current = null;
     setUseFallback(false);
     return () => {
       if (connectTimeoutRef.current) {
@@ -189,6 +191,7 @@ export function SandboxedIframe({
         }
         try {
           postRenderToSandbox(iframeRef.current, renderPayload);
+          postedPayloadRef.current = renderPayload;
         } catch {
           // ignore · payload re-posts on the onLoad path below
         }
@@ -238,8 +241,21 @@ export function SandboxedIframe({
     if (!sandboxOrigin || !iframeRef.current) return;
     try {
       postRenderToSandbox(iframeRef.current, renderPayload);
+      postedPayloadRef.current = renderPayload;
     } catch {
       // ignore
+    }
+  }, [sandboxOrigin, renderPayload]);
+
+  useEffect(() => {
+    const frame = iframeRef.current;
+    if (!sandboxOrigin || !frame || !sandboxConnectedRef.current) return;
+    if (postedPayloadRef.current === renderPayload) return;
+    try {
+      postRenderToSandbox(frame, renderPayload);
+      postedPayloadRef.current = renderPayload;
+    } catch {
+      // ignore · the next sandbox-ready or onLoad posts the current payload
     }
   }, [sandboxOrigin, renderPayload]);
 
