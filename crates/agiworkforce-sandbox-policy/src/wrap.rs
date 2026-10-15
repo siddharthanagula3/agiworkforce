@@ -809,7 +809,7 @@ fn alternations(names: &[String], before: &str) -> Vec<String> {
 /// Where the rule that starts `head` and names `name` among its alternatives
 /// is in `rules`, for a test to ask whether an entry is ruled without
 /// depending on which pattern it shares with others.
-#[cfg(test)]
+#[cfg(all(test, unix))]
 pub(crate) fn entry_rule(rules: &str, head: &str, name: &str) -> Option<usize> {
     let mut at = 0;
     for line in rules.split_inclusive('\n') {

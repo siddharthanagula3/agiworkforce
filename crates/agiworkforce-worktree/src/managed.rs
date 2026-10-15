@@ -1434,7 +1434,13 @@ mod tests {
             name: "HEAD".into(),
         };
         let broken = manager.create(head.clone(), None).await.unwrap().worktree;
-        std::fs::write(broken.checkout.join(".git"), "not a gitdir\n").unwrap();
+        let admin = std::fs::read_dir(repo.path().join(".git/worktrees"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        std::fs::write(admin.join("gitdir"), "not a gitdir\n").unwrap();
 
         let newest = manager.create(head, None).await.expect("creation succeeds");
 

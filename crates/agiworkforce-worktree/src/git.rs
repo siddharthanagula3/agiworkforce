@@ -1330,7 +1330,15 @@ mod tests {
             workspace.clone(),
             std::fs::canonicalize(&workspace).unwrap(),
         ];
-        let mut entries = vec![
+        #[cfg(unix)]
+        let linked = {
+            let linked = base.path().join("linked-bin");
+            std::os::unix::fs::symlink(&venv, &linked).unwrap();
+            Some(linked)
+        };
+        #[cfg(not(unix))]
+        let linked: Option<PathBuf> = None;
+        let entries: Vec<PathBuf> = [
             venv.clone(),
             PathBuf::from("bin"),
             system.clone(),
@@ -1340,13 +1348,10 @@ mod tests {
                 .join("project")
                 .join(".venv")
                 .join("bin"),
-        ];
-        #[cfg(unix)]
-        {
-            let linked = base.path().join("linked-bin");
-            std::os::unix::fs::symlink(&venv, &linked).unwrap();
-            entries.push(linked);
-        }
+        ]
+        .into_iter()
+        .chain(linked)
+        .collect();
         let path = std::env::join_paths(&entries).unwrap();
 
         assert_eq!(trusted_path_entries(&path, &roots), vec![system]);

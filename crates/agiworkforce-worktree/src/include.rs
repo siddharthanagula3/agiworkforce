@@ -21,7 +21,10 @@ pub struct IncludeOutcome {
 /// Directories no listing walks into for `.worktreeinclude`: dependency and
 /// build output trees hold hundreds of thousands of files and never the
 /// configuration a worktree needs.
-const UNWALKED: [&str; 2] = [":(exclude,glob)**/node_modules", ":(exclude,glob)**/target"];
+const UNWALKED: [&str; 2] = [
+    ":(exclude,glob)**/node_modules/**",
+    ":(exclude,glob)**/target/**",
+];
 
 /// Copy every untracked file under `source` that `.worktreeinclude` names and
 /// git ignores into the same place under `target`. A path that runs through a
@@ -74,6 +77,8 @@ pub(crate) async fn copy_included_files(
 /// `.gitignore` files and `info/exclude`, and the user's `core.excludesFile`,
 /// which host git is handed explicitly since it reads no global configuration.
 /// A file git would carry into the new checkout anyway is not copied over it.
+/// Every path goes in as `./<path>` so a name starting with `:` is not read as
+/// pathspec magic, which git 2.54 refuses `GIT_LITERAL_PATHSPECS` for here.
 async fn ignored_by_standard_excludes(
     runner: &dyn CommandRunner,
     source: &Path,
@@ -81,11 +86,11 @@ async fn ignored_by_standard_excludes(
 ) -> Result<HashSet<Vec<u8>>> {
     let mut input = Vec::new();
     for path in paths {
+        input.extend_from_slice(b"./");
         input.extend_from_slice(path);
         input.push(0);
     }
     let output = Git::at(runner, source)
-        .with_env("GIT_LITERAL_PATHSPECS", "1")
         .run(["check-ignore", "-z", "--stdin"], Some(input))
         .await?;
     // One means none of them is ignored; anything else is a failure.
@@ -99,7 +104,7 @@ async fn ignored_by_standard_excludes(
         .stdout
         .split(|byte| *byte == 0)
         .filter(|record| !record.is_empty())
-        .map(<[u8]>::to_vec)
+        .map(|record| record.strip_prefix(b"./").unwrap_or(record).to_vec())
         .collect())
 }
 
