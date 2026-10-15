@@ -1319,6 +1319,12 @@ export type ProcessedRequest = {
   connectorsAllowed?: boolean;
   toolExecutionObserved?: boolean;
   requestedModel: string;
+  /**
+   * The promoted model the caller picked, when the promotion did not admit the
+   * turn and it went to the Free plan model instead. Recorded as the requested
+   * model of the persisted turn; billing and routing keep `requestedModel`.
+   */
+  selectedModel?: string;
   provider: string;
   estimatedCostMicrousd?: number;
   estimatedCostCents: number;
@@ -3331,12 +3337,14 @@ async function processAdmittedRequest(
     }),
   );
   const promotionTurn = promotion.turn;
+  let selectedModel: string | undefined;
   if (promotionTurn) {
     applyFreeModelPromotion(chatRequest, promotionTurn.promotion);
   } else if (
     freeModelPromotionCoversPlan(subscription.plan_tier) &&
     namesFreeModelPromotionModel(chatRequest.model)
   ) {
+    selectedModel = chatRequest.model;
     chatRequest.model = FREE_TRIAL_MODEL;
   }
   const freeAutoSelection =
@@ -6357,6 +6365,7 @@ async function processAdmittedRequest(
     ...(toolLockdown ? { toolLockdown: true } : {}),
     ...(connectorsAllowed === undefined ? {} : { connectorsAllowed }),
     requestedModel,
+    ...(selectedModel ? { selectedModel } : {}),
     provider,
     estimatedCostMicrousd,
     estimatedCostCents: ledgerCentsFromMicrousd(estimatedCostMicrousd),

@@ -550,6 +550,6 @@ export function buildUpstreamErrorResponse(
           : {}),
       },
     },
-    { status: shape.status },
+    { status: shape.status, headers: { 'X-AGI-Resolved-Model': model } },
   );
 }

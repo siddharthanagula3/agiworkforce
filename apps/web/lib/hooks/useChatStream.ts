@@ -4297,6 +4297,11 @@ export function useChatStream(
           });
           connectingTicker.stop();
 
+          const resolvedModel = response.headers.get('X-AGI-Resolved-Model')?.trim() || model;
+          if (resolvedModel !== model) {
+            updateMessage(assistantMessageId, { model: resolvedModel }, conversationId);
+          }
+
           if (!response.ok) {
             throw await chatApiErrorFromResponse(response, `Request failed: ${response.status}`);
           }
@@ -4304,10 +4309,6 @@ export function useChatStream(
           if (!isTemporaryConversation && !regenerateParentId) reportTurnCommitted();
 
           surfaceTermsNotice(response);
-          const resolvedModel = response.headers.get('X-AGI-Resolved-Model')?.trim() || model;
-          if (resolvedModel !== model) {
-            updateMessage(assistantMessageId, { model: resolvedModel }, conversationId);
-          }
           const truncatedAttachments = readAttachmentTruncationHeader(
             response.headers.get(ATTACHMENTS_TRUNCATED_HEADER),
           );
@@ -5655,7 +5656,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
         id: assistantMessageId,
         role: 'assistant',
         content: errorContent,
-        model,
+        model: currentMessage?.model ?? model,
         metadata,
         ...(currentMessage?.parentId ? { parentId: currentMessage.parentId } : {}),
       },

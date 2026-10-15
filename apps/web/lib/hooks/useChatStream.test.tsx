@@ -3038,6 +3038,96 @@ describe('useChatStream', () => {
       });
     });
 
+    describe('a reply the server answered on another model than the one picked (REGEN-01)', () => {
+      const picked = listCanonicalModels().find(
+        (model) => model.provider === 'anthropic' && model.qualityTier === 'fast',
+      )!.id;
+      const answeredBy = getDefaultModelFor('free', 'chat');
+
+      function seedConversation() {
+        useChatStore.setState({
+          conversations: [PERSISTED_CONV],
+          activeConversationId: PERSISTED_CONV.id,
+          messages: [],
+        });
+      }
+
+      function serve(completion: () => Response) {
+        const saves: Array<Record<string, unknown>> = [];
+        vi.mocked(fetch).mockImplementation(async (input, init) => {
+          const url = String(input);
+          if (url.includes('/api/llm/')) return completion();
+          if (url.includes('/messages')) {
+            const saved = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+            saves.push(saved);
+            return new Response(JSON.stringify({ message: { id: saved['id'] } }), {
+              status: 200,
+            });
+          }
+          return new Response('{}', { status: 200 });
+        });
+        return saves;
+      }
+
+      async function send() {
+        const { result } = renderHook(() => useChatStream());
+        await act(async () => {
+          await result.current.sendMessage('Tell me a story', {
+            conversationId: PERSISTED_CONV.id,
+            model: picked,
+          });
+        });
+      }
+
+      function assistantReply() {
+        return useChatStore.getState().messages.find((message) => message.role === 'assistant');
+      }
+
+      it('labels and saves a reply that failed before streaming with the model that ran', async () => {
+        seedConversation();
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const saves = serve(
+          () =>
+            new Response(
+              JSON.stringify({
+                error: { code: 'provider_overloaded', message: 'This model is overloaded.' },
+              }),
+              { status: 503, headers: { 'X-AGI-Resolved-Model': answeredBy } },
+            ),
+        );
+
+        await send();
+
+        expect(assistantReply()?.model).toBe(answeredBy);
+        await vi.waitFor(() =>
+          expect(saves.find((saved) => saved['role'] === 'assistant')?.['model']).toBe(answeredBy),
+        );
+      });
+
+      it('saves a reply whose stream broke with the model the server named', async () => {
+        seedConversation();
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const saves = serve(
+          () =>
+            new Response(
+              new ReadableStream<Uint8Array>({
+                start(controller) {
+                  controller.error(new TypeError('network connection lost'));
+                },
+              }),
+              { status: 200, headers: { 'X-AGI-Resolved-Model': answeredBy } },
+            ),
+        );
+
+        await send();
+
+        expect(assistantReply()?.model).toBe(answeredBy);
+        await vi.waitFor(() =>
+          expect(saves.find((saved) => saved['role'] === 'assistant')?.['model']).toBe(answeredBy),
+        );
+      });
+    });
+
     it('tells the server the chat links past chats when it continues a reply (MEM-4)', async () => {
       useChatStore.setState({
         conversations: [PERSISTED_CONV],

@@ -102,6 +102,7 @@ export type AssistantTurnOrigin = Pick<
       | 'servingHarnessId'
       | 'movedFromModel'
       | 'movedReason'
+      | 'selectedModel'
       | 'retries'
       | 'toolExecutionObserved'
       | 'llmRequest'
@@ -194,7 +195,7 @@ export function buildAssistantTurnAttribution(
 ): AssistantTurnAttribution {
   return {
     completionStatus: snapshot.truncated ? 'truncated' : 'complete',
-    requestedModel: processed.requestedModel,
+    requestedModel: processed.selectedModel ?? processed.requestedModel,
     servedModel: snapshot.model,
     requestedRoute: {
       lane: processed.routeLane ?? null,

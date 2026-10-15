@@ -183,6 +183,27 @@ describe('a turn that was cancelled and then completed', () => {
   });
 });
 
+describe('a promoted pick the Free plan model answered (REGEN-01)', () => {
+  it('records the model that answered beside the model the account picked', async () => {
+    await persistAssistantTurn({
+      processed: {
+        ...processed,
+        requestedModel: 'fixture-free-model',
+        selectedModel: 'fixture-promoted-model',
+        chatRequest: { model: 'fixture-free-model' },
+      } as ProcessedRequest,
+      userId: USER_ID,
+      snapshot: snapshot({ model: 'fixture-free-model' }),
+    });
+
+    expect(storedMetadata()).toMatchObject({
+      requestedModel: 'fixture-promoted-model',
+      servedModel: 'fixture-free-model',
+    });
+    expect(rows.get(MESSAGE_ID)?.model).toBe('fixture-free-model');
+  });
+});
+
 describe('every attribution the conversation contract declares', () => {
   it('is written on a turn, so no reader has to tell absent from did not happen', async () => {
     await persistAssistantTurn({ processed, userId: USER_ID, snapshot: snapshot() });

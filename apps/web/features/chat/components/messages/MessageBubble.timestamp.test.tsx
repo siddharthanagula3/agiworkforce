@@ -62,6 +62,30 @@ describe('MessageBubble timestamp (CLR-03)', () => {
     expect(screen.getByTestId('message-answered-by')).toHaveTextContent(SERVED_LABEL);
   });
 
+  it('names the model that answered, not the one picked, when the turn was served by another (REGEN-01)', () => {
+    const picked = getModels({ requireCapabilities: { streaming: true } }).find(
+      (model) =>
+        isModelLive(model) &&
+        model.id !== SERVED_MODEL.id &&
+        getManagedModelPresentationLabel(model.id) !== SERVED_LABEL,
+    );
+    if (!picked) throw new Error('The canonical model catalog must expose a second chat model');
+
+    render(
+      <MessageBubble
+        message={{
+          ...message('assistant'),
+          metadata: { model: SERVED_MODEL.id, requestedModel: picked.id },
+        }}
+      />,
+    );
+
+    const chip = screen.getByTestId('message-answered-by');
+    expect(chip).toHaveTextContent(SERVED_LABEL);
+    expect(chip).not.toHaveTextContent(getManagedModelPresentationLabel(picked.id));
+    expect(chip.textContent ?? '').not.toMatch(/limit|usage|allowance/i);
+  });
+
   it('says Auto chose the model when the composer asked for Auto', () => {
     render(
       <MessageBubble

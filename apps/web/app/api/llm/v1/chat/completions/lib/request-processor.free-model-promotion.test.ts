@@ -268,6 +268,29 @@ describe('processRequest under the free model promotion', () => {
     expect(result.freeTrial?.promotion).toBeUndefined();
   });
 
+  it('keeps the pick the promotion refused beside the Free model that answers it (REGEN-01)', async () => {
+    mocks.admit.mockResolvedValue(null);
+
+    const refused = await turn('promotion-turn-8', PROMOTED.id);
+    const unpromoted = await turn('promotion-turn-9', FREE_CHAT_MODEL);
+    mocks.admit.mockResolvedValue({
+      promotion: PROMOTION,
+      hold: {
+        reservation: PROMOTION_RESERVATION,
+        handOver: mocks.handOver,
+        releaseUnlessHandedOver: mocks.release,
+      },
+    });
+    const admitted = await turn('promotion-turn-10', PROMOTED.id);
+
+    expect(refused.ok && unpromoted.ok && admitted.ok).toBe(true);
+    if (!refused.ok || !unpromoted.ok || !admitted.ok) return;
+    expect(refused.chatRequest.model).toBe(FREE_CHAT_MODEL);
+    expect(refused.selectedModel).toBe(PROMOTED.id);
+    expect(unpromoted.selectedModel).toBeUndefined();
+    expect(admitted.selectedModel).toBeUndefined();
+  });
+
   it('returns the hold when the turn is refused before the Free reservation takes it over', async () => {
     mocks.beginFree.mockResolvedValue({ ok: false, code: 'budget_reached', resetAt: null });
 

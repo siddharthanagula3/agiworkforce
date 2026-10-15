@@ -47,6 +47,20 @@ describe('buildUpstreamErrorResponse', () => {
     expect(body.error.message).not.toContain('RESOURCE_EXHAUSTED');
   });
 
+  it('names the model the failed attempt ran on, so the reply is labelled with it (REGEN-01)', () => {
+    const response = buildUpstreamErrorResponse(
+      upstreamError('upstream overloaded', 503),
+      'openai',
+      FIXTURE_MODEL_ID,
+      'fixture-picked-model',
+      'user-1',
+      'request-1',
+      'streaming',
+    );
+
+    expect(response.headers.get('X-AGI-Resolved-Model')).toBe(FIXTURE_MODEL_ID);
+  });
+
   it('names the free lane’s ways out when the shared free allowance is spent', async () => {
     const response = buildUpstreamErrorResponse(
       upstreamError('429 Rate limit exceeded: free-models-per-day', 429),
