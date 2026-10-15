@@ -136,6 +136,31 @@ describe('formatPastChatContext', () => {
   it('returns nothing when there is no excerpt to show', () => {
     expect(formatPastChatContext([])).toBeNull();
   });
+
+  const sailingExcerpt = {
+    conversationId: 'conversation-1',
+    messageId: 'message-1',
+    title: 'Sailing notes',
+    role: 'user' as const,
+    content: 'My favourite mooring knot is the bowline.',
+    createdAt: '2026-09-08T10:00:00.000Z',
+  };
+
+  it('tells the model it already has these excerpts and how far they reach', () => {
+    const prompt = formatPastChatContext([sailingExcerpt]);
+
+    expect(prompt).toContain('so you have them');
+    expect(prompt).toContain('name the chat by its title');
+    expect(prompt).toContain('say it is not in the excerpts you have');
+    expect(prompt).not.toContain('shows a link to each of these chats');
+  });
+
+  it('tells the model the app links each source chat where the surface shows those links', () => {
+    const prompt = formatPastChatContext([sailingExcerpt], { sourceLinksShown: true });
+
+    expect(prompt).toContain('The app shows a link to each of these chats with your answer');
+    expect(prompt).toContain('do not write links to them yourself');
+  });
 });
 
 describe('retrievePastChatContext', () => {

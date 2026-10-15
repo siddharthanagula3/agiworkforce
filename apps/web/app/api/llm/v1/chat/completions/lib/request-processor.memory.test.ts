@@ -288,6 +288,26 @@ describe('resolveInteractiveTurnContext: past chats', () => {
     expect(context.pastChatSources).toEqual([]);
     expect(query).not.toHaveBeenCalled();
   });
+
+  it('tells a web turn the app links the source chats, and no other surface', async () => {
+    const linkLine = 'The app shows a link to each of these chats with your answer';
+
+    const web = await resolveInteractiveTurnContext(
+      { query: vi.fn().mockResolvedValue([pastChatRow(0)]) },
+      recallInput({ surface: 'web' }),
+    );
+    expect(web.pastChatSources).toHaveLength(1);
+    expect(web.pastChatPrompt).toContain(linkLine);
+
+    for (const surface of ['mobile', 'desktop', 'chrome'] as const) {
+      const other = await resolveInteractiveTurnContext(
+        { query: vi.fn().mockResolvedValue([pastChatRow(0)]) },
+        recallInput({ surface }),
+      );
+      expect(other.pastChatPrompt).toContain('so you have them');
+      expect(other.pastChatPrompt).not.toContain(linkLine);
+    }
+  });
 });
 
 describe('prepareManagedAutoMemoryFacts', () => {

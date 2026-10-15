@@ -73,6 +73,13 @@ export function accountMemoryRequested(
   return surface === 'api' ? memoryEnabled === true : memoryEnabled !== false;
 }
 
+/**
+ * Only the web chat reads the past-chat citations header and draws a link to
+ * each source chat under the answer. The desktop app's own chat, the mobile
+ * app and the extension send the same turn but show no such link.
+ */
+const PAST_CHAT_LINK_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>(['web']);
+
 function classWithdrawn(manifest: ContextManifest, sourceClass: ContextSourceClass): boolean {
   const entry = manifest.entries.find((candidate) => candidate.sourceClass === sourceClass);
   return entry !== undefined && entry.candidateCount > 0 && entry.includedCount === 0;
@@ -225,7 +232,11 @@ export async function resolveInteractiveTurnContext(
   return {
     projectBlocks: project.blocks,
     projectCitations: project.citations,
-    pastChatPrompt: recallDegraded ? PAST_CHAT_DEGRADED_NOTICE : formatPastChatContext(excerpts),
+    pastChatPrompt: recallDegraded
+      ? PAST_CHAT_DEGRADED_NOTICE
+      : formatPastChatContext(excerpts, {
+          sourceLinksShown: PAST_CHAT_LINK_SURFACES.has(input.surface),
+        }),
     pastChatSources: recallDegraded ? [] : excerpts.map(pastChatCitation),
     memoryPrompt: formatManagedMemorySystemPrompt(memories),
     memories,
