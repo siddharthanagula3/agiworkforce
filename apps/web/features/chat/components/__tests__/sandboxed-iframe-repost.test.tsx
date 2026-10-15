@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ArtifactRenderPayload } from '@/lib/artifact-sandbox';
 
+type ArtifactSandboxModule = typeof import('@/lib/artifact-sandbox');
+
 const postRender = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/artifact-sandbox', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/artifact-sandbox')>()),
+  ...(await importOriginal<ArtifactSandboxModule>()),
   getSandboxOrigin: () => 'https://sandbox.example',
   isFromSandbox: () => true,
   postRenderToSandbox: postRender,

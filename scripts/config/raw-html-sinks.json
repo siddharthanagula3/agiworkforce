@@ -2,7 +2,7 @@
   "structuralSanitizers": [
     {
       "name": "sanitizeSvg",
-      "module": "packages/ui/unified-chat/src/components/ArtifactRenderer.tsx",
+      "module": "packages/ui/unified-chat/src/lib/sanitize-svg.ts",
       "test": "packages/ui/unified-chat/src/components/__tests__/sanitizeSvg.xss.test.ts",
       "reason": "An element and attribute allowlist over the parsed SVG tree with a URL scheme check on every href, not DOMPurify; the test drives script, handler, foreignObject, script-URL, animation and style vectors through it."
     }
