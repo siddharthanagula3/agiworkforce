@@ -179,7 +179,8 @@ function matchIndex(pattern: RegExp, text: string): number {
   return pattern.exec(text)?.index ?? -1;
 }
 
-const CLAUSE_BREAK = /[^,.;:!?\n]+/g;
+const LONG_DASHES = String.fromCharCode(0x2013, 0x2014);
+const CLAUSE_BREAK = new RegExp(`[^,.;:!?\\n${LONG_DASHES}]+`, 'g');
 
 /**
  * Where the first clause naming both a computation verb and a runtime starts its

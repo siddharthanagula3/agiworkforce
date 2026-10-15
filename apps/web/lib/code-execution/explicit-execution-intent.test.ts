@@ -7,6 +7,9 @@ import {
   hasExplicitCodeExecutionIntent,
 } from './explicit-execution-intent';
 
+const EM_DASH = String.fromCodePoint(0x2014);
+const EN_DASH = String.fromCodePoint(0x2013);
+
 const LIVE_DEFECT_PROMPT =
   'Use Python to compute the sum of the first 200 prime numbers, show the code you ran and the result';
 
@@ -46,6 +49,18 @@ describe('detectExplicitCodeExecutionIntent', () => {
       ),
     ).toBeNull();
     expect(detectExplicitCodeExecutionIntent('Use Python to compute the sum')).toBe('computation');
+  });
+
+  it('reads a long dash as the end of a clause', () => {
+    expect(
+      detectExplicitCodeExecutionIntent(`calculate the totals ${EM_DASH} I mostly write python`),
+    ).toBeNull();
+    expect(
+      detectExplicitCodeExecutionIntent(`sort these names ${EN_DASH} my script broke`),
+    ).toBeNull();
+    expect(
+      detectExplicitCodeExecutionIntent(`calculate the median in python ${EM_DASH} quickly`),
+    ).toBe('computation');
   });
 
   it('needs a runtime subject, so a computation verb alone never forces a run', () => {
