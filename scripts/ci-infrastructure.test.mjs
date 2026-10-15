@@ -379,7 +379,7 @@ test('Windows caches the Cargo workspace once without removing toolchain binarie
     job.steps.filter((step) => step.run?.startsWith('cargo ')).map((step) => step.run),
     [
       'cargo check --locked --workspace',
-      'cargo test --locked --workspace --lib -- --skip landlock --skip seccomp --skip linux_sandbox',
+      'cargo test --locked --no-fail-fast --workspace --lib -- --skip landlock --skip seccomp --skip linux_sandbox',
       'cargo clippy --locked --workspace --lib -- -D warnings -D unsafe-code',
     ],
   );
