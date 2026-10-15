@@ -3810,16 +3810,16 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         )
         .await
         .err();
-        let (subagent_manager, memory_consolidation_tasks) =
-            if let Some(session) = self.sessions.lock().await.get(&params.thread_id).cloned() {
-                let mut session = session.lock().await;
-                (
-                    session.take_subagent_manager(),
-                    session.take_memory_consolidation_tasks(),
-                )
-            } else {
-                (None, Vec::new())
-            };
+        let held = self.sessions.lock().await.get(&params.thread_id).cloned();
+        let (subagent_manager, memory_consolidation_tasks) = if let Some(session) = held {
+            let mut session = session.lock().await;
+            (
+                session.take_subagent_manager(),
+                session.take_memory_consolidation_tasks(),
+            )
+        } else {
+            (None, Vec::new())
+        };
         abort_and_join_tasks(memory_consolidation_tasks).await;
         if let Some(manager) = subagent_manager {
             manager.shutdown_all().await;
@@ -3835,7 +3835,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             TurnStatus::Interrupted,
         );
         let mut persist_error = None;
-        if let Some(session) = self.sessions.lock().await.get(&params.thread_id).cloned() {
+        let held = self.sessions.lock().await.get(&params.thread_id).cloned();
+        if let Some(session) = held {
             let partial = match running.partial.lock() {
                 Ok(partial) => partial.text.clone(),
                 Err(poisoned) => poisoned.into_inner().text.clone(),

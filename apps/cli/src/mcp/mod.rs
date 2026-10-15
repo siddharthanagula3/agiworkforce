@@ -2724,6 +2724,24 @@ mod tests {
     }
 
     #[cfg(target_os = "macos")]
+    fn seatbelt_wrapped_in(
+        workspace: &std::path::Path,
+        network: crate::sandbox::NetworkPolicy,
+        transport: TransportConfig,
+    ) -> TransportConfig {
+        sandbox_stdio_transport(
+            crate::sandbox::SandboxType::MacosSeatbelt,
+            workspace,
+            workspace,
+            network,
+            transport,
+            false,
+        )
+        .unwrap()
+        .transport
+    }
+
+    #[cfg(target_os = "macos")]
     fn seatbelt_profile_of(transport: TransportConfig) -> String {
         let TransportConfig::Stdio { args, .. } = transport else {
             panic!("stdio stays stdio");
@@ -2936,6 +2954,8 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn a_filesystem_servers_chosen_roots_are_writable_in_its_sandbox() {
+        let workspace = tempfile::tempdir().unwrap();
+        let workspace = workspace.path().canonicalize().unwrap();
         let root = tempfile::tempdir().unwrap();
         let root = root.path().canonicalize().unwrap();
         let elsewhere = tempfile::tempdir().unwrap();
@@ -2946,7 +2966,8 @@ mod tests {
                 dir.display()
             ))
         };
-        let profile = seatbelt_profile_of(seatbelt_wrapped(
+        let profile = seatbelt_profile_of(seatbelt_wrapped_in(
+            &workspace,
             crate::sandbox::NetworkPolicy::AllowExternal,
             TransportConfig::Stdio {
                 command: "npx".to_string(),
@@ -2961,7 +2982,8 @@ mod tests {
         ));
         assert!(writes(&profile, &root), "{profile}");
 
-        let profile = seatbelt_profile_of(seatbelt_wrapped(
+        let profile = seatbelt_profile_of(seatbelt_wrapped_in(
+            &workspace,
             crate::sandbox::NetworkPolicy::AllowExternal,
             TransportConfig::Stdio {
                 command: "npx".to_string(),
