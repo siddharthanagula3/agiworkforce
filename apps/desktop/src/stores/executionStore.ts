@@ -10,8 +10,6 @@ import type {
   SubGoal,
   FailedStep,
 } from '../api/reflection';
-import type { ActionType } from './browserStore';
-import { useBrowserStore } from './browserStore';
 import { useAgentTaskStore, type AgentTask, type AgentTaskLiveStep } from './agentTaskStore';
 
 export type StepStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
@@ -90,13 +88,7 @@ export interface ReflectionState {
 }
 
 export type IterationStatus =
-  | 'idle'
-  | 'planning'
-  | 'executing'
-  | 'reflecting'
-  | 'completed'
-  | 'failed'
-  | 'paused';
+  'idle' | 'planning' | 'executing' | 'reflecting' | 'completed' | 'failed' | 'paused';
 
 export interface IterationHistoryRecord {
   iteration: number;
@@ -1113,89 +1105,6 @@ export async function initializeExecutionListeners() {
       },
     );
     unlistenFunctions.push(unlisten10);
-
-    const unlisten11 = await listen<{
-      type: 'navigate' | 'click' | 'type' | 'extract' | 'screenshot';
-      url?: string;
-      selector?: string;
-      value?: string;
-      screenshot_base64?: string;
-      success: boolean;
-      error?: string;
-    }>('agi:browser_action', async ({ payload }) => {
-      const state = useExecutionStore.getState();
-      const actionId = `browser_${Date.now()}`;
-      const timestamp = Date.now();
-
-      state.addBrowserAction({
-        id: actionId,
-        timestamp,
-        type: payload.type,
-        url: payload.url,
-        selector: payload.selector,
-        value: payload.value,
-        screenshotData: payload.screenshot_base64,
-        success: payload.success,
-        error: payload.error,
-      });
-
-      if (payload.url) {
-        state.updateCurrentBrowserState(payload.url, payload.screenshot_base64 || null);
-      }
-
-      try {
-        const browserStore = useBrowserStore.getState();
-
-        browserStore.addAction({
-          id: actionId,
-          type: payload.type as ActionType,
-          timestamp,
-          success: payload.success,
-          details: {
-            url: payload.url,
-            selector: payload.selector,
-            text: payload.value,
-            error: payload.error,
-          },
-        });
-
-        if (payload.screenshot_base64 && browserStore.sessions.length > 0) {
-          const activeSession = browserStore.sessions.find((s) => s.active);
-          const activeTab = activeSession?.tabs.find((t) => t.active);
-          if (activeTab) {
-            browserStore.addScreenshot({
-              id: `screenshot_${timestamp}`,
-              timestamp,
-              data: payload.screenshot_base64,
-              tabId: activeTab.id,
-            });
-          }
-        }
-      } catch (syncError) {
-        console.debug('[ExecutionStore] browserStore sync skipped:', syncError);
-      }
-    });
-    unlistenFunctions.push(unlisten11);
-
-    const unlisten12 = await listen<{
-      path: string;
-      operation: 'create' | 'modify' | 'delete';
-      old_content?: string;
-      new_content?: string;
-      language?: string;
-    }>('agi:file_changed', ({ payload }) => {
-      useExecutionStore.getState().addFileChange({
-        id: `file_${Date.now()}`,
-        timestamp: Date.now(),
-        path: payload.path,
-        operation: payload.operation,
-        oldContent: payload.old_content,
-        newContent: payload.new_content,
-        language: payload.language,
-        accepted: null,
-      });
-    });
-    unlistenFunctions.push(unlisten12);
 
     const unlisten13 = await listen<{
       goal_id: string;

@@ -1,7 +1,11 @@
 import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { useChatSettingsStore, type FollowUpQueueMode } from '@agiworkforce/unified-chat';
+import { toast } from 'sonner';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { Label } from '@/ui/Label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { Switch } from '@/ui/Switch';
 import { Slider } from '@/ui/Slider';
 import { CustomAgentsList } from './CustomAgentsList';
@@ -10,17 +14,21 @@ export function AgentsSettings() {
   const chatPreferences = useSettingsStore(useShallow((state) => state.chatPreferences));
   const executionPreferences = useSettingsStore(useShallow((state) => state.executionPreferences));
 
-  const { setAutoApproveTools, setMaxTimeoutMinutes, setEnableTimeoutWarnings } = useSettingsStore(
+  const { setAutoApproveTools, setMaxTimeoutMinutes } = useSettingsStore(
     useShallow((s) => ({
       setAutoApproveTools: s.setAutoApproveTools,
       setMaxTimeoutMinutes: s.setMaxTimeoutMinutes,
-      setEnableTimeoutWarnings: s.setEnableTimeoutWarnings,
     })),
   );
 
+  const followUpQueueMode = useChatSettingsStore((state) => state.followUpQueueMode);
+  const setFollowUpQueueMode = useChatSettingsStore((state) => state.setFollowUpQueueMode);
+
   const handleAutoApproveChange = useCallback(
     (enabled: boolean) => {
-      void setAutoApproveTools(enabled);
+      setAutoApproveTools(enabled).catch((error: unknown) => {
+        toast.error(getSimpleErrorMessage(error));
+      });
     },
     [setAutoApproveTools],
   );
@@ -59,20 +67,25 @@ export function AgentsSettings() {
 
           <div className="border-t border-border" />
 
-          {/* Timeout warnings */}
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-0.5">
-              <Label htmlFor="agents-timeoutWarnings">Timeout Warnings</Label>
-              <p className="text-xs text-muted-foreground">
-                Show notifications at 1 hour, 30 minutes, and 5 minutes remaining before a task
-                times out.
-              </p>
-            </div>
-            <Switch
-              id="agents-timeoutWarnings"
-              checked={executionPreferences.enableTimeoutWarnings}
-              onCheckedChange={setEnableTimeoutWarnings}
-            />
+          <div className="space-y-2">
+            <Label htmlFor="agents-followUpQueueMode">Follow-ups while a reply is running</Label>
+            <Select
+              value={followUpQueueMode}
+              onValueChange={(value) => setFollowUpQueueMode(value as FollowUpQueueMode)}
+            >
+              <SelectTrigger id="agents-followUpQueueMode">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="steer">Steer</SelectItem>
+                <SelectItem value="queue">Queue</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Steer hands your message to the running reply, which reads it at its next step. Queue
+              sends it when the reply ends. Cmd/Ctrl+Shift+Enter does the other one for a single
+              message.
+            </p>
           </div>
         </div>
       </div>

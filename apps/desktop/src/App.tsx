@@ -32,9 +32,10 @@ import { useDesktopCloudResearchCapability } from './hooks/useDesktopCloudResear
 import { guardedFetch } from './lib/egressGuard';
 import { subscribeToLocalModelCatalogChanges } from './lib/localModelCatalog';
 import { isLocalProvider } from './types/provider';
-import { getCloudModels, CLOUD_API_BASE_URL } from './api/cloudApi';
+import { getCloudModels, getCloudUsage, CLOUD_API_BASE_URL } from './api/cloudApi';
 import { clearSessionToolApprovals } from './api/toolConfirmation';
 import { initializeAgentTaskEventListeners } from './stores/agentTaskStore';
+import { subscribeToComputerUseEvents } from './stores/computerUseStore';
 import {
   cleanupAgentWorkflowEventListeners,
   initializeAgentWorkflowEventListeners,
@@ -54,6 +55,7 @@ import {
   useChatStore as useDesktopChatStore,
 } from './stores/chat/chatStore';
 import { useCodingCheckpointStore } from './stores/codingCheckpointStore';
+import { useByokRequestStore } from './features/byok/byokRequestStore';
 import { createDesktopChatRuntimeWithLabeling } from './runtime/sessionLabeling';
 import { registerActiveDesktopChatRuntime } from './runtime/desktopChatRuntime';
 import type { CommandOption } from './features/chat/CommandPalette';
@@ -61,16 +63,13 @@ import { useSearchModal } from './hooks/useSearchModal';
 import { useThemeContext } from './providers/ThemeProvider';
 import { useWindowManager } from './hooks/useWindowManager';
 import {
-  cleanupBackgroundTaskEventListeners,
   dbIdToUuid,
-  initializeBackgroundTaskEventListeners,
   initializeAgentStatusListener,
   initializeToolEventListener,
   useUnifiedChatStore,
 } from './stores/unifiedChatStore';
 import { useDeepLink } from './hooks/useDeepLink';
 import { useTierBridge } from './hooks/useTierBridge';
-import type { TimeoutWarningData } from './features/execution/TimeoutWarningDialog';
 
 import {
   AlertTriangle,
@@ -103,7 +102,7 @@ import {
   waitForHydration,
 } from './stores/auth';
 import { initializeAuthOrchestrator } from './stores/authOrchestrator';
-import { initializeModelStoreFromSettings, useModelStore } from './stores/modelStore';
+import { initializeModelStoreFromSettings } from './stores/modelStore';
 import useErrorStore, { useSidecarStore } from './stores/ui';
 import {
   GLOBAL_SHORTCUTS,
@@ -207,9 +206,9 @@ const AutomationPermissionsModal = lazy(() =>
     default: m.AutomationPermissionsModal,
   })),
 );
-const TimeoutWarningDialog = lazy(() =>
-  import('./features/execution/TimeoutWarningDialog').then((m) => ({
-    default: m.TimeoutWarningDialog,
+const MasterPasswordLaunchUnlock = lazy(() =>
+  import('./features/settings/MasterPasswordLaunchUnlock').then((m) => ({
+    default: m.MasterPasswordLaunchUnlock,
   })),
 );
 const StatusBanner = lazy(() =>
@@ -228,8 +227,6 @@ const ErrorToastContainer = lazy(() =>
   })),
 );
 import { useSessionPersistence } from './hooks/useSessionPersistence';
-import { initializeSyncManager, cleanupSyncManager } from './lib/offline/offlineSync';
-import { initCloudSyncScheduler, triggerCloudSync } from './lib/cloudSyncTrigger';
 import { resetCloudConversationCoordinator } from './services/cloudChat';
 import { initManagedCloudSettingsSync } from './services/managedCloudSettingsSync';
 import { createManagedCloudRequestContext } from './services/managedCloudRequestContext';
@@ -335,8 +332,6 @@ const DesktopShell = () => {
   } | null>(null);
   const [plansModalOpen, setPlansModalOpen] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
-  const [timeoutWarning, setTimeoutWarning] = useState<TimeoutWarningData | null>(null);
-  const [isTimeoutWarningOpen, setIsTimeoutWarningOpen] = useState(false);
   const [subscriptionFetchFailed, setSubscriptionFetchFailed] = useState(false);
   const isSearchModalOpen = useSearchModal((state) => state.isOpen);
   const { theme, setTheme } = useThemeContext();
@@ -449,7 +444,6 @@ const DesktopShell = () => {
             };
           }),
         }));
-        if (!cancelled) triggerCloudSync();
         return;
       }
 
@@ -669,11 +663,6 @@ const DesktopShell = () => {
     installClientFailureReporting();
     registerCleanup(() => resetClientFailureReporting());
 
-    void runStartupStep('Sync manager', async () => {
-      initializeSyncManager();
-    });
-    registerCleanup(() => cleanupSyncManager());
-    registerCleanup(() => cleanupBackgroundTaskEventListeners());
     registerCleanup(() => cleanupExecutionListeners());
     registerCleanup(() => cleanupAgentWorkflowEventListeners());
     registerCleanup(() => cleanupRuntimeActivityEventListeners());
@@ -685,9 +674,6 @@ const DesktopShell = () => {
 
     if (isTauri) {
       void runStartupStep('Agent status listener', () => initializeAgentStatusListener());
-      void runStartupStep('Background task event listener', () =>
-        initializeBackgroundTaskEventListeners(),
-      );
       void runStartupStep('Tool event listener', () => initializeToolEventListener());
       void runStartupStep('Agent task event listener', () => initializeAgentTaskEventListeners());
       void runStartupStep('Agent workflow event listener', () =>
@@ -697,7 +683,7 @@ const DesktopShell = () => {
       void runStartupStep('Runtime activity event listener', () =>
         initializeRuntimeActivityEventListeners(),
       );
-      registerCleanup(initCloudSyncScheduler());
+      registerCleanup(subscribeToComputerUseEvents());
       registerCleanup(initializeDeviceRegistryHeartbeat());
       registerCleanup(initializeAutomationAuditOutbox());
     }
@@ -1029,7 +1015,7 @@ const DesktopShell = () => {
 
   useEffect(() => {
     const handleChatAction = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { type: string; tab?: string; content?: string };
+      const detail = (e as CustomEvent).detail as { type: string; tab?: string };
       if (detail.type === 'open-settings') {
         openSettingsDialog((detail.tab as Parameters<typeof openSettingsDialog>[0]) ?? 'general');
       } else if (detail.type === 'keyboard-shortcuts') {
@@ -1038,14 +1024,11 @@ const DesktopShell = () => {
         void useAuthStore.getState().signOut();
       } else if (detail.type === 'open-plans-modal') {
         setPlansModalOpen(true);
-      } else if (detail.type === 'fix-bug' && detail.content) {
-        ensureActiveConversation();
-        setExternalSendRequest({ id: crypto.randomUUID(), content: detail.content });
       }
     };
     window.addEventListener('chat:action', handleChatAction);
     return () => window.removeEventListener('chat:action', handleChatAction);
-  }, [openSettingsDialog, ensureActiveConversation]);
+  }, [openSettingsDialog]);
 
   useEffect(() => {
     if (!isTauri) return;
@@ -1110,45 +1093,6 @@ const DesktopShell = () => {
   }, [openSettingsDialog]);
 
   useEffect(() => {
-    if (!isTauri) return;
-
-    let isMounted = true;
-    let unlistenFn: (() => void) | null = null;
-
-    const setupTimeoutListener = async () => {
-      try {
-        const unlisten = await listen<TimeoutWarningData>('agi:timeout_warning', (event) => {
-          if (!isMounted) return;
-
-          const warningData = event.payload;
-          console.debug('[App] Received timeout warning:', warningData);
-
-          setTimeoutWarning(warningData);
-          setIsTimeoutWarningOpen(true);
-        });
-
-        if (isMounted) {
-          unlistenFn = unlisten;
-        } else {
-          unlisten();
-        }
-      } catch (error) {
-        console.error('[App] Failed to setup timeout warning listener:', error);
-      }
-    };
-
-    void setupTimeoutListener();
-
-    return () => {
-      isMounted = false;
-      if (unlistenFn) {
-        unlistenFn();
-        unlistenFn = null;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     const handleOnline = () => {
       useAppModeStore.getState().setOnline(true);
     };
@@ -1201,24 +1145,49 @@ const DesktopShell = () => {
     [actions],
   );
 
-  const handleQuickQueryOpenConversation = useCallback(
-    async (conversationId: string | number) => {
-      await routeToChatSurface();
-      useUnifiedChatStore
-        .getState()
-        .selectConversation(
-          typeof conversationId === 'number' ? dbIdToUuid(conversationId) : conversationId,
-        );
-      setQuickQueryOpen(false);
+  const reportQuickQueryFailure = useCallback(
+    (message: string, error: unknown) => {
+      console.error(`[QuickQuery] ${message}:`, error);
+      addError({
+        type: 'QUICK_QUERY_ERROR',
+        severity: 'warning',
+        message,
+        details: error instanceof Error ? error.message : String(error),
+      });
     },
-    [routeToChatSurface],
+    [addError],
   );
 
-  const handleQuickQueryStartNewChat = useCallback(async () => {
-    await routeToChatSurface();
-    await startNewChat();
-    setQuickQueryOpen(false);
-  }, [routeToChatSurface, startNewChat]);
+  const handleQuickQueryOpenConversation = useCallback(
+    (conversationId: string | number) => {
+      void (async () => {
+        try {
+          await routeToChatSurface();
+          useUnifiedChatStore
+            .getState()
+            .selectConversation(
+              typeof conversationId === 'number' ? dbIdToUuid(conversationId) : conversationId,
+            );
+          setQuickQueryOpen(false);
+        } catch (error) {
+          reportQuickQueryFailure('Quick Query could not open that chat', error);
+        }
+      })();
+    },
+    [routeToChatSurface, reportQuickQueryFailure],
+  );
+
+  const handleQuickQueryStartNewChat = useCallback(() => {
+    void (async () => {
+      try {
+        await routeToChatSurface();
+        await startNewChat();
+        setQuickQueryOpen(false);
+      } catch (error) {
+        reportQuickQueryFailure('Quick Query could not start a new chat', error);
+      }
+    })();
+  }, [routeToChatSurface, startNewChat, reportQuickQueryFailure]);
 
   const handleVoiceInputRequest = useCallback(
     async (draft = '') => {
@@ -1287,36 +1256,14 @@ const DesktopShell = () => {
   }, []);
 
   const handleQuickQuerySubmit = useCallback(
-    (query: string, model: string) => {
+    (query: string) => {
       ensureActiveConversation();
-
-      void (async () => {
-        try {
-          const { selectedModel, selectedProvider, selectModel } = useModelStore.getState();
-          if (
-            useAppModeStore.getState().mode === 'cloud' &&
-            model &&
-            (selectedModel !== model || selectedProvider !== 'managed_cloud')
-          ) {
-            await selectModel(model, 'managed_cloud');
-          }
-
-          setExternalSendRequest({
-            id: crypto.randomUUID(),
-            content: query,
-          });
-        } catch (error) {
-          console.error('[QuickQuery] Failed to submit message:', error);
-          addError({
-            type: 'QUICK_QUERY_ERROR',
-            severity: 'warning',
-            message: 'Quick Query failed to queue your message',
-            details: error instanceof Error ? error.message : String(error),
-          });
-        }
-      })();
+      setExternalSendRequest({
+        id: crypto.randomUUID(),
+        content: query,
+      });
     },
-    [ensureActiveConversation, addError],
+    [ensureActiveConversation],
   );
 
   useEffect(() => {
@@ -1445,11 +1392,6 @@ const DesktopShell = () => {
     };
   }, []);
 
-  const handleDismissTimeoutWarning = useCallback(() => {
-    setIsTimeoutWarningOpen(false);
-    setTimeoutWarning(null);
-  }, []);
-
   const runtimeAppMode = isTauri && appMode === 'cloud' && !hasCloudSession ? 'local' : appMode;
   const runtimeAccountId = runtimeAppMode === 'cloud' ? authenticatedUserId : null;
   const runtimeResearchEnabled = useDesktopCloudResearchCapability(
@@ -1538,6 +1480,9 @@ const DesktopShell = () => {
       setConversationModel: (id, modelId) => {
         useDesktopChatStore.getState().setConversationModel(id, modelId);
       },
+      requestByokConversation: (conversationId) =>
+        useByokRequestStore.getState().request(conversationId),
+      fetchPlanUsage: getCloudUsage,
       ...(canOfferStripePlanChanges
         ? {
             openUpgrade: (requiredTier: string) => {
@@ -1759,7 +1704,7 @@ const DesktopShell = () => {
             <StatusBanner />
           </Suspense>
           <Suspense fallback={null}>
-            <OfflineIndicator position="top" />
+            <OfflineIndicator />
           </Suspense>
           {conversationBoundaryError &&
             conversationBoundaryRef.current === expectedConversationBoundaryKey && (
@@ -1854,7 +1799,7 @@ const DesktopShell = () => {
             </div>
           )}
         </div>
-        <main className="flex flex-1 min-h-0 min-w-0 bg-[var(--chat-surface-base)]">
+        <div className="flex flex-1 min-h-0 min-w-0 bg-[var(--chat-surface-base)]">
           <div className="flex-1 overflow-hidden">
             <ErrorBoundary
               fallback={(error, errorInfo) => (
@@ -1914,7 +1859,7 @@ const DesktopShell = () => {
               />
             </ErrorBoundary>
           </div>
-        </main>
+        </div>
         <Suspense fallback={null}>{isSearchModalOpen ? <SearchModal /> : null}</Suspense>
         <Suspense fallback={null}>
           {commandPaletteOpen ? (
@@ -1957,18 +1902,16 @@ const DesktopShell = () => {
             <AutomationPermissionsModal />
           </Suspense>
         )}
+        {isTauri && (
+          <Suspense fallback={null}>
+            <MasterPasswordLaunchUnlock />
+          </Suspense>
+        )}
         <Suspense fallback={null}>
           <ErrorToastContainer position="top-right" />
         </Suspense>
         {/* Plans/Pricing modal, triggered by chat:action open-plans-modal */}
         <PlansModal open={plansModalOpen} onOpenChange={setPlansModalOpen} />
-        <Suspense fallback={null}>
-          <TimeoutWarningDialog
-            warning={timeoutWarning}
-            onDismiss={handleDismissTimeoutWarning}
-            isOpen={isTimeoutWarningOpen}
-          />
-        </Suspense>
         <Suspense fallback={null}>
           {quickQueryOpen ? (
             <QuickQuery
@@ -1976,9 +1919,7 @@ const DesktopShell = () => {
               onClose={() => setQuickQueryOpen(false)}
               onSubmit={handleQuickQuerySubmit}
               onOpenConversation={handleQuickQueryOpenConversation}
-              onStartNewChat={() => {
-                void handleQuickQueryStartNewChat();
-              }}
+              onStartNewChat={handleQuickQueryStartNewChat}
               onRequestVoice={(draft) => {
                 void handleVoiceInputRequest(draft);
               }}

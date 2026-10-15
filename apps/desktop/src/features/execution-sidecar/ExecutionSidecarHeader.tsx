@@ -1,5 +1,14 @@
 import { useCallback } from 'react';
-import { ChevronRight, X, ListOrdered, Monitor, Globe, Terminal, ShieldCheck } from 'lucide-react';
+import {
+  ChevronRight,
+  GitCompare,
+  Globe,
+  ListOrdered,
+  Monitor,
+  ShieldCheck,
+  Terminal,
+  X,
+} from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useExecutionSidecarStore, type SidecarContext } from '../../stores/executionSidecarStore';
 import { useChatStore } from '../../stores/chat/chatStore';
@@ -17,6 +26,7 @@ const TABS: TabDef[] = [
   { id: 'browser', label: 'Browser', Icon: Globe },
   { id: 'terminal', label: 'Terminal', Icon: Terminal },
   { id: 'approval', label: 'Approvals', Icon: ShieldCheck },
+  { id: 'changes', label: 'Changes', Icon: GitCompare },
 ];
 
 export function ExecutionSidecarHeader() {

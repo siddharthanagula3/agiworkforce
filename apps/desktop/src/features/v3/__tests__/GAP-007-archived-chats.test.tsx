@@ -116,6 +116,13 @@ vi.mock('../../../stores/appModeStore', () => ({
     selector({ privacyMode: 'local', mode: 'local', setMode: vi.fn() }),
 }));
 
+vi.mock('../../chat/conversationExport', () => ({
+  conversationExportFormats: () => ['markdown'],
+  conversationMarkdown: vi.fn(),
+  exportConversation: vi.fn(),
+  exportFileStem: vi.fn(),
+}));
+vi.mock('../../custom-instructions', () => ({ CustomInstructionsDialog: () => null }));
 vi.mock('../LocalCloudToggle', () => ({ LocalCloudToggle: () => null }));
 vi.mock('../../updates', () => ({ UpdatePill: () => null }));
 vi.mock('../AccountMenu', () => ({ AccountMenu: () => null }));
@@ -165,7 +172,11 @@ describe('GAP-007 archived-chat recovery', () => {
     fireEvent.mouseEnter(archivedRow);
     fireEvent.click(within(archivedRow).getByRole('button', { name: 'More options' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Delete permanently' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Confirm permanent delete' }));
+    expect(mocks.deleteConversation).not.toHaveBeenCalled();
+    const confirmation = await screen.findByRole('alertdialog');
+    expect(confirmation).toHaveTextContent('Archived chat');
+    expect(confirmation).toHaveTextContent('permanently removed');
+    await user.click(within(confirmation).getByRole('button', { name: 'Delete chat' }));
     expect(mocks.deleteConversation).toHaveBeenCalledWith('archived-chat');
   });
 });

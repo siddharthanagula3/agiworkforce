@@ -1,4 +1,3 @@
-
 export type StubBehavior = 'ok' | 'server-error';
 
 export interface CloudApiStubOptions {
@@ -219,7 +218,6 @@ async function registerDeviceAuthorizationMocks(
   const subject = options.subject ?? 'user_wdio';
   const lifetimeSeconds = options.lifetimeSeconds ?? 3600;
   const accessToken = fakeDeviceJwt(subject, lifetimeSeconds);
-  const refreshToken = `wdio-refresh-${subject}`;
 
   const apiBaseUrlMock = await browser.tauri.mock('account_store_api_base_url');
   await apiBaseUrlMock.mockImplementation(function rememberCloudOrigin(args) {
@@ -263,7 +261,6 @@ async function registerDeviceAuthorizationMocks(
     status: 200,
     body: JSON.stringify({
       access_token: accessToken,
-      refresh_token: refreshToken,
       token_type: 'Bearer',
       expires_in: lifetimeSeconds,
     }),
@@ -271,7 +268,6 @@ async function registerDeviceAuthorizationMocks(
 
   for (const command of [
     'account_store_access_token',
-    'account_store_refresh_token',
     'account_clear_tokens',
     'llm_ensure_managed_cloud',
   ]) {

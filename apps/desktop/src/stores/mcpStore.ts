@@ -3,29 +3,20 @@ import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { isTauri } from '../lib/tauri-mock';
 import { McpClient } from '../api/mcp';
 
-export * from './mcp/mcpServersStore';
-export * from './mcp/mcpToolsStore';
-export * from './mcp/mcpHealthStore';
-export * from './mcp/mcpOAuthStore';
-
 export * from './mcpbStore';
 export * from './mcpServerStore';
 
 import type {
   McpConfigLocation,
-  McpExecutionHistoryEntry,
   McpExtensionInfo,
-  McpExtensionPackageInfo,
   McpOAuthConnectionStatus,
   McpOAuthProvider,
   McpOAuthProviderConfig,
   McpOAuthStartResponse,
   McpOAuthTokenResponse,
-  McpRegistryPackage,
   McpRuntimeServerConfig,
   McpServerHealth,
   McpServerInfo,
-  McpToolExecutionStats,
   McpToolInfo,
   McpServersConfig,
 } from '../types/mcp';
@@ -33,14 +24,10 @@ import type {
 interface McpState {
   servers: McpServerInfo[];
   tools: McpToolInfo[];
-  toolSchemas: unknown[];
   config: McpServersConfig | null;
   configLocation: McpConfigLocation | null;
   stats: Record<string, number>;
   health: McpServerHealth[];
-  executionHistory: McpExecutionHistoryEntry[];
-  toolExecutionStats: McpToolExecutionStats[];
-  registry: McpRegistryPackage[];
   extensions: McpExtensionInfo[];
   connectedProviders: string[];
   isInitialized: boolean;
@@ -55,9 +42,6 @@ interface McpState {
   refreshTools: () => Promise<void>;
   refreshStats: () => Promise<void>;
   refreshHealth: () => Promise<void>;
-  checkServerHealth: (name: string) => Promise<void>;
-  refreshExecutionHistory: (limit?: number) => Promise<void>;
-  refreshToolExecutionStats: () => Promise<void>;
   refreshRuntimeTelemetry: () => Promise<void>;
   upsertServerHealth: (health: McpServerHealth) => void;
   connectServer: (name: string) => Promise<void>;
@@ -65,17 +49,9 @@ interface McpState {
   loadConfig: () => Promise<void>;
   updateConfig: (config: McpServersConfig) => Promise<void>;
   refreshConfigLocation: () => Promise<void>;
-  storeCredential: (serverName: string, key: string, value: string) => Promise<void>;
-  setCredential: (serverName: string, key: string, value: string) => Promise<void>;
-  deleteCredential: (serverName: string, key: string) => Promise<void>;
   enableServer: (name: string) => Promise<void>;
   disableServer: (name: string) => Promise<void>;
   searchTools: (query: string) => Promise<void>;
-  callTool: (toolId: string, args: Record<string, unknown>) => Promise<unknown>;
-  refreshToolSchemas: () => Promise<void>;
-  refreshRegistry: () => Promise<void>;
-  installServer: (serverId: string) => Promise<void>;
-  getServerLogs: (serverName: string, lines?: number) => Promise<string[]>;
   oauthStart: (provider: McpOAuthProvider) => Promise<McpOAuthStartResponse>;
   oauthCallback: (
     provider: McpOAuthProvider,
@@ -90,9 +66,6 @@ interface McpState {
   uninstallExtension: (extensionId: string) => Promise<void>;
   enableExtension: (extensionId: string) => Promise<void>;
   disableExtension: (extensionId: string) => Promise<void>;
-  validateExtensionPackage: (filePath: string) => Promise<McpExtensionPackageInfo>;
-  startAllExtensions: () => Promise<void>;
-  stopAllExtensions: () => Promise<void>;
   refreshConnectedProviders: () => Promise<void>;
   connectConnector: (connectorId: string) => Promise<void>;
   runtimeServerConfig: McpRuntimeServerConfig | null;
@@ -114,10 +87,7 @@ interface McpState {
   oauthGetAllStatuses: () => Promise<Record<McpOAuthProvider, McpOAuthConnectionStatus>>;
   oauthNeedsRefresh: (provider: McpOAuthProvider) => Promise<boolean>;
   getOAuthProviders: () => McpOAuthProviderConfig[];
-  getExtension: (extensionId: string) => Promise<McpExtensionInfo>;
   selectExtensionPackage: () => Promise<string | null>;
-  listExtensionsByStatus: (status: string) => Promise<McpExtensionInfo[]>;
-  getExtensionsDirectory: () => Promise<string>;
   getExtensionConfig: (extensionId: string) => Promise<Record<string, unknown>>;
   setExtensionConfig: (extensionId: string, config: Record<string, unknown>) => Promise<void>;
   setSelectedServer: (name: string | null) => void;
@@ -141,14 +111,10 @@ export const useMcpStore = create<McpState>()(
       return {
         servers: [],
         tools: [],
-        toolSchemas: [],
         config: null,
         configLocation: null,
         stats: {},
         health: [],
-        executionHistory: [],
-        toolExecutionStats: [],
-        registry: [],
         extensions: [],
         connectedProviders: [],
         runtimeServerConfig: null,
@@ -169,12 +135,7 @@ export const useMcpStore = create<McpState>()(
             await McpClient.initialize();
             await get().refreshServers();
             await get().refreshTools();
-            await Promise.all([
-              get().refreshStats(),
-              get().refreshHealth(),
-              get().refreshExecutionHistory(),
-              get().refreshToolExecutionStats(),
-            ]);
+            await Promise.all([get().refreshStats(), get().refreshHealth()]);
             await get().loadConfig();
             await get().refreshConfigLocation();
             endOp();
@@ -247,68 +208,9 @@ export const useMcpStore = create<McpState>()(
           }
         },
 
-        checkServerHealth: async (name: string) => {
-          if (!isTauri) return;
-          try {
-            const health = await McpClient.checkServerHealth(name);
-            get().upsertServerHealth(health);
-            set({ error: null }, undefined, 'mcp/checkServerHealth');
-          } catch (error) {
-            set(
-              {
-                error:
-                  error instanceof Error ? error.message : `Failed to check health for ${name}`,
-              },
-              undefined,
-              'mcp/checkServerHealth/error',
-            );
-          }
-        },
-
-        refreshExecutionHistory: async (limit = 20) => {
-          if (!isTauri) return;
-          try {
-            const executionHistory = await McpClient.getExecutionHistory(limit);
-            set({ executionHistory, error: null }, undefined, 'mcp/refreshExecutionHistory');
-          } catch (error) {
-            set(
-              {
-                error:
-                  error instanceof Error ? error.message : 'Failed to get MCP execution history',
-              },
-              undefined,
-              'mcp/refreshExecutionHistory/error',
-            );
-          }
-        },
-
-        refreshToolExecutionStats: async () => {
-          if (!isTauri) return;
-          try {
-            const toolExecutionStats = await McpClient.getToolExecutionStats();
-            set({ toolExecutionStats, error: null }, undefined, 'mcp/refreshToolExecutionStats');
-          } catch (error) {
-            set(
-              {
-                error:
-                  error instanceof Error
-                    ? error.message
-                    : 'Failed to get MCP tool execution statistics',
-              },
-              undefined,
-              'mcp/refreshToolExecutionStats/error',
-            );
-          }
-        },
-
         refreshRuntimeTelemetry: async () => {
           if (!isTauri) return;
-          await Promise.all([
-            get().refreshStats(),
-            get().refreshHealth(),
-            get().refreshExecutionHistory(),
-            get().refreshToolExecutionStats(),
-          ]);
+          await Promise.all([get().refreshStats(), get().refreshHealth()]);
         },
 
         upsertServerHealth: (health: McpServerHealth) => {
@@ -454,79 +356,6 @@ export const useMcpStore = create<McpState>()(
           }
         },
 
-        storeCredential: async (serverName: string, key: string, value: string) => {
-          if (!isTauri) return;
-          startOp();
-          set({ error: null }, undefined, 'mcp/storeCredential/start');
-          try {
-            await McpClient.storeCredential(serverName, key, value);
-            endOp();
-          } catch (error) {
-            endOp();
-            set(
-              {
-                error: error instanceof Error ? error.message : 'Failed to store credential',
-              },
-              undefined,
-              'mcp/storeCredential/error',
-            );
-          }
-        },
-
-        setCredential: async (serverName: string, key: string, value: string) => {
-          if (!isTauri) return;
-          if (!serverName.trim() || !key.trim()) {
-            set(
-              { error: 'Server name and key are required' },
-              undefined,
-              'mcp/setCredential/validationError',
-            );
-            return;
-          }
-          startOp();
-          set({ error: null }, undefined, 'mcp/setCredential/start');
-          try {
-            await McpClient.setCredential(serverName, key, value);
-            endOp();
-          } catch (error) {
-            endOp();
-            set(
-              {
-                error: error instanceof Error ? error.message : 'Failed to set credential',
-              },
-              undefined,
-              'mcp/setCredential/error',
-            );
-          }
-        },
-
-        deleteCredential: async (serverName: string, key: string) => {
-          if (!isTauri) return;
-          if (!serverName.trim() || !key.trim()) {
-            set(
-              { error: 'Server name and key are required' },
-              undefined,
-              'mcp/deleteCredential/validationError',
-            );
-            return;
-          }
-          startOp();
-          set({ error: null }, undefined, 'mcp/deleteCredential/start');
-          try {
-            await McpClient.deleteCredential(serverName, key);
-            endOp();
-          } catch (error) {
-            endOp();
-            set(
-              {
-                error: error instanceof Error ? error.message : 'Failed to delete credential',
-              },
-              undefined,
-              'mcp/deleteCredential/error',
-            );
-          }
-        },
-
         refreshConfigLocation: async () => {
           if (!isTauri) return;
           try {
@@ -559,91 +388,6 @@ export const useMcpStore = create<McpState>()(
               undefined,
               'mcp/searchTools/error',
             );
-          }
-        },
-
-        callTool: async (toolId: string, args: Record<string, unknown>) => {
-          if (!isTauri) return undefined;
-          try {
-            const result = await McpClient.callTool(toolId, args);
-            await get().refreshRuntimeTelemetry();
-            return result;
-          } catch (error) {
-            set(
-              {
-                error: error instanceof Error ? error.message : `Failed to call tool '${toolId}'`,
-              },
-              undefined,
-              'mcp/callTool/error',
-            );
-            throw error;
-          }
-        },
-
-        refreshToolSchemas: async () => {
-          if (!isTauri) return;
-          try {
-            const toolSchemas = await McpClient.getToolSchemas();
-            set({ toolSchemas, error: null }, undefined, 'mcp/refreshToolSchemas');
-          } catch (error) {
-            set(
-              { error: error instanceof Error ? error.message : 'Failed to get tool schemas' },
-              undefined,
-              'mcp/refreshToolSchemas/error',
-            );
-          }
-        },
-
-        refreshRegistry: async () => {
-          if (!isTauri) return;
-          try {
-            const registry = await McpClient.getRegistry();
-            set({ registry, error: null }, undefined, 'mcp/refreshRegistry');
-          } catch (error) {
-            set(
-              { error: error instanceof Error ? error.message : 'Failed to get MCP registry' },
-              undefined,
-              'mcp/refreshRegistry/error',
-            );
-          }
-        },
-
-        installServer: async (serverId: string) => {
-          if (!isTauri) return;
-          startOp();
-          set({ error: null }, undefined, 'mcp/installServer/start');
-          try {
-            await McpClient.installServer(serverId);
-            await get().refreshServers();
-            await get().refreshRegistry();
-            endOp();
-          } catch (error) {
-            endOp();
-            set(
-              {
-                error:
-                  error instanceof Error ? error.message : `Failed to install server '${serverId}'`,
-              },
-              undefined,
-              'mcp/installServer/error',
-            );
-          }
-        },
-
-        getServerLogs: async (serverName: string, lines?: number) => {
-          if (!isTauri) return [];
-          try {
-            return await McpClient.getServerLogs(serverName, lines);
-          } catch (error) {
-            set(
-              {
-                error:
-                  error instanceof Error ? error.message : `Failed to get logs for '${serverName}'`,
-              },
-              undefined,
-              'mcp/getServerLogs/error',
-            );
-            return [];
           }
         },
 
@@ -838,60 +582,6 @@ export const useMcpStore = create<McpState>()(
               },
               undefined,
               'mcp/disableExtension/error',
-            );
-          }
-        },
-
-        validateExtensionPackage: async (filePath: string) => {
-          if (!isTauri) throw new Error('Extensions not available outside Tauri');
-          try {
-            return await McpClient.validateExtensionPackage(filePath);
-          } catch (error) {
-            set(
-              { error: error instanceof Error ? error.message : 'Failed to validate extension' },
-              undefined,
-              'mcp/validateExtensionPackage/error',
-            );
-            throw error;
-          }
-        },
-
-        startAllExtensions: async () => {
-          if (!isTauri) return;
-          startOp();
-          set({ error: null }, undefined, 'mcp/startAllExtensions/start');
-          try {
-            await McpClient.startAllExtensions();
-            await get().refreshExtensions();
-            endOp();
-          } catch (error) {
-            endOp();
-            set(
-              {
-                error: error instanceof Error ? error.message : 'Failed to start all extensions',
-              },
-              undefined,
-              'mcp/startAllExtensions/error',
-            );
-          }
-        },
-
-        stopAllExtensions: async () => {
-          if (!isTauri) return;
-          startOp();
-          set({ error: null }, undefined, 'mcp/stopAllExtensions/start');
-          try {
-            await McpClient.stopAllExtensions();
-            await get().refreshExtensions();
-            endOp();
-          } catch (error) {
-            endOp();
-            set(
-              {
-                error: error instanceof Error ? error.message : 'Failed to stop all extensions',
-              },
-              undefined,
-              'mcp/stopAllExtensions/error',
             );
           }
         },
@@ -1159,27 +849,6 @@ export const useMcpStore = create<McpState>()(
           return McpClient.getOAuthProviders();
         },
 
-        getExtension: async (extensionId: string) => {
-          if (!isTauri) throw new Error('Extensions not available outside Tauri');
-          try {
-            const extension = await McpClient.getExtension(extensionId);
-            set({ error: null }, undefined, 'mcp/getExtension');
-            return extension;
-          } catch (error) {
-            set(
-              {
-                error:
-                  error instanceof Error
-                    ? error.message
-                    : `Failed to get extension '${extensionId}'`,
-              },
-              undefined,
-              'mcp/getExtension/error',
-            );
-            throw error;
-          }
-        },
-
         selectExtensionPackage: async () => {
           if (!isTauri) return null;
           try {
@@ -1194,42 +863,6 @@ export const useMcpStore = create<McpState>()(
               'mcp/selectExtensionPackage/error',
             );
             return null;
-          }
-        },
-
-        listExtensionsByStatus: async (status: string) => {
-          if (!isTauri) return [];
-          try {
-            return await McpClient.listExtensionsByStatus(status);
-          } catch (error) {
-            set(
-              {
-                error:
-                  error instanceof Error
-                    ? error.message
-                    : `Failed to list extensions by status '${status}'`,
-              },
-              undefined,
-              'mcp/listExtensionsByStatus/error',
-            );
-            return [];
-          }
-        },
-
-        getExtensionsDirectory: async () => {
-          if (!isTauri) throw new Error('Extensions not available outside Tauri');
-          try {
-            return await McpClient.getExtensionsDirectory();
-          } catch (error) {
-            set(
-              {
-                error:
-                  error instanceof Error ? error.message : 'Failed to get extensions directory',
-              },
-              undefined,
-              'mcp/getExtensionsDirectory/error',
-            );
-            throw error;
           }
         },
 
@@ -1292,14 +925,10 @@ export const useMcpStore = create<McpState>()(
             {
               servers: [],
               tools: [],
-              toolSchemas: [],
               config: null,
               configLocation: null,
               stats: {},
               health: [],
-              executionHistory: [],
-              toolExecutionStats: [],
-              registry: [],
               extensions: [],
               connectedProviders: [],
               runtimeServerConfig: null,
@@ -1323,6 +952,8 @@ export const useMcpStore = create<McpState>()(
 );
 
 // Legacy selectors (re-exported from sub-stores where possible; kept here for
+export const selectMcpServers = (state: McpState) => state.servers;
+export const selectMcpHealth = (state: McpState) => state.health;
 export const selectMcpIsInitialized = (state: McpState) => state.isInitialized;
 export const selectMcpIsLoading = (state: McpState) => state.isLoading;
 export const selectMcpError = (state: McpState) => state.error;

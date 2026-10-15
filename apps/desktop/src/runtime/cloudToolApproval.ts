@@ -16,6 +16,7 @@ import {
   mergeCloudStreamMessageProjections,
   type CloudStreamDeltaSink,
   type CloudStreamMessageProjection,
+  type CloudToolInputRequest,
 } from './cloudStreamDeltas';
 import { createManagedChatIdempotencyKey, sha256 } from '@agiworkforce/utils';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
@@ -51,6 +52,7 @@ export interface ResolveApprovalOutcome {
   finishReason?: string;
   streamError?: NonNullable<CloudStreamMessageProjection['streamError']>;
   messageProjection: CloudStreamMessageProjection;
+  pendingInputRequests?: CloudToolInputRequest[];
 }
 
 function parseApprovalArgs(input: string | undefined): Record<string, unknown> {
@@ -132,6 +134,18 @@ type SinkOutcome = Pick<
   | 'getAgentActivity'
   | 'getMessageProjection'
 >;
+
+export function resumedRunReference(
+  runReference: ManagedCloudAgentRunReference | undefined,
+  sink: CloudStreamDeltaSink,
+): ManagedCloudAgentRunReference | undefined {
+  if (!runReference) return undefined;
+  return {
+    ...runReference,
+    lastSequence: Math.max(runReference.lastSequence, sink.getAgentActivity()?.lastSequence ?? -1),
+    state: sink.isSuspended() ? 'awaiting_input' : sink.getStreamError() ? 'failed' : 'completed',
+  };
+}
 
 export class CloudToolApprovalRegistry {
   private readonly turns = new Map<string, PendingApprovalTurn>();
@@ -238,20 +252,7 @@ export class CloudToolApprovalRegistry {
             turn.messageProjection,
             sink.getMessageProjection(),
           );
-          const nextRunReference = turn.runReference
-            ? {
-                ...turn.runReference,
-                lastSequence: Math.max(
-                  turn.runReference.lastSequence,
-                  nextActivity?.lastSequence ?? -1,
-                ),
-                state: sink.isSuspended()
-                  ? ('awaiting_input' as const)
-                  : sink.getStreamError()
-                    ? ('failed' as const)
-                    : ('completed' as const),
-              }
-            : undefined;
+          const nextRunReference = resumedRunReference(turn.runReference, sink);
           let pendingProjection: CloudApprovalTurnProjection | undefined;
           if (sink.isSuspended()) {
             const nextTurn: PendingApprovalTurn = {
@@ -282,6 +283,9 @@ export class CloudToolApprovalRegistry {
             ...(nextActivity ? { agentActivity: nextActivity } : {}),
             ...(sink.getFinishReason() ? { finishReason: sink.getFinishReason() } : {}),
             ...(sink.getStreamError() ? { streamError: sink.getStreamError() } : {}),
+            ...(sink.getPendingInputRequests().length > 0
+              ? { pendingInputRequests: sink.getPendingInputRequests() }
+              : {}),
             messageProjection,
           });
         },

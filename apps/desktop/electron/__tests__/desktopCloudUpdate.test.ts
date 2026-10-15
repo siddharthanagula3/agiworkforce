@@ -4,7 +4,9 @@ import {
   checkDesktopCloudUpdate,
   compareDesktopCloudVersions,
   desktopCloudInstallerDownloadUrl,
+  desktopUpdatePrompt,
 } from '../desktopCloudUpdate';
+import { CLOUD_APP_ORIGIN } from '../config';
 
 function releaseResponse(version: string, status = 200): Response {
   return Response.json(
@@ -171,5 +173,57 @@ describe('desktop cloud update contract', () => {
     await expect(checkDesktopCloudUpdate('1.2.0', 'x64', armOnly as typeof fetch)).rejects.toThrow(
       /no signed AGI Cloud x64 installer/i,
     );
+  });
+});
+
+describe('desktop cloud update origin and in-place prompts', () => {
+  it('reads both release routes from the configured cloud origin', () => {
+    expect(DESKTOP_CLOUD_RELEASE_AVAILABILITY_URL).toBe(
+      `${CLOUD_APP_ORIGIN}/api/releases/desktop-cloud/latest`,
+    );
+    expect(desktopCloudInstallerDownloadUrl('arm64')).toBe(
+      `${CLOUD_APP_ORIGIN}/api/download?platform=mac&app=cloud&arch=arm64`,
+    );
+  });
+
+  it('offers a restart, not a download, once the update is ready', () => {
+    const prompt = desktopUpdatePrompt({
+      available: true,
+      currentVersion: '1.2.0',
+      version: '1.3.0',
+      downloadUrl: desktopCloudInstallerDownloadUrl('arm64'),
+      readyToInstall: true,
+    });
+
+    expect(prompt.title).toBe('AGI Cloud update ready');
+    expect(prompt.buttons[prompt.restartButton ?? -1]).toBe('Restart to Update');
+    expect(prompt.downloadButton).toBeNull();
+  });
+
+  it('offers neither while the update is still downloading', () => {
+    const prompt = desktopUpdatePrompt({
+      available: true,
+      currentVersion: '1.2.0',
+      version: '1.3.0',
+      downloadUrl: desktopCloudInstallerDownloadUrl('arm64'),
+      downloading: true,
+    });
+
+    expect(prompt.message).toContain('downloading');
+    expect(prompt.buttons).toEqual(['OK']);
+    expect(prompt.restartButton).toBeNull();
+    expect(prompt.downloadButton).toBeNull();
+  });
+
+  it('keeps the signed installer as the answer when the update cannot install in place', () => {
+    const prompt = desktopUpdatePrompt({
+      available: true,
+      currentVersion: '1.2.0',
+      version: '1.3.0',
+      downloadUrl: desktopCloudInstallerDownloadUrl('arm64'),
+    });
+
+    expect(prompt.buttons[prompt.downloadButton ?? -1]).toBe('Download Installer');
+    expect(prompt.restartButton).toBeNull();
   });
 });

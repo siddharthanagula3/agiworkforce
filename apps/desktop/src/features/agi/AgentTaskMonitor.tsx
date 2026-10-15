@@ -7,7 +7,6 @@ import {
   History,
   Loader2,
   Pause,
-  Play,
   StopCircle,
   XCircle,
 } from 'lucide-react';
@@ -15,11 +14,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { useAgentTaskStore, type AgentTask } from '../../stores/agentTaskStore';
-import {
-  useBackgroundTaskStore,
-  subscribeToTimeoutWarnings,
-  type Task as BgTask,
-} from '../../stores/backgroundTaskStore';
 import { ActionTimeline } from './ActionTimeline';
 import { OperatorDrillDown } from './OperatorDrillDown';
 import { SectionErrorBoundary } from '@/ui/SectionErrorBoundary';
@@ -369,154 +363,6 @@ function TaskRow({ task }: { task: AgentTask }) {
   );
 }
 
-const BG_STATUS_CONFIG: Record<
-  BgTask['status'],
-  { icon: React.ElementType; color: string; bgColor: string; label: string }
-> = {
-  Queued: {
-    icon: Clock,
-    color: 'text-warning-text',
-    bgColor: 'bg-warning-fill/10',
-    label: 'Queued',
-  },
-  Running: { icon: Loader2, color: 'text-blue-400', bgColor: 'bg-blue-400/10', label: 'Running' },
-  Paused: {
-    icon: Pause,
-    color: 'text-warning-text',
-    bgColor: 'bg-warning-fill/10',
-    label: 'Paused',
-  },
-  Completed: {
-    icon: CheckCircle2,
-    color: 'text-success-text',
-    bgColor: 'bg-success-fill/10',
-    label: 'Done',
-  },
-  Failed: {
-    icon: XCircle,
-    color: 'text-danger-text',
-    bgColor: 'bg-danger-fill/10',
-    label: 'Failed',
-  },
-  Cancelled: {
-    icon: StopCircle,
-    color: 'text-slate-400',
-    bgColor: 'bg-slate-400/10',
-    label: 'Cancelled',
-  },
-};
-
-function BgTaskRow({ task }: { task: BgTask }) {
-  const [expanded, setExpanded] = useState(false);
-  const cancelTask = useBackgroundTaskStore((s) => s.cancelTask);
-  const pauseTask = useBackgroundTaskStore((s) => s.pauseTask);
-  const resumeTask = useBackgroundTaskStore((s) => s.resumeTask);
-
-  const config = BG_STATUS_CONFIG[task.status];
-  const StatusIcon = config.icon;
-  const truncatedName = task.name.length > 60 ? task.name.slice(0, 57) + '...' : task.name;
-
-  return (
-    <div className="border-b border-white/5 last:border-b-0">
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-white/5"
-      >
-        {expanded ? (
-          <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-slate-500" />
-        ) : (
-          <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-slate-500" />
-        )}
-
-        <span
-          className={cn(
-            'flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium',
-            config.bgColor,
-            config.color,
-          )}
-        >
-          <StatusIcon className={cn('h-3 w-3', task.status === 'Running' && 'animate-spin')} />
-          {config.label}
-        </span>
-
-        <span className="flex-1 truncate text-sm text-slate-200" title={task.name}>
-          {truncatedName}
-        </span>
-
-        {task.progress > 0 && task.progress < 100 && (
-          <span className="flex-shrink-0 text-xs text-slate-500 tabular-nums">
-            {task.progress}%
-          </span>
-        )}
-
-        <span className="flex-shrink-0 text-xs text-slate-500">
-          {formatRelativeTime(task.completed_at ?? task.created_at)}
-        </span>
-      </button>
-
-      {expanded && (
-        <div className="border-t border-white/5 bg-white/[0.02] px-4 py-3">
-          <div className="space-y-2 text-sm">
-            {task.description && (
-              <div className="text-slate-300">
-                <span className="font-medium text-slate-400">Description: </span>
-                {task.description}
-              </div>
-            )}
-
-            <div className="text-slate-400">
-              <span className="font-medium">Priority: </span>
-              <span className="capitalize">{task.priority}</span>
-            </div>
-
-            {task.result?.error && (
-              <div className="flex items-start gap-2 rounded-md bg-danger-fill/10 p-2 text-danger-text">
-                <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-                {task.result.error}
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 mt-2">
-              {task.status === 'Running' && (
-                <button
-                  type="button"
-                  onClick={() => void pauseTask(task.id)}
-                  className="rounded-md bg-warning-fill/5 px-3 py-1.5 text-xs font-medium text-warning-text transition hover:bg-warning-fill/10"
-                >
-                  <Pause className="inline h-3 w-3 mr-1" />
-                  Pause
-                </button>
-              )}
-              {task.status === 'Paused' && (
-                <button
-                  type="button"
-                  onClick={() => void resumeTask(task.id)}
-                  className="rounded-md bg-blue-600/20 px-3 py-1.5 text-xs font-medium text-blue-400 transition hover:bg-blue-600/30"
-                >
-                  <Play className="inline h-3 w-3 mr-1" />
-                  Resume
-                </button>
-              )}
-              {(task.status === 'Queued' ||
-                task.status === 'Running' ||
-                task.status === 'Paused') && (
-                <button
-                  type="button"
-                  onClick={() => void cancelTask(task.id)}
-                  className="rounded-md bg-danger-fill/5 px-3 py-1.5 text-xs font-medium text-danger-text transition hover:bg-danger-fill/10"
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function AgentTaskMonitor() {
   const tasks = useAgentTaskStore((s) => s.tasks);
   const loading = useAgentTaskStore((s) => s.loading);
@@ -524,20 +370,9 @@ export function AgentTaskMonitor() {
   const getTaskStatus = useAgentTaskStore((s) => s.getTaskStatus);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const bgTasks = useBackgroundTaskStore((s) => s.tasks);
-  const bgLoading = useBackgroundTaskStore((s) => s.isLoading);
-  const listBgTasks = useBackgroundTaskStore((s) => s.listTasks);
-  const fetchBgStats = useBackgroundTaskStore((s) => s.fetchStats);
-
   useEffect(() => {
     void fetchTasks();
-    void listBgTasks();
-    void fetchBgStats();
-    const cleanupTimeoutWarnings = subscribeToTimeoutWarnings();
-    return () => {
-      cleanupTimeoutWarnings();
-    };
-  }, [fetchTasks, listBgTasks, fetchBgStats]);
+  }, [fetchTasks]);
 
   useEffect(() => {
     const hasRunning = tasks.some(
@@ -547,9 +382,8 @@ export function AgentTaskMonitor() {
         task.status === 'paused' ||
         task.status === 'awaiting_input',
     );
-    const hasBgRunning = bgTasks.some((t) => t.status === 'Running' || t.status === 'Queued');
 
-    if (hasRunning || hasBgRunning) {
+    if (hasRunning) {
       intervalRef.current = setInterval(() => {
         const runningTasks = useAgentTaskStore
           .getState()
@@ -563,13 +397,6 @@ export function AgentTaskMonitor() {
         for (const t of runningTasks) {
           void getTaskStatus(t.id);
         }
-        const currentBgTasks = useBackgroundTaskStore.getState().tasks;
-        const currentBgRunning = currentBgTasks.some(
-          (t) => t.status === 'Running' || t.status === 'Queued',
-        );
-        if (currentBgRunning) {
-          void useBackgroundTaskStore.getState().listTasks();
-        }
       }, 5000);
     }
 
@@ -579,12 +406,9 @@ export function AgentTaskMonitor() {
         intervalRef.current = null;
       }
     };
-  }, [tasks, bgTasks, getTaskStatus]);
+  }, [tasks, getTaskStatus]);
 
-  const isLoading = (loading && tasks.length === 0) || (bgLoading && bgTasks.length === 0);
-  const isEmpty = tasks.length === 0 && bgTasks.length === 0;
-
-  if (isLoading) {
+  if (loading && tasks.length === 0) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-slate-500">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -593,7 +417,7 @@ export function AgentTaskMonitor() {
     );
   }
 
-  if (isEmpty) {
+  if (tasks.length === 0) {
     return (
       <div className="px-4 py-12 text-center text-sm text-slate-500">
         No tasks yet. Create one to get started.
@@ -615,54 +439,11 @@ export function AgentTaskMonitor() {
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
-  const sortedBgTasks = [...bgTasks].sort((a, b) => {
-    const order: Record<string, number> = {
-      Running: 0,
-      Queued: 1,
-      Paused: 2,
-      Completed: 3,
-      Failed: 4,
-      Cancelled: 5,
-    };
-    const aOrder = order[a.status] ?? 6;
-    const bOrder = order[b.status] ?? 6;
-    if (aOrder !== bOrder) return aOrder - bOrder;
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
-
   return (
-    <div>
-      {/* Agent tasks */}
-      {sortedAgentTasks.length > 0 && (
-        <div>
-          {bgTasks.length > 0 && (
-            <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 bg-white/[0.02] border-b border-white/5">
-              Agent Tasks
-            </div>
-          )}
-          <div className="divide-y divide-white/5">
-            {sortedAgentTasks.map((task) => (
-              <TaskRow key={task.id} task={task} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Background queue tasks */}
-      {sortedBgTasks.length > 0 && (
-        <div>
-          {tasks.length > 0 && (
-            <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 bg-white/[0.02] border-b border-white/5">
-              Background Tasks
-            </div>
-          )}
-          <div className="divide-y divide-white/5">
-            {sortedBgTasks.map((task) => (
-              <BgTaskRow key={task.id} task={task} />
-            ))}
-          </div>
-        </div>
-      )}
+    <div className="divide-y divide-white/5">
+      {sortedAgentTasks.map((task) => (
+        <TaskRow key={task.id} task={task} />
+      ))}
     </div>
   );
 }

@@ -174,6 +174,60 @@ describe('cloudStreamDeltas, every x_* delta key the wire can emit', () => {
     expect(sink.isSuspended()).toBe(true);
   });
 
+  it('x_tool_input_request: suspends the turn and keeps the renderable prompts', () => {
+    const { sink } = makeSink();
+    sink.onEvent(
+      payload({
+        x_tool_input_request: {
+          tool_call_id: 'tc_in',
+          name: 'github_create_issue',
+          input_requests: {
+            repo: {
+              method: 'elicitation/create',
+              params: {
+                message: 'Which repository?',
+                requestedSchema: {
+                  type: 'object',
+                  properties: { repo: { type: 'string' } },
+                  required: ['repo'],
+                },
+              },
+            },
+          },
+        },
+      }),
+    );
+    expect(sink.isSuspended()).toBe(true);
+    const [request] = sink.getPendingInputRequests();
+    expect(request?.toolCallId).toBe('tc_in');
+    expect(request?.name).toBe('github_create_issue');
+    expect(request?.prompts[0]).toMatchObject({ key: 'repo', mode: 'form' });
+    expect(sink.getMessageProjection().toolCalls?.[0]).toMatchObject({
+      id: 'tc_in',
+      status: 'pending',
+    });
+  });
+
+  it('x_tool_input_request: ignores a request the shared contract cannot render', () => {
+    const { sink } = makeSink();
+    sink.onEvent(
+      payload({
+        x_tool_input_request: {
+          tool_call_id: 'tc_bad',
+          name: 'tool',
+          input_requests: {
+            a: {
+              method: 'elicitation/create',
+              params: { mode: 'url', message: 'x', url: 'http://plain.example' },
+            },
+          },
+        },
+      }),
+    );
+    expect(sink.isSuspended()).toBe(false);
+    expect(sink.getPendingInputRequests()).toEqual([]);
+  });
+
   it('x_tool_result: emits a tool_result event, not silently dropped', () => {
     const { sink, events } = makeSink();
     sink.onEvent(

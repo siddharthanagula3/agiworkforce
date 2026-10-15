@@ -4,6 +4,7 @@ import {
   render as testingRender,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { invoke } from '@tauri-apps/api/core';
 import type { ReactElement } from 'react';
@@ -15,30 +16,19 @@ import { useAppModeStore } from '../../../stores/appModeStore';
 import { useSettingsStore } from '../../../stores/settingsStore';
 import { SettingsPanel } from '../SettingsPanel';
 import { subscribeToLocalModelCatalogChanges } from '../../../lib/localModelCatalog';
+import { listen } from '../../../lib/tauri-mock';
 
 vi.mock('@agiworkforce/desktop-command-client', () => ({
-  chat: {
-    clearLocalDatabase: vi.fn().mockResolvedValue(undefined),
-  },
-  cache: {
-    cacheClearAll: vi.fn().mockResolvedValue(undefined),
-  },
   settings: {
     settingsV2ClearCache: vi.fn().mockResolvedValue(undefined),
   },
   onboarding: {
-    exportUserData: vi.fn().mockResolvedValue('{}'),
     getUserPreference: vi.fn().mockResolvedValue(null),
     setUserPreference: vi.fn().mockResolvedValue(undefined),
   },
   notifications: {
     notificationGetSettings: vi.fn().mockResolvedValue(null),
     notificationSetSettings: vi.fn().mockResolvedValue(undefined),
-  },
-  models: {
-    llmGetOllamaModels: vi
-      .fn()
-      .mockResolvedValue(['fixture-local-model:primary', 'fixture-local-model:secondary']),
   },
 }));
 
@@ -48,10 +38,6 @@ vi.mock('../AccountSettings', () => ({
 
 vi.mock('../UsageDashboard', () => ({
   UsageDashboard: () => <div>Usage dashboard</div>,
-}));
-
-vi.mock('../CustomModelsSettings', () => ({
-  CustomModelsSettings: () => <div>Custom models</div>,
 }));
 
 vi.mock('@/features/skill-marketplace/SkillMarketplace', () => ({
@@ -146,6 +132,9 @@ describe('SettingsPanel render stability', () => {
       if (command === 'ollama_pull_model') {
         return undefined;
       }
+      if (command === 'llm_list_saved_api_keys' || command === 'memory_list_all') {
+        return [];
+      }
       return undefined;
     });
 
@@ -217,10 +206,90 @@ describe('SettingsPanel render stability', () => {
       expect(invoke).toHaveBeenCalledWith('ollama_pull_model', {
         modelName: 'fixture-local-model:install',
         baseUrl: 'http://localhost:11434',
+        allowPrivateNetwork: false,
       });
       expect(onModelCatalogChanged).toHaveBeenCalled();
     });
     unsubscribe();
+  });
+
+  it('shows download progress and stops the download on request', async () => {
+    type ProgressEvent = { payload: Record<string, unknown>; id: number };
+    let reportProgress: ((event: ProgressEvent) => void) | undefined;
+    const stopListening = vi.fn();
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      if (event === 'ollama:pull-progress') {
+        reportProgress = handler as (event: ProgressEvent) => void;
+      }
+      return stopListening;
+    });
+    let finishPull: ((outcome: string) => void) | undefined;
+    const defaultInvoke = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === 'ollama_pull_model') {
+        return new Promise<string>((resolve) => {
+          finishPull = resolve;
+        });
+      }
+      if (command === 'ollama_cancel_pull') {
+        finishPull?.('cancelled');
+        return true;
+      }
+      return defaultInvoke(command, args);
+    });
+
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="models-keys" />);
+
+    const modelInput = await screen.findByRole('textbox', { name: 'Model to install' });
+    fireEvent.change(modelInput, { target: { value: 'fixture-local-model:install' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Install model' }));
+
+    expect(await screen.findByText('Starting download')).toBeInTheDocument();
+    await waitFor(() => expect(reportProgress).toBeDefined());
+
+    reportProgress!({
+      id: 1,
+      payload: {
+        model: 'another-model:being-pulled',
+        status: 'pulling abc',
+        digest: 'abc',
+        total: 1024,
+        completed: 512,
+      },
+    });
+    reportProgress!({
+      id: 2,
+      payload: {
+        model: 'fixture-local-model:install',
+        status: 'pulling abc',
+        digest: 'abc',
+        total: 4 * 1024 * 1024 * 1024,
+        completed: 1024 * 1024 * 1024,
+      },
+    });
+
+    expect(await screen.findByText('Downloading 1.00 GB of 4.00 GB')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Download progress' })).toHaveAttribute(
+      'aria-valuenow',
+      '25',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel download' }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('ollama_cancel_pull', {
+        modelName: 'fixture-local-model:install',
+      });
+    });
+    expect(await screen.findByRole('button', { name: 'Install model' })).toBeEnabled();
+    expect(screen.getByRole('textbox', { name: 'Model to install' })).toHaveValue(
+      'fixture-local-model:install',
+    );
+    expect(
+      screen.queryByRole('progressbar', { name: 'Download progress' }),
+    ).not.toBeInTheDocument();
+    expect(stopListening).toHaveBeenCalled();
+    vi.mocked(listen).mockResolvedValue(() => {});
   });
 
   it('refreshes the shared model catalog after re-checking another local runtime', async () => {
@@ -262,6 +331,9 @@ describe('SettingsPanel render stability', () => {
           },
         ];
       }
+      if (command === 'llm_list_saved_api_keys') {
+        return [];
+      }
       return undefined;
     });
 
@@ -285,6 +357,7 @@ describe('SettingsPanel render stability', () => {
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith('ollama_check_status', {
         baseUrl: 'http://localhost:11434/',
+        allowPrivateNetwork: false,
       });
     });
     expect(await screen.findByRole('textbox', { name: 'Model to install' })).toBeInTheDocument();
@@ -325,22 +398,21 @@ describe('SettingsPanel render stability', () => {
       target: { value: 'remo' },
     });
 
-    const remoteControl = screen.getByRole('button', {
-      name: 'Remote control, Connections',
-    });
-    expect(remoteControl).toBeInTheDocument();
+    const reduceMotion = screen.getByRole('button', { name: 'Reduce motion, Personalization' });
+    expect(reduceMotion).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Reduce motion, Personalization' }),
-    ).toBeInTheDocument();
+      screen.queryByRole('button', { name: 'Remote control, Connections' }),
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(remoteControl);
+    fireEvent.click(reduceMotion);
 
-    expect(await screen.findByText('Live mobile pairing workflow')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Showing Remote control');
-    const pairingTarget = screen.getByRole('region', { name: 'Mobile companion pairing' });
+    expect(await screen.findByRole('status')).toHaveTextContent('Showing Reduce motion');
     await waitFor(() => {
-      expect(pairingTarget).toHaveFocus();
-      expect(pairingTarget.className).toContain('outline-primary/60');
+      const target = document.querySelector<HTMLElement>(
+        '[data-setting-search-id="reduce-motion"]',
+      );
+      expect(target).toHaveFocus();
+      expect(target?.className).toContain('outline-primary/60');
     });
   });
 
@@ -363,7 +435,7 @@ describe('SettingsPanel render stability', () => {
   it('keeps cloud account deletion out of Local Mode privacy settings', async () => {
     render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="privacy" />);
 
-    expect(await screen.findByText('Clear Local Storage')).toBeInTheDocument();
+    expect(await screen.findByText('Delete all data on this device')).toBeInTheDocument();
     expect(screen.getByText('Master password settings')).toBeInTheDocument();
     expect(screen.queryByText('Delete my account')).not.toBeInTheDocument();
     expect(screen.queryByText('Web analytics')).not.toBeInTheDocument();
@@ -388,13 +460,18 @@ describe('SettingsPanel render stability', () => {
     expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
   });
 
-  it('renders Connections as the live mobile pairing destination', async () => {
-    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="connections" />);
+  it.each(['connections', 'cowork'] as const)(
+    'offers no %s section on this device, where a phone can never be paired',
+    async (tab) => {
+      render(<SettingsPanel open onOpenChange={vi.fn()} initialTab={tab} />);
 
-    expect(await screen.findByText('Live mobile pairing workflow')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Control this Mac' })).toBeInTheDocument();
-    expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
-  });
+      const nav = screen.getByRole('navigation', { name: 'Settings sections' });
+      expect(within(nav).queryByRole('button', { name: /connections/i })).not.toBeInTheDocument();
+      expect(within(nav).queryByRole('button', { name: /cowork/i })).not.toBeInTheDocument();
+      expect(screen.queryByText('Live mobile pairing workflow')).not.toBeInTheDocument();
+      expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
+    },
+  );
 
   it('renders Plugins as a direct Settings page', async () => {
     render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="plugins" />);

@@ -62,7 +62,14 @@ function rustRegistryIds(): string[] {
     source.indexOf('pub fn with_defaults()'),
     source.indexOf('impl Default for ShortcutsState'),
   );
-  return [...defaults.matchAll(/id:\s*"([a-z_]+)"\.to_string\(\)/g)].map((match) => match[1]!);
+  const constants = new Map(
+    [...source.matchAll(/pub const ([A-Z_]+):\s*&str\s*=\s*"([a-z_]+)";/g)].map(
+      (match) => [match[1]!, match[2]!] as const,
+    ),
+  );
+  return [...defaults.matchAll(/id:\s*(?:"([a-z_]+)"|([A-Z_]+))\.to_string\(\)/g)].map(
+    (match) => match[1] ?? constants.get(match[2]!) ?? match[2]!,
+  );
 }
 
 function rebindRow(description: string, key: string, modifiers: Record<string, boolean> = {}) {

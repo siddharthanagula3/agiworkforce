@@ -1,105 +1,41 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Loader2, AlertCircle, FlaskConical } from 'lucide-react';
-import { Label } from '@/ui/Label';
-import { Switch } from '@/ui/Switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
-import { Slider } from '@/ui/Slider';
+import { Check, AlertCircle, Search } from 'lucide-react';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { invoke } from '@/lib/tauri-mock';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
+import { Spinner } from '@/ui/Spinner';
 
-type ResearchMode = 'quick' | 'standard' | 'deep' | 'comprehensive';
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
-const RESEARCH_MODES: { value: ResearchMode; label: string; description: string }[] = [
-  {
-    value: 'quick',
-    label: 'Quick',
-    description: 'Fast lookup from a handful of top sources',
-  },
-  {
-    value: 'standard',
-    label: 'Standard',
-    description: 'Balanced depth, good for most research tasks',
-  },
-  {
-    value: 'deep',
-    label: 'Deep',
-    description: 'Thorough multi-source research with cross-referencing',
-  },
-  {
-    value: 'comprehensive',
-    label: 'Comprehensive',
-    description: 'Exhaustive investigation, may take several minutes',
-  },
-];
-
-interface ResearchPrefs {
-  mode: ResearchMode;
-  maxSources: number;
-  perplexityKeySet: boolean;
-}
-
-async function loadResearchPrefs(): Promise<ResearchPrefs> {
-  const [modeResult, sourcesResult, keyResult] = await Promise.allSettled([
-    invoke<{ value: string } | null>('get_user_preference', { key: 'research_mode' }),
-    invoke<{ value: string } | null>('get_user_preference', { key: 'research_max_sources' }),
-    invoke<boolean>('secret_manager_has', { key: 'perplexity_api_key' }),
-  ]);
-
-  const mode: ResearchMode =
-    modeResult.status === 'fulfilled' && modeResult.value?.value
-      ? (modeResult.value.value as ResearchMode)
-      : 'standard';
-
-  const maxSources: number =
-    sourcesResult.status === 'fulfilled' && sourcesResult.value?.value
-      ? Number(sourcesResult.value.value)
-      : 10;
-
-  const perplexityKeySet: boolean = keyResult.status === 'fulfilled' ? keyResult.value : false;
-
-  return { mode, maxSources, perplexityKeySet };
-}
+const PERPLEXITY_KEY = 'perplexity_api_key';
 
 export function ResearchSettings() {
-  const [prefs, setPrefs] = useState<ResearchPrefs>({
-    mode: 'standard',
-    maxSources: 10,
-    perplexityKeySet: false,
-  });
+  const [keySet, setKeySet] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-
   const [keyInput, setKeyInput] = useState('');
   const [keyStatus, setKeyStatus] = useState<SaveStatus>('idle');
-  const [keyError, setKeyError] = useState<string>('');
-
-  const [prefStatus, setPrefStatus] = useState<SaveStatus>('idle');
+  const [keyError, setKeyError] = useState('');
   const keyStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prefStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { confirm, dialog } = useConfirmAction();
 
   useEffect(() => {
     return () => {
       if (keyStatusTimerRef.current) clearTimeout(keyStatusTimerRef.current);
-      if (prefStatusTimerRef.current) clearTimeout(prefStatusTimerRef.current);
     };
   }, []);
 
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
-    loadResearchPrefs()
-      .then((p) => {
-        if (mounted) {
-          setPrefs(p);
-          setLoading(false);
-        }
+    invoke<boolean>('secret_manager_has', { key: PERPLEXITY_KEY })
+      .then((has) => {
+        if (mounted) setKeySet(has === true);
       })
       .catch((err) => {
-        if (mounted) {
-          setLoadError(getSimpleErrorMessage(err));
-          setLoading(false);
-        }
+        if (mounted) setLoadError(getSimpleErrorMessage(err));
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
       });
     return () => {
       mounted = false;
@@ -112,10 +48,10 @@ export function ResearchSettings() {
     setKeyStatus('saving');
     setKeyError('');
     try {
-      await invoke('secret_manager_set', { key: 'perplexity_api_key', value: trimmed });
+      await invoke('secret_manager_set', { key: PERPLEXITY_KEY, value: trimmed });
       setKeyInput('');
       setKeyStatus('saved');
-      setPrefs((p) => ({ ...p, perplexityKeySet: true }));
+      setKeySet(true);
       if (keyStatusTimerRef.current) clearTimeout(keyStatusTimerRef.current);
       keyStatusTimerRef.current = setTimeout(() => setKeyStatus('idle'), 2500);
     } catch (err) {
@@ -124,55 +60,24 @@ export function ResearchSettings() {
     }
   }, [keyInput]);
 
-  const handleRemoveKey = useCallback(async () => {
+  const removeKey = useCallback(async () => {
     setKeyStatus('saving');
     setKeyError('');
     try {
-      await invoke('secret_manager_delete', { key: 'perplexity_api_key' });
+      await invoke('secret_manager_delete', { key: PERPLEXITY_KEY });
       setKeyStatus('idle');
-      setPrefs((p) => ({ ...p, perplexityKeySet: false }));
+      setKeySet(false);
     } catch (err) {
       setKeyStatus('error');
       setKeyError(getSimpleErrorMessage(err));
     }
   }, []);
 
-  const savePrefs = useCallback(
-    async (updated: Partial<ResearchPrefs>) => {
-      const next = { ...prefs, ...updated };
-      setPrefs(next);
-      setPrefStatus('saving');
-      try {
-        await Promise.all([
-          invoke('set_user_preference', {
-            key: 'research_mode',
-            value: next.mode,
-            category: 'behavior',
-            dataType: 'string',
-          }),
-          invoke('set_user_preference', {
-            key: 'research_max_sources',
-            value: String(next.maxSources),
-            category: 'behavior',
-            dataType: 'string',
-          }),
-        ]);
-        setPrefStatus('saved');
-        if (prefStatusTimerRef.current) clearTimeout(prefStatusTimerRef.current);
-        prefStatusTimerRef.current = setTimeout(() => setPrefStatus('idle'), 2000);
-      } catch (err) {
-        setPrefStatus('error');
-        console.error('[ResearchSettings] Failed to save prefs:', err);
-      }
-    },
-    [prefs],
-  );
-
   if (loading) {
     return (
       <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        <span>Loading research settings…</span>
+        <Spinner size="sm" />
+        <span>Loading web search settings…</span>
       </div>
     );
   }
@@ -181,37 +86,36 @@ export function ResearchSettings() {
     return (
       <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive flex items-start gap-2">
         <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-        <span>Failed to load research settings: {loadError}</span>
+        <span>Failed to load web search settings: {loadError}</span>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <FlaskConical className="h-5 w-5" />
+          <Search className="h-5 w-5" />
         </div>
         <div>
-          <h3 className="text-h3">Deep Research</h3>
+          <h3 className="text-h3">Web search</h3>
           <p className="text-sm text-muted-foreground">
-            Configure multi-source research powered by Perplexity AI
+            The search provider the agent uses when it looks something up on the web
           </p>
         </div>
       </div>
 
-      {/* Perplexity API Key */}
       <div className="rounded-lg border border-border bg-card p-5 space-y-4">
         <div>
           <h4 className="text-sm font-semibold mb-0.5">Perplexity API Key</h4>
           <p className="text-xs text-muted-foreground">
-            Required to use web-grounded research. Keys are encrypted via SecretManager (Argon2id +
-            AES-GCM) and never stored in plaintext.
+            With a key, web searches the agent runs in chat and in Tasks go to Perplexity under your
+            account. Without one they use DuckDuckGo. Deep Research does not use this key. The key
+            is stored encrypted on this device.
           </p>
         </div>
 
-        {prefs.perplexityKeySet ? (
+        {keySet ? (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm text-success-text">
               <Check className="h-4 w-4" />
@@ -219,7 +123,16 @@ export function ResearchSettings() {
             </div>
             <button
               type="button"
-              onClick={() => void handleRemoveKey()}
+              onClick={() =>
+                confirm({
+                  title: 'Remove the Perplexity key?',
+                  description:
+                    'Web searches in chat and in Tasks go back to DuckDuckGo. The key is deleted from this device and cannot be shown again, so you will need to paste it in again to use Perplexity.',
+                  confirmLabel: 'Remove key',
+                  destructive: true,
+                  onConfirm: removeKey,
+                })
+              }
               disabled={keyStatus === 'saving'}
               className="text-xs text-destructive underline hover:no-underline disabled:opacity-50"
             >
@@ -237,6 +150,7 @@ export function ResearchSettings() {
                   if (e.key === 'Enter') void handleSaveKey();
                 }}
                 placeholder="pplx-…"
+                aria-label="Perplexity API key"
                 autoComplete="off"
                 className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring placeholder:text-muted-foreground"
               />
@@ -246,15 +160,9 @@ export function ResearchSettings() {
                 disabled={!keyInput.trim() || keyStatus === 'saving'}
                 className="shrink-0 h-9 px-4 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                {keyStatus === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                {keyStatus === 'saving' ? <Spinner size="sm" /> : 'Save'}
               </button>
             </div>
-            {keyError && (
-              <p className="text-xs text-destructive flex items-center gap-1">
-                <AlertCircle className="h-3 w-3" />
-                {keyError}
-              </p>
-            )}
             <p className="text-xs text-muted-foreground">
               Get your key at{' '}
               <a
@@ -268,119 +176,14 @@ export function ResearchSettings() {
             </p>
           </div>
         )}
+        {keyError && (
+          <p className="text-xs text-destructive flex items-center gap-1">
+            <AlertCircle className="h-3 w-3" />
+            {keyError}
+          </p>
+        )}
       </div>
-
-      {/* Research Mode */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium">Research Mode</Label>
-          {prefStatus === 'saving' && (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-          )}
-          {prefStatus === 'saved' && (
-            <span className="flex items-center gap-1 text-xs text-success-text">
-              <Check className="h-3 w-3" /> Saved
-            </span>
-          )}
-        </div>
-        <Select
-          value={prefs.mode}
-          onValueChange={(val) => void savePrefs({ mode: val as ResearchMode })}
-        >
-          <SelectTrigger className="h-9">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {RESEARCH_MODES.map((m) => (
-              <SelectItem key={m.value} value={m.value}>
-                <span className="font-medium">{m.label}</span>
-                <span className="ml-2 text-xs text-muted-foreground">{m.description}</span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          {RESEARCH_MODES.find((m) => m.value === prefs.mode)?.description}
-        </p>
-      </div>
-
-      {/* Max Sources */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium">
-            Max Sources
-            <span className="ml-2 font-normal text-muted-foreground">{prefs.maxSources}</span>
-          </Label>
-        </div>
-        <Slider
-          min={1}
-          max={20}
-          step={1}
-          value={[prefs.maxSources]}
-          onValueChange={([val]) => {
-            if (val !== undefined) {
-              setPrefs((p) => ({ ...p, maxSources: val }));
-            }
-          }}
-          onValueCommit={([val]) => {
-            if (val !== undefined) {
-              void savePrefs({ maxSources: val });
-            }
-          }}
-          className="w-full"
-        />
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>1 (fastest)</span>
-          <span>20 (most thorough)</span>
-        </div>
-      </div>
-
-      {/* Citation toggle, stored via user pref */}
-      <CitationToggle />
-    </div>
-  );
-}
-
-function CitationToggle() {
-  const [enabled, setEnabled] = useState(true);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    invoke<{ value: string } | null>('get_user_preference', { key: 'research_citations' })
-      .then((r) => {
-        if (r?.value !== undefined) {
-          setEnabled(r.value !== 'false');
-        }
-        setLoaded(true);
-      })
-      .catch(() => setLoaded(true));
-  }, []);
-
-  const toggle = useCallback(async (val: boolean) => {
-    setEnabled(val);
-    try {
-      await invoke('set_user_preference', {
-        key: 'research_citations',
-        value: String(val),
-        category: 'behavior',
-        dataType: 'boolean',
-      });
-    } catch (err) {
-      console.error('[ResearchSettings] Failed to save citations preference:', err);
-    }
-  }, []);
-
-  if (!loaded) return null;
-
-  return (
-    <div className="flex items-center justify-between">
-      <div className="space-y-0.5">
-        <Label className="text-sm font-medium">Show Citations</Label>
-        <p className="text-xs text-muted-foreground">
-          Include numbered source references in research reports
-        </p>
-      </div>
-      <Switch checked={enabled} onCheckedChange={(v) => void toggle(v)} />
+      {dialog}
     </div>
   );
 }

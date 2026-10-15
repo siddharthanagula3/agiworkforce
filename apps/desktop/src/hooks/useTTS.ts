@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import {
-  voiceTtsSpeak,
+  voiceTtsSpeakLocal,
   voiceTtsSpeakWithBargeIn,
   voiceTtsStop,
-  voiceTtsIsPlaying,
+  type VoiceCapabilities,
 } from '../api/voice';
 import { getPersistedVoicePersonaParams } from '../features/settings/voicePersonaParams';
+import { isTauri } from '../lib/tauri-mock';
+import { useVoiceModeStore } from '../stores/settings/voice';
 
 export function stripMarkdownForSpeech(text: string): string {
   return (
@@ -32,136 +34,86 @@ export function stripMarkdownForSpeech(text: string): string {
   );
 }
 
+export type NativeSpeechEngine = 'configured' | 'local';
+
+export function nativeSpeechEngine(
+  capabilities: VoiceCapabilities | null | undefined,
+): NativeSpeechEngine | null {
+  if (!capabilities) return null;
+  if (capabilities.ttsAvailable) return 'configured';
+  if (capabilities.localTtsAvailable) return 'local';
+  return null;
+}
+
+export function browserSpeechAvailable(): boolean {
+  return typeof window !== 'undefined' && 'speechSynthesis' in window;
+}
+
+export function speakInBrowser(text: string): Promise<void> {
+  if (!browserSpeechAvailable()) return Promise.resolve();
+  const persona = getPersistedVoicePersonaParams();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = persona.rate;
+  utterance.pitch = persona.pitch;
+  utterance.volume = persona.volume;
+  return new Promise<void>((resolve) => {
+    utterance.onend = () => resolve();
+    utterance.onerror = () => resolve();
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  });
+}
+
+export async function speakNatively(text: string): Promise<boolean> {
+  if (!isTauri) return false;
+  const store = useVoiceModeStore.getState();
+  const engine = nativeSpeechEngine(store.capabilities ?? (await store.fetchCapabilities()));
+  if (engine === 'configured') {
+    await voiceTtsSpeakWithBargeIn(text);
+    return true;
+  }
+  if (engine === 'local') {
+    const persona = getPersistedVoicePersonaParams();
+    await voiceTtsSpeakLocal(text, persona.rate, persona.volume);
+    return true;
+  }
+  return false;
+}
+
 export interface UseTTSReturn {
-  isSpeaking: boolean;
-  isSupported: boolean;
-  speak: (text: string) => void;
-  speakNative: (text: string) => Promise<void>;
   speakWithBargeIn: (text: string) => Promise<void>;
-  stop: () => void;
   stopNative: () => Promise<void>;
-  isNativePlaying: () => Promise<boolean>;
 }
 
 export function useTTS(): UseTTSReturn {
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-
-  const isSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
-
-  const stop = useCallback(() => {
-    if (!isSupported) return;
-    window.speechSynthesis.cancel();
-    setIsSpeaking(false);
-    utteranceRef.current = null;
-  }, [isSupported]);
-
-  const speak = useCallback(
-    (text: string) => {
-      if (!isSupported) return;
-
-      if (isSpeaking) {
-        stop();
-        return;
-      }
-
-      const clean = stripMarkdownForSpeech(text);
-      if (!clean) return;
-
-      window.speechSynthesis.cancel();
-
-      const utterance = new SpeechSynthesisUtterance(clean);
-      const personaParams = getPersistedVoicePersonaParams();
-      utterance.rate = personaParams.rate;
-      utterance.pitch = personaParams.pitch;
-      utterance.volume = personaParams.volume;
-
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        utteranceRef.current = null;
-      };
-      utterance.onerror = () => {
-        setIsSpeaking(false);
-        utteranceRef.current = null;
-      };
-
-      utteranceRef.current = utterance;
-      window.speechSynthesis.speak(utterance);
-    },
-    [isSupported, isSpeaking, stop],
-  );
-
-  const speakNative = useCallback(
-    async (text: string) => {
-      const clean = stripMarkdownForSpeech(text);
-      if (!clean) return;
-      setIsSpeaking(true);
-      try {
-        await voiceTtsSpeak(clean);
-      } catch {
-        speak(clean);
-      } finally {
-        setIsSpeaking(false);
-      }
-    },
-    [speak],
-  );
-
-  const speakWithBargeIn = useCallback(
-    async (text: string) => {
-      const clean = stripMarkdownForSpeech(text);
-      if (!clean) return;
-      setIsSpeaking(true);
-      try {
-        await voiceTtsSpeakWithBargeIn(clean);
-      } catch {
-        try {
-          await voiceTtsSpeak(clean);
-        } catch {
-          speak(clean);
-        }
-      } finally {
-        setIsSpeaking(false);
-      }
-    },
-    [speak],
-  );
-
-  const stopNative = useCallback(async () => {
+  const speakWithBargeIn = useCallback(async (text: string) => {
+    const clean = stripMarkdownForSpeech(text);
+    if (!clean) return;
     try {
-      await voiceTtsStop();
-    } catch {
-      // Ignore errors -- backend may not have an active session
+      if (await speakNatively(clean)) return;
+    } catch (err) {
+      console.warn('[useTTS] native speech failed', err);
     }
-    setIsSpeaking(false);
+    await speakInBrowser(clean);
   }, []);
 
-  const isNativePlaying = useCallback(async (): Promise<boolean> => {
+  const stopNative = useCallback(async () => {
+    if (browserSpeechAvailable()) window.speechSynthesis.cancel();
     try {
-      return await voiceTtsIsPlaying();
-    } catch {
-      return false;
+      await voiceTtsStop();
+    } catch (err) {
+      console.warn('[useTTS] voiceTtsStop failed', err);
     }
   }, []);
 
   useEffect(() => {
     return () => {
-      if (isSupported) window.speechSynthesis.cancel();
+      if (browserSpeechAvailable()) window.speechSynthesis.cancel();
       voiceTtsStop().catch((err: unknown) => {
         console.warn('[useTTS] voiceTtsStop on unmount failed', err);
       });
     };
-  }, [isSupported]);
+  }, []);
 
-  return {
-    isSpeaking,
-    isSupported,
-    speak,
-    speakNative,
-    speakWithBargeIn,
-    stop,
-    stopNative,
-    isNativePlaying,
-  };
+  return { speakWithBargeIn, stopNative };
 }

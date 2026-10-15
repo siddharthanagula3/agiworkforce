@@ -12,10 +12,11 @@ vi.mock('@agiworkforce/desktop-command-client', () => ({
   automation: {
     automationRecordActionNarration: mocks.automationRecordActionNarration,
   },
-  voice: {
-    voiceCheckLocalWhisper: mocks.voiceCheckLocalWhisper,
-    voiceTranscribeBlob: mocks.voiceTranscribeBlob,
-  },
+}));
+
+vi.mock('../../api/voice', () => ({
+  voiceCheckLocalWhisper: mocks.voiceCheckLocalWhisper,
+  voiceTranscribeBlob: mocks.voiceTranscribeBlob,
 }));
 
 import { useRecorderNarration } from './useRecorderNarration';

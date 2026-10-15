@@ -112,7 +112,6 @@ export const createCostSlice = (
       const userId = cloudAccountAuth.getUser()?.id;
       if (!userId) throw new Error('User not authenticated');
       await invoke('chat_set_monthly_budget', {
-        userId,
         amount: credits === undefined ? null : providerUsdFromCredits(credits),
       });
       await get().loadCostOverview();

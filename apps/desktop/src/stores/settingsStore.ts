@@ -1,6 +1,5 @@
 import { invoke, isTauriContext } from '../lib/tauri-mock';
 import { McpClient } from '../api/mcp';
-import { getTimeoutConfig, setTimeoutConfig, minutesToSeconds } from '../api/timeout';
 import { configureMemoryInjection } from '../api/memory';
 import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { create } from 'zustand';
@@ -15,7 +14,6 @@ import {
 } from '../constants/llm';
 
 import type { Provider } from '../types/provider';
-import type { CustomModelConfig } from '@agiworkforce/types';
 import type { SubscriptionTier } from '../constants/planModels';
 export type { Provider };
 import { applyTheme, clearAppliedTheme, getThemeById } from '../themes/index';
@@ -62,12 +60,12 @@ interface LLMConfig {
     managed_cloud: string;
   };
   taskRouting: TaskRouting;
-  favoriteModels: string[];
   providerMode: 'auto' | 'local' | 'cloud';
   ollamaUrl: string;
   lmstudioUrl: string;
   llamacppUrl: string;
   vllmUrl: string;
+  allowPrivateNetworkRuntimes: boolean;
 }
 
 interface WindowPreferences {
@@ -94,7 +92,6 @@ type NativeSettingsPayload = {
   };
   globalHotkeyPreferences?: Partial<GlobalHotkeyPreferences>;
   allowedDirectories?: string[];
-  customModels?: CustomModelConfig[];
   featureFlags?: Record<string, boolean>;
   personalization?: Partial<PersonalizationPreferences>;
   customKeybindings?: Record<string, string>;
@@ -117,10 +114,6 @@ export interface TerminalSandboxPreferences {
 
 export interface ExecutionPreferences {
   maxTimeoutMinutes: number;
-  enableCheckpointing: boolean;
-  checkpointInterval: number;
-  autoResumeOnRestart: boolean;
-  enableTimeoutWarnings: boolean;
   approvalTimeoutSeconds: number;
   approvalTimeoutPolicy: ApprovalTimeoutPolicy;
   streamInactivityTimeoutSeconds: number;
@@ -161,28 +154,21 @@ interface SettingsState {
   globalHotkeyPreferences: GlobalHotkeyPreferences;
   personalization: PersonalizationPreferences;
   allowedDirectories: string[];
-  customModels: CustomModelConfig[];
   customKeybindings: Record<string, string>;
   loading: boolean;
   error: string | null;
-
-  addCustomModel: (config: CustomModelConfig) => void;
-  updateCustomModel: (id: string, config: CustomModelConfig) => void;
-  removeCustomModel: (id: string) => void;
 
   setDefaultProvider: (provider: Provider) => Promise<void>;
   setTemperature: (temperature: number) => void;
   setMaxTokens: (maxTokens: number) => void;
   setDefaultModel: (provider: Provider, model: string) => void;
   setTaskRouting: (category: TaskCategory, provider: Provider, model: string) => void;
-  setFavoriteModels: (models: string[]) => void;
-  addFavoriteModel: (model: string) => void;
-  removeFavoriteModel: (model: string) => void;
   setProviderMode: (mode: 'auto' | 'local' | 'cloud') => void;
   setOllamaUrl: (url: string) => void;
   setLmStudioUrl: (url: string) => void;
   setLlamaCppUrl: (url: string) => void;
   setVllmUrl: (url: string) => void;
+  setAllowPrivateNetworkRuntimes: (allowed: boolean) => void;
 
   setTheme: (theme: Theme) => void;
   setSelectedTheme: (themeId: string | undefined) => void;
@@ -194,24 +180,16 @@ interface SettingsState {
   setStartupPosition: (position: 'center' | 'remember') => void;
   setDockOnStartup: (dock: 'left' | 'right' | null) => void;
 
-  setPromptCompletionEnabled: (enabled: boolean) => void;
-  setAlwaysUseAgentMode: (enabled: boolean) => void;
   setCompactMode: (enabled: boolean) => void;
   setTemporaryChat: (enabled: boolean) => void;
   setSendShortcut: (shortcut: 'enter' | 'mod-enter') => void;
   setAutoApproveTools: (enabled: boolean) => Promise<void>;
-  setAutoInjectSkills: (enabled: boolean) => void;
   setAutoSaveMemories: (enabled: boolean) => Promise<void>;
   setMemoryEnabled: (enabled: boolean) => Promise<void>;
   setAllowToolAssistedMemoryGeneration: (enabled: boolean) => Promise<void>;
   setAgentMode: (mode: AgentMode) => Promise<void>;
-  setChatStorageMode: (mode: 'local' | 'cloud') => void;
 
   setMaxTimeoutMinutes: (minutes: number) => void;
-  setEnableCheckpointing: (enabled: boolean) => void;
-  setCheckpointInterval: (interval: number) => void;
-  setAutoResumeOnRestart: (enabled: boolean) => void;
-  setEnableTimeoutWarnings: (enabled: boolean) => void;
   setApprovalTimeoutSeconds: (seconds: number) => void;
   setApprovalTimeoutPolicy: (policy: ApprovalTimeoutPolicy) => void;
   setStreamInactivityTimeoutSeconds: (seconds: number) => void;
@@ -239,7 +217,7 @@ interface SettingsState {
   saveSettings: () => Promise<void>;
 
   features: Record<string, boolean>;
-  setFeature: (key: string, enabled: boolean) => void;
+  setFeature: (key: string, enabled: boolean) => Promise<boolean>;
 
   _hasHydrated: boolean;
   setHasHydrated: (state: boolean) => void;
@@ -272,7 +250,6 @@ const defaultSettings: Pick<
   | 'globalHotkeyPreferences'
   | 'personalization'
   | 'allowedDirectories'
-  | 'customModels'
   | 'customKeybindings'
   | 'features'
 > = {
@@ -284,12 +261,12 @@ const defaultSettings: Pick<
       ollama: '',
       managed_cloud: 'auto',
     },
-    favoriteModels: [],
     providerMode: 'auto' as const,
     ollamaUrl: 'http://localhost:11434',
     lmstudioUrl: 'http://localhost:1234/v1',
     llamacppUrl: 'http://localhost:8080/v1',
     vllmUrl: 'http://localhost:8000/v1',
+    allowPrivateNetworkRuntimes: false,
     taskRouting: {
       search: { provider: 'managed_cloud', model: 'auto' },
       code: { provider: 'managed_cloud', model: 'auto' },
@@ -309,24 +286,16 @@ const defaultSettings: Pick<
     reduceMotion: false,
   },
   chatPreferences: {
-    promptCompletionEnabled: true, // AI-powered ghost text enabled by default
-    alwaysUseAgentMode: false, // Off by default - only use agent mode for action requests
     compactMode: true, // Show simple status messages like ChatGPT/Claude/Gemini
     sendShortcut: 'enter' as const,
     autoApproveTools: false, // Off by default - show confirmation dialogs
-    autoInjectSkills: true, // Auto-inject relevant skills based on message intent
     memoryEnabled: false, // Privacy-safe opt-in: no retrieval or generation until enabled
     allowToolAssistedMemoryGeneration: false,
     autoSaveMemories: false, // Off by default - avoid implicit memory growth
     agentMode: 'build' as AgentMode, // Default to Build mode
-    chatStorageMode: 'local' as const, // Local-only by default (privacy-preserving)
   },
   executionPreferences: {
     maxTimeoutMinutes: 1440, // 24 hours default
-    enableCheckpointing: true,
-    checkpointInterval: 5, // Steps between checkpoints
-    autoResumeOnRestart: true,
-    enableTimeoutWarnings: true,
     approvalTimeoutSeconds: 300, // 5 minutes default
     approvalTimeoutPolicy: 'auto-deny' as ApprovalTimeoutPolicy,
     streamInactivityTimeoutSeconds: 30, // 30 seconds default
@@ -339,7 +308,6 @@ const defaultSettings: Pick<
   },
   personalization: defaultPersonalization,
   allowedDirectories: [],
-  customModels: [],
   customKeybindings: {},
   features: {},
 };
@@ -348,12 +316,20 @@ export const createDefaultLLMConfig = (): LLMConfig => ({
   ...defaultSettings.llmConfig,
   defaultModels: { ...defaultSettings.llmConfig.defaultModels },
   taskRouting: { ...defaultSettings.llmConfig.taskRouting },
-  favoriteModels: [],
 });
 
 export const createDefaultWindowPreferences = (): WindowPreferences => ({
   ...defaultSettings.windowPreferences,
 });
+
+// `alwaysUseAgentMode` was saved and read by nothing. A settings file or a
+// saved state written before it was dropped may still carry it.
+function withoutRetiredChatKeys<T extends object>(preferences: T): T {
+  const { alwaysUseAgentMode: _retired, ...kept } = preferences as T & {
+    alwaysUseAgentMode?: unknown;
+  };
+  return kept as T;
+}
 
 function oneOf<T>(value: unknown, allowed: readonly T[], fallback: T): T {
   return allowed.some((candidate) => Object.is(candidate, value)) ? (value as T) : fallback;
@@ -362,6 +338,15 @@ function oneOf<T>(value: unknown, allowed: readonly T[], fallback: T): T {
 function boundedInteger(value: unknown, min: number, max: number, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+/**
+ * Register the Local runtimes again with the saved settings. A server key
+ * saved under a master password cannot be read until the vault is unlocked,
+ * so this is what picks it up afterwards.
+ */
+export async function reapplyLocalRuntimeProviders(): Promise<void> {
+  await configureLocalRuntimeProviders(useSettingsStore.getState().llmConfig);
 }
 
 async function configureLocalRuntimeProviders(config: LLMConfig): Promise<void> {
@@ -374,14 +359,25 @@ async function configureLocalRuntimeProviders(config: LLMConfig): Promise<void> 
 
   const results = await Promise.allSettled(
     runtimes.map(([provider, baseUrl]) =>
-      invoke('llm_configure_provider', { provider, apiKey: null, baseUrl }),
+      invoke('llm_configure_provider', {
+        provider,
+        apiKey: null,
+        baseUrl,
+        allowPrivateNetwork: config.allowPrivateNetworkRuntimes === true,
+      }),
     ),
   );
-  const failedProviders = results.flatMap((result, index) =>
-    result.status === 'rejected' ? [runtimes[index]![0]] : [],
+  const failures = results.flatMap((result, index) =>
+    result.status === 'rejected'
+      ? [
+          `${runtimes[index]![0]} (${
+            result.reason instanceof Error ? result.reason.message : String(result.reason)
+          })`,
+        ]
+      : [],
   );
-  if (failedProviders.length > 0) {
-    throw new Error(`Could not apply local runtime settings for: ${failedProviders.join(', ')}`);
+  if (failures.length > 0) {
+    throw new Error(`Could not apply local runtime settings for: ${failures.join('; ')}`);
   }
 }
 
@@ -390,7 +386,6 @@ type LiveSettingsSnapshot = {
   chatPreferences: ChatPreferences;
   executionPreferences: ExecutionPreferences;
   allowedDirectories: string[];
-  features: Record<string, boolean>;
 };
 
 function resolveNativeLiveSettings(
@@ -409,13 +404,10 @@ function resolveNativeLiveSettings(
         ...defaultSettings.llmConfig.taskRouting,
         ...(native.llmConfig?.taskRouting ?? {}),
       },
-      favoriteModels: Array.isArray(native.llmConfig?.favoriteModels)
-        ? native.llmConfig.favoriteModels
-        : [],
     },
     chatPreferences: {
       ...defaultSettings.chatPreferences,
-      ...(native.chatPreferences ?? {}),
+      ...withoutRetiredChatKeys(native.chatPreferences ?? {}),
     },
     executionPreferences: {
       ...defaultSettings.executionPreferences,
@@ -426,13 +418,10 @@ function resolveNativeLiveSettings(
       },
     },
     allowedDirectories: Array.isArray(native.allowedDirectories) ? native.allowedDirectories : [],
-    features:
-      native.featureFlags && typeof native.featureFlags === 'object' ? native.featureFlags : {},
   };
 }
 
 async function applyLiveSettingsSnapshot(snapshot: LiveSettingsSnapshot): Promise<void> {
-  await invoke('sync_capabilities', { capabilities: snapshot.features });
   await configureLocalRuntimeProviders(snapshot.llmConfig);
   await configureMemoryInjection(
     snapshot.chatPreferences.memoryEnabled === true,
@@ -444,7 +433,6 @@ async function applyLiveSettingsSnapshot(snapshot: LiveSettingsSnapshot): Promis
   if (snapshot.allowedDirectories.length > 0) {
     await McpClient.updateFilesystemDirectories(snapshot.allowedDirectories);
   }
-  await syncExecutionTimeoutToBackend(snapshot.executionPreferences);
 }
 
 async function restoreLiveSettingsSnapshot(snapshot: LiveSettingsSnapshot): Promise<string[]> {
@@ -458,9 +446,6 @@ async function restoreLiveSettingsSnapshot(snapshot: LiveSettingsSnapshot): Prom
     }
   };
 
-  await restore('capability policy', () =>
-    invoke('sync_capabilities', { capabilities: snapshot.features }),
-  );
   await restore('local runtime endpoints', () =>
     configureLocalRuntimeProviders(snapshot.llmConfig),
   );
@@ -480,9 +465,6 @@ async function restoreLiveSettingsSnapshot(snapshot: LiveSettingsSnapshot): Prom
       McpClient.updateFilesystemDirectories(snapshot.allowedDirectories),
     );
   }
-  await restore('task timeout policy', () =>
-    syncExecutionTimeoutToBackend(snapshot.executionPreferences),
-  );
   return failures;
 }
 
@@ -574,15 +556,6 @@ export function isTaskRoutingModelAllowedForTier(
   return isModelAllowedForTier(modelId, normalizedTier);
 }
 
-async function syncExecutionTimeoutToBackend(prefs: ExecutionPreferences): Promise<void> {
-  const current = await getTimeoutConfig();
-  await setTimeoutConfig({
-    ...current,
-    max_duration_secs: minutesToSeconds(prefs.maxTimeoutMinutes),
-    enable_warnings: prefs.enableTimeoutWarnings,
-  });
-}
-
 export const useSettingsStore = create<SettingsState>()(
   devtools(
     persist(
@@ -596,38 +569,21 @@ export const useSettingsStore = create<SettingsState>()(
           set({ _hasHydrated: state }, undefined, 'settings/setHasHydrated');
         },
 
-        setFeature: (key: string, enabled: boolean) => {
-          set(
-            (state) => ({ features: { ...state.features, [key]: enabled } }),
-            undefined,
-            'settings/setFeature',
-          );
-        },
-
-        addCustomModel: (config: CustomModelConfig) => {
-          set(
-            (state) => ({ customModels: [...state.customModels, config] }),
-            undefined,
-            'settings/addCustomModel',
-          );
-        },
-
-        updateCustomModel: (id: string, config: CustomModelConfig) => {
-          set(
-            (state) => ({
-              customModels: state.customModels.map((m) => (m.id === id ? config : m)),
-            }),
-            undefined,
-            'settings/updateCustomModel',
-          );
-        },
-
-        removeCustomModel: (id: string) => {
-          set(
-            (state) => ({ customModels: state.customModels.filter((m) => m.id !== id) }),
-            undefined,
-            'settings/removeCustomModel',
-          );
+        setFeature: async (key: string, enabled: boolean) => {
+          const apply = () =>
+            set(
+              (state) => ({ features: { ...state.features, [key]: enabled } }),
+              undefined,
+              'settings/setFeature',
+            );
+          if (!isTauriContext()) {
+            apply();
+            return true;
+          }
+          const changed = await invoke<boolean>('set_capability', { name: key, enabled });
+          if (changed === false) return false;
+          apply();
+          return true;
         },
 
         setMaxTimeoutMinutes: (minutes: number) => {
@@ -638,50 +594,6 @@ export const useSettingsStore = create<SettingsState>()(
             }),
             undefined,
             'settings/setMaxTimeoutMinutes',
-          );
-        },
-
-        setEnableCheckpointing: (enabled: boolean) => {
-          set(
-            (state) => ({
-              executionPreferences: { ...state.executionPreferences, enableCheckpointing: enabled },
-            }),
-            undefined,
-            'settings/setEnableCheckpointing',
-          );
-        },
-
-        setCheckpointInterval: (interval: number) => {
-          const clamped = Math.max(1, Math.min(100, interval));
-          set(
-            (state) => ({
-              executionPreferences: { ...state.executionPreferences, checkpointInterval: clamped },
-            }),
-            undefined,
-            'settings/setCheckpointInterval',
-          );
-        },
-
-        setAutoResumeOnRestart: (enabled: boolean) => {
-          set(
-            (state) => ({
-              executionPreferences: { ...state.executionPreferences, autoResumeOnRestart: enabled },
-            }),
-            undefined,
-            'settings/setAutoResumeOnRestart',
-          );
-        },
-
-        setEnableTimeoutWarnings: (enabled: boolean) => {
-          set(
-            (state) => ({
-              executionPreferences: {
-                ...state.executionPreferences,
-                enableTimeoutWarnings: enabled,
-              },
-            }),
-            undefined,
-            'settings/setEnableTimeoutWarnings',
           );
         },
 
@@ -944,45 +856,6 @@ export const useSettingsStore = create<SettingsState>()(
           );
         },
 
-        setFavoriteModels: (models: string[]) => {
-          set(
-            (state) => ({
-              llmConfig: { ...state.llmConfig, favoriteModels: models },
-            }),
-            undefined,
-            'settings/setFavoriteModels',
-          );
-        },
-
-        addFavoriteModel: (model: string) => {
-          set(
-            (state) => {
-              const favoriteModels = [...state.llmConfig.favoriteModels];
-              if (!favoriteModels.includes(model)) {
-                favoriteModels.push(model);
-              }
-              return {
-                llmConfig: { ...state.llmConfig, favoriteModels },
-              };
-            },
-            undefined,
-            'settings/addFavoriteModel',
-          );
-        },
-
-        removeFavoriteModel: (model: string) => {
-          set(
-            (state) => {
-              const favoriteModels = state.llmConfig.favoriteModels.filter((m) => m !== model);
-              return {
-                llmConfig: { ...state.llmConfig, favoriteModels },
-              };
-            },
-            undefined,
-            'settings/removeFavoriteModel',
-          );
-        },
-
         setProviderMode: (mode: 'auto' | 'local' | 'cloud') => {
           set(
             (state) => ({
@@ -1030,6 +903,16 @@ export const useSettingsStore = create<SettingsState>()(
             }),
             undefined,
             'settings/setVllmUrl',
+          );
+        },
+
+        setAllowPrivateNetworkRuntimes: (allowed: boolean) => {
+          set(
+            (state) => ({
+              llmConfig: { ...state.llmConfig, allowPrivateNetworkRuntimes: allowed },
+            }),
+            undefined,
+            'settings/setAllowPrivateNetworkRuntimes',
           );
         },
 
@@ -1162,26 +1045,6 @@ export const useSettingsStore = create<SettingsState>()(
           );
         },
 
-        setPromptCompletionEnabled: (enabled: boolean) => {
-          set(
-            (state) => ({
-              chatPreferences: { ...state.chatPreferences, promptCompletionEnabled: enabled },
-            }),
-            undefined,
-            'settings/setPromptCompletionEnabled',
-          );
-        },
-
-        setAlwaysUseAgentMode: (enabled: boolean) => {
-          set(
-            (state) => ({
-              chatPreferences: { ...state.chatPreferences, alwaysUseAgentMode: enabled },
-            }),
-            undefined,
-            'settings/setAlwaysUseAgentMode',
-          );
-        },
-
         setCompactMode: (enabled: boolean) => {
           set(
             (state) => ({
@@ -1209,16 +1072,6 @@ export const useSettingsStore = create<SettingsState>()(
             }),
             undefined,
             'settings/setSendShortcut',
-          );
-        },
-
-        setAutoInjectSkills: (enabled: boolean) => {
-          set(
-            (state) => ({
-              chatPreferences: { ...state.chatPreferences, autoInjectSkills: enabled },
-            }),
-            undefined,
-            'settings/setAutoInjectSkills',
           );
         },
 
@@ -1284,7 +1137,6 @@ export const useSettingsStore = create<SettingsState>()(
         setAgentMode: async (mode: AgentMode) => {
           const previousMode = get().chatPreferences.agentMode;
           const previousAutoApprove = get().chatPreferences.autoApproveTools;
-          const previousAlwaysAgent = get().chatPreferences.alwaysUseAgentMode;
 
           set(
             (state) => ({
@@ -1292,8 +1144,6 @@ export const useSettingsStore = create<SettingsState>()(
                 ...state.chatPreferences,
                 agentMode: mode,
                 autoApproveTools: mode === 'autopilot',
-                alwaysUseAgentMode:
-                  mode === 'plan' ? true : state.chatPreferences.alwaysUseAgentMode,
               },
             }),
             undefined,
@@ -1310,7 +1160,6 @@ export const useSettingsStore = create<SettingsState>()(
                   ...state.chatPreferences,
                   agentMode: previousMode,
                   autoApproveTools: previousAutoApprove,
-                  alwaysUseAgentMode: previousAlwaysAgent,
                 },
               }),
               undefined,
@@ -1318,17 +1167,6 @@ export const useSettingsStore = create<SettingsState>()(
             );
             throw error;
           }
-        },
-
-        setChatStorageMode: (mode: 'local' | 'cloud') => {
-          set(
-            (state) => ({
-              chatPreferences: { ...state.chatPreferences, chatStorageMode: mode },
-            }),
-            undefined,
-            'settings/setChatStorageMode',
-          );
-          void get().saveSettings();
         },
 
         addAllowedDirectory: (path: string) => {
@@ -1399,9 +1237,6 @@ export const useSettingsStore = create<SettingsState>()(
                 ...defaultSettings.llmConfig.taskRouting,
                 ...(settings.llmConfig?.taskRouting ?? defaultSettings.llmConfig.taskRouting),
               },
-              favoriteModels: Array.isArray(settings.llmConfig?.favoriteModels)
-                ? settings.llmConfig.favoriteModels
-                : [],
               providerMode:
                 settings.llmConfig?.providerMode ?? defaultSettings.llmConfig.providerMode,
               ollamaUrl: settings.llmConfig?.ollamaUrl ?? defaultSettings.llmConfig.ollamaUrl,
@@ -1417,6 +1252,10 @@ export const useSettingsStore = create<SettingsState>()(
                 settings.llmConfig?.vllmUrl ??
                 hydratedCurrent.llmConfig.vllmUrl ??
                 defaultSettings.llmConfig.vllmUrl,
+              allowPrivateNetworkRuntimes:
+                settings.llmConfig?.allowPrivateNetworkRuntimes ??
+                hydratedCurrent.llmConfig.allowPrivateNetworkRuntimes ??
+                defaultSettings.llmConfig.allowPrivateNetworkRuntimes,
             };
 
             const mergedWindowPreferences: WindowPreferences = {
@@ -1449,7 +1288,9 @@ export const useSettingsStore = create<SettingsState>()(
 
             const mergedChatPreferences: ChatPreferences = {
               ...defaultSettings.chatPreferences,
-              ...(settings.chatPreferences ?? defaultSettings.chatPreferences),
+              ...withoutRetiredChatKeys(
+                settings.chatPreferences ?? defaultSettings.chatPreferences,
+              ),
               sendShortcut: oneOf(
                 settings.chatPreferences?.sendShortcut,
                 ['enter', 'mod-enter'] as const,
@@ -1561,7 +1402,6 @@ export const useSettingsStore = create<SettingsState>()(
                 globalHotkeyPreferences: mergedGlobalHotkeyPreferences,
                 personalization: mergedPersonalization,
                 allowedDirectories: settings.allowedDirectories ?? [],
-                customModels: Array.isArray(settings.customModels) ? settings.customModels : [],
                 customKeybindings:
                   settings.customKeybindings && typeof settings.customKeybindings === 'object'
                     ? settings.customKeybindings
@@ -1647,25 +1487,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
 
             try {
-              await invoke('sync_capabilities', {
-                capabilities:
-                  settings.featureFlags && typeof settings.featureFlags === 'object'
-                    ? settings.featureFlags
-                    : get().features,
-              });
-            } catch (error) {
-              console.error('Failed to sync capabilities to backend:', error);
-              set(
-                {
-                  error:
-                    'Capability settings could not be applied. Disabled capabilities are not being enforced, restart the app before running tools.',
-                },
-                undefined,
-                'settings/loadSettings/capabilitySyncFailed',
-              );
-            }
-
-            try {
               const dirs = settings.allowedDirectories ?? [];
               await invoke('update_allowed_directories', { paths: dirs });
 
@@ -1674,21 +1495,6 @@ export const useSettingsStore = create<SettingsState>()(
               }
             } catch (error) {
               console.error('Failed to sync allowed directories to backend:', error);
-            }
-
-            try {
-              await syncExecutionTimeoutToBackend(get().executionPreferences);
-            } catch (error) {
-              console.error('Failed to restore task timeout policy:', error);
-              set(
-                {
-                  error:
-                    get().error ??
-                    'Task timeout settings could not be applied. Restart the app before running long tasks.',
-                },
-                undefined,
-                'settings/loadSettings/timeoutSyncFailed',
-              );
             }
           } catch (error) {
             console.error('Failed to load settings:', error);
@@ -1719,8 +1525,6 @@ export const useSettingsStore = create<SettingsState>()(
               executionPreferences,
               globalHotkeyPreferences,
               allowedDirectories,
-              customModels,
-              features,
               personalization,
               customKeybindings,
             } = get();
@@ -1733,7 +1537,6 @@ export const useSettingsStore = create<SettingsState>()(
               chatPreferences,
               executionPreferences,
               allowedDirectories,
-              features,
             });
 
             await invoke('settings_save', {
@@ -1744,8 +1547,6 @@ export const useSettingsStore = create<SettingsState>()(
                 executionPreferences,
                 globalHotkeyPreferences,
                 allowedDirectories,
-                customModels,
-                featureFlags: features,
                 personalization,
                 customKeybindings,
               },
@@ -1760,7 +1561,7 @@ export const useSettingsStore = create<SettingsState>()(
             const rollbackFailures = previousLiveSettings
               ? await restoreLiveSettingsSnapshot(previousLiveSettings)
               : [];
-            const originalMessage = error instanceof Error ? error.message : String(error);
+            const originalMessage = getSimpleErrorMessage(error).replace(/\.$/, '');
             const resolvedError =
               rollbackFailures.length > 0
                 ? new Error(
@@ -1799,7 +1600,6 @@ export const useSettingsStore = create<SettingsState>()(
             executionPreferences: state.executionPreferences,
             personalization: state.personalization,
             allowedDirectories: state.allowedDirectories,
-            customModels: state.customModels,
             customKeybindings: state.customKeybindings,
           };
 
@@ -1838,14 +1638,14 @@ export const useSettingsStore = create<SettingsState>()(
               ...currentState.llmConfig.taskRouting,
               ...(persisted?.llmConfig?.taskRouting ?? {}),
             },
-            favoriteModels: Array.isArray(persisted?.llmConfig?.favoriteModels)
-              ? persisted.llmConfig.favoriteModels
-              : currentState.llmConfig.favoriteModels,
             providerMode: persisted?.llmConfig?.providerMode ?? currentState.llmConfig.providerMode,
             ollamaUrl: persisted?.llmConfig?.ollamaUrl ?? currentState.llmConfig.ollamaUrl,
             lmstudioUrl: persisted?.llmConfig?.lmstudioUrl ?? currentState.llmConfig.lmstudioUrl,
             llamacppUrl: persisted?.llmConfig?.llamacppUrl ?? currentState.llmConfig.llamacppUrl,
             vllmUrl: persisted?.llmConfig?.vllmUrl ?? currentState.llmConfig.vllmUrl,
+            allowPrivateNetworkRuntimes:
+              persisted?.llmConfig?.allowPrivateNetworkRuntimes ??
+              currentState.llmConfig.allowPrivateNetworkRuntimes,
           };
 
           const mergedWindowPreferences: WindowPreferences = {
@@ -1857,7 +1657,7 @@ export const useSettingsStore = create<SettingsState>()(
 
           const mergedChatPreferences: ChatPreferences = {
             ...currentState.chatPreferences,
-            ...(persisted?.chatPreferences ?? {}),
+            ...withoutRetiredChatKeys(persisted?.chatPreferences ?? {}),
           };
 
           const mergedExecutionPreferences: ExecutionPreferences = {
@@ -1895,9 +1695,6 @@ export const useSettingsStore = create<SettingsState>()(
             globalHotkeyPreferences: mergedGlobalHotkeyPreferences,
             personalization: mergedPersonalization,
             allowedDirectories: persisted?.allowedDirectories ?? currentState.allowedDirectories,
-            customModels: Array.isArray(persisted?.customModels)
-              ? persisted.customModels
-              : currentState.customModels,
             customKeybindings:
               persisted?.customKeybindings && typeof persisted.customKeybindings === 'object'
                 ? persisted.customKeybindings
@@ -1909,7 +1706,6 @@ export const useSettingsStore = create<SettingsState>()(
             llmConfig?: Partial<LLMConfig> & {
               defaultProvider?: string;
               defaultModels?: Record<string, string>;
-              favoriteModels?: string[];
               taskRouting?: Record<string, { provider: Provider; model: string }>;
             };
             chatPreferences?: Partial<ChatPreferences>;
@@ -1933,7 +1729,6 @@ export const useSettingsStore = create<SettingsState>()(
                 ollama: state.llmConfig?.defaultModels?.ollama ?? '',
                 managed_cloud: state.llmConfig?.defaultModels?.managed_cloud ?? 'auto',
               };
-              state.llmConfig.favoriteModels = [];
               if (state.llmConfig.taskRouting) {
                 for (const key of Object.keys(state.llmConfig.taskRouting)) {
                   state.llmConfig.taskRouting[key] = { provider: 'managed_cloud', model: 'auto' };
@@ -1945,15 +1740,10 @@ export const useSettingsStore = create<SettingsState>()(
           if (version < 3) {
             if (!state.chatPreferences) {
               state.chatPreferences = {
-                promptCompletionEnabled: true,
-                alwaysUseAgentMode: false,
                 compactMode: true,
                 autoApproveTools: false,
                 agentMode: 'build',
-                chatStorageMode: 'local',
               };
-            } else if (state.chatPreferences.alwaysUseAgentMode === undefined) {
-              state.chatPreferences.alwaysUseAgentMode = false;
             }
           }
 
@@ -1961,10 +1751,6 @@ export const useSettingsStore = create<SettingsState>()(
             if (!state.executionPreferences) {
               state.executionPreferences = {
                 maxTimeoutMinutes: 1440, // 24 hours
-                enableCheckpointing: true,
-                checkpointInterval: 5,
-                autoResumeOnRestart: true,
-                enableTimeoutWarnings: true,
                 approvalTimeoutSeconds: 300,
                 approvalTimeoutPolicy: 'auto-deny' as ApprovalTimeoutPolicy,
                 streamInactivityTimeoutSeconds: 30,
@@ -2016,22 +1802,9 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          if (version < 10) {
-            const stateWithCustomModels = state as Partial<SettingsState>;
-            if (!Array.isArray(stateWithCustomModels.customModels)) {
-              stateWithCustomModels.customModels = [];
-            }
-          }
-
           if (version < 11) {
             if (!state.features || typeof state.features !== 'object') {
               (state as Partial<SettingsState>).features = {};
-            }
-          }
-
-          if (version < 12) {
-            if (state.chatPreferences && state.chatPreferences.autoInjectSkills === undefined) {
-              state.chatPreferences.autoInjectSkills = true;
             }
           }
 
@@ -2051,15 +1824,6 @@ export const useSettingsStore = create<SettingsState>()(
               }
               if (llmConfig.ollamaUrl === undefined) {
                 llmConfig.ollamaUrl = 'http://localhost:11434';
-              }
-            }
-          }
-
-          if (version < 15) {
-            if (state.chatPreferences) {
-              const cp = state.chatPreferences as Partial<ChatPreferences>;
-              if (cp.chatStorageMode === undefined) {
-                cp.chatStorageMode = 'local';
               }
             }
           }
@@ -2164,9 +1928,6 @@ export const useSettingsStore = create<SettingsState>()(
               llmConfig.defaultModels.managed_cloud =
                 normalizeKnownCatalogModelId(llmConfig.defaultModels.managed_cloud) ?? 'auto';
             }
-            llmConfig.favoriteModels = (llmConfig.favoriteModels ?? [])
-              .map((modelId) => normalizeKnownCatalogModelId(modelId))
-              .filter((modelId): modelId is string => modelId !== null);
             if (llmConfig.taskRouting) {
               for (const [category, route] of Object.entries(llmConfig.taskRouting)) {
                 const model = normalizeKnownCatalogModelId(route.model);
@@ -2206,13 +1967,6 @@ export const useSettingsStore = create<SettingsState>()(
         onRehydrateStorage: () => (state) => {
           if (state) {
             state.setHasHydrated(true);
-            if (isTauriContext() && state.features && Object.keys(state.features).length > 0) {
-              invoke('sync_capabilities', { capabilities: state.features }).catch(
-                (err: unknown) => {
-                  console.warn('[Settings] Failed to sync capabilities on rehydration:', err);
-                },
-              );
-            }
           }
         },
       },
@@ -2272,7 +2026,6 @@ export const selectTemperature = (state: SettingsState) => state.llmConfig.tempe
 export const selectMaxTokens = (state: SettingsState) => state.llmConfig.maxTokens;
 export const selectDefaultModels = (state: SettingsState) => state.llmConfig.defaultModels;
 export const selectTaskRouting = (state: SettingsState) => state.llmConfig.taskRouting;
-export const selectFavoriteModels = (state: SettingsState) => state.llmConfig.favoriteModels;
 
 export const selectWindowPreferences = (state: SettingsState) => state.windowPreferences;
 export const selectTheme = (state: SettingsState) => state.windowPreferences.theme;
@@ -2280,26 +2033,12 @@ export const selectLanguage = (state: SettingsState) => state.windowPreferences.
 export const selectStartupPosition = (state: SettingsState) =>
   state.windowPreferences.startupPosition;
 export const selectDockOnStartup = (state: SettingsState) => state.windowPreferences.dockOnStartup;
-export const selectChatFont = (state: SettingsState) =>
-  state.windowPreferences.chatFont ?? 'default';
 
 export const selectChatPreferences = (state: SettingsState) => state.chatPreferences;
-export const selectPromptCompletionEnabled = (state: SettingsState) =>
-  state.chatPreferences.promptCompletionEnabled;
-export const selectAlwaysUseAgentMode = (state: SettingsState) =>
-  state.chatPreferences.alwaysUseAgentMode;
 
 export const selectExecutionPreferences = (state: SettingsState) => state.executionPreferences;
 export const selectMaxTimeoutMinutes = (state: SettingsState) =>
   state.executionPreferences.maxTimeoutMinutes;
-export const selectEnableCheckpointing = (state: SettingsState) =>
-  state.executionPreferences.enableCheckpointing;
-export const selectCheckpointInterval = (state: SettingsState) =>
-  state.executionPreferences.checkpointInterval;
-export const selectAutoResumeOnRestart = (state: SettingsState) =>
-  state.executionPreferences.autoResumeOnRestart;
-export const selectEnableTimeoutWarnings = (state: SettingsState) =>
-  state.executionPreferences.enableTimeoutWarnings;
 
 export const selectGlobalHotkeyPreferences = (state: SettingsState) =>
   state.globalHotkeyPreferences;
@@ -2328,44 +2067,12 @@ export const selectPersonalization = (state: SettingsState) =>
 export type { SettingsTab } from './settings/dialog';
 export { LEGACY_TAB_MAP, useSettingsDialogStore } from './settings/dialog';
 
-export type {
-  ThinkingConfigResponse,
-  SetThinkingConfigRequest,
-  ThinkingContent,
-  ThinkingEvent,
-} from './settings/thinking';
-export {
-  useThinkingStore,
-  selectThinkingConfig,
-  selectIsThinkingEnabled,
-  selectThinkingBudget,
-  selectCurrentThinking,
-} from './settings/thinking';
-
-export type { ChatPreferencesStore } from './settings/chatPrefs';
-export { useChatPreferencesStore, defaultChatPreferences } from './settings/chatPrefs';
-
 export { useConnectorsStore } from './settings/connectors';
 
 export type {
-  VoiceSettingsBackend,
-  VoiceModePhase,
-  VoiceTurn,
   VoiceCapabilities,
-  TtsVoice,
-  WakeWordConfig,
-  PttConfig,
-  DeepgramConfig,
-  DeepgramStreamStatus,
-  DeepgramStreamingStats,
-  BargeInStatus,
-  BargeInStats,
-  BargeInConfig,
-  SpeechTranscriptResult,
   WhisperModelInfo,
   PiperVoiceInfo,
-  LocalModelsInfo,
-  TtsConfig,
   PostProcessingMode,
   VoiceInputHotkey,
 } from './settings/voice';

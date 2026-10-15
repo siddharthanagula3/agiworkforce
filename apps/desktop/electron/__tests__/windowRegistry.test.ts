@@ -5,16 +5,13 @@ import {
   cascadeBounds,
   conversationIdFromRoute,
   planSignOut,
-  planWindowOpen,
   resolveNavigationConflict,
-  windowHoldingConversation,
   type OpenWindow,
   type WindowBounds,
 } from '../windowRegistry';
 import { MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH } from '../garnishCore';
 
 const ADA_CHAT = '7f3c1a22-9d5b-4f61-a0c4-1b2e3d4f5a6b';
-const GRACE_CHAT = '0c9b8a77-1e2d-4c3b-9a8f-7e6d5c4b3a21';
 
 const WORK_AREA = { x: 0, y: 25, width: 1512, height: 920 };
 
@@ -45,74 +42,6 @@ describe('the route that names a conversation', () => {
       '/',
     ]) {
       expect(conversationIdFromRoute(route), route).toBeNull();
-    }
-  });
-});
-
-describe('asking for a route in a window of its own', () => {
-  it('opens a window for a conversation nothing is showing', () => {
-    expect(planWindowOpen([windowOn(1, '/chat', { primary: true })], `/chat/${ADA_CHAT}`)).toEqual({
-      action: 'create',
-      route: `/chat/${ADA_CHAT}`,
-    });
-  });
-
-  it('raises the window already on that conversation instead of opening a second', () => {
-    const windows = [
-      windowOn(1, '/chat', { primary: true }),
-      windowOn(2, `/chat/${ADA_CHAT}`),
-      windowOn(3, `/chat/${GRACE_CHAT}`),
-    ];
-
-    expect(planWindowOpen(windows, `/chat/${ADA_CHAT}`)).toEqual({ action: 'focus', windowId: 2 });
-    expect(planWindowOpen(windows, `/chat/${GRACE_CHAT}`)).toEqual({
-      action: 'focus',
-      windowId: 3,
-    });
-  });
-
-  it('lets two different conversations have a window each', () => {
-    let windows = [windowOn(1, '/chat', { primary: true })];
-    const first = planWindowOpen(windows, `/chat/${ADA_CHAT}`);
-    expect(first).toEqual({ action: 'create', route: `/chat/${ADA_CHAT}` });
-
-    windows = [...windows, windowOn(2, `/chat/${ADA_CHAT}`)];
-    expect(planWindowOpen(windows, `/chat/${GRACE_CHAT}`)).toEqual({
-      action: 'create',
-      route: `/chat/${GRACE_CHAT}`,
-    });
-    expect(windowHoldingConversation(windows, ADA_CHAT)?.id).toBe(2);
-  });
-
-  it('opens a second window on a route that is not a conversation', () => {
-    const windows = [windowOn(1, '/chat/library', { primary: true })];
-
-    expect(planWindowOpen(windows, '/chat/library')).toEqual({
-      action: 'create',
-      route: '/chat/library',
-    });
-    expect(planWindowOpen(windows, '/chat/library?surface=artifact')).toEqual({
-      action: 'create',
-      route: '/chat/library?surface=artifact',
-    });
-  });
-
-  it('refuses anything that is not an in-app route the shell may restore', () => {
-    const windows = [windowOn(1, '/chat', { primary: true })];
-
-    for (const route of [
-      'https://elsewhere.example/chat',
-      '//elsewhere.example/chat',
-      'javascript:alert(1)',
-      '/sign-in',
-      '/api/me',
-      '/chat/../admin',
-      '',
-    ]) {
-      expect(planWindowOpen(windows, route), route).toEqual({
-        action: 'refuse',
-        reason: 'route-not-openable',
-      });
     }
   });
 });
@@ -216,11 +145,11 @@ describe('who a runtime event reaches', () => {
 
   it('reaches every open window, not only the first', () => {
     const targets = [target(), target(), target()];
-    const revoked = { kind: 'permission-changed', capability: 'shell.run', state: 'denied' };
+    const changed = { kind: 'workspace-changed', rootId: 'root-1' };
 
-    expect(broadcastRuntimeEvent(targets, 'agi:runtime-event', revoked)).toBe(3);
+    expect(broadcastRuntimeEvent(targets, 'agi:runtime-event', changed)).toBe(3);
     for (const one of targets) {
-      expect(one.received).toEqual([{ channel: 'agi:runtime-event', event: revoked }]);
+      expect(one.received).toEqual([{ channel: 'agi:runtime-event', event: changed }]);
     }
   });
 

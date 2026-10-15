@@ -20,7 +20,7 @@ export function PluginsTab() {
       <div className="border-b border-border/80 pb-4">
         <h3 className="text-h3">Plugins</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Installed AGI plugins and compatible local plugin resources.
+          Claude Code plugins on this machine. AGI Workforce chat does not load them.
         </p>
       </div>
       <Suspense fallback={<Fallback />}>

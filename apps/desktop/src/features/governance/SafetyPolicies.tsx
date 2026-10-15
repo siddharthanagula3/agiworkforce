@@ -2,7 +2,7 @@
  * SafetyPolicies
  *
  * UI for viewing and editing per-tool approval policies.
- * Wires to existing Rust commands: set_tool_approval_policy / get_tool_approval_policy.
+ * Wires to existing Rust commands: set_tool_approval_policy / get_remembered_tool_choices.
  * Also shows and controls global auto-approve and agent mode settings.
  */
 import React, { useCallback, useEffect, useState } from 'react';
@@ -86,8 +86,6 @@ const KNOWN_TOOLS = [
   'browser_navigate',
   'browser_click',
   'search_web',
-  'email_send',
-  'calendar_create_event',
   'db_query',
   'db_write',
 ];
@@ -159,22 +157,22 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
 
   const handlePolicyChange = async (toolName: string, newPolicy: PolicyValue) => {
     setPolicies((prev) =>
-      prev.map((p) =>
-        p.toolName === toolName ? { ...p, policy: newPolicy, isUpdating: true } : p,
-      ),
+      prev.map((p) => (p.toolName === toolName ? { ...p, isUpdating: true } : p)),
     );
 
     try {
       await invoke('set_tool_approval_policy', { toolName, policy: newPolicy });
       setPolicies((prev) =>
-        prev.map((p) => (p.toolName === toolName ? { ...p, isUpdating: false } : p)),
+        prev.map((p) =>
+          p.toolName === toolName ? { ...p, policy: newPolicy, isUpdating: false } : p,
+        ),
       );
       toast.success(`Policy updated for ${toolName}`);
     } catch (err) {
       setPolicies((prev) =>
         prev.map((p) => (p.toolName === toolName ? { ...p, isUpdating: false } : p)),
       );
-      toast.error(`Failed to update policy: ${getSimpleErrorMessage(err)}`);
+      toast.error(getSimpleErrorMessage(err));
     }
   };
 
@@ -185,20 +183,22 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
       setAutoApproveAll(enabled);
       toast.success(enabled ? 'Auto-approve enabled' : 'Auto-approve disabled');
     } catch (err) {
-      toast.error(`Failed to update auto-approve: ${getSimpleErrorMessage(err)}`);
+      toast.error(getSimpleErrorMessage(err));
     } finally {
       setIsUpdatingAutoApprove(false);
     }
   };
 
   const handleAgentModeChange = async (mode: AgentMode) => {
+    if (mode === agentMode) return;
     setIsUpdatingAgentMode(true);
     try {
       await invoke('set_agent_mode', { mode });
       setAgentMode(mode);
       toast.success(`Agent mode set to ${mode}`);
+      setAutoApproveAll(await invoke<boolean>('get_auto_approve_all'));
     } catch (err) {
-      toast.error(`Failed to update agent mode: ${getSimpleErrorMessage(err)}`);
+      toast.error(getSimpleErrorMessage(err));
     } finally {
       setIsUpdatingAgentMode(false);
     }
@@ -333,6 +333,7 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
                 <div className="flex items-center gap-2">
                   {p.isUpdating && <Loader2 size={12} className="animate-spin text-gray-500" />}
                   <select
+                    aria-label={`Approval policy for ${p.toolName}`}
                     value={p.policy}
                     onChange={(e) =>
                       void handlePolicyChange(p.toolName, e.target.value as PolicyValue)

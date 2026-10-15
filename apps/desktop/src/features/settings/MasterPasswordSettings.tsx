@@ -7,16 +7,29 @@ import { Button } from '@/ui/Button';
 import { Input } from '@/ui/Input';
 import { Label } from '@/ui/Label';
 
-interface MasterPasswordStatus {
-  is_configured: boolean;
-  is_unlocked: boolean;
-  last_changed: string | null;
-  needs_migration: boolean;
+import { MASTER_PASSWORD_SCOPE } from './masterPasswordScope';
+import {
+  changeMasterPassword,
+  describeKeysNotUpgraded,
+  describePasswordPolicy,
+  describePasswordRuleViolation,
+  lockMasterPassword,
+  passwordRuleViolation,
+  refusalMessage,
+  removeMasterPassword,
+  setUpMasterPassword,
+  unlockMasterPassword,
+  type MasterPasswordStatus,
+  type PasswordPolicy,
+} from './masterPasswordVault';
+
+interface VaultMigrationReport {
+  api_keys_migrated: number;
+  rows_skipped_already_modern: number;
+  rows_skipped_undecryptable: number;
 }
 
-type View = 'status' | 'setup' | 'unlock' | 'change' | 'migration';
-
-const MIN_PASSWORD_LENGTH = 8;
+type View = 'status' | 'setup' | 'unlock' | 'change' | 'remove' | 'migration';
 
 export function MasterPasswordSettings() {
   const [status, setStatus] = useState<MasterPasswordStatus | null>(null);
@@ -54,7 +67,13 @@ export function MasterPasswordSettings() {
   }
 
   if (view === 'setup') {
-    return <SetupView onDone={handleDone} onCancel={() => setView('status')} />;
+    return (
+      <SetupView
+        policy={status?.password_policy}
+        onDone={handleDone}
+        onCancel={() => setView('status')}
+      />
+    );
   }
 
   if (view === 'unlock') {
@@ -62,7 +81,17 @@ export function MasterPasswordSettings() {
   }
 
   if (view === 'change') {
-    return <ChangeView onDone={handleDone} onCancel={() => setView('status')} />;
+    return (
+      <ChangeView
+        policy={status?.password_policy}
+        onDone={handleDone}
+        onCancel={() => setView('status')}
+      />
+    );
+  }
+
+  if (view === 'remove') {
+    return <RemoveView onDone={handleDone} onCancel={() => setView('status')} />;
   }
 
   if (view === 'migration') {
@@ -76,7 +105,7 @@ export function MasterPasswordSettings() {
       onUnlock={() => setView('unlock')}
       onLock={async () => {
         try {
-          await invoke('master_password_lock');
+          await lockMasterPassword();
           await loadStatus();
         } catch (err) {
           console.error('Failed to lock master password:', err);
@@ -86,6 +115,7 @@ export function MasterPasswordSettings() {
         }
       }}
       onChange={() => setView('change')}
+      onRemove={() => setView('remove')}
       onMigrate={() => setView('migration')}
     />
   );
@@ -97,10 +127,19 @@ interface StatusViewProps {
   onUnlock: () => void;
   onLock: () => void;
   onChange: () => void;
+  onRemove: () => void;
   onMigrate: () => void;
 }
 
-function StatusView({ status, onSetup, onUnlock, onLock, onChange, onMigrate }: StatusViewProps) {
+function StatusView({
+  status,
+  onSetup,
+  onUnlock,
+  onLock,
+  onChange,
+  onRemove,
+  onMigrate,
+}: StatusViewProps) {
   const isConfigured = status?.is_configured ?? false;
   const isUnlocked = status?.is_unlocked ?? false;
   const needsMigration = status?.needs_migration ?? false;
@@ -155,26 +194,39 @@ function StatusView({ status, onSetup, onUnlock, onLock, onChange, onMigrate }: 
               </Button>
             </>
           )}
+          {isConfigured && (
+            <Button size="sm" variant="ghost" onClick={onRemove}>
+              Remove
+            </Button>
+          )}
         </div>
       </div>
 
       {!isConfigured && (
         <p className="text-xs text-muted-foreground">
-          Set a master password to add an extra layer of protection. Your API keys and secrets will
-          be encrypted using Argon2id (OWASP-recommended).
+          {MASTER_PASSWORD_SCOPE} Sealed keys can only be used while unlocked.
         </p>
       )}
 
-      {needsMigration && isUnlocked && (
+      {needsMigration && (
         <div className="rounded-md border border-warning-fill/30 bg-warning-fill/10 p-3 flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-medium text-warning-text">Migration available</p>
+            <p className="text-xs font-medium text-warning-text">
+              Some saved keys are not protected yet
+            </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Re-encrypt your secrets with your master password for stronger protection.
+              {isUnlocked
+                ? 'Some provider API keys were saved before your master password protected them, and can still be used while locked. Re-encrypt them with your master password.'
+                : 'Some provider API keys were saved before your master password protected them, and can still be used while locked. Unlock to re-encrypt them.'}
             </p>
           </div>
-          <Button size="sm" variant="outline" className="shrink-0" onClick={onMigrate}>
-            Migrate
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0"
+            onClick={isUnlocked ? onMigrate : onUnlock}
+          >
+            {isUnlocked ? 'Migrate' : 'Unlock'}
           </Button>
         </div>
       )}
@@ -183,11 +235,12 @@ function StatusView({ status, onSetup, onUnlock, onLock, onChange, onMigrate }: 
 }
 
 interface SetupViewProps {
+  policy: PasswordPolicy | undefined;
   onDone: () => void;
   onCancel: () => void;
 }
 
-function SetupView({ onDone, onCancel }: SetupViewProps) {
+function SetupView({ policy, onDone, onCancel }: SetupViewProps) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -198,8 +251,9 @@ function SetupView({ onDone, onCancel }: SetupViewProps) {
     e.preventDefault();
     setError(null);
 
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+    const violation = policy ? passwordRuleViolation(password, policy) : null;
+    if (violation) {
+      setError(describePasswordRuleViolation(violation));
       return;
     }
 
@@ -210,13 +264,11 @@ function SetupView({ onDone, onCancel }: SetupViewProps) {
 
     setLoading(true);
     try {
-      const result = await invoke<{ success: boolean; message: string }>('master_password_setup', {
-        password,
-      });
+      const result = await setUpMasterPassword(password);
       if (result.success) {
         onDone();
       } else {
-        setError(result.message);
+        setError(refusalMessage(result));
       }
     } catch (err) {
       setError(String(err));
@@ -231,9 +283,11 @@ function SetupView({ onDone, onCancel }: SetupViewProps) {
         <Shield className="h-5 w-5 text-foreground" />
         <h4 className="font-semibold">Set Up Master Password</h4>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Choose a strong password (minimum 8 characters). This encrypts your API keys and secrets
-        using Argon2id with OWASP-recommended parameters.
+      <p id="mp-new-rule" className="text-xs text-muted-foreground">
+        {policy
+          ? describePasswordPolicy(policy)
+          : 'Choose a password you do not use anywhere else.'}{' '}
+        It seals your saved provider API keys using Argon2id with OWASP-recommended parameters.
       </p>
 
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
@@ -245,7 +299,8 @@ function SetupView({ onDone, onCancel }: SetupViewProps) {
               type={showPw ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 8 characters"
+              placeholder="New master password"
+              aria-describedby="mp-new-rule"
               className="pr-9"
               required
             />
@@ -272,7 +327,11 @@ function SetupView({ onDone, onCancel }: SetupViewProps) {
           />
         </div>
 
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {error && (
+          <p role="alert" className="text-xs text-danger">
+            {error}
+          </p>
+        )}
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
@@ -303,10 +362,11 @@ function UnlockView({ onDone, onCancel }: UnlockViewProps) {
     setError(null);
     setLoading(true);
     try {
-      const result = await invoke<{ success: boolean; message: string }>('master_password_unlock', {
-        password,
-      });
+      const result = await unlockMasterPassword(password);
       if (result.success) {
+        const leftBehind = describeKeysNotUpgraded(result);
+        if (leftBehind)
+          toast.warning('Some saved keys were not upgraded', { description: leftBehind });
         onDone();
       } else {
         setError(result.message);
@@ -365,12 +425,92 @@ function UnlockView({ onDone, onCancel }: UnlockViewProps) {
   );
 }
 
-interface ChangeViewProps {
+interface RemoveViewProps {
   onDone: () => void;
   onCancel: () => void;
 }
 
-function ChangeView({ onDone, onCancel }: ChangeViewProps) {
+function RemoveView({ onDone, onCancel }: RemoveViewProps) {
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const result = await removeMasterPassword(password);
+      if (result.success) {
+        toast.success('Master password removed', {
+          description: 'Your saved keys are protected by this device again. Nothing was deleted.',
+        });
+        onDone();
+      } else {
+        setError(result.message);
+      }
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+      <div className="flex items-center gap-2">
+        <LockOpen className="h-5 w-5 text-foreground" />
+        <h4 className="font-semibold">Remove Master Password</h4>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Your saved provider API keys go back to being protected by this device&apos;s key alone, so
+        anyone using this account on this computer can use them without a password. Nothing is
+        deleted, and you can set a master password again later.
+      </p>
+
+      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
+        <div className="space-y-1">
+          <Label htmlFor="mp-remove">Master Password</Label>
+          <Input
+            id="mp-remove"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter your master password"
+            aria-invalid={error ? 'true' : undefined}
+            aria-describedby={error ? 'mp-remove-error' : undefined}
+            autoFocus
+            required
+          />
+        </div>
+
+        {error && (
+          <p id="mp-remove-error" role="alert" className="text-xs text-danger">
+            {error}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={loading || password.length === 0}>
+            {loading ? 'Removing...' : 'Remove master password'}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+interface ChangeViewProps {
+  policy: PasswordPolicy | undefined;
+  onDone: () => void;
+  onCancel: () => void;
+}
+
+function ChangeView({ policy, onDone, onCancel }: ChangeViewProps) {
   const [current, setCurrent] = useState('');
   const [newPw, setNewPw] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -382,8 +522,9 @@ function ChangeView({ onDone, onCancel }: ChangeViewProps) {
     e.preventDefault();
     setError(null);
 
-    if (newPw.length < MIN_PASSWORD_LENGTH) {
-      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+    const violation = policy ? passwordRuleViolation(newPw, policy) : null;
+    if (violation) {
+      setError(describePasswordRuleViolation(violation));
       return;
     }
 
@@ -394,14 +535,11 @@ function ChangeView({ onDone, onCancel }: ChangeViewProps) {
 
     setLoading(true);
     try {
-      const result = await invoke<{ success: boolean; message: string }>('master_password_change', {
-        currentPassword: current,
-        newPassword: newPw,
-      });
+      const result = await changeMasterPassword(current, newPw);
       if (result.success) {
         onDone();
       } else {
-        setError(result.message);
+        setError(refusalMessage(result));
       }
     } catch (err) {
       setError(String(err));
@@ -449,9 +587,15 @@ function ChangeView({ onDone, onCancel }: ChangeViewProps) {
             type={showPw ? 'text' : 'password'}
             value={newPw}
             onChange={(e) => setNewPw(e.target.value)}
-            placeholder="At least 8 characters"
+            placeholder="New master password"
+            aria-describedby={policy ? 'mp-new2-rule' : undefined}
             required
           />
+          {policy && (
+            <p id="mp-new2-rule" className="text-xs text-muted-foreground">
+              {describePasswordPolicy(policy)}
+            </p>
+          )}
         </div>
 
         <div className="space-y-1">
@@ -466,7 +610,11 @@ function ChangeView({ onDone, onCancel }: ChangeViewProps) {
           />
         </div>
 
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {error && (
+          <p role="alert" className="text-xs text-danger">
+            {error}
+          </p>
+        )}
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
@@ -489,14 +637,20 @@ interface MigrationViewProps {
 function MigrationView({ onDone, onCancel }: MigrationViewProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [migrationConfirmed, setMigrationConfirmed] = useState(false);
 
   const handleMigrate = async () => {
     setError(null);
     setLoading(true);
     try {
-      await invoke('master_password_start_migration');
-      await invoke('master_password_complete_migration');
+      const report = await invoke<VaultMigrationReport>('master_password_migrate_credentials');
+      const migrated = report.api_keys_migrated;
+      if (report.rows_skipped_undecryptable > 0) {
+        toast.warning(`Re-encrypted ${migrated} saved keys`, {
+          description: `${report.rows_skipped_undecryptable} could not be read and were left as they were. Save those keys again to protect them.`,
+        });
+      } else {
+        toast.success(`Re-encrypted ${migrated} saved keys with your master password`);
+      }
       onDone();
     } catch (err) {
       setError(String(err));
@@ -509,31 +663,27 @@ function MigrationView({ onDone, onCancel }: MigrationViewProps) {
     <div className="rounded-lg border border-border bg-card p-6 space-y-4">
       <div className="flex items-center gap-2">
         <Shield className="h-5 w-5 text-foreground" />
-        <h4 className="font-semibold">Migrate Secrets</h4>
+        <h4 className="font-semibold">Protect Saved Keys</h4>
       </div>
       <p className="text-xs text-muted-foreground">
-        This will re-encrypt all stored API keys and secrets using your master password (Argon2id +
-        HKDF-SHA256). The app must be unlocked before migration. This cannot be undone.
+        This re-encrypts your saved provider API keys with your master password (Argon2id +
+        HKDF-SHA256), after which they can only be used while unlocked. {MASTER_PASSWORD_SCOPE} Each
+        key is read back before it replaces the old copy, and removing the master password later
+        moves them back.
       </p>
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
-
-      <label className="flex items-center gap-2 text-sm mb-3 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={migrationConfirmed}
-          onChange={(e) => setMigrationConfirmed(e.target.checked)}
-          className="rounded"
-        />
-        I understand this cannot be undone and I have backed up my API keys
-      </label>
+      {error && (
+        <p role="alert" className="text-xs text-danger">
+          {error}
+        </p>
+      )}
 
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="outline" onClick={onCancel} disabled={loading}>
           Cancel
         </Button>
-        <Button onClick={() => void handleMigrate()} disabled={loading || !migrationConfirmed}>
-          {loading ? 'Migrating...' : 'Start Migration'}
+        <Button onClick={() => void handleMigrate()} disabled={loading}>
+          {loading ? 'Re-encrypting...' : 'Re-encrypt keys'}
         </Button>
       </div>
     </div>

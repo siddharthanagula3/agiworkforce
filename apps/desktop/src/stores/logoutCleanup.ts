@@ -1,12 +1,9 @@
-
 import { useBillingUsageStore, stopMetricsAutoRefresh } from './billingUsage';
 import { useBrowserStore } from './browserStore';
 import { useCodeStore } from './codeStore';
 import { useConnectorsStore } from './connectorsStore';
-import { useDatabaseStore } from './databaseStore';
 import { useExecutionStore, cleanupExecutionListeners } from './executionStore';
 import { cleanupAgentWorkflowEventListeners } from './chat/agentWorkflowEvents';
-import { cleanupBackgroundTaskEventListeners } from './chat/agentStore';
 import { cleanupAgentTaskEventListeners, useAgentTaskStore } from './agentTaskStore';
 import { cleanupRuntimeActivityEventListeners } from '../hooks/useAgenticEvents';
 import { useMcpStore } from './mcpStore';
@@ -23,7 +20,6 @@ import { STORAGE_KEYS } from '../constants/storageKeys';
 
 export function cleanupAllStoresOnLogout(): void {
   try {
-
     const browserStore = useBrowserStore.getState();
     browserStore.cleanup();
 
@@ -42,10 +38,6 @@ export function cleanupAllStoresOnLogout(): void {
     const mcpStore = useMcpStore.getState();
     mcpStore.resetOnLogout();
 
-    const databaseStore = useDatabaseStore.getState();
-    databaseStore.resetOnLogout();
-
-    cleanupBackgroundTaskEventListeners();
     cleanupAgentWorkflowEventListeners();
     cleanupAgentTaskEventListeners();
     useAgentTaskStore.getState().resetOnLogout();

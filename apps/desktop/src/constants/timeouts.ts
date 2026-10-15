@@ -18,10 +18,6 @@ export const DATABASE_WARMUP_TIMEOUT_MS = 30_000;
 
 export const WEB_API_FALLBACK_TIMEOUT_MS = 30_000;
 
-export const AUTOMATION_TIMEOUT_MS = 30_000;
-
-export const AUTOMATION_EXECUTE_TIMEOUT_MS = 120_000;
-
 export const BROWSER_AUTOMATION_TIMEOUT_MS = 30_000;
 
 export const MCP_TIMEOUT_MS = 30_000;
@@ -36,27 +32,9 @@ export const MCP_SIGN_IN_TIMEOUT_MS = 150_000;
 
 export const COMPLETION_TIMEOUT_MS = 500;
 
-export const EMBEDDINGS_TIMEOUT_MS = 30_000;
-
-export const EMBEDDINGS_GENERATE_TIMEOUT_MS = 120_000;
-
-export const EMBEDDINGS_INDEX_TIMEOUT_MS = 600_000;
-
 export const OLLAMA_TIMEOUT_MS = 10_000;
 
-export const OLLAMA_PULL_TIMEOUT_MS = 60_000;
-
-export const OLLAMA_MODEL_PULL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
-
 export const PRIVACY_TIMEOUT_MS = 30_000;
-
-export const EXPORT_TIMEOUT_MS = 60_000;
-
-export const DELETE_TIMEOUT_MS = 60_000;
-
-export const MIGRATION_TIMEOUT_MS = 60_000;
-
-export const MIGRATION_LAUNCH_TIMEOUT_MS = 300_000;
 
 export const STREAM_TIMEOUT_MS = 60_000;
 

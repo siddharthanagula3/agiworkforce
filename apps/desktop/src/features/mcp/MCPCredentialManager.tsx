@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Alert, AlertDescription } from '@/ui/Alert';
 import { Input } from '@/ui/Input';
 import { Label } from '@/ui/Label';
+import { Spinner } from '@/ui/Spinner';
 import {
   Cloud,
   GitBranch,
@@ -14,14 +16,11 @@ import {
   Key,
   Eye,
   EyeOff,
-  Save,
   ExternalLink,
 } from 'lucide-react';
-import type { McpServerInfo } from '../../types/mcp';
+import type { McpCredentialSlot, McpServerInfo } from '../../types/mcp';
 import { openUrl } from '../../lib/tauri-mock';
 import { McpClient } from '../../api/mcp';
-import { useShallow } from 'zustand/react/shallow';
-import { useMcpStore } from '../../stores/mcpStore';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import type { McpOAuthConnectionStatus, McpOAuthProvider } from '../../types/mcp';
 
@@ -50,11 +49,6 @@ const OAUTH_PROVIDERS = {
   },
 } as const;
 
-const MANUAL_CREDENTIAL_CONFIGS: Record<
-  string,
-  Array<{ key: string; label: string; placeholder: string }>
-> = {};
-
 type OAuthProvider = McpOAuthProvider;
 
 interface OAuthState {
@@ -63,12 +57,142 @@ interface OAuthState {
   error: Record<OAuthProvider, string | null>;
 }
 
-export default function MCPCredentialManager({ servers }: MCPCredentialManagerProps) {
-  const { storeCredential } = useMcpStore(
-    useShallow((s) => ({
-      storeCredential: s.storeCredential,
-    })),
+function errorText(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
+function StoredKeyRow({
+  slot,
+  onChanged,
+  onRemove,
+}: {
+  slot: McpCredentialSlot;
+  onChanged: () => Promise<void>;
+  onRemove: (slot: McpCredentialSlot, report: (message: string) => void) => void;
+}) {
+  const inputId = `mcp-key-${slot.serverName}-${slot.key}`;
+  const [value, setValue] = useState('');
+  const [shown, setShown] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await McpClient.setCredential(slot.serverName, slot.key, value);
+      setValue('');
+      setShown(false);
+      await onChanged();
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form
+      noValidate
+      className="space-y-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (value) void save();
+      }}
+    >
+      <Label htmlFor={inputId} className="font-mono text-sm">
+        {slot.key}
+      </Label>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Input
+            id={inputId}
+            type={shown ? 'text' : 'password'}
+            autoComplete="off"
+            spellCheck={false}
+            className="pr-10"
+            value={value}
+            disabled={saving}
+            aria-describedby={`${inputId}-state`}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => setValue(event.target.value)}
+          />
+          <button
+            type="button"
+            aria-label={shown ? `Hide ${slot.key}` : `Show ${slot.key}`}
+            aria-pressed={shown}
+            onClick={() => setShown((current) => !current)}
+            className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {shown ? (
+              <EyeOff className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Eye className="h-4 w-4" aria-hidden="true" />
+            )}
+          </button>
+        </div>
+        <Button type="submit" variant="outline" size="sm" disabled={saving || !value}>
+          {saving ? <Spinner size="sm" className="mr-2" /> : null}
+          {slot.stored ? 'Replace' : 'Save'}
+        </Button>
+        {slot.stored ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={saving}
+            onClick={() => onRemove(slot, setError)}
+          >
+            Remove
+          </Button>
+        ) : null}
+      </div>
+      <p id={`${inputId}-state`} className="text-sm text-muted-foreground">
+        {slot.stored
+          ? 'A value is stored, encrypted on this device. It is never shown again.'
+          : 'No value stored yet. This server cannot authenticate until you save one.'}
+      </p>
+      {error ? (
+        <p role="alert" className="text-sm text-danger-text">
+          {error}
+        </p>
+      ) : null}
+    </form>
   );
+}
+
+export default function MCPCredentialManager({ servers }: MCPCredentialManagerProps) {
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const [slots, setSlots] = useState<McpCredentialSlot[]>([]);
+  const [slotsError, setSlotsError] = useState<string | null>(null);
+
+  const loadSlots = useCallback(async () => {
+    try {
+      setSlots(await McpClient.listCredentialSlots());
+      setSlotsError(null);
+    } catch (cause) {
+      setSlotsError(errorText(cause));
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSlots();
+  }, [loadSlots, servers]);
+
+  const removeSlot = (slot: McpCredentialSlot, report: (message: string) => void) =>
+    confirm({
+      title: `Remove the stored ${slot.key} for "${slot.serverName}"?`,
+      description: `"${slot.serverName}" can no longer read ${slot.key} and will fail to authenticate the next time it starts. The value cannot be recovered, so to use it again you have to enter it again.`,
+      confirmLabel: 'Remove key',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await McpClient.deleteCredential(slot.serverName, slot.key);
+          await loadSlots();
+        } catch (cause) {
+          report(errorText(cause));
+        }
+      },
+    });
 
   const [oauthState, setOauthState] = useState<OAuthState>({
     status: {
@@ -87,11 +211,6 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
       slack: null,
     },
   });
-
-  const [credentials, setCredentials] = useState<Record<string, Record<string, string>>>({});
-  const [showCredentials, setShowCredentials] = useState<Record<string, boolean>>({});
-  const [saving, setSaving] = useState<Record<string, boolean>>({});
-  const [success, setSuccess] = useState<Record<string, boolean>>({});
 
   const checkOAuthStatus = useCallback(async (provider: OAuthProvider) => {
     try {
@@ -261,55 +380,22 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
     };
   }, [handleOAuthCallback]);
 
-  const handleCredentialChange = (serverName: string, key: string, value: string) => {
-    setCredentials((prev) => ({
-      ...prev,
-      [serverName]: {
-        ...(prev[serverName] || {}),
-        [key]: value,
-      },
-    }));
-  };
-
-  const toggleShow = (id: string) => {
-    setShowCredentials((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  };
-
-  const handleSave = async (serverName: string, key: string) => {
-    const value = credentials[serverName]?.[key];
-    if (!value) return;
-
-    const saveId = `${serverName}_${key}`;
-    setSaving((prev) => ({ ...prev, [saveId]: true }));
-    setSuccess((prev) => ({ ...prev, [saveId]: false }));
-
-    try {
-      await storeCredential(serverName, key, value);
-      setSuccess((prev) => ({ ...prev, [saveId]: true }));
-      setTimeout(() => {
-        setSuccess((prev) => ({ ...prev, [saveId]: false }));
-      }, 3000);
-    } catch (error) {
-      console.error('Failed to store credential:', error);
-    } finally {
-      setSaving((prev) => ({ ...prev, [saveId]: false }));
-    }
-  };
-
   const oauthServers = servers.filter((server) => server.name in OAUTH_PROVIDERS);
-  const manualServers = servers.filter((server) => MANUAL_CREDENTIAL_CONFIGS[server.name]);
+  const slotServerNames = [...new Set(slots.map((slot) => slot.serverName))];
 
-  if (oauthServers.length === 0 && manualServers.length === 0) {
+  if (oauthServers.length === 0 && slots.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <Key className="w-12 h-12 text-muted-foreground mb-4" />
+        <Key className="w-12 h-12 text-muted-foreground mb-4" aria-hidden="true" />
         <h3 className="text-h3 mb-2">No credentials required</h3>
         <p className="text-sm text-muted-foreground">
-          The configured servers don't require API keys or authentication
+          The configured servers do not need a sign-in or a stored key.
         </p>
+        {slotsError ? (
+          <p role="alert" className="mt-2 text-sm text-danger-text">
+            {slotsError}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -319,9 +405,9 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
       <Alert>
         <AlertCircle className="w-4 h-4" />
         <AlertDescription>
-          Connect your accounts securely via OAuth or enter API keys. Credentials are stored
-          securely in your system keychain and never sent to external services except the providers
-          you connect to.
+          Connect your accounts with OAuth or save the keys your servers read when they start.
+          Stored keys are encrypted on this device and are only passed to the server that asks for
+          them.
         </AlertDescription>
       </Alert>
 
@@ -440,107 +526,48 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
         </div>
       )}
 
-      {/* Manual API Key Providers */}
-      {manualServers.length > 0 && (
+      {slotsError ? (
+        <p role="alert" className="text-sm text-danger-text">
+          {slotsError}
+        </p>
+      ) : null}
+
+      {slotServerNames.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-sm font-medium text-muted-foreground">API Keys</h3>
+          <h3 className="text-sm font-medium text-muted-foreground">Stored keys</h3>
 
-          {manualServers.map((server) => {
-            const credentialFields = MANUAL_CREDENTIAL_CONFIGS[server.name] || [];
-
-            return (
-              <Card key={server.name}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-muted rounded-lg">
-                        <Key className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-base">{server.name}</CardTitle>
-                        <CardDescription className="text-xs mt-0.5">
-                          Configure API credentials for this server
-                        </CardDescription>
-                      </div>
-                    </div>
-                    <div
-                      className={`w-2 h-2 rounded-full ${server.enabled ? 'bg-green-500' : 'bg-gray-400'}`}
+          {slotServerNames.map((serverName) => (
+            <Card key={serverName}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-muted rounded-lg">
+                    <Key className="w-5 h-5" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">{serverName}</CardTitle>
+                    <CardDescription className="text-sm mt-0.5">
+                      Read from the environment when this server starts
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-0">
+                {slots
+                  .filter((slot) => slot.serverName === serverName)
+                  .map((slot) => (
+                    <StoredKeyRow
+                      key={slot.key}
+                      slot={slot}
+                      onChanged={loadSlots}
+                      onRemove={removeSlot}
                     />
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="space-y-4">
-                    {credentialFields.map((field) => {
-                      const inputId = `${server.name}_${field.key}`;
-                      const isSaving = saving[inputId];
-                      const isSuccess = success[inputId];
-                      const showPassword = showCredentials[inputId];
-
-                      return (
-                        <div key={field.key} className="space-y-2">
-                          <Label htmlFor={inputId} className="text-sm">
-                            {field.label}
-                          </Label>
-                          <div className="flex items-center gap-2">
-                            <div className="relative flex-1">
-                              <Input
-                                id={inputId}
-                                type={showPassword ? 'text' : 'password'}
-                                placeholder={field.placeholder}
-                                value={credentials[server.name]?.[field.key] || ''}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                  handleCredentialChange(server.name, field.key, e.target.value)
-                                }
-                              />
-                              <button
-                                type="button"
-                                onClick={() => toggleShow(inputId)}
-                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                              >
-                                {showPassword ? (
-                                  <EyeOff className="w-4 h-4" />
-                                ) : (
-                                  <Eye className="w-4 h-4" />
-                                )}
-                              </button>
-                            </div>
-                            <Button
-                              variant={isSuccess ? 'default' : 'outline'}
-                              size="sm"
-                              onClick={() => handleSave(server.name, field.key)}
-                              disabled={isSaving || !credentials[server.name]?.[field.key]}
-                            >
-                              {isSaving ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                  Saving...
-                                </>
-                              ) : isSuccess ? (
-                                <>
-                                  <CheckCircle className="w-4 h-4 mr-2" />
-                                  Saved!
-                                </>
-                              ) : (
-                                <>
-                                  <Save className="w-4 h-4 mr-2" />
-                                  Save
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Stored securely in your system keychain
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  ))}
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

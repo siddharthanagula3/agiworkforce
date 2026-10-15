@@ -73,12 +73,54 @@ describe('browserStore', () => {
     expect(state.sessions[0]?.browserType).toBe('Chromium');
     expect(state.sessions[0]?.headless).toBe(false);
     expect(state.activeSessionId).toBe(sessionId);
+    expect(invokeMock).toHaveBeenCalledWith('browser_launch', {
+      browserType: 'Chromium',
+      headless: false,
+    });
+  });
+
+  it('offers the viewer its own controls and nothing that scripts or reads a page', () => {
+    const actions = Object.entries(useBrowserStore.getState())
+      .filter(([, value]) => typeof value === 'function')
+      .map(([name]) => name);
+
+    expect(actions).toEqual(
+      expect.arrayContaining([
+        'launchBrowser',
+        'closeBrowser',
+        'openTab',
+        'navigateTab',
+        'goBack',
+        'goForward',
+        'reloadTab',
+        'getUrl',
+        'getTitle',
+        'startStreaming',
+      ]),
+    );
+    for (const removed of [
+      'executeScript',
+      'executeAsyncScript',
+      'callFunction',
+      'executeInFrame',
+      'getCookies',
+      'setCookie',
+      'clearCookies',
+      'clickElement',
+      'typeText',
+      'fillForm',
+      'uploadFile',
+      'getPageContent',
+      'getDOMSnapshot',
+    ]) {
+      expect(actions).not.toContain(removed);
+    }
   });
 
   it('should open new tab in active session', async () => {
     const sessionId = 'session-456';
     invokeMock.mockResolvedValueOnce(sessionId);
-    await useBrowserStore.getState().launchBrowser('Firefox', true);
+    await useBrowserStore.getState().launchBrowser('Chromium', true);
 
     const tabId = 'tab-789';
     const url = 'https://google.com';
@@ -93,22 +135,6 @@ describe('browserStore', () => {
     expect(session?.tabs).toHaveLength(1);
     expect(session?.tabs[0]?.id).toBe(tabId);
     expect(session?.tabs[0]?.url).toBe(url);
-  });
-
-  it('should close tab', async () => {
-    invokeMock.mockResolvedValueOnce('session-1');
-    await useBrowserStore.getState().launchBrowser('Chromium', false);
-
-    invokeMock.mockResolvedValueOnce('tab-1');
-    await useBrowserStore.getState().openTab('https://example.com');
-
-    invokeMock.mockResolvedValueOnce(undefined);
-    await useBrowserStore.getState().closeTab('tab-1');
-
-    expect(invokeMock).toHaveBeenCalledWith('browser_close_tab', { tabId: 'tab-1' });
-
-    const session = useBrowserStore.getState().sessions[0];
-    expect(session?.tabs).toHaveLength(0);
   });
 
   it('should close browser via the browser_close command', async () => {
@@ -128,7 +154,7 @@ describe('browserStore', () => {
 
   it('should navigate tab to new URL', async () => {
     invokeMock.mockResolvedValueOnce('session-1');
-    await useBrowserStore.getState().launchBrowser('Webkit', true);
+    await useBrowserStore.getState().launchBrowser('Chromium', true);
 
     invokeMock.mockResolvedValueOnce('tab-1');
     await useBrowserStore.getState().openTab('https://example.com');
@@ -159,30 +185,11 @@ describe('browserStore', () => {
     expect(tabs[1]?.active).toBe(true);
   });
 
-  it('promotes the next tab when closing the active tab', async () => {
-    invokeMock.mockResolvedValueOnce('session-1');
-    await useBrowserStore.getState().launchBrowser('Chromium', false);
-
-    invokeMock.mockResolvedValueOnce('tab-1');
-    await useBrowserStore.getState().openTab('https://example.com');
-
-    invokeMock.mockResolvedValueOnce('tab-2');
-    await useBrowserStore.getState().openTab('https://openai.com');
-
-    invokeMock.mockResolvedValueOnce(undefined);
-    await useBrowserStore.getState().closeTab('tab-2');
-
-    const tabs = useBrowserStore.getState().sessions[0]?.tabs ?? [];
-    expect(tabs).toHaveLength(1);
-    expect(tabs[0]?.id).toBe('tab-1');
-    expect(tabs[0]?.active).toBe(true);
-  });
-
   it('should switch active session', () => {
     useBrowserStore.setState({
       sessions: [
         { id: 'session-1', browserType: 'Chromium', headless: false, tabs: [], active: true },
-        { id: 'session-2', browserType: 'Firefox', headless: true, tabs: [], active: false },
+        { id: 'session-2', browserType: 'Chromium', headless: true, tabs: [], active: false },
       ],
       activeSessionId: 'session-1',
     });
@@ -190,39 +197,6 @@ describe('browserStore', () => {
     useBrowserStore.getState().setActiveSession('session-2');
 
     expect(useBrowserStore.getState().activeSessionId).toBe('session-2');
-  });
-
-  it('should take screenshot', async () => {
-    const base64Data = 'data:image/png;base64,iVBORw0KGgo...';
-    invokeMock.mockResolvedValue(base64Data);
-
-    const result = await useBrowserStore.getState().screenshot('tab-1');
-
-    expect(result).toBe(base64Data);
-    expect(invokeMock).toHaveBeenCalledWith('browser_screenshot', { tabId: 'tab-1' });
-  });
-
-  it('should click element', async () => {
-    invokeMock.mockResolvedValue(undefined);
-
-    await useBrowserStore.getState().clickElement('tab-1', '#submit-button');
-
-    expect(invokeMock).toHaveBeenCalledWith('browser_click', {
-      tabId: 'tab-1',
-      selector: '#submit-button',
-    });
-  });
-
-  it('should type text in element', async () => {
-    invokeMock.mockResolvedValue(undefined);
-
-    await useBrowserStore.getState().typeText('tab-1', '#email-input', 'test@example.com');
-
-    expect(invokeMock).toHaveBeenCalledWith('browser_type', {
-      tabId: 'tab-1',
-      selector: '#email-input',
-      text: 'test@example.com',
-    });
   });
 
   it('should start and stop recording', () => {

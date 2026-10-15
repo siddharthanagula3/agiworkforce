@@ -49,7 +49,10 @@ export interface BackgroundAgentConversationMessage {
   timestamp: string;
 }
 
+export type BackgroundAgentBoundary = 'local' | 'on_device' | 'managed_cloud';
+
 export interface BackgroundAgentContext {
+  boundary?: BackgroundAgentBoundary | null;
   workingDirectory: string | null;
   environment: Record<string, string>;
   conversationSnapshot: BackgroundAgentConversationMessage[];
@@ -84,28 +87,6 @@ export interface BackgroundAgentStats {
   atCapacity: boolean;
 }
 
-export interface PushBackgroundAgentInput {
-  conversationId: string;
-  goal: string;
-  workingDirectory?: string;
-  conversationHistory?: BackgroundAgentConversationMessage[];
-  activeMcpServers?: string[];
-  customInstructions?: string;
-  priority?: number;
-  timeoutSecs?: number;
-}
-
-export interface PushBackgroundAgentResponse {
-  agentId: string;
-  queuePosition: number | null;
-  started: boolean;
-}
-
-export interface BackgroundAgentTakeOver {
-  agent: BackgroundAgent;
-  context: BackgroundAgentContext;
-}
-
 interface ListAgentsResponse {
   agents: BackgroundAgent[];
   activeCount: number;
@@ -124,22 +105,16 @@ interface BackgroundAgentState {
   maxAgents: number;
   isLoading: boolean;
   error: string | null;
-  lastTakeOver: BackgroundAgentTakeOver | null;
 
-  pushToBackground: (input: PushBackgroundAgentInput) => Promise<PushBackgroundAgentResponse>;
   listAgents: () => Promise<BackgroundAgent[]>;
   listActiveAgents: () => Promise<BackgroundAgent[]>;
   getAgent: (agentId: string) => Promise<BackgroundAgent | null>;
   pauseAgent: (agentId: string) => Promise<void>;
   resumeAgent: (agentId: string) => Promise<void>;
   cancelAgent: (agentId: string) => Promise<void>;
-  takeOverAgent: (agentId: string) => Promise<BackgroundAgentTakeOver>;
   fetchStats: () => Promise<BackgroundAgentStats>;
-  cleanupAgents: () => Promise<number>;
-  shouldPushToBackground: (goal: string) => Promise<{ shouldPush: boolean; goal: string }>;
 
   clearError: () => void;
-  clearTakeOver: () => void;
   reset: () => void;
 }
 
@@ -163,31 +138,13 @@ function countActive(agents: BackgroundAgent[]): number {
 
 export const useBackgroundAgentStore = create<BackgroundAgentState>()(
   devtools(
-    (set, get) => ({
+    (set) => ({
       agents: [],
       stats: null,
       activeCount: 0,
       maxAgents: DEFAULT_MAX_AGENTS,
       isLoading: false,
       error: null,
-      lastTakeOver: null,
-
-      pushToBackground: async (input) => {
-        set({ isLoading: true, error: null }, undefined, 'backgroundAgent/push/start');
-        try {
-          const response = await invoke<PushBackgroundAgentResponse>('background_agent_push', {
-            input,
-          });
-          await get().listAgents();
-          set({ isLoading: false }, undefined, 'backgroundAgent/push/success');
-          return response;
-        } catch (error) {
-          const message = toMessage(error);
-          set({ error: message, isLoading: false }, undefined, 'backgroundAgent/push/error');
-          toast.error(`Failed to start background agent: ${message}`);
-          throw error;
-        }
-      },
 
       listAgents: async () => {
         set({ isLoading: true, error: null }, undefined, 'backgroundAgent/list/start');
@@ -278,52 +235,13 @@ export const useBackgroundAgentStore = create<BackgroundAgentState>()(
         }
       },
 
-      takeOverAgent: async (agentId) => {
-        try {
-          const result = await invoke<BackgroundAgentTakeOver>('background_agent_take_over', {
-            agentId,
-          });
-          set(
-            (state) => {
-              const agents = upsertAgent(state.agents, result.agent);
-              return { agents, activeCount: countActive(agents), lastTakeOver: result };
-            },
-            undefined,
-            'backgroundAgent/takeOver/success',
-          );
-          return result;
-        } catch (error) {
-          const message = toMessage(error);
-          set({ error: message }, undefined, 'backgroundAgent/takeOver/error');
-          toast.error(`Failed to take over agent: ${message}`);
-          throw error;
-        }
-      },
-
       fetchStats: async () => {
         const stats = await invoke<BackgroundAgentStats>('background_agent_stats');
         set({ stats, maxAgents: stats.maxAgents }, undefined, 'backgroundAgent/stats/success');
         return stats;
       },
 
-      cleanupAgents: async () => {
-        const removed = await invoke<number>('background_agent_cleanup');
-        if (removed > 0) {
-          await get().listAgents();
-        }
-        return removed;
-      },
-
-      shouldPushToBackground: async (goal) => {
-        const [shouldPush, cleanedGoal] = await invoke<[boolean, string]>(
-          'background_agent_should_push',
-          { goal },
-        );
-        return { shouldPush, goal: cleanedGoal };
-      },
-
       clearError: () => set({ error: null }, undefined, 'backgroundAgent/clearError'),
-      clearTakeOver: () => set({ lastTakeOver: null }, undefined, 'backgroundAgent/clearTakeOver'),
       reset: () =>
         set(
           {
@@ -333,7 +251,6 @@ export const useBackgroundAgentStore = create<BackgroundAgentState>()(
             maxAgents: DEFAULT_MAX_AGENTS,
             isLoading: false,
             error: null,
-            lastTakeOver: null,
           },
           undefined,
           'backgroundAgent/reset',
@@ -376,7 +293,6 @@ const STATUS_EVENTS: Record<string, BackgroundAgentStatus> = {
   'background_agent:cancelled': 'cancelled',
   'background_agent:completed': 'completed',
   'background_agent:failed': 'failed',
-  'background_agent:taken_over': 'taken_over',
 };
 
 export const BACKGROUND_AGENT_EVENTS = [

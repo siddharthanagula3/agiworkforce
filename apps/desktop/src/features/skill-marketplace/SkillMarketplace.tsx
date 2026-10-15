@@ -24,6 +24,7 @@ import { Skeleton } from '@/ui/Skeleton';
 import { SkillCard } from './SkillCard';
 import { SkillCategoryFilter } from './SkillCategoryFilter';
 import { SkillSearchBar } from './SkillSearchBar';
+import { WorkspaceSkillsNotice } from './WorkspaceSkillsNotice';
 import { selectFilteredSkills, useSkillMarketplaceStore } from '../../stores/skillMarketplaceStore';
 
 function SkillCardSkeleton() {
@@ -180,6 +181,8 @@ export function SkillMarketplace() {
 
       {/* Content area */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
+        <WorkspaceSkillsNotice key={totalCount} />
+
         {/* Error banner */}
         {error && !isLoading && (
           <div className="mb-4 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">

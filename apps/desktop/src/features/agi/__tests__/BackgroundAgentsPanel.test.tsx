@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('sonner', () => ({
@@ -55,8 +55,6 @@ function stubBackend(agent: BackgroundAgent = AGENT) {
         return { agents: [agent], activeCount: 1, maxAgents: 8 };
       case 'background_agent_get':
         return agent;
-      case 'background_agent_take_over':
-        return { agent: { ...agent, status: 'taken_over' }, context: agent.context };
       default:
         return undefined;
     }
@@ -65,7 +63,7 @@ function stubBackend(agent: BackgroundAgent = AGENT) {
 
 async function openBackgroundTab() {
   render(<AgentTaskPanel />);
-  fireEvent.click(screen.getByRole('button', { name: /Background/i }));
+  fireEvent.click(screen.getByRole('tab', { name: /Background/i }));
   await screen.findByText('Refactor the billing module');
 }
 
@@ -84,20 +82,112 @@ describe('Background Agents panel', () => {
     expect(screen.getByText(/1\/8 active/)).toBeInTheDocument();
   });
 
-  it('sends pause, cancel and take-over through to the backend commands', async () => {
+  function sentCommands() {
+    return mockInvoke.mock.calls.map(([command]) => command);
+  }
+
+  it('pauses at once, since a paused run can be resumed', async () => {
     stubBackend();
     await openBackgroundTab();
 
     fireEvent.click(screen.getByRole('button', { name: /Pause/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Cancel/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Take Over/i }));
 
-    await waitFor(() => {
-      const commands = mockInvoke.mock.calls.map(([command]) => command);
-      expect(commands).toContain('background_agent_pause');
-      expect(commands).toContain('background_agent_cancel');
-      expect(commands).toContain('background_agent_take_over');
+    await waitFor(() => expect(sentCommands()).toContain('background_agent_pause'));
+  });
+
+  it('asks before cancelling and says the run cannot be resumed', async () => {
+    stubBackend();
+    await openBackgroundTab();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    const question = await screen.findByRole('alertdialog');
+    expect(within(question).getByText('Cancel this background run?')).toBeInTheDocument();
+    expect(within(question).getByText(/cannot be resumed/)).toBeInTheDocument();
+    expect(within(question).getByText(/Refactor the billing module/)).toBeInTheDocument();
+    expect(sentCommands()).not.toContain('background_agent_cancel');
+
+    fireEvent.click(within(question).getByRole('button', { name: 'Keep running' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(sentCommands()).not.toContain('background_agent_cancel');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel run' }),
+    );
+    await waitFor(() => expect(sentCommands()).toContain('background_agent_cancel'));
+  });
+
+  it('offers no control that only stops the run under another name', async () => {
+    stubBackend();
+    await openBackgroundTab();
+
+    expect(screen.queryByRole('button', { name: /Take Over/i })).not.toBeInTheDocument();
+  });
+
+  it('says which boundary the run keeps its model calls inside', async () => {
+    stubBackend({ ...AGENT, context: { ...AGENT.context, boundary: 'managed_cloud' } });
+    await openBackgroundTab();
+
+    expect(screen.getByTestId('background-agent-boundary')).toHaveTextContent('Model: AGI Cloud');
+  });
+
+  it('shows no boundary for a run stored before boundaries were recorded', async () => {
+    stubBackend();
+    await openBackgroundTab();
+
+    expect(screen.queryByTestId('background-agent-boundary')).not.toBeInTheDocument();
+  });
+
+  it('shows what a finished run found, its steps and any plan change that was dropped', async () => {
+    stubBackend({
+      ...AGENT,
+      status: 'completed',
+      completedAt: '2026-08-15T00:05:00Z',
+      summary: {
+        description: 'Three invoices from Dana are unpaid; the March one is 40 days late.',
+        filesChanged: [],
+        actionsTaken: ['Read the ledger: 212 rows', 'Read the inbox: 3 unread'],
+        warnings: ['The plan change the model asked for was not adopted: it added a command.'],
+        goalAchieved: true,
+      },
     });
+    await openBackgroundTab();
+
+    const result = screen.getByTestId('background-agent-result');
+    expect(
+      within(result).getByText(
+        'Three invoices from Dana are unpaid; the March one is 40 days late.',
+      ),
+    ).toBeInTheDocument();
+    expect(within(result).getByText('2 steps')).toBeInTheDocument();
+    expect(within(result).getByText('Read the inbox: 3 unread')).toBeInTheDocument();
+    expect(within(result).getByText(/was not adopted/)).toBeInTheDocument();
+  });
+
+  it('shows the whole reason a run failed', async () => {
+    const reason =
+      "Not run unattended: 'browser_navigate' needs your approval, and nobody was here to give it. Run it from chat, or save an 'Always allow' for this tool in Settings.";
+    stubBackend({ ...AGENT, status: 'failed', error: reason });
+    await openBackgroundTab();
+
+    expect(
+      within(screen.getByTestId('background-agent-result')).getByText(reason),
+    ).toBeInTheDocument();
+  });
+
+  it('does not tell the person to type a prefix that does nothing', async () => {
+    mockInvoke.mockImplementation(async (command: string) =>
+      command === 'background_agent_list'
+        ? { agents: [], activeCount: 0, maxAgents: 8 }
+        : undefined,
+    );
+    render(<AgentTaskPanel />);
+    fireEvent.click(screen.getByRole('tab', { name: /Background/i }));
+
+    const empty = await screen.findByText(/No background agents yet/);
+    expect(empty).not.toHaveTextContent('&');
+    expect(empty).toHaveTextContent('automation trigger fires');
   });
 
   it('offers Resume once a paused event arrives', async () => {

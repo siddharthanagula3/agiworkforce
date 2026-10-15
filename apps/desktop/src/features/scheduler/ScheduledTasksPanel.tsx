@@ -16,15 +16,15 @@ const FILTER_TABS: Array<{ id: FilterTab; label: string }> = [
   { id: 'active', label: 'Active' },
   { id: 'paused', label: 'Paused' },
   { id: 'completed', label: 'Completed' },
-  { id: 'failed', label: 'Failed' },
+  { id: 'failed', label: 'Stopped' },
 ];
 
 const EXAMPLE_TASKS: Array<{ name: string; prompt: string; emoji: string }> = [
   {
-    emoji: '📰',
-    name: 'Daily news summary',
+    emoji: '🗓️',
+    name: 'Daily planning questions',
     prompt:
-      'Summarize the top 5 AI and technology news stories from today. Format as bullet points with a one-sentence description each.',
+      'Write five short questions that help me plan today: what matters most, what could block it, what I can drop, who I need to talk to, and how I will know the day went well.',
   },
   {
     emoji: '📊',
@@ -45,6 +45,8 @@ export function ScheduledTasksPanel() {
   const isLoading = useSchedulerStore((s) => s.isLoading);
   const fetchTasks = useSchedulerStore((s) => s.fetchTasks);
   const createTask = useSchedulerStore((s) => s.createTask);
+  const initEventListeners = useSchedulerStore((s) => s.initEventListeners);
+  const cleanupEventListeners = useSchedulerStore((s) => s.cleanupEventListeners);
 
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -52,7 +54,9 @@ export function ScheduledTasksPanel() {
 
   useEffect(() => {
     void fetchTasks();
-  }, [fetchTasks]);
+    initEventListeners().catch(console.error);
+    return cleanupEventListeners;
+  }, [fetchTasks, initEventListeners, cleanupEventListeners]);
 
   const filteredTasks = useMemo(() => {
     if (activeFilter === 'all') return tasks;
@@ -92,7 +96,6 @@ export function ScheduledTasksPanel() {
         description: '',
         prompt: example.prompt,
         schedule: { type: 'recurring', interval: 'daily' },
-        status: 'active',
       });
     },
     [createTask],
@@ -171,7 +174,9 @@ export function ScheduledTasksPanel() {
             onUseExample={(ex) => void handleUseExample(ex)}
           />
         ) : filteredTasks.length === 0 ? (
-          <div className="py-8 text-center text-sm text-slate-500">No {activeFilter} tasks.</div>
+          <div className="py-8 text-center text-sm text-slate-500">
+            No {FILTER_TABS.find((tab) => tab.id === activeFilter)?.label.toLowerCase()} tasks.
+          </div>
         ) : (
           <div className="space-y-2 p-3">
             {filteredTasks.map((task) => (

@@ -16,6 +16,19 @@ import {
   type ShortcutKey,
 } from './garnishCore';
 
+export interface TraySession {
+  rootId: string;
+  threadId: string;
+  label: string;
+}
+
+export interface TrayActivity {
+  runningTurns: TraySession[];
+  pendingApprovals: TraySession[];
+  screenTakenOver: boolean;
+  computerUseGranted: boolean;
+}
+
 export interface TrayHandlers {
   onOpen: () => void;
   onNewChat: () => void;
@@ -23,8 +36,16 @@ export interface TrayHandlers {
   onScreenshot: () => void;
   onWindowShot: () => void;
   onVoice: () => void;
+  onStopAgents: () => void;
+  onStopAll: () => void;
+  onHandBackScreen: () => void;
+  onRevokeComputerUse: () => void;
+  onOpenSession: (rootId: string, threadId: string) => void;
   onCheckForUpdates: () => void;
+  activity: () => TrayActivity;
 }
+
+const MENU_LABEL_LIMIT = 60;
 
 let tray: Tray | null = null;
 
@@ -58,6 +79,7 @@ function applyShortcut(key: ShortcutKey, value: string, handlers: TrayHandlers):
     onScreenshot: handlers.onScreenshot,
     onWindowShot: handlers.onWindowShot,
     onVoice: handlers.onVoice,
+    onStop: handlers.onStopAgents,
   });
   refreshTrayMenu(handlers);
 }
@@ -92,12 +114,58 @@ function shortcutSubmenu(
   ]);
 }
 
+function menuLabel(text: string): string {
+  const line = text.replace(/\s+/gu, ' ').trim();
+  return line.length > MENU_LABEL_LIMIT ? `${line.slice(0, MENU_LABEL_LIMIT - 1)}…` : line;
+}
+
+function sessionItems(
+  heading: string,
+  sessions: readonly TraySession[],
+  handlers: TrayHandlers,
+): Electron.MenuItemConstructorOptions[] {
+  if (sessions.length === 0) return [];
+  return [
+    { label: heading, enabled: false },
+    ...sessions.map((session) => ({
+      label: menuLabel(session.label),
+      click: () => handlers.onOpenSession(session.rootId, session.threadId),
+    })),
+  ];
+}
+
+function activityItems(handlers: TrayHandlers): Electron.MenuItemConstructorOptions[] {
+  const activity = handlers.activity();
+  return [
+    ...sessionItems('Waiting for Approval', activity.pendingApprovals, handlers),
+    ...sessionItems('Running', activity.runningTurns, handlers),
+    {
+      label: 'Stop All Agents…',
+      enabled: activity.runningTurns.length > 0,
+      click: handlers.onStopAll,
+    },
+    ...(activity.screenTakenOver
+      ? [{ label: 'Hand Back Screen Control', click: handlers.onHandBackScreen }]
+      : []),
+    ...(activity.computerUseGranted
+      ? [
+          {
+            label: 'Stop Computer Use and Revoke Access…',
+            click: handlers.onRevokeComputerUse,
+          },
+        ]
+      : []),
+    { type: 'separator' },
+  ];
+}
+
 function buildMenu(handlers: TrayHandlers): Electron.Menu {
   const shortcuts = getShortcuts();
   return Menu.buildFromTemplate([
     { label: 'Open AGI Cloud', click: handlers.onOpen },
     { label: 'New Chat', click: handlers.onNewChat },
     { type: 'separator' },
+    ...activityItems(handlers),
     {
       label: SHORTCUT_LABELS.quickAskShortcut,
       accelerator: shortcuts.quickAskShortcut,
@@ -150,6 +218,10 @@ export function createTray(handlers: TrayHandlers): Tray {
 
 export function refreshTrayMenu(handlers: TrayHandlers): void {
   if (tray && !tray.isDestroyed()) tray.setContextMenu(buildMenu(handlers));
+}
+
+export function hasTray(): boolean {
+  return tray !== null && !tray.isDestroyed();
 }
 
 export function destroyTray(): void {

@@ -66,16 +66,12 @@ describe('backgroundAgentStore command wiring', () => {
 
     mockInvoke.mockImplementation(async (command: string) => {
       switch (command) {
-        case 'background_agent_push':
-          return { agentId: 'agent-1', queuePosition: null, started: true };
         case 'background_agent_list':
           return { agents: [agent], activeCount: 1, maxAgents: 8 };
         case 'background_agent_list_active':
           return [agent];
         case 'background_agent_get':
           return agent;
-        case 'background_agent_take_over':
-          return { agent: { ...agent, status: 'taken_over' }, context: agent.context };
         case 'background_agent_stats':
           return {
             totalAgents: 1,
@@ -87,10 +83,6 @@ describe('backgroundAgentStore command wiring', () => {
             maxAgents: 8,
             atCapacity: false,
           };
-        case 'background_agent_cleanup':
-          return 0;
-        case 'background_agent_should_push':
-          return [true, 'write tests'];
         default:
           return undefined;
       }
@@ -98,41 +90,32 @@ describe('backgroundAgentStore command wiring', () => {
 
     const store = useBackgroundAgentStore.getState();
 
-    await store.pushToBackground({ conversationId: 'conv-1', goal: 'write tests' });
     await store.listAgents();
     await store.listActiveAgents();
     await store.getAgent('agent-1');
     await store.pauseAgent('agent-1');
     await store.resumeAgent('agent-1');
     await store.cancelAgent('agent-1');
-    await store.takeOverAgent('agent-1');
     await store.fetchStats();
-    await store.cleanupAgents();
-    await store.shouldPushToBackground('& write tests');
 
     const invoked = new Set(mockInvoke.mock.calls.map(([command]) => command));
     expect([...invoked].sort()).toEqual([
       'background_agent_cancel',
-      'background_agent_cleanup',
       'background_agent_get',
       'background_agent_list',
       'background_agent_list_active',
       'background_agent_pause',
-      'background_agent_push',
       'background_agent_resume',
-      'background_agent_should_push',
       'background_agent_stats',
-      'background_agent_take_over',
     ]);
 
     const pauseCall = mockInvoke.mock.calls.find(([c]) => c === 'background_agent_pause');
     expect(pauseCall?.[1]).toEqual({ agentId: 'agent-1' });
 
-    expect(useBackgroundAgentStore.getState().lastTakeOver?.agent.status).toBe('taken_over');
     expect(useBackgroundAgentStore.getState().stats?.maxAgents).toBe(8);
   });
 
-  it('subscribes to all nine background agent events', async () => {
+  it('subscribes to all eight background agent events', async () => {
     mockInvoke.mockResolvedValue(null);
     mockListen.mockResolvedValue(() => {});
 
@@ -149,10 +132,9 @@ describe('backgroundAgentStore command wiring', () => {
         'background_agent:progress',
         'background_agent:resumed',
         'background_agent:started',
-        'background_agent:taken_over',
       ].sort(),
     );
-    expect(BACKGROUND_AGENT_EVENTS).toHaveLength(9);
+    expect(BACKGROUND_AGENT_EVENTS).toHaveLength(8);
   });
 
   it('applies each status event to the tracked agent', () => {
@@ -185,9 +167,6 @@ describe('backgroundAgentStore command wiring', () => {
     applyBackgroundAgentEvent('background_agent:completed', { agentId: 'agent-1' });
     expect(read()?.status).toBe('completed');
     expect(read()?.completedAt).toBeTruthy();
-
-    applyBackgroundAgentEvent('background_agent:taken_over', { agentId: 'agent-1' });
-    expect(read()?.status).toBe('taken_over');
   });
 
   it('refreshes the agent on created and progress events, which carry no state', () => {

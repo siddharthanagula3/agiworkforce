@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
-import { promises as fs } from 'node:fs';
+import type { SpawnOptions } from 'node:child_process';
+import { lstatSync, promises as fs, type Stats } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,7 +19,7 @@ vi.mock('node:child_process', async (importOriginal) => {
   return { ...original, spawn, execFile, default: { ...original, spawn, execFile } };
 });
 
-const { runShellCommand } = await import('../runtime/shellService');
+const { pinnedRootPath, runShellCommand } = await import('../runtime/shellService');
 const { SEATBELT_EXECUTABLE } = await import('../runtime/shellSandbox');
 
 function fakeChild() {
@@ -60,7 +61,6 @@ function run(
     command: 'node -e "1"',
     policy,
     sandbox,
-    network: 'deny',
     approve,
     emit: () => undefined,
   });
@@ -85,9 +85,52 @@ describe('runShellCommand with a sandbox', () => {
     expect(options.cwd).toBe(folder);
 
     const scratch = options.env['TMPDIR']!;
-    const writes = args[1]!.split('\n').filter((line) => line.startsWith('(allow file-write*'));
-    expect(writes.at(-1)).toBe(`(allow file-write* (subpath "${folder}") (subpath "${scratch}"))`);
+    const writes = args[1]!
+      .split('\n')
+      .filter((line) => line.startsWith('(allow file-write* (subpath '));
+    expect(writes.slice(-2)).toEqual([
+      `(allow file-write* (subpath "${folder}"))`,
+      `(allow file-write* (subpath "${scratch}"))`,
+    ]);
+    expect(args[1]).toContain(`(deny file-write-unlink (literal "${folder}"))`);
+    expect(args[1]).toContain('[.][hH][uU][sS][kK][yY]');
+    expect(args[1]).toContain('(deny file-read* (subpath "');
     expect(args[1]).not.toContain('network');
+  });
+
+  it('keeps the network blocked for a prompted run unless the user allowed it', async () => {
+    const approve = vi.fn().mockResolvedValue({ approved: true, allowNetwork: false });
+    await run({ backend: 'seatbelt', executable: SEATBELT_EXECUTABLE }, approve, {
+      allow: [],
+      deny: [],
+    });
+
+    expect(approve).toHaveBeenCalledTimes(1);
+    expect((spawn.mock.calls[0] as [string, string[]])[1][1]).not.toContain('network');
+  });
+
+  it('opens the network for the one run the user allowed it for', async () => {
+    const approve = vi.fn().mockResolvedValue({ approved: true, allowNetwork: true });
+    await run({ backend: 'seatbelt', executable: SEATBELT_EXECUTABLE }, approve, {
+      allow: [],
+      deny: [],
+    });
+    expect((spawn.mock.calls[0] as [string, string[]])[1][1]).toContain('(allow network-outbound)');
+
+    spawn.mockClear();
+    await run({ backend: 'seatbelt', executable: SEATBELT_EXECUTABLE }, vi.fn());
+    expect((spawn.mock.calls[0] as [string, string[]])[1][1]).not.toContain('network');
+  });
+
+  it('never opens the network for a run that was refused', async () => {
+    const approve = vi.fn().mockResolvedValue({ approved: false, allowNetwork: true });
+    await expect(
+      run({ backend: 'seatbelt', executable: SEATBELT_EXECUTABLE }, approve, {
+        allow: [],
+        deny: [],
+      }),
+    ).rejects.toMatchObject({ name: 'ShellCommandRefused', reason: 'not-listed' });
+    expect(spawn).not.toHaveBeenCalled();
   });
 
   it('spawns bubblewrap on Linux with the folder bound writable', async () => {
@@ -98,29 +141,137 @@ describe('runShellCommand with a sandbox', () => {
     expect(args.join(' ')).toContain(`--bind ${folder} ${folder}`);
   });
 
-  it('refuses a folder whose path cannot be expressed in the profile, without spawning', async () => {
-    const awkward = path.join(folder, 'Project (copy)');
+  function runAt(folderPath: string) {
+    return runShellCommand({
+      runId: `at-${Math.random()}`,
+      root: { ...root, path: folderPath },
+      relativePath: '',
+      command: 'node -e "1"',
+      policy: { allow: ['node'], deny: [] },
+      sandbox: { backend: 'seatbelt', executable: SEATBELT_EXECUTABLE },
+      approve: vi.fn(),
+      emit: () => undefined,
+    });
+  }
+
+  it('runs in a folder whose name holds parentheses and a quote, named in the profile as one escaped string', async () => {
+    const awkward = path.join(folder, 'Project (copy) "2"');
     await fs.mkdir(awkward);
-    await expect(
-      runShellCommand({
-        runId: 'awkward',
-        root: { ...root, path: awkward },
-        relativePath: '',
-        command: 'node -e "1"',
-        policy: { allow: ['node'], deny: [] },
-        sandbox: { backend: 'seatbelt', executable: SEATBELT_EXECUTABLE },
-        network: 'deny',
-        approve: vi.fn(),
-        emit: () => undefined,
-      }),
-    ).rejects.toMatchObject({ name: 'ShellCommandRefused', reason: 'sandbox-unavailable' });
+
+    await runAt(awkward);
+
+    const profile = (spawn.mock.calls[0] as [string, string[]])[1][1]!;
+    expect(profile.split('\n')).toContain(
+      `(allow file-write* (subpath "${awkward.replaceAll('"', '\\"')}"))`,
+    );
+  });
+
+  it('refuses a folder whose path cannot be expressed in the profile, without spawning', async () => {
+    const unnameable = path.join(folder, 'Project\ncopy');
+    await fs.mkdir(unnameable);
+
+    await expect(runAt(unnameable)).rejects.toMatchObject({
+      name: 'ShellCommandRefused',
+      reason: 'sandbox-unavailable',
+    });
     expect(spawn).not.toHaveBeenCalled();
+  });
+});
+
+describe('the approved folder is pinned to the path it was approved at', () => {
+  const seatbelt = { backend: 'seatbelt', executable: SEATBELT_EXECUTABLE } as const;
+
+  function runIn(at: WorkspaceRoot) {
+    return runShellCommand({
+      runId: `pinned-${Math.random()}`,
+      root: at,
+      relativePath: '',
+      command: 'node -e "1"',
+      policy: { allow: ['node'], deny: [] },
+      sandbox: seatbelt,
+      approve: vi.fn(),
+      emit: () => undefined,
+    });
+  }
+
+  it('refuses a folder swapped for a link to another home, without spawning', async () => {
+    const approved = path.join(folder, 'approved');
+    const home = path.join(folder, 'home');
+    await fs.mkdir(home);
+    await fs.symlink(home, approved);
+    try {
+      await expect(runIn({ ...root, path: approved })).rejects.toMatchObject({
+        name: 'ShellCommandRefused',
+        message: expect.stringContaining(`This folder changed since it was approved: ${approved}`),
+      });
+      expect(spawn).not.toHaveBeenCalled();
+    } finally {
+      await fs.rm(approved, { force: true });
+      await fs.rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a folder whose parent was swapped, so it now resolves elsewhere', async () => {
+    const real = path.join(folder, 'real');
+    const parent = path.join(folder, 'parent');
+    await fs.mkdir(path.join(real, 'project'), { recursive: true });
+    await fs.symlink(real, parent);
+    try {
+      await expect(runIn({ ...root, path: path.join(parent, 'project') })).rejects.toMatchObject({
+        message: expect.stringContaining('changed since it was approved'),
+      });
+      expect(spawn).not.toHaveBeenCalled();
+    } finally {
+      await fs.rm(parent, { force: true });
+      await fs.rm(real, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a folder that is gone', async () => {
+    await expect(runIn({ ...root, path: path.join(folder, 'missing') })).rejects.toMatchObject({
+      message: expect.stringContaining('changed since it was approved'),
+    });
+  });
+
+  it('refuses the home folder, an ancestor of it and the filesystem root', async () => {
+    const home = path.join(folder, 'users', 'someone');
+    await fs.mkdir(home, { recursive: true });
+    try {
+      for (const at of [home, path.join(folder, 'users'), '/']) {
+        await expect(pinnedRootPath({ ...root, path: at }, home)).rejects.toMatchObject({
+          message: expect.stringContaining('changed since it was approved'),
+        });
+      }
+      const inside = path.join(home, 'project');
+      await fs.mkdir(inside);
+      await expect(pinnedRootPath({ ...root, path: inside }, home)).resolves.toBe(inside);
+    } finally {
+      await fs.rm(path.join(folder, 'users'), { recursive: true, force: true });
+    }
+  });
+
+  it('runs in an unchanged folder, with a fresh private scratch folder', async () => {
+    let scratchStat: Stats | null = null;
+    spawn.mockImplementationOnce((_command: string, _args: string[], options: SpawnOptions) => {
+      scratchStat = lstatSync(options.env!['TMPDIR']!);
+      return fakeChild();
+    });
+    await runIn(root);
+    const [, , options] = spawn.mock.calls[0] as [string, string[], { env: NodeJS.ProcessEnv }];
+    const scratch = options.env['TMPDIR']!;
+    expect(scratchStat!.isDirectory()).toBe(true);
+    expect(scratchStat!.mode & 0o777).toBe(0o700);
+    expect(path.basename(scratch)).toMatch(/^agi-shell-scratch-/);
+    expect(await fs.realpath(path.dirname(scratch))).toBe(path.dirname(scratch));
+    const parent = await fs.lstat(path.dirname(scratch));
+    expect(parent.uid).toBe(process.getuid!());
+    expect(parent.mode & 0o077).toBe(0);
   });
 });
 
 describe('runShellCommand without a sandbox', () => {
   it('asks even for an allow-listed program, saying the run is unsandboxed', async () => {
-    const approve = vi.fn().mockResolvedValue(false);
+    const approve = vi.fn().mockResolvedValue({ approved: false, allowNetwork: false });
     await expect(run({ backend: 'none' }, approve)).rejects.toMatchObject({
       name: 'ShellCommandRefused',
       reason: 'sandbox-unavailable',
@@ -137,7 +288,7 @@ describe('runShellCommand without a sandbox', () => {
   });
 
   it('runs the program directly only after the unsandboxed run is approved', async () => {
-    const approve = vi.fn().mockResolvedValue(true);
+    const approve = vi.fn().mockResolvedValue({ approved: true, allowNetwork: false });
     await run({ backend: 'none' }, approve, { allow: [], deny: [] });
     expect(approve).toHaveBeenCalledTimes(1);
     const [command, args, options] = spawn.mock.calls[0] as [

@@ -1,5 +1,6 @@
 import { dotfiles } from '@agiworkforce/desktop-command-client';
 import { toast } from 'sonner';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { cn } from '@/lib/utils';
 import {
   ChevronDown,
@@ -138,7 +139,11 @@ function ConfigEditorSection() {
       if (provider) defaults['provider'] = provider;
       delete defaults['approval_mode'];
       if (permissionMode) defaults['permission_mode'] = permissionMode;
-      await dotfiles.writeSharedConfig('default', defaults);
+      const saved = await dotfiles.writeSharedConfig('default', defaults);
+      if (saved === false) {
+        toast.info('Nothing was saved. You declined the change at the system prompt.');
+        return;
+      }
       toast.success('Configuration saved');
     } catch (err) {
       toast.error(`Failed to save config: ${String(err)}`);
@@ -165,6 +170,10 @@ function ConfigEditorSection() {
         Shared settings from{' '}
         <code className="text-xs bg-muted px-1 py-0.5 rounded">~/.agiworkforce/config.toml</code>
         <OpenFolderButton path="~/.agiworkforce/config.toml" name="config.toml" />
+      </p>
+      <p className="text-sm text-muted-foreground mb-4">
+        The command-line tool reads these. Your system asks you to confirm before a permission mode
+        that lets the tool do more without asking is saved.
       </p>
       <div className="space-y-3">
         {[
@@ -215,6 +224,7 @@ function McpServersSection() {
   const [newName, setNewName] = useState('');
   const [newCommand, setNewCommand] = useState('');
   const [newArgs, setNewArgs] = useState('');
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const loadServers = useCallback(async () => {
     try {
@@ -235,10 +245,14 @@ function McpServersSection() {
     if (!newName.trim()) return;
     try {
       const config: McpServerEntry = {
-        command: newCommand || undefined,
-        args: newArgs ? newArgs.split(/\s+/) : undefined,
+        command: newCommand.trim(),
+        args: newArgs.trim() ? newArgs.trim().split(/\s+/) : [],
       };
-      await dotfiles.dotfileAddMcpServer(newName.trim(), config);
+      const added = await dotfiles.dotfileAddMcpServer(newName.trim(), config);
+      if (added === false) {
+        toast.info('Nothing was added. You declined the server at the system prompt.');
+        return;
+      }
       toast.success(`Added MCP server: ${newName.trim()}`);
       setNewName('');
       setNewCommand('');
@@ -251,22 +265,32 @@ function McpServersSection() {
   }, [newName, newCommand, newArgs, loadServers]);
 
   const handleRemove = useCallback(
-    async (name: string) => {
-      try {
-        await dotfiles.dotfileRemoveMcpServer(name);
-        toast.success(`Removed MCP server: ${name}`);
-        await loadServers();
-      } catch (err) {
-        toast.error(`Failed to remove server: ${String(err)}`);
-      }
+    (name: string) => {
+      confirm({
+        title: `Remove ${name}?`,
+        description:
+          'This deletes the server from ~/.agiworkforce/mcp.json. The command-line tool and this app stop offering it, and its command, arguments and environment are not kept anywhere else, so adding it back means entering them again.',
+        confirmLabel: 'Remove server',
+        destructive: true,
+        onConfirm: async () => {
+          try {
+            await dotfiles.dotfileRemoveMcpServer(name);
+            toast.success(`Removed MCP server: ${name}`);
+            await loadServers();
+          } catch (err) {
+            toast.error(`Failed to remove server: ${String(err)}`);
+          }
+        },
+      });
     },
-    [loadServers],
+    [confirm, loadServers],
   );
 
   const serverEntries = Object.entries(servers);
 
   return (
     <div>
+      {confirmDialog}
       <div className="flex items-center justify-between mb-1">
         <h3 className="text-h3">MCP Servers</h3>
         <Button variant="outline" size="sm" onClick={() => setShowAdd(!showAdd)}>
@@ -303,11 +327,19 @@ function McpServersSection() {
             placeholder="Args (space-separated)"
             className="w-full h-8 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
+          <p className="text-sm text-muted-foreground">
+            The command-line tool starts this command as you, outside its sandbox, the next time it
+            runs. Your system shows you the whole command and asks before it is saved.
+          </p>
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowAdd(false)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={() => void handleAdd()} disabled={!newName.trim()}>
+            <Button
+              size="sm"
+              onClick={() => void handleAdd()}
+              disabled={!newName.trim() || !newCommand.trim()}
+            >
               Add Server
             </Button>
           </div>
@@ -339,7 +371,7 @@ function McpServersSection() {
               </span>
               <button
                 type="button"
-                onClick={() => void handleRemove(name)}
+                onClick={() => handleRemove(name)}
                 className="shrink-0 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                 title="Remove server"
                 aria-label={`Remove MCP server ${name}`}
@@ -565,12 +597,16 @@ function InstructionsEditorSection() {
   return (
     <div>
       <h3 className="text-h3 mb-1">Instructions</h3>
-      <p className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4">
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground mb-1">
         Global instructions from{' '}
         <code className="text-xs bg-muted px-1 py-0.5 rounded">
           ~/.agiworkforce/INSTRUCTIONS.md
         </code>
         <OpenFolderButton path="~/.agiworkforce/INSTRUCTIONS.md" name="INSTRUCTIONS.md" />
+      </p>
+      <p className="text-sm text-muted-foreground mb-4">
+        Local chats on this device and the CLI both read this file. A chat’s own instructions, your
+        custom instructions and a project’s instruction files take precedence over it.
       </p>
       <textarea
         value={content}
@@ -644,12 +680,16 @@ function MemoryViewerSection() {
           </button>
         )}
       </div>
-      <p className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4">
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground mb-1">
         Read-only view of{' '}
         <code className="text-xs bg-muted px-1 py-0.5 rounded">
           ~/.agiworkforce/memories/raw_memories.md
         </code>
         <OpenFolderButton path="~/.agiworkforce/memories/raw_memories.md" name="raw_memories.md" />
+      </p>
+      <p className="text-sm text-muted-foreground mb-4">
+        Only the CLI writes and reads these. Chats in this app use the memories in Settings →
+        Memory.
       </p>
       {!content ? (
         <p className="text-sm text-muted-foreground py-2">No memories stored yet.</p>

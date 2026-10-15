@@ -30,7 +30,7 @@ describe('computerUseStore', () => {
     useAppModeStore.setState({ mode: 'local' });
   });
 
-  describe('takeover and display targeting', () => {
+  describe('takeover and stop', () => {
     it('takes the screen over and hands it back through the host', async () => {
       mockInvoke.mockResolvedValueOnce({ taken_over: true, target_display: null });
       await useComputerUseStore.getState().takeOver();
@@ -43,6 +43,18 @@ describe('computerUseStore', () => {
       expect(useComputerUseStore.getState().takenOver).toBe(false);
     });
 
+    it('keeps the screen with the person and says why when handing back is not confirmed', async () => {
+      useComputerUseStore.setState({ takenOver: true });
+      const declined = 'Handing control back was not confirmed, so the screen is still yours.';
+      mockInvoke.mockRejectedValueOnce(declined);
+
+      await useComputerUseStore.getState().handBack();
+
+      expect(useComputerUseStore.getState().takenOver).toBe(true);
+      expect(useComputerUseStore.getState().error).toBe(declined);
+      expect(toast.error).toHaveBeenCalledWith(declined);
+    });
+
     it('reports a takeover that did not happen instead of showing it as taken', async () => {
       useComputerUseStore.setState({ takenOver: false });
       mockInvoke.mockRejectedValueOnce(new Error('host unavailable'));
@@ -53,18 +65,50 @@ describe('computerUseStore', () => {
       expect(toast.error).toHaveBeenCalledWith('host unavailable');
     });
 
-    it('lists displays and targets the one chosen', async () => {
-      const displays = [
-        { id: 0, x: 0, y: 0, width: 3024, height: 1964, scale_factor: 2, is_primary: true },
-        { id: 1, x: 1512, y: 0, width: 2560, height: 1440, scale_factor: 1, is_primary: false },
-      ];
-      mockInvoke.mockResolvedValueOnce(displays);
-      await expect(useComputerUseStore.getState().listDisplays()).resolves.toEqual(displays);
+    it('takes the screen back before it cancels the running action', async () => {
+      const executionId = '99999999-9999-4999-8999-999999999999';
+      useComputerUseStore.setState({
+        activeOpaExecutionId: executionId,
+        isExecutingOpa: true,
+        pausedConfirmation: {
+          sessionId: 'session-1',
+          stepIndex: 2,
+          approval: {} as never,
+        },
+      });
+      mockInvoke.mockImplementation((command) => {
+        if (command === 'computer_use_take_over') {
+          return Promise.resolve({ taken_over: true, target_display: null });
+        }
+        if (command === 'computer_use_cancel_opa_task') return Promise.resolve(true);
+        return Promise.resolve(undefined);
+      });
 
-      mockInvoke.mockResolvedValueOnce(displays[1]);
-      await useComputerUseStore.getState().setTargetDisplay(1);
-      expect(mockInvoke).toHaveBeenCalledWith('computer_use_set_target_display', { displayId: 1 });
-      expect(useComputerUseStore.getState().targetDisplayId).toBe(1);
+      await useComputerUseStore.getState().stopComputerUse();
+
+      const order = mockInvoke.mock.calls.map(([command]) => command);
+      expect(order.indexOf('computer_use_take_over')).toBeLessThan(
+        order.indexOf('computer_use_cancel_opa_task'),
+      );
+      expect(mockInvoke).toHaveBeenCalledWith('computer_use_cancel_opa_task', { executionId });
+      const state = useComputerUseStore.getState();
+      expect(state.takenOver).toBe(true);
+      expect(state.isExecutingOpa).toBe(false);
+      expect(state.pausedConfirmation).toBeNull();
+      expect(state.pendingApproval).toBeNull();
+    });
+
+    it('still takes the screen back when nothing is running', async () => {
+      mockInvoke.mockResolvedValueOnce({ taken_over: true, target_display: null });
+
+      await useComputerUseStore.getState().stopComputerUse();
+
+      expect(mockInvoke).toHaveBeenCalledWith('computer_use_take_over');
+      expect(mockInvoke).not.toHaveBeenCalledWith(
+        'computer_use_cancel_opa_task',
+        expect.anything(),
+      );
+      expect(useComputerUseStore.getState().takenOver).toBe(true);
     });
   });
 

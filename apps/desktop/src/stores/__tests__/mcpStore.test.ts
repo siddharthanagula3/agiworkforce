@@ -1,11 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { useMcpStore } from '../mcpStore';
-import type {
-  McpExecutionHistoryEntry,
-  McpServerHealth,
-  McpServersConfig,
-  McpToolExecutionStats,
-} from '../../types/mcp';
+import type { McpServerHealth, McpServersConfig } from '../../types/mcp';
 
 vi.mock('../../lib/tauri-mock', async () => {
   const actual =
@@ -22,10 +17,7 @@ vi.mock('../../api/mcp', () => ({
     listServers: vi.fn(),
     listTools: vi.fn(),
     getStats: vi.fn(),
-    getExecutionHistory: vi.fn(),
-    getToolExecutionStats: vi.fn(),
     getHealth: vi.fn(),
-    checkServerHealth: vi.fn(),
     getConfig: vi.fn(),
     getConfigLocation: vi.fn(),
     connect: vi.fn(),
@@ -33,7 +25,6 @@ vi.mock('../../api/mcp', () => ({
     enableServer: vi.fn(),
     disableServer: vi.fn(),
     updateConfig: vi.fn(),
-    storeCredential: vi.fn(),
     searchTools: vi.fn(),
   },
 }));
@@ -58,10 +49,7 @@ interface McpClientMocks {
   listServers: Mock<() => Promise<MockServerInfo[]>>;
   listTools: Mock<() => Promise<MockToolInfo[]>>;
   getStats: Mock<() => Promise<Record<string, number>>>;
-  getExecutionHistory: Mock<(limit?: number) => Promise<McpExecutionHistoryEntry[]>>;
-  getToolExecutionStats: Mock<() => Promise<McpToolExecutionStats[]>>;
   getHealth: Mock<() => Promise<McpServerHealth[]>>;
-  checkServerHealth: Mock<(serverName: string) => Promise<McpServerHealth>>;
   getConfig: Mock<() => Promise<Partial<McpServersConfig> | { servers: Record<string, unknown> }>>;
   getConfigLocation: Mock<() => Promise<{ path: string; source: string } | null>>;
   connect: Mock<(serverName: string) => Promise<string>>;
@@ -69,7 +57,6 @@ interface McpClientMocks {
   enableServer: Mock<(serverName: string) => Promise<string>>;
   disableServer: Mock<(serverName: string) => Promise<string>>;
   updateConfig: Mock<(config: McpServersConfig) => Promise<string>>;
-  storeCredential: Mock<(serverName: string, key: string, value: string) => Promise<string>>;
   searchTools: Mock<(query: string) => Promise<MockToolInfo[]>>;
 }
 
@@ -89,8 +76,6 @@ describe('mcpStore', () => {
       configLocation: null,
       stats: {},
       health: [],
-      executionHistory: [],
-      toolExecutionStats: [],
       isInitialized: false,
       isLoading: false,
       error: null,
@@ -102,8 +87,6 @@ describe('mcpStore', () => {
     Object.values(mcpMock).forEach((mock) => mock.mockReset());
     mcpMock.getStats.mockResolvedValue({});
     mcpMock.getHealth.mockResolvedValue([]);
-    mcpMock.getExecutionHistory.mockResolvedValue([]);
-    mcpMock.getToolExecutionStats.mockResolvedValue([]);
     mcpMock.getConfigLocation.mockResolvedValue(null);
   });
 
@@ -115,8 +98,6 @@ describe('mcpStore', () => {
       expect(state.tools).toEqual([]);
       expect(state.config).toBeNull();
       expect(state.health).toEqual([]);
-      expect(state.executionHistory).toEqual([]);
-      expect(state.toolExecutionStats).toEqual([]);
       expect(state.stats).toEqual({});
       expect(state.isInitialized).toBe(false);
       expect(state.isLoading).toBe(false);
@@ -133,16 +114,12 @@ describe('mcpStore', () => {
       const mockStats = { servers: 1, tools: 1 };
       const mockConfig = { servers: {} };
       const mockHealth: McpServerHealth[] = [];
-      const mockHistory: McpExecutionHistoryEntry[] = [];
-      const mockToolStats: McpToolExecutionStats[] = [];
 
       mcpMock.initialize.mockResolvedValue('initialized');
       mcpMock.listServers.mockResolvedValue(mockServers);
       mcpMock.listTools.mockResolvedValue(mockTools);
       mcpMock.getStats.mockResolvedValue(mockStats);
       mcpMock.getHealth.mockResolvedValue(mockHealth);
-      mcpMock.getExecutionHistory.mockResolvedValue(mockHistory);
-      mcpMock.getToolExecutionStats.mockResolvedValue(mockToolStats);
       mcpMock.getConfig.mockResolvedValue(mockConfig);
       mcpMock.getConfigLocation.mockResolvedValue(null);
 
@@ -260,44 +237,6 @@ describe('mcpStore', () => {
       expect(useMcpStore.getState().health).toEqual(mockHealth);
     });
 
-    it('should refresh MCP execution history', async () => {
-      const mockHistory: McpExecutionHistoryEntry[] = [
-        {
-          tool_id: 'mcp__filesystem__read_file',
-          server_name: 'filesystem',
-          result: { ok: true },
-          duration_ms: 25,
-          timestamp: 1_700_000_000,
-          success: true,
-          error: null,
-        },
-      ];
-      mcpMock.getExecutionHistory.mockResolvedValue(mockHistory);
-
-      await useMcpStore.getState().refreshExecutionHistory(5);
-
-      expect(mcpMock.getExecutionHistory).toHaveBeenCalledWith(5);
-      expect(useMcpStore.getState().executionHistory).toEqual(mockHistory);
-    });
-
-    it('should refresh MCP tool execution stats', async () => {
-      const mockToolStats: McpToolExecutionStats[] = [
-        {
-          tool_id: 'mcp__filesystem__read_file',
-          total_executions: 4,
-          successful_executions: 4,
-          failed_executions: 0,
-          avg_duration_ms: 18,
-          last_execution: 1_700_000_000,
-        },
-      ];
-      mcpMock.getToolExecutionStats.mockResolvedValue(mockToolStats);
-
-      await useMcpStore.getState().refreshToolExecutionStats();
-
-      expect(useMcpStore.getState().toolExecutionStats).toEqual(mockToolStats);
-    });
-
     it('should upsert server health entries', () => {
       const initialHealth: McpServerHealth = {
         server_name: 'filesystem',
@@ -326,24 +265,6 @@ describe('mcpStore', () => {
           consecutive_failures: 0,
         }),
       ]);
-    });
-
-    it('should check and upsert a single server health row', async () => {
-      const health: McpServerHealth = {
-        server_name: 'filesystem',
-        status: 'healthy',
-        last_check: new Date().toISOString(),
-        error_message: null,
-        response_time_ms: 18,
-        tool_count: 3,
-        consecutive_failures: 0,
-      };
-      mcpMock.checkServerHealth.mockResolvedValue(health);
-
-      await useMcpStore.getState().checkServerHealth('filesystem');
-
-      expect(mcpMock.checkServerHealth).toHaveBeenCalledWith('filesystem');
-      expect(useMcpStore.getState().health).toEqual([health]);
     });
   });
 
@@ -489,27 +410,6 @@ describe('mcpStore', () => {
 
       const state = useMcpStore.getState();
       expect(state.error).toContain('Update failed');
-    });
-  });
-
-  describe('storeCredential', () => {
-    it('should store credential', async () => {
-      mcpMock.storeCredential.mockResolvedValue('stored');
-
-      await useMcpStore.getState().storeCredential('server', 'key', 'value');
-
-      const state = useMcpStore.getState();
-      expect(state.isLoading).toBe(false);
-      expect(mcpMock.storeCredential).toHaveBeenCalledWith('server', 'key', 'value');
-    });
-
-    it('should handle store credential errors', async () => {
-      mcpMock.storeCredential.mockRejectedValue(new Error('Storage failed'));
-
-      await useMcpStore.getState().storeCredential('server', 'key', 'value');
-
-      const state = useMcpStore.getState();
-      expect(state.error).toContain('Storage failed');
     });
   });
 

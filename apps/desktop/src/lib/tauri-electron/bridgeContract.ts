@@ -34,9 +34,8 @@ export const ELECTRON_BRIDGE_COMMANDS = [
   'account_approve_device_authorization',
   'account_store_api_base_url',
   'account_store_access_token',
-  'account_store_refresh_token',
   'account_restore_access_token',
-  'account_restore_refresh_token',
+  'account_refresh_session',
   'account_clear_tokens',
 ] as const;
 
@@ -62,6 +61,7 @@ export const ELECTRON_IPC_CHANNELS = {
   workspaceDrop: 'agi:workspace-drop',
   rendererTheme: 'agi:renderer-theme',
   openUpdateInstaller: 'agi:open-update-installer',
+  restartToUpdate: 'agi:restart-to-update',
 } as const;
 
 export type ElectronWindowControlAction =

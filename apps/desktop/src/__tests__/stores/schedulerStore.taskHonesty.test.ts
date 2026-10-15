@@ -27,11 +27,15 @@ function makeTask(overrides: Partial<ScheduledTask> = {}): ScheduledTask {
     name: 'Original Name',
     description: '',
     prompt: 'Do the thing',
+    actionType: 'agiTask',
     schedule: { type: 'recurring', interval: 'daily' },
     status: 'active',
     lastRunAt: null,
     nextRunAt: Date.now() + 1000,
     runCount: 0,
+    failureCount: 0,
+    lastProblem: null,
+    lastRunWasDueAt: null,
     lastOutput: null,
     createdAt: Date.now(),
     ...overrides,
@@ -44,7 +48,7 @@ describe('schedulerStore task actions, native (Tauri) failure honesty', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setItemSpy = vi.spyOn(window.localStorage, 'setItem');
-    useSchedulerStore.setState({ tasks: [], isLoading: false, error: null });
+    useSchedulerStore.setState({ tasks: [], runningTaskIds: [], isLoading: false, error: null });
     setItemSpy.mockClear();
   });
 
@@ -57,7 +61,6 @@ describe('schedulerStore task actions, native (Tauri) failure honesty', () => {
         description: '',
         prompt: 'hello',
         schedule: { type: 'recurring', interval: 'daily' },
-        status: 'active',
       }),
     ).rejects.toThrow();
 
@@ -83,6 +86,112 @@ describe('schedulerStore task actions, native (Tauri) failure honesty', () => {
     expect(state.tasks[0]).toEqual(original);
     expect(state.error).toBeTruthy();
     expect(setItemSpy).not.toHaveBeenCalledWith(TASKS_FALLBACK_STORAGE_KEY, expect.anything());
+  });
+
+  it('a refused edit says why, in the words the scheduler gave, and saves nothing', async () => {
+    const { toast } = await import('sonner');
+    const original = makeTask();
+    useSchedulerStore.setState({ tasks: [original] });
+    const reason = "'soon' is not a schedule this app can read";
+    mockInvoke.mockRejectedValueOnce({ type: 'Generic', details: reason });
+
+    await expect(
+      useSchedulerStore.getState().updateTask('task-1', {
+        schedule: { type: 'recurring', interval: 'custom', cronExpression: 'soon' },
+      }),
+    ).rejects.toEqual({ type: 'Generic', details: reason });
+
+    expect(useSchedulerStore.getState().error).toBe(reason);
+    expect(toast.error).toHaveBeenCalledWith(`Failed to update task: ${reason}`);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(useSchedulerStore.getState().tasks[0]).toEqual(original);
+  });
+
+  it('turning a stopped task back on asks the scheduler and takes its answer', async () => {
+    const stopped = makeTask({
+      status: 'failed',
+      failureCount: 3,
+      lastProblem: { kind: 'failed', reason: 'no connection' },
+    });
+    useSchedulerStore.setState({ tasks: [stopped] });
+    mockInvoke.mockResolvedValueOnce(true);
+    mockInvoke.mockResolvedValueOnce([
+      {
+        id: 'task-1',
+        name: 'Original Name',
+        schedule: '0 9 * * *',
+        plan: { type: 'recurring', interval: 'daily', timeOfDay: '09:00' },
+        actionType: 'agiTask',
+        actionData: { prompt: 'Do the thing' },
+        status: 'active',
+        createdAt: '2026-07-25T00:00:00.000Z',
+        updatedAt: '2026-07-25T00:00:00.000Z',
+        runCount: 3,
+        failureCount: 0,
+        lastProblem: null,
+        description: null,
+      },
+    ]);
+
+    await useSchedulerStore.getState().toggleTask('task-1');
+
+    expect(mockInvoke).toHaveBeenCalledWith('scheduler_toggle_job', { id: 'task-1' });
+    const task = useSchedulerStore.getState().tasks[0];
+    expect(task?.status).toBe('active');
+    expect(task?.failureCount).toBe(0);
+    expect(task?.lastProblem).toBeNull();
+  });
+
+  it('follows a run from its start to its end, and stops it through the scheduler', async () => {
+    const { listen } = await import('../../lib/tauri-mock');
+    const handlers = new Map<string, (event: { payload: unknown }) => void>();
+    vi.mocked(listen).mockImplementation(async (event, handler) => {
+      handlers.set(event as string, handler as (event: { payload: unknown }) => void);
+      return () => undefined;
+    });
+    useSchedulerStore.setState({ tasks: [makeTask()], runningTaskIds: [] });
+
+    await useSchedulerStore.getState().initEventListeners();
+    handlers.get('scheduler:run_started')?.({ payload: { jobId: 'task-1' } });
+    handlers.get('scheduler:run_started')?.({ payload: { jobId: 'task-1' } });
+    expect(useSchedulerStore.getState().runningTaskIds).toEqual(['task-1']);
+
+    mockInvoke.mockResolvedValueOnce(true);
+    await useSchedulerStore.getState().stopRun('task-1');
+    expect(mockInvoke).toHaveBeenCalledWith('scheduler_stop_run', { id: 'task-1' });
+    expect(useSchedulerStore.getState().runningTaskIds).toEqual(['task-1']);
+
+    handlers.get('scheduler:job_executed')?.({
+      payload: {
+        id: 'task-1',
+        name: 'Original Name',
+        schedule: '0 9 * * *',
+        actionType: 'agiTask',
+        actionData: { prompt: 'Do the thing' },
+        status: 'active',
+        createdAt: '2026-07-25T00:00:00.000Z',
+        updatedAt: '2026-07-25T00:00:00.000Z',
+        runCount: 0,
+        failureCount: 0,
+        lastProblem: { kind: 'skipped', reason: 'It was stopped before it finished.' },
+        lastRunWasDue: null,
+        description: null,
+      },
+    });
+    const state = useSchedulerStore.getState();
+    expect(state.runningTaskIds).toEqual([]);
+    expect(state.tasks[0]?.lastProblem?.reason).toBe('It was stopped before it finished.');
+    useSchedulerStore.getState().cleanupEventListeners();
+  });
+
+  it('reads which tasks are running when it loads the list', async () => {
+    mockInvoke.mockResolvedValueOnce([]);
+    mockInvoke.mockResolvedValueOnce(['task-9']);
+
+    await useSchedulerStore.getState().fetchTasks();
+
+    expect(mockInvoke).toHaveBeenNthCalledWith(2, 'scheduler_running_jobs');
+    expect(useSchedulerStore.getState().runningTaskIds).toEqual(['task-9']);
   });
 
   it('deleteTask rejects and does not remove the task', async () => {
@@ -138,7 +247,6 @@ describe('schedulerStore task actions, native (Tauri) failure honesty', () => {
       description: '',
       prompt: 'hello',
       schedule: { type: 'recurring', interval: 'daily' },
-      status: 'active',
     });
 
     expect(mockInvoke).toHaveBeenCalledWith('scheduler_add_job', expect.any(Object));

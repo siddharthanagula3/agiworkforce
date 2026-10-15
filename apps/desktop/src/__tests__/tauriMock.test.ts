@@ -69,12 +69,6 @@ describe('LLM provider/model commands in tauri-mock', () => {
 });
 
 describe('Core data commands return expected shapes', () => {
-  it('get_onboarding_status returns { completed: boolean }', async () => {
-    const invoke = await getRealInvoke();
-    const result = await invoke<{ completed: boolean }>('get_onboarding_status');
-    expect(typeof result.completed).toBe('boolean');
-  });
-
   it('chat_create_conversation returns a Conversation object', async () => {
     const invoke = await getRealInvoke();
     const result = await invoke<{ id: number; title: string; created_at: string }>(
@@ -96,27 +90,12 @@ describe('Core data commands return expected shapes', () => {
     const invoke = await getRealInvoke();
     const result = await invoke<string>('scheduler_add_job', {
       name: 'Test',
-      schedule: '0 0 9 * * *',
-      actionType: 'notification',
-      actionData: {},
+      prompt: 'Summarise my inbox',
+      description: null,
+      schedule: { type: 'recurring', interval: 'daily', timeOfDay: '09:00', timezone: 'UTC' },
     });
     expect(typeof result).toBe('string');
     expect(result.startsWith('sched_mock_')).toBe(true);
-  });
-
-  it('background_task_list returns an array', async () => {
-    const invoke = await getRealInvoke();
-    const result = await invoke<unknown[]>('background_task_list');
-    expect(Array.isArray(result)).toBe(true);
-  });
-
-  it('get_model_capabilities returns a capabilities object', async () => {
-    const invoke = await getRealInvoke();
-    const result = await invoke<{ supports_tools: boolean; context_length: number }>(
-      'get_model_capabilities',
-    );
-    expect(typeof result.supports_tools).toBe('boolean');
-    expect(typeof result.context_length).toBe('number');
   });
 
   it('supports the MCP bundle registry lifecycle without host mutations', async () => {
@@ -169,15 +148,6 @@ describe('Research commands return expected shapes', () => {
     const result = await invoke<string>('research_start', { query: 'test' });
     expect(typeof result).toBe('string');
     expect(result.startsWith('session_mock_')).toBe(true);
-  });
-
-  it('research_get_status returns a status object', async () => {
-    const invoke = await getRealInvoke();
-    const result = await invoke<{ status: string }>('research_get_status', {
-      sessionId: 'session_mock_123',
-    });
-    expect(typeof result.status).toBe('string');
-    expect(result.status).toBe('complete');
   });
 
   it('research_cancel returns undefined', async () => {

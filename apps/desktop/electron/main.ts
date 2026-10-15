@@ -12,7 +12,7 @@ import {
   session,
   shell,
 } from 'electron';
-import { promises as fs } from 'node:fs';
+import { promises as fs, realpathSync } from 'node:fs';
 import path from 'node:path';
 import {
   LOCAL_CODE_SESSION_ACTIVITY_PATH,
@@ -42,13 +42,18 @@ import {
   type ElectronWindowControlRequest,
 } from '../src/lib/tauri-electron/bridgeContract';
 import {
+  NO_HOST_SHORTCUT,
   DESKTOP_RUNTIME_CHANNEL,
   DESKTOP_RUNTIME_EVENT_CHANNEL,
   type BrowserPairRequestPrompt,
+  type HostAgentNotificationKind,
+  type HostAgentNotificationPreferences,
+  localSessionPath,
   type BrowserPairingState,
   type HostCommand,
   type HostPreferences,
   type HostPreferencesState,
+  type HostRestartOutcome,
 } from '@agiworkforce/local-runtime-contract';
 import {
   BrowserBridgeError,
@@ -58,22 +63,34 @@ import {
 } from './browser/bridgeServer';
 import { handleBridgeCommand } from './accountBridge';
 import {
-  configureWindowOpening,
   dispatch as dispatchDesktopRuntime,
+  noteDeveloperSessionEvent as noteDispatcherSessionEvent,
   runBrowserCommand,
+  windowAnswersUserInput,
 } from './runtime/dispatcher';
-import { cancelAllShellRuns } from './runtime/shellService';
+import { activeShellRunCount, cancelAllShellRuns } from './runtime/shellService';
 import {
+  answerDeveloperApproval,
   configureDeveloperSessions,
+  interruptDeveloperTurn,
+  killAllDeveloperRuntimes,
   readDeveloperSession,
-  stopAllDeveloperRuntimes,
+  readPendingApproval,
+  resolveBinaryPath,
 } from './runtime/developerSessionService';
 import {
   configureRemoteControl,
   relayDeveloperSessionEvent,
   remoteControlActive,
+  remoteControlState,
   stopRemoteControl,
 } from './remote/remoteControlService';
+import { getRoot } from './runtime/workspaceStore';
+import { agentAllowedIn } from './runtime/agentAccess';
+import { NOT_THIS_APP, shownValue } from './runtime/dialogText';
+import { createNativeNotification, showNativeMessage } from './runtime/nativeSurface';
+import { askNativeQuestion, NOT_ASKED_MESSAGES } from './runtime/nativeQuestions';
+import { getPermissionState } from './runtime/permissionManager';
 import {
   approveDeviceCode,
   onShellIdentityReported,
@@ -82,7 +99,7 @@ import {
 } from './shellIdentity';
 import { createCodeSessionActivity } from './runtime/codeSessionActivity';
 import {
-  noteDeveloperSessionEvent,
+  noteDeveloperSessionEvent as noteBackgroundSessionEvent,
   spawnTrackedDeveloperRuntime,
 } from './runtime/backgroundActivity';
 import {
@@ -94,6 +111,28 @@ import {
   stopComputerUse,
   takeOverComputerUse,
 } from './runtime/computerUseSession';
+import {
+  createAgentNotifier,
+  type AgentActivity,
+  type NotificationLike,
+  type NotificationOptionsLike,
+} from './agentNotifications';
+import {
+  enqueueDeepLink,
+  freshDeepLinks,
+  loadDeepLinkQueue,
+  mergeDeepLinkQueues,
+  saveDeepLinkQueue,
+  type QueuedDeepLink,
+} from './deepLinkQueue';
+import {
+  GUARD_CONFIRM_INDEX,
+  quitPrompt,
+  revokeComputerUsePrompt,
+  stopAgentsPrompt,
+  type GuardPrompt,
+  type LiveWork,
+} from './quitGuard';
 import { installAppMenu } from './appMenu';
 import { readBrowserSignInLink } from './browserSignIn';
 import { configureDevicePrompts } from './runtime/devicePrompts';
@@ -125,6 +164,7 @@ import {
 import {
   MIN_WINDOW_HEIGHT,
   MIN_WINDOW_WIDTH,
+  SHORTCUT_LABELS,
   SHORTCUT_KEYS,
   ZOOM_LEVEL_STEP,
   clampZoomLevel,
@@ -133,7 +173,11 @@ import {
   hostShortcutKeyFor,
   isAppearance,
   isSessionCompletionAlerts,
+  normalizeAgentNotifications,
   pickableCaptureSources,
+  pageMayWriteShortcut,
+  shortcutMayBeOff,
+  type ShortcutKey,
   type WindowFrame,
 } from './garnishCore';
 import {
@@ -149,9 +193,10 @@ import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
 import {
   registerGarnishShortcuts,
   shortcutRegistrations,
+  shortcutStatusDetail,
   unregisterGarnishShortcuts,
 } from './shortcuts';
-import { createTray, destroyTray } from './tray';
+import { createTray, destroyTray, hasTray, refreshTrayMenu, type TrayActivity } from './tray';
 import { toggleGlobalDictation } from './voiceDictation';
 import { applyRemoteWindowPolicy, openExternally } from './windowPolicy';
 import { pageBackgroundColor, paintWindows, titleBarChrome } from './windowChrome';
@@ -174,13 +219,14 @@ import {
   cascadeBounds,
   conversationIdFromRoute,
   planSignOut,
-  planWindowOpen,
   resolveNavigationConflict,
   type OpenWindow,
 } from './windowRegistry';
 import { handleWorkspaceDrop } from './workspaceDrop';
 import {
   isTrustedCloudRendererOrigin,
+  isTrustedPageUrl,
+  showsTrustedPage,
   shouldGrantCloudPermissionCheck,
   shouldGrantCloudPermissionRequest,
 } from './permissionPolicy';
@@ -196,8 +242,10 @@ interface ShellWindowEntry {
 const shellWindows = new Map<number, ShellWindowEntry>();
 
 let mainWindow: BrowserWindow | null = null;
-let pendingDeepLink: string | null = null;
 const coldStartDeepLinks: string[] = [];
+let deepLinkQueue: QueuedDeepLink[] = [];
+let appReady = false;
+let quitConfirmed = false;
 
 function liveWindows(): ShellWindowEntry[] {
   return [...shellWindows.values()].filter((entry) => !entry.win.isDestroyed());
@@ -226,6 +274,7 @@ function installedMacArchitecture(): DesktopCloudMacArchitecture {
 }
 
 const QUICK_ASK_WARMUP_MS = 5000;
+const UPDATE_RESTART_TIMEOUT_MS = 60_000;
 
 const SUPPORT_PATH = '/support';
 
@@ -322,18 +371,19 @@ async function serveRenderer(request: Request): Promise<Response> {
 function isTrustedSender(event: Electron.IpcMainInvokeEvent): boolean {
   const frame = event.senderFrame;
   if (!frame || frame !== event.sender.mainFrame) return false;
-  if (frame.url.startsWith(`${RENDERER_ORIGIN}/`) || frame.url === RENDERER_ORIGIN) return true;
-  if (RENDERER_MODE !== 'remote') return false;
-  try {
-    return new URL(frame.url).origin === new URL(CLOUD_APP_ORIGIN).origin;
-  } catch {
-    return false;
-  }
+  return isTrustedPageUrl(frame.url);
 }
 
+/**
+ * A window can be showing a sign-in provider's page, where the preload still
+ * runs. What main sends is for the app's own page, so a window showing
+ * anything else is skipped, by the check `isTrustedSender` makes of a caller.
+ */
 function sendRuntimeEvent(event: unknown): void {
   broadcastRuntimeEvent(
-    liveWindows().map((entry) => entry.win.webContents),
+    liveWindows()
+      .map((entry) => entry.win.webContents)
+      .filter(showsTrustedPage),
     DESKTOP_RUNTIME_EVENT_CHANNEL,
     event,
   );
@@ -356,19 +406,23 @@ async function startPairingBridge(): Promise<void> {
         sendRuntimeEvent({ kind: 'browser-pairing-changed', state }),
       onPairRequest: (prompt: BrowserPairRequestPrompt) => {
         showMainWindow();
-        if (Notification.isSupported()) {
-          new Notification({
-            title: 'Pair Chrome with AGI Cloud',
-            body: `Pairing code ${prompt.code}. Type it in the extension within two minutes.`,
-          }).show();
-        }
+        // The code is shown here and nowhere a page can read it: typing it
+        // into the extension is what says a person at this computer agreed.
+        void showNativeMessage(mainWindow, {
+          type: 'info',
+          buttons: ['OK'],
+          title: 'Pair Chrome with AGI Cloud',
+          message: `Pairing code ${shownValue(prompt.code, PAIRING_CODE_SHOWN)}`,
+          detail: `Type this code in the AGI extension in Chrome within two minutes. It pairs the extension with the ID below with this app, so the agent can use that browser when you allow it.\n\nExtension ID: ${shownValue(prompt.extensionId, PAIRING_CODE_SHOWN)}`,
+          noLink: true,
+        }).catch(() => undefined);
       },
       appVersion: app.getVersion(),
       // The bridge holds the routes; the gate lives with the renderer's own
       // dispatch. Injected here so neither module has to import the other.
-      runBrowserCommand: async (command, args, caller) => {
+      runBrowserCommand: async (command, args, caller, signal) => {
         try {
-          const outcome = await runBrowserCommand(mainWindow, command, args, caller);
+          const outcome = await runBrowserCommand(mainWindow, command, args, caller, signal);
           return outcome.ok
             ? { ok: true, value: outcome.value }
             : { ok: false, error: outcome.error.message, code: outcome.error.code };
@@ -398,40 +452,40 @@ async function startPairingBridge(): Promise<void> {
   } catch (error) {
     // The bridge is the one part of the shell another app on this machine can
     // take from it, so the refusal names that rather than reading as a fault
-    // here. The state event carries it to the Capabilities panel, which would
-    // otherwise show a bridge that is simply not listening, with nothing
-    // anywhere saying why.
+    // here. The pairing state carries the reason to the Capabilities panel,
+    // which would otherwise show a bridge that is simply not listening, with
+    // nothing anywhere saying why.
     console.warn('[browser-bridge] could not start the pairing bridge:', error);
     recordDesktopEvent({
       domain: 'local_daemon',
       outcome: 'failed',
       cause: error instanceof BrowserBridgeError ? 'not_configured' : 'unknown',
     });
-    sendRuntimeEvent({
-      kind: 'browser-pairing-changed',
-      state: pairingState(),
-      unavailable:
-        error instanceof BrowserBridgeError
-          ? error.message
-          : 'This app could not open the browser bridge on this computer. Reopen it to try again.',
-    });
+    sendRuntimeEvent({ kind: 'browser-pairing-changed', state: pairingState() });
   }
 }
 
-function registerIpcHandlers(): void {
-  ipcMain.handle(DESKTOP_RUNTIME_CHANNEL, async (event, command, args) => {
-    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
-    if (typeof command !== 'string') throw new Error('Unknown runtime command.');
-    const safeArgs =
-      args && typeof args === 'object' && !Array.isArray(args)
-        ? (args as Record<string, unknown>)
-        : undefined;
-    // The window that asked, so an approval sheet opens on the window the user
-    // is looking at rather than on whichever one was created first.
-    const caller = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
-    return dispatchDesktopRuntime(caller, command, safeArgs);
-  });
+/**
+ * Restarts through the same quit the menu takes: the question about work in
+ * flight, then `will-quit`, which stops every agent, command and paired phone.
+ * `app.exit` skips both and leaves them running with nobody to answer them.
+ */
+async function relaunchThroughQuitGuard(allowQuit: () => void): Promise<boolean> {
+  const prompt = quitPrompt(liveWork());
+  if (prompt && !(await askGuardPrompt(prompt))) return false;
+  allowQuit();
+  app.relaunch();
+  app.quit();
+  return true;
+}
 
+/**
+ * The half of the bridge only the bundled renderer drives: the account bridge,
+ * the window, native dialogs that hand back absolute paths, and a restart. The
+ * hosted page has no caller for any of it, so in remote mode none of it is
+ * registered and a script on the app origin has nothing to reach.
+ */
+function registerBundledRendererHandlers(allowQuit: () => void): void {
   ipcMain.handle(ELECTRON_IPC_CHANNELS.invokeBridge, async (event, command, args) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
     if (typeof command !== 'string' || !isElectronBridgeCommand(command)) {
@@ -442,24 +496,6 @@ function registerIpcHandlers(): void {
         ? (args as Record<string, unknown>)
         : undefined;
     return handleBridgeCommand(command, safeArgs);
-  });
-
-  ipcMain.handle(ELECTRON_IPC_CHANNELS.openExternal, async (event, url) => {
-    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
-    if (typeof url !== 'string') return;
-    let parsed: URL;
-    try {
-      parsed = new URL(url);
-    } catch {
-      return;
-    }
-    if (
-      parsed.protocol === 'https:' ||
-      parsed.protocol === 'http:' ||
-      parsed.protocol === 'mailto:'
-    ) {
-      await shell.openExternal(parsed.toString());
-    }
   });
 
   ipcMain.handle(ELECTRON_IPC_CHANNELS.windowControl, async (event, request) => {
@@ -515,7 +551,7 @@ function registerIpcHandlers(): void {
     const req = (request ?? {}) as ElectronDialogRequest;
     switch (req.kind) {
       case 'message': {
-        await dialog.showMessageBox(win, {
+        await showNativeMessage(win, {
           type: 'info',
           message: String(req.message ?? ''),
           title: req.title ?? app.name,
@@ -524,7 +560,7 @@ function registerIpcHandlers(): void {
       }
       case 'ask':
       case 'confirm': {
-        const { response } = await dialog.showMessageBox(win, {
+        const { response } = await showNativeMessage(win, {
           type: 'question',
           buttons: ['Yes', 'No'],
           defaultId: 0,
@@ -554,12 +590,56 @@ function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle(ELECTRON_IPC_CHANNELS.relaunch, async (event) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    return relaunchThroughQuitGuard(allowQuit);
+  });
+}
+
+function registerIpcHandlers(allowQuit: () => void): void {
+  if (RENDERER_MODE === 'bundled') registerBundledRendererHandlers(allowQuit);
+
+  ipcMain.handle(DESKTOP_RUNTIME_CHANNEL, async (event, command, args) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    if (typeof command !== 'string') throw new Error('Unknown runtime command.');
+    const safeArgs =
+      args && typeof args === 'object' && !Array.isArray(args)
+        ? (args as Record<string, unknown>)
+        : undefined;
+    // The window that asked, so an approval sheet opens on the window the user
+    // is looking at rather than on whichever one was created first.
+    const caller = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    try {
+      return await dispatchDesktopRuntime(caller, command, safeArgs);
+    } finally {
+      if (command.startsWith(COMPUTER_COMMAND_PREFIX)) refreshTrayForComputerUse();
+    }
+  });
+
+  ipcMain.handle(ELECTRON_IPC_CHANNELS.openExternal, async (event, url) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    if (typeof url !== 'string') return;
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return;
+    }
+    if (
+      parsed.protocol === 'https:' ||
+      parsed.protocol === 'http:' ||
+      parsed.protocol === 'mailto:'
+    ) {
+      await shell.openExternal(parsed.toString());
+    }
+  });
+
   ipcMain.handle(ELECTRON_IPC_CHANNELS.notify, async (event, request) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
     const req = (request ?? {}) as ElectronNotifyRequest;
     if (typeof req.title !== 'string' || req.title === '') return;
     if (!Notification.isSupported()) return;
-    const notification = new Notification({
+    const notification = createNativeNotification({
       title: req.title,
       ...(typeof req.body === 'string' ? { body: req.body } : {}),
     });
@@ -569,7 +649,7 @@ function registerIpcHandlers(): void {
         : null;
     notification.on('click', () => {
       focusMainWindow();
-      if (target) mainWindow?.webContents.send(ELECTRON_IPC_CHANNELS.deepLink, target);
+      if (target) deliverDeepLink(target);
     });
     notification.show();
   });
@@ -578,7 +658,9 @@ function registerIpcHandlers(): void {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
     if (!Array.isArray(paths)) return;
     const candidates = paths.filter((path): path is string => typeof path === 'string');
-    await handleWorkspaceDrop(BrowserWindow.fromWebContents(event.sender), candidates);
+    await handleWorkspaceDrop(BrowserWindow.fromWebContents(event.sender), candidates, (rootId) =>
+      sendRuntimeEvent({ kind: 'workspace-changed', rootId }),
+    );
   });
 
   /**
@@ -597,12 +679,6 @@ function registerIpcHandlers(): void {
     if (getPreferences().appearance !== theme) saveSettings({ appearance: theme });
   });
 
-  ipcMain.handle(ELECTRON_IPC_CHANNELS.relaunch, async (event) => {
-    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
-    app.relaunch();
-    app.exit(0);
-  });
-
   ipcMain.handle(ELECTRON_IPC_CHANNELS.checkUpdate, async (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
     return cloudUpdateAvailability();
@@ -610,8 +686,16 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(ELECTRON_IPC_CHANNELS.openUpdateInstaller, async (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
-    if (installDownloadedUpdate()) return;
+    if (downloadedUpdate() !== null) {
+      await restartToUpdate();
+      return;
+    }
     await shell.openExternal(desktopCloudInstallerDownloadUrl(installedMacArchitecture()));
+  });
+
+  ipcMain.handle(ELECTRON_IPC_CHANNELS.restartToUpdate, async (event) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    return restartToUpdate();
   });
 
   ipcMain.handle(ELECTRON_IPC_CHANNELS.hostPreferences, async (event, patch) => {
@@ -620,20 +704,9 @@ function registerIpcHandlers(): void {
     if (typeof patch !== 'object' || Array.isArray(patch)) {
       throw new Error('A preferences write takes an object.');
     }
-    return writeHostPreferences(patch as Partial<HostPreferences>);
+    const caller = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    return writeHostPreferences(caller, patch as Partial<HostPreferences>);
   });
-}
-
-// Both modes attach a preload, so both have an IPC receiver for a deep link.
-const DEEP_LINK_BRIDGE_ATTACHED = true;
-
-function deepLinkRoute(url: string): string {
-  try {
-    const parsed = new URL(url);
-    return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, '') || '/';
-  } catch {
-    return '<unparseable>';
-  }
 }
 
 function focusMainWindow(): void {
@@ -658,23 +731,44 @@ function deliverDeepLink(url: string): void {
     return;
   }
 
-  if (!DEEP_LINK_BRIDGE_ATTACHED) {
-    console.warn(
-      `[deep-link] dropped ${DEEP_LINK_SCHEME}://${deepLinkRoute(url)}: renderer mode ` +
-        `"${RENDERER_MODE}" loads ${CLOUD_APP_ORIGIN} top-level with no preload, so no IPC ` +
-        'receiver is attached. Unset AGI_CLOUD_RENDERER to restore native deep links.',
-    );
-    showMainWindow();
+  deepLinkQueue = enqueueDeepLink(deepLinkQueue, url, Date.now());
+  if (rendererReady()) {
+    focusMainWindow();
+    flushDeepLinks();
     return;
   }
+  saveDeepLinkQueue(deepLinkQueuePath(), deepLinkQueue);
+  if (appReady) showMainWindow();
+}
 
-  if (mainWindow && !mainWindow.webContents.isLoading()) {
-    focusMainWindow();
-    mainWindow.webContents.send(ELECTRON_IPC_CHANNELS.deepLink, url);
-  } else {
-    pendingDeepLink = url;
-    showMainWindow();
-  }
+function deepLinkQueuePath(): string {
+  return path.join(app.getPath('userData'), 'deep-link-queue.json');
+}
+
+/**
+ * The offline and crash screens are `data:` pages with no deep-link receiver,
+ * and a sign-in provider's page is not the app's, so a link waits for ours.
+ */
+function rendererReady(): boolean {
+  return Boolean(
+    mainWindow &&
+    !mainWindow.isDestroyed() &&
+    !mainWindow.webContents.isLoading() &&
+    showsTrustedPage(mainWindow.webContents),
+  );
+}
+
+/**
+ * Hands the page every link that arrived while it could not take one, oldest
+ * first. A link held across a relaunch is only replayed while it is still
+ * recent: an approval link from yesterday is not something to act on now.
+ */
+function flushDeepLinks(): void {
+  if (!mainWindow || !rendererReady()) return;
+  const due = freshDeepLinks(deepLinkQueue, Date.now());
+  deepLinkQueue = [];
+  saveDeepLinkQueue(deepLinkQueuePath(), deepLinkQueue);
+  for (const entry of due) mainWindow.webContents.send(ELECTRON_IPC_CHANNELS.deepLink, entry.url);
 }
 
 function configureSession(targetSession: Electron.Session): void {
@@ -704,14 +798,17 @@ function configureSession(targetSession: Electron.Session): void {
             return;
           }
           const cancelId = offered.length;
-          const selection = await dialog.showMessageBox({
+          const selection = await showNativeMessage(null, {
             type: 'question',
             title: 'Share a screen or window',
             message: 'Choose what to share with AGI Cloud',
             detail:
               'A window shares only that window, even when something else is in front of it. Sharing stops when you end screen capture in the chat.',
-            buttons: [...offered.map((source) => source.name), 'Cancel'],
-            defaultId: 0,
+            buttons: [
+              ...offered.map((source) => shownValue(source.name, CAPTURE_SOURCE_SHOWN)),
+              'Cancel',
+            ],
+            defaultId: cancelId,
             cancelId,
             noLink: true,
           });
@@ -956,12 +1053,14 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
       // The preload is attached in BOTH modes now. Remote used to go without
       // one, which is why deep links, the account bridge and the update check
       // were all dead there; the window was a browser tab pointed at the site.
-      // `preload.ts` only exposes the bridge on the app's own origin, so the
-      // sign-in providers `windowPolicy.ts` allows do not receive it.
+      // `preload.ts` exposes the bridge on every document, including the
+      // sign-in providers `windowPolicy.ts` allows; `isTrustedSender` is what
+      // refuses their calls.
       preload: path.join(__dirname, 'preload.cjs'),
       additionalArguments: [
         `--agi-app-version=${app.getVersion()}`,
         `--agi-app-origin=${CLOUD_APP_ORIGIN}`,
+        `--agi-renderer=${RENDERER_MODE}`,
       ],
       // Remote keeps a persistent partition so the site's session survives a
       // restart. Bundled has no cross-origin session to keep.
@@ -995,13 +1094,7 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
   });
 
   if (options.primary) {
-    win.webContents.once('did-finish-load', () => {
-      if (pendingDeepLink) {
-        const url = pendingDeepLink;
-        pendingDeepLink = null;
-        win.webContents.send(ELECTRON_IPC_CHANNELS.deepLink, url);
-      }
-    });
+    win.webContents.on('did-finish-load', flushDeepLinks);
   }
 
   // Chromium's zoom is per origin and per session, so it survives a navigation
@@ -1116,25 +1209,6 @@ function showMainWindow(): void {
   focusMainWindow();
 }
 
-/**
- * Opens a route in a window of its own, or raises the window already on it.
- *
- * Refusing an unopenable route rather than loading it is what keeps a
- * `javascript:` or cross-origin string from becoming a window: the page asks
- * for this over the runtime channel, and the shell decides.
- */
-function openRouteInNewWindow(route: string): boolean {
-  const plan = planWindowOpen(openWindows(), route);
-  if (plan.action === 'refuse') return false;
-  if (plan.action === 'focus') {
-    focusWindow(plan.windowId);
-    return true;
-  }
-  if (!mainWindow || mainWindow.isDestroyed()) createMainWindow();
-  createShellWindow({ primary: false, route: plan.route });
-  return true;
-}
-
 /** The conversation the front window is on, or null when it is not on one. */
 function focusedConversationRoute(): string | null {
   const focused = BrowserWindow.getFocusedWindow();
@@ -1192,10 +1266,229 @@ function openLogsFolder(): void {
 function copyDiagnostics(): void {
   clipboard.writeText(JSON.stringify(desktopDiagnostics(), null, 2));
   if (!Notification.isSupported()) return;
-  new Notification({
+  createNativeNotification({
     title: 'Diagnostics copied',
     body: 'A summary of this session is on your clipboard. Paste it into your support message.',
   }).show();
+}
+
+/**
+ * Raises the window already showing this session, or opens it in the main
+ * window. A window already on it is not reloaded, so a draft in its composer
+ * survives the click.
+ */
+function openLocalSession(rootId: string, threadId: string): void {
+  const route = localSessionPath(rootId, threadId);
+  const showing = liveWindows().find((entry) => entry.route === route);
+  if (showing) {
+    focusWindow(showing.win.id);
+    return;
+  }
+  showMainWindow();
+  const entry = mainWindow ? shellWindows.get(mainWindow.id) : undefined;
+  if (!entry) return;
+  entry.route = route;
+  void entry.win.loadURL(windowUrlFor(route));
+}
+
+function sessionFolderName(rootId: string): string {
+  return getRoot(rootId)?.name ?? 'a coding session';
+}
+
+function nativeNotification(options: NotificationOptionsLike): NotificationLike {
+  const notification = createNativeNotification(options);
+  return {
+    onClick: (listener) => notification.on('click', listener),
+    onAction: (listener) => notification.on('action', (details) => listener(details.actionIndex)),
+    onClose: (listener) => notification.on('close', listener),
+    show: () => notification.show(),
+    close: () => notification.close(),
+  };
+}
+
+/**
+ * One notification is raised per agent event. The Settings choices for
+ * finished sessions and approvals narrow the agent notification settings:
+ * off mutes those kinds, and Always shows them while a window is in front.
+ */
+function agentNotificationPreferences(): HostAgentNotificationPreferences {
+  const { agentNotifications, sessionCompletionAlerts, sessionApprovalAlerts } = getPreferences();
+  const muted = new Set<HostAgentNotificationKind>(agentNotifications.muted);
+  if (sessionCompletionAlerts === 'never') {
+    muted.add('turn-complete');
+    muted.add('turn-failed');
+  }
+  if (!sessionApprovalAlerts) muted.add('approval');
+  return {
+    ...agentNotifications,
+    when:
+      sessionCompletionAlerts === 'always' && agentNotifications.when === 'unfocused'
+        ? 'always'
+        : agentNotifications.when,
+    muted: [...muted],
+  };
+}
+
+const agentNotifier = createAgentNotifier({
+  preferences: agentNotificationPreferences,
+  appFocused: () => BrowserWindow.getFocusedWindow() !== null,
+  supported: () => Notification.isSupported(),
+  supportsActions: process.platform === 'darwin' || process.platform === 'win32',
+  create: nativeNotification,
+  answerApproval: answerDeveloperApproval,
+  reviewApproval: readPendingApproval,
+  openSession: openLocalSession,
+  sessionLabel: sessionFolderName,
+  onActivityChanged: (activity: AgentActivity) => {
+    app.setBadgeCount(activity.pendingApprovals.length);
+    syncTray();
+  },
+  onAnswerFailed: (error) => {
+    console.warn('[agent-notifications] the approval answer did not reach the agent:', error);
+  },
+});
+
+function trayActivity(): TrayActivity {
+  const activity = agentNotifier.activity();
+  return {
+    pendingApprovals: activity.pendingApprovals.map((approval) => ({
+      rootId: approval.rootId,
+      threadId: approval.threadId,
+      label: `${approval.summary} (${sessionFolderName(approval.rootId)})`,
+    })),
+    runningTurns: activity.runningTurns.map((turn) => ({
+      rootId: turn.rootId,
+      threadId: turn.threadId,
+      label: `Coding in ${sessionFolderName(turn.rootId)}`,
+    })),
+    screenTakenOver: computerUsePhase() === 'paused',
+    computerUseGranted: computerUseGranted(),
+  };
+}
+
+function liveWork(): LiveWork {
+  const remote = remoteControlState();
+  return {
+    shellRuns: activeShellRunCount(),
+    agentTurns: agentNotifier.activity().runningTurns.length,
+    remoteControl: { status: remote.status, phoneName: remote.phoneName },
+  };
+}
+
+async function askGuardPrompt(prompt: GuardPrompt): Promise<boolean> {
+  const parent = frontWindow();
+  const result = await showNativeMessage(parent, prompt);
+  return result.response === GUARD_CONFIRM_INDEX;
+}
+
+/**
+ * Takes the screen back from computer use and interrupts every running agent
+ * turn. Interrupting keeps what a turn already did, and the session can be
+ * asked again, which is why the shortcut acts without asking first: it exists
+ * for the moment an agent is doing something the user wants stopped now.
+ */
+function stopAgents(): number {
+  const turns = agentNotifier.activity().runningTurns;
+  takeOverComputerUse();
+  for (const turn of turns) {
+    void interruptDeveloperTurn(turn.rootId, turn.threadId, turn.turnId).catch((error: unknown) => {
+      console.warn('[stop-agents] a turn did not stop:', error);
+    });
+  }
+  refreshTrayMenu(garnishHandlers);
+  return turns.length;
+}
+
+function stopAgentsFromShortcut(): void {
+  const stopped = stopAgents();
+  if (!Notification.isSupported()) return;
+  const screenHeld = computerUsePhase() === 'paused';
+  createNativeNotification({
+    title:
+      stopped > 0 ? 'Agents stopped' : screenHeld ? 'Screen control is yours' : 'Nothing to stop',
+    body: [
+      stopped === 0
+        ? 'No agent turn was running.'
+        : `Stopped ${stopped} running ${stopped === 1 ? 'turn' : 'turns'}.`,
+      ...(screenHeld
+        ? ['Agents cannot control the screen until you choose Hand Back Screen Control.']
+        : []),
+    ].join(' '),
+  }).show();
+}
+
+async function confirmStopAll(): Promise<void> {
+  const prompt = stopAgentsPrompt(liveWork());
+  if (!prompt) return;
+  if (await askGuardPrompt(prompt)) stopAgents();
+}
+
+const COMPUTER_COMMAND_PREFIX = 'computer_';
+let trayComputerUseState = '';
+
+function computerUseGranted(): boolean {
+  return getPermissionState('computer.use', { kind: 'global' }) === 'granted';
+}
+
+function computerUseTrayState(): string {
+  return `${computerUseGranted()}:${computerUsePhase()}`;
+}
+
+/**
+ * A grant is given or withdrawn, and the screen taken over, by a computer-use
+ * command, so the tray is rebuilt after one of those when the answer changed
+ * rather than after every runtime call.
+ */
+function refreshTrayForComputerUse(): void {
+  const state = computerUseTrayState();
+  if (state === trayComputerUseState) return;
+  trayComputerUseState = state;
+  syncTray();
+}
+
+/**
+ * The menu bar item is one of the two ways to stop an agent from outside its
+ * own window, the Stop Agents shortcut being the other. The preference that
+ * hides it is set from the settings page, which is a website, so it is
+ * honoured only while there is nothing to stop: with an agent turn running,
+ * or the agent allowed to use the screen, the item stays.
+ */
+function trayNeeded(): boolean {
+  return (
+    getPreferences().showInMenuBar ||
+    computerUseGranted() ||
+    agentNotifier.activity().runningTurns.length > 0
+  );
+}
+
+function syncTray(): void {
+  if (!trayNeeded()) {
+    destroyTray();
+    return;
+  }
+  if (hasTray()) refreshTrayMenu(garnishHandlers);
+  else createTray(garnishHandlers);
+}
+
+/**
+ * The same `computer_stop` the page sends: the helper is killed and the grant
+ * withdrawn, so the agent has to be allowed again before it touches the screen.
+ */
+async function confirmRevokeComputerUse(): Promise<void> {
+  const prompt = revokeComputerUsePrompt();
+  if (!(await askGuardPrompt(prompt))) return;
+  await dispatchDesktopRuntime(frontWindow(), 'computer_stop', undefined);
+  refreshTrayForComputerUse();
+}
+
+function handBackScreen(): void {
+  handBackComputerUse();
+  refreshTrayMenu(garnishHandlers);
+}
+
+function takeOverScreen(): void {
+  takeOverComputerUse();
+  refreshTrayMenu(garnishHandlers);
 }
 
 const garnishHandlers = {
@@ -1204,8 +1497,14 @@ const garnishHandlers = {
   onQuickAsk: () => toggleQuickAsk(mainWindow),
   onScreenshot: () => void captureToChat(mainWindow),
   onWindowShot: () => void captureWindowToChat(mainWindow, () => frontWindowIdOutside(process.pid)),
-  onVoice: () => void toggleGlobalDictation(mainWindow),
+  onVoice: () => void toggleGlobalDictation(mainWindow, showMainWindow),
+  onStopAgents: stopAgentsFromShortcut,
+  onStopAll: () => void confirmStopAll(),
+  onHandBackScreen: handBackScreen,
+  onRevokeComputerUse: () => void confirmRevokeComputerUse(),
+  onOpenSession: openLocalSession,
   onCheckForUpdates: () => void checkForCloudUpdate(),
+  activity: trayActivity,
 };
 
 function applyGarnishShortcuts(): void {
@@ -1215,6 +1514,7 @@ function applyGarnishShortcuts(): void {
     onScreenshot: garnishHandlers.onScreenshot,
     onWindowShot: garnishHandlers.onWindowShot,
     onVoice: garnishHandlers.onVoice,
+    onStop: garnishHandlers.onStopAgents,
   });
 }
 
@@ -1241,6 +1541,8 @@ function hostPreferencesState(): HostPreferencesState {
       screenshotShortcut: shortcuts.screenshotShortcut,
       windowShotShortcut: shortcuts.windowShotShortcut,
       voiceShortcut: shortcuts.voiceShortcut,
+      stopShortcut: shortcuts.stopShortcut,
+      agentNotifications: preferences.agentNotifications,
     },
     shortcutStatus: Object.fromEntries(
       SHORTCUT_KEYS.map((key) => [
@@ -1253,29 +1555,187 @@ function hostPreferencesState(): HostPreferencesState {
   };
 }
 
-function writeHostPreferences(patch: Partial<HostPreferences>): HostPreferencesState {
+/**
+ * The program named here is started with the user's account on every coding
+ * session and every status check, and the page asking to change it is a
+ * website. So a new path is resolved and shown to the user in main, and only
+ * the path they confirmed is saved.
+ */
+const PROGRAM_PATH_SHOWN = { head: 400, tail: 200 };
+const PAIRING_CODE_SHOWN = { head: 40, tail: 0 };
+const CAPTURE_SOURCE_SHOWN = { head: 60, tail: 0 };
+
+/**
+ * A yes or no this window asks because a page changed a preference. The
+ * subject keeps a page from raising the same question again the moment it is
+ * cancelled, or several at once (`nativeQuestions.ts`).
+ */
+async function confirmPreference(
+  window: BrowserWindow | null,
+  key: string,
+  options: Electron.MessageBoxOptions,
+): Promise<boolean> {
+  const subject = { group: 'host-preference', key, quietAfterCancel: true };
+  const result = await askNativeQuestion(window, subject, options);
+  if (result.notAsked !== undefined) throw new Error(NOT_ASKED_MESSAGES[result.notAsked]);
+  return result.response === 1;
+}
+
+/**
+ * Clearing the path changes which program runs every coding session just as
+ * naming one does: from the one the user confirmed to the one that comes with
+ * this app, or to whatever is called `agi` on this app's PATH when none does.
+ * So it is asked too, saying which program is being given up.
+ */
+async function confirmBuiltInCli(window: BrowserWindow | null, current: string): Promise<boolean> {
+  return confirmPreference(window, 'cli-path built-in', {
+    type: 'question',
+    buttons: ['Cancel', 'Use the built-in CLI'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Go back to the built-in AGI CLI?',
+    message: 'Stop using the program you chose for coding sessions?',
+    detail: [
+      "AGI Cloud will run the AGI CLI that comes with this app for every coding session, or the program named agi on this app's PATH when this build carries none.",
+      `Program in use now: ${shownValue(current, PROGRAM_PATH_SHOWN)}`,
+    ].join('\n\n'),
+    noLink: true,
+  });
+}
+
+/**
+ * Opening at login keeps this app, and the page it loads, running from every
+ * login on. Turning it on is asked here; turning it off is not.
+ */
+async function confirmLaunchAtLogin(window: BrowserWindow | null): Promise<boolean> {
+  return confirmPreference(window, 'launch-at-login', {
+    type: 'question',
+    buttons: ['Cancel', 'Open at login'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Open AGI Cloud at login?',
+    message: 'Open AGI Cloud each time you log in to this computer?',
+    detail:
+      "It starts when you log in and keeps running until you quit it. You can turn this off in Settings, or in your system's login items.",
+    noLink: true,
+  });
+}
+
+async function confirmCliPath(
+  window: BrowserWindow | null,
+  requested: string,
+  current: string,
+): Promise<string | null> {
+  if (requested === '') return (await confirmBuiltInCli(window, current)) ? '' : null;
+  if (requested.includes(path.sep) && !path.isAbsolute(requested)) {
+    throw new Error('Enter the full path to the AGI CLI, or just its name.');
+  }
+  const resolved = resolveBinaryPath(requested);
+  if (!resolved) throw new Error(`No program this computer can run was found at ${requested}.`);
+  let target = resolved;
+  try {
+    target = realpathSync(resolved);
+  } catch {
+    target = resolved;
+  }
+  const options = {
+    type: 'warning' as const,
+    buttons: ['Cancel', 'Use this program'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Use this program as the AGI CLI?',
+    message: 'Run this program for coding sessions?',
+    detail: [
+      'AGI Cloud starts this program to check its version and to run every coding session. It runs with your account: it can read and change files in the folders you approve and start other programs. Use it only if you set this path yourself.',
+      `The path a page asked for. ${NOT_THIS_APP}`,
+      [
+        `Program: ${shownValue(resolved, PROGRAM_PATH_SHOWN)}`,
+        ...(target === resolved ? [] : [`It links to: ${shownValue(target, PROGRAM_PATH_SHOWN)}`]),
+      ].join('\n'),
+    ].join('\n\n'),
+    noLink: true,
+  };
+  return (await confirmPreference(window, `cli-path ${resolved}`, options)) ? resolved : null;
+}
+
+const STOP_SHORTCUT_REQUIRED =
+  'Stop Agents keeps a shortcut: it is how you stop an agent that is controlling the screen, from whatever app is in front. Choose one of the listed shortcuts instead.';
+
+function shortcutWriteRefusal(key: ShortcutKey, requested: string): string {
+  return requested === NO_HOST_SHORTCUT
+    ? STOP_SHORTCUT_REQUIRED
+    : `${SHORTCUT_LABELS[key]} takes only one of the listed shortcuts. A shortcut is registered for every app on this computer, so this app does not take one a page names.`;
+}
+
+/**
+ * A shortcut that is never off has to end a write still registered. A chord
+ * another app holds is saved like any other and reports `taken`, which for
+ * Stop Agents would leave no shortcut at all. Answers with what to tell the
+ * page when the shortcut did not take; the caller puts the old chords back.
+ */
+function lostAlwaysOnShortcut(): string | null {
+  const lost = shortcutRegistrations().find(
+    (registration) => !shortcutMayBeOff(registration.key) && registration.status !== 'registered',
+  );
+  if (!lost) return null;
+  return `${SHORTCUT_LABELS[lost.key]} could not take that shortcut: it ${
+    shortcutStatusDetail(lost.status) ?? 'was not registered'
+  }. The shortcut it had is kept. Choose another one.`;
+}
+
+async function writeHostPreferences(
+  window: BrowserWindow | null,
+  patch: Partial<HostPreferences>,
+): Promise<HostPreferencesState> {
   const before = getPreferences();
 
-  if ('launchAtLogin' in patch && typeof patch.launchAtLogin === 'boolean') {
-    setLaunchAtLogin(patch.launchAtLogin);
+  for (const key of SHORTCUT_KEYS) {
+    const requested = patch[key];
+    if (
+      typeof requested === 'string' &&
+      !pageMayWriteShortcut(key, requested, getShortcuts()[key])
+    ) {
+      throw new Error(shortcutWriteRefusal(key, requested));
+    }
   }
 
   const shortcutPatch = Object.fromEntries(
     SHORTCUT_KEYS.filter((key) => typeof patch[key] === 'string').map((key) => [key, patch[key]]),
   );
   if (Object.keys(shortcutPatch).length > 0) {
+    const previous = getShortcuts();
     saveSettings(shortcutPatch);
     applyGarnishShortcuts();
+    const lost = lostAlwaysOnShortcut();
+    if (lost) {
+      saveSettings(previous);
+      applyGarnishShortcuts();
+      refreshTrayMenu(garnishHandlers);
+      throw new Error(lost);
+    }
+    refreshTrayMenu(garnishHandlers);
+  }
+
+  if (
+    typeof patch.launchAtLogin === 'boolean' &&
+    patch.launchAtLogin !== before.launchAtLogin &&
+    (!patch.launchAtLogin || (await confirmLaunchAtLogin(window)))
+  ) {
+    setLaunchAtLogin(patch.launchAtLogin);
+  }
+
+  if (patch.agentNotifications && typeof patch.agentNotifications === 'object') {
+    saveSettings({ agentNotifications: normalizeAgentNotifications(patch.agentNotifications) });
   }
 
   if (typeof patch.cliPath === 'string' && patch.cliPath.trim() !== before.cliPath) {
-    saveSettings({ cliPath: patch.cliPath.trim() });
+    const confirmed = await confirmCliPath(window, patch.cliPath.trim(), before.cliPath);
+    if (confirmed !== null) saveSettings({ cliPath: confirmed });
   }
 
   if (typeof patch.showInMenuBar === 'boolean' && patch.showInMenuBar !== before.showInMenuBar) {
     saveSettings({ showInMenuBar: patch.showInMenuBar });
-    if (patch.showInMenuBar) createTray(garnishHandlers);
-    else destroyTray();
+    syncTray();
   }
 
   if (isSessionCompletionAlerts(patch.sessionCompletionAlerts)) {
@@ -1314,11 +1774,15 @@ function sendHostCommand(command: HostCommand): void {
   const target = frontWindow();
   if (!target) {
     showMainWindow();
-    mainWindow?.webContents.send(ELECTRON_IPC_CHANNELS.hostCommand, command);
+    if (mainWindow && showsTrustedPage(mainWindow.webContents)) {
+      mainWindow.webContents.send(ELECTRON_IPC_CHANNELS.hostCommand, command);
+    }
     return;
   }
   focusWindow(target.id);
-  target.webContents.send(ELECTRON_IPC_CHANNELS.hostCommand, command);
+  if (showsTrustedPage(target.webContents)) {
+    target.webContents.send(ELECTRON_IPC_CHANNELS.hostCommand, command);
+  }
 }
 
 function goBack(): void {
@@ -1356,14 +1820,33 @@ async function cloudUpdateAvailability(): Promise<DesktopCloudUpdateAvailability
   };
 }
 
+/**
+ * Installing quits the app, so a restart asks first about work a quit would
+ * stop, in the quit guard's own words. Declined, the update waits and installs
+ * on the next quit, which asks the same question.
+ */
+async function restartToUpdate(): Promise<HostRestartOutcome> {
+  if (downloadedUpdate() === null) return 'not-ready';
+  const prompt = quitPrompt(liveWork());
+  if (prompt && !(await askGuardPrompt(prompt))) return 'deferred';
+  quitConfirmed = true;
+  setTimeout(() => {
+    quitConfirmed = false;
+  }, UPDATE_RESTART_TIMEOUT_MS).unref?.();
+  installDownloadedUpdate();
+  return 'restarting';
+}
+
 function announceUpdateReady(version: string): void {
   sendRuntimeEvent({ kind: 'update-ready', version });
   if (!Notification.isSupported()) return;
-  const notification = new Notification({
-    title: `AGI Cloud ${version} is ready`,
-    body: 'Restart AGI Cloud to finish updating.',
+  const notification = createNativeNotification({
+    title: 'AGI Cloud update ready',
+    body: `Version ${version} is downloaded. Restart AGI Cloud to finish updating.`,
+    actions: [{ type: 'button', text: 'Restart to Update' }],
   });
-  notification.on('click', showMainWindow);
+  notification.on('action', () => void restartToUpdate());
+  notification.on('click', () => void checkForCloudUpdate());
   notification.show();
 }
 
@@ -1374,8 +1857,8 @@ async function checkForCloudUpdate(): Promise<void> {
     recordDesktopEvent({ domain: 'updater', outcome: 'ok' });
     prompt = desktopUpdatePrompt(update);
     const chosen = await showUpdatePrompt(prompt);
-    if (prompt.installButton !== null && chosen === prompt.installButton) {
-      installDownloadedUpdate();
+    if (prompt.restartButton !== null && chosen === prompt.restartButton) {
+      await restartToUpdate();
     } else if (prompt.downloadButton !== null && chosen === prompt.downloadButton) {
       await shell.openExternal(update.downloadUrl);
     }
@@ -1399,9 +1882,7 @@ async function showUpdatePrompt(prompt: DesktopUpdatePrompt): Promise<number> {
     defaultId: 0,
     ...(prompt.buttons.length > 1 ? { cancelId: prompt.buttons.length - 1, noLink: true } : {}),
   };
-  const result = mainWindow
-    ? await dialog.showMessageBox(mainWindow, options)
-    : await dialog.showMessageBox(options);
+  const result = await showNativeMessage(mainWindow, options);
   return result.response;
 }
 
@@ -1426,8 +1907,8 @@ function installMenu(): void {
       goForward,
       setZoomLevel: applyZoomLevel,
       stepZoomLevel,
-      takeOverScreen: () => void takeOverComputerUse(),
-      handBackScreen: () => void handBackComputerUse(),
+      takeOverScreen,
+      handBackScreen,
       stopScreenControl: () => void stopComputerUse(),
     },
     {
@@ -1445,13 +1926,6 @@ if (!hasSingleInstanceLock) {
   app.setName('AGI Cloud');
   app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
 
-  if (!DEEP_LINK_BRIDGE_ATTACHED) {
-    console.warn(
-      `[deep-link] registered as handler for ${DEEP_LINK_SCHEME}:// but renderer mode ` +
-        `"${RENDERER_MODE}" attaches no IPC bridge, incoming links will be dropped.`,
-    );
-  }
-
   const launchLink = process.argv.find((arg) => arg.startsWith(`${DEEP_LINK_SCHEME}://`));
   if (launchLink) coldStartDeepLinks.push(launchLink);
 
@@ -1467,13 +1941,13 @@ if (!hasSingleInstanceLock) {
   });
 
   void app.whenReady().then(() => {
-    // The IPC handlers are registered in both modes. They used to be inside
-    // the bundled branch, so the remote window had a preload with nothing on
-    // the other end of it. `isTrustedSender` is what decides who may call, not
-    // which mode we booted in.
+    // The handlers the hosted page calls are registered in both modes, and
+    // `isTrustedSender` decides who may call them. The ones only the bundled
+    // renderer drives are registered for it alone.
     recordDesktopEvent({ domain: 'launch', outcome: 'started' });
-    registerIpcHandlers();
-    configureWindowOpening(openRouteInNewWindow);
+    registerIpcHandlers(() => {
+      quitConfirmed = true;
+    });
     signedInAccount = readShellWindowState().lastAccount;
     onShellIdentityReported((identity) => adoptReportedAccount(accountFingerprint(identity)));
     nativeTheme.themeSource = getPreferences().appearance;
@@ -1485,10 +1959,16 @@ if (!hasSingleInstanceLock) {
       configureSession(session.fromPartition(REMOTE_SESSION_PARTITION));
     }
 
+    deepLinkQueue = mergeDeepLinkQueues(
+      loadDeepLinkQueue(deepLinkQueuePath(), Date.now()),
+      deepLinkQueue,
+    );
+    appReady = true;
     createMainWindow();
     for (const link of coldStartDeepLinks.splice(0)) deliverDeepLink(link);
 
-    if (getPreferences().showInMenuBar) createTray(garnishHandlers);
+    trayComputerUseState = computerUseTrayState();
+    syncTray();
     installMenu();
     // The Window menu says whether the front window is on a conversation, so it
     // is rebuilt when the front window changes rather than once at launch.
@@ -1497,15 +1977,22 @@ if (!hasSingleInstanceLock) {
     applyLaunchAtLogin();
     applyGarnishShortcuts();
 
-    configureRemoteControl((state) => sendRuntimeEvent({ kind: 'remote-control-changed', state }));
+    configureRemoteControl(
+      (state) => sendRuntimeEvent({ kind: 'remote-control-changed', state }),
+      () => {
+        showMainWindow();
+        return mainWindow;
+      },
+    );
     configureComputerUse({
       onChange: () => {
         sendRuntimeEvent({ kind: 'computer-use-changed', status: computerUseStatus() });
         installMenu();
+        refreshTrayForComputerUse();
       },
       onNotificationClick: showMainWindow,
       onResumeOwed: (driver) => {
-        if (driver && !driver.isDestroyed()) {
+        if (driver && !driver.isDestroyed() && showsTrustedPage(driver.webContents)) {
           driver.webContents.send(DESKTOP_RUNTIME_EVENT_CHANNEL, {
             kind: 'computer-use-handed-back',
           });
@@ -1521,33 +2008,23 @@ if (!hasSingleInstanceLock) {
         ) || null,
       remoteControlActive,
       report: reportCodeSessionActivity,
-      alertPreferences: () => {
-        const preferences = getPreferences();
-        return {
-          completion: preferences.sessionCompletionAlerts,
-          approvals: preferences.sessionApprovalAlerts,
-        };
-      },
-      inBackground: () => BrowserWindow.getFocusedWindow() === null,
-      alert: ({ title, body }) => {
-        if (!Notification.isSupported()) return;
-        const notification = new Notification({ title, body });
-        notification.on('click', showMainWindow);
-        notification.show();
-      },
     });
     configureDeveloperSessions({
       emit: (rootId, event) => {
-        noteDeveloperSessionEvent(rootId, event);
+        noteBackgroundSessionEvent(rootId, event);
         sendRuntimeEvent({ kind: 'developer-session', rootId, event });
         relayDeveloperSessionEvent(rootId, event);
+        agentNotifier.handle(rootId, event);
+        noteDispatcherSessionEvent(rootId, event);
         codeSessionActivity(rootId, event).catch((error: unknown) =>
           console.warn('[code-session-activity] could not deliver activity:', error),
         );
       },
       resolveBinary: () => getPreferences().cliPath,
+      mayRunIn: (root) => agentAllowedIn(root.id),
       accountBridge: { readShellIdentity, approveDeviceCode },
       spawn: spawnTrackedDeveloperRuntime,
+      answersUserInput: windowAnswersUserInput,
     });
 
     configureQuickAskBridge({
@@ -1567,18 +2044,41 @@ if (!hasSingleInstanceLock) {
     });
   });
 
+  let quitPromptOpen = false;
+
+  app.on('before-quit', (event) => {
+    if (quitConfirmed) return;
+    const prompt = quitPrompt(liveWork());
+    if (!prompt) return;
+    event.preventDefault();
+    if (quitPromptOpen) return;
+    quitPromptOpen = true;
+    void askGuardPrompt(prompt)
+      .then((confirmed) => {
+        if (confirmed) {
+          quitConfirmed = true;
+          app.quit();
+          return;
+        }
+        if (liveWindows().length === 0 && process.platform !== 'darwin') showMainWindow();
+      })
+      .finally(() => {
+        quitPromptOpen = false;
+      });
+  });
+
   app.on('will-quit', () => {
     unregisterGarnishShortcuts();
     cancelAllShellRuns();
     stopRemoteControl();
-    stopAllDeveloperRuntimes();
+    killAllDeveloperRuntimes();
     shutDownComputerUse();
     void stopBrowserBridge();
   });
 
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-      app.quit();
-    }
+    if (process.platform === 'darwin') return;
+    if (hasTray()) return;
+    app.quit();
   });
 }

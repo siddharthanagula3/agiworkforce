@@ -20,8 +20,21 @@ vi.mock('@agiworkforce/unified-chat', () => ({
 
 import { useAppModeStore } from '../../../stores/appModeStore';
 import { useChatStore } from '../../../stores/chat/chatStore';
-import type { Project } from '../../../stores/projectStore';
+import { useProjectStore, type Project } from '../../../stores/projectStore';
 import { ProjectSettingsDialog } from '../ProjectSettingsDialog';
+
+const KNOWLEDGE_SYNC = {
+  retrieval: 'whole_files',
+  indexedFiles: 0,
+  wholeFileMaxFiles: 20,
+  wholeFileMaxChars: 200_000,
+};
+
+function resolveHostCommands() {
+  host.invoke.mockImplementation(async (command: string) =>
+    command === 'project_sync_knowledge' ? KNOWLEDGE_SYNC : undefined,
+  );
+}
 
 const EDIT_PROJECT: Project = {
   id: 'project-1',
@@ -41,6 +54,7 @@ describe('ProjectSettingsDialog host-aware rendering', () => {
     host.prefersReducedMotion = false;
     useAppModeStore.setState({ mode: 'local' });
     useChatStore.setState({ conversations: [] });
+    resolveHostCommands();
   });
 
   afterEach(() => {
@@ -119,6 +133,7 @@ describe('ProjectSettingsDialog memory scoping', () => {
     host.prefersReducedMotion = false;
     useAppModeStore.setState({ mode: 'local' });
     useChatStore.setState({ conversations: [] });
+    resolveHostCommands();
   });
 
   afterEach(() => {
@@ -213,4 +228,40 @@ describe('ProjectSettingsDialog knowledge-base ingestion', () => {
     expect(supported.textContent).toContain('.pdf');
     expect(supported.textContent).toContain('.docx');
   });
+});
+
+describe('ProjectSettingsDialog git settings trust', () => {
+  beforeEach(() => {
+    host.isTauri = true;
+    host.prefersReducedMotion = false;
+    useChatStore.setState({ conversations: [] });
+    resolveHostCommands();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    useProjectStore.setState({ currentFolder: null });
+  });
+
+  it.each([
+    { mode: 'local' as const, currentFolder: '/Users/someone/code/app', offered: true },
+    { mode: 'local' as const, currentFolder: null, offered: false },
+    { mode: 'cloud' as const, currentFolder: '/Users/someone/code/app', offered: false },
+  ])(
+    'offers to trust git settings: $offered in $mode mode with folder $currentFolder',
+    ({ mode, currentFolder, offered }) => {
+      useAppModeStore.setState({ mode });
+      useProjectStore.setState({ currentFolder });
+
+      render(
+        <ProjectSettingsDialog open mode="edit" project={EDIT_PROJECT} onOpenChange={vi.fn()} />,
+      );
+
+      const trustButton = screen.queryByRole('button', {
+        name: 'Trust this project’s git settings',
+      });
+      expect(trustButton !== null).toBe(offered);
+    },
+  );
 });

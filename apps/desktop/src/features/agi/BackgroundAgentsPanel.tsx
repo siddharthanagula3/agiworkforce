@@ -1,14 +1,28 @@
-import { CheckCircle2, Clock, Loader2, Pause, Play, Repeat, XCircle } from 'lucide-react';
-import { useCallback, useEffect } from 'react';
+import { CheckCircle2, Clock, Loader2, Pause, Play, XCircle } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+
+import { useConfirmAction, type ConfirmActionRequest } from '@agiworkforce/ui';
 
 import { cn } from '../../lib/utils';
+import {
+  NOTIFICATION_TARGET_ATTRIBUTE,
+  notificationTargetValue,
+  useNotificationTarget,
+} from '../notifications/notificationTarget';
 import {
   isTerminalBackgroundAgentStatus,
   subscribeToBackgroundAgents,
   useBackgroundAgentStore,
   type BackgroundAgent,
+  type BackgroundAgentBoundary,
   type BackgroundAgentStatus,
 } from '../../stores/backgroundAgentStore';
+
+const BOUNDARY_LABELS: Record<BackgroundAgentBoundary, string> = {
+  local: 'Model: on this computer',
+  on_device: 'Model: on this computer',
+  managed_cloud: 'Model: AGI Cloud',
+};
 
 const STATUS_LABELS: Record<BackgroundAgentStatus, string> = {
   queued: 'Queued',
@@ -38,23 +52,92 @@ function StatusIcon({ status }: { status: BackgroundAgentStatus }) {
   return <XCircle className="h-4 w-4" />;
 }
 
-function BackgroundAgentRow({ agent }: { agent: BackgroundAgent }) {
+function RunResult({ agent }: { agent: BackgroundAgent }) {
+  const { summary, error } = agent;
+  if (!summary && !error) return null;
+
+  return (
+    <div className="mt-2 flex flex-col gap-1.5" data-testid="background-agent-result">
+      {error ? (
+        <p className="whitespace-pre-wrap break-words text-xs text-danger-text">{error}</p>
+      ) : null}
+      {summary ? (
+        <>
+          <p className="whitespace-pre-wrap break-words text-sm text-slate-100">
+            {summary.description}
+          </p>
+          {summary.warnings.map((warning) => (
+            <p key={warning} className="whitespace-pre-wrap break-words text-xs text-warning-text">
+              {warning}
+            </p>
+          ))}
+          {summary.actionsTaken.length > 0 ? (
+            <details className="text-xs text-slate-300">
+              <summary className="cursor-pointer text-slate-400">
+                {summary.actionsTaken.length === 1
+                  ? '1 step'
+                  : `${summary.actionsTaken.length} steps`}
+              </summary>
+              <ol className="mt-1 flex list-decimal flex-col gap-1 pl-5">
+                {summary.actionsTaken.map((action, index) => (
+                  <li key={`${index}-${action}`} className="whitespace-pre-wrap break-words">
+                    {action}
+                  </li>
+                ))}
+              </ol>
+            </details>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function BackgroundAgentRow({
+  agent,
+  revealed,
+  confirm,
+}: {
+  agent: BackgroundAgent;
+  revealed: boolean;
+  confirm: (request: ConfirmActionRequest) => void;
+}) {
   const pauseAgent = useBackgroundAgentStore((s) => s.pauseAgent);
   const resumeAgent = useBackgroundAgentStore((s) => s.resumeAgent);
   const cancelAgent = useBackgroundAgentStore((s) => s.cancelAgent);
-  const takeOverAgent = useBackgroundAgentStore((s) => s.takeOverAgent);
 
   const terminal = isTerminalBackgroundAgentStatus(agent.status);
   const percentage = Math.min(100, Math.max(0, agent.progress?.percentage ?? 0));
+  const boundary = agent.context?.boundary;
+  const boundaryLabel = boundary ? BOUNDARY_LABELS[boundary] : undefined;
 
   return (
-    <li className="rounded-lg border border-white/10 bg-white/5 p-3" data-testid="background-agent">
+    <li
+      tabIndex={-1}
+      {...{
+        [NOTIFICATION_TARGET_ATTRIBUTE]: notificationTargetValue('background-agent', agent.id),
+      }}
+      className={cn(
+        'rounded-lg border border-white/10 bg-white/5 p-3',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        revealed && 'ring-2 ring-ring',
+      )}
+      data-testid="background-agent"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-slate-100">{agent.goal}</p>
           <p className="mt-0.5 truncate text-xs text-slate-400">
             {agent.progress?.currentStepDescription}
           </p>
+          {boundaryLabel ? (
+            <p
+              className="mt-0.5 truncate text-xs text-slate-400"
+              data-testid="background-agent-boundary"
+            >
+              {boundaryLabel}
+            </p>
+          ) : null}
         </div>
         <span
           className={cn(
@@ -77,7 +160,7 @@ function BackgroundAgentRow({ agent }: { agent: BackgroundAgent }) {
         </p>
       </div>
 
-      {agent.error ? <p className="mt-2 text-xs text-danger-text">{agent.error}</p> : null}
+      <RunResult agent={agent} />
 
       <div className="mt-3 flex flex-wrap gap-2">
         {agent.status === 'paused' ? (
@@ -103,20 +186,20 @@ function BackgroundAgentRow({ agent }: { agent: BackgroundAgent }) {
         <button
           type="button"
           disabled={terminal}
-          onClick={() => void cancelAgent(agent.id)}
+          onClick={() =>
+            confirm({
+              title: 'Cancel this background run?',
+              description: `"${agent.goal}" stops now. Steps it has not reached are not run, and it cannot be resumed. What it has already done is not undone.`,
+              confirmLabel: 'Cancel run',
+              cancelLabel: 'Keep running',
+              destructive: true,
+              onConfirm: () => cancelAgent(agent.id).catch(() => undefined),
+            })
+          }
           className="flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1 text-xs text-slate-200 hover:bg-white/10 disabled:opacity-40"
         >
           <XCircle className="h-3.5 w-3.5" />
           Cancel
-        </button>
-        <button
-          type="button"
-          disabled={terminal}
-          onClick={() => void takeOverAgent(agent.id)}
-          className="flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1 text-xs text-slate-200 hover:bg-white/10 disabled:opacity-40"
-        >
-          <Repeat className="h-3.5 w-3.5" />
-          Take Over
         </button>
       </div>
     </li>
@@ -130,13 +213,27 @@ export function BackgroundAgentsPanel() {
   const error = useBackgroundAgentStore((s) => s.error);
   const listAgents = useBackgroundAgentStore((s) => s.listAgents);
 
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const [listed, setListed] = useState(false);
+  const revealedAgentId = useNotificationTarget(
+    'background-agent',
+    agents.map((agent) => agent.id),
+    listed,
+  );
+
   useEffect(() => {
-    void listAgents();
+    let mounted = true;
+    void Promise.resolve(listAgents()).finally(() => {
+      if (mounted) setListed(true);
+    });
     let unsubscribe: (() => void) | undefined;
     void subscribeToBackgroundAgents().then((fn) => {
       unsubscribe = fn;
     });
-    return () => unsubscribe?.();
+    return () => {
+      mounted = false;
+      unsubscribe?.();
+    };
   }, [listAgents]);
 
   const refresh = useCallback(() => {
@@ -162,15 +259,22 @@ export function BackgroundAgentsPanel() {
 
       {agents.length === 0 ? (
         <p className="text-sm text-slate-500">
-          No background agents yet. Prefix a message with &amp; to push it to the background.
+          No background agents yet. One appears here when a chat starts a background run or an
+          automation trigger fires.
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
           {agents.map((agent) => (
-            <BackgroundAgentRow key={agent.id} agent={agent} />
+            <BackgroundAgentRow
+              key={agent.id}
+              agent={agent}
+              revealed={revealedAgentId === agent.id}
+              confirm={confirm}
+            />
           ))}
         </ul>
       )}
+      {confirmDialog}
     </div>
   );
 }

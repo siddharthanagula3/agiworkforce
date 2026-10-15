@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { settingsBackupKey, useSettingsStore } from '../settingsStore';
+import { invoke } from '../../lib/tauri-mock';
 type ScanModule0 = typeof import('../../lib/tauri-mock');
 
 vi.mock('../../lib/tauri-mock', async (importOriginal) => ({
@@ -128,5 +129,39 @@ describe('returning to the build that was downgraded from', () => {
     expect(uiScale()).toBe(42);
     expect(window.localStorage.getItem(settingsBackupKey(THIS_VERSION))).toBeNull();
     warn.mockRestore();
+  });
+});
+
+describe('keys that nothing reads', () => {
+  it('are dropped from older saved state and never written again', async () => {
+    window.localStorage.setItem(
+      STORE_KEY,
+      persisted(THIS_VERSION, 100, {
+        chatPreferences: { alwaysUseAgentMode: true, compactMode: false },
+        customModels: [{ id: 'custom-1', baseUrl: 'https://models.example.com/v1' }],
+      }),
+    );
+
+    await useSettingsStore.persist.rehydrate();
+
+    const state = useSettingsStore.getState();
+    expect(state.chatPreferences.compactMode).toBe(false);
+    expect(state.chatPreferences).not.toHaveProperty('alwaysUseAgentMode');
+
+    vi.mocked(invoke).mockClear();
+    await state.saveSettings();
+    const saved = vi
+      .mocked(invoke)
+      .mock.calls.find(([command]) => command === 'settings_save')?.[1] as
+      { settings: { chatPreferences: object } } | undefined;
+    expect(saved?.settings).toBeDefined();
+    expect(saved?.settings).not.toHaveProperty('customModels');
+    expect(saved?.settings.chatPreferences).not.toHaveProperty('alwaysUseAgentMode');
+    expect(saved?.settings.chatPreferences).toMatchObject({ compactMode: false });
+
+    const written = window.localStorage.getItem(STORE_KEY) ?? '';
+    expect(written).toContain('"compactMode":false');
+    expect(written).not.toContain('customModels');
+    expect(written).not.toContain('alwaysUseAgentMode');
   });
 });

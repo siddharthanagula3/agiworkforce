@@ -1,4 +1,4 @@
-import type { CaptureMetadata, CaptureRecord, CaptureResult, Region } from '../types/capture';
+import type { CaptureMetadata, CaptureResult, Region } from '../types/capture';
 
 interface RawRegion {
   x: number;
@@ -21,18 +21,6 @@ interface RawCaptureResult {
   thumbnail_path?: string | null;
   capture_type: 'fullscreen' | 'window' | 'region';
   metadata: RawCaptureMetadata;
-  created_at: number;
-}
-
-interface RawCaptureRecord {
-  id: string;
-  conversation_id?: number | null;
-  capture_type: string;
-  file_path: string;
-  thumbnail_path?: string | null;
-  ocr_text?: string | null;
-  ocr_confidence?: number | null;
-  metadata: string;
   created_at: number;
 }
 
@@ -70,18 +58,4 @@ export function normalizeCaptureResult(raw: RawCaptureResult): CaptureResult {
   };
 }
 
-export function normalizeCaptureRecord(raw: RawCaptureRecord): CaptureRecord {
-  return {
-    id: raw.id,
-    conversationId: raw.conversation_id ?? null,
-    captureType: raw.capture_type,
-    filePath: raw.file_path,
-    thumbnailPath: raw.thumbnail_path ?? null,
-    ocrText: raw.ocr_text ?? null,
-    ocrConfidence: raw.ocr_confidence ?? null,
-    metadata: raw.metadata,
-    createdAt: raw.created_at,
-  };
-}
-
-export type { RawCaptureRecord, RawCaptureResult };
+export type { RawCaptureResult };

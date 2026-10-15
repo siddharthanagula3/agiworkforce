@@ -1,4 +1,8 @@
 import {
+  ALWAYS_ON_HOST_SHORTCUTS,
+  DEFAULT_HOST_AGENT_NOTIFICATIONS,
+  HOST_AGENT_NOTIFICATION_KINDS,
+  HOST_AGENT_NOTIFICATION_MODES,
   HOST_SHORTCUT_CHOICES,
   HOST_SHORTCUT_KEYS,
   HOST_SHORTCUT_PREFERENCE_KEYS,
@@ -7,6 +11,7 @@ import {
   SESSION_COMPLETION_ALERTS,
   defaultHostShortcut,
   describeAccelerator,
+  type HostAgentNotificationPreferences,
   type HostPreferences,
   type HostShortcutKey,
   type SessionCompletionAlerts,
@@ -17,9 +22,15 @@ import {
  * the hosted settings panel and this process cannot end up with two spellings
  * of the same preference.
  */
-export type GarnishShortcuts = Pick<
-  HostPreferences,
-  'quickAskShortcut' | 'screenshotShortcut' | 'windowShotShortcut' | 'voiceShortcut'
+export type GarnishShortcuts = Required<
+  Pick<
+    HostPreferences,
+    | 'quickAskShortcut'
+    | 'screenshotShortcut'
+    | 'windowShotShortcut'
+    | 'voiceShortcut'
+    | 'stopShortcut'
+  >
 >;
 
 export const DEFAULT_SHORTCUTS: GarnishShortcuts = {
@@ -27,6 +38,7 @@ export const DEFAULT_SHORTCUTS: GarnishShortcuts = {
   screenshotShortcut: defaultHostShortcut('screenshot'),
   windowShotShortcut: defaultHostShortcut('windowShot'),
   voiceShortcut: defaultHostShortcut('voice'),
+  stopShortcut: defaultHostShortcut('stop'),
 };
 
 export function isUsableAccelerator(value: unknown): value is string {
@@ -41,6 +53,7 @@ export function normalizeShortcuts(raw: unknown): GarnishShortcuts {
     screenshotShortcut: readAccelerator(source, 'screenshotShortcut'),
     windowShotShortcut: readAccelerator(source, 'windowShotShortcut'),
     voiceShortcut: readAccelerator(source, 'voiceShortcut'),
+    stopShortcut: readAccelerator(source, 'stopShortcut'),
   };
 }
 
@@ -63,16 +76,32 @@ export const SHORTCUT_LABELS: Record<ShortcutKey, string> = {
   screenshotShortcut: 'Screenshot to Chat',
   windowShotShortcut: 'Window to Chat',
   voiceShortcut: 'Dictation',
+  stopShortcut: 'Stop Agents',
 };
+
+/**
+ * Stop Agents is how a person halts an agent that is moving the pointer, from
+ * whatever app is in front. The settings panel is a website, so it is the one
+ * shortcut that cannot be set to none, to a chord outside the offered ones, or
+ * pushed aside by another shortcut taking its chord.
+ */
+const ALWAYS_ON_SHORTCUTS: readonly ShortcutKey[] = ALWAYS_ON_HOST_SHORTCUTS.map(
+  (key) => HOST_SHORTCUT_PREFERENCE_KEYS[key] as ShortcutKey,
+);
+
+export function shortcutMayBeOff(key: ShortcutKey): boolean {
+  return !ALWAYS_ON_SHORTCUTS.includes(key);
+}
 
 /**
  * An empty string is the user choosing no shortcut, which is a setting rather
  * than a missing value, so it survives normalisation instead of springing back
- * to the default the next time the file is read.
+ * to the default the next time the file is read. A shortcut that is never off
+ * has no such setting.
  */
 function readAccelerator(source: Record<string, unknown>, key: ShortcutKey): string {
   const raw = source[key];
-  if (raw === NO_HOST_SHORTCUT) return NO_HOST_SHORTCUT;
+  if (raw === NO_HOST_SHORTCUT && shortcutMayBeOff(key)) return NO_HOST_SHORTCUT;
   return isUsableAccelerator(raw) ? raw : DEFAULT_SHORTCUTS[key];
 }
 
@@ -81,6 +110,7 @@ export const SHORTCUT_CHOICES: Record<ShortcutKey, readonly string[]> = {
   screenshotShortcut: HOST_SHORTCUT_CHOICES.screenshot,
   windowShotShortcut: HOST_SHORTCUT_CHOICES.windowShot,
   voiceShortcut: HOST_SHORTCUT_CHOICES.voice,
+  stopShortcut: HOST_SHORTCUT_CHOICES.stop,
 };
 
 const MODIFIER_ALIASES: Record<string, string> = {
@@ -117,19 +147,41 @@ export function acceleratorIdentity(accelerator: string): string {
 }
 
 /**
- * Keys whose accelerator repeats an earlier key's chord. Registration order is
- * the tiebreak, so the first key in `SHORTCUT_KEYS` keeps the chord.
+ * Keys whose accelerator repeats an earlier key's chord. A shortcut that is
+ * never off claims its chord first; after that registration order is the
+ * tiebreak, so the first key in `SHORTCUT_KEYS` keeps the chord.
  */
 export function duplicateShortcutKeys(shortcuts: GarnishShortcuts): ShortcutKey[] {
   const claimed = new Map<string, ShortcutKey>();
   const duplicates: ShortcutKey[] = [];
-  for (const key of SHORTCUT_KEYS) {
+  const claimOrder = [
+    ...SHORTCUT_KEYS.filter((key) => !shortcutMayBeOff(key)),
+    ...SHORTCUT_KEYS.filter(shortcutMayBeOff),
+  ];
+  for (const key of claimOrder) {
     if (shortcuts[key] === NO_HOST_SHORTCUT) continue;
     const identity = acceleratorIdentity(shortcuts[key]);
     if (claimed.has(identity)) duplicates.push(key);
     else claimed.set(identity, key);
   }
   return duplicates;
+}
+
+/**
+ * Whether the settings page may set `key` to `requested`. The page is a
+ * website, and a chord it names is registered for every app on this computer:
+ * Screenshot to Chat on the paste chord would hand it a screen capture at
+ * every paste. So it may choose among the chords the shell offers for that
+ * shortcut, leave the one already there, or turn off a shortcut that may be
+ * off, and nothing else.
+ */
+export function pageMayWriteShortcut(
+  key: ShortcutKey,
+  requested: string,
+  current: string,
+): boolean {
+  if (requested === NO_HOST_SHORTCUT) return shortcutMayBeOff(key);
+  return SHORTCUT_CHOICES[key].includes(requested) || requested === current;
 }
 
 export function shortcutChoices(key: ShortcutKey, current: string): string[] {
@@ -319,6 +371,7 @@ export interface GarnishPreferences {
    * its own frame makes every launch the first one.
    */
   windowFrame: WindowFrame | null;
+  agentNotifications: HostAgentNotificationPreferences;
 }
 
 export const DEFAULT_PREFERENCES: GarnishPreferences = {
@@ -331,6 +384,7 @@ export const DEFAULT_PREFERENCES: GarnishPreferences = {
   zoomLevel: 0,
   appearance: 'system',
   windowFrame: null,
+  agentNotifications: DEFAULT_HOST_AGENT_NOTIFICATIONS,
 };
 
 export const ZOOM_LEVEL_STEP = 1;
@@ -381,6 +435,29 @@ export function normalizePreferences(raw: unknown): GarnishPreferences {
       ? source['appearance']
       : DEFAULT_PREFERENCES.appearance,
     windowFrame: normalizeWindowFrame(source['windowFrame']),
+    agentNotifications: normalizeAgentNotifications(source['agentNotifications']),
+  };
+}
+
+export function normalizeAgentNotifications(raw: unknown): HostAgentNotificationPreferences {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {
+      ...DEFAULT_HOST_AGENT_NOTIFICATIONS,
+      muted: [...DEFAULT_HOST_AGENT_NOTIFICATIONS.muted],
+    };
+  }
+  const source = raw as Record<string, unknown>;
+  const when = source['when'];
+  const muted = Array.isArray(source['muted']) ? source['muted'] : [];
+  return {
+    when: HOST_AGENT_NOTIFICATION_MODES.includes(when as HostAgentNotificationPreferences['when'])
+      ? (when as HostAgentNotificationPreferences['when'])
+      : DEFAULT_HOST_AGENT_NOTIFICATIONS.when,
+    muted: HOST_AGENT_NOTIFICATION_KINDS.filter((kind) => muted.includes(kind)),
+    sound:
+      typeof source['sound'] === 'boolean'
+        ? source['sound']
+        : DEFAULT_HOST_AGENT_NOTIFICATIONS.sound,
   };
 }
 

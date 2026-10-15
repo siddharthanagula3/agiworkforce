@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -7,10 +7,12 @@ let userData = '';
 
 vi.mock('electron', () => ({
   app: { getPath: () => userData },
+  dialog: { showMessageBox: vi.fn() },
 }));
 
 const { findContainingRoot, grantRoot, listRoots, revokeRoot } =
   await import('../runtime/workspaceStore');
+const { getPermissionState, recordDecision } = await import('../runtime/permissionManager');
 
 const scratch: string[] = [];
 
@@ -62,7 +64,50 @@ describe('the workspaces the app has been given', () => {
     expect(findContainingRoot(path.join(granted.path, 'src'))).toBeUndefined();
   });
 
-  it('refuse a location too broad to be one project', async () => {
-    await expect(grantRoot(homedir())).rejects.toThrow(/too broad/);
+  it('take every grant made on them along when one is revoked, and leave a refusal standing', async () => {
+    const ledger = await grantRoot(project('ledger'));
+    const atlas = await grantRoot(project('atlas'));
+    const ledgerScope = { kind: 'workspace', target: ledger.path } as const;
+    const atlasScope = { kind: 'workspace', target: atlas.path } as const;
+    recordDecision('filesystem.write', ledgerScope, 'granted', 'always');
+    recordDecision('shell.execute', ledgerScope, 'granted', 'session');
+    recordDecision('filesystem.write', atlasScope, 'granted', 'always');
+    recordDecision('git.write', ledgerScope, 'denied', 'session');
+
+    expect(revokeRoot(ledger.id)).toBe(true);
+
+    expect(getPermissionState('filesystem.write', ledgerScope)).toBe('prompt');
+    expect(getPermissionState('shell.execute', ledgerScope)).toBe('prompt');
+    expect(getPermissionState('git.write', ledgerScope)).toBe('denied');
+    expect(getPermissionState('filesystem.write', atlasScope)).toBe('granted');
+
+    const again = await grantRoot(ledger.path);
+    expect(getPermissionState('filesystem.write', { kind: 'workspace', target: again.path })).toBe(
+      'prompt',
+    );
+  });
+
+  it('answer false, and forget nothing, for a folder that was never approved', async () => {
+    const atlas = await grantRoot(project('atlas'));
+    const scope = { kind: 'workspace', target: atlas.path } as const;
+    recordDecision('filesystem.write', scope, 'granted', 'always');
+
+    expect(revokeRoot('not-a-root')).toBe(false);
+    expect(getPermissionState('filesystem.write', scope)).toBe('granted');
+  });
+
+  it('refuse a location too broad to be one project, or where keys are kept', async () => {
+    for (const location of [homedir(), path.dirname(homedir()), '/private', '/tmp']) {
+      await expect(grantRoot(location), location).rejects.toThrow(
+        /cannot be approved as a workspace/,
+      );
+    }
+    for (const kept of ['.ssh', 'Library']) {
+      const location = path.join(homedir(), kept);
+      if (!existsSync(location)) continue;
+      await expect(grantRoot(location), location).rejects.toThrow(
+        /cannot be approved as a workspace/,
+      );
+    }
   });
 });

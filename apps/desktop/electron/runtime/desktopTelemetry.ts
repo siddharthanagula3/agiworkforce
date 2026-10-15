@@ -9,7 +9,6 @@ export const DESKTOP_TELEMETRY_DOMAINS = [
   'launch',
   'local_daemon',
   'local_store_migration',
-  'local_inference',
   'cloud_request',
   'voice_shortcut',
   'desktop_control',

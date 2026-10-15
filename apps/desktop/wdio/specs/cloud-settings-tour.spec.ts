@@ -1,4 +1,3 @@
-
 import { waitForDesktopShell } from '../support/desktop-shell';
 
 const MOCK_USER = {
@@ -349,7 +348,6 @@ async function mockDeviceAuthorizationIpc(retrying = false): Promise<void> {
     status: 200,
     body: JSON.stringify({
       access_token: `${header}.${claims}.wdio`,
-      refresh_token: 'wdio-refresh-token',
       token_type: 'bearer',
       expires_in: 3600,
     }),
@@ -358,7 +356,6 @@ async function mockDeviceAuthorizationIpc(retrying = false): Promise<void> {
   for (const command of [
     'account_store_api_base_url',
     'account_store_access_token',
-    'account_store_refresh_token',
     'account_clear_tokens',
   ]) {
     const mock = await browser.tauri.mock(command);

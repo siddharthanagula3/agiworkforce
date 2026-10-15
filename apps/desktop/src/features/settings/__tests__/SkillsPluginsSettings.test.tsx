@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SkillsPluginsSettings } from '../SkillsPluginsSettings';
 
@@ -263,6 +263,85 @@ describe('SkillsPluginsSettings', () => {
     });
   });
 
+  describe('Remove', () => {
+    const withClaudeCommand = () => {
+      setupSuccessfulLoad();
+      const load = mockInvoke.getMockImplementation()!;
+      mockInvoke.mockImplementation((cmd: string, args?: Record<string, unknown>) =>
+        cmd === 'claude_plugin_cli_available'
+          ? Promise.resolve(true)
+          : cmd === 'claude_plugin_change'
+            ? Promise.resolve(undefined)
+            : load(cmd, args),
+      );
+    };
+    const pluginChanges = () =>
+      mockInvoke.mock.calls
+        .filter(([cmd]) => cmd === 'claude_plugin_change')
+        .map(([, args]) => args as { action: string; plugin: string });
+
+    it('asks before uninstalling a plugin from Claude Code and names what is lost', async () => {
+      withClaudeCommand();
+      render(<SkillsPluginsSettings />);
+
+      await userEvent.click((await screen.findByText('Code Review')).closest('button')!);
+      const remove = await screen.findByRole('button', { name: 'Remove' });
+      await waitFor(() => expect(remove).toBeEnabled());
+      await userEvent.click(remove);
+
+      const dialog = await screen.findByRole('alertdialog');
+      expect(dialog).toHaveTextContent('Remove "Code Review" from Claude Code?');
+      expect(dialog).toHaveTextContent('you have to install it again');
+      expect(pluginChanges()).toEqual([]);
+
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Remove plugin' }));
+
+      await waitFor(() =>
+        expect(pluginChanges()).toEqual([
+          { action: 'remove', plugin: 'code-review@claude-plugins-official' },
+        ]),
+      );
+      expect(mockInvoke.mock.calls.map(([cmd]) => cmd)).not.toContain('execute_terminal_command');
+    });
+
+    it('shows what the host said when an install is declined, and claims no success', async () => {
+      withClaudeCommand();
+      const load = mockInvoke.getMockImplementation()!;
+      const declined = 'The plugin was not installed. You declined it in the system dialog.';
+      mockInvoke.mockImplementation((cmd: string, args?: Record<string, unknown>) =>
+        cmd === 'claude_plugin_change' ? Promise.reject(declined) : load(cmd, args),
+      );
+      render(<SkillsPluginsSettings />);
+
+      const input = await screen.findByPlaceholderText('plugin-name@marketplace');
+      await waitFor(() => expect(input).toBeEnabled());
+      await userEvent.type(input, 'formatter@claude-plugins-official');
+      await userEvent.click(screen.getByRole('button', { name: 'Install plugin' }));
+
+      expect(await screen.findByText(declined)).toBeInTheDocument();
+      expect(screen.queryByText(/succeeded/)).not.toBeInTheDocument();
+      expect(pluginChanges()).toEqual([
+        { action: 'install', plugin: 'formatter@claude-plugins-official' },
+      ]);
+      expect(input).toHaveValue('formatter@claude-plugins-official');
+    });
+
+    it('leaves the plugin installed when the question is cancelled', async () => {
+      withClaudeCommand();
+      render(<SkillsPluginsSettings />);
+
+      await userEvent.click((await screen.findByText('Code Review')).closest('button')!);
+      const remove = await screen.findByRole('button', { name: 'Remove' });
+      await waitFor(() => expect(remove).toBeEnabled());
+      await userEvent.click(remove);
+      await userEvent.click(
+        within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel' }),
+      );
+
+      expect(pluginChanges()).toEqual([]);
+    });
+  });
+
   describe('Enable / disable', () => {
     const expandCodeReview = async () => {
       await waitFor(() => {
@@ -274,8 +353,7 @@ describe('SkillsPluginsSettings', () => {
 
     const writtenSettings = (path: string) => {
       const call = mockInvoke.mock.calls.find(
-        ([cmd, args]) =>
-          cmd === 'file_write' && (args as Record<string, unknown>)['path'] === path,
+        ([cmd, args]) => cmd === 'file_write' && (args as Record<string, unknown>)['path'] === path,
       );
       expect(call, `no file_write for ${path}`).toBeDefined();
       return JSON.parse((call?.[1] as { content: string }).content) as {
@@ -379,7 +457,7 @@ describe('SkillsPluginsSettings', () => {
       render(<SkillsPluginsSettings />);
 
       await waitFor(() => {
-        expect(screen.getByText(/no plugins installed/i)).toBeInTheDocument();
+        expect(screen.getByText(/has no plugins installed/i)).toBeInTheDocument();
       });
     });
 
@@ -415,7 +493,7 @@ describe('SkillsPluginsSettings', () => {
       await waitFor(() => {
         expect(screen.queryByText(/loading plugins/i)).not.toBeInTheDocument();
       });
-      expect(screen.getByText(/Skills & Plugins/i)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Claude Code plugins' })).toBeInTheDocument();
     });
 
     it('shows "no plugins installed" when JSON parsing fails', async () => {
@@ -425,7 +503,7 @@ describe('SkillsPluginsSettings', () => {
       await waitFor(() => {
         expect(screen.queryByText(/loading plugins/i)).not.toBeInTheDocument();
       });
-      expect(screen.getByText(/no plugins installed/i)).toBeInTheDocument();
+      expect(screen.getByText(/has no plugins installed/i)).toBeInTheDocument();
     });
   });
 

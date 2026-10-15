@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Terminal as TerminalIcon, X } from 'lucide-react';
-import { updateCloudConversationTitle } from '@/api/cloudApi';
+import { Terminal as TerminalIcon, X } from 'lucide-react';
+import { Spinner } from '@/ui/Spinner';
 import { listCloudSkills } from '@/api/cloudSkills';
 import {
   ChatInterface,
@@ -18,8 +18,15 @@ import { Sidebar } from './Sidebar';
 import { AgiWorkProjects } from './AgiWorkProjects';
 import { AgiWorkArtifacts } from './AgiWorkArtifacts';
 import { AgiWorkScheduled } from './AgiWorkScheduled';
-import { ArtifactPanel } from '@/features/artifacts/ArtifactPanel';
+import {
+  DEVICE_AUTOMATION_PANELS,
+  isDeviceAutomationPanel,
+  isPanelAvailable,
+  type DeviceAutomationPanel,
+  type V3Panel,
+} from './shellPanels';
 import { ArtifactDraftView } from '@/features/artifacts/ArtifactDraftView';
+import { useDesktopArtifactActions } from '@/features/artifacts/useDesktopArtifactActions';
 import { getAgiTaskModelEligibility } from '@/lib/modelCapabilityGates';
 import { resolveComposerEditorMode } from '@/lib/composerEditorGate';
 const DesktopLibrary = lazy(() => import('@/features/library/DesktopLibrary'));
@@ -65,6 +72,7 @@ import { useSkillMarketplaceStore } from '../../stores/skillMarketplaceStore';
 import { useConnectorsStore } from '../../stores/connectorsStore';
 import { useFolderSelection } from '../../hooks/useFolderSelection';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
+import { CLOUD_OFFLINE_MESSAGE } from '../offline-indicator';
 import { selectHasCloudAccountSession, selectPlan, useUnifiedAuthStore } from '../../stores/auth';
 import { ActionRecorder } from '@/features/automation/ActionRecorder';
 import { ProjectSettingsDialog } from '@/features/chat/ProjectSettingsDialog';
@@ -74,6 +82,7 @@ import {
   type SelectedContextHandoff,
 } from '../context-handoff/SelectedContextReview';
 import { CloudFolderAttachSheet } from '../context-handoff/CloudFolderAttachSheet';
+import { ByokConversationDialog } from '../byok/ByokConversationDialog';
 import { revokeCloudHandoffGrant } from '../context-handoff/cloudHandoffGrant';
 import { canUseDesktopCloudAgiWork } from '../../services/desktopCloudEntitlements';
 import { CloudVoiceActionDialog } from '../voice/CloudVoiceActionDialog';
@@ -82,7 +91,11 @@ import { ComputerUseConsentDialog } from '../settings/ComputerUseConsentDialog';
 import { createDesktopCloudShare } from '../../services/desktopCloudShares';
 import { deriveDesktopMessageArtifacts } from '../../runtime/desktopArtifactProjection';
 import { McpToolConfirmationPrompt } from '../chat/McpToolConfirmationPrompt';
+import { McpElicitationPrompt } from '../mcp/McpElicitationPrompt';
 import { ComposerContextControls } from './ComposerContextControls';
+import { compactLocalConversation, fetchLocalContextUsage } from '../chat/localContextActions';
+import { useTemporaryChatControl } from '../chat/useTemporaryChat';
+import { useRegenerateModelOptions, useTauriMessageActions } from '../chat/useTauriMessageActions';
 
 function readMessageOrigin(message: ChatMessage, key: 'model' | 'provider'): string | undefined {
   const direct = message[key];
@@ -108,33 +121,43 @@ function useV3Mode() {
   return { mode };
 }
 
-type V3Panel =
-  | 'chat'
-  | 'projects'
-  | 'artifacts'
-  | 'code'
-  | 'design'
-  | 'research'
-  | 'automation'
-  | 'library'
-  | 'tasks'
-  | 'agent-tasks'
-  | 'cloud-schedules'
-  | 'scheduled'
-  | 'record-skill';
+const DEVICE_AUTOMATION_LABELS: Record<DeviceAutomationPanel, string> = {
+  automation: 'Automations',
+  scheduled: 'Scheduled tasks',
+  'agent-tasks': 'Agent tasks',
+};
 
-const DEVICE_ONLY_PANELS: readonly V3Panel[] = [
-  'artifacts',
-  'code',
-  'design',
-  'research',
-  'automation',
-  'scheduled',
-  'record-skill',
-  'agent-tasks',
-];
+function DeviceAutomationLinks({ onOpen }: { onOpen: (panel: DeviceAutomationPanel) => void }) {
+  return (
+    <nav
+      aria-label="Automations on this device"
+      className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--chat-border)] px-6 py-2 text-sm text-[var(--chat-text-secondary)]"
+    >
+      <span>Also running on this device:</span>
+      {DEVICE_AUTOMATION_PANELS.map((panel) => (
+        <button
+          key={panel}
+          type="button"
+          onClick={() => onOpen(panel)}
+          className="rounded text-[var(--chat-text-primary)] underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
+        >
+          {DEVICE_AUTOMATION_LABELS[panel]}
+        </button>
+      ))}
+    </nav>
+  );
+}
 
-const CLOUD_ONLY_PANELS: readonly V3Panel[] = ['library', 'tasks', 'cloud-schedules'];
+function DeviceAutomationNotice() {
+  return (
+    <p
+      data-testid="device-automation-notice"
+      className="border-b border-[var(--chat-border)] px-6 py-2 text-sm text-[var(--chat-text-secondary)]"
+    >
+      These run on this device, whichever mode the app is in.
+    </p>
+  );
+}
 
 export interface DesktopShellV3Props {
   runtime: ChatRuntime | null;
@@ -148,9 +171,11 @@ export interface DesktopShellV3Props {
 
 const panelFallback = (
   <div className="flex h-full items-center justify-center" aria-busy="true">
-    <Loader2 className="h-5 w-5 animate-spin text-slate-400" aria-label="Loading panel" />
+    <Spinner size="sm" className="text-[var(--chat-text-secondary)]" aria-label="Loading panel" />
   </div>
 );
+
+const MAIN_REGION_ID = 'desktop-main';
 
 export function DesktopShellV3({
   runtime,
@@ -182,12 +207,26 @@ export function DesktopShellV3({
     }
   }, [terminalDockOpen]);
 
-  const artifactPanelOpen = useArtifactStore((s) => s.panelOpen);
-  const closeArtifactPanel = useArtifactStore((s) => s.closePanel);
   const artifactDraft = useArtifactStore((s) => s.draft);
   const discardArtifactDraft = useArtifactStore((s) => s.discardArtifactDraft);
   const privacyMode = useAppModeStore(selectPrivacyMode);
   const folderSeamEnabled = privacyMode === 'local' || privacyMode === 'managed';
+  const chatHostBridge = useMemo(
+    () =>
+      hostBridge && privacyMode !== 'managed'
+        ? {
+            ...hostBridge,
+            compactConversation: (conversationId: string, focus?: string) =>
+              compactLocalConversation(conversationId, focus, async (id) => {
+                const loadMessages = runtime?.loadMessages ?? runtime?.getMessages;
+                if (!runtime || !loadMessages) return;
+                useSharedChatStore.getState().setMessages(id, await loadMessages.call(runtime, id));
+              }),
+            fetchContextUsage: fetchLocalContextUsage,
+          }
+        : hostBridge,
+    [hostBridge, privacyMode, runtime],
+  );
   const { selectFolder, currentFolderLabel, clearFolder } = useFolderSelection(
     privacyMode === 'managed' ? 'cloud' : 'local',
   );
@@ -197,6 +236,7 @@ export function DesktopShellV3({
   const cloudSessionEpoch = useUnifiedAuthStore((state) => state.cloudSessionEpoch);
   const activeCloudConversationId = useChatStore((s) => s.activeConversationId);
   const isManagedCloud = privacyMode === 'managed';
+  const isOnline = useAppModeStore((state) => state.isOnline);
   const needsLocalModelSetup = useChatModelStore(
     (state) =>
       privacyMode === 'local' &&
@@ -354,8 +394,7 @@ export function DesktopShellV3({
     pendingAttachments?.ownerKey === composerAttachmentOwnerKey ? pendingAttachments : null;
 
   useEffect(() => {
-    const stranded = privacyMode === 'local' ? CLOUD_ONLY_PANELS : DEVICE_ONLY_PANELS;
-    if (stranded.includes(activePanel)) {
+    if (!isPanelAvailable(activePanel, privacyMode)) {
       setActivePanel('chat');
     }
   }, [activePanel, privacyMode]);
@@ -365,6 +404,7 @@ export function DesktopShellV3({
       const detail = (event as CustomEvent<unknown>).detail;
       if (detail === 'projects') setActivePanel('projects');
       if (detail === 'chat') setActivePanel('chat');
+      if (isDeviceAutomationPanel(detail)) setActivePanel(detail);
     };
     const navigateLibrary = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail;
@@ -461,18 +501,9 @@ export function DesktopShellV3({
     [hostBridge],
   );
 
-  const handleRenameConversation = useCallback(
-    async (conversationId: string, title: string) => {
-      if (privacyMode === 'local') return;
-      try {
-        await updateCloudConversationTitle(conversationId, title);
-      } catch (error) {
-        console.error('[DesktopShellV3] Failed to rename conversation:', error);
-        toast.error('Could not rename the conversation. The new title was not saved.');
-      }
-    },
-    [privacyMode],
-  );
+  const handleRenameConversation = useCallback(async (conversationId: string, title: string) => {
+    await useChatStore.getState().renameConversation(conversationId, title);
+  }, []);
 
   const handleShareConversation = useCallback(
     async (conversationId: string) => {
@@ -541,12 +572,17 @@ export function DesktopShellV3({
     [setActivePanel],
   );
 
+  const temporaryChat = useTemporaryChatControl();
+  const messageActions = useTauriMessageActions();
+  const regenerateModelOptions = useRegenerateModelOptions();
+  const artifactActions = useDesktopArtifactActions();
   const conversationActions = useMemo(
     () => ({
       onRename: handleRenameConversation,
       ...(privacyMode === 'managed' ? { onShare: handleShareConversation } : {}),
+      ...(temporaryChat ? { temporaryChat } : {}),
     }),
-    [handleRenameConversation, handleShareConversation, privacyMode],
+    [handleRenameConversation, handleShareConversation, privacyMode, temporaryChat],
   );
 
   const handleOpenProjectConversation = useCallback(
@@ -615,10 +651,6 @@ export function DesktopShellV3({
         return;
       }
       if (view === 'automation') {
-        if (privacyMode !== 'local') {
-          toast.info('Automations run on this device and are available in Local mode.');
-          return;
-        }
         setActivePanel('automation');
         return;
       }
@@ -637,6 +669,10 @@ export function DesktopShellV3({
     [onNavigateView, privacyMode],
   );
 
+  // ChatInterface renders its own <main>, so the shell supplies the landmark
+  // for every other panel and never nests a second one around the chat.
+  const PanelRegion = activePanel === 'chat' ? 'div' : 'main';
+
   return (
     <CapabilityProvider platform="desktop">
       <div
@@ -644,6 +680,12 @@ export function DesktopShellV3({
         data-v3-shell=""
         style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}
       >
+        <a
+          href={`#${MAIN_REGION_ID}`}
+          className="sr-only rounded-md bg-[var(--chat-surface-elevated)] px-4 py-2 text-sm font-medium text-[var(--chat-text-primary)] focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-primary)]"
+        >
+          Skip to main content
+        </a>
         <Sidebar
           mode={mode}
           onNewChat={handleNewChat}
@@ -660,7 +702,11 @@ export function DesktopShellV3({
         />
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="relative min-h-0 flex-1 overflow-hidden">
+          <PanelRegion
+            id={MAIN_REGION_ID}
+            tabIndex={-1}
+            className="relative min-h-0 flex-1 overflow-hidden focus:outline-none"
+          >
             {activePanel === 'chat' ? (
               <ChatInterface
                 key={composerTrustBoundaryKey}
@@ -669,10 +715,13 @@ export function DesktopShellV3({
                 externalSendRequest={externalSendRequest}
                 manageTheme={false}
                 enableShortcuts={true}
-                hostBridge={hostBridge}
+                hostBridge={chatHostBridge}
                 onModelSelectorClick={isManagedCloud ? undefined : onModelSelectorClick}
                 allowModelFallbackModels={!isManagedCloud}
                 conversationActions={conversationActions}
+                messageActions={messageActions}
+                regenerateModelOptions={regenerateModelOptions}
+                artifactActions={artifactActions}
                 deriveMessageArtifacts={deriveDesktopMessageArtifacts}
                 onSelectFolder={folderSeamEnabled ? handleSelectFolder : undefined}
                 pendingAttachments={activePendingAttachments}
@@ -687,6 +736,7 @@ export function DesktopShellV3({
                 onSubmitGoal={canUseAgiWork ? handleSubmitChatGoal : undefined}
                 canUseAgiWork={canUseAgiWork}
                 agiWorkUnavailableReason={agiWorkUnavailableReason}
+                sendBlockedReason={isManagedCloud && !isOnline ? CLOUD_OFFLINE_MESSAGE : undefined}
                 composerHostControls={
                   <ComposerContextControls
                     mode={privacyMode}
@@ -740,6 +790,7 @@ export function DesktopShellV3({
               </div>
             ) : activePanel === 'tasks' && privacyMode !== 'local' ? (
               <div data-testid="desktop-tasks" className="h-full overflow-y-auto">
+                <DeviceAutomationLinks onOpen={setActivePanel} />
                 <Suspense fallback={panelFallback}>
                   <DesktopTasks
                     onOpenConversation={handleOpenProjectConversation}
@@ -753,16 +804,22 @@ export function DesktopShellV3({
                   />
                 </Suspense>
               </div>
-            ) : activePanel === 'agent-tasks' && privacyMode === 'local' ? (
+            ) : activePanel === 'agent-tasks' ? (
               <div data-testid="desktop-agent-tasks" className="h-full overflow-y-auto">
+                {privacyMode !== 'local' && <DeviceAutomationNotice />}
                 <Suspense fallback={panelFallback}>
                   <DesktopAgentTasks />
                 </Suspense>
               </div>
             ) : activePanel === 'cloud-schedules' && privacyMode === 'managed' ? (
-              <Suspense fallback={panelFallback}>
-                <DesktopCloudSchedules />
-              </Suspense>
+              <div className="flex h-full flex-col">
+                <DeviceAutomationLinks onOpen={setActivePanel} />
+                <div className="min-h-0 flex-1">
+                  <Suspense fallback={panelFallback}>
+                    <DesktopCloudSchedules />
+                  </Suspense>
+                </div>
+              </div>
             ) : activePanel === 'artifacts' && privacyMode === 'local' ? (
               <AgiWorkArtifacts onNewChat={() => handleNewChat()} />
             ) : activePanel === 'code' && privacyMode === 'local' ? (
@@ -783,14 +840,20 @@ export function DesktopShellV3({
                   <DeepResearchPage />
                 </Suspense>
               </div>
-            ) : activePanel === 'automation' && privacyMode === 'local' ? (
+            ) : activePanel === 'automation' ? (
               <div data-testid="desktop-automation" className="h-full overflow-y-auto">
+                {privacyMode !== 'local' && <DeviceAutomationNotice />}
                 <Suspense fallback={panelFallback}>
                   <AutomationBuilder />
                 </Suspense>
               </div>
-            ) : activePanel === 'scheduled' && privacyMode === 'local' ? (
-              <AgiWorkScheduled />
+            ) : activePanel === 'scheduled' ? (
+              <div data-testid="desktop-scheduled" className="flex h-full flex-col">
+                {privacyMode !== 'local' && <DeviceAutomationNotice />}
+                <div className="min-h-0 flex-1">
+                  <AgiWorkScheduled />
+                </div>
+              </div>
             ) : (
               <AgiWorkProjects
                 onCreateProject={handleCreateProject}
@@ -800,12 +863,11 @@ export function DesktopShellV3({
             )}
             <CapModal onSwitchModel={handleSwitchModel} />
 
-            {/* Artifact viewer panel, mounts when the artifact store requests it open.
-            Shares the same artifactStore instance that AgiWorkArtifacts writes,
-            so setActiveArtifact + openPanel in the grid card opens this panel. */}
-            {privacyMode === 'local' && artifactPanelOpen && (
+            {/* A Local artifact streams here as it is written; when it is complete
+            the chat's artifact panel takes over (TauriRuntime chat:artifact). */}
+            {privacyMode === 'local' && artifactDraft && (
               <div
-                data-testid="v3-artifact-panel"
+                data-testid="v3-artifact-draft"
                 style={{
                   position: 'absolute',
                   inset: 0,
@@ -815,17 +877,14 @@ export function DesktopShellV3({
                   background: 'var(--chat-surface-base)',
                 }}
               >
-                {artifactDraft ? (
-                  <ArtifactDraftView
-                    draft={artifactDraft}
-                    onClose={() => discardArtifactDraft(artifactDraft.key)}
-                  />
-                ) : (
-                  <ArtifactPanel onClose={closeArtifactPanel} />
-                )}
+                <ArtifactDraftView
+                  draft={artifactDraft}
+                  onClose={() => discardArtifactDraft(artifactDraft.key)}
+                />
               </div>
             )}
             <SelectedContextReview onAccept={handleSelectedContextAccept} />
+            <ByokConversationDialog />
             <CloudFolderAttachSheet
               folderPath={cloudFolderSelection?.path ?? null}
               folderGrantId={cloudFolderSelection?.grantId ?? null}
@@ -872,7 +931,8 @@ export function DesktopShellV3({
               onAccept={() => void cloudVoice.acceptComputerUseConsent()}
             />
             <McpToolConfirmationPrompt />
-          </div>
+            <McpElicitationPrompt />
+          </PanelRegion>
 
           {privacyMode === 'local' && (
             <>

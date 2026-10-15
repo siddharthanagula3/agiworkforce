@@ -459,7 +459,6 @@ export function projectDesktopCloudSafeSettings(
       allowToolAssistedGeneration: state.chatPreferences.allowToolAssistedMemoryGeneration === true,
     },
     chat: { compactMode: state.chatPreferences.compactMode },
-    editor: { promptCompletionEnabled: state.chatPreferences.promptCompletionEnabled },
   };
 }
 
@@ -503,10 +502,6 @@ export function applyDesktopCloudSafeSettings(settings: CloudSafeSettings): void
   }
   const compactMode = settings.chat?.['compactMode'];
   if (typeof compactMode === 'boolean') store.setCompactMode(compactMode);
-  const promptCompletionEnabled = settings.editor?.['promptCompletionEnabled'];
-  if (typeof promptCompletionEnabled === 'boolean') {
-    store.setPromptCompletionEnabled(promptCompletionEnabled);
-  }
 
   const memoryEnabled = settings.capabilities?.['memory'];
   const allowToolAssistedGeneration = settings.capabilities?.['allowToolAssistedGeneration'];

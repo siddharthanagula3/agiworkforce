@@ -1,14 +1,21 @@
 import type {
   ChatRuntime,
   Artifact,
-  FileRef,
+  InterruptedTurn,
   SendMessageOptions,
   SendMessageParams,
+  SteeredMessage,
   StreamChunk,
   TauriAttachmentPayload,
+  TurnUsage,
 } from '@agiworkforce/unified-chat';
 import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
-import { useChatModelStore } from '@agiworkforce/unified-chat';
+import {
+  SteerRefusedError,
+  useChatArtifactStore,
+  useChatModelStore,
+  useChatUIStore,
+} from '@agiworkforce/unified-chat';
 import {
   getModelMetadataById,
   getToolDisplayLabel,
@@ -17,21 +24,33 @@ import {
   type ChatExecutionMode,
 } from '@agiworkforce/types';
 import type { AgentEvent, JsonValue } from '@agiworkforce/types/protocol';
+import type { AgentEventSource } from '@agiworkforce/types';
 import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import { invoke } from '../lib/tauri-mock';
 import { listen } from '../lib/tauri-mock';
 import { useSettingsStore } from '../stores/settingsStore';
 import { personalizationToPrompt } from '../features/chat/personalizationToPrompt';
 import { ACCOUNT_INSTRUCTION, orderLocalPromptBlocks } from '../lib/context-precedence';
-import { triggerCloudSyncAfterTurn } from '../lib/cloudSyncTrigger';
 import {
+  dbIdToUuid,
   resolveDesktopChatOwnerId,
   useChatStore as useDesktopChatStore,
   uuidToDbId,
 } from '../stores/chat/chatStore';
 import { useArtifactStore } from '../stores/artifactStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useSkillMarketplaceStore } from '../stores/skillMarketplaceStore';
+import { toast } from 'sonner';
 import { PartialArtifactAccumulator } from './partialArtifactArgs';
+import {
+  LOCAL_CHAT_ATTACHMENT_POLICY,
+  messageDetailFromRow,
+  storedAttachmentList,
+  temporaryHistoryTurns,
+  TurnDetailRecorder,
+  unreadableImageNotice,
+  type RawMessageDetail,
+} from './localChatTurn';
 
 async function resolveSkillSystemPrompt(options?: SendMessageOptions): Promise<string | undefined> {
   if (!options?.skillName) return options?.systemPrompt;
@@ -56,10 +75,81 @@ interface StreamEndPayload {
   message_id: string | number;
   backend_message_id?: number;
   usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
+    prompt_tokens?: number | null;
+    completion_tokens?: number | null;
+    total_tokens?: number | null;
+    cache_read_input_tokens?: number | null;
+    cache_creation_input_tokens?: number | null;
+  } | null;
+  model?: string | null;
+}
+
+function tokenCount(value: number | null | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+function turnContextWindow(modelId: string | undefined): number | undefined {
+  if (!modelId) return undefined;
+  const catalogWindow = getModelMetadataById(modelId)?.contextWindow;
+  if (catalogWindow !== undefined) return catalogWindow;
+  const runtimeModel = useChatModelStore
+    .getState()
+    .models.find((candidate) => candidate.id === modelId && candidate.metadataSource === 'runtime');
+  return runtimeModel?.contextWindow;
+}
+
+export function turnUsageFromStreamEnd(
+  usage: StreamEndPayload['usage'],
+  modelId: string | undefined,
+): TurnUsage | undefined {
+  if (!usage) return undefined;
+  const turnUsage: TurnUsage = {
+    inputTokens: tokenCount(usage.prompt_tokens),
+    outputTokens: tokenCount(usage.completion_tokens),
+    cacheReadTokens: tokenCount(usage.cache_read_input_tokens),
+    cacheWriteTokens: tokenCount(usage.cache_creation_input_tokens),
   };
+  if (turnUsage.inputTokens === undefined && turnUsage.outputTokens === undefined) {
+    return undefined;
+  }
+  const contextWindow = turnContextWindow(modelId);
+  return contextWindow === undefined ? turnUsage : { ...turnUsage, contextWindow };
+}
+
+interface AttachmentNoticePayload {
+  conversation_id: string | number;
+  notice: string;
+}
+
+interface ToolsWithheldPayload {
+  conversation_id: string | number;
+  notice: string;
+}
+
+/** The native `ChatSourcesEvent` (sys/commands/chat/sources.rs). */
+interface ChatSourcesPayload {
+  conversation_id: string | number;
+  kind: 'web_search' | 'project_knowledge';
+  tool_call_id?: string;
+  query?: string;
+  sources: AgentEventSource[];
+}
+
+const PROJECT_KNOWLEDGE_SOURCES_LABEL = 'Project knowledge';
+
+type SearchResults = Extract<
+  import('@agiworkforce/unified-chat').StreamEvent,
+  { type: 'search_results' }
+>['search'];
+
+type LocalStreamChunk = StreamChunk | { type: 'search_results'; search: SearchResults };
+
+function sourceDomain(url: string): string | undefined {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return undefined;
+  }
 }
 
 interface StreamErrorPayload {
@@ -68,15 +158,44 @@ interface StreamErrorPayload {
   error: string;
 }
 
+interface QuestionAskPayload {
+  id: string;
+  question: string;
+  choices: string[];
+  multiSelect?: boolean;
+}
+
+interface BlockedByModePayload {
+  tool_name: string;
+  mode: string;
+  hint: string;
+}
+
+interface MessageConsumedPayload {
+  conversation_id: string | number;
+  message_id: string | number;
+  pending_message?: { id?: string };
+}
+
+/** The native `ToolEvent` (sys/commands/chat/tool_events.rs), tagged by `type`. */
 interface ToolEventPayload {
   type: 'started' | 'progress' | 'completed';
   id: string;
-  name?: string;
+  conversation_id?: number;
   message_id?: string | number;
-  args?: Record<string, unknown>;
-  output?: string;
-  error?: string;
+  tool_name?: string;
+  arguments?: unknown;
+  success?: boolean;
+  output?: string | null;
+  error?: string | null;
   duration_ms?: number;
+  stdout_chunk?: string | null;
+}
+
+function toolArguments(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 interface AgentThinkingPayload {
@@ -185,7 +304,10 @@ function isArtifactRenderType(value: unknown): value is Artifact['type'] {
   return typeof value === 'string' && ARTIFACT_RENDER_TYPES.has(value as Artifact['type']);
 }
 
-function resolveArtifactRenderType(renderType: unknown, nativeType?: unknown): Artifact['type'] {
+export function resolveArtifactRenderType(
+  renderType: unknown,
+  nativeType?: unknown,
+): Artifact['type'] {
   if (isArtifactRenderType(renderType)) return renderType;
   switch (nativeType) {
     case 'code':
@@ -276,7 +398,7 @@ interface RawConversation {
   executionMode?: ChatExecutionMode;
 }
 
-interface RawMessage {
+interface RawMessage extends RawMessageDetail {
   id: string | number;
   conversation_id?: string | number;
   conversationId?: string | number;
@@ -288,13 +410,32 @@ interface RawMessage {
   provider?: string;
 }
 
-interface RawFileUploadResult {
+interface RawSendMessageResponse {
+  user_message?: { id?: number };
+}
+
+interface LocalTurn {
+  userMessageId?: string;
+  assistantMessageId?: string;
+  files?: File[];
+  history?: SendMessageOptions['messageHistory'];
+}
+
+/** The conversation id the native runtime reports for a turn it does not store. */
+const TEMPORARY_CONVERSATION_ID = -1;
+// Mirrors PROMPT_REFUSAL_PREFIX in src-tauri/src/ui/hooks/mod.rs. A steer
+// refused with it is dropped; any other failure is queued to send later.
+const PROMPT_REFUSAL_PREFIX = 'A hook blocked this message: ';
+
+interface RawInterruptedTurn {
+  conversationId: number;
+  content: string;
+  startedAt: string;
+}
+
+interface RawPendingMessage {
   id: string;
-  name: string;
-  url: string;
-  mime_type?: string;
-  mimeType?: string;
-  size?: number;
+  content: string;
 }
 
 function mapConversation(raw: RawConversation): Conversation {
@@ -323,6 +464,7 @@ function mapMessage(raw: RawMessage): ChatMessage {
     createdAt: raw.created_at ?? raw.createdAt ?? new Date().toISOString(),
     model: raw.model ?? undefined,
     provider: raw.provider as ChatMessage['provider'] | undefined,
+    ...messageDetailFromRow(raw),
   };
 }
 
@@ -399,14 +541,17 @@ function resolveModelCapabilities(modelId: string | undefined) {
 export class TauriRuntime implements ChatRuntime {
   readonly supportsExplicitLocalWebSearch = true;
 
-  readonly supportsAgentControl = false;
+  readonly supportsAgentControl = true;
 
-  // ChatInterface falls back to supportsAgentControl when this is undefined,
-  // and this runtime sets that to false, so both the effort chip and the
-  // thinking control were hidden on Tauri, while sendMessage forwarded
-  // `effort` and `thinkingEnabled` all the way to reasoningEffort on the Rust
-  // command. Declared explicitly so the two cannot disagree again.
+  // Plan is enforced by the native chat tool loop (chat_set_plan_mode), which
+  // refuses every tool that could write. Ask leaves tool approval to the
+  // agent mode chosen in Settings. Auto and Bypass have no native enforcement
+  // in this runtime, so they are not offered.
+  readonly agentModes = ['ask', 'plan'] as const;
+
   readonly supportsReasoningEffort = true;
+
+  readonly attachmentPolicy = LOCAL_CHAT_ATTACHMENT_POLICY;
 
   private readonly _stopFlags = new Map<string, boolean>();
   private readonly _stopSettlers = new Map<string, () => void>();
@@ -427,6 +572,14 @@ export class TauriRuntime implements ChatRuntime {
     return 'local_only';
   }
 
+  private isTemporaryConversation(conversationId: string): boolean {
+    return (
+      useDesktopChatStore
+        .getState()
+        .conversations.find((candidate) => candidate.id === conversationId)?.incognito === true
+    );
+  }
+
   private async ensureBackendConversation(
     frontendConversationId: string,
     content: string,
@@ -442,15 +595,19 @@ export class TauriRuntime implements ChatRuntime {
       throw new Error('Please sign in to send messages.');
     }
 
-    const projectId =
-      useDesktopChatStore.getState().conversations.find((c) => c.id === frontendConversationId)
-        ?.projectId ?? null;
+    const stored = useDesktopChatStore
+      .getState()
+      .conversations.find((c) => c.id === frontendConversationId);
+    const storedTitle = stored?.title?.trim();
 
     const raw = await invoke<RawConversation>('chat_create_conversation', {
       request: {
-        title: content.trim().slice(0, 50) || 'New Conversation',
+        title:
+          storedTitle && storedTitle !== 'New chat'
+            ? storedTitle.slice(0, 500)
+            : content.trim().slice(0, 50) || 'New Conversation',
         userId,
-        projectId,
+        projectId: stored?.projectId ?? null,
         executionMode,
       },
     });
@@ -461,6 +618,14 @@ export class TauriRuntime implements ChatRuntime {
     }
 
     useDesktopChatStore.getState().linkConversationId(frontendConversationId, dbId);
+    if (stored?.pinned) {
+      void invoke('chat_pin_conversation', { conversationId: dbId, userId, pinned: true }).catch(
+        (error: unknown) => {
+          console.error('[TauriRuntime] Failed to save a pin made before the first send:', error);
+          toast.error('This chat was saved, but its pin was not. Pin it again from the sidebar.');
+        },
+      );
+    }
     if (import.meta.env.DEV) {
       const { desktopExecutionProfileFor, labelDesktopSession } = await import('./sessionLabeling');
       labelDesktopSession({
@@ -498,7 +663,13 @@ export class TauriRuntime implements ChatRuntime {
       localToolScope,
       enableTools: localToolScope !== undefined,
     };
-    for await (const chunk of this._streamMessage(params)) {
+    const turn: LocalTurn = {
+      userMessageId: options?.userMessageId,
+      assistantMessageId: options?.assistantMessageId,
+      files: options?.attachments,
+      history: options?.messageHistory,
+    };
+    for await (const chunk of this._streamMessage(params, turn)) {
       if (this._streamCallbacks.size > 0) {
         let event: import('@agiworkforce/unified-chat').StreamEvent | null = null;
         if (chunk.type === 'text') event = { type: 'content', content: chunk.content };
@@ -533,8 +704,17 @@ export class TauriRuntime implements ChatRuntime {
             type: 'artifact',
             artifact: chunk.data,
           };
-        } else if (chunk.type === 'done') event = { type: 'done' };
-        else if (chunk.type === 'error') event = { type: 'error', error: chunk.content };
+        } else if (chunk.type === 'steer_consumed') {
+          event = { type: 'steer_consumed', steerId: chunk.steerId };
+        } else if (chunk.type === 'question') {
+          event = { type: 'question', question: chunk.question };
+        } else if (chunk.type === 'notice') {
+          event = { type: 'notice', message: chunk.message };
+        } else if (chunk.type === 'search_results') {
+          event = { type: 'search_results', search: chunk.search };
+        } else if (chunk.type === 'done') {
+          event = chunk.usage ? { type: 'done', usage: chunk.usage } : { type: 'done' };
+        } else if (chunk.type === 'error') event = { type: 'error', error: chunk.content };
         if (event) {
           for (const cb of this._streamCallbacks) {
             cb(event);
@@ -542,7 +722,6 @@ export class TauriRuntime implements ChatRuntime {
         }
       }
     }
-    triggerCloudSyncAfterTurn();
   }
 
   onStream(
@@ -561,7 +740,10 @@ export class TauriRuntime implements ChatRuntime {
     return convs.map((c) => ({ id: c.id, title: c.title, updatedAt: c.updatedAt }));
   }
 
-  private async *_streamMessage(params: SendMessageParams): AsyncIterable<StreamChunk> {
+  private async *_streamMessage(
+    params: SendMessageParams,
+    turn: LocalTurn = {},
+  ): AsyncIterable<LocalStreamChunk> {
     const {
       conversationId,
       content,
@@ -572,6 +754,7 @@ export class TauriRuntime implements ChatRuntime {
       thinkingEnabled,
       webSearch,
       systemPrompt,
+      agentMode,
       effort,
       localToolScope,
       enableTools,
@@ -579,19 +762,27 @@ export class TauriRuntime implements ChatRuntime {
     const frontendMessageId = crypto.randomUUID();
     const userId = this.getCurrentUserId();
     const executionMode = this.getConversationExecutionMode(conversationId);
+    const temporary = this.isTemporaryConversation(conversationId);
+    const turnDetail = new TurnDetailRecorder();
 
     if (!userId) {
       yield { type: 'error', content: 'Please sign in to send messages.' };
       return;
     }
 
+    const imageNotice = unreadableImageNotice(model, attachments);
+    if (imageNotice) {
+      yield { type: 'error', content: imageNotice };
+      return;
+    }
+
     let backendConversationId: number;
     try {
-      backendConversationId = await this.ensureBackendConversation(
-        conversationId,
-        content,
-        executionMode,
-      );
+      // A temporary chat is never written to SQLite; the native runtime answers
+      // it under the reserved id -1 and skips history, memory and indexing.
+      backendConversationId = temporary
+        ? TEMPORARY_CONVERSATION_ID
+        : await this.ensureBackendConversation(conversationId, content, executionMode);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       yield { type: 'error', content: message };
@@ -600,8 +791,9 @@ export class TauriRuntime implements ChatRuntime {
 
     this._stopFlags.set(conversationId, false);
 
-    type Resolve = (value: StreamChunk | null) => void;
-    const queue: StreamChunk[] = [];
+    type Resolve = (value: LocalStreamChunk | null) => void;
+    const queue: LocalStreamChunk[] = [];
+    const toolExecutionIds: string[] = [];
     const waiting: Resolve[] = [];
     const streamedArtifactIds = new Set<string>();
     const artifactDraftAccumulators = new Map<string, PartialArtifactAccumulator>();
@@ -613,7 +805,7 @@ export class TauriRuntime implements ChatRuntime {
     let streamedThinkingContent = '';
     let stopWatchdog: ReturnType<typeof setTimeout> | undefined;
 
-    const push = (chunk: StreamChunk | null) => {
+    const push = (chunk: LocalStreamChunk | null) => {
       if (chunk === null) {
         done = true;
       } else {
@@ -625,14 +817,14 @@ export class TauriRuntime implements ChatRuntime {
       }
     };
 
-    const nextChunk = (): Promise<StreamChunk | null> => {
+    const nextChunk = (): Promise<LocalStreamChunk | null> => {
       if (queue.length > 0) {
         return Promise.resolve(queue.shift()!);
       }
       if (done) {
         return Promise.resolve(null);
       }
-      return new Promise<StreamChunk | null>((resolve) => {
+      return new Promise<LocalStreamChunk | null>((resolve) => {
         waiting.push(resolve);
       });
     };
@@ -695,6 +887,7 @@ export class TauriRuntime implements ChatRuntime {
       const durationMs = Math.max(0, payload.timestamp - thinkingStartedAtMs);
       if (payload.event_type === 'delta') {
         streamedThinkingContent += payload.content;
+        turnDetail.appendThinking(payload.content);
         push({
           type: 'thinking',
           content: payload.content,
@@ -713,6 +906,7 @@ export class TauriRuntime implements ChatRuntime {
         payload.content.length >= streamedThinkingContent.length
           ? payload.content
           : streamedThinkingContent;
+      turnDetail.appendThinking(unseenContent);
       push({
         type: 'thinking',
         content: unseenContent,
@@ -783,7 +977,17 @@ export class TauriRuntime implements ChatRuntime {
           }
         }
 
-        push({ type: 'done' });
+        if (!temporary && typeof backendMessageId === 'number' && backendMessageId > 0) {
+          await this.saveMessageDetail(backendMessageId, userId, {
+            clientId: turn.assistantMessageId ?? null,
+            toolCalls: turnDetail.toolCalls(),
+            thinking: turnDetail.thinking(),
+            sources: turnDetail.sources(),
+          });
+        }
+
+        const usage = turnUsageFromStreamEnd(payload.usage, payload.model ?? model);
+        push(usage ? { type: 'done', usage } : { type: 'done' });
         push(null);
       })().catch((error: unknown) => {
         push({
@@ -795,6 +999,42 @@ export class TauriRuntime implements ChatRuntime {
         });
         push(null);
       });
+    });
+
+    await registerListener<QuestionAskPayload>('question:ask', (payload) => {
+      if (typeof payload.id !== 'string' || !Array.isArray(payload.choices)) return;
+      push({
+        type: 'question',
+        question: {
+          id: payload.id,
+          question: payload.question,
+          choices: payload.choices,
+          multiSelect: payload.multiSelect === true,
+        },
+      });
+    });
+
+    await registerListener<BlockedByModePayload>('tool:blocked_by_mode', (payload) => {
+      push({
+        type: 'notice',
+        message: `${getToolDisplayLabel(payload.tool_name).displayName} was not run in ${payload.mode} mode. ${payload.hint}`,
+      });
+    });
+
+    await registerListener<MessageConsumedPayload>('agentic:message-consumed', (payload) => {
+      if (String(payload.conversation_id) !== String(backendConversationId)) return;
+      const steerId = payload.pending_message?.id;
+      if (typeof steerId === 'string') push({ type: 'steer_consumed', steerId });
+    });
+
+    await registerListener<AttachmentNoticePayload>('chat:attachment-notice', (payload) => {
+      if (String(payload.conversation_id) !== String(backendConversationId)) return;
+      toast.warning(payload.notice);
+    });
+
+    await registerListener<ToolsWithheldPayload>('chat:tools-withheld', (payload) => {
+      if (String(payload.conversation_id) !== String(backendConversationId)) return;
+      push({ type: 'notice', message: payload.notice });
     });
 
     await registerListener<StreamErrorPayload>('chat:stream-error', (payload) => {
@@ -809,8 +1049,15 @@ export class TauriRuntime implements ChatRuntime {
     });
 
     await registerListener<ToolEventPayload>('tool:event', (payload) => {
+      if (
+        payload.conversation_id !== undefined &&
+        String(payload.conversation_id) !== String(backendConversationId)
+      )
+        return;
+      const name = payload.tool_name ?? '';
       if (payload.type === 'started') {
-        const name = payload.name ?? '';
+        toolExecutionIds.push(payload.id);
+        const args = toolArguments(payload.arguments);
         const display = getToolDisplayLabel(name);
         pushAgentEvent({
           type: 'tool-execution-start',
@@ -818,39 +1065,98 @@ export class TauriRuntime implements ChatRuntime {
           name,
           category: inferAgentToolCategory(name),
           summary: display.activeForm,
-          input: toAgentJsonValue(payload.args ?? {}),
+          input: toAgentJsonValue(args),
         });
+        turnDetail.recordCall(payload.id, name, args);
         push({
           type: 'tool_call',
           data: {
             id: payload.id,
             name,
             status: 'running',
-            input: payload.args ?? {},
+            input: args,
           },
         });
-      } else if (payload.type === 'completed') {
-        const name = payload.name ?? '';
+      } else if (payload.type === 'progress') {
+        const summary = payload.stdout_chunk?.trim();
+        if (!summary) return;
+        pushAgentEvent({
+          type: 'progress-update',
+          progressId: `tool-${payload.id}`,
+          summary,
+          status: 'running',
+        });
+      } else {
+        const failed = payload.success === false || Boolean(payload.error);
+        const output = payload.output ?? undefined;
+        const error = failed ? (payload.error ?? output ?? 'The tool failed.') : undefined;
         pushAgentEvent({
           type: 'tool-execution-end',
           toolCallId: payload.id,
           name,
-          output: toAgentJsonValue(payload.error ?? payload.output ?? null),
-          isError: Boolean(payload.error),
+          output: toAgentJsonValue(error ?? output ?? null),
+          isError: failed,
           ...(payload.duration_ms !== undefined ? { elapsedMs: payload.duration_ms } : {}),
         });
+        turnDetail.recordResult(payload.id, name, failed ? undefined : output, error);
         push({
           type: 'tool_result',
           data: {
             id: payload.id,
             name,
-            status: payload.error ? 'failed' : 'completed',
-            output: payload.output,
-            error: payload.error,
+            status: failed ? 'failed' : 'completed',
+            output: failed ? undefined : output,
+            error,
             durationMs: payload.duration_ms,
           },
         });
       }
+    });
+
+    await registerListener<ChatSourcesPayload>('chat:sources', (payload) => {
+      if (String(payload.conversation_id) !== String(backendConversationId)) return;
+      const sources = (Array.isArray(payload.sources) ? payload.sources : []).filter(
+        (source) => typeof source.title === 'string' && typeof source.url === 'string',
+      );
+      if (sources.length === 0) return;
+
+      const modelCallId = payload.tool_call_id;
+      const toolCallId = modelCallId
+        ? [...toolExecutionIds]
+            .reverse()
+            .find((id) => id === modelCallId || id.startsWith(`${modelCallId}_`))
+        : undefined;
+      const query =
+        payload.kind === 'project_knowledge' ? PROJECT_KNOWLEDGE_SOURCES_LABEL : payload.query;
+      pushAgentEvent({
+        type: 'source-list',
+        ...(toolCallId ? { toolCallId } : {}),
+        ...(query ? { query } : {}),
+        sources: sources.map((source) => ({
+          url: source.url,
+          title: source.title,
+          ...(source.snippet ? { snippet: source.snippet } : {}),
+        })),
+      });
+
+      if (payload.kind !== 'web_search') return;
+      const search: SearchResults = {
+        id: toolCallId ?? modelCallId ?? `sources-${agentEventSequence}`,
+        query: payload.query?.trim() || 'Web search',
+        results: sources.map((source) => {
+          const domain = sourceDomain(source.url);
+          return {
+            url: source.url,
+            title: source.title,
+            ...(source.snippet ? { snippet: source.snippet } : {}),
+            ...(domain ? { domain } : {}),
+          };
+        }),
+        resultCount: sources.length,
+        status: 'completed',
+      };
+      turnDetail.recordSearch(search);
+      push({ type: 'search_results', search });
     });
 
     await registerListener<ArtifactProgressPayload>('chat:artifact-progress', (payload) => {
@@ -899,25 +1205,27 @@ export class TauriRuntime implements ChatRuntime {
         return;
       }
       streamedArtifactIds.add(payload.artifact.id);
+      const finalArtifact: Artifact = {
+        id: payload.artifact.id,
+        type: resolveArtifactRenderType(payload.artifact.type),
+        title: payload.artifact.title,
+        content: payload.artifact.content,
+        language: payload.artifact.language ?? undefined,
+        version: payload.artifact.version ?? 1,
+        createdAt: payload.artifact.created_at,
+        updatedAt: payload.artifact.updated_at,
+        conversationId: String(backendConversationId),
+        metadata: payload.artifact.metadata,
+      };
       if (activeArtifactDraftKey !== null) {
+        // The draft overlay was showing this artifact as it streamed; hand it
+        // to the chat's artifact panel now that it is complete.
         activeArtifactDraftKey = null;
-        useArtifactStore.getState().finalizeArtifactDraft(payload.artifact.id);
+        useArtifactStore.getState().finalizeArtifactDraft();
+        useChatArtifactStore.getState().openArtifact(finalArtifact);
+        useChatUIStore.getState().openArtifactPanel();
       }
-      push({
-        type: 'artifact',
-        data: {
-          id: payload.artifact.id,
-          type: resolveArtifactRenderType(payload.artifact.type),
-          title: payload.artifact.title,
-          content: payload.artifact.content,
-          language: payload.artifact.language ?? undefined,
-          version: payload.artifact.version ?? 1,
-          createdAt: payload.artifact.created_at,
-          updatedAt: payload.artifact.updated_at,
-          conversationId: String(backendConversationId),
-          metadata: payload.artifact.metadata,
-        },
-      });
+      push({ type: 'artifact', data: finalArtifact });
     });
 
     const cleanup = () => {
@@ -950,8 +1258,12 @@ export class TauriRuntime implements ChatRuntime {
         .join('\n\n') || undefined;
 
     try {
+      await invoke('chat_set_plan_mode', {
+        conversationId: backendConversationId,
+        enabled: agentMode === 'plan',
+      });
       const resolvedModelCapabilities = resolveModelCapabilities(model);
-      await invoke('chat_send_message', {
+      const response = await invoke<RawSendMessageResponse | null>('chat_send_message', {
         request: {
           content,
           userId,
@@ -960,7 +1272,13 @@ export class TauriRuntime implements ChatRuntime {
           modelCapabilities: resolvedModelCapabilities,
           toolScope: localToolScope,
           enableTools,
-          conversationId: backendConversationId,
+          conversationId: temporary ? undefined : backendConversationId,
+          ...(temporary
+            ? {
+                incognito: true,
+                temporaryHistory: temporaryHistoryTurns(turn.history, content),
+              }
+            : {}),
           attachments: attachments ?? [],
           stream: true,
           frontendMessageId,
@@ -970,9 +1288,17 @@ export class TauriRuntime implements ChatRuntime {
           thinkingMode: resolvedModelCapabilities?.thinking ? thinkingEnabled : undefined,
           reasoningEffort: effort,
           customInstructions: mergedCustomInstructions,
+          projectFolder: useProjectStore.getState().currentFolder ?? undefined,
           focusMode: webSearch ? 'web' : undefined,
         },
       });
+      const userRowId = response?.user_message?.id;
+      if (!temporary && typeof userRowId === 'number' && userRowId > 0) {
+        void this.saveMessageDetail(userRowId, userId, {
+          clientId: turn.userMessageId ?? null,
+          attachments: storedAttachmentList(turn.files),
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       cleanup();
@@ -994,11 +1320,58 @@ export class TauriRuntime implements ChatRuntime {
     }
   }
 
+  async steer(conversationId: string, content: string): Promise<SteeredMessage> {
+    const backendConversationId = uuidToDbId(conversationId);
+    if (backendConversationId === undefined) {
+      throw new Error('This conversation has no running reply to steer.');
+    }
+    let pending: RawPendingMessage;
+    try {
+      pending = await invoke<RawPendingMessage>('chat_add_pending_message', {
+        request: { content, conversationId: backendConversationId },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.startsWith(PROMPT_REFUSAL_PREFIX)) throw new SteerRefusedError(message);
+      throw err;
+    }
+    return { id: pending.id, content: pending.content };
+  }
+
+  async withdrawSteer(conversationId: string, steerId: string): Promise<boolean> {
+    const backendConversationId = uuidToDbId(conversationId);
+    if (backendConversationId === undefined) return false;
+    const popped = await invoke<RawPendingMessage | null>('chat_pop_pending_message', {
+      request: { conversationId: backendConversationId, pendingMessageId: steerId },
+    });
+    return popped !== null;
+  }
+
+  async answerQuestion(questionId: string, answer: string | string[]): Promise<void> {
+    await invoke('question_answer', { id: questionId, answer });
+  }
+
+  async listInterruptedTurns(): Promise<InterruptedTurn[]> {
+    const turns = await invoke<RawInterruptedTurn[]>('chat_list_interrupted_turns');
+    return turns.map((turn) => ({
+      conversationId: dbIdToUuid(turn.conversationId),
+      content: turn.content,
+      startedAt: turn.startedAt,
+    }));
+  }
+
+  async dismissInterruptedTurn(conversationId: string): Promise<void> {
+    const backendConversationId = uuidToDbId(conversationId);
+    if (backendConversationId === undefined) return;
+    await invoke('chat_dismiss_interrupted_turn', { conversationId: backendConversationId });
+  }
+
   stopGeneration(conversationId: string): void {
     if (this._stopFlags.get(conversationId)) return;
     this._stopFlags.set(conversationId, true);
     this._stopSettlers.get(conversationId)?.();
     const backendConversationId = uuidToDbId(conversationId);
+    if (backendConversationId === undefined) return;
     void invoke('chat_stop_generation', { conversationId: backendConversationId }).catch(() => {
       // Ignore errors, the stop flag already prevents further yields
     });
@@ -1097,28 +1470,92 @@ export class TauriRuntime implements ChatRuntime {
     });
   }
 
-  async uploadFile(file: File): Promise<FileRef> {
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsDataURL(file);
+  /**
+   * Removes the rows an edit or regenerate replaced. A message loaded from
+   * SQLite carries its row id; one sent in this window carries the id the
+   * renderer gave it, which the row stores as `client_id`.
+   */
+  async supersedeMessages(conversationId: string, messageIds: string[]): Promise<string> {
+    const backendConversationId = uuidToDbId(conversationId);
+    if (backendConversationId === undefined || this.isTemporaryConversation(conversationId)) {
+      return '';
+    }
+    const ids = messageIds.filter((id) => /^\d+$/.test(id)).map(Number);
+    const clientIds = messageIds.filter((id) => !/^\d+$/.test(id));
+    return invoke<string>('chat_supersede_messages', {
+      conversationId: backendConversationId,
+      userId: this.getCurrentUserId(),
+      ids,
+      clientIds,
     });
+  }
 
-    const raw = await invoke<RawFileUploadResult>('upload_file', {
-      name: file.name,
-      mimeType: file.type,
-      dataUrl,
-      size: file.size,
-    });
+  async restoreSupersededMessages(key: string): Promise<void> {
+    if (!key) return;
+    await invoke('chat_restore_superseded_messages', { key });
+  }
 
-    return {
-      id: raw.id,
-      name: raw.name,
-      url: raw.url,
-      mimeType: raw.mime_type ?? raw.mimeType ?? file.type,
-      size: raw.size ?? file.size,
-    };
+  async releaseSupersededMessages(key: string): Promise<void> {
+    if (!key) return;
+    await invoke('chat_release_superseded_messages', { key });
+  }
+
+  async deleteMessages(conversationId: string, messageIds: string[]): Promise<void> {
+    const backendConversationId = uuidToDbId(conversationId);
+    if (backendConversationId === undefined || this.isTemporaryConversation(conversationId)) {
+      return;
+    }
+    const userId = this.getCurrentUserId();
+    const failures: string[] = [];
+    for (const messageId of messageIds) {
+      const rowId = /^\d+$/.test(messageId) ? Number(messageId) : null;
+      try {
+        await invoke('chat_delete_message', {
+          conversationId: backendConversationId,
+          userId,
+          id: rowId,
+          clientId: rowId === null ? messageId : null,
+        });
+      } catch (error) {
+        failures.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+    if (failures.length > 0) {
+      toast.error(
+        'The replaced messages could not all be removed from this chat. They may reappear when you reopen it.',
+        { description: failures[0] },
+      );
+      throw new Error(failures[0]);
+    }
+  }
+
+  private async saveMessageDetail(
+    messageId: number,
+    userId: string,
+    detail: {
+      clientId: string | null;
+      toolCalls?: unknown[] | null;
+      thinking?: string | null;
+      attachments?: unknown[] | null;
+      sources?: unknown[] | null;
+    },
+  ): Promise<void> {
+    try {
+      await invoke('chat_save_message_detail', {
+        messageId,
+        userId,
+        clientId: detail.clientId,
+        toolCalls: detail.toolCalls ?? null,
+        thinking: detail.thinking ?? null,
+        attachments: detail.attachments ?? null,
+        sources: detail.sources ?? null,
+      });
+    } catch (error) {
+      console.error('[TauriRuntime] Failed to save turn detail:', error);
+      toast.error(
+        'This reply was saved without its tool steps, reasoning, sources or attachment list. They will be missing when you reopen the chat.',
+      );
+    }
   }
 
   getPlatform(): 'desktop' | 'web' | 'mobile' {

@@ -1,8 +1,8 @@
 import type { HostUpdateAvailability } from '@agiworkforce/local-runtime-contract';
 import { platformRequestHeaders } from '../src/lib/platformHeaders';
+import { CLOUD_APP_ORIGIN } from './config';
 
-export const DESKTOP_CLOUD_RELEASE_AVAILABILITY_URL =
-  'https://agiworkforce.com/api/releases/desktop-cloud/latest';
+export const DESKTOP_CLOUD_RELEASE_AVAILABILITY_URL = `${CLOUD_APP_ORIGIN}/api/releases/desktop-cloud/latest`;
 
 /** The published channel this shell belongs to, and the download it asks for. */
 export const DESKTOP_CLOUD_RELEASE_CHANNEL = 'cloud';
@@ -12,14 +12,14 @@ export type DesktopCloudMacArchitecture = 'arm64' | 'x64';
 export function desktopCloudInstallerDownloadUrl(
   architecture: DesktopCloudMacArchitecture,
 ): string {
-  return `https://agiworkforce.com/api/download?platform=mac&app=${DESKTOP_CLOUD_RELEASE_CHANNEL}&arch=${architecture}`;
+  return `${CLOUD_APP_ORIGIN}/api/download?platform=mac&app=${DESKTOP_CLOUD_RELEASE_CHANNEL}&arch=${architecture}`;
 }
 
 export function desktopCloudUpdateFeedUrl(
   architecture: DesktopCloudMacArchitecture,
   currentVersion: string,
 ): string {
-  return `https://agiworkforce.com/api/releases/desktop-cloud/update/${architecture}/${encodeURIComponent(currentVersion)}`;
+  return `${CLOUD_APP_ORIGIN}/api/releases/desktop-cloud/update/${architecture}/${encodeURIComponent(currentVersion)}`;
 }
 
 export type DesktopCloudUpdateAvailability = HostUpdateAvailability;
@@ -201,7 +201,7 @@ export interface DesktopUpdatePrompt {
   readonly detail: string;
   readonly buttons: readonly string[];
   readonly downloadButton: number | null;
-  readonly installButton: number | null;
+  readonly restartButton: number | null;
 }
 
 /**
@@ -220,7 +220,7 @@ export function desktopUpdatePrompt(
       detail: outcome.failure,
       buttons: ['OK'],
       downloadButton: null,
-      installButton: null,
+      restartButton: null,
     };
   }
   if (!outcome.available) {
@@ -231,7 +231,7 @@ export function desktopUpdatePrompt(
       detail: `Installed: ${outcome.currentVersion}\nLatest published: ${outcome.version}`,
       buttons: ['OK'],
       downloadButton: null,
-      installButton: null,
+      restartButton: null,
     };
   }
   if (outcome.readyToInstall) {
@@ -242,10 +242,10 @@ export function desktopUpdatePrompt(
       detail: `You have ${outcome.currentVersion}. Restart AGI Cloud to finish updating; your chats are saved in your account.`,
       buttons: ['Restart to Update', 'Later'],
       downloadButton: null,
-      installButton: 0,
+      restartButton: 0,
     };
   }
-  if (outcome.installsAutomatically) {
+  if (outcome.installsAutomatically || outcome.downloading) {
     return {
       type: 'info',
       title: 'AGI Cloud update available',
@@ -253,7 +253,7 @@ export function desktopUpdatePrompt(
       detail: `You have ${outcome.currentVersion}. AGI Cloud tells you when the update is ready, then installs it when you restart.`,
       buttons: ['OK'],
       downloadButton: null,
-      installButton: null,
+      restartButton: null,
     };
   }
   return {
@@ -265,6 +265,6 @@ export function desktopUpdatePrompt(
       'then replace AGI Cloud in Applications. This opens your browser and does not install automatically.',
     buttons: ['Download Installer', 'Later'],
     downloadButton: 0,
-    installButton: null,
+    restartButton: null,
   };
 }

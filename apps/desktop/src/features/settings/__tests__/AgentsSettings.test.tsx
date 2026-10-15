@@ -22,21 +22,14 @@ global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
 const mockSetAutoApproveTools = vi.fn().mockResolvedValue(undefined);
 const mockSetMaxTimeoutMinutes = vi.fn();
-const mockSetEnableTimeoutWarnings = vi.fn();
 
 let mockChatPreferences = {
-  alwaysUseAgentMode: false,
   autoApproveTools: false,
-  promptCompletionEnabled: true,
   compactMode: true,
 };
 
 let mockExecutionPreferences = {
   maxTimeoutMinutes: 60,
-  enableCheckpointing: false,
-  checkpointInterval: 10,
-  autoResumeOnRestart: false,
-  enableTimeoutWarnings: true,
 };
 
 vi.mock('../../../stores/settingsStore', () => ({
@@ -46,7 +39,6 @@ vi.mock('../../../stores/settingsStore', () => ({
       executionPreferences: mockExecutionPreferences,
       setAutoApproveTools: mockSetAutoApproveTools,
       setMaxTimeoutMinutes: mockSetMaxTimeoutMinutes,
-      setEnableTimeoutWarnings: mockSetEnableTimeoutWarnings,
     }),
   ),
 }));
@@ -59,17 +51,11 @@ describe('AgentsSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockChatPreferences = {
-      alwaysUseAgentMode: false,
       autoApproveTools: false,
-      promptCompletionEnabled: true,
       compactMode: true,
     };
     mockExecutionPreferences = {
       maxTimeoutMinutes: 60,
-      enableCheckpointing: false,
-      checkpointInterval: 10,
-      autoResumeOnRestart: false,
-      enableTimeoutWarnings: true,
     };
   });
 
@@ -113,10 +99,9 @@ describe('AgentsSettings', () => {
       ).not.toBeInTheDocument();
     });
 
-    it('shows Timeout Warnings switch', () => {
+    it('does not offer timeout warnings, which no run ever raised', () => {
       render(<AgentsSettings />);
-      const toggle = screen.getByRole('switch', { name: /timeout warnings/i });
-      expect(toggle).toBeInTheDocument();
+      expect(screen.queryByRole('switch', { name: /timeout warnings/i })).not.toBeInTheDocument();
     });
   });
 

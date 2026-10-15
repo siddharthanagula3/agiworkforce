@@ -21,8 +21,10 @@ vi.mock('../../../hooks/useSearchModal', () => ({
 }));
 
 vi.mock('../../../stores/chat/chatStore', () => ({
+  resolveDesktopChatOwnerId: () => 'local-desktop-user',
   useChatStore: (selector: (state: unknown) => unknown) =>
     selector({ conversations: [], selectConversation: vi.fn() }),
+  uuidToDbId: () => undefined,
 }));
 
 vi.mock('../../../stores/projectStore', () => ({
@@ -77,6 +79,8 @@ vi.mock('../../../lib/runtimeEnvironment', () => ({
     return mocks.isTauri;
   },
 }));
+
+vi.mock('../../artifacts/openArtifactInChat', () => ({ openArtifactInChat: vi.fn() }));
 
 import { SearchModal } from '../SearchModal';
 

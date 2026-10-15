@@ -1,4 +1,3 @@
-
 import { closeAnySettingsDialog, waitForSettingsReady } from '../support/close-settings';
 import { resolveScreenDir } from '../support/dom';
 
@@ -132,31 +131,31 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
     }
   });
 
-  it('toggling Timeout Warnings then closing via X surfaces a discard confirmation, and "Keep editing" preserves the edit', async () => {
+  it('toggling Global Hotkey then closing via X surfaces a discard confirmation, and "Keep editing" preserves the edit', async () => {
     await browser.pause(1500);
     await openSettings();
 
-    const clickedAgents = await clickButtonWithText(
+    const clickedGeneral = await clickButtonWithText(
       'nav[aria-label="Settings sections"]',
-      'Agents',
+      'General',
     );
-    expect(clickedAgents).toBe(true);
-    await browser.waitUntil(async () => (await getSwitchState('agents-timeoutWarnings')) !== null, {
+    expect(clickedGeneral).toBe(true);
+    await browser.waitUntil(async () => (await getSwitchState('globalHotkeyEnabled')) !== null, {
       timeout: 15_000,
       interval: 250,
-      timeoutMsg: 'The Agents tab never rendered its Timeout Warnings switch',
+      timeoutMsg: 'The General tab never rendered its Global Hotkey switch',
     });
 
-    const before = await getSwitchState('agents-timeoutWarnings');
-    console.log('Timeout Warnings switch state before toggle:', before);
+    const before = await getSwitchState('globalHotkeyEnabled');
+    console.log('Global Hotkey switch state before toggle:', before);
     expect(before === 'true' || before === 'false').toBe(true);
 
-    const toggled = await clickById('agents-timeoutWarnings');
+    const toggled = await clickById('globalHotkeyEnabled');
     expect(toggled).toBe(true);
     await browser.pause(300);
 
-    const afterToggle = await getSwitchState('agents-timeoutWarnings');
-    console.log('Timeout Warnings switch state after toggle:', afterToggle);
+    const afterToggle = await getSwitchState('globalHotkeyEnabled');
+    console.log('Global Hotkey switch state after toggle:', afterToggle);
     expect(afterToggle).not.toBe(before);
 
     const closedViaX = await clickDialogXClose();
@@ -196,17 +195,17 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
     const settingsStillOpen = await settingsContentRoot();
     expect(settingsStillOpen).toBe(true);
 
-    const afterKeepEditing = await getSwitchState('agents-timeoutWarnings');
-    console.log('Timeout Warnings switch state after Keep editing:', afterKeepEditing);
+    const afterKeepEditing = await getSwitchState('globalHotkeyEnabled');
+    console.log('Global Hotkey switch state after Keep editing:', afterKeepEditing);
     expect(afterKeepEditing).toBe(afterToggle);
 
-    await clickById('agents-timeoutWarnings');
-    const restored = await getSwitchState('agents-timeoutWarnings');
+    await clickById('globalHotkeyEnabled');
+    const restored = await getSwitchState('globalHotkeyEnabled');
     expect(restored).toBe(before);
     await browser.waitUntil(async () => (await isSaveChangesDisabled()) === true, {
       timeout: 10_000,
       interval: 100,
-      timeoutMsg: 'Restoring Timeout Warnings did not return Settings to its clean baseline',
+      timeoutMsg: 'Restoring Global Hotkey did not return Settings to its clean baseline',
     });
 
     const closedAgainViaX = await clickDialogXClose();

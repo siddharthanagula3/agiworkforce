@@ -522,7 +522,7 @@ describe('Keyboard shortcuts, Ctrl+ modifier on Windows', () => {
   });
 });
 
-describe('Terminal, Windows shell types via useTerminal', () => {
+describe('Terminal, Windows shell types via terminalStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -535,12 +535,12 @@ describe('Terminal, Windows shell types via useTerminal', () => {
       return undefined;
     });
 
-    const { useTerminal } = await import('../hooks/useTerminal');
-    const { result } = renderHook(() => useTerminal({ autoConnect: false }));
+    const { useTerminalStore } = await import('../stores/terminalStore');
+    const terminal = useTerminalStore.getState();
 
     let sessionId: string | undefined;
     await act(async () => {
-      sessionId = await result.current.createSession('powershell', 'C:\\Users\\nagul');
+      sessionId = await terminal.createSession('powershell', 'C:\\Users\\nagul');
     });
 
     expect(sessionId).toBe('win-session-pwsh-001');
@@ -558,12 +558,12 @@ describe('Terminal, Windows shell types via useTerminal', () => {
       return undefined;
     });
 
-    const { useTerminal } = await import('../hooks/useTerminal');
-    const { result } = renderHook(() => useTerminal({ autoConnect: false }));
+    const { useTerminalStore } = await import('../stores/terminalStore');
+    const terminal = useTerminalStore.getState();
 
     let sessionId: string | undefined;
     await act(async () => {
-      sessionId = await result.current.createSession('cmd');
+      sessionId = await terminal.createSession('cmd');
     });
 
     expect(sessionId).toBe('win-session-cmd-001');
@@ -578,12 +578,12 @@ describe('Terminal, Windows shell types via useTerminal', () => {
     const mockInvoke = vi.mocked(coreMod.invoke);
     mockInvoke.mockResolvedValueOnce('win-session-gitbash-001');
 
-    const { useTerminal } = await import('../hooks/useTerminal');
-    const { result } = renderHook(() => useTerminal({ autoConnect: false }));
+    const { useTerminalStore } = await import('../stores/terminalStore');
+    const terminal = useTerminalStore.getState();
 
     let sessionId: string | undefined;
     await act(async () => {
-      sessionId = await result.current.createSession('gitbash', 'C:\\repos\\myproject');
+      sessionId = await terminal.createSession('gitbash', 'C:\\repos\\myproject');
     });
 
     expect(sessionId).toBe('win-session-gitbash-001');
@@ -598,12 +598,12 @@ describe('Terminal, Windows shell types via useTerminal', () => {
     const mockInvoke = vi.mocked(coreMod.invoke);
     mockInvoke.mockResolvedValueOnce('win-session-wsl-001');
 
-    const { useTerminal } = await import('../hooks/useTerminal');
-    const { result } = renderHook(() => useTerminal({ autoConnect: false }));
+    const { useTerminalStore } = await import('../stores/terminalStore');
+    const terminal = useTerminalStore.getState();
 
     let sessionId: string | undefined;
     await act(async () => {
-      sessionId = await result.current.createSession('wsl');
+      sessionId = await terminal.createSession('wsl');
     });
 
     expect(sessionId).toBe('win-session-wsl-001');
@@ -641,18 +641,18 @@ describe('Terminal, Windows shell types via useTerminal', () => {
 
     mockInvoke.mockResolvedValueOnce(windowsShells);
 
-    const { useTerminal } = await import('../hooks/useTerminal');
-    const { result } = renderHook(() => useTerminal({ autoConnect: false }));
+    const { useTerminalStore } = await import('../stores/terminalStore');
+    const terminal = useTerminalStore.getState();
 
-    let shells: typeof windowsShells | undefined;
     await act(async () => {
-      shells = await result.current.detectShells();
+      await terminal.loadAvailableShells();
     });
+    const shells = useTerminalStore.getState().availableShells;
 
     expect(mockInvoke).toHaveBeenCalledWith('terminal_detect_shells');
     expect(shells).toHaveLength(4);
-    expect(shells?.map((s) => s.shell_type)).toEqual(['powershell', 'cmd', 'gitbash', 'wsl']);
-    expect(shells?.[1]?.path).toContain('cmd.exe');
+    expect(shells.map((s) => s.shell_type)).toEqual(['powershell', 'cmd', 'gitbash', 'wsl']);
+    expect(shells[1]?.path).toContain('cmd.exe');
   });
 
   it('sends a Windows dir command to the terminal session', async () => {
@@ -660,11 +660,11 @@ describe('Terminal, Windows shell types via useTerminal', () => {
     const mockInvoke = vi.mocked(coreMod.invoke);
     mockInvoke.mockResolvedValueOnce(undefined);
 
-    const { useTerminal } = await import('../hooks/useTerminal');
-    const { result } = renderHook(() => useTerminal({ autoConnect: false }));
+    const { useTerminalStore } = await import('../stores/terminalStore');
+    const terminal = useTerminalStore.getState();
 
     await act(async () => {
-      await result.current.sendInput('session-123', 'dir C:\\Users\r\n');
+      await terminal.sendInput('session-123', 'dir C:\\Users\r\n');
     });
 
     expect(mockInvoke).toHaveBeenCalledWith('terminal_send_input', {
@@ -673,35 +673,16 @@ describe('Terminal, Windows shell types via useTerminal', () => {
     });
   });
 
-  it('sets USERPROFILE environment variable in a Windows terminal session', async () => {
-    const coreMod = await import('@tauri-apps/api/core');
-    const mockInvoke = vi.mocked(coreMod.invoke);
-    mockInvoke.mockResolvedValueOnce(undefined);
-
-    const { useTerminal } = await import('../hooks/useTerminal');
-    const { result } = renderHook(() => useTerminal({ autoConnect: false }));
-
-    await act(async () => {
-      await result.current.setEnv('session-456', 'USERPROFILE', 'C:\\Users\\nagul');
-    });
-
-    expect(mockInvoke).toHaveBeenCalledWith('terminal_set_env', {
-      sessionId: 'session-456',
-      key: 'USERPROFILE',
-      value: 'C:\\Users\\nagul',
-    });
-  });
-
   it('resizes terminal to standard Windows console dimensions', async () => {
     const coreMod = await import('@tauri-apps/api/core');
     const mockInvoke = vi.mocked(coreMod.invoke);
     mockInvoke.mockResolvedValueOnce(undefined);
 
-    const { useTerminal } = await import('../hooks/useTerminal');
-    const { result } = renderHook(() => useTerminal({ autoConnect: false }));
+    const { useTerminalStore } = await import('../stores/terminalStore');
+    const terminal = useTerminalStore.getState();
 
     await act(async () => {
-      await result.current.resize('session-789', 120, 30);
+      await terminal.resizeTerminal('session-789', 120, 30);
     });
 
     expect(mockInvoke).toHaveBeenCalledWith('terminal_resize', {

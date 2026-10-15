@@ -1,16 +1,13 @@
 import { McpClient } from '../../api/mcp';
 import { Download, RefreshCw, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { cn } from '../../lib/utils';
 import { Button } from '@/ui/Button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/ui/Dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/ui/Dialog';
 import { ScrollArea } from '@/ui/ScrollArea';
+import { Spinner } from '@/ui/Spinner';
 
 interface MCPLogsViewerProps {
   serverName: string;
@@ -48,16 +45,16 @@ export function MCPLogsViewer({ serverName, open, onClose }: MCPLogsViewerProps)
   }, [open, serverName, fetchLogs]);
 
   const handleExport = async () => {
-    const logText = logs.join('\n');
-    const blob = new Blob([logText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${serverName}-logs-${new Date().toISOString()}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setError(null);
+    try {
+      const path = await save({
+        defaultPath: `${serverName}-logs.txt`,
+        filters: [{ name: 'Text', extensions: ['txt'] }],
+      });
+      if (path) await writeTextFile(path, logs.join('\n'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to export logs');
+    }
   };
 
   return (
@@ -65,7 +62,9 @@ export function MCPLogsViewer({ serverName, open, onClose }: MCPLogsViewerProps)
       <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Logs: {serverName}</DialogTitle>
-          <DialogDescription>Server logs and debug information</DialogDescription>
+          <DialogDescription>
+            The most recent lines this server wrote to standard error, refreshed every five seconds.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center justify-between mb-4">
@@ -77,47 +76,49 @@ export function MCPLogsViewer({ serverName, open, onClose }: MCPLogsViewerProps)
               disabled={loading}
               className="gap-2"
             >
-              <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
               Refresh
             </Button>
-            <Button variant="outline" size="sm" onClick={handleExport} className="gap-2">
-              <Download className="h-4 w-4" />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={logs.length === 0}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
               Export
             </Button>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose} className="gap-2">
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4" aria-hidden="true" />
             Close
           </Button>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-destructive/10 text-destructive text-sm rounded">{error}</div>
+          <p role="alert" className="mb-4 text-sm text-danger-text">
+            {error}
+          </p>
         )}
 
         <ScrollArea className="flex-1 border rounded-md bg-muted p-4">
           {loading && logs.length === 0 ? (
             <div className="flex items-center justify-center py-8">
-              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+              <Spinner />
             </div>
           ) : logs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No logs available for this server
-            </div>
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              This server has written nothing to standard error since the app started.
+            </p>
           ) : (
-            <div className="font-mono text-xs space-y-1">
+            <div className="space-y-1 font-mono text-sm">
               {logs.map((log, index) => (
                 <div
                   key={index}
                   className={cn(
-                    'px-2 py-1 rounded',
-                    log.includes('ERROR') || log.includes('error')
-                      ? 'bg-destructive/10 text-destructive'
-                      : log.includes('WARN') || log.includes('warn')
-                        ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
-                        : log.includes('INFO') || log.includes('info')
-                          ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                          : 'text-foreground/80',
+                    'break-all px-2 py-1',
+                    /error/i.test(log) ? 'text-danger-text' : 'text-foreground',
                   )}
                 >
                   {log}

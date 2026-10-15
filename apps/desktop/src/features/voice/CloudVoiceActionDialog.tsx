@@ -7,6 +7,8 @@ import {
   describeApprovalRisk,
   isApprovalAnswerable,
 } from '../../lib/toolApprovalCopy';
+import { useComputerUseStore } from '../../stores/computerUseStore';
+import { ComputerUseControlStatus } from './ComputerUseControlStatus';
 
 export interface CloudVoiceActionDialogProps {
   action: string | null;
@@ -49,6 +51,8 @@ export function CloudVoiceActionDialog({
   const isStoppingRef = useRef(isStopping);
   const [rememberForSession, setRememberForSession] = useState(false);
   const rememberFieldId = useId();
+  const takenOver = useComputerUseStore((state) => state.takenOver);
+  const handBack = useComputerUseStore((state) => state.handBack);
   onCancelRef.current = onCancel;
   isStoppingRef.current = isStopping;
   const isOpen = Boolean(action) || isPaused;
@@ -111,7 +115,15 @@ export function CloudVoiceActionDialog({
     };
   }, [isExecuting, isOpen, isRecovery]);
 
-  if (!isOpen) return null;
+  if (!isOpen) return <ComputerUseControlStatus />;
+
+  const runAction = async () => {
+    if (takenOver) {
+      await handBack();
+      if (useComputerUseStore.getState().takenOver) return;
+    }
+    onApprove();
+  };
 
   return (
     <div
@@ -285,7 +297,7 @@ export function CloudVoiceActionDialog({
                 <button
                   ref={approveButtonRef}
                   type="button"
-                  onClick={onApprove}
+                  onClick={() => void runAction()}
                   disabled={isExecuting || isStopping || refusedByHarness}
                   className="inline-flex items-center gap-2 rounded-lg bg-[var(--chat-accent-primary)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
                 >
@@ -298,7 +310,9 @@ export function CloudVoiceActionDialog({
                       ? 'Running action…'
                       : requiresComputerUseConsent
                         ? 'Enable desktop control and run'
-                        : 'Run this action'}
+                        : takenOver
+                          ? 'Hand back control and run'
+                          : 'Run this action'}
                 </button>
               </>
             )}

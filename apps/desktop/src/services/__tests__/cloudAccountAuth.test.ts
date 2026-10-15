@@ -132,6 +132,7 @@ describe('cloudAccountAuth', () => {
     );
     await cloudAccountAuth.signOut();
     vi.mocked(fetch).mockClear();
+    invokeMock.mockClear();
   });
 
   it('restores and validates a machine-encrypted Cloud session on startup', async () => {
@@ -152,94 +153,184 @@ describe('cloudAccountAuth', () => {
     expect(cloudAccountAuth.getPlanTier()).toBe('pro');
   });
 
-  it('rotates an expired saved session with the encrypted refresh credential', async () => {
-    const expiredAccessToken = jwtWithClaims({
-      sub: 'user_123',
-      email: 'user@example.com',
-      exp: Math.floor(Date.now() / 1000) - 60,
-    });
-    const nextAccessToken = jwtWithClaims({
-      sub: 'user_123',
-      email: 'user@example.com',
-      exp: Math.floor(Date.now() / 1000) + 3600,
-    });
+  function expiredAndRenewed(subject = 'user_123') {
+    const claims = { sub: subject, email: `${subject}@example.com` };
+    return {
+      expired: jwtWithClaims({ ...claims, exp: Math.floor(Date.now() / 1000) - 60 }),
+      renewed: jwtWithClaims({ ...claims, exp: Math.floor(Date.now() / 1000) + 3600 }),
+    };
+  }
+
+  function refreshFetches() {
+    return vi
+      .mocked(fetch)
+      .mock.calls.filter(([input]) => String(input).includes('/api/auth/device/refresh'));
+  }
+
+  it('renews an expired saved session through the host and never sees a refresh token', async () => {
+    const { expired, renewed } = expiredAndRenewed();
     invokeMock.mockImplementation(async (command: string) => {
-      if (command === 'account_restore_access_token') return expiredAccessToken;
-      if (command === 'account_restore_refresh_token') return 'saved-refresh-token';
-      return undefined;
-    });
-    vi.mocked(fetch).mockImplementation(async (input) => {
-      if (String(input).includes('/api/auth/device/refresh')) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({
-            access_token: nextAccessToken,
-            refresh_token: 'rotated-refresh-token',
-          }),
-        } as Response;
+      if (command === 'account_restore_access_token') return expired;
+      if (command === 'account_refresh_session') {
+        return { status: 'renewed', accessToken: renewed };
       }
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
-          id: 'user_123',
-          email: 'user@example.com',
-          name: 'Example User',
-          avatar_url: null,
-          created_at: null,
-          updated_at: 1751712000,
-          plan: null,
-          feature_flags: {},
-          credits: null,
-          routing_preferences: {},
-        }),
-      } as Response;
+      return undefined;
     });
 
     await cloudAccountAuth.checkSession();
 
-    expect(fetch).toHaveBeenCalledWith(
-      `${WEB_APP_URL}/api/auth/device/refresh`,
-      expect.objectContaining({
-        method: 'POST',
-        credentials: 'omit',
-        body: JSON.stringify({ refresh_token: 'saved-refresh-token' }),
-      }),
-    );
-    expect(cloudAccountAuth.getSession()?.access_token).toBe(nextAccessToken);
-    expect(cloudAccountAuth.getSession()?.refresh_token).toBe('rotated-refresh-token');
+    expect(invokeMock).toHaveBeenCalledWith('account_refresh_session');
+    expect(refreshFetches()).toEqual([]);
+    expect(cloudAccountAuth.getSession()?.access_token).toBe(renewed);
+    expect(cloudAccountAuth.getSession()?.refresh_token).toBeNull();
     expect(invokeMock).toHaveBeenCalledWith('account_store_access_token', {
-      accessToken: nextAccessToken,
+      accessToken: renewed,
     });
-    expect(invokeMock).toHaveBeenCalledWith('account_store_refresh_token', {
-      refreshToken: 'rotated-refresh-token',
+    const commands = invokeMock.mock.calls.map(([command]) => command);
+    expect(commands).not.toContain('account_restore_refresh_token');
+    expect(commands).not.toContain('account_store_refresh_token');
+    expect(JSON.stringify(invokeMock.mock.calls)).not.toContain('refreshToken');
+  });
+
+  it('renews with only a saved refresh credential and stays quiet when nothing is saved', async () => {
+    const { renewed } = expiredAndRenewed();
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'account_restore_access_token') return null;
+      if (command === 'account_refresh_session') return { status: 'signed_out' };
+      return undefined;
     });
+
+    await cloudAccountAuth.checkSession();
+
+    expect(cloudAccountAuth.isAuthenticated()).toBe(false);
+    expect(cloudAccountAuth.getState().error).toBeNull();
+    expect(cloudAccountAuth.getState().isLoading).toBe(false);
+    expect(invokeMock).not.toHaveBeenCalledWith('account_clear_tokens');
+
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'account_restore_access_token') return null;
+      if (command === 'account_refresh_session') {
+        return { status: 'renewed', accessToken: renewed };
+      }
+      return undefined;
+    });
+
+    await cloudAccountAuth.checkSession();
+
+    expect(cloudAccountAuth.getSession()?.access_token).toBe(renewed);
+  });
+
+  it('signs out and clears the saved session when the server rejects the refresh credential', async () => {
+    const { expired } = expiredAndRenewed();
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'account_restore_access_token') return expired;
+      if (command === 'account_refresh_session') return { status: 'rejected' };
+      return undefined;
+    });
+
+    await cloudAccountAuth.checkSession();
+
+    expect(cloudAccountAuth.isAuthenticated()).toBe(false);
+    expect(invokeMock).toHaveBeenCalledWith('account_clear_tokens');
+    expect(cloudAccountAuth.getState().error).toContain('could not be renewed');
   });
 
   it.each([
-    [400, { error: 'invalid_grant' }, true],
-    [403, { error: 'terms_acceptance_required', error_description: 'Accept the terms.' }, false],
-    [429, { error: 'slow_down' }, false],
-    [503, {}, false],
+    ['the host reports the server unreachable', { status: 'unreachable', reason: 'fetch failed' }],
+    ['the host answers something this page cannot read', { status: 'renewing' }],
+  ])('keeps the saved sign-in at launch when %s', async (_label, outcome) => {
+    const { expired } = expiredAndRenewed();
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'account_restore_access_token') return expired;
+      if (command === 'account_refresh_session') return outcome;
+      return undefined;
+    });
+
+    await cloudAccountAuth.checkSession();
+
+    expect(invokeMock).not.toHaveBeenCalledWith('account_clear_tokens');
+    expect(cloudAccountAuth.isAuthenticated()).toBe(true);
+    expect(cloudAccountAuth.getState().user?.id).toBe('user_123');
+    expect(cloudAccountAuth.getState().error).toBe(
+      'AGI Cloud could not be reached to renew your session. Your sign-in is kept and will be tried again.',
+    );
+    await expect(cloudAccountAuth.getValidSession()).resolves.toBeNull();
+    expect(cloudAccountAuth.isAuthenticated()).toBe(true);
+  });
+
+  it('keeps the saved sign-in when the host command itself fails', async () => {
+    const { expired } = expiredAndRenewed();
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'account_restore_access_token') return expired;
+      if (command === 'account_refresh_session') throw 'The system credential vault is locked';
+      return undefined;
+    });
+
+    await cloudAccountAuth.checkSession();
+
+    expect(invokeMock).not.toHaveBeenCalledWith('account_clear_tokens');
+    expect(cloudAccountAuth.isAuthenticated()).toBe(true);
+  });
+
+  it('keeps working on a still-valid token while unreachable, retries on the next need, and renews when it can', async () => {
+    const soon = Math.floor(Date.now() / 1000) + 120;
+    const nearExpiry = jwtWithClaims({ sub: 'user_123', email: 'user@example.com', exp: soon });
+    const { renewed } = expiredAndRenewed();
+    let outcome: unknown = { status: 'unreachable', reason: 'fetch failed' };
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'account_refresh_session') return outcome;
+      return undefined;
+    });
+    const renewals = () =>
+      invokeMock.mock.calls.filter(([command]) => command === 'account_refresh_session').length;
+    await cloudAccountAuth.setSession({ access_token: nearExpiry });
+    const now = vi.spyOn(Date, 'now');
+    const start = Date.now();
+    now.mockReturnValue(start);
+
+    await expect(cloudAccountAuth.getValidSession()).resolves.toMatchObject({
+      access_token: nearExpiry,
+    });
+    expect(renewals()).toBe(1);
+    expect(invokeMock).not.toHaveBeenCalledWith('account_clear_tokens');
+
+    await cloudAccountAuth.getValidSession();
+    expect(renewals(), 'a need inside the pause does not call the host again').toBe(1);
+
+    now.mockReturnValue(start + 31_000);
+    outcome = { status: 'renewed', accessToken: renewed };
+    await expect(cloudAccountAuth.getValidSession()).resolves.toMatchObject({
+      access_token: renewed,
+    });
+    expect(renewals()).toBe(2);
+    expect(cloudAccountAuth.getState().error).toBeNull();
+  });
+
+  it.each([
+    [400, { status: 'rejected' }, true],
+    [
+      403,
+      { status: 'refused', reason: 'Accept the terms.', code: 'terms_acceptance_required' },
+      false,
+    ],
+    [
+      429,
+      { status: 'unreachable', reason: 'AGI Cloud did not renew the session (status 429).' },
+      false,
+    ],
+    [
+      503,
+      { status: 'unreachable', reason: 'AGI Cloud did not renew the session (status 503).' },
+      false,
+    ],
   ])(
     'ends the saved session on a %i refresh refusal only when the credential is gone',
-    async (status, body, cleared) => {
-      const expiredAccessToken = jwtWithClaims({
-        sub: 'user_123',
-        email: 'user@example.com',
-        exp: Math.floor(Date.now() / 1000) - 60,
-      });
+    async (_status, renewal, cleared) => {
+      const { expired } = expiredAndRenewed();
       invokeMock.mockImplementation(async (command: string) => {
-        if (command === 'account_restore_access_token') return expiredAccessToken;
-        if (command === 'account_restore_refresh_token') return 'saved-refresh-token';
+        if (command === 'account_restore_access_token') return expired;
+        if (command === 'account_refresh_session') return renewal;
         return undefined;
-      });
-      vi.mocked(fetch).mockImplementation(async (input) => {
-        if (String(input).includes('/api/auth/device/refresh')) {
-          return { ok: false, status, json: async () => body } as Response;
-        }
-        return { ok: false, status: 401, json: async () => ({}) } as Response;
       });
       invokeMock.mockClear();
 
@@ -249,6 +340,10 @@ describe('cloudAccountAuth', () => {
         ([command]) => command === 'account_clear_tokens',
       );
       expect(clears.length > 0).toBe(cleared);
+      expect(cloudAccountAuth.getState().isLoading).toBe(false);
+      if (renewal.status === 'refused') {
+        expect(cloudAccountAuth.getState().error).toBe('Accept the terms.');
+      }
     },
   );
 
@@ -410,52 +505,27 @@ describe('cloudAccountAuth', () => {
     expect(cloudAccountAuth.getSession()?.access_token).toBe(accountBToken);
   });
 
-  it('cannot resurrect a signed-out account when an older refresh resolves late', async () => {
-    const expiredAccessToken = jwtWithClaims({
-      sub: 'account-a',
-      email: 'account-a@example.test',
-      exp: Math.floor(Date.now() / 1000) - 60,
-    });
-    const refreshedAccessToken = jwtWithClaims({
-      sub: 'account-a',
-      email: 'account-a@example.test',
-      exp: Math.floor(Date.now() / 1000) + 3600,
-    });
-    const refreshResponse = deferred<Response>();
-
-    vi.mocked(fetch).mockImplementation(async (input) => {
-      if (String(input).includes('/api/auth/device/refresh')) {
-        return refreshResponse.promise;
-      }
-      return new Response('{}', { status: 200 });
+  it('cannot resurrect a signed-out account when an older renewal resolves late', async () => {
+    const { expired, renewed } = expiredAndRenewed('account-a');
+    const renewal = deferred<unknown>();
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'account_refresh_session') return renewal.promise;
+      return undefined;
     });
 
-    const refreshResult = cloudAccountAuth.setSession({
-      access_token: expiredAccessToken,
-      refresh_token: 'refresh-a',
-    });
+    const refreshResult = cloudAccountAuth.setSession({ access_token: expired });
     await waitFor(() =>
-      vi
-        .mocked(fetch)
-        .mock.calls.some(([input]) => String(input).includes('/api/auth/device/refresh')),
+      invokeMock.mock.calls.some(([command]) => command === 'account_refresh_session'),
     );
 
     await cloudAccountAuth.signOut();
-    refreshResponse.resolve(
-      new Response(
-        JSON.stringify({
-          access_token: refreshedAccessToken,
-          refresh_token: 'refresh-a-rotated',
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ),
-    );
+    renewal.resolve({ status: 'renewed', accessToken: renewed });
     await refreshResult;
 
     expect(cloudAccountAuth.isAuthenticated()).toBe(false);
     expect(cloudAccountAuth.getSession()).toBeNull();
     expect(invokeMock).not.toHaveBeenCalledWith('account_store_access_token', {
-      accessToken: refreshedAccessToken,
+      accessToken: renewed,
     });
   });
 

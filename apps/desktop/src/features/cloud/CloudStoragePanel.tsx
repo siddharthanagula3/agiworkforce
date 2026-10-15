@@ -9,8 +9,10 @@ import {
   Link,
   RefreshCcw,
   Trash2,
+  Unplug,
   Upload,
 } from 'lucide-react';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { Button } from '@/ui/Button';
 import { Input } from '@/ui/Input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
@@ -51,6 +53,7 @@ export function CloudStoragePanel() {
     listFiles,
     beginConnect,
     completeConnect,
+    disconnectAccount,
     uploadFile,
     downloadFile,
     deleteEntry,
@@ -72,6 +75,7 @@ export function CloudStoragePanel() {
       listFiles: s.listFiles,
       beginConnect: s.beginConnect,
       completeConnect: s.completeConnect,
+      disconnectAccount: s.disconnectAccount,
       uploadFile: s.uploadFile,
       downloadFile: s.downloadFile,
       deleteEntry: s.deleteEntry,
@@ -91,6 +95,7 @@ export function CloudStoragePanel() {
 
   const { confirm, dialog: confirmDialog } = useConfirm();
   const { prompt, dialog: promptDialog } = usePrompt();
+  const { confirm: confirmAction, dialog: confirmActionDialog } = useConfirmAction();
 
   useEffect(() => {
     void refreshAccounts();
@@ -228,6 +233,22 @@ export function CloudStoragePanel() {
       return;
     }
     await deleteEntry(path);
+  };
+
+  const handleDisconnect = (accountId: string, name: string, provider: CloudProvider) => {
+    const providerLabel = PROVIDER_LABELS[provider];
+    confirmAction({
+      title: `Disconnect ${name}?`,
+      description: `AGI Workforce forgets the sign-in for this ${providerLabel} account. Its files stop being listed here, and uploads, downloads and share links for it stop working until you authorize it again. Nothing in ${providerLabel} is deleted.`,
+      confirmLabel: 'Disconnect',
+      destructive: true,
+      onConfirm: async () => {
+        await disconnectAccount(accountId);
+        if (!useCloudStore.getState().accounts.some((a) => a.accountId === accountId)) {
+          toast.success(`Disconnected ${name}`);
+        }
+      },
+    });
   };
 
   const handleShare = async (path: string) => {
@@ -384,26 +405,45 @@ export function CloudStoragePanel() {
                   No accounts connected yet. Authorize above to get started.
                 </div>
               )}
-              {accounts.map((account) => (
-                <button
-                  key={account.accountId}
-                  type="button"
-                  onClick={() => selectAccount(account.accountId)}
-                  className={cn(
-                    'w-full rounded-md px-3 py-2 text-left text-sm transition-colors',
-                    account.accountId === activeAccountId
-                      ? 'bg-primary/10 text-primary'
-                      : 'hover:bg-muted/70 hover:text-foreground',
-                  )}
-                >
-                  <div className="flex flex-col">
-                    <span className="font-medium">{account.label || account.accountId}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {PROVIDER_LABELS[account.provider]}
-                    </span>
+              {accounts.map((account) => {
+                const accountName = account.label || account.accountId;
+                return (
+                  <div
+                    key={account.accountId}
+                    className={cn(
+                      'group flex items-center rounded-md transition-colors',
+                      account.accountId === activeAccountId
+                        ? 'bg-primary/10 text-primary'
+                        : 'hover:bg-muted/70 hover:text-foreground',
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => selectAccount(account.accountId)}
+                      className="min-w-0 flex-1 rounded-md px-3 py-2 text-left text-sm"
+                    >
+                      <div className="flex flex-col">
+                        <span className="truncate font-medium">{accountName}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {PROVIDER_LABELS[account.provider]}
+                        </span>
+                      </div>
+                    </button>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      className="mr-1 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                      aria-label={`Disconnect ${accountName}`}
+                      title="Disconnect"
+                      onClick={() =>
+                        handleDisconnect(account.accountId, accountName, account.provider)
+                      }
+                    >
+                      <Unplug className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
-                </button>
-              ))}
+                );
+              })}
             </div>
           </ScrollArea>
         </div>
@@ -538,6 +578,7 @@ export function CloudStoragePanel() {
 
       {}
       {confirmDialog}
+      {confirmActionDialog}
       {promptDialog}
     </div>
   );

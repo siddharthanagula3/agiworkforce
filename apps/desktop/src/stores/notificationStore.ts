@@ -1,142 +1,27 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import type { notifications } from '@agiworkforce/desktop-command-client';
 import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 
-export interface NotificationAction {
-  id: string;
-  title: string;
-}
-
-export interface ScheduledNotification {
-  id: string;
-  title: string;
-  body: string;
-  icon: string | null;
-  scheduledAt: string;
-  delivered: boolean;
-  actions: NotificationAction[] | null;
-  category: string | null;
-}
-
-export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent';
-
-export type NotificationType =
-  | 'system'
-  | 'task_complete'
-  | 'task_failed'
-  | 'agent_activity'
-  | 'mcp_server'
-  | 'reminder'
-  | 'achievement'
-  | 'team'
-  | 'info'
-  | 'warning'
-  | 'error';
-
-export interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  type: NotificationType;
-  priority: NotificationPriority;
-  read: boolean;
-  createdAt: string;
-  readAt: string | null;
-  actionUrl: string | null;
-  actionLabel: string | null;
-  icon: string | null;
-  metadata: Record<string, unknown> | null;
-  dismissible: boolean;
-  expiresAt: string | null;
-}
-
-export interface NotificationListResponse {
-  notifications: Notification[];
-  total: number;
-  unreadCount: number;
-  page: number;
-  pageSize: number;
-  hasMore: boolean;
-}
-
-export interface NotificationSettings {
-  enabled: boolean;
-  soundEnabled: boolean;
-  badgeEnabled: boolean;
-  desktopNotifications: boolean;
-  enabledTypes: NotificationType[];
-  doNotDisturb: boolean;
-  dndStartTime: string | null;
-  dndEndTime: string | null;
-}
-
-export interface CreateNotificationInput {
-  title: string;
-  message: string;
-  type?: NotificationType;
-  priority?: NotificationPriority;
-  actionUrl?: string;
-  actionLabel?: string;
-  icon?: string;
-  metadata?: Record<string, unknown>;
-  dismissible?: boolean;
-  expiresAt?: string;
-}
+export type Notification = notifications.Notification;
+export type NotificationListResponse = notifications.NotificationListResponse;
+export type NotificationPriority = notifications.NotificationPriority;
+export type NotificationSettings = notifications.NotificationSettings;
+export type NotificationType = notifications.NotificationType;
 
 interface NotificationState {
-  permissionGranted: boolean;
-
   notifications: Notification[];
   total: number;
   unreadCount: number;
   page: number;
   pageSize: number;
   hasMore: boolean;
-  settings: NotificationSettings | null;
-
-  unreadCounts: Record<string, number>;
-
-  scheduled: ScheduledNotification[];
 
   loading: boolean;
   error: string | null;
 
   _unlisteners: UnlistenFn[];
-
-  checkPermission: () => Promise<boolean>;
-  requestPermission: () => Promise<string>;
-
-  show: (title: string, body: string, icon?: string) => Promise<void>;
-  showWithActions: (title: string, body: string, actions: NotificationAction[]) => Promise<string>;
-  schedule: (
-    title: string,
-    body: string,
-    at: string,
-    icon?: string,
-    category?: string,
-  ) => Promise<string>;
-  scheduleReminder: (
-    title: string,
-    body: string,
-    at: string,
-    actions?: NotificationAction[],
-  ) => Promise<string>;
-  cancelScheduled: (notificationId: string) => Promise<void>;
-  cancelAllScheduled: () => Promise<number>;
-  getScheduled: () => Promise<ScheduledNotification[]>;
-  getScheduledById: (notificationId: string) => Promise<ScheduledNotification | null>;
-  updateScheduled: (
-    notificationId: string,
-    title?: string,
-    body?: string,
-    at?: string,
-  ) => Promise<ScheduledNotification>;
-  registerActions: (actions: NotificationAction[]) => Promise<void>;
-
-  incrementUnread: (conversationId: string) => void;
-  markConversationRead: (conversationId: string) => void;
-  clearAllUnread: () => void;
 
   list: (
     page?: number,
@@ -148,9 +33,6 @@ interface NotificationState {
   markAllRead: () => Promise<number>;
   deleteNotification: (notificationId: string) => Promise<boolean>;
   deleteAllRead: () => Promise<number>;
-  getSettings: () => Promise<NotificationSettings>;
-  setSettings: (settings: NotificationSettings) => Promise<void>;
-  create: (input: CreateNotificationInput) => Promise<Notification>;
   fetchUnreadCount: () => Promise<number>;
 
   init: () => Promise<void>;
@@ -161,210 +43,15 @@ export const useNotificationStore = create<NotificationState>()(
   devtools(
     subscribeWithSelector(
       immer((set, get) => ({
-        permissionGranted: false,
         notifications: [],
         total: 0,
         unreadCount: 0,
         page: 1,
         pageSize: 20,
         hasMore: false,
-        settings: null,
-        unreadCounts: {},
-        scheduled: [],
         loading: false,
         error: null,
         _unlisteners: [],
-
-        checkPermission: async () => {
-          try {
-            const granted = await invoke<boolean>('notification_check_permission');
-            set({ permissionGranted: granted }, undefined, 'notification/checkPermission');
-            return granted;
-          } catch (err) {
-            console.error('[NotificationStore] checkPermission failed:', err);
-            return false;
-          }
-        },
-
-        requestPermission: async () => {
-          try {
-            const state = await invoke<string>('notification_request_permission');
-            set(
-              { permissionGranted: state === 'granted' },
-              undefined,
-              'notification/requestPermission',
-            );
-            return state;
-          } catch (err) {
-            console.error('[NotificationStore] requestPermission failed:', err);
-            return 'denied';
-          }
-        },
-
-        show: async (title, body, icon) => {
-          try {
-            await invoke('notification_show', { title, body, icon: icon ?? null });
-          } catch (err) {
-            console.error('[NotificationStore] show failed:', err);
-            set({ error: String(err) }, undefined, 'notification/show/error');
-          }
-        },
-
-        showWithActions: async (title, body, actions) => {
-          try {
-            return await invoke<string>('notification_show_with_actions', {
-              title,
-              body,
-              actions,
-            });
-          } catch (err) {
-            console.error('[NotificationStore] showWithActions failed:', err);
-            set({ error: String(err) }, undefined, 'notification/showWithActions/error');
-            return '';
-          }
-        },
-
-        schedule: async (title, body, at, icon, category) => {
-          try {
-            const id = await invoke<string>('notification_schedule', {
-              title,
-              body,
-              at,
-              icon: icon ?? null,
-              category: category ?? null,
-            });
-            await get().getScheduled();
-            return id;
-          } catch (err) {
-            console.error('[NotificationStore] schedule failed:', err);
-            set({ error: String(err) }, undefined, 'notification/schedule/error');
-            return '';
-          }
-        },
-
-        scheduleReminder: async (title, body, at, actions) => {
-          try {
-            const id = await invoke<string>('notification_schedule_reminder', {
-              title,
-              body,
-              at,
-              actions: actions ?? null,
-            });
-            await get().getScheduled();
-            return id;
-          } catch (err) {
-            console.error('[NotificationStore] scheduleReminder failed:', err);
-            set({ error: String(err) }, undefined, 'notification/scheduleReminder/error');
-            return '';
-          }
-        },
-
-        cancelScheduled: async (notificationId) => {
-          try {
-            await invoke('notification_cancel', { notificationId });
-            set(
-              (s) => {
-                s.scheduled = s.scheduled.filter((n) => n.id !== notificationId);
-              },
-              undefined,
-              'notification/cancelScheduled',
-            );
-          } catch (err) {
-            console.error('[NotificationStore] cancelScheduled failed:', err);
-            set({ error: String(err) }, undefined, 'notification/cancelScheduled/error');
-          }
-        },
-
-        cancelAllScheduled: async () => {
-          try {
-            const count = await invoke<number>('notification_cancel_all');
-            set({ scheduled: [] }, undefined, 'notification/cancelAllScheduled');
-            return count;
-          } catch (err) {
-            console.error('[NotificationStore] cancelAllScheduled failed:', err);
-            set({ error: String(err) }, undefined, 'notification/cancelAllScheduled/error');
-            return 0;
-          }
-        },
-
-        getScheduled: async () => {
-          try {
-            const scheduled = await invoke<ScheduledNotification[]>('notification_get_scheduled');
-            set({ scheduled }, undefined, 'notification/getScheduled');
-            return scheduled;
-          } catch (err) {
-            console.error('[NotificationStore] getScheduled failed:', err);
-            return [];
-          }
-        },
-
-        getScheduledById: async (notificationId) => {
-          try {
-            return await invoke<ScheduledNotification | null>('notification_get', {
-              notificationId,
-            });
-          } catch (err) {
-            console.error('[NotificationStore] getScheduledById failed:', err);
-            return null;
-          }
-        },
-
-        updateScheduled: async (notificationId, title, body, at) => {
-          try {
-            const updated = await invoke<ScheduledNotification>('notification_update', {
-              notificationId,
-              title: title ?? null,
-              body: body ?? null,
-              at: at ?? null,
-            });
-            set(
-              (s) => {
-                const idx = s.scheduled.findIndex((n) => n.id === notificationId);
-                if (idx >= 0) {
-                  s.scheduled[idx] = updated;
-                }
-              },
-              undefined,
-              'notification/updateScheduled',
-            );
-            return updated;
-          } catch (err) {
-            console.error('[NotificationStore] updateScheduled failed:', err);
-            throw err;
-          }
-        },
-
-        registerActions: async (actions) => {
-          try {
-            await invoke('notification_register_actions', { actions });
-          } catch (err) {
-            console.error('[NotificationStore] registerActions failed:', err);
-          }
-        },
-
-        incrementUnread: (conversationId) => {
-          set(
-            (s) => {
-              s.unreadCounts[conversationId] = (s.unreadCounts[conversationId] ?? 0) + 1;
-            },
-            undefined,
-            'notification/incrementUnread',
-          );
-        },
-
-        markConversationRead: (conversationId) => {
-          set(
-            (s) => {
-              delete s.unreadCounts[conversationId];
-            },
-            undefined,
-            'notification/markConversationRead',
-          );
-        },
-
-        clearAllUnread: () => {
-          set({ unreadCounts: {} }, undefined, 'notification/clearAllUnread');
-        },
 
         list: async (page, pageSize, unreadOnly, notificationType) => {
           set({ loading: true, error: null }, undefined, 'notification/list/start');
@@ -491,48 +178,6 @@ export const useNotificationStore = create<NotificationState>()(
           }
         },
 
-        getSettings: async () => {
-          try {
-            const settings = await invoke<NotificationSettings>('notification_get_settings');
-            set({ settings }, undefined, 'notification/getSettings');
-            return settings;
-          } catch (err) {
-            console.error('[NotificationStore] getSettings failed:', err);
-            throw err;
-          }
-        },
-
-        setSettings: async (settings) => {
-          try {
-            await invoke('notification_set_settings', { settings });
-            set({ settings }, undefined, 'notification/setSettings');
-          } catch (err) {
-            console.error('[NotificationStore] setSettings failed:', err);
-            set({ error: String(err) }, undefined, 'notification/setSettings/error');
-          }
-        },
-
-        create: async (input) => {
-          try {
-            const notification = await invoke<Notification>('notification_create', { input });
-            set(
-              (s) => {
-                s.notifications.unshift(notification);
-                s.total += 1;
-                if (!notification.read) {
-                  s.unreadCount += 1;
-                }
-              },
-              undefined,
-              'notification/create',
-            );
-            return notification;
-          } catch (err) {
-            console.error('[NotificationStore] create failed:', err);
-            throw err;
-          }
-        },
-
         fetchUnreadCount: async () => {
           try {
             const count = await invoke<number>('notification_unread_count');
@@ -555,6 +200,7 @@ export const useNotificationStore = create<NotificationState>()(
           const newUn = await listen<Notification>('notification:new', (event) => {
             set(
               (s) => {
+                if (s.notifications.some((n) => n.id === event.payload.id)) return;
                 s.notifications.unshift(event.payload);
                 s.total += 1;
               },
@@ -581,7 +227,6 @@ export const useNotificationStore = create<NotificationState>()(
 
           set({ _unlisteners: unlisteners }, undefined, 'notification/init');
 
-          await get().checkPermission();
           await get().fetchUnreadCount();
         },
 
@@ -598,22 +243,8 @@ export const useNotificationStore = create<NotificationState>()(
   ),
 );
 
-export const selectPermissionGranted = (s: NotificationState) => s.permissionGranted;
 export const selectNotifications = (s: NotificationState) => s.notifications;
 export const selectUnreadCount = (s: NotificationState) => s.unreadCount;
-export const selectNotificationTotal = (s: NotificationState) => s.total;
 export const selectHasMore = (s: NotificationState) => s.hasMore;
-export const selectNotificationSettings = (s: NotificationState) => s.settings;
-export const selectScheduledNotifications = (s: NotificationState) => s.scheduled;
 export const selectNotificationLoading = (s: NotificationState) => s.loading;
 export const selectNotificationError = (s: NotificationState) => s.error;
-
-export const selectUnreadCounts = (s: NotificationState) => s.unreadCounts;
-
-export const selectConversationUnreadCount =
-  (conversationId: string) =>
-  (s: NotificationState): number =>
-    s.unreadCounts[conversationId] ?? 0;
-
-export const selectTotalConversationUnread = (s: NotificationState): number =>
-  Object.values(s.unreadCounts).reduce((acc, n) => acc + n, 0);

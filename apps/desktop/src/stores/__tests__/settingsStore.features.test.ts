@@ -159,16 +159,50 @@ describe('settingsStore, features capability toggles', () => {
           temperature: 0.7,
           maxTokens: 4096,
           defaultModels: { managed_cloud: 'auto', ollama: '' },
-          favoriteModels: [],
           taskRouting: {},
         },
-        customModels: [],
       };
 
       const migrated = options.migrate(v10State, 10) as Record<string, unknown>;
 
       expect(migrated).toHaveProperty('features');
       expect(migrated['features']).toEqual({});
+    });
+
+    it('loads settings saved before favorite models and checkpoint options were removed', () => {
+      const storeConfig = (
+        useSettingsStore as unknown as {
+          persist?: {
+            getOptions?: () => {
+              version?: number;
+              migrate?: (state: unknown, version: number) => unknown;
+              merge?: (persisted: unknown, current: unknown) => unknown;
+            };
+          };
+        }
+      ).persist;
+      const options = storeConfig?.getOptions?.();
+      expect(options?.migrate).toBeTypeOf('function');
+      expect(options?.merge).toBeTypeOf('function');
+
+      const current = useSettingsStore.getState();
+      const stored = {
+        llmConfig: { ...current.llmConfig, favoriteModels: ['fixture-model'], temperature: 0.2 },
+        executionPreferences: {
+          ...current.executionPreferences,
+          maxTimeoutMinutes: 90,
+          enableCheckpointing: false,
+          checkpointInterval: 9,
+          autoResumeOnRestart: false,
+        },
+      };
+
+      const migrated = options!.migrate!(stored, (options!.version ?? 1) - 1);
+      const merged = options!.merge!(migrated, current) as typeof current;
+
+      expect(merged.llmConfig.temperature).toBe(0.2);
+      expect(merged.executionPreferences.maxTimeoutMinutes).toBe(90);
+      expect(merged.llmConfig.defaultModels).toEqual(current.llmConfig.defaultModels);
     });
 
     it('migrate from v10 does not overwrite an existing features object', () => {
@@ -191,7 +225,6 @@ describe('settingsStore, features capability toggles', () => {
 
       const v10State = {
         features: { webSearch: true },
-        customModels: [],
       };
 
       const migrated = options.migrate(v10State, 10) as Record<string, unknown>;

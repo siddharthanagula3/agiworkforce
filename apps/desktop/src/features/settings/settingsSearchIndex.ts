@@ -139,6 +139,13 @@ export const DESKTOP_SETTINGS_SEARCH_INDEX: DesktopSettingSearchEntry[] = [
     keywords: ['permissions', 'tools'],
   },
   {
+    id: 'assistant-tools',
+    tab: 'capabilities',
+    label: 'Tools the assistant may use',
+    description: 'Turn kinds of tools on or off for every chat and task on this device.',
+    keywords: ['tools', 'capabilities', 'permissions', 'disable'],
+  },
+  {
     id: 'computer-use',
     tab: 'capabilities',
     label: 'Computer use',
@@ -146,11 +153,11 @@ export const DESKTOP_SETTINGS_SEARCH_INDEX: DesktopSettingSearchEntry[] = [
     keywords: ['screen', 'automation'],
   },
   {
-    id: 'deep-research',
+    id: 'web-search',
     tab: 'capabilities',
-    label: 'Deep research',
-    description: 'Configure multi-source research behavior.',
-    keywords: ['citations', 'sources'],
+    label: 'Web search',
+    description: 'Perplexity API key for web searches in chat and Tasks.',
+    keywords: ['perplexity', 'search', 'research'],
   },
   {
     id: 'remote-control',

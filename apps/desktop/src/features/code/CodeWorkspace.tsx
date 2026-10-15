@@ -1,5 +1,4 @@
 import { useShallow } from 'zustand/react/shallow';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { ErrorBoundary } from '@/features/error-handling';
 import {
   ChevronLeft,
@@ -15,6 +14,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
+import { invoke } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import type { OpenFile } from '../../stores/codeStore';
 import { useCodeStore } from '../../stores/codeStore';
@@ -162,20 +163,16 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
 
   const handleSelectFolder = async () => {
     try {
-      const selected = await openDialog({
-        directory: true,
-        multiple: false,
-        title: 'Select Project Folder',
-      });
+      const selected = await invoke<string | null>('pick_folder', { purpose: 'project_folder' });
 
-      if (selected && typeof selected === 'string') {
+      if (selected) {
         setRootPath(selected);
         closeAllFiles();
         toast.success(`Opened folder: ${selected}`);
       }
     } catch (error) {
       console.error('Failed to select folder:', error);
-      toast.error('Failed to open folder');
+      toast.error(getSimpleErrorMessage(error));
     }
   };
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { automation, voice } from '@agiworkforce/desktop-command-client';
+import { automation } from '@agiworkforce/desktop-command-client';
+import { voiceCheckLocalWhisper, voiceTranscribeBlob } from '../../api/voice';
 
 export type RecorderNarrationPhase = 'off' | 'listening' | 'transcribing';
 
@@ -43,8 +44,7 @@ export function useRecorderNarration() {
 
   useEffect(() => {
     let mounted = true;
-    void voice
-      .voiceCheckLocalWhisper()
+    void voiceCheckLocalWhisper()
       .then((available) => {
         if (mounted) setIsAvailable(available);
       })
@@ -93,12 +93,7 @@ export function useRecorderNarration() {
         }
         const audioData = Array.from(new Uint8Array(await blob.arrayBuffer()));
         const format = blob.type.includes('mp4') ? 'mp4' : 'webm';
-        const transcription = await voice.voiceTranscribeBlob(
-          audioData,
-          format,
-          'local_whisper',
-          'en',
-        );
+        const transcription = await voiceTranscribeBlob(audioData, format, 'local_whisper', 'en');
         const text = transcription.text.trim();
         if (text) await automation.automationRecordActionNarration(text);
         setError(null);

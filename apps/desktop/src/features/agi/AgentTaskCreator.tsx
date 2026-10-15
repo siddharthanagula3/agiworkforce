@@ -10,14 +10,14 @@ import {
   useAgentTaskStore,
 } from '../../stores/agentTaskStore';
 import { useIsMounted } from '../../hooks/useIsMounted';
-import { canRunNativeAgentExecution, invoke, isTauri, relaunchApp } from '../../lib/tauri-mock';
+import { canRunNativeAgentExecution, invoke, isTauri } from '../../lib/tauri-mock';
 import { isCloudWeb, isDesktopUiDevLocal, isTestEnvironment } from '../../lib/runtimeEnvironment';
 import { getAgiTaskModelEligibility } from '../../lib/modelCapabilityGates';
 import { useChatModelStore } from '@agiworkforce/unified-chat';
 
 type ExecutionMode = 'auto' | 'sequential' | 'parallel' | 'swarm';
-type TaskAutomationState =
-  'checking' | 'ready' | 'blocked' | 'restart-required' | 'error' | 'unsupported';
+export type TaskAutomationState =
+  'checking' | 'ready' | 'blocked' | 'service-unavailable' | 'error' | 'unsupported';
 
 /**
  * Whether this build can run a task at all, asked before the screen claims it
@@ -45,7 +45,16 @@ export function resolveTaskAutomationState(
 ): Exclude<TaskAutomationState, 'checking' | 'error'> {
   if (!readiness.accessibility) return 'blocked';
   if (readiness.automation_service_ready) return 'ready';
-  return 'restart-required';
+  return 'service-unavailable';
+}
+
+/**
+ * Only a build that cannot reach the agent engine blocks a launch. A missing
+ * Accessibility grant does not: the engine asks for the automation service
+ * when a step controls another app, and that step reports the permission.
+ */
+export function taskLaunchBlocked(state: TaskAutomationState): boolean {
+  return state === 'unsupported';
 }
 
 interface AgentTaskCreatorProps {
@@ -127,8 +136,8 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
   }, [goal, shouldUseSwarm]);
 
   const handleSubmit = useCallback(async () => {
-    if (accessibilityState !== 'ready') {
-      toast.error('Enable macOS Accessibility before launching a Task.');
+    if (taskLaunchBlocked(accessibilityState)) {
+      toast.error('Tasks are not available in this build.');
       return;
     }
     const trimmed = goal.trim();
@@ -325,28 +334,29 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
         </div>
       )}
 
-      {accessibilityState !== 'ready' && (
+      {accessibilityState !== 'ready' && accessibilityState !== 'checking' && (
         <div
           role="status"
+          data-testid="agent-task-desktop-control-notice"
           className="rounded-lg border border-warning-fill/30 bg-warning-fill/10 p-3 text-sm text-warning-text"
         >
           <p className="font-medium">
-            {accessibilityState === 'checking'
-              ? 'Checking macOS Accessibility…'
-              : accessibilityState === 'unsupported'
-                ? 'Tasks are not available in this build'
-                : accessibilityState === 'error'
-                  ? 'Accessibility status could not be verified'
-                  : accessibilityState === 'restart-required'
-                    ? 'Restart AGI to finish enabling Tasks'
-                    : 'Enable Accessibility to launch Tasks'}
+            {accessibilityState === 'unsupported'
+              ? 'Tasks are not available in this build'
+              : accessibilityState === 'error'
+                ? 'Accessibility status could not be verified'
+                : accessibilityState === 'service-unavailable'
+                  ? 'Desktop control did not start'
+                  : 'Controlling other apps needs Accessibility'}
           </p>
           <p className="mt-1 text-xs leading-relaxed text-warning-text">
             {accessibilityState === 'unsupported'
               ? 'Tasks control approved apps through a local automation service that this build cannot reach, so a Task launched here would fail. Chat, voice and everything else on this screen are unaffected.'
-              : accessibilityState === 'restart-required'
-                ? 'macOS now allows Accessibility, but the protected automation service is created only when AGI starts. Quit and reopen AGI before launching a Task.'
-                : 'Tasks can control approved apps while executing a plan, so macOS requires this system permission. AGI will still ask before privileged actions.'}
+              : accessibilityState === 'service-unavailable'
+                ? 'macOS allows Accessibility, but AGI could not start the automation service. You can still launch a Task; a step that controls another app will stop and say so. Refresh the status to try again.'
+                : accessibilityState === 'error'
+                  ? 'You can still launch a Task. A step that controls another app will stop and say so if the permission is missing.'
+                  : 'You can launch a Task without it. A step that clicks or types in another app will stop and name this permission. Turning it on in System Settings takes effect right away, without restarting AGI, and AGI will still ask before privileged actions.'}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {accessibilityState === 'blocked' && (
@@ -364,22 +374,13 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
                 Open Accessibility settings
               </button>
             )}
-            {accessibilityState !== 'checking' && accessibilityState !== 'unsupported' && (
+            {accessibilityState !== 'unsupported' && (
               <button
                 type="button"
                 onClick={() => void refreshAccessibility()}
                 className="rounded-lg border border-warning-fill/20 px-3 py-1.5 text-xs font-medium hover:bg-warning-fill/10"
               >
                 Refresh status
-              </button>
-            )}
-            {accessibilityState === 'restart-required' && (
-              <button
-                type="button"
-                onClick={() => void relaunchApp()}
-                className="rounded-lg bg-warning-fill px-3 py-1.5 text-xs font-semibold text-warning-on-fill"
-              >
-                Restart AGI
               </button>
             )}
           </div>
@@ -407,7 +408,7 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
           !goal.trim() ||
           !selectedModel ||
           !modelEligibility.eligible ||
-          accessibilityState !== 'ready'
+          taskLaunchBlocked(accessibilityState)
         }
         className={cn(
           'flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition',
@@ -415,7 +416,7 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
             !goal.trim() ||
             !selectedModel ||
             !modelEligibility.eligible ||
-            accessibilityState !== 'ready'
+            taskLaunchBlocked(accessibilityState)
             ? 'cursor-not-allowed bg-white/5 text-slate-500'
             : 'bg-teal-600 text-white hover:bg-teal-500',
         )}

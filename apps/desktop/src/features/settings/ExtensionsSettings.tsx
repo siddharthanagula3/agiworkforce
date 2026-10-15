@@ -13,6 +13,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
+import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { invoke, listen } from '@/lib/tauri-mock';
 import { toast } from 'sonner';
 import { Button } from '@/ui/Button';
@@ -38,6 +39,7 @@ interface ExtensionInfo {
   requiresConfig: boolean;
   configComplete: boolean;
   configSchema: unknown | null;
+  storedSecrets?: string[];
   category: string | null;
   iconPath: string | null;
   installedAt: string;
@@ -48,7 +50,7 @@ interface ExtensionInfo {
 interface InstallProgress {
   phase: string;
   message: string;
-  percentage: number;
+  progress: number;
 }
 
 interface ExtensionConfigProperty {
@@ -118,6 +120,7 @@ function seedFieldValues(
 function buildConfigPayload(
   schema: ExtensionConfigSchema,
   values: Record<string, ConfigFieldValue>,
+  storedSecrets: readonly string[],
 ): { config: Record<string, unknown> } | { error: string } {
   const config: Record<string, unknown> = {};
 
@@ -144,7 +147,9 @@ function buildConfigPayload(
     config[key] = text;
   }
 
-  const missing = schema.required.filter((key) => config[key] === undefined);
+  const missing = schema.required.filter(
+    (key) => config[key] === undefined && !storedSecrets.includes(key),
+  );
   if (missing.length > 0) {
     return {
       error: `Fill in required settings: ${missing
@@ -189,8 +194,7 @@ export function ExtensionsSettings() {
       const result = await invoke<ExtensionInfo[]>('extension_list');
       setExtensions(result);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load extensions';
-      setError(errorMessage);
+      setError(getSimpleErrorMessage(err));
       console.error('Error loading extensions:', err);
     } finally {
       setLoading(false);
@@ -222,10 +226,7 @@ export function ExtensionsSettings() {
     );
 
     unlisteners.push(
-      listen<{ error: string }>('extension:install_failed', (event) => {
-        toast.error('Installation failed', {
-          description: event.payload.error,
-        });
+      listen<{ error: string }>('extension:install_failed', () => {
         setInstalling(false);
         setInstallProgress(null);
       }),
@@ -262,7 +263,7 @@ export function ExtensionsSettings() {
       setInstallProgress({
         phase: 'selecting',
         message: 'Select an extension package...',
-        percentage: 0,
+        progress: 0,
       });
 
       const filePath = await invoke<string | null>('extension_select_package');
@@ -276,15 +277,14 @@ export function ExtensionsSettings() {
       setInstallProgress({
         phase: 'installing',
         message: 'Installing extension...',
-        percentage: 10,
+        progress: 10,
       });
 
       await invoke<ExtensionInfo>('extension_install', { filePath });
       // Success handled by event listener
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Installation failed';
-      toast.error('Installation failed', {
-        description: errorMessage,
+      toast.error('Extension not installed', {
+        description: getSimpleErrorMessage(err),
       });
       setInstalling(false);
       setInstallProgress(null);
@@ -310,9 +310,8 @@ export function ExtensionsSettings() {
       });
       void loadExtensions();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to uninstall extension';
-      toast.error('Uninstall failed', {
-        description: errorMessage,
+      toast.error('Extension not uninstalled', {
+        description: getSimpleErrorMessage(err),
       });
     } finally {
       setActionInProgress(null);
@@ -339,12 +338,8 @@ export function ExtensionsSettings() {
 
       void loadExtensions();
     } catch (err) {
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : `Failed to ${isEnabled ? 'disable' : 'enable'} extension`;
-      toast.error(`${isEnabled ? 'Disable' : 'Enable'} failed`, {
-        description: errorMessage,
+      toast.error(isEnabled ? 'Extension not disabled' : 'Extension not enabled', {
+        description: getSimpleErrorMessage(err),
       });
     } finally {
       setActionInProgress(null);
@@ -385,7 +380,7 @@ export function ExtensionsSettings() {
         setConfigValues(seedFieldValues(schema, stored ?? {}));
       } catch (err) {
         if (configRequestRef.current !== extension.id) return;
-        setConfigError(err instanceof Error ? err.message : 'Failed to load configuration');
+        setConfigError(getSimpleErrorMessage(err));
       } finally {
         if (configRequestRef.current === extension.id) setConfigLoading(false);
       }
@@ -397,7 +392,7 @@ export function ExtensionsSettings() {
     async (extension: ExtensionInfo) => {
       if (!configSchema) return;
 
-      const result = buildConfigPayload(configSchema, configValues);
+      const result = buildConfigPayload(configSchema, configValues, extension.storedSecrets ?? []);
       if ('error' in result) {
         setConfigError(result.error);
         return;
@@ -417,9 +412,9 @@ export function ExtensionsSettings() {
         closeConfig();
         void loadExtensions();
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to save configuration';
+        const errorMessage = getSimpleErrorMessage(err);
         setConfigError(errorMessage);
-        toast.error('Save failed', { description: errorMessage });
+        toast.error('Configuration not saved', { description: errorMessage });
       } finally {
         setConfigSaving(false);
       }
@@ -535,7 +530,7 @@ export function ExtensionsSettings() {
               <div className="mt-2 h-2 w-full rounded-full bg-muted">
                 <div
                   className="h-2 rounded-full bg-primary transition-all duration-300"
-                  style={{ width: `${installProgress.percentage}%` }}
+                  style={{ width: `${installProgress.progress}%` }}
                 />
               </div>
             </div>
@@ -705,6 +700,7 @@ export function ExtensionsSettings() {
                             const helpUrl = safeHelpUrl(property.helpUrl);
                             const inputId = `ext-config-${extension.id}-${key}`;
                             const value = configValues[key];
+                            const stored = extension.storedSecrets?.includes(key) === true;
 
                             return (
                               <div key={key} className="space-y-1">
@@ -750,9 +746,20 @@ export function ExtensionsSettings() {
                                     }
                                     value={typeof value === 'string' ? value : ''}
                                     placeholder={property.placeholder}
+                                    aria-describedby={stored ? `${inputId}-stored` : undefined}
                                     onChange={(event) => setConfigField(key, event.target.value)}
                                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                                   />
+                                )}
+
+                                {stored && (
+                                  <p
+                                    id={`${inputId}-stored`}
+                                    className="text-xs text-muted-foreground"
+                                  >
+                                    A value is stored on this device and is not shown here. Leave
+                                    this empty to keep it, or type a new one to replace it.
+                                  </p>
                                 )}
 
                                 {property.description && (

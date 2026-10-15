@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useMenuKeyboard } from '@agiworkforce/ui';
+import { useConfirmAction, useMenuKeyboard } from '@agiworkforce/ui';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -11,10 +11,24 @@ import {
   ArchiveRestore,
   FolderInput,
   FolderMinus,
+  Sparkles,
+  Download,
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
 import type { ConversationSummary } from '../../stores/chat';
+import { CustomInstructionsDialog } from '../custom-instructions';
+import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
+import {
+  conversationExportFormats,
+  exportConversation,
+  type ConversationExportFormat,
+} from '../chat/conversationExport';
+
+const EXPORT_LABELS: Record<ConversationExportFormat, string> = {
+  markdown: 'Export as Markdown',
+  pdf: 'Export as PDF',
+};
 
 const MENU_WIDTH = 220;
 const MENU_EST_HEIGHT = 340;
@@ -24,7 +38,7 @@ export interface ConversationRowProps {
   active: boolean;
   onSelect: (id: string) => void;
   onRename: (id: string, title: string) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => unknown;
   onTogglePin: (id: string) => void;
   onArchive: (id: string) => void;
   onRestore: (id: string) => void;
@@ -86,8 +100,11 @@ export function ConversationRow({
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [editing, setEditing] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [draft, setDraft] = useState(conversation.title);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const privacyMode = useAppModeStore(selectPrivacyMode);
+  const exportFormats = conversationExportFormats(privacyMode, conversation.incognito === true);
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -104,7 +121,6 @@ export function ConversationRow({
     const preferredTop = openUp ? rect.top - MENU_EST_HEIGHT - 4 : rect.bottom + 4;
     const top = Math.max(8, Math.min(preferredTop, window.innerHeight - MENU_EST_HEIGHT - 8));
     setMenuPos({ top, left });
-    setConfirmDelete(false);
     setMenuOpen(true);
   }, []);
 
@@ -149,6 +165,29 @@ export function ConversationRow({
     setEditing(false);
     setDraft(conversation.title);
   }, [conversation.title]);
+
+  const requestDelete = useCallback(() => {
+    setMenuOpen(false);
+    confirm({
+      title: conversation.archived ? 'Delete this archived chat permanently?' : 'Delete this chat?',
+      description: `“${title}” and all of its messages will be permanently removed. This cannot be undone.`,
+      confirmLabel: 'Delete chat',
+      destructive: true,
+      onConfirm: () => onDelete(conversation.id),
+    });
+  }, [confirm, conversation.archived, conversation.id, onDelete, title]);
+
+  const exportItems = exportFormats.map((format) => (
+    <MenuItem
+      key={format}
+      icon={Download}
+      label={EXPORT_LABELS[format]}
+      onClick={() => {
+        setMenuOpen(false);
+        void exportConversation(conversation.id, format);
+      }}
+    />
+  ));
 
   return (
     <div
@@ -278,14 +317,17 @@ export function ConversationRow({
             }}
           >
             {conversation.archived ? (
-              <MenuItem
-                icon={ArchiveRestore}
-                label={t('sidebar.actions.restore')}
-                onClick={() => {
-                  onRestore(conversation.id);
-                  setMenuOpen(false);
-                }}
-              />
+              <>
+                <MenuItem
+                  icon={ArchiveRestore}
+                  label={t('sidebar.actions.restore')}
+                  onClick={() => {
+                    onRestore(conversation.id);
+                    setMenuOpen(false);
+                  }}
+                />
+                {exportItems}
+              </>
             ) : (
               <>
                 <MenuItem
@@ -306,6 +348,17 @@ export function ConversationRow({
                     setEditing(true);
                   }}
                 />
+                {exportItems}
+                {conversation.executionMode !== 'cloud_managed' && (
+                  <MenuItem
+                    icon={Sparkles}
+                    label={t('sidebar.actions.customInstructions', 'Custom instructions')}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setInstructionsOpen(true);
+                    }}
+                  />
+                )}
                 <MenuItem
                   icon={Archive}
                   label={t('sidebar.actions.archive')}
@@ -368,31 +421,24 @@ export function ConversationRow({
             <MenuItem
               icon={Trash2}
               danger
-              label={
-                confirmDelete
-                  ? t(
-                      conversation.archived
-                        ? 'sidebar.actions.confirmDeletePermanently'
-                        : 'sidebar.actions.confirmDelete',
-                    )
-                  : t(
-                      conversation.archived
-                        ? 'sidebar.actions.deletePermanently'
-                        : 'sidebar.actions.delete',
-                    )
-              }
-              onClick={() => {
-                if (confirmDelete) {
-                  onDelete(conversation.id);
-                  setMenuOpen(false);
-                } else {
-                  setConfirmDelete(true);
-                }
-              }}
+              label={t(
+                conversation.archived
+                  ? 'sidebar.actions.deletePermanently'
+                  : 'sidebar.actions.delete',
+              )}
+              onClick={requestDelete}
             />
           </div>,
           document.body,
         )}
+      {instructionsOpen && (
+        <CustomInstructionsDialog
+          open={instructionsOpen}
+          onOpenChange={setInstructionsOpen}
+          conversationId={conversation.id}
+        />
+      )}
+      {confirmDialog}
     </div>
   );
 }

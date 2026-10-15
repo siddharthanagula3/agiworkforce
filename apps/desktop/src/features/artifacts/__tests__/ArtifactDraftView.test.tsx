@@ -11,7 +11,6 @@ function draft(overrides: Partial<ArtifactDraft> = {}): ArtifactDraft {
     content: '',
     language: 'tsx',
     complete: false,
-    openedPanel: true,
     ...overrides,
   };
 }

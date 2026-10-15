@@ -1,4 +1,33 @@
-import { CLOUD_APP_ORIGIN, RENDERER_HOST, RENDERER_SCHEME } from './config';
+import {
+  CLOUD_APP_ORIGIN,
+  RENDERER_HOST,
+  RENDERER_MODE,
+  RENDERER_ORIGIN,
+  RENDERER_SCHEME,
+} from './config';
+
+/**
+ * Whether a document is one this build serves: the bundled `agi://cloud`
+ * renderer, or the cloud app itself when the window wraps the website. The
+ * window is also allowed to navigate to sign-in providers, and the preload
+ * runs on their pages too, so this is asked both of whoever calls the bridge
+ * and of whatever page main is about to send something to.
+ */
+export function isTrustedPageUrl(rawUrl: string | undefined): boolean {
+  if (!rawUrl) return false;
+  if (rawUrl.startsWith(`${RENDERER_ORIGIN}/`) || rawUrl === RENDERER_ORIGIN) return true;
+  if (RENDERER_MODE !== 'remote') return false;
+  try {
+    return new URL(rawUrl).origin === new URL(CLOUD_APP_ORIGIN).origin;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether the page a window holds right now may be sent what main knows. */
+export function showsTrustedPage(contents: { isDestroyed(): boolean; getURL(): string }): boolean {
+  return !contents.isDestroyed() && isTrustedPageUrl(contents.getURL());
+}
 
 const TRUSTED_NON_MEDIA_PERMISSIONS = new Set([
   'notifications',

@@ -10,7 +10,6 @@ export interface CacheTypeStats {
 export interface CacheStats {
   llm_cache: CacheTypeStats;
   tool_cache: CacheTypeStats;
-  codebase_cache: CacheTypeStats;
   total_size_mb: number;
   total_savings_usd: number;
 }
@@ -44,4 +43,4 @@ export interface CacheAnalytics {
   total_tokens_saved: number;
 }
 
-export type CacheType = 'llm' | 'tool' | 'codebase';
+export type CacheType = 'llm' | 'tool';

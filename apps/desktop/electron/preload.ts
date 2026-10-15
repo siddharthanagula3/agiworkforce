@@ -1,7 +1,8 @@
 /**
- * Sandboxed preload exposing exactly the `ElectronHostBridge` contract
- * (`src/lib/tauri-electron/bridgeContract.ts`) as `window.agiHost`, the only
- * surface the renderer has beyond the DOM.
+ * Sandboxed preload exposing `window.agiHost`, the only surface the renderer
+ * has beyond the DOM: the `HostBridge` contract for the hosted page, and the
+ * rest of `ElectronHostBridge` (`src/lib/tauri-electron/bridgeContract.ts`)
+ * only for the bundled renderer, which is the one mode main answers it in.
  */
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import {
@@ -9,9 +10,11 @@ import {
   isHostCommand,
   type DesktopRuntimeEvent,
   type DesktopRuntimeResponse,
+  type HostBridge,
   type HostCommand,
   type HostPreferences,
   type HostPreferencesState,
+  type HostRestartOutcome,
 } from '@agiworkforce/local-runtime-contract';
 import {
   ELECTRON_BRIDGE_COMMANDS,
@@ -49,21 +52,10 @@ ipcRenderer.on(ELECTRON_IPC_CHANNELS.deepLink, (_event: unknown, url: unknown) =
 
 const bridgeCommands = new Set<string>(ELECTRON_BRIDGE_COMMANDS);
 
-const agiHost: ElectronHostBridge = {
+const hostBridge: HostBridge = {
   platform: `electron-${process.platform}`,
   shell: ELECTRON_HOST_SHELL,
   appVersion: argValue('--agi-app-version='),
-
-  handles(command: string): boolean {
-    return bridgeCommands.has(command);
-  },
-
-  async invokeBridge(command: string, args?: Record<string, unknown>): Promise<unknown> {
-    if (!bridgeCommands.has(command)) {
-      throw new Error(`Unknown bridge command: ${command}`);
-    }
-    return ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.invokeBridge, command, args);
-  },
 
   async invokeRuntime<T>(command: string, args?: Record<string, unknown>) {
     return (await ipcRenderer.invoke(
@@ -129,21 +121,8 @@ const agiHost: ElectronHostBridge = {
     await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.openExternal, url);
   },
 
-  async windowControl(request: ElectronWindowControlRequest): Promise<boolean> {
-    return (await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.windowControl, request)) === true;
-  },
-
-  async dialog(request: ElectronDialogRequest): Promise<string | boolean | null> {
-    return (await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.dialog, request)) as
-      string | boolean | null;
-  },
-
   async notify(request: ElectronNotifyRequest): Promise<void> {
     await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.notify, request);
-  },
-
-  async relaunch(): Promise<void> {
-    await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.relaunch);
   },
 
   async checkForUpdate() {
@@ -153,19 +132,57 @@ const agiHost: ElectronHostBridge = {
   async openUpdateInstaller(): Promise<void> {
     await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.openUpdateInstaller);
   },
+
+  async restartToUpdate(): Promise<HostRestartOutcome> {
+    return (await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.restartToUpdate)) as HostRestartOutcome;
+  },
 };
 
+const bundledRendererBridge: Omit<ElectronHostBridge, keyof HostBridge> = {
+  handles(command: string): boolean {
+    return bridgeCommands.has(command);
+  },
+
+  async invokeBridge(command: string, args?: Record<string, unknown>): Promise<unknown> {
+    if (!bridgeCommands.has(command)) {
+      throw new Error(`Unknown bridge command: ${command}`);
+    }
+    return ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.invokeBridge, command, args);
+  },
+
+  async windowControl(request: ElectronWindowControlRequest): Promise<boolean> {
+    return (await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.windowControl, request)) === true;
+  },
+
+  async dialog(request: ElectronDialogRequest): Promise<string | boolean | null> {
+    return (await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.dialog, request)) as
+      string | boolean | null;
+  },
+
+  async relaunch(): Promise<void> {
+    await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.relaunch);
+  },
+};
+
+const agiHost: HostBridge | ElectronHostBridge =
+  argValue('--agi-renderer=') === 'bundled'
+    ? { ...hostBridge, ...bundledRendererBridge }
+    : hostBridge;
+
 /**
- * Exposed unconditionally. A sandboxed preload runs before the document, so
+ * Exposed on every document. A sandboxed preload runs before the document, so
  * there is no origin to read here; `isTrustedSender` in `main.ts` is the gate.
  */
 contextBridge.exposeInMainWorld('agiHost', agiHost);
 
 /**
  * A directory has no bytes for the DOM to hand over, so its path goes to the
- * main process for a workspace grant. Files fall through to the page.
+ * main process for a workspace grant. Files fall through to the page. Only a
+ * drop the person made counts: one a page's script dispatched is not a choice
+ * of folder by anyone.
  */
 window.addEventListener('drop', (event) => {
+  if (!event.isTrusted) return;
   const dropped = Array.from((event as DragEvent).dataTransfer?.files ?? []);
   if (dropped.length === 0) return;
   const paths = dropped.map((file) => webUtils.getPathForFile(file)).filter((path) => path !== '');

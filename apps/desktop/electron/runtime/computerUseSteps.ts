@@ -1,4 +1,4 @@
-import { dialog, type BrowserWindow } from 'electron';
+import type { BrowserWindow } from 'electron';
 import {
   COMPUTER_USE_STOP_SHORTCUT,
   MAX_DEVICE_REVIEW_LENGTH,
@@ -11,6 +11,7 @@ import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { gateApplications } from './applicationControl';
 import { showDevicePrompt } from './devicePrompts';
 import { ComputerUseRefused, readFrontWindow } from './computerUseService';
+import { showNativeMessage } from './nativeSurface';
 import {
   askUserDuringRun,
   computerUsePhase,
@@ -140,15 +141,13 @@ export async function confirmHandBack(window: BrowserWindow | null): Promise<Com
   const options = {
     type: 'question' as const,
     buttons: ['Keep control', 'Hand back'],
-    defaultId: 1,
+    defaultId: 0,
     cancelId: 0,
     title: 'Hand the screen back?',
     message: 'Let AGI carry on using your computer?',
     detail: `It takes a fresh look at the screen first, then carries on from where it paused. Press ${describeAccelerator(COMPUTER_USE_STOP_SHORTCUT, process.platform)} at any time to stop it.`,
     noLink: true,
   };
-  const result = window
-    ? await dialog.showMessageBox(window, options)
-    : await dialog.showMessageBox(options);
+  const result = await showNativeMessage(window, options);
   return result.response === 1 ? handBackComputerUse() : computerUseStatus();
 }

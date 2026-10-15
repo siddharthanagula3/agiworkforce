@@ -3,7 +3,6 @@ import { create } from 'zustand';
 import { createJSONStorage, devtools, persist, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../lib/tauri-mock';
-import { revertChanges as revertAgiChanges, type RevertResult } from '../api/codeEditing';
 
 export interface OpenFile {
   path: string;
@@ -30,7 +29,6 @@ interface CodeState {
   saveFile: (path: string) => Promise<void>;
   saveAllFiles: () => Promise<void>;
   revertFile: (path: string) => void;
-  revertAgiChanges: (paths: string[]) => Promise<RevertResult>;
   getFileByPath: (path: string) => OpenFile | undefined;
   hydrateOpenFiles: () => Promise<void>;
 }
@@ -365,37 +363,6 @@ export const useCodeStore = create<CodeState>()(
               undefined,
               'code/revertFile',
             );
-          },
-
-          revertAgiChanges: async (paths: string[]): Promise<RevertResult> => {
-            const result = await revertAgiChanges(paths);
-
-            if (result.reverted_files.length > 0) {
-              for (const path of result.reverted_files) {
-                const currentFiles = get().openFiles;
-                const fileIndex = currentFiles.findIndex((f) => f.path === path);
-                if (fileIndex !== -1) {
-                  try {
-                    const content = await invoke<string>('file_read', { path });
-                    const updatedFiles = [...get().openFiles];
-                    const file = updatedFiles[fileIndex];
-                    if (file) {
-                      updatedFiles[fileIndex] = {
-                        ...file,
-                        content,
-                        originalContent: content,
-                        isDirty: false,
-                      };
-                      set({ openFiles: updatedFiles }, undefined, 'code/reloadRevertedFile');
-                    }
-                  } catch (error) {
-                    console.warn('Failed to reload reverted file:', path, error);
-                  }
-                }
-              }
-            }
-
-            return result;
           },
 
           getFileByPath: (path: string) => {

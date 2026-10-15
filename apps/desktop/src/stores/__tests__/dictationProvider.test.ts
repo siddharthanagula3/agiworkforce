@@ -15,12 +15,12 @@ describe('normalizeDictationProvider', () => {
     expect(normalizeDictationProvider('managed_cloud')).toBe('managed_cloud');
   });
 
-  it('migrates legacy deepgram to the managed-cloud label it actually used', () => {
-    expect(normalizeDictationProvider('deepgram')).toBe('managed_cloud');
+  it('moves a legacy third-party choice to the on-device engine, never to AGI Cloud', () => {
+    expect(normalizeDictationProvider('deepgram')).toBe('local_whisper');
   });
 
   it('fails safe to the offline default for unknown values', () => {
-    for (const value of ['', 'azure', 42, null, undefined, {}]) {
+    for (const value of ['', 'azure', 'Deepgram', 42, null, undefined, {}]) {
       expect(normalizeDictationProvider(value)).toBe('local_whisper');
     }
   });

@@ -1,6 +1,5 @@
-import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import {
   Search,
   Clock,
@@ -16,7 +15,9 @@ import type { LucideIcon } from 'lucide-react';
 import Fuse from 'fuse.js';
 import { useChatStore, dbIdToUuid, type ConversationSummary } from '../../stores/chat/chatStore';
 import { cn } from '../../lib/utils';
-import { invoke, isTauri } from '../../lib/tauri-mock';
+import { isTauri } from '../../lib/tauri-mock';
+import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
+import { useLocalChatSearch, type LocalChatSearchHit } from './useLocalChatSearch';
 import { useReducedMotion } from '@agiworkforce/unified-chat';
 import {
   formatLastUsed,
@@ -42,23 +43,13 @@ interface CommandPaletteProps {
   commands?: CommandOption[];
 }
 
-interface ChatSearchResult {
-  message_id: number;
-  conversation_id: number;
-  conversation_title: string | null;
-  content_snippet: string;
-  role: string;
-  created_at: string;
-  rank: number;
-}
-
 type ResultKind = 'command' | 'conversation' | 'message';
 
 interface PaletteResult {
   kind: ResultKind;
   id: string;
   conversation?: ConversationSummary;
-  ftsResult?: ChatSearchResult;
+  ftsResult?: LocalChatSearchHit;
   score: number;
   snippet?: string;
   command?: CommandOption;
@@ -161,15 +152,17 @@ function clearRecentSearches(): void {
 export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [ftsResults, setFtsResults] = useState<ChatSearchResult[]>([]);
-  const [ftsLoading, setFtsLoading] = useState(false);
   const [recentCommandIds, setRecentCommandIds] = useState<string[]>([]);
   const [recentSearchEntries, setRecentSearchEntries] = useState<RecentSearchEntry[]>([]);
-  const ftsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prefersReducedMotion = useReducedMotion();
 
   const conversations = useChatStore((state) => state.conversations);
   const selectConversation = useChatStore((state) => state.selectConversation);
+  const privacyMode = useAppModeStore(selectPrivacyMode);
+  const { hits: ftsResults, loading: ftsLoading } = useLocalChatSearch(query, {
+    enabled: isOpen && isTauri && privacyMode === 'local',
+    limit: 8,
+  });
 
   useEffect(() => {
     if (isOpen) {
@@ -179,39 +172,8 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
   }, [isOpen]);
 
   useEffect(() => {
-    if (ftsDebounceRef.current) clearTimeout(ftsDebounceRef.current);
-    if (!query.trim() || query.trim().length < 3 || !isTauri) {
-      setFtsResults([]);
-      return;
-    }
-    ftsDebounceRef.current = setTimeout(async () => {
-      setFtsLoading(true);
-      try {
-        const results = await invoke<ChatSearchResult[]>('search_chat_history', {
-          query: query.trim(),
-          limit: 8,
-        });
-        setFtsResults(results);
-        if (results.length > 0) {
-          recordRecentSearch(query.trim());
-        }
-      } catch {
-        setFtsResults([]);
-      } finally {
-        setFtsLoading(false);
-      }
-    }, SEARCH_INPUT_DEBOUNCE_MS);
-    return () => {
-      if (ftsDebounceRef.current) clearTimeout(ftsDebounceRef.current);
-    };
-  }, [query]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setFtsResults([]);
-      setFtsLoading(false);
-    }
-  }, [isOpen]);
+    if (ftsResults.length > 0) recordRecentSearch(query.trim());
+  }, [ftsResults, query]);
 
   useEffect(() => {
     if (!isOpen) {

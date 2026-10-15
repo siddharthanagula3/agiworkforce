@@ -7,6 +7,7 @@ const LazyDotfileSettings = lazy(() =>
 const LazyAgentExecutionSettings = lazy(() =>
   import('../../AgentExecutionSettings').then((m) => ({ default: m.AgentExecutionSettings })),
 );
+const LazyHooksSettings = lazy(() => import('../../HooksSettings'));
 
 function Fallback({ label }: { label: string }) {
   return (
@@ -25,6 +26,11 @@ export function DeveloperTab() {
         <div className="pt-6 border-t border-border">
           <Suspense fallback={<Fallback label="Loading agent execution..." />}>
             <LazyAgentExecutionSettings />
+          </Suspense>
+        </div>
+        <div className="pt-6 border-t border-border">
+          <Suspense fallback={<Fallback label="Loading hooks..." />}>
+            <LazyHooksSettings />
           </Suspense>
         </div>
       </>

@@ -48,6 +48,7 @@ import type {
 import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
 import {
   parseAgentEventDelta,
+  parseElicitationInputRequests,
   reconcileManagedCloudPublicText,
   type CloudAgentRun,
   type CloudAgentRunSnapshotPage,
@@ -94,7 +95,13 @@ import {
   type CloudStreamMessageProjection,
 } from './cloudStreamDeltas';
 import { buildBoundedCloudMessageMetadata } from './cloudMessageMetadata';
-import { CloudToolApprovalRegistry, toPersistedCloudApprovalProjection } from './cloudToolApproval';
+import {
+  CloudToolApprovalRegistry,
+  toPersistedCloudApprovalProjection,
+  type ResolveApprovalOutcome,
+} from './cloudToolApproval';
+import { CloudToolInputRegistry, cloudElicitationBridge } from './cloudToolInput';
+import type { ElicitationResponse } from '@agiworkforce/cloud-contracts';
 import { finishAgentActivityLocally, type AgentActivityState } from '@agiworkforce/client-runtime';
 import {
   assertCloudConversationBoundary,
@@ -252,11 +259,12 @@ export class CloudRuntime implements ChatRuntime {
   private readonly _streamCallbacks = new Set<StreamCallback>();
   private readonly _abortControllers = new Map<string, AbortController>();
   private readonly _activeTurns = new Map<string, ActiveCloudTurn>();
-  private readonly _resolvingApprovals = new Map<
+  private readonly _resumingRuns = new Map<
     string,
     { runId: string; cleanupCredential?: DesktopCloudRunCleanupCredential }
   >();
   private readonly _approvals = new CloudToolApprovalRegistry();
+  private readonly _inputs = new CloudToolInputRegistry();
   private readonly _attachmentAssetIds = new Map<string, string>();
 
   readonly supportsResearch: boolean;
@@ -346,7 +354,7 @@ export class CloudRuntime implements ChatRuntime {
       turn.settled = true;
     }
     this._activeTurns.clear();
-    this._resolvingApprovals.clear();
+    this._resumingRuns.clear();
 
     for (const controller of this._abortControllers.values()) {
       controller.abort();
@@ -739,6 +747,13 @@ export class CloudRuntime implements ChatRuntime {
       turn.sink,
       turn.assistantMessageId,
     );
+    this.recordInputOutcome(
+      conversationId,
+      turn.runReference,
+      turn.model,
+      turn.sink,
+      turn.assistantMessageId,
+    );
     if (turn.sink.isSuspended()) {
       await this.persistAssistantTurn(
         conversationId,
@@ -748,7 +763,7 @@ export class CloudRuntime implements ChatRuntime {
         turn.sink.getAgentActivity(),
         turn.runReference,
         toPersistedCloudApprovalProjection(this._approvals.getTurnProjection(conversationId)),
-        projection,
+        this.pausedTurnProjection(conversationId, projection),
       );
       this.emitForConversation(conversationId, {
         type: 'done',
@@ -853,6 +868,7 @@ export class CloudRuntime implements ChatRuntime {
 
     if (run.state === 'awaiting_input') {
       this.reattachPendingApproval(conversationId, persisted, run, runReference);
+      this.reattachPendingInput(conversationId, persisted, run, runReference);
       return;
     }
 
@@ -886,6 +902,49 @@ export class CloudRuntime implements ChatRuntime {
       })
       .finally(() => this.clearAbortController(conversationId, controller));
     await turn.replayPromise;
+  }
+
+  /**
+   * A turn paused on cloud MCP input is not finished. Persisting the stream's
+   * finish reason would make the reopened chat skip the reattach that brings
+   * the input card back from the run's durable `pendingInput`.
+   */
+  private pausedTurnProjection(
+    conversationId: string,
+    projection: CloudStreamMessageProjection,
+  ): CloudStreamMessageProjection {
+    if (!this._inputs.hasLiveTurn(conversationId)) return projection;
+    const { finishReason: _finishReason, ...paused } = projection;
+    return paused;
+  }
+
+  /** Brings back the input card for a run that is still waiting on it. */
+  private reattachPendingInput(
+    conversationId: string,
+    persisted: CloudRunReattachment,
+    run: CloudAgentRun,
+    runReference: ManagedCloudAgentRunReference,
+  ): void {
+    const pending = run.pendingInput;
+    if (!pending) return;
+    const requests = pending.toolCalls.flatMap((call) => {
+      const prompts = parseElicitationInputRequests(call.inputRequests);
+      return prompts ? [{ toolCallId: call.toolCallId, name: call.name, prompts }] : [];
+    });
+    if (requests.length === 0) return;
+    this.recordInputOutcome(
+      conversationId,
+      runReference,
+      persisted.model || run.model,
+      {
+        isSuspended: () => true,
+        getAccumulatedContent: () => persisted.content,
+        getPendingInputRequests: () => requests,
+        getAgentActivity: () => undefined,
+        getMessageProjection: () => ({}),
+      },
+      persisted.assistantMessageId,
+    );
   }
 
   private reattachPendingApproval(
@@ -1116,6 +1175,13 @@ export class CloudRuntime implements ChatRuntime {
             sink,
             assistantMessageId,
           );
+          this.recordInputOutcome(
+            conversationId,
+            activeTurn.runReference,
+            model,
+            sink,
+            assistantMessageId,
+          );
           const approvalProjection = toPersistedCloudApprovalProjection(
             this._approvals.getTurnProjection(conversationId),
           );
@@ -1128,7 +1194,7 @@ export class CloudRuntime implements ChatRuntime {
               sink.getAgentActivity(),
               activeTurn.runReference,
               approvalProjection,
-              sink.getMessageProjection(),
+              this.pausedTurnProjection(conversationId, sink.getMessageProjection()),
             );
           } else {
             const projection = sink.getMessageProjection();
@@ -1326,7 +1392,7 @@ export class CloudRuntime implements ChatRuntime {
       projection.calls.every(
         (call) => call.toolCallId === toolCallId || call.decision !== undefined,
       );
-    const resolvingApproval: {
+    const resumingRun: {
       runId: string;
       cleanupCredential?: DesktopCloudRunCleanupCredential;
     } | null =
@@ -1335,7 +1401,7 @@ export class CloudRuntime implements ChatRuntime {
             runId: projection.runId,
           }
         : null;
-    if (resolvingApproval) this._resolvingApprovals.set(conversationId, resolvingApproval);
+    if (resumingRun) this._resumingRuns.set(conversationId, resumingRun);
     try {
       const outcome = await this._approvals.resolve(
         conversationId,
@@ -1346,8 +1412,8 @@ export class CloudRuntime implements ChatRuntime {
         (err) => this.emitForConversation(conversationId, cloudErrorEvent(err)),
         controller.signal,
         (credential) => {
-          if (this._resolvingApprovals.get(conversationId) === resolvingApproval) {
-            resolvingApproval!.cleanupCredential = credential;
+          if (this._resumingRuns.get(conversationId) === resumingRun) {
+            resumingRun!.cleanupCredential = credential;
           }
         },
       );
@@ -1367,49 +1433,162 @@ export class CloudRuntime implements ChatRuntime {
           );
         }
       } else if (outcome.assistantMessageId) {
-        const emptyTerminal =
-          !outcome.suspended &&
-          !hasRenderableCloudMessageOutput(outcome.content, outcome.messageProjection) &&
-          !outcome.streamError;
-        await this.persistAssistantTurn(
-          conversationId,
-          outcome.assistantMessageId,
-          outcome.content,
-          outcome.model,
-          emptyTerminal && outcome.agentActivity
-            ? finishAgentActivityLocally(outcome.agentActivity, {
-                status: 'failed',
-                completedAtMs: Date.now(),
-                error: EMPTY_TURN_FAILURE_MESSAGE,
-                overrideTerminal: true,
-              })
-            : outcome.agentActivity,
-          outcome.runReference,
-          outcome.pendingProjection
-            ? toPersistedCloudApprovalProjection(outcome.pendingProjection)
-            : null,
-          emptyTerminal
-            ? emptyTurnFailureProjection(outcome.messageProjection)
-            : outcome.messageProjection,
-        );
-        if (emptyTerminal) {
-          this.emitForConversation(conversationId, {
-            type: 'error',
-            error: EMPTY_TURN_FAILURE_MESSAGE,
-            code: EMPTY_TURN_FAILURE_CODE,
-          });
-          return;
+        if (outcome.suspended) {
+          this.recordInputOutcome(
+            conversationId,
+            outcome.runReference ?? outcome.runId,
+            outcome.model,
+            {
+              isSuspended: () => outcome.suspended,
+              getAccumulatedContent: () => outcome.content,
+              getPendingInputRequests: () => outcome.pendingInputRequests ?? [],
+              getAgentActivity: () => outcome.agentActivity,
+              getMessageProjection: () => outcome.messageProjection,
+            },
+            outcome.assistantMessageId,
+          );
         }
-        this.emitForConversation(conversationId, {
-          type: 'done',
-          ...(outcome.finishReason ? { finishReason: outcome.finishReason } : {}),
-          ...(outcome.streamError ? { streamError: outcome.streamError } : {}),
-          ...(outcome.messageProjection?.usage ? { usage: outcome.messageProjection.usage } : {}),
-        });
+        await this.settleResumedTurn(conversationId, outcome);
       }
     } finally {
-      if (this._resolvingApprovals.get(conversationId) === resolvingApproval) {
-        this._resolvingApprovals.delete(conversationId);
+      if (this._resumingRuns.get(conversationId) === resumingRun) {
+        this._resumingRuns.delete(conversationId);
+      }
+      this.clearAbortController(conversationId, controller);
+    }
+  }
+
+  private async settleResumedTurn(
+    conversationId: string,
+    outcome: ResolveApprovalOutcome,
+  ): Promise<void> {
+    if (!outcome.assistantMessageId) return;
+    const emptyTerminal =
+      !outcome.suspended &&
+      !hasRenderableCloudMessageOutput(outcome.content, outcome.messageProjection) &&
+      !outcome.streamError;
+    await this.persistAssistantTurn(
+      conversationId,
+      outcome.assistantMessageId,
+      outcome.content,
+      outcome.model,
+      emptyTerminal && outcome.agentActivity
+        ? finishAgentActivityLocally(outcome.agentActivity, {
+            status: 'failed',
+            completedAtMs: Date.now(),
+            error: EMPTY_TURN_FAILURE_MESSAGE,
+            overrideTerminal: true,
+          })
+        : outcome.agentActivity,
+      outcome.runReference,
+      outcome.pendingProjection
+        ? toPersistedCloudApprovalProjection(outcome.pendingProjection)
+        : null,
+      emptyTerminal
+        ? emptyTurnFailureProjection(outcome.messageProjection)
+        : this.pausedTurnProjection(conversationId, outcome.messageProjection),
+    );
+    if (emptyTerminal) {
+      this.emitForConversation(conversationId, {
+        type: 'error',
+        error: EMPTY_TURN_FAILURE_MESSAGE,
+        code: EMPTY_TURN_FAILURE_CODE,
+      });
+      return;
+    }
+    this.emitForConversation(conversationId, {
+      type: 'done',
+      ...(outcome.finishReason ? { finishReason: outcome.finishReason } : {}),
+      ...(outcome.streamError ? { streamError: outcome.streamError } : {}),
+      ...(outcome.messageProjection?.usage ? { usage: outcome.messageProjection.usage } : {}),
+    });
+  }
+
+  /** Hands a turn's cloud MCP input requests to the shared elicitation card. */
+  private recordInputOutcome(
+    conversationId: string,
+    run: Parameters<CloudToolInputRegistry['recordTurnOutcome']>[1],
+    model: string,
+    sink: Parameters<CloudToolInputRegistry['recordTurnOutcome']>[3],
+    assistantMessageId?: string,
+  ): void {
+    const requests = this._inputs.recordTurnOutcome(
+      conversationId,
+      run,
+      model,
+      sink,
+      assistantMessageId,
+    );
+    if (requests.length === 0) {
+      cloudElicitationBridge.withdraw(conversationId);
+      return;
+    }
+    cloudElicitationBridge.publish(conversationId, requests, (toolCallId, responses) =>
+      this.resolveToolInput(conversationId, toolCallId, responses),
+    );
+  }
+
+  async resolveToolInput(
+    conversationId: string,
+    toolCallId: string,
+    responses: Record<string, ElicitationResponse>,
+  ): Promise<void> {
+    const boundary = this.requireBoundary();
+    const controller = new AbortController();
+    this._abortControllers.set(conversationId, controller);
+    const resumedRunId = this._inputs.runResumedBy(conversationId, toolCallId);
+    const resumingRun: {
+      runId: string;
+      cleanupCredential?: DesktopCloudRunCleanupCredential;
+    } | null = resumedRunId ? { runId: resumedRunId } : null;
+    if (resumingRun) this._resumingRuns.set(conversationId, resumingRun);
+    try {
+      const outcome = await this._inputs.resolve(
+        conversationId,
+        toolCallId,
+        responses,
+        (event) => this.emitForConversation(conversationId, event),
+        CLOUD_API_BASE_URL,
+        (err) => this.emitForConversation(conversationId, cloudErrorEvent(err)),
+        controller.signal,
+        (credential) => {
+          if (this._resumingRuns.get(conversationId) === resumingRun) {
+            resumingRun!.cleanupCredential = credential;
+          }
+        },
+      );
+      this.assertBoundary(boundary);
+      if (!outcome) return;
+      const continuation = {
+        isSuspended: () => outcome.suspended,
+        getAccumulatedContent: () => outcome.content,
+        getPendingApprovalCalls: () => outcome.sink.getPendingApprovalCalls(),
+        getPendingInputRequests: () => outcome.sink.getPendingInputRequests(),
+        getAgentActivity: () => outcome.agentActivity,
+        getMessageProjection: () => outcome.messageProjection,
+      };
+      this._approvals.recordTurnOutcome(
+        conversationId,
+        outcome.runReference ?? outcome.runId,
+        outcome.model,
+        continuation,
+        outcome.assistantMessageId,
+      );
+      this.recordInputOutcome(
+        conversationId,
+        outcome.runReference ?? outcome.runId,
+        outcome.model,
+        continuation,
+        outcome.assistantMessageId,
+      );
+      const pendingProjection = this._approvals.getTurnProjection(conversationId);
+      await this.settleResumedTurn(conversationId, {
+        ...outcome,
+        ...(pendingProjection ? { pendingProjection } : {}),
+      });
+    } finally {
+      if (this._resumingRuns.get(conversationId) === resumingRun) {
+        this._resumingRuns.delete(conversationId);
       }
       this.clearAbortController(conversationId, controller);
     }
@@ -1420,7 +1599,8 @@ export class CloudRuntime implements ChatRuntime {
   }
 
   stopGeneration(conversationId: string): void {
-    const resolvingApproval = this._resolvingApprovals.get(conversationId);
+    cloudElicitationBridge.withdraw(conversationId);
+    const resumingRun = this._resumingRuns.get(conversationId);
     const controller = this._abortControllers.get(conversationId);
     if (controller) {
       controller.abort();
@@ -1470,16 +1650,16 @@ export class CloudRuntime implements ChatRuntime {
         });
       });
     }
-    if (resolvingApproval) {
-      this._resolvingApprovals.delete(conversationId);
-      const credential = resolvingApproval.cleanupCredential ?? this._boundary;
+    if (resumingRun) {
+      this._resumingRuns.delete(conversationId);
+      const credential = resumingRun.cleanupCredential ?? this._boundary;
       if (credential) {
         void createDesktopCloudAgentRunCleanupClient(credential)
-          .cancelRun(resolvingApproval.runId)
+          .cancelRun(resumingRun.runId)
           .catch((err: unknown) => {
             this.emitForConversation(conversationId, {
               type: 'error',
-              error: `Could not stop the approved Cloud task: ${
+              error: `Could not stop the resumed Cloud task: ${
                 err instanceof Error ? err.message : String(err)
               }`,
             });

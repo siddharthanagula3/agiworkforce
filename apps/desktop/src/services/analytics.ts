@@ -7,6 +7,7 @@ import {
   analyticsDeleteAllData,
   analyticsSetPrivacyMode,
 } from '../api/analytics';
+import { updatePrivacyPreferences } from '../api/privacy';
 import { useAppModeStore } from '../stores/appModeStore';
 import { isPrivateTrustBoundary } from '../stores/privacyBoundary';
 import { trackDesktopProductEvent } from './productAnalytics';
@@ -85,6 +86,9 @@ class AnalyticsService {
       await this.loadConfig();
 
       await this.loadPrivacyConsent();
+      if (this.privacyConsent) {
+        this.syncNativeConsent(this.privacyConsent);
+      }
 
       await this.loadUserId();
 
@@ -227,6 +231,20 @@ class AnalyticsService {
     this.config.allowPerformanceMonitoring = consent.performance_monitoring_enabled;
 
     safeSetJSON('analytics_config', this.config);
+    this.syncNativeConsent(consent);
+  }
+
+  private syncNativeConsent(consent: PrivacyConsent | undefined) {
+    const analyticsEnabled = consent?.analytics_enabled ?? false;
+    void updatePrivacyPreferences({
+      telemetryEnabled: analyticsEnabled,
+      analyticsEnabled,
+      crashReportingEnabled: consent?.error_reporting_enabled ?? false,
+      usageDataCollection: consent?.performance_monitoring_enabled ?? false,
+      aiModelSharingEnabled: false,
+    }).catch((error) => {
+      console.error('Failed to record analytics consent for the native collector:', error);
+    });
   }
 
   public async exportData() {
@@ -268,6 +286,8 @@ class AnalyticsService {
 
     this.userId = undefined;
     this.config.enabled = false;
+    this.privacyConsent = undefined;
+    this.syncNativeConsent(undefined);
   }
 
   public async flushQueue() {
@@ -324,8 +344,8 @@ class AnalyticsService {
         name: event.name,
         properties: event.properties as Record<string, unknown>,
         timestamp: event.timestamp,
-        sessionId: event.sessionId,
-        userId: event.userId,
+        session_id: event.sessionId,
+        user_id: event.userId,
       });
     } catch (error) {
       console.error('Failed to send event to backend:', error);

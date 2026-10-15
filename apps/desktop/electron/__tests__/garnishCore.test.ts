@@ -20,6 +20,9 @@ import {
   parseSettingsFile,
   pickSourceForDisplay,
   pickableCaptureSources,
+  pageMayWriteShortcut,
+  SHORTCUT_CHOICES,
+  shortcutMayBeOff,
 } from '../garnishCore';
 
 describe('parseSettingsFile', () => {
@@ -91,12 +94,47 @@ describe('normalizeShortcuts', () => {
     expect(isShortcutOff(DEFAULT_SHORTCUTS.quickAskShortcut)).toBe(false);
   });
 
+  it('never reads Stop Agents as switched off, whatever the file says', () => {
+    expect(normalizeShortcuts({ stopShortcut: '' }).stopShortcut).toBe(
+      DEFAULT_SHORTCUTS.stopShortcut,
+    );
+    expect(shortcutMayBeOff('stopShortcut')).toBe(false);
+    expect(shortcutMayBeOff('voiceShortcut')).toBe(true);
+  });
+
+  it('lets Stop Agents keep its chord when an earlier shortcut asks for the same one', () => {
+    expect(
+      duplicateShortcutKeys({
+        ...DEFAULT_SHORTCUTS,
+        quickAskShortcut: 'Alt+CommandOrControl+.',
+        stopShortcut: 'CommandOrControl+Alt+.',
+      }),
+    ).toEqual(['quickAskShortcut']);
+  });
+
+  it('lets a page choose only an offered chord, the current one, or none where none is allowed', () => {
+    const current = DEFAULT_SHORTCUTS.screenshotShortcut;
+
+    for (const offered of SHORTCUT_CHOICES.screenshotShortcut) {
+      expect(pageMayWriteShortcut('screenshotShortcut', offered, current), offered).toBe(true);
+    }
+    expect(pageMayWriteShortcut('screenshotShortcut', '', current)).toBe(true);
+    expect(pageMayWriteShortcut('screenshotShortcut', 'F19', 'F19')).toBe(true);
+    expect(pageMayWriteShortcut('screenshotShortcut', 'CommandOrControl+V', current)).toBe(false);
+    expect(
+      pageMayWriteShortcut('quickAskShortcut', SHORTCUT_CHOICES.stopShortcut[0] ?? '', ''),
+    ).toBe(false);
+    expect(pageMayWriteShortcut('stopShortcut', '', DEFAULT_SHORTCUTS.stopShortcut)).toBe(false);
+    expect(pageMayWriteShortcut('stopShortcut', '', '')).toBe(false);
+  });
+
   it('never counts two switched-off shortcuts as a collision', () => {
     const duplicates = duplicateShortcutKeys({
       quickAskShortcut: '',
       screenshotShortcut: '',
       windowShotShortcut: DEFAULT_SHORTCUTS.windowShotShortcut,
       voiceShortcut: DEFAULT_SHORTCUTS.voiceShortcut,
+      stopShortcut: '',
     });
 
     expect(duplicates).toEqual([]);

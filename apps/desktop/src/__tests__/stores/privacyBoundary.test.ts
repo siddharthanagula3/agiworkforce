@@ -87,6 +87,24 @@ describe('CRITICAL: telemetry egress gate (real analytics.track)', () => {
     expect(wasEventSent()).toBe(true);
   });
 
+  it('sends the event under the field names the native collector reads', () => {
+    useAppModeStore.setState({ mode: 'cloud' });
+
+    analytics.track('app_opened', { source: 'unit-test' });
+
+    const sent = invoke.mock.calls.find((args) => args[0] === 'analytics_track_event');
+    const event = (sent?.[1] as { event: Record<string, unknown> }).event;
+    expect(Object.keys(event).sort()).toEqual([
+      'name',
+      'properties',
+      'session_id',
+      'timestamp',
+      'user_id',
+    ]);
+    expect(event['session_id']).toEqual(expect.any(String));
+    expect(event['name']).toBe('app_opened');
+  });
+
   it('respects the consent toggle in cloud mode (enabled=false → no egress)', () => {
     useAppModeStore.setState({ mode: 'cloud' });
     analytics.updateConfig({ enabled: false });

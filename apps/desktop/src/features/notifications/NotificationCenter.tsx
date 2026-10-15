@@ -33,8 +33,7 @@ import type {
   NotificationType,
   NotificationPriority,
 } from '@/stores/notificationStore';
-import { useSettingsDialogStore } from '@/stores/settingsDialogStore';
-import type { SettingsTab } from '@/stores/settingsDialogStore';
+import { hasNotificationRoute, openNotificationRoute } from './notificationRoutes';
 import { Button } from '@/ui/Button';
 import { ScrollArea } from '@/ui/ScrollArea';
 import { Skeleton } from '@/ui/Skeleton';
@@ -147,7 +146,7 @@ function NotificationItem({
     if (!notification.read) {
       onMarkRead(notification.id);
     }
-    if (notification.actionUrl && onActionClick) {
+    if (hasNotificationRoute(notification.actionUrl) && onActionClick) {
       onActionClick(notification);
     }
   }, [notification, onMarkRead, onActionClick]);
@@ -246,7 +245,7 @@ function NotificationItem({
           </span>
 
           <div className="flex items-center gap-1">
-            {notification.actionUrl && (
+            {hasNotificationRoute(notification.actionUrl) && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleClick}>
@@ -299,30 +298,9 @@ export function NotificationCenter({ className, onActionClick }: NotificationCen
         return;
       }
 
-      const url = notification.actionUrl;
-      if (!url) return;
-
-      const [scheme, id] = url.split(':', 2);
-      switch (scheme) {
-        case 'task':
-        case 'approval':
-        case 'workflow': {
-          window.dispatchEvent(
-            new CustomEvent('notification:navigate', { detail: { scheme, id, notification } }),
-          );
-          break;
-        }
-        case 'settings': {
-          useSettingsDialogStore.getState().openSettings((id as SettingsTab) || 'general');
-          break;
-        }
-        default:
-          if (url.startsWith('http')) {
-            window.open(url, '_blank', 'noopener,noreferrer');
-          }
-      }
-
-      setIsOpen(false);
+      void openNotificationRoute(notification.actionUrl).then((opened) => {
+        if (opened) setIsOpen(false);
+      });
     },
     [onActionClick],
   );

@@ -11,22 +11,8 @@ import { isLocalProvider } from '../types/provider';
 
 type OpaExecutionMode = 'local_only' | 'byok' | 'cloud_managed';
 
-/**
- * Mirrors CONSENT_SETTINGS_KEY in src-tauri/src/automation/computer_use/consent.rs,
- * which owns it. Deleting the row can only withdraw desktop control, never grant
- * it: the record it holds is sealed with a secret no renderer can reach.
- */
-export const DESKTOP_CONSENT_SETTINGS_KEY = 'computer_use.consent';
-
 const opaExecutionMode = (): OpaExecutionMode =>
   selectPrivacyMode(useAppModeStore.getState()) === 'managed' ? 'cloud_managed' : 'local_only';
-
-export interface ScreenCapture {
-  image_data: string;
-  width: number;
-  height: number;
-  timestamp: number;
-}
 
 export type ActionType =
   | 'click'
@@ -45,36 +31,6 @@ export interface DesktopComputerAction {
   text: string | null;
   key: string | null;
   timestamp: number;
-}
-
-export interface DesktopComputerUseSession {
-  id: string;
-  actions: DesktopComputerAction[];
-  screenshots: ScreenCapture[];
-  started_at: number;
-}
-
-export interface ZoomRegionRequest {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  zoom_level?: number;
-  interpolation?: string;
-  save_path?: string;
-}
-
-export interface ZoomRegionResponse {
-  image_data: string;
-  width: number;
-  height: number;
-  scale_factor: number;
-  original_x: number;
-  original_y: number;
-  original_width: number;
-  original_height: number;
-  processing_time_ms: number;
-  saved_path?: string;
 }
 
 export type OpaCompletionReason =
@@ -217,16 +173,6 @@ export function formatOpaCompletionReason(reason: OpaCompletionReason): string {
   }
 }
 
-export interface DesktopDisplay {
-  id: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  scale_factor: number;
-  is_primary: boolean;
-}
-
 interface ControlStatePayload {
   taken_over: boolean;
   target_display: number | null;
@@ -235,14 +181,11 @@ interface ControlStatePayload {
 interface ComputerUseState {
   isActive: boolean;
   takenOver: boolean;
-  displays: DesktopDisplay[];
-  targetDisplayId: number | null;
   sessionId: string | null;
   currentScreenshot: string | null;
   screenWidth: number | null;
   screenHeight: number | null;
   actionLog: DesktopComputerAction[];
-  sessions: DesktopComputerUseSession[];
   error: string | null;
   isExecutingOpa: boolean;
   activeOpaExecutionId: string | null;
@@ -256,13 +199,9 @@ interface ComputerUseState {
   computerUseEnabled: boolean;
   consentAccepted: boolean;
 
-  startSession: () => Promise<void>;
-  stopSession: () => Promise<void>;
   takeOver: () => Promise<void>;
   handBack: () => Promise<void>;
-  listDisplays: () => Promise<DesktopDisplay[]>;
-  setTargetDisplay: (displayId: number | null) => Promise<void>;
-  captureScreen: () => Promise<void>;
+  stopComputerUse: () => Promise<void>;
   logAction: (action: DesktopComputerAction) => void;
   clearLog: () => void;
   reset: () => void;
@@ -273,20 +212,6 @@ interface ComputerUseState {
   clearPendingApproval: () => void;
   resolveConfirmation: (approved: boolean, rememberForSession?: boolean) => Promise<boolean>;
 
-  click: (x: number, y: number) => Promise<void>;
-  moveMouse: (x: number, y: number) => Promise<void>;
-  typeText: (text: string) => Promise<void>;
-  getSession: (sessionId: string) => Promise<DesktopComputerUseSession | null>;
-  listSessions: () => Promise<DesktopComputerUseSession[]>;
-  executeTool: (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
-  zoomRegion: (request: ZoomRegionRequest) => Promise<ZoomRegionResponse | null>;
-  zoomAtPoint: (
-    x: number,
-    y: number,
-    contextSize?: number,
-    zoomLevel?: number,
-  ) => Promise<ZoomRegionResponse | null>;
-  suggestZoomLevel: (width: number, height: number) => Promise<number>;
   executeOpaTask: (
     description: string,
     options?: {
@@ -309,14 +234,11 @@ export const useComputerUseStore = create<ComputerUseState>()(
     immer((set, get) => ({
       isActive: false,
       takenOver: false,
-      displays: [],
-      targetDisplayId: null,
       sessionId: null,
       currentScreenshot: null,
       screenWidth: null,
       screenHeight: null,
       actionLog: [],
-      sessions: [],
       error: null,
       isExecutingOpa: false,
       activeOpaExecutionId: null,
@@ -389,7 +311,7 @@ export const useComputerUseStore = create<ComputerUseState>()(
 
       revokeDesktopConsent: async () => {
         try {
-          await invoke('settings_v2_delete', { key: DESKTOP_CONSENT_SETTINGS_KEY });
+          await invoke('computer_use_revoke_consent');
         } catch (error) {
           set(
             (state) => {
@@ -399,57 +321,6 @@ export const useComputerUseStore = create<ComputerUseState>()(
             'computerUse/revokeDesktopConsent/error',
           );
         }
-      },
-
-      startSession: async () => {
-        try {
-          const sessionId = await invoke<string>('computer_use_start_session');
-          set(
-            (state) => {
-              state.isActive = true;
-              state.sessionId = sessionId;
-              state.actionLog = [];
-              state.error = null;
-            },
-            undefined,
-            'computerUse/startSession',
-          );
-        } catch (error) {
-          set(
-            (state) => {
-              state.error = String(error);
-            },
-            undefined,
-            'computerUse/startSession/error',
-          );
-        }
-      },
-
-      stopSession: async () => {
-        const { sessionId } = get();
-        // This store drives the Tauri screen-control session; the Electron
-        // runtime's `computer_*` family serves the hosted page instead, so a
-        // stop there belongs to that caller, not here.
-        let stopFailure: string | null = null;
-        if (sessionId) {
-          try {
-            await invoke('computer_use_stop_session', { sessionId });
-          } catch (error) {
-            stopFailure =
-              error instanceof Error ? error.message : 'Desktop control could not be stopped.';
-          }
-        }
-        set(
-          (state) => {
-            state.isActive = false;
-            state.sessionId = null;
-            // A stop that did not stop anything must not read as stopped.
-            if (stopFailure !== null) state.error = stopFailure;
-          },
-          undefined,
-          'computerUse/stopSession',
-        );
-        if (stopFailure !== null) toast.error(stopFailure);
       },
 
       takeOver: async () => {
@@ -488,89 +359,31 @@ export const useComputerUseStore = create<ComputerUseState>()(
             'computerUse/handBack',
           );
         } catch (error) {
+          const message =
+            typeof error === 'string'
+              ? error
+              : error instanceof Error
+                ? error.message
+                : 'Screen control could not be handed back.';
           set(
             (state) => {
-              state.error = String(error);
+              state.error = message;
             },
             undefined,
             'computerUse/handBack/error',
           );
+          toast.error(message);
         }
       },
 
-      listDisplays: async () => {
-        try {
-          const displays = await invoke<DesktopDisplay[]>('computer_use_list_displays');
+      stopComputerUse: async () => {
+        await get().takeOver();
+        const stopped = await get().cancelOpaTask();
+        if (stopped) {
           set(
-            (state) => {
-              state.displays = displays;
-            },
+            { pendingApproval: null, pausedConfirmation: null, isResolvingConfirmation: false },
             undefined,
-            'computerUse/listDisplays',
-          );
-          return displays;
-        } catch (error) {
-          set(
-            (state) => {
-              state.error = String(error);
-            },
-            undefined,
-            'computerUse/listDisplays/error',
-          );
-          return [];
-        }
-      },
-
-      setTargetDisplay: async (displayId) => {
-        try {
-          await invoke<DesktopDisplay>('computer_use_set_target_display', { displayId });
-          set(
-            (state) => {
-              state.targetDisplayId = displayId;
-              state.error = null;
-            },
-            undefined,
-            'computerUse/setTargetDisplay',
-          );
-        } catch (error) {
-          set(
-            (state) => {
-              state.error = String(error);
-            },
-            undefined,
-            'computerUse/setTargetDisplay/error',
-          );
-        }
-      },
-
-      captureScreen: async () => {
-        try {
-          const capture = await invoke<ScreenCapture>('computer_use_capture_screen');
-          set(
-            (state) => {
-              state.currentScreenshot = capture.image_data;
-              state.screenWidth = capture.width;
-              state.screenHeight = capture.height;
-              state.error = null;
-            },
-            undefined,
-            'computerUse/captureScreen',
-          );
-
-          get().logAction({
-            action_type: 'screenshot',
-            coordinates: null,
-            text: null,
-            key: null,
-            timestamp: capture.timestamp || Math.floor(Date.now() / 1000),
-          });
-        } catch (error) {
-          set(
-            (state) => {
-              state.error = String(error);
-            },
-            undefined,
-            'computerUse/captureScreen/error',
+            'computerUse/stop',
           );
         }
       },
@@ -605,7 +418,6 @@ export const useComputerUseStore = create<ComputerUseState>()(
             screenWidth: null,
             screenHeight: null,
             actionLog: [],
-            sessions: [],
             error: null,
             isExecutingOpa: false,
             activeOpaExecutionId: null,
@@ -618,192 +430,6 @@ export const useComputerUseStore = create<ComputerUseState>()(
           undefined,
           'computerUse/reset',
         );
-      },
-
-      click: async (x, y) => {
-        try {
-          await invoke('computer_use_click', { x, y });
-          get().logAction({
-            action_type: 'click',
-            coordinates: [x, y],
-            text: null,
-            key: null,
-            timestamp: Math.floor(Date.now() / 1000),
-          });
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'computerUse/click/error',
-          );
-        }
-      },
-
-      moveMouse: async (x, y) => {
-        try {
-          await invoke('computer_use_move_mouse', { x, y });
-          get().logAction({
-            action_type: 'move_mouse',
-            coordinates: [x, y],
-            text: null,
-            key: null,
-            timestamp: Math.floor(Date.now() / 1000),
-          });
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'computerUse/moveMouse/error',
-          );
-        }
-      },
-
-      typeText: async (text) => {
-        try {
-          await invoke('computer_use_type_text', { text });
-          get().logAction({
-            action_type: 'type',
-            coordinates: null,
-            text,
-            key: null,
-            timestamp: Math.floor(Date.now() / 1000),
-          });
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'computerUse/typeText/error',
-          );
-        }
-      },
-
-      getSession: async (sessionId) => {
-        try {
-          const session = await invoke<DesktopComputerUseSession>('computer_use_get_session', {
-            sessionId,
-          });
-          return session;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'computerUse/getSession/error',
-          );
-          return null;
-        }
-      },
-
-      listSessions: async () => {
-        try {
-          const sessions = await invoke<DesktopComputerUseSession[]>('computer_use_list_sessions');
-          set(
-            (state) => {
-              state.sessions = sessions;
-            },
-            undefined,
-            'computerUse/listSessions',
-          );
-          return sessions;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'computerUse/listSessions/error',
-          );
-          return [];
-        }
-      },
-
-      executeTool: async (toolName, args) => {
-        try {
-          return await invoke<unknown>('computer_use_execute_tool', { toolName, args });
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'computerUse/executeTool/error',
-          );
-          return null;
-        }
-      },
-
-      zoomRegion: async (request) => {
-        try {
-          const result = await invoke<ZoomRegionResponse>('computer_use_zoom_region', {
-            request,
-          });
-          set(
-            (state) => {
-              state.currentScreenshot = result.image_data;
-              state.screenWidth = result.width;
-              state.screenHeight = result.height;
-            },
-            undefined,
-            'computerUse/zoomRegion',
-          );
-          return result;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'computerUse/zoomRegion/error',
-          );
-          return null;
-        }
-      },
-
-      zoomAtPoint: async (x, y, contextSize, zoomLevel) => {
-        try {
-          const result = await invoke<ZoomRegionResponse>('computer_use_zoom_at_point', {
-            x,
-            y,
-            contextSize,
-            zoomLevel,
-          });
-          set(
-            (state) => {
-              state.currentScreenshot = result.image_data;
-              state.screenWidth = result.width;
-              state.screenHeight = result.height;
-            },
-            undefined,
-            'computerUse/zoomAtPoint',
-          );
-          return result;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'computerUse/zoomAtPoint/error',
-          );
-          return null;
-        }
-      },
-
-      suggestZoomLevel: async (width, height) => {
-        try {
-          return await invoke<number>('computer_use_suggest_zoom_level', { width, height });
-        } catch {
-          if (width > 100 || height > 100) return 2.0;
-          if (width > 50 || height > 50) return 4.0;
-          return 8.0;
-        }
       },
 
       executeOpaTask: async (description, options) => {
@@ -982,23 +608,79 @@ interface ConfirmationResolvedPayload {
   outcome: ConfirmationOutcome;
 }
 
+/** Emitted by the Rust global shortcut, which has already taken the screen back. */
+export const STOP_AGENTS_SHORTCUT_ACTION = 'stop_agents';
+
+const ACTION_TYPES: Record<string, ActionType> = {
+  click: 'click',
+  double_click: 'double_click',
+  triple_click: 'click',
+  right_click: 'right_click',
+  move_mouse: 'move_mouse',
+  type: 'type',
+  key_press: 'key_press',
+  hotkey: 'key_press',
+  screenshot: 'screenshot',
+  scroll: 'scroll',
+  zoom: 'zoom',
+};
+
+/**
+ * The native loop reports a step as `{ action: { action: 'click', x, y } }`;
+ * the vendor agent reports it as `{ action: 'click' }`. Anything else is not a
+ * step the screen view can draw.
+ */
+export function parseCompletedAction(payload: unknown): DesktopComputerAction | null {
+  if (!isRecord(payload)) return null;
+  const raw = payload['action'];
+  const step = isRecord(raw) ? raw : null;
+  const name = step ? step['action'] : raw;
+  if (typeof name !== 'string') return null;
+  const actionType = ACTION_TYPES[name];
+  if (!actionType) return null;
+
+  const x = step?.['x'];
+  const y = step?.['y'];
+  const text = step?.['text'];
+  const key = step?.['key'];
+  return {
+    action_type: actionType,
+    coordinates: typeof x === 'number' && typeof y === 'number' ? [x, y] : null,
+    text: typeof text === 'string' ? text : null,
+    key: typeof key === 'string' ? key : null,
+    timestamp: Math.floor(Date.now() / 1000),
+  };
+}
+
+async function stopFromShortcut(): Promise<void> {
+  const store = useComputerUseStore.getState();
+  const wasRunning = store.isExecutingOpa || store.pausedConfirmation !== null;
+  await store.stopComputerUse();
+  if (!useComputerUseStore.getState().takenOver) return;
+  toast(wasRunning ? 'Desktop control stopped' : 'Screen control is yours', {
+    description: 'Agents cannot use the pointer or keyboard until you hand control back.',
+    action: {
+      label: 'Hand back',
+      onClick: () => void useComputerUseStore.getState().handBack(),
+    },
+  });
+}
+
 export function subscribeToComputerUseEvents(): () => void {
   const unlisteners: Promise<UnlistenFn>[] = [];
 
   unlisteners.push(
-    listen<{ action_type: string; coordinates?: [number, number]; text?: string; key?: string }>(
-      'computer_use:action_completed',
-      (event) => {
-        const { action_type, coordinates, text, key } = event.payload;
-        useComputerUseStore.getState().logAction({
-          action_type: action_type as ActionType,
-          coordinates: coordinates ?? null,
-          text: text ?? null,
-          key: key ?? null,
-          timestamp: Math.floor(Date.now() / 1000),
-        });
-      },
-    ),
+    listen<unknown>('computer_use:action_completed', (event) => {
+      const action = parseCompletedAction(event.payload);
+      if (action) useComputerUseStore.getState().logAction(action);
+    }),
+  );
+
+  unlisteners.push(
+    listen<string>('shortcut_action', (event) => {
+      if (event.payload !== STOP_AGENTS_SHORTCUT_ACTION) return;
+      void stopFromShortcut();
+    }),
   );
 
   unlisteners.push(
@@ -1097,7 +779,6 @@ export const selectScreenWidth = (state: ComputerUseState) => state.screenWidth;
 export const selectScreenHeight = (state: ComputerUseState) => state.screenHeight;
 export const selectActionLog = (state: ComputerUseState) => state.actionLog;
 export const selectComputerUseError = (state: ComputerUseState) => state.error;
-export const selectSessions = (state: ComputerUseState) => state.sessions;
 export const selectIsExecutingOpa = (state: ComputerUseState) => state.isExecutingOpa;
 export const selectLastOpaResult = (state: ComputerUseState) => state.lastOpaResult;
 export const selectLastRouting = (state: ComputerUseState) => state.lastRouting;

@@ -3,6 +3,7 @@ import { Terminal } from './Terminal';
 import { TerminalAIAssistant } from './TerminalAIAssistant';
 import { useTerminalStore, type ShellTypeLiteral } from '../../stores/terminalStore';
 import { cn } from '../../lib/utils';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import { Button } from '@/ui/Button';
 import {
   Plus,
@@ -47,7 +48,8 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyEntries, setHistoryEntries] = useState<string[]>([]);
-  const [initialSessionSpawned, setInitialSessionSpawned] = useState(false);
+  const [openRefusal, setOpenRefusal] = useState<string | null>(null);
+  const firstOpenTried = useRef(false);
 
   useEffect(() => {
     loadAvailableShells().catch((error) => {
@@ -61,13 +63,14 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
       if (isCreating) return false;
 
       setIsCreating(true);
+      setOpenRefusal(null);
       try {
         await createSession(shellType);
         toast.success(`Created ${shellType} session`);
         return true;
       } catch (error) {
         console.error('Failed to create terminal session:', error);
-        toast.error(`Failed to create ${shellType} session`);
+        setOpenRefusal(getSimpleErrorMessage(error));
         return false;
       } finally {
         setIsCreating(false);
@@ -121,11 +124,11 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
     }
   }, [activeSessionId]);
 
+  // The first terminal is offered once when the panel opens. A no in the
+  // system dialog is an answer: asking again is the person's own click.
   useEffect(() => {
-    if (initialSessionSpawned || sessions.length > 0) {
-      if (sessions.length > 0 && !initialSessionSpawned) {
-        setInitialSessionSpawned(true);
-      }
+    if (firstOpenTried.current || sessions.length > 0) {
+      firstOpenTried.current = true;
       return;
     }
 
@@ -138,22 +141,9 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
       return;
     }
 
-    let cancelled = false;
-    (async () => {
-      const success = await handleCreateSession(preferredShell.shell_type);
-      if (cancelled) return;
-
-      if (success) {
-        setInitialSessionSpawned(true);
-      } else {
-        setInitialSessionSpawned(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [availableShells, handleCreateSession, initialSessionSpawned, isCreating, sessions.length]);
+    firstOpenTried.current = true;
+    void handleCreateSession(preferredShell.shell_type);
+  }, [availableShells, handleCreateSession, isCreating, sessions.length]);
 
   const historyListRef = useRef<HTMLDivElement>(null);
 
@@ -186,10 +176,10 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
 
       try {
         await sendInput(activeSessionId, `${trimmed}\n`);
-        toast.success(`Re-ran: ${trimmed}`);
+        toast.success(`Sent to the terminal: ${trimmed}`);
       } catch (error) {
         console.error('Failed to replay command:', error);
-        toast.error('Failed to replay command');
+        toast.error(getSimpleErrorMessage(error));
       }
     },
     [activeSessionId, sendInput],
@@ -292,6 +282,12 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
           </DropdownMenu>
         </div>
       </div>
+
+      {openRefusal && sessions.length > 0 && (
+        <p role="alert" className="border-b border-border px-3 py-2 text-sm text-foreground">
+          A new terminal was not opened. {openRefusal}
+        </p>
+      )}
 
       {sessions.length > 0 && (
         <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-muted/5 px-2 py-1">
@@ -396,7 +392,15 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
               </div>
               <div>
                 <p className="mb-2 text-lg font-medium">No Terminal Sessions</p>
-                <p className="mb-4 text-sm">Create a new terminal session to get started</p>
+                <p className="mb-4 max-w-md text-sm">
+                  Opening a terminal asks in a system dialog. Commands typed there run as you,
+                  outside the sandbox.
+                </p>
+                {openRefusal && (
+                  <p role="alert" className="mb-4 max-w-md text-sm text-foreground">
+                    No terminal was opened. {openRefusal}
+                  </p>
+                )}
               </div>
 
               <DropdownMenu>
@@ -435,8 +439,10 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
             shellType={activeSession.shellType}
             cwd={activeSession.cwd}
             onCommandSelect={(command) => {
-              void sendInput(activeSession.id, `${command}\n`);
-              toast.success(`Executed: ${command}`);
+              sendInput(activeSession.id, `${command}\n`).then(
+                () => toast.success(`Sent to the terminal: ${command}`),
+                (error: unknown) => toast.error(getSimpleErrorMessage(error)),
+              );
             }}
           />
         </div>

@@ -4,6 +4,7 @@ type ScanModule0 = typeof import('../../../api/voice');
 
 const voiceApiMock = vi.hoisted(() => ({
   voiceTtsSpeakWithBargeIn: vi.fn(async () => undefined),
+  voiceTtsSpeakLocal: vi.fn(async () => undefined),
   voiceTtsStop: vi.fn(async () => true),
 }));
 
@@ -20,6 +21,7 @@ vi.mock('../../../lib/tauri-mock', () => ({
 }));
 
 import { useChatStore, type ChatMessage } from '@agiworkforce/unified-chat';
+import type { VoiceCapabilities } from '../../../api/voice';
 import { useVoiceModeStore } from '../../../stores/settings/voice';
 import { useSpokenReplies } from '../SpokenReplies';
 import { VOICE_PERSONA_STORAGE_KEY } from '../../settings/voicePersonaParams';
@@ -52,6 +54,25 @@ Object.defineProperty(window, 'speechSynthesis', {
   configurable: true,
 });
 
+function capabilities(overrides: Partial<VoiceCapabilities>): VoiceCapabilities {
+  return {
+    ttsAvailable: false,
+    ttsProvider: 'System',
+    ttsPlaying: false,
+    wakeWordEnabled: false,
+    wakeWordAvailable: false,
+    bargeInEnabled: false,
+    bargeInSensitivity: 0.5,
+    vadAvailable: true,
+    localSttAvailable: false,
+    localSttModel: null,
+    localTtsAvailable: false,
+    localTtsVoice: null,
+    systemDictationAvailable: false,
+    ...overrides,
+  };
+}
+
 function assistantMessage(id: string, content: string): ChatMessage {
   return { id, role: 'assistant', content, conversationId: CONVERSATION_ID };
 }
@@ -79,7 +100,11 @@ describe('useSpokenReplies', () => {
     localStorage.clear();
     window.speechSynthesis.speak = vi.fn();
     window.speechSynthesis.cancel = vi.fn();
-    useVoiceModeStore.setState({ speakRepliesEnabled: false, bargeInEnabled: false });
+    useVoiceModeStore.setState({
+      speakRepliesEnabled: false,
+      bargeInEnabled: false,
+      capabilities: capabilities({ ttsAvailable: true }),
+    });
     seedConversation([]);
   });
 
@@ -115,6 +140,45 @@ describe('useSpokenReplies', () => {
       expect(voiceApiMock.voiceTtsSpeakWithBargeIn).toHaveBeenCalledWith('Interrupt me.');
     });
     expect(window.speechSynthesis.speak).not.toHaveBeenCalled();
+  });
+
+  it('speaks through the local voice where the system voice is not implemented', async () => {
+    localStorage.setItem(VOICE_PERSONA_STORAGE_KEY, 'calm');
+    useVoiceModeStore.setState({
+      speakRepliesEnabled: true,
+      bargeInEnabled: true,
+      capabilities: capabilities({ localTtsAvailable: true }),
+    });
+    renderHook(() => useSpokenReplies());
+
+    act(() => {
+      appendMessage(assistantMessage('m1', 'Local voice.'));
+    });
+
+    await waitFor(() => {
+      expect(voiceApiMock.voiceTtsSpeakLocal).toHaveBeenCalledWith('Local voice.', 0.85, 0.9);
+    });
+    expect(voiceApiMock.voiceTtsSpeakWithBargeIn).not.toHaveBeenCalled();
+    expect(window.speechSynthesis.speak).not.toHaveBeenCalled();
+  });
+
+  it('never calls a native voice the platform cannot run', async () => {
+    useVoiceModeStore.setState({
+      speakRepliesEnabled: true,
+      bargeInEnabled: true,
+      capabilities: capabilities({}),
+    });
+    renderHook(() => useSpokenReplies());
+
+    act(() => {
+      appendMessage(assistantMessage('m1', 'Browser voice.'));
+    });
+
+    await waitFor(() => {
+      expect(window.speechSynthesis.speak).toHaveBeenCalledTimes(1);
+    });
+    expect(voiceApiMock.voiceTtsSpeakWithBargeIn).not.toHaveBeenCalled();
+    expect(voiceApiMock.voiceTtsSpeakLocal).not.toHaveBeenCalled();
   });
 
   it('stays silent while the reply is still streaming', async () => {

@@ -24,7 +24,8 @@ import {
   stopComputerUseHelper,
 } from './computerUseService';
 import { recordDesktopEvent } from './desktopTelemetryService';
-import { getPermissionState, revokePermission } from './permissionManager';
+import { createNativeNotification } from './nativeSurface';
+import { getPermissionState, withdrawGrant } from './permissionManager';
 import { listForAccessibility, systemPermissionStatus } from './systemPermissions';
 
 const GLOBAL_SCOPE: PermissionScope = { kind: 'global' };
@@ -114,7 +115,7 @@ export function computerUsePhase(): ComputerUsePhase {
 
 function announce(title: string, body: string): void {
   if (!Notification.isSupported()) return;
-  const notification = new Notification({ title, body });
+  const notification = createNativeNotification({ title, body });
   notification.on('click', () => hooks.onNotificationClick());
   notification.show();
 }
@@ -332,7 +333,7 @@ export async function askUserDuringRun<T>(
 }
 
 export function stopComputerUse(): ComputerUseStatus {
-  revokePermission('computer.use', GLOBAL_SCOPE);
+  withdrawGrant('computer.use', GLOBAL_SCOPE);
   stopComputerUseHelper();
   recordDesktopEvent({ domain: 'desktop_control', outcome: 'refused', cause: 'cancelled' });
   if (phase !== 'idle') endRun('stopped');

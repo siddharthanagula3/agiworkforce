@@ -69,7 +69,7 @@ describe('ConnectorGallery', () => {
         name: 'custom-acme-mcp',
         enabled: true,
         connected: false,
-        tool_count: 0,
+        toolCount: 0,
         command: '',
       },
     ]);
@@ -107,7 +107,7 @@ describe('ConnectorGallery', () => {
         name: 'custom-acme-mcp',
         enabled: true,
         connected: false,
-        tool_count: 0,
+        toolCount: 0,
         command: '',
       },
     ]);

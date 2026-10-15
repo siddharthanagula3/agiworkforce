@@ -1,13 +1,17 @@
-import { realpath } from 'node:fs/promises';
+import { lstat, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import {
-  ALWAYS_DENIED_BASENAMES,
+  foldedFileName,
+  isCredentialPath,
   isPathInside,
+  isProtectedWorkspacePath,
   relativeWithinRoot,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
+import { gitMetadataPaths } from './shellSandbox';
 
-export type PathRefusalReason = 'traversal' | 'outside-workspace' | 'denied-file' | 'io-error';
+export type PathRefusalReason =
+  'traversal' | 'outside-workspace' | 'denied-file' | 'shared-file' | 'io-error';
 
 export class PathRefused extends Error {
   readonly reason: PathRefusalReason;
@@ -19,6 +23,8 @@ export class PathRefused extends Error {
 }
 
 export interface ResolvedWorkspacePath {
+  /** The path as the caller wrote it, relative to the workspace root. */
+  requested: string;
   /** Absolute path on disk, symlinks resolved as far as the path exists. */
   absolute: string;
   /** POSIX-separated path relative to the workspace root. */
@@ -57,7 +63,19 @@ function assertRelativeIsSafe(relativePath: string): void {
  * ancestor is what matters: if the parent directory resolves inside the root,
  * a new child of it is inside too. Resolving only the existing prefix is what
  * lets a create call be checked as strictly as a read.
+ *
+ * A link whose target does not exist fails `realpath` exactly as a missing
+ * name does, and a write through it lands wherever the link points. So a
+ * missing component that is itself a link is refused rather than walked past.
  */
+async function isDanglingLink(candidate: string): Promise<boolean> {
+  try {
+    return (await lstat(candidate)).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
 async function resolveExistingPrefix(absolute: string): Promise<string> {
   let current = absolute;
   const trailing: string[] = [];
@@ -70,6 +88,12 @@ async function resolveExistingPrefix(absolute: string): Promise<string> {
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== 'ENOENT' && code !== 'ENOTDIR') {
         throw new PathRefused('io-error', `Could not resolve ${absolute}.`);
+      }
+      if (await isDanglingLink(current)) {
+        throw new PathRefused(
+          'traversal',
+          `${path.basename(current)} is a link to something that does not exist, so where this path leads cannot be checked.`,
+        );
       }
       const parent = path.dirname(current);
       if (parent === current) {
@@ -105,20 +129,74 @@ export async function resolveWithinRoot(
   }
 
   const relative = relativeWithinRoot(rootReal, absolute, { platform: platform() }) ?? '';
-  return { absolute, relative, root };
+  return { requested: relativePath, absolute, relative, root };
 }
 
 /**
- * Files whose contents are credentials rather than source. Approving a folder
- * is not approval to hand over the keys stored in it, so these stay refused
- * even inside a granted root.
+ * Files whose contents are credentials rather than source, by their names.
+ * Approving a folder is not approval to hand over the keys stored in it, so
+ * this app opens none of them, even inside a granted root.
+ *
+ * That is all it is: a refusal by name, of this app's own file commands. A
+ * command run in the folder reads such a file like any other, since neither
+ * this sandbox nor the CLI's denies reads inside the workspace, and a second
+ * name for the same file, such as a hard link, is not a credential name.
+ * The message says what is refused and no more.
  */
 export function assertNotDeniedFile(absolute: string): void {
-  const base = path.basename(absolute).toLowerCase();
-  if (ALWAYS_DENIED_BASENAMES.includes(base)) {
+  if (isCredentialPath(absolute)) {
     throw new PathRefused(
       'denied-file',
-      `${path.basename(absolute)} is never readable by the agent.`,
+      `${path.basename(absolute)} is a credential file by its name, so this app does not open it for the agent.`,
+    );
+  }
+}
+
+const SUBMODULE_MAP_FILE = '.gitmodules';
+
+/**
+ * The file at the top of a folder that maps each submodule to its folder and
+ * its source. The sandbox denies a command that file, so a page's write does
+ * not get it either: a host that reads it would be told about submodules
+ * that are not there, at addresses of the writer's choosing.
+ */
+function isSubmoduleMap(relativePath: string): boolean {
+  const segments = relativePath
+    .split(/[\\/]+/u)
+    .filter((segment) => segment !== '' && segment !== '.');
+  return segments.length === 1 && foldedFileName(segments[0] ?? '') === SUBMODULE_MAP_FILE;
+}
+
+/**
+ * Whether a write would change something that decides what runs on this
+ * machine later: git's metadata, the project's configuration, or a hook
+ * manager's files. The path is judged as written and again as resolved, so a
+ * link named for a protected file and a protected file reached through a link
+ * are both caught, and so are the git directories a linked worktree or a
+ * submodule keeps under another name, and the submodule map. Mirrors `is_protected_project_path` in
+ * the sandbox-policy crate.
+ */
+export async function isProtectedWrite(resolved: ResolvedWorkspacePath): Promise<boolean> {
+  if (isProtectedWorkspacePath(resolved.requested) || isProtectedWorkspacePath(resolved.relative)) {
+    return true;
+  }
+  if (isSubmoduleMap(resolved.requested) || isSubmoduleMap(resolved.relative)) return true;
+  const metadata = await gitMetadataPaths(resolved.root.path);
+  return metadata.some((entry) =>
+    isPathInside(entry, resolved.absolute, { platform: platform(), caseSensitive: false }),
+  );
+}
+
+/**
+ * A file written to one of those paths is a program chosen for a later,
+ * unsandboxed run, so a write grant on the folder does not reach them.
+ */
+export async function assertWritable(resolved: ResolvedWorkspacePath): Promise<void> {
+  assertNotDeniedFile(resolved.absolute);
+  if (await isProtectedWrite(resolved)) {
+    throw new PathRefused(
+      'denied-file',
+      `${resolved.requested} is git metadata, project configuration or a hook manager's file, which this app does not change for the agent.`,
     );
   }
 }

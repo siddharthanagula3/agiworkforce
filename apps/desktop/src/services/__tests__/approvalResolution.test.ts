@@ -67,7 +67,7 @@ describe('approvalResolution', () => {
     expect(resolveAgentApproval).not.toHaveBeenCalled();
   });
 
-  it('uses the agent approval channel and records an explicitly trusted action', async () => {
+  it('uses the agent approval channel for this one action and records no standing trust', async () => {
     const approval: ApprovalRequest = {
       ...baseApproval,
       type: 'terminal_command',
@@ -79,10 +79,9 @@ describe('approvalResolution', () => {
 
     expect(resolveAgentApproval).toHaveBeenCalledWith('approval-1', 'approve', {
       reason: undefined,
-      trust: true,
     });
     expect(approveOperation).toHaveBeenCalledWith('approval-1');
-    expect(recordTrustedAction).toHaveBeenCalledWith('workflow-hash', 'action-signature');
+    expect(recordTrustedAction).not.toHaveBeenCalled();
   });
 
   it('keeps local state pending when the native resolver fails', async () => {

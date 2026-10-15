@@ -1,12 +1,11 @@
-
 import { invoke } from '../lib/tauri-mock';
 
 export interface TelemetryEvent {
   name: string;
   properties: Record<string, unknown>;
   timestamp: number;
-  sessionId: string;
-  userId?: string;
+  session_id: string;
+  user_id?: string;
 }
 
 export interface SystemMetrics {
@@ -294,24 +293,6 @@ export async function analyticsGetMetricTrends(
   }
 }
 
-export async function analyticsGetTimeSavedTrend(days: number): Promise<TrendPoint[]> {
-  try {
-    return await invoke<TrendPoint[]>('analytics_get_time_saved_trend', { days });
-  } catch (error) {
-    console.error('[analytics] failed to get time saved trend:', error);
-    throw error;
-  }
-}
-
-export async function analyticsGetCostSavedTrend(days: number): Promise<TrendPoint[]> {
-  try {
-    return await invoke<TrendPoint[]>('analytics_get_cost_saved_trend', { days });
-  } catch (error) {
-    console.error('[analytics] failed to get cost saved trend:', error);
-    throw error;
-  }
-}
-
 export async function analyticsExportReport(
   format: string,
   startDate: number,
@@ -325,54 +306,6 @@ export async function analyticsExportReport(
   }
 }
 
-export async function analyticsGenerateWeeklyReport(): Promise<string> {
-  try {
-    return await invoke<string>('analytics_generate_weekly_report');
-  } catch (error) {
-    console.error('[analytics] failed to generate weekly report:', error);
-    throw error;
-  }
-}
-
-export async function analyticsGenerateMonthlyReport(): Promise<string> {
-  try {
-    return await invoke<string>('analytics_generate_monthly_report');
-  } catch (error) {
-    console.error('[analytics] failed to generate monthly report:', error);
-    throw error;
-  }
-}
-
-export async function analyticsSaveSnapshot(
-  startDate: number,
-  endDate: number,
-  teamId?: string,
-): Promise<string> {
-  try {
-    return await invoke<string>('analytics_save_snapshot', { startDate, endDate, teamId });
-  } catch (error) {
-    console.error('[analytics] failed to save snapshot:', error);
-    throw error;
-  }
-}
-
-export async function analyticsGetTopProcesses(
-  startDate: number,
-  endDate: number,
-  limit: number,
-): Promise<ProcessMetrics[]> {
-  try {
-    return await invoke<ProcessMetrics[]>('analytics_get_top_processes', {
-      startDate,
-      endDate,
-      limit,
-    });
-  } catch (error) {
-    console.error('[analytics] failed to get top processes:', error);
-    throw error;
-  }
-}
-
 export async function trackWorkflowView(workflowId: string): Promise<void> {
   try {
     await invoke('track_workflow_view', { workflowId });
@@ -381,42 +314,3 @@ export async function trackWorkflowView(workflowId: string): Promise<void> {
     throw error;
   }
 }
-
-export async function acknowledgeMilestone(milestoneId: string): Promise<void> {
-  try {
-    await invoke('acknowledge_milestone', { milestoneId });
-  } catch (error) {
-    console.error('[analytics] failed to acknowledge milestone:', error);
-    throw error;
-  }
-}
-
-export const AnalyticsClient = {
-  trackEvent: analyticsTrackEvent,
-  flushEvents: analyticsFlushEvents,
-  getSessionId: analyticsGetSessionId,
-  setUserProperty: analyticsSetUserProperty,
-  deleteAllData: analyticsDeleteAllData,
-  getSystemMetrics: metricsGetSystem,
-  getAppMetrics: metricsGetApp,
-  incrementAutomations: metricsIncrementAutomations,
-  incrementGoals: metricsIncrementGoals,
-  setMcpServers: metricsSetMcpServers,
-  setCacheHitRate: metricsSetCacheHitRate,
-  getUsageStats: analyticsGetUsageStats,
-  getFeatureUsage: analyticsGetFeatureUsage,
-  calculateRoi: analyticsCalculateRoi,
-  getProcessMetrics: analyticsGetProcessMetrics,
-  getUserMetrics: analyticsGetUserMetrics,
-  getToolMetrics: analyticsGetToolMetrics,
-  getMetricTrends: analyticsGetMetricTrends,
-  getTimeSavedTrend: analyticsGetTimeSavedTrend,
-  getCostSavedTrend: analyticsGetCostSavedTrend,
-  exportReport: analyticsExportReport,
-  generateWeeklyReport: analyticsGenerateWeeklyReport,
-  generateMonthlyReport: analyticsGenerateMonthlyReport,
-  saveSnapshot: analyticsSaveSnapshot,
-  getTopProcesses: analyticsGetTopProcesses,
-  trackWorkflowView,
-  acknowledgeMilestone,
-} as const;

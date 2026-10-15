@@ -1,10 +1,7 @@
-
 import { useCallback, useMemo } from 'react';
 import { useChatStore } from './chat/chatStore';
 import {
   useAgentStore,
-  cleanupBackgroundTaskEventListeners,
-  initializeBackgroundTaskEventListeners,
   initializeAgentStatusListener,
   applyAgentStatusSnapshot,
 } from './chat/agentStore';
@@ -35,14 +32,7 @@ export type {
   ConversationMode,
 } from './chat/types';
 
-export type {
-  AgentStatus,
-  BackgroundTaskStatus,
-  BackgroundTaskPriority,
-  BackgroundTask,
-  ActionTrailEntry,
-  AgentStatusPayload,
-} from './chat/agentStore';
+export type { AgentStatus, ActionTrailEntry, AgentStatusPayload } from './chat/agentStore';
 
 export type {
   FileOperationType,
@@ -71,13 +61,7 @@ export type { ContextItem } from '@agiworkforce/types';
 
 export { dbIdToUuid, uuidToDbId } from './chat/chatStore';
 
-export {
-  initializeAgentStatusListener,
-  initializeBackgroundTaskEventListeners,
-  cleanupBackgroundTaskEventListeners,
-  applyAgentStatusSnapshot,
-  initializeToolEventListener,
-};
+export { initializeAgentStatusListener, applyAgentStatusSnapshot, initializeToolEventListener };
 
 function combinedClearHistory(): void {
   useChatStore.getState().clearHistory();
@@ -118,7 +102,6 @@ export interface UnifiedChatState {
 
   agents: ReturnType<typeof useAgentStore.getState>['agents'];
   agentStatus: ReturnType<typeof useAgentStore.getState>['agentStatus'];
-  backgroundTasks: ReturnType<typeof useAgentStore.getState>['backgroundTasks'];
   actionTrail: ReturnType<typeof useAgentStore.getState>['actionTrail'];
   fadeTimers: ReturnType<typeof useAgentStore.getState>['fadeTimers'];
   isAutonomousMode: ReturnType<typeof useAgentStore.getState>['isAutonomousMode'];
@@ -149,12 +132,6 @@ export interface UnifiedChatState {
   createConversation: ReturnType<typeof useChatStore.getState>['createConversation'];
   selectConversation: ReturnType<typeof useChatStore.getState>['selectConversation'];
   renameConversation: ReturnType<typeof useChatStore.getState>['renameConversation'];
-  setConversationCustomInstructions: ReturnType<
-    typeof useChatStore.getState
-  >['setConversationCustomInstructions'];
-  getConversationCustomInstructions: ReturnType<
-    typeof useChatStore.getState
-  >['getConversationCustomInstructions'];
   deleteConversation: ReturnType<typeof useChatStore.getState>['deleteConversation'];
   togglePinnedConversation: ReturnType<typeof useChatStore.getState>['togglePinnedConversation'];
   archiveConversation: ReturnType<typeof useChatStore.getState>['archiveConversation'];
@@ -162,9 +139,6 @@ export interface UnifiedChatState {
   getArchivedConversations: ReturnType<typeof useChatStore.getState>['getArchivedConversations'];
   getConversationsByProject: ReturnType<typeof useChatStore.getState>['getConversationsByProject'];
   setConversationProject: ReturnType<typeof useChatStore.getState>['setConversationProject'];
-  exportConversationToMarkdown: ReturnType<
-    typeof useChatStore.getState
-  >['exportConversationToMarkdown'];
   addMessage: ReturnType<typeof useChatStore.getState>['addMessage'];
   addOptimisticMessage: ReturnType<typeof useChatStore.getState>['addOptimisticMessage'];
   confirmOptimisticMessage: ReturnType<typeof useChatStore.getState>['confirmOptimisticMessage'];
@@ -173,9 +147,6 @@ export interface UnifiedChatState {
   updateMessage: ReturnType<typeof useChatStore.getState>['updateMessage'];
   deleteMessage: ReturnType<typeof useChatStore.getState>['deleteMessage'];
   editMessage: ReturnType<typeof useChatStore.getState>['editMessage'];
-  editAndRegenerateFromMessage: ReturnType<
-    typeof useChatStore.getState
-  >['editAndRegenerateFromMessage'];
   getMessagesAfter: ReturnType<typeof useChatStore.getState>['getMessagesAfter'];
   setIsLoading: ReturnType<typeof useChatStore.getState>['setIsLoading'];
   setStreamingMessage: ReturnType<typeof useChatStore.getState>['setStreamingMessage'];
@@ -210,10 +181,6 @@ export interface UnifiedChatState {
   setAgentStatus: ReturnType<typeof useAgentStore.getState>['setAgentStatus'];
   addAgent: ReturnType<typeof useAgentStore.getState>['addAgent'];
   removeAgent: ReturnType<typeof useAgentStore.getState>['removeAgent'];
-  updateTaskProgress: ReturnType<typeof useAgentStore.getState>['updateTaskProgress'];
-  addBackgroundTask: ReturnType<typeof useAgentStore.getState>['addBackgroundTask'];
-  updateBackgroundTask: ReturnType<typeof useAgentStore.getState>['updateBackgroundTask'];
-  clearBackgroundTasks: ReturnType<typeof useAgentStore.getState>['clearBackgroundTasks'];
   addActionTrailEntry: ReturnType<typeof useAgentStore.getState>['addActionTrailEntry'];
   removeActionTrailEntry: ReturnType<typeof useAgentStore.getState>['removeActionTrailEntry'];
   clearActionTrail: ReturnType<typeof useAgentStore.getState>['clearActionTrail'];
@@ -267,7 +234,6 @@ export interface UnifiedChatState {
   getSuggestedSidecarMode: ReturnType<typeof useSidecarStore.getState>['getSuggestedSidecarMode'];
 
   clearHistory: () => void;
-  exportConversation: () => Promise<string>;
   resetOnLogout: () => void;
 }
 
@@ -322,7 +288,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
 
       agents: agentState.agents,
       agentStatus: agentState.agentStatus,
-      backgroundTasks: agentState.backgroundTasks,
       actionTrail: agentState.actionTrail,
       fadeTimers: agentState.fadeTimers,
       isAutonomousMode: agentState.isAutonomousMode,
@@ -353,8 +318,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       createConversation: chatState.createConversation,
       selectConversation: chatState.selectConversation,
       renameConversation: chatState.renameConversation,
-      setConversationCustomInstructions: chatState.setConversationCustomInstructions,
-      getConversationCustomInstructions: chatState.getConversationCustomInstructions,
       deleteConversation: chatState.deleteConversation,
       togglePinnedConversation: chatState.togglePinnedConversation,
       archiveConversation: chatState.archiveConversation,
@@ -362,7 +325,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       getArchivedConversations: chatState.getArchivedConversations,
       getConversationsByProject: chatState.getConversationsByProject,
       setConversationProject: chatState.setConversationProject,
-      exportConversationToMarkdown: chatState.exportConversationToMarkdown,
       addMessage: chatState.addMessage,
       addOptimisticMessage: chatState.addOptimisticMessage,
       confirmOptimisticMessage: chatState.confirmOptimisticMessage,
@@ -371,7 +333,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       updateMessage: chatState.updateMessage,
       deleteMessage: chatState.deleteMessage,
       editMessage: chatState.editMessage,
-      editAndRegenerateFromMessage: chatState.editAndRegenerateFromMessage,
       getMessagesAfter: chatState.getMessagesAfter,
       setIsLoading: chatState.setIsLoading,
       setStreamingMessage: chatState.setStreamingMessage,
@@ -406,10 +367,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       setAgentStatus: agentState.setAgentStatus,
       addAgent: agentState.addAgent,
       removeAgent: agentState.removeAgent,
-      updateTaskProgress: agentState.updateTaskProgress,
-      addBackgroundTask: agentState.addBackgroundTask,
-      updateBackgroundTask: agentState.updateBackgroundTask,
-      clearBackgroundTasks: agentState.clearBackgroundTasks,
       addActionTrailEntry: addNormalizedActionTrailEntry,
       removeActionTrailEntry: agentState.removeActionTrailEntry,
       clearActionTrail: agentState.clearActionTrail,
@@ -461,7 +418,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       getSuggestedSidecarMode: sidecarState.getSuggestedSidecarMode,
 
       clearHistory,
-      exportConversation: chatState.exportConversation,
       resetOnLogout,
     }),
     [chatState, agentState, toolState, sidecarState, clearHistory, resetOnLogout],
@@ -499,7 +455,6 @@ useUnifiedChatStore.getState = (): UnifiedChatState => {
     ...chatState,
     agents: agentState.agents,
     agentStatus: agentState.agentStatus,
-    backgroundTasks: agentState.backgroundTasks,
     actionTrail: agentState.actionTrail,
     fadeTimers: agentState.fadeTimers,
     isAutonomousMode: agentState.isAutonomousMode,
@@ -508,10 +463,6 @@ useUnifiedChatStore.getState = (): UnifiedChatState => {
     setAgentStatus: agentState.setAgentStatus,
     addAgent: agentState.addAgent,
     removeAgent: agentState.removeAgent,
-    updateTaskProgress: agentState.updateTaskProgress,
-    addBackgroundTask: agentState.addBackgroundTask,
-    updateBackgroundTask: agentState.updateBackgroundTask,
-    clearBackgroundTasks: agentState.clearBackgroundTasks,
     addActionTrailEntry: addNormalizedActionTrailEntry,
     removeActionTrailEntry: agentState.removeActionTrailEntry,
     clearActionTrail: agentState.clearActionTrail,
@@ -612,7 +563,6 @@ useUnifiedChatStore.setState = (
   const agentKeys = [
     'agents',
     'agentStatus',
-    'backgroundTasks',
     'actionTrail',
     'fadeTimers',
     'isAutonomousMode',

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockInvoke = vi.fn();
 
@@ -21,57 +21,55 @@ vi.mock('sonner', () => ({
 }));
 
 import {
+  type ScheduledJob,
+  type TaskSchedule,
+  completeSchedule,
+  getProblemSummary,
   getScheduleSummary,
   inferTaskInterval,
+  scheduledTaskFromJob,
   useSchedulerStore,
 } from '../../stores/schedulerStore';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
+
+const ZONE = 'America/New_York';
+
+function inZone(timeZone: string) {
+  const options = Intl.DateTimeFormat().resolvedOptions();
+  return vi
+    .spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions')
+    .mockReturnValue({ ...options, timeZone });
+}
+
+function storedJob(overrides: Partial<ScheduledJob> = {}): ScheduledJob {
+  return {
+    id: 'job-1',
+    name: 'Morning summary',
+    schedule: '0 9 * * *',
+    actionType: 'agiTask',
+    actionData: { prompt: 'Summarise my inbox' },
+    status: 'active',
+    createdAt: '2026-07-25T00:00:00.000Z',
+    updatedAt: '2026-07-25T00:00:00.000Z',
+    lastRun: null,
+    nextRun: null,
+    runCount: 0,
+    failureCount: 0,
+    description: null,
+    ...overrides,
+  };
+}
 
 describe('schedulerStore, Tauri command wiring', () => {
+  let zone: ReturnType<typeof inZone>;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    zone = inZone(ZONE);
     useSchedulerStore.setState({ jobs: [], tasks: [], isLoading: false, error: null });
   });
 
-  it('addJob invokes scheduler_add_job (not scheduler_create_job or other variants)', async () => {
-    mockInvoke.mockResolvedValueOnce('job-123');
-    mockInvoke.mockResolvedValueOnce([]);
-
-    await useSchedulerStore.getState().addJob('Test Job', '0 9 * * *', 'briefing', '{}');
-
-    expect(mockInvoke).toHaveBeenCalledWith(
-      'scheduler_add_job',
-      expect.objectContaining({
-        name: 'Test Job',
-        schedule: '0 9 * * *',
-        actionType: 'briefing',
-        actionData: {},
-      }),
-    );
-  });
-
-  it('removeJob invokes scheduler_remove_job (not scheduler_delete_job)', async () => {
-    mockInvoke.mockResolvedValueOnce(true);
-
-    await useSchedulerStore.getState().removeJob('job-456');
-
-    expect(mockInvoke).toHaveBeenCalledWith('scheduler_remove_job', { jobId: 'job-456' });
-  });
-
-  it('pauseJob invokes scheduler_pause_job', async () => {
-    mockInvoke.mockResolvedValueOnce(true);
-
-    await useSchedulerStore.getState().pauseJob('job-789');
-
-    expect(mockInvoke).toHaveBeenCalledWith('scheduler_pause_job', { jobId: 'job-789' });
-  });
-
-  it('resumeJob invokes scheduler_resume_job', async () => {
-    mockInvoke.mockResolvedValueOnce(true);
-
-    await useSchedulerStore.getState().resumeJob('job-101');
-
-    expect(mockInvoke).toHaveBeenCalledWith('scheduler_resume_job', { jobId: 'job-101' });
-  });
+  afterEach(() => zone.mockRestore());
 
   it('listJobs invokes scheduler_list_jobs (not scheduler_get_jobs)', async () => {
     mockInvoke.mockResolvedValueOnce([]);
@@ -81,23 +79,9 @@ describe('schedulerStore, Tauri command wiring', () => {
     expect(mockInvoke).toHaveBeenCalledWith('scheduler_list_jobs');
   });
 
-  it('maps the native six-field weekly cron schedule without labeling it daily', async () => {
+  it('shows a job stored before schedules were typed as the UTC cron it runs on', async () => {
     mockInvoke.mockResolvedValueOnce([
-      {
-        id: 'weekly-memory',
-        name: 'memory_weekly_decay',
-        schedule: '0 0 4 * * 1',
-        actionType: 'script',
-        actionData: {},
-        status: 'active',
-        createdAt: '2026-07-25T00:00:00.000Z',
-        updatedAt: '2026-07-25T00:00:00.000Z',
-        lastRun: null,
-        nextRun: null,
-        runCount: 0,
-        failureCount: 0,
-        description: null,
-      },
+      storedJob({ id: 'weekly-memory', name: 'memory_weekly_decay', schedule: '0 0 4 * * 1' }),
     ]);
 
     await useSchedulerStore.getState().fetchTasks();
@@ -105,10 +89,182 @@ describe('schedulerStore, Tauri command wiring', () => {
     const schedule = useSchedulerStore.getState().tasks[0]?.schedule;
     expect(schedule).toEqual({
       type: 'recurring',
-      interval: 'weekly',
+      interval: 'custom',
       cronExpression: '0 0 4 * * 1',
+      timezone: 'UTC',
     });
-    expect(schedule && getScheduleSummary(schedule)).toBe('Every week');
+    expect(schedule && getScheduleSummary(schedule)).toBe('Every week (UTC)');
+  });
+
+  it('shows a typed job as the schedule it was given, with its problem and its kind', () => {
+    const plan: TaskSchedule = {
+      type: 'recurring',
+      interval: 'weekly',
+      timeOfDay: '16:00',
+      weekday: 5,
+      timezone: ZONE,
+    };
+    const task = scheduledTaskFromJob(
+      storedJob({
+        plan,
+        status: 'failed',
+        failureCount: 3,
+        lastProblem: { kind: 'failed', reason: 'no connection' },
+      }),
+    );
+
+    expect(task.schedule).toEqual(plan);
+    expect(task.actionType).toBe('agiTask');
+    expect(getScheduleSummary(task.schedule)).toBe('Every Friday at 16:00');
+    expect(getProblemSummary(task)).toBe(
+      'Stopped after 3 failed runs in a row. Last error: no connection',
+    );
+    expect(
+      getProblemSummary({
+        ...task,
+        status: 'active',
+        lastProblem: { kind: 'skipped', reason: 'Switch to Cloud to run it.' },
+      }),
+    ).toBe('Last run skipped: Switch to Cloud to run it.');
+    expect(getProblemSummary({ ...task, status: 'active', lastProblem: null })).toBeNull();
+  });
+
+  it.each([
+    [
+      { type: 'recurring', interval: 'hourly' },
+      { type: 'recurring', interval: 'hourly' },
+    ],
+    [
+      { type: 'recurring', interval: 'daily' },
+      { type: 'recurring', interval: 'daily', timeOfDay: '09:00' },
+    ],
+    [
+      { type: 'recurring', interval: 'weekly', timeOfDay: '07:30', weekday: 3 },
+      { type: 'recurring', interval: 'weekly', timeOfDay: '07:30', weekday: 3 },
+    ],
+    [
+      { type: 'recurring', interval: 'weekly', cronExpression: '0 9 * * *' },
+      { type: 'recurring', interval: 'weekly', timeOfDay: '09:00', weekday: 1 },
+    ],
+    [
+      { type: 'recurring', interval: 'monthly' },
+      { type: 'recurring', interval: 'monthly', timeOfDay: '09:00', dayOfMonth: 1 },
+    ],
+    [
+      { type: 'recurring', interval: 'custom', cronExpression: ' 0 9 * * 1 ' },
+      { type: 'recurring', interval: 'custom', cronExpression: '0 9 * * 1' },
+    ],
+    [
+      { type: 'once', runAt: 1_800_000_000_000, interval: 'daily' },
+      { type: 'once', runAt: 1_800_000_000_000 },
+    ],
+  ] as const)('createTask sends %j as the schedule the form shows', async (chosen, sent) => {
+    mockInvoke.mockResolvedValueOnce('job-123');
+    mockInvoke.mockResolvedValueOnce([]);
+
+    await useSchedulerStore.getState().createTask({
+      name: 'Morning summary',
+      description: 'Before stand-up',
+      prompt: 'Summarise my inbox',
+      schedule: chosen as TaskSchedule,
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith('scheduler_add_job', {
+      name: 'Morning summary',
+      prompt: 'Summarise my inbox',
+      description: 'Before stand-up',
+      schedule: { ...sent, timezone: ZONE },
+    });
+  });
+
+  it('updateTask sends the edited schedule, not the one the task had', async () => {
+    mockInvoke.mockResolvedValueOnce(true);
+    mockInvoke.mockResolvedValueOnce([]);
+
+    await useSchedulerStore.getState().updateTask('job-1', {
+      name: 'Weekly summary',
+      description: '',
+      prompt: 'Summarise the week',
+      schedule: {
+        type: 'recurring',
+        interval: 'weekly',
+        timeOfDay: '16:00',
+        weekday: 5,
+        cronExpression: '0 9 * * *',
+        timezone: 'Europe/Paris',
+      },
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith('scheduler_update_job', {
+      id: 'job-1',
+      updates: {
+        name: 'Weekly summary',
+        description: '',
+        prompt: 'Summarise the week',
+        schedule: {
+          type: 'recurring',
+          interval: 'weekly',
+          timeOfDay: '16:00',
+          weekday: 5,
+          timezone: 'Europe/Paris',
+        },
+      },
+    });
+  });
+
+  it('sends a stored schedule back unchanged, so an untouched one is not an edit', () => {
+    const stored: TaskSchedule[] = [
+      { type: 'once', runAt: 1_800_000_000_000, timezone: 'Asia/Tokyo' },
+      { type: 'recurring', interval: 'hourly', timezone: ZONE },
+      { type: 'recurring', interval: 'daily', timeOfDay: '06:45', timezone: ZONE },
+      {
+        type: 'recurring',
+        interval: 'monthly',
+        timeOfDay: '09:00',
+        dayOfMonth: 28,
+        timezone: ZONE,
+      },
+      { type: 'recurring', interval: 'custom', cronExpression: '0 0 3 * * *', timezone: 'UTC' },
+    ];
+    for (const schedule of stored) {
+      expect(completeSchedule(schedule)).toEqual(schedule);
+    }
+  });
+
+  it("states the time zone of a schedule that is not in this computer's zone", () => {
+    const daily: TaskSchedule = { type: 'recurring', interval: 'daily', timeOfDay: '09:00' };
+    expect(getScheduleSummary({ ...daily, timezone: ZONE })).toBe('Every day at 09:00');
+    expect(getScheduleSummary({ ...daily, timezone: 'Europe/Paris' })).toBe(
+      'Every day at 09:00 (Europe/Paris)',
+    );
+    expect(
+      getScheduleSummary({
+        type: 'recurring',
+        interval: 'monthly',
+        dayOfMonth: 15,
+        timezone: ZONE,
+      }),
+    ).toBe('Day 15 of every month at 09:00');
+    expect(
+      getScheduleSummary({
+        type: 'recurring',
+        interval: 'custom',
+        cronExpression: '*/15 9-17 * * 1-5',
+        timezone: ZONE,
+      }),
+    ).toBe('Custom: */15 9-17 * * 1-5');
+  });
+
+  it('keeps the reason a scheduler command gives for refusing', () => {
+    expect(
+      getSimpleErrorMessage({
+        type: 'Generic',
+        details: 'Pick a time in the future for a task that runs once.',
+      }),
+    ).toBe('Pick a time in the future for a task that runs once.');
+    expect(getSimpleErrorMessage({ type: 'Generic', details: '' })).toBe(
+      'Something went wrong. Please try again.',
+    );
   });
 
   it.each([
@@ -119,6 +275,10 @@ describe('schedulerStore, Tauri command wiring', () => {
     ['0 9 * * *', 'daily'],
     ['15 9 * * 2', 'weekly'],
     ['0 9 1 * *', 'monthly'],
+    ['*/15 9-17 * * 1-5', 'custom'],
+    ['0 9,17 * * *', 'custom'],
+    ['30 0 9 * * *', 'custom'],
+    ['0 9 * 6 *', 'custom'],
     ['not a cron expression', 'custom'],
   ] as const)('infers %s as %s', (cronExpression, expectedInterval) => {
     expect(inferTaskInterval(cronExpression)).toBe(expectedInterval);
@@ -138,40 +298,5 @@ describe('schedulerStore, Tauri command wiring', () => {
     await useSchedulerStore.getState().getNextRuns();
 
     expect(mockInvoke).toHaveBeenCalledWith('scheduler_get_next_runs', { limit: 10 });
-  });
-
-  it('addJob returns the job ID from invoke response', async () => {
-    mockInvoke.mockResolvedValueOnce('returned-job-id');
-    mockInvoke.mockResolvedValueOnce([]);
-
-    const jobId = await useSchedulerStore.getState().addJob('Name', 'cron', 'custom', 'data');
-    expect(jobId).toBe('returned-job-id');
-  });
-
-  it('removeJob returns false when job not found', async () => {
-    mockInvoke.mockResolvedValueOnce(false);
-
-    const result = await useSchedulerStore.getState().removeJob('nonexistent-job');
-    expect(result).toBe(false);
-  });
-
-  it('addJob sets isLoading=false after success', async () => {
-    mockInvoke.mockResolvedValueOnce('job-id');
-    mockInvoke.mockResolvedValueOnce([]);
-
-    await useSchedulerStore.getState().addJob('Name', 'cron', 'custom', 'data');
-    expect(useSchedulerStore.getState().isLoading).toBe(false);
-  });
-
-  it('addJob sets error and isLoading=false on failure', async () => {
-    mockInvoke.mockRejectedValueOnce(new Error('Tauri command failed'));
-
-    await expect(
-      useSchedulerStore.getState().addJob('Name', 'cron', 'custom', 'data'),
-    ).rejects.toThrow();
-
-    const state = useSchedulerStore.getState();
-    expect(state.isLoading).toBe(false);
-    expect(state.error).not.toBeNull();
   });
 });

@@ -7,15 +7,18 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Square,
   Terminal,
   Trash2,
   XCircle,
 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
+import { useConfirmAction } from '@agiworkforce/ui';
 import {
   type ScheduledTask,
   type TaskStatus,
+  getProblemSummary,
   getRelativeTimeDisplay,
   getScheduleSummary,
   useSchedulerStore,
@@ -44,7 +47,7 @@ const STATUS_CONFIG: Record<TaskStatus, { label: string; badgeClass: string; dot
     dotClass: 'bg-slate-400',
   },
   failed: {
-    label: 'Failed',
+    label: 'Stopped',
     badgeClass: 'bg-red-500/15 text-red-400 border-red-500/25',
     dotClass: 'bg-red-400',
   },
@@ -59,6 +62,8 @@ export function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardProps) {
   const deleteTask = useSchedulerStore((s) => s.deleteTask);
   const toggleTask = useSchedulerStore((s) => s.toggleTask);
   const runNow = useSchedulerStore((s) => s.runNow);
+  const stopRun = useSchedulerStore((s) => s.stopRun);
+  const runInProgress = useSchedulerStore((s) => s.runningTaskIds.includes(task.id));
 
   const statusCfg = STATUS_CONFIG[task.status];
   const truncatedName = task.name.length > 50 ? task.name.slice(0, 47) + '...' : task.name;
@@ -79,7 +84,12 @@ export function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardProps) {
     setIsToggling(true);
     try {
       await toggleTask(task.id);
-      const label = task.status === 'active' ? 'paused' : 'resumed';
+      const label =
+        task.status === 'active'
+          ? 'paused'
+          : task.status === 'failed'
+            ? 'turned back on'
+            : 'resumed';
       toast.success(`Task ${label}`);
     } catch {
       toast.error('Failed to update task');
@@ -100,7 +110,20 @@ export function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardProps) {
     }
   }, [deleteTask, task.id, task.name]);
 
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const confirmDelete = () =>
+    confirm({
+      title: 'Delete scheduled task?',
+      description: `"${task.name}" stops running on its schedule, and its prompt, schedule and last result are removed. This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: handleDelete,
+    });
+
   const canToggle = task.status === 'active' || task.status === 'paused';
+  const canEdit = task.actionType === 'agiTask';
+  const toggleLabel = task.status === 'active' ? 'Pause task' : 'Resume task';
+  const problem = getProblemSummary(task);
 
   return (
     <div className="rounded-xl border border-white/8 bg-white/[0.03] transition hover:border-white/15">
@@ -148,31 +171,57 @@ export function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardProps) {
               <span className="text-teal-500">Next: {getRelativeTimeDisplay(task.nextRunAt)}</span>
             )}
             {task.runCount > 0 && <span>{task.runCount}x run</span>}
+            {runInProgress && <span className="text-teal-500">Running now</span>}
+            {task.lastRunWasDueAt !== null && (
+              <span>
+                Last run was late: due{' '}
+                {new Date(task.lastRunWasDueAt).toLocaleString([], {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+            )}
           </div>
         </div>
 
         {/* Actions */}
         <div className="flex flex-shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={() => void handleRunNow()}
-            disabled={isRunning}
-            title="Run now"
-            className="rounded-md p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isRunning ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Play className="h-3.5 w-3.5" />
-            )}
-          </button>
+          {runInProgress ? (
+            <button
+              type="button"
+              onClick={() => void stopRun(task.id).catch(() => undefined)}
+              title="Stop this run"
+              aria-label="Stop this run"
+              className="rounded-md p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white"
+            >
+              <Square className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleRunNow()}
+              disabled={isRunning}
+              title="Run now"
+              aria-label="Run now"
+              className="rounded-md p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isRunning ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Play className="h-3.5 w-3.5" />
+              )}
+            </button>
+          )}
 
           {canToggle && (
             <button
               type="button"
               onClick={() => void handleToggle()}
               disabled={isToggling}
-              title={task.status === 'active' ? 'Pause task' : 'Resume task'}
+              title={toggleLabel}
+              aria-label={toggleLabel}
               className="rounded-md p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isToggling ? (
@@ -185,20 +234,24 @@ export function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardProps) {
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => onEdit(task)}
-            title="Edit task"
-            className="rounded-md p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white"
-          >
-            <Edit2 className="h-3.5 w-3.5" />
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(task)}
+              title="Edit task"
+              aria-label="Edit task"
+              className="rounded-md p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white"
+            >
+              <Edit2 className="h-3.5 w-3.5" />
+            </button>
+          )}
 
           <button
             type="button"
-            onClick={() => void handleDelete()}
+            onClick={confirmDelete}
             disabled={isDeleting}
             title="Delete task"
+            aria-label="Delete task"
             className="rounded-md p-1.5 text-slate-400 transition hover:bg-red-900/30 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isDeleting ? (
@@ -209,6 +262,24 @@ export function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardProps) {
           </button>
         </div>
       </div>
+
+      {task.status === 'failed' && (
+        <div
+          role="status"
+          className="mx-4 mb-3 flex items-start gap-2 rounded-md bg-red-900/20 px-3 py-2 text-sm text-red-300"
+        >
+          <XCircle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+          <p className="min-w-0 flex-1 break-words">{problem}</p>
+          <button
+            type="button"
+            onClick={() => void handleToggle()}
+            disabled={isToggling}
+            className="flex-shrink-0 rounded-md border border-red-400/40 px-2 py-1 text-xs font-medium text-red-300 transition hover:bg-red-900/30 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Turn back on
+          </button>
+        </div>
+      )}
 
       {/* Expanded details */}
       {expanded && (
@@ -231,35 +302,26 @@ export function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardProps) {
             </p>
           </div>
 
-          {task.modelId && (
-            <div>
-              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-                Model
-              </div>
-              <span className="text-sm text-slate-400">{task.modelId}</span>
-            </div>
-          )}
-
           {task.lastOutput && (
             <div>
               <div className="mb-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">
                 <Terminal className="h-3 w-3" />
                 Last Output
               </div>
-              <div className="max-h-32 overflow-y-auto rounded-md border border-white/5 bg-black/20 px-3 py-2 text-sm text-slate-300">
+              <div className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-white/5 bg-black/20 px-3 py-2 text-sm text-slate-300">
                 {task.lastOutput}
               </div>
             </div>
           )}
 
-          {task.status === 'failed' && (
-            <div className="flex items-center gap-2 rounded-md bg-red-900/20 px-3 py-2 text-sm text-red-300">
-              <XCircle className="h-4 w-4 flex-shrink-0" />
-              This task failed on its last run. Check the prompt and try again.
-            </div>
+          {problem && task.status !== 'failed' && (
+            <p className="rounded-md border border-white/5 bg-black/20 px-3 py-2 text-sm text-slate-300">
+              {problem}
+            </p>
           )}
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

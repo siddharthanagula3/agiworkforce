@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Loader2 } from 'lucide-react';
-import type { NotificationSettings } from '../../../../hooks/useNotifications';
+import type { NotificationSettings } from '../../../../stores/notificationStore';
 
 const LazyNotificationsSettings = lazy(() =>
   import('../../NotificationsSettings').then((m) => ({ default: m.NotificationsSettings })),

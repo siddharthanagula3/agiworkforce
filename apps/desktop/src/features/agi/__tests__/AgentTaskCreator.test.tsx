@@ -25,7 +25,11 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import { AgentTaskCreator, resolveTaskAutomationState } from '@/features/agi/AgentTaskCreator';
+import {
+  AgentTaskCreator,
+  resolveTaskAutomationState,
+  taskLaunchBlocked,
+} from '@/features/agi/AgentTaskCreator';
 import { invoke } from '@/lib/tauri-mock';
 import { MAX_PARALLEL_AGENTS, useAgentTaskStore } from '@/stores/agentTaskStore';
 import { useAppModeStore } from '@/stores/appModeStore';
@@ -144,19 +148,34 @@ describe('AgentTaskCreator', () => {
     expect(screen.getByLabelText(/Parallel agents/i)).toBeTruthy();
   });
 
-  it('does not treat an in-session macOS permission grant as a ready automation service', () => {
+  it('reports a granted permission whose automation service failed to start as unavailable', () => {
     expect(
       resolveTaskAutomationState({
         accessibility: true,
         automation_service_ready: false,
       }),
-    ).toBe('restart-required');
+    ).toBe('service-unavailable');
     expect(
       resolveTaskAutomationState({
         accessibility: true,
         automation_service_ready: true,
       }),
     ).toBe('ready');
+  });
+
+  it('lets a Task launch without Accessibility, since only desktop-control steps need it', () => {
+    expect(
+      resolveTaskAutomationState({ accessibility: false, automation_service_ready: false }),
+    ).toBe('blocked');
+    expect(taskLaunchBlocked('blocked')).toBe(false);
+    expect(taskLaunchBlocked('service-unavailable')).toBe(false);
+    expect(taskLaunchBlocked('error')).toBe(false);
+    expect(taskLaunchBlocked('checking')).toBe(false);
+    expect(taskLaunchBlocked('ready')).toBe(false);
+  });
+
+  it('still refuses to launch in a build that cannot reach the agent engine', () => {
+    expect(taskLaunchBlocked('unsupported')).toBe(true);
   });
 
   it('keeps an unverified function-tool model available for chat but blocks Tasks', () => {

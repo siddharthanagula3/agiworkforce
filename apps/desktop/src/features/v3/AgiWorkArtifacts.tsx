@@ -1,5 +1,6 @@
 import { AlertTriangle, Box, ExternalLink, File, RefreshCw, Table } from 'lucide-react';
 import { useEffect } from 'react';
+import { openArtifactInChat } from '../artifacts/openArtifactInChat';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { EmptyState } from '@/ui/EmptyState';
@@ -48,8 +49,6 @@ export function AgiWorkArtifacts({ onNewChat }: { onNewChat?: () => void } = {})
   const isLoading = useArtifactStore((s) => s.isLoading);
   const summariesError = useArtifactStore((s) => s.summariesError);
   const listPersistedArtifacts = useArtifactStore((s) => s.listPersistedArtifacts);
-  const setActiveArtifact = useArtifactStore((s) => s.setActiveArtifact);
-  const openPanel = useArtifactStore((s) => s.openPanel);
 
   useEffect(() => {
     void listPersistedArtifacts(undefined, 50);
@@ -190,10 +189,7 @@ export function AgiWorkArtifacts({ onNewChat }: { onNewChat?: () => void } = {})
                         className="flex h-5 w-5 items-center justify-center rounded text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
                         title={t('search.open')}
                         aria-label={t('search.open')}
-                        onClick={() => {
-                          setActiveArtifact(a.id);
-                          openPanel();
-                        }}
+                        onClick={() => void openArtifactInChat(a.id)}
                       >
                         <ExternalLink size={11} aria-hidden="true" />
                       </button>

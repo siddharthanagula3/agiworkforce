@@ -73,7 +73,7 @@ export const CacheManagement: React.FC = () => {
     }
   };
 
-  const handleClearByType = async (type: 'llm' | 'tool' | 'codebase') => {
+  const handleClearByType = async (type: 'llm' | 'tool') => {
     try {
       setLoading(true);
       await CacheService.clearByType(type);
@@ -404,8 +404,7 @@ export const CacheManagement: React.FC = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Clear all cache?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove all cached LLM responses, tool results, and codebase data. This
-              action cannot be undone.
+              This removes every cached model response. It cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

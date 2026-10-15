@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '../lib/tauri-mock';
-import type { CaptureRecord, CaptureResult, Region, WindowInfo } from '../types/capture';
-import {
-  normalizeCaptureRecord,
-  normalizeCaptureResult,
-  type RawCaptureRecord,
-  type RawCaptureResult,
-} from '../utils/captureTransforms';
+import type { CaptureResult, Region, WindowInfo } from '../types/capture';
+import { normalizeCaptureResult, type RawCaptureResult } from '../utils/captureTransforms';
 
-export type { CaptureRecord, CaptureResult, Region, WindowInfo } from '../types/capture';
+export type { CaptureResult, Region, WindowInfo } from '../types/capture';
 
 const CAPTURE_TIMEOUTS_MS = {
   full: 30_000,
@@ -23,9 +18,6 @@ export interface UseScreenCaptureReturn {
   captureRegion: (region: Region, conversationId?: number) => Promise<CaptureResult>;
   captureWindow: (windowHandle: string, conversationId?: number) => Promise<CaptureResult>;
   getAvailableWindows: () => Promise<WindowInfo[]>;
-  getHistory: (conversationId?: number, limit?: number) => Promise<CaptureRecord[]>;
-  deleteCapture: (captureId: string) => Promise<void>;
-  saveToClipboard: (captureId: string) => Promise<void>;
   error: string | null;
 }
 
@@ -183,62 +175,12 @@ export function useScreenCapture(): UseScreenCaptureReturn {
     }
   }, [withTimeout]);
 
-  const getHistory = useCallback(
-    async (conversationId?: number, limit?: number): Promise<CaptureRecord[]> => {
-      try {
-        const params: Record<string, unknown> = {};
-        if (conversationId != null) {
-          params['conversation_id'] = conversationId;
-        }
-        if (limit != null) {
-          params['limit'] = limit;
-        }
-        const history = await invoke<RawCaptureRecord[]>('capture_get_history', params);
-        return history.map((entry) => normalizeCaptureRecord(entry));
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        if (isMountedRef.current) {
-          setError(errorMessage);
-        }
-        return [];
-      }
-    },
-    [],
-  );
-
-  const deleteCapture = useCallback(async (captureId: string): Promise<void> => {
-    try {
-      await invoke('capture_delete', { captureId });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      if (isMountedRef.current) {
-        setError(errorMessage);
-      }
-      throw new Error(errorMessage);
-    }
-  }, []);
-
-  const saveToClipboard = useCallback(async (captureId: string): Promise<void> => {
-    try {
-      await invoke('capture_save_to_clipboard', { captureId });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      if (isMountedRef.current) {
-        setError(errorMessage);
-      }
-      throw new Error(errorMessage);
-    }
-  }, []);
-
   return {
     isCapturing,
     captureFullScreen,
     captureRegion,
     captureWindow,
     getAvailableWindows,
-    getHistory,
-    deleteCapture,
-    saveToClipboard,
     error,
   };
 }

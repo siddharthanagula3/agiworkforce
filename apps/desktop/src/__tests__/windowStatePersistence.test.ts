@@ -48,10 +48,6 @@ describe('Window State Persistence - Integration Tests', () => {
       if (command === 'window_get_state') {
         return Promise.resolve({ ...persistedState });
       }
-      if (command === 'window_set_fullscreen') {
-        persistedState.fullscreen = (args as { fullscreen: boolean }).fullscreen;
-        return Promise.resolve(undefined);
-      }
       if (command === 'window_toggle_maximize') {
         persistedState.maximized = !persistedState.maximized;
         return Promise.resolve(undefined);

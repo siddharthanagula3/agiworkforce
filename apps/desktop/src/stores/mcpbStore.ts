@@ -1,6 +1,7 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
+import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { invoke, listen } from '../lib/tauri-mock';
 import type {
   McpBundle,
@@ -144,8 +145,7 @@ export const useMcpbStore = create<McpbState>()(
             },
           });
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : `Failed to install bundle ${bundleId}`;
+          const message = getSimpleErrorMessage(error);
           set({
             error: message,
             isInstalling: false,
@@ -153,7 +153,7 @@ export const useMcpbStore = create<McpbState>()(
               bundleId,
               status: 'failed',
               progress: 0,
-              message: 'Installation failed.',
+              message: 'The bundle was not installed.',
               error: message,
             },
           });
@@ -232,8 +232,7 @@ export const useMcpbStore = create<McpbState>()(
             },
           });
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : `Failed to update bundle ${bundleId}`;
+          const message = getSimpleErrorMessage(error);
           set({
             error: message,
             isInstalling: false,
@@ -241,7 +240,7 @@ export const useMcpbStore = create<McpbState>()(
               bundleId,
               status: 'failed',
               progress: 0,
-              message: 'Update failed.',
+              message: 'The bundle was not updated.',
               error: message,
             },
           });

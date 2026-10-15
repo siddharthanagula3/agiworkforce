@@ -1,10 +1,9 @@
-import { open } from '@tauri-apps/plugin-dialog';
-import { exists } from '@tauri-apps/plugin-fs';
 import { AlertCircle, FolderPlus, FolderX } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { isTauri } from '../../lib/tauri-mock';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
+import { invoke, isTauri } from '../../lib/tauri-mock';
 import { useSettingsStore } from '../../stores/settingsStore';
 import {
   AlertDialog,
@@ -17,8 +16,6 @@ import {
   AlertDialogTitle,
 } from '@/ui/AlertDialog';
 import { Button } from '@/ui/Button';
-import { Input } from '@/ui/Input';
-import { Label } from '@/ui/Label';
 import { ScrollArea } from '@/ui/ScrollArea';
 
 export function AllowedDirectoriesSettings() {
@@ -26,47 +23,8 @@ export function AllowedDirectoriesSettings() {
   const allowedDirectories = useSettingsStore((state) => state.allowedDirectories);
   const addAllowedDirectory = useSettingsStore((state) => state.addAllowedDirectory);
   const removeAllowedDirectory = useSettingsStore((state) => state.removeAllowedDirectory);
-  const [manualPath, setManualPath] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [removeDirPath, setRemoveDirPath] = useState<string | null>(null);
-
-  const handleAddManualPath = async () => {
-    if (!manualPath.trim()) return;
-    setError(null);
-
-    const path = manualPath.trim();
-
-    if (!isTauri) {
-      if (allowedDirectories.includes(path)) {
-        setError('Directory already added');
-        return;
-      }
-      addAllowedDirectory(path);
-      setManualPath('');
-      return;
-    }
-
-    try {
-      const pathExists = await exists(path);
-      if (!pathExists) {
-        setError('Directory does not exist');
-        return;
-      }
-
-      if (allowedDirectories.includes(path)) {
-        setError('Directory already added');
-        return;
-      }
-
-      addAllowedDirectory(path);
-      setManualPath('');
-    } catch (e) {
-      console.error('Failed to validate path:', e);
-      setError(
-        'Could not verify path. Please check the path exists and try again, or use Browse to select.',
-      );
-    }
-  };
 
   const handleBrowse = async () => {
     setError(null);
@@ -75,22 +33,15 @@ export function AllowedDirectoriesSettings() {
       return;
     }
     try {
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        title: 'Select Allowed Directory',
-      });
-
-      if (selected && typeof selected === 'string') {
-        if (allowedDirectories.includes(selected)) {
-          setError('Directory already added');
-          return;
-        }
-        addAllowedDirectory(selected);
+      const selected = await invoke<string | null>('pick_folder', { purpose: 'allowed_folder' });
+      if (selected === null) return;
+      if (allowedDirectories.includes(selected)) {
+        setError('Directory already added');
+        return;
       }
+      addAllowedDirectory(selected);
     } catch (e: unknown) {
-      console.error('Failed to open directory picker:', e);
-      setError('Failed to open directory picker. Please try again.');
+      setError(getSimpleErrorMessage(e));
     }
   };
 
@@ -105,27 +56,10 @@ export function AllowedDirectoriesSettings() {
       </div>
 
       <div className="space-y-4">
-        <div className="flex gap-2 items-end">
-          <div className="flex-1 space-y-2">
-            <Label htmlFor="manualPath">Add Directory Path</Label>
-            <Input
-              id="manualPath"
-              value={manualPath}
-              onChange={(e) => setManualPath(e.target.value)}
-              placeholder="/path/to/directory"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddManualPath();
-              }}
-            />
-          </div>
-          <Button onClick={handleAddManualPath} disabled={!manualPath.trim()}>
-            {t('add')}
-          </Button>
-          <Button variant="outline" onClick={handleBrowse}>
-            <FolderPlus className="mr-2 h-4 w-4" />
-            Browse
-          </Button>
-        </div>
+        <Button variant="outline" onClick={handleBrowse}>
+          <FolderPlus className="mr-2 h-4 w-4" aria-hidden="true" />
+          {t('add')}
+        </Button>
 
         {error && (
           <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-2 rounded-md">

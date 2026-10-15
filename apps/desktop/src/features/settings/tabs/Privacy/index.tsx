@@ -1,14 +1,15 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Database, Download, Loader2, X } from 'lucide-react';
-import { isTauri } from '@/lib/tauri-mock';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import { Check, Database, Download, Loader2 } from 'lucide-react';
+import { useConfirmAction } from '@agiworkforce/ui';
+import { isTauri, relaunchApp } from '@/lib/tauri-mock';
 import { analyticsDeleteAllData } from '@/api/analytics';
-import { chat, cache, settings, onboarding } from '@agiworkforce/desktop-command-client';
-import { save } from '@tauri-apps/plugin-dialog';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
+import { deleteLocalData, exportLocalData } from '@/api/privacy';
+import { settings, onboarding } from '@agiworkforce/desktop-command-client';
 import { appDataDir } from '@tauri-apps/api/path';
-import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { Button } from '@/ui/Button';
+import { Spinner } from '@/ui/Spinner';
 import { errorTracking } from '../../../../services/errorTracking';
+import { MASTER_PASSWORD_SCOPE } from '../../masterPasswordScope';
 import { selectHasCloudAccountSession, useAuthStore } from '../../../../stores/auth';
 
 const LazyMasterPasswordSettings = lazy(() =>
@@ -46,12 +47,18 @@ function Fallback({ label }: { label: string }) {
   );
 }
 
+function hostMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
 function DataPrivacySection() {
   const [exporting, setExporting] = useState(false);
-  const [exportSuccess, setExportSuccess] = useState(false);
+  const [exportedAs, setExportedAs] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [clearingData, setClearingData] = useState(false);
-  const [clearError, setClearError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteDeclined, setDeleteDeclined] = useState(false);
+  const { confirm: confirmAction, dialog: confirmActionDialog } = useConfirmAction();
   const [localDataPath, setLocalDataPath] = useState<string | null>(null);
   const [localDataPathUnavailable, setLocalDataPathUnavailable] = useState(false);
   const [crashReportingEnabled, setCrashReportingEnabled] = useState(() => {
@@ -108,32 +115,42 @@ function DataPrivacySection() {
     };
   }, []);
 
-  const handleClearAllData = async () => {
-    const confirmed = confirm(
-      'Are you sure you want to clear all local data? This will delete chat history, settings, cached data, and encrypted local credentials, then reload the app.',
-    );
-    if (!confirmed) return;
-    setClearingData(true);
-    setClearError(null);
+  const deleteAllLocalData = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    setDeleteDeclined(false);
+    let deleted = false;
     try {
-      const results = await Promise.allSettled([
-        chat.clearLocalDatabase(),
-        cache.cacheClearAll(),
-        settings.settingsV2ClearCache(),
-        analyticsDeleteAllData(),
-      ]);
-      const failures = results
-        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-        .map((r) => getSimpleErrorMessage(r.reason));
-      if (failures.length > 0) throw new Error(failures.join('; '));
-      localStorage.clear();
-      sessionStorage.clear();
-      window.location.reload();
+      deleted = await deleteLocalData();
     } catch (err) {
-      setClearError(getSimpleErrorMessage(err));
-    } finally {
-      setClearingData(false);
+      setDeleteError(`The deletion did not finish, and you can run it again. ${hostMessage(err)}`);
+      setDeleting(false);
+      return;
     }
+    if (!deleted) {
+      setDeleteDeclined(true);
+      setDeleting(false);
+      return;
+    }
+    await Promise.allSettled([
+      settings.settingsV2ClearCache(),
+      analyticsDeleteAllData(),
+      useAuthStore.getState().signOut(),
+    ]);
+    localStorage.clear();
+    sessionStorage.clear();
+    await relaunchApp();
+  };
+
+  const handleDeleteAllData = () => {
+    confirmAction({
+      title: 'Delete all data on this device?',
+      description:
+        'This removes every conversation, memory and project, your saved API keys and credentials, your settings, and the files AGI Workforce stored in its own data folders on this device, with its log of the terminal commands it ran. None of it can be recovered. You are signed out and the app restarts as if newly installed. Not removed: installed extensions, downloaded speech models, the settings, hooks, skills and agents shared with the command-line tool, and temporary files, which the system clears. A Cloud account, if you have one, is not deleted: delete it with Manage Cloud privacy, under Cloud account data on this page. Your system asks you once more before anything is deleted.',
+      confirmLabel: 'Delete all data',
+      destructive: true,
+      onConfirm: deleteAllLocalData,
+    });
   };
 
   const handleToggleCrashReporting = useCallback(async (enabled: boolean) => {
@@ -155,50 +172,14 @@ function DataPrivacySection() {
     }
   }, []);
 
-  const exportSuccessTimerRef = useRef<number | null>(null);
-  const exportErrorTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (exportSuccessTimerRef.current) window.clearTimeout(exportSuccessTimerRef.current);
-      if (exportErrorTimerRef.current) window.clearTimeout(exportErrorTimerRef.current);
-    };
-  }, []);
-
   const handleExportData = useCallback(async () => {
     setExporting(true);
     setExportError(null);
-    setExportSuccess(false);
+    setExportedAs(null);
     try {
-      const exportData = (await onboarding.exportUserData()) as string;
-      if (!isTauri) {
-        const blob = new Blob([exportData], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `agi-workforce-export-${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
-        setExportSuccess(true);
-        if (exportSuccessTimerRef.current) window.clearTimeout(exportSuccessTimerRef.current);
-        exportSuccessTimerRef.current = window.setTimeout(() => setExportSuccess(false), 5000);
-      } else {
-        const savePath = await save({
-          defaultPath: `agi-workforce-export-${new Date().toISOString().split('T')[0]}.json`,
-          filters: [{ name: 'JSON', extensions: ['json'] }],
-        });
-        if (savePath) {
-          await writeTextFile(savePath, exportData);
-          setExportSuccess(true);
-          if (exportSuccessTimerRef.current) window.clearTimeout(exportSuccessTimerRef.current);
-          exportSuccessTimerRef.current = window.setTimeout(() => setExportSuccess(false), 5000);
-        }
-      }
+      setExportedAs(await exportLocalData());
     } catch (err) {
-      console.error('Failed to export data:', err);
-      setExportError(getSimpleErrorMessage(err));
-      if (exportErrorTimerRef.current) window.clearTimeout(exportErrorTimerRef.current);
-      exportErrorTimerRef.current = window.setTimeout(() => setExportError(null), 5000);
+      setExportError(`Your data was not exported. ${hostMessage(err)}`);
     } finally {
       setExporting(false);
     }
@@ -217,36 +198,43 @@ function DataPrivacySection() {
               <Download className="h-6 w-6 text-muted-foreground" />
             </div>
             <div className="flex-1">
-              <h4 className="font-semibold mb-2">Export Your Data</h4>
-              <p className="text-sm text-muted-foreground mb-4">
-                Download all your conversations, messages, and settings in JSON format. This
-                includes all data stored locally on your device.
+              <h4 className="font-semibold mb-2">Export your data</h4>
+              <p className="text-sm text-muted-foreground mb-2">
+                Saves one JSON file, where you choose, with what AGI Workforce keeps for you on this
+                device: conversations, memories, projects, settings and history, your schedules and
+                saved knowledge, app permissions and trusted workflows, and the two settings files
+                it shares with the command-line tool.
               </p>
-              <Button onClick={handleExportData} disabled={exporting} size="sm">
+              <p className="text-sm text-muted-foreground mb-4">
+                Passwords, API keys, tokens and sign-in sessions are left out; a field that held one
+                reads [redacted], and a web address is saved without its sign-in details or query.
+                Not in the file: attachments and generated files, what you approved or consented to
+                (hooks, servers, tools and computer use), the log of terminal commands, other files
+                in the app data folder such as logs and caches, and installed extensions and skills.
+              </p>
+              <Button onClick={() => void handleExportData()} disabled={exporting} size="sm">
                 {exporting ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Exporting...
+                    <Spinner size="sm" className="mr-2" />
+                    Exporting
                   </>
                 ) : (
                   <>
                     <Download className="mr-2 h-4 w-4" />
-                    Export Data
+                    Export data
                   </>
                 )}
               </Button>
-              {exportSuccess && (
-                <div className="mt-3 flex items-center gap-2 text-sm text-success-text">
-                  <Check className="h-4 w-4" />
-                  <span>Data exported successfully!</span>
-                </div>
-              )}
-              {exportError && (
-                <div className="mt-3 flex items-center gap-2 text-sm text-danger-text">
-                  <X className="h-4 w-4" />
-                  <span>{exportError}</span>
-                </div>
-              )}
+              {exportedAs ? (
+                <p role="status" className="mt-3 text-sm text-foreground">
+                  Saved as {exportedAs}.
+                </p>
+              ) : null}
+              {exportError ? (
+                <p role="alert" className="mt-3 text-sm text-danger-text">
+                  {exportError}
+                </p>
+              ) : null}
             </div>
           </div>
         </div>
@@ -287,21 +275,31 @@ function DataPrivacySection() {
               <Database className="h-6 w-6 text-danger-text" />
             </div>
             <div className="flex-1">
-              <h4 className="font-semibold mb-2 text-danger-text">Clear Local Storage</h4>
+              <h4 className="font-semibold mb-2 text-danger-text">
+                Delete all data on this device
+              </h4>
               <p className="text-sm text-muted-foreground mb-4">
-                Reset the application to its initial state. This will clear all chat history,
-                settings, cached data, and encrypted local credentials. This action cannot be
-                undone.
+                Erases everything AGI Workforce keeps on this device, signs you out and restarts the
+                app as if newly installed. A Cloud account is not affected.
               </p>
               <Button
                 variant="destructive"
                 size="sm"
-                onClick={() => void handleClearAllData()}
-                disabled={clearingData}
+                onClick={handleDeleteAllData}
+                disabled={deleting}
               >
-                {clearingData ? 'Clearing...' : 'Clear All Data'}
+                {deleting ? 'Deleting' : 'Delete all data'}
               </Button>
-              {clearError && <p className="mt-3 text-sm text-danger-text">{clearError}</p>}
+              {deleteDeclined ? (
+                <p role="status" className="mt-3 text-sm text-muted-foreground">
+                  Nothing was deleted.
+                </p>
+              ) : null}
+              {deleteError ? (
+                <p role="alert" className="mt-3 text-sm text-danger-text">
+                  {deleteError}
+                </p>
+              ) : null}
             </div>
           </div>
         </div>
@@ -372,6 +370,7 @@ function DataPrivacySection() {
           </p>
         </div>
       </div>
+      {confirmActionDialog}
     </div>
   );
 }
@@ -477,9 +476,7 @@ export function PrivacyTab({ scope = 'local' }: PrivacyTabProps) {
     <>
       <div>
         <h3 className="text-h3 mb-1">Master Password</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Encrypt stored API keys and secrets with an Argon2id-derived master password.
-        </p>
+        <p className="text-sm text-muted-foreground mb-4">{MASTER_PASSWORD_SCOPE}</p>
         <Suspense fallback={<Fallback label="Loading security settings..." />}>
           <LazyMasterPasswordSettings />
         </Suspense>

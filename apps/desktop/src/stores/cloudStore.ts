@@ -33,6 +33,7 @@ interface CloudState {
   ) => Promise<void>;
   beginConnect: (provider: CloudProvider, credentials: OAuthCredentials) => Promise<void>;
   completeConnect: (state: string, code: string) => Promise<void>;
+  disconnectAccount: (accountId: string) => Promise<void>;
   uploadFile: (localPath: string, remotePath: string) => Promise<void>;
   downloadFile: (remotePath: string, localPath: string) => Promise<void>;
   deleteEntry: (remotePath: string) => Promise<void>;
@@ -235,6 +236,25 @@ export const useCloudStore = create<CloudState>((set, get) => {
         console.error('[cloud] failed to complete OAuth', error);
         set({ error: (error as Error).message });
       }
+    },
+
+    disconnectAccount: async (accountId) => {
+      set({ error: null });
+      try {
+        await invoke('cloud_disconnect', { accountId });
+      } catch (error) {
+        console.error('[cloud] failed to disconnect the account', error);
+        set({ error: (error as Error).message });
+        return;
+      }
+
+      const remaining = get().accounts.filter((account) => account.accountId !== accountId);
+      if (get().activeAccountId === accountId) {
+        set({ accounts: remaining, activeAccountId: null, files: [], currentPath: '/' });
+      } else {
+        set({ accounts: remaining });
+      }
+      await get().refreshAccounts();
     },
 
     uploadFile: async (localPath, remotePath) => {

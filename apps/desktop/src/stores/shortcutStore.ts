@@ -10,7 +10,7 @@ export interface Shortcut {
   description: string;
   action: string;
   enabled: boolean;
-  isGlobal?: boolean;
+  is_global?: boolean;
 }
 
 export interface QuickQueryHotkeyPreferences {
@@ -297,7 +297,7 @@ export const useShortcutStore = create<ShortcutState>()(
 export const selectShortcuts = (s: ShortcutState) => s.shortcuts;
 export const selectShortcutDefaults = (s: ShortcutState) => s.defaults;
 export const selectEnabledShortcuts = (s: ShortcutState) => s.shortcuts.filter((sc) => sc.enabled);
-export const selectGlobalShortcuts = (s: ShortcutState) => s.shortcuts.filter((sc) => sc.isGlobal);
+export const selectGlobalShortcuts = (s: ShortcutState) => s.shortcuts.filter((sc) => sc.is_global);
 export const selectShortcutLoading = (s: ShortcutState) => s.loading;
 export const selectShortcutError = (s: ShortcutState) => s.error;
 export const selectLastTriggeredAction = (s: ShortcutState) => s.lastTriggeredAction;

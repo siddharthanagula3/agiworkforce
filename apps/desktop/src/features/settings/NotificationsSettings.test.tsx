@@ -2,18 +2,18 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { NotificationSettings } from '../../hooks/useNotifications';
+import type { NotificationSettings } from '../../stores/notificationStore';
 import { NotificationsSettings } from './NotificationsSettings';
 
 const settings: NotificationSettings = {
   enabled: true,
-  sound_enabled: true,
-  badge_enabled: true,
-  desktop_notifications: true,
-  enabled_types: [],
-  do_not_disturb: false,
-  dnd_start_time: null,
-  dnd_end_time: null,
+  soundEnabled: true,
+  badgeEnabled: true,
+  desktopNotifications: true,
+  enabledTypes: [],
+  doNotDisturb: false,
+  dndStartTime: null,
+  dndEndTime: null,
 };
 
 describe('NotificationsSettings', () => {
@@ -40,7 +40,7 @@ describe('NotificationsSettings', () => {
 
     await user.click(screen.getByRole('switch', { name: 'Failures and input needed' }));
     expect(onUpdate).toHaveBeenCalledWith({
-      enabled_types: expect.not.arrayContaining(['task_failed', 'agent_activity']),
+      enabledTypes: expect.not.arrayContaining(['task_failed', 'agent_activity']),
     });
   });
 });

@@ -1,4 +1,3 @@
-
 import { cloudAccountAuth, type AuthState } from '../services/cloudAccountAuth';
 import {
   useUnifiedAuthStore,
@@ -10,6 +9,8 @@ import { useBillingUsageStore } from './billingUsage';
 import { asPlanTier, PLAN_DISPLAY_NAMES, type PlanTier } from '../lib/cloudAccountTypes';
 import { accountApi } from '../api/accountApi';
 import { isTauri, invoke } from '../lib/tauri-mock';
+import { nativeAppModeReported, startNativeAppModeSync } from '../lib/nativeAppMode';
+import { selectIsCloud, useAppModeStore } from './appModeStore';
 import { effectivePlanTier } from '@agiworkforce/types';
 
 let orchestratorInitialized = false;
@@ -347,9 +348,11 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
       lastSyncedAt: Date.now(),
     });
 
-    if (isTauri && authState.session) {
+    if (isTauri && authState.session && selectIsCloud(useAppModeStore.getState())) {
       try {
+        await nativeAppModeReported();
         if (!authSnapshotIsCurrent(authState)) return;
+        if (!selectIsCloud(useAppModeStore.getState())) return;
         await invoke('llm_ensure_managed_cloud');
       } catch (error) {
         console.warn('[AuthOrchestrator] Failed to initialize Managed Cloud:', error);
@@ -380,6 +383,7 @@ export function initializeAuthOrchestrator(): () => void {
   }
 
   orchestratorInitialized = true;
+  startNativeAppModeSync();
 
   unsubscribeFn = cloudAccountAuth.onAuthStateChange((authState) => {
     void processAuthStateChange(authState);

@@ -31,7 +31,6 @@ import {
   Trash2,
   Upload,
   Database,
-  ChevronDown,
   Loader2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -44,13 +43,15 @@ import {
   type ProjectFile,
   type KnowledgeBaseFile,
 } from '../../stores/projectStore';
-import { type ProjectAccentColor, type PrivacyMode } from '@agiworkforce/types';
+import { type ProjectAccentColor } from '@agiworkforce/types';
 import { useChatStore, type ConversationSummary } from '../../stores/chat/chatStore';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
 import { invoke, isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import type { ManagedCloudProjectKnowledgeFile } from '@agiworkforce/cloud-contracts';
 import { desktopCloudProjectKnowledge } from '../../services/desktopCloudProjectKnowledge';
+import { ProjectGitTrustSection } from './ProjectGitTrustSection';
+import { ProjectMemorySection } from './ProjectMemorySection';
 
 const SUPPORTED_KB_EXTENSIONS = [
   '.txt',
@@ -74,6 +75,54 @@ export function kbReadCommandFor(fileName: string): 'document_extract_text' | 'f
     ? 'document_extract_text'
     : 'file_read';
 }
+interface ProjectKnowledgeSync {
+  retrieval: 'passages' | 'whole_files';
+  indexedFiles: number;
+  wholeFileMaxFiles: number;
+  wholeFileMaxChars: number;
+}
+
+function syncLocalProjectKnowledge(projectId: string): Promise<ProjectKnowledgeSync> {
+  return invoke<ProjectKnowledgeSync>('project_sync_knowledge', { projectId });
+}
+
+/**
+ * Passages are keyed by file id. Older builds also saved each file as a memory
+ * keyed only by its name, which can no longer be told apart, so that memory is
+ * forgotten only once no file left in the project carries the name.
+ */
+async function removeLocalProjectKnowledge(
+  projectId: string,
+  removedFiles: KnowledgeBaseFile[],
+  keptFiles: KnowledgeBaseFile[],
+): Promise<void> {
+  const keptNames = new Set(keptFiles.map((file) => file.name));
+  const forgottenNames = new Set(
+    removedFiles.map((file) => file.name).filter((name) => !keptNames.has(name)),
+  );
+  await Promise.all([
+    ...removedFiles.map((file) =>
+      invoke('project_remove_knowledge_file', { projectId, fileId: file.id }),
+    ),
+    ...[...forgottenNames].map((name) =>
+      invoke('memory_forget_topic', { category: 'context', topic: `knowledge_base:${name}` }),
+    ),
+  ]);
+}
+
+function knowledgeFileUsageNote(
+  file: KnowledgeBaseFile,
+  index: number,
+  sync: ProjectKnowledgeSync | null,
+): string | null {
+  if (!sync || sync.retrieval !== 'whole_files') return null;
+  if (index >= sync.wholeFileMaxFiles) return 'Not used in chats';
+  if ((file.content?.length ?? 0) > sync.wholeFileMaxChars) {
+    return `Chats read the first ${sync.wholeFileMaxChars.toLocaleString()} characters`;
+  }
+  return null;
+}
+
 const CLOUD_KNOWLEDGE_ACCEPT =
   'application/pdf,text/plain,text/markdown,text/csv,application/json,.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.rs';
 
@@ -155,7 +204,6 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const [icon, setIcon] = useState(DEFAULT_ICON);
   const [iconEmoji, setIconEmoji] = useState('');
   const [accentColor, setAccentColor] = useState<ProjectAccentColor | null>(null);
-  const [defaultPrivacyMode, setDefaultPrivacyMode] = useState<PrivacyMode>('local');
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [conversationIds, setConversationIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -171,7 +219,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
     () => new Set(),
   );
   const [isUploadingKb, setIsUploadingKb] = useState(false);
-  const [showCreateOptions, setShowCreateOptions] = useState(false);
+  const [knowledgeSync, setKnowledgeSync] = useState<ProjectKnowledgeSync | null>(null);
   const kbDropZoneRef = useRef<HTMLDivElement>(null);
   const cloudKnowledgeInputRef = useRef<HTMLInputElement>(null);
 
@@ -179,6 +227,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const updateProject = useProjectStore((state) => state.updateProject);
   const conversations = useChatStore((state) => state.conversations);
   const isManagedCloud = useAppModeStore(selectPrivacyMode) === 'managed';
+  const currentFolder = useProjectStore((state) => state.currentFolder);
 
   const projectId = project?.id ?? null;
   useEffect(() => {
@@ -191,13 +240,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         setIcon(project.icon || DEFAULT_ICON);
         setIconEmoji(project.iconEmoji ?? '');
         setAccentColor(project.accentColor ?? null);
-        setDefaultPrivacyMode(
-          isManagedCloud ? 'managed' : project.defaultPrivacyMode === 'byok' ? 'byok' : 'local',
-        );
         setFiles(project.files);
         setConversationIds(project.conversationIds);
         setKnowledgeBaseFiles(project.knowledgeBaseFiles ?? []);
-        setShowCreateOptions(false);
       } else {
         setName('');
         setDescription('');
@@ -206,11 +251,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         setIcon(DEFAULT_ICON);
         setIconEmoji('');
         setAccentColor(null);
-        setDefaultPrivacyMode('local');
         setFiles([]);
         setConversationIds([]);
         setKnowledgeBaseFiles([]);
-        setShowCreateOptions(false);
       }
       setActiveTab('general');
     }
@@ -246,6 +289,25 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
     };
   }, [cloudKnowledgeRetry, isManagedCloud, mode, open, projectId]);
 
+  useEffect(() => {
+    if (!open || isManagedCloud || mode !== 'edit' || !projectId || !isTauri) {
+      setKnowledgeSync(null);
+      return;
+    }
+    let cancelled = false;
+    void syncLocalProjectKnowledge(projectId)
+      .then((result) => {
+        if (!cancelled) setKnowledgeSync(result);
+      })
+      .catch((error) => {
+        console.warn('[ProjectSettingsDialog] Project knowledge sync failed:', error);
+        if (!cancelled) setKnowledgeSync(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isManagedCloud, mode, open, projectId]);
+
   const handleSave = async () => {
     if (!name.trim()) {
       return;
@@ -262,12 +324,17 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           icon,
           iconEmoji: iconEmoji.trim() || null,
           accentColor,
-          defaultPrivacyMode: isManagedCloud ? 'managed' : defaultPrivacyMode,
+          ...(isManagedCloud ? { defaultPrivacyMode: 'managed' as const } : {}),
           files: isManagedCloud ? [] : files,
           conversationIds,
           isArchived: false,
           knowledgeBaseFiles: isManagedCloud ? [] : knowledgeBaseFiles,
         });
+        if (!isManagedCloud && isTauri && knowledgeBaseFiles.length > 0) {
+          void syncLocalProjectKnowledge(createdProject.id).catch((error) => {
+            console.warn('[ProjectSettingsDialog] Project knowledge indexing failed:', error);
+          });
+        }
         if (isManagedCloud) {
           const selected = new Set(conversationIds);
           for (const conversation of conversations) {
@@ -286,11 +353,28 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           icon,
           iconEmoji: iconEmoji.trim() || null,
           accentColor,
-          defaultPrivacyMode: isManagedCloud ? 'managed' : defaultPrivacyMode,
+          ...(isManagedCloud ? { defaultPrivacyMode: 'managed' as const } : {}),
           ...(!isManagedCloud
             ? { files, conversationIds, knowledgeBaseFiles }
             : { conversationIds }),
         });
+        if (!isManagedCloud && isTauri) {
+          const keptIds = new Set(knowledgeBaseFiles.map((file) => file.id));
+          const removedFiles = (project.knowledgeBaseFiles ?? []).filter(
+            (file) => !keptIds.has(file.id),
+          );
+          await removeLocalProjectKnowledge(project.id, removedFiles, knowledgeBaseFiles).catch(
+            (error) => {
+              console.warn('[ProjectSettingsDialog] Removing knowledge passages failed:', error);
+              toast.error(
+                'The project was saved, but passages from removed files could not be deleted yet. They are removed before the next chat in this project.',
+              );
+            },
+          );
+          void syncLocalProjectKnowledge(project.id).catch((error) => {
+            console.warn('[ProjectSettingsDialog] Project knowledge indexing failed:', error);
+          });
+        }
         if (isManagedCloud) {
           const nextIds = new Set(conversationIds);
           for (const conversation of conversations) {
@@ -368,15 +452,6 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         if (prev.some((f) => f.path === filePath)) return prev;
         return [...prev, newFile];
       });
-      if (typeof content === 'string' && content.length > 0) {
-        await invoke('memory_remember', {
-          category: 'context',
-          topic: `knowledge_base:${fileName}`,
-          content: `[Knowledge Base: ${fileName}]\n${content.slice(0, 8000)}`,
-        }).catch((err) => {
-          console.warn('[ProjectSettings] failed to store knowledge-base memory:', err);
-        });
-      }
     } catch {
       toast.error(`Failed to read file: ${fileName}`);
     }
@@ -537,23 +612,6 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
       },
     ];
 
-    const privacyOptions: Array<{
-      value: PrivacyMode;
-      label: string;
-      description: string;
-    }> = [
-      {
-        value: 'local',
-        label: 'Local',
-        description: 'Runs on this machine. Best for private work.',
-      },
-      {
-        value: 'byok',
-        label: 'BYOK',
-        description: 'Uses your provider key when the conversation needs cloud models.',
-      },
-    ];
-
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
@@ -626,61 +684,13 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                 />
               </div>
 
-              {isManagedCloud ? (
+              {isManagedCloud && (
                 <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.06] px-4 py-3">
                   <p className="text-sm font-medium text-foreground">Cloud project</p>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
                     Chats, instructions, and uploaded sources sync through your AGI account. Device
                     folders and Local memory remain on this computer.
                   </p>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-border bg-muted/20">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateOptions((value) => !value)}
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium text-foreground"
-                    aria-expanded={showCreateOptions}
-                  >
-                    More options
-                    <ChevronDown
-                      className={cn(
-                        'h-4 w-4 text-muted-foreground transition-transform',
-                        showCreateOptions && 'rotate-180',
-                      )}
-                    />
-                  </button>
-
-                  {showCreateOptions && (
-                    <div className="border-t border-border px-4 pb-4 pt-3">
-                      <Label className="text-sm font-medium text-foreground">Default compute</Label>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        {privacyOptions.map((option) => {
-                          const selected = defaultPrivacyMode === option.value;
-                          return (
-                            <button
-                              key={option.value}
-                              type="button"
-                              onClick={() => setDefaultPrivacyMode(option.value)}
-                              className={cn(
-                                'rounded-xl border px-3 py-3 text-left transition-colors',
-                                selected
-                                  ? 'border-foreground/30 bg-foreground/[0.06]'
-                                  : 'border-border bg-background hover:bg-muted/50',
-                              )}
-                            >
-                              <span className="block text-sm font-medium text-foreground">
-                                {option.label}
-                              </span>
-                              <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                                {option.description}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -901,9 +911,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-foreground">Default Privacy Mode</Label>
-                {isManagedCloud ? (
+              {isManagedCloud && (
+                <div className="space-y-2">
+                  <Label className="text-foreground">Privacy</Label>
                   <div className="rounded-lg border border-blue-500/20 bg-blue-500/[0.06] px-3 py-2">
                     <p className="text-sm font-medium text-foreground">Managed Cloud</p>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">
@@ -911,48 +921,11 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                       requires an explicit redacted handoff; it cannot be changed here silently.
                     </p>
                   </div>
-                ) : (
-                  <>
-                    <p className="text-xs text-muted-foreground">
-                      Privacy mode for new conversations in this project.
-                    </p>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="privacy-mode"
-                          value="local"
-                          checked={defaultPrivacyMode === 'local'}
-                          onChange={() => setDefaultPrivacyMode('local')}
-                          className="accent-blue-500"
-                        />
-                        <span className="text-sm text-foreground">Local</span>
-                        <span className="text-xs text-muted-foreground ml-1">
-                          Runs on-device. No data leaves your machine.
-                        </span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="privacy-mode"
-                          value="byok"
-                          checked={defaultPrivacyMode === 'byok'}
-                          onChange={() => setDefaultPrivacyMode('byok')}
-                          className="accent-blue-500"
-                        />
-                        <span className="text-sm text-foreground">BYOK</span>
-                        <span className="text-xs text-muted-foreground ml-1">
-                          Your API key, provider servers.
-                        </span>
-                      </label>
-                    </div>
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      Cloud projects are created from Cloud mode so Local data is never uploaded
-                      without an explicit handoff.
-                    </p>
-                  </>
-                )}
-              </div>
+                </div>
+              )}
+              {!isManagedCloud && currentFolder && (
+                <ProjectGitTrustSection projectPath={currentFolder} />
+              )}
             </TabsContent>
 
             {/* Instructions Tab */}
@@ -997,6 +970,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                     memories from outside chats, and vice versa. Review them in Settings → Memory.
                   </p>
                 </div>
+              )}
+              {!isManagedCloud && currentFolder && (
+                <ProjectMemorySection projectFolder={currentFolder} />
               )}
             </TabsContent>
 
@@ -1233,43 +1209,50 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {knowledgeBaseFiles.map((file) => (
-                          <div
-                            key={file.id}
-                            className="flex items-center justify-between p-2 bg-muted rounded-md group"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <File className="w-4 h-4 text-green-700 dark:text-green-400 shrink-0" />
-                              <div className="min-w-0">
-                                <span className="text-sm text-foreground truncate block">
-                                  {file.name}
-                                </span>
-                                {file.content && (
-                                  <span className="text-xs text-muted-foreground">
-                                    {file.content.length.toLocaleString()} chars
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoveKbFile(file.id)}
-                              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-danger-text shrink-0"
+                        {knowledgeBaseFiles.map((file, index) => {
+                          const usageNote = knowledgeFileUsageNote(file, index, knowledgeSync);
+                          return (
+                            <div
+                              key={file.id}
+                              className="flex items-center justify-between p-2 bg-muted rounded-md group"
                             >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        ))}
+                              <div className="flex items-center gap-2 min-w-0">
+                                <File className="w-4 h-4 text-green-700 dark:text-green-400 shrink-0" />
+                                <div className="min-w-0">
+                                  <span className="text-sm text-foreground truncate block">
+                                    {file.name}
+                                  </span>
+                                  {file.content && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {file.content.length.toLocaleString()} chars
+                                      {usageNote ? ` · ${usageNote}` : ''}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                aria-label={`Remove ${file.name}`}
+                                onClick={() => handleRemoveKbFile(file.id)}
+                                className="shrink-0 text-muted-foreground opacity-0 hover:text-danger-text focus-visible:opacity-100 group-hover:opacity-100"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </ScrollArea>
 
                   <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
                     <p className="text-xs text-blue-300">
-                      Knowledge base files are read once and stored locally. AGI searches this
-                      content and references the most relevant parts when answering questions in
-                      this project.
+                      {knowledgeSync?.retrieval === 'passages'
+                        ? 'Files stay on this device. Your local embedding model picks the passages most relevant to each message.'
+                        : knowledgeSync?.retrieval === 'whole_files'
+                          ? `Files stay on this device. No local embedding model was found, so chats read the first ${knowledgeSync.wholeFileMaxFiles} files, up to ${knowledgeSync.wholeFileMaxChars.toLocaleString()} characters each. Install an embedding model in Ollama to search all of it.`
+                          : 'Files stay on this device and are used as context for chats in this project.'}
                     </p>
                   </div>
                 </>

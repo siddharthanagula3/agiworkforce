@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   ChevronDown,
@@ -9,18 +9,19 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { useShallow } from 'zustand/react/shallow';
-import { cn } from '../../lib/utils';
-import { useAccountStore } from '../../stores/auth';
-import { type RecentConversationSearchResult, useChatStore } from '../../stores/chat/chatStore';
-import { useModelStore } from '../../stores/modelStore';
 import {
-  PROVIDER_LABELS,
-  getAllowedAutoModesForTier,
-  getBestAutoModeForTier,
-  getManagedAutoModelOptions,
-} from '../../constants/llm';
-import type { Provider } from '../../stores/settingsStore';
+  getModelsAdmittedForExecutionMode,
+  isChatModelSelectable,
+  useChatModelStore,
+} from '@agiworkforce/unified-chat';
+import type { ChatExecutionMode } from '@agiworkforce/types';
+import { cn } from '../../lib/utils';
+import {
+  defaultConversationExecutionMode,
+  type RecentConversationSearchResult,
+  useChatStore,
+} from '../../stores/chat/chatStore';
+import { PROVIDER_LABELS } from '../../constants/llm';
 import { ScreenCaptureButton } from '@/features/screen-capture/ScreenCaptureButton';
 import type { CaptureResult } from '../../types/capture';
 import { useUiTranslation } from '@agiworkforce/ui';
@@ -100,10 +101,16 @@ function formatRelativeTimestamp(value: string): string {
   return formatter.format(months, 'month');
 }
 
+const BOUNDARY_LABELS: Record<ChatExecutionMode, string> = {
+  local_only: 'Local',
+  byok: 'BYOK',
+  cloud_managed: PROVIDER_LABELS['managed_cloud'],
+};
+
 interface QuickQueryProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (query: string, model: string) => void;
+  onSubmit: (query: string) => void;
   onOpenConversation?: (conversationId: string | number) => void;
   onStartNewChat?: () => void;
   onRequestVoice?: (draft: string) => void;
@@ -128,53 +135,64 @@ export function QuickQuery({
   const overlayRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const { selectedModel, selectModel } = useModelStore(
-    useShallow((state) => ({
-      selectedModel: state.selectedModel,
-      selectModel: state.selectModel,
-    })),
+  const chatModels = useChatModelStore((state) => state.models);
+  const selectedModelId = useChatModelStore((state) => state.selectedModelId);
+  const selectChatModel = useChatModelStore((state) => state.selectModel);
+  const activeConversation = useChatStore((state) =>
+    state.conversations.find((conversation) => conversation.id === state.activeConversationId),
   );
-  const account = useAccountStore((state) => state.account);
+  const setConversationModel = useChatStore((state) => state.setConversationModel);
   const getRecentConversations = useChatStore((state) => state.getRecentConversations);
   const canOpenRecentChats = typeof onOpenConversation === 'function';
-  const planTier = account.plan ?? 'free';
-  const allowedAutoModes = getAllowedAutoModesForTier(planTier);
-  const defaultModel = getBestAutoModeForTier(planTier);
+  const executionMode = activeConversation?.executionMode ?? defaultConversationExecutionMode();
+  const modelOptions = useMemo(
+    () =>
+      getModelsAdmittedForExecutionMode(chatModels, executionMode).filter(isChatModelSelectable),
+    [chatModels, executionMode],
+  );
+  const selectedOption = modelOptions.find((model) => model.id === selectedModelId);
 
   useEffect(() => {
-    if (open) {
-      const timer = setTimeout(() => {
-        inputRef.current?.focus();
-      }, 50);
-
-      if (canOpenRecentChats) {
-        setIsLoadingRecent(true);
-        void getRecentConversations(6)
-          .then((results) => {
-            setRecentConversations(
-              (results ?? [])
-                .map((item) =>
-                  normalizeRecentConversation(item as unknown as Record<string, unknown>),
-                )
-                .filter((item): item is RecentConversationItem => item !== null),
-            );
-          })
-          .catch((error) => {
-            console.error('[QuickQuery] Failed to load recent conversations:', error);
-            setRecentConversations([]);
-          })
-          .finally(() => {
-            setIsLoadingRecent(false);
-          });
-      }
-
-      return () => clearTimeout(timer);
+    if (!open) {
+      setQuery('');
+      setModelDropdownOpen(false);
+      setRecentConversations([]);
+      setIsLoadingRecent(false);
+      return undefined;
     }
-    setQuery('');
-    setModelDropdownOpen(false);
-    setRecentConversations([]);
-    setIsLoadingRecent(false);
-    return undefined;
+
+    let stale = false;
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+
+    if (canOpenRecentChats) {
+      setIsLoadingRecent(true);
+      void getRecentConversations(6)
+        .then((results) => {
+          if (stale) return;
+          setRecentConversations(
+            (results ?? [])
+              .map((item) =>
+                normalizeRecentConversation(item as unknown as Record<string, unknown>),
+              )
+              .filter((item): item is RecentConversationItem => item !== null),
+          );
+        })
+        .catch((error) => {
+          if (stale) return;
+          console.error('[QuickQuery] Failed to load recent conversations:', error);
+          setRecentConversations([]);
+        })
+        .finally(() => {
+          if (!stale) setIsLoadingRecent(false);
+        });
+    }
+
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
   }, [canOpenRecentChats, getRecentConversations, open]);
 
   useEffect(() => {
@@ -226,10 +244,21 @@ export function QuickQuery({
   const handleSubmit = useCallback(() => {
     const trimmed = query.trim();
     if (!trimmed) return;
-    onSubmit(trimmed, selectedModel ?? defaultModel);
+    onSubmit(trimmed);
     setQuery('');
     onClose();
-  }, [defaultModel, query, selectedModel, onSubmit, onClose]);
+  }, [query, onSubmit, onClose]);
+
+  const handleSelectModel = useCallback(
+    (modelId: string) => {
+      selectChatModel(modelId);
+      if (activeConversation) {
+        setConversationModel(activeConversation.id, modelId);
+      }
+      setModelDropdownOpen(false);
+    },
+    [activeConversation, selectChatModel, setConversationModel],
+  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -267,32 +296,8 @@ export function QuickQuery({
     [onClose, onRequestCapture, query],
   );
 
-  const modelOptions = (() => {
-    const options: Array<{ value: string; label: string; provider: Provider }> = [];
-
-    for (const model of getManagedAutoModelOptions()) {
-      if (!allowedAutoModes.includes(model.value)) {
-        continue;
-      }
-      options.push({ ...model, provider: 'managed_cloud' });
-    }
-
-    return options;
-  })();
-
-  const currentModelLabel = (() => {
-    if (!selectedModel) {
-      const defaultOption = modelOptions.find((option) => option.value === defaultModel);
-      return defaultOption?.label ?? 'Auto (Economy)';
-    }
-    const found = modelOptions.find((o) => o.value === selectedModel);
-    if (found) return found.label;
-    if (selectedModel.startsWith('auto')) {
-      const defaultOption = modelOptions.find((option) => option.value === defaultModel);
-      return defaultOption?.label ?? 'Auto (Economy)';
-    }
-    return selectedModel.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-  })();
+  const currentModelLabel =
+    selectedOption?.name ?? (modelOptions.length > 0 ? 'Select model' : 'No model available');
 
   if (!open) return null;
 
@@ -443,12 +448,16 @@ export function QuickQuery({
             <button
               type="button"
               onClick={() => setModelDropdownOpen((prev) => !prev)}
+              disabled={modelOptions.length === 0}
+              aria-expanded={modelDropdownOpen}
+              aria-label={`Model: ${currentModelLabel}`}
               className={cn(
                 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg',
                 'text-xs font-medium text-zinc-400',
                 'bg-white/[0.04] hover:bg-white/[0.08]',
                 'border border-white/[0.06]',
                 'transition-all duration-150',
+                'disabled:cursor-not-allowed disabled:hover:bg-white/[0.04]',
               )}
             >
               <span className="truncate max-w-[160px]">{currentModelLabel}</span>
@@ -465,7 +474,7 @@ export function QuickQuery({
               <div
                 className={cn(
                   'absolute bottom-full left-0 mb-1.5',
-                  'w-56 rounded-xl overflow-hidden',
+                  'w-56 max-h-72 overflow-y-auto rounded-xl',
                   'bg-zinc-900/95 backdrop-blur-xl',
                   'border border-white/[0.08]',
                   'shadow-xl shadow-black/40',
@@ -474,15 +483,13 @@ export function QuickQuery({
                 )}
               >
                 {modelOptions.map((option) => {
-                  const isSelected = selectedModel === option.value;
+                  const isSelected = selectedModelId === option.id;
                   return (
                     <button
                       type="button"
-                      key={option.value}
-                      onClick={() => {
-                        void selectModel(option.value, option.provider);
-                        setModelDropdownOpen(false);
-                      }}
+                      aria-pressed={isSelected}
+                      key={option.id}
+                      onClick={() => handleSelectModel(option.id)}
                       className={cn(
                         'w-full flex items-center gap-2 px-3 py-2 text-left text-sm',
                         'transition-colors duration-100',
@@ -491,7 +498,7 @@ export function QuickQuery({
                           : 'text-zinc-300 hover:bg-white/[0.06]',
                       )}
                     >
-                      <span className="truncate">{option.label}</span>
+                      <span className="truncate">{option.name}</span>
                       {isSelected && (
                         <span className="ml-auto text-blue-400 text-xs font-medium">Active</span>
                       )}
@@ -503,7 +510,7 @@ export function QuickQuery({
                 <div className="mx-3 my-1 border-t border-white/[0.06]" />
                 <div className="px-3 py-1">
                   <span className="text-[10px] text-zinc-600 uppercase tracking-wider font-semibold">
-                    {PROVIDER_LABELS['managed_cloud']}
+                    {BOUNDARY_LABELS[executionMode]}
                   </span>
                 </div>
               </div>

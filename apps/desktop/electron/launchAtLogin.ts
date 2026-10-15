@@ -23,7 +23,3 @@ export function setLaunchAtLogin(enabled: boolean): boolean {
   app.setLoginItemSettings({ openAtLogin: enabled });
   return enabled;
 }
-
-export function toggleLaunchAtLogin(): boolean {
-  return setLaunchAtLogin(!isLaunchAtLoginEnabled());
-}

@@ -75,13 +75,6 @@ export interface ProjectFileInfo {
   extension: string | null;
 }
 
-export interface ProjectInstructionFile {
-  path: string;
-  filename: string;
-  content: string;
-  scope: string;
-}
-
 interface ProjectState {
   projects: Project[];
   activeProjectId: string | null;
@@ -133,8 +126,6 @@ interface ProjectState {
   getProjectSummary: () => Promise<string>;
   listProjectFiles: (maxDepth?: number, includeHidden?: boolean) => Promise<ProjectFileInfo[]>;
   validateProjectPath: (path: string) => Promise<boolean>;
-  loadProjectInstructions: () => Promise<ProjectInstructionFile[]>;
-  hasProjectInstructions: () => Promise<boolean>;
 
   clearError: () => void;
 }
@@ -728,28 +719,6 @@ export const useProjectStore = create<ProjectState>()(
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             console.error('[ProjectStore] Failed to validate project path:', errorMessage);
-            set({ error: errorMessage });
-            throw error;
-          }
-        },
-
-        loadProjectInstructions: async () => {
-          try {
-            return await invoke<ProjectInstructionFile[]>('project_load_instructions');
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error('[ProjectStore] Failed to load project instructions:', errorMessage);
-            set({ error: errorMessage });
-            throw error;
-          }
-        },
-
-        hasProjectInstructions: async () => {
-          try {
-            return await invoke<boolean>('project_has_instructions');
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error('[ProjectStore] Failed to check project instructions:', errorMessage);
             set({ error: errorMessage });
             throw error;
           }

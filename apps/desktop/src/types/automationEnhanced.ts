@@ -58,6 +58,8 @@ export interface ScriptAction {
   duration?: number;
   condition?: string;
   repeatCount?: number;
+  /** The app this step acts in, when it differs from the script's. */
+  app?: string;
 }
 
 export interface AutomationScript {
@@ -69,6 +71,8 @@ export interface AutomationScript {
   createdAt: number;
   updatedAt: number;
   lastRunAt?: number;
+  /** The app clicks and typing go to, by Dock name or bundle id; required to replay input. */
+  app?: string;
 }
 
 export interface ExecutionResult {

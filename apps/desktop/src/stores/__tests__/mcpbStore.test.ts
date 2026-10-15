@@ -97,4 +97,21 @@ describe('mcpbStore', () => {
       },
     });
   });
+
+  it('reports an install the person declined natively in the words Rust gave', async () => {
+    tauri.invoke.mockRejectedValueOnce('You chose not to install @example/mcp-server 1.0.0.');
+
+    await useMcpbStore.getState().installBundle(installedBundle.id);
+
+    expect(useMcpbStore.getState()).toMatchObject({
+      isInstalling: false,
+      error: 'You chose not to install @example/mcp-server 1.0.0.',
+      installProgress: {
+        status: 'failed',
+        message: 'The bundle was not installed.',
+        error: 'You chose not to install @example/mcp-server 1.0.0.',
+      },
+    });
+    expect(tauri.invoke).toHaveBeenCalledTimes(1);
+  });
 });

@@ -38,6 +38,7 @@ export function getShortcuts(): GarnishShortcuts {
     screenshotShortcut: settings.screenshotShortcut,
     windowShotShortcut: settings.windowShotShortcut,
     voiceShortcut: settings.voiceShortcut,
+    stopShortcut: settings.stopShortcut,
   };
 }
 

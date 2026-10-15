@@ -7,6 +7,12 @@ import { PrivacyTab } from './index';
 
 vi.mock('@/lib/tauri-mock', () => ({
   isTauri: true,
+  relaunchApp: vi.fn(),
+}));
+
+vi.mock('@/api/privacy', () => ({
+  exportLocalData: vi.fn(),
+  deleteLocalData: vi.fn(),
 }));
 
 vi.mock('@tauri-apps/api/path', () => ({
@@ -14,17 +20,10 @@ vi.mock('@tauri-apps/api/path', () => ({
 }));
 
 vi.mock('@agiworkforce/desktop-command-client', () => ({
-  chat: {
-    clearLocalDatabase: vi.fn(),
-  },
-  cache: {
-    cacheClearAll: vi.fn(),
-  },
   settings: {
     settingsV2ClearCache: vi.fn(),
   },
   onboarding: {
-    exportUserData: vi.fn(),
     getUserPreference: vi.fn().mockResolvedValue(null),
     setUserPreference: vi.fn(),
   },

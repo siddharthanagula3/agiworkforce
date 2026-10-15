@@ -1,5 +1,6 @@
 import { Notification, globalShortcut } from 'electron';
 import { getShortcuts } from './settingsStore';
+import { createNativeNotification } from './runtime/nativeSurface';
 import type { HostShortcutStatus } from '@agiworkforce/local-runtime-contract';
 import {
   SHORTCUT_KEYS,
@@ -16,6 +17,7 @@ export interface GarnishShortcutHandlers {
   onScreenshot: () => void;
   onWindowShot: () => void;
   onVoice: () => void;
+  onStop: () => void;
 }
 
 export type ShortcutStatus = HostShortcutStatus;
@@ -49,7 +51,7 @@ function warnOnce(accelerator: string, label: string, detail: string): void {
   if (warnedAboutConflict) return;
   warnedAboutConflict = true;
   if (!Notification.isSupported()) return;
-  new Notification({
+  createNativeNotification({
     title: TAKEN_NOTIFICATION_TITLE,
     body: `${accelerator} ${detail}. ${TRAY_FALLBACK_DETAIL}`,
   }).show();
@@ -92,6 +94,7 @@ export function registerGarnishShortcuts(
     screenshotShortcut: handlers.onScreenshot,
     windowShotShortcut: handlers.onWindowShot,
     voiceShortcut: handlers.onVoice,
+    stopShortcut: handlers.onStop,
   };
 
   registrations = SHORTCUT_KEYS.map((key) =>

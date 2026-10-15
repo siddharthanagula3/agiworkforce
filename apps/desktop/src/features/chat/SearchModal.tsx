@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Search, MessageSquare, Folder, File as FileIcon, FileCode, X, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LibraryListResponseSchema, type LibraryItem } from '@agiworkforce/cloud-contracts';
-import { useChatStore } from '../../stores/chat/chatStore';
+import { useChatStore, uuidToDbId } from '../../stores/chat/chatStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useArtifactStore } from '../../stores/artifactStore';
 import { useSearchModal } from '../../hooks/useSearchModal';
@@ -19,6 +19,8 @@ import {
 } from '../../services/managedCloudRequestContext';
 import { selectHasCloudAccountSession, useAuthStore } from '../../stores/auth';
 import { isTauri } from '../../lib/runtimeEnvironment';
+import { useLocalChatSearch } from './useLocalChatSearch';
+import { openArtifactInChat } from '../artifacts/openArtifactInChat';
 import { useUiTranslation } from '@agiworkforce/ui';
 
 type ResultType = 'chat' | 'project' | 'library' | 'artifact';
@@ -94,8 +96,6 @@ export function SearchModal() {
   const projects = useProjectStore((s) => s.projects);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
   const summaries = useArtifactStore((s) => s.summaries);
-  const setActiveArtifact = useArtifactStore((s) => s.setActiveArtifact);
-  const openArtifactPanel = useArtifactStore((s) => s.openPanel);
   const privacyMode = useAppModeStore(selectPrivacyMode);
   const hasCloudAccountSession = useAuthStore(selectHasCloudAccountSession);
   const cloudAccountId = useAuthStore((state) => state.user?.id ?? null);
@@ -114,6 +114,14 @@ export function SearchModal() {
     librarySearch?.requestKey === libraryRequestKey ? librarySearch : null;
   const libraryItems = activeLibrarySearch?.items ?? EMPTY_LIBRARY_ITEMS;
   const librarySearchError = activeLibrarySearch?.error ?? null;
+  const {
+    hits: messageHits,
+    loading: messageSearchLoading,
+    error: messageSearchError,
+  } = useLocalChatSearch(query, {
+    enabled: isOpen && isTauri && privacyMode === 'local' && ['all', 'chats'].includes(filter),
+    limit: 20,
+  });
 
   useEffect(() => {
     setLibrarySearch(null);
@@ -208,24 +216,43 @@ export function SearchModal() {
   const results = useMemo((): SearchResult[] => {
     const q = query.trim().toLowerCase();
 
-    const chatResults: SearchResult[] =
-      filter === 'all' || filter === 'chats'
-        ? conversations
-            .filter((c) => !c.archived)
-            .filter(
-              (c) =>
-                !q || c.title.toLowerCase().includes(q) || c.lastMessage?.toLowerCase().includes(q),
-            )
-            .slice(0, 8)
-            .map((c) => ({
-              id: `chat-${c.id}`,
-              type: 'chat' as const,
-              title: c.title || 'Untitled chat',
-              subtitle: c.lastMessage || undefined,
-              updatedAt: c.updatedAt,
-              payload: c,
-            }))
-        : [];
+    const chatResults: SearchResult[] = [];
+    if (filter === 'all' || filter === 'chats') {
+      const active = conversations.filter((c) => !c.archived);
+      const titleMatches = active
+        .filter(
+          (c) =>
+            !q || c.title.toLowerCase().includes(q) || c.lastMessage?.toLowerCase().includes(q),
+        )
+        .slice(0, 8);
+      for (const c of titleMatches) {
+        chatResults.push({
+          id: `chat-${c.id}`,
+          type: 'chat',
+          title: c.title || 'Untitled chat',
+          subtitle: c.lastMessage || undefined,
+          updatedAt: c.updatedAt,
+          payload: c,
+        });
+      }
+      // Message text lives only in SQLite, so the full-text hits name the chat
+      // that contains the match and show the matching passage beneath it.
+      const byStoredId = new Map(active.map((c) => [uuidToDbId(c.id), c]));
+      const listed = new Set(titleMatches.map((c) => c.id));
+      for (const hit of messageHits) {
+        const conversation = byStoredId.get(hit.conversation_id);
+        if (!conversation || listed.has(conversation.id)) continue;
+        listed.add(conversation.id);
+        chatResults.push({
+          id: `chat-${conversation.id}`,
+          type: 'chat',
+          title: conversation.title || 'Untitled chat',
+          subtitle: hit.content_snippet,
+          updatedAt: conversation.updatedAt,
+          payload: conversation,
+        });
+      }
+    }
 
     const projectResults: SearchResult[] =
       filter === 'all' || filter === 'projects'
@@ -297,6 +324,7 @@ export function SearchModal() {
     privacyMode,
     hasCloudAccountSession,
     libraryItems,
+    messageHits,
   ]);
 
   const groupedResults = useMemo(() => {
@@ -328,8 +356,7 @@ export function SearchModal() {
         case 'artifact': {
           const artifact = result.payload as ArtifactSummary;
           if (privacyMode !== 'local') break;
-          setActiveArtifact(artifact.id);
-          openArtifactPanel();
+          void openArtifactInChat(artifact.id);
           break;
         }
         case 'library': {
@@ -344,14 +371,7 @@ export function SearchModal() {
       }
       close();
     },
-    [
-      selectConversation,
-      setActiveProject,
-      setActiveArtifact,
-      openArtifactPanel,
-      close,
-      privacyMode,
-    ],
+    [selectConversation, setActiveProject, close, privacyMode],
   );
 
   useEffect(() => {
@@ -580,7 +600,7 @@ export function SearchModal() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search chats, projects, and files..."
+              placeholder="Search chats, messages, projects, and files..."
               className={cn(
                 'flex-1 bg-transparent text-sm text-foreground outline-hidden',
                 'placeholder:text-muted-foreground',
@@ -634,8 +654,18 @@ export function SearchModal() {
           >
             {renderGrouped()}
             {librarySearchError && privacyMode === 'managed' ? (
-              <p role="alert" className="px-4 pb-3 text-xs text-[var(--chat-destructive)]">
+              <p role="alert" className="px-4 pb-3 text-xs text-[var(--chat-destructive-text)]">
                 Library search failed ({librarySearchError}).
+              </p>
+            ) : null}
+            {messageSearchLoading ? (
+              <p role="status" className="px-4 pb-3 text-xs text-muted-foreground">
+                Searching messages…
+              </p>
+            ) : null}
+            {messageSearchError ? (
+              <p role="alert" className="px-4 pb-3 text-xs text-[var(--chat-destructive-text)]">
+                Message search failed ({messageSearchError}).
               </p>
             ) : null}
           </div>

@@ -37,16 +37,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
   const isDebug = Boolean(env['TAURI_DEBUG']);
   const browserShimDir = (module: string) =>
     isElectronBuild &&
-    [
-      'core',
-      'window',
-      'deep-link',
-      'dialog',
-      'shell',
-      'notification',
-      'process',
-      'updater',
-    ].includes(module)
+    ['core', 'window', 'deep-link', 'dialog', 'shell', 'process', 'updater'].includes(module)
       ? './src/lib/tauri-electron'
       : './src/lib/tauri-web';
   const webTauriAliases = isBrowserBundle
@@ -65,10 +56,6 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         ),
         '@tauri-apps/plugin-shell': path.resolve(__dirname, `${browserShimDir('shell')}/shell.ts`),
         '@tauri-apps/plugin-fs': path.resolve(__dirname, './src/lib/tauri-web/fs.ts'),
-        '@tauri-apps/plugin-notification': path.resolve(
-          __dirname,
-          `${browserShimDir('notification')}/notification.ts`,
-        ),
         '@tauri-apps/plugin-process': path.resolve(
           __dirname,
           `${browserShimDir('process')}/process.ts`,

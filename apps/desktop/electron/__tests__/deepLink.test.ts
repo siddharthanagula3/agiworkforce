@@ -12,6 +12,9 @@ const shell = vi.hoisted(() => ({
 }));
 
 const appHandlers = new Map<string, (...args: unknown[]) => void>();
+const HOSTED_PAGE = 'https://agiworkforce.com/chat';
+const BUNDLED_PAGE = 'agi://cloud/index.html';
+let pageUrl = HOSTED_PAGE;
 const webContentsSend = vi.fn();
 
 function makeWebContents() {
@@ -23,6 +26,7 @@ function makeWebContents() {
     }),
     isLoading: () => false,
     isDestroyed: () => false,
+    getURL: () => pageUrl,
     setWindowOpenHandler: vi.fn(),
     userAgent: 'test',
     focus: vi.fn(),
@@ -109,7 +113,12 @@ vi.mock('electron', () => {
   };
 });
 
-vi.mock('../tray', () => ({ createTray: vi.fn() }));
+vi.mock('../tray', () => ({
+  createTray: vi.fn(),
+  destroyTray: vi.fn(),
+  hasTray: () => false,
+  refreshTrayMenu: vi.fn(),
+}));
 vi.mock('../shortcuts', () => ({
   registerGarnishShortcuts: vi.fn(),
   unregisterGarnishShortcuts: vi.fn(),
@@ -131,6 +140,7 @@ vi.mock('../accountBridge', () => ({ handleBridgeCommand: vi.fn() }));
 async function bootMain(mode: 'remote' | 'bundled' | 'unset') {
   if (mode === 'unset') delete process.env['AGI_CLOUD_RENDERER'];
   else process.env['AGI_CLOUD_RENDERER'] = mode;
+  pageUrl = mode === 'bundled' ? BUNDLED_PAGE : HOSTED_PAGE;
   vi.resetModules();
   appHandlers.clear();
   webContentsSend.mockClear();
@@ -232,6 +242,15 @@ describe('deep-link delivery', () => {
       ELECTRON_IPC_CHANNELS.deepLink,
       LEGACY_SSO_LINK,
     );
+  });
+
+  it('holds a link while the window shows a sign-in provider, which is not the page it is for', async () => {
+    await bootMain('remote');
+    pageUrl = 'https://accounts.google.com/o/oauth2/auth';
+
+    openUrl(DEEP_LINK);
+
+    expect(webContentsSend).not.toHaveBeenCalled();
   });
 
   it('ignores URLs outside the deep-link scheme', async () => {

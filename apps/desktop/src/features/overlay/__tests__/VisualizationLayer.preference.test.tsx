@@ -29,7 +29,7 @@ describe('VisualizationLayer overlay preference', () => {
     render(<VisualizationLayer />);
 
     await waitFor(() => {
-      expect(mockListen).toHaveBeenCalledWith('overlay:animate', expect.any(Function));
+      expect(mockListen).toHaveBeenCalledWith('overlay:update', expect.any(Function));
     });
   });
 

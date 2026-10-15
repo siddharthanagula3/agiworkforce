@@ -1,5 +1,4 @@
-import type { TaskMetadata } from '../lib/taskMetadata';
-import type { Effort } from '@agiworkforce/types';
+import type { LifecycleStatus } from '@agiworkforce/types';
 import type { ToolCallUI, ToolExecutionWorkflow, ToolResultUI } from './toolCalling';
 
 export type MessageRole = 'user' | 'assistant' | 'system';
@@ -123,32 +122,6 @@ export interface UpdateConversationRequest {
   title: string;
 }
 
-export interface ChatRoutingPreferences {
-  provider?: string | undefined;
-  model?: string | undefined;
-  strategy?: string | undefined;
-  costPriority?: 'low' | 'balanced';
-}
-
-export interface ChatSendMessageRequest extends ChatRoutingPreferences {
-  conversationId?: number | null;
-  content: string;
-  stream?: boolean;
-  workflowHash?: string;
-  taskMetadata?: TaskMetadata;
-  providerOverride?: string;
-  modelOverride?: string;
-  enableTools?: boolean;
-  conversationMode?: 'auto' | 'manual';
-  customInstructions?: string;
-  enableThinking?: boolean;
-  thinkingBudget?: number;
-  reasoningEffort?: Effort;
-  temperature?: number;
-  maxOutputTokens?: number;
-  isExplicitModelSelection?: boolean;
-}
-
 export interface CreditsInfo {
   cost_cents: number;
   remaining_cents: number;
@@ -231,7 +204,7 @@ export interface ChatStreamEndPayload {
 export interface ResearchStep {
   id: string;
   description: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: Extract<LifecycleStatus, 'pending' | 'running' | 'completed' | 'failed'>;
   timestamp?: number;
   details?: string;
 }
@@ -240,7 +213,7 @@ export interface ResearchTask {
   id: string;
   query: string;
   progress: number;
-  status: 'running' | 'completed' | 'failed';
+  status: Extract<LifecycleStatus, 'running' | 'completed' | 'failed'>;
   steps: ResearchStep[];
   findings: string[];
   sources: { title: string; url: string; domain?: string }[];

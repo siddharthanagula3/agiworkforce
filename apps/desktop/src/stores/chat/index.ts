@@ -1,4 +1,3 @@
-
 export { useChatStore, useChatMessageStore } from './chatStore';
 export { useChatViewStore } from './chatViewStore';
 export { useChatExecutionStore } from './chatExecutionStore';
@@ -30,24 +29,8 @@ export type {
   ConversationMode,
 } from './types';
 
-export type {
-  ChatState,
-  ChatSearchResult,
-  ConversationSearchResult,
-  BackendConversationStats,
-  CostOverviewResponse,
-  CostAnalyticsResponse,
-  ContextCompactionResponse,
-} from './chatStore';
-export type {
-  AgentStatus,
-  BackgroundTaskStatus,
-  BackgroundTaskPriority,
-  BackgroundTask,
-  ActionTrailEntry,
-  AgentState,
-  AgentStatusPayload,
-} from './agentStore';
+export type { ChatState, CostOverviewResponse, CostAnalyticsResponse } from './chatStore';
+export type { AgentStatus, ActionTrailEntry, AgentState, AgentStatusPayload } from './agentStore';
 export type {
   FileOperationType,
   FileOperation,
@@ -110,12 +93,10 @@ export {
 export {
   selectAgents,
   selectAgentStatus,
-  selectBackgroundTasks,
   selectActionTrail,
   selectIsAutonomousMode,
   selectMissionControlOpen,
   selectRunningAgents,
-  selectActiveBackgroundTasks,
 } from './agentStore';
 
 export {

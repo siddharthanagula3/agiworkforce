@@ -1,5 +1,5 @@
-import { OLLAMA_MODEL_PULL_TIMEOUT_MS, OLLAMA_TIMEOUT_MS } from '../constants/timeouts';
-import { invoke } from '../lib/tauri-mock';
+import { OLLAMA_TIMEOUT_MS } from '../constants/timeouts';
+import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 
 export interface OllamaModelDetails {
   parameter_size: string;
@@ -60,9 +60,15 @@ export function formatModelSize(bytes: number): string {
  * }
  * ```
  */
-export async function ollamaCheckStatus(baseUrl?: string): Promise<boolean> {
+export async function ollamaCheckStatus(
+  baseUrl?: string,
+  allowPrivateNetwork?: boolean,
+): Promise<boolean> {
   try {
-    return await invokeWithTimeout<boolean>('ollama_check_status', { baseUrl });
+    return await invokeWithTimeout<boolean>('ollama_check_status', {
+      baseUrl,
+      allowPrivateNetwork,
+    });
   } catch (error) {
     console.debug('[Ollama] Status check failed:', error);
     return false;
@@ -83,72 +89,110 @@ export async function ollamaCheckStatus(baseUrl?: string): Promise<boolean> {
  * });
  * ```
  */
-export async function ollamaListModels(baseUrl?: string): Promise<OllamaModel[]> {
+export async function ollamaListModels(
+  baseUrl?: string,
+  allowPrivateNetwork?: boolean,
+): Promise<OllamaModel[]> {
   try {
-    return await invokeWithTimeout<OllamaModel[]>('ollama_list_models', { baseUrl });
+    return await invokeWithTimeout<OllamaModel[]>('ollama_list_models', {
+      baseUrl,
+      allowPrivateNetwork,
+    });
   } catch (error) {
     throw new Error(`Failed to list Ollama models: ${error}`);
   }
 }
 
-/**
- * Get detailed information about a specific Ollama model.
- *
- * @param modelName - The provider-reported name of an installed model
- * @returns Model details including parameters and quantization
- * @throws Error if the model is not found or Ollama is not running
- *
- * @example
- * ```ts
- * const info = await ollamaGetModelInfo(selectedModel.name);
- * console.log(`Parameters: ${info.details.parameter_size}`);
- * ```
- */
-export async function ollamaGetModelInfo(
-  modelName: string,
-  baseUrl?: string,
-): Promise<OllamaModel> {
-  if (!modelName || modelName.trim().length === 0) {
-    throw new Error('Model name cannot be empty');
-  }
+export interface OllamaPullProgress {
+  model: string;
+  status: string;
+  digest: string | null;
+  total: number | null;
+  completed: number | null;
+}
 
-  try {
-    return await invokeWithTimeout<OllamaModel>('ollama_get_model_info', {
-      modelName,
-      baseUrl,
-    });
-  } catch (error) {
-    throw new Error(`Failed to get model info for '${modelName}': ${error}`);
-  }
+export type OllamaPullOutcome = 'completed' | 'cancelled';
+
+export interface OllamaLoadedModel {
+  name: string;
+  size: number;
+  size_vram: number;
+  expires_at: string | null;
+  parameter_size: string;
+  quantization_level: string;
 }
 
 /**
- * Pull (download) a model from Ollama.
- * Resolves after Ollama finishes the download.
- *
- * @param modelName - The model name selected by the user
- * @throws Error if the model name is invalid or the request fails
- *
- * @example
- * ```ts
- * await ollamaPullModel(modelName);
- * console.log('Model download initiated');
- * ```
+ * Download a model through Ollama. Progress arrives on
+ * `ollama:pull-progress`; the promise settles when Ollama reports
+ * success, when `ollamaCancelPull` stops it, or when the download fails.
  */
-export async function ollamaPullModel(modelName: string, baseUrl?: string): Promise<void> {
+export async function ollamaPullModel(
+  modelName: string,
+  baseUrl?: string,
+  allowPrivateNetwork?: boolean,
+): Promise<OllamaPullOutcome> {
   if (!modelName || modelName.trim().length === 0) {
     throw new Error('Model name cannot be empty');
   }
 
   try {
-    await invokeWithTimeout<void>(
-      'ollama_pull_model',
-      { modelName, baseUrl },
-      OLLAMA_MODEL_PULL_TIMEOUT_MS,
-    );
+    const outcome = await invoke<OllamaPullOutcome | undefined>('ollama_pull_model', {
+      modelName,
+      baseUrl,
+      allowPrivateNetwork,
+    });
+    return outcome === 'cancelled' ? 'cancelled' : 'completed';
   } catch (error) {
     throw new Error(`Failed to pull model '${modelName}': ${error}`);
   }
+}
+
+export async function ollamaCancelPull(modelName: string): Promise<boolean> {
+  return invokeWithTimeout<boolean>('ollama_cancel_pull', { modelName });
+}
+
+export function onOllamaPullProgress(
+  handler: (progress: OllamaPullProgress) => void,
+): Promise<UnlistenFn> {
+  return listen<OllamaPullProgress>('ollama:pull-progress', (event) => handler(event.payload));
+}
+
+export async function ollamaListLoadedModels(
+  baseUrl?: string,
+  allowPrivateNetwork?: boolean,
+): Promise<OllamaLoadedModel[]> {
+  const loaded = await invokeWithTimeout<OllamaLoadedModel[]>('ollama_list_loaded_models', {
+    baseUrl,
+    allowPrivateNetwork,
+  });
+  return Array.isArray(loaded) ? loaded : [];
+}
+
+export async function ollamaLoadModel(
+  modelName: string,
+  baseUrl?: string,
+  allowPrivateNetwork?: boolean,
+): Promise<void> {
+  await invoke<void>('ollama_load_model', { modelName, baseUrl, allowPrivateNetwork });
+}
+
+export async function ollamaUnloadModel(
+  modelName: string,
+  baseUrl?: string,
+  allowPrivateNetwork?: boolean,
+): Promise<void> {
+  await invoke<void>('ollama_unload_model', { modelName, baseUrl, allowPrivateNetwork });
+}
+
+export async function ollamaGetKeepAlive(): Promise<number | null> {
+  return (await invokeWithTimeout<number | null>('ollama_get_keep_alive')) ?? null;
+}
+
+export async function ollamaSetKeepAlive(keepAliveSeconds: number | null): Promise<number | null> {
+  return (
+    (await invokeWithTimeout<number | null>('ollama_set_keep_alive', { keepAliveSeconds })) ?? null
+  );
 }
 
 /**
@@ -163,13 +207,21 @@ export async function ollamaPullModel(modelName: string, baseUrl?: string): Prom
  * console.log('Model deleted successfully');
  * ```
  */
-export async function ollamaDeleteModel(modelName: string, baseUrl?: string): Promise<void> {
+export async function ollamaDeleteModel(
+  modelName: string,
+  baseUrl?: string,
+  allowPrivateNetwork?: boolean,
+): Promise<void> {
   if (!modelName || modelName.trim().length === 0) {
     throw new Error('Model name cannot be empty');
   }
 
   try {
-    await invokeWithTimeout<void>('ollama_delete_model', { modelName, baseUrl });
+    await invokeWithTimeout<void>('ollama_delete_model', {
+      modelName,
+      baseUrl,
+      allowPrivateNetwork,
+    });
   } catch (error) {
     throw new Error(`Failed to delete model '${modelName}': ${error}`);
   }
@@ -195,11 +247,7 @@ export class OllamaClient {
     return ollamaListModels(baseUrl);
   }
 
-  static async getModelInfo(modelName: string, baseUrl?: string): Promise<OllamaModel> {
-    return ollamaGetModelInfo(modelName, baseUrl);
-  }
-
-  static async pullModel(modelName: string, baseUrl?: string): Promise<void> {
+  static async pullModel(modelName: string, baseUrl?: string): Promise<OllamaPullOutcome> {
     return ollamaPullModel(modelName, baseUrl);
   }
 

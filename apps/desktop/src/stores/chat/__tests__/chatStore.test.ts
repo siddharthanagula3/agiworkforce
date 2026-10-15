@@ -43,7 +43,7 @@ function populateMappings(count: number): Array<[number, string]> {
   return pairs;
 }
 
-describe('chatStore ID mapping pruning (H51)', () => {
+describe('chatStore ID mapping (H51)', () => {
   beforeEach(() => {
     clearIdMappings();
     vi.clearAllMocks();
@@ -81,61 +81,13 @@ describe('chatStore ID mapping pruning (H51)', () => {
     });
   });
 
-  describe('pruning, FIFO eviction at 1001 entries', () => {
-    it('triggers pruning when more than 1000 entries are added', () => {
-      const pairs = populateMappings(1001);
+  describe('no eviction', () => {
+    it('keeps every mapping past the old 1000-entry cap, so older chats stay addressable', () => {
+      const pairs = populateMappings(1500);
 
-      const firstUuid = pairs[0]![1];
-      expect(uuidToDbId(firstUuid)).toBeUndefined();
-    });
-
-    it('retains the most recent 1000 entries after pruning', () => {
-      const pairs = populateMappings(1001);
-
-      for (let i = 1; i < pairs.length; i++) {
-        const [dbId, uuid] = pairs[i]!;
+      for (const [dbId, uuid] of pairs) {
         expect(uuidToDbId(uuid)).toBe(dbId);
         expect(dbIdToUuid(dbId)).toBe(uuid);
-      }
-    });
-
-    it('oldest entry by numeric dbId is removed first (not insertion order)', () => {
-      populateMappings(999);
-
-      const veryOldId = 0;
-      const veryOldUuid = dbIdToUuid(veryOldId);
-
-      dbIdToUuid(1000);
-      dbIdToUuid(1001);
-
-      expect(uuidToDbId(veryOldUuid)).toBeUndefined();
-    });
-  });
-
-  describe('pruning, boundary conditions', () => {
-    it('does not prune when exactly 1000 entries exist', () => {
-      const pairs = populateMappings(1000);
-
-      for (const [dbId, uuid] of pairs) {
-        expect(uuidToDbId(uuid)).toBe(dbId);
-      }
-    });
-
-    it('does not prune when fewer than 1000 entries exist', () => {
-      const pairs = populateMappings(500);
-
-      for (const [dbId, uuid] of pairs) {
-        expect(uuidToDbId(uuid)).toBe(dbId);
-      }
-    });
-
-    it('count stays at or below 1000 after many additions', () => {
-      populateMappings(1500);
-
-      for (let i = 501; i <= 1500; i++) {
-        const uuid = dbIdToUuid(i);
-        expect(typeof uuid).toBe('string');
-        expect(uuidToDbId(uuid)).toBe(i);
       }
     });
   });
@@ -419,17 +371,11 @@ describe('chatStore action basics (H15)', () => {
       expect(state.messagesByConversation[forkId!]?.[1]?.metadata?.provider).toBe('openai');
     });
 
-    it('preserves project and custom instruction metadata on the fork', () => {
-      const {
-        createConversation,
-        addMessage,
-        setConversationProject,
-        setConversationCustomInstructions,
-      } = useChatStore.getState();
+    it('preserves project metadata on the fork', () => {
+      const { createConversation, addMessage, setConversationProject } = useChatStore.getState();
       const sourceId = createConversation('Project thread');
       addMessage({ role: 'user', content: 'Project question' });
       setConversationProject(sourceId, 'project-1');
-      setConversationCustomInstructions(sourceId, 'Use the project voice.');
 
       const approvedId = (useChatStore.getState().messagesByConversation[sourceId] ?? [])[0]!.id;
       const forkId = useChatStore.getState().forkConversationForByok(sourceId, {
@@ -440,7 +386,6 @@ describe('chatStore action basics (H15)', () => {
         .conversations.find((conversation) => conversation.id === forkId);
 
       expect(fork?.projectId).toBe('project-1');
-      expect(fork?.customInstructions).toBe('Use the project voice.');
     });
   });
 

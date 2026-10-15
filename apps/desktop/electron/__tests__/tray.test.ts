@@ -56,7 +56,15 @@ vi.mock('../shortcuts', () => ({
     status === 'taken' ? 'is already in use by another app' : null,
 }));
 
-const { createTray, destroyTray } = await import('../tray');
+const { createTray, destroyTray, refreshTrayMenu } = await import('../tray');
+type TrayActivity = import('../tray').TrayActivity;
+
+let activity: TrayActivity = {
+  runningTurns: [],
+  pendingApprovals: [],
+  screenTakenOver: false,
+  computerUseGranted: false,
+};
 
 function makeHandlers() {
   return {
@@ -66,7 +74,13 @@ function makeHandlers() {
     onScreenshot: vi.fn(),
     onWindowShot: vi.fn(),
     onVoice: vi.fn(),
+    onStopAgents: vi.fn(),
+    onStopAll: vi.fn(),
+    onHandBackScreen: vi.fn(),
+    onRevokeComputerUse: vi.fn(),
+    onOpenSession: vi.fn(),
     onCheckForUpdates: vi.fn(),
+    activity: () => activity,
   };
 }
 
@@ -124,6 +138,7 @@ describe('tray shortcut customization', () => {
       onScreenshot: handlers.onScreenshot,
       onWindowShot: handlers.onWindowShot,
       onVoice: handlers.onVoice,
+      onStop: handlers.onStopAgents,
     });
 
     expect(contextMenus).toHaveLength(2);
@@ -206,6 +221,82 @@ describe('tray dictation shortcut', () => {
       .map((entry) => entry.label)
       .filter((label): label is string => typeof label === 'string');
     expect(headings).toContain('Dictation (is already in use by another app)');
+  });
+});
+
+describe('tray agent activity', () => {
+  const click = (item: Electron.MenuItemConstructorOptions) =>
+    item.click?.(
+      {} as Electron.MenuItem,
+      undefined as unknown as Electron.BrowserWindow,
+      {} as Electron.KeyboardEvent,
+    );
+
+  beforeEach(() => {
+    stored = { ...DEFAULT_SHORTCUTS };
+    statuses = [];
+    contextMenus.length = 0;
+    activity = {
+      runningTurns: [],
+      pendingApprovals: [],
+      screenTakenOver: false,
+      computerUseGranted: false,
+    };
+    destroyTray();
+  });
+
+  it('offers no session list and a disabled Stop All while nothing runs', () => {
+    createTray(makeHandlers());
+    const menu = latestMenu();
+
+    expect(menu.map((entry) => entry.label)).not.toContain('Running');
+    expect(itemLabelled(menu, 'Stop All Agents…').enabled).toBe(false);
+    expect(menu.map((entry) => entry.label)).not.toContain('Hand Back Screen Control');
+    expect(menu.map((entry) => entry.label)).not.toContain('Stop Computer Use and Revoke Access…');
+  });
+
+  it('lists approvals and running sessions, each opening its session', () => {
+    activity = {
+      runningTurns: [{ rootId: 'r1', threadId: 't1', label: 'Coding in agiworkforce' }],
+      pendingApprovals: [{ rootId: 'r1', threadId: 't1', label: 'Run pnpm test (agiworkforce)' }],
+      screenTakenOver: true,
+      computerUseGranted: true,
+    };
+    const handlers = makeHandlers();
+    createTray(handlers);
+    const menu = latestMenu();
+    const labels = menu.map((entry) => entry.label);
+
+    expect(labels.indexOf('Waiting for Approval')).toBeLessThan(labels.indexOf('Running'));
+    click(itemLabelled(menu, 'Run pnpm test (agiworkforce)'));
+    expect(handlers.onOpenSession).toHaveBeenCalledWith('r1', 't1');
+
+    const stopAll = itemLabelled(menu, 'Stop All Agents…');
+    expect(stopAll.enabled).toBe(true);
+    expect(stopAll.accelerator).toBeUndefined();
+    click(stopAll);
+    expect(handlers.onStopAll).toHaveBeenCalledTimes(1);
+    expect(handlers.onStopAgents).not.toHaveBeenCalled();
+
+    click(itemLabelled(menu, 'Hand Back Screen Control'));
+    expect(handlers.onHandBackScreen).toHaveBeenCalledTimes(1);
+
+    click(itemLabelled(menu, 'Stop Computer Use and Revoke Access…'));
+    expect(handlers.onRevokeComputerUse).toHaveBeenCalledTimes(1);
+  });
+
+  it('reflects new activity when the menu is refreshed', () => {
+    const handlers = makeHandlers();
+    createTray(handlers);
+    activity = {
+      runningTurns: [{ rootId: 'r1', threadId: 't1', label: 'Coding in agiworkforce' }],
+      pendingApprovals: [],
+      screenTakenOver: false,
+      computerUseGranted: false,
+    };
+    refreshTrayMenu(handlers);
+
+    expect(latestMenu().map((entry) => entry.label)).toContain('Coding in agiworkforce');
   });
 });
 

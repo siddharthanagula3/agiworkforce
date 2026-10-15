@@ -105,6 +105,36 @@ describe('GAP-002 folder access consent', () => {
     });
   });
 
+  it('offers no way to remember a read-only request and grants it for this session', async () => {
+    const user = userEvent.setup();
+    const approval = folderApproval({}, { capabilities: ['read'] });
+    render(<FolderAccessConsentDialog approval={approval} pendingCount={1} />);
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByText(/Read-only access lasts for this session\./)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Allow' }));
+    expect(approvalActionsMock.resolveApproval).toHaveBeenCalledWith(approval, 'approve', {
+      trust: false,
+      reason: undefined,
+    });
+    expect(useSettingsStore.getState().allowedDirectories).toEqual([]);
+  });
+
+  it('says a remembered request to run commands also lets the agent change files', () => {
+    render(
+      <FolderAccessConsentDialog
+        approval={folderApproval({}, { capabilities: ['execute'] })}
+        pendingCount={1}
+      />,
+    );
+
+    expect(screen.getByRole('checkbox')).toBeInTheDocument();
+    expect(
+      screen.getByText(/lets the agent read and change files and run commands in them/),
+    ).toBeInTheDocument();
+  });
+
   it('keeps the tool blocked and the dialog visible when native persistence fails', async () => {
     const user = userEvent.setup();
     approvalActionsMock.resolveApproval.mockRejectedValue(new Error('settings.json is read-only'));

@@ -1,15 +1,7 @@
-
 import { invoke, isTauri } from '../lib/tauri-mock';
 
 export type ArtifactType =
-  | 'code'
-  | 'document'
-  | 'spreadsheet'
-  | 'diagram'
-  | 'web'
-  | 'chart'
-  | 'presentation'
-  | 'image';
+  'code' | 'document' | 'spreadsheet' | 'diagram' | 'web' | 'chart' | 'presentation' | 'image';
 
 export type ArtifactStatus = 'streaming' | 'complete' | 'failed' | 'archived';
 
@@ -107,162 +99,10 @@ export interface ArtifactSummary {
   conversation_id?: number;
 }
 
-export interface VersionDiff {
-  from_version: number;
-  to_version: number;
-  from_content: string;
-  to_content: string;
-  from_timestamp: string;
-  to_timestamp: string;
-}
-
-export interface ArtifactStoreStats {
-  total_artifacts: number;
-  total_versions: number;
-  total_size_bytes: number;
-  by_type: Record<ArtifactType, number>;
-  by_status: Record<ArtifactStatus, number>;
-}
-
-export interface RenderedArtifact {
-  id: string;
-  title: string;
-  artifact_type: ArtifactType;
-  rendered_content: RenderedContent;
-  version_info: VersionInfo;
-  status: ArtifactStatus;
-  available_actions: ArtifactAction[];
-}
-
-export type ArtifactAction =
-  | 'copy'
-  | 'download'
-  | 'edit'
-  | 'delete'
-  | 'pin'
-  | 'share'
-  | 'export_pdf'
-  | 'export_word'
-  | 'export_excel'
-  | 'export_svg'
-  | 'export_png'
-  | 'copy_markdown'
-  | 'run'
-  | 'apply_to_file';
-
-export interface VersionInfo {
-  current: number;
-  total: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export type RenderedContent =
-  | { type: 'Code'; data: CodeRenderData }
-  | { type: 'Document'; data: DocumentRenderData }
-  | { type: 'Spreadsheet'; data: SpreadsheetRenderData }
-  | { type: 'Diagram'; data: DiagramRenderData }
-  | { type: 'Web'; data: WebRenderData }
-  | { type: 'Chart'; data: ChartRenderData }
-  | { type: 'Presentation'; data: PresentationRenderData }
-  | { type: 'Image'; data: ImageRenderData };
-
-export interface CodeRenderData {
-  source: string;
-  language: string;
-  highlight_lines: number[];
-  executable: boolean;
-  line_count: number;
-  file_extension: string;
-}
-
-export interface DocumentRenderData {
-  source: string;
-  format: string;
-  toc: TocEntry[];
-  word_count: number;
-  char_count: number;
-}
-
-export interface SpreadsheetRenderData {
-  rows: Record<string, unknown>[];
-  columns: ColumnInfo[];
-  row_count: number;
-  editable: boolean;
-}
-
-export interface ColumnInfo {
-  name: string;
-  data_type: string;
-  width?: number;
-}
-
-export interface DiagramRenderData {
-  source: string;
-  diagram_type: string;
-  theme: string;
-}
-
-export interface WebRenderData {
-  html: string;
-  scripts_enabled: boolean;
-  sandbox_permissions: string[];
-  viewport?: [number, number];
-}
-
-export interface ChartRenderData {
-  chart_type: string;
-  data: Record<string, unknown>[];
-  x_axis?: { label?: string; data_key: string };
-  y_axis?: { label?: string; data_key: string };
-  series: { data_key: string; name?: string; color?: string }[];
-  show_legend: boolean;
-  colors: string[];
-}
-
-export interface PresentationRenderData {
-  slides: SlideData[];
-  slide_count: number;
-  current_slide: number;
-}
-
-export interface SlideData {
-  index: number;
-  title?: string;
-  content: string;
-  notes?: string;
-}
-
-export interface ImageRenderData {
-  source: string;
-  format: string;
-  width?: number;
-  height?: number;
-  alt_text?: string;
-}
-
 export interface ArtifactResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
-}
-
-export interface ArtifactDiffHunk {
-  startLine: number;
-  endLine: number;
-  originalContent: string;
-  newContent: string;
-}
-
-export interface ArtifactListFilter {
-  artifactTypes?: ArtifactType[];
-  statuses?: ArtifactStatus[];
-  tags?: string[];
-  conversationId?: number;
-  searchQuery?: string;
-  pinnedOnly?: boolean;
-  limit?: number;
-  offset?: number;
 }
 
 function unwrap<T>(response: ArtifactResponse<T>): T {
@@ -323,87 +163,11 @@ export async function artifactCreate(
   return unwrap(response);
 }
 
-export async function artifactCreateStreaming(
-  title: string,
-  artifactType: ArtifactType,
-  metadata?: ArtifactMetadata,
-  conversationId?: number,
-  messageId?: number,
-): Promise<Artifact> {
-  if (!isTauri) {
-    return mockArtifact({ title, artifact_type: artifactType, status: 'streaming', metadata });
-  }
-  const response = await invoke<ArtifactResponse<Artifact>>('artifact_create_streaming', {
-    title,
-    artifactType,
-    metadata: metadata ?? null,
-    conversationId: conversationId ?? null,
-    messageId: messageId ?? null,
-  });
-  return unwrap(response);
-}
-
-export async function artifactAppendStreaming(id: string, delta: string): Promise<void> {
-  if (!isTauri) return;
-  const response = await invoke<ArtifactResponse<void>>('artifact_append_streaming', {
-    id,
-    delta,
-  });
-  unwrapVoid(response);
-}
-
-export async function artifactFinalizeStreaming(
-  id: string,
-  changeDescription?: string,
-): Promise<Artifact> {
-  if (!isTauri) {
-    return mockArtifact({ id, status: 'complete' });
-  }
-  const response = await invoke<ArtifactResponse<Artifact>>('artifact_finalize_streaming', {
-    id,
-    changeDescription: changeDescription ?? null,
-  });
-  return unwrap(response);
-}
-
 export async function artifactGet(id: string): Promise<Artifact> {
   if (!isTauri) {
     return mockArtifact({ id });
   }
   const response = await invoke<ArtifactResponse<Artifact>>('artifact_get', { id });
-  return unwrap(response);
-}
-
-export async function artifactGetRendered(id: string): Promise<RenderedArtifact> {
-  if (!isTauri) {
-    return {
-      id,
-      title: 'Mock Artifact',
-      artifact_type: 'code',
-      rendered_content: {
-        type: 'Code',
-        data: {
-          source: '',
-          language: 'text',
-          highlight_lines: [],
-          executable: false,
-          line_count: 0,
-          file_extension: 'txt',
-        },
-      },
-      version_info: {
-        current: 1,
-        total: 1,
-        created_at: MOCK_TIMESTAMP(),
-        updated_at: MOCK_TIMESTAMP(),
-      },
-      status: 'complete',
-      available_actions: ['copy', 'download', 'edit', 'delete'],
-    };
-  }
-  const response = await invoke<ArtifactResponse<RenderedArtifact>>('artifact_get_rendered', {
-    id,
-  });
   return unwrap(response);
 }
 
@@ -425,27 +189,6 @@ export async function artifactUpdate(
     title: title ?? null,
     metadata: metadata ?? null,
     tags: tags ?? null,
-  });
-  return unwrap(response);
-}
-
-export async function artifactApplyDiff(
-  id: string,
-  hunks: ArtifactDiffHunk[],
-  changeDescription?: string,
-): Promise<Artifact> {
-  if (!isTauri) {
-    return mockArtifact({ id });
-  }
-  const response = await invoke<ArtifactResponse<Artifact>>('artifact_apply_diff', {
-    id,
-    hunks: hunks.map((h) => ({
-      start_line: h.startLine,
-      end_line: h.endLine,
-      original_content: h.originalContent,
-      new_content: h.newContent,
-    })),
-    changeDescription: changeDescription ?? null,
   });
   return unwrap(response);
 }
@@ -479,107 +222,6 @@ export async function artifactUnarchive(id: string): Promise<void> {
 export async function artifactPin(id: string, pinned: boolean): Promise<void> {
   if (!isTauri) return;
   const response = await invoke<ArtifactResponse<void>>('artifact_pin', { id, pinned });
-  unwrapVoid(response);
-}
-
-export async function artifactAddTags(id: string, tags: string[]): Promise<void> {
-  if (!isTauri) return;
-  const response = await invoke<ArtifactResponse<void>>('artifact_add_tags', { id, tags });
-  unwrapVoid(response);
-}
-
-export async function artifactRemoveTags(id: string, tags: string[]): Promise<void> {
-  if (!isTauri) return;
-  const response = await invoke<ArtifactResponse<void>>('artifact_remove_tags', { id, tags });
-  unwrapVoid(response);
-}
-
-export async function artifactList(filter?: ArtifactListFilter): Promise<ArtifactSummary[]> {
-  if (!isTauri) return [];
-  const response = await invoke<ArtifactResponse<ArtifactSummary[]>>('artifact_list', {
-    artifactTypes: filter?.artifactTypes ?? null,
-    statuses: filter?.statuses ?? null,
-    tags: filter?.tags ?? null,
-    conversationId: filter?.conversationId ?? null,
-    searchQuery: filter?.searchQuery ?? null,
-    pinnedOnly: filter?.pinnedOnly ?? null,
-    limit: filter?.limit ?? null,
-    offset: filter?.offset ?? null,
-  });
-  return unwrap(response);
-}
-
-export async function artifactGetByConversation(
-  conversationId: number,
-): Promise<ArtifactSummary[]> {
-  if (!isTauri) return [];
-  const response = await invoke<ArtifactResponse<ArtifactSummary[]>>(
-    'artifact_get_by_conversation',
-    { conversationId },
-  );
-  return unwrap(response);
-}
-
-export async function artifactGetVersions(id: string): Promise<ArtifactVersion[]> {
-  if (!isTauri) return [];
-  const response = await invoke<ArtifactResponse<ArtifactVersion[]>>('artifact_get_versions', {
-    id,
-  });
-  return unwrap(response);
-}
-
-export async function artifactGetDiff(
-  id: string,
-  fromVersion: number,
-  toVersion: number,
-): Promise<VersionDiff> {
-  if (!isTauri) {
-    return {
-      from_version: fromVersion,
-      to_version: toVersion,
-      from_content: '',
-      to_content: '',
-      from_timestamp: MOCK_TIMESTAMP(),
-      to_timestamp: MOCK_TIMESTAMP(),
-    };
-  }
-  const response = await invoke<ArtifactResponse<VersionDiff>>('artifact_get_diff', {
-    id,
-    fromVersion,
-    toVersion,
-  });
-  return unwrap(response);
-}
-
-export async function artifactGetStats(): Promise<ArtifactStoreStats> {
-  if (!isTauri) {
-    return {
-      total_artifacts: 0,
-      total_versions: 0,
-      total_size_bytes: 0,
-      by_type: {} as Record<ArtifactType, number>,
-      by_status: {} as Record<ArtifactStatus, number>,
-    };
-  }
-  const response = await invoke<ArtifactResponse<ArtifactStoreStats>>('artifact_get_stats');
-  return unwrap(response);
-}
-
-export async function artifactExportAll(): Promise<Artifact[]> {
-  if (!isTauri) return [];
-  const response = await invoke<ArtifactResponse<Artifact[]>>('artifact_export_all');
-  return unwrap(response);
-}
-
-export async function artifactImportAll(artifacts: Artifact[]): Promise<number> {
-  if (!isTauri) return 0;
-  const response = await invoke<ArtifactResponse<number>>('artifact_import_all', { artifacts });
-  return unwrap(response);
-}
-
-export async function artifactClearAll(): Promise<void> {
-  if (!isTauri) return;
-  const response = await invoke<ArtifactResponse<void>>('artifact_clear_all');
   unwrapVoid(response);
 }
 

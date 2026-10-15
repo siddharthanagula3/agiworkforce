@@ -13,8 +13,8 @@ const VERDICT = /^(?:WIRE|DELETE|KEEP): /;
 const CITATION = /\b(?:apps\/|packages\/|core\/|sys\/|features\/|docs\/|lib\.rs)/;
 
 describe('wiring-allowlist reachability entries', () => {
-  it('is not empty', () => {
-    expect(entries.length).toBeGreaterThan(0);
+  it('is a list, empty when every registered command has a live caller', () => {
+    expect(Array.isArray(entries)).toBe(true);
   });
 
   it('opens every entry with an individual WIRE/DELETE/KEEP decision', () => {

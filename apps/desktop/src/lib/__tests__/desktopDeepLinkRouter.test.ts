@@ -113,6 +113,25 @@ describe('routeDesktopDeepLink', () => {
     expect(panelNavigations()).toHaveLength(0);
   });
 
+  it('routes the scheme Tauri registers through the same targets and id checks', () => {
+    expect(routeDesktopDeepLink('agiworkforce://chat/conversation-1')).toBe(true);
+    expect(useChatStore.getState().activeConversationId).toBe('conversation-1');
+
+    expect(routeDesktopDeepLink('AGIWORKFORCE://settings/connectors')).toBe(true);
+    expect(useSettingsDialogStore.getState().settingsInitialTab).toBe('connectors');
+
+    expect(routeDesktopDeepLink('agiworkforce://chat/conversation-missing')).toBe(false);
+    expect(routeDesktopDeepLink('agiworkforce://settings/not-a-tab')).toBe(false);
+    expect(routeDesktopDeepLink('agiworkforce://invoice/inv-1')).toBe(false);
+  });
+
+  it('leaves the sign-in and connector callbacks on the Tauri scheme to their own handlers', () => {
+    expect(routeDesktopDeepLink('agiworkforce://sso-callback?rotating_token_nonce=n')).toBe(false);
+    expect(routeDesktopDeepLink('agiworkforce://oauth/mcp/github?code=c&state=s')).toBe(false);
+    expect(panelNavigations()).toHaveLength(0);
+    expect(openExternalUrl).not.toHaveBeenCalled();
+  });
+
   it('changes nothing for an unknown target', () => {
     expect(routeDesktopDeepLink('agiworkforce-cloud://invoice/inv-1')).toBe(false);
     expect(panelNavigations()).toHaveLength(0);

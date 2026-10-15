@@ -14,23 +14,19 @@ vi.mock('../../../lib/tauri-mock', async () => {
   return { ...actual, invoke: (...args: unknown[]) => mockInvoke(...args) };
 });
 
-const mockSendNotification = vi.fn().mockResolvedValue(undefined);
-vi.mock('@tauri-apps/plugin-notification', () => ({
-  sendNotification: (...args: unknown[]) => mockSendNotification(...args),
-}));
-
 import { useAgentStore } from '../agentStore';
 import { useChatStore } from '../chatStore';
 import { useToolStore } from '../toolStore';
 import {
   applyApprovalDenied,
-  applyApprovalRequest,
+  applyApprovalRequired,
   applyAgentActionUpdate,
   applyAgentPermissionRequired,
   applyAgentPlanUpdate,
   applyAgentStepStarted,
   applyAgentTaskFailed,
   applyBackgroundAgentCompleted,
+  applyBackgroundAgentFailed,
   applyGoalAchieved,
   applyGoalProgress,
   applyGoalStepCompleted,
@@ -75,24 +71,10 @@ function createAssistantMessage(): string {
   return messageId;
 }
 
-const defaultNotificationSettings = {
-  enabled: true,
-  sound_enabled: true,
-  badge_enabled: true,
-  desktop_notifications: true,
-  enabled_types: [],
-  do_not_disturb: false,
-  dnd_start_time: null,
-  dnd_end_time: null,
-};
-
 describe('agentWorkflowEvents', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockInvoke.mockImplementation(async (command: string) => {
-      if (command === 'notification_get_settings') return defaultNotificationSettings;
-      return undefined;
-    });
+    mockInvoke.mockImplementation(async () => undefined);
     useChatStore.getState().resetOnLogout();
     useAgentStore.getState().resetOnLogout();
     useToolStore.getState().resetOnLogout();
@@ -188,10 +170,13 @@ describe('agentWorkflowEvents', () => {
   it('routes permission-required events through canonical approval ownership', () => {
     const messageId = createAssistantMessage();
 
+    // The envelope `core/agent/approval.rs` places on `agent:permission_required`.
     applyAgentPermissionRequired({
       actionId: 'approval-1',
+      toolName: 'file_delete',
       workflowHash: 'wf-1',
       title: 'Delete file',
+      description: 'Delete /tmp/output.txt',
       reason: 'Requires deleting /tmp/output.txt',
       scope: {
         type: 'filesystem',
@@ -199,8 +184,10 @@ describe('agentWorkflowEvents', () => {
         risk: 'high',
       },
       riskLevel: 'high',
-      type: 'file_delete',
       actionSignature: 'delete:/tmp/output.txt',
+      requestedAtMs: 1_790_000_000_000,
+      expiresAtMs: 1_790_000_300_000,
+      timeoutSeconds: 300,
     });
 
     const toolState = useToolStore.getState();
@@ -209,7 +196,7 @@ describe('agentWorkflowEvents', () => {
 
     expect(approval).toMatchObject({
       id: 'approval-1',
-      type: 'file_delete',
+      type: 'data_modification',
       riskLevel: 'high',
       workflowHash: 'wf-1',
       actionSignature: 'delete:/tmp/output.txt',
@@ -222,6 +209,41 @@ describe('agentWorkflowEvents', () => {
       requiresApproval: true,
       type: 'filesystem',
     });
+  });
+
+  it('names each approval by what the action touches, and keeps agent approvals off the MCP prompt', () => {
+    createAssistantMessage();
+    const request = (actionId: string, scopeType: string) =>
+      applyAgentPermissionRequired({
+        actionId,
+        toolName: 'tool',
+        workflowHash: null,
+        title: 'Approval',
+        description: '',
+        reason: 'Needs approval',
+        scope: { type: scopeType, risk: 'medium' } as never,
+        riskLevel: 'medium',
+        actionSignature: `${scopeType}:1`,
+      });
+
+    request('a-terminal', 'terminal');
+    request('a-browser', 'browser');
+    request('a-mcp', 'mcp');
+    request('a-unknown', 'unknown');
+
+    const { pendingApprovals, actionLog } = useToolStore.getState();
+    const approvalType = (id: string) => pendingApprovals.find((entry) => entry.id === id)?.type;
+    const logType = (id: string) => actionLog.find((entry) => entry.id === id)?.type;
+    expect(approvalType('a-terminal')).toBe('terminal_command');
+    expect(approvalType('a-browser')).toBe('tool_execution');
+    expect(approvalType('a-mcp')).toBe('tool_execution');
+    expect(approvalType('a-unknown')).toBe('tool_execution');
+    expect(logType('a-terminal')).toBe('terminal');
+    expect(logType('a-browser')).toBe('browser');
+    expect(logType('a-mcp')).toBe('mcp');
+    expect(
+      pendingApprovals.find((entry) => entry.id === 'a-terminal')?.workflowHash,
+    ).toBeUndefined();
   });
 
   it('records step start and task failure in the canonical trail/log path', () => {
@@ -431,12 +453,16 @@ describe('agentWorkflowEvents', () => {
   it('tracks approval requests and denials through the canonical approval store', () => {
     createAssistantMessage();
 
-    applyApprovalRequest({
-      id: 'approval-2',
-      type: 'terminal_command',
-      description: 'Run rm -rf /tmp/cache',
-      riskLevel: 'high',
-      details: { command: 'rm -rf /tmp/cache' },
+    applyApprovalRequired({
+      approval: {
+        id: 'approval-2',
+        type: 'terminal_command',
+        description: 'Run rm -rf /tmp/cache',
+        riskLevel: 'high',
+        details: { command: 'rm -rf /tmp/cache' },
+        createdAt: new Date(),
+        status: 'pending',
+      },
     });
     applyApprovalDenied({
       approval: {
@@ -569,7 +595,7 @@ describe('agentWorkflowEvents', () => {
     await applyBackgroundAgentCompleted({
       agentId: 'bg-agent-1',
       goal: 'Compile weekly report',
-      summaryPath: '/tmp/weekly-report.md',
+      summary: 'Twelve pull requests merged; two are waiting on review.',
     });
 
     expect(
@@ -578,6 +604,8 @@ describe('agentWorkflowEvents', () => {
       id: 'bg-agent-1',
       status: 'success',
       title: 'Background task completed',
+      description:
+        'Compile weekly report\n\nTwelve pull requests merged; two are waiting on review.',
     });
     expect(window.dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -586,71 +614,22 @@ describe('agentWorkflowEvents', () => {
     );
   });
 
-  it('sends a native OS notification for background agent completion when enabled', async () => {
+  it('leaves the background agent notice to the host, which raises it once', async () => {
     createAssistantMessage();
 
     await applyBackgroundAgentCompleted({
       agentId: 'bg-agent-notify-1',
       goal: 'Compile weekly report',
     });
-
-    expect(mockInvoke).toHaveBeenCalledWith('notification_get_settings');
-    expect(mockSendNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'AGI Workforce, Task Completed' }),
-    );
-  });
-
-  /**
-   * `agentId` is the background agent's own uuid, and the completion event
-   * carries nothing else to navigate by: the agent's `conversationId` stays in
-   * the Rust struct, and the only live producer (`background_agent_start`)
-   * defaults it to `tool:<call id>`. A `chat` link built from either would
-   * resolve to no conversation, so these two notifications carry no link until
-   * the event carries an id that names something the user can open.
-   */
-  it('sends no deep link, because a background agent id names no conversation', async () => {
-    createAssistantMessage();
-
-    await applyBackgroundAgentCompleted({
-      agentId: 'bg-agent-notify-4',
-      goal: 'Compile weekly report',
-    });
-
-    const request = mockSendNotification.mock.calls.at(-1)?.[0] as Record<string, unknown>;
-    expect(Object.keys(request)).toEqual(['title', 'body']);
-  });
-
-  it('respects the desktop_notifications=false setting and does not fire a notification', async () => {
-    mockInvoke.mockImplementation(async (command: string) => {
-      if (command === 'notification_get_settings') {
-        return { ...defaultNotificationSettings, desktop_notifications: false };
-      }
-      return undefined;
-    });
-    createAssistantMessage();
-
-    await applyBackgroundAgentCompleted({
+    await applyBackgroundAgentFailed({
       agentId: 'bg-agent-notify-2',
-      goal: 'Compile weekly report',
+      error: 'The model refused the request',
     });
 
-    expect(mockSendNotification).not.toHaveBeenCalled();
-  });
-
-  it('respects do_not_disturb=true and does not fire a notification', async () => {
-    mockInvoke.mockImplementation(async (command: string) => {
-      if (command === 'notification_get_settings') {
-        return { ...defaultNotificationSettings, do_not_disturb: true };
-      }
-      return undefined;
-    });
-    createAssistantMessage();
-
-    await applyBackgroundAgentCompleted({
-      agentId: 'bg-agent-notify-3',
-      goal: 'Compile weekly report',
-    });
-
-    expect(mockSendNotification).not.toHaveBeenCalled();
+    const commands = mockInvoke.mock.calls.map(([command]) => command);
+    expect(commands).not.toContain('notification_create');
+    expect(commands).not.toContain('notification_get_settings');
+    const logged = useToolStore.getState().actionLog.map((entry) => entry.id);
+    expect(logged).toEqual(expect.arrayContaining(['bg-agent-notify-1', 'bg-agent-notify-2']));
   });
 });

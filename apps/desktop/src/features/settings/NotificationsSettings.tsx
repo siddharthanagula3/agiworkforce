@@ -2,7 +2,7 @@ import { Loader2 } from 'lucide-react';
 import { isCloudWeb } from '@/lib/tauri-mock';
 import { Label } from '@/ui/Label';
 import { Switch } from '@/ui/Switch';
-import type { NotificationSettings, NotificationType } from '../../hooks/useNotifications';
+import type { NotificationSettings, NotificationType } from '../../stores/notificationStore';
 
 interface NotificationsSettingsProps {
   notificationLoading: boolean;
@@ -59,8 +59,8 @@ export function NotificationsSettings({
   onUpdateNotificationSettings,
 }: NotificationsSettingsProps) {
   const enabledTypeSet = new Set(
-    notificationSettings?.enabled_types.length
-      ? notificationSettings.enabled_types
+    notificationSettings?.enabledTypes.length
+      ? notificationSettings.enabledTypes
       : ALL_NOTIFICATION_TYPES,
   );
 
@@ -70,7 +70,7 @@ export function NotificationsSettings({
       if (enabled) next.add(type);
       else next.delete(type);
     }
-    onUpdateNotificationSettings({ enabled_types: [...next] });
+    onUpdateNotificationSettings({ enabledTypes: [...next] });
   };
 
   return (
@@ -110,9 +110,9 @@ export function NotificationsSettings({
               </p>
             </div>
             <Switch
-              checked={notificationSettings.desktop_notifications}
+              checked={notificationSettings.desktopNotifications}
               onCheckedChange={(enabled) =>
-                onUpdateNotificationSettings({ desktop_notifications: enabled })
+                onUpdateNotificationSettings({ desktopNotifications: enabled })
               }
             />
           </div>
@@ -124,10 +124,8 @@ export function NotificationsSettings({
               </p>
             </div>
             <Switch
-              checked={notificationSettings.sound_enabled}
-              onCheckedChange={(enabled) =>
-                onUpdateNotificationSettings({ sound_enabled: enabled })
-              }
+              checked={notificationSettings.soundEnabled}
+              onCheckedChange={(enabled) => onUpdateNotificationSettings({ soundEnabled: enabled })}
             />
           </div>
 
@@ -161,10 +159,8 @@ export function NotificationsSettings({
               </p>
             </div>
             <Switch
-              checked={notificationSettings.badge_enabled}
-              onCheckedChange={(enabled) =>
-                onUpdateNotificationSettings({ badge_enabled: enabled })
-              }
+              checked={notificationSettings.badgeEnabled}
+              onCheckedChange={(enabled) => onUpdateNotificationSettings({ badgeEnabled: enabled })}
             />
           </div>
         </div>

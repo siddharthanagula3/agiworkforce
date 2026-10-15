@@ -4,7 +4,8 @@ import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { storageFallback } from '../utils/localStorage';
 
-export type SidecarContext = 'timeline' | 'screenshot' | 'browser' | 'terminal' | 'approval';
+export type SidecarContext =
+  'timeline' | 'screenshot' | 'browser' | 'terminal' | 'approval' | 'changes';
 
 export interface FilmstripScreenshot {
   id: string;
@@ -34,6 +35,7 @@ export interface ExecutionSidecarState {
   setWidth: (width: number) => void;
   setActiveContext: (ctx: SidecarContext) => void;
   setUserOverrideContext: (ctx: SidecarContext | null) => void;
+  toggleChanges: () => void;
   addFilmstripScreenshot: (screenshot: FilmstripScreenshot) => void;
   setHighlightedToolId: (id: string | null) => void;
   reset: () => void;
@@ -115,6 +117,27 @@ export const useExecutionSidecarStore = create<ExecutionSidecarState>()(
             },
             undefined,
             'executionSidecar/setUserOverrideContext',
+          ),
+
+        toggleChanges: () =>
+          set(
+            (state) => {
+              const showing =
+                state.isOpen &&
+                !state.isCollapsed &&
+                (state.userOverrideContext ?? state.activeContext) === 'changes';
+              if (showing) {
+                state.isOpen = false;
+                state.userClosedThisSession = true;
+                state.userOverrideContext = null;
+                return;
+              }
+              state.isOpen = true;
+              state.isCollapsed = false;
+              state.userOverrideContext = 'changes';
+            },
+            undefined,
+            'executionSidecar/toggleChanges',
           ),
 
         addFilmstripScreenshot: (screenshot) =>

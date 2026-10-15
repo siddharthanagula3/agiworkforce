@@ -1,15 +1,119 @@
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/Card';
+import { useId, useState } from 'react';
+import { Card, CardContent, CardHeader } from '@/ui/Card';
 import { Badge } from '@/ui/Badge';
 import { Button } from '@/ui/Button';
+import { Spinner } from '@/ui/Spinner';
+import { Textarea } from '@/ui/Textarea';
 import { Wrench, ChevronDown, ChevronRight, Play } from 'lucide-react';
+import { mcpCallTool } from '../../api/mcp';
 import type { McpToolInfo } from '../../types/mcp';
+
+type CallTool = (toolId: string, args: Record<string, unknown>) => Promise<unknown>;
 
 interface MCPToolBrowserProps {
   tools: McpToolInfo[];
+  callTool?: CallTool;
 }
 
-export default function MCPToolBrowser({ tools }: MCPToolBrowserProps) {
+function argumentTemplate(tool: McpToolInfo): string {
+  return JSON.stringify(
+    Object.fromEntries((tool.parameters ?? []).map((name) => [name, ''])),
+    null,
+    2,
+  );
+}
+
+export function parseToolArguments(text: string): Record<string, unknown> | string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return 'Arguments must be valid JSON.';
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return 'Arguments must be a JSON object, such as {"path": "notes.txt"}.';
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function ToolTestPanel({ tool, callTool }: { tool: McpToolInfo; callTool: CallTool }) {
+  const baseId = useId();
+  const [argumentsText, setArgumentsText] = useState(() => argumentTemplate(tool));
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async () => {
+    const parsed = parseToolArguments(argumentsText);
+    setResult(null);
+    if (typeof parsed === 'string') {
+      setError(parsed);
+      return;
+    }
+    setRunning(true);
+    setError(null);
+    try {
+      const output = await callTool(tool.id, parsed);
+      setResult(typeof output === 'string' ? output : JSON.stringify(output, null, 2));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <form
+      noValidate
+      className="space-y-2 border-t pt-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void run();
+      }}
+    >
+      <label htmlFor={`${baseId}-arguments`} className="text-sm font-medium text-foreground">
+        Arguments (JSON)
+      </label>
+      <Textarea
+        id={`${baseId}-arguments`}
+        className="font-mono text-sm"
+        rows={4}
+        spellCheck={false}
+        value={argumentsText}
+        disabled={running}
+        aria-describedby={`${baseId}-hint`}
+        onChange={(event) => setArgumentsText(event.target.value)}
+      />
+      <p id={`${baseId}-hint`} className="text-sm text-muted-foreground">
+        This runs the tool for real on {tool.server}. You are asked to approve the call first,
+        unless you have set this tool to always allow.
+      </p>
+      <Button type="submit" variant="outline" size="sm" disabled={running}>
+        {running ? (
+          <Spinner size="sm" className="mr-2" />
+        ) : (
+          <Play className="mr-2 h-3 w-3" aria-hidden="true" />
+        )}
+        {running ? 'Waiting for the result' : 'Run tool'}
+      </Button>
+      {error ? (
+        <p role="alert" className="text-sm text-danger-text">
+          {error}
+        </p>
+      ) : null}
+      {result !== null ? (
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground">Result</p>
+          <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-3 font-mono text-sm text-foreground">
+            {result}
+          </pre>
+        </div>
+      ) : null}
+    </form>
+  );
+}
+
+export default function MCPToolBrowser({ tools, callTool = mcpCallTool }: MCPToolBrowserProps) {
   const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
 
   const toggleExpanded = (toolId: string) => {
@@ -70,28 +174,41 @@ export default function MCPToolBrowser({ tools }: MCPToolBrowserProps) {
 
                 return (
                   <Card key={tool.id}>
-                    <CardHeader className="cursor-pointer" onClick={() => toggleExpanded(tool.id)}>
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2 flex-1">
+                    <CardHeader>
+                      <button
+                        type="button"
+                        aria-expanded={isExpanded}
+                        onClick={() => toggleExpanded(tool.id)}
+                        className="flex w-full items-start justify-between rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <span className="flex min-w-0 flex-1 items-center gap-2">
                           {isExpanded ? (
-                            <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+                            <ChevronDown
+                              className="w-4 h-4 text-muted-foreground shrink-0"
+                              aria-hidden="true"
+                            />
                           ) : (
-                            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                            <ChevronRight
+                              className="w-4 h-4 text-muted-foreground shrink-0"
+                              aria-hidden="true"
+                            />
                           )}
-                          <Wrench className="w-4 h-4 text-primary shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <CardTitle className="text-sm truncate">{tool.name}</CardTitle>
+                          <Wrench className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold text-foreground">
+                              {tool.name}
+                            </span>
                             {tool.description && (
-                              <CardDescription className="text-xs mt-1 line-clamp-2">
+                              <span className="mt-1 block text-sm text-muted-foreground line-clamp-2">
                                 {tool.description}
-                              </CardDescription>
+                              </span>
                             )}
-                          </div>
-                        </div>
+                          </span>
+                        </span>
                         <Badge variant="secondary" className="ml-2 text-xs">
                           {tool.server}
                         </Badge>
-                      </div>
+                      </button>
                     </CardHeader>
 
                     {isExpanded && (
@@ -115,15 +232,7 @@ export default function MCPToolBrowser({ tools }: MCPToolBrowserProps) {
                             </div>
                           )}
 
-                          <div className="pt-2 border-t">
-                            <Button variant="outline" size="sm" disabled>
-                              <Play className="w-3 h-3 mr-2" />
-                              Test Tool
-                            </Button>
-                            <p className="text-xs text-muted-foreground mt-2">
-                              Tool testing will be available in a future update
-                            </p>
-                          </div>
+                          <ToolTestPanel tool={tool} callTool={callTool} />
                         </div>
                       </CardContent>
                     )}

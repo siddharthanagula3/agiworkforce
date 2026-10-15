@@ -6,19 +6,29 @@ import { createJSONStorage, devtools, persist, subscribeWithSelector } from 'zus
 import { toast } from 'sonner';
 
 export type SchedulerActionType =
-  | 'workflow'
   | 'agiTask'
-  | 'shellCommand'
   | 'notification'
+  | 'memorySummarization'
+  | 'memoryDecay'
+  | 'shellCommand'
   | 'webhook'
-  | 'script';
+  | 'script'
+  | 'workflow';
 
 export type JobStatus = 'active' | 'paused' | 'completed' | 'failed';
+
+export interface RunProblem {
+  kind: 'failed' | 'skipped';
+  reason: string;
+}
 
 export interface ScheduledJob {
   id: string;
   name: string;
   schedule: string;
+  plan?: TaskSchedule | null;
+  lastProblem?: RunProblem | null;
+  lastRunWasDue?: string | null;
   actionType: SchedulerActionType;
   actionData: Record<string, unknown>;
   status: JobStatus;
@@ -31,6 +41,7 @@ export interface ScheduledJob {
   runCount: number;
   failureCount: number;
   description: string | null;
+  lastOutput?: string | null;
 }
 
 export interface NextRunInfo {
@@ -48,6 +59,7 @@ export interface JobExecutionRecord {
   status: JobExecutionStatus;
   error: string | null;
   durationMs: number | null;
+  output?: string | null;
 }
 
 export type TaskInterval = 'hourly' | 'daily' | 'weekly' | 'monthly' | 'custom';
@@ -58,6 +70,9 @@ export interface TaskSchedule {
   runAt?: number;
   interval?: TaskInterval;
   cronExpression?: string;
+  timeOfDay?: string;
+  weekday?: number;
+  dayOfMonth?: number;
   timezone?: string;
 }
 
@@ -66,43 +81,142 @@ export interface ScheduledTask {
   name: string;
   description: string;
   prompt: string;
+  actionType: SchedulerActionType;
   schedule: TaskSchedule;
   status: TaskStatus;
   lastRunAt: number | null;
   nextRunAt: number | null;
   runCount: number;
+  failureCount: number;
+  lastProblem: RunProblem | null;
+  lastRunWasDueAt: number | null;
   lastOutput: string | null;
-  modelId?: string;
   createdAt: number;
 }
 
-export type CreateTaskInput = Omit<
-  ScheduledTask,
-  'id' | 'createdAt' | 'runCount' | 'lastRunAt' | 'nextRunAt' | 'lastOutput'
->;
+export type CreateTaskInput = Pick<ScheduledTask, 'name' | 'description' | 'prompt' | 'schedule'>;
+export type TaskEdit = Partial<CreateTaskInput>;
 
+export const FAILURES_BEFORE_A_TASK_IS_STOPPED = 3;
+export const DEFAULT_TIME_OF_DAY = '09:00';
+export const DEFAULT_WEEKDAY = 1;
+export const DEFAULT_DAY_OF_MONTH = 1;
+export const LAST_DAY_EVERY_MONTH_HAS = 28;
+export const WEEKDAY_LABELS = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const;
+
+const LEGACY_SCHEDULE_TIMEZONE = 'UTC';
+
+export function localTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+export function completeSchedule(schedule: TaskSchedule): TaskSchedule {
+  if (schedule.type === 'once') {
+    return {
+      type: 'once',
+      runAt: schedule.runAt,
+      timezone: schedule.timezone ?? localTimeZone(),
+    };
+  }
+
+  const timezone = schedule.timezone ?? localTimeZone();
+  const timeOfDay = schedule.timeOfDay ?? DEFAULT_TIME_OF_DAY;
+  switch (schedule.interval ?? 'daily') {
+    case 'hourly':
+      return { type: 'recurring', interval: 'hourly', timezone };
+    case 'weekly':
+      return {
+        type: 'recurring',
+        interval: 'weekly',
+        timeOfDay,
+        weekday: schedule.weekday ?? DEFAULT_WEEKDAY,
+        timezone,
+      };
+    case 'monthly':
+      return {
+        type: 'recurring',
+        interval: 'monthly',
+        timeOfDay,
+        dayOfMonth: schedule.dayOfMonth ?? DEFAULT_DAY_OF_MONTH,
+        timezone,
+      };
+    case 'custom':
+      return {
+        type: 'recurring',
+        interval: 'custom',
+        cronExpression: (schedule.cronExpression ?? '').trim(),
+        timezone,
+      };
+    default:
+      return { type: 'recurring', interval: 'daily', timeOfDay, timezone };
+  }
+}
+
+const ONE_NUMBER = /^\d+$/;
+const ONE_WEEKDAY = /^(\d|sun|mon|tue|wed|thu|fri|sat)$/i;
+
+/**
+ * The plain repeat a cron expression spells out, or `custom` when it says
+ * anything more: a step, a range or a list runs more often than the plain
+ * label would claim.
+ */
 export function inferTaskInterval(cronExpression: string): TaskInterval {
   const fields = cronExpression.trim().split(/\s+/);
+  if (fields.length === 6 && fields[0] !== '0') return 'custom';
   const normalizedFields = fields.length === 6 ? fields.slice(1) : fields;
   if (normalizedFields.length !== 5) return 'custom';
 
   const [minute, hour, dayOfMonth, month, dayOfWeek] = normalizedFields;
   if (!minute || !hour || !dayOfMonth || !month || !dayOfWeek) return 'custom';
+  if (!ONE_NUMBER.test(minute) || month !== '*') return 'custom';
 
-  if (hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-    return 'hourly';
+  if (hour === '*') {
+    return dayOfMonth === '*' && dayOfWeek === '*' ? 'hourly' : 'custom';
   }
-  if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') return 'daily';
-  if (dayOfMonth === '*' && month === '*' && dayOfWeek !== '*') return 'weekly';
-  if (dayOfMonth !== '*' && month === '*' && dayOfWeek === '*') return 'monthly';
+  if (!ONE_NUMBER.test(hour)) return 'custom';
+  if (dayOfMonth === '*' && dayOfWeek === '*') return 'daily';
+  if (dayOfMonth === '*' && ONE_WEEKDAY.test(dayOfWeek)) return 'weekly';
+  if (ONE_NUMBER.test(dayOfMonth) && dayOfWeek === '*') return 'monthly';
   return 'custom';
 }
 
-export function taskScheduleFromCronExpression(cronExpression: string): TaskSchedule {
+function legacySchedule(cronExpression: string): TaskSchedule {
   return {
     type: 'recurring',
-    interval: inferTaskInterval(cronExpression),
+    interval: 'custom',
     cronExpression,
+    timezone: LEGACY_SCHEDULE_TIMEZONE,
+  };
+}
+
+export function scheduledTaskFromJob(job: ScheduledJob): ScheduledTask {
+  const lastRun = job.lastExecutedAt ?? job.lastRun;
+  const nextRun = job.nextExecutionAt ?? job.nextRun;
+  const prompt = job.actionData?.['prompt'];
+  return {
+    id: job.id,
+    name: job.name,
+    description: job.description ?? '',
+    prompt: typeof prompt === 'string' ? prompt : '',
+    actionType: job.actionType,
+    schedule: job.plan ?? legacySchedule(job.schedule),
+    status: job.status,
+    lastRunAt: lastRun ? new Date(lastRun).getTime() : null,
+    nextRunAt: nextRun ? new Date(nextRun).getTime() : null,
+    runCount: job.runCount,
+    failureCount: job.failureCount,
+    lastProblem: job.lastProblem ?? null,
+    lastRunWasDueAt: job.lastRunWasDue ? new Date(job.lastRunWasDue).getTime() : null,
+    lastOutput: job.lastOutput ?? null,
+    createdAt: new Date(job.createdAt).getTime(),
   };
 }
 
@@ -134,6 +248,15 @@ function computeNextRunAt(schedule: TaskSchedule): number | null {
 
 const TASKS_STORAGE_KEY = 'agiworkforce-scheduled-tasks-fallback';
 
+async function readRunningTaskIds(): Promise<string[] | null> {
+  try {
+    const ids = await invoke<string[]>('scheduler_running_jobs');
+    return Array.isArray(ids) ? ids : null;
+  } catch {
+    return null;
+  }
+}
+
 function persistTasksToStorage(tasks: ScheduledTask[]): void {
   try {
     localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
@@ -159,6 +282,25 @@ const INTERVAL_LABELS: Record<TaskInterval, string> = {
   custom: 'Custom schedule',
 };
 
+function recurringSummary(schedule: TaskSchedule): string {
+  const time = schedule.timeOfDay ?? DEFAULT_TIME_OF_DAY;
+  switch (schedule.interval ?? 'daily') {
+    case 'hourly':
+      return INTERVAL_LABELS.hourly;
+    case 'weekly':
+      return `Every ${WEEKDAY_LABELS[schedule.weekday ?? DEFAULT_WEEKDAY] ?? 'week'} at ${time}`;
+    case 'monthly':
+      return `Day ${schedule.dayOfMonth ?? DEFAULT_DAY_OF_MONTH} of every month at ${time}`;
+    case 'custom': {
+      const cron = schedule.cronExpression ?? '';
+      const shape = inferTaskInterval(cron);
+      return shape === 'custom' ? `Custom: ${cron}` : INTERVAL_LABELS[shape];
+    }
+    default:
+      return `Every day at ${time}`;
+  }
+}
+
 export function getScheduleSummary(schedule: TaskSchedule): string {
   if (schedule.type === 'once') {
     if (schedule.runAt) {
@@ -171,10 +313,21 @@ export function getScheduleSummary(schedule: TaskSchedule): string {
     }
     return 'Run once (no time set)';
   }
-  if (schedule.interval === 'custom' && schedule.cronExpression) {
-    return `Custom: ${schedule.cronExpression}`;
+  const summary = recurringSummary(schedule);
+  const elsewhere = schedule.timezone && schedule.timezone !== localTimeZone();
+  return elsewhere ? `${summary} (${schedule.timezone})` : summary;
+}
+
+export function getProblemSummary(task: ScheduledTask): string | null {
+  const problem = task.lastProblem;
+  if (task.status === 'failed') {
+    const stopped = `Stopped after ${FAILURES_BEFORE_A_TASK_IS_STOPPED} failed runs in a row.`;
+    return problem ? `${stopped} Last error: ${problem.reason}` : stopped;
   }
-  return INTERVAL_LABELS[schedule.interval ?? 'daily'];
+  if (!problem) return null;
+  return problem.kind === 'skipped'
+    ? `Last run skipped: ${problem.reason}`
+    : `Last run failed: ${problem.reason}`;
 }
 
 export function getRelativeTimeDisplay(timestamp: number | null): string {
@@ -206,36 +359,59 @@ const storageFallback: Storage = {
 
 const SCHEDULER_STORE_VERSION = 1;
 
+interface SchedulerListenerHandlers {
+  onRunStarted: (jobId: string) => void;
+  onRunEnded: (job: ScheduledJob) => void;
+  onJobChanged: (job: ScheduledJob) => void;
+  onJobAdded: (job: ScheduledJob) => void;
+  onJobRemoved: (jobId: string) => void;
+  onError: (jobId: string, error: string) => void;
+}
+
+let schedulerListenerUsers = 0;
+let schedulerListenerSetup: Promise<UnlistenFn[]> | null = null;
+
+async function registerSchedulerListeners(
+  handlers: SchedulerListenerHandlers,
+): Promise<UnlistenFn[]> {
+  const unlistenFns: UnlistenFn[] = [];
+  try {
+    unlistenFns.push(
+      await listen<{ jobId: string }>('scheduler:run_started', (event) =>
+        handlers.onRunStarted(event.payload.jobId),
+      ),
+      await listen<ScheduledJob>('scheduler:job_executed', (event) =>
+        handlers.onRunEnded(event.payload),
+      ),
+      await listen<ScheduledJob>('scheduler:job_updated', (event) =>
+        handlers.onJobChanged(event.payload),
+      ),
+      await listen<ScheduledJob>('scheduler:job_added', (event) =>
+        handlers.onJobAdded(event.payload),
+      ),
+      await listen<{ jobId: string }>('scheduler:job_removed', (event) =>
+        handlers.onJobRemoved(event.payload.jobId),
+      ),
+      await listen<{ jobId: string; error: string }>('scheduler:error', (event) =>
+        handlers.onError(event.payload.jobId, event.payload.error),
+      ),
+    );
+    return unlistenFns;
+  } catch (error) {
+    unlistenFns.forEach((fn) => fn());
+    throw error;
+  }
+}
+
 interface SchedulerState {
   jobs: ScheduledJob[];
   isLoading: boolean;
   error: string | null;
 
-  addJob: (
-    name: string,
-    schedule: string,
-    actionType: string,
-    actionData: string,
-  ) => Promise<string>;
-  removeJob: (jobId: string) => Promise<boolean>;
-  pauseJob: (jobId: string) => Promise<boolean>;
-  resumeJob: (jobId: string) => Promise<boolean>;
   listJobs: () => Promise<void>;
   getJob: (jobId: string) => Promise<ScheduledJob | null>;
   getHistory: (jobId?: string) => Promise<JobExecutionRecord[]>;
   getNextRuns: (limit?: number) => Promise<NextRunInfo[]>;
-  toggleJob: (jobId: string) => Promise<boolean>;
-  runJobNow: (jobId: string) => Promise<boolean>;
-  updateJobOnBackend: (
-    jobId: string,
-    updates: {
-      name?: string;
-      description?: string;
-      schedule?: unknown;
-      status?: string;
-      prompt?: string;
-    },
-  ) => Promise<boolean>;
   updateJob: (job: ScheduledJob) => void;
   setError: (error: string | null) => void;
   clearError: () => void;
@@ -248,8 +424,10 @@ interface SchedulerState {
   setHasHydrated: (state: boolean) => void;
 
   tasks: ScheduledTask[];
+  runningTaskIds: string[];
+  stopRun: (id: string) => Promise<void>;
   createTask: (task: CreateTaskInput) => Promise<void>;
-  updateTask: (id: string, updates: Partial<ScheduledTask>) => Promise<void>;
+  updateTask: (id: string, updates: TaskEdit) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   toggleTask: (id: string) => Promise<void>;
   runNow: (id: string) => Promise<void>;
@@ -267,141 +445,10 @@ export const useSchedulerStore = create<SchedulerState>()(
         _hasHydrated: false,
 
         tasks: [],
+        runningTaskIds: [],
 
         setHasHydrated: (state: boolean) => {
           set({ _hasHydrated: state }, undefined, 'scheduler/setHasHydrated');
-        },
-
-        addJob: async (
-          name: string,
-          schedule: string,
-          actionType: string,
-          actionData: string,
-        ): Promise<string> => {
-          set({ isLoading: true, error: null }, undefined, 'scheduler/addJob/start');
-
-          try {
-            let parsedActionData: Record<string, unknown> | undefined;
-            try {
-              parsedActionData = actionData
-                ? (JSON.parse(actionData) as Record<string, unknown>)
-                : undefined;
-            } catch {
-              parsedActionData = actionData ? { raw: actionData } : undefined;
-            }
-
-            const jobId = await invoke<string>('scheduler_add_job', {
-              name,
-              schedule,
-              actionType,
-              actionData: parsedActionData,
-            });
-
-            await get().listJobs();
-
-            set({ isLoading: false }, undefined, 'scheduler/addJob/success');
-            toast.success('Scheduled job created');
-            return jobId;
-          } catch (error) {
-            const errorMessage = getSimpleErrorMessage(error);
-            console.error('[schedulerStore] Failed to add job:', error);
-            set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/addJob/error');
-            toast.error(`Failed to create job: ${errorMessage}`);
-            throw error;
-          }
-        },
-
-        removeJob: async (jobId: string): Promise<boolean> => {
-          set({ isLoading: true, error: null }, undefined, 'scheduler/removeJob/start');
-
-          try {
-            const success = await invoke<boolean>('scheduler_remove_job', { jobId });
-
-            if (success) {
-              set(
-                (state) => ({
-                  jobs: state.jobs.filter((job) => job.id !== jobId),
-                  isLoading: false,
-                }),
-                undefined,
-                'scheduler/removeJob/success',
-              );
-              toast.success('Job removed');
-            } else {
-              set({ isLoading: false }, undefined, 'scheduler/removeJob/notFound');
-              toast.error('Job not found');
-            }
-
-            return success;
-          } catch (error) {
-            const errorMessage = getSimpleErrorMessage(error);
-            console.error('[schedulerStore] Failed to remove job:', error);
-            set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/removeJob/error');
-            toast.error(`Failed to remove job: ${errorMessage}`);
-            throw error;
-          }
-        },
-
-        pauseJob: async (jobId: string): Promise<boolean> => {
-          set({ isLoading: true, error: null }, undefined, 'scheduler/pauseJob/start');
-
-          try {
-            const success = await invoke<boolean>('scheduler_pause_job', { jobId });
-
-            if (success) {
-              set(
-                (state) => ({
-                  jobs: state.jobs.map((job) =>
-                    job.id === jobId ? { ...job, enabled: false } : job,
-                  ),
-                  isLoading: false,
-                }),
-                undefined,
-                'scheduler/pauseJob/success',
-              );
-            } else {
-              set({ isLoading: false }, undefined, 'scheduler/pauseJob/notFound');
-            }
-
-            return success;
-          } catch (error) {
-            const errorMessage = getSimpleErrorMessage(error);
-            console.error('[schedulerStore] Failed to pause job:', error);
-            set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/pauseJob/error');
-            toast.error(`Failed to pause job: ${errorMessage}`);
-            throw error;
-          }
-        },
-
-        resumeJob: async (jobId: string): Promise<boolean> => {
-          set({ isLoading: true, error: null }, undefined, 'scheduler/resumeJob/start');
-
-          try {
-            const success = await invoke<boolean>('scheduler_resume_job', { jobId });
-
-            if (success) {
-              set(
-                (state) => ({
-                  jobs: state.jobs.map((job) =>
-                    job.id === jobId ? { ...job, enabled: true } : job,
-                  ),
-                  isLoading: false,
-                }),
-                undefined,
-                'scheduler/resumeJob/success',
-              );
-            } else {
-              set({ isLoading: false }, undefined, 'scheduler/resumeJob/notFound');
-            }
-
-            return success;
-          } catch (error) {
-            const errorMessage = getSimpleErrorMessage(error);
-            console.error('[schedulerStore] Failed to resume job:', error);
-            set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/resumeJob/error');
-            toast.error(`Failed to resume job: ${errorMessage}`);
-            throw error;
-          }
         },
 
         listJobs: async (): Promise<void> => {
@@ -460,113 +507,13 @@ export const useSchedulerStore = create<SchedulerState>()(
           }
         },
 
-        toggleJob: async (jobId: string): Promise<boolean> => {
-          set({ isLoading: true, error: null }, undefined, 'scheduler/toggleJob/start');
-
-          try {
-            const success = await invoke<boolean>('scheduler_toggle_job', { id: jobId });
-
-            if (success) {
-              set(
-                (state) => ({
-                  jobs: state.jobs.map((job) =>
-                    job.id === jobId
-                      ? {
-                          ...job,
-                          status: (job.status === 'active' ? 'paused' : 'active') as JobStatus,
-                        }
-                      : job,
-                  ),
-                  isLoading: false,
-                }),
-                undefined,
-                'scheduler/toggleJob/success',
-              );
-              toast.success('Job toggled');
-            } else {
-              set({ isLoading: false }, undefined, 'scheduler/toggleJob/notFound');
-              toast.error('Job not found');
-            }
-
-            return success;
-          } catch (error) {
-            const errorMessage = getSimpleErrorMessage(error);
-            console.error('[schedulerStore] Failed to toggle job:', error);
-            set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/toggleJob/error');
-            toast.error(`Failed to toggle job: ${errorMessage}`);
-            throw error;
-          }
-        },
-
-        runJobNow: async (jobId: string): Promise<boolean> => {
-          set({ isLoading: true, error: null }, undefined, 'scheduler/runJobNow/start');
-
-          try {
-            const success = await invoke<boolean>('scheduler_run_job_now', { id: jobId });
-
-            set({ isLoading: false }, undefined, 'scheduler/runJobNow/success');
-
-            if (success) {
-              toast.success('Job triggered');
-              await get().listJobs();
-            } else {
-              toast.error('Job not found');
-            }
-
-            return success;
-          } catch (error) {
-            const errorMessage = getSimpleErrorMessage(error);
-            console.error('[schedulerStore] Failed to run job:', error);
-            set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/runJobNow/error');
-            toast.error(`Failed to run job: ${errorMessage}`);
-            throw error;
-          }
-        },
-
-        updateJobOnBackend: async (
-          jobId: string,
-          updates: {
-            name?: string;
-            description?: string;
-            schedule?: unknown;
-            status?: string;
-            prompt?: string;
-          },
-        ): Promise<boolean> => {
-          set({ isLoading: true, error: null }, undefined, 'scheduler/updateJobOnBackend/start');
-
-          try {
-            const success = await invoke<boolean>('scheduler_update_job', {
-              id: jobId,
-              updates,
-            });
-
-            if (success) {
-              await get().listJobs();
-              toast.success('Job updated');
-            } else {
-              set({ isLoading: false }, undefined, 'scheduler/updateJobOnBackend/notFound');
-              toast.error('Job not found');
-            }
-
-            return success;
-          } catch (error) {
-            const errorMessage = getSimpleErrorMessage(error);
-            console.error('[schedulerStore] Failed to update job:', error);
-            set(
-              { error: errorMessage, isLoading: false },
-              undefined,
-              'scheduler/updateJobOnBackend/error',
-            );
-            toast.error(`Failed to update job: ${errorMessage}`);
-            throw error;
-          }
-        },
-
         updateJob: (job: ScheduledJob) => {
           set(
             (state) => ({
               jobs: state.jobs.map((j) => (j.id === job.id ? job : j)),
+              tasks: state.tasks.map((task) =>
+                task.id === job.id ? scheduledTaskFromJob(job) : task,
+              ),
             }),
             undefined,
             'scheduler/updateJob',
@@ -584,107 +531,90 @@ export const useSchedulerStore = create<SchedulerState>()(
         },
 
         initEventListeners: async (): Promise<void> => {
-          const unlistenFns: UnlistenFn[] = [];
-
-          try {
-            const unlistenJobExecuted = await listen<ScheduledJob>(
-              'scheduler:job_executed',
-              (event) => {
-                console.debug('[schedulerStore] Job executed:', event.payload);
-                get().updateJob(event.payload);
-              },
-            );
-            unlistenFns.push(unlistenJobExecuted);
-
-            const unlistenJobAdded = await listen<ScheduledJob>('scheduler:job_added', (event) => {
-              console.debug('[schedulerStore] Job added:', event.payload);
+          schedulerListenerUsers += 1;
+          schedulerListenerSetup ??= registerSchedulerListeners({
+            onRunStarted: (jobId) =>
               set(
-                (state) => {
-                  if (state.jobs.some((j) => j.id === event.payload.id)) {
-                    return state;
-                  }
-                  return { jobs: [...state.jobs, event.payload] };
-                },
+                (state) =>
+                  state.runningTaskIds.includes(jobId)
+                    ? state
+                    : { runningTaskIds: [...state.runningTaskIds, jobId] },
+                undefined,
+                'scheduler/event/runStarted',
+              ),
+            onRunEnded: (job) => {
+              get().updateJob(job);
+              set(
+                (state) => ({ runningTaskIds: state.runningTaskIds.filter((id) => id !== job.id) }),
+                undefined,
+                'scheduler/event/runEnded',
+              );
+            },
+            onJobChanged: (job) => get().updateJob(job),
+            onJobAdded: (job) =>
+              set(
+                (state) =>
+                  state.jobs.some((j) => j.id === job.id)
+                    ? state
+                    : {
+                        jobs: [...state.jobs, job],
+                        tasks: [scheduledTaskFromJob(job), ...state.tasks],
+                      },
                 undefined,
                 'scheduler/event/jobAdded',
-              );
-            });
-            unlistenFns.push(unlistenJobAdded);
+              ),
+            onJobRemoved: (jobId) =>
+              set(
+                (state) => ({
+                  jobs: state.jobs.filter((j) => j.id !== jobId),
+                  tasks: state.tasks.filter((task) => task.id !== jobId),
+                  runningTaskIds: state.runningTaskIds.filter((id) => id !== jobId),
+                }),
+                undefined,
+                'scheduler/event/jobRemoved',
+              ),
+            onError: (jobId, error) => {
+              const name = get().tasks.find((task) => task.id === jobId)?.name;
+              get().setError(name ? `${name}: ${error}` : error);
+            },
+          });
 
-            const unlistenJobRemoved = await listen<{ jobId: string }>(
-              'scheduler:job_removed',
-              (event) => {
-                console.debug('[schedulerStore] Job removed:', event.payload);
-                set(
-                  (state) => ({
-                    jobs: state.jobs.filter((j) => j.id !== event.payload.jobId),
-                  }),
-                  undefined,
-                  'scheduler/event/jobRemoved',
-                );
-              },
-            );
-            unlistenFns.push(unlistenJobRemoved);
-
-            const unlistenJobUpdated = await listen<ScheduledJob>(
-              'scheduler:job_updated',
-              (event) => {
-                console.debug('[schedulerStore] Job updated:', event.payload);
-                get().updateJob(event.payload);
-              },
-            );
-            unlistenFns.push(unlistenJobUpdated);
-
-            const unlistenError = await listen<{ jobId: string; error: string }>(
-              'scheduler:error',
-              (event) => {
-                console.error('[schedulerStore] Scheduler error:', event.payload);
-                get().setError(`Job ${event.payload.jobId} failed: ${event.payload.error}`);
-              },
-            );
-            unlistenFns.push(unlistenError);
-
+          try {
+            const unlistenFns = await schedulerListenerSetup;
             set({ _unlistenFns: unlistenFns }, undefined, 'scheduler/initEventListeners');
           } catch (error) {
             console.error('[schedulerStore] Failed to initialize event listeners:', error);
-            unlistenFns.forEach((fn) => fn());
+            schedulerListenerUsers = Math.max(0, schedulerListenerUsers - 1);
+            schedulerListenerSetup = null;
             throw error;
           }
         },
 
         cleanupEventListeners: () => {
-          const { _unlistenFns } = get();
-          _unlistenFns.forEach((fn) => fn());
+          schedulerListenerUsers = Math.max(0, schedulerListenerUsers - 1);
+          if (schedulerListenerUsers > 0) return;
+
+          const setup = schedulerListenerSetup;
+          schedulerListenerSetup = null;
           set({ _unlistenFns: [] }, undefined, 'scheduler/cleanupEventListeners');
+          void setup
+            ?.then((unlistenFns) => unlistenFns.forEach((fn) => fn()))
+            .catch(() => undefined);
         },
 
         fetchTasks: async () => {
           set({ isLoading: true }, undefined, 'scheduler/fetchTasks/start');
           try {
             const jobs = await invoke<ScheduledJob[]>('scheduler_list_jobs');
-            const tasks: ScheduledTask[] = jobs.map((job) => ({
-              id: job.id,
-              name: job.name,
-              description: job.description ?? '',
-              prompt: ((job.actionData as Record<string, unknown>)?.['prompt'] as string) ?? '',
-              schedule: taskScheduleFromCronExpression(job.schedule),
-              status: job.status as TaskStatus,
-              lastRunAt: job.lastExecutedAt
-                ? new Date(job.lastExecutedAt).getTime()
-                : job.lastRun
-                  ? new Date(job.lastRun).getTime()
-                  : null,
-              nextRunAt: job.nextExecutionAt
-                ? new Date(job.nextExecutionAt).getTime()
-                : job.nextRun
-                  ? new Date(job.nextRun).getTime()
-                  : null,
-              runCount: job.runCount,
-              lastOutput: null,
-              createdAt: new Date(job.createdAt).getTime(),
-            }));
+            const tasks = jobs.map(scheduledTaskFromJob);
+            const running = await readRunningTaskIds();
             set(
-              { tasks, isLoading: false, error: null },
+              {
+                tasks,
+                runningTaskIds: running ?? get().runningTaskIds,
+                isLoading: false,
+                error: null,
+              },
               undefined,
               'scheduler/fetchTasks/success',
             );
@@ -709,7 +639,8 @@ export const useSchedulerStore = create<SchedulerState>()(
             await invoke<string>('scheduler_add_job', {
               name: input.name,
               prompt: input.prompt,
-              schedule: input.schedule,
+              description: input.description || null,
+              schedule: completeSchedule(input.schedule),
             });
             await get().fetchTasks();
           } catch (error) {
@@ -724,8 +655,13 @@ export const useSchedulerStore = create<SchedulerState>()(
             const newTask: ScheduledTask = {
               ...input,
               id: crypto.randomUUID(),
+              actionType: 'agiTask',
+              status: 'active',
               createdAt: now,
               runCount: 0,
+              failureCount: 0,
+              lastProblem: null,
+              lastRunWasDueAt: null,
               lastRunAt: null,
               nextRunAt: computeNextRunAt(input.schedule),
               lastOutput: null,
@@ -742,9 +678,14 @@ export const useSchedulerStore = create<SchedulerState>()(
           }
         },
 
-        updateTask: async (id: string, updates: Partial<ScheduledTask>) => {
+        updateTask: async (id: string, updates: TaskEdit) => {
           try {
-            await invoke('scheduler_update_job', { id, updates });
+            await invoke('scheduler_update_job', {
+              id,
+              updates: updates.schedule
+                ? { ...updates, schedule: completeSchedule(updates.schedule) }
+                : updates,
+            });
             await get().fetchTasks();
           } catch (error) {
             if (isTauri) {
@@ -832,6 +773,18 @@ export const useSchedulerStore = create<SchedulerState>()(
           }
         },
 
+        stopRun: async (id: string) => {
+          try {
+            await invoke<boolean>('scheduler_stop_run', { id });
+          } catch (error) {
+            const errorMessage = getSimpleErrorMessage(error);
+            console.error('[schedulerStore] Failed to stop the run:', error);
+            set({ error: errorMessage }, undefined, 'scheduler/stopRun/error');
+            toast.error(`Failed to stop the run: ${errorMessage}`);
+            throw error;
+          }
+        },
+
         runNow: async (id: string) => {
           try {
             await invoke('scheduler_run_job_now', { id });
@@ -909,43 +862,3 @@ export function waitForSchedulerHydration(): Promise<void> {
     });
   });
 }
-
-export const selectJobs = (state: SchedulerState) => state.jobs;
-export const selectEnabledJobs = (state: SchedulerState) =>
-  state.jobs.filter((job) => job.status === 'active');
-export const selectDisabledJobs = (state: SchedulerState) =>
-  state.jobs.filter((job) => job.status !== 'active');
-export const selectJobById = (jobId: string) => (state: SchedulerState) =>
-  state.jobs.find((job) => job.id === jobId);
-export const selectJobsByActionType =
-  (actionType: SchedulerActionType) => (state: SchedulerState) =>
-    state.jobs.filter((job) => job.actionType === actionType);
-
-export const selectSchedulerLoading = (state: SchedulerState) => state.isLoading;
-export const selectSchedulerError = (state: SchedulerState) => state.error;
-export const selectSchedulerHasHydrated = (state: SchedulerState) => state._hasHydrated;
-
-export const selectJobCount = (state: SchedulerState) => state.jobs.length;
-export const selectEnabledJobCount = (state: SchedulerState) =>
-  state.jobs.filter((job) => job.status === 'active').length;
-
-export const selectUpcomingJobs = (state: SchedulerState) =>
-  [...state.jobs]
-    .filter((job) => job.status === 'active' && job.nextRun)
-    .sort((a, b) => {
-      if (!a.nextRun) return 1;
-      if (!b.nextRun) return -1;
-      return new Date(a.nextRun).getTime() - new Date(b.nextRun).getTime();
-    });
-
-export const selectTasks = (state: SchedulerState) => state.tasks;
-export const selectActiveTasks = (state: SchedulerState) =>
-  state.tasks.filter((t) => t.status === 'active');
-export const selectTaskById = (id: string) => (state: SchedulerState) =>
-  state.tasks.find((t) => t.id === id);
-
-export { useSchedulerStore as useScheduledTaskStore };
-
-/** @deprecated Use SchedulerActionType instead */
-export type ActionType = SchedulerActionType;
-export type ScheduleType = 'cron' | 'interval' | 'once';

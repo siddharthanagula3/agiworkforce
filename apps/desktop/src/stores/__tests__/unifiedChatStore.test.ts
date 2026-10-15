@@ -16,7 +16,6 @@ describe('unifiedChatStore', () => {
       toolExecutions: [],
       screenshots: [],
       agents: [],
-      backgroundTasks: [],
       pendingApprovals: [],
       activeContext: [],
       isLoading: false,
@@ -167,19 +166,6 @@ describe('unifiedChatStore', () => {
     state = useUnifiedChatStore.getState();
     expect(state.messages).toHaveLength(0);
     expect(state.fileOperations).toHaveLength(0);
-  });
-
-  it('should export conversation', async () => {
-    const { addMessage, exportConversation } = useUnifiedChatStore.getState();
-
-    addMessage({ role: 'user', content: 'Test message' });
-
-    const exported = await exportConversation();
-    const parsed = JSON.parse(exported);
-
-    expect(parsed.messages).toHaveLength(1);
-    expect(parsed.messages[0].content).toBe('Test message');
-    expect(parsed.exportedAt).toBeDefined();
   });
 
   it('should attach action trail entries to the current streaming message when messageId is missing', () => {

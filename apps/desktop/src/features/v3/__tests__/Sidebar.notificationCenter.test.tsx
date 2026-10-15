@@ -96,6 +96,13 @@ vi.mock('../../../stores/cloudTaskBadgeStore', () => {
   return { useCloudTaskBadgeStore };
 });
 
+vi.mock('../../chat/conversationExport', () => ({
+  conversationExportFormats: () => ['markdown'],
+  conversationMarkdown: vi.fn(),
+  exportConversation: vi.fn(),
+  exportFileStem: vi.fn(),
+}));
+vi.mock('../../custom-instructions', () => ({ CustomInstructionsDialog: () => null }));
 vi.mock('../LocalCloudToggle', () => ({ LocalCloudToggle: () => null }));
 vi.mock('../../updates', () => ({ UpdatePill: () => null }));
 vi.mock('../AccountMenu', () => ({ AccountMenu: () => null }));

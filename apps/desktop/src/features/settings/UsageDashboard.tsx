@@ -22,7 +22,7 @@ import {
   selectCostAnalytics,
 } from '../../stores/billingUsage';
 import type { ModelUsageStats } from '../../types/billing';
-import type { CostTimeseriesPoint } from '../../types/chat';
+import type { CostOverviewResponse, CostTimeseriesPoint } from '../../types/chat';
 import type { BudgetPeriod } from '../../stores/billing/budgetSlice';
 
 const DAY_MS = 86_400_000;
@@ -149,6 +149,24 @@ export function activityCells(
     cells.push({ date: toIsoDay(day), cost: costByDay.get(day) ?? 0 });
   }
   return cells;
+}
+
+/**
+ * The monthly budget as it is enforced. `remaining_budget` counts every
+ * request against the user's own keys, agent runs included, so the bar is
+ * drawn from it; `month_total` is this account's chat messages alone and is
+ * the fallback only when no remaining figure came back.
+ */
+export function monthlyBudgetUsage(
+  overview: CostOverviewResponse | null | undefined,
+): { budget: number; remaining: number; percent: number } | null {
+  const budget = overview?.monthly_budget ?? null;
+  if (budget === null || budget <= 0) return null;
+  const remaining = Math.min(
+    Math.max(overview?.remaining_budget ?? budget - (overview?.month_total ?? 0), 0),
+    budget,
+  );
+  return { budget, remaining, percent: ((budget - remaining) / budget) * 100 };
 }
 
 export function favouriteModel(models: readonly ModelUsageStats[]): ModelUsageStats | null {
@@ -455,8 +473,7 @@ export function UsageDashboard() {
 
   const monthTotal = costOverview?.month_total ?? 0;
   const monthlyBudget = costOverview?.monthly_budget ?? null;
-  const budgetSpendPct =
-    monthlyBudget && monthlyBudget > 0 ? Math.min((monthTotal / monthlyBudget) * 100, 100) : 0;
+  const budgetUsage = monthlyBudgetUsage(costOverview);
 
   return (
     <div className="space-y-6">
@@ -591,30 +608,32 @@ export function UsageDashboard() {
                 </div>
               </div>
 
-              {monthlyBudget !== null && monthlyBudget > 0 && (
+              {budgetUsage && (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm">{formatProviderCostCredits(monthTotal)} used</span>
+                    <span className="text-sm">Monthly credit limit</span>
                     <span
                       className={cn(
                         'text-xs font-semibold tabular-nums',
-                        textColorClass(budgetSpendPct),
+                        textColorClass(budgetUsage.percent),
                       )}
                     >
-                      {Math.round(budgetSpendPct)}% of {formatProviderCostCredits(monthlyBudget)}
+                      {Math.round(budgetUsage.percent)}% of{' '}
+                      {formatProviderCostCredits(budgetUsage.budget)}
                     </span>
                   </div>
                   <Progress
-                    value={budgetSpendPct}
+                    value={budgetUsage.percent}
                     max={100}
                     className="h-2 bg-secondary"
                     indicatorClassName={cn(
                       'transition-all duration-500',
-                      barColorClass(budgetSpendPct),
+                      barColorClass(budgetUsage.percent),
                     )}
                   />
                   <p className="text-xs text-muted-foreground">
-                    {formatProviderCostCredits(costOverview?.remaining_budget)} left this month
+                    {formatProviderCostCredits(budgetUsage.remaining)} left this month, counting
+                    chats and agent runs that use your own keys
                   </p>
                 </div>
               )}
@@ -653,8 +672,10 @@ export function UsageDashboard() {
                       {isAdjustingBudget ? 'Saving...' : 'Set limit'}
                     </Button>
                   </div>
-                  <p className="text-[10px] text-muted-foreground">
-                    Enter 0 to remove the monthly limit.
+                  <p className="text-xs text-muted-foreground">
+                    Once this month&apos;s spend against your own keys reaches the limit, chats,
+                    agent runs and scheduled tasks that use them stop until you raise it. Local
+                    models are not affected. Enter 0 to remove the limit.
                   </p>
                 </div>
               )}

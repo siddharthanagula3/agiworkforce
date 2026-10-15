@@ -15,7 +15,8 @@ describe('Electron cloud release source guards', () => {
 
   it('ships signed DMGs and the zip archives the cloud update feed serves', () => {
     expect(builderConfig).not.toMatch(/api\/releases\/electron\/mac/);
-    expect(builderConfig).toMatch(/target:\s*zip/);
+    expect(builderConfig).toMatch(/- target: dmg\n\s+arch: \[arm64, x64\]/);
+    expect(builderConfig).toMatch(/- target: zip\n\s+arch: \[arm64, x64\]/);
     expect(builderConfig).not.toMatch(/^publish:/m);
     expect(releaseWorkflow).not.toMatch(/latest-mac\.yml/);
     expect(releaseWorkflow).toMatch(/"\$out"\/\*\.zip/);

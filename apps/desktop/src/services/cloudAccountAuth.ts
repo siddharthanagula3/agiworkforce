@@ -78,6 +78,51 @@ const DEV_BROWSER_SESSION_STORAGE_KEY = '__AGI_DEV_BROWSER_CLOUD_SESSION__';
 const NATIVE_SESSION_RESTORE_TIMEOUT_MS = 8_000;
 const SESSION_REFRESH_SKEW_SECONDS = 5 * 60;
 const REMOTE_LOGOUT_TIMEOUT_MS = 5_000;
+const NO_SAVED_SIGN_IN = 'no_saved_sign_in';
+const RENEWAL_UNREACHABLE = 'renewal_unreachable';
+const RENEWAL_RETRY_COOLDOWN_MS = 30_000;
+const RENEWAL_UNREACHABLE_MESSAGE =
+  'AGI Cloud could not be reached to renew your session. Your sign-in is kept and will be tried again.';
+
+type SessionRenewal =
+  | { status: 'renewed'; accessToken: string }
+  | { status: 'signed_out' }
+  | { status: 'rejected' }
+  | { status: 'refused'; reason: string; code: string }
+  | { status: 'unreachable'; reason: string };
+
+/**
+ * What the host said became of a renewal. Only `rejected` signs the person
+ * out: an answer this page cannot read is treated as the host being
+ * unreachable, so a saved sign-in is never thrown away on a guess.
+ */
+function readSessionRenewal(outcome: unknown): SessionRenewal {
+  if (outcome === null || outcome === undefined) return { status: 'signed_out' };
+  const record = (typeof outcome === 'object' ? outcome : {}) as Record<string, unknown>;
+  const { status, accessToken, reason, code } = record;
+  if (status === 'renewed' && typeof accessToken === 'string' && accessToken) {
+    return { status, accessToken };
+  }
+  if (status === 'signed_out' || status === 'rejected') return { status };
+  if (status === 'refused' && typeof reason === 'string' && reason) {
+    return {
+      status,
+      reason,
+      code: typeof code === 'string' && code ? code : 'refresh_unavailable',
+    };
+  }
+  return {
+    status: 'unreachable',
+    reason:
+      typeof reason === 'string' && reason
+        ? reason
+        : 'The host did not say whether the session was renewed.',
+  };
+}
+
+function unexpired(session: Session): Session | null {
+  return session.expires_at && session.expires_at > Math.floor(Date.now() / 1000) ? session : null;
+}
 const usesNativeCloudAccountBridge = isTauri || isElectronHost;
 
 interface CachedAuthData<T> {
@@ -93,20 +138,13 @@ function isLocalDevBrowser(): boolean {
   return window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
 }
 
-async function restoreNativeSessionSeed(): Promise<{
-  access_token: string | null;
-  refresh_token: string | null;
-}> {
+async function restoreNativeAccessToken(): Promise<string | null> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   try {
     return await Promise.race([
-      Promise.all([
-        invoke<string | null>('account_restore_access_token'),
-        invoke<string | null>('account_restore_refresh_token'),
-      ]).then(([accessToken, refreshToken]) => ({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      })),
+      invoke<string | null>('account_restore_access_token').then(
+        (accessToken) => accessToken ?? null,
+      ),
       new Promise<never>((_, reject) => {
         timeoutId = setTimeout(
           () => reject(new Error('The system credential vault did not respond in time.')),
@@ -305,9 +343,12 @@ class CloudAccountAuthService {
   private sessionExpiryTimer: ReturnType<typeof setTimeout> | null = null;
   private sessionGeneration = 0;
   private nativeCredentialQueue: Promise<void> = Promise.resolve();
+  private renewalRetryNotBefore = 0;
+  private restoreQueuedForOnline = false;
 
   private advanceSessionGeneration(): number {
     this.sessionGeneration += 1;
+    this.renewalRetryNotBefore = 0;
     this.sessionRefreshController?.abort();
     return this.sessionGeneration;
   }
@@ -337,12 +378,33 @@ class CloudAccountAuthService {
 
       if (!this.sessionSnapshotIsCurrent(generation, session.user.id, session.access_token)) return;
       await invoke('account_store_access_token', { accessToken: session.access_token });
-
-      if (!this.sessionSnapshotIsCurrent(generation, session.user.id, session.access_token)) return;
-      if (session.refresh_token) {
-        await invoke('account_store_refresh_token', { refreshToken: session.refresh_token });
-      }
     });
+  }
+
+  /**
+   * A saved sign-in that could not be renewed at launch because the server
+   * was out of reach is tried once more when the network comes back.
+   */
+  private restoreWhenBackOnline(): void {
+    if (this.restoreQueuedForOnline || typeof window === 'undefined') return;
+    this.restoreQueuedForOnline = true;
+    window.addEventListener(
+      'online',
+      () => {
+        this.restoreQueuedForOnline = false;
+        if (!this.currentState.session) void this.checkSession();
+      },
+      { once: true },
+    );
+  }
+
+  /**
+   * On a native host the refresh token never reaches this page: the host keeps
+   * it and renews the session itself, so every native session can be renewed.
+   * A browser session can only when it was seeded with a refresh token.
+   */
+  private canRenew(session: Session): boolean {
+    return usesNativeCloudAccountBridge || Boolean(session.refresh_token);
   }
 
   private clearNativeSession(): Promise<void> {
@@ -370,19 +432,15 @@ class CloudAccountAuthService {
     if (usesNativeCloudAccountBridge && !this.currentState.session) {
       this.updateState({ isLoading: true, error: null });
       try {
-        const seed = await restoreNativeSessionSeed();
+        const accessToken = await restoreNativeAccessToken();
         if (this.sessionGeneration !== generation) return;
-        if (seed.access_token) {
-          await this.setSession({
-            access_token: seed.access_token,
-            refresh_token: seed.refresh_token,
-          });
+        if (accessToken) {
+          await this.setSession({ access_token: accessToken });
           return;
         }
-        if (seed.refresh_token) {
-          await this.refreshSession(seed.refresh_token);
-          return;
-        }
+        const renewed = await this.refreshSession(null, { signedOutIsQuiet: true });
+        if (renewed.error?.code === RENEWAL_UNREACHABLE) this.restoreWhenBackOnline();
+        if (renewed.error?.code !== NO_SAVED_SIGN_IN) return;
       } catch (error) {
         if (this.sessionGeneration !== generation) return;
         const message = error instanceof Error ? error.message : String(error);
@@ -708,11 +766,13 @@ class CloudAccountAuthService {
 
     const now = Math.floor(Date.now() / 1000);
     if (
-      session.refresh_token &&
+      this.canRenew(session) &&
       session.expires_at &&
       session.expires_at <= now + SESSION_REFRESH_SKEW_SECONDS
     ) {
-      const result = await this.refreshSession(session.refresh_token);
+      if (Date.now() < this.renewalRetryNotBefore) return unexpired(session);
+      const result = await this.refreshSession(session.refresh_token ?? null);
+      if (result.error?.code === RENEWAL_UNREACHABLE) return unexpired(session);
       return result.error ? null : this.currentState.session;
     }
 
@@ -765,8 +825,18 @@ class CloudAccountAuthService {
 
     const session = buildSession(tokens.access_token, tokens.refresh_token);
     if (session.expires_at && session.expires_at <= Math.floor(Date.now() / 1000)) {
-      if (session.refresh_token) {
-        return this.refreshSession(session.refresh_token);
+      if (this.canRenew(session) && !this.sessionRefreshPromise) {
+        const renewed = await this.refreshSession(session.refresh_token ?? null);
+        if (renewed.error?.code === RENEWAL_UNREACHABLE && !this.currentState.session) {
+          this.updateState({
+            user: session.user,
+            session,
+            isLoading: false,
+            error: RENEWAL_UNREACHABLE_MESSAGE,
+            subscriptionFetchStatus: 'failed',
+          });
+        }
+        return renewed;
       }
       const error = new AuthError(
         'Your AGI Cloud session has expired. Please connect again.',
@@ -939,7 +1009,7 @@ class CloudAccountAuthService {
     this.clearSessionExpiryTimer();
     if (!session.expires_at) return;
 
-    const refreshSkewMs = session.refresh_token ? SESSION_REFRESH_SKEW_SECONDS * 1000 : 0;
+    const refreshSkewMs = this.canRenew(session) ? SESSION_REFRESH_SKEW_SECONDS * 1000 : 0;
     const delayMs = Math.max(0, session.expires_at * 1000 - Date.now() - refreshSkewMs);
     this.sessionExpiryTimer = setTimeout(() => {
       this.sessionExpiryTimer = null;
@@ -947,7 +1017,10 @@ class CloudAccountAuthService {
     }, delayMs);
   }
 
-  private async refreshSession(refreshToken: string): Promise<{ error: AuthError | null }> {
+  private async refreshSession(
+    refreshToken: string | null,
+    options: { signedOutIsQuiet?: boolean } = {},
+  ): Promise<{ error: AuthError | null }> {
     const generation = this.sessionGeneration;
     if (
       this.sessionRefreshPromise &&
@@ -965,7 +1038,7 @@ class CloudAccountAuthService {
 
     const refreshPromise = (async () => {
       try {
-        const tokens = await this.requestDeviceTokenRefresh(refreshToken, controller.signal);
+        const tokens = await this.requestSessionRenewal(refreshToken, controller.signal);
         if (controller.signal.aborted || this.sessionGeneration !== generation) {
           return {
             error: new AuthError(
@@ -988,10 +1061,20 @@ class CloudAccountAuthService {
         if (controller.signal.aborted || this.sessionGeneration !== generation) {
           return { error: authError };
         }
-        if (authError.code === 'invalid_refresh_token') {
+        if (options.signedOutIsQuiet && authError.code === NO_SAVED_SIGN_IN) {
+          return { error: authError };
+        }
+        if (authError.code === RENEWAL_UNREACHABLE) {
+          this.renewalRetryNotBefore = Date.now() + RENEWAL_RETRY_COOLDOWN_MS;
+          this.updateState({ isLoading: false, error: RENEWAL_UNREACHABLE_MESSAGE });
+          return { error: authError };
+        }
+        if (authError.code === 'invalid_refresh_token' || authError.code === NO_SAVED_SIGN_IN) {
           await this.invalidateSession(
             'Your AGI Cloud session could not be renewed. Please connect again.',
           );
+        } else {
+          this.updateState({ isLoading: false, error: authError.message });
         }
         return { error: authError };
       }
@@ -1012,13 +1095,49 @@ class CloudAccountAuthService {
     }
   }
 
-  private async requestDeviceTokenRefresh(
-    refreshToken: string,
+  private async requestSessionRenewal(
+    refreshToken: string | null,
     signal?: AbortSignal,
   ): Promise<{
     access_token: string;
-    refresh_token: string;
+    refresh_token?: string | null;
   }> {
+    if (usesNativeCloudAccountBridge) {
+      let outcome: unknown;
+      try {
+        outcome = await invoke<unknown>('account_refresh_session');
+      } catch (error) {
+        throw new AuthError(
+          error instanceof Error ? error.message : String(error),
+          503,
+          RENEWAL_UNREACHABLE,
+        );
+      }
+      const renewal = readSessionRenewal(outcome);
+      switch (renewal.status) {
+        case 'renewed':
+          return { access_token: renewal.accessToken };
+        case 'signed_out':
+          throw new AuthError(
+            'No AGI Cloud sign-in is saved on this device.',
+            401,
+            NO_SAVED_SIGN_IN,
+          );
+        case 'rejected':
+          throw new AuthError(
+            'AGI Cloud rejected the saved refresh credential.',
+            401,
+            'invalid_refresh_token',
+          );
+        case 'refused':
+          throw new AuthError(renewal.reason, 403, renewal.code);
+        case 'unreachable':
+          throw new AuthError(renewal.reason, 503, RENEWAL_UNREACHABLE);
+      }
+    }
+    if (!refreshToken) {
+      throw new AuthError('No AGI Cloud sign-in is saved on this device.', 401, NO_SAVED_SIGN_IN);
+    }
     const { guardedFetch } = await import('../lib/egressGuard');
     const response = await guardedFetch(`${WEB_APP_URL}/api/auth/device/refresh`, {
       method: 'POST',

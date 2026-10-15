@@ -2,7 +2,6 @@ import {
   DEFAULT_MAX_RETRIES,
   MCP_INIT_TIMEOUT_MS,
   MCP_OAUTH_TIMEOUT_MS,
-  MCP_SIGN_IN_TIMEOUT_MS,
   MCP_TIMEOUT_MS,
   MCP_TOOL_CALL_TIMEOUT_MS,
   RETRY_BACKOFF_MULTIPLIER,
@@ -14,19 +13,16 @@ import type {
   McpServerHealth,
   McpServerInfo,
   McpServersConfig,
-  McpExecutionHistoryEntry,
-  McpRegistryPackage,
   McpRuntimeServerConfig,
   McpToolInfo,
-  McpToolExecutionStats,
   McpConfigLocation,
+  McpCredentialSlot,
   McpOAuthProvider,
   McpOAuthStartResponse,
   McpOAuthTokenResponse,
   McpOAuthConnectionStatus,
   McpOAuthProviderConfig,
   McpExtensionInfo,
-  McpExtensionPackageInfo,
 } from '../types/mcp';
 
 import { claimFromDeadline, startDeadline } from './deadlines';
@@ -36,19 +32,16 @@ export type {
   McpServerHealth,
   McpServerInfo,
   McpServersConfig,
-  McpExecutionHistoryEntry,
-  McpRegistryPackage,
   McpRuntimeServerConfig,
   McpToolInfo,
-  McpToolExecutionStats,
   McpConfigLocation,
+  McpCredentialSlot,
   McpOAuthProvider,
   McpOAuthStartResponse,
   McpOAuthTokenResponse,
   McpOAuthConnectionStatus,
   McpOAuthProviderConfig,
   McpExtensionInfo,
-  McpExtensionPackageInfo,
 };
 
 interface RetryConfig {
@@ -87,6 +80,23 @@ async function invokeWithTimeout<T>(
         reject(new Error(`MCP command '${command}' failed: ${error}`));
       });
   });
+}
+
+/**
+ * For a command that can stop on a system dialog: an approval the host asks
+ * for, or a file picker. The person may take any time to answer, so no timer
+ * runs here. A timer would report a failure while the question is still open,
+ * and the person could then answer yes to something the page said had failed.
+ */
+async function invokeAwaitingPerson<T>(
+  command: string,
+  args?: Record<string, unknown>,
+): Promise<T> {
+  try {
+    return await invoke<T>(command, args);
+  } catch (error) {
+    throw new Error(`MCP command '${command}' failed: ${error}`);
+  }
 }
 
 async function invokeWithRetry<T>(
@@ -154,7 +164,7 @@ export async function mcpListServers(): Promise<McpServerInfo[]> {
 export async function mcpConnectServer(name: string): Promise<string> {
   try {
     validateNonEmpty(name, 'server name');
-    return await invokeWithTimeout<string>('mcp_connect_server', { name }, MCP_SIGN_IN_TIMEOUT_MS);
+    return await invokeAwaitingPerson<string>('mcp_connect_server', { name });
   } catch (error) {
     throw new Error(`Failed to connect to MCP server '${name}': ${error}`);
   }
@@ -172,7 +182,7 @@ export async function mcpDisconnectServer(name: string): Promise<string> {
 export async function mcpEnableServer(name: string): Promise<string> {
   try {
     validateNonEmpty(name, 'server name');
-    return await invokeWithTimeout<string>('mcp_enable_server', { name });
+    return await invokeAwaitingPerson<string>('mcp_enable_server', { name });
   } catch (error) {
     throw new Error(`Failed to enable MCP server '${name}': ${error}`);
   }
@@ -259,57 +269,11 @@ export async function mcpGetStats(): Promise<Record<string, number>> {
   }
 }
 
-export async function mcpGetRegistry(): Promise<McpRegistryPackage[]> {
-  try {
-    return await invokeWithTimeout<McpRegistryPackage[]>('mcp_get_registry');
-  } catch (error) {
-    throw new Error(`Failed to get MCP registry: ${error}`);
-  }
-}
-
-export async function mcpInstallServer(serverId: string): Promise<string> {
-  try {
-    validateNonEmpty(serverId, 'server ID');
-    return await invokeWithTimeout<string>('mcp_install_server', { serverId });
-  } catch (error) {
-    throw new Error(`Failed to install MCP server '${serverId}': ${error}`);
-  }
-}
-
-export async function mcpGetExecutionHistory(
-  limit: number = 20,
-): Promise<McpExecutionHistoryEntry[]> {
-  try {
-    return await invokeWithTimeout<McpExecutionHistoryEntry[]>('mcp_get_execution_history', {
-      limit,
-    });
-  } catch (error) {
-    throw new Error(`Failed to get MCP execution history: ${error}`);
-  }
-}
-
-export async function mcpGetToolExecutionStats(): Promise<McpToolExecutionStats[]> {
-  try {
-    return await invokeWithTimeout<McpToolExecutionStats[]>('mcp_get_tool_execution_stats');
-  } catch (error) {
-    throw new Error(`Failed to get MCP tool execution statistics: ${error}`);
-  }
-}
-
 export async function mcpGetHealth(): Promise<McpServerHealth[]> {
   try {
     return await invokeWithTimeout<McpServerHealth[]>('mcp_get_health');
   } catch (error) {
     throw new Error(`Failed to get MCP health: ${error}`);
-  }
-}
-
-export async function mcpCheckServerHealth(serverName: string): Promise<McpServerHealth> {
-  try {
-    validateNonEmpty(serverName, 'server name');
-    return await invokeWithTimeout<McpServerHealth>('mcp_check_server_health', { serverName });
-  } catch (error) {
-    throw new Error(`Failed to check MCP server health for '${serverName}': ${error}`);
   }
 }
 
@@ -319,35 +283,6 @@ export async function mcpGetServerLogs(serverName: string, lines?: number): Prom
     return await invokeWithTimeout<string[]>('mcp_get_server_logs', { serverName, lines });
   } catch (error) {
     throw new Error(`Failed to get MCP server logs for '${serverName}': ${error}`);
-  }
-}
-
-export async function mcpStoreCredential(
-  serverName: string,
-  key: string,
-  value: string,
-): Promise<string> {
-  try {
-    validateNonEmpty(serverName, 'server name');
-    validateNonEmpty(key, 'credential key');
-    if (value === undefined || value === null) {
-      throw new Error('credential value cannot be null or undefined');
-    }
-    return await invokeWithTimeout<string>('mcp_store_credential', {
-      serverName,
-      key,
-      value,
-    });
-  } catch (error) {
-    throw new Error(`Failed to store credential for server '${serverName}': ${error}`);
-  }
-}
-
-export async function mcpGetToolSchemas(): Promise<unknown[]> {
-  try {
-    return await invokeWithTimeout<unknown[]>('mcp_get_tool_schemas');
-  } catch (error) {
-    throw new Error(`Failed to get MCP tool schemas: ${error}`);
   }
 }
 
@@ -385,15 +320,12 @@ export const MCP_OAUTH_PROVIDERS: McpOAuthProviderConfig[] = [
 export async function mcpOAuthStart(provider: McpOAuthProvider): Promise<McpOAuthStartResponse> {
   try {
     validateNonEmpty(provider, 'provider');
-    const result = await invokeWithTimeout<{ auth_url: string; state: string }>(
+    const result = await invokeWithTimeout<McpOAuthStartResponse>(
       'mcp_oauth_start',
       { provider },
       MCP_OAUTH_TIMEOUT_MS,
     );
-    return {
-      authUrl: result.auth_url,
-      state: result.state,
-    };
+    return { authUrl: result.authUrl, state: result.state };
   } catch (error) {
     throw new Error(`Failed to start OAuth flow for ${provider}: ${error}`);
   }
@@ -417,15 +349,15 @@ export async function mcpOAuthCallback(
     validateNonEmpty(provider, 'provider');
     validateNonEmpty(code, 'authorization code');
     validateNonEmpty(callbackState, 'callback state');
-    const result = await invokeWithTimeout<{
-      provider: string;
-      connected: boolean;
-      expires_at: number | null;
-    }>('mcp_oauth_callback', { provider, code, callbackState }, MCP_OAUTH_TIMEOUT_MS);
+    const result = await invokeWithTimeout<McpOAuthTokenResponse>(
+      'mcp_oauth_callback',
+      { provider, code, callbackState },
+      MCP_OAUTH_TIMEOUT_MS,
+    );
     return {
       provider: result.provider,
       connected: result.connected,
-      expiresAt: result.expires_at,
+      expiresAt: result.expiresAt,
     };
   } catch (error) {
     throw new Error(`Failed to complete OAuth callback for ${provider}: ${error}`);
@@ -441,15 +373,15 @@ export async function mcpOAuthCallbackRaw(
     validateNonEmpty(provider, 'provider');
     validateNonEmpty(code, 'authorization code');
     validateNonEmpty(callbackState, 'callback state');
-    const result = await invokeWithTimeout<{
-      provider: string;
-      connected: boolean;
-      expires_at: number | null;
-    }>('mcp_oauth_callback', { provider, code, callbackState }, MCP_OAUTH_TIMEOUT_MS);
+    const result = await invokeWithTimeout<McpOAuthTokenResponse>(
+      'mcp_oauth_callback',
+      { provider, code, callbackState },
+      MCP_OAUTH_TIMEOUT_MS,
+    );
     return {
       provider: result.provider,
       connected: result.connected,
-      expiresAt: result.expires_at,
+      expiresAt: result.expiresAt,
     };
   } catch (error) {
     throw new Error(`Failed to complete OAuth callback for ${provider}: ${error}`);
@@ -467,27 +399,20 @@ export async function mcpOAuthStatus(
 ): Promise<McpOAuthConnectionStatus> {
   try {
     validateNonEmpty(provider, 'provider');
-    const result = await invokeWithTimeout<{
-      connected: boolean;
-      user_info: {
-        id: string;
-        name: string | null;
-        email: string | null;
-        avatar_url: string | null;
-      } | null;
-      expires_at: number | null;
-    }>('mcp_oauth_status', { provider });
+    const result = await invokeWithTimeout<McpOAuthConnectionStatus>('mcp_oauth_status', {
+      provider,
+    });
     return {
       connected: result.connected,
-      userInfo: result.user_info
+      userInfo: result.userInfo
         ? {
-            id: result.user_info.id,
-            name: result.user_info.name,
-            email: result.user_info.email,
-            avatarUrl: result.user_info.avatar_url,
+            id: result.userInfo.id,
+            name: result.userInfo.name,
+            email: result.userInfo.email,
+            avatarUrl: result.userInfo.avatarUrl,
           }
         : null,
-      expiresAt: result.expires_at,
+      expiresAt: result.expiresAt,
     };
   } catch (error) {
     throw new Error(`Failed to get OAuth status for ${provider}: ${error}`);
@@ -517,15 +442,15 @@ export async function mcpOAuthDisconnect(provider: McpOAuthProvider): Promise<vo
 export async function mcpOAuthRefresh(provider: McpOAuthProvider): Promise<McpOAuthTokenResponse> {
   try {
     validateNonEmpty(provider, 'provider');
-    const result = await invokeWithTimeout<{
-      provider: string;
-      connected: boolean;
-      expires_at: number | null;
-    }>('mcp_oauth_refresh', { provider }, MCP_OAUTH_TIMEOUT_MS);
+    const result = await invokeWithTimeout<McpOAuthTokenResponse>(
+      'mcp_oauth_refresh',
+      { provider },
+      MCP_OAUTH_TIMEOUT_MS,
+    );
     return {
       provider: result.provider,
       connected: result.connected,
-      expiresAt: result.expires_at,
+      expiresAt: result.expiresAt,
     };
   } catch (error) {
     throw new Error(`Failed to refresh OAuth tokens for ${provider}: ${error}`);
@@ -594,15 +519,12 @@ export async function mcpOAuthSetCredentialsRaw(
 export async function mcpOAuthStartRaw(provider: string): Promise<McpOAuthStartResponse> {
   try {
     validateNonEmpty(provider, 'provider');
-    const result = await invokeWithTimeout<{ auth_url: string; state: string }>(
+    const result = await invokeWithTimeout<McpOAuthStartResponse>(
       'mcp_oauth_start',
       { provider },
       MCP_OAUTH_TIMEOUT_MS,
     );
-    return {
-      authUrl: result.auth_url,
-      state: result.state,
-    };
+    return { authUrl: result.authUrl, state: result.state };
   } catch (error) {
     throw new Error(`Failed to start OAuth flow for ${provider}: ${error}`);
   }
@@ -636,11 +558,7 @@ export async function mcpGetSupportedConnectorIds(): Promise<string[]> {
 export async function mcpConnectConnector(connectorId: string): Promise<unknown> {
   try {
     validateNonEmpty(connectorId, 'connector ID');
-    return await invokeWithTimeout(
-      'mcp_connect_connector',
-      { connectorId },
-      MCP_SIGN_IN_TIMEOUT_MS,
-    );
+    return await invokeAwaitingPerson('mcp_connect_connector', { connectorId });
   } catch (error) {
     throw new Error(`Failed to connect MCP connector '${connectorId}': ${error}`);
   }
@@ -696,6 +614,14 @@ export async function mcpUpdateFilesystemDirectories(directories: string[]): Pro
     await invokeWithTimeout<void>('mcp_update_filesystem_directories', { directories });
   } catch (error) {
     throw new Error(`Failed to update MCP filesystem directories: ${error}`);
+  }
+}
+
+export async function mcpListCredentialSlots(): Promise<McpCredentialSlot[]> {
+  try {
+    return await invokeWithTimeout<McpCredentialSlot[]>('mcp_list_credential_slots');
+  } catch (error) {
+    throw new Error(`Failed to list stored credentials: ${error}`);
   }
 }
 
@@ -757,23 +683,10 @@ export async function mcpExtensionList(): Promise<McpExtensionInfo[]> {
   }
 }
 
-export async function mcpExtensionGet(extensionId: string): Promise<McpExtensionInfo> {
-  try {
-    validateNonEmpty(extensionId, 'extension ID');
-    return await invokeWithTimeout<McpExtensionInfo>('extension_get', { extensionId });
-  } catch (error) {
-    throw new Error(`Failed to get extension '${extensionId}': ${error}`);
-  }
-}
-
 export async function mcpExtensionInstall(filePath: string): Promise<McpExtensionInfo> {
   try {
     validateNonEmpty(filePath, 'file path');
-    return await invokeWithTimeout<McpExtensionInfo>(
-      'extension_install',
-      { filePath },
-      MCP_INIT_TIMEOUT_MS,
-    );
+    return await invokeAwaitingPerson<McpExtensionInfo>('extension_install', { filePath });
   } catch (error) {
     throw new Error(`Failed to install extension from '${filePath}': ${error}`);
   }
@@ -791,7 +704,7 @@ export async function mcpExtensionUninstall(extensionId: string): Promise<string
 export async function mcpExtensionEnable(extensionId: string): Promise<string> {
   try {
     validateNonEmpty(extensionId, 'extension ID');
-    return await invokeWithTimeout<string>('extension_enable', { extensionId });
+    return await invokeAwaitingPerson<string>('extension_enable', { extensionId });
   } catch (error) {
     throw new Error(`Failed to enable extension '${extensionId}': ${error}`);
   }
@@ -808,51 +721,9 @@ export async function mcpExtensionDisable(extensionId: string): Promise<string> 
 
 export async function mcpExtensionSelectPackage(): Promise<string | null> {
   try {
-    return await invokeWithTimeout<string | null>('extension_select_package');
+    return await invokeAwaitingPerson<string | null>('extension_select_package');
   } catch (error) {
     throw new Error(`Failed to open extension file picker: ${error}`);
-  }
-}
-
-export async function mcpExtensionValidate(filePath: string): Promise<McpExtensionPackageInfo> {
-  try {
-    validateNonEmpty(filePath, 'file path');
-    return await invokeWithTimeout<McpExtensionPackageInfo>('extension_validate', { filePath });
-  } catch (error) {
-    throw new Error(`Failed to validate extension package '${filePath}': ${error}`);
-  }
-}
-
-export async function mcpExtensionListByStatus(status: string): Promise<McpExtensionInfo[]> {
-  try {
-    validateNonEmpty(status, 'status');
-    return await invokeWithTimeout<McpExtensionInfo[]>('extension_list_by_status', { status });
-  } catch (error) {
-    throw new Error(`Failed to list extensions by status '${status}': ${error}`);
-  }
-}
-
-export async function mcpExtensionStartAll(): Promise<string> {
-  try {
-    return await invokeWithTimeout<string>('extension_start_all');
-  } catch (error) {
-    throw new Error(`Failed to start all extensions: ${error}`);
-  }
-}
-
-export async function mcpExtensionStopAll(): Promise<string> {
-  try {
-    return await invokeWithTimeout<string>('extension_stop_all');
-  } catch (error) {
-    throw new Error(`Failed to stop all extensions: ${error}`);
-  }
-}
-
-export async function mcpExtensionGetDirectory(): Promise<string> {
-  try {
-    return await invokeWithTimeout<string>('extension_get_directory');
-  } catch (error) {
-    throw new Error(`Failed to get extensions directory: ${error}`);
   }
 }
 
@@ -979,40 +850,12 @@ export class McpClient {
     return mcpGetStats();
   }
 
-  static async getRegistry(): Promise<McpRegistryPackage[]> {
-    return mcpGetRegistry();
-  }
-
-  static async installServer(serverId: string): Promise<string> {
-    return mcpInstallServer(serverId);
-  }
-
-  static async getExecutionHistory(limit: number = 20): Promise<McpExecutionHistoryEntry[]> {
-    return mcpGetExecutionHistory(limit);
-  }
-
-  static async getToolExecutionStats(): Promise<McpToolExecutionStats[]> {
-    return mcpGetToolExecutionStats();
-  }
-
   static async getHealth(): Promise<McpServerHealth[]> {
     return mcpGetHealth();
   }
 
-  static async checkServerHealth(serverName: string): Promise<McpServerHealth> {
-    return mcpCheckServerHealth(serverName);
-  }
-
   static async getServerLogs(serverName: string, lines?: number): Promise<string[]> {
     return mcpGetServerLogs(serverName, lines);
-  }
-
-  static async storeCredential(serverName: string, key: string, value: string): Promise<string> {
-    return mcpStoreCredential(serverName, key, value);
-  }
-
-  static async getToolSchemas(): Promise<unknown[]> {
-    return mcpGetToolSchemas();
   }
 
   static getOAuthProviders(): McpOAuthProviderConfig[] {
@@ -1115,6 +958,10 @@ export class McpClient {
     return mcpUpdateFilesystemDirectories(directories);
   }
 
+  static async listCredentialSlots(): Promise<McpCredentialSlot[]> {
+    return mcpListCredentialSlots();
+  }
+
   static async setCredential(serverName: string, key: string, value: string): Promise<string> {
     return mcpSetCredential(serverName, key, value);
   }
@@ -1135,10 +982,6 @@ export class McpClient {
     return mcpExtensionList();
   }
 
-  static async getExtension(extensionId: string): Promise<McpExtensionInfo> {
-    return mcpExtensionGet(extensionId);
-  }
-
   static async installExtension(filePath: string): Promise<McpExtensionInfo> {
     return mcpExtensionInstall(filePath);
   }
@@ -1157,26 +1000,6 @@ export class McpClient {
 
   static async selectExtensionPackage(): Promise<string | null> {
     return mcpExtensionSelectPackage();
-  }
-
-  static async validateExtensionPackage(filePath: string): Promise<McpExtensionPackageInfo> {
-    return mcpExtensionValidate(filePath);
-  }
-
-  static async listExtensionsByStatus(status: string): Promise<McpExtensionInfo[]> {
-    return mcpExtensionListByStatus(status);
-  }
-
-  static async startAllExtensions(): Promise<string> {
-    return mcpExtensionStartAll();
-  }
-
-  static async stopAllExtensions(): Promise<string> {
-    return mcpExtensionStopAll();
-  }
-
-  static async getExtensionsDirectory(): Promise<string> {
-    return mcpExtensionGetDirectory();
   }
 
   static async getExtensionConfig(extensionId: string): Promise<Record<string, unknown>> {

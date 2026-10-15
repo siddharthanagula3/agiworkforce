@@ -2,8 +2,7 @@ import { agent } from '@agiworkforce/desktop-command-client';
 import type { BrowserActivityEventDetail } from '@agiworkforce/types';
 import { EVENTS } from '../../constants/event-names';
 import { INVOKE_TIMEOUT_MS } from '../../constants/timeouts';
-import { invoke, listen, type UnlistenFn, isTauri } from '../../lib/tauri-mock';
-import type { NotificationSettings } from '../../hooks/useNotifications';
+import { listen, type UnlistenFn, isTauri } from '../../lib/tauri-mock';
 import { sha256 } from '../../lib/hash';
 import { useAgentStore, type AgentStatus } from './agentStore';
 import type {
@@ -60,13 +59,17 @@ export interface AgentActionUpdateEvent {
 
 export interface AgentPermissionRequiredEvent {
   actionId: string;
-  workflowHash?: string;
+  toolName?: string;
+  workflowHash?: string | null;
   reason?: string;
   title?: string;
+  description?: string;
   scope: ApprovalScope;
   riskLevel?: 'low' | 'medium' | 'high';
   actionSignature?: string;
-  type?: string;
+  requestedAtMs?: number;
+  expiresAtMs?: number;
+  timeoutSeconds?: number;
 }
 
 export interface AgentMetricsEvent {
@@ -124,7 +127,7 @@ export interface AgentTaskFailedPayload {
 export interface BackgroundAgentCompletedEvent {
   agentId: string;
   goal?: string;
-  summaryPath?: string;
+  summary?: string;
   message?: string | null;
 }
 
@@ -153,15 +156,6 @@ export interface ToolConfirmationSummary {
   reason: string;
   reversible: boolean;
   undo_description?: string;
-}
-
-export interface ApprovalRequestPayload {
-  id: string;
-  type?: string;
-  description?: string;
-  riskLevel?: string;
-  details?: Record<string, unknown>;
-  impact?: string;
 }
 
 export interface GoalProgressEvent {
@@ -375,20 +369,6 @@ function resolveGoalProgressPercent(payload: GoalProgressEvent): number {
   return 0;
 }
 
-async function sendBackgroundAgentNotification(title: string, body: string): Promise<void> {
-  try {
-    const settings = await invoke<NotificationSettings>('notification_get_settings');
-    if (!settings.enabled || !settings.desktop_notifications || settings.do_not_disturb) {
-      return;
-    }
-
-    const { sendNotification } = await import('@tauri-apps/plugin-notification');
-    await sendNotification({ title, body });
-  } catch {
-    // Notification plugin/settings command unavailable outside the native desktop runtime.
-  }
-}
-
 function buildPlanData(plan: AgentPlanUpdateEvent['plan']): PlanData {
   const normalizedSteps =
     plan.steps?.map<PlanStep>((step) => ({
@@ -503,28 +483,43 @@ export function applyAgentActionUpdate(payload: AgentActionUpdateEvent): void {
   });
 }
 
+// An MCP-scoped request is deliberately not 'mcp_tool': that type is answered
+// through the tool-confirmation command, and this request waits on the agent
+// approval controller.
+function approvalTypeForScope(scopeType: string | undefined): ApprovalRequest['type'] {
+  switch (scopeType) {
+    case 'terminal':
+      return 'terminal_command';
+    case 'filesystem':
+      return 'data_modification';
+    default:
+      return 'tool_execution';
+  }
+}
+
 export function applyAgentPermissionRequired(payload: AgentPermissionRequiredEvent): void {
+  const workflowHash = payload.workflowHash ?? undefined;
   addNormalizedApprovalRequest({
     id: payload.actionId,
-    type: (payload.type as ApprovalRequest['type']) ?? 'terminal_command',
+    type: approvalTypeForScope(payload.scope.type),
     description: payload.reason ?? 'Action requires approval',
     riskLevel: normalizeRiskLevel(payload.riskLevel ?? payload.scope.risk),
     details: {
       scope: payload.scope,
     },
     scope: payload.scope,
-    workflowHash: payload.workflowHash,
+    workflowHash,
     actionId: payload.actionId,
     actionSignature: payload.actionSignature,
   });
 
   upsertActionLogEntry({
     id: payload.actionId,
-    type: mapActionType(payload.type),
+    type: mapActionType(payload.scope.type),
     title: payload.title ?? 'Approval required',
     description: payload.reason,
     status: 'blocked',
-    workflowHash: payload.workflowHash,
+    workflowHash,
     requiresApproval: true,
     scope: payload.scope,
   });
@@ -672,18 +667,13 @@ export async function applyBackgroundAgentCompleted(
   }
 
   const goal = payload.goal?.trim() || payload.message?.trim() || 'Background task completed';
-  const summaryPath = payload.summaryPath?.trim() ?? '';
-
-  await sendBackgroundAgentNotification(
-    'AGI Workforce, Task Completed',
-    goal.length > 120 ? `${goal.slice(0, 117)}...` : goal,
-  );
+  const summary = payload.summary?.trim() ?? '';
 
   upsertActionLogEntry({
     id: payload.agentId,
     type: 'plan',
     title: 'Background task completed',
-    description: summaryPath ? `${goal}\n\nReport saved: ${summaryPath}` : goal,
+    description: summary ? `${goal}\n\n${summary}` : goal,
     status: 'success',
   });
 
@@ -705,11 +695,6 @@ export async function applyBackgroundAgentFailed(
   }
 
   const error = payload.error?.trim() || payload.message?.trim() || 'Background task failed';
-
-  await sendBackgroundAgentNotification(
-    'AGI Workforce, Task Failed',
-    error.length > 120 ? `${error.slice(0, 117)}...` : error,
-  );
 
   upsertActionLogEntry({
     id: payload.agentId,
@@ -806,21 +791,6 @@ export function applyToolConfirmationTimeout(payload: { request_id: string }): v
       approvalId: payload.request_id,
       toolName,
     },
-  });
-}
-
-export function applyApprovalRequest(payload: ApprovalRequestPayload): void {
-  if (!payload.id) {
-    return;
-  }
-
-  addNormalizedApprovalRequest({
-    id: payload.id,
-    type: (payload.type ?? 'terminal_command') as ApprovalRequest['type'],
-    description: payload.description ?? 'Agent operation requires approval',
-    riskLevel: normalizeRiskLevel(payload.riskLevel),
-    details: payload.details ?? {},
-    impact: payload.impact,
   });
 }
 
@@ -1099,12 +1069,6 @@ export async function initializeAgentWorkflowEventListeners(): Promise<void> {
     );
 
     agentWorkflowUnlistenFunctions.push(
-      await listen<ApprovalRequestPayload>('approval:request', ({ payload }) => {
-        applyApprovalRequest(payload);
-      }),
-    );
-
-    agentWorkflowUnlistenFunctions.push(
       await listen<ApprovalRequestEvent>('agi:approval_granted', ({ payload }) => {
         applyApprovalGranted(payload);
       }),
@@ -1129,12 +1093,6 @@ export async function initializeAgentWorkflowEventListeners(): Promise<void> {
     );
 
     agentWorkflowUnlistenFunctions.push(
-      await listen<GoalStepCompletedEvent>('agi:step_completed', ({ payload }) => {
-        applyGoalStepCompleted(payload);
-      }),
-    );
-
-    agentWorkflowUnlistenFunctions.push(
       await listen<GoalCompletedEvent>('agi:goal:achieved', ({ payload }) => {
         applyGoalAchieved(payload);
       }),
@@ -1143,17 +1101,6 @@ export async function initializeAgentWorkflowEventListeners(): Promise<void> {
     agentWorkflowUnlistenFunctions.push(
       await listen<GoalCompletedEvent>('agi:goal:error', ({ payload }) => {
         applyGoalError(payload);
-      }),
-    );
-
-    agentWorkflowUnlistenFunctions.push(
-      await listen<GoalCompletedEvent>('agi:goal_completed', ({ payload }) => {
-        if (payload.success === false) {
-          applyGoalError(payload);
-          return;
-        }
-
-        applyGoalAchieved(payload);
       }),
     );
   } catch (error) {

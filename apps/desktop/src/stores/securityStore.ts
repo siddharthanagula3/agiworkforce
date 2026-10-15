@@ -25,28 +25,17 @@ export interface ApprovalRequestPayload {
 }
 
 interface SecurityState {
-  isCheckingSecret: boolean;
-  secretError: string | null;
-
   pendingApprovalId: string | null;
 
   authLogin: (email: string, password: string) => Promise<AuthToken>;
 
-  hasSecret: (key: string) => Promise<boolean>;
-  setSecret: (key: string, value: string) => Promise<void>;
-  deleteSecret: (key: string) => Promise<void>;
-
   approveOperation: (approvalId: string) => Promise<void>;
   rejectOperation: (approvalId: string, reason?: string) => Promise<void>;
-
-  clearError: () => void;
 }
 
 export const useSecurityStore = create<SecurityState>()(
   devtools(
     subscribeWithSelector((set) => ({
-      isCheckingSecret: false,
-      secretError: null,
       pendingApprovalId: null,
 
       authLogin: async (email: string, password: string) => {
@@ -55,38 +44,6 @@ export const useSecurityStore = create<SecurityState>()(
           return token;
         } catch (error) {
           throw new Error(error instanceof Error ? error.message : 'Login failed');
-        }
-      },
-
-      hasSecret: async (key: string) => {
-        set({ isCheckingSecret: true, secretError: null });
-        try {
-          const exists = await invoke<boolean>('secret_manager_has', { key });
-          set({ isCheckingSecret: false });
-          return exists;
-        } catch (error) {
-          set({ isCheckingSecret: false, secretError: String(error) });
-          throw error;
-        }
-      },
-
-      setSecret: async (key: string, value: string) => {
-        set({ secretError: null });
-        try {
-          await invoke('secret_manager_set', { key, value });
-        } catch (error) {
-          set({ secretError: String(error) });
-          throw error;
-        }
-      },
-
-      deleteSecret: async (key: string) => {
-        set({ secretError: null });
-        try {
-          await invoke('secret_manager_delete', { key });
-        } catch (error) {
-          set({ secretError: String(error) });
-          throw error;
         }
       },
 
@@ -110,10 +67,6 @@ export const useSecurityStore = create<SecurityState>()(
           set({ pendingApprovalId: null });
           throw new Error(error instanceof Error ? error.message : 'Failed to reject operation');
         }
-      },
-
-      clearError: () => {
-        set({ secretError: null });
       },
     })),
     { name: 'SecurityStore', enabled: import.meta.env.DEV },

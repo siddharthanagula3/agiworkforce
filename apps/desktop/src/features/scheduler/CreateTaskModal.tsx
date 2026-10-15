@@ -4,9 +4,9 @@ import { toast } from 'sonner';
 import {
   type ScheduledTask,
   type TaskSchedule,
+  completeSchedule,
   useSchedulerStore,
 } from '../../stores/schedulerStore';
-import { getCurrentModelOptions } from '../../constants/llm';
 import { cn } from '../../lib/utils';
 import { TaskScheduleInput } from './TaskScheduleInput';
 
@@ -16,17 +16,9 @@ interface CreateTaskModalProps {
   onClose: () => void;
 }
 
-const ALL_MODEL_OPTIONS: Array<{ value: string; label: string; group: string }> =
-  getCurrentModelOptions().map(({ value, label, provider }) => ({
-    value,
-    label,
-    group: provider,
-  }));
-
-const DEFAULT_SCHEDULE: TaskSchedule = {
-  type: 'recurring',
-  interval: 'daily',
-};
+function newTaskSchedule(): TaskSchedule {
+  return completeSchedule({ type: 'recurring', interval: 'daily' });
+}
 
 function fieldClass(extra?: string) {
   return cn(
@@ -44,8 +36,7 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [prompt, setPrompt] = useState('');
-  const [modelId, setModelId] = useState('');
-  const [schedule, setSchedule] = useState<TaskSchedule>(DEFAULT_SCHEDULE);
+  const [schedule, setSchedule] = useState<TaskSchedule>(newTaskSchedule);
   const [isSaving, setIsSaving] = useState(false);
 
   const isEditing = editingTask != null;
@@ -55,14 +46,12 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
       setName(editingTask.name);
       setDescription(editingTask.description);
       setPrompt(editingTask.prompt);
-      setModelId(editingTask.modelId ?? '');
       setSchedule(editingTask.schedule);
     } else {
       setName('');
       setDescription('');
       setPrompt('');
-      setModelId('');
-      setSchedule(DEFAULT_SCHEDULE);
+      setSchedule(newTaskSchedule());
     }
   }, [editingTask, isOpen]);
 
@@ -88,6 +77,10 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
       toast.error('Please select a date and time for the one-time run');
       return;
     }
+    if (schedule.interval === 'custom' && !schedule.cronExpression?.trim()) {
+      toast.error('Enter a cron expression for the custom schedule');
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -96,7 +89,6 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
           name: trimmedName,
           description: description.trim(),
           prompt: trimmedPrompt,
-          modelId: modelId || undefined,
           schedule,
         });
         toast.success('Task updated');
@@ -105,16 +97,14 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
           name: trimmedName,
           description: description.trim(),
           prompt: trimmedPrompt,
-          modelId: modelId || undefined,
           schedule,
-          status: 'active',
         });
         toast.success('Task created');
       }
       onClose();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save task';
-      toast.error(message);
+    } catch {
+      // The store has already said why; the form stays open to be corrected.
+      return;
     } finally {
       setIsSaving(false);
     }
@@ -122,7 +112,6 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
     name,
     description,
     prompt,
-    modelId,
     schedule,
     isEditing,
     editingTask,
@@ -229,32 +218,11 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
             />
           </div>
 
-          {/* Model selector */}
-          <div>
-            <label htmlFor="task-model" className="mb-1.5 block text-sm font-medium text-slate-300">
-              Model <span className="text-slate-500 font-normal">(optional, uses app default)</span>
-            </label>
-            <select
-              id="task-model"
-              value={modelId}
-              onChange={(e) => setModelId(e.target.value)}
-              disabled={isSaving}
-              className={cn(fieldClass(), 'cursor-pointer')}
-            >
-              <option value="" className="bg-slate-900">
-                Use app default
-              </option>
-              {ALL_MODEL_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value} className="bg-slate-900">
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Schedule */}
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-300">Schedule</label>
+          <div role="group" aria-labelledby="task-schedule-label">
+            <div id="task-schedule-label" className="mb-2 block text-sm font-medium text-slate-300">
+              Schedule
+            </div>
             <TaskScheduleInput value={schedule} onChange={setSchedule} disabled={isSaving} />
           </div>
         </div>

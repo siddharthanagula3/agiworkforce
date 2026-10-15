@@ -13,7 +13,7 @@ export async function resolveApprovalRequest(
   decision: 'approve' | 'reject',
   options?: ApprovalResolutionOptions,
 ): Promise<ToolConfirmationResolution | undefined> {
-  const { approveOperation, rejectOperation, recordTrustedAction } = useToolStore.getState();
+  const { approveOperation, rejectOperation } = useToolStore.getState();
 
   if (approval.type === 'mcp_tool') {
     const resolution = await respondToolConfirmation(
@@ -33,16 +33,10 @@ export async function resolveApprovalRequest(
     return resolution;
   }
 
-  await resolveAgentApproval(approval.id, decision, {
-    reason: options?.reason,
-    trust: options?.trust ?? false,
-  });
+  await resolveAgentApproval(approval.id, decision, { reason: options?.reason });
 
   if (decision === 'approve') {
     approveOperation(approval.id);
-    if (options?.trust && approval.workflowHash && approval.actionSignature) {
-      recordTrustedAction(approval.workflowHash, approval.actionSignature);
-    }
   } else {
     rejectOperation(approval.id, options?.reason);
   }

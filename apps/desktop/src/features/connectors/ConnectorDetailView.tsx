@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, ChevronLeft, Loader2, Shield, Puzzle } from 'lucide-react';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { useIsMounted } from '@/hooks/useIsMounted';
+import { Button } from '@/ui/Button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import {
   type ConnectorPermissionLevel,
@@ -8,7 +10,10 @@ import {
   CONNECTOR_PERMISSION_DESCRIPTION,
   defaultPermissionForTool,
 } from '@agiworkforce/types';
-import { getConnectorPermissionStore } from '@agiworkforce/unified-chat';
+import {
+  getConnectorPermissionStore,
+  type ConnectorPermissionStoreState,
+} from '@agiworkforce/unified-chat';
 import type { ConnectorDef } from './connectorDefinitions';
 
 export interface ConnectorTool {
@@ -99,6 +104,11 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [storeState, setStoreState] = useState<ConnectorPermissionStoreState | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [keptAs, setKeptAs] = useState<string | null>(null);
+  const [reloads, setReloads] = useState(0);
+  const { confirm: confirmAction, dialog: confirmActionDialog } = useConfirmAction();
 
   const store = getConnectorPermissionStore();
 
@@ -115,10 +125,11 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
         for (const tool of resolvedTools) {
           map[tool.name] = defaultPermissionForTool(tool.destructive);
         }
-        for (const tp of saved) {
+        for (const tp of saved.permissions) {
           map[tp.toolName] = tp.level;
         }
         setPermissions(map);
+        setStoreState(saved.store);
         setLoaded(true);
       })
       .catch((err: unknown) => {
@@ -129,6 +140,7 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
           map[tool.name] = defaultPermissionForTool(tool.destructive);
         }
         setPermissions(map);
+        setStoreState(null);
         setLoaded(true);
       });
 
@@ -136,7 +148,32 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connector.id]);
+  }, [connector.id, reloads]);
+
+  const storeUnreadable = storeState?.state === 'unreadable' ? storeState : null;
+
+  const requestReset = useCallback(() => {
+    confirmAction({
+      title: 'Reset connector permissions?',
+      description:
+        'All saved allow and block choices, for every connector, are cleared. Each connector tool then asks before it runs, and tools that can change or delete data stay blocked until you allow them. The old file is kept beside the new one under a new name; its choices are not brought back.',
+      confirmLabel: 'Reset connector permissions',
+      onConfirm: async () => {
+        if (isMounted.current) setResetError(null);
+        try {
+          const outcome = await store.reset();
+          if (!isMounted.current) return;
+          setKeptAs(outcome.keptAs);
+          setReloads((count) => count + 1);
+        } catch (err) {
+          if (isMounted.current) {
+            setResetError(err instanceof Error ? err.message : String(err));
+          }
+          console.error('[ConnectorDetailView] reset failed:', err);
+        }
+      },
+    });
+  }, [confirmAction, store, isMounted]);
 
   const handleChange = useCallback(
     async (tool: ConnectorTool, level: ConnectorPermissionLevel) => {
@@ -223,9 +260,42 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
           <span>Permission not saved, {saveError}</span>
         </div>
       )}
+      {storeUnreadable && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 flex-1">
+            Your saved connector choices could not be read, so every connector is blocked until this
+            is fixed.
+            {storeUnreadable.unlockMayFix &&
+              ' Unlock your saved keys in Settings, under Privacy: an earlier version sealed these choices with your master password, and unlocking brings them back.'}
+          </span>
+          {!storeUnreadable.unlockMayFix && (
+            <Button size="sm" variant="outline" className="shrink-0" onClick={requestReset}>
+              Reset connector permissions
+            </Button>
+          )}
+        </div>
+      )}
+      {resetError && (
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          <span>Connector permissions were not reset: {resetError}</span>
+        </div>
+      )}
+      {keptAs && !storeUnreadable && (
+        <p role="status" className="px-3 text-xs text-muted-foreground">
+          Connector permissions were reset. The old file was kept as {keptAs}.
+        </p>
+      )}
 
       {/* Tool list */}
-      {tools === null || !loaded ? (
+      {storeUnreadable ? null : tools === null || !loaded ? (
         <div className="flex items-center justify-center py-8 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
@@ -251,6 +321,7 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
           ))}
         </div>
       )}
+      {confirmActionDialog}
     </div>
   );
 }

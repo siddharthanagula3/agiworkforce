@@ -26,6 +26,7 @@ import {
   parseAgentEventDelta,
   readManagedCloudAgentRunHandle,
   TOOL_APPROVAL_RESUME_PATH,
+  TOOL_INPUT_RESUME_PATH,
   type ManagedMediaImageProvider,
   type ManagedMediaVideoProvider,
   type ManagedCloudAgentRunClient,
@@ -956,6 +957,55 @@ export async function sendCloudApprovalResume(
   idempotencyKey?: string,
   onCredential?: (credential: DesktopCloudRunCleanupCredential) => void,
 ): Promise<void> {
+  return sendCloudToolResume(
+    TOOL_APPROVAL_RESUME_PATH,
+    { run_id: runId, tool_approvals: toolApprovals },
+    onChunk,
+    onDone,
+    onError,
+    signal,
+    onEvent,
+    idempotencyKey,
+    onCredential,
+  );
+}
+
+/** Answers a run paused on MCP elicitation and streams its continuation. */
+export async function sendCloudInputResume(
+  runId: string,
+  toolInputs: Array<{ tool_call_id: string; input_responses: Record<string, unknown> }>,
+  onChunk: (text: string) => void,
+  onDone: () => void | Promise<void>,
+  onError: (err: Error) => void,
+  signal?: AbortSignal,
+  onEvent?: (payload: Record<string, unknown>) => void,
+  idempotencyKey?: string,
+  onCredential?: (credential: DesktopCloudRunCleanupCredential) => void,
+): Promise<void> {
+  return sendCloudToolResume(
+    TOOL_INPUT_RESUME_PATH,
+    { run_id: runId, tool_inputs: toolInputs },
+    onChunk,
+    onDone,
+    onError,
+    signal,
+    onEvent,
+    idempotencyKey,
+    onCredential,
+  );
+}
+
+async function sendCloudToolResume(
+  path: string,
+  body: Record<string, unknown>,
+  onChunk: (text: string) => void,
+  onDone: () => void | Promise<void>,
+  onError: (err: Error) => void,
+  signal?: AbortSignal,
+  onEvent?: (payload: Record<string, unknown>) => void,
+  idempotencyKey?: string,
+  onCredential?: (credential: DesktopCloudRunCleanupCredential) => void,
+): Promise<void> {
   let headers: Record<string, string>;
   const expectedAccountId = captureDesktopCloudAccountId();
 
@@ -975,11 +1025,11 @@ export async function sendCloudApprovalResume(
     let res: Response;
     try {
       res = await accountBoundCloudFetch(
-        `${CLOUD_API_BASE_URL}${TOOL_APPROVAL_RESUME_PATH}`,
+        `${CLOUD_API_BASE_URL}${path}`,
         {
           method: 'POST',
           headers,
-          body: JSON.stringify({ run_id: runId, tool_approvals: toolApprovals }),
+          body: JSON.stringify(body),
           signal: abortScope.controller.signal,
           credentials: 'include',
         },

@@ -88,10 +88,7 @@ describe('monthly credit limit', () => {
 
     await store.getState().setMonthlyBudget(2 * CREDITS_PER_USD);
 
-    expect(mocks.invoke).toHaveBeenNthCalledWith(1, 'chat_set_monthly_budget', {
-      userId: 'fixture-user',
-      amount: 2,
-    });
+    expect(mocks.invoke).toHaveBeenNthCalledWith(1, 'chat_set_monthly_budget', { amount: 2 });
     expect(mocks.invoke).toHaveBeenNthCalledWith(2, 'chat_get_cost_overview', {
       userId: 'fixture-user',
     });
@@ -104,10 +101,7 @@ describe('monthly credit limit', () => {
 
     await store.getState().setMonthlyBudget(undefined);
 
-    expect(mocks.invoke).toHaveBeenCalledWith('chat_set_monthly_budget', {
-      userId: 'fixture-user',
-      amount: null,
-    });
+    expect(mocks.invoke).toHaveBeenCalledWith('chat_set_monthly_budget', { amount: null });
   });
 
   it('reports a refused limit instead of dropping it', async () => {

@@ -2,7 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultTerminalSandboxPreferences, useSettingsStore } from '../../stores/settingsStore';
-import { AgentExecutionSettings } from './AgentExecutionSettings';
+import { AgentExecutionSettings, agentCommandSandboxStatus } from './AgentExecutionSettings';
 
 if (typeof Element.prototype.hasPointerCapture === 'undefined') {
   Element.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
@@ -82,5 +82,32 @@ describe('AgentExecutionSettings sandbox consent', () => {
     await user.click(screen.getByRole('button', { name: 'Run Without Sandbox' }));
 
     expect(useSettingsStore.getState().executionPreferences.terminalSandbox.backend).toBe('none');
+  });
+});
+
+describe('agent command sandbox status', () => {
+  afterEach(() => cleanup());
+
+  it('shows the agent-command mode even while the srt runtime is off', () => {
+    const state = useSettingsStore.getState();
+    useSettingsStore.setState({
+      executionPreferences: {
+        ...state.executionPreferences,
+        terminalSandbox: { ...defaultTerminalSandboxPreferences, enabled: false },
+      },
+    });
+    render(<AgentExecutionSettings />);
+
+    expect(screen.getByRole('combobox', { name: 'Access policy' })).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toMatch(/^Agent commands:/);
+  });
+
+  it('says plainly when agent commands are not sandboxed', () => {
+    expect(agentCommandSandboxStatus('danger-full-access', false)).toMatch(/not sandboxed/);
+    expect(agentCommandSandboxStatus('workspace-write', true)).toMatch(/not sandboxed on Windows/);
+    expect(agentCommandSandboxStatus('workspace-write', false)).toMatch(
+      /write only inside the chat’s folder/,
+    );
+    expect(agentCommandSandboxStatus('read-only', false)).toMatch(/write nothing/);
   });
 });

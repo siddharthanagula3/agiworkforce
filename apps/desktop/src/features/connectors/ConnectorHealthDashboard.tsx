@@ -212,7 +212,7 @@ export function ConnectorHealthDashboard({ className }: ConnectorHealthDashboard
               {/* Meta: tool count */}
               <div className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground">
                 <Zap className="h-3 w-3" />
-                <span>{server.tool_count} tools</span>
+                <span>{server.toolCount} tools</span>
               </div>
 
               {/* Meta: last ping */}

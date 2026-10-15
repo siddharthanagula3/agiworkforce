@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-import { useComputerUseStore, DESKTOP_CONSENT_SETTINGS_KEY } from '../computerUseStore';
+import { useComputerUseStore } from '../computerUseStore';
 import { invoke } from '../../lib/tauri-mock';
 
 vi.mock('sonner', () => ({
@@ -29,11 +29,7 @@ describe('withdrawing desktop control', () => {
     useComputerUseStore.setState({ computerUseEnabled: true, consentAccepted: true });
 
     useComputerUseStore.getState().setComputerUseEnabled(false);
-    await vi.waitFor(() =>
-      expect(mockInvoke).toHaveBeenCalledWith('settings_v2_delete', {
-        key: DESKTOP_CONSENT_SETTINGS_KEY,
-      }),
-    );
+    await vi.waitFor(() => expect(mockInvoke).toHaveBeenCalledWith('computer_use_revoke_consent'));
 
     expect(useComputerUseStore.getState().computerUseEnabled).toBe(false);
     expect(useComputerUseStore.getState().consentAccepted).toBe(false);
@@ -41,7 +37,7 @@ describe('withdrawing desktop control', () => {
 
   it('reports a revocation the native side refused instead of pretending it happened', async () => {
     mockInvoke.mockImplementation((command) =>
-      command === 'settings_v2_delete'
+      command === 'computer_use_revoke_consent'
         ? Promise.reject(new Error('settings locked'))
         : Promise.resolve(undefined),
     );
@@ -54,7 +50,7 @@ describe('withdrawing desktop control', () => {
   it('does not touch the persisted grant when computer use is turned on', () => {
     useComputerUseStore.getState().setComputerUseEnabled(true);
 
-    expect(mockInvoke).not.toHaveBeenCalledWith('settings_v2_delete', expect.anything());
+    expect(mockInvoke).not.toHaveBeenCalledWith('computer_use_revoke_consent');
     expect(useComputerUseStore.getState().computerUseEnabled).toBe(true);
   });
 });

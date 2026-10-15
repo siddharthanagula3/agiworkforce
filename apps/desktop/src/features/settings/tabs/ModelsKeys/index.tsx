@@ -4,16 +4,23 @@ import type { Provider } from '@agiworkforce/types';
 import { validateUrl } from '@/utils/security';
 import { invoke } from '@/lib/tauri-mock';
 import { McpClient } from '@/api/mcp';
+import { deleteApiKey, listLockedApiKeys, listSavedApiKeys } from '@/api/byok';
+import { formatModelSize, type OllamaPullOutcome, type OllamaPullProgress } from '@/api/ollama';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { VAULT_STATE_CHANGED_EVENT } from '../../masterPasswordVault';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { Button } from '@/ui/Button';
+import { Progress } from '@/ui/Progress';
+import { Spinner } from '@/ui/Spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { Switch } from '@/ui/Switch';
 
-const LazyCustomModelsSettings = lazy(() =>
-  import('../../CustomModelsSettings').then((m) => ({ default: m.CustomModelsSettings })),
-);
-
 const LazyLocalRuntimeSettings = lazy(() =>
   import('./LocalRuntimeSettings').then((m) => ({ default: m.LocalRuntimeSettings })),
+);
+
+const LazyOllamaMemorySettings = lazy(() =>
+  import('./LocalModelMemory').then((m) => ({ default: m.OllamaMemorySettings })),
 );
 
 const LazyDailyBudgetSettings = lazy(() =>
@@ -43,6 +50,28 @@ const BYOK_PROVIDERS: ReadonlyArray<{ id: Provider; name: string; placeholder: s
   { id: 'zhipu', name: 'Zhipu (GLM)', placeholder: 'API key...' },
 ] as const;
 
+const PULL_LAYER_STATUS_PREFIX = 'pulling ';
+
+/**
+ * Ollama reports a pull one layer at a time, so the byte counts describe the
+ * layer in flight, and the steps that move no bytes carry no counts at all.
+ */
+export function describePullProgress(progress: OllamaPullProgress | null): {
+  label: string;
+  percent: number | null;
+} {
+  if (!progress) return { label: 'Starting download', percent: null };
+  const { status, total, completed } = progress;
+  if (status.startsWith(PULL_LAYER_STATUS_PREFIX) && total && total > 0) {
+    const done = Math.min(completed ?? 0, total);
+    return {
+      label: `Downloading ${formatModelSize(done)} of ${formatModelSize(total)}`,
+      percent: Math.round((done / total) * 100),
+    };
+  }
+  return { label: status.charAt(0).toUpperCase() + status.slice(1), percent: null };
+}
+
 type ProviderHealth = {
   provider: Provider;
   available: boolean;
@@ -50,7 +79,7 @@ type ProviderHealth = {
   error?: string;
 };
 
-function BYOKApiKeysSection() {
+export function BYOKApiKeysSection() {
   const [keys, setKeys] = React.useState<Record<string, string>>({});
   const [statuses, setStatuses] = React.useState<
     Record<string, 'idle' | 'saving' | 'saved' | 'testing' | 'error'>
@@ -58,7 +87,51 @@ function BYOKApiKeysSection() {
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [savedProviders, setSavedProviders] = React.useState<Record<string, boolean>>({});
   const [health, setHealth] = React.useState<Partial<Record<Provider, ProviderHealth>>>({});
+  const [savedKeysError, setSavedKeysError] = React.useState<string | null>(null);
+  const [lockedProviders, setLockedProviders] = React.useState<ReadonlySet<string>>(new Set());
   const savedTimersRef = React.useRef<Record<string, number>>({});
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
+
+  React.useEffect(() => {
+    let cancelled = false;
+    listSavedApiKeys()
+      .then((providers) => {
+        if (cancelled) return;
+        setSavedProviders((current) => ({
+          ...Object.fromEntries(providers.map((provider) => [provider, true])),
+          ...current,
+        }));
+        setSavedKeysError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setSavedKeysError(
+          `Saved keys could not be read: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const refreshLocked = () => {
+      listLockedApiKeys()
+        .then((locked) => {
+          if (!cancelled) setLockedProviders(new Set(locked));
+        })
+        .catch(() => {
+          if (!cancelled) setLockedProviders(new Set());
+        });
+    };
+    refreshLocked();
+    window.addEventListener(VAULT_STATE_CHANGED_EVENT, refreshLocked);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(VAULT_STATE_CHANGED_EVENT, refreshLocked);
+    };
+  }, []);
 
   React.useEffect(() => {
     const timers = savedTimersRef.current;
@@ -135,12 +208,46 @@ function BYOKApiKeysSection() {
     [checkProvider, keys],
   );
 
+  const requestRemove = React.useCallback(
+    (providerId: Provider, name: string) => {
+      confirm({
+        title: `Remove the ${name} key?`,
+        description: `The ${name} key is deleted from this device and AGI Workforce stops sending requests to ${name} straight away. BYOK chats that use ${name} keep their history but cannot send until you save a key again. The key cannot be recovered from AGI Workforce; you would paste it again from your ${name} account.`,
+        confirmLabel: 'Remove key',
+        onConfirm: async () => {
+          try {
+            await deleteApiKey(providerId);
+            setSavedProviders((s) => ({ ...s, [providerId]: false }));
+            setHealth((h) => {
+              const next = { ...h };
+              delete next[providerId];
+              return next;
+            });
+            setStatuses((s) => ({ ...s, [providerId]: 'idle' }));
+            setErrors((e) => ({ ...e, [providerId]: '' }));
+          } catch (err) {
+            setStatuses((s) => ({ ...s, [providerId]: 'error' }));
+            setErrors((e) => ({ ...e, [providerId]: String(err) }));
+          }
+        },
+      });
+    },
+    [confirm],
+  );
+
   return (
     <div>
+      {confirmDialog}
       <h3 className="text-h3 mb-1">API Keys (BYOK)</h3>
       <p className="text-sm text-muted-foreground mb-4">
-        Enter your own API keys for each AI provider. Keys are encrypted and stored locally.
+        Enter your own API keys for each AI provider. Keys are encrypted and stored on this device.
+        A BYOK chat sends your messages directly to the provider you pick.
       </p>
+      {savedKeysError && (
+        <p role="alert" className="mb-3 text-xs text-danger">
+          {savedKeysError}
+        </p>
+      )}
       <div className="rounded-lg border border-border bg-card divide-y divide-border">
         {BYOK_PROVIDERS.map(({ id, name, placeholder }) => {
           const status = statuses[id] ?? 'idle';
@@ -186,25 +293,66 @@ function BYOKApiKeysSection() {
                     'Test'
                   )}
                 </button>
+                {savedProviders[id] && (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => requestRemove(id, name)}
+                    aria-label={`Remove the ${name} key`}
+                    className="shrink-0 h-8 rounded-md border border-border px-2.5 text-xs font-medium text-danger hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
-              {(providerHealth || errors[id]) && (
+              {(providerHealth || errors[id] || savedProviders[id]) && (
                 <p
                   className={`mt-1.5 text-xs ${
                     providerHealth?.available ? 'text-success-text' : 'text-muted-foreground'
                   }`}
                   style={{ marginLeft: 156 }}
                 >
-                  {providerHealth?.available
-                    ? 'Verified and ready.'
-                    : providerHealth?.configured
-                      ? 'Saved locally. Live availability is not confirmed yet.'
-                      : errors[id] || 'Not configured.'}
+                  {lockedProviders.has(id)
+                    ? 'Locked. Unlock your saved keys in Settings, under Privacy, to use this provider.'
+                    : providerHealth?.available
+                      ? 'Verified and ready.'
+                      : errors[id]
+                        ? errors[id]
+                        : providerHealth?.configured || savedProviders[id]
+                          ? 'Key saved on this device. Use Test to check it.'
+                          : 'Not configured.'}
                 </p>
               )}
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function PrivateNetworkRuntimesSetting() {
+  const allowed = useSettingsStore((state) => state.llmConfig.allowPrivateNetworkRuntimes === true);
+  const setAllowed = useSettingsStore((state) => state.setAllowPrivateNetworkRuntimes);
+
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-card p-4">
+      <div className="min-w-0">
+        <p id="private-network-runtimes-label" className="text-sm font-medium">
+          Use local servers on my private network
+        </p>
+        <p id="private-network-runtimes-help" className="mt-1 text-xs text-muted-foreground">
+          Turn this on only for computers you own on your home or office network, such as
+          192.168.1.20. Local chats then go to that computer and stay on your network. An address on
+          the public internet is never treated as Local. Changes apply when you save Settings.
+        </p>
+      </div>
+      <Switch
+        checked={allowed}
+        onCheckedChange={setAllowed}
+        aria-labelledby="private-network-runtimes-label"
+        aria-describedby="private-network-runtimes-help"
+      />
     </div>
   );
 }
@@ -220,12 +368,14 @@ export interface ModelsKeysTabProps {
   isOllamaAvailable: boolean;
   ollamaEnabled: boolean;
   installingOllamaModel: boolean;
+  ollamaInstallProgress: OllamaPullProgress | null;
   ollamaInstallError: string | null;
   onOllamaUrlChange: (url: string) => void;
   onOllamaEnabledChange: (enabled: boolean) => void;
   onOllamaModelChange: (model: string) => void;
   onRefreshOllamaState: () => Promise<void>;
-  onInstallOllamaModel: (modelName: string) => Promise<void>;
+  onInstallOllamaModel: (modelName: string) => Promise<OllamaPullOutcome>;
+  onCancelOllamaInstall: () => void;
   onExportSettings: () => void;
 }
 
@@ -237,12 +387,14 @@ export function ModelsKeysTab({
   isOllamaAvailable,
   ollamaEnabled,
   installingOllamaModel,
+  ollamaInstallProgress,
   ollamaInstallError,
   onOllamaUrlChange,
   onOllamaEnabledChange,
   onOllamaModelChange,
   onRefreshOllamaState,
   onInstallOllamaModel,
+  onCancelOllamaInstall,
   onExportSettings,
 }: ModelsKeysTabProps) {
   const [modelToInstall, setModelToInstall] = React.useState('');
@@ -273,15 +425,27 @@ export function ModelsKeysTab({
 
     const sanitized = result.sanitized ?? raw;
     setOllamaUrlInput(sanitized);
-    setOllamaUrlError(null);
-    onOllamaUrlChange(sanitized);
+    const allowPrivateNetwork =
+      useSettingsStore.getState().llmConfig.allowPrivateNetworkRuntimes === true;
+    invoke<boolean>('ollama_check_status', { baseUrl: sanitized, allowPrivateNetwork })
+      .then(() => {
+        setOllamaUrlError(null);
+        onOllamaUrlChange(sanitized);
+      })
+      .catch((err: unknown) => {
+        setOllamaUrlError(err instanceof Error ? err.message : String(err));
+      });
   }, [ollamaUrlInput, onOllamaUrlChange]);
+
+  const installProgress = describePullProgress(ollamaInstallProgress);
 
   const installModel = React.useCallback(() => {
     const modelName = modelToInstall.trim();
     if (!modelName || installingOllamaModel) return;
     void onInstallOllamaModel(modelName)
-      .then(() => setModelToInstall(''))
+      .then((outcome) => {
+        if (outcome === 'completed') setModelToInstall('');
+      })
       .catch(() => {
         // The parent exposes the actionable error inline and as a toast.
       });
@@ -322,10 +486,12 @@ export function ModelsKeysTab({
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                URL for the local Ollama server. Default: http://localhost:11434
+                URL for the Ollama server on this computer. Default: http://localhost:11434
               </p>
             )}
           </div>
+
+          <PrivateNetworkRuntimesSetting />
 
           <div className="rounded-lg border border-border bg-card p-6">
             <div className="flex items-start justify-between gap-4">
@@ -405,35 +571,58 @@ export function ModelsKeysTab({
                             disabled={installingOllamaModel}
                             className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60"
                           />
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={installModel}
-                            disabled={!modelToInstall.trim() || installingOllamaModel}
-                            aria-busy={installingOllamaModel}
-                            aria-label={
-                              installingOllamaModel ? 'Installing local model' : 'Install model'
-                            }
-                          >
-                            {installingOllamaModel ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Downloading…
-                              </>
-                            ) : (
-                              <>
-                                <Download className="mr-2 h-4 w-4" />
-                                Install model
-                              </>
-                            )}
-                          </Button>
+                          {installingOllamaModel ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={onCancelOllamaInstall}
+                            >
+                              Cancel download
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={installModel}
+                              disabled={!modelToInstall.trim()}
+                              aria-label="Install model"
+                            >
+                              <Download className="mr-2 h-4 w-4" />
+                              Install model
+                            </Button>
+                          )}
                         </div>
+                        {installingOllamaModel && (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                              <span className="flex min-w-0 items-center gap-2">
+                                {installProgress.percent === null && (
+                                  <Spinner size="sm" className="h-3 w-3 shrink-0" />
+                                )}
+                                <span className="truncate">{installProgress.label}</span>
+                              </span>
+                              {installProgress.percent !== null && (
+                                <span className="tabular-nums">{installProgress.percent}%</span>
+                              )}
+                            </div>
+                            {installProgress.percent !== null && (
+                              <Progress
+                                value={installProgress.percent}
+                                aria-label="Download progress"
+                              />
+                            )}
+                          </div>
+                        )}
                         {ollamaInstallError && (
                           <p role="alert" className="text-xs text-destructive">
                             {ollamaInstallError}
                           </p>
                         )}
                       </div>
+                      <Suspense fallback={<Fallback label="Loading models in memory..." />}>
+                        <LazyOllamaMemorySettings installedModels={ollamaModels} />
+                      </Suspense>
                     </div>
                   ) : (
                     <div className="flex flex-wrap items-center gap-2 text-xs text-warning-text">
@@ -472,10 +661,6 @@ export function ModelsKeysTab({
 
           <Suspense fallback={<Fallback label="Loading local runtime settings..." />}>
             <LazyLocalRuntimeSettings />
-          </Suspense>
-
-          <Suspense fallback={<Fallback label="Loading custom model settings..." />}>
-            <LazyCustomModelsSettings />
           </Suspense>
         </div>
       </div>

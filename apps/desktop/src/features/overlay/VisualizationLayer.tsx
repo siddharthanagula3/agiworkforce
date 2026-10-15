@@ -54,7 +54,7 @@ export function VisualizationLayer() {
     let unlisten: UnlistenFn | undefined;
 
     const init = async () => {
-      unlisten = await listen<OverlayAnimation>('overlay:animate', (event) => {
+      unlisten = await listen<OverlayAnimation>('overlay:update', (event) => {
         if (!active || !event.payload) {
           return;
         }

@@ -130,6 +130,14 @@ export const GLOBAL_SHORTCUTS: GlobalShortcutDefinition[] = [
     category: 'window',
     backendId: 'floating_window',
   },
+  {
+    id: 'stop-agents',
+    key: '.',
+    modifiers: { meta: true, alt: true },
+    description: 'Stop desktop control and take the screen back',
+    category: 'window',
+    backendId: 'stop_agents',
+  },
 ];
 
 export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [...RENDERER_SHORTCUTS, ...GLOBAL_SHORTCUTS];

@@ -3,7 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CREDITS_PER_USD, formatCredits } from '@agiworkforce/types';
 import { formatProviderCostCredits, useBillingUsageStore } from '../../stores/billingUsage';
 import type { ModelUsageStats } from '../../types/billing';
-import { UsageDashboard, activityCells, favouriteModel, summarizeActivity } from './UsageDashboard';
+import {
+  UsageDashboard,
+  activityCells,
+  favouriteModel,
+  monthlyBudgetUsage,
+  summarizeActivity,
+} from './UsageDashboard';
 
 const DAY_MS = 86_400_000;
 const NOW = Date.parse('2026-03-20T09:00:00Z');
@@ -85,6 +91,44 @@ describe('favouriteModel', () => {
 
   it('returns null with no model usage', () => {
     expect(favouriteModel([])).toBeNull();
+  });
+});
+
+describe('monthlyBudgetUsage', () => {
+  it('has nothing to show without a monthly budget', () => {
+    expect(monthlyBudgetUsage(null)).toBeNull();
+    expect(monthlyBudgetUsage({ today_total: 1, month_total: 4 })).toBeNull();
+    expect(monthlyBudgetUsage({ today_total: 1, month_total: 4, monthly_budget: 0 })).toBeNull();
+  });
+
+  it('draws the bar from the enforced remaining figure, not from chat spend alone', () => {
+    expect(
+      monthlyBudgetUsage({
+        today_total: 1,
+        month_total: 4,
+        monthly_budget: 20,
+        remaining_budget: 5,
+      }),
+    ).toEqual({ budget: 20, remaining: 5, percent: 75 });
+  });
+
+  it('shows a spent budget as full with nothing remaining', () => {
+    expect(
+      monthlyBudgetUsage({
+        today_total: 1,
+        month_total: 4,
+        monthly_budget: 20,
+        remaining_budget: 0,
+      }),
+    ).toEqual({ budget: 20, remaining: 0, percent: 100 });
+  });
+
+  it('falls back to chat spend when no remaining figure came back', () => {
+    expect(monthlyBudgetUsage({ today_total: 1, month_total: 4, monthly_budget: 20 })).toEqual({
+      budget: 20,
+      remaining: 16,
+      percent: 20,
+    });
   });
 });
 
@@ -206,18 +250,20 @@ describe('UsageDashboard in credits', () => {
     const { container } = render(<UsageDashboard />);
 
     expect(screen.getByText(formatProviderCostCredits(overview.today_total))).toBeInTheDocument();
-    expect(
-      screen.getByText(`${formatProviderCostCredits(overview.month_total)} used`),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Monthly credit limit')).toBeInTheDocument();
     expect(
       screen.getByText(
-        `${Math.round((overview.month_total / overview.monthly_budget) * 100)}% of ${formatProviderCostCredits(overview.monthly_budget)}`,
+        `${Math.round(((overview.monthly_budget - overview.remaining_budget) / overview.monthly_budget) * 100)}% of ${formatProviderCostCredits(overview.monthly_budget)}`,
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(`${formatProviderCostCredits(overview.remaining_budget)} left this month`),
+      screen.getByText(
+        `${formatProviderCostCredits(overview.remaining_budget)} left this month, counting chats and agent runs that use your own keys`,
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByText(`500 tok · ${formatCredits(0.3 * CREDITS_PER_USD)}`)).toBeInTheDocument();
+    expect(
+      screen.getByText(`500 tok · ${formatCredits(0.3 * CREDITS_PER_USD)}`),
+    ).toBeInTheDocument();
     expect(container.textContent).not.toContain('$');
   });
 
@@ -228,10 +274,7 @@ describe('UsageDashboard in credits', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Adjust limit' }));
     const input = screen.getByLabelText('Monthly credit limit');
-    expect(input).toHaveAttribute(
-      'placeholder',
-      String(overview.monthly_budget * CREDITS_PER_USD),
-    );
+    expect(input).toHaveAttribute('placeholder', String(overview.monthly_budget * CREDITS_PER_USD));
 
     fireEvent.change(input, { target: { value: String(2 * CREDITS_PER_USD) } });
     fireEvent.click(screen.getByRole('button', { name: 'Set limit' }));

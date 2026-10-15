@@ -7,7 +7,11 @@ import { useConnectionStore } from '@/stores/connectionStore';
 import { useCoworkDispatchStore } from '@/stores/coworkDispatchStore';
 import { useSettingsDialogStore } from '@/stores/settingsDialogStore';
 
-export function CoworkTab() {
+interface CoworkTabProps {
+  onManagePairing?: () => void;
+}
+
+export function CoworkTab({ onManagePairing }: CoworkTabProps) {
   const { enabled, setEnabled } = useCoworkDispatchStore(
     useShallow((state) => ({ enabled: state.enabled, setEnabled: state.setEnabled })),
   );
@@ -18,6 +22,7 @@ export function CoworkTab() {
     })),
   );
   const openSettings = useSettingsDialogStore((state) => state.openSettings);
+  const managePairing = onManagePairing ?? (() => openSettings('connections'));
 
   return (
     <div className="space-y-6">
@@ -78,12 +83,7 @@ export function CoworkTab() {
                     : 'Not paired'}
               </span>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => openSettings('connections')}
-            >
+            <Button type="button" variant="outline" size="sm" onClick={managePairing}>
               Manage pairing
             </Button>
           </div>

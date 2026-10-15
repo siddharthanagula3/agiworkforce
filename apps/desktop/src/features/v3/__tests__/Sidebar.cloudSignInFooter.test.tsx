@@ -79,6 +79,13 @@ vi.mock('../../../stores/appModeStore', () => ({
     selector({ privacyMode: 'local', mode: 'local', setMode: mocks.setMode }),
 }));
 
+vi.mock('../../chat/conversationExport', () => ({
+  conversationExportFormats: () => ['markdown'],
+  conversationMarkdown: vi.fn(),
+  exportConversation: vi.fn(),
+  exportFileStem: vi.fn(),
+}));
+vi.mock('../../custom-instructions', () => ({ CustomInstructionsDialog: () => null }));
 vi.mock('../LocalCloudToggle', () => ({ LocalCloudToggle: () => null }));
 vi.mock('../../updates', () => ({ UpdatePill: () => null }));
 vi.mock('../AccountMenu', () => ({ AccountMenu: () => null }));

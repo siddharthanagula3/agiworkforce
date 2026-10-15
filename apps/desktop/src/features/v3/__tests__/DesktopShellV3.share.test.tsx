@@ -65,6 +65,7 @@ vi.mock('@agiworkforce/unified-chat', async () => {
     messagesByConversation: sharedChatMock.messagesByConversation,
     setDraftContent: sharedChatMock.setDraftContent,
     appendDraftContent: sharedChatMock.appendDraftContent,
+    isStreaming: false,
   });
   const useChatStore = (selector: (state: ReturnType<typeof readState>) => unknown) =>
     selector(readState());
@@ -76,6 +77,18 @@ vi.mock('@agiworkforce/unified-chat', async () => {
       getSelectedModel: () => undefined;
     }) => unknown,
   ) => selector({ models: [], selectedModelId: '', getSelectedModel: () => undefined });
+  const artifactStoreState = {
+    activeArtifact: null,
+    openArtifact: vi.fn(),
+    closeArtifact: vi.fn(),
+  };
+  const useChatArtifactStore = (selector: (state: typeof artifactStoreState) => unknown) =>
+    selector(artifactStoreState);
+  useChatArtifactStore.getState = () => artifactStoreState;
+  const uiStoreState = { openArtifactPanel: vi.fn(), closeArtifactPanel: vi.fn() };
+  const useChatUIStore = (selector: (state: typeof uiStoreState) => unknown) =>
+    selector(uiStoreState);
+  useChatUIStore.getState = () => uiStoreState;
   return {
     CapabilityProvider: (props: { children?: ReactNode }) =>
       React.createElement(React.Fragment, null, props.children),
@@ -97,6 +110,8 @@ vi.mock('@agiworkforce/unified-chat', async () => {
     },
     useChatStore,
     useChatModelStore,
+    useChatArtifactStore,
+    useChatUIStore,
     selectBudget: () => ({ enabled: false }),
     selectBudgetPercentage: () => 0,
     useBudgetStore: (selector: (state: unknown) => unknown) =>
@@ -109,8 +124,7 @@ function renderCloudShell() {
   render(<DesktopShellV3 runtime={null} hostBridge={null} />);
   const props = sharedChatMock.chatInterfaceProps.at(-1);
   const actions = props?.['conversationActions'] as
-    | { onShare?: (conversationId: string) => Promise<void> }
-    | undefined;
+    { onShare?: (conversationId: string) => Promise<void> } | undefined;
   const onShare = actions?.onShare;
   if (!onShare) throw new Error('Managed Cloud must expose a share action on the conversation.');
   return onShare;

@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DeveloperSessionList } from '@agiworkforce/local-runtime-contract';
 import {
+  REMOTE_CODE_LIMITS,
   parseRemoteCodeEvent,
   parseRemoteCodeSessions,
   parseRemoteCodeSnapshot,
 } from '@agiworkforce/types';
 import {
+  RemoteCommandRefused,
+  WITHHELD_DIFF,
   createCodeRemoteController,
   type CodeRemoteDependencies,
   type DeveloperSessionActivity,
@@ -41,6 +44,7 @@ function activity(overrides: Partial<DeveloperSessionActivity> = {}): DeveloperS
         { role: 'assistant', text: 'Working on it.' },
       ],
       truncated: false,
+      activeTurn: null,
     },
     branch: 'main',
     fileChanges: [
@@ -124,7 +128,7 @@ beforeEach(() => {
     readActivity: vi.fn(async () => activity()),
     startTurn: vi.fn(async () => ({ turnId: 'turn-guided' })),
     interruptTurn: vi.fn(async () => true),
-    answerApproval: vi.fn(async () => true),
+    answerApproval: vi.fn(async () => ({ status: 'applied' as const })),
     readDiff: vi.fn(async () => GIT_DIFF),
     now: () => NOW,
   };
@@ -206,6 +210,29 @@ describe('remote control of a developer session', () => {
     expect(controller.attachedThreadCount()).toBe(1);
   });
 
+  it('does not attach a session the phone was refused, and sends nothing from it afterwards', async () => {
+    deps.readActivity = vi.fn(async () => {
+      throw new RemoteCommandRefused('This device has not been allowed to run commands there.');
+    });
+    const controller = createCodeRemoteController(deps);
+
+    await expect(
+      controller.handleControl(
+        'code.session.attach',
+        request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+      ),
+    ).rejects.toBeInstanceOf(RemoteCommandRefused);
+    await controller.handleSessionEvent('root-1', {
+      type: 'output-delta',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      delta: 'private output',
+    });
+
+    expect(controller.attachedThreadCount()).toBe(0);
+    expect(sent).toEqual([]);
+  });
+
   it('joins a running turn mid-flight with its partial output and pending approval', async () => {
     deps.readActivity = vi.fn(async () =>
       activity({
@@ -244,7 +271,263 @@ describe('remote control of a developer session', () => {
       threadId: 'thread-1',
       turnId: 'turn-7',
       requestId: 'ap-1',
-      approved: true,
+      decision: 'approve_once',
+    });
+  });
+
+  describe('an allow the computer will not take from a phone alone', () => {
+    async function attachWithApproval() {
+      deps.readActivity = vi.fn(async () =>
+        activity({
+          activeTurn: {
+            turnId: 'turn-7',
+            partialResponse: '',
+            pendingApprovals: [{ requestId: 'ap-1', summary: 'Force push', detail: 'git' }],
+          },
+        }),
+      );
+      const controller = createCodeRemoteController(deps);
+      await controller.handleControl(
+        'code.session.attach',
+        request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+      );
+      sent = [];
+      return controller;
+    }
+
+    const approve = () =>
+      request('approve', {
+        rootId: 'root-1',
+        threadId: 'thread-1',
+        turnId: 'turn-7',
+        approvalRequestId: 'ap-1',
+        approved: true,
+      });
+
+    const holds = () =>
+      sent
+        .filter((entry) => entry.action === 'code.session.event')
+        .map((entry) => entry.payload['event'] as Record<string, unknown>)
+        .filter((event) => event['type'] === 'approval-held');
+
+    it('tells the phone it is waiting at the computer, then how that ended', async () => {
+      let settle: (result: { allowed: boolean; message: string }) => void = () => undefined;
+      deps.answerApproval = vi.fn(async () => ({
+        status: 'held' as const,
+        message: 'This needs to be allowed at your computer.',
+        settled: new Promise<{ allowed: boolean; message: string }>((resolve) => {
+          settle = resolve;
+        }),
+      }));
+      const controller = await attachWithApproval();
+
+      await controller.handleControl('code.approval.respond', approve());
+      expect(holds()).toEqual([
+        {
+          type: 'approval-held',
+          requestId: 'ap-1',
+          status: 'waiting',
+          message: 'This needs to be allowed at your computer.',
+        },
+      ]);
+
+      settle({ allowed: false, message: 'Not allowed at your computer.' });
+      await vi.waitFor(() => expect(holds()).toHaveLength(2));
+      expect(holds()[1]).toEqual({
+        type: 'approval-held',
+        requestId: 'ap-1',
+        status: 'refused',
+        message: 'Not allowed at your computer.',
+      });
+    });
+
+    it('tells the phone when the computer allowed it', async () => {
+      deps.answerApproval = vi.fn(async () => ({
+        status: 'held' as const,
+        message: 'waiting',
+        settled: Promise.resolve({ allowed: true, message: 'Allowed at your computer.' }),
+      }));
+      const controller = await attachWithApproval();
+
+      await controller.handleControl('code.approval.respond', approve());
+
+      await vi.waitFor(() => expect(holds()).toHaveLength(2));
+      expect(holds().map((event) => event['status'])).toEqual(['waiting', 'allowed']);
+    });
+
+    it('logs, and leaves no unhandled rejection, when how a held answer ended cannot be told', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      deps.answerApproval = vi.fn(async () => ({
+        status: 'held' as const,
+        message: 'waiting',
+        settled: Promise.reject<{ allowed: boolean; message: string }>(new Error('window gone')),
+      }));
+      const controller = await attachWithApproval();
+
+      try {
+        await controller.handleControl('code.approval.respond', approve());
+
+        await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
+        expect(warn.mock.calls[0]?.[0]).toContain('held approval');
+        expect(warn.mock.calls[0]?.[1]).toContain('window gone');
+        expect(holds().map((event) => event['status'])).toEqual(['waiting']);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('tells the phone why an answer was refused outright, instead of looking accepted', async () => {
+      deps.answerApproval = vi.fn(async () => {
+        throw new RemoteCommandRefused('Its screen is locked. Unlock it and answer again.');
+      });
+      const controller = await attachWithApproval();
+
+      await expect(controller.handleControl('code.approval.respond', approve())).resolves.toBe(
+        true,
+      );
+
+      expect(holds()).toEqual([
+        {
+          type: 'approval-held',
+          requestId: 'ap-1',
+          status: 'refused',
+          message: 'Its screen is locked. Unlock it and answer again.',
+        },
+      ]);
+    });
+
+    it('sends nothing extra for an answer that was simply applied, and lets other failures surface', async () => {
+      const controller = await attachWithApproval();
+      await controller.handleControl('code.approval.respond', approve());
+      expect(holds()).toEqual([]);
+
+      deps.answerApproval = vi.fn(async () => {
+        throw new Error('runtime gone');
+      });
+      const failing = await attachWithApproval();
+      await expect(failing.handleControl('code.approval.respond', approve())).rejects.toThrow(
+        'runtime gone',
+      );
+    });
+  });
+
+  it('shows a phone that joins mid-question the question the turn is waiting on', async () => {
+    const base = activity();
+    deps.readActivity = vi.fn(async () =>
+      activity({
+        transcript: {
+          ...base.transcript,
+          activeTurn: {
+            turnId: 'turn-7',
+            partialResponse: '',
+            approvals: [],
+            questions: [{ requestId: 'q-1', question: 'Which branch should I rebase onto?' }],
+          },
+        },
+        activeTurn: { turnId: 'turn-7', partialResponse: '', pendingApprovals: [] },
+      }),
+    );
+    const controller = createCodeRemoteController(deps);
+    await controller.handleControl(
+      'code.session.attach',
+      request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+    );
+
+    expect(sent.find((entry) => entry.action === 'code.session.snapshot')?.payload).toMatchObject({
+      status: 'running',
+      pendingQuestions: [
+        { turnId: 'turn-7', requestId: 'q-1', question: 'Which branch should I rebase onto?' },
+      ],
+    });
+  });
+
+  it('sends a phone only the newest questions and approvals the snapshot contract admits', async () => {
+    const base = activity();
+    const questions = Array.from({ length: REMOTE_CODE_LIMITS.pendingQuestions + 5 }, (_, i) => ({
+      requestId: `q-${i}`,
+      question: `Question ${i}?`,
+    }));
+    deps.readActivity = vi.fn(async () =>
+      activity({
+        transcript: {
+          ...base.transcript,
+          activeTurn: { turnId: 'turn-7', partialResponse: '', approvals: [], questions },
+        },
+        activeTurn: {
+          turnId: 'turn-7',
+          partialResponse: '',
+          pendingApprovals: Array.from(
+            { length: REMOTE_CODE_LIMITS.pendingApprovals + 5 },
+            (_, i) => ({ requestId: `ap-${i}`, summary: `Step ${i}`, detail: 'shell' }),
+          ),
+        },
+      }),
+    );
+    const controller = createCodeRemoteController(deps);
+    await controller.handleControl(
+      'code.session.attach',
+      request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+    );
+
+    const snapshot = sent.find((entry) => entry.action === 'code.session.snapshot')?.payload;
+    const parsed = parseRemoteCodeSnapshot(snapshot);
+    expect(parsed?.pendingQuestions).toHaveLength(REMOTE_CODE_LIMITS.pendingQuestions);
+    expect(parsed?.pendingQuestions.at(-1)?.requestId).toBe(`q-${questions.length - 1}`);
+    expect(parsed?.pendingApprovals).toHaveLength(REMOTE_CODE_LIMITS.pendingApprovals);
+  });
+
+  it('relays questions as they are asked and answered, and drops them when the turn ends', async () => {
+    const controller = createCodeRemoteController(deps);
+    await controller.handleControl(
+      'code.session.attach',
+      request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+    );
+    sent = [];
+
+    await controller.handleSessionEvent('root-1', {
+      type: 'user-input-requested',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      requestId: 'q-1',
+      question: 'Keep the old flag?',
+    });
+    expect(lastEvent('user-input-requested')).toEqual({
+      type: 'user-input-requested',
+      turnId: 'turn-1',
+      requestId: 'q-1',
+      question: 'Keep the old flag?',
+    });
+
+    await controller.handleSessionEvent('root-1', {
+      type: 'user-input-answered',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      requestId: 'q-1',
+      cancelled: false,
+    });
+    expect(lastEvent('user-input-answered')).toEqual({
+      type: 'user-input-answered',
+      requestId: 'q-1',
+    });
+
+    await controller.handleSessionEvent('root-1', {
+      type: 'user-input-requested',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      requestId: 'q-2',
+      question: 'Push now?',
+    });
+    sent = [];
+    await controller.handleSessionEvent('root-1', {
+      type: 'turn-finished',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      outcome: 'completed',
+      response: 'Done.',
+      failure: null,
+    });
+    expect(sent.find((entry) => entry.action === 'code.session.snapshot')?.payload).toMatchObject({
+      pendingQuestions: [],
     });
   });
 
@@ -315,6 +598,86 @@ describe('remote control of a developer session', () => {
         failed: 1,
       },
     });
+  });
+
+  it('names a changed credential file to the phone and withholds its contents, whichever way the diff arrived', async () => {
+    const secret = 'STRIPE_SECRET_KEY=sk_live_abc123';
+    const envPatch = [
+      'diff --git a/.env.production b/.env.production',
+      '--- a/.env.production',
+      '+++ b/.env.production',
+      '@@ -1 +1 @@',
+      `+${secret}`,
+    ].join('\n');
+    const renamedPatch = [
+      'diff --git a/config/server.key b/notes.txt',
+      'rename from config/server.key',
+      'rename to notes.txt',
+      '@@ -1 +1 @@',
+      `+${secret}`,
+    ].join('\n');
+    deps.readActivity = vi.fn(async () =>
+      activity({
+        fileChanges: [
+          {
+            path: '.env.production',
+            kind: 'modified',
+            tool: 'edit_file',
+            toolCallId: 'call-1',
+            changedAt: SENT_AT,
+          },
+          {
+            path: 'src/retry.ts',
+            kind: 'modified',
+            tool: 'edit_file',
+            toolCallId: 'call-2',
+            changedAt: SENT_AT,
+          },
+        ],
+      }),
+    );
+    const controller = createCodeRemoteController(deps);
+
+    await controller.handleControl(
+      'code.session.attach',
+      request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+    );
+    expect(deps.readDiff).toHaveBeenCalledWith('root-1', ['src/retry.ts']);
+
+    await controller.handleSessionEvent('root-1', {
+      type: 'turn-diff',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      unifiedDiff: `${GIT_DIFF}\n${envPatch}\n${renamedPatch}`,
+      paths: ['src/retry.ts', '.env.production', 'notes.txt'],
+    });
+    await controller.handleSessionEvent('root-1', {
+      type: 'tool-finished',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      toolCallId: 'call-edit',
+      name: 'edit_file',
+      output: `Edited.\n${envPatch}`,
+      isError: false,
+    });
+
+    const diffs = sent
+      .map(
+        (entry) =>
+          (entry.payload as { event?: { type: string; diff?: { path: string; patch: string } } })
+            .event,
+      )
+      .filter((event) => event?.type === 'diff')
+      .map((event) => event?.diff);
+    expect(JSON.stringify(sent)).not.toContain(secret);
+    expect(diffs.filter((diff) => diff?.path === '.env.production').length).toBeGreaterThan(0);
+    for (const diff of diffs) {
+      if (diff?.path === 'src/retry.ts') expect(diff.patch).toBe(GIT_DIFF);
+      else expect(diff?.patch).toBe(WITHHELD_DIFF);
+    }
+    expect(diffs.map((diff) => diff?.path)).toEqual(
+      expect.arrayContaining(['.env.production', 'notes.txt', 'src/retry.ts']),
+    );
   });
 
   it('sends the phone the diff the runtime states, not one scraped from tool output', async () => {
@@ -407,6 +770,241 @@ describe('remote control of a developer session', () => {
       text: 'skip the docs\n\nand stop editing tests',
     });
     expect(lastEvent('guidance-delivered')).toMatchObject({ turnId: 'turn-guided' });
+  });
+
+  // Session events are not relayed while no phone is connected, so the end of
+  // a turn can be missed entirely. What the runtime says on the next attach
+  // has to win over what was remembered.
+  it('shows a session idle again, and takes a new message, when its turn ended while the phone was away', async () => {
+    const running = {
+      turnId: 'turn-7',
+      partialResponse: 'Editing retry.ts',
+      pendingApprovals: [{ requestId: 'ap-1', summary: 'Run pnpm test', detail: 'shell' }],
+    };
+    deps.readActivity = vi.fn(async () =>
+      activity({
+        activeTurn: running,
+        transcript: {
+          ...activity().transcript,
+          activeTurn: {
+            turnId: 'turn-7',
+            partialResponse: 'Editing retry.ts',
+            approvals: [],
+            questions: [{ requestId: 'q-1', question: 'Which branch?' }],
+          },
+        },
+      }),
+    );
+    const controller = createCodeRemoteController(deps);
+    const attach = () =>
+      controller.handleControl(
+        'code.session.attach',
+        request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+      );
+    await attach();
+    await controller.handleControl(
+      'code.session.detach',
+      request('detach', { rootId: 'root-1', threadId: 'thread-1' }),
+    );
+
+    deps.readActivity = vi.fn(async () => activity());
+    sent = [];
+    await attach();
+
+    expect(sent.find((entry) => entry.action === 'code.session.snapshot')?.payload).toMatchObject({
+      status: 'idle',
+      activeTurnId: null,
+      partialResponse: '',
+      pendingApprovals: [],
+      pendingQuestions: [],
+    });
+
+    await controller.handleControl(
+      'code.approval.respond',
+      request('approve', {
+        rootId: 'root-1',
+        threadId: 'thread-1',
+        turnId: 'turn-7',
+        approvalRequestId: 'ap-1',
+        approved: true,
+      }),
+    );
+    expect(deps.answerApproval).not.toHaveBeenCalled();
+
+    await controller.handleControl(
+      'code.session.steer',
+      request('steer', { rootId: 'root-1', threadId: 'thread-1', text: 'now add a test' }),
+    );
+    expect(deps.startTurn).toHaveBeenCalledWith({
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      text: 'now add a test',
+    });
+    expect(lastEvent('guidance-queued')).toBeUndefined();
+  });
+
+  it('delivers guidance that was waiting on a turn which ended while the phone was away', async () => {
+    const controller = createCodeRemoteController(deps);
+    const attach = () =>
+      controller.handleControl(
+        'code.session.attach',
+        request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+      );
+    await attach();
+    await controller.handleSessionEvent('root-1', {
+      type: 'turn-started',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+    await controller.handleControl(
+      'code.session.steer',
+      request('steer', { rootId: 'root-1', threadId: 'thread-1', text: 'skip the docs' }),
+    );
+    expect(deps.startTurn).not.toHaveBeenCalled();
+
+    sent = [];
+    await attach();
+
+    expect(sent.find((entry) => entry.action === 'code.session.snapshot')?.payload).toMatchObject({
+      activeTurnId: null,
+      queuedGuidance: ['skip the docs'],
+    });
+    expect(deps.startTurn).toHaveBeenCalledWith({
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      text: 'skip the docs',
+    });
+    expect(lastEvent('guidance-delivered')).toMatchObject({
+      turnId: 'turn-guided',
+      queuedGuidance: [],
+    });
+  });
+
+  it('keeps what a phone queued while it is away, and drops it for good once the pairing is forgotten', async () => {
+    const running = { turnId: 'turn-1', partialResponse: '', pendingApprovals: [] };
+    const steer = (controller: ReturnType<typeof createCodeRemoteController>) =>
+      controller.handleControl(
+        'code.session.steer',
+        request('steer', { rootId: 'root-1', threadId: 'thread-1', text: 'delete the branch' }),
+      );
+    const attach = (controller: ReturnType<typeof createCodeRemoteController>) =>
+      controller.handleControl(
+        'code.session.attach',
+        request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+      );
+
+    deps.readActivity = vi.fn(async () => activity({ activeTurn: running }));
+    const kept = createCodeRemoteController(deps);
+    await attach(kept);
+    await steer(kept);
+    kept.detach();
+    expect(kept.attachedThreadCount()).toBe(0);
+    deps.readActivity = vi.fn(async () => activity());
+    await attach(kept);
+    expect(deps.startTurn).toHaveBeenCalledWith({
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      text: 'delete the branch',
+    });
+
+    vi.mocked(deps.startTurn).mockClear();
+    deps.readActivity = vi.fn(async () => activity({ activeTurn: running }));
+    const forgotten = createCodeRemoteController(deps);
+    await attach(forgotten);
+    await steer(forgotten);
+    forgotten.forget();
+    deps.readActivity = vi.fn(async () => activity());
+    sent = [];
+    await attach(forgotten);
+
+    expect(deps.startTurn).not.toHaveBeenCalled();
+    expect(sent.find((entry) => entry.action === 'code.session.snapshot')?.payload).toMatchObject({
+      queuedGuidance: [],
+    });
+    expect(lastEvent('guidance-delivered')).toBeUndefined();
+  });
+
+  // A diff read from a tool's own output is what that tool wrote then. Once
+  // no turn runs, the file on disk is the truth, and git reads it.
+  it('shows the diff git reads now, not one a finished turn left behind', async () => {
+    const stale = [
+      'diff --git a/src/retry.ts b/src/retry.ts',
+      '--- a/src/retry.ts',
+      '+++ b/src/retry.ts',
+      '@@ -1 +1 @@',
+      '-const attempts = 3;',
+      '+const attempts = 4;',
+    ].join('\n');
+    const controller = createCodeRemoteController(deps);
+    const attach = () =>
+      controller.handleControl(
+        'code.session.attach',
+        request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+      );
+    const diffs = () =>
+      sent
+        .filter((entry) => entry.action === 'code.session.event')
+        .map((entry) => entry.payload['event'] as { type: string; diff?: { patch: string } })
+        .filter((event) => event.type === 'diff')
+        .map((event) => event.diff?.patch);
+    await attach();
+    await controller.handleSessionEvent('root-1', {
+      type: 'turn-started',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+    await controller.handleSessionEvent('root-1', {
+      type: 'turn-diff',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      unifiedDiff: stale,
+      paths: ['src/retry.ts'],
+    });
+    expect(diffs()).toEqual([GIT_DIFF, stale]);
+
+    sent = [];
+    await attach();
+
+    expect(diffs()).toEqual([GIT_DIFF]);
+    expect(deps.readDiff).toHaveBeenLastCalledWith('root-1', ['src/retry.ts']);
+  });
+
+  it('starts each turn with no diff left from the one before', async () => {
+    const earlier = [
+      'diff --git a/src/old.ts b/src/old.ts',
+      '--- a/src/old.ts',
+      '+++ b/src/old.ts',
+      '@@ -1 +1 @@',
+      '-a',
+      '+b',
+    ].join('\n');
+    const running = { turnId: 'turn-2', partialResponse: '', pendingApprovals: [] };
+    const controller = createCodeRemoteController(deps);
+    await controller.handleSessionEvent('root-1', {
+      type: 'turn-diff',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      unifiedDiff: earlier,
+      paths: ['src/old.ts'],
+    });
+    await controller.handleSessionEvent('root-1', {
+      type: 'turn-started',
+      threadId: 'thread-1',
+      turnId: 'turn-2',
+    });
+    deps.readActivity = vi.fn(async () => activity({ activeTurn: running }));
+
+    await controller.handleControl(
+      'code.session.attach',
+      request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+    );
+
+    const patches = sent
+      .filter((entry) => entry.action === 'code.session.event')
+      .map((entry) => entry.payload['event'] as { type: string; diff?: { patch: string } })
+      .filter((event) => event.type === 'diff')
+      .map((event) => event.diff?.patch);
+    expect(patches).toEqual([GIT_DIFF]);
   });
 
   it('ignores requests that fail validation', async () => {

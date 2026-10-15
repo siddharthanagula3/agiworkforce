@@ -1,5 +1,3 @@
-import { invoke, isTauri } from '../lib/tauri-mock';
-
 export interface ReflectionInsight {
   id: string;
   goalId: string;
@@ -133,83 +131,6 @@ export function getCorrectionTypeIcon(type: CorrectionType): string {
     RequiresHuman: 'user',
   };
   return icons[type] || 'help-circle';
-}
-
-export async function getReflectionInsights(goalId: string): Promise<ReflectionInsight | null> {
-  if (!isTauri) {
-    console.debug('[reflection] getReflectionInsights (mock)', goalId);
-    return null;
-  }
-
-  try {
-    const result = await invoke<ReflectionInsight | null>('agi_get_reflection_insights', {
-      goalId,
-    });
-    return result;
-  } catch (error) {
-    console.error('[reflection] Failed to get reflection insights:', error);
-    return null;
-  }
-}
-
-export async function getFailurePatterns(goalId: string): Promise<FailurePattern[]> {
-  if (!isTauri) {
-    console.debug('[reflection] getFailurePatterns (mock)', goalId);
-    return [];
-  }
-
-  try {
-    const result = await invoke<FailurePattern[]>('agi_get_failure_patterns', { goalId });
-    return result;
-  } catch (error) {
-    console.error('[reflection] Failed to get failure patterns:', error);
-    return [];
-  }
-}
-
-export async function getSuggestedCorrections(goalId: string): Promise<Correction[]> {
-  if (!isTauri) {
-    console.debug('[reflection] getSuggestedCorrections (mock)', goalId);
-    return [];
-  }
-
-  try {
-    const result = await invoke<Correction[]>('agi_get_suggested_corrections', { goalId });
-    return result;
-  } catch (error) {
-    console.error('[reflection] Failed to get suggested corrections:', error);
-    return [];
-  }
-}
-
-export async function getSubGoals(goalId: string): Promise<SubGoal[]> {
-  if (!isTauri) {
-    console.debug('[reflection] getSubGoals (mock)', goalId);
-    return [];
-  }
-
-  try {
-    const result = await invoke<SubGoal[]>('agi_get_sub_goals', { goalId });
-    return result;
-  } catch (error) {
-    console.error('[reflection] Failed to get sub-goals:', error);
-    return [];
-  }
-}
-
-export async function getRecommendations(goalId: string): Promise<string[]> {
-  if (!isTauri) {
-    console.debug('[reflection] getRecommendations (mock)', goalId);
-    return [];
-  }
-
-  try {
-    const result = await invoke<string[]>('agi_get_recommendations', { goalId });
-    return result;
-  } catch (error) {
-    console.error('[reflection] Failed to get recommendations:', error);
-    return [];
-  }
 }
 
 export function calculateHealthScore(insight: ReflectionInsight): number {

@@ -28,14 +28,7 @@ describe('SkillsPluginsSettings', () => {
     vi.clearAllMocks();
     mocks.homeDir.mockResolvedValue('/Users/test');
     mocks.invoke.mockImplementation(async (command: string) => {
-      if (command === 'execute_terminal_command') {
-        return {
-          stdout: '',
-          stderr: 'claude: command not found',
-          exitCode: 127,
-          durationMs: 4,
-        };
-      }
+      if (command === 'claude_plugin_cli_available') return false;
       if (command === 'dir_list') return [];
       if (command === 'file_read') throw new Error('No compatible plugin registry');
       return undefined;
@@ -45,19 +38,19 @@ describe('SkillsPluginsSettings', () => {
   it('disables compatible plugin package actions when the CLI is unavailable', async () => {
     render(<SkillsPluginsSettings />);
 
-    expect(await screen.findByText('Compatible plugin lifecycle')).toBeInTheDocument();
+    expect(await screen.findByText('Install, update and remove')).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByText('Compatible CLI unavailable')).toBeInTheDocument();
+      expect(screen.getByText('claude command not found')).toBeInTheDocument();
     });
 
     expect(screen.getByPlaceholderText('plugin-name@marketplace')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Install plugin' })).toBeDisabled();
     expect(
-      screen.getByText(/Plugin package actions are disabled because the compatible CLI/i),
+      screen.getByText(/These actions are off because the claude command is not installed/i),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Built-in AGI skills and project resources remain available/i),
+      screen.getByText(/Claude Code has no plugins installed on this machine/i),
     ).toBeInTheDocument();
   });
 });

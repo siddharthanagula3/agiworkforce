@@ -211,16 +211,6 @@ export interface EnhancedMessage {
   reactions?: MessageReaction[];
   inlinePanels?: InlinePanel[];
   slashCommand?: SlashCommandMetadata;
-  branchId?: string;
-  parentMessageId?: string;
-}
-
-export interface BranchSummary {
-  id: string;
-  name: string;
-  parentBranchId?: string;
-  forkPointMessageId?: number;
-  createdAt: string;
 }
 
 export interface ConversationSummary {
@@ -231,7 +221,6 @@ export interface ConversationSummary {
   lastMessage?: string;
   createdAt?: Date;
   updatedAt: Date;
-  customInstructions?: string;
   projectId?: string;
   incognito?: boolean;
   modelOverride?: string;
@@ -293,5 +282,3 @@ export type ActiveView =
   | 'vision';
 
 export type ConversationMode = 'auto' | 'manual';
-
-export const DEFAULT_BRANCH_ID = 'main' as const;

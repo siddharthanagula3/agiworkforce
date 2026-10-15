@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { invoke } from '@tauri-apps/api/core';
 import { AnalyticsService } from '../../services/analytics';
 import { PrivacyConsent } from '../../types/analytics';
 import { useAppModeStore } from '../../stores/appModeStore';
@@ -149,6 +150,81 @@ describe('AnalyticsService', () => {
 
       expect(service.isEnabled()).toBe(false);
     });
+
+    it('records granted consent with the native collector', async () => {
+      service.updatePrivacyConsent({
+        analytics_enabled: true,
+        error_reporting_enabled: true,
+        performance_monitoring_enabled: false,
+        consent_date: new Date().toISOString(),
+        consent_version: '1.0',
+      });
+
+      await vi.waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith('settings_update_privacy', {
+          preferences: {
+            telemetryEnabled: true,
+            analyticsEnabled: true,
+            crashReportingEnabled: true,
+            usageDataCollection: false,
+            aiModelSharingEnabled: false,
+          },
+        });
+      });
+    });
+
+    it('withdraws consent from the native collector when analytics is turned off', async () => {
+      service.updatePrivacyConsent({
+        analytics_enabled: false,
+        error_reporting_enabled: false,
+        performance_monitoring_enabled: false,
+        consent_date: new Date().toISOString(),
+        consent_version: '1.0',
+      });
+
+      await vi.waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith(
+          'settings_update_privacy',
+          expect.objectContaining({
+            preferences: expect.objectContaining({ telemetryEnabled: false }),
+          }),
+        );
+      });
+    });
+
+    it('restores a saved consent to the native collector at startup', async () => {
+      localStorage.setItem(
+        'privacy_consent',
+        JSON.stringify({
+          analytics_enabled: true,
+          error_reporting_enabled: false,
+          performance_monitoring_enabled: false,
+          consent_date: '2026-10-01T00:00:00.000Z',
+          consent_version: '1.0',
+        }),
+      );
+      vi.mocked(invoke).mockClear();
+
+      new AnalyticsService();
+
+      await vi.waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith(
+          'settings_update_privacy',
+          expect.objectContaining({
+            preferences: expect.objectContaining({ telemetryEnabled: true }),
+          }),
+        );
+      });
+    });
+
+    it('does not tell the native collector anything before a choice was made', async () => {
+      vi.mocked(invoke).mockClear();
+
+      new AnalyticsService();
+      await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith('analytics_get_session_id'));
+
+      expect(invoke).not.toHaveBeenCalledWith('settings_update_privacy', expect.anything());
+    });
   });
 
   describe('User Properties', () => {
@@ -187,6 +263,29 @@ describe('AnalyticsService', () => {
       const sessionInfo = service.getSessionInfo();
       expect(sessionInfo.events_count).toBe(0);
       expect(service.isEnabled()).toBe(false);
+    });
+
+    it('withdraws native consent along with the deleted data', async () => {
+      service.updatePrivacyConsent({
+        analytics_enabled: true,
+        error_reporting_enabled: false,
+        performance_monitoring_enabled: false,
+        consent_date: new Date().toISOString(),
+        consent_version: '1.0',
+      });
+      vi.mocked(invoke).mockClear();
+
+      await service.deleteAllData();
+
+      expect(service.getPrivacyConsent()).toBeUndefined();
+      await vi.waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith(
+          'settings_update_privacy',
+          expect.objectContaining({
+            preferences: expect.objectContaining({ telemetryEnabled: false }),
+          }),
+        );
+      });
     });
   });
 

@@ -1,41 +1,29 @@
 import { useEffect, useRef } from 'react';
 import { useChatStore, type ChatMessage } from '@agiworkforce/unified-chat';
-import { voiceTtsSpeakWithBargeIn, voiceTtsStop } from '../../api/voice';
+import { voiceTtsStop } from '../../api/voice';
 import { isTauri } from '../../lib/tauri-mock';
-import { getPersistedVoicePersonaParams } from '../settings/voicePersonaParams';
-import { stripMarkdownForSpeech } from '../../hooks/useTTS';
+import {
+  browserSpeechAvailable,
+  speakInBrowser,
+  speakNatively,
+  stripMarkdownForSpeech,
+} from '../../hooks/useTTS';
 import { useVoiceModeStore } from '../../stores/settings/voice';
 
 const NOTHING_SPOKEN = '';
 const NO_MESSAGES: ChatMessage[] = [];
 
-function speechSynthesisAvailable(): boolean {
-  return typeof window !== 'undefined' && 'speechSynthesis' in window;
-}
-
-function speakWithPersona(text: string): void {
-  if (!speechSynthesisAvailable()) return;
-  const persona = getPersistedVoicePersonaParams();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = persona.rate;
-  utterance.pitch = persona.pitch;
-  utterance.volume = persona.volume;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utterance);
-}
-
 export async function speakAssistantReply(content: string, bargeInEnabled: boolean): Promise<void> {
   const clean = stripMarkdownForSpeech(content);
   if (!clean) return;
-  if (bargeInEnabled && isTauri) {
+  if (bargeInEnabled || !browserSpeechAvailable()) {
     try {
-      await voiceTtsSpeakWithBargeIn(clean);
-      return;
+      if (await speakNatively(clean)) return;
     } catch (err) {
-      console.warn('[spokenReplies] native barge-in speech failed', err);
+      console.warn('[spokenReplies] native speech failed', err);
     }
   }
-  speakWithPersona(clean);
+  await speakInBrowser(clean);
 }
 
 export function settledAssistantReply(messages: ChatMessage[]): ChatMessage | null {
@@ -47,7 +35,7 @@ export function settledAssistantReply(messages: ChatMessage[]): ChatMessage | nu
 }
 
 function stopSpeaking(): void {
-  if (speechSynthesisAvailable()) window.speechSynthesis.cancel();
+  if (browserSpeechAvailable()) window.speechSynthesis.cancel();
   if (!isTauri) return;
   voiceTtsStop().catch((err: unknown) => {
     console.warn('[spokenReplies] voiceTtsStop failed', err);

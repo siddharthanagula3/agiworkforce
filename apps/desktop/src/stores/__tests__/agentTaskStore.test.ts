@@ -346,18 +346,8 @@ describe('agentTaskStore', () => {
   });
 
   describe('submitGoalSwarm', () => {
-    it('sends the local trust boundary on the swarm payload', async () => {
-      mockInvoke.mockResolvedValueOnce({
-        success: true,
-        goalId: 'goal-swarm-1',
-        summary: 'Swarm finished',
-        succeeded: 2,
-        failed: 0,
-        wallTimeMs: 1200,
-        speedupRatio: 1.8,
-        criticalPathLength: 3,
-        maxParallelism: 2,
-      });
+    it('sends the local trust boundary and returns while the swarm is still running', async () => {
+      mockInvoke.mockResolvedValueOnce({ goalId: 'goal-swarm-1' });
 
       const taskId = await useAgentTaskStore.getState().submitGoalSwarm('Swarm the audit');
 
@@ -373,13 +363,11 @@ describe('agentTaskStore', () => {
         },
       });
       expect(taskId).toBe('goal-swarm-1');
-      expect(useAgentTaskStore.getState().tasks[0]).toEqual(
-        expect.objectContaining({
-          id: 'goal-swarm-1',
-          status: 'ready_for_review',
-          completedAt: expect.any(String),
-        }),
+      const task = useAgentTaskStore.getState().tasks[0];
+      expect(task).toEqual(
+        expect.objectContaining({ id: 'goal-swarm-1', status: 'queued', executionMode: 'swarm' }),
       );
+      expect(task?.completedAt).toBeUndefined();
     });
   });
 
@@ -491,6 +479,25 @@ describe('agentTaskStore', () => {
   });
 
   describe('fetchTasks', () => {
+    it('drops a scheduled run an earlier version listed, instead of calling it interrupted', async () => {
+      useAgentTaskStore.setState({
+        tasks: [
+          {
+            id: 'scheduled_5b0f8a54-2f0e-4a53-9b37-6c2f0a1f1c11',
+            goal: 'Summarise my inbox',
+            status: 'running',
+            createdAt: '2026-08-13T00:00:00.000Z',
+          },
+        ],
+      });
+      mockInvoke.mockResolvedValueOnce([]);
+
+      await useAgentTaskStore.getState().fetchTasks();
+
+      expect(useAgentTaskStore.getState().tasks).toEqual([]);
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+    });
+
     it('fails a persisted active task honestly when the native process no longer owns it', async () => {
       useAgentTaskStore.setState({
         tasks: [

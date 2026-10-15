@@ -52,22 +52,15 @@ describe('settingsStore', () => {
       llmConfig: createDefaultLLMConfig(),
       windowPreferences: createDefaultWindowPreferences(),
       chatPreferences: {
-        promptCompletionEnabled: true,
-        alwaysUseAgentMode: false,
         compactMode: true,
         autoApproveTools: false,
         agentMode: 'build',
-        chatStorageMode: 'local',
         memoryEnabled: false,
         autoSaveMemories: false,
         allowToolAssistedMemoryGeneration: false,
       },
       executionPreferences: {
         maxTimeoutMinutes: 1440,
-        enableCheckpointing: true,
-        checkpointInterval: 5,
-        autoResumeOnRestart: true,
-        enableTimeoutWarnings: true,
         approvalTimeoutSeconds: 300,
         approvalTimeoutPolicy: 'auto-deny',
         streamInactivityTimeoutSeconds: 30,
@@ -80,29 +73,23 @@ describe('settingsStore', () => {
     });
   });
 
-  it('syncs max-timeout and timeout-warnings into the live TimeoutConfig on save', async () => {
-    invokeMock.mockImplementation(async (cmd: string) => {
-      if (cmd === 'timeout_get_config') {
-        return {
-          max_duration_secs: 3600,
-          enable_warnings: true,
-          enable_checkpoint_on_timeout: true,
-        };
-      }
-      return undefined;
-    });
+  it('saves the task time limit with the settings the native side reads it from', async () => {
+    invokeMock.mockResolvedValue(undefined);
 
     useSettingsStore.getState().setMaxTimeoutMinutes(120);
-    useSettingsStore.getState().setEnableTimeoutWarnings(false);
     await useSettingsStore.getState().saveSettings();
 
-    expect(invokeMock).toHaveBeenCalledWith('timeout_set_config', {
-      config: {
-        max_duration_secs: 120 * 60,
-        enable_warnings: false,
-        enable_checkpoint_on_timeout: true,
-      },
-    });
+    expect(invokeMock).toHaveBeenCalledWith(
+      'settings_save',
+      expect.objectContaining({
+        settings: expect.objectContaining({
+          executionPreferences: expect.objectContaining({ maxTimeoutMinutes: 120 }),
+        }),
+      }),
+    );
+    const commands = invokeMock.mock.calls.map(([command]) => command);
+    expect(commands).not.toContain('timeout_set_config');
+    expect(commands).not.toContain('timeout_get_config');
   });
 
   it('should initialize with default settings', () => {
@@ -124,11 +111,6 @@ describe('settingsStore', () => {
     expect(new Set(Object.keys(state.llmConfig.defaultModels))).toEqual(
       new Set(['managed_cloud', 'ollama']),
     );
-  });
-
-  it('should have empty favorite models by default', () => {
-    const state = useSettingsStore.getState();
-    expect(state.llmConfig.favoriteModels).toEqual([]);
   });
 
   it('should initialize terminal sandbox defaults', () => {
@@ -176,7 +158,7 @@ describe('settingsStore', () => {
     const { setDefaultProvider } = useSettingsStore.getState();
     await expect(setDefaultProvider('ollama')).rejects.toThrow(errorMessage);
 
-    expect(useSettingsStore.getState().error).toBe('Something went wrong. Please try again.');
+    expect(useSettingsStore.getState().error).toBe(errorMessage);
 
     consoleErrorSpy.mockRestore();
   });
@@ -210,40 +192,6 @@ describe('settingsStore', () => {
 
     setDefaultModel('ollama', 'fixture-local-model');
     expect(useSettingsStore.getState().llmConfig.defaultModels.ollama).toBe('fixture-local-model');
-  });
-
-  it('should add favorite model', () => {
-    const { addFavoriteModel } = useSettingsStore.getState();
-    const newModel = 'managed_cloud/auto';
-
-    addFavoriteModel(newModel);
-
-    const favorites = useSettingsStore.getState().llmConfig.favoriteModels;
-    expect(favorites).toContain(newModel);
-  });
-
-  it('should not add duplicate favorite models', () => {
-    const { addFavoriteModel } = useSettingsStore.getState();
-    const model = 'managed_cloud/auto';
-
-    addFavoriteModel(model);
-    const lengthAfterFirst = useSettingsStore.getState().llmConfig.favoriteModels.length;
-
-    addFavoriteModel(model);
-    const lengthAfterSecond = useSettingsStore.getState().llmConfig.favoriteModels.length;
-
-    expect(lengthAfterFirst).toBe(lengthAfterSecond);
-  });
-
-  it('should remove favorite model', () => {
-    const { addFavoriteModel, removeFavoriteModel } = useSettingsStore.getState();
-    const model = 'managed_cloud/auto';
-
-    addFavoriteModel(model);
-    expect(useSettingsStore.getState().llmConfig.favoriteModels).toContain(model);
-
-    removeFavoriteModel(model);
-    expect(useSettingsStore.getState().llmConfig.favoriteModels).not.toContain(model);
   });
 
   it('should update startup position', () => {
@@ -330,13 +278,6 @@ describe('settingsStore', () => {
           allowedDirectories: [],
         };
       }
-      if (command === 'timeout_get_config') {
-        return {
-          max_duration_secs: 3600,
-          enable_warnings: true,
-          enable_checkpoint_on_timeout: true,
-        };
-      }
       if (command === 'settings_save') throw new Error('save failed');
       return undefined;
     });
@@ -352,9 +293,7 @@ describe('settingsStore', () => {
     );
     expect(memoryPolicyCalls.at(-2)?.[1]).toMatchObject({ enabled: true });
     expect(memoryPolicyCalls.at(-1)?.[1]).toMatchObject({ enabled: false });
-    expect(invokeMock).toHaveBeenCalledWith('sync_capabilities', {
-      capabilities: { webSearch: true },
-    });
+    expect(invokeMock.mock.calls.map(([command]) => command)).not.toContain('sync_capabilities');
 
     consoleErrorSpy.mockRestore();
   });
@@ -369,7 +308,7 @@ describe('settingsStore', () => {
     await expect(saveSettings()).rejects.toThrow(errorMessage);
 
     expect(useSettingsStore.getState().loading).toBe(false);
-    expect(useSettingsStore.getState().error).toBe('Something went wrong. Please try again.');
+    expect(useSettingsStore.getState().error).toBe(errorMessage);
 
     consoleErrorSpy.mockRestore();
   });
@@ -468,12 +407,10 @@ type MigrateState = {
   llmConfig?: {
     defaultProvider?: string;
     defaultModels?: Record<string, string>;
-    favoriteModels?: string[];
     taskRouting?: Record<string, { provider: string; model: string }>;
   };
   chatPreferences?: {
     promptCompletionEnabled?: boolean;
-    alwaysUseAgentMode?: boolean;
     compactMode?: boolean;
     autoApproveTools?: boolean;
     autoSaveMemories?: boolean;
@@ -482,10 +419,6 @@ type MigrateState = {
   };
   executionPreferences?: {
     maxTimeoutMinutes?: number;
-    enableCheckpointing?: boolean;
-    checkpointInterval?: number;
-    autoResumeOnRestart?: boolean;
-    enableTimeoutWarnings?: boolean;
     terminalSandbox?: {
       enabled?: boolean;
       backend?: string;
@@ -504,7 +437,6 @@ type MigrateState = {
     enabled?: boolean;
     combo?: string;
   };
-  customModels?: unknown[];
   features?: Record<string, boolean>;
 };
 
@@ -540,7 +472,6 @@ function migrateSettings(persistedState: unknown, version: number): MigrateState
         ollama: state.llmConfig?.defaultModels?.['ollama'] ?? '',
         managed_cloud: state.llmConfig?.defaultModels?.['managed_cloud'] ?? 'auto',
       };
-      state.llmConfig.favoriteModels = [];
       if (state.llmConfig.taskRouting) {
         for (const key of Object.keys(state.llmConfig.taskRouting)) {
           state.llmConfig.taskRouting[key] = { provider: 'managed_cloud', model: 'auto' };
@@ -552,13 +483,9 @@ function migrateSettings(persistedState: unknown, version: number): MigrateState
   if (version < 3) {
     if (!state.chatPreferences) {
       state.chatPreferences = {
-        promptCompletionEnabled: true,
-        alwaysUseAgentMode: false,
         compactMode: true,
         autoApproveTools: false,
       };
-    } else if (state.chatPreferences.alwaysUseAgentMode === undefined) {
-      state.chatPreferences.alwaysUseAgentMode = false;
     }
   }
 
@@ -566,10 +493,6 @@ function migrateSettings(persistedState: unknown, version: number): MigrateState
     if (!state.executionPreferences) {
       state.executionPreferences = {
         maxTimeoutMinutes: 1440,
-        enableCheckpointing: true,
-        checkpointInterval: 5,
-        autoResumeOnRestart: true,
-        enableTimeoutWarnings: true,
         terminalSandbox: { ...defaultTerminalSandboxPreferences },
       };
     }
@@ -615,12 +538,6 @@ function migrateSettings(persistedState: unknown, version: number): MigrateState
     }
   }
 
-  if (version < 10) {
-    if (!Array.isArray(state.customModels)) {
-      state.customModels = [];
-    }
-  }
-
   if (version < 11) {
     if (!state.features || typeof state.features !== 'object') {
       state.features = { ...DEFAULT_FEATURES };
@@ -654,17 +571,6 @@ describe('settingsStore migrate() boundaries (H16)', () => {
       expect(result.llmConfig?.defaultProvider).toBe('managed_cloud');
     });
 
-    it('resets favoriteModels to empty array', () => {
-      const old = {
-        llmConfig: {
-          favoriteModels: [FIXTURE_MODEL_ID, 'fixture-secondary-settings-model'],
-          defaultModels: {},
-        },
-      };
-      const result = migrateSettings(old, 1);
-      expect(result.llmConfig?.favoriteModels).toEqual([]);
-    });
-
     it('resets all taskRouting entries to managed_cloud/auto', () => {
       const old = {
         llmConfig: {
@@ -687,23 +593,10 @@ describe('settingsStore migrate() boundaries (H16)', () => {
     });
   });
 
-  describe('v2 → v3: alwaysUseAgentMode defaults to false', () => {
-    it('adds alwaysUseAgentMode=false when chatPreferences is missing', () => {
-      const old = {};
-      const result = migrateSettings(old, 2);
-      expect(result.chatPreferences?.alwaysUseAgentMode).toBe(false);
-    });
-
-    it('adds alwaysUseAgentMode=false when it is undefined on existing chatPreferences', () => {
-      const old = { chatPreferences: { promptCompletionEnabled: true } };
-      const result = migrateSettings(old, 2);
-      expect(result.chatPreferences?.alwaysUseAgentMode).toBe(false);
-    });
-
-    it('preserves alwaysUseAgentMode=true if already set', () => {
-      const old = { chatPreferences: { promptCompletionEnabled: true, alwaysUseAgentMode: true } };
-      const result = migrateSettings(old, 2);
-      expect(result.chatPreferences?.alwaysUseAgentMode).toBe(true);
+  describe('v2 → v3: chatPreferences created', () => {
+    it('creates chatPreferences when it is missing', () => {
+      const result = migrateSettings({}, 2);
+      expect(result.chatPreferences).toMatchObject({ compactMode: true, autoApproveTools: false });
     });
   });
 
@@ -713,10 +606,6 @@ describe('settingsStore migrate() boundaries (H16)', () => {
       const result = migrateSettings(old, 3);
       expect(result.executionPreferences).toBeDefined();
       expect(result.executionPreferences?.maxTimeoutMinutes).toBe(1440);
-      expect(result.executionPreferences?.enableCheckpointing).toBe(true);
-      expect(result.executionPreferences?.checkpointInterval).toBe(5);
-      expect(result.executionPreferences?.autoResumeOnRestart).toBe(true);
-      expect(result.executionPreferences?.enableTimeoutWarnings).toBe(true);
       expect(result.executionPreferences?.terminalSandbox).toEqual(
         defaultTerminalSandboxPreferences,
       );
@@ -754,12 +643,10 @@ describe('settingsStore migrate() boundaries (H16)', () => {
       const result = migrateSettings(v1State, 1);
 
       expect(result.llmConfig?.defaultProvider).toBe('managed_cloud');
-      expect(result.chatPreferences?.alwaysUseAgentMode).toBe(false);
       expect(result.executionPreferences?.maxTimeoutMinutes).toBe(1440);
       expect(result.executionPreferences?.terminalSandbox?.policy).toBe('workspace-write');
       expect(result.chatPreferences?.compactMode).toBe(true);
       expect(result.globalHotkeyPreferences?.enabled).toBe(true);
-      expect(Array.isArray(result.customModels)).toBe(true);
       expect(result.features).toBeDefined();
       expect(result.chatPreferences?.memoryEnabled).toBe(false);
       expect(result.chatPreferences?.allowToolAssistedMemoryGeneration).toBe(false);

@@ -64,7 +64,7 @@ import type {
   ConnectedConnector,
   SettingsNavGroupResolved,
 } from '@agiworkforce/ui';
-import { Archive, Brain, Laptop, Link2 } from 'lucide-react';
+import { Archive, Brain, Laptop, Link2, MonitorSmartphone } from 'lucide-react';
 
 import { CONNECTORS } from '../connectors/connectorDefinitions';
 import {
@@ -136,6 +136,7 @@ const CLOUD_SETTINGS_SECTIONS = new Set([
   'usage',
   'capabilities',
   'cowork',
+  'connections',
   'security',
   'safety',
   'notifications',
@@ -216,6 +217,7 @@ const DESKTOP_CLOUD_SETTINGS_NAV: SettingsNavGroupResolved[] = SETTINGS_NAV_GROU
         return [
           item,
           { key: 'cowork' as const, label: 'Cowork', icon: Laptop },
+          { key: 'connections' as const, label: 'Connections', icon: MonitorSmartphone },
           { key: 'memory' as const, label: 'Memory', icon: Brain },
         ];
       }
@@ -242,6 +244,9 @@ const LazyPrivacyTab = lazy(() =>
 );
 const LazyMemoryTab = lazy(() => import('./tabs/Memory').then((m) => ({ default: m.MemoryTab })));
 const LazyCoworkTab = lazy(() => import('./tabs/Cowork').then((m) => ({ default: m.CoworkTab })));
+const LazyConnectionsTab = lazy(() =>
+  import('./tabs/Connections').then((m) => ({ default: m.ConnectionsTab })),
+);
 const LazyArchivedChats = lazy(() =>
   import('./cloud/CloudArchivedChatsSection').then((m) => ({
     default: m.CloudArchivedChatsSection,
@@ -1195,7 +1200,12 @@ export function DesktopCloudSettingsModal({
       capabilities: <DesktopCapabilitiesSection />,
       cowork: (
         <Suspense fallback={<SectionSkeleton />}>
-          <LazyCoworkTab />
+          <LazyCoworkTab onManagePairing={() => setActiveSection('connections')} />
+        </Suspense>
+      ),
+      connections: (
+        <Suspense fallback={<SectionSkeleton />}>
+          <LazyConnectionsTab />
         </Suspense>
       ),
       security: (

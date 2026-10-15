@@ -1,11 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import {
-  checkForUpdates,
-  relaunchApp,
-  isElectronHost,
-  isTauri,
-  listen,
-} from '../../lib/tauri-mock';
+import { checkForUpdates, relaunchApp, isElectronHost, isTauri } from '../../lib/tauri-mock';
 import { getElectronHostBridge } from '../../lib/tauri-electron/bridgeContract';
 import {
   useUpdaterStore,
@@ -78,50 +72,6 @@ export function useUpdater() {
 
     void loadVersion();
   }, []);
-
-  useEffect(() => {
-    if (!isTauri) return;
-
-    let unlistenProgress: (() => void) | null = null;
-    let unlistenDownloaded: (() => void) | null = null;
-    let unlistenError: (() => void) | null = null;
-
-    const setupListeners = async () => {
-      try {
-        unlistenProgress = await listen<{ downloaded: number; total: number }>(
-          'tauri://update-download-progress',
-          (event) => {
-            if (!mountedRef.current) return;
-            const { downloaded, total } = event.payload;
-            const percent = total > 0 ? Math.round((downloaded / total) * 100) : 0;
-            setDownloadProgress({ downloaded, total, percent });
-          },
-        );
-
-        unlistenDownloaded = await listen('tauri://update-downloaded', () => {
-          if (!mountedRef.current) return;
-          setStatus('downloaded');
-          setIsDownloading(false);
-        });
-
-        unlistenError = await listen<string>('tauri://update-error', (event) => {
-          if (!mountedRef.current) return;
-          setError(event.payload);
-          setIsDownloading(false);
-        });
-      } catch (err) {
-        console.error('[useUpdater] Failed to setup event listeners:', err);
-      }
-    };
-
-    void setupListeners();
-
-    return () => {
-      unlistenProgress?.();
-      unlistenDownloaded?.();
-      unlistenError?.();
-    };
-  }, [setDownloadProgress, setStatus, setError]);
 
   const doCheckForUpdates = useCallback(async (): Promise<UpdateInfo | null> => {
     if (!isTauri && !isElectronHost) {

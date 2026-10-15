@@ -46,6 +46,24 @@ protocols:
     schemes:
       - agiworkforce-cloud
 
+# Flipped in the Electron binary after packing and before signing, so the
+# signature is what keeps them from being flipped back. Integrity validation
+# and asar-only loading together bind the binary to the signed app.asar that
+# electron-builder writes the hash of.
+#
+# runAsNode stays on: the Chrome native messaging host is this binary
+# re-executed with ELECTRON_RUN_AS_NODE=1 (electron/browser/hostInstaller.ts),
+# and turning the fuse off makes that launcher start the app instead of the
+# host. It can only go once the host ships as its own executable.
+electronFuses:
+  runAsNode: true
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
+
 mac:
   category: public.app-category.productivity
   # Explicit arch marker on every artifact: the default x64 names omit it

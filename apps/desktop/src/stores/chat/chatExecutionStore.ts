@@ -1,16 +1,8 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import { invoke } from '../../lib/tauri-mock';
 import type { ToolLabelEntry } from '@agiworkforce/types';
-import type {
-  EnhancedMessage,
-  InlinePanel,
-  InlinePanelContent,
-  PendingUserMessage,
-  BranchSummary,
-} from './types';
-import { DEFAULT_BRANCH_ID } from './types';
+import type { EnhancedMessage, InlinePanel, InlinePanelContent, PendingUserMessage } from './types';
 
 export type { ToolLabelEntry };
 
@@ -31,9 +23,6 @@ export interface ChatExecutionState {
     iteration: number;
     maxIterations: number;
   } | null;
-
-  activeBranchId: string;
-  branches: BranchSummary[];
 
   lastStreamActivityAt: number | null;
   streamWatchdogTimerId: ReturnType<typeof setTimeout> | null;
@@ -72,15 +61,6 @@ export interface ChatExecutionState {
 
   setAgenticLoopStatus: (status: ChatExecutionState['agenticLoopStatus']) => void;
 
-  loadBranches: (conversationId: number) => Promise<void>;
-  switchBranch: (conversationId: number, branchId: string) => Promise<void>;
-  forkAndRegenerate: (
-    conversationId: number,
-    messageId: number,
-    newContent: string,
-  ) => Promise<void>;
-  deleteBranch: (conversationId: number, branchId: string) => Promise<void>;
-
   resetExecutionState: () => void;
 }
 
@@ -108,8 +88,6 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
         toolTimelineByMessage: {} as Record<string, ToolLabelEntry[]>,
         thinkingByMessage: {} as Record<string, string>,
         agenticLoopStatus: null,
-        activeBranchId: DEFAULT_BRANCH_ID,
-        branches: [] as BranchSummary[],
         lastStreamActivityAt: null as number | null,
         streamWatchdogTimerId: null as ReturnType<typeof setTimeout> | null,
 
@@ -431,157 +409,6 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
             'exec/setAgenticLoopStatus',
           ),
 
-        loadBranches: async (conversationId) => {
-          try {
-            const branches = await invoke<BranchSummary[]>('conversation_list_branches', {
-              conversationId,
-            });
-            set(
-              (state) => {
-                state.branches = branches;
-              },
-              undefined,
-              'exec/loadBranches',
-            );
-          } catch (error) {
-            console.error('[ChatExecutionStore] Failed to load branches:', error);
-          }
-        },
-
-        switchBranch: async (conversationId, branchId) => {
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { useChatStore } = require('./chatStore') as {
-              useChatStore: {
-                getState: () => {
-                  activeConversationId: string | null;
-                  setConversationMessages: (id: string, messages: EnhancedMessage[]) => void;
-                };
-              };
-            };
-            const currentConvoId = useChatStore.getState().activeConversationId;
-            const rawMessages = await invoke<
-              Array<{
-                id: number;
-                conversation_id: number;
-                user_id: string;
-                role: 'user' | 'assistant' | 'system';
-                content: string;
-                tokens: number | null;
-                cost: number | null;
-                provider: string | null;
-                model: string | null;
-                created_at: string;
-              }>
-            >('conversation_switch_branch', { conversationId, branchId });
-            const enhanced: EnhancedMessage[] = rawMessages.map((msg) => ({
-              id: msg.id.toString(),
-              role: msg.role,
-              content: msg.content,
-              timestamp: new Date(msg.created_at),
-              metadata: {
-                model: msg.model ?? undefined,
-                provider: msg.provider ?? undefined,
-                cost: msg.cost ?? undefined,
-                tokenCount: msg.tokens ?? undefined,
-              },
-            }));
-            if (useChatStore.getState().activeConversationId !== currentConvoId) return;
-            set(
-              (state) => {
-                state.activeBranchId = branchId;
-              },
-              undefined,
-              'exec/switchBranch',
-            );
-            if (currentConvoId)
-              useChatStore.getState().setConversationMessages(currentConvoId, enhanced);
-          } catch (error) {
-            console.error('[ChatExecutionStore] Failed to switch branch:', error);
-          }
-        },
-
-        forkAndRegenerate: async (conversationId, messageId, newContent) => {
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { useChatStore } = require('./chatStore') as {
-              useChatStore: {
-                getState: () => {
-                  activeConversationId: string | null;
-                  setConversationMessages: (id: string, messages: EnhancedMessage[]) => void;
-                };
-              };
-            };
-            const currentConvoId = useChatStore.getState().activeConversationId;
-            const branchName = `Edit at message ${messageId}`;
-            const result = await invoke<{
-              branch: BranchSummary;
-              messages: Array<{
-                id: number;
-                conversation_id: number;
-                user_id: string;
-                role: 'user' | 'assistant' | 'system';
-                content: string;
-                tokens: number | null;
-                cost: number | null;
-                provider: string | null;
-                model: string | null;
-                created_at: string;
-              }>;
-            }>('conversation_fork', { conversationId, messageId, branchName });
-            const enhanced: EnhancedMessage[] = result.messages.map((msg) => ({
-              id: msg.id.toString(),
-              role: msg.role,
-              content: msg.content,
-              timestamp: new Date(msg.created_at),
-              metadata: {
-                model: msg.model ?? undefined,
-                provider: msg.provider ?? undefined,
-                cost: msg.cost ?? undefined,
-                tokenCount: msg.tokens ?? undefined,
-              },
-            }));
-            if (enhanced.length > 0 && newContent) {
-              const lastMsg = enhanced[enhanced.length - 1];
-              if (lastMsg && lastMsg.role === 'user') {
-                lastMsg.content = newContent;
-                lastMsg.metadata = { ...lastMsg.metadata, edited: true, editedAt: new Date() };
-              }
-            }
-            if (useChatStore.getState().activeConversationId !== currentConvoId) return;
-            set(
-              (state) => {
-                state.branches = [...state.branches, result.branch];
-                state.activeBranchId = result.branch.id;
-              },
-              undefined,
-              'exec/forkAndRegenerate',
-            );
-            if (currentConvoId)
-              useChatStore.getState().setConversationMessages(currentConvoId, enhanced);
-          } catch (error) {
-            console.error('[ChatExecutionStore] Failed to fork conversation:', error);
-          }
-        },
-
-        deleteBranch: async (conversationId, branchId) => {
-          try {
-            await invoke('conversation_delete_branch', { conversationId, branchId });
-            const wasActive = get().activeBranchId === branchId;
-            set(
-              (state) => {
-                state.branches = state.branches.filter((b) => b.id !== branchId);
-                if (state.activeBranchId === branchId) state.activeBranchId = DEFAULT_BRANCH_ID;
-              },
-              undefined,
-              'exec/deleteBranch',
-            );
-            if (wasActive) await get().switchBranch(conversationId, DEFAULT_BRANCH_ID);
-          } catch (error) {
-            console.error('[ChatExecutionStore] Failed to delete branch:', error);
-          }
-        },
-
         resetExecutionState: () =>
           set(
             (state) => {
@@ -593,8 +420,6 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
               state.toolTimelineByMessage = {};
               state.thinkingByMessage = {};
               state.agenticLoopStatus = null;
-              state.activeBranchId = DEFAULT_BRANCH_ID;
-              state.branches = [];
               state.lastStreamActivityAt = null;
               state.streamWatchdogTimerId = null;
             },

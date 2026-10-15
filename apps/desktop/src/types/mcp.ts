@@ -2,12 +2,27 @@ import type { McpServerConfig } from '@agiworkforce/mcp';
 
 export type { McpServerConfig } from '@agiworkforce/mcp';
 
+export interface McpStoredSecretReference {
+  kind: 'apiKey' | 'signIn';
+  provider: string;
+}
+
 export interface McpServerInfo {
   name: string;
   enabled: boolean;
   connected: boolean;
-  tool_count: number;
+  toolCount: number;
   command?: string;
+  local?: boolean;
+  sandboxed?: boolean;
+  /** Why a server the user let out of the sandbox is being kept in it. */
+  sandboxNotice?: string;
+  /** The user's own stored secrets this server names and is handed. */
+  receivesSecrets?: McpStoredSecretReference[];
+  /** For a server from the open project's MCP file: the files its approval covers. */
+  approvalCoversFiles?: string[];
+  /** For such a server: why its files cannot be pinned, so it is approved one start at a time. */
+  approvalNotice?: string;
 }
 
 export interface McpToolInfo {
@@ -57,21 +72,6 @@ export interface McpConfigLocation {
   exists: boolean;
 }
 
-export interface McpRegistryPackage {
-  id: string;
-  name: string;
-  version?: string;
-  description: string;
-  author: string;
-  category: 'automation' | 'data' | 'search' | 'productivity' | 'development' | 'integration';
-  npm_package?: string;
-  github?: string;
-  tools: string[];
-  rating?: number;
-  downloads?: number;
-  installed: boolean;
-}
-
 export interface McpToolResult {
   success: boolean;
   data: unknown;
@@ -107,6 +107,12 @@ export interface McpRuntimeServerConfig {
   running: boolean;
 }
 
+export interface McpCredentialSlot {
+  serverName: string;
+  key: string;
+  stored: boolean;
+}
+
 export interface McpServerHealth {
   server_name: string;
   status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
@@ -115,25 +121,6 @@ export interface McpServerHealth {
   response_time_ms: number | null;
   tool_count: number;
   consecutive_failures: number;
-}
-
-export interface McpExecutionHistoryEntry {
-  tool_id: string;
-  server_name: string;
-  result: unknown;
-  duration_ms: number;
-  timestamp: number;
-  success: boolean;
-  error: string | null;
-}
-
-export interface McpToolExecutionStats {
-  tool_id: string;
-  total_executions: number;
-  successful_executions: number;
-  failed_executions: number;
-  avg_duration_ms: number;
-  last_execution: number | null;
 }
 
 export interface McpCredential {
@@ -317,15 +304,6 @@ export interface BundleInstallProgress {
 export type BundleInstallStatus =
   'pending' | 'downloading' | 'installing' | 'configuring' | 'completed' | 'failed';
 
-export interface McpbEventPayload {
-  type: 'install_started' | 'install_progress' | 'install_completed' | 'install_failed';
-  bundleId: string;
-  bundleName?: string;
-  progress?: number;
-  message?: string;
-  error?: string;
-}
-
 export type McpExtensionStatus =
   'disabled' | 'enabled' | 'running' | 'error' | 'updating' | 'pending_removal';
 
@@ -348,20 +326,6 @@ export interface McpExtensionInfo {
   installedAt: string;
   updatedAt: string;
   useCount: number;
-}
-
-export interface McpExtensionPackageInfo {
-  id: string;
-  name: string;
-  version: string;
-  description: string;
-  author: string;
-  toolCount: number;
-  tools: string[];
-  requiresConfig: boolean;
-  fileCount: number;
-  totalSize: number;
-  hasDependencies: boolean;
 }
 
 export type McpOAuthProvider = 'github' | 'google_drive' | 'slack';

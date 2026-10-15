@@ -1,4 +1,3 @@
-
 const CONVERSATION_ID = 'b6f1c2d4-7a83-4e15-9c60-2d8f4a1b3e77';
 const CONVERSATION_TITLE = 'WDIO share round-trip';
 const USER_TEXT = 'Summarise the quarterly review for the board.';
@@ -92,12 +91,11 @@ describe('AGI Desktop Cloud conversation sharing', () => {
             return Promise.resolve(null);
           }
           case 'account_store_access_token':
-          case 'account_store_refresh_token':
           case 'account_clear_tokens':
           case 'llm_ensure_managed_cloud':
             return Promise.resolve(null);
           case 'account_restore_access_token':
-          case 'account_restore_refresh_token':
+          case 'account_refresh_session':
             return Promise.resolve(null);
           case 'fetch_user_profile':
             return Promise.resolve({ id: seed.accountId, email: seed.accountEmail, credits: null });
@@ -118,7 +116,6 @@ describe('AGI Desktop Cloud conversation sharing', () => {
             return Promise.resolve(
               deviceResponse({
                 access_token: `wdio.${seed.accountId}.access`,
-                refresh_token: `wdio.${seed.accountId}.refresh`,
                 token_type: 'Bearer',
                 expires_in: 3600,
               }),

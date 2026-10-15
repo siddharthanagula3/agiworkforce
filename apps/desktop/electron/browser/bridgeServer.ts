@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
   type BrowserActivityEntry,
+  type BrowserPairRequestNotice,
   type BrowserPairRequestPrompt,
   type BrowserPairingState,
 } from '@agiworkforce/local-runtime-contract';
@@ -20,6 +21,7 @@ import {
   MAX_PAIR_CONFIRM_ATTEMPTS,
   MAX_PENDING_PAIR_REQUESTS,
   NATIVE_BROWSER_POLL_MESSAGE,
+  NATIVE_BROWSER_COMMAND_WATCH_MESSAGE,
   NATIVE_BROWSER_RESULT_MESSAGE,
   NATIVE_BROWSER_UNPAIR_MESSAGE,
   NATIVE_HOST_TOKEN_HEADER,
@@ -69,9 +71,11 @@ interface PendingResult {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   timer: NodeJS.Timeout;
+  signal?: AbortSignal;
+  onAbort?: () => void;
 }
 
-type PollWaiter = (command: BrowserCommandRequest | null) => void;
+type PollWaiter = (command: BrowserCommandRequest | null) => boolean;
 
 export interface BridgeDependencies {
   onStateChanged: (state: BrowserPairingState) => void;
@@ -88,6 +92,7 @@ export interface BridgeDependencies {
     command: string,
     args: Record<string, unknown>,
     caller: { name: string; subject: string; folder: string | null; path: string | null },
+    signal?: AbortSignal,
   ) => Promise<{ ok: boolean; value?: unknown; error?: string; code?: string }>;
   deliverToChat?: (handoff: BrowserChatHandoff) => Promise<void>;
 }
@@ -101,6 +106,7 @@ const pendingPairRequests = new Map<string, PendingPairRequest>();
 const queuedCommands: BrowserCommandRequest[] = [];
 const pollWaiters: PollWaiter[] = [];
 const pendingResults = new Map<string, PendingResult>();
+const commandWatchers = new Map<string, (state: 'active' | 'cancelled' | 'completed') => void>();
 
 /**
  * A bridge failure carrying why, not only what. A refusal and a browser that
@@ -148,18 +154,28 @@ function dropExpiredPairRequests(nowMs: number): void {
   }
 }
 
-function currentPrompt(): BrowserPairRequestPrompt | null {
+/**
+ * That a pairing is waiting, for the page to say so. The code is not in it:
+ * the code is what proves a person at this computer read it off this app and
+ * typed it into the extension, and a page that could read it could confirm a
+ * pairing for an extension of its own choosing.
+ */
+function currentPrompt(): BrowserPairRequestNotice | null {
   dropExpiredPairRequests(Date.now());
   for (const [requestId, request] of pendingPairRequests) {
     return {
       requestId,
       extensionId: request.extensionId,
-      code: request.code,
       expiresAtMs: request.createdAtMs + PAIR_REQUEST_TTL_MS,
     };
   }
   return null;
 }
+
+const START_FAILED =
+  'This app could not open the browser bridge on this computer. Reopen it to try again.';
+
+let startFailure: string | null = null;
 
 export function pairingState(): BrowserPairingState {
   const pairing = readPairing();
@@ -175,6 +191,7 @@ export function pairingState(): BrowserPairingState {
     hostInstalled: manifests.length > 0,
     installedManifestPaths: manifests,
     pendingRequest: currentPrompt(),
+    unavailableReason: startFailure,
   };
 }
 
@@ -182,9 +199,26 @@ function publishState(): void {
   deps?.onStateChanged(pairingState());
 }
 
+const EXTENSION_ORIGIN = /^chrome-extension:\/\/([a-p]{32})$/u;
+
+/**
+ * The extension a request came from, by the `Origin` its browser put on it,
+ * or null. A page cannot set that header to an extension's, and a sandboxed
+ * frame sends `null`, so this is what a pairing is bound to: a body can name
+ * any extension, and the routes that pair one take the name only from here.
+ */
+function originExtensionId(origin: string | undefined): string | null {
+  return EXTENSION_ORIGIN.exec(origin ?? '')?.[1] ?? null;
+}
+
+/**
+ * Whether a request may reach a route that is not a pairing route. The native
+ * host and the local clients are programs, which send no `Origin`; a browser
+ * always sends one from a page, and only an extension's is taken.
+ */
 function isOriginAllowed(origin: string | undefined): boolean {
-  if (!origin || origin === 'null') return true;
-  return origin.startsWith('chrome-extension://') || origin.startsWith('vscode-webview://');
+  if (origin === undefined) return true;
+  return originExtensionId(origin) !== null || origin.startsWith('vscode-webview://');
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown): void {
@@ -192,7 +226,6 @@ function sendJson(response: ServerResponse, status: number, body: unknown): void
   response.writeHead(status, {
     'Content-Type': 'application/json',
     'Content-Length': Buffer.byteLength(payload),
-    'Access-Control-Allow-Origin': '*',
     Connection: 'close',
   });
   response.end(payload);
@@ -202,13 +235,28 @@ function sendText(response: ServerResponse, status: number, body: string): void 
   response.writeHead(status, {
     'Content-Type': 'text/plain',
     'Content-Length': Buffer.byteLength(body),
-    'Access-Control-Allow-Origin': '*',
     Connection: 'close',
   });
   response.end(body);
 }
 
+function tokenMatches(supplied: unknown, expected: string): boolean {
+  const provided = Buffer.from(typeof supplied === 'string' ? supplied : '');
+  const expectedBytes = Buffer.from(expected);
+  return provided.length === expectedBytes.length && timingSafeEqual(provided, expectedBytes);
+}
+
+/**
+ * The body, read only up to `limit`. A request that says it is longer is
+ * refused before any of it is read, and one that says nothing, or less than
+ * it sends, is cut off as it passes the limit.
+ */
 async function readBody(request: IncomingMessage, limit: number): Promise<string> {
+  const declared = Number(request.headers['content-length']);
+  if (Number.isFinite(declared) && declared > limit) {
+    request.destroy();
+    throw new BrowserBridgeError('Request body is too large.');
+  }
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks: Buffer[] = [];
@@ -252,11 +300,17 @@ function openPairRequest(extensionId: string): BrowserPairRequestPrompt {
   return { requestId, extensionId, code, expiresAtMs: now + PAIR_REQUEST_TTL_MS };
 }
 
-function takeConfirmedPairRequest(requestId: string, suppliedCode: string): string {
+function takeConfirmedPairRequest(
+  requestId: string,
+  suppliedCode: string,
+  fromExtension: string,
+): string {
   const now = Date.now();
   dropExpiredPairRequests(now);
   const request = pendingPairRequests.get(requestId);
-  if (!request) throw new BrowserBridgeError('No pairing request is waiting for that code.');
+  if (!request || request.extensionId !== fromExtension) {
+    throw new BrowserBridgeError('No pairing request is waiting for that code.');
+  }
   if (!codeMatches(normalizePairCode(suppliedCode), request.code)) {
     request.failedAttempts += 1;
     if (request.failedAttempts >= MAX_PAIR_CONFIRM_ATTEMPTS) {
@@ -285,12 +339,34 @@ function completePairing(extensionId: string, port: number): Record<string, unkn
   };
 }
 
-function handlePairRequestRoute(response: ServerResponse, body: Record<string, unknown>): void {
+/**
+ * The extension a pairing request is for: the one its `Origin` names, which
+ * has to be the one its body names. Null after the refusal has been sent.
+ */
+function pairingExtension(
+  response: ServerResponse,
+  fromExtension: string,
+  body: Record<string, unknown>,
+): string | null {
   const extensionId = typeof body['extensionId'] === 'string' ? body['extensionId'].trim() : '';
   if (!isValidExtensionId(extensionId)) {
     sendText(response, 400, 'extensionId is required');
-    return;
+    return null;
   }
+  if (extensionId !== fromExtension) {
+    sendText(response, 403, 'A pairing is asked for by the extension it is for');
+    return null;
+  }
+  return extensionId;
+}
+
+function handlePairRequestRoute(
+  response: ServerResponse,
+  fromExtension: string,
+  body: Record<string, unknown>,
+): void {
+  const extensionId = pairingExtension(response, fromExtension, body);
+  if (extensionId === null) return;
   let prompt: BrowserPairRequestPrompt;
   try {
     prompt = openPairRequest(extensionId);
@@ -309,7 +385,11 @@ function handlePairRequestRoute(response: ServerResponse, body: Record<string, u
   });
 }
 
-function handlePairConfirmRoute(response: ServerResponse, body: Record<string, unknown>): void {
+function handlePairConfirmRoute(
+  response: ServerResponse,
+  fromExtension: string,
+  body: Record<string, unknown>,
+): void {
   const requestId = typeof body['requestId'] === 'string' ? body['requestId'].trim() : '';
   const code = typeof body['code'] === 'string' ? body['code'] : '';
   if (!requestId || !isValidPairCode(code)) {
@@ -318,7 +398,7 @@ function handlePairConfirmRoute(response: ServerResponse, body: Record<string, u
   }
   let extensionId: string;
   try {
-    extensionId = takeConfirmedPairRequest(requestId, code);
+    extensionId = takeConfirmedPairRequest(requestId, code, fromExtension);
   } catch (error) {
     sendText(response, 401, error instanceof Error ? error.message : 'Pairing refused');
     return;
@@ -331,25 +411,12 @@ function handlePairConfirmRoute(response: ServerResponse, body: Record<string, u
 }
 
 function handlePairLegacyRoute(
-  request: IncomingMessage,
   response: ServerResponse,
+  fromExtension: string,
   body: Record<string, unknown>,
 ): void {
-  const extensionId = typeof body['extensionId'] === 'string' ? body['extensionId'].trim() : '';
-  if (!isValidExtensionId(extensionId)) {
-    sendText(response, 400, 'extensionId is required');
-    return;
-  }
-  const supplied = request.headers[BRIDGE_TOKEN_HEADER];
-  const expected = bridgeToken();
-  const provided = typeof supplied === 'string' ? supplied : '';
-  if (
-    provided.length !== expected.length ||
-    !timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
-  ) {
-    sendText(response, 401, 'Unauthorized manifest install');
-    return;
-  }
+  const extensionId = pairingExtension(response, fromExtension, body);
+  if (extensionId === null) return;
   try {
     sendJson(response, 200, completePairing(extensionId, listeningPort));
   } catch (error) {
@@ -358,10 +425,15 @@ function handlePairLegacyRoute(
 }
 
 function nextQueuedCommand(): BrowserCommandRequest | null {
-  return queuedCommands.shift() ?? null;
+  while (queuedCommands.length) {
+    const command = queuedCommands.shift()!;
+    if (pendingResults.has(command.id)) return command;
+  }
+  return null;
 }
 
 function handlePoll(response: ServerResponse): void {
+  if (response.destroyed || response.writableEnded) return;
   const queued = nextQueuedCommand();
   if (queued) {
     sendJson(response, 200, { success: true, command: queued });
@@ -370,26 +442,87 @@ function handlePoll(response: ServerResponse): void {
 
   let settled = false;
   const waiter: PollWaiter = (command) => {
-    if (settled) return;
+    if (settled || response.destroyed || response.writableEnded) return false;
     settled = true;
     clearTimeout(timer);
+    response.removeListener('close', closed);
     sendJson(response, 200, { success: true, command });
+    return true;
+  };
+  const closed = (): void => {
+    settled = true;
+    clearTimeout(timer);
+    const index = pollWaiters.indexOf(waiter);
+    if (index >= 0) pollWaiters.splice(index, 1);
   };
   const timer = setTimeout(() => {
     const index = pollWaiters.indexOf(waiter);
     if (index >= 0) pollWaiters.splice(index, 1);
     waiter(null);
   }, BROWSER_COMMAND_POLL_WINDOW_MS);
+  response.once('close', closed);
   pollWaiters.push(waiter);
+}
+
+function takePendingResult(
+  id: string,
+  state: 'cancelled' | 'completed' = 'cancelled',
+): PendingResult | null {
+  const pending = pendingResults.get(id);
+  if (!pending) return null;
+  pendingResults.delete(id);
+  clearTimeout(pending.timer);
+  if (pending.signal && pending.onAbort)
+    pending.signal.removeEventListener('abort', pending.onAbort);
+  commandWatchers.get(id)?.(state);
+  return pending;
+}
+
+function handleCommandWatch(response: ServerResponse, id: unknown, wait: unknown): void {
+  if (typeof wait !== 'boolean') {
+    sendJson(response, 200, { success: false, error: 'A command watch mode is required.' });
+    return;
+  }
+  if (typeof id !== 'string' || !pendingResults.has(id)) {
+    sendJson(response, 200, { success: true, state: 'cancelled' });
+    return;
+  }
+  if (response.destroyed || response.writableEnded) return;
+  if (!wait) {
+    sendJson(response, 200, { success: true, state: 'active' });
+    return;
+  }
+  commandWatchers.get(id)?.('active');
+  let settled = false;
+  const cleanup = (): void => {
+    clearTimeout(timer);
+    response.removeListener('close', closed);
+    if (commandWatchers.get(id) === finish) commandWatchers.delete(id);
+  };
+  const finish = (state: 'active' | 'cancelled' | 'completed'): void => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    if (!response.destroyed && !response.writableEnded)
+      sendJson(response, 200, { success: true, state });
+  };
+  const closed = (): void => {
+    settled = true;
+    cleanup();
+  };
+  const timer = setTimeout(
+    () => finish(pendingResults.has(id) ? 'active' : 'cancelled'),
+    BROWSER_COMMAND_POLL_WINDOW_MS,
+  );
+  commandWatchers.set(id, finish);
+  response.once('close', closed);
 }
 
 function handleCommandResult(body: Record<string, unknown>): void {
   const result = body['result'];
   if (!isBrowserCommandResult(result)) return;
-  const pending = pendingResults.get(result.id);
+  const pending = takePendingResult(result.id, 'completed');
   if (!pending) return;
-  pendingResults.delete(result.id);
-  clearTimeout(pending.timer);
   if (result.ok) {
     pending.resolve(result.value);
   } else {
@@ -464,21 +597,9 @@ async function deliverChatHandoff(
 }
 
 async function handleNativeMessageRoute(
-  request: IncomingMessage,
   response: ServerResponse,
   body: Record<string, unknown>,
 ): Promise<void> {
-  const supplied = request.headers[NATIVE_HOST_TOKEN_HEADER];
-  const expected = hostToken();
-  const provided = typeof supplied === 'string' ? supplied : '';
-  if (
-    provided.length !== expected.length ||
-    !timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
-  ) {
-    sendText(response, 401, 'Unauthorized native host');
-    return;
-  }
-
   const pairing = readPairing();
   const extensionId = typeof body['extensionId'] === 'string' ? body['extensionId'] : null;
   if (!pairing || !extensionId || extensionId !== pairing.extensionId) {
@@ -500,6 +621,27 @@ async function handleNativeMessageRoute(
   if (!wasConnected) publishState();
 
   const type = (message as Record<string, unknown>)['type'];
+  if (
+    (type === NATIVE_BROWSER_POLL_MESSAGE ||
+      type === NATIVE_BROWSER_RESULT_MESSAGE ||
+      type === NATIVE_BROWSER_COMMAND_WATCH_MESSAGE) &&
+    (message as Record<string, unknown>)['version'] !== BROWSER_COMMAND_PROTOCOL_VERSION
+  ) {
+    sendJson(response, 200, {
+      success: false,
+      error:
+        'The desktop and Chrome browser command protocols do not match. Update both before running paired browser work.',
+    });
+    return;
+  }
+  if (type === NATIVE_BROWSER_COMMAND_WATCH_MESSAGE) {
+    handleCommandWatch(
+      response,
+      (message as Record<string, unknown>)['id'],
+      (message as Record<string, unknown>)['wait'],
+    );
+    return;
+  }
   if (type === NATIVE_BROWSER_UNPAIR_MESSAGE) {
     // Keeping the record would leave clients offering tools that never answer.
     removeHostAndPairing();
@@ -610,11 +752,25 @@ async function handleLocalClientCommandRoute(
   // An uncaught throw becomes a plain-text 500, which a client parsing JSON
   // reads as a broken connection rather than the refusal it was.
   let outcome: { ok: boolean; value?: unknown; error?: string; code?: string };
+  const controller = new AbortController();
+  const closed = (): void => {
+    if (!response.writableEnded)
+      controller.abort(
+        new BrowserBridgeError('The requesting local client disconnected.', 'cancelled'),
+      );
+  };
+  response.once('close', closed);
+  if (response.destroyed) closed();
   try {
-    outcome = await run(parsed.command, parsed.args, {
-      name: parsed.client.name.trim().slice(0, 60),
-      ...described,
-    });
+    outcome = await run(
+      parsed.command,
+      parsed.args,
+      {
+        name: parsed.client.name.trim().slice(0, 60),
+        ...described,
+      },
+      controller.signal,
+    );
   } catch (error) {
     // Read the code off the error rather than testing its class: `instanceof`
     // is per module instance, so an error thrown by another copy of this
@@ -625,8 +781,11 @@ async function handleLocalClientCommandRoute(
       error: error instanceof Error ? error.message : 'The browser did not answer.',
       code: isLocalClientFailureCode(code) ? code : 'timeout',
     };
+  } finally {
+    response.removeListener('close', closed);
   }
   settleBrowserActivity(activity, outcome.ok ? null : (outcome.error ?? null));
+  if (response.destroyed || controller.signal.aborted) return;
   sendJson(response, 200, {
     version: LOCAL_CLIENT_PROTOCOL_VERSION,
     ...outcome,
@@ -660,16 +819,10 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
-  let body: Record<string, unknown>;
-  try {
-    body = parseJsonBody(
-      await readBody(request, isNative ? MAX_NATIVE_BODY_BYTES : MAX_PAIR_BODY_BYTES),
-    );
-  } catch (error) {
-    sendText(response, 400, error instanceof Error ? error.message : 'Bad Request');
-    return;
-  }
-
+  // Who is asking is settled from the headers, before a byte of the body is
+  // read: a caller with no right to a route does not get to make this
+  // process buffer and parse what it sends.
+  const fromExtension = originExtensionId(request.headers.origin);
   if (isLocalClient) {
     // The local-client token is a separate grant from the extension's: an
     // extension that somehow reached these routes still has to present it.
@@ -682,6 +835,41 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
       });
       return;
     }
+  } else if (isNative) {
+    if (!tokenMatches(request.headers[NATIVE_HOST_TOKEN_HEADER], hostToken())) {
+      sendText(response, 401, 'Unauthorized native host');
+      return;
+    }
+  } else {
+    if (fromExtension === null) {
+      sendText(response, 403, 'A pairing is asked for by the extension it is for');
+      return;
+    }
+    if (
+      path === BROWSER_BRIDGE_ROUTES.pair &&
+      !tokenMatches(request.headers[BRIDGE_TOKEN_HEADER], bridgeToken())
+    ) {
+      sendText(response, 401, 'Unauthorized manifest install');
+      return;
+    }
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = parseJsonBody(
+      await readBody(
+        request,
+        isNative || path === BROWSER_BRIDGE_ROUTES.clientCommand
+          ? MAX_NATIVE_BODY_BYTES
+          : MAX_PAIR_BODY_BYTES,
+      ),
+    );
+  } catch (error) {
+    sendText(response, 400, error instanceof Error ? error.message : 'Bad Request');
+    return;
+  }
+
+  if (isLocalClient) {
     if (path === BROWSER_BRIDGE_ROUTES.clientState) {
       const state = pairingState();
       sendJson(response, 200, {
@@ -698,18 +886,19 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   if (isNative) {
-    await handleNativeMessageRoute(request, response, body);
+    await handleNativeMessageRoute(response, body);
     return;
   }
+  if (fromExtension === null) return;
   if (path === BROWSER_BRIDGE_ROUTES.pairRequest) {
-    handlePairRequestRoute(response, body);
+    handlePairRequestRoute(response, fromExtension, body);
     return;
   }
   if (path === BROWSER_BRIDGE_ROUTES.pairConfirm) {
-    handlePairConfirmRoute(response, body);
+    handlePairConfirmRoute(response, fromExtension, body);
     return;
   }
-  handlePairLegacyRoute(request, response, body);
+  handlePairLegacyRoute(response, fromExtension, body);
 }
 
 export function isLoopbackAddress(address: string): boolean {
@@ -734,24 +923,30 @@ export async function startBrowserBridge(dependencies: BridgeDependencies): Prom
   // owning the bridge file and the extension would talk to whichever won the
   // last race. This one stands down, leaves the running bridge's file alone,
   // and says what to do about it.
-  await new Promise<void>((resolve, reject) => {
-    instance.once('error', (error: NodeJS.ErrnoException) => {
-      instance.close();
-      reject(
-        error.code === 'EADDRINUSE'
-          ? new BrowserBridgeError(
-              `Another app on this computer is already using the browser bridge on port ${port}. Quit it, then reopen this app to pair a browser here.`,
-              'not-paired',
-            )
-          : error,
-      );
+  try {
+    await new Promise<void>((resolve, reject) => {
+      instance.once('error', (error: NodeJS.ErrnoException) => {
+        instance.close();
+        reject(
+          error.code === 'EADDRINUSE'
+            ? new BrowserBridgeError(
+                `Another app on this computer is already using the browser bridge on port ${port}. Quit it, then reopen this app to pair a browser here.`,
+                'not-paired',
+              )
+            : error,
+        );
+      });
+      instance.listen(port, BROWSER_BRIDGE_LOOPBACK_ADDRESS, () => {
+        instance.removeAllListeners('error');
+        resolve();
+      });
     });
-    instance.listen(port, BROWSER_BRIDGE_LOOPBACK_ADDRESS, () => {
-      instance.removeAllListeners('error');
-      resolve();
-    });
-  });
+  } catch (error) {
+    startFailure = error instanceof BrowserBridgeError ? error.message : START_FAILED;
+    throw error;
+  }
 
+  startFailure = null;
   server = instance;
   const address = instance.address();
   listeningPort = typeof address === 'object' && address ? address.port : port;
@@ -763,9 +958,10 @@ export async function startBrowserBridge(dependencies: BridgeDependencies): Prom
 export async function stopBrowserBridge(): Promise<void> {
   withdrawLocalClientBridge();
   for (const waiter of pollWaiters.splice(0)) waiter(null);
-  for (const [, pending] of pendingResults) {
-    clearTimeout(pending.timer);
-    pending.reject(new BrowserBridgeError('AGI Cloud closed the browser bridge.', 'cancelled'));
+  for (const [id] of pendingResults) {
+    takePendingResult(id)?.reject(
+      new BrowserBridgeError('AGI Cloud closed the browser bridge.', 'cancelled'),
+    );
   }
   pendingResults.clear();
   queuedCommands.length = 0;
@@ -783,7 +979,12 @@ export function sendBrowserCommand(
   command: BrowserCommand,
   args: Record<string, unknown>,
   siteRules?: { allow: string[]; deny: string[] },
+  signal?: AbortSignal,
 ): Promise<unknown> {
+  if (signal?.aborted)
+    return Promise.reject(
+      new BrowserBridgeError('The browser command was cancelled.', 'cancelled'),
+    );
   const pairing = readPairing();
   if (!pairing) {
     return Promise.reject(
@@ -804,19 +1005,31 @@ export function sendBrowserCommand(
 
   return new Promise<unknown>((resolve, reject) => {
     const timer = setTimeout(() => {
-      pendingResults.delete(request.id);
+      if (!takePendingResult(request.id)) return;
       const index = queuedCommands.indexOf(request);
       if (index >= 0) queuedCommands.splice(index, 1);
       reject(new BrowserBridgeError('The paired browser did not answer.'));
     }, BROWSER_COMMAND_TIMEOUT_MS);
-    pendingResults.set(request.id, { resolve, reject, timer });
+    const onAbort = (): void => {
+      if (!takePendingResult(request.id)) return;
+      const index = queuedCommands.indexOf(request);
+      if (index >= 0) queuedCommands.splice(index, 1);
+      reject(
+        new BrowserBridgeError('The browser command was cancelled by its requester.', 'cancelled'),
+      );
+    };
+    pendingResults.set(request.id, {
+      resolve,
+      reject,
+      timer,
+      ...(signal ? { signal, onAbort } : {}),
+    });
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+    if (!pendingResults.has(request.id)) return;
 
-    const waiter = pollWaiters.shift();
-    if (waiter) {
-      waiter(request);
-    } else {
-      queuedCommands.push(request);
-    }
+    while (pollWaiters.length) if (pollWaiters.shift()!(request)) return;
+    queuedCommands.push(request);
   });
 }
 
@@ -839,9 +1052,8 @@ export function installHostForPairedExtension(): string[] {
  */
 export function removeHostAndPairing(): void {
   for (const waiter of pollWaiters.splice(0)) waiter(null);
-  for (const [, pending] of pendingResults) {
-    clearTimeout(pending.timer);
-    pending.reject(
+  for (const [id] of pendingResults) {
+    takePendingResult(id)?.reject(
       new BrowserBridgeError('The browser is no longer paired with this Mac.', 'not-paired'),
     );
   }
@@ -906,4 +1118,5 @@ export function resetBridgeForTests(): void {
   listeningPort = 0;
   deps = null;
   server = null;
+  startFailure = null;
 }

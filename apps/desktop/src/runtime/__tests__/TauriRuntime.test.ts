@@ -1,4 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
+import { modelsCatalog } from '@agiworkforce/types';
+import {
+  SteerRefusedError,
+  useChatArtifactStore,
+  useChatUIStore,
+} from '@agiworkforce/unified-chat';
 import type { PersonalizationPreferences } from '../../stores/settingsStore';
 
 const FIXTURE_MODEL_ID = 'fixture-model';
@@ -29,6 +36,7 @@ const neutralPersonalization = (): PersonalizationPreferences => ({
 const personalizationMock: { current: PersonalizationPreferences } = {
   current: neutralPersonalization(),
 };
+const currentFolderMock: { current: string | null } = { current: null };
 
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: invokeMock,
@@ -56,6 +64,7 @@ vi.mock('../../stores/appModeStore', () => ({
 
 vi.mock('../../stores/chat/chatStore', () => ({
   uuidToDbId: uuidToDbIdMock,
+  dbIdToUuid: (dbId: number) => `frontend-${dbId}`,
   resolveDesktopChatOwnerId: () => 'user-123',
   useChatStore: {
     getState: () => ({
@@ -75,14 +84,22 @@ vi.mock('../../stores/settingsStore', () => ({
   },
 }));
 
+vi.mock('../../stores/projectStore', () => ({
+  useProjectStore: {
+    getState: () => ({ currentFolder: currentFolderMock.current }),
+  },
+}));
+
 const [{ useArtifactStore }, { TauriRuntime }] = await Promise.all([
   import('../../stores/artifactStore'),
   import('../TauriRuntime'),
 ]);
 
 describe('TauriRuntime', () => {
-  it('does not advertise the shared per-conversation agent control without a native wire field', async () => {
-    expect(new TauriRuntime().supportsAgentControl).toBe(false);
+  it('offers only the agent modes the native chat loop enforces', async () => {
+    const runtime = new TauriRuntime();
+    expect(runtime.supportsAgentControl).toBe(true);
+    expect(runtime.agentModes).toEqual(['ask', 'plan']);
   });
 
   it('advertises reasoning effort, which it does forward to the native command', async () => {
@@ -100,6 +117,7 @@ describe('TauriRuntime', () => {
     executionModeByConversationId.clear();
     projectIdByConversationId.clear();
     personalizationMock.current = neutralPersonalization();
+    currentFolderMock.current = null;
     uuidToDbIdMock.mockReturnValue(undefined);
 
     invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
@@ -173,7 +191,12 @@ describe('TauriRuntime', () => {
       },
     });
 
-    expect(invokeMock).toHaveBeenNthCalledWith(2, 'chat_send_message', {
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'chat_set_plan_mode', {
+      conversationId: 42,
+      enabled: false,
+    });
+
+    expect(invokeMock).toHaveBeenNthCalledWith(3, 'chat_send_message', {
       request: expect.objectContaining({
         content: 'Hello from runtime',
         userId: 'user-123',
@@ -188,6 +211,157 @@ describe('TauriRuntime', () => {
 
     expect(invokeMock.mock.calls.map(([command]) => command)).not.toContain('llm_send_message');
     expect(linkConversationIdMock).toHaveBeenCalledWith('frontend-conversation-id', 42);
+  });
+
+  it('sends the folder the composer shows so the turn works and recalls memory there', async () => {
+    currentFolderMock.current = '/Users/someone/code/app';
+    const runtime = new TauriRuntime();
+
+    await runtime.sendMessage('frontend-conversation-id', 'What do we use to install?', {
+      model: FIXTURE_MODEL_ID,
+    });
+
+    const sendCall = invokeMock.mock.calls.find(([command]) => command === 'chat_send_message');
+    expect((sendCall?.[1] as { request: { projectFolder?: string } }).request.projectFolder).toBe(
+      '/Users/someone/code/app',
+    );
+  });
+
+  it('sends no folder when none is chosen, so the host keeps its own', async () => {
+    const runtime = new TauriRuntime();
+
+    await runtime.sendMessage('frontend-conversation-id', 'Hello', { model: FIXTURE_MODEL_ID });
+
+    const sendCall = invokeMock.mock.calls.find(([command]) => command === 'chat_send_message');
+    expect(
+      (sendCall?.[1] as { request: { projectFolder?: string } }).request.projectFolder,
+    ).toBeUndefined();
+  });
+
+  it('puts the conversation in native plan mode before a plan-mode turn', async () => {
+    const runtime = new TauriRuntime();
+
+    await runtime.sendMessage('frontend-conversation-id', 'Plan the refactor', {
+      model: FIXTURE_MODEL_ID,
+      agentMode: 'plan',
+    });
+
+    const commands = invokeMock.mock.calls.map(([command]) => command);
+    expect(commands.indexOf('chat_set_plan_mode')).toBeLessThan(
+      commands.indexOf('chat_send_message'),
+    );
+    expect(invokeMock).toHaveBeenCalledWith('chat_set_plan_mode', {
+      conversationId: 42,
+      enabled: true,
+    });
+  });
+
+  it('stops only the named conversation and never sends an unscoped stop', () => {
+    const runtime = new TauriRuntime();
+
+    uuidToDbIdMock.mockReturnValue(42);
+    runtime.stopGeneration('chat-with-row');
+    expect(invokeMock).toHaveBeenCalledWith('chat_stop_generation', { conversationId: 42 });
+
+    invokeMock.mockClear();
+    uuidToDbIdMock.mockReturnValue(undefined);
+    runtime.stopGeneration('chat-without-row');
+    expect(invokeMock).not.toHaveBeenCalledWith('chat_stop_generation', expect.anything());
+  });
+
+  it('steers a running turn through the native pending-message queue', async () => {
+    uuidToDbIdMock.mockReturnValue(42);
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_add_pending_message') return { id: 'steer-1', content: 'use tabs' };
+      if (command === 'chat_pop_pending_message') return null;
+      return undefined;
+    });
+    const runtime = new TauriRuntime();
+
+    const steered = await runtime.steer('frontend-conversation-id', 'use tabs');
+    const withdrawn = await runtime.withdrawSteer('frontend-conversation-id', 'steer-1');
+
+    expect(steered).toEqual({ id: 'steer-1', content: 'use tabs' });
+    expect(invokeMock).toHaveBeenCalledWith('chat_add_pending_message', {
+      request: { content: 'use tabs', conversationId: 42 },
+    });
+    expect(invokeMock).toHaveBeenCalledWith('chat_pop_pending_message', {
+      request: { conversationId: 42, pendingMessageId: 'steer-1' },
+    });
+    expect(withdrawn).toBe(false);
+  });
+
+  it('lists turns a previous run left unfinished under their frontend ids', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_list_interrupted_turns') {
+        return [{ conversationId: 7, content: 'summarise', startedAt: '2026-10-10T00:00:00Z' }];
+      }
+      return undefined;
+    });
+    const runtime = new TauriRuntime();
+
+    await expect(runtime.listInterruptedTurns()).resolves.toEqual([
+      { conversationId: 'frontend-7', content: 'summarise', startedAt: '2026-10-10T00:00:00Z' },
+    ]);
+  });
+
+  it('answers an agent question through the native question command', async () => {
+    invokeMock.mockImplementation(async () => undefined);
+    const runtime = new TauriRuntime();
+
+    await runtime.answerQuestion('q-1', ['a', 'b']);
+
+    expect(invokeMock).toHaveBeenCalledWith('question_answer', { id: 'q-1', answer: ['a', 'b'] });
+  });
+
+  it('sets replaced rows aside by row id or client id before a regenerate', async () => {
+    uuidToDbIdMock.mockReturnValue(42);
+    invokeMock.mockImplementation(async (command: string) =>
+      command === 'chat_supersede_messages' ? 'stash-1' : undefined,
+    );
+    const runtime = new TauriRuntime();
+
+    const key = await runtime.supersedeMessages('frontend-conversation-id', ['17', 'client-abc']);
+    await runtime.restoreSupersededMessages(key);
+
+    expect(key).toBe('stash-1');
+    expect(invokeMock).toHaveBeenCalledWith('chat_supersede_messages', {
+      conversationId: 42,
+      userId: 'user-123',
+      ids: [17],
+      clientIds: ['client-abc'],
+    });
+    expect(invokeMock).toHaveBeenCalledWith('chat_restore_superseded_messages', { key: 'stash-1' });
+  });
+
+  it('reports a steer a prompt hook blocked as refused, with the reason', async () => {
+    uuidToDbIdMock.mockReturnValue(42);
+    invokeMock.mockRejectedValueOnce('A hook blocked this message: no secrets in prompts');
+    const runtime = new TauriRuntime();
+
+    const refusal = await runtime
+      .steer('frontend-conversation-id', 'here is the key')
+      .catch((error: unknown) => error);
+
+    expect(refusal).toBeInstanceOf(SteerRefusedError);
+    expect((refusal as Error).message).toBe('A hook blocked this message: no secrets in prompts');
+  });
+
+  it('leaves any other steer failure as it was thrown', async () => {
+    uuidToDbIdMock.mockReturnValue(42);
+    invokeMock.mockRejectedValueOnce('Failed to lock pending messages queue');
+    const runtime = new TauriRuntime();
+
+    await expect(runtime.steer('frontend-conversation-id', 'use tabs')).rejects.toBe(
+      'Failed to lock pending messages queue',
+    );
+  });
+
+  it('refuses to steer a conversation with no native turn', async () => {
+    const runtime = new TauriRuntime();
+    await expect(runtime.steer('unsaved-conversation', 'hello')).rejects.toThrow(
+      'no running reply',
+    );
   });
 
   it('forwards an explicit Local Web-search turn as the narrow native search scope', async () => {
@@ -293,6 +467,30 @@ describe('TauriRuntime', () => {
     expect(instructions).toContain(
       'Reconcile every invoice line against the ledger before answering.',
     );
+  });
+
+  it('says so and sends without the instructions when a project skill is not allowed', async () => {
+    const refused = vi.spyOn(toast, 'error').mockImplementation(() => 'toast-id');
+    const baseInvoke = invokeMock.getMockImplementation()!;
+    invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+      if (command === 'skill_get_instructions') {
+        throw "This project's skills are not allowed yet, or changed since you allowed them. Allow them in Settings, Capabilities.";
+      }
+      return baseInvoke(command, args);
+    });
+
+    const runtime = new TauriRuntime();
+
+    await runtime.sendMessage('frontend-conversation-id', 'Reconcile the vendor invoice', {
+      model: FIXTURE_MODEL_ID,
+      skillName: 'project-skill',
+    });
+
+    expect(refused).toHaveBeenCalledWith(
+      "project-skill was not used. This project's skills are not allowed yet, or changed since you allowed them. Allow them in Settings, Capabilities.",
+    );
+    expect(invokeMock.mock.calls.some(([command]) => command === 'chat_send_message')).toBe(true);
+    refused.mockRestore();
   });
 
   it('carries the conversation project scope into the backend create', async () => {
@@ -482,6 +680,158 @@ describe('TauriRuntime', () => {
     });
   });
 
+  it('attaches web search sources to the search step and offers them as search results', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_send_message') {
+        setTimeout(() => {
+          listenHandlers.get('tool:event')?.({
+            payload: {
+              type: 'started',
+              id: 'call_1_abc123',
+              conversation_id: 42,
+              tool_name: 'search_web',
+              arguments: { query: 'rust async' },
+            },
+          });
+          listenHandlers.get('chat:sources')?.({
+            payload: {
+              conversation_id: 99,
+              kind: 'web_search',
+              tool_call_id: 'call_1',
+              query: 'another chat',
+              sources: [{ title: 'Other', url: 'https://other.example/' }],
+            },
+          });
+          listenHandlers.get('chat:sources')?.({
+            payload: {
+              conversation_id: 42,
+              kind: 'web_search',
+              tool_call_id: 'call_1',
+              query: 'rust async',
+              sources: [
+                {
+                  title: 'Async book',
+                  url: 'https://www.example.com/async',
+                  snippet: 'Futures and tasks',
+                },
+                { title: 'Tokio', url: 'https://tokio.rs/' },
+              ],
+            },
+          });
+          listenHandlers.get('chat:stream-end')?.({
+            payload: { conversation_id: 42, message_id: 'assistant-1' },
+          });
+        }, 0);
+        return undefined;
+      }
+      if (command === 'chat_create_conversation') {
+        return {
+          id: 42,
+          title: 'New Conversation',
+          created_at: '2026-03-28T00:00:00.000Z',
+          updated_at: '2026-03-28T00:00:00.000Z',
+        };
+      }
+      return undefined;
+    });
+
+    const runtime = new TauriRuntime();
+    const events: import('@agiworkforce/unified-chat').StreamEvent[] = [];
+    runtime.onStream((event) => events.push(event));
+
+    await runtime.sendMessage('frontend-conversation-id', 'How does async work in Rust?');
+
+    const sourceLists = events.flatMap((event) =>
+      event.type === 'agent_event' && event.envelope.event.type === 'source-list'
+        ? [event.envelope.event]
+        : [],
+    );
+    expect(sourceLists).toEqual([
+      {
+        type: 'source-list',
+        toolCallId: 'call_1_abc123',
+        query: 'rust async',
+        sources: [
+          {
+            url: 'https://www.example.com/async',
+            title: 'Async book',
+            snippet: 'Futures and tasks',
+          },
+          { url: 'https://tokio.rs/', title: 'Tokio' },
+        ],
+      },
+    ]);
+    expect(events.filter((event) => event.type === 'search_results')).toEqual([
+      {
+        type: 'search_results',
+        search: {
+          id: 'call_1_abc123',
+          query: 'rust async',
+          results: [
+            {
+              url: 'https://www.example.com/async',
+              title: 'Async book',
+              snippet: 'Futures and tasks',
+              domain: 'example.com',
+            },
+            { url: 'https://tokio.rs/', title: 'Tokio', domain: 'tokio.rs' },
+          ],
+          resultCount: 2,
+          status: 'completed',
+        },
+      },
+    ]);
+  });
+
+  it('lists the project knowledge files a turn drew on without offering them as web links', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_send_message') {
+        setTimeout(() => {
+          listenHandlers.get('chat:sources')?.({
+            payload: {
+              conversation_id: 42,
+              kind: 'project_knowledge',
+              sources: [{ title: 'notes.md', url: '', snippet: 'The launch window is May.' }],
+            },
+          });
+          listenHandlers.get('chat:stream-end')?.({
+            payload: { conversation_id: 42, message_id: 'assistant-1' },
+          });
+        }, 0);
+        return undefined;
+      }
+      if (command === 'chat_create_conversation') {
+        return {
+          id: 42,
+          title: 'New Conversation',
+          created_at: '2026-03-28T00:00:00.000Z',
+          updated_at: '2026-03-28T00:00:00.000Z',
+        };
+      }
+      return undefined;
+    });
+
+    const runtime = new TauriRuntime();
+    const events: import('@agiworkforce/unified-chat').StreamEvent[] = [];
+    runtime.onStream((event) => events.push(event));
+
+    await runtime.sendMessage('frontend-conversation-id', 'When is the launch window?');
+
+    const sourceLists = events.flatMap((event) =>
+      event.type === 'agent_event' && event.envelope.event.type === 'source-list'
+        ? [event.envelope.event]
+        : [],
+    );
+    expect(sourceLists).toEqual([
+      {
+        type: 'source-list',
+        query: 'Project knowledge',
+        sources: [{ url: '', title: 'notes.md', snippet: 'The launch window is May.' }],
+      },
+    ]);
+    expect(events.some((event) => event.type === 'search_results')).toBe(false);
+  });
+
   it('renders a progressive artifact draft while create_artifact arguments stream', async () => {
     const argsChunks = [
       '{"artifact_type":"markdown"',
@@ -492,7 +842,9 @@ describe('TauriRuntime', () => {
 
     type Draft = ReturnType<typeof useArtifactStore.getState>['draft'];
     const draftSnapshots: Draft[] = [];
-    useArtifactStore.setState({ draft: null, panelOpen: false, activeArtifactId: null });
+    useArtifactStore.setState({ draft: null });
+    useChatArtifactStore.getState().closeArtifact();
+    useChatUIStore.getState().closeArtifactPanel();
 
     invokeMock.mockImplementation(async (command: string) => {
       if (command === 'chat_send_message') {
@@ -553,8 +905,8 @@ describe('TauriRuntime', () => {
 
     const finalState = useArtifactStore.getState();
     expect(finalState.draft).toBeNull();
-    expect(finalState.activeArtifactId).toBe('artifact-final');
-    expect(finalState.panelOpen).toBe(true);
+    expect(useChatArtifactStore.getState().activeArtifact?.id).toBe('artifact-final');
+    expect(useChatUIStore.getState().activeRightPanel).toBe('artifact');
   });
 
   it('discards the artifact draft when the turn ends without an artifact', async () => {
@@ -591,14 +943,15 @@ describe('TauriRuntime', () => {
       return undefined;
     });
 
-    useArtifactStore.setState({ draft: null, panelOpen: false, activeArtifactId: null });
+    useArtifactStore.setState({ draft: null });
+    useChatArtifactStore.getState().closeArtifact();
+    useChatUIStore.getState().closeArtifactPanel();
 
     await new TauriRuntime().sendMessage('frontend-conversation-id', 'Write some code');
 
     const finalState = useArtifactStore.getState();
     expect(finalState.draft).toBeNull();
-    expect(finalState.panelOpen).toBe(false);
-    expect(finalState.activeArtifactId).toBeNull();
+    expect(useChatArtifactStore.getState().activeArtifact).toBeNull();
   });
 
   it('ignores a chat:artifact-progress event for a different conversation', async () => {
@@ -631,12 +984,14 @@ describe('TauriRuntime', () => {
       return undefined;
     });
 
-    useArtifactStore.setState({ draft: null, panelOpen: false, activeArtifactId: null });
+    useArtifactStore.setState({ draft: null });
+    useChatArtifactStore.getState().closeArtifact();
+    useChatUIStore.getState().closeArtifactPanel();
 
     await new TauriRuntime().sendMessage('frontend-conversation-id', 'Write some code');
 
     expect(useArtifactStore.getState().draft).toBeNull();
-    expect(useArtifactStore.getState().panelOpen).toBe(false);
+    expect(useChatArtifactStore.getState().activeArtifact).toBeNull();
   });
 
   it('projects native Local thinking and iteration events into the shared activity stream', async () => {
@@ -1065,9 +1420,13 @@ describe('TauriRuntime', () => {
       type: 'image/png',
     });
 
+    // The runtime refuses images for a model the catalog does not mark as
+    // vision-capable, so this forwarding case uses one the catalog does.
+    const [visionModelId] = Object.entries(modelsCatalog.models).find(
+      ([, metadata]) => metadata.capabilities.vision,
+    )!;
     await runtime.sendMessage('frontend-conversation-id', 'What does the file say?', {
-      model: 'fixture-local-model:current',
-      provider: 'ollama',
+      model: visionModelId,
       attachments: [textFile, imageFile],
     });
 

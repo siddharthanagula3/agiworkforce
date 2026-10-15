@@ -147,6 +147,8 @@ vi.mock('@agiworkforce/unified-chat', async () => {
   const sharedStoreState = {
     setDraftContent: unifiedChatMock.setDraftContent,
     appendDraftContent: unifiedChatMock.appendDraftContent,
+    messagesByConversation: {} as Record<string, unknown[]>,
+    isStreaming: false,
   };
   const modelStoreState = {
     models: [] as Array<Record<string, unknown>>,
@@ -157,10 +159,19 @@ vi.mock('@agiworkforce/unified-chat', async () => {
     selector(sharedStoreState);
   const useChatModelStore = (selector: (state: typeof modelStoreState) => unknown) =>
     selector(modelStoreState);
-  useChatStore.getState = () => ({
-    setDraftContent: unifiedChatMock.setDraftContent,
-    appendDraftContent: unifiedChatMock.appendDraftContent,
-  });
+  useChatStore.getState = () => sharedStoreState;
+  const artifactStoreState = {
+    activeArtifact: null,
+    openArtifact: vi.fn(),
+    closeArtifact: vi.fn(),
+  };
+  const useChatArtifactStore = (selector: (state: typeof artifactStoreState) => unknown) =>
+    selector(artifactStoreState);
+  useChatArtifactStore.getState = () => artifactStoreState;
+  const uiStoreState = { openArtifactPanel: vi.fn(), closeArtifactPanel: vi.fn() };
+  const useChatUIStore = (selector: (state: typeof uiStoreState) => unknown) =>
+    selector(uiStoreState);
+  useChatUIStore.getState = () => uiStoreState;
   return {
     CapabilityProvider: (props: { children?: ReactNode }) =>
       React.createElement(React.Fragment, null, props.children),
@@ -213,6 +224,8 @@ vi.mock('@agiworkforce/unified-chat', async () => {
     },
     useChatStore,
     useChatModelStore,
+    useChatArtifactStore,
+    useChatUIStore,
     selectBudget: (state: typeof unifiedChatMock.budgetState) => state.budget,
     selectBudgetPercentage: (state: typeof unifiedChatMock.budgetState) => state.percentage,
     useBudgetStore: (selector: (state: typeof unifiedChatMock.budgetState) => unknown) =>
@@ -284,6 +297,23 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(props?.['emptyStateSlot']).toBeTruthy();
     expect(props?.['voiceInputController']).toBeUndefined();
     expect(props?.['allowModelFallbackModels']).toBe(true);
+  });
+
+  it('offers a skip link and exactly one main landmark target for every panel', () => {
+    const { container } = render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+    const skip = screen.getByRole('link', { name: 'Skip to main content' });
+    expect(skip).toHaveAttribute('href', '#desktop-main');
+
+    const chatRegion = container.querySelector('#desktop-main');
+    expect(chatRegion?.tagName).toBe('DIV');
+    expect(chatRegion).toContainElement(screen.getByTestId('chat-interface'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
+
+    const panelRegion = container.querySelector('#desktop-main');
+    expect(panelRegion?.tagName).toBe('MAIN');
+    expect(container.querySelectorAll('[data-v3-shell] main')).toHaveLength(1);
   });
 
   it('shows a native MCP approval in live chat and executes it only after Approve', async () => {

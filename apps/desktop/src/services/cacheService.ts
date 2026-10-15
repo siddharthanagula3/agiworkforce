@@ -13,7 +13,6 @@ const DEFAULT_CACHE_TYPE_STATS = {
 const DEFAULT_CACHE_STATS: CacheStats = {
   llm_cache: { ...DEFAULT_CACHE_TYPE_STATS },
   tool_cache: { ...DEFAULT_CACHE_TYPE_STATS },
-  codebase_cache: { ...DEFAULT_CACHE_TYPE_STATS },
   total_size_mb: 0,
   total_savings_usd: 0,
 };

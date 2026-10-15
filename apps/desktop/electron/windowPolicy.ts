@@ -6,9 +6,10 @@ import type {
   WebContents,
 } from 'electron';
 import { shell } from 'electron';
+import { hostKeepsSignInInWindow } from '@agiworkforce/local-runtime-contract';
 import { VSCODE_CONTEXT_HANDOFF_AUTHORITY } from '@agiworkforce/types';
 import { isAuthPath, isProductPath } from '@agiworkforce/types/product-routes';
-import { CLOUD_APP_ORIGIN, RENDERER_MODE, RENDERER_ORIGIN } from './config';
+import { CLERK_DEVELOPMENT_HOST, CLOUD_APP_ORIGIN, RENDERER_MODE, RENDERER_ORIGIN } from './config';
 
 /**
  * The window holds the product and the sign-in flow. Everything else the site
@@ -16,15 +17,22 @@ import { CLOUD_APP_ORIGIN, RENDERER_MODE, RENDERER_ORIGIN } from './config';
  * user's browser, which is where a link out of a desktop app is expected to
  * land and where the user already has their bookmarks and extensions.
  *
- * The identity hosts are here because sign-in is a top-level navigation off our
- * origin and back. Sending that to the browser would strand the user
- * half-signed-in with a session the shell cannot see.
+ * The identity hosts are allowed because sign-in is a top-level navigation off
+ * our origin and back. Sending that to the browser would strand the user
+ * half-signed-in with a session the shell cannot see. The contract owns their
+ * list, `HOST_IN_WINDOW_SIGN_IN_HOSTS`, because the page reads the same one to
+ * know which sign-ins stay in the window.
+ *
+ * Clerk is not in that list. Its production host is on our own domain, and a
+ * development build names its one tenant through `CLERK_DEVELOPMENT_HOST`.
  */
-const IDENTITY_NAVIGATION_HOSTS = [
-  'accounts.google.com',
-  'login.microsoftonline.com',
-  'login.live.com',
-  'appleid.apple.com',
+/**
+ * GitHub and the enterprise single sign-on providers, whose authorize and
+ * login pages have to stay in the window too. A dot-prefixed entry matches
+ * subdomains only, so a vendor's own marketing apex still opens in the
+ * browser.
+ */
+const SSO_NAVIGATION_HOSTS = [
   'github.com',
   '.okta.com',
   '.okta-emea.com',
@@ -37,7 +45,6 @@ const IDENTITY_NAVIGATION_HOSTS = [
   'auth.pingone.sg',
   'auth.pingone.asia',
   'sso.connect.pingidentity.com',
-  '.clerk.accounts.dev',
 ] as const;
 
 const IDENTITY_RETURN_PATH = /^\/v1\/(?:oauth_callback|saml\/acs\/[^/]+)$/;
@@ -71,10 +78,15 @@ function isAppOrigin(parsed: URL, appOrigin: string): boolean {
 }
 
 /**
- * `appOrigin` is a parameter rather than a module read so a development build
- * pointed at a local origin decides the same way the shipped one does.
+ * `appOrigin` and `clerkHost` are parameters rather than module reads so a
+ * development build pointed at a local origin decides the same way the
+ * shipped one does.
  */
-export function decideRemoteNavigation(url: string, appOrigin: string): RemoteNavigation {
+export function decideRemoteNavigation(
+  url: string,
+  appOrigin: string,
+  clerkHost: string | null = CLERK_DEVELOPMENT_HOST,
+): RemoteNavigation {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -90,8 +102,36 @@ export function decideRemoteNavigation(url: string, appOrigin: string): RemoteNa
       : 'open-externally';
   }
 
-  if (parsed.protocol !== 'https:') return 'open-externally';
-  return matchesHost(parsed.hostname, IDENTITY_NAVIGATION_HOSTS) ? 'allow' : 'open-externally';
+  return isIdentityOrigin(parsed, clerkHost) ? 'allow' : 'open-externally';
+}
+
+function isIdentityOrigin(parsed: URL, clerkHost: string | null): boolean {
+  if (hostKeepsSignInInWindow(parsed)) return true;
+  if (parsed.protocol !== 'https:') return false;
+  if (matchesHost(parsed.hostname, SSO_NAVIGATION_HOSTS)) return true;
+  return clerkHost !== null && parsed.hostname === clerkHost;
+}
+
+/**
+ * A server redirect is a hop inside a navigation already allowed, and sign-in
+ * passes through paths on our hosts that are neither product nor auth routes,
+ * such as the identity provider's callback. Only the origin is decided here;
+ * the path split stays with the navigation the user started.
+ */
+export function decideRemoteRedirect(
+  url: string,
+  appOrigin: string,
+  clerkHost: string | null = CLERK_DEVELOPMENT_HOST,
+): RemoteNavigation {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return 'open-externally';
+  }
+  return isAppOrigin(parsed, appOrigin) || isIdentityOrigin(parsed, clerkHost)
+    ? 'allow'
+    : 'open-externally';
 }
 
 const DETACHED_PAGE_WINDOW: BrowserWindowConstructorOptions = {
@@ -208,13 +248,26 @@ export function applyRemoteWindowPolicy(win: BrowserWindow): void {
     if (isPanelWindowRequest(url, frameName)) closeWithOpener(child, win);
   });
 
+  const isLocalRenderer = (url: string) => url.startsWith(`${RENDERER_ORIGIN}/`);
+
   win.webContents.on('will-navigate', (event, url) => {
     const allowed = isRemote
       ? decideRemoteNavigation(url, CLOUD_APP_ORIGIN) === 'allow'
-      : url.startsWith(`${RENDERER_ORIGIN}/`);
+      : isLocalRenderer(url);
     if (!allowed) {
       event.preventDefault();
       openExternally(url);
+    }
+  });
+
+  win.webContents.on('will-redirect', (event) => {
+    if (!event.isMainFrame) return;
+    const allowed = isRemote
+      ? decideRemoteRedirect(event.url, CLOUD_APP_ORIGIN) === 'allow'
+      : isLocalRenderer(event.url);
+    if (!allowed) {
+      event.preventDefault();
+      openExternally(event.url);
     }
   });
 }

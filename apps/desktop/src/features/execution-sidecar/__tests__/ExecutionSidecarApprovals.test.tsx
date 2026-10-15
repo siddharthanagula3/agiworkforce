@@ -50,7 +50,6 @@ describe('ExecutionSidecarApprovals', () => {
     await waitFor(() => {
       expect(resolveAgentApproval).toHaveBeenCalledWith('action-42', 'approve', {
         reason: undefined,
-        trust: false,
       });
     });
     await waitFor(() => {
@@ -64,11 +63,9 @@ describe('ExecutionSidecarApprovals', () => {
     fireEvent.click(screen.getByRole('button', { name: /Deny/ }));
 
     await waitFor(() => {
-      expect(resolveAgentApproval).toHaveBeenCalledWith(
-        'action-42',
-        'reject',
-        expect.objectContaining({ trust: false }),
-      );
+      expect(resolveAgentApproval).toHaveBeenCalledWith('action-42', 'reject', {
+        reason: 'Denied by user in the execution panel',
+      });
     });
   });
 

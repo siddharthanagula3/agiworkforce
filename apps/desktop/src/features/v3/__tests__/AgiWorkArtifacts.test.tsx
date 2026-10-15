@@ -1,8 +1,11 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useArtifactStore, type ArtifactSummary } from '../../../stores/artifactStore';
 import { AgiWorkArtifacts } from '../AgiWorkArtifacts';
+
+const openArtifactInChat = vi.hoisted(() => vi.fn());
+vi.mock('../../artifacts/openArtifactInChat', () => ({ openArtifactInChat }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -99,5 +102,14 @@ describe('the artifacts panel tells a failed load apart from an empty one', () =
     retry.click();
 
     expect(useArtifactStore.getState().listPersistedArtifacts).toHaveBeenCalled();
+  });
+
+  it('opens an artifact in the chat artifact panel, the one shared viewer', () => {
+    setStore([makeSummary('a1')], null);
+    render(<AgiWorkArtifacts />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'search.open' })[0]!);
+
+    expect(openArtifactInChat).toHaveBeenCalledWith('a1');
   });
 });

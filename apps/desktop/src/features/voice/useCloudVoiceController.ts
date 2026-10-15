@@ -336,10 +336,13 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
       if (!isCurrentWorkflow(request, generation)) return;
       request.assertBoundary();
       if (!result?.success) {
+        const latest = useComputerUseStore.getState();
         const reason = result?.reason
           ? formatOpaCompletionReason(result.reason)
-          : useComputerUseStore.getState().error ||
-            'Desktop control could not complete this action.';
+          : latest.error ||
+            (latest.takenOver
+              ? formatOpaCompletionReason({ type: 'user_cancelled' })
+              : 'Desktop control could not complete this action.');
         throw new Error(reason);
       }
 

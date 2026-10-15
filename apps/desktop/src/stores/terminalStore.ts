@@ -21,20 +21,6 @@ export interface ShellInfo {
   shell_type: ShellTypeLiteral;
 }
 
-export interface ExecuteResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  durationMs: number;
-  streamId: string | null;
-}
-
-export interface TerminalExecuteResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-}
-
 interface TerminalState {
   sessions: TerminalSession[];
   activeSessionId: string | null;
@@ -67,30 +53,7 @@ interface TerminalState {
   smartCommit: (sessionId: string) => Promise<string>;
   aiSuggestImprovements: (command: string, shellType: ShellTypeLiteral) => Promise<string | null>;
 
-  executeCommand: (
-    command: string,
-    options?: {
-      cwd?: string;
-      shell?: string;
-      streamId?: string;
-      emitEvents?: boolean;
-      timeoutMs?: number;
-    },
-  ) => Promise<ExecuteResult>;
-
-  executeSimple: (command: string, workingDir?: string) => Promise<TerminalExecuteResult>;
-
-  listSessions: () => Promise<string[]>;
-
   clearHistory: (sessionId: string) => Promise<void>;
-
-  setEnv: (sessionId: string, key: string, value: string) => Promise<void>;
-
-  getEnv: (sessionId: string, key: string) => Promise<string | null>;
-
-  listEnv: (sessionId: string) => Promise<[string, string][]>;
-
-  unsetEnv: (sessionId: string, key: string) => Promise<void>;
 }
 
 export const useTerminalStore = create<TerminalState>()(
@@ -199,30 +162,6 @@ export const useTerminalStore = create<TerminalState>()(
         },
 
         sendInput: async (sessionId: string, data: string) => {
-          const text = data.trim().toLowerCase();
-          const dangerousPatterns = [
-            'rm -rf /',
-            'rm -rf',
-            'del /f /s /q',
-            'format c:',
-            'shutdown',
-            'poweroff',
-            'mkfs',
-            'rd /s /q',
-            'chmod -r',
-            'chown -r',
-            ':(){:|:&};:',
-          ];
-          const hit = dangerousPatterns.find((p) => text.includes(p));
-          if (hit) {
-            const confirmed = window.confirm(
-              `This command looks destructive ("${hit}"). Are you sure you want to run it?`,
-            );
-            if (!confirmed) {
-              return;
-            }
-          }
-
           try {
             await invoke('terminal_send_input', { sessionId, data });
           } catch (error) {
@@ -430,103 +369,11 @@ export const useTerminalStore = create<TerminalState>()(
           }
         },
 
-        executeCommand: async (
-          command: string,
-          options?: {
-            cwd?: string;
-            shell?: string;
-            streamId?: string;
-            emitEvents?: boolean;
-            timeoutMs?: number;
-          },
-        ) => {
-          try {
-            const result = await invoke<ExecuteResult>('execute_terminal_command', {
-              command,
-              cwd: options?.cwd ?? null,
-              shell: options?.shell ?? null,
-              streamId: options?.streamId ?? null,
-              emitEvents: options?.emitEvents ?? false,
-              timeoutMs: options?.timeoutMs ?? null,
-            });
-            return result;
-          } catch (error) {
-            console.error('Failed to execute terminal command:', error);
-            throw error;
-          }
-        },
-
-        executeSimple: async (command: string, workingDir?: string) => {
-          try {
-            const result = await invoke<TerminalExecuteResult>('terminal_execute', {
-              command,
-              workingDir: workingDir ?? null,
-            });
-            return result;
-          } catch (error) {
-            console.error('Failed to execute simple terminal command:', error);
-            throw error;
-          }
-        },
-
-        listSessions: async () => {
-          try {
-            const sessionIds = await invoke<string[]>('terminal_list_sessions');
-            return sessionIds;
-          } catch (error) {
-            console.error('Failed to list terminal sessions:', error);
-            throw error;
-          }
-        },
-
         clearHistory: async (sessionId: string) => {
           try {
             await invoke('terminal_clear_history', { sessionId });
           } catch (error) {
             console.error('Failed to clear terminal history:', error);
-            throw error;
-          }
-        },
-
-        setEnv: async (sessionId: string, key: string, value: string) => {
-          try {
-            await invoke('terminal_set_env', { sessionId, key, value });
-          } catch (error) {
-            console.error('Failed to set environment variable:', error);
-            throw error;
-          }
-        },
-
-        getEnv: async (sessionId: string, key: string) => {
-          try {
-            const value = await invoke<string | null>('terminal_get_env', {
-              sessionId,
-              key,
-            });
-            return value;
-          } catch (error) {
-            console.error('Failed to get environment variable:', error);
-            throw error;
-          }
-        },
-
-        listEnv: async (sessionId: string) => {
-          try {
-            const envVars = await invoke<[string, string][]>('terminal_list_env', {
-              sessionId,
-            });
-            return envVars;
-          } catch (error) {
-            console.error('Failed to list environment variables:', error);
-            throw error;
-          }
-        },
-
-        unsetEnv: async (sessionId: string, key: string) => {
-          try {
-            await invoke('terminal_unset_env', { sessionId, key });
-          } catch (error) {
-            console.error('Failed to unset environment variable:', error);
             throw error;
           }
         },

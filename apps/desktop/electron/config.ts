@@ -11,9 +11,14 @@
  */
 
 import { DESKTOP_DEEP_LINK_SCHEME } from '@agiworkforce/local-runtime-contract';
+import { frontendApiFromPublishableKey } from './clerkProxy';
 
 const PRODUCTION_CLOUD_APP_ORIGIN = 'https://agiworkforce.com';
 const CLOUD_APP_ORIGIN_ENV = 'AGI_CLOUD_APP_ORIGIN';
+const RELAY_HOST = 'agiworkforce-signaling.fly.dev';
+const CLERK_PUBLISHABLE_KEY_ENV = 'VITE_CLERK_PUBLISHABLE_KEY';
+const CLERK_DEVELOPMENT_SUFFIX = '.clerk.accounts.dev';
+const LOCALHOST_NAMES = ['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0'];
 
 export type RendererMode = 'remote' | 'bundled';
 
@@ -23,9 +28,9 @@ export type RendererMode = 'remote' | 'bundled';
  * The reason bundled was the default no longer holds. It used to be the only
  * mode that attached `preload.cjs`, so remote dropped deep links, the account
  * bridge and the update check; the window was a browser tab pointed at the
- * site. Both modes attach it now, and `preload.ts` exposes the bridge only on
- * this origin, so the sign-in providers `windowPolicy.ts` allows for OAuth do
- * not receive it.
+ * site. Both modes attach it now. `preload.ts` exposes the bridge on every
+ * document the window loads, so `isTrustedSender` in `main.ts` is what keeps
+ * the sign-in providers `windowPolicy.ts` allows for OAuth from calling it.
  *
  * What bundled actually shipped was the Tauri renderer with its `@tauri-apps`
  * imports aliased to Electron stubs: 946 distinct `invoke` commands, 10 of
@@ -47,21 +52,31 @@ export const RENDERER_ORIGIN = `${RENDERER_SCHEME}://${RENDERER_HOST}`;
 
 export const DEEP_LINK_SCHEME = DESKTOP_DEEP_LINK_SCHEME;
 
-export function isAllowedApiBaseUrl(rawUrl: string): boolean {
+function parseWithoutCredentials(rawUrl: string): URL | null {
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);
   } catch {
-    return false;
+    return null;
   }
-  if (parsed.username !== '' || parsed.password !== '') {
-    return false;
-  }
+  return parsed.username === '' && parsed.password === '' ? parsed : null;
+}
+
+function isLocalhost(host: string): boolean {
+  return LOCALHOST_NAMES.includes(host);
+}
+
+function isFirstPartyHost(host: string): boolean {
+  return host === 'agiworkforce.com' || host.endsWith('.agiworkforce.com');
+}
+
+export function isAllowedApiBaseUrl(rawUrl: string): boolean {
+  const parsed = parseWithoutCredentials(rawUrl);
+  if (!parsed) return false;
   const host = parsed.hostname;
-  const isLocalhost = ['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0'].includes(host);
-  if (parsed.protocol === 'http:' && !isLocalhost) return false;
+  if (parsed.protocol === 'http:' && !isLocalhost(host)) return false;
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
-  return isLocalhost || host === 'agiworkforce.com' || host.endsWith('.agiworkforce.com');
+  return isLocalhost(host) || isFirstPartyHost(host);
 }
 
 function resolveCloudAppOrigin(): string {
@@ -72,13 +87,54 @@ function resolveCloudAppOrigin(): string {
 
 export const CLOUD_APP_ORIGIN = resolveCloudAppOrigin();
 
+/**
+ * The one Clerk-hosted sign-in host the window may navigate through, or null.
+ *
+ * A production Clerk instance answers on the app's own domain, which the
+ * window already holds. A development instance answers under a suffix every
+ * Clerk customer shares, so admitting the suffix admits a sign-in page anyone
+ * can host. Only the tenant this build's own publishable key names is let in,
+ * and a key naming any other kind of host adds nothing.
+ */
+export function clerkDevelopmentHost(publishableKey: string | undefined): string | null {
+  if (!publishableKey) return null;
+  let host: string;
+  try {
+    host = frontendApiFromPublishableKey(publishableKey).toLowerCase();
+  } catch {
+    return null;
+  }
+  return host.endsWith(CLERK_DEVELOPMENT_SUFFIX) && host !== CLERK_DEVELOPMENT_SUFFIX.slice(1)
+    ? host
+    : null;
+}
+
+export const CLERK_DEVELOPMENT_HOST = clerkDevelopmentHost(process.env[CLERK_PUBLISHABLE_KEY_ENV]);
+
+/**
+ * The page hands over the relay address it got from the pairing API, and the
+ * page is not trusted to choose it: a relay of its own would carry the phone's
+ * end of the session. An unencrypted local relay is accepted only when the app
+ * itself is pointed at a local server.
+ */
+export function isAllowedRelayUrl(rawUrl: string): boolean {
+  const parsed = parseWithoutCredentials(rawUrl);
+  if (!parsed) return false;
+  const host = parsed.hostname;
+  if (parsed.protocol === 'wss:') return host === RELAY_HOST || isFirstPartyHost(host);
+  if (parsed.protocol === 'ws:') {
+    return isLocalhost(host) && isLocalhost(new URL(CLOUD_APP_ORIGIN).hostname);
+  }
+  return false;
+}
+
 export const RENDERER_CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   'img-src * data: blob:',
   "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:",
-  `connect-src 'self' https://api.agiworkforce.com ${CLOUD_APP_ORIGIN} https://api.stripe.com https://agiworkforce-signaling.fly.dev wss://agiworkforce-signaling.fly.dev`,
+  `connect-src 'self' https://api.agiworkforce.com ${CLOUD_APP_ORIGIN} https://api.stripe.com https://${RELAY_HOST} wss://${RELAY_HOST}`,
   "frame-src 'self' https://js.stripe.com",
   "frame-ancestors 'none'",
   "media-src 'self' blob:",

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -132,6 +132,79 @@ describe('ActionRecorder', () => {
     expect(await screen.findByText('HUD unavailable')).toBeInTheDocument();
     expect(mocks.automationRecordDiscard).toHaveBeenCalledOnce();
     expect(screen.queryByText('Capturing your workflow')).not.toBeInTheDocument();
+  });
+
+  it('keeps the app each step was recorded in through review and into the saved skill', async () => {
+    const user = userEvent.setup();
+    let onActionRecorded: ((event: { payload: unknown }) => void) | undefined;
+    mocks.listen.mockImplementation(
+      (eventName: string, handler: (event: { payload: unknown }) => void) => {
+        if (eventName === 'automation:action_recorded') onActionRecorded = handler;
+        return Promise.resolve(() => {});
+      },
+    );
+    const recording = {
+      id: 'recording-1',
+      name: 'Recorded workflow',
+      actions: [
+        {
+          id: 'action-1',
+          actionType: 'click' as const,
+          timestampMs: 200,
+          target: { x: 30, y: 40 },
+          app: 'com.apple.Notes',
+        },
+      ],
+      durationMs: 800,
+      createdAt: 1,
+    };
+    mocks.checkAutomationPermissions.mockResolvedValue({
+      accessibility: true,
+      inputMonitoring: true,
+      screenRecording: false,
+    });
+    mocks.automationRecordStop.mockResolvedValue(recording);
+    mocks.skillCreateFromRecording.mockResolvedValue({
+      skill: { name: 'Notes demo' },
+      actionCount: 1,
+      path: '/tmp/notes-demo',
+    });
+
+    render(<ActionRecorder />);
+
+    await user.click(screen.getByRole('button', { name: 'I understand, continue' }));
+    await user.click(screen.getByRole('button', { name: 'Start recording' }));
+    await waitFor(() => expect(onActionRecorded).toBeDefined());
+    act(() => {
+      onActionRecorded?.({
+        payload: {
+          id: 'live-1',
+          action_type: 'type',
+          timestamp_ms: 100,
+          value: 'hello',
+          app: 'com.apple.TextEdit',
+        },
+      });
+    });
+    expect(await screen.findByText('In com.apple.TextEdit')).toBeInTheDocument();
+
+    await user.click(await screen.findByRole('button', { name: 'Done' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Notes demo' } });
+    fireEvent.change(screen.getByLabelText('When should AGI use it?'), {
+      target: { value: 'Use this for the notes walkthrough.' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Create skill' }));
+
+    await waitFor(() => {
+      expect(mocks.skillCreateFromRecording).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actions: [expect.objectContaining({ app: 'com.apple.Notes' })],
+        }),
+        'Notes demo',
+        'Use this for the notes walkthrough.',
+      );
+    });
   });
 
   it('creates a reusable managed skill from a reviewed recording', async () => {

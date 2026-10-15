@@ -554,8 +554,9 @@ export const useModelStore = create<ModelState>()(
 
         checkOllamaStatus: async () => {
           try {
-            const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl;
-            const available = await ollamaCheckStatus(baseUrl);
+            const { ollamaUrl: baseUrl, allowPrivateNetworkRuntimes: allowPrivateNetwork } =
+              useSettingsStore.getState().llmConfig;
+            const available = await ollamaCheckStatus(baseUrl, allowPrivateNetwork);
             set(
               { ollamaAvailable: available, ollamaError: null },
               undefined,
@@ -580,8 +581,9 @@ export const useModelStore = create<ModelState>()(
             'model/fetchOllamaModels/start',
           );
           try {
-            const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl;
-            const available = await ollamaCheckStatus(baseUrl);
+            const { ollamaUrl: baseUrl, allowPrivateNetworkRuntimes: allowPrivateNetwork } =
+              useSettingsStore.getState().llmConfig;
+            const available = await ollamaCheckStatus(baseUrl, allowPrivateNetwork);
             if (!available) {
               set(
                 {
@@ -597,7 +599,7 @@ export const useModelStore = create<ModelState>()(
               return [];
             }
 
-            const models = await ollamaListModels(baseUrl);
+            const models = await ollamaListModels(baseUrl, allowPrivateNetwork);
             set(
               {
                 ollamaModels: models,
@@ -627,8 +629,9 @@ export const useModelStore = create<ModelState>()(
         pullOllamaModel: async (modelName: string) => {
           set({ ollamaLoading: true, ollamaError: null }, undefined, 'model/pullOllamaModel/start');
           try {
-            const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl;
-            await ollamaPullModel(modelName, baseUrl);
+            const { ollamaUrl: baseUrl, allowPrivateNetworkRuntimes: allowPrivateNetwork } =
+              useSettingsStore.getState().llmConfig;
+            await ollamaPullModel(modelName, baseUrl, allowPrivateNetwork);
             await get().fetchOllamaModels();
           } catch (error) {
             console.error('Failed to pull Ollama model:', error);
@@ -648,8 +651,9 @@ export const useModelStore = create<ModelState>()(
             'model/deleteOllamaModel/start',
           );
           try {
-            const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl;
-            await ollamaDeleteModel(modelName, baseUrl);
+            const { ollamaUrl: baseUrl, allowPrivateNetworkRuntimes: allowPrivateNetwork } =
+              useSettingsStore.getState().llmConfig;
+            await ollamaDeleteModel(modelName, baseUrl, allowPrivateNetwork);
             await get().fetchOllamaModels();
           } catch (error) {
             console.error('Failed to delete Ollama model:', error);

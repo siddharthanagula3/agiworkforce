@@ -15,17 +15,6 @@ export type RiskLevel = 'Low' | 'Medium' | 'High' | 'Critical';
 export type SafetyTier =
   'Safe' | 'RequiresNotification' | 'RequiresConfirmation' | 'RequiresExplicitApproval';
 
-/**
- * Information about a tool's safety tier.
- */
-export interface ToolSafetyTierInfo {
-  tool_name: string;
-  safety_tier: SafetyTier;
-  safety_tier_description: string;
-  requires_user_action: boolean;
-  risk_level: RiskLevel | null;
-}
-
 export interface ToolConfirmationSummary {
   request_id: string;
   tool_name: string;
@@ -94,69 +83,6 @@ export async function respondToolConfirmation(
   }
 }
 
-/**
- * Get the safety tier information for a specific tool.
- *
- * @param toolName - The name of the tool
- * @returns Information about the tool's safety tier
- */
-export async function getToolSafetyTier(toolName: string): Promise<ToolSafetyTierInfo | null> {
-  if (!isTauri) {
-    console.debug('[toolConfirmation] getToolSafetyTier (mock)', toolName);
-    return {
-      tool_name: toolName,
-      safety_tier: 'Safe',
-      safety_tier_description: 'This action is safe and will execute immediately.',
-      requires_user_action: false,
-      risk_level: 'Low',
-    };
-  }
-
-  try {
-    const result = await invoke<ToolSafetyTierInfo>('get_tool_safety_tier', {
-      toolName: toolName,
-    });
-    return result;
-  } catch (error) {
-    console.error('[toolConfirmation] Failed to get tool safety tier:', error);
-    return null;
-  }
-}
-
-/**
- * Get all remembered tool choices.
- *
- * @returns Map of tool names to their remembered approval status
- */
-export async function getRememberedToolChoices(): Promise<Record<string, boolean>> {
-  if (!isTauri) {
-    console.debug('[toolConfirmation] getRememberedToolChoices (mock)');
-    return {};
-  }
-
-  try {
-    const result = await invoke<Record<string, boolean>>('get_remembered_tool_choices');
-    return result;
-  } catch (error) {
-    console.error('[toolConfirmation] Failed to get remembered choices:', error);
-    return {};
-  }
-}
-
-export async function clearRememberedToolChoices(): Promise<void> {
-  if (!isTauri) {
-    console.debug('[toolConfirmation] clearRememberedToolChoices (mock)');
-    return;
-  }
-
-  try {
-    await invoke<void>('clear_remembered_tool_choices');
-  } catch (error) {
-    console.error('[toolConfirmation] Failed to clear remembered choices:', error);
-    throw error;
-  }
-}
-
 export async function clearSessionToolApprovals(): Promise<void> {
   if (!isTauri) {
     console.debug('[toolConfirmation] clearSessionToolApprovals (mock)');
@@ -164,68 +90,6 @@ export async function clearSessionToolApprovals(): Promise<void> {
   }
 
   await invoke<void>('clear_session_tool_approvals');
-}
-
-/**
- * Clear a specific remembered tool choice.
- *
- * @param toolName - The name of the tool to clear the remembered choice for
- */
-export async function clearRememberedToolChoice(toolName: string): Promise<void> {
-  if (!isTauri) {
-    console.debug('[toolConfirmation] clearRememberedToolChoice (mock)', toolName);
-    return;
-  }
-
-  try {
-    await invoke<void>('clear_remembered_tool_choice', { toolName: toolName });
-  } catch (error) {
-    console.error('[toolConfirmation] Failed to clear remembered choice:', error);
-    throw error;
-  }
-}
-
-/**
- * Get the count of pending confirmation requests.
- *
- * @returns The number of pending confirmations
- */
-export async function getPendingConfirmationCount(): Promise<number> {
-  if (!isTauri) {
-    console.debug('[toolConfirmation] getPendingConfirmationCount (mock)');
-    return 0;
-  }
-
-  try {
-    const result = await invoke<number>('get_pending_confirmation_count');
-    return result;
-  } catch (error) {
-    console.error('[toolConfirmation] Failed to get pending count:', error);
-    return 0;
-  }
-}
-
-/**
- * Cancel a pending tool confirmation request.
- * Use this when the user closes the dialog without responding.
- *
- * @param requestId - The unique ID of the confirmation request to cancel
- */
-export async function cancelToolConfirmation(requestId: string): Promise<void> {
-  if (!requestId || requestId.trim().length === 0) {
-    throw new Error('[toolConfirmation] requestId is required');
-  }
-  if (!isTauri) {
-    console.debug('[toolConfirmation] cancelToolConfirmation (mock)', requestId);
-    return;
-  }
-
-  try {
-    await invoke<void>('cancel_tool_confirmation', { requestId: requestId });
-  } catch (error) {
-    console.error('[toolConfirmation] Failed to cancel confirmation:', error);
-    throw error;
-  }
 }
 
 /**

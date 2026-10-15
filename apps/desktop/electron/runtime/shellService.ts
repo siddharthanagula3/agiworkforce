@@ -1,5 +1,5 @@
 import { spawn, execFile, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { promises as fs } from 'node:fs';
+import { promises as fs, type Stats } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -26,8 +26,16 @@ import {
 import { PathRefused, resolveWithinRoot } from './pathGuard';
 import {
   findExecutable,
+  hostConfigPaths,
+  seatbeltEnvironment,
+  nestedCheckoutPins,
   planSandboxedSpawn,
+  sandboxProtectedPaths,
+  ancestorDirectories,
+  sandboxUnreadablePaths,
+  seatbeltGitReadPaths,
   seatbeltToolchainRoots,
+  hostUserGitConfigPaths,
   type SandboxNetwork,
   type ShellSandbox,
 } from './shellSandbox';
@@ -45,6 +53,15 @@ export interface ShellApprovalRequest {
   sandboxed: boolean;
 }
 
+/**
+ * What the user chose in the approval. `allowNetwork` lifts the sandbox's
+ * network block for this one run and is false unless they ticked it.
+ */
+export interface ShellApprovalAnswer {
+  approved: boolean;
+  allowNetwork: boolean;
+}
+
 export interface RunShellCommandInput {
   /**
    * Chosen by the caller, because a run has to be cancellable and followable
@@ -58,12 +75,18 @@ export interface RunShellCommandInput {
   timeoutMs?: number;
   policy: ShellPolicy;
   sandbox: ShellSandbox;
-  network: SandboxNetwork;
+  /**
+   * Host paths the sandbox keeps read-only even when the approved folder
+   * contains them, and never lets a command read, such as the app's own
+   * sign-in, grants and settings.
+   */
+  protectedPaths?: readonly string[];
   /**
    * Asked once per run for anything the policy does not already allow, and for
-   * every run when no sandbox is available, allow-listed or not.
+   * every run when no sandbox is available, allow-listed or not. A run that
+   * was not asked about keeps the network blocked.
    */
-  approve: (request: ShellApprovalRequest) => Promise<boolean>;
+  approve: (request: ShellApprovalRequest) => Promise<ShellApprovalAnswer>;
   emit: (chunk: ShellStreamChunk) => void;
   /**
    * Set by the server once the turn carries untrusted content. It asks even
@@ -122,6 +145,15 @@ export function listShellRuns(): BackgroundCommandRun[] {
 }
 
 /**
+ * Every run from the moment it is asked for, not from the moment its program
+ * starts. Path checks, the approval and the sandbox plan are all awaited
+ * first, and a run that existed nowhere during them could be asked for twice
+ * under one id, leaving the first program untracked, and could not be
+ * cancelled or stopped with its folder until it had already started.
+ */
+const claims = new Map<string, RunClaim>();
+
+/**
  * The PATH a login shell would have.
  *
  * An app launched from Finder inherits `/usr/bin:/bin:/usr/sbin:/sbin` and
@@ -154,16 +186,108 @@ function loginPath(): Promise<string | null> {
 }
 
 /**
- * The child's environment, minus the variables that describe this process.
- *
- * `ELECTRON_RUN_AS_NODE` and its siblings change how a spawned Electron or
- * Node binary starts, and inheriting them makes a child behave differently
- * under the app than it does in a terminal.
+ * Starts from `INHERITED_ENV_ALLOWLIST` in `crates/agiworkforce-mcp/src/client.rs`
+ * and adds what a developer's own commands need that an MCP server does not:
+ * the SSH agent for git over ssh, the proxy a corporate network requires, and
+ * the locations toolchain managers point compilers and interpreters at.
+ * An allowlist rather than a denylist, because the parent environment carries
+ * loader injection, runtime hooks and whatever credentials the user exported,
+ * and a command approved to run in a folder was not approved to inherit them.
  */
-function childEnvironment(pathValue: string | null): NodeJS.ProcessEnv {
+export const INHERITED_ENV_ALLOWLIST: readonly string[] = [
+  'PATH',
+  'HOME',
+  'USER',
+  'LOGNAME',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TMPDIR',
+  'TERM',
+  'SHELL',
+  'XDG_RUNTIME_DIR',
+  'SSH_AUTH_SOCK',
+  'HTTP_PROXY',
+  'HTTPS_PROXY',
+  'NO_PROXY',
+  'ALL_PROXY',
+  'http_proxy',
+  'https_proxy',
+  'no_proxy',
+  'all_proxy',
+  'SDKROOT',
+  'DEVELOPER_DIR',
+  'JAVA_HOME',
+  'GOPATH',
+  'GOROOT',
+  'CARGO_HOME',
+  'RUSTUP_HOME',
+  'VIRTUAL_ENV',
+  'CONDA_PREFIX',
+  'NVM_DIR',
+  'PYENV_ROOT',
+  'PNPM_HOME',
+  'BUN_INSTALL',
+  'VOLTA_HOME',
+];
+
+/**
+ * Windows programs fail to start, or cannot find their own profile, without
+ * these, and none of them carries a secret or a loader hook.
+ */
+const WINDOWS_INHERITED_ENV_ALLOWLIST: readonly string[] = [
+  'SystemRoot',
+  'SystemDrive',
+  'windir',
+  'ComSpec',
+  'PATHEXT',
+  'TEMP',
+  'TMP',
+  'USERPROFILE',
+  'USERNAME',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'ProgramData',
+  'ProgramFiles',
+  'ProgramFiles(x86)',
+];
+
+const WITHHELD_ENV_PREFIXES: readonly string[] = ['DYLD_', 'LD_', 'ELECTRON_'];
+
+const WITHHELD_ENV_NAMES: readonly string[] = ['NODE_OPTIONS'];
+
+const WITHHELD_ENV_FRAGMENTS: readonly string[] = ['KEY', 'SECRET', 'TOKEN'];
+
+/**
+ * Applied after the allowlist, so a name added to it later still cannot carry
+ * a loader hook or a credential into a command.
+ */
+export function isWithheldVariable(name: string): boolean {
+  const upper = name.toUpperCase();
+  return (
+    WITHHELD_ENV_PREFIXES.some((prefix) => upper.startsWith(prefix)) ||
+    WITHHELD_ENV_NAMES.includes(upper) ||
+    WITHHELD_ENV_FRAGMENTS.some((fragment) => upper.includes(fragment))
+  );
+}
+
+export function childEnvironment(
+  pathValue: string | null,
+  parent: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): NodeJS.ProcessEnv {
+  const allowed = new Set(
+    (platform === 'win32'
+      ? [...INHERITED_ENV_ALLOWLIST, ...WINDOWS_INHERITED_ENV_ALLOWLIST]
+      : INHERITED_ENV_ALLOWLIST
+    ).map((name) => (platform === 'win32' ? name.toUpperCase() : name)),
+  );
   const env: NodeJS.ProcessEnv = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (key.startsWith('ELECTRON_')) continue;
+  for (const [key, value] of Object.entries(parent)) {
+    if (value === undefined) continue;
+    const name = platform === 'win32' ? key.toUpperCase() : key;
+    if (!allowed.has(name) && !name.startsWith('LC_')) continue;
+    if (isWithheldVariable(key)) continue;
     env[key] = value;
   }
   if (pathValue) env['PATH'] = pathValue;
@@ -196,9 +320,108 @@ function missingProgram(program: string): ShellCommandRefused {
   );
 }
 
+function isWithin(child: string, parent: string): boolean {
+  return (
+    child === parent || child.startsWith(parent.endsWith(path.sep) ? parent : parent + path.sep)
+  );
+}
+
+/**
+ * The approved folder's path, refused when it no longer resolves to the folder
+ * that was approved. `root.path` is the realpath recorded at approval, and the
+ * sandbox grants whatever the path resolves to now, so a root a command
+ * renamed away and replaced with a link to the home folder would otherwise
+ * hand that folder to the next run.
+ */
+export async function pinnedRootPath(
+  root: WorkspaceRoot,
+  home: string = os.homedir(),
+): Promise<string> {
+  const changed = () =>
+    new ShellCommandRefused(
+      'sandbox-unavailable',
+      `This folder changed since it was approved: ${root.path}. Choose it again to run commands in it.`,
+    );
+  let resolved: string;
+  try {
+    if ((await fs.lstat(root.path)).isSymbolicLink()) throw changed();
+    resolved = await fs.realpath(root.path);
+  } catch (error) {
+    if (error instanceof ShellCommandRefused) throw error;
+    throw changed();
+  }
+  const homes = [home, await fs.realpath(home).catch(() => home)];
+  if (
+    resolved !== root.path ||
+    resolved === path.parse(resolved).root ||
+    homes.some((value) => isWithin(value, resolved))
+  ) {
+    throw changed();
+  }
+  return resolved;
+}
+
+/**
+ * A per-user temp folder no other account can enter: the system temp folder
+ * when it is already private, as macOS makes it, otherwise a 0700 folder of
+ * this user's inside it.
+ */
+async function privateTempParent(): Promise<string> {
+  const uid = process.getuid?.() ?? -1;
+  const isPrivate = (stat: Stats) =>
+    stat.isDirectory() && stat.uid === uid && (stat.mode & 0o077) === 0;
+  const system = await fs.realpath(os.tmpdir());
+  if (isPrivate(await fs.lstat(system))) return system;
+  const own = path.join(system, `agi-shell-${uid}`);
+  await fs.mkdir(own, { mode: 0o700 }).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'EEXIST') throw error;
+  });
+  if (!isPrivate(await fs.lstat(own))) {
+    throw new ShellCommandRefused(
+      'sandbox-unavailable',
+      `The sandbox needs a private temporary folder, and ${own} is not one.`,
+    );
+  }
+  return own;
+}
+
+async function createScratch(): Promise<string> {
+  const scratch = await fs.mkdtemp(path.join(await privateTempParent(), 'agi-shell-scratch-'));
+  const stat = await fs.lstat(scratch);
+  if (!stat.isDirectory() || (stat.mode & 0o777) !== 0o700) {
+    removeScratch(scratch);
+    throw new ShellCommandRefused(
+      'sandbox-unavailable',
+      'The sandbox could not make a private temporary folder for this command.',
+    );
+  }
+  return scratch;
+}
+
 function removeScratch(directory: string | null): void {
   if (!directory) return;
   fs.rm(directory, { recursive: true, force: true }).catch(() => undefined);
+}
+
+/**
+ * Each run leads its own process group (`detached` on POSIX), so a negative pid
+ * reaches the grandchildren a build tool or test runner spawns, which would
+ * otherwise outlive a cancel, a timeout or the app quitting. Windows has no
+ * groups to signal; `taskkill /T /F` walks the tree instead. This mirrors
+ * `apps/cli/src/process_tree.rs`.
+ */
+function signalProcessTree(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): void {
+  const pid = child.pid;
+  if (pid === undefined) return;
+  if (process.platform === 'win32') {
+    execFile('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true }, () => undefined);
+    return;
+  }
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    child.kill(signal);
+  }
 }
 
 export function cancelShellRun(runId: string): boolean {
@@ -208,16 +431,38 @@ export function cancelShellRun(runId: string): boolean {
     return true;
   }
   const child = running.get(runId)?.child;
-  if (!child) return false;
-  child.kill('SIGTERM');
-  setTimeout(() => {
-    if (running.has(runId)) child.kill('SIGKILL');
-  }, KILL_GRACE_MS).unref?.();
+  if (!child) {
+    const claim = claims.get(runId);
+    if (!claim) return false;
+    claim.cancelled = true;
+    return true;
+  }
+  signalProcessTree(child, 'SIGTERM');
+  // The group outlives its leader when a grandchild ignores SIGTERM, so the
+  // escalation does not wait on the run still being tracked.
+  setTimeout(() => signalProcessTree(child, 'SIGKILL'), KILL_GRACE_MS).unref?.();
   return true;
 }
 
+/**
+ * The app is quitting and no timer will fire after this, so every tree is
+ * killed outright rather than asked to stop.
+ */
 export function cancelAllShellRuns(): void {
-  for (const runId of [...running.keys(), ...background.keys()]) cancelShellRun(runId);
+  for (const claim of claims.values()) claim.cancelled = true;
+  for (const { child } of running.values()) signalProcessTree(child, 'SIGKILL');
+  for (const run of background.values()) void stopProcessTree(run);
+}
+
+export function activeShellRunCount(): number {
+  return listShellRuns().length;
+}
+
+/** The commands asked for in one approved folder that have not finished, started or not. */
+export function shellRunsIn(rootId: string): string[] {
+  const claimed = [...claims].filter(([, claim]) => claim.rootId === rootId);
+  const started = [...background].filter(([, run]) => run.rootId === rootId && !run.exited);
+  return [...new Set([...claimed, ...started].map(([runId]) => runId))];
 }
 
 /**
@@ -239,9 +484,24 @@ interface PreparedCommand {
   sandboxed: boolean;
 }
 
+interface RunClaim {
+  readonly rootId: string;
+  cancelled: boolean;
+}
+
+function claimRun(input: RunShellCommandInput): RunClaim {
+  if (claims.has(input.runId) || background.has(input.runId)) {
+    throw new ShellCommandRefused('not-listed', 'That command is already running.');
+  }
+  const claim: RunClaim = { rootId: input.root.id, cancelled: false };
+  claims.set(input.runId, claim);
+  return claim;
+}
+
 async function prepareShellCommand(
   input: RunShellCommandInput,
   terminal: boolean,
+  claim: { readonly cancelled: boolean },
 ): Promise<PreparedCommand> {
   const command = input.command.trim();
   if (command.length === 0 || command.length > MAX_SHELL_COMMAND_LENGTH) {
@@ -272,13 +532,15 @@ async function prepareShellCommand(
     );
   }
 
-  const cwd = await resolveWorkingDirectory(input.root, input.relativePath);
-
   const sandbox = input.sandbox;
   const sandboxed = sandbox.backend !== 'none';
+  const project = sandboxed ? await pinnedRootPath(input.root) : null;
+  const cwd = await resolveWorkingDirectory(input.root, input.relativePath);
+  let network: SandboxNetwork = 'deny';
   if (verdict.decision === 'ask' || !sandboxed || input.review !== undefined) {
-    const approved = await input.approve({ verdict, command, cwd: cwd.absolute, sandboxed });
-    if (!approved) {
+    const answer = await input.approve({ verdict, command, cwd: cwd.absolute, sandboxed });
+    if (answer.approved && answer.allowNetwork) network = 'allow';
+    if (!answer.approved) {
       throw sandboxed
         ? new ShellCommandRefused('not-listed', `Running ${verdict.program} was not approved.`)
         : new ShellCommandRefused(
@@ -289,32 +551,48 @@ async function prepareShellCommand(
   }
 
   const [program, ...args] = argv as [string, ...string[]];
-  if (running.has(input.runId) || background.has(input.runId)) {
-    throw new ShellCommandRefused('not-listed', 'That command is already running.');
-  }
   const env = childEnvironment(await loginPath());
 
   let spawnCommand = program;
   let spawnArgs = args;
   let scratchDirectory: string | null = null;
-  if (sandbox.backend !== 'none') {
+  if (sandbox.backend !== 'none' && project !== null) {
     const executable = await findExecutable(program, env['PATH'], cwd.absolute);
     if (!executable) throw missingProgram(program);
-    scratchDirectory = await fs.realpath(
-      await fs.mkdtemp(path.join(os.tmpdir(), 'agi-shell-scratch-')),
-    );
+    scratchDirectory = await createScratch();
+    env['TMPDIR'] = scratchDirectory;
     try {
+      const writableRoots = [project, scratchDirectory];
+      const gitConfig = await hostUserGitConfigPaths(env);
+      const gitReads =
+        sandbox.backend === 'seatbelt' ? await seatbeltGitReadPaths(writableRoots, gitConfig) : [];
+      const hostPaths = [...hostConfigPaths(), ...(input.protectedPaths ?? [])];
+      if (sandbox.backend === 'seatbelt') {
+        Object.assign(env, await seatbeltEnvironment(scratchDirectory, env));
+      }
       const planned = planSandboxedSpawn({
         sandbox,
         program: executable,
         args,
         cwd: cwd.absolute,
-        writableRoots: [await fs.realpath(input.root.path), scratchDirectory],
+        writableRoots,
+        protectedPaths: await sandboxProtectedPaths({
+          project,
+          writableRoots,
+          gitConfigPaths: gitConfig,
+          hostPaths,
+        }),
+        pinnedFolders:
+          sandbox.backend === 'seatbelt' ? await nestedCheckoutPins(writableRoots) : [],
+        unreadablePaths:
+          sandbox.backend === 'seatbelt' ? await sandboxUnreadablePaths({ hostPaths }) : [],
         readableRoots:
           sandbox.backend === 'seatbelt'
-            ? await seatbeltToolchainRoots(env['PATH'], executable)
+            ? [...(await seatbeltToolchainRoots(env['PATH'], executable)), ...gitReads]
             : [],
-        network: input.network,
+        metadataPaths: ancestorDirectories([...writableRoots, ...gitReads]),
+        network,
+        developerDirNamed: env['DEVELOPER_DIR'] !== undefined,
         terminal,
       });
       spawnCommand = planned.command;
@@ -323,7 +601,10 @@ async function prepareShellCommand(
       removeScratch(scratchDirectory);
       throw error;
     }
-    env['TMPDIR'] = scratchDirectory;
+  }
+  if (claim.cancelled) {
+    removeScratch(scratchDirectory);
+    throw new ShellCommandRefused('not-listed', 'That command was cancelled before it started.');
   }
   return {
     command,
@@ -339,6 +620,18 @@ async function prepareShellCommand(
 }
 
 export async function runShellCommand(input: RunShellCommandInput): Promise<ShellRunResult> {
+  const claim = claimRun(input);
+  try {
+    return await runClaimedCommand(input, claim);
+  } finally {
+    claims.delete(input.runId);
+  }
+}
+
+async function runClaimedCommand(
+  input: RunShellCommandInput,
+  claim: RunClaim,
+): Promise<ShellRunResult> {
   const {
     command,
     verdict,
@@ -349,7 +642,7 @@ export async function runShellCommand(input: RunShellCommandInput): Promise<Shel
     spawnArgs,
     scratchDirectory,
     sandboxed,
-  } = await prepareShellCommand(input, false);
+  } = await prepareShellCommand(input, false, claim);
   const timeoutMs = boundedTimeout(input.timeoutMs);
   const runId = input.runId;
   const startedAtMs = Date.now();
@@ -362,6 +655,7 @@ export async function runShellCommand(input: RunShellCommandInput): Promise<Shel
         env,
         shell: false,
         windowsHide: true,
+        detached: process.platform !== 'win32',
       });
     } catch (error) {
       removeScratch(scratchDirectory);
@@ -587,8 +881,20 @@ function requireBackgroundRun(runId: string, rootId: string): BackgroundCommand 
 export async function startBackgroundCommand(
   input: RunShellCommandInput,
 ): Promise<BackgroundShellOutput> {
+  const claim = claimRun(input);
+  try {
+    return await startClaimedBackgroundCommand(input, claim);
+  } finally {
+    claims.delete(input.runId);
+  }
+}
+
+async function startClaimedBackgroundCommand(
+  input: RunShellCommandInput,
+  claim: RunClaim,
+): Promise<BackgroundShellOutput> {
   const terminal = process.platform === 'darwin';
-  const prepared = await prepareShellCommand(input, terminal);
+  const prepared = await prepareShellCommand(input, terminal, claim);
   const env: NodeJS.ProcessEnv = {
     ...prepared.env,
     TERM: 'xterm-256color',

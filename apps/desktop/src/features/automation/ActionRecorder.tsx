@@ -77,6 +77,7 @@ function normalizeRecordedAction(payload: unknown): RecordedAction | null {
       raw['metadata'] && typeof raw['metadata'] === 'object'
         ? (raw['metadata'] as Record<string, unknown>)
         : undefined,
+    app: typeof raw['app'] === 'string' && raw['app'].trim() ? raw['app'] : undefined,
   };
 }
 
@@ -600,6 +601,11 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
                     {action.target && (
                       <p className="mt-1 text-[11px] text-muted-foreground">
                         Position {action.target.x}, {action.target.y}
+                      </p>
+                    )}
+                    {action.app && (
+                      <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                        In {action.app}
                       </p>
                     )}
                   </div>

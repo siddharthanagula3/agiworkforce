@@ -85,8 +85,8 @@ export function CustomInstructionsSettings() {
             </p>
             <ol className="list-decimal list-inside mt-2 space-y-1 text-muted-foreground">
               <li>
-                <span className="font-medium">Project instructions</span> - from CLAUDE.md or
-                project files
+                <span className="font-medium">Project instructions</span> - from the project&apos;s
+                settings and its AGENTS.md, CLAUDE.md or .agi/instructions.md
               </li>
               <li>
                 <span className="font-medium">Conversation instructions</span> - specific to each
@@ -187,7 +187,10 @@ export function CustomInstructionsSettings() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Clear custom instructions?</AlertDialogTitle>
-              <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+              <AlertDialogDescription>
+                Your instructions for all conversations are deleted and stop applying to new
+                messages. This cannot be undone.
+              </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>

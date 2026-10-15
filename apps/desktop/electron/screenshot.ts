@@ -3,12 +3,12 @@ import {
   clipboard,
   ClipboardItem,
   desktopCapturer,
-  dialog,
   Notification,
   screen,
   systemPreferences,
 } from 'electron';
 import { focusPageComposer } from './composerFocus';
+import { createNativeNotification, showNativeMessage } from './runtime/nativeSurface';
 import { pickSourceForDisplay } from './garnishCore';
 import { physicalCaptureSize } from './runtime/computerUseProtocol';
 import { hideQuickAsk, isQuickAskVisible } from './quickAsk';
@@ -29,7 +29,7 @@ function notify(title: string, body: string): void {
     console.warn(`[screenshot] ${title}: ${body}`);
     return;
   }
-  new Notification({ title, body }).show();
+  createNativeNotification({ title, body }).show();
 }
 
 function warnIfScreenCaptureBlocked(): void {
@@ -38,7 +38,7 @@ function warnIfScreenCaptureBlocked(): void {
   if (status !== 'denied' && status !== 'restricted') return;
   if (explainedScreenPermission) return;
   explainedScreenPermission = true;
-  void dialog.showMessageBox({
+  void showNativeMessage(null, {
     type: 'info',
     title: 'Screen recording permission needed',
     message: 'AGI Cloud needs permission to capture your screen.',

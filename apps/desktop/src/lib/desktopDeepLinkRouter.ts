@@ -10,7 +10,14 @@ import {
   useSettingsDialogStore,
   type SettingsTab,
 } from '../stores/settingsDialogStore';
-import { parseDesktopDeepLink } from './tauri-electron/bridgeContract';
+import { DESKTOP_DEEP_LINK_SCHEME, parseDesktopDeepLink } from './tauri-electron/bridgeContract';
+
+const TAURI_DEEP_LINK = /^agiworkforce:(\/\/.*)$/i;
+
+function inContractScheme(url: string): string {
+  const registered = TAURI_DEEP_LINK.exec(url);
+  return registered ? `${DESKTOP_DEEP_LINK_SCHEME}:${registered[1]}` : url;
+}
 
 function navigatePanel(panel: 'chat' | 'projects'): void {
   window.dispatchEvent(new CustomEvent('desktop:navigate-panel', { detail: panel }));
@@ -52,13 +59,15 @@ function openSettingsTab(id: string): boolean {
 }
 
 /**
- * Resolves one `agiworkforce-cloud://` link, whether the shell delivered it
- * from an external open or from a click on a notification the page itself
- * raised. Returns whether it navigated: an id naming nothing that exists leaves
- * the user where they are rather than opening an empty view.
+ * Resolves one desktop link, whether the shell delivered it from an external
+ * open or from a click on a notification the page itself raised. Electron
+ * registers `agiworkforce-cloud:` and Tauri registers `agiworkforce:`; both
+ * name the same targets and go through the same parser. Returns whether it
+ * navigated: an id naming nothing that exists leaves the user where they are
+ * rather than opening an empty view.
  */
 export function routeDesktopDeepLink(url: string): boolean {
-  const link = parseDesktopDeepLink(url);
+  const link = parseDesktopDeepLink(inContractScheme(url));
   if (!link) return false;
   switch (link.target) {
     case 'chat':

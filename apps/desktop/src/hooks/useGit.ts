@@ -1,15 +1,7 @@
-/**
- * Git operations hook for AGI Workforce.
- *
- * Provides a convenient interface to Git operations via Tauri commands.
- * Handles loading states, error handling, and automatic status refresh.
- *
- * @module useGit
- */
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 import { invoke } from '../lib/tauri-mock';
-import { useCallback, useState } from 'react';
-import { toast } from 'sonner';
 
 export interface GitStatus {
   branch: string;
@@ -19,14 +11,6 @@ export interface GitStatus {
   unstaged: string[];
   untracked: string[];
   conflicts: string[];
-}
-
-export interface GitCommit {
-  hash: string;
-  author: string;
-  email: string;
-  date: string;
-  message: string;
 }
 
 export interface GitBranch {
@@ -44,660 +28,177 @@ export interface GitDiff {
 
 export interface UseGitReturn {
   status: GitStatus | null;
+  branches: GitBranch[];
   loading: boolean;
   error: string | null;
-  repoPath: string | null;
-
-  setRepoPath: (path: string) => void;
-  refreshStatus: () => Promise<void>;
-  stage: (files: string[]) => Promise<void>;
-  unstage: (files: string[]) => Promise<void>;
-  stageAll: () => Promise<void>;
-  unstageAll: () => Promise<void>;
-  discardChanges: (files: string[]) => Promise<void>;
-  commit: (message: string) => Promise<string>;
-  push: (remote?: string, branch?: string, force?: boolean) => Promise<void>;
-  pull: (remote?: string, branch?: string) => Promise<void>;
-  getDiff: (filePath?: string, staged?: boolean) => Promise<GitDiff[]>;
-  listBranches: () => Promise<GitBranch[]>;
-  checkout: (branchName: string) => Promise<void>;
-  createBranch: (branchName: string) => Promise<void>;
-  getLog: (limit?: number) => Promise<GitCommit[]>;
-  stash: (message?: string) => Promise<void>;
-  stashPop: () => Promise<void>;
-  init: (path: string) => Promise<string>;
-  clone: (url: string, destination: string) => Promise<string>;
-  fetch: (remote?: string) => Promise<void>;
-  merge: (branchName: string) => Promise<void>;
-  deleteBranch: (branchName: string, force?: boolean) => Promise<void>;
-  currentBranch: () => Promise<string>;
-  defaultBranch: () => Promise<string>;
-  listRemotes: () => Promise<[string, string][]>;
-  addRemote: (name: string, url: string) => Promise<void>;
+  refresh: () => Promise<void>;
+  stage: (files: string[]) => Promise<boolean>;
+  unstage: (files: string[]) => Promise<boolean>;
+  discard: (files: string[]) => Promise<boolean>;
+  commit: (message: string) => Promise<boolean>;
+  checkout: (branchName: string) => Promise<boolean>;
+  createBranch: (branchName: string) => Promise<boolean>;
+  deleteBranch: (branchName: string) => Promise<boolean>;
+  fetch: () => Promise<boolean>;
+  pull: () => Promise<boolean>;
 }
 
-/**
- * Hook for managing Git operations.
- *
- * @param initialPath - Optional initial repository path
- * @returns Git operations and state
- *
- * @example
- * ```tsx
- * const { status, stage, commit, push, refreshStatus } = useGit('/path/to/repo');
- *
- * // Stage files
- * await stage(['src/file.ts']);
- *
- * // Commit changes
- * await commit('feat: add new feature');
- *
- * // Push to remote
- * await push();
- * ```
- */
-export function useGit(initialPath?: string): UseGitReturn {
-  const [repoPath, setRepoPath] = useState<string | null>(initialPath ?? null);
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+const plural = (count: number) => `${count} file${count === 1 ? '' : 's'}`;
+
+export function useGit(repoPath: string | null): UseGitReturn {
   const [status, setStatus] = useState<GitStatus | null>(null);
+  const [branches, setBranches] = useState<GitBranch[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const currentPath = useRef(repoPath);
 
-  const handleError = useCallback((err: unknown, operation: string) => {
-    const message = err instanceof Error ? err.message : String(err);
-    setError(message);
-    toast.error(`Git ${operation} failed: ${message}`);
-    throw err;
-  }, []);
+  useEffect(() => {
+    currentPath.current = repoPath;
+  }, [repoPath]);
 
-  const refreshStatus = useCallback(async () => {
-    if (!repoPath) {
-      setError('No repository path set');
-      return;
-    }
-
+  const refresh = useCallback(async () => {
+    if (!repoPath) return;
     setLoading(true);
-    setError(null);
-
     try {
-      const result = await invoke<GitStatus>('git_status', { path: repoPath });
-      setStatus(result);
-    } catch (err) {
-      handleError(err, 'status');
-    } finally {
-      setLoading(false);
-    }
-  }, [repoPath, handleError]);
-
-  const stage = useCallback(
-    async (files: string[]) => {
-      if (!repoPath) {
-        throw new Error('No repository path set');
-      }
-
-      setLoading(true);
+      const [nextStatus, nextBranches] = await Promise.all([
+        invoke<GitStatus>('git_status', { path: repoPath }),
+        invoke<GitBranch[]>('git_list_branches', { path: repoPath }),
+      ]);
+      if (currentPath.current !== repoPath) return;
+      setStatus(nextStatus);
+      setBranches(nextBranches);
       setError(null);
+    } catch (cause) {
+      if (currentPath.current !== repoPath) return;
+      setStatus(null);
+      setBranches([]);
+      setError(messageOf(cause));
+    } finally {
+      if (currentPath.current === repoPath) setLoading(false);
+    }
+  }, [repoPath]);
 
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const run = useCallback(
+    async (
+      operation: string,
+      task: (path: string) => Promise<unknown>,
+      done?: string | ((result: unknown) => string),
+    ) => {
+      if (!repoPath) return false;
+      setLoading(true);
       try {
-        await invoke('git_add', { path: repoPath, files });
-        toast.success(`Staged ${files.length} file${files.length !== 1 ? 's' : ''}`);
-        await refreshStatus();
-      } catch (err) {
-        handleError(err, 'stage');
+        const result = await task(repoPath);
+        if (done) toast.success(typeof done === 'string' ? done : done(result));
+        return true;
+      } catch (cause) {
+        toast.error(`Could not ${operation}: ${messageOf(cause)}`);
+        return false;
       } finally {
-        setLoading(false);
+        await refresh();
       }
     },
-    [repoPath, refreshStatus, handleError],
+    [refresh, repoPath],
+  );
+
+  const stage = useCallback(
+    (files: string[]) =>
+      run('stage', (path) => invoke('git_add', { path, files }), `Staged ${plural(files.length)}`),
+    [run],
   );
 
   const unstage = useCallback(
-    async (files: string[]) => {
-      if (!repoPath) {
-        throw new Error('No repository path set');
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        await invoke('git_reset', {
-          path: repoPath,
-          commit: 'HEAD',
-          mode: 'mixed',
-          files,
-        });
-        toast.success(`Unstaged ${files.length} file${files.length !== 1 ? 's' : ''}`);
-        await refreshStatus();
-      } catch (err) {
-        handleError(err, 'unstage');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [repoPath, refreshStatus, handleError],
+    (files: string[]) =>
+      run(
+        'unstage',
+        (path) => invoke('git_reset', { path, commit: 'HEAD', mode: 'mixed', files }),
+        `Unstaged ${plural(files.length)}`,
+      ),
+    [run],
   );
 
-  const stageAll = useCallback(async () => {
-    if (!repoPath) {
-      throw new Error('No repository path set');
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      await invoke('git_add', { path: repoPath, files: ['.'] });
-      toast.success('Staged all changes');
-      await refreshStatus();
-    } catch (err) {
-      handleError(err, 'stage all');
-    } finally {
-      setLoading(false);
-    }
-  }, [repoPath, refreshStatus, handleError]);
-
-  const unstageAll = useCallback(async () => {
-    if (!repoPath) {
-      throw new Error('No repository path set');
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      await invoke('git_reset', {
-        path: repoPath,
-        commit: 'HEAD',
-        mode: 'mixed',
-      });
-      toast.success('Unstaged all changes');
-      await refreshStatus();
-    } catch (err) {
-      handleError(err, 'unstage all');
-    } finally {
-      setLoading(false);
-    }
-  }, [repoPath, refreshStatus, handleError]);
-
-  const discardChanges = useCallback(
-    async (files: string[]) => {
-      if (!repoPath) {
-        throw new Error('No repository path set');
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        await invoke('git_checkout_files', {
-          path: repoPath,
-          files,
-        });
-        toast.success(`Discarded changes in ${files.length} file${files.length !== 1 ? 's' : ''}`);
-        await refreshStatus();
-      } catch (err) {
-        handleError(err, 'discard');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [repoPath, refreshStatus, handleError],
+  const discard = useCallback(
+    (files: string[]) =>
+      run(
+        'discard changes',
+        (path) => invoke('git_checkout_files', { path, files }),
+        `Discarded changes in ${plural(files.length)}`,
+      ),
+    [run],
   );
 
   const commit = useCallback(
-    async (message: string): Promise<string> => {
-      if (!repoPath) {
-        throw new Error('No repository path set');
-      }
-
-      if (!message.trim()) {
-        throw new Error('Commit message cannot be empty');
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const commitHash = await invoke<string>('git_commit', {
-          path: repoPath,
-          message,
-        });
-        toast.success('Commit created successfully');
-        await refreshStatus();
-        return commitHash;
-      } catch (err) {
-        handleError(err, 'commit');
-        throw err;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [repoPath, refreshStatus, handleError],
+    (message: string) =>
+      run('commit', (path) => invoke('git_commit', { path, message }), 'Committed'),
+    [run],
   );
-
-  const push = useCallback(
-    async (remote?: string, branch?: string, force?: boolean) => {
-      if (!repoPath) {
-        throw new Error('No repository path set');
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        await invoke('git_push', {
-          path: repoPath,
-          remote: remote ?? null,
-          branch: branch ?? null,
-          force: force ?? false,
-        });
-        toast.success('Pushed successfully');
-        await refreshStatus();
-      } catch (err) {
-        handleError(err, 'push');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [repoPath, refreshStatus, handleError],
-  );
-
-  const pull = useCallback(
-    async (remote?: string, branch?: string) => {
-      if (!repoPath) {
-        throw new Error('No repository path set');
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        await invoke('git_pull', {
-          path: repoPath,
-          remote: remote ?? null,
-          branch: branch ?? null,
-        });
-        toast.success('Pulled successfully');
-        await refreshStatus();
-      } catch (err) {
-        handleError(err, 'pull');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [repoPath, refreshStatus, handleError],
-  );
-
-  const getDiff = useCallback(
-    async (filePath?: string, staged?: boolean): Promise<GitDiff[]> => {
-      if (!repoPath) {
-        throw new Error('No repository path set');
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const diffs = await invoke<GitDiff[]>('git_diff', {
-          path: repoPath,
-          filePath: filePath ?? null,
-          staged: staged ?? false,
-        });
-        return diffs;
-      } catch (err) {
-        handleError(err, 'diff');
-        throw err;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [repoPath, handleError],
-  );
-
-  const listBranches = useCallback(async (): Promise<GitBranch[]> => {
-    if (!repoPath) {
-      throw new Error('No repository path set');
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const branches = await invoke<GitBranch[]>('git_list_branches', {
-        path: repoPath,
-      });
-      return branches;
-    } catch (err) {
-      handleError(err, 'list branches');
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [repoPath, handleError]);
 
   const checkout = useCallback(
-    async (branchName: string) => {
-      if (!repoPath) {
-        throw new Error('No repository path set');
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        await invoke('git_checkout', {
-          path: repoPath,
-          branchName,
-        });
-        toast.success(`Switched to branch '${branchName}'`);
-        await refreshStatus();
-      } catch (err) {
-        handleError(err, 'checkout');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [repoPath, refreshStatus, handleError],
+    (branchName: string) =>
+      run(
+        'switch branch',
+        (path) => invoke('git_checkout', { path, branchName }),
+        `Switched to ${branchName}`,
+      ),
+    [run],
   );
 
   const createBranch = useCallback(
-    async (branchName: string) => {
-      if (!repoPath) {
-        throw new Error('No repository path set');
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        await invoke('git_checkout_new_branch', {
-          path: repoPath,
-          branchName,
-        });
-        toast.success(`Created and switched to branch '${branchName}'`);
-        await refreshStatus();
-      } catch (err) {
-        handleError(err, 'create branch');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [repoPath, refreshStatus, handleError],
-  );
-
-  const getLog = useCallback(
-    async (limit?: number): Promise<GitCommit[]> => {
-      if (!repoPath) {
-        throw new Error('No repository path set');
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const commits = await invoke<GitCommit[]>('git_log', {
-          path: repoPath,
-          limit: limit ?? 50,
-        });
-        return commits;
-      } catch (err) {
-        handleError(err, 'log');
-        throw err;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [repoPath, handleError],
-  );
-
-  const stash = useCallback(
-    async (message?: string) => {
-      if (!repoPath) {
-        throw new Error('No repository path set');
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        await invoke('git_stash', {
-          path: repoPath,
-          message: message ?? null,
-        });
-        toast.success('Changes stashed');
-        await refreshStatus();
-      } catch (err) {
-        handleError(err, 'stash');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [repoPath, refreshStatus, handleError],
-  );
-
-  const stashPop = useCallback(async () => {
-    if (!repoPath) {
-      throw new Error('No repository path set');
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      await invoke('git_stash_pop', { path: repoPath });
-      toast.success('Stash applied');
-      await refreshStatus();
-    } catch (err) {
-      handleError(err, 'stash pop');
-    } finally {
-      setLoading(false);
-    }
-  }, [repoPath, refreshStatus, handleError]);
-
-  const init = useCallback(
-    async (path: string): Promise<string> => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const result = await invoke<string>('git_init', { path });
-        toast.success('Repository initialized');
-        return result;
-      } catch (err) {
-        handleError(err, 'init');
-        throw err;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [handleError],
-  );
-
-  const clone = useCallback(
-    async (url: string, destination: string): Promise<string> => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const result = await invoke<string>('git_clone', { url, destination });
-        toast.success('Repository cloned');
-        return result;
-      } catch (err) {
-        handleError(err, 'clone');
-        throw err;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [handleError],
-  );
-
-  const fetch = useCallback(
-    async (remote?: string) => {
-      if (!repoPath) {
-        throw new Error('No repository path set');
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        await invoke('git_fetch', {
-          path: repoPath,
-          remote: remote ?? null,
-        });
-        toast.success('Fetched successfully');
-        await refreshStatus();
-      } catch (err) {
-        handleError(err, 'fetch');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [repoPath, refreshStatus, handleError],
-  );
-
-  const merge = useCallback(
-    async (branchName: string) => {
-      if (!repoPath) {
-        throw new Error('No repository path set');
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        await invoke('git_merge', {
-          path: repoPath,
-          branchName,
-        });
-        toast.success(`Merged branch '${branchName}'`);
-        await refreshStatus();
-      } catch (err) {
-        handleError(err, 'merge');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [repoPath, refreshStatus, handleError],
+    (branchName: string) =>
+      run(
+        'create branch',
+        (path) => invoke('git_checkout_new_branch', { path, branchName }),
+        `Created and switched to ${branchName}`,
+      ),
+    [run],
   );
 
   const deleteBranch = useCallback(
-    async (branchName: string, force?: boolean) => {
-      if (!repoPath) {
-        throw new Error('No repository path set');
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        await invoke('git_delete_branch', {
-          path: repoPath,
-          branchName,
-          force: force ?? false,
-        });
-        toast.success(`Deleted branch '${branchName}'`);
-        await refreshStatus();
-      } catch (err) {
-        handleError(err, 'delete branch');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [repoPath, refreshStatus, handleError],
+    (branchName: string) =>
+      run(
+        'delete branch',
+        (path) => invoke('git_delete_branch', { path, branchName }),
+        `Deleted ${branchName}`,
+      ),
+    [run],
   );
 
-  const currentBranch = useCallback(async (): Promise<string> => {
-    if (!repoPath) {
-      throw new Error('No repository path set');
-    }
+  const fetch = useCallback(
+    () => run('fetch', (path) => invoke('git_fetch', { path }), 'Fetched from the remote'),
+    [run],
+  );
 
-    try {
-      return await invoke<string>('git_current_branch', { path: repoPath });
-    } catch (err) {
-      handleError(err, 'current branch');
-      throw err;
-    }
-  }, [repoPath, handleError]);
-
-  const defaultBranch = useCallback(async (): Promise<string> => {
-    if (!repoPath) {
-      throw new Error('No repository path set');
-    }
-
-    try {
-      return await invoke<string>('git_default_branch', { path: repoPath });
-    } catch (err) {
-      handleError(err, 'default branch');
-      throw err;
-    }
-  }, [repoPath, handleError]);
-
-  const listRemotes = useCallback(async (): Promise<[string, string][]> => {
-    if (!repoPath) {
-      throw new Error('No repository path set');
-    }
-
-    try {
-      return await invoke<[string, string][]>('git_list_remotes', { path: repoPath });
-    } catch (err) {
-      handleError(err, 'list remotes');
-      throw err;
-    }
-  }, [repoPath, handleError]);
-
-  const addRemote = useCallback(
-    async (name: string, url: string) => {
-      if (!repoPath) {
-        throw new Error('No repository path set');
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        await invoke('git_add_remote', { path: repoPath, name, url });
-        toast.success(`Added remote '${name}'`);
-      } catch (err) {
-        handleError(err, 'add remote');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [repoPath, handleError],
+  const pull = useCallback(
+    () =>
+      run(
+        'pull',
+        (path) => invoke<string>('git_pull', { path }),
+        (result) => (typeof result === 'string' && result ? result : 'Pull successful'),
+      ),
+    [run],
   );
 
   return {
     status,
+    branches,
     loading,
     error,
-    repoPath,
-    setRepoPath,
-    refreshStatus,
+    refresh,
     stage,
     unstage,
-    stageAll,
-    unstageAll,
-    discardChanges,
+    discard,
     commit,
-    push,
-    pull,
-    getDiff,
-    listBranches,
     checkout,
     createBranch,
-    getLog,
-    stash,
-    stashPop,
-    init,
-    clone,
-    fetch,
-    merge,
     deleteBranch,
-    currentBranch,
-    defaultBranch,
-    listRemotes,
-    addRemote,
+    fetch,
+    pull,
   };
 }

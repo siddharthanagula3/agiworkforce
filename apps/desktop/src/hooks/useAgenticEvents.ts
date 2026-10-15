@@ -37,12 +37,11 @@ import type {
 } from '../types/toolCalling';
 import type { Artifact } from '../types/chat';
 import { normalizeToolNameForUi } from '../lib/chatToolUtils';
-import {
-  useExtensionEventsStore,
-  type ExtensionPageContextEvent,
-  type ExtensionTaskResultEvent,
-  type ExtensionConnectionStatusEvent,
-} from '../stores/extensionEventsStore';
+import type {
+  ExtensionPageContextEvent,
+  ExtensionTaskResultEvent,
+  ExtensionConnectionStatusEvent,
+} from '../types/extensionEvents';
 import { useMcpStore } from '../stores/mcpStore';
 import {
   getActiveConversationMessages,
@@ -322,8 +321,7 @@ function upsertInlineExtensionArtifact(
   const artifactId = `extension-${taskId}`;
   const artifacts = getMergedMessageArtifacts(targetMessage);
   const existingArtifact = artifacts.find((artifact) => artifact.id === artifactId) as
-    | (Artifact & Record<string, unknown>)
-    | undefined;
+    (Artifact & Record<string, unknown>) | undefined;
   const patchMetadata = patch['metadata'];
   const mergedMetadata = {
     ...((existingArtifact?.metadata as Record<string, unknown> | undefined) ?? {}),
@@ -417,7 +415,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
   const unlistenExtensionPageContext = await listen<ExtensionPageContextEvent>(
     'extension:page-context',
     safeHandler(ctx, 'extension:page-context', (payload) => {
-      useExtensionEventsStore.getState().applyPageContext(payload);
       const actionCount = payload.actions?.length ?? 0;
       const selectedText =
         typeof payload.selected_text === 'string' ? payload.selected_text.trim() : '';
@@ -498,7 +495,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
   const unlistenExtensionConnectionStatus = await listen<ExtensionConnectionStatusEvent>(
     'extension:connection-status',
     safeHandler(ctx, 'extension:connection-status', (payload) => {
-      useExtensionEventsStore.getState().applyConnectionStatus(payload.connected === true);
       const isConnected = payload.connected === true;
       const statusLabel = String(payload.status ?? (isConnected ? 'connected' : 'disconnected'));
       const description = isConnected
@@ -545,7 +541,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
   const unlistenExtensionTaskResult = await listen<ExtensionTaskResultEvent>(
     'extension:task-result',
     safeHandler(ctx, 'extension:task-result', (payload) => {
-      useExtensionEventsStore.getState().applyTaskResult(payload);
       const actionId = `extension-${payload.task_id}`;
       const status: ActionLogStatus = payload.success ? 'success' : 'failed';
       upsertActionLogEntry({
@@ -649,146 +644,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
   });
   push(unlistenPermRequired);
 
-  const unlistenCalendarAuthStarted = await listen<string>(
-    'calendar:auth_started',
-    safeHandler(ctx, 'calendar:auth_started', (provider) => {
-      const providerLabel = String(provider || 'calendar').trim() || 'calendar';
-      emitRuntimeActivity(
-        buildRuntimeActivityEmission({
-          id: `calendar-auth-${Date.now()}`,
-          type: 'terminal',
-          title: 'Calendar authorization started',
-          description: `Opening ${providerLabel} authorization flow`,
-          status: 'running',
-          metadata: { provider: providerLabel },
-          trail: {
-            type: 'running',
-            message: `Connecting ${providerLabel} calendar...`,
-          },
-          sidecarEventType: 'calendar',
-        }),
-      );
-    }),
-  );
-  push(unlistenCalendarAuthStarted);
-
-  const unlistenCalendarConnected = await listen<string>(
-    'calendar:connected',
-    safeHandler(ctx, 'calendar:connected', (accountId) => {
-      const normalizedAccountId = String(accountId || '').trim() || 'unknown';
-      emitRuntimeActivity(
-        buildRuntimeActivityEmission({
-          id: `calendar-connected-${normalizedAccountId}-${Date.now()}`,
-          type: 'terminal',
-          title: 'Calendar connected',
-          description: `Connected calendar account ${normalizedAccountId}`,
-          status: 'success',
-          metadata: { account_id: normalizedAccountId },
-          trail: {
-            type: 'completed',
-            message: 'Calendar connected',
-          },
-          sidecarEventType: 'calendar',
-        }),
-      );
-    }),
-  );
-  push(unlistenCalendarConnected);
-
-  const unlistenCalendarDisconnected = await listen<string>(
-    'calendar:disconnected',
-    safeHandler(ctx, 'calendar:disconnected', (accountId) => {
-      const normalizedAccountId = String(accountId || '').trim() || 'unknown';
-      emitRuntimeActivity(
-        buildRuntimeActivityEmission({
-          id: `calendar-disconnected-${normalizedAccountId}-${Date.now()}`,
-          type: 'terminal',
-          title: 'Calendar disconnected',
-          description: `Disconnected calendar account ${normalizedAccountId}`,
-          status: 'success',
-          metadata: { account_id: normalizedAccountId },
-          trail: {
-            type: 'completed',
-            message: 'Calendar disconnected',
-          },
-          sidecarEventType: 'calendar',
-        }),
-      );
-    }),
-  );
-  push(unlistenCalendarDisconnected);
-
-  const unlistenCalendarEventCreated = await listen<Record<string, unknown>>(
-    'calendar:event_created',
-    safeHandler(ctx, 'calendar:event_created', (payload) => {
-      const title = String(payload['title'] ?? payload['summary'] ?? 'Calendar event');
-      const eventId = String(payload['id'] ?? payload['event_id'] ?? '');
-      emitRuntimeActivity(
-        buildRuntimeActivityEmission({
-          id: `calendar-event-created-${eventId || Date.now().toString()}`,
-          type: 'terminal',
-          title: 'Calendar event created',
-          description: title,
-          status: 'success',
-          metadata: payload,
-          trail: {
-            type: 'completed',
-            message: `Created event: ${title}`,
-          },
-          sidecarEventType: 'calendar',
-        }),
-      );
-    }),
-  );
-  push(unlistenCalendarEventCreated);
-
-  const unlistenCalendarEventUpdated = await listen<Record<string, unknown>>(
-    'calendar:event_updated',
-    safeHandler(ctx, 'calendar:event_updated', (payload) => {
-      const title = String(payload['title'] ?? payload['summary'] ?? 'Calendar event');
-      const eventId = String(payload['id'] ?? payload['event_id'] ?? '');
-      emitRuntimeActivity(
-        buildRuntimeActivityEmission({
-          id: `calendar-event-updated-${eventId || Date.now().toString()}`,
-          type: 'terminal',
-          title: 'Calendar event updated',
-          description: title,
-          status: 'success',
-          metadata: payload,
-          trail: {
-            type: 'completed',
-            message: `Updated event: ${title}`,
-          },
-          sidecarEventType: 'calendar',
-        }),
-      );
-    }),
-  );
-  push(unlistenCalendarEventUpdated);
-
-  const unlistenCalendarEventDeleted = await listen<Record<string, unknown>>(
-    'calendar:event_deleted',
-    safeHandler(ctx, 'calendar:event_deleted', (payload) => {
-      const eventId = String(payload['event_id'] ?? payload['id'] ?? 'unknown');
-      emitRuntimeActivity(
-        buildRuntimeActivityEmission({
-          id: `calendar-event-deleted-${eventId}-${Date.now()}`,
-          type: 'terminal',
-          title: 'Calendar event deleted',
-          description: `Deleted calendar event ${eventId}`,
-          status: 'success',
-          metadata: payload,
-          trail: {
-            type: 'completed',
-            message: `Deleted event ${eventId}`,
-          },
-          sidecarEventType: 'calendar',
-        }),
-      );
-    }),
-  );
-  push(unlistenCalendarEventDeleted);
-
   const unlistenAutomationRecordingStarted = await listen<Record<string, unknown>>(
     'automation:recording_started',
     safeHandler(ctx, 'automation:recording_started', (payload) => {
@@ -870,31 +725,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
   );
   push(unlistenAutomationRecordingStopped);
 
-  const unlistenAutomationScreenshotRequested = await listen<Record<string, unknown>>(
-    'automation:request_screenshot',
-    safeHandler(ctx, 'automation:request_screenshot', (payload) => {
-      const actionId = String(payload['action_id'] ?? payload['actionId'] ?? 'unknown');
-      emitRuntimeActivity(
-        buildRuntimeActivityEmission({
-          id: `automation-screenshot-${actionId}-${Date.now()}`,
-          actionId,
-          type: 'ui',
-          title: 'Automation screenshot requested',
-          description: 'Capturing UI state for automation step',
-          status: 'running',
-          metadata: payload,
-          trail: {
-            type: 'running',
-            message: 'Capturing automation screenshot...',
-            fadeAfter: 3000,
-          },
-          sidecarEventType: 'automation',
-        }),
-      );
-    }),
-  );
-  push(unlistenAutomationScreenshotRequested);
-
   const unlistenCloudAuthStarted = await listen<string>(
     'cloud:auth_started',
     safeHandler(ctx, 'cloud:auth_started', (provider) => {
@@ -940,29 +770,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
     }),
   );
   push(unlistenCloudConnected);
-
-  const unlistenCloudDisconnected = await listen<string>(
-    'cloud:disconnected',
-    safeHandler(ctx, 'cloud:disconnected', (accountId) => {
-      const normalizedAccountId = String(accountId || '').trim() || 'unknown';
-      emitRuntimeActivity(
-        buildRuntimeActivityEmission({
-          id: `cloud-disconnected-${normalizedAccountId}-${Date.now()}`,
-          type: 'terminal',
-          title: 'Cloud account disconnected',
-          description: `Disconnected account ${normalizedAccountId}`,
-          status: 'success',
-          metadata: { account_id: normalizedAccountId },
-          trail: {
-            type: 'completed',
-            message: 'Cloud account disconnected',
-          },
-          sidecarEventType: 'cloud',
-        }),
-      );
-    }),
-  );
-  push(unlistenCloudDisconnected);
 
   const unlistenCloudFileUploaded = await listen<Record<string, unknown>>(
     'cloud:file_uploaded',
@@ -1059,98 +866,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
     }),
   );
   push(unlistenCloudFolderCreated);
-
-  const unlistenGmailAuthStarted = await listen<string>(
-    'gmail:auth_started',
-    safeHandler(ctx, 'gmail:auth_started', (oauthState) => {
-      emitRuntimeActivity(
-        buildRuntimeActivityEmission({
-          id: `gmail-auth-${Date.now()}`,
-          type: 'terminal',
-          title: 'Gmail authorization started',
-          description: 'Opening Gmail OAuth flow',
-          status: 'running',
-          metadata: { oauth_state: oauthState },
-          trail: {
-            type: 'running',
-            message: 'Connecting Gmail account...',
-          },
-          sidecarEventType: 'gmail',
-        }),
-      );
-    }),
-  );
-  push(unlistenGmailAuthStarted);
-
-  const unlistenGmailConnected = await listen<string>(
-    'gmail:connected',
-    safeHandler(ctx, 'gmail:connected', (accountId) => {
-      const normalizedAccountId = String(accountId || '').trim() || 'unknown';
-      emitRuntimeActivity(
-        buildRuntimeActivityEmission({
-          id: `gmail-connected-${normalizedAccountId}-${Date.now()}`,
-          type: 'terminal',
-          title: 'Gmail connected',
-          description: `Connected account ${normalizedAccountId}`,
-          status: 'success',
-          metadata: { account_id: normalizedAccountId },
-          trail: {
-            type: 'completed',
-            message: 'Gmail connected',
-          },
-          sidecarEventType: 'gmail',
-        }),
-      );
-    }),
-  );
-  push(unlistenGmailConnected);
-
-  const unlistenGmailTokenRefreshed = await listen<string>(
-    'gmail:token_refreshed',
-    safeHandler(ctx, 'gmail:token_refreshed', (accountId) => {
-      const normalizedAccountId = String(accountId || '').trim() || 'unknown';
-      emitRuntimeActivity(
-        buildRuntimeActivityEmission({
-          id: `gmail-token-refreshed-${normalizedAccountId}-${Date.now()}`,
-          type: 'terminal',
-          title: 'Gmail token refreshed',
-          description: `Refreshed credentials for ${normalizedAccountId}`,
-          status: 'success',
-          metadata: { account_id: normalizedAccountId },
-          trail: {
-            type: 'completed',
-            message: 'Gmail token refreshed',
-            fadeAfter: 3000,
-          },
-          sidecarEventType: 'gmail',
-        }),
-      );
-    }),
-  );
-  push(unlistenGmailTokenRefreshed);
-
-  const unlistenGmailDisconnected = await listen<string>(
-    'gmail:disconnected',
-    safeHandler(ctx, 'gmail:disconnected', (accountId) => {
-      const normalizedAccountId = String(accountId || '').trim() || 'unknown';
-      emitRuntimeActivity(
-        buildRuntimeActivityEmission({
-          id: `gmail-disconnected-${normalizedAccountId}-${Date.now()}`,
-          type: 'terminal',
-          title: 'Gmail disconnected',
-          description: `Disconnected account ${normalizedAccountId}`,
-          status: 'success',
-          metadata: { account_id: normalizedAccountId },
-          trail: {
-            type: 'completed',
-            message: 'Gmail disconnected',
-          },
-          sidecarEventType: 'gmail',
-        }),
-      );
-    }),
-  );
-  push(unlistenGmailDisconnected);
 
   const unlistenMcpToolStarted = await listen<McpToolExecutionStartedPayload>(
     'mcp:tool_execution_started',
@@ -1496,16 +1211,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
       }),
     );
     push(unlistenMcpConnectionChanged);
-
-    const unlistenMcpToolCompletedSync = await listen<McpToolExecutionCompletedPayload>(
-      'mcp:tool_execution_completed',
-      safeHandler(ctx, 'mcp:tool_execution_completed', () => {
-        const mcpState = useMcpStore.getState();
-        mcpState.refreshExecutionHistory();
-        mcpState.refreshToolExecutionStats();
-      }),
-    );
-    push(unlistenMcpToolCompletedSync);
 
     const unlistenMcpToolsUpdated = await listen<McpToolsUpdatedPayload>(
       'mcp:tools_updated',

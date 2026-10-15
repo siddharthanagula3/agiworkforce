@@ -68,7 +68,6 @@ describe('settingsStore agent mode backend sync', () => {
         case 'llm_set_default_provider':
         case 'set_auto_approve_all':
         case 'set_agent_mode':
-        case 'sync_capabilities':
         case 'update_allowed_directories':
           return undefined;
         default:
@@ -113,7 +112,6 @@ describe('settingsStore agent mode backend sync', () => {
           return false;
         case 'llm_configure_provider':
         case 'llm_set_default_provider':
-        case 'sync_capabilities':
         case 'update_allowed_directories':
           return undefined;
         default:

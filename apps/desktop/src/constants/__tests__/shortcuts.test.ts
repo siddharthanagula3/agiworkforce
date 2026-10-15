@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_SHORTCUTS,
+  GLOBAL_SHORTCUTS,
   RENDERER_SHORTCUTS,
   formatComboDisplay,
   matchesBinding,
@@ -109,5 +110,15 @@ describe('one binding, two platforms', () => {
       key: newChat.key,
       modifiers: newChat.modifiers,
     });
+  });
+});
+
+describe('stop shortcut', () => {
+  it("rebinds the host stop chord, which defaults to Electron's CommandOrControl+Alt+.", () => {
+    const stop = GLOBAL_SHORTCUTS.find((shortcut) => shortcut.backendId === 'stop_agents');
+    expect(stop).toBeDefined();
+    expect(toBackendAccelerator(serializeCombo(stop!.key, stop!.modifiers))).toBe(
+      'alt+CommandOrControl+.',
+    );
   });
 });

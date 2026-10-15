@@ -580,36 +580,6 @@ test.describe('Windows: Toast Notifications', () => {
     }
     // Platform-conditional: absence of element is valid on this OS configuration
   });
-
-  test('Tauri native notification command is reachable on Windows', async ({ page }) => {
-    // llm-guardrail-allow: platform gate, the predicate is the host OS, not whether a control rendered, so it cannot mask a missing feature.
-    test.skip(process.platform !== 'win32', 'Windows only');
-
-    const result = await page.evaluate(async () => {
-      const tauri = (
-        window as unknown as {
-          __TAURI__?: { invoke: (cmd: string, args?: unknown) => Promise<unknown> };
-        }
-      ).__TAURI__;
-      if (!tauri) return { skipped: true };
-      try {
-        await tauri.invoke('notification_show', {
-          title: 'E2E Test',
-          body: 'Windows E2E notification test',
-        });
-        return { success: true };
-      } catch (err) {
-        return { success: false, error: (err as Error).message };
-      }
-    });
-
-    if ((result as { skipped?: boolean }).skipped) return;
-
-    expect(
-      (result as { success: boolean }).success === true ||
-        typeof (result as { error?: string }).error === 'string',
-    ).toBe(true);
-  });
 });
 
 test.describe('Windows: Deep Links', () => {

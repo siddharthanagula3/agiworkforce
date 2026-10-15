@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Mic,
   MicOff,
-  Loader2,
   Sparkles,
   Zap,
   Ban,
@@ -15,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Label } from '@/ui/Label';
+import { Spinner } from '@/ui/Spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { useVoiceInputStore, type PostProcessingMode } from '../../stores/settingsStore';
 import {
@@ -24,9 +24,32 @@ import {
 } from '../../stores/settingsStore';
 import { VoicePersonaSelector } from './VoicePersonaSelector';
 import { VOICE_PERSONA_STORAGE_KEY } from './voicePersonaParams';
-import { voiceCheckLocalWhisper } from '../../api/voice';
+import {
+  voiceCheckLocalWhisper,
+  voiceCheckPiperBinary,
+  voiceDownloadPiperBinary,
+  type DownloadProgress,
+} from '../../api/voice';
+import { browserSpeechAvailable, nativeSpeechEngine } from '../../hooks/useTTS';
+import { listen } from '../../lib/tauri-mock';
 import { VOICE_LANGUAGE_CHOICES } from '../../lib/voiceLanguage';
 import { DEFAULT_GLOBAL_VOICE_ACCELERATOR } from '../../lib/globalVoiceShortcut';
+
+/**
+ * Progress events name the kind of download but not the model or voice, so
+ * each kind runs one download at a time and its events belong to that one.
+ */
+const WHISPER_PROGRESS_EVENTS = ['voice:whisper_download_progress'] as const;
+const PIPER_PROGRESS_EVENTS = [
+  'voice:piper_download_progress',
+  'voice:piper_binary_download_progress',
+] as const;
+
+function withoutKey(record: Record<string, number>, key: string): Record<string, number> {
+  const next = { ...record };
+  delete next[key];
+  return next;
+}
 
 const HOTKEY_OPTIONS = [
   { value: 'option', label: 'Option / Alt (hold to dictate)' },
@@ -91,6 +114,7 @@ export function VoiceSettings() {
   const stopListening = useVoiceInputStore((s) => s.stopListening);
 
   const capabilities = useVoiceModeStore((s) => s.capabilities);
+  const voiceError = useVoiceModeStore((s) => s.error);
   const wakeWordActive = useVoiceModeStore((s) => s.wakeWordActive);
   const globalPttActive = useVoiceModeStore((s) => s.globalPttActive);
   const bargeInEnabled = useVoiceModeStore((s) => s.bargeInEnabled);
@@ -112,7 +136,9 @@ export function VoiceSettings() {
   const [piperVoices, setPiperVoices] = useState<PiperVoiceInfo[]>([]);
   const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
   const [downloadingVoice, setDownloadingVoice] = useState<string | null>(null);
+  const [downloadPercent, setDownloadPercent] = useState<Record<string, number>>({});
   const [localWhisperAvailable, setLocalWhisperAvailable] = useState(false);
+  const [whisperModelsFailed, setWhisperModelsFailed] = useState(false);
   const [selectedPersona, setSelectedPersona] = useState<string>(
     () => localStorage.getItem(VOICE_PERSONA_STORAGE_KEY) ?? 'professional',
   );
@@ -130,6 +156,7 @@ export function VoiceSettings() {
       .then(setWhisperModels)
       .catch((err: unknown) => {
         console.error('Failed to load Whisper models:', err);
+        setWhisperModelsFailed(true);
       });
     listPiperVoices()
       .then(setPiperVoices)
@@ -140,6 +167,27 @@ export function VoiceSettings() {
       .then(setLocalWhisperAvailable)
       .catch(() => setLocalWhisperAvailable(false));
   }, [fetchCapabilities, listWhisperModels, listPiperVoices]);
+
+  const withDownloadProgress = useCallback(
+    async (key: string, events: readonly string[], download: () => Promise<unknown>) => {
+      setDownloadPercent((current) => withoutKey(current, key));
+      const unlisteners = await Promise.all(
+        events.map((event) =>
+          listen<DownloadProgress>(event, ({ payload }) => {
+            const percent = Math.max(0, Math.min(100, Math.round(payload.percentage)));
+            setDownloadPercent((current) => ({ ...current, [key]: percent }));
+          }).catch(() => null),
+        ),
+      );
+      try {
+        await download();
+      } finally {
+        unlisteners.forEach((unlisten) => unlisten?.());
+        setDownloadPercent((current) => withoutKey(current, key));
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -224,6 +272,18 @@ export function VoiceSettings() {
   const isBusy = isRecording || isTranscribing || isProcessing;
 
   const systemDictationAvailable = capabilities?.systemDictationAvailable === true;
+  const wakeWordAvailable = capabilities?.wakeWordAvailable === true;
+  const nativeEngine = nativeSpeechEngine(capabilities);
+  const spokenRepliesAvailable = nativeEngine !== null || browserSpeechAvailable();
+  const bargeInAvailable = capabilities?.vadAvailable === true && nativeEngine !== null;
+  const spokenReplyEngineLabel =
+    nativeEngine === 'configured'
+      ? (capabilities?.ttsProvider ?? 'System')
+      : nativeEngine === 'local'
+        ? `Local voice${capabilities?.localTtsVoice ? ` (${capabilities.localTtsVoice})` : ''}`
+        : browserSpeechAvailable()
+          ? 'Browser voice'
+          : 'Unavailable';
 
   const selectedPostProcess = POST_PROCESSING_OPTIONS.find((o) => o.value === postProcessingMode);
 
@@ -357,7 +417,7 @@ export function VoiceSettings() {
             >
               {isTranscribing ? (
                 <>
-                  <Loader2 size={16} className="animate-spin" />
+                  <Spinner size="sm" />
                   Transcribing...
                 </>
               ) : isProcessing ? (
@@ -486,9 +546,7 @@ export function VoiceSettings() {
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="flex items-center gap-2 p-2 rounded bg-muted/30">
                   <Volume2 size={14} className="text-muted-foreground" />
-                  <span>
-                    TTS: {capabilities.ttsAvailable ? capabilities.ttsProvider : 'Unavailable'}
-                  </span>
+                  <span>TTS: {spokenReplyEngineLabel}</span>
                 </div>
                 <div className="flex items-center gap-2 p-2 rounded bg-muted/30">
                   <Globe size={14} className="text-muted-foreground" />
@@ -521,13 +579,18 @@ export function VoiceSettings() {
             <div className="flex items-center justify-between">
               <div>
                 <Label>Wake Word Detection</Label>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Say a wake phrase to activate voice input hands-free.
+                <p id="voiceWakeWordHint" className="text-xs text-muted-foreground mt-0.5">
+                  {wakeWordAvailable
+                    ? 'Say a wake phrase to activate voice input hands-free.'
+                    : 'Not available in this build. The detector cannot recognise a wake phrase yet, so dictation starts from the hotkey above.'}
                 </p>
               </div>
               <button
                 type="button"
+                aria-describedby="voiceWakeWordHint"
+                disabled={!wakeWordAvailable}
                 onClick={() => {
+                  if (!wakeWordAvailable) return;
                   if (wakeWordActive) {
                     void disableWakeWord();
                   } else {
@@ -536,14 +599,15 @@ export function VoiceSettings() {
                 }}
                 className={[
                   'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                  wakeWordActive
+                  wakeWordActive && wakeWordAvailable
                     ? 'bg-green-500/20 text-green-400 border border-green-500/50'
                     : 'bg-muted/40 text-foreground border border-border hover:bg-accent',
+                  !wakeWordAvailable ? 'opacity-50 cursor-not-allowed' : '',
                 ].join(' ')}
               >
                 <span className="flex items-center gap-1.5">
                   <Radio size={12} />
-                  {wakeWordActive ? 'Listening' : 'Enable'}
+                  {!wakeWordAvailable ? 'Unavailable' : wakeWordActive ? 'Listening' : 'Enable'}
                 </span>
               </button>
             </div>
@@ -599,23 +663,35 @@ export function VoiceSettings() {
             <div className="flex items-center justify-between">
               <div>
                 <Label>Speak Assistant Replies</Label>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Read each finished reply aloud in the active chat, using the voice persona below.
+                <p id="voiceSpokenRepliesHint" className="text-xs text-muted-foreground mt-0.5">
+                  {spokenRepliesAvailable
+                    ? 'Read each finished reply aloud in the active chat, using the voice persona below.'
+                    : 'No voice can speak on this device yet. Download a Piper voice below to turn on spoken replies.'}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setSpeakRepliesEnabled(!speakRepliesEnabled)}
+                aria-describedby="voiceSpokenRepliesHint"
+                disabled={!spokenRepliesAvailable}
+                onClick={() => {
+                  if (!spokenRepliesAvailable) return;
+                  setSpeakRepliesEnabled(!speakRepliesEnabled);
+                }}
                 className={[
                   'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                  speakRepliesEnabled
+                  speakRepliesEnabled && spokenRepliesAvailable
                     ? 'bg-green-500/20 text-green-400 border border-green-500/50'
                     : 'bg-muted/40 text-foreground border border-border hover:bg-accent',
+                  !spokenRepliesAvailable ? 'opacity-50 cursor-not-allowed' : '',
                 ].join(' ')}
               >
                 <span className="flex items-center gap-1.5">
                   <Volume2 size={12} />
-                  {speakRepliesEnabled ? 'Enabled' : 'Enable'}
+                  {!spokenRepliesAvailable
+                    ? 'Unavailable'
+                    : speakRepliesEnabled
+                      ? 'Enabled'
+                      : 'Enable'}
                 </span>
               </button>
             </div>
@@ -626,29 +702,43 @@ export function VoiceSettings() {
             <div className="flex items-center justify-between">
               <div>
                 <Label>Barge-in Detection</Label>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Interrupt a spoken reply by talking. Requires VAD support and spoken replies.
+                <p id="voiceBargeInHint" className="text-xs text-muted-foreground mt-0.5">
+                  {bargeInAvailable
+                    ? 'Interrupt a spoken reply by talking.'
+                    : capabilities?.vadAvailable
+                      ? 'Not available yet. Interruption needs the system voice or a downloaded Piper voice.'
+                      : 'Not available in this build. Voice activity detection is not included.'}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => void enableBargeIn(!bargeInEnabled)}
-                disabled={!capabilities?.vadAvailable}
+                aria-describedby="voiceBargeInHint"
+                onClick={() => {
+                  if (!bargeInAvailable) return;
+                  void enableBargeIn(!bargeInEnabled);
+                }}
+                disabled={!bargeInAvailable}
                 className={[
                   'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                  bargeInEnabled
+                  bargeInEnabled && bargeInAvailable
                     ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
                     : 'bg-muted/40 text-foreground border border-border hover:bg-accent',
-                  !capabilities?.vadAvailable ? 'opacity-50 cursor-not-allowed' : '',
+                  !bargeInAvailable ? 'opacity-50 cursor-not-allowed' : '',
                 ].join(' ')}
               >
                 <span className="flex items-center gap-1.5">
                   <Shield size={12} />
-                  {bargeInEnabled ? 'Enabled' : 'Enable'}
+                  {!bargeInAvailable ? 'Unavailable' : bargeInEnabled ? 'Enabled' : 'Enable'}
                 </span>
               </button>
             </div>
           </div>
+
+          {voiceError && (
+            <p role="alert" className="text-xs text-destructive pt-2 border-t border-border">
+              {voiceError}
+            </p>
+          )}
         </div>
       </div>
 
@@ -675,57 +765,76 @@ export function VoiceSettings() {
           {/* Whisper STT Models */}
           <div className="space-y-2">
             <Label>Whisper STT Models</Label>
-            <div className="space-y-2">
-              {whisperModels.map((model) => (
-                <div
-                  key={model.size}
-                  className="flex items-center justify-between p-2 rounded bg-muted/30"
-                >
-                  <div className="flex items-center gap-2 text-sm">
-                    <Mic size={14} className="text-muted-foreground" />
-                    <span className="font-medium">{model.size}</span>
-                    <span className="text-xs text-muted-foreground">
-                      ({(model.sizeBytes / 1024 / 1024).toFixed(0)} MB)
-                    </span>
+            {!localWhisperAvailable ? (
+              <p className="text-sm text-muted-foreground">
+                This build does not include on-device Whisper, so a downloaded model would never be
+                used. Dictation runs through AGI Cloud or OpenAI Whisper with your key.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {whisperModels.map((model) => (
+                  <div
+                    key={model.size}
+                    className="flex items-center justify-between p-2 rounded bg-muted/30"
+                  >
+                    <div className="flex items-center gap-2 text-sm">
+                      <Mic size={14} className="text-muted-foreground" />
+                      <span className="font-medium">{model.size}</span>
+                      <span className="text-xs text-muted-foreground">
+                        ({model.approximate_size_mb} MB)
+                      </span>
+                    </div>
+                    {model.is_downloaded ? (
+                      <span className="flex items-center gap-1 text-xs text-green-400">
+                        <CheckCircle2 size={12} />
+                        Downloaded
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={downloadingModel !== null}
+                        onClick={async () => {
+                          setDownloadingModel(model.size);
+                          try {
+                            await withDownloadProgress(
+                              `whisper:${model.size}`,
+                              WHISPER_PROGRESS_EVENTS,
+                              () => downloadWhisperModel(model.size),
+                            );
+                            const updated = await listWhisperModels();
+                            setWhisperModels(updated);
+                            void fetchCapabilities();
+                          } catch (err) {
+                            console.error('Whisper download failed:', err);
+                            toast.error('Failed to download model');
+                          } finally {
+                            setDownloadingModel(null);
+                          }
+                        }}
+                        className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-muted/40 border border-border hover:bg-accent transition-colors"
+                      >
+                        {downloadingModel === model.size ? (
+                          <Spinner size="sm" className="h-3 w-3" />
+                        ) : (
+                          <Download size={12} />
+                        )}
+                        {downloadingModel === model.size &&
+                        downloadPercent[`whisper:${model.size}`] !== undefined
+                          ? `${downloadPercent[`whisper:${model.size}`]}%`
+                          : 'Download'}
+                      </button>
+                    )}
                   </div>
-                  {model.downloaded ? (
-                    <span className="flex items-center gap-1 text-xs text-green-400">
-                      <CheckCircle2 size={12} />
-                      Downloaded
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={downloadingModel === model.size}
-                      onClick={async () => {
-                        setDownloadingModel(model.size);
-                        try {
-                          await downloadWhisperModel(model.size);
-                          const updated = await listWhisperModels();
-                          setWhisperModels(updated);
-                        } catch (err) {
-                          console.error('Whisper download failed:', err);
-                          toast.error('Failed to download model');
-                        } finally {
-                          setDownloadingModel(null);
-                        }
-                      }}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-muted/40 border border-border hover:bg-accent transition-colors"
-                    >
-                      {downloadingModel === model.size ? (
-                        <Loader2 size={12} className="animate-spin" />
-                      ) : (
-                        <Download size={12} />
-                      )}
-                      Download
-                    </button>
-                  )}
-                </div>
-              ))}
-              {whisperModels.length === 0 && (
-                <p className="text-xs text-muted-foreground">Loading models...</p>
-              )}
-            </div>
+                ))}
+                {whisperModels.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {whisperModelsFailed
+                      ? 'The model list could not be loaded.'
+                      : 'Loading models...'}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Piper TTS Voices */}
@@ -750,13 +859,23 @@ export function VoiceSettings() {
                   ) : (
                     <button
                       type="button"
-                      disabled={downloadingVoice === voice.id}
+                      disabled={downloadingVoice !== null}
                       onClick={async () => {
                         setDownloadingVoice(voice.id);
                         try {
-                          await downloadPiperVoice(voice.id);
+                          await withDownloadProgress(
+                            `piper:${voice.id}`,
+                            PIPER_PROGRESS_EVENTS,
+                            async () => {
+                              if (!(await voiceCheckPiperBinary())) {
+                                await voiceDownloadPiperBinary();
+                              }
+                              await downloadPiperVoice(voice.id);
+                            },
+                          );
                           const updated = await listPiperVoices();
                           setPiperVoices(updated);
+                          void fetchCapabilities();
                         } catch (err) {
                           console.error('Piper download failed:', err);
                           toast.error('Failed to download voice');
@@ -767,11 +886,14 @@ export function VoiceSettings() {
                       className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-muted/40 border border-border hover:bg-accent transition-colors"
                     >
                       {downloadingVoice === voice.id ? (
-                        <Loader2 size={12} className="animate-spin" />
+                        <Spinner size="sm" className="h-3 w-3" />
                       ) : (
                         <Download size={12} />
                       )}
-                      Download
+                      {downloadingVoice === voice.id &&
+                      downloadPercent[`piper:${voice.id}`] !== undefined
+                        ? `${downloadPercent[`piper:${voice.id}`]}%`
+                        : 'Download'}
                     </button>
                   )}
                 </div>

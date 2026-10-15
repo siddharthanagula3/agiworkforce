@@ -13,12 +13,13 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { homeDir as getHomeDir } from '@tauri-apps/api/path';
+import { useConfirmAction, useUiTranslation } from '@agiworkforce/ui';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import { invoke, isTauriContext } from '../../lib/tauri-mock';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { selectCurrentFolder, useProjectStore } from '../../stores/projectStore';
 import { Button } from '@/ui/Button';
 import { Switch } from '@/ui/Switch';
-import { useUiTranslation } from '@agiworkforce/ui';
 
 interface InstalledPluginRecord {
   scope: 'user' | 'local';
@@ -63,13 +64,6 @@ interface DirEntry {
   is_dir: boolean;
 }
 
-interface TerminalCommandResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  durationMs: number;
-}
-
 function pluginIdFromKey(key: string): { name: string; marketplace: string } {
   const parts = key.split('@');
   return { name: parts[0] ?? key, marketplace: parts[1] ?? '' };
@@ -94,24 +88,6 @@ function normalizePluginSpec(value: string): string | null {
   if (!/^[A-Za-z0-9._:@/-]+$/.test(trimmed)) return null;
   if (trimmed.length > 200) return null;
   return trimmed;
-}
-
-function pluginCliCandidates(
-  action: 'install' | 'update' | 'remove',
-  pluginSpec: string,
-): string[] {
-  if (action === 'install') {
-    return [`claude plugins install ${pluginSpec}`, `claude plugin install ${pluginSpec}`];
-  }
-  if (action === 'update') {
-    return [`claude plugins update ${pluginSpec}`, `claude plugin update ${pluginSpec}`];
-  }
-  return [
-    `claude plugins remove ${pluginSpec}`,
-    `claude plugin remove ${pluginSpec}`,
-    `claude plugins uninstall ${pluginSpec}`,
-    `claude plugin uninstall ${pluginSpec}`,
-  ];
 }
 
 type JsonObjectRead = { ok: true; value: Record<string, unknown> } | { ok: false };
@@ -317,7 +293,7 @@ function PluginRow({
               size="sm"
               variant="outline"
               disabled={!pluginCliAvailable || isUpdating || isRemoving}
-              className="text-destructive hover:text-destructive"
+              className="text-danger-text hover:text-danger-text"
               onClick={() => onRemove(plugin)}
             >
               {isRemoving ? (
@@ -412,6 +388,8 @@ export function SkillsPluginsSettings() {
   const [pluginActionInProgress, setPluginActionInProgress] = useState<string | null>(null);
   const [pluginActionMessage, setPluginActionMessage] = useState<string | null>(null);
   const [homeDirPath, setHomeDirPath] = useState<string | null>(null);
+
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const [pluginsExpanded, setPluginsExpanded] = useState(true);
   const [commandsExpanded, setCommandsExpanded] = useState(true);
@@ -558,15 +536,9 @@ export function SkillsPluginsSettings() {
 
     let mounted = true;
     setPluginCliAvailable(null);
-    void invoke<TerminalCommandResult>('execute_terminal_command', {
-      command: 'claude --version',
-      cwd: projectRoot,
-      shell: null,
-      timeoutMs: 10000,
-    })
-      .then((response) => {
-        if (!mounted) return;
-        setPluginCliAvailable((response.exitCode ?? 1) === 0);
+    void invoke<boolean>('claude_plugin_cli_available')
+      .then((available) => {
+        if (mounted) setPluginCliAvailable(available === true);
       })
       .catch(() => {
         if (mounted) setPluginCliAvailable(false);
@@ -575,7 +547,7 @@ export function SkillsPluginsSettings() {
     return () => {
       mounted = false;
     };
-  }, [isNonTauri, projectRoot]);
+  }, [isNonTauri]);
 
   const runPluginCliAction = useCallback(
     async (action: 'install' | 'update' | 'remove', pluginSpec: string) => {
@@ -588,7 +560,7 @@ export function SkillsPluginsSettings() {
       }
       if (pluginCliAvailable !== true) {
         setPluginActionMessage(
-          'Compatible plugin CLI is not available. AGI skills still work locally; install the compatibility CLI only if you want to manage those plugin packages from Settings.',
+          'The claude command is not available, so Claude Code plugins cannot be changed from here.',
         );
         return;
       }
@@ -597,44 +569,20 @@ export function SkillsPluginsSettings() {
       setPluginActionInProgress(actionKey);
       setPluginActionMessage(null);
 
-      const candidates = pluginCliCandidates(action, normalizedSpec);
-      let lastError = 'Command failed';
-      let successfulCommand: string | null = null;
-
-      for (const command of candidates) {
-        try {
-          const response = await invoke<TerminalCommandResult>('execute_terminal_command', {
-            command,
-            cwd: projectRoot,
-            shell: null,
-            timeoutMs: 120000,
-          });
-          if ((response.exitCode ?? 1) === 0) {
-            successfulCommand = command;
-            break;
-          }
-          lastError =
-            response.stderr.trim() ||
-            response.stdout.trim() ||
-            `Exited with status ${response.exitCode ?? 1}`;
-        } catch (e) {
-          lastError = e instanceof Error ? e.message : String(e);
-        }
-      }
-
-      if (successfulCommand) {
+      try {
+        await invoke('claude_plugin_change', { action, plugin: normalizedSpec });
         setPluginActionMessage(`Plugin ${action} succeeded: ${normalizedSpec}`);
         if (action === 'install') {
           setPluginInput('');
         }
         await load();
-      } else {
-        setPluginActionMessage(`Plugin ${action} failed for ${normalizedSpec}: ${lastError}`);
+      } catch (error) {
+        setPluginActionMessage(getSimpleErrorMessage(error));
+      } finally {
+        setPluginActionInProgress(null);
       }
-
-      setPluginActionInProgress(null);
     },
-    [load, pluginCliAvailable, projectRoot],
+    [load, pluginCliAvailable],
   );
 
   const handleInstallPlugin = useCallback(async () => {
@@ -650,9 +598,16 @@ export function SkillsPluginsSettings() {
 
   const handleRemovePlugin = useCallback(
     (plugin: ResolvedPlugin) => {
-      void runPluginCliAction('remove', plugin.id);
+      confirm({
+        title: `Remove "${plugin.displayName}" from Claude Code?`,
+        description:
+          'This runs the claude command to uninstall the plugin. Claude Code loses its skills, agents and tools, and to use the plugin again you have to install it again.',
+        confirmLabel: 'Remove plugin',
+        destructive: true,
+        onConfirm: () => runPluginCliAction('remove', plugin.id),
+      });
     },
-    [runPluginCliAction],
+    [confirm, runPluginCliAction],
   );
 
   const handleTogglePluginEnabled = useCallback(
@@ -713,7 +668,7 @@ export function SkillsPluginsSettings() {
             current.map((entry) => (entry.id === plugin.id ? { ...entry, enabled } : entry)),
           );
           setPluginActionMessage(
-            `${plugin.displayName} ${enabled ? 'enabled' : 'disabled'} in ${targetPath}. Restart running agent sessions to pick it up.`,
+            `${plugin.displayName} ${enabled ? 'enabled' : 'disabled'} in ${targetPath}. Restart running Claude Code sessions to pick it up.`,
           );
         } catch (err) {
           setPluginActionMessage(
@@ -730,19 +685,20 @@ export function SkillsPluginsSettings() {
   const totalProjectItems = commands.length + skills.length + agents.length;
   const pluginCliStatus =
     pluginCliAvailable === null
-      ? 'Checking compatible CLI...'
+      ? 'Checking for the claude command...'
       : pluginCliAvailable
-        ? 'Compatible CLI detected'
-        : 'Compatible CLI unavailable';
+        ? 'claude command found'
+        : 'claude command not found';
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-h3 mb-1">Skills &amp; Plugins</h3>
+          <h3 className="text-h3 mb-1">Claude Code plugins</h3>
           <p className="text-sm text-muted-foreground">
-            Installed plugins can provide agents, skills, and tools. AGI also reads existing
-            compatibility-backed project resources from the current workspace.
+            These are the plugins Claude Code keeps on this machine in ~/.claude/plugins. AGI
+            Workforce chat does not load them: nothing here adds a skill, agent or tool to a chat in
+            this app.
           </p>
         </div>
         <Button
@@ -764,7 +720,7 @@ export function SkillsPluginsSettings() {
       <div className="rounded-lg border border-border p-4 space-y-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium">Compatible plugin lifecycle</p>
+            <p className="text-sm font-medium">Install, update and remove</p>
             <span
               className={`rounded-full px-2 py-0.5 text-xs ${
                 pluginCliAvailable
@@ -775,15 +731,14 @@ export function SkillsPluginsSettings() {
               {pluginCliStatus}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Install, update, or remove compatible plugin packages when the CLI is present. AGI
-            built-in skills and local MCP tools do not require sign-in or that CLI.
+          <p className="text-sm text-muted-foreground">
+            These actions run the claude command for you. They change Claude Code, not this app.
+            Installing or updating a plugin is confirmed in a system dialog first.
           </p>
         </div>
         {pluginCliAvailable === false && (
-          <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            Plugin package actions are disabled because the compatible CLI is not installed or not
-            reachable. Skill Marketplace and project resources below remain available.
+          <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            These actions are off because the claude command is not installed or not on your PATH.
           </div>
         )}
         <div className="flex flex-col sm:flex-row gap-2">
@@ -822,7 +777,7 @@ export function SkillsPluginsSettings() {
       {isNonTauri && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground bg-card rounded-md p-3">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          Plugin discovery requires the desktop app.
+          Reading Claude Code plugins requires the desktop app.
         </div>
       )}
 
@@ -846,7 +801,7 @@ export function SkillsPluginsSettings() {
           <div className="rounded-lg border border-border overflow-hidden">
             <SectionHeader
               icon={Puzzle}
-              title="Installed Plugins"
+              title="Installed in Claude Code"
               count={plugins.length}
               expanded={pluginsExpanded}
               onToggle={() => setPluginsExpanded((v) => !v)}
@@ -855,8 +810,7 @@ export function SkillsPluginsSettings() {
               <div className="divide-y divide-border">
                 {plugins.length === 0 ? (
                   <p className="px-4 py-3 text-sm text-muted-foreground">
-                    No plugins installed. Built-in AGI skills and project resources remain
-                    available.
+                    Claude Code has no plugins installed on this machine.
                   </p>
                 ) : (
                   plugins.map((p) => (
@@ -879,12 +833,13 @@ export function SkillsPluginsSettings() {
           {totalProjectItems > 0 || Boolean(projectRoot) ? (
             <div className="space-y-4">
               <div>
-                <h4 className="text-sm font-semibold mb-1">Project Resources</h4>
-                <p className="text-xs text-muted-foreground">
-                  From{' '}
+                <h4 className="text-sm font-semibold mb-1">Claude Code files in this project</h4>
+                <p className="text-sm text-muted-foreground">
+                  Listed for reference from{' '}
                   <code className="rounded bg-muted px-1 py-0.5">
-                    compatibility directory for {projectRoot ?? 'project'}
+                    {projectRoot ? `${projectRoot}/.claude` : '.claude'}
                   </code>
+                  . AGI Workforce chat does not run these commands or load these skills.
                 </p>
               </div>
 
@@ -901,7 +856,7 @@ export function SkillsPluginsSettings() {
                   <div>
                     {commands.length === 0 ? (
                       <p className="px-4 py-3 text-sm text-muted-foreground">
-                        No slash commands found in the project compatibility directory.
+                        No slash commands found in the project .claude folder.
                       </p>
                     ) : (
                       commands.map((c) => <EntryRow key={c.path} entry={c} icon={Zap} prefix="/" />)
@@ -923,7 +878,7 @@ export function SkillsPluginsSettings() {
                   <div>
                     {skills.length === 0 ? (
                       <p className="px-4 py-3 text-sm text-muted-foreground">
-                        No skills found in the project compatibility directory.
+                        No skills found in the project .claude folder.
                       </p>
                     ) : (
                       skills.map((s) => <EntryRow key={s.path} entry={s} icon={BookOpen} />)
@@ -945,7 +900,7 @@ export function SkillsPluginsSettings() {
                   <div>
                     {agents.length === 0 ? (
                       <p className="px-4 py-3 text-sm text-muted-foreground">
-                        No agents found in the project compatibility directory.
+                        No agents found in the project .claude folder.
                       </p>
                     ) : (
                       agents.map((a) => <EntryRow key={a.path} entry={a} icon={Bot} />)
@@ -957,6 +912,7 @@ export function SkillsPluginsSettings() {
           ) : null}
         </>
       )}
+      {confirmDialog}
     </div>
   );
 }

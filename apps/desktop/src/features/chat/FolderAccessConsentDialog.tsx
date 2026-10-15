@@ -72,24 +72,32 @@ export function FolderAccessConsentDialog({
       ? args['requesting_tool'].replaceAll('_', ' ')
       : null;
   const requestIsValid = paths.length > 0 && directories.length > 0 && capabilities.length > 0;
+  const readOnly = capabilities.length > 0 && capabilities.every((value) => value === 'read');
+  const remember = rememberFolders && !readOnly;
 
   const resolve = async (decision: 'approve' | 'reject') => {
     setIsResolving(true);
     setError(null);
     try {
       const resolution = await resolveApproval(approval, decision, {
-        trust: decision === 'approve' && rememberFolders,
+        trust: decision === 'approve' && remember,
         reason: decision === 'reject' ? 'Folder access cancelled by user' : undefined,
       });
 
-      if (decision === 'approve' && rememberFolders) {
+      if (decision === 'approve' && remember) {
         if (!resolution?.allowedDirectories) {
           throw new Error('Native settings did not confirm the remembered folders.');
         }
         setAllowedDirectories(resolution.allowedDirectories);
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not send your decision.');
+      setError(
+        typeof cause === 'string' && cause.trim() !== ''
+          ? cause
+          : cause instanceof Error
+            ? cause.message
+            : 'Could not send your decision.',
+      );
     } finally {
       setIsResolving(false);
     }
@@ -124,7 +132,10 @@ export function FolderAccessConsentDialog({
               className="mt-1 text-sm text-muted-foreground"
             >
               {requestingTool ? `${requestingTool} needs` : 'The agent needs'} access before it can
-              continue. Access lasts for this task/session unless you remember the folders.
+              continue.{' '}
+              {readOnly
+                ? 'Read-only access lasts for this session.'
+                : 'Access lasts for this task/session unless you remember the folders.'}
             </p>
             {pendingCount > 1 && (
               <p className="mt-1 text-xs text-muted-foreground">
@@ -198,23 +209,28 @@ export function FolderAccessConsentDialog({
             </ul>
           </section>
 
-          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3">
-            <Checkbox
-              checked={rememberFolders}
-              onCheckedChange={(checked) => setRememberFolders(checked === true)}
-              aria-describedby="remember-folder-access-description"
-            />
-            <span>
-              <span className="block text-sm font-medium">Remember these folders in Settings</span>
-              <span
-                id="remember-folder-access-description"
-                className="mt-1 block text-xs text-muted-foreground"
-              >
-                Adds {directories.length === 1 ? 'this folder' : 'these folders'} to Allowed
-                Directories. You can revoke access there at any time.
+          {!readOnly && (
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3">
+              <Checkbox
+                checked={rememberFolders}
+                onCheckedChange={(checked) => setRememberFolders(checked === true)}
+                aria-describedby="remember-folder-access-description"
+              />
+              <span>
+                <span className="block text-sm font-medium">
+                  Remember these folders in Settings
+                </span>
+                <span
+                  id="remember-folder-access-description"
+                  className="mt-1 block text-xs text-muted-foreground"
+                >
+                  Adds {directories.length === 1 ? 'this folder' : 'these folders'} to Allowed
+                  Directories, which lets the agent read and change files and run commands in them.
+                  You can revoke access there at any time.
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+          )}
 
           {!requestIsValid && (
             <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">

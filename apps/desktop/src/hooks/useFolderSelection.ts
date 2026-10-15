@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { open } from '@tauri-apps/plugin-dialog';
 import { toast } from 'sonner';
+import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { invoke, isTauri } from '../lib/tauri-mock';
-import { useProjectStore, selectCurrentFolder, formatFolderPath } from '../stores/projectStore';
+import {
+  useProjectStore,
+  selectCurrentFolder,
+  formatFolderPath,
+  type ProjectContext,
+} from '../stores/projectStore';
 import {
   selectCloudHandoffFolder,
   revokeCloudHandoffGrant,
@@ -64,12 +69,7 @@ export function useFolderSelection(mode: FolderSelectionMode = 'local'): UseFold
       const selected =
         mode === 'cloud'
           ? cloudGrant?.path
-          : await open({
-              directory: true,
-              multiple: false,
-              recursive: true,
-              title: 'Select Project Folder',
-            });
+          : await invoke<string | null>('pick_folder', { purpose: 'project_folder' });
 
       const expectedPrivacyMode = mode === 'cloud' ? 'managed' : 'local';
       const liveAuth = mode === 'cloud' ? useAuthStore.getState() : null;
@@ -90,23 +90,33 @@ export function useFolderSelection(mode: FolderSelectionMode = 'local'): UseFold
       }
 
       if (selected && typeof selected === 'string') {
+        let folder = selected;
         if (mode === 'local') {
-          await invoke('project_context_set_folder', { path: selected });
-          toast.success(`Project folder set: ${formatFolderPath(selected)}`);
+          const context = await invoke<ProjectContext>('project_context_set_folder', {
+            path: selected,
+          });
+          folder = context.folder ?? selected;
+          toast.success(`Project folder set: ${formatFolderPath(folder)}`);
+          if (folder !== selected) {
+            toast.warning(
+              `${formatFolderPath(selected)} goes through a link, so the project uses its real folder ${formatFolderPath(folder)}`,
+            );
+          }
         } else {
           toast.success(
             `Folder: ${formatFolderPath(selected)}, files stay on this device until you approve them.`,
           );
         }
-        setCurrentFolder(selected);
+        setCurrentFolder(folder);
         return {
-          path: selected,
+          path: folder,
           cloudGrantId: cloudGrant?.grantId ?? null,
         };
       }
       return null;
     } catch (error) {
       console.error('[useFolderSelection] Failed to select folder:', error);
+      toast.error(getSimpleErrorMessage(error));
       return null;
     }
   }, [mode, setCurrentFolder]);

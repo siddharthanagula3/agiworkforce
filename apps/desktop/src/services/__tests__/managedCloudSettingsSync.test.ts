@@ -117,7 +117,7 @@ describe('Desktop Managed Cloud settings synchronization', () => {
       const coordinator = createManagedCloudSettingsSyncCoordinator(h.ports);
 
       coordinator.start();
-      h.edit({ appearance: { theme: 'dark' }, chat: { chatStorageMode: 'cloud' } });
+      h.edit({ appearance: { theme: 'dark' }, chat: { compactMode: false } });
       await vi.advanceTimersByTimeAsync(100);
 
       expect(h.pull).not.toHaveBeenCalled();
@@ -142,7 +142,7 @@ describe('Desktop Managed Cloud settings synchronization', () => {
 
     h.edit({
       appearance: { theme: 'system' },
-      editor: { promptCompletionEnabled: false },
+      chat: { compactMode: false },
     });
     await vi.advanceTimersByTimeAsync(24);
     expect(h.push).not.toHaveBeenCalled();
@@ -152,7 +152,7 @@ describe('Desktop Managed Cloud settings synchronization', () => {
       {
         settings: {
           appearance: { theme: 'system' },
-          editor: { promptCompletionEnabled: false },
+          chat: { compactMode: false },
         },
         baseVersion: '2',
       },
@@ -181,7 +181,7 @@ describe('Desktop Managed Cloud settings synchronization', () => {
     coordinator.stop();
   });
 
-  it('projects named cloud-safe fields and never infers trust from chatStorageMode', () => {
+  it('projects only the named cloud-safe fields', () => {
     const projected = projectDesktopCloudSafeSettings({
       windowPreferences: {
         theme: 'dark',
@@ -191,14 +191,10 @@ describe('Desktop Managed Cloud settings synchronization', () => {
         chatFont: 'mono',
       },
       chatPreferences: {
-        promptCompletionEnabled: true,
-        alwaysUseAgentMode: true,
         compactMode: false,
         autoApproveTools: true,
-        autoInjectSkills: true,
         autoSaveMemories: true,
         agentMode: 'build',
-        chatStorageMode: 'cloud',
       },
       personalization: {
         name: 'Sid',
@@ -220,10 +216,9 @@ describe('Desktop Managed Cloud settings synchronization', () => {
         allowToolAssistedGeneration: false,
       },
       chat: { compactMode: false },
-      editor: { promptCompletionEnabled: true },
     });
     expect(JSON.stringify(projected)).not.toMatch(
-      /chatStorageMode|autoApprove|autoSave|agentMode|bio|apiKey|provider/i,
+      /autoApprove|autoSave|agentMode|bio|apiKey|provider|editor/i,
     );
   });
 

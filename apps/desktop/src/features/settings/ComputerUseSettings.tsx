@@ -445,9 +445,9 @@ export function ComputerUseSettings() {
                   Always Blocked (cannot be overridden)
                 </h4>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Investment, brokerage, crypto, and banking apps are hardcoded as blocked at the
-                  agent level, matching Claude Cowork's hard-blocked categories.{' '}
-                  {alwaysBlocked.length} bundle IDs are on this list.
+                  Money apps (brokerage, crypto, banking, payments), terminals, password managers,
+                  and the system's security and settings apps are blocked for the agent whatever is
+                  set above. {alwaysBlocked.length} bundle IDs are on this list.
                 </p>
               </div>
               <details className="text-xs">

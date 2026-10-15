@@ -124,6 +124,17 @@ describe('DesktopCloudSettingsModal capability honesty', () => {
     );
   });
 
+  it('opens phone pairing on the tab Cowork sends the user to', () => {
+    render(<DesktopCloudSettingsModal open onClose={vi.fn()} initialTab="connections" />);
+
+    const props = latestSettingsProps();
+    const navKeys = (props.navGroups ?? []).flatMap((group) => group.items.map((item) => item.key));
+
+    expect(props.activeSection).toBe('connections');
+    expect(navKeys).toEqual(expect.arrayContaining(['cowork', 'connections']));
+    expect(props.sectionContent['connections']).toBeTruthy();
+  });
+
   it('can reach archived chats and shared links, the surfaces web links from Privacy', () => {
     render(<DesktopCloudSettingsModal open={false} onClose={vi.fn()} />);
 

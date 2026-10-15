@@ -70,8 +70,11 @@ function asWindow(win: FakeWindow): never {
 }
 
 describe('global dictation press', () => {
+  const openMainWindow = vi.fn();
+
   beforeEach(() => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
+    openMainWindow.mockClear();
     quickAsk.visible = false;
     quickAsk.panel = null;
     quickAsk.surfaced = null;
@@ -82,12 +85,13 @@ describe('global dictation press', () => {
 
   it('toggles capture in the visible main window without raising quick ask', async () => {
     const main = new FakeWindow(true);
-    await toggleGlobalDictation(asWindow(main));
+    await toggleGlobalDictation(asWindow(main), openMainWindow);
 
     expect(surfaceQuickAsk).not.toHaveBeenCalled();
     expect(main.focused).toBe(1);
     expect(focusPageComposer).toHaveBeenCalledWith(main);
     expect(main.sent).toEqual([ELECTRON_IPC_CHANNELS.voiceHotkey]);
+    expect(openMainWindow).not.toHaveBeenCalled();
   });
 
   it('raises the quick ask surface when the main window is hidden', async () => {
@@ -95,7 +99,7 @@ describe('global dictation press', () => {
     const raised = new FakeWindow(true);
     quickAsk.surfaced = raised;
 
-    await toggleGlobalDictation(asWindow(main));
+    await toggleGlobalDictation(asWindow(main), openMainWindow);
 
     expect(surfaceQuickAsk).toHaveBeenCalledTimes(1);
     expect(raised.sent).toEqual([ELECTRON_IPC_CHANNELS.voiceHotkey]);
@@ -106,7 +110,7 @@ describe('global dictation press', () => {
     const main = new FakeWindow(true, true);
     quickAsk.surfaced = main;
 
-    await toggleGlobalDictation(asWindow(main));
+    await toggleGlobalDictation(asWindow(main), openMainWindow);
 
     expect(surfaceQuickAsk).toHaveBeenCalledTimes(1);
   });
@@ -117,24 +121,35 @@ describe('global dictation press', () => {
     quickAsk.visible = true;
     quickAsk.panel = panel;
 
-    await toggleGlobalDictation(asWindow(main));
+    await toggleGlobalDictation(asWindow(main), openMainWindow);
 
     expect(surfaceQuickAsk).not.toHaveBeenCalled();
     expect(panel.sent).toEqual([ELECTRON_IPC_CHANNELS.voiceHotkey]);
     expect(main.sent).toEqual([]);
   });
 
-  it('says so rather than sending into nothing when no window exists', async () => {
-    await toggleGlobalDictation(null);
+  it('opens the main window and says to press again when nothing can be raised', async () => {
+    await toggleGlobalDictation(null, openMainWindow);
 
+    expect(openMainWindow).toHaveBeenCalledTimes(1);
     expect(notifications).toHaveLength(1);
-    expect(notifications[0]?.title).toBe('No AGI Cloud window');
+    expect(notifications[0]?.title).toBe('Opening AGI Cloud');
+  });
+
+  it('opens a new window rather than sending into a destroyed one', async () => {
+    const main = new FakeWindow(true);
+    main.destroyed = true;
+
+    await toggleGlobalDictation(asWindow(main), openMainWindow);
+
+    expect(openMainWindow).toHaveBeenCalledTimes(1);
+    expect(main.sent).toEqual([]);
   });
 
   it('reaches the page the remote shell loads, which owns the capture', async () => {
     const main = new FakeWindow(true);
 
-    await toggleGlobalDictation(asWindow(main));
+    await toggleGlobalDictation(asWindow(main), openMainWindow);
 
     expect(focusPageComposer).toHaveBeenCalledWith(main);
     expect(main.sent).toEqual([ELECTRON_IPC_CHANNELS.voiceHotkey]);
@@ -148,7 +163,7 @@ describe('global dictation press', () => {
       return false;
     });
 
-    await toggleGlobalDictation(asWindow(main));
+    await toggleGlobalDictation(asWindow(main), openMainWindow);
 
     expect(main.sent).toEqual([]);
   });

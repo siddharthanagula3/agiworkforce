@@ -19,10 +19,10 @@ function createCodedError(message: string, code: string): CodedError {
  * Rejects any command the Rust `generate_handler!` registry does not answer.
  *
  * Exported so `src/lib/tauri-mock.ts` can call it: 178 renderer modules import
- * their `invoke` from there, and only two (`features/code/FileTree.tsx`,
- * `stores/editingStore.ts`) import this module's `invoke`. Coverage is still not
- * total, `features/startup-recovery/StartupRecoveryBootstrap.tsx`,
- * `services/analyticsQueries.ts`, `lib/newChatReset.ts` and
+ * their `invoke` from there, and only three (`features/code/FileTree.tsx`,
+ * `features/diagnostics/diagnosticsBundle.ts`, `services/automationAuditOutbox.ts`)
+ * import this module's `invoke`. Coverage is still not
+ * total, `features/startup-recovery/StartupRecoveryBootstrap.tsx` and
  * `lib/browserAutomation.ts` import `@tauri-apps/api/core` directly and reach
  * Rust without passing this check.
  *
@@ -195,8 +195,8 @@ async function rateLimit(key: string): Promise<void> {
  * Invokes a Tauri backend command with allowlist, payload-size, rate-limit and
  * timeout enforcement.
  *
- * This is NOT the renderer's general invoke: FileTree.tsx and editingStore.ts
- * are its only callers. Everything else imports `invoke` from
+ * This is NOT the renderer's general invoke: FileTree.tsx, diagnosticsBundle.ts
+ * and automationAuditOutbox.ts are its only callers. Everything else imports `invoke` from
  * `src/lib/tauri-mock.ts`, which enforces the allowlist but none of the rest.
  *
  * @param command - The Tauri command name to invoke

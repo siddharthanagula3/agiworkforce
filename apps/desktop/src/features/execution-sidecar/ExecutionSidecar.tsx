@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useExecutionSidecarStore } from '../../stores/executionSidecarStore';
@@ -10,6 +11,8 @@ import { ExecutionSidecarApprovals } from './ExecutionSidecarApprovals';
 import { ExecutionSidecarFilmstrip } from './ExecutionSidecarFilmstrip';
 import { useExecutionSidecarContext } from '../../hooks/useExecutionSidecarContext';
 import { BrowserVisualization } from '../browser/BrowserVisualization';
+import { ChangesPanel } from '../git/ChangesPanel';
+import { selectCurrentFolder, useProjectStore } from '../../stores/projectStore';
 
 const COLLAPSED_WIDTH = 40;
 
@@ -25,9 +28,25 @@ function ContextView({ context }: { context: string }) {
       return <ExecutionSidecarTerminal />;
     case 'approval':
       return <ExecutionSidecarApprovals />;
+    case 'changes':
+      return <ChangesView />;
     default:
       return <ExecutionSidecarTimeline />;
   }
+}
+
+function ChangesView() {
+  const folder = useProjectStore(selectCurrentFolder);
+  return <ChangesPanel repoPath={folder} />;
+}
+
+function isChangesShortcut(event: KeyboardEvent): boolean {
+  return (
+    (event.metaKey || event.ctrlKey) &&
+    event.shiftKey &&
+    !event.altKey &&
+    event.key.toLowerCase() === 'g'
+  );
 }
 
 export function ExecutionSidecar() {
@@ -40,6 +59,16 @@ export function ExecutionSidecar() {
   const expand = useExecutionSidecarStore((s) => s.expand);
 
   useExecutionSidecarContext();
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isChangesShortcut(event)) return;
+      event.preventDefault();
+      useExecutionSidecarStore.getState().toggleChanges();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   if (!isOpen) {
     return null;

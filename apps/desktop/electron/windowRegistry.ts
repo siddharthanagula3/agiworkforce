@@ -1,4 +1,4 @@
-import { NEW_CHAT_ROUTE, isRestorableRoute, type WorkArea } from './windowState';
+import { NEW_CHAT_ROUTE, type WorkArea } from './windowState';
 import { MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH } from './garnishCore';
 
 export interface WindowBounds {
@@ -32,35 +32,6 @@ export function conversationIdFromRoute(route: string): string | null {
   const path = route.slice(CONVERSATION_ROUTE_PREFIX.length).split(/[?#]/)[0] ?? '';
   const segment = path.split('/')[0] ?? '';
   return CONVERSATION_ID.test(segment) ? segment.toLowerCase() : null;
-}
-
-export function windowHoldingConversation(
-  windows: readonly OpenWindow[],
-  conversationId: string,
-): OpenWindow | null {
-  return windows.find((window) => conversationIdFromRoute(window.route) === conversationId) ?? null;
-}
-
-export type WindowOpenPlan =
-  | { action: 'focus'; windowId: number }
-  | { action: 'create'; route: string }
-  | { action: 'refuse'; reason: 'route-not-openable' };
-
-/**
- * What asking for a route in its own window does.
- *
- * A conversation already on screen is raised rather than duplicated. Two
- * windows on one conversation would each hold their own composer draft and
- * each believe it owns the turn, so the second one is not opened at all: there
- * is never a second editor to reconcile with.
- */
-export function planWindowOpen(windows: readonly OpenWindow[], route: string): WindowOpenPlan {
-  if (!isRestorableRoute(route)) return { action: 'refuse', reason: 'route-not-openable' };
-  const trimmed = route.trim();
-  const conversationId = conversationIdFromRoute(trimmed);
-  if (conversationId === null) return { action: 'create', route: trimmed };
-  const holder = windowHoldingConversation(windows, conversationId);
-  return holder ? { action: 'focus', windowId: holder.id } : { action: 'create', route: trimmed };
 }
 
 /**

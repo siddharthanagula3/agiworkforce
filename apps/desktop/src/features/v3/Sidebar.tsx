@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { supportsLocalAppMode } from '@/lib/runtimeEnvironment';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -235,6 +235,82 @@ export interface SidebarProps {
   accountMenuOpen?: boolean;
 }
 
+const SIDEBAR_RAIL_WIDTH = 64;
+const SIDEBAR_DEFAULT_WIDTH = 260;
+const SIDEBAR_MIN_WIDTH = 220;
+const SIDEBAR_MAX_WIDTH = 400;
+const SIDEBAR_RESIZE_STEP = 16;
+const ACCOUNT_MENU_WIDTH = 248;
+const NARROW_WINDOW_QUERY = '(max-width: 767px)';
+
+export function clampSidebarWidth(width: number | undefined): number {
+  if (typeof width !== 'number' || !Number.isFinite(width)) return SIDEBAR_DEFAULT_WIDTH;
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(width)));
+}
+
+interface SidebarResizeHandleProps {
+  width: number;
+  onDrag: (width: number) => void;
+  onDragEnd: () => void;
+  onStep: (width: number) => void;
+}
+
+function SidebarResizeHandle({ width, onDrag, onDragEnd, onStep }: SidebarResizeHandleProps) {
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    onDragEnd();
+  };
+
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize sidebar"
+      aria-valuemin={SIDEBAR_MIN_WIDTH}
+      aria-valuemax={SIDEBAR_MAX_WIDTH}
+      aria-valuenow={width}
+      tabIndex={0}
+      data-v3-sidebar-resize=""
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        dragRef.current = { startX: event.clientX, startWidth: width };
+      }}
+      onPointerMove={(event) => {
+        const drag = dragRef.current;
+        if (!drag) return;
+        onDrag(drag.startWidth + event.clientX - drag.startX);
+      }}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      onKeyDown={(event) => {
+        const next =
+          event.key === 'ArrowLeft'
+            ? width - SIDEBAR_RESIZE_STEP
+            : event.key === 'ArrowRight'
+              ? width + SIDEBAR_RESIZE_STEP
+              : event.key === 'Home'
+                ? SIDEBAR_MIN_WIDTH
+                : event.key === 'End'
+                  ? SIDEBAR_MAX_WIDTH
+                  : null;
+        if (next === null) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onStep(next);
+      }}
+      className="absolute inset-y-0 right-0 z-10 w-1.5 cursor-col-resize touch-none transition-colors hover:bg-[var(--chat-border)] focus-visible:bg-[var(--chat-accent-primary)] focus-visible:outline-none"
+    />
+  );
+}
+
 const NAV_ID_TO_VIEW: Record<string, string> = {
   projects: 'projects',
   artifacts: 'artifacts',
@@ -262,6 +338,42 @@ export function Sidebar({
   const { t } = useTranslation('v3');
   const collapsed = useSidecarStore(selectSidebarCollapsed);
   const setCollapsed = useSidecarStore((s) => s.setSidebarCollapsed);
+  const storedWidth = useSidecarStore((s) => s.sidebarWidth);
+  const setSidebarWidth = useSidecarStore((s) => s.setSidebarWidth);
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
+  const expandedWidth = clampSidebarWidth(dragWidth ?? storedWidth);
+  const sidebarWidth = collapsed ? SIDEBAR_RAIL_WIDTH : expandedWidth;
+
+  // A window narrowed past the breakpoint collapses the sidebar to its rail,
+  // and widening it again restores the sidebar only if the narrowing, not the
+  // user, collapsed it.
+  const collapsedRef = useRef(collapsed);
+  const autoCollapsedRef = useRef(false);
+  useEffect(() => {
+    collapsedRef.current = collapsed;
+  }, [collapsed]);
+  useEffect(() => {
+    const query =
+      typeof window.matchMedia === 'function' ? window.matchMedia(NARROW_WINDOW_QUERY) : null;
+    if (!query) return;
+    const apply = (narrow: boolean) => {
+      if (narrow && !collapsedRef.current) {
+        autoCollapsedRef.current = true;
+        setCollapsed(true);
+      } else if (!narrow && autoCollapsedRef.current) {
+        autoCollapsedRef.current = false;
+        setCollapsed(false);
+      }
+    };
+    apply(query.matches);
+    const onChange = (event: MediaQueryListEvent) => apply(event.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, [setCollapsed]);
+  const toggleCollapsed = useCallback(() => {
+    autoCollapsedRef.current = false;
+    setCollapsed(!collapsed);
+  }, [collapsed, setCollapsed]);
   const [showAll, setShowAll] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
@@ -409,7 +521,7 @@ export function Sidebar({
   const accountTriggerRef = useRef<HTMLButtonElement | null>(null);
   const closeAccountMenu = useCallback(() => onOpenAccountMenu?.(), [onOpenAccountMenu]);
   useMenuKeyboard({
-    open: Boolean(showAccountMenu) && !collapsed,
+    open: Boolean(showAccountMenu),
     onClose: closeAccountMenu,
     panelRef: accountMenuRef,
     triggerRef: accountTriggerRef,
@@ -448,17 +560,29 @@ export function Sidebar({
       data-mode={mode}
       aria-label={t('sidebar.modes.chat')}
       style={{
-        width: collapsed ? 64 : 240,
-        minWidth: collapsed ? 64 : 240,
+        position: 'relative',
+        width: sidebarWidth,
+        minWidth: sidebarWidth,
         background: 'var(--chat-sidebar-bg)',
         borderRight: '1px solid var(--chat-border)',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        transition: 'width 180ms ease, min-width 180ms ease',
+        transition: dragWidth === null ? 'width 180ms ease, min-width 180ms ease' : 'none',
         overflow: 'hidden',
       }}
     >
+      {!collapsed && (
+        <SidebarResizeHandle
+          width={expandedWidth}
+          onDrag={(width) => setDragWidth(clampSidebarWidth(width))}
+          onDragEnd={() => {
+            if (dragWidth !== null) setSidebarWidth(dragWidth);
+            setDragWidth(null);
+          }}
+          onStep={(width) => setSidebarWidth(clampSidebarWidth(width))}
+        />
+      )}
       {/* Window chrome */}
       <div
         style={{
@@ -486,7 +610,7 @@ export function Sidebar({
           {!collapsed && 'AGI'}
         </span>
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={toggleCollapsed}
           title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
           aria-label={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
           className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
@@ -899,7 +1023,7 @@ export function Sidebar({
       >
         {/* Account menu floats above the avatar (Claude/web behavior) instead of
             replacing the sidebar body. A full-window backdrop closes it on outside click. */}
-        {!collapsed && showAccountMenu && (
+        {showAccountMenu && (
           <>
             <div
               onClick={() => onOpenAccountMenu?.()}
@@ -911,10 +1035,19 @@ export function Sidebar({
               role="menu"
               aria-label={t('accountMenu.accountFallback')}
               style={{
-                position: 'absolute',
-                bottom: 'calc(100% + 6px)',
-                left: 8,
-                right: 8,
+                ...(collapsed
+                  ? {
+                      position: 'fixed' as const,
+                      bottom: 8,
+                      left: SIDEBAR_RAIL_WIDTH + 8,
+                      width: ACCOUNT_MENU_WIDTH,
+                    }
+                  : {
+                      position: 'absolute' as const,
+                      bottom: 'calc(100% + 6px)',
+                      left: 8,
+                      right: 8,
+                    }),
                 zIndex: 41,
                 background: 'var(--chat-surface-elevated)',
                 border: '1px solid var(--chat-border)',

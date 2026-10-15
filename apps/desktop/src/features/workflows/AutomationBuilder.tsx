@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { useModelStore } from '../../stores/modelStore';
-import { getDefaultModelFor } from '@agiworkforce/types';
+import { useConfirmAction } from '@agiworkforce/ui';
 import {
   Calendar,
+  Check,
   ChevronDown,
   ChevronRight,
   Clock,
+  Copy,
   FileSearch,
   FolderOpen,
   Globe,
@@ -21,12 +21,21 @@ import {
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import {
+  NOTIFICATION_TARGET_ATTRIBUTE,
+  notificationTargetValue,
+  useNotificationTarget,
+} from '../notifications/notificationTarget';
+import {
   useTriggerStore,
+  webhookNeedsToken,
   type CreateTriggerInput,
   type CronConfig,
   type EventTriggerDefinition,
   type FileWatcherConfig,
+  type TriggerEngineInfo,
+  type TriggerActionType,
   type TriggerExecution,
+  type TriggerRunOutcome,
   type TriggerType,
   type WebhookConfig,
 } from '../../stores/triggerStore';
@@ -61,11 +70,23 @@ const CRON_PRESETS: { label: string; value: string }[] = [
   { label: 'Monthly 1st 9am', value: '0 9 1 * *' },
 ];
 
-const DEFAULT_CRON_CONFIG: CronConfig = { type: 'cron', expression: '0 9 * * *' };
+const COMPUTER_TIME_ZONE = "this computer's time zone";
+
+function systemTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
+function defaultCronConfig(): CronConfig {
+  return { type: 'cron', expression: '0 9 * * *', timezone: systemTimeZone() };
+}
+
 const DEFAULT_WEBHOOK_CONFIG: WebhookConfig = {
   type: 'webhook',
-  path: '/webhook',
-  authToken: null,
+  path: '',
 };
 const DEFAULT_FILE_WATCHER_CONFIG: FileWatcherConfig = {
   type: 'fileWatcher',
@@ -107,10 +128,19 @@ function formatTs(ts: number | null): string {
   });
 }
 
-function formatDuration(ms: number | null): string {
-  if (ms === null) return ', ';
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
+const RUN_OUTCOME_TEXT: Record<TriggerRunOutcome, string> = {
+  queued: 'The run is queued.',
+  running: 'The run is still going.',
+  waiting: 'The run is paused, waiting for you in background agents.',
+  finished: 'The run finished.',
+  failed: 'The run failed.',
+  cancelled: 'The run was stopped.',
+  taken_over: 'The run was taken over in a chat.',
+};
+
+function firingLabel(execution: TriggerExecution, actionType: TriggerActionType): string {
+  if (!execution.started) return 'Could not start';
+  return actionType === 'notification' ? 'Notified' : 'Started';
 }
 
 function defaultFormState(): CreateTriggerInput {
@@ -118,40 +148,95 @@ function defaultFormState(): CreateTriggerInput {
     name: '',
     type: 'cron',
     enabled: true,
-    config: { ...DEFAULT_CRON_CONFIG },
+    config: defaultCronConfig(),
     action: {
       type: 'agent',
       prompt: '',
-      model: getDefaultModelFor(null, 'chat'),
       approvalRequired: false,
     },
   };
 }
 
-function ExecutionEntry({ execution }: { execution: TriggerExecution }) {
-  const statusColor =
-    execution.status === 'success'
-      ? 'text-success-text'
-      : execution.status === 'failed'
-        ? 'text-danger-text'
-        : 'text-warning-text';
+function cronTimeZone(config: CronConfig): string {
+  return config.timezone?.trim() || COMPUTER_TIME_ZONE;
+}
 
+function minutesOf(seconds: number): string {
+  const minutes = Math.round(seconds / 60);
+  return minutes === 1 ? '1 minute' : `${minutes} minutes`;
+}
+
+function secondsOf(seconds: number): string {
+  return seconds === 1 ? '1 second' : `${seconds} seconds`;
+}
+
+function webhookExample(url: string, token: string): string {
+  return [
+    `curl -X POST ${url} \\`,
+    `  -H "Authorization: Bearer ${token}" \\`,
+    `  -H "Content-Type: application/json" \\`,
+    `  -d '{"ref":"main"}'`,
+  ].join('\n');
+}
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setCopied(false);
+  }, [value]);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+    } catch {
+      toast.error('Could not copy. Select the text and copy it by hand.');
+    }
+  }, [value]);
+
+  return (
+    <button
+      type="button"
+      onClick={() => void handleCopy()}
+      className="flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? 'Copied' : label}
+    </button>
+  );
+}
+
+function ExecutionEntry({
+  execution,
+  actionType,
+}: {
+  execution: TriggerExecution;
+  actionType: TriggerActionType;
+}) {
   return (
     <div className="flex flex-col gap-0.5 rounded-md border border-border/50 bg-surface-base px-3 py-2">
       <div className="flex items-center justify-between gap-2">
-        <span className={cn('text-xs font-medium capitalize', statusColor)}>
-          {execution.status}
+        <span
+          className={cn(
+            'text-xs font-medium',
+            execution.started ? 'text-foreground' : 'text-[var(--chat-destructive-text)]',
+          )}
+        >
+          {firingLabel(execution, actionType)}
         </span>
-        <span className="text-[10px] text-muted-foreground">
-          {formatDuration(execution.durationMs)}
-        </span>
-        <span className="text-[10px] text-muted-foreground">{formatTs(execution.startedAt)}</span>
+        <span className="text-[10px] text-muted-foreground">{formatTs(execution.firedAt)}</span>
       </div>
-      {execution.resultPreview && (
-        <p className="truncate text-[11px] text-muted-foreground">{execution.resultPreview}</p>
+      {execution.outcome && (
+        <p className="text-[11px] text-muted-foreground">{RUN_OUTCOME_TEXT[execution.outcome]}</p>
       )}
       {execution.error && (
-        <p className="truncate text-[11px] text-destructive">{execution.error}</p>
+        <p className="text-[11px] text-[var(--chat-destructive-text)]">{execution.error}</p>
+      )}
+      {execution.missedStarts > 1 && (
+        <p className="text-[11px] text-muted-foreground">
+          Missed start {execution.missedStarts} in a row
+        </p>
       )}
     </div>
   );
@@ -159,40 +244,41 @@ function ExecutionEntry({ execution }: { execution: TriggerExecution }) {
 
 interface ExecutionLogPanelProps {
   triggerId: string;
+  actionType: TriggerActionType;
   executions: TriggerExecution[];
   onLoad: (triggerId: string) => void;
 }
 
-function ExecutionLogPanel({ triggerId, executions, onLoad }: ExecutionLogPanelProps) {
+function ExecutionLogPanel({ triggerId, actionType, executions, onLoad }: ExecutionLogPanelProps) {
   const [expanded, setExpanded] = useState(false);
 
   const handleToggle = useCallback(() => {
-    setExpanded((prev) => {
-      const next = !prev;
-      if (next && executions.length === 0) {
-        onLoad(triggerId);
-      }
-      return next;
-    });
-  }, [executions.length, onLoad, triggerId]);
+    if (!expanded) onLoad(triggerId);
+    setExpanded(!expanded);
+  }, [expanded, onLoad, triggerId]);
 
   return (
     <div className="mt-1">
       <button
         type="button"
         onClick={handleToggle}
+        aria-expanded={expanded}
         className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
       >
         {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        Execution log
+        Firings since the app started
       </button>
 
       {expanded && (
         <div className="mt-2 flex flex-col gap-1.5 pl-1">
           {executions.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground/60">No executions recorded yet.</p>
+            <p className="text-[11px] text-muted-foreground">
+              Nothing has fired since the app started.
+            </p>
           ) : (
-            executions.slice(0, 10).map((ex) => <ExecutionEntry key={ex.id} execution={ex} />)
+            executions
+              .slice(0, 10)
+              .map((ex) => <ExecutionEntry key={ex.id} execution={ex} actionType={actionType} />)
           )}
         </div>
       )}
@@ -206,7 +292,9 @@ interface TriggerCardProps {
   onToggle: (id: string, enabled: boolean) => void;
   onEdit: (trigger: EventTriggerDefinition) => void;
   onDelete: (id: string) => void;
+  onNewToken: (trigger: EventTriggerDefinition) => void;
   onLoadExecutions: (triggerId: string) => void;
+  revealed: boolean;
 }
 
 function TriggerCard({
@@ -215,12 +303,20 @@ function TriggerCard({
   onToggle,
   onEdit,
   onDelete,
+  onNewToken,
   onLoadExecutions,
+  revealed,
 }: TriggerCardProps) {
+  const needsToken = webhookNeedsToken(trigger);
+
   return (
     <div
+      tabIndex={-1}
+      {...{ [NOTIFICATION_TARGET_ATTRIBUTE]: notificationTargetValue('trigger', trigger.id) }}
       className={cn(
         'group rounded-lg border bg-surface-raised p-4 transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        revealed && 'ring-2 ring-ring',
         trigger.enabled ? 'border-border' : 'border-border/50 opacity-70',
       )}
     >
@@ -247,15 +343,31 @@ function TriggerCard({
             <Badge variant="outline" className="shrink-0 text-[10px]">
               {triggerTypeLabel(trigger.type)}
             </Badge>
+            {needsToken && (
+              <Badge variant="outline" className="shrink-0 border-destructive/40 text-[10px]">
+                Needs a token
+              </Badge>
+            )}
           </div>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Last run: {formatTs(trigger.lastTriggeredAt)} &middot; {trigger.triggerCount} runs
+            Last fired: {formatTs(trigger.lastTriggeredAt)} &middot; fired {trigger.triggerCount}{' '}
+            {trigger.triggerCount === 1 ? 'time' : 'times'}
+            {trigger.coalescedCount > 0 && (
+              <> &middot; {trigger.coalescedCount} counted but not started</>
+            )}
           </p>
+          {trigger.runLive && (
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              A run of this trigger is going or waiting in background agents. Firings that arrive
+              before it ends are counted, not started.
+            </p>
+          )}
         </div>
 
         {/* Enable switch */}
         <Switch
-          checked={trigger.enabled}
+          checked={trigger.enabled && !needsToken}
+          disabled={needsToken}
           onCheckedChange={(checked) => onToggle(trigger.id, checked)}
           aria-label={trigger.enabled ? 'Disable trigger' : 'Enable trigger'}
         />
@@ -263,6 +375,19 @@ function TriggerCard({
 
       {/* Config summary */}
       <ConfigSummary trigger={trigger} />
+
+      {trigger.problem && (
+        <p role="status" className="mt-2 text-xs text-[var(--chat-destructive-text)]">
+          {trigger.problem}
+        </p>
+      )}
+
+      {needsToken && (
+        <p className="mt-2 text-xs text-foreground">
+          This webhook is off because it has no token, so anything on this computer could have
+          started it. Generate a token, then turn it back on.
+        </p>
+      )}
 
       {/* Action row */}
       <div className="mt-3 flex items-center gap-2">
@@ -273,6 +398,16 @@ function TriggerCard({
         >
           Edit
         </button>
+
+        {trigger.type === 'webhook' && (
+          <button
+            type="button"
+            onClick={() => onNewToken(trigger)}
+            className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {needsToken ? 'Generate token' : 'Regenerate token'}
+          </button>
+        )}
 
         <AlertDialog>
           <AlertDialogTrigger asChild>
@@ -305,7 +440,7 @@ function TriggerCard({
 
         {/* Status pill */}
         <div className="ml-auto flex items-center gap-1">
-          {trigger.enabled ? (
+          {trigger.enabled && !needsToken ? (
             <Zap className="h-3 w-3 text-success-text" />
           ) : (
             <ZapOff className="h-3 w-3 text-muted-foreground" />
@@ -313,16 +448,21 @@ function TriggerCard({
           <span
             className={cn(
               'text-[10px] font-medium',
-              trigger.enabled ? 'text-success-text' : 'text-muted-foreground',
+              trigger.enabled && !needsToken ? 'text-success-text' : 'text-muted-foreground',
             )}
           >
-            {trigger.enabled ? 'Active' : 'Disabled'}
+            {needsToken ? 'Off until it has a token' : trigger.enabled ? 'Active' : 'Disabled'}
           </span>
         </div>
       </div>
 
       {/* Execution log */}
-      <ExecutionLogPanel triggerId={trigger.id} executions={executions} onLoad={onLoadExecutions} />
+      <ExecutionLogPanel
+        triggerId={trigger.id}
+        actionType={trigger.action.type}
+        executions={executions}
+        onLoad={onLoadExecutions}
+      />
     </div>
   );
 }
@@ -332,19 +472,127 @@ function ConfigSummary({ trigger }: { trigger: EventTriggerDefinition }) {
   let summary = '';
 
   if (trigger.type === 'cron') {
-    summary = `Schedule: ${(cfg as CronConfig).expression}`;
+    const cron = cfg as CronConfig;
+    summary = `Schedule: ${cron.expression} (${cronTimeZone(cron)})`;
   } else if (trigger.type === 'webhook') {
     const wh = cfg as WebhookConfig;
-    summary = `Path: ${wh.path}${wh.authToken ? ' · Auth token set' : ''}`;
+    summary = `POST ${trigger.webhookUrl ?? wh.path} · ${wh.tokenHash ? 'Token required' : 'No token'}`;
   } else if (trigger.type === 'file_watcher') {
     const fw = cfg as FileWatcherConfig;
-    summary = `Watch: ${fw.watchPath || '(unset)'}, ${fw.glob}`;
+    summary = `Watch: ${fw.watchPath || '(unset)'}, ${fw.glob || 'every file'}`;
   }
 
   return (
-    <p className="mt-2 truncate rounded-md bg-muted/40 px-2 py-1 font-mono text-[10px] text-muted-foreground">
+    <p
+      title={summary}
+      className="mt-2 truncate rounded-md bg-muted/40 px-2 py-1 font-mono text-[10px] text-muted-foreground"
+    >
       {summary}
     </p>
+  );
+}
+
+interface ShownWebhookToken {
+  triggerName: string;
+  token: string;
+  url: string | null;
+}
+
+function WebhookTokenDialog({
+  shown,
+  engineInfo,
+  onClose,
+}: {
+  shown: ShownWebhookToken | null;
+  engineInfo: TriggerEngineInfo | null;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={shown !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Copy the webhook token now</DialogTitle>
+          <DialogDescription>
+            This is the only time the token for "{shown?.triggerName}" is shown. Requests must send
+            it as an Authorization header, or they are refused. If you lose it, regenerate it.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4 py-2">
+          {shown?.url && (
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium text-foreground" htmlFor="webhook-url">
+                Send a POST request to
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="webhook-url"
+                  type="text"
+                  readOnly
+                  value={shown.url}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <CopyButton value={shown.url} label="Copy address" />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                This address answers only programs on this computer.
+              </p>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-medium text-foreground" htmlFor="webhook-token">
+              Authorization: Bearer
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="webhook-token"
+                type="text"
+                readOnly
+                value={shown?.token ?? ''}
+                onFocus={(e) => e.currentTarget.select()}
+                className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <CopyButton value={shown?.token ?? ''} label="Copy token" />
+            </div>
+          </div>
+
+          {shown?.url && (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium text-foreground">Example</p>
+              <pre
+                data-testid="webhook-example"
+                className="overflow-x-auto rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-xs text-foreground"
+              >
+                {webhookExample(shown.url, shown.token)}
+              </pre>
+              {engineInfo && (
+                <p className="text-xs text-muted-foreground">
+                  The body can be up to {Math.floor(engineInfo.maxWebhookBodyBytes / 1024)} KB and
+                  must come with a Content-Length header. To make a retry safe, add an
+                  Idempotency-Key header: a repeat of the same key within{' '}
+                  {minutesOf(engineInfo.idempotencyWindowSecs)} is answered without starting another
+                  run. A request that arrives while a run is going, or within{' '}
+                  {secondsOf(engineInfo.minStartIntervalSecs)} of the last start, is answered 429
+                  with a Retry-After header and does not run: send it again after that time.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+          >
+            Done
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -352,25 +600,37 @@ interface TriggerFormProps {
   open: boolean;
   initial: CreateTriggerInput | null;
   editId: string | null;
+  engineInfo: TriggerEngineInfo | null;
+  onPickFolder: () => Promise<string | null>;
   onClose: () => void;
   onSubmit: (data: CreateTriggerInput, editId: string | null) => Promise<void>;
 }
 
-function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormProps) {
+function TriggerForm({
+  open,
+  initial,
+  editId,
+  engineInfo,
+  onPickFolder,
+  onClose,
+  onSubmit,
+}: TriggerFormProps) {
   const [form, setForm] = useState<CreateTriggerInput>(initial ?? defaultFormState());
   const [saving, setSaving] = useState(false);
 
-  const availableModels = useModelStore((s) => s.availableModels);
-  const automationModelOptions = useMemo(
-    () => availableModels.filter((m) => m.available).map((m) => ({ value: m.id, label: m.name })),
-    [availableModels],
-  );
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const latestInitial = useRef(initial);
+  useEffect(() => {
+    latestInitial.current = initial;
+  });
 
   useEffect(() => {
     if (open) {
-      setForm(initial ?? defaultFormState());
+      setForm(latestInitial.current ?? defaultFormState());
+      setSaveError(null);
     }
-  }, [open, initial]);
+  }, [open, editId]);
 
   const handleTypeChange = useCallback((type: TriggerType) => {
     setForm((prev) => ({
@@ -378,7 +638,7 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
       type,
       config:
         type === 'cron'
-          ? { ...DEFAULT_CRON_CONFIG }
+          ? defaultCronConfig()
           : type === 'webhook'
             ? { ...DEFAULT_WEBHOOK_CONFIG }
             : { ...DEFAULT_FILE_WATCHER_CONFIG },
@@ -386,26 +646,21 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
   }, []);
 
   const handleCronPreset = useCallback((expression: string) => {
-    setForm((prev) => ({ ...prev, config: { expression } as CronConfig }));
+    setForm((prev) => ({ ...prev, config: { ...(prev.config as CronConfig), expression } }));
   }, []);
 
   const handleBrowseWatchDirectory = useCallback(async () => {
     try {
-      const selected = await openDialog({
-        directory: true,
-        multiple: false,
-        title: 'Select Watch Directory',
-      });
-      if (typeof selected !== 'string') return;
+      const selected = await onPickFolder();
+      if (!selected) return;
       setForm((prev) => ({
         ...prev,
-        config: { ...(prev.config as FileWatcherConfig), directory: selected },
+        config: { ...(prev.config as FileWatcherConfig), watchPath: selected },
       }));
     } catch (error) {
-      console.error('Failed to select watch directory:', error);
-      toast.error('Failed to open folder picker');
+      toast.error(error instanceof Error ? error.message : String(error));
     }
-  }, []);
+  }, [onPickFolder]);
 
   const handleSubmit = useCallback(async () => {
     if (!form.name.trim()) {
@@ -413,15 +668,19 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
       return;
     }
     setSaving(true);
+    setSaveError(null);
     try {
       await onSubmit(form, editId);
       onClose();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }
   }, [form, editId, onSubmit, onClose]);
 
   const cfg = form.config;
+  const webhookPath = form.type === 'webhook' ? (cfg as WebhookConfig).path.trim() : '';
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -450,7 +709,11 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
           {/* Trigger type */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-foreground">Trigger type</label>
-            <Select value={form.type} onValueChange={(v) => handleTypeChange(v as TriggerType)}>
+            <Select
+              value={form.type}
+              disabled={Boolean(editId)}
+              onValueChange={(v) => handleTypeChange(v as TriggerType)}
+            >
               <SelectTrigger className="h-9 text-sm">
                 <SelectValue />
               </SelectTrigger>
@@ -475,6 +738,11 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
                 </SelectItem>
               </SelectContent>
             </Select>
+            {editId && (
+              <p className="text-xs text-muted-foreground">
+                The kind of trigger cannot be changed. Delete it and create a new one.
+              </p>
+            )}
           </div>
 
           {/* Type-specific config */}
@@ -504,13 +772,41 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
                 onChange={(e) =>
                   setForm((prev) => ({
                     ...prev,
-                    config: { expression: e.target.value } as CronConfig,
+                    config: { ...(prev.config as CronConfig), expression: e.target.value },
                   }))
                 }
                 placeholder="0 9 * * *"
                 className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
-              <p className="text-[10px] text-muted-foreground">min hour day month weekday (UTC)</p>
+              <p className="text-xs text-muted-foreground">
+                minute hour day month weekday. Weekdays are 0 to 7, where 0 and 7 are Sunday, so 1-5
+                is Monday to Friday and 6-7 is the weekend.
+              </p>
+              <label className="text-xs font-medium text-foreground" htmlFor="trigger-time-zone">
+                Time zone
+              </label>
+              <input
+                id="trigger-time-zone"
+                type="text"
+                value={(cfg as CronConfig).timezone ?? ''}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    config: { ...(prev.config as CronConfig), timezone: e.target.value },
+                  }))
+                }
+                placeholder="This computer's time zone"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <p className="text-xs text-muted-foreground">
+                This schedule is read in {cronTimeZone(cfg as CronConfig)}. Use a zone name such as
+                Europe/Berlin, or leave it blank to follow this computer's time zone.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                If the app is closed or asleep when a run is due, the trigger runs once when the app
+                is back, and a notification says how many runs were missed. Turning the trigger on
+                or changing its schedule never runs a time that has already passed.
+              </p>
             </div>
           )}
 
@@ -527,58 +823,72 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
                       config: { ...(prev.config as WebhookConfig), path: e.target.value },
                     }))
                   }
-                  placeholder="/webhook/my-trigger"
+                  placeholder={
+                    editId ? '/hooks/my-trigger' : 'Leave blank to generate a unique path'
+                  }
                   maxLength={200}
                   className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-foreground">Require auth token</label>
-                <Switch
-                  checked={Boolean((cfg as WebhookConfig).authToken)}
-                  onCheckedChange={(checked) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      config: {
-                        ...(prev.config as WebhookConfig),
-                        authToken: checked ? crypto.randomUUID() : null,
-                      },
-                    }))
-                  }
-                />
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Each webhook needs its own path. A path another trigger already uses is refused.
+                {engineInfo && (
+                  <>
+                    {' '}
+                    Requests go to{' '}
+                    <span className="font-mono text-foreground">
+                      {engineInfo.webhookBaseUrl}
+                      {webhookPath || '/hooks/…'}
+                    </span>
+                    , which answers only programs on this computer.
+                  </>
+                )}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {editId
+                  ? "Requests must send this webhook's token. Regenerate it from the trigger list."
+                  : 'A token is generated when you create this trigger and shown once. Requests without it are refused.'}
+              </p>
+              {engineInfo?.webhookProblem && (
+                <p role="status" className="text-xs text-[var(--chat-destructive-text)]">
+                  {engineInfo.webhookProblem}
+                </p>
+              )}
             </div>
           )}
 
           {form.type === 'file_watcher' && (
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-foreground">Watch directory</label>
+                <label
+                  className="text-xs font-medium text-foreground"
+                  htmlFor="trigger-watch-folder"
+                >
+                  Watch folder
+                </label>
                 <div className="flex gap-2">
                   <input
+                    id="trigger-watch-folder"
                     type="text"
+                    readOnly
                     value={(cfg as FileWatcherConfig).watchPath}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        config: {
-                          ...(prev.config as FileWatcherConfig),
-                          watchPath: e.target.value,
-                        },
-                      }))
-                    }
-                    placeholder="/Users/me/Documents"
-                    className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="No folder chosen"
+                    className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <button
                     type="button"
-                    title="Browse for directory"
-                    className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground transition-colors hover:text-foreground"
+                    className="flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
                     onClick={() => void handleBrowseWatchDirectory()}
                   >
                     <FolderOpen className="h-4 w-4" />
+                    Browse
                   </button>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  A trigger watches only a folder you choose with Browse, or one already granted to
+                  the agent. Links that lead out of the folder are not followed, and files the app
+                  writes itself never start a run.
+                </p>
               </div>
 
               <div className="flex flex-col gap-1.5">
@@ -598,6 +908,12 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
                   placeholder="**/*.pdf"
                   className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 />
+                <p className="text-xs text-muted-foreground">
+                  The pattern is matched against the path below the watched folder.{' '}
+                  <span className="font-mono text-foreground">*.pdf</span> matches files in the
+                  folder itself, <span className="font-mono text-foreground">**/*.pdf</span> matches
+                  at every level, and a blank pattern matches every file.
+                </p>
               </div>
 
               <div className="flex flex-col gap-1.5">
@@ -622,6 +938,14 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
             </div>
           )}
 
+          <p className="text-xs text-muted-foreground">
+            One run at a time: a firing that arrives while this trigger's run is still going is
+            counted on the trigger, not started.
+            {engineInfo &&
+              form.type !== 'cron' &&
+              ` Starts are at least ${secondsOf(engineInfo.minStartIntervalSecs)} apart, and a firing inside that time is counted the same way.`}
+          </p>
+
           {/* Agent action config */}
           <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-muted/20 p-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -645,38 +969,12 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
               />
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-foreground">Model</label>
-              <Select
-                value={form.action.model ?? ''}
-                onValueChange={(v) =>
-                  setForm((prev) => ({ ...prev, action: { ...prev.action, model: v } }))
-                }
-              >
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {automationModelOptions.length > 0 ? (
-                    automationModelOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="" disabled>
-                      Loading models…
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium text-foreground">Require approval</p>
-                <p className="text-[10px] text-muted-foreground">
-                  Pause before executing, approve from mobile
+                <p className="text-xs text-muted-foreground">
+                  A run starts paused and waits until you resume it from background agents. While
+                  one is waiting, later firings are counted on the trigger, not started.
                 </p>
               </div>
               <Switch
@@ -693,13 +991,21 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
 
           {/* Enabled toggle */}
           <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-foreground">Enabled on creation</label>
+            <label className="text-xs font-medium text-foreground">
+              {editId ? 'Enabled' : 'Enabled on creation'}
+            </label>
             <Switch
               checked={form.enabled}
               onCheckedChange={(checked) => setForm((prev) => ({ ...prev, enabled: checked }))}
             />
           </div>
         </div>
+
+        {saveError && (
+          <p role="alert" className="text-sm text-destructive">
+            {editId ? 'Your changes were not saved' : 'The trigger was not created'}: {saveError}
+          </p>
+        )}
 
         <DialogFooter>
           <button
@@ -748,10 +1054,14 @@ export function AutomationBuilder() {
   const {
     triggers,
     executions,
+    engineInfo,
     loading,
     error,
     fetchTriggers,
+    fetchEngineInfo,
+    pickWatchFolder,
     createTrigger,
+    regenerateWebhookToken,
     updateTrigger,
     deleteTrigger,
     toggleTrigger,
@@ -760,10 +1070,14 @@ export function AutomationBuilder() {
     useShallow((s) => ({
       triggers: s.triggers,
       executions: s.executions,
+      engineInfo: s.engineInfo,
       loading: s.loading,
       error: s.error,
       fetchTriggers: s.fetchTriggers,
+      fetchEngineInfo: s.fetchEngineInfo,
+      pickWatchFolder: s.pickWatchFolder,
       createTrigger: s.createTrigger,
+      regenerateWebhookToken: s.regenerateWebhookToken,
       updateTrigger: s.updateTrigger,
       deleteTrigger: s.deleteTrigger,
       toggleTrigger: s.toggleTrigger,
@@ -773,10 +1087,34 @@ export function AutomationBuilder() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<EventTriggerDefinition | null>(null);
+  const [shownToken, setShownToken] = useState<ShownWebhookToken | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
+
+  const [listed, setListed] = useState(false);
+  const revealedTriggerId = useNotificationTarget(
+    'trigger',
+    triggers.map((trigger) => trigger.id),
+    listed,
+  );
 
   useEffect(() => {
-    void fetchTriggers();
+    let mounted = true;
+    void Promise.resolve(fetchTriggers()).finally(() => {
+      if (mounted) setListed(true);
+    });
+    return () => {
+      mounted = false;
+    };
   }, [fetchTriggers]);
+
+  const refresh = useCallback(() => {
+    void fetchTriggers();
+    void fetchEngineInfo();
+  }, [fetchEngineInfo, fetchTriggers]);
+
+  useEffect(() => {
+    void fetchEngineInfo();
+  }, [fetchEngineInfo]);
 
   const handleOpenCreate = useCallback(() => {
     setEditTarget(null);
@@ -795,18 +1133,13 @@ export function AutomationBuilder() {
 
   const handleSubmit = useCallback(
     async (data: CreateTriggerInput, editId: string | null) => {
-      try {
-        if (editId) {
-          await updateTrigger(editId, data);
-          toast.success('Trigger updated');
-        } else {
-          await createTrigger(data);
-          toast.success('Trigger created');
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        toast.error(`Failed to ${editId ? 'update' : 'create'} trigger: ${msg}`);
-        throw err;
+      if (editId) {
+        await updateTrigger(editId, data);
+        toast.success('Trigger updated');
+      } else {
+        const { token, trigger } = await createTrigger(data);
+        toast.success('Trigger created');
+        if (token) setShownToken({ triggerName: data.name, token, url: trigger.webhookUrl });
       }
     },
     [createTrigger, updateTrigger],
@@ -820,6 +1153,32 @@ export function AutomationBuilder() {
       });
     },
     [toggleTrigger],
+  );
+
+  const handleNewToken = useCallback(
+    (trigger: EventTriggerDefinition) => {
+      const generate = async () => {
+        try {
+          const token = await regenerateWebhookToken(trigger.id);
+          setShownToken({ triggerName: trigger.name, token, url: trigger.webhookUrl });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          toast.error(`Failed to generate a token: ${msg}`);
+        }
+      };
+      if (webhookNeedsToken(trigger)) {
+        void generate();
+        return;
+      }
+      confirm({
+        title: 'Regenerate this webhook token?',
+        description: `The current token for "${trigger.name}" stops working at once and cannot be recovered. Anything that calls this webhook is refused until you give it the new token.`,
+        confirmLabel: 'Regenerate token',
+        destructive: true,
+        onConfirm: generate,
+      });
+    },
+    [confirm, regenerateWebhookToken],
   );
 
   const handleDelete = useCallback(
@@ -841,15 +1200,19 @@ export function AutomationBuilder() {
     [fetchExecutions],
   );
 
-  const formInitial: CreateTriggerInput | null = editTarget
-    ? {
-        name: editTarget.name,
-        type: editTarget.type,
-        enabled: editTarget.enabled,
-        config: editTarget.config,
-        action: editTarget.action,
-      }
-    : null;
+  const formInitial = useMemo<CreateTriggerInput | null>(
+    () =>
+      editTarget
+        ? {
+            name: editTarget.name,
+            type: editTarget.type,
+            enabled: editTarget.enabled,
+            config: editTarget.config,
+            action: editTarget.action,
+          }
+        : null,
+    [editTarget],
+  );
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface-base">
@@ -864,7 +1227,7 @@ export function AutomationBuilder() {
         <div className="ml-auto flex items-center gap-2">
           <button
             type="button"
-            onClick={() => void fetchTriggers()}
+            onClick={refresh}
             disabled={loading}
             title="Refresh triggers"
             className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
@@ -919,9 +1282,11 @@ export function AutomationBuilder() {
                 key={trigger.id}
                 trigger={trigger}
                 executions={executions[trigger.id] ?? []}
+                revealed={revealedTriggerId === trigger.id}
                 onToggle={handleToggle}
                 onEdit={handleOpenEdit}
                 onDelete={handleDelete}
+                onNewToken={handleNewToken}
                 onLoadExecutions={handleLoadExecutions}
               />
             ))}
@@ -934,9 +1299,18 @@ export function AutomationBuilder() {
         open={dialogOpen}
         initial={formInitial}
         editId={editTarget?.id ?? null}
+        engineInfo={engineInfo}
+        onPickFolder={pickWatchFolder}
         onClose={handleCloseDialog}
         onSubmit={handleSubmit}
       />
+
+      <WebhookTokenDialog
+        shown={shownToken}
+        engineInfo={engineInfo}
+        onClose={() => setShownToken(null)}
+      />
+      {confirmDialog}
     </div>
   );
 }

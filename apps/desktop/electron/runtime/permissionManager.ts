@@ -14,15 +14,20 @@ import {
   type PermissionState,
 } from '@agiworkforce/local-runtime-contract';
 import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import { APP_NAME, shownValue } from './dialogText';
 import {
   buildDecision,
   evaluatePermission,
   isPersistable,
+  isRestorable,
   isSingleUse,
   normalizeGrantDuration,
 } from './permissionCore';
 import { showDevicePrompt } from './devicePrompts';
 import { systemPermissionStatuses } from './systemPermissions';
+
+const TARGET_SHOWN = { head: 240, tail: 120 };
+const NAME_SHOWN = { head: 80, tail: 0 };
 
 type StoredDecision = PermissionDecision & { label?: string };
 
@@ -60,7 +65,7 @@ function load(): void {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return;
     for (const entry of parsed) {
-      if (isDecisionShape(entry)) {
+      if (isDecisionShape(entry) && isRestorable(entry)) {
         persisted.set(permissionKey(entry.capability, entry.scope), entry);
       }
     }
@@ -93,11 +98,12 @@ export function recordDecision(
   scope: PermissionScope,
   state: 'granted' | 'denied',
   duration: PermissionGrantDuration,
-  acknowledgedHighRisk = false,
   label?: string,
 ): PermissionDecision {
   load();
-  const effective = normalizeGrantDuration(capability, duration, acknowledgedHighRisk);
+  // A refusal may stand for good. Only a grant of a high-risk capability is
+  // held to the session.
+  const effective = state === 'denied' ? duration : normalizeGrantDuration(capability, duration);
   const decision: StoredDecision = {
     ...buildDecision(capability, scope, state, effective, Date.now()),
     ...(label ? { label } : {}),
@@ -119,6 +125,11 @@ export function consumeSingleUse(capability: DesktopCapability, scope: Permissio
   if (decision && isSingleUse(decision)) session.delete(key);
 }
 
+/**
+ * Forgets whatever was decided, a refusal included, so the next use asks
+ * again. Only a path the user confirmed in main may call this for a refusal;
+ * everything else withdraws through `withdrawGrant`.
+ */
 export function revokePermission(capability: DesktopCapability, scope: PermissionScope): void {
   load();
   const key = permissionKey(capability, scope);
@@ -126,106 +137,49 @@ export function revokePermission(capability: DesktopCapability, scope: Permissio
   if (persisted.delete(key)) persist();
 }
 
-export function revokeScope(scope: PermissionScope): void {
+/**
+ * Takes a grant back and leaves a refusal standing. Stopping something, or
+ * removing a folder, takes access away; neither is the user changing their
+ * mind about a no, and a caller that could clear one this way could raise the
+ * same prompt until it was allowed.
+ */
+export function withdrawGrant(capability: DesktopCapability, scope: PermissionScope): void {
   load();
-  const target = permissionScopeKey(scope);
-  let changed = false;
-  for (const store of [session, persisted]) {
-    for (const [key, decision] of store) {
-      if (permissionScopeKey(decision.scope) !== target) continue;
-      store.delete(key);
-      if (store === persisted) changed = true;
-    }
-  }
-  if (changed) persist();
-}
-
-export function listPermissions(): PermissionDecision[] {
-  load();
-  return [...persisted.values(), ...session.values()];
-}
-
-export function clearSessionPermissions(): void {
-  session.clear();
-}
-
-const revokedDevices = new Map<string, number>();
-let revocationsLoaded = false;
-
-function revocationStorePath(): string {
-  return path.join(app.getPath('userData'), 'revoked-devices.json');
-}
-
-function loadRevocations(): void {
-  if (revocationsLoaded) return;
-  revocationsLoaded = true;
-  let raw: string;
-  try {
-    raw = readFileSync(revocationStorePath(), 'utf8');
-  } catch {
-    return;
-  }
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return;
-    for (const entry of parsed) {
-      if (!entry || typeof entry !== 'object') continue;
-      const record = entry as { deviceId?: unknown; revokedAtMs?: unknown };
-      if (typeof record.deviceId !== 'string' || record.deviceId.length === 0) continue;
-      revokedDevices.set(
-        record.deviceId,
-        typeof record.revokedAtMs === 'number' ? record.revokedAtMs : 0,
-      );
-    }
-  } catch {
-    // A corrupt store is read as no revocations; the cloud re-sends them on the next sync.
-  }
-}
-
-function persistRevocations(): void {
-  const rows = [...revokedDevices.entries()].map(([deviceId, revokedAtMs]) => ({
-    deviceId,
-    revokedAtMs,
-  }));
-  try {
-    writeFileSync(revocationStorePath(), `${JSON.stringify(rows, null, 2)}\n`, {
-      encoding: 'utf8',
-      mode: 0o600,
-    });
-  } catch (error) {
-    console.warn('[permissions] could not persist device revocations:', error);
+  const key = permissionKey(capability, scope);
+  if (session.get(key)?.state === 'granted') session.delete(key);
+  if (persisted.get(key)?.state === 'granted') {
+    persisted.delete(key);
+    persist();
   }
 }
 
 /**
- * Takes effect on the next command, not on the next sync: the refusal is held
- * in memory and written to disk, so neither a poll interval nor a restart can
- * let the device carry on working.
+ * Takes back every grant recorded against one scope, so a folder approved
+ * again later starts from prompts instead of inheriting what its last approval
+ * collected. A refusal recorded there stays, as it does for `withdrawGrant`.
  */
-export function revokeDevice(deviceId: string, revokedAtMs: number = Date.now()): void {
-  if (!deviceId) return;
-  loadRevocations();
-  revokedDevices.set(deviceId, revokedAtMs);
-  persistRevocations();
+export function revokeScope(scope: PermissionScope): number {
+  load();
+  const scopeKey = permissionScopeKey(scope);
+  let removed = 0;
+  let persistedChanged = false;
+  for (const store of [session, persisted]) {
+    for (const [key, decision] of [...store]) {
+      if (permissionScopeKey(decision.scope) !== scopeKey || decision.state !== 'granted') continue;
+      store.delete(key);
+      removed += 1;
+      if (store === persisted) persistedChanged = true;
+    }
+  }
+  if (persistedChanged) persist();
+  return removed;
 }
 
-export function reinstateDevice(deviceId: string): void {
-  loadRevocations();
-  if (revokedDevices.delete(deviceId)) persistRevocations();
-}
-
-export function isDeviceRevoked(deviceId: string | null | undefined): boolean {
-  if (!deviceId) return false;
-  loadRevocations();
-  return revokedDevices.has(deviceId);
-}
-
-export function listRevokedDevices(): { deviceId: string; revokedAtMs: number }[] {
-  loadRevocations();
-  return [...revokedDevices.entries()].map(([deviceId, revokedAtMs]) => ({
-    deviceId,
-    revokedAtMs,
-  }));
+/** What is in force now: a session decision stands in front of a stored one. */
+export function listPermissions(): PermissionDecision[] {
+  load();
+  const inForce = new Map<string, PermissionDecision>([...persisted, ...session]);
+  return [...inForce.values()].filter((decision) => !isSingleUse(decision));
 }
 
 export interface RemoteCommandAuthorization {
@@ -233,30 +187,19 @@ export interface RemoteCommandAuthorization {
   readonly reason?: string;
 }
 
-const UNNAMED_DEVICE_REFUSAL =
-  'This command did not say which device it came from, so it was refused.';
-
 /**
- * The gate every command that arrived from another device passes. A revoked
- * device is refused outright rather than prompted: there is nobody at the other
- * end of this machine's dialog to answer for it.
+ * The gate every command that arrived from another device passes. It never
+ * prompts: whoever would answer this machine's dialog is not the one who sent
+ * the command, so anything short of a grant already given here is a refusal.
  */
 export function authorizeRemoteCommand(
-  deviceId: string | null | undefined,
   capability: DesktopCapability,
   scope: PermissionScope,
 ): RemoteCommandAuthorization {
-  if (!deviceId) return { allowed: false, reason: UNNAMED_DEVICE_REFUSAL };
-  if (isDeviceRevoked(deviceId)) {
-    return {
-      allowed: false,
-      reason: 'This device was revoked, so it can no longer be asked to do anything.',
-    };
-  }
   if (getPermissionState(capability, scope) !== 'granted') {
     return {
       allowed: false,
-      reason: `This device has not been allowed to ${describe(capability, scope)}.`,
+      reason: `This device has not been allowed to ${describePermission(capability, scope)}.`,
     };
   }
   return { allowed: true };
@@ -275,7 +218,6 @@ const CAPABILITY_LABELS: Record<DesktopCapability, string> = {
   'computer.use': 'read the screen and control the mouse and keyboard',
   'application.control': 'control the application',
   'clipboard.read': 'read the clipboard',
-  'clipboard.monitor': 'watch the clipboard continuously',
   // Enforced by Chromium, not by this engine: audio capture reaches the
   // renderer through getUserMedia, so `setPermissionRequestHandler` and
   // `setPermissionCheckHandler` in main.ts decide it, restricted to audio from
@@ -283,22 +225,18 @@ const CAPABILITY_LABELS: Record<DesktopCapability, string> = {
   // shared vocabulary a client can be asked about; no dispatcher command maps
   // to it, and a review has already read that absence as ungated.
   microphone: 'use the microphone',
-  'simulator.ios': 'control the iOS simulator',
-  'emulator.android': 'control the Android emulator',
-  'mcp.local': 'run the local tool server',
   'local.inference': 'answer chats with a model running on this Mac',
   'host.remote': 'accept work from your other devices',
-  'task.scheduled': 'run scheduled tasks',
 };
 
 /**
  * The verb phrase a prompt asks about. An application-scoped grant names the
  * asking program, so appending the target reads as though it were the object.
  */
-function describe(capability: DesktopCapability, scope: PermissionScope): string {
+export function describePermission(capability: DesktopCapability, scope: PermissionScope): string {
   const verb = CAPABILITY_LABELS[capability];
   if (!scope.target || scope.kind === 'application') return verb;
-  return `${verb} ${scope.target}`;
+  return `${verb} ${shownValue(scope.target, TARGET_SHOWN)}`;
 }
 
 const REVIEW_PHRASES: Partial<Record<DesktopCapability, string>> = {
@@ -314,7 +252,7 @@ export function describePermissionDecision(decision: StoredDecision): string {
   if (decision.scope.kind === 'application' && decision.scope.target) {
     return `${phrase ?? CAPABILITY_LABELS[decision.capability]}, when ${decision.scope.target} asks`;
   }
-  return phrase ?? describe(decision.capability, decision.scope);
+  return phrase ?? describePermission(decision.capability, decision.scope);
 }
 
 export function reviewPermissions(): DesktopPermissionsReview {
@@ -343,11 +281,15 @@ export interface PermissionQuestion {
 
 const NEVER_ALLOW_LABEL = 'Never allow';
 
+const asking = new Map<string, Promise<PermissionState>>();
+
 /**
  * Asks once and records the answer, returning the stored state rather than a
- * boolean so a denial is not re-prompted.
+ * boolean so a denial is not re-prompted. A request for something already
+ * being asked about joins that question, so a caller cannot stack a second
+ * dialog behind the first or raise one again the moment it is refused.
  */
-export async function requestPermission(
+export function requestPermission(
   window: BrowserWindow | null,
   capability: DesktopCapability,
   scope: PermissionScope,
@@ -355,8 +297,25 @@ export async function requestPermission(
   question: PermissionQuestion = {},
 ): Promise<PermissionState> {
   const existing = getPermissionState(capability, scope);
-  if (existing !== 'prompt') return existing;
+  if (existing !== 'prompt') return Promise.resolve(existing);
 
+  const key = permissionKey(capability, scope);
+  const open = asking.get(key);
+  if (open) return open;
+  const asked = ask(window, capability, scope, reason, question).finally(() => {
+    asking.delete(key);
+  });
+  asking.set(key, asked);
+  return asked;
+}
+
+async function ask(
+  window: BrowserWindow | null,
+  capability: DesktopCapability,
+  scope: PermissionScope,
+  reason: string,
+  question: PermissionQuestion,
+): Promise<PermissionState> {
   const highRisk = isHighRiskCapability(capability);
   const neverAllow = highRisk && question.offerNeverAllow === true;
   const allowSession = `${TOOL_APPROVAL_ACTION_LABELS.allow} this session`;
@@ -370,8 +329,12 @@ export async function requestPermission(
     defaultId: 0,
     cancelId: 0,
     title: 'Permission required',
-    message: `Allow ${question.subject ?? 'AGI Workforce'} to ${
-      question.objectPhrase ?? describe(capability, scope)
+    message: `Allow ${
+      question.subject === undefined ? APP_NAME : shownValue(question.subject, NAME_SHOWN)
+    } to ${
+      question.objectPhrase === undefined
+        ? describePermission(capability, scope)
+        : shownValue(question.objectPhrase, TARGET_SHOWN)
     }?`,
     detail: highRisk
       ? `${reason}\n\nThis is a high-impact permission. It lasts until you quit the app; there is no permanent grant from this prompt.`
@@ -381,16 +344,22 @@ export async function requestPermission(
 
   const result = await showDevicePrompt(window, options);
 
-  if (result.response === 0) {
-    recordDecision(capability, scope, 'denied', 'session', false, question.targetLabel);
+  // Only the button that was pressed decides, by its place in `buttons`. Any
+  // other answer, such as a dialog that closed without one, grants nothing.
+  if (neverAllow && result.response === buttons.indexOf(NEVER_ALLOW_LABEL)) {
+    recordDecision(capability, scope, 'denied', 'always', question.targetLabel);
     return 'denied';
   }
-  if (neverAllow && result.response === 2) {
-    recordDecision(capability, scope, 'denied', 'always', true, question.targetLabel);
+  const duration: PermissionGrantDuration | null =
+    result.response === buttons.indexOf(allowSession)
+      ? 'session'
+      : !highRisk && result.response === buttons.indexOf(TOOL_APPROVAL_ACTION_LABELS.alwaysAllow)
+        ? 'always'
+        : null;
+  if (duration === null) {
+    recordDecision(capability, scope, 'denied', 'session', question.targetLabel);
     return 'denied';
   }
-
-  const duration: PermissionGrantDuration = result.response === 2 ? 'always' : 'session';
-  recordDecision(capability, scope, 'granted', duration, false, question.targetLabel);
+  recordDecision(capability, scope, 'granted', duration, question.targetLabel);
   return 'granted';
 }

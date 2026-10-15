@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -49,10 +48,24 @@ function commandsInvokedThroughUtilsIpc(): Set<string> {
   return commands;
 }
 
+const CORE_COMMANDS = [
+  'chat_send_message',
+  'chat_create_conversation',
+  'chat_get_messages',
+  'llm_send_message',
+  'mcp_list_servers',
+];
+
 describe('REGISTERED_COMMANDS mirrors generate_handler!', () => {
+  it('reads the Rust registry rather than an empty or truncated parse', () => {
+    const rust = registeredInRust();
+
+    expect(CORE_COMMANDS.filter((command) => !rust.has(command))).toEqual([]);
+    expect(rust.size).toBeGreaterThan(100);
+  });
+
   it('rejects nothing the Rust registry answers', () => {
     const rust = registeredInRust();
-    expect(rust.size).toBeGreaterThan(1000);
 
     const missing = [...rust].filter((command) => !REGISTERED_COMMANDS.has(command));
     expect(missing).toEqual([]);

@@ -199,18 +199,6 @@ interface ReflectionInsightResponse {
   recommendations: string[];
 }
 
-interface SwarmGoalResponse {
-  success: boolean;
-  goalId: string;
-  succeeded: number;
-  failed: number;
-  wallTimeMs: number;
-  speedupRatio: number;
-  criticalPathLength: number;
-  maxParallelism: number;
-  summary: string;
-}
-
 export interface AgiGoalSubmittedPayload {
   goal_id: string;
   description: string;
@@ -267,6 +255,39 @@ export interface AgiGoalExecutionCompletedPayload {
   goal_id: string;
   success: boolean;
   error?: string;
+}
+
+export interface AgiSwarmCompletedPayload extends AgiGoalExecutionCompletedPayload {
+  succeeded: number;
+  failed: number;
+  wall_time_ms: number;
+  speedup_ratio: number;
+  critical_path_length: number;
+  max_parallelism: number;
+  summary: string;
+}
+
+export interface SwarmDecomposedPayload {
+  goal_id: string;
+  total_subtasks: number;
+}
+
+export interface SwarmSubtaskStartedPayload {
+  goal_id: string;
+  subtask_id: string;
+  description: string;
+}
+
+export interface SwarmSubtaskCompletedPayload {
+  goal_id: string;
+  subtask_id: string;
+  execution_time_ms: number;
+}
+
+export interface SwarmSubtaskFailedPayload {
+  goal_id: string;
+  subtask_id: string;
+  error?: string | null;
 }
 
 export const useAgentTaskStore = create<AgentTaskStoreState>()(
@@ -355,7 +376,7 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
             const modelTarget = captureGoalModelTarget(options);
             await ensureAgiInitialized();
             authority.assertCurrent();
-            const result = await invoke<SwarmGoalResponse>('agi_submit_goal_swarm', {
+            const result = await invoke<SubmitGoalResponse>('agi_submit_goal_swarm', {
               request: {
                 description: goal,
                 priority: options.priority ?? 'medium',
@@ -367,36 +388,19 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
             });
 
             const taskId = result.goalId;
-            const status: AgentTaskStatus = result.success ? 'ready_for_review' : 'failed';
             set((state) => ({
-              tasks: upsertSubmittedAgentTask(
-                state.tasks,
-                {
-                  id: taskId,
-                  goal,
-                  status,
-                  createdAt: new Date().toISOString(),
-                  completedAt: new Date().toISOString(),
-                  result: result.summary,
-                  error: result.success ? undefined : result.summary,
-                  executionMode: 'swarm',
-                  swarmMetrics: {
-                    succeeded: result.succeeded,
-                    failed: result.failed,
-                    wallTimeMs: result.wallTimeMs,
-                    speedupRatio: result.speedupRatio,
-                    criticalPathLength: result.criticalPathLength,
-                    maxParallelism: result.maxParallelism,
-                    summary: result.summary,
-                  },
-                },
-                true,
-              ),
+              tasks: upsertSubmittedAgentTask(state.tasks, {
+                id: taskId,
+                goal,
+                status: 'queued',
+                createdAt: new Date().toISOString(),
+                executionMode: 'swarm',
+              }),
             }));
             return taskId;
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            if (!isAbortError(err)) toast.error('Swarm execution failed: ' + msg);
+            if (!isAbortError(err)) toast.error('Failed to start the swarm: ' + msg);
             throw err;
           }
         },
@@ -452,7 +456,12 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
             const backendIds = new Set(goals.map((g) => g.id));
             const recoveryEntries = await Promise.all(
               existingTasks
-                .filter((task) => isActiveAgentTaskStatus(task.status) && !backendIds.has(task.id))
+                .filter(
+                  (task) =>
+                    isActiveAgentTaskStatus(task.status) &&
+                    !backendIds.has(task.id) &&
+                    !isScheduledRunGoalId(task.id),
+                )
                 .map(async (task) => [task.id, await readNativeTaskSnapshot(task.id)] as const),
             );
             const recoveryByTaskId = new Map(recoveryEntries);
@@ -478,7 +487,7 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
               });
 
               const localOnly = state.tasks
-                .filter((task) => !backendIds.has(task.id))
+                .filter((task) => !backendIds.has(task.id) && !isScheduledRunGoalId(task.id))
                 .map((task) => {
                   if (!isActiveAgentTaskStatus(task.status) || !recoveryByTaskId.has(task.id)) {
                     return task;
@@ -695,7 +704,37 @@ function capLiveTaskRecord<T>(record: Record<string, T>): Record<string, T> {
   return Object.fromEntries(entries.slice(-MAX_LIVE_TASK_ENTRIES));
 }
 
+const SWARM_SUB_GOAL_ID_PREFIX = 'swarm-subgoal-';
+
+/**
+ * A swarm runs each subtask as a goal of its own inside the engine
+ * (`core/swarm/agent_spawner.rs` gives those ids this prefix). Their events
+ * are not tasks the user started: the parent row shows them as live steps
+ * through the `swarm:subtask_*` events instead.
+ */
+export function isSwarmSubGoalId(id: string): boolean {
+  return id.startsWith(SWARM_SUB_GOAL_ID_PREFIX);
+}
+
+const SCHEDULED_RUN_GOAL_ID_PREFIX = 'scheduled_';
+
+/**
+ * A scheduled task runs as a goal the scheduler owns
+ * (`sys/commands/scheduler.rs` gives those ids this prefix). The engine that
+ * answers `agi_cancel_goal` and `agi_list_goals` never holds it, so listed
+ * here it would offer a Cancel that fails and be marked ended by a restart
+ * while it is still running. Its row, result and Stop are in Scheduled tasks.
+ */
+export function isScheduledRunGoalId(id: string): boolean {
+  return id.startsWith(SCHEDULED_RUN_GOAL_ID_PREFIX);
+}
+
+function isOutsideMonitor(id: string): boolean {
+  return isSwarmSubGoalId(id) || isScheduledRunGoalId(id);
+}
+
 export function applyAgentTaskGoalSubmitted(payload: AgiGoalSubmittedPayload): void {
+  if (isOutsideMonitor(payload.goal_id)) return;
   useAgentTaskStore.setState((state) => {
     const existingTask = state.tasks.find((task) => task.id === payload.goal_id);
     if (existingTask) {
@@ -726,6 +765,7 @@ export function applyAgentTaskGoalSubmitted(payload: AgiGoalSubmittedPayload): v
 }
 
 export function applyAgentTaskGoalPlanCreated(payload: AgiGoalPlanCreatedPayload): void {
+  if (isOutsideMonitor(payload.goal_id)) return;
   useAgentTaskStore.setState((state) => ({
     liveProgressByTask: capLiveTaskRecord({
       ...state.liveProgressByTask,
@@ -735,6 +775,7 @@ export function applyAgentTaskGoalPlanCreated(payload: AgiGoalPlanCreatedPayload
 }
 
 export function applyAgentTaskGoalStepStarted(payload: AgiGoalStepStartedPayload): void {
+  if (isOutsideMonitor(payload.goal_id)) return;
   useAgentTaskStore.setState((state) => {
     const existingSteps = state.liveStepsByTask[payload.goal_id] ?? [];
     const nextStep: AgentTaskLiveStep = {
@@ -765,6 +806,7 @@ export function applyAgentTaskGoalStepStarted(payload: AgiGoalStepStartedPayload
 }
 
 export function applyAgentTaskGoalStepCompleted(payload: AgiGoalStepCompletedPayload): void {
+  if (isOutsideMonitor(payload.goal_id)) return;
   useAgentTaskStore.setState((state) => {
     const existingSteps = state.liveStepsByTask[payload.goal_id] ?? [];
     const existingStep = existingSteps.find((step) => step.id === payload.step_id);
@@ -799,6 +841,7 @@ export function applyAgentTaskGoalStepCompleted(payload: AgiGoalStepCompletedPay
 }
 
 export function applyAgentTaskGoalProgress(payload: AgiGoalProgressPayload): void {
+  if (isOutsideMonitor(payload.goal_id)) return;
   useAgentTaskStore.setState((state) => ({
     tasks: state.tasks.map((task) =>
       task.id === payload.goal_id
@@ -819,6 +862,7 @@ export function applyAgentTaskGoalProgress(payload: AgiGoalProgressPayload): voi
 }
 
 export function applyAgentTaskGoalAchieved(payload: AgiGoalAchievedPayload): void {
+  if (isOutsideMonitor(payload.goal_id)) return;
   useAgentTaskStore.setState((state) => {
     const liveStepsByTask = { ...state.liveStepsByTask };
     const currentSteps = liveStepsByTask[payload.goal_id];
@@ -849,6 +893,7 @@ export function applyAgentTaskGoalAchieved(payload: AgiGoalAchievedPayload): voi
 }
 
 export function applyAgentTaskGoalError(payload: AgiGoalErrorPayload): void {
+  if (isOutsideMonitor(payload.goal_id)) return;
   useAgentTaskStore.setState((state) => {
     const liveStepsByTask = { ...state.liveStepsByTask };
     const currentSteps = liveStepsByTask[payload.goal_id];
@@ -875,6 +920,7 @@ export function applyAgentTaskGoalExecutionStarted(
   payload: AgiGoalExecutionStartedPayload,
   executionMode: 'parallel' | 'swarm',
 ): void {
+  if (isOutsideMonitor(payload.goal_id)) return;
   useAgentTaskStore.setState((state) => {
     const existingIndex = state.tasks.findIndex((task) => task.id === payload.goal_id);
     if (existingIndex === -1) {
@@ -906,6 +952,7 @@ export function applyAgentTaskGoalExecutionStarted(
 export function applyAgentTaskGoalExecutionCompleted(
   payload: AgiGoalExecutionCompletedPayload,
 ): void {
+  if (isOutsideMonitor(payload.goal_id)) return;
   useAgentTaskStore.setState((state) => ({
     tasks: state.tasks.map((task) =>
       task.id === payload.goal_id
@@ -916,6 +963,101 @@ export function applyAgentTaskGoalExecutionCompleted(
         : task,
     ),
   }));
+}
+
+export function applyAgentTaskSwarmCompleted(payload: AgiSwarmCompletedPayload): void {
+  useAgentTaskStore.setState((state) => ({
+    tasks: state.tasks.map((task) =>
+      task.id === payload.goal_id
+        ? {
+            ...task,
+            result: payload.summary,
+            error: payload.success ? task.error : (payload.error ?? payload.summary),
+            swarmMetrics: {
+              succeeded: payload.succeeded,
+              failed: payload.failed,
+              wallTimeMs: payload.wall_time_ms,
+              speedupRatio: payload.speedup_ratio,
+              criticalPathLength: payload.critical_path_length,
+              maxParallelism: payload.max_parallelism,
+              summary: payload.summary,
+            },
+          }
+        : task,
+    ),
+  }));
+}
+
+export function applySwarmDecomposed(payload: SwarmDecomposedPayload): void {
+  useAgentTaskStore.setState((state) => ({
+    liveProgressByTask: capLiveTaskRecord({
+      ...state.liveProgressByTask,
+      [payload.goal_id]: { step: 0, total: payload.total_subtasks },
+    }),
+  }));
+}
+
+export function applySwarmSubtaskStarted(payload: SwarmSubtaskStartedPayload): void {
+  useAgentTaskStore.setState((state) => {
+    const existingSteps = state.liveStepsByTask[payload.goal_id] ?? [];
+    const existingStep = existingSteps.find((step) => step.id === payload.subtask_id);
+    return {
+      liveStepsByTask: capLiveTaskRecord({
+        ...state.liveStepsByTask,
+        [payload.goal_id]: upsertLiveStep(existingSteps, {
+          id: payload.subtask_id,
+          index: existingStep?.index ?? existingSteps.length,
+          description: payload.description,
+          status: 'running',
+          startedAt: new Date(),
+        }),
+      }),
+    };
+  });
+}
+
+function settleSwarmSubtask(
+  goalId: string,
+  subtaskId: string,
+  outcome: Pick<AgentTaskLiveStep, 'status' | 'executionTimeMs' | 'error'>,
+): void {
+  useAgentTaskStore.setState((state) => {
+    const existingSteps = state.liveStepsByTask[goalId] ?? [];
+    const existingStep = existingSteps.find((step) => step.id === subtaskId);
+    const steps = upsertLiveStep(existingSteps, {
+      id: subtaskId,
+      index: existingStep?.index ?? existingSteps.length,
+      description: existingStep?.description ?? 'Subtask',
+      startedAt: existingStep?.startedAt,
+      completedAt: new Date(),
+      ...outcome,
+    });
+    const settled = steps.filter((step) => step.status === 'done' || step.status === 'failed');
+    return {
+      liveStepsByTask: capLiveTaskRecord({ ...state.liveStepsByTask, [goalId]: steps }),
+      liveProgressByTask: capLiveTaskRecord({
+        ...state.liveProgressByTask,
+        [goalId]: {
+          step: settled.length,
+          total: Math.max(state.liveProgressByTask[goalId]?.total ?? 0, steps.length),
+        },
+      }),
+    };
+  });
+}
+
+export function applySwarmSubtaskCompleted(payload: SwarmSubtaskCompletedPayload): void {
+  settleSwarmSubtask(payload.goal_id, payload.subtask_id, {
+    status: 'done',
+    executionTimeMs: payload.execution_time_ms,
+  });
+}
+
+export function applySwarmSubtaskFailed(payload: SwarmSubtaskFailedPayload): void {
+  settleSwarmSubtask(payload.goal_id, payload.subtask_id, {
+    status: 'failed',
+    error: payload.error ?? undefined,
+  });
 }
 
 function isTerminalAgentTaskStatus(status: AgentTaskStatus): boolean {
@@ -982,6 +1124,7 @@ function markTaskInterruptedByRestart(task: AgentTask, recoveredAt: string): Age
 }
 
 export function applyAgentTaskStateChanged(payload: AgentTaskStateChanged): void {
+  if (isOutsideMonitor(payload.taskId)) return;
   useAgentTaskStore.setState((state) => {
     const completedAt =
       isTerminalAgentTaskStatus(payload.state) || payload.state === 'ready_for_review'
@@ -1073,8 +1216,32 @@ export async function initializeAgentTaskEventListeners(): Promise<void> {
     );
 
     agentTaskUnlistenFunctions.push(
-      await listen<AgiGoalExecutionCompletedPayload>('agi:goal:swarm_completed', ({ payload }) => {
-        applyAgentTaskGoalExecutionCompleted(payload);
+      await listen<AgiSwarmCompletedPayload>('agi:goal:swarm_completed', ({ payload }) => {
+        applyAgentTaskSwarmCompleted(payload);
+      }),
+    );
+
+    agentTaskUnlistenFunctions.push(
+      await listen<SwarmDecomposedPayload>('swarm:decomposed', ({ payload }) => {
+        applySwarmDecomposed(payload);
+      }),
+    );
+
+    agentTaskUnlistenFunctions.push(
+      await listen<SwarmSubtaskStartedPayload>('swarm:subtask_started', ({ payload }) => {
+        applySwarmSubtaskStarted(payload);
+      }),
+    );
+
+    agentTaskUnlistenFunctions.push(
+      await listen<SwarmSubtaskCompletedPayload>('swarm:subtask_completed', ({ payload }) => {
+        applySwarmSubtaskCompleted(payload);
+      }),
+    );
+
+    agentTaskUnlistenFunctions.push(
+      await listen<SwarmSubtaskFailedPayload>('swarm:subtask_failed', ({ payload }) => {
+        applySwarmSubtaskFailed(payload);
       }),
     );
 

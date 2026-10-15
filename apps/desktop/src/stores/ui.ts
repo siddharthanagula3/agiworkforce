@@ -407,9 +407,9 @@ export const useUIStore = create<UIState>()(
             try {
               await invoke('error_report', {
                 errorData: {
-                  errorType: error.type,
+                  error_type: error.type,
                   message: error.message,
-                  stackTrace: error.stack,
+                  stack_trace: error.stack,
                   context: error.context || {},
                   timestamp: error.timestamp,
                 },

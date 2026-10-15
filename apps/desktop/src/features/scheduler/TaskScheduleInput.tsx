@@ -1,5 +1,16 @@
-import { Calendar, Clock, Info, RefreshCw } from 'lucide-react';
-import { type TaskInterval, type TaskSchedule } from '../../stores/schedulerStore';
+import { Calendar, Clock, RefreshCw } from 'lucide-react';
+import { useId } from 'react';
+import {
+  DEFAULT_DAY_OF_MONTH,
+  DEFAULT_TIME_OF_DAY,
+  DEFAULT_WEEKDAY,
+  LAST_DAY_EVERY_MONTH_HAS,
+  type TaskInterval,
+  type TaskSchedule,
+  WEEKDAY_LABELS,
+  completeSchedule,
+  localTimeZone,
+} from '../../stores/schedulerStore';
 import { cn } from '../../lib/utils';
 
 export interface TaskScheduleInputProps {
@@ -16,49 +27,48 @@ const INTERVAL_OPTIONS: Array<{ value: TaskInterval; label: string }> = [
   { value: 'custom', label: 'Custom (cron)' },
 ];
 
+const DAYS_OF_MONTH = Array.from({ length: LAST_DAY_EVERY_MONTH_HAS }, (_, index) => index + 1);
+
+const CRON_EXAMPLE = '0 9 * * 1';
+
 function getPreviewLabel(schedule: TaskSchedule): string {
   if (schedule.type === 'once') {
     if (schedule.runAt) {
       const d = new Date(schedule.runAt);
-      return `Runs once on ${d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      return `Runs once on ${d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${localTimeZone()} time`;
     }
     return 'Select a date and time above';
   }
 
-  const intervalMap: Record<TaskInterval, string> = {
-    hourly: 'Runs every hour',
-    daily: 'Runs every day',
-    weekly: 'Runs every 7 days',
-    monthly: 'Runs every 30 days',
-    custom: schedule.cronExpression
-      ? `Cron: ${schedule.cronExpression}`
-      : 'Enter a cron expression above',
-  };
-  return intervalMap[schedule.interval ?? 'daily'];
+  const zone = `${schedule.timezone} time`;
+  const time = schedule.timeOfDay ?? DEFAULT_TIME_OF_DAY;
+  switch (schedule.interval) {
+    case 'hourly':
+      return `Runs every hour, on the hour, ${zone}`;
+    case 'weekly':
+      return `Runs every ${WEEKDAY_LABELS[schedule.weekday ?? DEFAULT_WEEKDAY]} at ${time}, ${zone}`;
+    case 'monthly':
+      return `Runs on day ${schedule.dayOfMonth ?? DEFAULT_DAY_OF_MONTH} of every month at ${time}, ${zone}`;
+    case 'custom':
+      return schedule.cronExpression
+        ? `Cron ${schedule.cronExpression}, ${zone}`
+        : 'Enter a cron expression above';
+    default:
+      return `Runs every day at ${time}, ${zone}`;
+  }
 }
 
 export function TaskScheduleInput({ value, onChange, disabled = false }: TaskScheduleInputProps) {
-  const isOnce = value.type === 'once';
+  const schedule = completeSchedule(value);
+  const isOnce = schedule.type === 'once';
+  const interval = schedule.interval ?? 'daily';
+  const fieldId = useId();
 
-  const handleTypeChange = (type: 'once' | 'recurring') => {
-    if (type === 'once') {
-      onChange({ type: 'once', runAt: undefined });
-    } else {
-      onChange({ type: 'recurring', interval: 'daily' });
-    }
-  };
+  const change = (next: TaskSchedule) => onChange(completeSchedule(next));
 
   const handleRunAtChange = (raw: string) => {
     const ts = raw ? new Date(raw).getTime() : undefined;
-    onChange({ ...value, type: 'once', runAt: ts });
-  };
-
-  const handleIntervalChange = (interval: TaskInterval) => {
-    onChange({ ...value, type: 'recurring', interval });
-  };
-
-  const handleCronChange = (cron: string) => {
-    onChange({ ...value, type: 'recurring', interval: 'custom', cronExpression: cron });
+    change({ type: 'once', runAt: Number.isNaN(ts) ? undefined : ts });
   };
 
   const formatForInput = (ts: number | undefined): string => {
@@ -74,14 +84,15 @@ export function TaskScheduleInput({ value, onChange, disabled = false }: TaskSch
     'focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/30',
     disabled && 'cursor-not-allowed opacity-50',
   );
+  const labelClass = 'mb-1.5 block text-xs font-medium text-slate-400';
 
   return (
     <div className="space-y-3">
-      {/* Type toggle */}
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => handleTypeChange('once')}
+          aria-pressed={isOnce}
+          onClick={() => change({ type: 'once' })}
           disabled={disabled}
           className={cn(
             'flex flex-1 items-center justify-center gap-2 rounded-lg border py-2 text-sm font-medium transition',
@@ -95,7 +106,8 @@ export function TaskScheduleInput({ value, onChange, disabled = false }: TaskSch
         </button>
         <button
           type="button"
-          onClick={() => handleTypeChange('recurring')}
+          aria-pressed={!isOnce}
+          onClick={() => change({ type: 'recurring', interval: 'daily' })}
           disabled={disabled}
           className={cn(
             'flex flex-1 items-center justify-center gap-2 rounded-lg border py-2 text-sm font-medium transition',
@@ -109,13 +121,15 @@ export function TaskScheduleInput({ value, onChange, disabled = false }: TaskSch
         </button>
       </div>
 
-      {/* Conditional inputs */}
       {isOnce ? (
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-slate-400">Date &amp; Time</label>
+          <label htmlFor={`${fieldId}-run-at`} className={labelClass}>
+            Date &amp; Time
+          </label>
           <input
+            id={`${fieldId}-run-at`}
             type="datetime-local"
-            value={formatForInput(value.runAt)}
+            value={formatForInput(schedule.runAt)}
             onChange={(e) => handleRunAtChange(e.target.value)}
             disabled={disabled}
             className={cn(fieldClass, '[color-scheme:dark]')}
@@ -124,12 +138,13 @@ export function TaskScheduleInput({ value, onChange, disabled = false }: TaskSch
       ) : (
         <div className="space-y-3">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-slate-400">
+            <label htmlFor={`${fieldId}-interval`} className={labelClass}>
               Repeat interval
             </label>
             <select
-              value={value.interval ?? 'daily'}
-              onChange={(e) => handleIntervalChange(e.target.value as TaskInterval)}
+              id={`${fieldId}-interval`}
+              value={interval}
+              onChange={(e) => change({ ...schedule, interval: e.target.value as TaskInterval })}
               disabled={disabled}
               className={cn(fieldClass, 'cursor-pointer')}
             >
@@ -141,37 +156,95 @@ export function TaskScheduleInput({ value, onChange, disabled = false }: TaskSch
             </select>
           </div>
 
-          {value.interval === 'custom' && (
+          {interval === 'weekly' && (
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-400">
+              <label htmlFor={`${fieldId}-weekday`} className={labelClass}>
+                Day of the week
+              </label>
+              <select
+                id={`${fieldId}-weekday`}
+                value={schedule.weekday ?? DEFAULT_WEEKDAY}
+                onChange={(e) => change({ ...schedule, weekday: Number(e.target.value) })}
+                disabled={disabled}
+                className={cn(fieldClass, 'cursor-pointer')}
+              >
+                {WEEKDAY_LABELS.map((label, weekday) => (
+                  <option key={label} value={weekday} className="bg-slate-900">
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {interval === 'monthly' && (
+            <div>
+              <label htmlFor={`${fieldId}-day-of-month`} className={labelClass}>
+                Day of the month
+              </label>
+              <select
+                id={`${fieldId}-day-of-month`}
+                value={schedule.dayOfMonth ?? DEFAULT_DAY_OF_MONTH}
+                onChange={(e) => change({ ...schedule, dayOfMonth: Number(e.target.value) })}
+                disabled={disabled}
+                className={cn(fieldClass, 'cursor-pointer')}
+              >
+                {DAYS_OF_MONTH.map((day) => (
+                  <option key={day} value={day} className="bg-slate-900">
+                    {day}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {(interval === 'daily' || interval === 'weekly' || interval === 'monthly') && (
+            <div>
+              <label htmlFor={`${fieldId}-time`} className={labelClass}>
+                Time
+              </label>
+              <input
+                id={`${fieldId}-time`}
+                type="time"
+                value={schedule.timeOfDay ?? DEFAULT_TIME_OF_DAY}
+                onChange={(e) =>
+                  change({ ...schedule, timeOfDay: e.target.value || DEFAULT_TIME_OF_DAY })
+                }
+                disabled={disabled}
+                className={cn(fieldClass, '[color-scheme:dark]')}
+              />
+            </div>
+          )}
+
+          {interval === 'custom' && (
+            <div>
+              <label htmlFor={`${fieldId}-cron`} className={labelClass}>
                 Cron expression
               </label>
               <input
+                id={`${fieldId}-cron`}
                 type="text"
                 value={value.cronExpression ?? ''}
-                onChange={(e) => handleCronChange(e.target.value)}
-                placeholder="0 9 * * * (daily at 9 AM)"
+                onChange={(e) =>
+                  onChange({ ...schedule, interval: 'custom', cronExpression: e.target.value })
+                }
+                placeholder={CRON_EXAMPLE}
+                aria-describedby={`${fieldId}-cron-help`}
                 disabled={disabled}
                 className={fieldClass}
               />
-              <a
-                href="https://crontab.guru"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1 inline-flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300"
-              >
-                <Info className="h-3 w-3" />
-                crontab.guru, cron expression helper
-              </a>
+              <p id={`${fieldId}-cron-help`} className="mt-1 text-xs text-slate-400">
+                Five fields: minute, hour, day of month, month, day of week. {CRON_EXAMPLE} runs
+                every Monday at 09:00. A task can run at most every 5 minutes.
+              </p>
             </div>
           )}
         </div>
       )}
 
-      {/* Preview */}
       <div className="flex items-center gap-2 rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2">
         <Clock className="h-3.5 w-3.5 flex-shrink-0 text-teal-400" />
-        <span className="text-xs text-slate-400">{getPreviewLabel(value)}</span>
+        <span className="text-xs text-slate-400">{getPreviewLabel(schedule)}</span>
       </div>
     </div>
   );

@@ -37,7 +37,13 @@ const { registerGarnishShortcuts, shortcutRegistrations, unregisterGarnishShortc
   await import('../shortcuts');
 
 function handlers() {
-  return { onQuickAsk: vi.fn(), onScreenshot: vi.fn(), onWindowShot: vi.fn(), onVoice: vi.fn() };
+  return {
+    onQuickAsk: vi.fn(),
+    onScreenshot: vi.fn(),
+    onWindowShot: vi.fn(),
+    onVoice: vi.fn(),
+    onStop: vi.fn(),
+  };
 }
 
 function statusOf(key: keyof GarnishShortcuts): string | undefined {
@@ -64,14 +70,25 @@ describe('global shortcut registration', () => {
     expect(spies.onQuickAsk).not.toHaveBeenCalled();
   });
 
-  it('ships a dictation default that collides with neither sibling shortcut', () => {
+  it('ships defaults that collide with no sibling shortcut', () => {
     registerGarnishShortcuts(handlers());
     expect(shortcutRegistrations().map((entry) => entry.status)).toEqual([
       'registered',
       'registered',
       'registered',
       'registered',
+      'registered',
     ]);
+  });
+
+  it('claims the stop chord and runs the stop handler on it', () => {
+    const spies = handlers();
+    registerGarnishShortcuts(spies);
+
+    expect(statusOf('stopShortcut')).toBe('registered');
+    registered.get(DEFAULT_SHORTCUTS.stopShortcut)?.();
+    expect(spies.onStop).toHaveBeenCalledTimes(1);
+    expect(spies.onVoice).not.toHaveBeenCalled();
   });
 
   it('reports a chord another app already holds without dropping the others', () => {

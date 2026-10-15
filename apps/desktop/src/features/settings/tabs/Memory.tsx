@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Brain, Download, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Brain, Download, Trash2, Upload } from 'lucide-react';
+import { useConfirmAction } from '@agiworkforce/ui';
 import {
   MemoryEditor,
   type MemoryEditorDataAdapter,
@@ -34,19 +35,31 @@ function MemorySettingsContent({ adapter, scope }: MemorySettingsContentProps) {
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [resetDeclined, setResetDeclined] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState<{ ok: boolean; message: string } | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
-  const exportMemories = useCallback(async () => {
+  const exportMemories = useCallback(async (format: 'json' | 'markdown') => {
     setExporting(true);
     setExportError(null);
     try {
-      const entries = await useDesktopMemoryStore.getState().exportAll();
-      const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
+      const store = useDesktopMemoryStore.getState();
+      const blob =
+        format === 'json'
+          ? new Blob([JSON.stringify(await store.exportBackup(), null, 2)], {
+              type: 'application/json',
+            })
+          : new Blob([await store.exportMarkdown()], { type: 'text/markdown' });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = `agi-memories-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.download = `agi-memories-${new Date().toISOString().slice(0, 10)}.${
+        format === 'json' ? 'json' : 'md'
+      }`;
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (error) {
@@ -90,24 +103,63 @@ function MemorySettingsContent({ adapter, scope }: MemorySettingsContentProps) {
     [setAllowToolAssistedMemoryGeneration],
   );
 
-  const resetMemories = useCallback(async () => {
-    if (adapter.facts.length === 0) return;
-    const confirmed =
-      typeof globalThis.confirm !== 'function' ||
-      globalThis.confirm(
-        `Reset all ${adapter.facts.length} ${scope === 'cloud' ? 'account' : 'local'} memories? This cannot be undone.`,
-      );
-    if (!confirmed) return;
-    setResetting(true);
-    setPolicyError(null);
+  const importMemories = useCallback(async (file: File) => {
+    setImporting(true);
+    setImportStatus(null);
     try {
-      await adapter.clear();
+      const result = await useDesktopMemoryStore.getState().importBackup(await file.text());
+      const kept = result.memories_skipped;
+      const parts = [
+        `Imported ${result.memories_imported} ${result.memories_imported === 1 ? 'memory' : 'memories'}.`,
+        kept > 0
+          ? `${kept} already saved on this device ${kept === 1 ? 'was' : 'were'} kept unchanged.`
+          : '',
+        result.errors.length > 0
+          ? `${result.errors.length} ${result.errors.length === 1 ? 'entry' : 'entries'} could not be read.`
+          : '',
+      ];
+      setImportStatus({ ok: true, message: parts.filter(Boolean).join(' ') });
     } catch (error) {
-      setPolicyError(error instanceof Error ? error.message : 'Memories could not be reset.');
+      setImportStatus({
+        ok: false,
+        message:
+          error instanceof Error
+            ? `That file could not be imported. ${error.message}`
+            : 'That file could not be imported.',
+      });
     } finally {
-      setResetting(false);
+      setImporting(false);
+      if (importInputRef.current) importInputRef.current.value = '';
     }
-  }, [adapter, scope]);
+  }, []);
+
+  const resetMemories = useCallback(() => {
+    const count = adapter.facts.length;
+    if (count === 0) return;
+    const noun = count === 1 ? 'memory' : 'memories';
+    confirm({
+      title: `Delete all ${count} ${noun}?`,
+      description:
+        scope === 'cloud'
+          ? `This permanently deletes every memory saved to your Managed Cloud account. Chats on all your devices stop using them, and they cannot be recovered.`
+          : `This permanently deletes every memory saved on this device. Chats stop using them, and they cannot be recovered unless you exported them first. Your system asks you once more before anything is deleted.`,
+      confirmLabel: 'Delete all memories',
+      destructive: true,
+      onConfirm: async () => {
+        setResetting(true);
+        setPolicyError(null);
+        setResetDeclined(false);
+        try {
+          // The device adapter resolves to null when the system prompt was declined.
+          setResetDeclined((await adapter.clear()) === null);
+        } catch (error) {
+          setPolicyError(error instanceof Error ? error.message : 'Memories could not be reset.');
+        } finally {
+          setResetting(false);
+        }
+      },
+    });
+  }, [adapter, confirm, scope]);
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
@@ -171,37 +223,73 @@ function MemorySettingsContent({ adapter, scope }: MemorySettingsContentProps) {
               variant="destructive"
               size="sm"
               disabled={adapter.facts.length === 0 || resetting}
-              onClick={() => void resetMemories()}
+              onClick={resetMemories}
             >
               <Trash2 className="mr-2 h-4 w-4" />
               {resetting ? 'Resetting…' : 'Reset memories'}
             </Button>
           </div>
-          {/*
-            Export / import. The store has had `exportAll` and
-            `importJsonString` all along, but the only UI that surfaced them was
-            `MemoryManager` behind `showImportExport`, and its sole caller
-            (`MemoryBrowserModal`) was never mounted, so a user could not get
-            their memories out of the device at all. Local scope only: cloud
-            memories are exported through the account data-export path.
-          */}
           {scope === 'local' && (
             <div className="flex items-center justify-between gap-5 rounded-lg border p-4">
               <div>
                 <p className="text-sm font-medium">Export memories</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Download every device memory as JSON.
+                  Download every device memory. JSON can be imported again; Markdown is for reading.
                 </p>
               </div>
+              <div className="flex shrink-0 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={adapter.facts.length === 0 || exporting}
+                  onClick={() => void exportMemories('markdown')}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export Markdown
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={adapter.facts.length === 0 || exporting}
+                  onClick={() => void exportMemories('json')}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export JSON
+                </Button>
+              </div>
+            </div>
+          )}
+          {scope === 'local' && (
+            <div className="flex items-center justify-between gap-5 rounded-lg border p-4">
+              <div>
+                <p className="text-sm font-medium">Import memories</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Add memories from a JSON export. Memories already on this device are kept.
+                </p>
+              </div>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                aria-hidden="true"
+                tabIndex={-1}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void importMemories(file);
+                }}
+              />
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={adapter.facts.length === 0 || exporting}
-                onClick={() => void exportMemories()}
+                disabled={importing}
+                onClick={() => importInputRef.current?.click()}
               >
-                <Download className="mr-2 h-4 w-4" />
-                {exporting ? 'Exporting…' : 'Export JSON'}
+                <Upload className="mr-2 h-4 w-4" />
+                {importing ? 'Importing…' : 'Import JSON'}
               </Button>
             </div>
           )}
@@ -212,6 +300,16 @@ function MemorySettingsContent({ adapter, scope }: MemorySettingsContentProps) {
             {exportError}
           </p>
         ) : null}
+        {importStatus ? (
+          <p
+            role={importStatus.ok ? 'status' : 'alert'}
+            className={
+              importStatus.ok ? 'text-xs text-muted-foreground' : 'text-xs text-destructive'
+            }
+          >
+            {importStatus.message}
+          </p>
+        ) : null}
 
         <p className="text-xs text-muted-foreground">
           Turning memory off stops automatic retrieval and generation. You can still review, edit,
@@ -220,6 +318,11 @@ function MemorySettingsContent({ adapter, scope }: MemorySettingsContentProps) {
         {policyError ? (
           <p role="alert" className="text-xs text-destructive">
             {policyError}
+          </p>
+        ) : null}
+        {resetDeclined ? (
+          <p role="status" className="text-xs text-muted-foreground">
+            Nothing was deleted.
           </p>
         ) : null}
       </section>
@@ -235,6 +338,7 @@ function MemorySettingsContent({ adapter, scope }: MemorySettingsContentProps) {
         hideClearAll
         className="min-h-[360px] flex-1"
       />
+      {confirmDialog}
     </div>
   );
 }
@@ -368,6 +472,7 @@ function LocalMemoryTab() {
   const loadAll = useDesktopMemoryStore((state) => state.loadAll);
   const storeMemory = useDesktopMemoryStore((state) => state.storeMemory);
   const deleteMemory = useDesktopMemoryStore((state) => state.deleteMemory);
+  const deleteAll = useDesktopMemoryStore((state) => state.deleteAll);
 
   useEffect(() => {
     void loadAll();
@@ -408,14 +513,9 @@ function LocalMemoryTab() {
       remove: async (id) => {
         await deleteMemory(Number(id));
       },
-      clear: async () => {
-        for (const memory of memories) {
-          await deleteMemory(memory.id);
-        }
-        await loadAll();
-      },
+      clear: deleteAll,
     }),
-    [deleteMemory, error, facts, isLoading, loadAll, memories, storeMemory],
+    [deleteAll, deleteMemory, error, facts, isLoading, loadAll, memories, storeMemory],
   );
 
   return <MemorySettingsContent adapter={adapter} scope="local" />;

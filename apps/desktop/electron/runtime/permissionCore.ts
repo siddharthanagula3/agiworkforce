@@ -50,18 +50,24 @@ export function evaluatePermission(
 }
 
 /**
- * A high-risk capability never becomes a standing grant by accident. Without an
- * explicit acknowledgement the strongest duration it can reach is the current
- * session, so closing the app revokes it.
+ * A high-risk capability never becomes a standing grant. The strongest
+ * duration it can reach is the current session, so quitting the app revokes
+ * it, and nothing written to disk can bring it back.
  */
 export function normalizeGrantDuration(
   capability: DesktopCapability,
   requested: PermissionGrantDuration,
-  acknowledgedHighRisk: boolean,
 ): PermissionGrantDuration {
   if (requested !== 'always') return requested;
-  if (!isHighRiskCapability(capability)) return 'always';
-  return acknowledgedHighRisk ? 'always' : 'session';
+  return isHighRiskCapability(capability) ? 'session' : 'always';
+}
+
+/**
+ * Whether a decision read back from disk may come into force. A stored grant
+ * of a high-risk capability is never honoured, whoever wrote it there.
+ */
+export function isRestorable(decision: PermissionDecision): boolean {
+  return !(decision.state === 'granted' && isHighRiskCapability(decision.capability));
 }
 
 export function buildDecision(

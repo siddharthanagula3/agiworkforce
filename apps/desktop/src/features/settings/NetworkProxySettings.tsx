@@ -7,6 +7,7 @@ import { Button } from '@/ui/Button';
 import { Input } from '@/ui/Input';
 import { Label } from '@/ui/Label';
 import { Switch } from '@/ui/Switch';
+import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { invoke } from '@/lib/tauri-mock';
 import { useSettingsStore } from '@/stores/settingsStore';
 
@@ -17,9 +18,14 @@ interface NetworkProxySettingsValue {
   caCertPath: string;
   username: string;
   hasPassword: boolean;
+  /** Why the host is not using the saved certificate, in the host's words. */
+  caCertProblem?: string | null;
 }
 
-interface NetworkProxyUpdate extends Omit<NetworkProxySettingsValue, 'hasPassword'> {
+interface NetworkProxyUpdate extends Omit<
+  NetworkProxySettingsValue,
+  'hasPassword' | 'caCertProblem'
+> {
   password: string | null;
   clearPassword: boolean;
 }
@@ -60,7 +66,12 @@ async function restoreLocalProviders(): Promise<string[]> {
 
   const results = await Promise.allSettled(
     providers.map(([provider, baseUrl]) =>
-      invoke('llm_configure_provider', { provider, apiKey: null, baseUrl }),
+      invoke('llm_configure_provider', {
+        provider,
+        apiKey: null,
+        baseUrl,
+        allowPrivateNetwork: llmConfig.allowPrivateNetworkRuntimes === true,
+      }),
     ),
   );
   return results.flatMap((result, index) =>
@@ -88,7 +99,7 @@ export function NetworkProxySettings() {
       setClearPassword(false);
       setSaved(false);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : String(loadError));
+      setError(getSimpleErrorMessage(loadError));
     } finally {
       setLoading(false);
     }
@@ -123,7 +134,7 @@ export function NetworkProxySettings() {
       });
       if (typeof selected === 'string') update('caCertPath', selected);
     } catch (dialogError) {
-      setError(dialogError instanceof Error ? dialogError.message : String(dialogError));
+      setError(getSimpleErrorMessage(dialogError));
     }
   };
 
@@ -162,7 +173,7 @@ export function NetworkProxySettings() {
         toast.success('LLM network settings applied');
       }
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : String(saveError));
+      setError(getSimpleErrorMessage(saveError));
     } finally {
       setSaving(false);
     }
@@ -273,7 +284,9 @@ export function NetworkProxySettings() {
             </Button>
           )}
           <p className="text-xs text-muted-foreground">
-            Passwords stay in encrypted native storage and are never returned to this screen.
+            Passwords stay in encrypted native storage and are never returned to this screen. A
+            saved password belongs to the proxy it was saved for: changing the proxy address removes
+            it unless you enter it again.
           </p>
         </div>
 
@@ -314,8 +327,20 @@ export function NetworkProxySettings() {
             PEM only. The CA is an additional trusted root and also applies with environment proxy
             settings.
           </p>
+          <p className="text-xs text-muted-foreground">
+            Applying a proxy or a root certificate asks in a system dialog, which shows the proxy
+            host and the certificate file with its SHA-256 fingerprint. A certificate inside this
+            app's own data folder is refused. Turning both off never asks.
+          </p>
         </div>
       </div>
+
+      {value.caCertProblem && (
+        <div className="flex items-start gap-2 text-xs text-foreground" role="alert">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{value.caCertProblem}</span>
+        </div>
+      )}
 
       {(error || validationError) && (
         <div className="flex items-start gap-2 text-xs text-destructive" role="alert">

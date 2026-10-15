@@ -6,6 +6,7 @@ import type {
   ManagedCloudAgentRunFollowResult,
 } from '@agiworkforce/cloud-contracts';
 import { CloudRuntime } from '../CloudRuntime';
+import { cloudElicitationBridge, type CloudElicitationRequest } from '../cloudToolInput';
 import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 type ScanModule0 = typeof import('../../stores/auth');
 
@@ -85,6 +86,7 @@ vi.mock('../sessionLabeling', () => ({
 
 const sendCloudMessage = vi.fn();
 const sendCloudApprovalResume = vi.fn();
+const sendCloudInputResume = vi.fn();
 const generateCloudImage = vi.fn();
 const generateCloudVideo = vi.fn();
 const followRun = vi.fn();
@@ -109,6 +111,7 @@ vi.mock('../../api/cloudApi', () => ({
     }
   },
   cloudFetch: vi.fn(),
+  sendCloudInputResume: (...args: unknown[]) => sendCloudInputResume(...args),
   accountBoundCloudFetch: vi.fn(async () => new Response('{}', { status: 200 })),
   getAuthHeaders: vi.fn(async () => ({
     Authorization: 'Bearer desktop-cloud-token',
@@ -1159,6 +1162,126 @@ describe('CloudRuntime', () => {
       ]);
       expect(runtime.hasLiveApprovalTurn('conv_awaiting')).toBe(true);
       expect(followRun).not.toHaveBeenCalled();
+    });
+
+    it('brings back the cloud input card from the run the server kept waiting', async () => {
+      getRun.mockResolvedValue({
+        run: {
+          ...managedRun('awaiting_input', 7),
+          pendingInput: {
+            requestedAt: '2026-07-17T20:00:05.000Z',
+            toolCalls: [
+              {
+                toolCallId: 'call_issue',
+                name: 'github_create_issue',
+                connectorId: 'github',
+                round: 0,
+                inputRequests: {
+                  repo: {
+                    method: 'elicitation/create',
+                    params: {
+                      message: 'Which repository?',
+                      requestedSchema: {
+                        type: 'object',
+                        properties: { repo: { type: 'string' } },
+                        required: ['repo'],
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+        events: [],
+        nextAfterSequence: 7,
+      });
+
+      const seen: CloudElicitationRequest[][] = [];
+      const unsubscribe = cloudElicitationBridge.subscribe((requests) => seen.push(requests));
+      const runtime = new CloudRuntime('user-desktop');
+      await runtime.reattachConversation('conv_input', persisted);
+      unsubscribe();
+
+      expect(seen.at(-1)).toEqual([
+        expect.objectContaining({
+          conversationId: 'conv_input',
+          toolCallId: 'call_issue',
+          toolName: 'github_create_issue',
+          prompts: [expect.objectContaining({ key: 'repo', mode: 'form' })],
+        }),
+      ]);
+      expect(followRun).not.toHaveBeenCalled();
+      cloudElicitationBridge.withdraw('conv_input');
+    });
+
+    it('cancels a run resuming after an answered input card when the user stops', async () => {
+      getRun.mockResolvedValue({
+        run: {
+          ...managedRun('awaiting_input', 7),
+          pendingInput: {
+            requestedAt: '2026-07-17T20:00:05.000Z',
+            toolCalls: [
+              {
+                toolCallId: 'call_issue',
+                name: 'github_create_issue',
+                connectorId: 'github',
+                round: 0,
+                inputRequests: {
+                  repo: {
+                    method: 'elicitation/create',
+                    params: {
+                      message: 'Which repository?',
+                      requestedSchema: {
+                        type: 'object',
+                        properties: { repo: { type: 'string' } },
+                        required: ['repo'],
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+        events: [],
+        nextAfterSequence: 7,
+      });
+      sendCloudInputResume.mockImplementationOnce(async (...args: unknown[]) => {
+        const onError = args[4] as (error: Error) => void;
+        const signal = args[5] as AbortSignal;
+        const onCredential = args[8] as (credential: {
+          accountId: string;
+          accessToken: string;
+        }) => void;
+        onCredential({ accountId: 'user-desktop', accessToken: 'input-token-2' });
+        await new Promise<void>((resolve) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              onError(new DOMException('Stopped', 'AbortError'));
+              resolve();
+            },
+            { once: true },
+          );
+        });
+      });
+      const runtime = new CloudRuntime('user-desktop');
+      await runtime.reattachConversation('conv_input_stop', persisted);
+
+      const resolution = runtime.resolveToolInput('conv_input_stop', 'call_issue', {
+        repo: { action: 'accept', content: { repo: 'agi/workforce' } },
+      });
+      await vi.waitFor(() => expect(sendCloudInputResume).toHaveBeenCalledOnce());
+
+      runtime.stopGeneration('conv_input_stop');
+
+      await expect(resolution).rejects.toMatchObject({ name: 'AbortError' });
+      await vi.waitFor(() => expect(cancelRun).toHaveBeenCalledWith(MANAGED_RUN_ID));
+      expect(createCleanupClient).toHaveBeenCalledWith({
+        accountId: 'user-desktop',
+        accessToken: 'input-token-2',
+      });
     });
 
     it('leaves an already-hydrated approval alone rather than rendering the card twice', async () => {

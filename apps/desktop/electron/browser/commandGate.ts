@@ -1,5 +1,24 @@
 import { type DesktopCapability } from '@agiworkforce/local-runtime-contract';
 import { BROWSER_CDP_COMMANDS, isBrowserCommand, type BrowserCommand } from '@agiworkforce/types';
+import { NOT_THIS_APP, shownValue } from '../runtime/dialogText';
+
+const SELECTOR_SHOWN = { head: 300, tail: 100 };
+const TYPED_TEXT_SHOWN = { head: 1_500, tail: 500 };
+const ADDRESS_SHOWN = { head: 600, tail: 200 };
+
+/**
+ * What a browser command does, said by this app, then what the caller sent
+ * for it. A selector, an address and text to type come from a page or an
+ * agent, so each sits on a line this app labelled, below the line that says
+ * so, where none can read as the sentence above it.
+ */
+function withSent(effect: string, sent: ReadonlyArray<[label: string, value: string]>): string {
+  return [
+    effect,
+    `What was sent for it. ${NOT_THIS_APP}`,
+    sent.map(([label, value]) => `${label}: ${value}`).join('\n'),
+  ].join('\n\n');
+}
 
 export class InvalidBrowserArguments extends Error {}
 
@@ -128,7 +147,10 @@ export function planBrowserCommand(
       return plan(
         { selector },
         'Click in the paired browser?',
-        `The element matching ${selector} is clicked on the active tab. A click can submit a form or start a purchase.`,
+        withSent(
+          'The element the selector below matches is clicked on the active tab. A click can submit a form or start a purchase.',
+          [['Selector', shownValue(selector, SELECTOR_SHOWN)]],
+        ),
       );
     }
     case 'browser_type': {
@@ -138,7 +160,13 @@ export function planBrowserCommand(
       return plan(
         withDefined({ selector, text, clear: clear || undefined }),
         'Type into the paired browser?',
-        `${text}\n\nis typed into ${selector} on the active tab.`,
+        withSent(
+          'The text below is typed into the element the selector matches, on the active tab.',
+          [
+            ['Text', shownValue(text, TYPED_TEXT_SHOWN)],
+            ['Selector', shownValue(selector, SELECTOR_SHOWN)],
+          ],
+        ),
       );
     }
     case 'browser_navigate': {
@@ -146,7 +174,9 @@ export function planBrowserCommand(
       return plan(
         { url },
         'Open a page in the paired browser?',
-        `The active tab leaves its current page and loads ${url}.`,
+        withSent('The active tab leaves its current page and loads the address below.', [
+          ['Address', shownValue(url, ADDRESS_SHOWN)],
+        ]),
       );
     }
     case 'browser_screenshot':
@@ -215,7 +245,9 @@ export function planBrowserCommand(
       return plan(
         { url },
         'Download a file through the paired browser?',
-        `${url} is saved to your downloads folder by the browser.`,
+        withSent('The browser saves the file at the address below to your downloads folder.', [
+          ['Address', shownValue(url, ADDRESS_SHOWN)],
+        ]),
       );
     }
   }

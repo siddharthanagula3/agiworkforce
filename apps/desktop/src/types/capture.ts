@@ -24,18 +24,6 @@ export interface CaptureResult {
   createdAt: number;
 }
 
-export interface CaptureRecord {
-  id: string;
-  conversationId?: number | null;
-  captureType: string;
-  filePath: string;
-  thumbnailPath?: string | null;
-  ocrText?: string | null;
-  ocrConfidence?: number | null;
-  metadata: string;
-  createdAt: number;
-}
-
 export interface WindowInfo {
   handle: string;
   title: string;

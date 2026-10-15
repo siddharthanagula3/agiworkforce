@@ -685,6 +685,26 @@ export function ConnectorGallery() {
     };
   }, [completeOAuth]);
 
+  useEffect(() => {
+    if (!isTauri) return;
+    let disposed = false;
+    const unlisteners: Array<() => void> = [];
+    const keep = (unlisten: () => void) => {
+      if (disposed) unlisten();
+      else unlisteners.push(unlisten);
+    };
+
+    void (async () => {
+      keep(await listen<string>('connector:connected', () => void fetchConnected()));
+      keep(await listen<string>('connector:disconnected', () => void fetchConnected()));
+    })();
+
+    return () => {
+      disposed = true;
+      for (const unlisten of unlisteners) unlisten();
+    };
+  }, [fetchConnected]);
+
   const supportedConnectors = useMemo(
     () => CONNECTOR_DIRECTORY.filter((c) => supportedConnectorIds.includes(c.id)),
     [supportedConnectorIds],

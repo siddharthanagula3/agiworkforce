@@ -50,15 +50,6 @@ function emittedEvents(): Set<string> {
 }
 
 const UNEMITTED_BY_DESIGN: Record<string, string> = {
-  'tauri://update-download-progress': 'tauri-plugin-updater',
-  'tauri://update-downloaded': 'tauri-plugin-updater',
-  'tauri://update-error': 'tauri-plugin-updater',
-
-  'agi:browser_action': 'no browser-automation event source exists yet',
-  'agi:file_changed': 'file edits ship as agi:file_operation; consumer not migrated',
-  'agi:goal_completed': 'chat agent workflow events (agentWorkflowEvents.ts)',
-  'agi:step_completed': 'chat agent workflow events (agentWorkflowEvents.ts)',
-  'approval:request': 'chat agent workflow events (agentWorkflowEvents.ts)',
   'extension:disabled': 'browser-extension settings surface',
   'extension:enabled': 'browser-extension settings surface',
   'extension:install_completed': 'browser-extension settings surface',
@@ -97,11 +88,6 @@ describe('Tauri event contract', () => {
 
   describe('surfaces repaired by ExecutionPlan #40', () => {
     const repaired = [
-      'swarm:started',
-      'swarm:subtask_started',
-      'swarm:subtask_completed',
-      'swarm:subtask_failed',
-      'swarm:completed',
       'scheduler:job_added',
       'scheduler:job_removed',
       'scheduler:job_updated',

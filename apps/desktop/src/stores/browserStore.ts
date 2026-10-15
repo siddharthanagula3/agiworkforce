@@ -9,63 +9,15 @@ import {
   browserLaunch,
   browserClose,
   browserOpenTab,
-  browserCloseTab,
-  browserSwitchTab,
-  browserListTabs,
   browserNavigate,
   browserGoBack,
   browserGoForward,
   browserReload,
   browserGetUrl,
   browserGetTitle,
-  browserClick,
-  browserType,
-  browserGetText,
-  browserGetAttribute,
-  browserWaitForSelector,
-  browserSelectOption,
-  browserCheck as browserCheckElement,
-  browserUncheck,
-  browserScreenshot,
-  browserEvaluate,
-  browserHover,
-  browserFocus,
-  browserQueryAll,
-  browserScrollIntoView,
-  browserGetContent,
-  browserGetDomSnapshot,
-  browserExecuteAsyncJs,
-  browserGetElementState,
-  browserWaitForInteractive,
-  browserFillForm,
-  browserDragAndDrop,
-  browserUploadFile,
-  browserGetCookies,
-  browserSetCookie,
-  browserClearCookies,
-  browserGetPerformanceMetrics,
-  browserWaitForNavigation,
-  browserGetFrames,
-  browserExecuteInFrame,
-  browserCallFunction,
   browserGetScreenshotStream,
-  browserHighlightElement,
   browserCheckStatus,
-  findElementSemantic,
-  findAllElementsSemantic,
-  clickSemantic,
-  typeSemantic,
-  getAccessibilityTree,
-  getDomSemanticGraph,
-  getInteractiveElements,
-  findByRole,
-  type BrowserCookie,
   type BrowserStatusResult,
-  type ElementStateResult,
-  type PerformanceMetrics,
-  type FrameContext,
-  type TabInfo as ApiTabInfo,
-  type ElementBoundsResult,
 } from '../api/browser';
 
 export interface BrowserTab {
@@ -77,7 +29,7 @@ export interface BrowserTab {
 
 export interface BrowserSession {
   id: string;
-  browserType: 'Chromium' | 'Firefox' | 'Webkit';
+  browserType: 'Chromium';
   headless: boolean;
   tabs: BrowserTab[];
   active: boolean;
@@ -86,14 +38,7 @@ export interface BrowserSession {
 export type BrowserType = BrowserSession['browserType'];
 
 export type ActionType =
-  | 'navigate'
-  | 'click'
-  | 'type'
-  | 'extract'
-  | 'screenshot'
-  | 'scroll'
-  | 'wait'
-  | 'execute';
+  'navigate' | 'click' | 'type' | 'extract' | 'screenshot' | 'scroll' | 'wait' | 'execute';
 
 export interface BrowserAction {
   id: string;
@@ -139,15 +84,7 @@ export interface RecordedStep {
   timestamp: number;
 }
 
-export type {
-  BrowserCookie,
-  BrowserStatusResult,
-  ElementStateResult,
-  PerformanceMetrics,
-  FrameContext,
-  ApiTabInfo,
-  ElementBoundsResult,
-};
+export type { BrowserStatusResult };
 
 interface BrowserState {
   sessions: BrowserSession[];
@@ -171,9 +108,6 @@ interface BrowserState {
   closeBrowser: (sessionId: string) => Promise<void>;
 
   openTab: (url: string) => Promise<string>;
-  closeTab: (tabId: string) => Promise<void>;
-  switchTab: (tabId: string) => Promise<void>;
-  listTabs: () => Promise<ApiTabInfo[]>;
   setActiveSession: (sessionId: string) => void;
 
   navigateTab: (tabId: string, url: string) => Promise<void>;
@@ -182,58 +116,8 @@ interface BrowserState {
   reloadTab: (tabId?: string) => Promise<void>;
   getUrl: (tabId?: string) => Promise<string>;
   getTitle: (tabId?: string) => Promise<string>;
-  waitForNavigation: (timeoutMs?: number, tabId?: string) => Promise<void>;
 
-  clickElement: (tabId: string, selector: string) => Promise<void>;
-  typeText: (tabId: string, selector: string, text: string) => Promise<void>;
-  getText: (selector: string, tabId?: string) => Promise<string>;
-  getAttribute: (selector: string, attribute: string, tabId?: string) => Promise<string | null>;
-  waitForSelector: (selector: string, timeout?: number, tabId?: string) => Promise<void>;
-  selectOption: (selector: string, value: string, tabId?: string) => Promise<void>;
-  checkElement: (selector: string, tabId?: string) => Promise<void>;
-  uncheckElement: (selector: string, tabId?: string) => Promise<void>;
-  hoverElement: (selector: string, tabId?: string) => Promise<void>;
-  focusElement: (selector: string, tabId?: string) => Promise<void>;
-  queryAll: (selector: string, tabId?: string) => Promise<string[]>;
-  scrollIntoView: (selector: string, tabId?: string) => Promise<void>;
-  getElementState: (selector: string, tabId?: string) => Promise<ElementStateResult>;
-  waitForInteractive: (selector: string, timeoutMs?: number, tabId?: string) => Promise<void>;
-
-  fillForm: (
-    selector: string,
-    data: Record<string, string | number | boolean>,
-    tabId?: string,
-  ) => Promise<void>;
-  dragAndDrop: (source: string, target: string, tabId?: string) => Promise<void>;
-  uploadFile: (selector: string, paths: string[], tabId?: string) => Promise<void>;
-
-  screenshot: (tabId: string) => Promise<string>;
-  getPageContent: (tabId: string) => Promise<string>;
-  getDOMSnapshot: (tabId: string) => Promise<DOMSnapshot>;
-  highlightElement: (tabId: string, selector: string) => Promise<void>;
   clearHighlight: () => void;
-
-  executeScript: (tabId: string, script: string) => Promise<unknown>;
-  executeAsyncScript: (script: string, tabId?: string) => Promise<unknown>;
-  callFunction: (functionName: string, args: unknown, tabId?: string) => Promise<unknown>;
-  executeInFrame: (frameId: string, script: string, tabId?: string) => Promise<unknown>;
-
-  getCookies: (tabId?: string) => Promise<BrowserCookie[]>;
-  setCookie: (cookie: BrowserCookie, tabId?: string) => Promise<void>;
-  clearCookies: (tabId?: string) => Promise<void>;
-
-  getPerformanceMetrics: (tabId?: string) => Promise<PerformanceMetrics>;
-  getFrames: (tabId?: string) => Promise<FrameContext[]>;
-
-  findSemantic: (query: string, tabId?: string) => Promise<string>;
-  findAllSemantic: (query: string, tabId?: string) => Promise<string[]>;
-  clickSemantic: (query: string, tabId?: string) => Promise<void>;
-  typeSemantic: (query: string, text: string, tabId?: string) => Promise<void>;
-
-  getAccessibilityTree: (tabId?: string) => Promise<unknown>;
-  getDomSemanticGraph: (tabId?: string) => Promise<unknown>;
-  getInteractiveElements: (tabId?: string) => Promise<string[]>;
-  findByRole: (role: string, name?: string, tabId?: string) => Promise<string>;
 
   startStreaming: (tabId: string) => void;
   stopStreaming: () => void;
@@ -400,65 +284,6 @@ export const useBrowserStore = create<BrowserState>()(
           }
         },
 
-        closeTab: async (tabId: string) => {
-          try {
-            await browserCloseTab(tabId);
-
-            set(
-              (state) => {
-                for (const session of state.sessions) {
-                  const tabIndex = session.tabs.findIndex((t) => t.id === tabId);
-                  if (tabIndex >= 0) {
-                    const wasActive = session.tabs[tabIndex]?.active === true;
-                    session.tabs.splice(tabIndex, 1);
-                    if (wasActive && session.tabs.length > 0) {
-                      session.tabs[0]!.active = true;
-                    }
-                    break;
-                  }
-                }
-                state.screenshots = state.screenshots.filter((s) => s.tabId !== tabId);
-              },
-              undefined,
-              'browser/closeTab',
-            );
-          } catch (error) {
-            console.error('Failed to close tab:', error);
-            throw error;
-          }
-        },
-
-        switchTab: async (tabId: string) => {
-          try {
-            await browserSwitchTab(tabId);
-            set(
-              (state) => {
-                for (const session of state.sessions) {
-                  if (!session.tabs.some((t) => t.id === tabId)) continue;
-                  for (const tab of session.tabs) {
-                    tab.active = tab.id === tabId;
-                  }
-                  break;
-                }
-              },
-              undefined,
-              'browser/switchTab',
-            );
-          } catch (error) {
-            console.error('Failed to switch tab:', error);
-            throw error;
-          }
-        },
-
-        listTabs: async () => {
-          try {
-            return await browserListTabs();
-          } catch (error) {
-            console.error('Failed to list tabs:', error);
-            throw error;
-          }
-        },
-
         setActiveSession: (sessionId: string) => {
           set(
             (state) => {
@@ -541,381 +366,8 @@ export const useBrowserStore = create<BrowserState>()(
           }
         },
 
-        waitForNavigation: async (timeoutMs?: number, tabId?: string) => {
-          try {
-            await browserWaitForNavigation(timeoutMs, tabId);
-          } catch (error) {
-            console.error('Failed to wait for navigation:', error);
-            throw error;
-          }
-        },
-
-        clickElement: async (tabId: string, selector: string) => {
-          try {
-            await browserClick(selector, tabId);
-          } catch (error) {
-            console.error('Failed to click element:', error);
-            throw error;
-          }
-        },
-
-        typeText: async (tabId: string, selector: string, text: string) => {
-          try {
-            await browserType(selector, text, tabId);
-          } catch (error) {
-            console.error('Failed to type text:', error);
-            throw error;
-          }
-        },
-
-        getText: async (selector: string, tabId?: string) => {
-          try {
-            return await browserGetText(selector, tabId);
-          } catch (error) {
-            console.error('Failed to get text:', error);
-            throw error;
-          }
-        },
-
-        getAttribute: async (selector: string, attribute: string, tabId?: string) => {
-          try {
-            return await browserGetAttribute(selector, attribute, tabId);
-          } catch (error) {
-            console.error('Failed to get attribute:', error);
-            throw error;
-          }
-        },
-
-        waitForSelector: async (selector: string, timeout?: number, tabId?: string) => {
-          try {
-            await browserWaitForSelector(selector, timeout, tabId);
-          } catch (error) {
-            console.error('Failed to wait for selector:', error);
-            throw error;
-          }
-        },
-
-        selectOption: async (selector: string, value: string, tabId?: string) => {
-          try {
-            await browserSelectOption(selector, value, tabId);
-          } catch (error) {
-            console.error('Failed to select option:', error);
-            throw error;
-          }
-        },
-
-        checkElement: async (selector: string, tabId?: string) => {
-          try {
-            await browserCheckElement(selector, tabId);
-          } catch (error) {
-            console.error('Failed to check element:', error);
-            throw error;
-          }
-        },
-
-        uncheckElement: async (selector: string, tabId?: string) => {
-          try {
-            await browserUncheck(selector, tabId);
-          } catch (error) {
-            console.error('Failed to uncheck element:', error);
-            throw error;
-          }
-        },
-
-        hoverElement: async (selector: string, tabId?: string) => {
-          try {
-            await browserHover(selector, tabId);
-          } catch (error) {
-            console.error('Failed to hover element:', error);
-            throw error;
-          }
-        },
-
-        focusElement: async (selector: string, tabId?: string) => {
-          try {
-            await browserFocus(selector, tabId);
-          } catch (error) {
-            console.error('Failed to focus element:', error);
-            throw error;
-          }
-        },
-
-        queryAll: async (selector: string, tabId?: string) => {
-          try {
-            return await browserQueryAll(selector, tabId);
-          } catch (error) {
-            console.error('Failed to query all:', error);
-            throw error;
-          }
-        },
-
-        scrollIntoView: async (selector: string, tabId?: string) => {
-          try {
-            await browserScrollIntoView(selector, tabId);
-          } catch (error) {
-            console.error('Failed to scroll into view:', error);
-            throw error;
-          }
-        },
-
-        getElementState: async (selector: string, tabId?: string) => {
-          try {
-            return await browserGetElementState(selector, tabId);
-          } catch (error) {
-            console.error('Failed to get element state:', error);
-            throw error;
-          }
-        },
-
-        waitForInteractive: async (selector: string, timeoutMs?: number, tabId?: string) => {
-          try {
-            await browserWaitForInteractive(selector, timeoutMs, tabId);
-          } catch (error) {
-            console.error('Failed to wait for interactive:', error);
-            throw error;
-          }
-        },
-
-        fillForm: async (
-          selector: string,
-          data: Record<string, string | number | boolean>,
-          tabId?: string,
-        ) => {
-          try {
-            await browserFillForm(selector, data, tabId);
-          } catch (error) {
-            console.error('Failed to fill form:', error);
-            throw error;
-          }
-        },
-
-        dragAndDrop: async (source: string, target: string, tabId?: string) => {
-          try {
-            await browserDragAndDrop(source, target, tabId);
-          } catch (error) {
-            console.error('Failed to drag and drop:', error);
-            throw error;
-          }
-        },
-
-        uploadFile: async (selector: string, paths: string[], tabId?: string) => {
-          try {
-            await browserUploadFile(selector, paths, tabId);
-          } catch (error) {
-            console.error('Failed to upload file:', error);
-            throw error;
-          }
-        },
-
-        screenshot: async (tabId: string) => {
-          try {
-            const data = await browserScreenshot(undefined, tabId);
-            return data;
-          } catch (error) {
-            console.error('Failed to take screenshot:', error);
-            throw error;
-          }
-        },
-
-        getPageContent: async (tabId: string) => {
-          try {
-            const content = await browserGetContent(tabId);
-            return content;
-          } catch (error) {
-            console.error('Failed to get page content:', error);
-            throw error;
-          }
-        },
-
-        getDOMSnapshot: async (tabId: string) => {
-          try {
-            const html = await browserGetDomSnapshot(tabId);
-            const snapshot: DOMSnapshot = { html, timestamp: Date.now() };
-            set(
-              (state) => {
-                state.domSnapshots.push(snapshot);
-                if (state.domSnapshots.length > 50) {
-                  state.domSnapshots = state.domSnapshots.slice(-50);
-                }
-              },
-              undefined,
-              'browser/getDOMSnapshot',
-            );
-            return snapshot;
-          } catch (error) {
-            console.error('Failed to get DOM snapshot:', error);
-            throw error;
-          }
-        },
-
-        highlightElement: async (tabId: string, selector: string) => {
-          try {
-            const result = await browserHighlightElement(selector, tabId);
-            if (result.bounds) {
-              set({ highlightedElement: result.bounds }, undefined, 'browser/highlightElement');
-            }
-          } catch (error) {
-            console.error('Failed to highlight element:', error);
-            throw error;
-          }
-        },
-
         clearHighlight: () => {
           set({ highlightedElement: null }, undefined, 'browser/clearHighlight');
-        },
-
-        executeScript: async (tabId: string, script: string) => {
-          try {
-            const result = await browserEvaluate(script, tabId);
-            return result;
-          } catch (error) {
-            console.error('Failed to execute script:', error);
-            throw error;
-          }
-        },
-
-        executeAsyncScript: async (script: string, tabId?: string) => {
-          try {
-            return await browserExecuteAsyncJs(script, tabId);
-          } catch (error) {
-            console.error('Failed to execute async script:', error);
-            throw error;
-          }
-        },
-
-        callFunction: async (functionName: string, args: unknown, tabId?: string) => {
-          try {
-            return await browserCallFunction(functionName, args, tabId);
-          } catch (error) {
-            console.error('Failed to call function:', error);
-            throw error;
-          }
-        },
-
-        executeInFrame: async (frameId: string, script: string, tabId?: string) => {
-          try {
-            return await browserExecuteInFrame(frameId, script, tabId);
-          } catch (error) {
-            console.error('Failed to execute in frame:', error);
-            throw error;
-          }
-        },
-
-        getCookies: async (tabId?: string) => {
-          try {
-            return await browserGetCookies(tabId);
-          } catch (error) {
-            console.error('Failed to get cookies:', error);
-            throw error;
-          }
-        },
-
-        setCookie: async (cookie: BrowserCookie, tabId?: string) => {
-          try {
-            await browserSetCookie(cookie, tabId);
-          } catch (error) {
-            console.error('Failed to set cookie:', error);
-            throw error;
-          }
-        },
-
-        clearCookies: async (tabId?: string) => {
-          try {
-            await browserClearCookies(tabId);
-          } catch (error) {
-            console.error('Failed to clear cookies:', error);
-            throw error;
-          }
-        },
-
-        getPerformanceMetrics: async (tabId?: string) => {
-          try {
-            return await browserGetPerformanceMetrics(tabId);
-          } catch (error) {
-            console.error('Failed to get performance metrics:', error);
-            throw error;
-          }
-        },
-
-        getFrames: async (tabId?: string) => {
-          try {
-            return await browserGetFrames(tabId);
-          } catch (error) {
-            console.error('Failed to get frames:', error);
-            throw error;
-          }
-        },
-
-        findSemantic: async (query: string, tabId?: string) => {
-          try {
-            return await findElementSemantic(query, tabId);
-          } catch (error) {
-            console.error('Failed to find semantic element:', error);
-            throw error;
-          }
-        },
-
-        findAllSemantic: async (query: string, tabId?: string) => {
-          try {
-            return await findAllElementsSemantic(query, tabId);
-          } catch (error) {
-            console.error('Failed to find all semantic elements:', error);
-            throw error;
-          }
-        },
-
-        clickSemantic: async (query: string, tabId?: string) => {
-          try {
-            await clickSemantic(query, tabId);
-          } catch (error) {
-            console.error('Failed to click semantic element:', error);
-            throw error;
-          }
-        },
-
-        typeSemantic: async (query: string, text: string, tabId?: string) => {
-          try {
-            await typeSemantic(query, text, tabId);
-          } catch (error) {
-            console.error('Failed to type in semantic element:', error);
-            throw error;
-          }
-        },
-
-        getAccessibilityTree: async (tabId?: string) => {
-          try {
-            return await getAccessibilityTree(tabId);
-          } catch (error) {
-            console.error('Failed to get accessibility tree:', error);
-            throw error;
-          }
-        },
-
-        getDomSemanticGraph: async (tabId?: string) => {
-          try {
-            return await getDomSemanticGraph(tabId);
-          } catch (error) {
-            console.error('Failed to get DOM semantic graph:', error);
-            throw error;
-          }
-        },
-
-        getInteractiveElements: async (tabId?: string) => {
-          try {
-            return await getInteractiveElements(tabId);
-          } catch (error) {
-            console.error('Failed to get interactive elements:', error);
-            throw error;
-          }
-        },
-
-        findByRole: async (role: string, name?: string, tabId?: string) => {
-          try {
-            return await findByRole(role, name, tabId);
-          } catch (error) {
-            console.error('Failed to find by role:', error);
-            throw error;
-          }
         },
 
         startStreaming: (tabId: string) => {

@@ -6,6 +6,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import {
   BROWSER_BRIDGE_ROUTES,
   BROWSER_COMMAND_PROTOCOL_VERSION,
+  BROWSER_COMMAND_POLL_WINDOW_MS,
+  NATIVE_BROWSER_COMMAND_WATCH_MESSAGE,
   NATIVE_BROWSER_POLL_MESSAGE,
   NATIVE_BROWSER_RESULT_MESSAGE,
   PAIR_CODE_LENGTH,
@@ -173,10 +175,30 @@ describe('native session handshake', () => {
 
 describe('loopback pairing bridge', () => {
   let context: Awaited<ReturnType<typeof freshBridge>>;
+  let shown: Array<{ requestId: string; extensionId: string; code: string }>;
+  const OTHER_EXTENSION = 'ponmlkjihgfedcbaponmlkjihgfedcba';
+  const fromExtension = (id = EXTENSION_ID) => ({
+    'Content-Type': 'application/json',
+    Origin: `chrome-extension://${id}`,
+  });
 
   beforeEach(async () => {
-    context = await freshBridge();
+    shown = [];
+    context = await freshBridge({ onPairRequest: (prompt) => shown.push(prompt) });
+    // The pairing lives on disk, so one test's would be the next one's start.
+    context.pairingStore.clearPairing();
   });
+
+  /** Opens a pairing as the extension does, and answers with what the app showed for it. */
+  async function requestPairing(id = EXTENSION_ID) {
+    const response = await fetch(url('/pair/request'), {
+      method: 'POST',
+      headers: fromExtension(id),
+      body: JSON.stringify({ extensionId: id }),
+    });
+    await vi.waitFor(() => expect(shown.at(-1)?.extensionId).toBe(id));
+    return { response, prompt: shown.at(-1) as (typeof shown)[number] };
+  }
 
   afterEach(async () => {
     await context.bridge.stopBrowserBridge();
@@ -204,6 +226,10 @@ describe('loopback pairing bridge', () => {
         home: secondHome,
       }),
     ).rejects.toThrow(/already using the browser bridge on port/);
+    expect(second.pairingState().unavailableReason).toMatch(
+      /already using the browser bridge on port/,
+    );
+    expect(context.bridge.pairingState().unavailableReason).toBeNull();
 
     // The app that lost keeps its hands off the file the running one published,
     // which is the only thing a local client reads to find the bridge.
@@ -231,38 +257,108 @@ describe('loopback pairing bridge', () => {
     expect(response.status).toBe(403);
   });
 
-  it('keeps the code off the request response and pairs only with it', async () => {
-    const requested = await fetch(url('/pair/request'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Origin: `chrome-extension://${EXTENSION_ID}` },
-      body: JSON.stringify({ extensionId: EXTENSION_ID }),
-    });
-    const opened = (await requested.json()) as Record<string, unknown>;
+  it('keeps the code off the request response and off the state a page reads, and pairs only with it', async () => {
+    const { response, prompt } = await requestPairing();
+    const opened = (await response.json()) as Record<string, unknown>;
     expect(opened['codeLength']).toBe(PAIR_CODE_LENGTH);
-    expect(JSON.stringify(opened)).not.toContain(
-      context.bridge.pairingState().pendingRequest?.code ?? 'no-code',
-    );
+    expect(prompt.code).toHaveLength(PAIR_CODE_LENGTH);
+    expect(JSON.stringify(opened)).not.toContain(prompt.code);
+    expect(response.headers.get('access-control-allow-origin')).toBeNull();
 
-    const prompt = context.bridge.pairingState().pendingRequest;
-    expect(prompt?.extensionId).toBe(EXTENSION_ID);
+    const waiting = context.bridge.pairingState().pendingRequest;
+    expect(waiting).toEqual({
+      requestId: opened['requestId'],
+      extensionId: EXTENSION_ID,
+      expiresAtMs: expect.any(Number),
+    });
+    expect(JSON.stringify(context.bridge.pairingState())).not.toContain(prompt.code);
 
     const wrong = await fetch(url('/pair/confirm'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: fromExtension(),
       body: JSON.stringify({ requestId: opened['requestId'], code: 'AAAAAAAA' }),
     });
     expect(wrong.status).toBe(401);
 
     const confirmed = await fetch(url('/pair/confirm'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId: opened['requestId'], code: prompt?.code }),
+      headers: fromExtension(),
+      body: JSON.stringify({ requestId: opened['requestId'], code: prompt.code }),
     });
     const issued = (await confirmed.json()) as Record<string, unknown>;
     expect(issued['nativeHostManifestInstalled']).toBe(true);
     expect(String(issued['token'])).toMatch(/^[a-f0-9]{64}$/);
     expect(context.bridge.pairingState().paired).toBe(true);
     expect(context.bridge.pairingState().hostInstalled).toBe(true);
+  });
+
+  // A page, a sandboxed frame and a script with no browser behind it can each
+  // name any extension in a body. What they cannot do is send that
+  // extension's Origin, so the pairing is bound to it.
+  it.each([
+    ['a sandboxed frame', { Origin: 'null' }],
+    ['a caller that sends no Origin', {}],
+    ['the hosted page', { Origin: 'https://agiworkforce.com' }],
+    ['another extension', { Origin: `chrome-extension://${OTHER_EXTENSION}` }],
+    [
+      'an origin that only starts like an extension',
+      { Origin: `chrome-extension://${EXTENSION_ID}.evil.example` },
+    ],
+  ])('opens no pairing for an extension when asked by %s', async (_label, origin) => {
+    const response = await fetch(url('/pair/request'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...origin },
+      body: JSON.stringify({ extensionId: EXTENSION_ID }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(context.bridge.pairingState().pendingRequest).toBeNull();
+    expect(shown).toEqual([]);
+  });
+
+  it('lets only the extension a pairing is for confirm it, even with the right code', async () => {
+    const { response, prompt } = await requestPairing();
+    const { requestId } = (await response.json()) as { requestId: string };
+    const confirm = (headers: Record<string, string>) =>
+      fetch(url('/pair/confirm'), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ requestId, code: prompt.code }),
+      });
+
+    expect((await confirm({ 'Content-Type': 'application/json' })).status).toBe(403);
+    expect((await confirm({ 'Content-Type': 'application/json', Origin: 'null' })).status).toBe(
+      403,
+    );
+    expect((await confirm(fromExtension(OTHER_EXTENSION))).status).toBe(401);
+    expect(context.bridge.pairingState().paired).toBe(false);
+
+    expect((await confirm(fromExtension())).status).toBe(200);
+    expect(context.bridge.pairingState().extensionId).toBe(EXTENSION_ID);
+  });
+
+  it('reads no more of a body than a route takes, and none past what it declares', async () => {
+    const tooLong = await fetch(url('/pair/request'), {
+      method: 'POST',
+      headers: fromExtension(),
+      body: JSON.stringify({ extensionId: EXTENSION_ID, padding: 'x'.repeat(8 * 1024) }),
+    }).then(
+      (response) => response.status,
+      () => 'closed',
+    );
+
+    expect([400, 'closed']).toContain(tooLong);
+    expect(context.bridge.pairingState().pendingRequest).toBeNull();
+  });
+
+  it('answers a native message with no token before reading what it carries', async () => {
+    const response = await fetch(url('/native/message'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{ this is not JSON, and would be refused as such if it were read',
+    });
+
+    expect(response.status).toBe(401);
   });
 
   /**
@@ -287,7 +383,7 @@ describe('loopback pairing bridge', () => {
     for (const route of privileged) {
       const response = await fetch(url(route), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: fromExtension(),
         body: JSON.stringify({
           version: 1,
           extensionId: EXTENSION_ID,
@@ -322,19 +418,11 @@ describe('loopback pairing bridge', () => {
   });
 
   it('carries a command to the extension and its result back', async () => {
-    const prompt = await (async () => {
-      await fetch(url('/pair/request'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ extensionId: EXTENSION_ID }),
-      });
-      return context.bridge.pairingState().pendingRequest;
-    })();
-    const opened = context.bridge.pairingState().pendingRequest;
+    const { prompt } = await requestPairing();
     await fetch(url('/pair/confirm'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId: opened?.requestId, code: prompt?.code }),
+      headers: fromExtension(),
+      body: JSON.stringify({ requestId: prompt.requestId, code: prompt.code }),
     });
 
     const token = context.pairingStore.hostToken();
@@ -358,6 +446,7 @@ describe('loopback pairing bridge', () => {
         extensionId: EXTENSION_ID,
         message: {
           type: NATIVE_BROWSER_RESULT_MESSAGE,
+          version: BROWSER_COMMAND_PROTOCOL_VERSION,
           result: {
             version: BROWSER_COMMAND_PROTOCOL_VERSION,
             id: delivered.command?.id,
@@ -389,6 +478,142 @@ describe('loopback pairing bridge', () => {
     const body = (await response.json()) as Record<string, unknown>;
     expect(body['success']).toBe(false);
     expect(String(body['error'])).toMatch(/not paired/i);
+  });
+
+  async function nativeMessage(message: Record<string, unknown>) {
+    const response = await fetch(url('/native/message'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Native-Host-Token': context.pairingStore.hostToken(),
+      },
+      body: JSON.stringify({ extensionId: EXTENSION_ID, message }),
+    });
+    expect(response.status).toBe(200);
+    return response.json() as Promise<Record<string, unknown>>;
+  }
+
+  it('never delivers an aborted queued command and preserves site rules for the next command', async () => {
+    context.pairingStore.savePairing(EXTENSION_ID);
+    const controller = new AbortController();
+    const cancelled = context.bridge.sendBrowserCommand(
+      'browser_click',
+      { selector: '#cancelled' },
+      undefined,
+      controller.signal,
+    );
+    const rejected = expect(cancelled).rejects.toMatchObject({ code: 'cancelled' });
+    controller.abort();
+    await rejected;
+
+    const siteRules = { allow: ['example.com'], deny: ['private.example.com'] };
+    const next = context.bridge.sendBrowserCommand('browser_read_page', {}, siteRules);
+    const polled = await nativeMessage({
+      type: NATIVE_BROWSER_POLL_MESSAGE,
+      version: BROWSER_COMMAND_PROTOCOL_VERSION,
+    });
+    const command = polled['command'] as { id: string; command: string; siteRules: unknown };
+    expect(command.command).toBe('browser_read_page');
+    expect(command.siteRules).toEqual(siteRules);
+    await nativeMessage({
+      type: NATIVE_BROWSER_RESULT_MESSAGE,
+      version: BROWSER_COMMAND_PROTOCOL_VERSION,
+      result: {
+        version: BROWSER_COMMAND_PROTOCOL_VERSION,
+        id: command.id,
+        ok: true,
+        value: 'read',
+      },
+    });
+    await expect(next).resolves.toBe('read');
+  });
+
+  it('settles a registered native watcher when its delivered command is cancelled', async () => {
+    context.pairingStore.savePairing(EXTENSION_ID);
+    const controller = new AbortController();
+    const pending = context.bridge.sendBrowserCommand(
+      'browser_read_page',
+      {},
+      undefined,
+      controller.signal,
+    );
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'cancelled' });
+    const polled = await nativeMessage({
+      type: NATIVE_BROWSER_POLL_MESSAGE,
+      version: BROWSER_COMMAND_PROTOCOL_VERSION,
+    });
+    const { id } = polled['command'] as { id: string };
+    await expect(
+      nativeMessage({
+        type: NATIVE_BROWSER_COMMAND_WATCH_MESSAGE,
+        version: BROWSER_COMMAND_PROTOCOL_VERSION,
+        id,
+        wait: false,
+      }),
+    ).resolves.toMatchObject({ state: 'active' });
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    try {
+      const watching = nativeMessage({
+        type: NATIVE_BROWSER_COMMAND_WATCH_MESSAGE,
+        version: BROWSER_COMMAND_PROTOCOL_VERSION,
+        id,
+        wait: true,
+      });
+      await vi.waitFor(() =>
+        expect(
+          timers.mock.calls.filter(([, delay]) => delay === BROWSER_COMMAND_POLL_WINDOW_MS),
+        ).toHaveLength(1),
+      );
+      controller.abort();
+      await rejected;
+      await expect(watching).resolves.toMatchObject({ success: true, state: 'cancelled' });
+      await expect(
+        nativeMessage({
+          type: NATIVE_BROWSER_COMMAND_WATCH_MESSAGE,
+          version: BROWSER_COMMAND_PROTOCOL_VERSION,
+          id,
+          wait: false,
+        }),
+      ).resolves.toMatchObject({ state: 'cancelled' });
+    } finally {
+      timers.mockRestore();
+    }
+  });
+
+  it('rejects missing and mismatched browser protocol versions before delivering a command', async () => {
+    context.pairingStore.savePairing(EXTENSION_ID);
+    const controller = new AbortController();
+    const pending = context.bridge.sendBrowserCommand(
+      'browser_read_page',
+      {},
+      undefined,
+      controller.signal,
+    );
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'cancelled' });
+    for (const version of [undefined, BROWSER_COMMAND_PROTOCOL_VERSION + 1]) {
+      await expect(
+        nativeMessage({
+          type: NATIVE_BROWSER_POLL_MESSAGE,
+          ...(version === undefined ? {} : { version }),
+        }),
+      ).resolves.toMatchObject({ success: false });
+    }
+    const polled = await nativeMessage({
+      type: NATIVE_BROWSER_POLL_MESSAGE,
+      version: BROWSER_COMMAND_PROTOCOL_VERSION,
+    });
+    expect(polled['command']).toMatchObject({ command: 'browser_read_page' });
+    controller.abort();
+    await rejected;
+  });
+
+  it('rejects an already-cancelled requester before pairing or queue work', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      context.bridge.sendBrowserCommand('browser_read_page', {}, undefined, controller.signal),
+    ).rejects.toMatchObject({ code: 'cancelled' });
+    expect(context.bridge.pairingState().paired).toBe(false);
   });
 
   it('refuses a command while nothing is paired', async () => {
@@ -720,7 +945,8 @@ describe('local client routes', () => {
     await expect(pending).rejects.toThrow(/no longer paired/i);
   });
 
-  it('records each command against the client that asked', async () => {
+  it('logs each command against the client that asked', async () => {
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
     pairBrowser();
     await post('/client/command', {
       version: 1,
@@ -728,8 +954,9 @@ describe('local client routes', () => {
       args: {},
       client: { name: 'agi', cwd: '/work/project' },
     });
-    const activity = context.bridge.listLocalClientActivity();
-    expect(activity.at(-1)?.client).toBe('The AGI CLI in project');
-    expect(activity.at(-1)?.command).toBe('browser_read_page');
+    expect(debug).toHaveBeenCalledWith(
+      '[browser-bridge] The AGI CLI in project ran browser_read_page in the paired browser',
+    );
+    debug.mockRestore();
   });
 });

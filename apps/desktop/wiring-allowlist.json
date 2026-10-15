@@ -2,8 +2,12 @@
   "schemaVersion": 1,
   "registeredWithoutFrontendCaller": [
     {
-      "command": "document_edit_excel",
-      "reason": "Agent-selected tool, not a renderer command. The LLM tool executor calls the Rust function directly (core/llm/tool_executor/document_tools.rs) after tool_guard approval; there is deliberately no invoke() call site because no UI drives spreadsheet editing. Registered so the same entry point is reachable if a UI is added. No document_edit_word counterpart exists on purpose, see docs/decisions/wire-or-cut.md."
+      "command": "automation_record_action_click",
+      "reason": "Test seam, not a renderer command. apps/desktop/wdio/specs/record-skill.spec.ts calls it over the raw IPC bridge to place one click in a live recording, because WebDriver cannot produce the global input the recorder's own hooks capture (src-tauri/src/automation/recorder.rs). It records nothing unless a recording is running. Cut it together with that spec step if the spec learns another way to fill a recording."
+    },
+    {
+      "command": "automation_record_is_recording",
+      "reason": "Test seam, not a renderer command. apps/desktop/wdio/specs/record-skill.spec.ts reads it over the raw IPC bridge to confirm the recorder started before it injects a click; the renderer reads automation_record_get_status instead. Cut it with automation_record_action_click."
     },
     {
       "command": "llm_list_llamacpp_models",
@@ -14,198 +18,21 @@
       "reason": "Invoked through the runtime-selected local model command table in apps/desktop/src/App.tsx."
     },
     {
+      "command": "llm_list_ollama_models",
+      "reason": "Invoked through the runtime-selected local model command table in apps/desktop/src/App.tsx."
+    },
+    {
       "command": "llm_list_vllm_models",
       "reason": "Invoked through the runtime-selected local model command table in apps/desktop/src/App.tsx."
+    },
+    {
+      "command": "speech_start_recording",
+      "reason": "Native microphone capture for system-wide dictation, plan stage 3 of docs/specs/desktop-global-voice/spec.md (features/speech/dictation/capture.rs). No renderer calls it: in-app dictation records in the webview and sends voice_transcribe_blob, and the global path stays closed until the release gates tracked as DESKTOP-SYSTEM-DICTATION-UNWIRED-01 pass. The unused voice store wrappers were removed; cut this command with capture.rs if that plan is dropped."
+    },
+    {
+      "command": "speech_stop_and_transcribe",
+      "reason": "Native microphone capture for system-wide dictation, plan stage 3 of docs/specs/desktop-global-voice/spec.md (features/speech/dictation/capture.rs). No renderer calls it: in-app dictation records in the webview and sends voice_transcribe_blob, and the global path stays closed until the release gates tracked as DESKTOP-SYSTEM-DICTATION-UNWIRED-01 pass. The unused voice store wrappers were removed; cut this command with capture.rs if that plan is dropped."
     }
   ],
-  "registeredWithoutReachableCaller": [
-    {
-      "command": "api_delete",
-      "reason": "DELETE: DELETE shorthand over api_request. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
-    },
-    {
-      "command": "api_extract_json_path",
-      "reason": "DELETE: JSONPath extractor over a parsed response. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
-    },
-    {
-      "command": "api_extract_template_variables",
-      "reason": "DELETE: Template-variable lister for the same client. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
-    },
-    {
-      "command": "api_get",
-      "reason": "DELETE: GET shorthand over api_request. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
-    },
-    {
-      "command": "api_oauth_client_credentials",
-      "reason": "DELETE: Runs the OAuth 2.0 client-credentials grant. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
-    },
-    {
-      "command": "api_oauth_create_client",
-      "reason": "DELETE: Stores a renderer-supplied OAuth 2.0 client. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
-    },
-    {
-      "command": "api_oauth_exchange_code",
-      "reason": "DELETE: Exchanges an OAuth 2.0 code for tokens. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
-    },
-    {
-      "command": "api_oauth_get_auth_url",
-      "reason": "DELETE: Builds the OAuth 2.0 authorize URL. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
-    },
-    {
-      "command": "api_oauth_refresh_token",
-      "reason": "DELETE: Refreshes an OAuth 2.0 token. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
-    },
-    {
-      "command": "api_parse_response",
-      "reason": "DELETE: Response-body parser for the same client. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
-    },
-    {
-      "command": "api_post_json",
-      "reason": "DELETE: JSON POST shorthand over api_request. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
-    },
-    {
-      "command": "api_put_json",
-      "reason": "DELETE: JSON PUT shorthand over api_request. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
-    },
-    {
-      "command": "api_render_template",
-      "reason": "DELETE: Request-template renderer for the same client. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
-    },
-    {
-      "command": "api_request",
-      "reason": "DELETE: The generic renderer-driven HTTP request. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
-    },
-    {
-      "command": "api_validate_template",
-      "reason": "DELETE: Template validator for the same client. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
-    },
-    {
-      "command": "auto_save_decision",
-      "reason": "WIRE: Records a decision into project memory. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
-    },
-    {
-      "command": "automation_generate_code",
-      "reason": "DELETE: Turns a recording into source code. The mounted apps/desktop/src/features/automation/ActionRecorder.tsx records through packages/client/desktop-command-client/src/automation.ts and saves a recording with skills.skillCreateFromRecording; the script/codegen export was never ported to that client and survives only in the unreachable apps/desktop/src/api/automationEnhanced.ts. Superseded by the skill flow. Delete the wrapper, its lib.rs registration, and the client."
-    },
-    {
-      "command": "automation_save_recording_as_script",
-      "reason": "DELETE: Saves a recording as a script file. The mounted apps/desktop/src/features/automation/ActionRecorder.tsx records through packages/client/desktop-command-client/src/automation.ts and saves a recording with skills.skillCreateFromRecording; the script/codegen export was never ported to that client and survives only in the unreachable apps/desktop/src/api/automationEnhanced.ts. Superseded by the skill flow. Delete the wrapper, its lib.rs registration, and the client."
-    },
-    {
-      "command": "chat_detect_intent",
-      "reason": "DELETE: Regex intent classifier over the user\u2019s message. sys/commands/chat/intent.rs is self-contained - detect_user_intent and matches_stop_intent have no Rust caller - and the only client is the unreachable apps/desktop/src/api/chat.ts. The mounted composer stops generation with chat_stop_generation (apps/desktop/src/runtime/TauriRuntime.ts) rather than pre-classifying the text. Delete the wrapper and its lib.rs registration."
-    },
-    {
-      "command": "chat_is_stop_command",
-      "reason": "DELETE: Regex \"did the user say stop\" predicate. sys/commands/chat/intent.rs is self-contained - detect_user_intent and matches_stop_intent have no Rust caller - and the only client is the unreachable apps/desktop/src/api/chat.ts. The mounted composer stops generation with chat_stop_generation (apps/desktop/src/runtime/TauriRuntime.ts) rather than pre-classifying the text. Delete the wrapper and its lib.rs registration."
-    },
-    {
-      "command": "clear_project_memories",
-      "reason": "WIRE: Clears a project folder\u2019s memories - the user-facing half of a memory store that can currently only be written to. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
-    },
-    {
-      "command": "coord_get_pending_approvals",
-      "reason": "DELETE: Lists pending approvals. Same dead module as task_*: sys/commands/task_persistence.rs keeps app_states and approvals in an in-memory HashMap with no producer, while the shipped approval boundary is core/agent/approval.rs behind request_tool_confirmation. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
-    },
-    {
-      "command": "coord_request_approval",
-      "reason": "DELETE: Opens an approval request. Same dead module as task_*: sys/commands/task_persistence.rs keeps app_states and approvals in an in-memory HashMap with no producer, while the shipped approval boundary is core/agent/approval.rs behind request_tool_confirmation. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
-    },
-    {
-      "command": "coord_update_app_state",
-      "reason": "DELETE: Writes an app-state entry. Same dead module as task_*: sys/commands/task_persistence.rs keeps app_states and approvals in an in-memory HashMap with no producer, while the shipped approval boundary is core/agent/approval.rs behind request_tool_confirmation. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
-    },
-    {
-      "command": "delete_project_memory",
-      "reason": "WIRE: Deletes one stored memory - the user-facing half of a memory store that can currently only be written to. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
-    },
-    {
-      "command": "execute_code",
-      "reason": "WIRE: Sandboxed multi-language runner, already gated - sys/commands/code_execution.rs:59-75 calls request_confirmation_simple before running anything. Its only client is canvasRunCodeViaTauri in apps/desktop/src/stores/editingStore.ts, and the whole canvas tree (features/canvas, features/dynamic-canvas) is unmounted, so this decision rides on the canvas wire-or-cut call in docs/decisions/wire-or-cut.md. Separately: it is absent from apps/desktop/.hitl-required-tools.yaml, so nothing in CI guards that confirmation gate."
-    },
-    {
-      "command": "get_architectural_decisions",
-      "reason": "WIRE: Reads back architectural decisions. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
-    },
-    {
-      "command": "get_coding_styles",
-      "reason": "WIRE: Reads back per-project coding styles. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
-    },
-    {
-      "command": "get_project_context",
-      "reason": "WIRE: Reads the stored project context. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
-    },
-    {
-      "command": "get_project_memory_stats",
-      "reason": "WIRE: Reports project-memory counts. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
-    },
-    {
-      "command": "migration_launch_lovable",
-      "reason": "DELETE: Would queue a Lovable workflow import. sys/commands/migration.rs returns a fixed \"planned but not yet available\" error for every Lovable command (migration.rs:3-9) and its own tests assert that refusal; the only client is the unreachable apps/desktop/src/api/migration.ts. Nothing is lost by removing it and nothing ships by keeping it. Delete the wrapper, its lib.rs registration, and the client."
-    },
-    {
-      "command": "migration_list_lovable_workflows",
-      "reason": "DELETE: Would list Lovable workflows. sys/commands/migration.rs returns a fixed \"planned but not yet available\" error for every Lovable command (migration.rs:3-9) and its own tests assert that refusal; the only client is the unreachable apps/desktop/src/api/migration.ts. Nothing is lost by removing it and nothing ships by keeping it. Delete the wrapper, its lib.rs registration, and the client."
-    },
-    {
-      "command": "migration_test_lovable_connection",
-      "reason": "DELETE: Would validate Lovable credentials. sys/commands/migration.rs returns a fixed \"planned but not yet available\" error for every Lovable command (migration.rs:3-9) and its own tests assert that refusal; the only client is the unreachable apps/desktop/src/api/migration.ts. Nothing is lost by removing it and nothing ships by keeping it. Delete the wrapper, its lib.rs registration, and the client."
-    },
-    {
-      "command": "save_architectural_decision",
-      "reason": "WIRE: Writes an architectural decision. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
-    },
-    {
-      "command": "save_coding_style",
-      "reason": "WIRE: Writes a per-project coding style. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
-    },
-    {
-      "command": "task_cancel",
-      "reason": "DELETE: Cancels a task in the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
-    },
-    {
-      "command": "task_complete",
-      "reason": "DELETE: Completes a task in the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
-    },
-    {
-      "command": "task_create",
-      "reason": "DELETE: Creates a task in the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
-    },
-    {
-      "command": "task_get_resumable",
-      "reason": "DELETE: Lists resumable tasks from the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
-    },
-    {
-      "command": "task_get_status",
-      "reason": "DELETE: Reads a task from the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
-    },
-    {
-      "command": "task_list",
-      "reason": "DELETE: Lists the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
-    },
-    {
-      "command": "task_list_by_status",
-      "reason": "DELETE: Filters the duplicate store by status. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
-    },
-    {
-      "command": "task_pause",
-      "reason": "DELETE: Pauses a task in the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
-    },
-    {
-      "command": "task_resume",
-      "reason": "DELETE: Resumes a task in the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
-    },
-    {
-      "command": "task_save_context",
-      "reason": "DELETE: Saves resume context into the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
-    },
-    {
-      "command": "task_update_progress",
-      "reason": "DELETE: Updates progress in the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
-    },
-    {
-      "command": "update_memory_importance",
-      "reason": "WIRE: Re-ranks one stored memory. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
-    }
-  ]
+  "registeredWithoutReachableCaller": []
 }

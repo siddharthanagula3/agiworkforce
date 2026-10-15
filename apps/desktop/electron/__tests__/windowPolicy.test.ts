@@ -1,16 +1,24 @@
-import { describe, expect, it, vi } from 'vitest';
+import { EventEmitter } from 'node:events';
+import type { BrowserWindow } from 'electron';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('electron', () => ({ shell: { openExternal: vi.fn() } }));
+const { openExternal } = vi.hoisted(() => ({ openExternal: vi.fn() }));
+
+vi.mock('electron', () => ({ shell: { openExternal } }));
 vi.mock('../config', () => ({
+  CLERK_DEVELOPMENT_HOST: null,
   CLOUD_APP_ORIGIN: 'https://agiworkforce.com',
   RENDERER_MODE: 'remote',
   RENDERER_ORIGIN: 'agi://cloud',
 }));
 
-const { decideRemoteNavigation } = await import('../windowPolicy');
+const { applyRemoteWindowPolicy, decideRemoteNavigation, decideRemoteRedirect } =
+  await import('../windowPolicy');
 
 const PRODUCTION = 'https://agiworkforce.com';
 const DEVELOPMENT = 'http://localhost:3100';
+const OWN_CLERK_TENANT = 'sharp-cat-12.clerk.accounts.dev';
+const OTHER_CLERK_TENANT = 'https://attacker-site-99.clerk.accounts.dev/sign-in';
 
 describe('remote navigation', () => {
   it('keeps the product in the window', () => {
@@ -62,9 +70,32 @@ describe('remote navigation', () => {
       'https://login.microsoftonline.com/common/oauth2/authorize',
       'https://login.live.com/oauth20_authorize.srf',
       'https://appleid.apple.com/auth/authorize',
-      'https://sharp-cat-12.clerk.accounts.dev/v1/oauth_callback',
     ]) {
       expect(decideRemoteNavigation(url, PRODUCTION), url).toBe('allow');
+    }
+  });
+
+  it('admits no Clerk-hosted tenant in a build that names none', () => {
+    for (const url of [`https://${OWN_CLERK_TENANT}/v1/oauth_callback`, OTHER_CLERK_TENANT]) {
+      expect(decideRemoteNavigation(url, PRODUCTION), url).toBe('open-externally');
+      expect(decideRemoteRedirect(url, PRODUCTION), url).toBe('open-externally');
+    }
+  });
+
+  it('admits only its own Clerk tenant in a development build, never another one', () => {
+    const own = `https://${OWN_CLERK_TENANT}/v1/oauth_callback`;
+    expect(decideRemoteNavigation(own, DEVELOPMENT, OWN_CLERK_TENANT)).toBe('allow');
+    expect(decideRemoteRedirect(own, DEVELOPMENT, OWN_CLERK_TENANT)).toBe('allow');
+    for (const url of [
+      OTHER_CLERK_TENANT,
+      `https://evil.${OWN_CLERK_TENANT}/sign-in`,
+      `http://${OWN_CLERK_TENANT}/v1/oauth_callback`,
+      'https://clerk.accounts.dev/sign-in',
+    ]) {
+      expect(decideRemoteNavigation(url, DEVELOPMENT, OWN_CLERK_TENANT), url).toBe(
+        'open-externally',
+      );
+      expect(decideRemoteRedirect(url, DEVELOPMENT, OWN_CLERK_TENANT), url).toBe('open-externally');
     }
   });
 
@@ -87,5 +118,84 @@ describe('remote navigation', () => {
     expect(decideRemoteNavigation('https://app.agiworkforce.com/pricing', PRODUCTION)).toBe(
       'open-externally',
     );
+  });
+});
+
+describe('remote redirects', () => {
+  it('lets a redirect move between paths on our hosts and the identity providers', () => {
+    for (const url of [
+      'https://agiworkforce.com/chat',
+      'https://agiworkforce.com/pricing',
+      'https://clerk.agiworkforce.com/v1/oauth_callback',
+      'https://accounts.google.com/o/oauth2/auth',
+    ]) {
+      expect(decideRemoteRedirect(url, PRODUCTION), url).toBe('allow');
+    }
+  });
+
+  it('refuses a redirect that leaves the allowed origins', () => {
+    for (const url of [
+      'https://example.com/',
+      'https://accounts.google.com.evil.test/o/oauth2/auth',
+      'http://agiworkforce.com/chat',
+      'http://accounts.google.com/o/oauth2/auth',
+      'file:///etc/passwd',
+      'not a url',
+    ]) {
+      expect(decideRemoteRedirect(url, PRODUCTION), url).toBe('open-externally');
+    }
+  });
+});
+
+describe('applyRemoteWindowPolicy', () => {
+  function fakeWindow() {
+    const webContents = Object.assign(new EventEmitter(), {
+      userAgent: 'Mozilla/5.0 Electron/44.4.5',
+      setWindowOpenHandler: vi.fn(),
+    });
+    return { win: { webContents } as unknown as BrowserWindow, webContents };
+  }
+
+  function redirect(url: string, isMainFrame = true) {
+    return { url, isMainFrame, preventDefault: vi.fn() };
+  }
+
+  beforeEach(() => {
+    openExternal.mockReset();
+  });
+
+  it("cancels a main-frame redirect to a Clerk tenant that is not this build's own", () => {
+    const { win, webContents } = fakeWindow();
+    applyRemoteWindowPolicy(win);
+    const event = redirect(OTHER_CLERK_TENANT);
+    webContents.emit('will-redirect', event);
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(openExternal).toHaveBeenCalledWith(OTHER_CLERK_TENANT);
+  });
+
+  it('cancels a main-frame redirect to another origin and hands it to the browser', () => {
+    const { win, webContents } = fakeWindow();
+    applyRemoteWindowPolicy(win);
+    const event = redirect('https://example.com/landing');
+    webContents.emit('will-redirect', event);
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(openExternal).toHaveBeenCalledWith('https://example.com/landing');
+  });
+
+  it('lets a main-frame redirect through the sign-in hosts continue', () => {
+    const { win, webContents } = fakeWindow();
+    applyRemoteWindowPolicy(win);
+    const event = redirect('https://clerk.agiworkforce.com/v1/oauth_callback');
+    webContents.emit('will-redirect', event);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it('leaves subframe redirects to the page content security policy', () => {
+    const { win, webContents } = fakeWindow();
+    applyRemoteWindowPolicy(win);
+    const event = redirect('https://hooks.stripe.com/redirect', false);
+    webContents.emit('will-redirect', event);
+    expect(event.preventDefault).not.toHaveBeenCalled();
   });
 });

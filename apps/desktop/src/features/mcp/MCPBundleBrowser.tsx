@@ -92,7 +92,7 @@ function InstallProgressModal({
             <div>
               <h3 className="font-semibold text-foreground">
                 {isFailed
-                  ? 'Installation Failed'
+                  ? 'Nothing was installed'
                   : isComplete
                     ? 'Installation Complete'
                     : 'Installing Bundle'}

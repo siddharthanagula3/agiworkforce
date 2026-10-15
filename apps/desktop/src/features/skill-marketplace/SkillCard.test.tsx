@@ -17,7 +17,6 @@ const runtimeLoadedSkill: MarketplaceSkill = {
   allowedTools: [],
   contextMode: 'main',
   category: 'productivity',
-  isActive: false,
 };
 
 describe('SkillCard capability honesty', () => {

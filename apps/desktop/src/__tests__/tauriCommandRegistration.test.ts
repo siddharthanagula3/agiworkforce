@@ -15,26 +15,10 @@ describe('tauri command registration contracts', () => {
     expect(dataModRs).not.toMatch(/^pub mod settings_sync;/m);
   });
 
-  it('keeps realtime + messaging commands registered when frontend invokes them', () => {
-    const libPaths = [
-      'crate::sys::commands::messaging::send_message',
-      'crate::sys::commands::realtime::connect_websocket',
-      'crate::sys::commands::realtime::get_team_presence',
-      'crate::sys::commands::realtime::get_user_presence',
-      'crate::sys::commands::realtime::set_user_online',
-      'crate::sys::commands::realtime::set_user_offline',
-      'crate::sys::commands::realtime::update_user_activity',
-    ];
-
-    for (const path of libPaths) {
-      expect(libRs).toContain(path);
-    }
-  });
-
   describe('Command argument signatures (M38)', () => {
     describe('memory commands', () => {
-      it('memory_remember accepts category, topic, content, importance, source', () => {
-        expect(libRs).toContain('memory_remember');
+      it('memory_store accepts category, topic, content, importance, source', () => {
+        expect(libRs).toContain('memory_store');
         const commandsDir = resolve(__dirname, '../../src-tauri/src');
         let memRs = '';
         const primaryPath = `${commandsDir}/sys/commands/memory.rs`;
@@ -51,48 +35,12 @@ describe('tauri command registration contracts', () => {
         expect(memRs).not.toBe('');
 
         if (memRs) {
-          expect(memRs).toContain('memory_remember');
+          expect(memRs).toContain('memory_store');
           expect(memRs).toContain('category');
           expect(memRs).toContain('topic');
           expect(memRs).toContain('content');
           expect(memRs).toContain('importance');
         }
-      });
-
-      it('memory_recall accepts category and topic', () => {
-        expect(libRs).toContain('memory_recall');
-      });
-
-      it('memory_search accepts query and optional limit', () => {
-        expect(libRs).toContain('memory_search');
-      });
-
-      it('memory_forget accepts memory_id', () => {
-        expect(libRs).toContain('memory_forget');
-      });
-
-      it('memory_get_by_category is registered', () => {
-        expect(libRs).toContain('memory_get_by_category');
-      });
-
-      it('memory_get_session_context is registered', () => {
-        expect(libRs).toContain('memory_get_session_context');
-      });
-
-      it('memory_log_context is registered', () => {
-        expect(libRs).toContain('memory_log_context');
-      });
-
-      it('memory_get_important is registered', () => {
-        expect(libRs).toContain('memory_get_important');
-      });
-
-      it('memory_export_all is registered', () => {
-        expect(libRs).toContain('memory_export_all');
-      });
-
-      it('memory_cleanup_logs is registered', () => {
-        expect(libRs).toContain('memory_cleanup_logs');
       });
 
       it('memory_list_all is registered', () => {
@@ -154,10 +102,7 @@ describe('tauri command registration contracts', () => {
 
     describe('no typos in critical command names', () => {
       const criticalCommands = [
-        'memory_remember',
-        'memory_recall',
-        'memory_search',
-        'memory_forget',
+        'memory_store',
         'window_get_state',
         'window_toggle_maximize',
         'settings_save',

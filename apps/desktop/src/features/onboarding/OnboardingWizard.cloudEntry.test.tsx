@@ -18,6 +18,7 @@ vi.mock('../../lib/tauri-mock', () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
   isTauri: true,
   isTauriContext: () => true,
+  listen: vi.fn().mockResolvedValue(() => {}),
 }));
 
 vi.mock('../../api/ollama', () => ({

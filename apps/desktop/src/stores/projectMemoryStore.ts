@@ -1,21 +1,7 @@
-// TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-import { toast } from 'sonner';
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
 import { invoke } from '../lib/tauri-mock';
-
-export interface ProjectContext {
-  id: number;
-  project_folder: string;
-  tech_stack: string[];
-  main_language: string | null;
-  conventions: string | null;
-  frameworks: string[];
-  importance: number;
-  created_at: string;
-  updated_at: string;
-}
 
 export interface ProjectMemory {
   id: number;
@@ -28,105 +14,82 @@ export interface ProjectMemory {
   last_accessed: string | null;
 }
 
-export interface SaveProjectContextRequest {
-  projectFolder: string;
-  techStack: string[];
-  mainLanguage?: string;
-  conventions?: string;
-  frameworks: string[];
-  importance?: number;
-}
-
-export interface SearchMemoriesRequest {
-  projectFolder: string;
-  query: string;
-  limit?: number;
-}
-
 interface ProjectMemoryState {
+  projectFolder: string | null;
+  memories: ProjectMemory[];
   isLoading: boolean;
   error: string | null;
 
-  saveProjectContext: (request: SaveProjectContextRequest) => Promise<number>;
-  getProjectMemories: (projectFolder: string) => Promise<ProjectMemory[]>;
-  searchProjectMemories: (request: SearchMemoriesRequest) => Promise<ProjectMemory[]>;
-  clearError: () => void;
+  loadProjectMemories: (projectFolder: string) => Promise<void>;
+  addProjectMemory: (projectFolder: string, decision: string, rationale: string) => Promise<void>;
+  deleteProjectMemory: (memoryId: number) => Promise<void>;
+  reset: () => void;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export const useProjectMemoryStore = create<ProjectMemoryState>()(
   devtools(
-    (set) => ({
+    (set, get) => ({
+      projectFolder: null,
+      memories: [],
       isLoading: false,
       error: null,
 
-      saveProjectContext: async (request: SaveProjectContextRequest) => {
-        set({ isLoading: true, error: null }, undefined, 'projectMemory/saveContext/start');
-        try {
-          const id = await invoke<number>('save_project_context', {
-            request: {
-              projectFolder: request.projectFolder,
-              techStack: request.techStack,
-              mainLanguage: request.mainLanguage ?? null,
-              conventions: request.conventions ?? null,
-              frameworks: request.frameworks,
-              importance: request.importance ?? null,
-            },
-          });
-          set({ isLoading: false }, undefined, 'projectMemory/saveContext/success');
-          toast.success('Project context saved');
-          return id;
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error);
-          console.error('[projectMemoryStore] failed to save project context:', msg);
-          set({ error: msg, isLoading: false }, undefined, 'projectMemory/saveContext/error');
-          toast.error(`Failed to save project context: ${msg}`);
-          throw error;
-        }
-      },
-
-      getProjectMemories: async (projectFolder: string) => {
-        set({ isLoading: true, error: null }, undefined, 'projectMemory/getMemories/start');
+      loadProjectMemories: async (projectFolder) => {
+        const folderChanged = get().projectFolder !== projectFolder;
+        set(
+          {
+            projectFolder,
+            isLoading: true,
+            error: null,
+            ...(folderChanged ? { memories: [] } : {}),
+          },
+          undefined,
+          'projectMemory/load/start',
+        );
         try {
           const memories = await invoke<ProjectMemory[]>('get_project_memories', {
             projectFolder,
           });
-          set({ isLoading: false }, undefined, 'projectMemory/getMemories/success');
-          return memories;
+          if (get().projectFolder !== projectFolder) return;
+          set({ memories, isLoading: false }, undefined, 'projectMemory/load/success');
         } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error);
-          console.error('[projectMemoryStore] failed to get memories:', msg);
-          set({ error: msg, isLoading: false }, undefined, 'projectMemory/getMemories/error');
-          throw error;
+          if (get().projectFolder !== projectFolder) return;
+          set(
+            { error: errorMessage(error), isLoading: false },
+            undefined,
+            'projectMemory/load/error',
+          );
         }
       },
 
-      searchProjectMemories: async (request: SearchMemoriesRequest) => {
-        set({ isLoading: true, error: null }, undefined, 'projectMemory/search/start');
-        try {
-          const results = await invoke<ProjectMemory[]>('search_project_memories', {
-            request: {
-              projectFolder: request.projectFolder,
-              query: request.query,
-              limit: request.limit ?? null,
-            },
-          });
-          set({ isLoading: false }, undefined, 'projectMemory/search/success');
-          return results;
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error);
-          console.error('[projectMemoryStore] failed to search memories:', msg);
-          set({ error: msg, isLoading: false }, undefined, 'projectMemory/search/error');
-          throw error;
-        }
+      addProjectMemory: async (projectFolder, decision, rationale) => {
+        await invoke<number>('save_architectural_decision', {
+          request: { projectFolder, decision, rationale },
+        });
+        await get().loadProjectMemories(projectFolder);
       },
 
-      clearError: () => {
-        set({ error: null }, undefined, 'projectMemory/clearError');
+      deleteProjectMemory: async (memoryId) => {
+        await invoke<boolean>('delete_project_memory', { memoryId });
+        set(
+          (state) => ({ memories: state.memories.filter((memory) => memory.id !== memoryId) }),
+          undefined,
+          'projectMemory/delete/success',
+        );
+      },
+
+      reset: () => {
+        set(
+          { projectFolder: null, memories: [], isLoading: false, error: null },
+          undefined,
+          'projectMemory/reset',
+        );
       },
     }),
     { name: 'ProjectMemoryStore', enabled: import.meta.env.DEV },
   ),
 );
-
-export const selectProjectMemoryLoading = (state: ProjectMemoryState) => state.isLoading;
-export const selectProjectMemoryError = (state: ProjectMemoryState) => state.error;

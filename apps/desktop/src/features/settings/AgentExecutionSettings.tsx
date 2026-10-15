@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { invoke, isTauriContext } from '../../lib/tauri-mock';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +25,57 @@ import {
   selectStreamInactivityTimeoutSeconds,
   selectTerminalSandbox,
 } from '../../stores/settingsStore';
+
+function isWindowsHost(): boolean {
+  return typeof navigator !== 'undefined' && navigator.platform.toUpperCase().startsWith('WIN');
+}
+
+export function agentCommandSandboxStatus(
+  policy: TerminalSandboxPolicy,
+  onWindows: boolean,
+): string {
+  if (policy === 'danger-full-access') {
+    return 'Agent commands: not sandboxed. They run with your account’s full file and network access after you approve each one.';
+  }
+  if (onWindows) {
+    return 'Agent commands: not sandboxed on Windows, which has no OS sandbox here. Each command still asks before it runs.';
+  }
+  return policy === 'read-only'
+    ? 'Agent commands: sandboxed. They can read files but write nothing outside a private temporary folder, and cannot reach services on this computer.'
+    : 'Agent commands: sandboxed. They can read anywhere but write only inside the chat’s folder, and cannot reach services on this computer.';
+}
+
+interface TerminalSandboxAvailability {
+  supported: boolean;
+  available: boolean;
+  reason: string | null;
+}
+
+const SANDBOX_AVAILABILITY_DEBOUNCE_MS = 250;
+
+function useTerminalSandboxAvailability(executable: string): TerminalSandboxAvailability | null {
+  const [availability, setAvailability] = useState<TerminalSandboxAvailability | null>(null);
+
+  useEffect(() => {
+    if (!isTauriContext()) return;
+    let current = true;
+    const timer = setTimeout(() => {
+      invoke<TerminalSandboxAvailability>('terminal_sandbox_availability', { executable })
+        .then((result) => {
+          if (current) setAvailability(result);
+        })
+        .catch(() => {
+          if (current) setAvailability(null);
+        });
+    }, SANDBOX_AVAILABILITY_DEBOUNCE_MS);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [executable]);
+
+  return availability;
+}
 
 interface AgentExecutionSettingsProps {
   onSettingsChange?: () => void;
@@ -54,6 +106,10 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
   );
   const [pendingUnsafeSandboxChange, setPendingUnsafeSandboxChange] =
     useState<UnsafeSandboxChange | null>(null);
+  const sandboxAvailability = useTerminalSandboxAvailability(terminalSandbox.executable);
+  const sandboxRuntimeSupported = sandboxAvailability?.supported ?? !isWindowsHost();
+  const sandboxRuntimeMissing =
+    sandboxAvailability !== null && sandboxAvailability.supported && !sandboxAvailability.available;
 
   const handleApprovalTimeoutChange = useCallback(
     (value: number[]) => {
@@ -91,10 +147,11 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
         setPendingUnsafeSandboxChange({ kind: 'enabled', value: false });
         return;
       }
+      if (enabled && sandboxRuntimeMissing) return;
       setTerminalSandboxEnabled(enabled);
       onSettingsChange?.();
     },
-    [onSettingsChange, setTerminalSandboxEnabled, terminalSandbox.enabled],
+    [onSettingsChange, sandboxRuntimeMissing, setTerminalSandboxEnabled, terminalSandbox.enabled],
   );
 
   const handleTerminalSandboxBackendChange = useCallback(
@@ -185,6 +242,21 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
   const allowedDomainsText = useMemo(
     () => terminalSandbox.allowedDomains.join(', '),
     [terminalSandbox.allowedDomains],
+  );
+
+  const runtimeExecutableField = (
+    <div className="space-y-2">
+      <Label htmlFor="terminalSandboxExecutable">Runtime executable</Label>
+      <Input
+        id="terminalSandboxExecutable"
+        value={terminalSandbox.executable}
+        onChange={(event) => handleTerminalSandboxExecutableChange(event.target.value)}
+        placeholder="srt"
+      />
+      <p className="text-xs text-muted-foreground">
+        Use `srt` when it is on `PATH`, or provide an absolute path to the binary.
+      </p>
+    </div>
   );
 
   return (
@@ -306,18 +378,60 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
           <div className="space-y-1">
             <h4 className="font-semibold text-sm">Terminal Sandbox</h4>
             <p className="text-xs text-muted-foreground">
-              Wrap terminal commands in an OS-level sandbox. This follows the CLI model and can use
-              `srt` for workspace-write or read-only execution.
+              {sandboxRuntimeSupported
+                ? 'Wrap terminal commands in an OS-level sandbox. This follows the CLI model and can use `srt` for workspace-write or read-only execution.'
+                : 'The sandbox runtime for terminal commands is not available on Windows. Commands you run from the terminal panel run with your account’s access.'}
             </p>
+            {sandboxRuntimeSupported && (
+              <p className="text-xs text-muted-foreground">
+                Turning the sandbox off, choosing full access, changing the runtime or its
+                executable, or allowing another domain is confirmed in a system dialog when you
+                save. If you decline there, nothing is saved.
+              </p>
+            )}
           </div>
-          <Switch
-            checked={terminalSandbox.enabled}
-            onCheckedChange={handleTerminalSandboxEnabledChange}
-            aria-label="Enable terminal sandbox"
-          />
+          {sandboxRuntimeSupported && (
+            <Switch
+              checked={terminalSandbox.enabled}
+              onCheckedChange={handleTerminalSandboxEnabledChange}
+              disabled={sandboxRuntimeMissing && !terminalSandbox.enabled}
+              aria-label="Enable terminal sandbox"
+              aria-describedby={sandboxRuntimeMissing ? 'terminalSandboxUnavailable' : undefined}
+            />
+          )}
         </div>
 
-        {terminalSandbox.enabled ? (
+        <div className="space-y-2">
+          <Label htmlFor="terminalSandboxPolicy">Access policy</Label>
+          <Select value={terminalSandbox.policy} onValueChange={handleTerminalSandboxPolicyChange}>
+            <SelectTrigger id="terminalSandboxPolicy">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="workspace-write">Workspace write</SelectItem>
+              <SelectItem value="read-only">Read-only</SelectItem>
+              <SelectItem value="danger-full-access">Danger full access</SelectItem>
+            </SelectContent>
+          </Select>
+          <p role="status" className="text-xs text-muted-foreground">
+            {agentCommandSandboxStatus(terminalSandbox.policy, isWindowsHost())}
+          </p>
+        </div>
+
+        {sandboxRuntimeSupported && sandboxRuntimeMissing && (
+          <div
+            id="terminalSandboxUnavailable"
+            role="alert"
+            className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-foreground"
+          >
+            {terminalSandbox.enabled
+              ? 'Terminal commands cannot start until the sandbox runtime is found.'
+              : 'The terminal sandbox cannot be switched on yet.'}{' '}
+            {sandboxAvailability?.reason} Install `srt`, or give the path to its executable below.
+          </div>
+        )}
+
+        {!sandboxRuntimeSupported ? null : terminalSandbox.enabled ? (
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -335,37 +449,9 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="terminalSandboxPolicy">Access policy</Label>
-                <Select
-                  value={terminalSandbox.policy}
-                  onValueChange={handleTerminalSandboxPolicyChange}
-                >
-                  <SelectTrigger id="terminalSandboxPolicy">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="workspace-write">Workspace write</SelectItem>
-                    <SelectItem value="read-only">Read-only</SelectItem>
-                    <SelectItem value="danger-full-access">Danger full access</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="terminalSandboxExecutable">Runtime executable</Label>
-              <Input
-                id="terminalSandboxExecutable"
-                value={terminalSandbox.executable}
-                onChange={(event) => handleTerminalSandboxExecutableChange(event.target.value)}
-                placeholder="srt"
-              />
-              <p className="text-xs text-muted-foreground">
-                Use `srt` when it is on `PATH`, or provide an absolute path to the binary.
-              </p>
-            </div>
+            {runtimeExecutableField}
 
             <div className="space-y-2">
               <Label htmlFor="terminalSandboxDomains">Allowed network domains</Label>
@@ -393,8 +479,12 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
             )}
           </div>
         ) : (
-          <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-            Terminal commands run without an OS-level sandbox until this is enabled.
+          <div className="space-y-4">
+            {sandboxRuntimeMissing && runtimeExecutableField}
+            <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+              Commands you run from the terminal panel use no sandbox runtime until this is enabled.
+              Agent commands follow the access policy above.
+            </div>
           </div>
         )}
       </div>

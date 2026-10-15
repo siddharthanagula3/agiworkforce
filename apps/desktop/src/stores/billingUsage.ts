@@ -52,7 +52,6 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
         version: 1,
         storage: createJSONStorage(() => getStorage()),
         partialize: (state) => ({
-          costFilters: state.costFilters,
           budget: state.budget,
           budgetAlerts: state.budgetAlerts,
         }),
@@ -85,16 +84,6 @@ export const selectTokenBreakdown = (state: BillingUsageStore) => ({
   cost: state.budget.estimatedCost,
   percentage: (state.budget.currentUsage / state.budget.limit) * 100,
 });
-
-export function getUsagePercentage(used: number, total: number): number {
-  if (total === 0) return 0;
-  return Math.round((used / total) * 100);
-}
-
-export function getRemainingPercentage(used: number, total: number): number {
-  if (total === 0) return 0;
-  return Math.round(((total - used) / total) * 100);
-}
 
 export function initializeUsageStore(): () => void {
   const unsubscribe = useBillingStore.subscribe((state) => {
@@ -160,5 +149,3 @@ export const useCostStore = useBillingUsageStore;
 export const useUsageStore = useBillingUsageStore;
 /** @deprecated Use useBillingUsageStore instead */
 export const useTokenBudgetStore = useBillingUsageStore;
-/** @deprecated Use useBillingUsageStore instead */
-export const useAnalyticsStore = useBillingUsageStore;

@@ -28,7 +28,13 @@ import type { ToolLabelEntry } from '@agiworkforce/types';
 import React, { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { codeEditing } from '@agiworkforce/desktop-command-client';
+import { useConfirmAction } from '@agiworkforce/ui';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import { useToolStore } from '../../stores/chat/toolStore';
+import {
+  forgetCheckpointAvailability,
+  useCheckpointAvailability,
+} from '../../stores/codingCheckpointStore';
 import { useIsMounted } from '../../hooks/useIsMounted';
 
 export type { ToolLabelEntry };
@@ -96,6 +102,8 @@ function DiffView({ diff, checkpointId, onRewind }: DiffViewProps) {
   const [showAll, setShowAll] = useState(false);
   const [rewinding, setRewinding] = useState(false);
   const isMounted = useIsMounted();
+  const undoEnded = useCheckpointAvailability(checkpointId) === 'ended';
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const lines = diff.split('\n');
   const visibleLines = showAll ? lines : lines.slice(0, MAX_DIFF_LINES_INITIAL);
@@ -106,11 +114,12 @@ function DiffView({ diff, checkpointId, onRewind }: DiffViewProps) {
     setRewinding(true);
     try {
       await codeEditing.codingCheckpointRewind(checkpointId);
+      forgetCheckpointAvailability();
       onRewind?.();
     } catch (err) {
       console.error('[ToolLabel] Rewind failed:', err);
-      toast.error('Rewind failed', {
-        description: err instanceof Error ? err.message : 'Could not undo this change',
+      toast.error('This change was not undone', {
+        description: getSimpleErrorMessage(err),
       });
     } finally {
       if (isMounted.current) {
@@ -155,10 +164,28 @@ function DiffView({ diff, checkpointId, onRewind }: DiffViewProps) {
         )}
       </div>
 
-      {checkpointId && (
+      {checkpointId && undoEnded && (
+        <p
+          className="mt-1 text-xs text-muted-foreground"
+          title="Undo points are kept in memory. They end when the app restarts, when a rewind replaces them, or after 50 newer ones."
+        >
+          Undo is no longer available for this change
+        </p>
+      )}
+
+      {checkpointId && !undoEnded && (
         <button
           type="button"
-          onClick={handleRewind}
+          onClick={() =>
+            confirm({
+              title: 'Undo this change?',
+              description:
+                'The files this edit touched go back to how they were before it. Anything changed in them since then, by the assistant or by you, is lost, and the undo points made after this one are removed.',
+              confirmLabel: 'Undo change',
+              destructive: true,
+              onConfirm: handleRewind,
+            })
+          }
           disabled={rewinding}
           className={cn(
             'mt-1 flex items-center gap-1 text-xs rounded px-1.5 py-0.5',
@@ -171,6 +198,7 @@ function DiffView({ diff, checkpointId, onRewind }: DiffViewProps) {
           {rewinding ? 'Rewinding…' : 'Undo'}
         </button>
       )}
+      {confirmDialog}
     </div>
   );
 }

@@ -6,14 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   MCP_INIT_TIMEOUT_MS,
-  MIGRATION_LAUNCH_TIMEOUT_MS,
   RETRY_BACKOFF_MULTIPLIER,
   RETRY_BASE_DELAY_MS,
   DEFAULT_MAX_RETRIES,
 } from '../../constants/timeouts';
 import { assertChildDeadline, claimFromDeadline, startDeadline } from '../deadlines';
 import { mcpInitialize } from '../mcp';
-import { launchLovableMigration } from '../migration';
 
 const mockedInvoke = vi.mocked(tauriInvoke);
 
@@ -37,27 +35,6 @@ describe('retried commands stay inside the deadline they are given', () => {
     const call = mcpInitialize().catch(settled);
 
     await vi.advanceTimersByTimeAsync(MCP_INIT_TIMEOUT_MS - 1);
-    expect(settled).not.toHaveBeenCalled();
-
-    await vi.advanceTimersByTimeAsync(1);
-    expect(settled).toHaveBeenCalledTimes(1);
-    expect(mockedInvoke).toHaveBeenCalledTimes(1);
-
-    await call;
-  });
-
-  it('launchLovableMigration gives up at MIGRATION_LAUNCH_TIMEOUT_MS', async () => {
-    mockedInvoke.mockImplementation(hang);
-    const settled = vi.fn();
-    const call = launchLovableMigration({
-      workspaceSlug: 'source-workspace',
-      targetWorkspace: 'target-workspace',
-      autoEnableSchedules: false,
-      includeAuditLogs: false,
-      workflowIds: ['workflow-1'],
-    }).catch(settled);
-
-    await vi.advanceTimersByTimeAsync(MIGRATION_LAUNCH_TIMEOUT_MS - 1);
     expect(settled).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);

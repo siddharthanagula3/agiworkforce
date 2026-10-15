@@ -7,6 +7,8 @@ import type {
   WebSearchResult,
 } from '@agiworkforce/unified-chat';
 import {
+  parseElicitationInputRequests,
+  type ElicitationPrompt,
   parseAgentEventDelta,
   parseGeneratedFilesDelta,
   parseSearchResultsDelta,
@@ -16,6 +18,7 @@ import {
   resolveGeneratedFileUri,
 } from '@agiworkforce/cloud-contracts';
 import { applyAgentActivityEvent, type AgentActivityState } from '@agiworkforce/client-runtime';
+import type { ToolStatus } from '@agiworkforce/types';
 
 interface ToolCallBufferEntry {
   id: string;
@@ -70,6 +73,13 @@ export function parseCloudStreamFailure(raw: unknown): CloudStreamFailure | unde
   };
 }
 
+/** A cloud MCP tool paused for user input (`x_tool_input_request`). */
+export interface CloudToolInputRequest {
+  toolCallId: string;
+  name: string;
+  prompts: ElicitationPrompt[];
+}
+
 export interface CloudStreamDeltaSink {
   onChunk: (text: string) => void;
   onEvent: (payload: Record<string, unknown>) => void;
@@ -82,6 +92,7 @@ export interface CloudStreamDeltaSink {
     name: string;
     args: Record<string, unknown>;
   }[];
+  getPendingInputRequests: () => CloudToolInputRequest[];
   getToolResult: (toolCallId: string) => { content: string; isError: boolean } | undefined;
   getAgentActivity: () => AgentActivityState | undefined;
   getMessageProjection: () => CloudStreamMessageProjection;
@@ -299,6 +310,7 @@ export function createCloudStreamDeltaSink(
     name: string;
     args: Record<string, unknown>;
   }[] = [];
+  const pendingInputRequests = new Map<string, CloudToolInputRequest>();
   const toolResults = new Map<string, { content: string; isError: boolean }>();
 
   const onChunk = (text: string): void => {
@@ -430,7 +442,7 @@ export function createCloudStreamDeltaSink(
         id: callId,
         name: nextName,
         args: parsedArgs,
-        status: 'running',
+        status: 'running' satisfies ToolStatus,
       });
     }
 
@@ -537,7 +549,7 @@ export function createCloudStreamDeltaSink(
           id: syntheticId,
           name: toolStatus.name,
           args: toolStatus.args ?? {},
-          status: 'running',
+          status: 'running' satisfies ToolStatus,
         });
         emit({
           type: 'tool_call',
@@ -567,6 +579,32 @@ export function createCloudStreamDeltaSink(
         name: approvalRequest.name,
         args: approvalRequest.args,
       });
+    }
+
+    const inputRequest = delta?.['x_tool_input_request'];
+    if (inputRequest && typeof inputRequest === 'object') {
+      const record = inputRequest as Record<string, unknown>;
+      const toolCallId = record['tool_call_id'];
+      const name = record['name'];
+      const prompts = parseElicitationInputRequests(record['input_requests']);
+      if (
+        typeof toolCallId === 'string' &&
+        toolCallId &&
+        typeof name === 'string' &&
+        name &&
+        prompts
+      ) {
+        suspended = true;
+        pendingInputRequests.set(toolCallId, { toolCallId, name, prompts });
+        const existing = projectedToolCalls.get(toolCallId);
+        projectedToolCalls.set(toolCallId, {
+          id: toolCallId,
+          name,
+          args: existing?.args ?? {},
+          status: 'pending' satisfies ToolStatus,
+          requiresApproval: false,
+        });
+      }
     }
 
     const toolResult = parseToolResultDelta(delta?.['x_tool_result']);
@@ -624,6 +662,7 @@ export function createCloudStreamDeltaSink(
     isSuspended: () => suspended,
     getAccumulatedContent: () => accumulatedContent,
     getPendingApprovalCalls: () => [...pendingApprovalCalls],
+    getPendingInputRequests: () => [...pendingInputRequests.values()],
     getToolResult: (toolCallId) => toolResults.get(toolCallId),
     getAgentActivity: () => agentActivity,
     getMessageProjection: () => ({

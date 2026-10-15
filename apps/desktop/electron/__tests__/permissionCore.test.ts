@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  HIGH_RISK_CAPABILITIES,
   permissionKey,
   type PermissionDecision,
   type PermissionScope,
@@ -8,6 +9,7 @@ import {
   buildDecision,
   evaluatePermission,
   isPersistable,
+  isRestorable,
   isSingleUse,
   normalizeGrantDuration,
   type PermissionLookup,
@@ -89,23 +91,39 @@ describe('evaluatePermission', () => {
 
 describe('normalizeGrantDuration', () => {
   it('leaves an ordinary capability at the requested duration', () => {
-    expect(normalizeGrantDuration('filesystem.read', 'always', false)).toBe('always');
-    expect(normalizeGrantDuration('filesystem.read', 'once', false)).toBe('once');
+    expect(normalizeGrantDuration('filesystem.read', 'always')).toBe('always');
+    expect(normalizeGrantDuration('filesystem.read', 'once')).toBe('once');
   });
 
-  it('caps an unacknowledged high-risk grant at the session', () => {
-    expect(normalizeGrantDuration('shell.execute', 'always', false)).toBe('session');
-    expect(normalizeGrantDuration('computer.use', 'always', false)).toBe('session');
-    expect(normalizeGrantDuration('git.destructive', 'always', false)).toBe('session');
-  });
-
-  it('allows a high-risk standing grant only once acknowledged', () => {
-    expect(normalizeGrantDuration('shell.execute', 'always', true)).toBe('always');
+  it('caps every high-risk grant at the session, with no way to ask for more', () => {
+    for (const capability of HIGH_RISK_CAPABILITIES) {
+      expect(normalizeGrantDuration(capability, 'always'), capability).toBe('session');
+    }
   });
 
   it('never widens a narrower request', () => {
-    expect(normalizeGrantDuration('shell.execute', 'once', true)).toBe('once');
-    expect(normalizeGrantDuration('shell.execute', 'session', true)).toBe('session');
+    expect(normalizeGrantDuration('shell.execute', 'once')).toBe('once');
+    expect(normalizeGrantDuration('shell.execute', 'session')).toBe('session');
+  });
+});
+
+describe('isRestorable', () => {
+  it('never brings a stored high-risk grant back into force', () => {
+    for (const capability of HIGH_RISK_CAPABILITIES) {
+      expect(
+        isRestorable(buildDecision(capability, projectA, 'granted', 'always', 0)),
+        capability,
+      ).toBe(false);
+    }
+  });
+
+  it('restores an ordinary stored grant, and a stored refusal of anything', () => {
+    expect(isRestorable(buildDecision('filesystem.write', projectA, 'granted', 'always', 0))).toBe(
+      true,
+    );
+    expect(isRestorable(buildDecision('shell.execute', projectA, 'denied', 'always', 0))).toBe(
+      true,
+    );
   });
 });
 

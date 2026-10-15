@@ -2,7 +2,15 @@ import { isTauri, isCloudWeb, isDesktopUiDevLocal } from '@/lib/tauri-mock';
 import { notifications } from '@agiworkforce/desktop-command-client';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { notifyLocalModelCatalogChanged } from '@/lib/localModelCatalog';
-import { ollamaCheckStatus, ollamaListModels, ollamaPullModel } from '@/api/ollama';
+import {
+  ollamaCancelPull,
+  ollamaCheckStatus,
+  ollamaListModels,
+  ollamaPullModel,
+  onOllamaPullProgress,
+  type OllamaPullOutcome,
+  type OllamaPullProgress,
+} from '@/api/ollama';
 import { toast } from 'sonner';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
@@ -27,7 +35,7 @@ import {
   type PersonalizationPreferences,
 } from '../../stores/settingsStore';
 import { LEGACY_TAB_MAP, type SettingsTab } from '../../stores/settingsDialogStore';
-import type { NotificationSettings } from '../../hooks/useNotifications';
+import type { NotificationSettings } from '../../stores/notificationStore';
 import { Button } from '@/ui/Button';
 import { SectionErrorBoundary } from '@/ui/SectionErrorBoundary';
 import { useConfirm } from '@/ui/ConfirmDialog';
@@ -55,6 +63,7 @@ import { AgiCodeTab } from './tabs/AgiCode';
 import { BillingTab } from './tabs/Billing';
 import { AgiInChromeTab } from './tabs/AgiInChrome';
 import { searchDesktopSettings, type DesktopSettingSearchEntry } from './settingsSearchIndex';
+import { KeptSettingsFileNotice } from './KeptSettingsFileNotice';
 
 type CanonicalTab = SettingsNavKey;
 
@@ -64,10 +73,10 @@ function resolveTab(tab: SettingsTab): CanonicalTab {
 
 const LOCAL_NOTIFICATION_SETTINGS: NotificationSettings = {
   enabled: true,
-  sound_enabled: true,
-  badge_enabled: true,
-  desktop_notifications: true,
-  enabled_types: [
+  soundEnabled: true,
+  badgeEnabled: true,
+  desktopNotifications: true,
+  enabledTypes: [
     'system',
     'task_complete',
     'task_failed',
@@ -78,9 +87,9 @@ const LOCAL_NOTIFICATION_SETTINGS: NotificationSettings = {
     'warning',
     'error',
   ],
-  do_not_disturb: false,
-  dnd_start_time: null,
-  dnd_end_time: null,
+  doNotDisturb: false,
+  dndStartTime: null,
+  dndEndTime: null,
 };
 
 function canPersistNotificationSettings(): boolean {
@@ -95,7 +104,13 @@ const SELF_SAVING_TABS = new Set<CanonicalTab>([
   'plugins',
 ]);
 const WEB_HIDDEN_TABS = new Set<CanonicalTab>(['models-keys', 'voice']);
-const LOCAL_HIDDEN_TABS = new Set<CanonicalTab>(['account', 'billing', 'usage']);
+const LOCAL_HIDDEN_TABS = new Set<CanonicalTab>([
+  'account',
+  'billing',
+  'usage',
+  'connections',
+  'cowork',
+]);
 const visibleNav = isCloudWeb
   ? SETTINGS_NAV.filter((t) => !WEB_HIDDEN_TABS.has(t.key))
   : SETTINGS_NAV.filter((t) => !LOCAL_HIDDEN_TABS.has(t.key));
@@ -154,7 +169,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const chatPreferences = useSettingsStore(useShallow((state) => state.chatPreferences));
   const executionPreferences = useSettingsStore(useShallow((state) => state.executionPreferences));
   const allowedDirectories = useSettingsStore(useShallow((state) => state.allowedDirectories));
-  const customModels = useSettingsStore(useShallow((state) => state.customModels));
   const features = useSettingsStore(useShallow((state) => state.features));
   const personalization = useSettingsStore(useShallow((state) => state.personalization));
   const customKeybindings = useSettingsStore(useShallow((state) => state.customKeybindings));
@@ -178,6 +192,10 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const [checkingOllama, setCheckingOllama] = useState(false);
   const [ollamaAvailable, setOllamaAvailable] = useState(false);
   const [installingOllamaModel, setInstallingOllamaModel] = useState(false);
+  const [ollamaInstallProgress, setOllamaInstallProgress] = useState<OllamaPullProgress | null>(
+    null,
+  );
+  const installingOllamaModelNameRef = useRef<string | null>(null);
   const [ollamaInstallError, setOllamaInstallError] = useState<string | null>(null);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(
     null,
@@ -260,7 +278,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
           chatPreferences: storeState.chatPreferences,
           executionPreferences: storeState.executionPreferences,
           globalHotkeyPreferences: storeState.globalHotkeyPreferences,
-          customModels: storeState.customModels,
         },
         null,
         2,
@@ -316,7 +333,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         setNotificationSettings(LOCAL_NOTIFICATION_SETTINGS);
         return LOCAL_NOTIFICATION_SETTINGS;
       }
-      const s = (await notifications.notificationGetSettings()) as unknown as NotificationSettings;
+      const s = await notifications.notificationGetSettings();
       setNotificationSettings(s);
       return s;
     } catch (err) {
@@ -341,11 +358,16 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const refreshOllamaState = useCallback(async () => {
     setCheckingOllama(true);
     try {
-      const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl || 'http://localhost:11434';
-      const available = isDesktopUiDevLocal ? false : await ollamaCheckStatus(baseUrl);
+      const { ollamaUrl, allowPrivateNetworkRuntimes } = useSettingsStore.getState().llmConfig;
+      const baseUrl = ollamaUrl || 'http://localhost:11434';
+      const available = isDesktopUiDevLocal
+        ? false
+        : await ollamaCheckStatus(baseUrl, allowPrivateNetworkRuntimes);
       setOllamaAvailable(available);
       const rawModels =
-        available && !isDesktopUiDevLocal ? await ollamaListModels(baseUrl).catch(() => []) : [];
+        available && !isDesktopUiDevLocal
+          ? await ollamaListModels(baseUrl, allowPrivateNetworkRuntimes).catch(() => [])
+          : [];
       const models = normalizeOllamaModelList(rawModels);
       setOllamaModels(models);
       setSelectedOllamaModel((currentModel) => {
@@ -366,32 +388,60 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   }, []);
 
   const handleInstallOllamaModel = useCallback(
-    async (modelName: string) => {
+    async (modelName: string): Promise<OllamaPullOutcome> => {
       const normalizedModelName = modelName.trim();
-      if (!normalizedModelName || installingOllamaModel) return;
+      if (!normalizedModelName || installingOllamaModel) return 'cancelled';
 
       setInstallingOllamaModel(true);
+      setOllamaInstallProgress(null);
       setOllamaInstallError(null);
+      installingOllamaModelNameRef.current = normalizedModelName;
+      let stopListening: (() => void) | undefined;
       try {
-        const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl || 'http://localhost:11434';
-        await ollamaPullModel(normalizedModelName, baseUrl);
+        stopListening = await onOllamaPullProgress((progress) => {
+          if (progress.model === normalizedModelName) setOllamaInstallProgress(progress);
+        });
+        const { ollamaUrl, allowPrivateNetworkRuntimes } = useSettingsStore.getState().llmConfig;
+        const outcome = await ollamaPullModel(
+          normalizedModelName,
+          ollamaUrl || 'http://localhost:11434',
+          allowPrivateNetworkRuntimes,
+        );
+        if (outcome === 'cancelled') {
+          toast.info(`Download of ${normalizedModelName} stopped`, {
+            description: 'Ollama keeps what was downloaded. Install it again to resume.',
+          });
+          return outcome;
+        }
         await refreshOllamaState();
         setSelectedOllamaModel(normalizedModelName);
         if (ollamaEnabled) {
           setDefaultModel('ollama', normalizedModelName);
         }
         toast.success(`${normalizedModelName} is ready to use`);
+        return outcome;
       } catch (err) {
         const message = getSimpleErrorMessage(err);
         setOllamaInstallError(message);
         toast.error(`Could not install ${normalizedModelName}`);
         throw err;
       } finally {
+        stopListening?.();
+        installingOllamaModelNameRef.current = null;
         setInstallingOllamaModel(false);
+        setOllamaInstallProgress(null);
       }
     },
     [installingOllamaModel, ollamaEnabled, refreshOllamaState, setDefaultModel],
   );
+
+  const handleCancelOllamaInstall = useCallback(() => {
+    const modelName = installingOllamaModelNameRef.current;
+    if (!modelName) return;
+    void ollamaCancelPull(modelName).catch((err: unknown) => {
+      setOllamaInstallError(getSimpleErrorMessage(err));
+    });
+  }, []);
 
   const buildCurrentSnapshot = useCallback((notifs: NotificationSettings | null) => {
     const state = useSettingsStore.getState();
@@ -408,7 +458,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       executionPreferences: state.executionPreferences,
       globalHotkeyPreferences: state.globalHotkeyPreferences,
       allowedDirectories: state.allowedDirectories,
-      customModels: state.customModels,
       features: state.features,
       personalization: state.personalization,
       customKeybindings: state.customKeybindings,
@@ -516,7 +565,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     executionPreferences,
     globalHotkeyPreferences,
     allowedDirectories,
-    customModels,
     features,
     personalization,
     customKeybindings,
@@ -567,11 +615,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     try {
       await saveSettings();
       if (notificationSettings && canPersistNotificationSettings()) {
-        await notifications.notificationSetSettings(
-          notificationSettings as unknown as Parameters<
-            typeof notifications.notificationSetSettings
-          >[0],
-        );
+        await notifications.notificationSetSettings(notificationSettings);
       }
       personalizationBaselineRef.current = useSettingsStore.getState().personalization;
       baselineSnapshotRef.current = buildCurrentSnapshot(notificationSettings);
@@ -685,12 +729,14 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
             isOllamaAvailable={Boolean(isOllamaAvailable)}
             ollamaEnabled={ollamaEnabled}
             installingOllamaModel={installingOllamaModel}
+            ollamaInstallProgress={ollamaInstallProgress}
             ollamaInstallError={ollamaInstallError}
             onOllamaUrlChange={handleOllamaUrlChange}
             onOllamaEnabledChange={handleOllamaEnabledChange}
             onOllamaModelChange={handleOllamaModelChange}
             onRefreshOllamaState={refreshOllamaState}
             onInstallOllamaModel={handleInstallOllamaModel}
+            onCancelOllamaInstall={handleCancelOllamaInstall}
             onExportSettings={() => void handleExportSettings()}
           />
         );
@@ -892,6 +938,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                       </p>
                     </div>
                   )}
+                  <KeptSettingsFileNotice />
                   {error && (
                     <div
                       role="alert"

@@ -1,6 +1,9 @@
 import { Suspense, lazy } from 'react';
 import { Loader2 } from 'lucide-react';
 
+const LazyCapabilityToggles = lazy(() =>
+  import('../../CapabilityToggles').then((m) => ({ default: m.CapabilityToggles })),
+);
 const LazyComputerUseSettings = lazy(() =>
   import('../../ComputerUseSettings').then((m) => ({ default: m.ComputerUseSettings })),
 );
@@ -26,9 +29,14 @@ export function CapabilitiesTab() {
   return (
     <Suspense fallback={<Fallback label="Loading capabilities..." />}>
       <>
-        <LazyComputerUseSettings />
+        <LazyCapabilityToggles />
         <div className="pt-6 border-t border-border">
-          <Suspense fallback={<Fallback label="Loading research..." />}>
+          <Suspense fallback={<Fallback label="Loading computer use..." />}>
+            <LazyComputerUseSettings />
+          </Suspense>
+        </div>
+        <div className="pt-6 border-t border-border">
+          <Suspense fallback={<Fallback label="Loading web search..." />}>
             <LazyResearchSettings />
           </Suspense>
         </div>

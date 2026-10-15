@@ -221,7 +221,6 @@ describe('desktop cloud session: one predicate for every surface', () => {
       'services/managedCloudBoundary.ts',
       'stores/chat/chatStore.ts',
       'stores/projectStore.ts',
-      'lib/cloudSyncTrigger.ts',
       'lib/cloudChatPersistence.ts',
     ];
 

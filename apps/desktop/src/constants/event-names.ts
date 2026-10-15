@@ -1,4 +1,3 @@
-
 export const EVENTS = {
   AGI_GOAL_PROGRESS: 'agi:goal:progress',
   AGI_GOAL_SUBMITTED: 'agi:goal:submitted',
@@ -19,7 +18,6 @@ export const EVENTS = {
   BACKGROUND_AGENT_CANCELLED: 'background_agent:cancelled',
   BACKGROUND_AGENT_PAUSED: 'background_agent:paused',
   BACKGROUND_AGENT_RESUMED: 'background_agent:resumed',
-  BACKGROUND_AGENT_TAKEN_OVER: 'background_agent:taken_over',
 
   TOOL_APPROVAL_REQUIRED: 'tool:approval_required',
   FILE_OPERATION_COMPLETE: 'file:operation_complete',
@@ -27,7 +25,6 @@ export const EVENTS = {
   EXTENSION_TASK_RESULT: 'extension:task-result',
   EXTENSION_PAGE_CONTEXT: 'extension:page-context',
 
-  CHAT_CONTEXT_COMPACTED: 'chat:context-compacted',
   COMPACTION_AUTO_TRIGGERED: 'compaction:auto-triggered',
   COMPACTION_COMPLETED: 'compaction:completed',
 } as const;
