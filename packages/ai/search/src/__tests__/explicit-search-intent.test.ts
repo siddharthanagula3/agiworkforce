@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   EXPLICIT_SEARCH_INTENT_PHRASES,
   detectExplicitWebSearchIntent,
+  explicitlyRefusedItems,
   hasExplicitWebFetchIntent,
   hasExplicitWebSearchOptOut,
   hasExplicitWebSearchIntent,
@@ -173,6 +174,24 @@ describe('hasExplicitWebSearchOptOut', () => {
       'AUDIT ROUND4. From these synthetic counts only, show a compact table, a labelled bar chart and a downloadable CSV together: North 12, South 7, East 15, West 9. Then write a two-sentence summary. Keep every value consistent. No search or external tools that contact other services.',
     ],
     ['R4-T07', 'Include a short Python code block below. No search or commentary.'],
+    [
+      'R10-Q01',
+      'AUDIT ROUND10: synthetic renderer fidelity test. Do not use tools, web search, connected services, files, images, video, or artifacts. Reply with exactly the following Markdown, preserving the fenced bodies byte-for-byte. No introduction or conclusion.',
+    ],
+    [
+      'TOOLS-01',
+      'AUDIT ROUND11 cancellation test R11-STOP-31. Write a long ordinary fictional story about a repair workshop on a rainy afternoon, in exactly 80 numbered paragraphs of about 30 words each. Keep writing directly in the chat, without a file, artifact, code, tools, skills, web search, external services, or real personal information. Use only invented characters and events.',
+    ],
+    [
+      'R13-02',
+      'SYNTHETIC UI AUDIT R13. Draft an email, but do not send it or open an email service. Keep it under 100 words. Do not browse, run code, or use external tools.',
+    ],
+    [
+      'R8-I02',
+      'Can you find and continue our earlier Juniper Lantern picnic discussion? Use the earlier conversations, not the runbook, saved memory, or web search. Do not change settings or save anything to memory.',
+    ],
+    ['private history scope', 'Search only my private history for the picnic plan.'],
+    ['past chats scope', 'Only search my past chats for the agreed colour.'],
   ])('recognises the opt-out in audit prompt %s', (_fixture, prompt) => {
     expect(hasExplicitWebSearchOptOut(prompt)).toBe(true);
     expect(detectExplicitWebSearchIntent(prompt)).toBeNull();
@@ -339,6 +358,8 @@ describe('hasExplicitWebSearchOptOut', () => {
     'write me a haiku about rain',
     'No problem, thanks.',
     'There is no search engine I trust.',
+    'Do not use tools, web search or code until I say so, then search the web.',
+    'Search my past chats and the web for the agreed colour.',
     '',
   ])('finds no refusal in %j', (text) => {
     expect(hasExplicitWebSearchOptOut(text)).toBe(false);
@@ -361,6 +382,24 @@ describe('hasExplicitWebSearchOptOut', () => {
     const startedAt = performance.now();
     expect(hasExplicitWebSearchOptOut(text)).toBe(false);
     expect(performance.now() - startedAt).toBeLessThan(2000);
+  });
+});
+
+describe('explicitlyRefusedItems', () => {
+  it.each([
+    [
+      'Do not use tools, web search, connected services, files, images, video, or artifacts.',
+      ['tools', 'web search', 'connected services', 'files', 'images', 'video', 'artifacts'],
+    ],
+    ['Do not browse, run code, or use external tools.', ['browse', 'code', 'tools']],
+    ['Answer from memory. No tools at all.', ['tools']],
+    ["Don't search the web or run code, just answer.", ['search the web', 'code']],
+    ["Don't guess, check the docs or search the web.", ['guess']],
+    ["Don't hesitate to run code.", []],
+    ['You never run code. Run it now.', []],
+    ['Do not use tools unless you need to.', ['tools unless you need to']],
+  ])('reads the refused items of %j', (text, items) => {
+    expect(explicitlyRefusedItems(text)).toEqual(items);
   });
 });
 

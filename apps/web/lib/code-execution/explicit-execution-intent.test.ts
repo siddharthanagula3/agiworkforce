@@ -39,6 +39,15 @@ describe('detectExplicitCodeExecutionIntent', () => {
     expect(detectExplicitCodeExecutionIntent('plot this with matplotlib')).toBe('computation');
   });
 
+  it('reads code named as a noun in a list as context, not a request to compute', () => {
+    expect(
+      detectExplicitCodeExecutionIntent(
+        'For each, identify the source chat and report its agreed code, item count and color, day, and coordinator role.',
+      ),
+    ).toBeNull();
+    expect(detectExplicitCodeExecutionIntent('Use Python to compute the sum')).toBe('computation');
+  });
+
   it('needs a runtime subject, so a computation verb alone never forces a run', () => {
     expect(detectExplicitCodeExecutionIntent('compute the total')).toBeNull();
     expect(detectExplicitCodeExecutionIntent('calculate the tip on 40')).toBeNull();

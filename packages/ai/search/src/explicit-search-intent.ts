@@ -115,6 +115,100 @@ const SEARCH_REFUSAL_FORMS: Readonly<Record<string, string>> = {
 };
 
 const SEARCH_REFUSAL_PATTERN = new RegExp(Object.values(SEARCH_REFUSAL_FORMS).join('|'), 'giu');
+
+const REFUSED_LIST_PATTERN = new RegExp(
+  String.raw`(?:${REFUSING_IMPERATIVE}|\b(?:without|avoid)|${REFUSAL_CLAUSE_START}(?:no|not))(?!\s+(?:just|only|simply|hesitate|forget|fail|worry|worries|mind|stop|be\s+afraid|problem|problems|thanks|idea|doubt|matter|way|sure|need\s+to\s+ask)\b)[^\S\n]+([^.;:!?\n${LONG_DASHES}]{1,400})(?=[.;:!?\n${LONG_DASHES}]|$)`,
+  'giu',
+);
+const REFUSED_LIST_SEPARATOR = /\s*,\s*(?:(?:or|nor)\s+)?|\s+(?:or|nor)\s+/giu;
+const LIST_CLOSING_CONJUNCTION = /\b(?:or|nor)\b/iu;
+const REFUSED_ITEM_TRAILING_QUALIFIER =
+  /(?:\s+(?:at\s+all|this\s+time|for\s+(?:this(?:\s+one)?|now)|here|today|now|please|either|again))+$/u;
+const REFUSED_ITEM_LEADING_FILLER =
+  /^(?:(?:use|using|run|running|call|calling|do|doing|perform|performing|make|making|execute|executing|access|accessing|invoke|invoking|any|a|an|the|your|some|external|outside|other|extra|additional)\s+)+/u;
+const REFUSED_WEB_SEARCH_ITEM =
+  /^(?:(?:(?:web|internet|online|live|public)\s+)?(?:search(?:es|ing)?|brows(?:e|ing)|googl(?:e|ing))(?:\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:web|internet|online))?(?:\s+tools?)?|(?:the\s+)?(?:web|internet)|look(?:ing)?\s+(?:(?:it|this|that|anything)\s+up|up\s+anything)|check(?:ing)?\s+(?:online|the\s+web))$/u;
+const PRIVATE_SCOPE_ONLY_PATTERN =
+  /\b(?:(?:only|just)\s+(?:search|use|check|look\s+(?:in|at|through)|draw\s+on)|(?:search|use|check)\s+only(?:\s+(?:in|through))?)\s+(?:my|our)\s+(?:own\s+)?(?:private\s+)?(?:(?:past|earlier|previous|prior|old|saved|other)\s+)?(?:chats?|conversations?|(?:chat\s+)?history|memor(?:y|ies)|files?|documents?|notes?)\b/iu;
+
+type RefusedItem = { text: string; start: number; end: number };
+
+function normalizeRefusedItem(item: string): string {
+  return item
+    .toLowerCase()
+    .trim()
+    .replace(REFUSED_ITEM_TRAILING_QUALIFIER, '')
+    .replace(REFUSED_ITEM_LEADING_FILLER, '');
+}
+
+/**
+ * A refusal governs a list only when the list is unambiguous: "a or b", or a
+ * comma list closed by ", or". "Don't guess, check the docs or search the web"
+ * refuses the guess and asks for the rest, so a comma list without that closing
+ * comma refuses its first item alone.
+ */
+function refusedItemsOfClause(clause: string, offset: number): RefusedItem[] {
+  const segments: RefusedItem[] = [];
+  const separators: string[] = [];
+  let cursor = 0;
+  for (const separator of clause.matchAll(REFUSED_LIST_SEPARATOR)) {
+    segments.push({
+      text: clause.slice(cursor, separator.index),
+      start: cursor,
+      end: separator.index,
+    });
+    separators.push(separator[0]);
+    cursor = separator.index + separator[0].length;
+  }
+  segments.push({ text: clause.slice(cursor), start: cursor, end: clause.length });
+
+  let lastOr = -1;
+  separators.forEach((separator, index) => {
+    if (LIST_CLOSING_CONJUNCTION.test(separator)) lastOr = index;
+  });
+  const closedList =
+    lastOr === 0 || (lastOr > 0 && separators[lastOr]!.trimStart().startsWith(','));
+  const refused = closedList ? segments.slice(0, lastOr + 2) : segments.slice(0, 1);
+  return refused
+    .map((segment) => ({
+      text: normalizeRefusedItem(segment.text),
+      start: offset + segment.start,
+      end: offset + segment.end,
+    }))
+    .filter((segment) => segment.text.length > 0);
+}
+
+function refusedItemsOf(text: string): RefusedItem[] {
+  const items: RefusedItem[] = [];
+  for (const match of text.matchAll(REFUSED_LIST_PATTERN)) {
+    const clause = match[1] ?? '';
+    const clauseStart = match.index + match[0].length - clause.length;
+    items.push(...refusedItemsOfClause(clause, clauseStart));
+  }
+  return items;
+}
+
+/**
+ * The things one refusal in this text rules out, normalised to their bare noun
+ * or action: "Do not browse, run code, or use external tools" gives `browse`,
+ * `code` and `tools`. Callers classify the items; this only reads the list.
+ */
+export function explicitlyRefusedItems(text: string): string[] {
+  return refusedItemsOf(text).map((item) => item.text);
+}
+
+function hasListedWebSearchRefusal(text: string): boolean {
+  const refusedSearches = refusedItemsOf(text).filter((item) =>
+    REFUSED_WEB_SEARCH_ITEM.test(item.text),
+  );
+  if (refusedSearches.length === 0) return false;
+  let outsideRefusals = text;
+  for (const item of [...refusedSearches].reverse()) {
+    outsideRefusals = `${outsideRefusals.slice(0, item.start)}\n${outsideRefusals.slice(item.end)}`;
+  }
+  outsideRefusals = outsideRefusals.replace(SEARCH_REFUSAL_PATTERN, '\n');
+  return !SEARCH_VERB_PATTERN.test(outsideRefusals);
+}
 const HTTP_URL_PATTERN = /https?:\/\/[^\s<>"']+/i;
 const URL_FETCH_ACTION_PATTERN =
   /\b(read|summarize|analyse|analyze|review|check|inspect|open|fetch)\b/i;
@@ -145,9 +239,10 @@ export function detectExplicitWebSearchIntent(text: string): ExplicitSearchInten
 }
 
 export function hasExplicitWebSearchOptOut(text: string): boolean {
-  if (SEARCH_OPT_OUT_PATTERN.test(text)) return true;
+  if (SEARCH_OPT_OUT_PATTERN.test(text) || PRIVATE_SCOPE_ONLY_PATTERN.test(text)) return true;
   const outsideRefusals = text.replace(SEARCH_REFUSAL_PATTERN, '\n');
-  return outsideRefusals !== text && !SEARCH_VERB_PATTERN.test(outsideRefusals);
+  if (outsideRefusals !== text && !SEARCH_VERB_PATTERN.test(outsideRefusals)) return true;
+  return hasListedWebSearchRefusal(text);
 }
 
 export function hasExplicitWebSearchIntent(text: string): boolean {

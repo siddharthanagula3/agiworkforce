@@ -179,11 +179,27 @@ function matchIndex(pattern: RegExp, text: string): number {
   return pattern.exec(text)?.index ?? -1;
 }
 
+const CLAUSE_BREAK = /[^,.;:!?\n]+/g;
+
+/**
+ * Where the first clause naming both a computation verb and a runtime starts its
+ * verb, or -1. "Report its agreed code, item count and colour" names both in
+ * separate list items, as nouns; "use Python to compute the sum" names both in
+ * one instruction.
+ */
+function computationVerbIndex(request: string): number {
+  for (const clause of request.matchAll(CLAUSE_BREAK)) {
+    const verbAt = matchIndex(COMPUTATION_VERB_PATTERN, clause[0]);
+    if (verbAt >= 0 && RUNTIME_SUBJECT_PATTERN.test(clause[0])) return clause.index + verbAt;
+  }
+  return -1;
+}
+
 /**
  * The signal this text carries, or `null` when it carries none.
  *
- * `computation` needs both a computation verb and a runtime subject, because
- * either alone is ordinary conversation: "what does this code do" names a
+ * `computation` needs both a computation verb and a runtime subject in one
+ * clause, because either alone is ordinary conversation: "what does this code do" names a
  * runtime with nothing to run, and "calculate the tip on 40" wants arithmetic,
  * not a sandbox. Returning the signal rather than a boolean keeps the reason
  * auditable in telemetry.
@@ -207,8 +223,8 @@ export function detectExplicitCodeExecutionIntent(
     return explanationAt >= 0 && explanationAt < directiveAt ? null : 'run_directive';
   }
 
-  const verbAt = matchIndex(COMPUTATION_VERB_PATTERN, request);
-  if (verbAt < 0 || !RUNTIME_SUBJECT_PATTERN.test(request)) return null;
+  const verbAt = computationVerbIndex(request);
+  if (verbAt < 0) return null;
   return explanationAt >= 0 && explanationAt < verbAt ? null : 'computation';
 }
 
