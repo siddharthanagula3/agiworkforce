@@ -324,7 +324,7 @@ function buildAuthorLabel(role: ChatMessage['role']): HTMLElement {
 }
 
 function bubbleClass(msg: ChatMessage): string {
-  return `sp-bubble sp-bubble-${msg.role}${msg.error ? ' sp-bubble-error' : ''}${msg.streaming ? ' sp-cursor' : ''}`;
+  return `sp-bubble sp-bubble-${msg.role}${msg.error ? ' sp-bubble-error' : ''}`;
 }
 
 export function fillAnswerBubble(

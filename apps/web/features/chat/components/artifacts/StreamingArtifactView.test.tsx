@@ -27,6 +27,12 @@ describe('StreamingArtifactView · progressive render from a simulated stream', 
     );
   });
 
+  it('draws no cursor at the end of the code while it streams', () => {
+    render(<StreamingArtifactView artifact={makeArtifact('<!DOCTYPE html>\n<html>')} />);
+
+    expect(screen.getByTestId('streaming-artifact-code').querySelector('code > *')).toBeNull();
+  });
+
   it('appends content across simulated stream chunks', () => {
     const { rerender } = render(<StreamingArtifactView artifact={makeArtifact('<!DOCTYPE')} />);
     const code = () => screen.getByTestId('streaming-artifact-code').textContent ?? '';

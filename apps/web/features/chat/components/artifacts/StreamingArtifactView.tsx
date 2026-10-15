@@ -60,11 +60,6 @@ export function StreamingArtifactView({
         <pre className="p-4">
           <code className="whitespace-pre-wrap break-words text-sm text-gray-100">
             {artifact.content}
-            {/* Blinking caret at the write head */}
-            <span
-              className="ms-0.5 inline-block h-4 w-2 animate-pulse bg-gray-100/70 align-text-bottom"
-              aria-hidden="true"
-            />
           </code>
         </pre>
       </div>

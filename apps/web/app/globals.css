@@ -1147,53 +1147,6 @@
   @apply hidden;
 }
 
-.message-text[data-streaming='true'] > :not(span, ul, ol):last-child::after,
-.message-text[data-streaming='true'] > :not(ul, ol):has(+ span:last-child)::after,
-.message-text[data-streaming='true'] > :is(ul, ol):last-child > li:last-child::after,
-.message-text[data-streaming='true'] > :is(ul, ol):has(+ span:last-child) > li:last-child::after {
-  content: '';
-  display: inline-block;
-  width: 0.125em;
-  height: 1em;
-  margin-inline-start: 0.25em;
-  vertical-align: -0.125em;
-  border-radius: var(--chat-radius-sm);
-  background-color: currentColor;
-  animation: transcript-caret 1s steps(2, start) infinite;
-}
-
-@keyframes transcript-caret {
-  to {
-    visibility: hidden;
-  }
-}
-
-[data-voice-mode='true']
-  .message-text[data-streaming='true']
-  > :not(span, ul, ol):last-child::after,
-[data-voice-mode='true']
-  .message-text[data-streaming='true']
-  > :not(ul, ol):has(+ span:last-child)::after,
-[data-voice-mode='true']
-  .message-text[data-streaming='true']
-  > :is(ul, ol):last-child
-  > li:last-child::after,
-[data-voice-mode='true']
-  .message-text[data-streaming='true']
-  > :is(ul, ol):has(+ span:last-child)
-  > li:last-child::after {
-  content: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .message-text[data-streaming='true'] > :not(span, ul, ol):last-child::after,
-  .message-text[data-streaming='true'] > :not(ul, ol):has(+ span:last-child)::after,
-  .message-text[data-streaming='true'] > :is(ul, ol):last-child > li:last-child::after,
-  .message-text[data-streaming='true'] > :is(ul, ol):has(+ span:last-child) > li:last-child::after {
-    animation: none;
-  }
-}
-
 /* Animation utilities */
 @layer utilities {
   .animate-fade-in-up {

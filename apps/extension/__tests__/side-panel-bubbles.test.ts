@@ -359,7 +359,7 @@ describe('interrupted reply (reload mid-stream)', () => {
       msg({ role: 'assistant', content: 'typing...', streaming: true }),
     );
     expect(node.querySelector('.sp-bubble-interrupted-footer')).toBeNull();
-    expect(node.querySelector('.sp-bubble')?.className).toContain('sp-cursor');
+    expect(node.querySelector('.sp-bubble')?.className).not.toContain('sp-cursor');
   });
 
   it('retries an interrupted reply the same way a failed one retries', () => {

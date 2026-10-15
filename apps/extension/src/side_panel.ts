@@ -2964,16 +2964,6 @@ function injectStyles(): void {
     .sp-interactive-card__action > .agi-icon { flex: 0 0 12px; opacity: 0.7; }
 
     /* ── Cursor blink for streaming ── */
-    .sp-cursor::after {
-      content: '▋';
-      animation: sp-blink var(--duration-blink) steps(1) infinite;
-      color: var(--agi-ext-accent-text);
-      font-size: var(--type-caption-size);
-    }
-    @keyframes sp-blink { 0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
-    }
-
     /* ── Inline tool-call UI (design-spec §4) ── */
     .tool-call {
       display: flex;
@@ -6948,16 +6938,11 @@ function removeThinking(): void {
   document.querySelectorAll('.sp-thinking-wrap').forEach((n) => n.remove());
 }
 
-function updateStreamingBubble(id: string, fullText: string, done: boolean): void {
+function updateStreamingBubble(id: string, fullText: string): void {
   const bubble = document.getElementById(`sp-bubble-${id}`);
   if (!bubble) return;
   const message = _ctx.messages.find((candidate) => candidate.id === id);
   fillAnswerBubble(bubble, fullText, message ? answerSourceLists(message).markers : []);
-  if (done) {
-    bubble.classList.remove('sp-cursor');
-  } else {
-    bubble.classList.add('sp-cursor');
-  }
   scrollToBottom();
 }
 
@@ -17655,7 +17640,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     stampResolvedRoute(chunk.id, existing);
     existing.content += chunk.text;
     if (document.getElementById(`sp-bubble-${chunk.id}`)) {
-      updateStreamingBubble(chunk.id, existing.content, chunk.done);
+      updateStreamingBubble(chunk.id, existing.content);
     } else {
       removeThinking();
       renderMessages();
