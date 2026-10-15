@@ -16,6 +16,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
 
 [data-design='agi'] .agi-app-window {
   --u: calc(100cqw / var(--app-w));
+  --agi-app-text-display: calc(var(--u) * 28);
   display: flex;
   flex-direction: column;
   block-size: calc(var(--u) * var(--app-h));
@@ -300,7 +301,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
 
 [data-design='agi'] .agi-app-greeting {
   font-family: var(--chat-font-display);
-  font-size: calc(var(--u) * 28);
+  font-size: var(--agi-app-text-display);
   font-weight: 400;
   line-height: 1.2;
   letter-spacing: -0.02em;
@@ -519,7 +520,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
 
 [data-design='agi'] .agi-app-page-title {
   margin-block-end: calc(var(--u) * 8);
-  font-size: calc(var(--u) * 28);
+  font-size: var(--agi-app-text-display);
   font-weight: 600;
 }
 
@@ -1234,7 +1235,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
 
 [data-design='agi'] .agi-app-phone-heading {
   margin-block-start: calc(var(--u) * 8);
-  font-size: calc(var(--u) * 28);
+  font-size: var(--agi-app-text-display);
   font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.01em;
