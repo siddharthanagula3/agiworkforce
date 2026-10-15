@@ -38,16 +38,6 @@
       "reason": "Test fixtures only. The values are synthetic and authenticate nothing; scripts/check-secrets.mjs is the blocking gate for real credential shapes. Scoped by path on purpose, the same rule firing in production code must fail."
     },
     {
-      "rule": "typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml",
-      "paths": [
-        "apps/desktop/src/features/canvas/ArtifactPreview.tsx",
-        "apps/web/shared/components/seo/SEOHead.tsx"
-      ],
-      "owner": "@siddhartha",
-      "expires": "2027-02-28",
-      "reason": "ArtifactPreview routes markdown through DOMPurify and raw HTML through a sandboxed iframe; SEOHead emits ld+json and has no importers; ToolResultCard is under archive/ and is not built."
-    },
-    {
       "rule": "package_managers.dependabot.dependabot-missing-cooldown.dependabot-missing-cooldown",
       "paths": [".github/dependabot.yml"],
       "owner": "@siddhartha",
