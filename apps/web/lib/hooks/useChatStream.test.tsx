@@ -2964,6 +2964,80 @@ describe('useChatStream', () => {
       );
     }
 
+    describe('a reply that created files, on later turns (R6-07)', () => {
+      const workbook = {
+        id: 'f3d1c2b4-0a9e-4c8b-9f1e-7d6a5b4c3e21',
+        fileName: 'audit_round6_shop.xlsx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        uri: '/api/files/f3d1c2b4-0a9e-4c8b-9f1e-7d6a5b4c3e21',
+        byteCount: 5_120,
+        kind: 'xlsx',
+      };
+      const filesNote =
+        'The previous assistant reply created these files: audit_round6_shop.xlsx (format: xlsx, file id: f3d1c2b4-0a9e-4c8b-9f1e-7d6a5b4c3e21).';
+
+      function seed(finishReason: string) {
+        useChatStore.setState({
+          conversations: [PERSISTED_CONV],
+          activeConversationId: PERSISTED_CONV.id,
+          messages: [
+            {
+              id: 'user-1',
+              role: 'user',
+              content: 'Make a shop workbook',
+              createdAt: '2026-07-01T00:00:00.000Z',
+            },
+            {
+              id: '0190a000-0000-7000-8000-0000000000ac',
+              role: 'assistant',
+              content: 'Here is your workbook.',
+              createdAt: '2026-07-01T00:00:01.000Z',
+              model: 'test/model-1',
+              metadata: { finishReason, generatedFiles: [workbook] },
+            },
+          ],
+        });
+      }
+
+      it('sends the files after the reply, never inside its text, on the next message', async () => {
+        seed('stop');
+        const { llmBodies } = mockRoutedFetch(
+          sse([{ choices: [{ delta: { content: 'Done.' }, finish_reason: 'stop' }] }]),
+        );
+
+        const { result } = renderHook(() => useChatStream());
+        await act(async () => {
+          await result.current.sendMessage('Add a total row to it', {
+            conversationId: PERSISTED_CONV.id,
+            model: 'test/model-1',
+          });
+        });
+
+        const sent = (llmBodies[0]?.['messages'] ?? []) as Array<Record<string, unknown>>;
+        const replyIndex = sent.findIndex((message) => message['role'] === 'assistant');
+        expect(sent[replyIndex]?.['content']).toBe('Here is your workbook.');
+        expect(sent[replyIndex + 1]).toEqual({ role: 'user', content: filesNote });
+        expect(sent.at(-1)).toMatchObject({ role: 'user', content: 'Add a total row to it' });
+      });
+
+      it('sends them when the reply is continued too', async () => {
+        seed('length');
+        const { llmBodies } = mockRoutedFetch(
+          sse([{ choices: [{ delta: { content: ' More.' }, finish_reason: 'stop' }] }]),
+        );
+
+        const { result } = renderHook(() => useChatStream());
+        await act(async () => {
+          await result.current.continueGeneration('0190a000-0000-7000-8000-0000000000ac');
+        });
+
+        const sent = (llmBodies[0]?.['messages'] ?? []) as Array<Record<string, unknown>>;
+        const replyIndex = sent.findIndex((message) => message['role'] === 'assistant');
+        expect(sent[replyIndex]?.['content']).toBe('Here is your workbook.');
+        expect(sent[replyIndex + 1]).toEqual({ role: 'user', content: filesNote });
+      });
+    });
+
     it('tells the server the chat links past chats when it continues a reply (MEM-4)', async () => {
       useChatStore.setState({
         conversations: [PERSISTED_CONV],

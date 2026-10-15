@@ -228,6 +228,7 @@ import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permi
 import { networkErrorMessage, toUserMessage } from '@/lib/user-error-message';
 import {
   buildApiMessageContent,
+  createdFilesHistoryTurn,
   durableAttachmentDescriptors,
 } from '@/features/chat/lib/persisted-attachments';
 import { normalizePromotionalChatHistory } from '@/features/chat/lib/promotional-chat-request';
@@ -1188,6 +1189,12 @@ function settledInteractiveCardTurn(message: Message): ApiMessage | null {
     .map(describeSettledInteractiveCard)
     .filter((entry): entry is string => entry !== null);
   return settled.length > 0 ? { role: 'user', content: settled.join('\n\n') } : null;
+}
+
+function turnsAfterReply(message: Message): ApiMessage[] {
+  return [createdFilesHistoryTurn(message), settledInteractiveCardTurn(message)].filter(
+    (turn): turn is ApiMessage => turn !== null,
+  );
 }
 
 function hasResumableInteractiveCard(message: Message | undefined): boolean {
@@ -4114,14 +4121,13 @@ export function useChatStream(
 
           const apiMessages: ApiMessage[] = currentMessages
             .filter((m) => m.id !== assistantMessageId)
-            .flatMap((m) => {
-              const turn: ApiMessage = {
+            .flatMap((m): ApiMessage[] => [
+              {
                 role: m.role,
                 content: researchTurnHistoryContent(m) ?? buildApiMessageContent(m),
-              };
-              const settled = settledInteractiveCardTurn(m);
-              return settled ? [turn, settled] : [turn];
-            });
+              },
+              ...turnsAfterReply(m),
+            ]);
 
           if (options.artifactInstruction) {
             apiMessages.unshift({ role: 'system', content: options.artifactInstruction });
@@ -4544,11 +4550,10 @@ export function useChatStream(
 
         const apiMessages: ApiMessage[] = conversationMessages
           .slice(0, messageIndex + 1)
-          .flatMap((m) => {
-            const turn: ApiMessage = { role: m.role, content: m.content as MessageContent };
-            const settled = settledInteractiveCardTurn(m);
-            return settled ? [turn, settled] : [turn];
-          });
+          .flatMap((m): ApiMessage[] => [
+            { role: m.role, content: m.content as MessageContent },
+            ...turnsAfterReply(m),
+          ]);
         if (!resumingCard) {
           apiMessages.push({ role: 'user', content: CONTINUE_GENERATION_INSTRUCTION });
         }

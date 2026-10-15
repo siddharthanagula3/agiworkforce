@@ -49,42 +49,10 @@ export function readPersistedAttachments(value: unknown): Attachment[] | undefin
   return attachments.length ? attachments : undefined;
 }
 
-const MAX_CREATED_FILE_REFERENCES = 20;
-const MAX_CREATED_FILE_NAME_CHARS = 200;
-
-function singleLine(value: string): string {
-  return value.replace(/\s+/g, ' ').trim().slice(0, MAX_CREATED_FILE_NAME_CHARS);
-}
-
-/**
- * The files an assistant reply created live only in its metadata, so without
- * this line a later turn shows the model its own reply but not the files it
- * made, and asked to revise one it said it had never created it.
- */
-function createdFileReferences(message: Message): string | null {
-  if (message.role !== 'assistant') return null;
-  const files = message.metadata?.generatedFiles ?? [];
-  if (files.length === 0) return null;
-  const listed = files.slice(0, MAX_CREATED_FILE_REFERENCES).map((file) => {
-    const format = file.kind && file.kind !== 'other' ? file.kind : file.mimeType;
-    return `${singleLine(file.fileName)} (format: ${singleLine(format)}, file id: ${singleLine(file.id)})`;
-  });
-  const unlisted = files.length - listed.length;
-  if (unlisted > 0) listed.push(`and ${unlisted} more`);
-  return `[Files created in this reply: ${listed.join('; ')}]`;
-}
-
-function historyText(message: Message): string {
-  const references = createdFileReferences(message);
-  if (!references) return message.content;
-  return message.content.trim() ? `${message.content}\n\n${references}` : references;
-}
-
 export function buildApiMessageContent(message: Message): string | ApiContentPart[] {
-  const text = historyText(message);
-  if (!message.attachments?.length) return text;
+  if (!message.attachments?.length) return message.content;
   const parts: ApiContentPart[] = [];
-  if (text.trim()) parts.push({ type: 'text', text });
+  if (message.content.trim()) parts.push({ type: 'text', text: message.content });
 
   for (const attachment of message.attachments) {
     if (attachment.assetId) {
@@ -94,5 +62,34 @@ export function buildApiMessageContent(message: Message): string | ApiContentPar
     }
   }
 
-  return parts.length ? parts : text;
+  return parts.length ? parts : message.content;
+}
+
+const MAX_CREATED_FILE_REFERENCES = 20;
+const MAX_CREATED_FILE_NAME_CHARS = 200;
+
+function singleLine(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().slice(0, MAX_CREATED_FILE_NAME_CHARS);
+}
+
+/**
+ * Sent as a turn of its own after the reply, never inside the reply's text: a
+ * line in the model's own words is one it learns to write into later replies.
+ */
+export function createdFilesHistoryTurn(
+  message: Message,
+): { role: 'user'; content: string } | null {
+  if (message.role !== 'assistant') return null;
+  const files = message.metadata?.generatedFiles ?? [];
+  if (files.length === 0) return null;
+  const listed = files.slice(0, MAX_CREATED_FILE_REFERENCES).map((file) => {
+    const format = file.kind && file.kind !== 'other' ? file.kind : file.mimeType;
+    return `${singleLine(file.fileName)} (format: ${singleLine(format)}, file id: ${singleLine(file.id)})`;
+  });
+  const unlisted = files.length - listed.length;
+  if (unlisted > 0) listed.push(`and ${unlisted} more`);
+  return {
+    role: 'user',
+    content: `The previous assistant reply created these files: ${listed.join('; ')}.`,
+  };
 }
