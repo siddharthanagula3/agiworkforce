@@ -52,6 +52,12 @@ export interface ChatTurnState {
   readonly artifactConnectors?: boolean;
   /** Capability ids the plan and surface grant; absent when the caller does not know them. */
   readonly productCapabilities?: readonly string[];
+  /** The model serving the turn, for versions that state it; null when it is not known. */
+  readonly servingModel?: ServingModel | null;
+  /** This chat's setup, for versions with a setup block; absent when the caller has none. */
+  readonly setup?: ChatTurnSetup;
+  /** Whose Settings to point the user to, for versions that do. */
+  readonly settingsGuidance?: SettingsGuidance;
 }
 
 export interface ChatTurnClock {
@@ -107,6 +113,14 @@ export interface ChatSetupTools {
   readonly memoryTools: boolean;
   readonly fileSearchTools: boolean;
 }
+
+export type ChatTurnSetup =
+  | {
+      readonly chat: ChatSetup;
+      readonly tools: ChatSetupTools;
+      readonly temporaryChatRetentionDays: number;
+    }
+  | { readonly textOnly: TextOnlyChatSetup; readonly temporaryChatRetentionDays: number };
 
 export type SectionReader = (key: string, values?: Readonly<Record<string, string>>) => string;
 
@@ -247,6 +261,13 @@ export function textOnlySetupBlock(
   return lines.length > 0 ? [heading, ...lines].join('\n') : '';
 }
 
+function turnSetupBlock(section: SectionReader, setup: ChatTurnSetup | undefined): string {
+  if (!setup) return '';
+  return 'chat' in setup
+    ? chatSetupBlock(section, setup.chat, setup.tools, setup.temporaryChatRetentionDays)
+    : textOnlySetupBlock(section, setup.textOnly, setup.temporaryChatRetentionDays);
+}
+
 export interface AssembledChatSystemPrompt {
   /** Identical on every turn with the same state, so it can sit in the cached prefix. */
   readonly body: string;
@@ -280,8 +301,8 @@ export function assembleChatSystemPrompt(
   state: ChatTurnState,
   clock: ChatTurnClock,
 ): AssembledChatSystemPrompt {
-  const section = (key: string, values?: Readonly<Record<string, string>>) =>
-    chatSystemPromptSection(sections, key, values);
+  const section: SectionReader = (key, values) => chatSystemPromptSection(sections, key, values);
+  const describesSetup = sections['setup_heading'] !== undefined;
 
   const { toolNames } = state;
   const hasSearch = toolNames.includes('web_search');
@@ -307,6 +328,8 @@ export function assembleChatSystemPrompt(
 
   const blocks: string[] = [
     section('identity'),
+    section('identity_rules'),
+    ...servingModelBlocks(section, state.servingModel ?? null),
     section('instruction_precedence'),
     section('untrusted_content'),
     section('capability_honesty'),
@@ -345,9 +368,19 @@ export function assembleChatSystemPrompt(
     blocks.push(section('no_tools'), section('citations_none'));
   }
 
+  blocks.push(turnSetupBlock(section, state.setup));
+  if (state.settingsGuidance) {
+    blocks.push(
+      section(`settings_help_${state.settingsGuidance}`),
+      section(`account_help_${state.settingsGuidance}`),
+    );
+  }
+  blocks.push(section('disclosure'), section('response_language'));
+
   blocks.push(section('user_documents'), section('people_and_privacy'), section('refusal_style'));
-  if (state.memory === 'on') blocks.push(section('memory_on'));
-  if (state.memory === 'off') blocks.push(section('memory_off'));
+  // In a version with a setup block, memory_on and memory_off are lines of that block.
+  if (!describesSetup && state.memory === 'on') blocks.push(section('memory_on'));
+  if (!describesSetup && state.memory === 'off') blocks.push(section('memory_off'));
   blocks.push(section('format_and_length'), section('email_and_writing_blocks'));
   if (state.artifactMarkers) {
     blocks.push(

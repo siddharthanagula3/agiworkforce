@@ -31,6 +31,7 @@ import {
   TOOL_SECTION_PREFIX,
   type ChatSetup,
   type ChatTurnMemory,
+  type ChatTurnState,
   type ModelChoice,
   type SectionReader,
   type ServingModel,
@@ -277,18 +278,26 @@ export function resolveChatSystemPrompt(options: ResolvePromptOptions = {}): {
   };
 }
 
+/**
+ * Versions 8 to 10 were written on version 4 and render through the setup
+ * composer below. A version that also holds the sections version 5 added
+ * renders through the published assembler, which renders its setup block too.
+ */
+export function rendersThroughSetupComposer(sections: ChatSystemPromptSections): boolean {
+  return sections['setup_heading'] !== undefined && sections['capability_honesty'] === undefined;
+}
+
 export function chatSystemPromptDescribesSetup(options: ResolvePromptOptions = {}): boolean {
   return resolveChatSystemPrompt(options).sections['setup_heading'] !== undefined;
 }
 
-/** Only a version without the setup block renders the product overview, and only if it has one. */
+/** Only the published assembler renders the product overview, and only for a version that has one. */
 export function chatSystemPromptDescribesProductCapabilities(
   options: ResolvePromptOptions = {},
 ): boolean {
   const { sections } = resolveChatSystemPrompt(options);
   return (
-    sections['setup_heading'] === undefined &&
-    sections['product_capabilities_heading'] !== undefined
+    !rendersThroughSetupComposer(sections) && sections['product_capabilities_heading'] !== undefined
   );
 }
 
@@ -296,7 +305,12 @@ export function capabilityPreambleStamp(options: ResolvePromptOptions = {}): str
   return resolvePrompt(CHAT_SYSTEM_PROMPT_ID, options).stamp;
 }
 
-function buildPublishedCapabilityPreamble(input: CapabilityPreambleInput): string | null {
+type CarriedTurnState = Pick<ChatTurnState, 'servingModel' | 'setup' | 'settingsGuidance'>;
+
+function buildPublishedCapabilityPreamble(
+  input: CapabilityPreambleInput,
+  carried: CarriedTurnState,
+): string | null {
   const { sections } = resolveChatSystemPrompt(input.promptSelection ?? {});
   const now = roundDownToGranularity(input.now ?? new Date(), TIME_CONTEXT_GRANULARITY_MS);
   const { body, time } = assembleChatSystemPrompt(
@@ -321,6 +335,7 @@ function buildPublishedCapabilityPreamble(input: CapabilityPreambleInput): strin
       ...(input.artifactRuntime === false ? { artifactRuntime: false } : {}),
       ...(input.artifactConnectors ? { artifactConnectors: true } : {}),
       ...(input.productCapabilities ? { productCapabilities: input.productCapabilities } : {}),
+      ...carried,
     },
     {
       utc: now.toISOString(),
@@ -414,9 +429,23 @@ function joinBlocks(blocks: readonly string[], timeContext: string): string {
 
 export function buildCapabilityPreamble(input: CapabilityPreambleInput): string | null {
   const { sections, section } = sectionReaderFor(input.promptSelection);
-  if (!sections['setup_heading']) return buildPublishedCapabilityPreamble(input);
-
   const toolNames = extractToolNames(input.tools);
+  if (!rendersThroughSetupComposer(sections)) {
+    return buildPublishedCapabilityPreamble(input, {
+      servingModel: input.servingModel ?? null,
+      ...(input.chatSetup
+        ? {
+            setup: {
+              chat: input.chatSetup,
+              tools: chatSetupTools(toolNames),
+              temporaryChatRetentionDays: TEMPORARY_CHAT_RETENTION_DAYS,
+            },
+          }
+        : {}),
+      settingsGuidance: settingsGuidanceFor(input.surface ?? 'unknown'),
+    });
+  }
+
   const hasSearch = toolNames.includes('web_search');
   const hasFetch = toolNames.includes('web_fetch') || toolNames.includes('url_fetch');
   const hasFileCreation = toolNames.some((name) =>
@@ -494,17 +523,30 @@ export interface TextOnlyPreambleInput {
 
 export function buildTextOnlyPreamble(input: TextOnlyPreambleInput): string {
   const { sections, section } = sectionReaderFor(input.promptSelection);
-  if (!sections['setup_heading']) {
+  if (!rendersThroughSetupComposer(sections)) {
     return (
-      buildPublishedCapabilityPreamble({
-        tools: [],
-        ...(input.promptSelection ? { promptSelection: input.promptSelection } : {}),
-        ...(input.timeZone ? { timeZone: input.timeZone } : {}),
-        ...(input.now ? { now: input.now } : {}),
-        ...(input.artifacts ? { artifacts: true } : {}),
-        artifactRuntime: false,
-        memory: input.setup?.personalContext === 'read_only' ? 'on' : 'off',
-      }) ?? ''
+      buildPublishedCapabilityPreamble(
+        {
+          tools: [],
+          ...(input.promptSelection ? { promptSelection: input.promptSelection } : {}),
+          ...(input.timeZone ? { timeZone: input.timeZone } : {}),
+          ...(input.now ? { now: input.now } : {}),
+          ...(input.artifacts ? { artifacts: true } : {}),
+          artifactRuntime: false,
+          memory: input.setup?.personalContext === 'read_only' ? 'on' : 'off',
+        },
+        {
+          servingModel: input.servingModel ?? null,
+          ...(input.setup
+            ? {
+                setup: {
+                  textOnly: input.setup,
+                  temporaryChatRetentionDays: TEMPORARY_CHAT_RETENTION_DAYS,
+                },
+              }
+            : {}),
+        },
+      ) ?? ''
     );
   }
   return joinBlocks(
