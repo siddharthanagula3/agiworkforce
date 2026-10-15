@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
   GATEWAY_BACKED_HARNESS_IDS,
   getDefaultAutoRoutingProfile,
+  getModelMetadataById,
   getModelRegistryFacts,
   listCanonicalModels,
   REGISTRY_HARNESS_IDS,
@@ -217,6 +218,42 @@ describe('configured transient same-route retry', () => {
         safeFirstStep,
       ),
     ).toBeNull();
+  });
+});
+
+describe('a fallback that cannot hold the fitted conversation (PC-F08)', () => {
+  const narrow = listCanonicalModels()
+    .map((model) => ({ id: model.id, window: getModelMetadataById(model.id)?.contextWindow ?? 0 }))
+    .filter((model) => model.window > 0)
+    .sort((left, right) => left.window - right.window)[0];
+  if (!narrow) throw new Error('Canonical model with a context window is missing');
+
+  const fittedFor = (content: string) =>
+    makeProcessed({
+      fallbackModels: [narrow.id, 'candidate-b'],
+      llmRequest: {
+        model: 'primary-model',
+        messages: [{ role: 'user', content }],
+        max_tokens: 100,
+      } as unknown as ProcessedRequest['llmRequest'],
+    });
+
+  beforeEach(() => {
+    mockResolveProviderFromModel.mockImplementation((model: string) =>
+      model === narrow.id ? 'openai' : 'google',
+    );
+  });
+
+  it('is skipped rather than sent more than its window holds', () => {
+    const plan = makePlan(fittedFor('word '.repeat(narrow.window * 2)));
+
+    expect(plan.next(httpError(503))?.model).toBe('candidate-b');
+  });
+
+  it('is still tried when the fitted conversation fits it', () => {
+    const plan = makePlan(fittedFor('a short question'));
+
+    expect(plan.next(httpError(503))?.model).toBe(narrow.id);
   });
 });
 

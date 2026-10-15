@@ -80,14 +80,17 @@ describe('context validation covers every model a chat turn can be served by', (
         'the question this turn has to answer',
       );
 
+      const pasted = 'paste '.repeat(window * 2);
       const oversizedTurn: TrimmableMessage[] = [
         { role: 'system', content: 'stay on task' },
-        { role: 'user', content: 'paste '.repeat(window * 2) },
+        { role: 'user', content: pasted },
       ];
-      const shrunk = trimMessagesToContextWindow(oversizedTurn, key, MAX_OUTPUT_TOKENS);
-      expect(shrunk, key).not.toBeNull();
-      expect(shrunk!.truncatedMessages, key).toBeGreaterThan(0);
-      expect(shrunk!.estimatedTokensAfter, key).toBeLessThanOrEqual(shrunk!.budgetTokens);
+      const fitted = trimMessagesToContextWindow(oversizedTurn, key, MAX_OUTPUT_TOKENS);
+      expect(fitted, key).not.toBeNull();
+      expect(oversizedTurn[1]?.content, key).toBe(pasted);
+      expect(fitted!.truncatedMessages, key).toBe(0);
+      expect(fitted!.protectedOverflow, key).toBe(true);
+      expect(fitted!.estimatedTokensAfter, key).toBeGreaterThan(fitted!.budgetTokens);
     }
   });
 });

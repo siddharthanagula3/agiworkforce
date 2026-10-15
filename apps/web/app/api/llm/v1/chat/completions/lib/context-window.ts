@@ -37,17 +37,28 @@ export interface ContextTrimResult {
  * reference block behind the cache boundary or the span replacement this fit
  * inserted. Generic shrinking cuts from the end of a message, so cutting policy
  * silently drops whichever rule came last; it is left whole and an overflow is
- * reported instead.
+ * reported instead. The latest user message is the request itself: cut, the
+ * model answers a question the user did not ask, so it is left whole too.
  */
 function isProtectedFromShrinking(
   message: TrimmableMessage,
   replacement: TrimmableMessage | null,
+  latestUserMessage: TrimmableMessage | null,
 ): boolean {
+  if (message === latestUserMessage) return true;
   return (
     message.role === 'system' &&
     message !== replacement &&
     !message.content.startsWith(SYSTEM_PROMPT_CACHE_BOUNDARY)
   );
+}
+
+function latestUserMessageOf(messages: readonly TrimmableMessage[]): TrimmableMessage | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === 'user') return message;
+  }
+  return null;
 }
 
 /**
@@ -174,6 +185,7 @@ export function applyDroppedSpanReplacement(
   }
 
   const truncated = new Set<number>();
+  const latestUserMessage = latestUserMessageOf(next);
   if (running > plan.budgetTokens) {
     // One sweep only approximates the budget, because the keep-ratio is derived
     // from an estimator and every message carries fixed overhead. Sweeping until
@@ -185,7 +197,7 @@ export function applyDroppedSpanReplacement(
       for (let i = next.length - 1; i >= 0 && running > plan.budgetTokens; i--) {
         const message = next[i];
         if (!message || typeof message.content !== 'string') continue;
-        if (isProtectedFromShrinking(message, replacement)) continue;
+        if (isProtectedFromShrinking(message, replacement, latestUserMessage)) continue;
         const currentTokens = measure(message);
         if (currentTokens <= 16) continue;
         const body = message.content.endsWith(TRUNCATED_MESSAGE_MARKER)
@@ -248,6 +260,35 @@ export function trimMessagesToContextWindow(
     '[context-window] trimmed conversation history to fit the resolved model context window',
   );
   return result;
+}
+
+/**
+ * How much of `original` a fit kept. Shrinking keeps a prefix and appends the
+ * truncation marker, so anything that started past that prefix never reached
+ * the model.
+ */
+export function keptPrefixLength(original: string, fitted: string): number {
+  if (fitted === original) return original.length;
+  const body = fitted.endsWith(TRUNCATED_MESSAGE_MARKER)
+    ? fitted.slice(0, -TRUNCATED_MESSAGE_MARKER.length)
+    : fitted;
+  return original.startsWith(body) ? body.length : 0;
+}
+
+/**
+ * Whether messages fitted for one model also fit another model's window.
+ * Failover sends the fitted payload unchanged, so a fallback with a smaller
+ * window would be sent more than it can read. A model with no recorded window
+ * gives no evidence either way.
+ */
+export function fitsModelContextWindow(
+  messages: readonly TrimmableMessage[],
+  model: string,
+  maxOutputTokens: number,
+): boolean {
+  const contextWindow = getModelMetadataById(model)?.contextWindow;
+  if (!contextWindow || contextWindow <= 0) return true;
+  return totalTokens(messages, model) <= contextBudgetTokens(contextWindow, maxOutputTokens);
 }
 
 export function compactionUsageFields(trim: ContextTrimResult | null | undefined): {

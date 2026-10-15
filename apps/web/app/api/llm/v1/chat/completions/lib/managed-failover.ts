@@ -80,6 +80,7 @@ import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import { nativeSearchToolName } from '@/lib/web-search/required-search';
 import { isGatewayBackedHarness, type FailoverRoute } from './failover-plan';
 import { retargetServingModel, servingModelFor, type ModelSelection } from './capability-preamble';
+import { fitsModelContextWindow } from './context-window';
 import type { ProcessedRequest } from './request-processor';
 import { buildThinkingConfig, fastTierFor, resolveRequestEffort } from './request-processor';
 
@@ -554,6 +555,13 @@ export function createFailoverPlan(
         );
         continue;
       }
+      if (!fitsModelContextWindow(latestView.llmRequest.messages, candidate, processed.maxTokens)) {
+        logger.warn(
+          { requestId: processed.requestId, model: candidate, provider },
+          'Managed failover candidate skipped: the fitted conversation is longer than its context window',
+        );
+        continue;
+      }
       const attemptView = buildFailoverAttemptView(latestView, candidate, provider);
       latestView = attemptView;
       latestHarnessId = planned.harnessId;
@@ -638,6 +646,15 @@ export function createFailoverPlan(
         logger.warn(
           { requestId: processed.requestId, routeId: route.routeId, provider: route.provider },
           'Free-lane failover candidate skipped: it may train on inputs and the account opted out',
+        );
+        continue;
+      }
+      if (
+        !fitsModelContextWindow(latestView.llmRequest.messages, route.modelKey, processed.maxTokens)
+      ) {
+        logger.warn(
+          { requestId: processed.requestId, routeId: route.routeId, provider: route.provider },
+          'Free-lane failover candidate skipped: the fitted conversation is longer than its context window',
         );
         continue;
       }

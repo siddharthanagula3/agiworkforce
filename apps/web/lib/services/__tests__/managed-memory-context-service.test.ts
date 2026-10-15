@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ChatCompletionRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import {
   applyManagedMemoryContext,
+  firstManagedMemoryContentOffset,
   formatManagedMemorySystemPrompt,
   loadManagedMemoryContext,
   loadManagedMemoryPolicy,
@@ -426,5 +427,22 @@ describe('loadProjectMemoryScope', () => {
     await expect(
       loadProjectMemoryScope({ query }, { userId: 'user-1', projectId: 'project-1' }),
     ).resolves.toEqual({ projectId: null, usesGlobalMemory: true });
+  });
+});
+
+describe('firstManagedMemoryContentOffset', () => {
+  it('finds where the first memory text starts in the prompt the formatter built', () => {
+    const prompt = formatManagedMemorySystemPrompt([
+      { content: 'I prefer "morning" meetings.', category: 'preference', pinned: true },
+      { content: 'My team ships on Fridays.', category: null, pinned: false },
+    ])!;
+
+    const offset = firstManagedMemoryContentOffset(prompt);
+
+    expect(prompt.slice(offset)).toMatch(/^I prefer \\"morning\\" meetings\./);
+  });
+
+  it('is -1 for text that holds no memory', () => {
+    expect(firstManagedMemoryContentOffset('No memories here.')).toBe(-1);
   });
 });

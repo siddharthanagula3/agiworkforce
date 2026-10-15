@@ -8,6 +8,7 @@ import {
   ROUTING_PROFILE_CHOICE_OPTIONS,
 } from '@agiworkforce/types';
 import type { Skill } from '@agiworkforce/skills';
+import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
 
 import { PLATFORM_ADMIN_ENV_VAR } from '@/features/admin/lib/platform-admin-access';
 import {
@@ -139,6 +140,22 @@ vi.mock('@/lib/services/turn-context-service', async (importOriginal) => {
   return { ...actual, resolveInteractiveTurnContext: mocks.turnContext };
 });
 
+const finalFit = vi.hoisted(() => ({
+  sizing: null as null | {
+    budgetTokens: number;
+    measure: (message: { role: string; content: string }) => number;
+  },
+}));
+
+vi.mock('./context-compaction', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./context-compaction')>();
+  return {
+    ...actual,
+    compactContextWindow: (input: Parameters<typeof actual.compactContextWindow>[0]) =>
+      actual.compactContextWindow(finalFit.sizing ? { ...input, sizing: finalFit.sizing } : input),
+  };
+});
+
 import { CreditService } from '@/lib/services/credit-service';
 import { processRequest } from './request-processor';
 import type { AuthGateSuccess } from './auth-gate';
@@ -231,6 +248,7 @@ function temporaryConversationRows(sql: string) {
 beforeEach(() => {
   vi.restoreAllMocks();
   for (const mock of Object.values(mocks)) mock.mockReset();
+  finalFit.sizing = null;
   vi.stubEnv(PLATFORM_ADMIN_ENV_VAR, 'user-pro');
 
   mocks.enforceSafety.mockResolvedValue({ enabled: false, allowed: true });
@@ -794,5 +812,47 @@ describe('the product overview chat prompt v7 renders for the turn (PC-F05)', ()
 
     expect(joined).not.toContain(overviewLine('canUseCloudExecution'));
     expect(joined).toContain(overviewLine('canUseDeepResearch'));
+  });
+});
+
+describe('the past chats a turn shows after the final fit (PC-F08)', () => {
+  it('shows only the past chats whose excerpt the fit still sent', async () => {
+    const pastChatPrompt = [
+      'Excerpts from the user’s other chats follow.',
+      '<past_chats>',
+      `[{"title":"A","role":"user","excerpt":"first ${'x '.repeat(1_000)}"},{"title":"B","role":"user","excerpt":"second"},{"title":"C","role":"user","excerpt":"third"}]`,
+      '</past_chats>',
+    ].join('\n');
+    const pastChatSources = ['a', 'b', 'c'].map((id) => ({
+      id: `source-${id}`,
+      conversationId: `conversation-${id}`,
+      messageId: `message-${id}`,
+      title: id,
+      createdAt: '2026-10-01T10:00:00.000Z',
+    }));
+    mocks.turnContext.mockResolvedValue({
+      projectBlocks: [],
+      projectCitations: [],
+      pastChatPrompt,
+      pastChatSources,
+      memoryPrompt: null,
+      memories: [],
+      memoryCitations: [],
+      manifest: null,
+    });
+    finalFit.sizing = {
+      budgetTokens: 600,
+      measure: (message) =>
+        message.role === 'system' && message.content.startsWith(SYSTEM_PROMPT_CACHE_BOUNDARY)
+          ? message.content.length
+          : 0,
+    };
+
+    const result = await processRequest(chatRequestFor('chat-system-prompt-pcf08'), auth());
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.contextTrim?.truncatedMessages).toBe(1);
+    expect(result.pastChatSources?.map((source) => source.messageId)).toEqual(['message-a']);
   });
 });

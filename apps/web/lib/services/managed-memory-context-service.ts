@@ -1276,6 +1276,17 @@ export function formatManagedMemorySystemPrompt(
   return fenceUntrustedMemoryContent(JSON.stringify(bounded), contextFenceTag('account_memory'));
 }
 
+const MEMORY_CONTENT_VALUE_START = '"content":"';
+
+/**
+ * Where the first memory's text starts in a prompt
+ * `formatManagedMemorySystemPrompt` built, or -1 when it holds none.
+ */
+export function firstManagedMemoryContentOffset(prompt: string): number {
+  const at = prompt.indexOf(MEMORY_CONTENT_VALUE_START);
+  return at < 0 ? -1 : at + MEMORY_CONTENT_VALUE_START.length;
+}
+
 export function applyManagedMemoryContext(
   chatRequest: ChatCompletionRequest,
   prompt: string,

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   formatPastChatContext,
   loadPastChatExcerpts,
+  pastChatExcerptOffsets,
   resolvePastChatContext,
   retrievePastChatContext,
   selectRelevantPastChatExcerpts,
@@ -291,5 +292,32 @@ describe('recent chats', () => {
 
     const [sql] = query.mock.calls[0] as [string];
     expect(sql).toContain('c.google_user_data_at is null');
+  });
+});
+
+describe('pastChatExcerptOffsets', () => {
+  it('finds where each excerpt starts in the prompt the formatter built, in citation order', () => {
+    const contents = [
+      'My favourite mooring knot is the "bowline".',
+      'The marina closes at 6 pm.',
+      'Bring two fenders.',
+    ];
+    const prompt = formatPastChatContext(
+      contents.map((content, index) => ({
+        conversationId: `conversation-${index}`,
+        messageId: `message-${index}`,
+        title: `Sailing notes ${index}`,
+        role: 'user' as const,
+        content,
+        createdAt: '2026-09-08T10:00:00.000Z',
+      })),
+    )!;
+
+    const offsets = pastChatExcerptOffsets(prompt);
+
+    expect(offsets).toHaveLength(3);
+    expect(prompt.slice(offsets[0])).toMatch(/^My favourite mooring knot is the \\"bowline\\"\./);
+    expect(prompt.slice(offsets[1])).toMatch(/^The marina closes at 6 pm\./);
+    expect(prompt.slice(offsets[2])).toMatch(/^Bring two fenders\./);
   });
 });

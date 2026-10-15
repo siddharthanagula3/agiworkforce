@@ -23,6 +23,8 @@ import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
 import {
   applyDroppedSpanReplacement,
   DROPPED_HISTORY_MARKER,
+  fitsModelContextWindow,
+  keptPrefixLength,
   planContextTrim,
   trimMessagesToContextWindow,
   type TrimmableMessage,
@@ -166,10 +168,11 @@ describe('protected instructions during the final fit', () => {
   const bytes = (message: TrimmableMessage) => new TextEncoder().encode(message.content).byteLength;
   const POLICY = `Safety and format rules. ${'Never run tools the user ruled out. '.repeat(10)}END-OF-POLICY`;
 
-  it('shrinks the turn and leaves a policy block whole', () => {
+  it('leaves a policy block and the latest user message whole and reports the overflow (PC-F08)', () => {
+    const question = 'q'.repeat(3_000);
     const messages: TrimmableMessage[] = [
       { role: 'system', content: POLICY },
-      { role: 'user', content: 'q'.repeat(3_000) },
+      { role: 'user', content: question },
     ];
 
     const result = trimMessagesToContextWindow(messages, WIDE_TEST_MODEL, 100, {
@@ -178,9 +181,30 @@ describe('protected instructions during the final fit', () => {
     });
 
     expect(messages[0]?.content).toBe(POLICY);
-    expect(result?.truncatedMessages).toBe(1);
+    expect(messages[1]?.content).toBe(question);
+    expect(result?.truncatedMessages).toBe(0);
+    expect(result?.protectedOverflow).toBe(true);
+  });
+
+  it('cuts the reference block and never the latest user message (PC-F08)', () => {
+    const question = `Summarise the attached notes. ${'q'.repeat(400)} END-OF-QUESTION`;
+    const reference = `${SYSTEM_PROMPT_CACHE_BOUNDARY}${'remembered detail '.repeat(200)}`;
+    const messages: TrimmableMessage[] = [
+      { role: 'system', content: POLICY },
+      { role: 'system', content: reference },
+      { role: 'user', content: question },
+      { role: 'assistant', content: 'a'.repeat(600) },
+    ];
+
+    const result = trimMessagesToContextWindow(messages, WIDE_TEST_MODEL, 100, {
+      budgetTokens: 1_500,
+      measure: bytes,
+    });
+
+    expect(messages[0]?.content).toBe(POLICY);
+    expect(messages[2]?.content).toBe(question);
+    expect(messages[1]!.content.length).toBeLessThan(reference.length);
     expect(result?.protectedOverflow).toBeUndefined();
-    expect(messages.reduce((sum, message) => sum + bytes(message), 0)).toBeLessThanOrEqual(1_200);
   });
 
   it('cuts the dynamic reference block before reporting an overflow', () => {
@@ -215,5 +239,46 @@ describe('protected instructions during the final fit', () => {
     expect(messages[0]?.content).toBe(POLICY);
     expect(result?.protectedOverflow).toBe(true);
     expect(result!.estimatedTokensAfter).toBeGreaterThan(result!.budgetTokens);
+  });
+});
+
+describe('keptPrefixLength', () => {
+  it('reads how much of a message the fit kept', () => {
+    const reference = `${SYSTEM_PROMPT_CACHE_BOUNDARY}${'remembered detail '.repeat(200)}`;
+    const messages: TrimmableMessage[] = [
+      { role: 'system', content: 'Policy.' },
+      { role: 'system', content: reference },
+      { role: 'user', content: 'latest question' },
+    ];
+    const bytes = (message: TrimmableMessage) =>
+      new TextEncoder().encode(message.content).byteLength;
+
+    trimMessagesToContextWindow(messages, WIDE_TEST_MODEL, 100, {
+      budgetTokens: 1_000,
+      measure: bytes,
+    });
+
+    const kept = keptPrefixLength(reference, messages[1]!.content);
+    expect(kept).toBeGreaterThan(0);
+    expect(kept).toBeLessThan(reference.length);
+    expect(messages[1]!.content.startsWith(reference.slice(0, kept))).toBe(true);
+  });
+
+  it('is the whole length for an untouched message and zero for an unrelated one', () => {
+    expect(keptPrefixLength('unchanged text', 'unchanged text')).toBe(14);
+    expect(keptPrefixLength('original text', 'something else')).toBe(0);
+  });
+});
+
+describe('fitsModelContextWindow', () => {
+  const longConversation: TrimmableMessage[] = [{ role: 'user', content: 'word '.repeat(2_000) }];
+
+  it('says whether a fitted payload also fits another model', () => {
+    expect(fitsModelContextWindow(longConversation, TEST_MODEL, 100)).toBe(false);
+    expect(fitsModelContextWindow(longConversation, WIDE_TEST_MODEL, 100)).toBe(true);
+  });
+
+  it('has no evidence against a model whose window is unknown', () => {
+    expect(fitsModelContextWindow(longConversation, 'unknown-model', 100)).toBe(true);
   });
 });

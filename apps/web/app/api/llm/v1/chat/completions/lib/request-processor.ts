@@ -314,8 +314,9 @@ import {
   buildFreeCapacityUnavailableResponse,
   resolveFreeLaneOutcome,
 } from '@/lib/services/free-lane/stage';
-import type { ContextTrimResult } from './context-window';
+import { keptPrefixLength, type ContextTrimResult } from './context-window';
 import { compactContextWindow } from './context-compaction';
+import { citationsSentAfterFit } from './reference-citations';
 import { buildInterimRoutePlanId } from '@/lib/cpst-telemetry';
 import type { AuthGateSuccess } from './auth-gate';
 import { resolveAuthenticatedSurface } from './request-surface';
@@ -6124,6 +6125,11 @@ async function processAdmittedRequest(
   };
 
   const scopedForCompaction = await scopedDbPromise;
+  const referenceMessage = internalMessages.find(
+    (message) =>
+      message.role === 'system' && message.content.startsWith(SYSTEM_PROMPT_CACHE_BOUNDARY),
+  );
+  const referenceBeforeFit = referenceMessage?.content;
   const contextTrim = await timePhase(CHAT_TURN_PHASE.contextCompaction, () =>
     compactContextWindow({
       messages: internalMessages,
@@ -6148,6 +6154,20 @@ async function processAdmittedRequest(
         : {}),
     }),
   );
+  const sentCitations =
+    referenceMessage && referenceBeforeFit !== undefined
+      ? citationsSentAfterFit(
+          { pastChatSources, memoryCitations },
+          {
+            pastChatPrompt: turnContext?.pastChatPrompt ?? null,
+            memoryPrompt: turnContext?.memoryPrompt ?? null,
+          },
+          {
+            original: referenceBeforeFit,
+            keptLength: keptPrefixLength(referenceBeforeFit, referenceMessage.content),
+          },
+        )
+      : { pastChatSources, memoryCitations };
 
   if (freeTrialEnabled) {
     const trialReservationResult = await beginFreeTrialRequest({
@@ -6260,8 +6280,12 @@ async function processAdmittedRequest(
     ...(ownership.ok && ownership.projectSources?.length
       ? { projectSources: ownership.projectSources }
       : {}),
-    ...(pastChatSources.length ? { pastChatSources } : {}),
-    ...(memoryCitations.length ? { memoryCitations } : {}),
+    ...(sentCitations.pastChatSources.length
+      ? { pastChatSources: sentCitations.pastChatSources }
+      : {}),
+    ...(sentCitations.memoryCitations.length
+      ? { memoryCitations: sentCitations.memoryCitations }
+      : {}),
     assistantMessageId: chatRequest.assistant_message_id,
     assistantParentId: chatRequest.assistant_parent_id,
     ...(chatRequest.user_message ? { userMessageId: chatRequest.user_message.id } : {}),

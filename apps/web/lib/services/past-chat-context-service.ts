@@ -230,6 +230,24 @@ export function formatPastChatContext(
   return fenced ? `${rules}\n${fenced}` : null;
 }
 
+const EXCERPT_VALUE_START = '"excerpt":"';
+
+/**
+ * Where each excerpt's text starts in a prompt `formatPastChatContext` built,
+ * in excerpt order, which is the order of the citations the turn shows. A
+ * quote inside an excerpt is escaped in the JSON, so the key cannot match
+ * inside one.
+ */
+export function pastChatExcerptOffsets(prompt: string): number[] {
+  const offsets: number[] = [];
+  let from = prompt.indexOf(EXCERPT_VALUE_START);
+  while (from >= 0) {
+    offsets.push(from + EXCERPT_VALUE_START.length);
+    from = prompt.indexOf(EXCERPT_VALUE_START, from + EXCERPT_VALUE_START.length);
+  }
+  return offsets;
+}
+
 export function formatRecentChatsContext(excerpts: readonly PastChatExcerpt[]): string | null {
   let remaining = RECENT_CHATS_MAX_TOTAL_CHARS;
   const bounded: Array<{
