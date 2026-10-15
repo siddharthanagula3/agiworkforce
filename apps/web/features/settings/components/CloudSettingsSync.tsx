@@ -22,6 +22,7 @@ import {
   readStoredLocale,
   toAppearanceNamespace,
   type AppearanceNamespace,
+  type AppearanceSettings,
   type SyncedTheme,
 } from '@/features/settings/lib/appearance-namespace';
 import {
@@ -38,6 +39,21 @@ const SUPPORTED_LOCALES = SUPPORTED_LANGUAGES.map((language) => language.code);
 
 function isSyncedTheme(value: string | undefined): value is SyncedTheme {
   return value === 'light' || value === 'dark' || value === 'system';
+}
+
+type AppearanceField = keyof AppearanceSettings;
+type AppearanceRevisions = Partial<Record<AppearanceField, number>>;
+
+function fieldsUnchangedSince(
+  account: Partial<AppearanceSettings>,
+  atRead: AppearanceRevisions,
+  now: AppearanceRevisions,
+): Partial<AppearanceSettings> {
+  return Object.fromEntries(
+    Object.entries(account).filter(
+      ([field]) => atRead[field as AppearanceField] === now[field as AppearanceField],
+    ),
+  ) as Partial<AppearanceSettings>;
 }
 
 export function CloudSettingsSync() {
@@ -76,10 +92,44 @@ export function CloudSettingsSync() {
   const localeRef = useRef(currentLocale);
   localeRef.current = currentLocale;
 
-  const themeRevision = useRef(0);
+  const appearanceRevisions = useRef<AppearanceRevisions>({});
+  const renderedAppearance = useRef<Record<AppearanceField, unknown> | null>(null);
   useLayoutEffect(() => {
-    themeRevision.current += 1;
-  }, [theme]);
+    const current: Record<AppearanceField, unknown> = {
+      theme,
+      accentColor,
+      chatFont,
+      chatTextSize,
+      motion,
+      highContrast,
+      codeBlockWrap,
+      followUpSuggestionsEnabled,
+      followUpBehavior,
+      dictationEnabled,
+      voiceSpeed,
+      hiddenNavIds,
+    };
+    const previous = renderedAppearance.current;
+    renderedAppearance.current = current;
+    if (!previous) return;
+    for (const field of Object.keys(current) as AppearanceField[]) {
+      if (Object.is(previous[field], current[field])) continue;
+      appearanceRevisions.current[field] = (appearanceRevisions.current[field] ?? 0) + 1;
+    }
+  }, [
+    accentColor,
+    chatFont,
+    chatTextSize,
+    codeBlockWrap,
+    dictationEnabled,
+    followUpBehavior,
+    followUpSuggestionsEnabled,
+    hiddenNavIds,
+    highContrast,
+    motion,
+    theme,
+    voiceSpeed,
+  ]);
 
   const write = useCallback<(namespace: string, patch: Record<string, unknown>) => void>(
     (namespace, patch) => {
@@ -119,7 +169,7 @@ export function CloudSettingsSync() {
     }
 
     let cancelled = false;
-    const themeRevisionAtRead = themeRevision.current;
+    const revisionsAtRead = { ...appearanceRevisions.current };
     void getCsrfToken().catch(() => {});
     void Promise.all([
       fetchStoredPreferenceNamespace<AppearanceNamespace>(APPEARANCE_NAMESPACE),
@@ -128,9 +178,13 @@ export function CloudSettingsSync() {
     ])
       .then(async ([storedAppearance, storedLanguage, storedCommands]) => {
         if (cancelled) return;
-        const { theme: storedTheme, ...storeFields } = fromAppearanceNamespace(storedAppearance);
+        const { theme: storedTheme, ...storeFields } = fieldsUnchangedSince(
+          fromAppearanceNamespace(storedAppearance),
+          revisionsAtRead,
+          appearanceRevisions.current,
+        );
         if (Object.keys(storeFields).length > 0) useSettingsStore.setState(storeFields);
-        if (storedTheme && themeRevision.current === themeRevisionAtRead) setTheme(storedTheme);
+        if (storedTheme) setTheme(storedTheme);
 
         const accountCommands = readAccountCustomCommands(storedCommands);
         useSettingsStore.setState({

@@ -324,6 +324,59 @@ describe('changing a control on web', () => {
   });
 });
 
+describe('changing a control while the account settings are still being read', () => {
+  // Fails on 1527aac2cb, which guarded only the theme: the late read set high
+  // contrast back to the account's false, and nothing was written.
+  it('keeps high contrast as switched here, still takes the untouched fields, then saves it', async () => {
+    session.isSignedIn = true;
+    let answerAppearanceRead: (stored: Record<string, unknown>) => void = () => undefined;
+    preferences.fetchStoredPreferenceNamespace.mockImplementation((namespace: string) =>
+      namespace === 'appearance'
+        ? new Promise((resolve) => {
+            answerAppearanceRead = resolve;
+          })
+        : Promise.resolve({ locale: 'en' }),
+    );
+
+    render(<CloudSettingsSync />);
+    await settle();
+
+    act(() => {
+      useSettingsStore.getState().setHighContrast(true);
+    });
+    await settle();
+
+    await act(async () => {
+      answerAppearanceRead({
+        theme: 'system',
+        accentColor: 'violet',
+        font: 'default',
+        textSize: 'default',
+        motion: 'system',
+        highContrast: false,
+        codeBlockWrap: false,
+        followUpSuggestions: true,
+        followUpBehavior: 'queue',
+        dictationEnabled: true,
+        voiceSpeed: 'normal',
+        hiddenNavIds: [],
+      });
+    });
+    await settle();
+
+    expect(useSettingsStore.getState().highContrast).toBe(true);
+    expect(useSettingsStore.getState().accentColor).toBe('violet');
+
+    await flushDebounce();
+    const appearanceWrites = preferences.savePreferenceNamespace.mock.calls.filter(
+      ([namespace]) => namespace === 'appearance',
+    );
+    expect(appearanceWrites).toEqual([
+      ['appearance', { highContrast: true }, { merge: true, keepalive: true }],
+    ]);
+  });
+});
+
 function renderStatus(hook: () => { error: string | null; retry: (() => void) | null }) {
   let captured: { error: string | null; retry: (() => void) | null } = {
     error: null,
