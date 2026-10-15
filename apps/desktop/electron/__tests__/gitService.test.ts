@@ -291,7 +291,18 @@ describe('host git hardening', () => {
       const dir = await committedRepo('pointer-host');
       git(dir, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', upstream, 'sub');
       git(dir, 'commit', '-qm', 'add submodule');
-      git(path.join(dir, 'sub'), 'commit', '-q', '--allow-empty', '-m', 'moved');
+      git(
+        path.join(dir, 'sub'),
+        '-c',
+        'user.name=Test',
+        '-c',
+        'user.email=test@example.com',
+        'commit',
+        '-q',
+        '--allow-empty',
+        '-m',
+        'moved',
+      );
       git(dir, 'add', 'sub');
 
       expect((await readGitState(dir))?.staged).toBe(1);
