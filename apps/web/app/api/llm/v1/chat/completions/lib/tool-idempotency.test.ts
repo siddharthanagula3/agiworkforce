@@ -14,6 +14,8 @@ vi.mock('@/lib/server/key-value', () => ({
 
 import {
   alreadySettledMessage,
+  claimUnconfirmedMessage,
+  outcomeUnknownMessage,
   resolveToolIdempotencyWindowMs,
   runToolCallOnce,
   TOOL_IDEMPOTENCY_WINDOW_ENV,
@@ -27,10 +29,12 @@ function memoryStore() {
   return {
     entries,
     get: vi.fn(async (key: string) => entries.get(key) ?? null),
-    set: vi.fn(async (key: string, value: unknown) => {
+    set: vi.fn(async (key: string, value: unknown, options?: { onlyIfAbsent?: boolean }) => {
+      if (options?.onlyIfAbsent && entries.has(key)) return false;
       entries.set(key, value);
       return true;
     }),
+    delete: vi.fn(async (...keys: string[]) => keys.filter((key) => entries.delete(key)).length),
   };
 }
 
@@ -136,7 +140,75 @@ describe('a retried step does not run a mutating tool twice', () => {
     expect(execute).toHaveBeenCalledTimes(2);
   });
 
-  it('runs the tool rather than failing the turn when the store is unreachable', async () => {
+  it('lets only one of two concurrent attempts run the call', async () => {
+    let release: () => void = () => {};
+    const execute = vi.fn(
+      () =>
+        new Promise<{ content: string; isError: boolean }>((resolve) => {
+          release = () => resolve({ content: 'sent', isError: false });
+        }),
+    );
+    const execution = {
+      idempotencyKey: key(0),
+      retrySafety: 'unsafe' as const,
+      toolName: TOOL_NAME,
+      execute,
+    };
+
+    const first = runToolCallOnce(execution);
+    const second = await runToolCallOnce(execution);
+    release();
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(second).toEqual({ content: outcomeUnknownMessage(TOOL_NAME), isError: true });
+    await expect(first).resolves.toEqual({ content: 'sent', isError: false });
+  });
+
+  it('reports an unknown outcome, not success, when the earlier run never recorded its result', async () => {
+    const memory = memoryStore();
+    store.value = memory;
+    const execute = vi.fn(async () => ({ content: 'sent', isError: false }));
+    const execution = {
+      idempotencyKey: key(0),
+      retrySafety: 'unsafe' as const,
+      toolName: TOOL_NAME,
+      execute,
+    };
+    memory.set.mockImplementationOnce(async (k: string, value: unknown) => {
+      memory.entries.set(k, value);
+      return true;
+    });
+    memory.set.mockRejectedValueOnce(new Error('store lost the write'));
+
+    await runToolCallOnce(execution);
+    const retried = await runToolCallOnce(execution);
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(retried).toEqual({ content: outcomeUnknownMessage(TOOL_NAME), isError: true });
+  });
+
+  it('refuses a retry-unsafe call when its claim cannot be written', async () => {
+    const memory = memoryStore();
+    memory.set.mockRejectedValue(new Error('store unreachable'));
+    store.value = memory;
+    const execute = vi.fn(async () => ({ content: 'sent', isError: false }));
+
+    const result = await runToolCallOnce({
+      idempotencyKey: key(0),
+      retrySafety: 'unsafe',
+      toolName: TOOL_NAME,
+      execute,
+    });
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      content: claimUnconfirmedMessage(TOOL_NAME),
+      isError: true,
+      unavailable: true,
+    });
+  });
+
+  it('runs the tool when the deployment has no key-value store configured', async () => {
     store.value = null;
     const execute = vi.fn(async () => ({ content: 'sent', isError: false }));
     const execution = {

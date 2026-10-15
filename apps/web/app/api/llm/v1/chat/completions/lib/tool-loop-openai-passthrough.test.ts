@@ -153,7 +153,14 @@ describe('runToolLoop openai-passthrough dispatch (mocked adapter)', () => {
       }),
     );
 
-    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('fs', 'list_directory', { path: '/' });
+    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith(
+      'fs',
+      'list_directory',
+      { path: '/' },
+      {
+        signal: expect.any(AbortSignal),
+      },
+    );
 
     expect(mockOpenAIStream).toHaveBeenCalledTimes(2);
 
@@ -208,12 +215,26 @@ describe('runToolLoop openai-passthrough dispatch (mocked adapter)', () => {
       }),
     );
 
-    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('fs', 'read_file', {
-      path: '/README.md',
-    });
-    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('github', 'get_pull_request_diff', {
-      pull_number: 2,
-    });
+    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith(
+      'fs',
+      'read_file',
+      {
+        path: '/README.md',
+      },
+      {
+        signal: expect.any(AbortSignal),
+      },
+    );
+    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith(
+      'github',
+      'get_pull_request_diff',
+      {
+        pull_number: 2,
+      },
+      {
+        signal: expect.any(AbortSignal),
+      },
+    );
     expect(mockOpenAIStream).toHaveBeenCalledTimes(3);
     expect(output).toContain('Done.');
     expect(output).toContain('data: [DONE]');

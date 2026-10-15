@@ -18,6 +18,8 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
   };
 });
 
+import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
+
 import {
   applyDroppedSpanReplacement,
   DROPPED_HISTORY_MARKER,
@@ -157,5 +159,61 @@ describe("trimming to a sizing of the turn's own", () => {
     expect(
       planContextTrim(messages, TEST_MODEL, 100, { budgetTokens: 1_000, measure: bytes }),
     ).toBeNull();
+  });
+});
+
+describe('protected instructions during the final fit', () => {
+  const bytes = (message: TrimmableMessage) => new TextEncoder().encode(message.content).byteLength;
+  const POLICY = `Safety and format rules. ${'Never run tools the user ruled out. '.repeat(10)}END-OF-POLICY`;
+
+  it('shrinks the turn and leaves a policy block whole', () => {
+    const messages: TrimmableMessage[] = [
+      { role: 'system', content: POLICY },
+      { role: 'user', content: 'q'.repeat(3_000) },
+    ];
+
+    const result = trimMessagesToContextWindow(messages, WIDE_TEST_MODEL, 100, {
+      budgetTokens: 1_200,
+      measure: bytes,
+    });
+
+    expect(messages[0]?.content).toBe(POLICY);
+    expect(result?.truncatedMessages).toBe(1);
+    expect(result?.protectedOverflow).toBeUndefined();
+    expect(messages.reduce((sum, message) => sum + bytes(message), 0)).toBeLessThanOrEqual(1_200);
+  });
+
+  it('cuts the dynamic reference block before reporting an overflow', () => {
+    const reference = `${SYSTEM_PROMPT_CACHE_BOUNDARY}${'remembered detail '.repeat(200)}`;
+    const messages: TrimmableMessage[] = [
+      { role: 'system', content: POLICY },
+      { role: 'system', content: reference },
+      { role: 'user', content: 'latest question' },
+    ];
+
+    const result = trimMessagesToContextWindow(messages, WIDE_TEST_MODEL, 100, {
+      budgetTokens: 1_000,
+      measure: bytes,
+    });
+
+    expect(messages[0]?.content).toBe(POLICY);
+    expect(messages[1]!.content.length).toBeLessThan(reference.length);
+    expect(result?.protectedOverflow).toBeUndefined();
+  });
+
+  it('sends the policy whole and reports the overflow when nothing else can give', () => {
+    const messages: TrimmableMessage[] = [
+      { role: 'system', content: POLICY },
+      { role: 'user', content: 'hi' },
+    ];
+
+    const result = trimMessagesToContextWindow(messages, WIDE_TEST_MODEL, 100, {
+      budgetTokens: 100,
+      measure: bytes,
+    });
+
+    expect(messages[0]?.content).toBe(POLICY);
+    expect(result?.protectedOverflow).toBe(true);
+    expect(result!.estimatedTokensAfter).toBeGreaterThan(result!.budgetTokens);
   });
 });

@@ -265,6 +265,13 @@ describe('runToolLoop end-to-end, user connector tool execution', () => {
     );
 
     expect(connectorExecutor).toHaveBeenCalledTimes(1);
-    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('operator', 'do_thing', {});
+    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith(
+      'operator',
+      'do_thing',
+      {},
+      {
+        signal: expect.any(AbortSignal),
+      },
+    );
   });
 });

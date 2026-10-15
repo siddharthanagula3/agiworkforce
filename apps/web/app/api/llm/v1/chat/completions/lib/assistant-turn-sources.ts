@@ -36,6 +36,8 @@ import {
   type SourceDelivery,
 } from '@agiworkforce/types';
 
+import { displaySourceSnippet } from '@/lib/sources/display-snippet';
+
 export interface PersistedTurnSource {
   /** Stable across turns and providers, so the same page is one citation. */
   id: string;
@@ -223,7 +225,7 @@ export class AssistantTurnSourceCollector {
       const source = {
         url,
         title: readString(result, 'title') || url,
-        snippet: readString(result, 'encrypted_content').slice(0, MAX_SNIPPET_CHARS),
+        snippet: displaySourceSnippet(result['encrypted_content']).slice(0, MAX_SNIPPET_CHARS),
       };
       this.byId.set(id, {
         ...source,

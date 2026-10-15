@@ -293,6 +293,36 @@ describe('implicit managed-tool intent', () => {
     expect(chatRequest.web_fetch).toBeUndefined();
   });
 
+  it.each(['research', 'simple_chat', 'general'] as const)(
+    'offers no public search and no code for a restricted past-chat question on a %s turn',
+    (taskType) => {
+      const prompt =
+        'AUDIT ROUND8 relevant-chat capability control. Can you find and continue our earlier Juniper Lantern picnic discussion outside projects and our Saffron Comet repair day discussion in AUDIT 2026-10-12 Workshop? Use the earlier conversations, not the runbook, saved memory, or web search. For each, identify or link the source chat and report its agreed code, item count and color, day, and coordinator or organizer role. If you cannot search or access those chats under the current controls, say so clearly and do not invent facts or citations. Do not change settings or save anything to memory.';
+      const chatRequest = request();
+
+      applyImplicitManagedToolIntent()(chatRequest, { prompt, taskType, planTier: 'free' });
+
+      const requirement = resolveWebSearchRequirement({
+        webSearchEnabled: chatRequest.web_search,
+        agiWorkRun: false,
+        researchTask: taskType === 'research',
+        userMessage: prompt,
+      });
+      expect(chatRequest.web_search).not.toBe(true);
+      expect(chatRequest.web_fetch).toBeUndefined();
+      expect(chatRequest.code_execution).toBeUndefined();
+      expect(requirement.required).toBe(false);
+      expect(
+        shouldOfferWebSearchForTurn({
+          webSearchEnabled: chatRequest.web_search,
+          requirement,
+          modelPolicy: 'required_only',
+          surface: 'web',
+        }),
+      ).toBe(false);
+    },
+  );
+
   it('does not implicitly activate streaming-only tools on a non-streaming request', () => {
     const chatRequest = request({ stream: false });
 

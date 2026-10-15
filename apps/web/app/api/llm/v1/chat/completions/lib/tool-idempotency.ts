@@ -10,6 +10,7 @@ import 'server-only';
  * and blocking it would cost the turn its answer.
  */
 import { logger } from '@/lib/logger';
+import type { KeyValueStore } from '@agiworkforce/key-value';
 import { getKeyValueStore } from '@/lib/server/key-value';
 
 import type { CloudAgentToolRetrySafety, ToolLoopToolResult } from './tool-loop';
@@ -30,10 +31,14 @@ const KEY_SEPARATOR = ':';
 const MAX_STORED_RESULT_BYTES = 16 * 1024;
 
 const SETTLED_WITHOUT_RESULT = 'settled';
+const CLAIMED_UNSETTLED = 'claimed';
 
 interface SettledToolRecord {
   result?: ToolLoopToolResult;
 }
+
+type StoredToolRecord =
+  SettledToolRecord | typeof SETTLED_WITHOUT_RESULT | typeof CLAIMED_UNSETTLED;
 
 export function resolveToolIdempotencyWindowMs(
   environment: Readonly<Record<string, string | undefined>> = process.env,
@@ -59,39 +64,66 @@ export function alreadySettledMessage(toolName: string): string {
   return `Tool "${toolName}" already ran for this step and was not run again. Its result is in the conversation above.`;
 }
 
-function storableRecord(
-  result: ToolLoopToolResult,
-): SettledToolRecord | typeof SETTLED_WITHOUT_RESULT {
+export function claimUnconfirmedMessage(toolName: string): string {
+  return (
+    `Tool "${toolName}" was not run: the record that stops it running twice could not be ` +
+    'written. Tell the user it did not run; do not retry it on this turn.'
+  );
+}
+
+export function outcomeUnknownMessage(toolName: string): string {
+  return (
+    `Tool "${toolName}" may already have run for this step, but its outcome was never ` +
+    'recorded, so it was not run again. Tell the user the outcome is unknown; do not say it ' +
+    'succeeded or failed.'
+  );
+}
+
+function storableRecord(result: ToolLoopToolResult): StoredToolRecord {
   const serialized = JSON.stringify({ result });
   return serialized.length > MAX_STORED_RESULT_BYTES ? SETTLED_WITHOUT_RESULT : { result };
 }
 
-async function readSettled(idempotencyKey: string): Promise<SettledToolRecord | null> {
-  const store = getKeyValueStore();
-  if (!store) return null;
+type ClaimOutcome = 'claimed' | 'taken' | 'unavailable';
+
+async function claimCall(
+  store: KeyValueStore,
+  idempotencyKey: string,
+  windowMs: number,
+): Promise<ClaimOutcome> {
   try {
-    const raw = await store.get<SettledToolRecord | typeof SETTLED_WITHOUT_RESULT>(
-      settledKey(idempotencyKey),
-    );
-    if (raw === null || raw === undefined) return null;
-    if (raw === SETTLED_WITHOUT_RESULT) return {};
-    return typeof raw === 'object' ? raw : {};
+    const claimed = await store.set(settledKey(idempotencyKey), CLAIMED_UNSETTLED, {
+      onlyIfAbsent: true,
+      ttlSeconds: Math.ceil(windowMs / MS_PER_SECOND),
+    });
+    return claimed ? 'claimed' : 'taken';
   } catch (error) {
     logger.error(
       { error, idempotencyKey },
-      '[tool-idempotency] settled lookup failed; the call may run again',
+      '[tool-idempotency] claim failed; the retry-unsafe call is refused rather than risk a second run',
     );
-    return null;
+    return 'unavailable';
+  }
+}
+
+async function readRecord(
+  store: KeyValueStore,
+  idempotencyKey: string,
+): Promise<StoredToolRecord | null | 'unreadable'> {
+  try {
+    return (await store.get<StoredToolRecord>(settledKey(idempotencyKey))) ?? null;
+  } catch (error) {
+    logger.error({ error, idempotencyKey }, '[tool-idempotency] claimed record unreadable');
+    return 'unreadable';
   }
 }
 
 async function recordSettled(
+  store: KeyValueStore,
   idempotencyKey: string,
   result: ToolLoopToolResult,
   windowMs: number,
 ): Promise<void> {
-  const store = getKeyValueStore();
-  if (!store) return;
   try {
     await store.set(settledKey(idempotencyKey), storableRecord(result), {
       ttlSeconds: Math.ceil(windowMs / MS_PER_SECOND),
@@ -99,7 +131,18 @@ async function recordSettled(
   } catch (error) {
     logger.error(
       { error, idempotencyKey },
-      '[tool-idempotency] settlement was not recorded; a retry may run the call again',
+      '[tool-idempotency] settlement was not recorded; a retry reports the outcome as unknown',
+    );
+  }
+}
+
+async function releaseClaim(store: KeyValueStore, idempotencyKey: string): Promise<void> {
+  try {
+    await store.delete(settledKey(idempotencyKey));
+  } catch (error) {
+    logger.error(
+      { error, idempotencyKey },
+      '[tool-idempotency] paused call kept its claim; the resume round is keyed separately',
     );
   }
 }
@@ -112,29 +155,50 @@ export interface GuardedToolExecution {
 }
 
 /**
- * Fails OPEN on a store problem: an unreadable record runs the tool rather than
- * failing the turn, which is the same trade the route health store makes and
- * the only one that keeps a Redis outage from taking chat down.
+ * A retry-unsafe call claims its key atomically before it runs, so a concurrent
+ * attempt or a retry after a lost process finds the claim rather than nothing.
+ * A claim that cannot be written refuses the call: running it unrecorded is the
+ * duplicate this guard exists to stop. A deployment with no key-value store
+ * configured has no record to claim and runs the call as before.
  */
 export async function runToolCallOnce(
   execution: GuardedToolExecution,
 ): Promise<ToolLoopToolResult> {
   if (execution.retrySafety === 'safe') return execution.execute();
+  const store = getKeyValueStore();
+  if (!store) return execution.execute();
 
-  const settled = await readSettled(execution.idempotencyKey);
-  if (settled) {
+  const { idempotencyKey, toolName } = execution;
+  const windowMs = resolveToolIdempotencyWindowMs();
+  const claim = await claimCall(store, idempotencyKey, windowMs);
+  if (claim === 'unavailable') {
+    return { content: claimUnconfirmedMessage(toolName), isError: true, unavailable: true };
+  }
+  if (claim === 'taken') {
+    const prior = await readRecord(store, idempotencyKey);
+    if (prior === 'unreadable') {
+      return { content: claimUnconfirmedMessage(toolName), isError: true, unavailable: true };
+    }
+    if (prior !== null && prior !== CLAIMED_UNSETTLED) {
+      logger.warn(
+        { idempotencyKey, tool: toolName },
+        '[tool-idempotency] refusing to run a tool call this step already settled',
+      );
+      return prior === SETTLED_WITHOUT_RESULT || !prior.result
+        ? { content: alreadySettledMessage(toolName), isError: false }
+        : prior.result;
+    }
     logger.warn(
-      { idempotencyKey: execution.idempotencyKey, tool: execution.toolName },
-      '[tool-idempotency] refusing to run a tool call this step already settled',
+      { idempotencyKey, tool: toolName },
+      '[tool-idempotency] call already claimed and never settled; outcome unknown',
     );
-    return settled.result ?? { content: alreadySettledMessage(execution.toolName), isError: false };
+    return { content: outcomeUnknownMessage(toolName), isError: true };
   }
 
   const result = await execution.execute();
   // A call that paused for input has not settled: recording it here would make
   // the resume round replay the pause instead of finishing the call.
-  if (!result.inputRequired) {
-    await recordSettled(execution.idempotencyKey, result, resolveToolIdempotencyWindowMs());
-  }
+  if (result.inputRequired) await releaseClaim(store, idempotencyKey);
+  else await recordSettled(store, idempotencyKey, result, windowMs);
   return result;
 }

@@ -196,7 +196,11 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     processed.llmRequest.tool_choice = { type: 'function', function: { name: EXECUTE_CODE_TOOL } };
     const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
 
-    expect(runCode).toHaveBeenCalledWith({ language: 'python', code: 'print(1+1)' });
+    expect(runCode).toHaveBeenCalledWith({
+      language: 'python',
+      code: 'print(1+1)',
+      signal: expect.any(AbortSignal),
+    });
     expect(dispose).toHaveBeenCalled();
 
     expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(2);
@@ -706,6 +710,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     expect(runCode).toHaveBeenCalledExactlyOnceWith({
       language: 'python',
       code: "print('CANCEL_RECOVERY_OK')",
+      signal: expect.any(AbortSignal),
     });
     expect(output).toContain('CANCEL_RECOVERY_OK');
     expect(output).not.toContain('<tool_call>');

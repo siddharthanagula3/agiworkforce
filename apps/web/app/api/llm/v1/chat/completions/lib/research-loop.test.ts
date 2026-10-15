@@ -56,6 +56,7 @@ import {
   parseDroppedPlanSteps,
   deriveResearchGaps,
   hasDiminishingReturns,
+  rankResearchResults,
   type ResearchRunReport,
 } from './research-loop';
 import { DEFAULT_RESEARCH_DELIVERABLE, type ResearchStep } from '@agiworkforce/types';
@@ -288,6 +289,35 @@ describe('SourceAggregator', () => {
     const agg = new SourceAggregator(createResearchDomainPolicy({ allow: ['nature.com'] }));
 
     expect(agg.add({ url: '/api/files/abc', title: 'My saved notes' })).toBe(true);
+  });
+});
+
+describe('rankResearchResults', () => {
+  it('keeps an opaque provider token out of the snippet the aggregator stores', () => {
+    const ranked = rankResearchResults(
+      [
+        {
+          type: 'web_search_result',
+          url: 'https://a.example/report',
+          title: 'Report',
+          encrypted_content: `Ev0D${'Qx9kLm2Pz7Rt'.repeat(12)}`,
+        },
+        {
+          type: 'web_search_result',
+          url: 'https://b.example/guide',
+          title: 'Guide',
+          encrypted_content: 'A readable summary of the guide.',
+        },
+      ],
+      'report guide',
+    );
+
+    expect(ranked.find((result) => result.url === 'https://a.example/report')?.snippet).toBe(
+      undefined,
+    );
+    expect(ranked.find((result) => result.url === 'https://b.example/guide')?.snippet).toBe(
+      'A readable summary of the guide.',
+    );
   });
 });
 

@@ -321,12 +321,26 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
       }),
     );
 
-    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('github', 'get_pull_request_diff', {
-      pull_number: 4,
-    });
-    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('github', 'get_pull_request_diff', {
-      pull_number: 7,
-    });
+    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith(
+      'github',
+      'get_pull_request_diff',
+      {
+        pull_number: 4,
+      },
+      {
+        signal: expect.any(AbortSignal),
+      },
+    );
+    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith(
+      'github',
+      'get_pull_request_diff',
+      {
+        pull_number: 7,
+      },
+      {
+        signal: expect.any(AbortSignal),
+      },
+    );
 
     expect(mockAnthropicStream).toHaveBeenCalledTimes(2);
     const secondStepChatRequest = mockAnthropicStream.mock.calls[1]?.[0] as {
@@ -390,10 +404,24 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
       }),
     );
 
-    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('fs', 'list_directory', { path: '/' });
-    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('github', 'get_pull_request_diff', {
-      pull_number: 1,
-    });
+    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith(
+      'fs',
+      'list_directory',
+      { path: '/' },
+      {
+        signal: expect.any(AbortSignal),
+      },
+    );
+    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith(
+      'github',
+      'get_pull_request_diff',
+      {
+        pull_number: 1,
+      },
+      {
+        signal: expect.any(AbortSignal),
+      },
+    );
     expect(mockAnthropicStream).toHaveBeenCalledTimes(3);
     expect(output).toContain('Done.');
     expect(output).toContain('data: [DONE]');

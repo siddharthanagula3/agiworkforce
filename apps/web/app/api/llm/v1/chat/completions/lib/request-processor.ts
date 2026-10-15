@@ -459,6 +459,11 @@ import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { FAST_MODE_CAPABILITY, WORK_CAPABILITY } from '@/lib/feature-flags/kill-switches';
 import { PAID_UPGRADE_ACCESS_NOTE } from '@/lib/billing/paid-upgrade-copy';
 import { CHAT_TURN_PHASE } from './turn-phases';
+import {
+  applyTurnToolProhibition,
+  resolveTurnToolProhibition,
+  type TurnToolProhibition,
+} from './turn-tool-prohibition';
 
 export const ChatCompletionRequestSchema = z
   .object({
@@ -1353,6 +1358,7 @@ export type ProcessedRequest = {
    */
   executionRequirement?: CodeExecutionRequirement;
   executionEnforcement?: RequiredExecutionEnforcement;
+  turnToolProhibition?: TurnToolProhibition;
   /**
    * The files attached to the turn being sent, with their bytes. Carried so the
    * tool loop can put them in the execution sandbox the moment it acquires one,
@@ -4003,6 +4009,11 @@ async function processAdmittedRequest(
     taskType: resolvedTaskType,
     planTier: subscription.plan_tier,
   });
+  const turnToolProhibition = resolveTurnToolProhibition(lastUserText, {
+    surface: chatSurface,
+    searchRequested: chatRequest.search_requested === true,
+  });
+  applyTurnToolProhibition(chatRequest, turnToolProhibition);
   resolvedTaskType = resolveToolAwareTaskType(resolvedTaskType, chatRequest);
   const requestedMaxOutputTokens = chatRequest.max_tokens ?? chatRequest.max_completion_tokens;
   const initialResponseBudget =
@@ -4960,7 +4971,7 @@ async function processAdmittedRequest(
     (!freeTrialEnabled || fitsFreeTrialWindow(placesSearchMicrousdPerCall()));
   const placesRequirement = resolvePlacesRequirement({
     userMessage: lastUserText,
-    toolsCapable: resolvedModelCaps?.tools ?? true,
+    toolsCapable: (resolvedModelCaps?.tools ?? true) && turnToolProhibition?.allTools !== true,
     stream: chatRequest.stream,
     backendConfigured: placesAvailable,
   });
@@ -5809,6 +5820,7 @@ async function processAdmittedRequest(
     }
     codeExecutionUnavailable = turnCodeExecution.unavailable;
   }
+  if (turnToolProhibition?.allTools) resolvedTools = undefined;
 
   const autoMemoryFactsRequireToolFreeTurn = !managedMemoryPolicy.allowToolAssistedGeneration;
   if (autoMemoryFactsRequireToolFreeTurn && isUnreportedToolAssistedTurn(chatRequest)) {
@@ -5994,12 +6006,13 @@ async function processAdmittedRequest(
     max_tokens: maxTokens,
     stream: chatRequest.stream,
     tools: resolvedTools as unknown[] | undefined,
-    tool_choice:
-      executionEnforcement.toolChoice ??
-      placesEnforcement.toolChoice ??
-      searchEnforcement.toolChoice ??
-      officeOutputToolChoice ??
-      chatRequest.tool_choice,
+    tool_choice: turnToolProhibition?.allTools
+      ? undefined
+      : (executionEnforcement.toolChoice ??
+        placesEnforcement.toolChoice ??
+        searchEnforcement.toolChoice ??
+        officeOutputToolChoice ??
+        chatRequest.tool_choice),
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
     effort: effectiveEffort,
@@ -6196,6 +6209,7 @@ async function processAdmittedRequest(
     searchEnforcement,
     executionRequirement,
     executionEnforcement,
+    ...(turnToolProhibition ? { turnToolProhibition } : {}),
     turnAttachments,
     truncatedAttachments,
     placesRequirement,

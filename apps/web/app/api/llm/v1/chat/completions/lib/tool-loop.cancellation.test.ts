@@ -24,6 +24,8 @@ vi.mock('@/lib/mcp-tool-executor', async () => {
   };
 });
 
+import { CREATE_FOLDER_TOOL, e2bExecutionToolDefs } from '@/lib/e2b/execution-tools';
+import { connectorToolPermissionsFromEntries } from './connector-tool-permissions';
 import { runToolLoop, type ConnectorToolExecutor } from './tool-loop';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import type { ProcessedRequest } from './request-processor';
@@ -144,7 +146,72 @@ describe('runToolLoop, cancellation reaches connector tools', () => {
       'github',
       'get_pull_request_diff',
       { owner: 'acme', repo: 'app', pull_number: 7 },
-      { signal: controller.signal, allowInputRequired: true },
+      { signal: expect.any(AbortSignal), allowInputRequired: true },
+    );
+    const handedSignal = vi.mocked(connectorExecutor).mock.calls[0]?.[3]?.signal;
+    expect(handedSignal?.aborted).toBe(false);
+    controller.abort();
+    expect(handedSignal?.aborted).toBe(true);
+  });
+
+  it('checks for a stop again before each write in a batch', async () => {
+    const writeTool: WebMcpToolDef = {
+      qualifiedName: 'mcp__notes__create_note',
+      serverId: 'notes',
+      toolName: 'create_note',
+      description: 'create a note',
+      origin: 'connector',
+      inputSchema: { type: 'object' },
+    };
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      sseStreamFrom([
+        chunk({
+          tool_calls: [
+            {
+              index: 0,
+              id: 'call_note',
+              function: { name: writeTool.qualifiedName, arguments: JSON.stringify({}) },
+            },
+            {
+              index: 1,
+              id: 'call_folder',
+              function: { name: CREATE_FOLDER_TOOL, arguments: JSON.stringify({ path: 'notes' }) },
+            },
+          ],
+        }),
+        chunk({}, 'tool_calls'),
+      ]),
+    );
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      sseStreamFrom([chunk({ content: 'done' }), chunk({}, 'stop')]),
+    );
+
+    let stopRequested = false;
+    const connectorExecutor: ConnectorToolExecutor = vi.fn(async () => {
+      stopRequested = true;
+      return { handled: true, content: 'saved', isError: false };
+    });
+    const processed = makeProcessed();
+    processed.llmRequest.tools = e2bExecutionToolDefs();
+
+    const output = await drain(
+      runToolLoop(processed, {
+        approvalMode: 'auto',
+        userId: 'user-1',
+        mcpTools: [writeTool],
+        connectorExecutor,
+        toolApprovalPolicy: 'autonomous',
+        connectorPermissions: connectorToolPermissionsFromEntries([
+          { connectorId: 'notes', toolName: 'create_note', level: 'allow' },
+        ]),
+        isCancellationRequested: async () => stopRequested,
+      }),
+    );
+
+    expect(connectorExecutor).toHaveBeenCalledTimes(1);
+    expect(mockGetE2BExecutor).not.toHaveBeenCalled();
+    expect(output).toContain(
+      `Tool \\"${CREATE_FOLDER_TOOL}\\" was not run: the user stopped this run before it started.`,
     );
   });
 });

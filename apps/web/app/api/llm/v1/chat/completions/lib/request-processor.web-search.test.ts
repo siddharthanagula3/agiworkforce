@@ -391,12 +391,131 @@ describe('Free capability gate, model-agnostic web search', () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.chatRequest.code_execution).toBeUndefined();
+      expect(result.chatRequest.code_execution).toBe(false);
       for (const name of ['web_search', 'url_fetch', EXECUTE_CODE_TOOL]) {
         expect(result.llmRequest.tools).not.toContainEqual(
           expect.objectContaining({ function: expect.objectContaining({ name }) }),
         );
       }
+    }
+  });
+
+  it.each([
+    [
+      'R10-Q01',
+      'AUDIT ROUND10 synthetic renderer fidelity test. Do not use tools, web search, connected services, files, images, video, or artifacts. Reply with exactly the following Markdown.\n\n```\nalpha\n```',
+    ],
+    [
+      'R13-02',
+      'Draft an email to Alex about Thursday at 14:00 UTC. Keep it under 100 words. Do not browse, run code, or use external tools.',
+    ],
+  ])('sends no tool and forces none when the turn refuses every tool (%s)', async (id, prompt) => {
+    const result = await processRequest(
+      freeTrialRequest(
+        {
+          model: FREE_CHAT_MODEL,
+          messages: [{ role: 'user', content: prompt }],
+          web_search: true,
+          web_fetch: true,
+          stream: true,
+        },
+        `free-ws-no-tools-${id}`,
+      ),
+      {
+        ok: true,
+        userId: 'user-free',
+        token: 'session-token',
+        boundSurface: 'web',
+        subscription: freeSubscription,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.turnToolProhibition).toEqual({
+        allTools: true,
+        codeExecution: true,
+        webSearch: true,
+      });
+      expect(result.chatRequest).toMatchObject({
+        web_search: false,
+        web_fetch: false,
+        code_execution: false,
+        connector_tools_enabled: false,
+      });
+      expect(result.llmRequest.tools).toBeUndefined();
+      expect(result.llmRequest.tool_choice).toBeUndefined();
+      expect(result.searchRequirement).toEqual({ required: false, source: null });
+      expect(result.executionRequirement).toEqual({ required: false, source: null });
+    }
+  });
+
+  it('does not force a map card on a no-tools Markdown request that mentions a route (R6-03)', async () => {
+    const result = await processRequest(
+      freeTrialRequest(
+        {
+          model: FREE_CHAT_MODEL,
+          messages: [
+            {
+              role: 'user',
+              content:
+                'AUDIT ROUND5 rendering fixture. No search or tools. Return only this content as Markdown, preserving the footnote and task states:\n# Workshop checklist\n- [x] Count 3 boxes\n\nThe route is ready.[^route]\n\n[^route]: Fictional source note: route code CEDAR-482.',
+            },
+          ],
+          x_interactive_cards: { supported: ['map-search.v1'], canRespond: false },
+          stream: true,
+        },
+        'free-ws-no-tools-r6-03',
+      ),
+      {
+        ok: true,
+        userId: 'user-free',
+        token: 'session-token',
+        boundSurface: 'web',
+        subscription: freeSubscription,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.turnToolProhibition?.allTools).toBe(true);
+      expect(result.llmRequest.tools).toBeUndefined();
+      expect(result.llmRequest.tool_choice).toBeUndefined();
+    }
+  });
+
+  it('keeps the requested search when Search mode outranks a typed refusal of tools', async () => {
+    const result = await processRequest(
+      freeTrialRequest(
+        {
+          model: FREE_CHAT_MODEL,
+          messages: [
+            { role: 'user', content: 'Latest AI headlines today. Do not use tools or run code.' },
+          ],
+          web_search: true,
+          search_requested: true,
+          stream: true,
+        },
+        'free-ws-no-tools-search-mode',
+      ),
+      {
+        ok: true,
+        userId: 'user-free',
+        token: 'session-token',
+        boundSurface: 'web',
+        subscription: freeSubscription,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.turnToolProhibition).toEqual({
+        allTools: false,
+        codeExecution: true,
+        webSearch: false,
+      });
+      expect(carriesTool(result.llmRequest.tools, 'web_search')).toBe(true);
+      expect(carriesTool(result.llmRequest.tools, EXECUTE_CODE_TOOL)).toBe(false);
     }
   });
 

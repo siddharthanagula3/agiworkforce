@@ -233,6 +233,34 @@ describe('withToolTimeout, per-tool-call wall-clock bound', () => {
     }
   });
 
+  it('stops a write at the deadline and reports its outcome as unknown', async () => {
+    vi.useFakeTimers();
+    try {
+      const abort = new AbortController();
+      const hung = new Promise<{ content: string; isError: boolean }>(() => {
+        /* never settles */
+      });
+      const p = withToolTimeout(hung, 'send_email', 30_000, { abort, write: true });
+      await vi.advanceTimersByTimeAsync(30_000);
+      const r = await p;
+      expect(abort.signal.aborted).toBe(true);
+      expect(r.isError).toBe(true);
+      expect(r.content).toContain('outcome is unknown');
+      expect(r.content).toContain('Do not retry');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not abort a call that settled in time', async () => {
+    const abort = new AbortController();
+    await withToolTimeout(Promise.resolve({ content: 'ok', isError: false }), 'my_tool', 1000, {
+      abort,
+      write: true,
+    });
+    expect(abort.signal.aborted).toBe(false);
+  });
+
   it('converts a rejection into an error result (one tool cannot crash the batch)', async () => {
     const r = await withToolTimeout(Promise.reject(new Error('boom')), 'bad_tool', 1000);
     expect(r.isError).toBe(true);

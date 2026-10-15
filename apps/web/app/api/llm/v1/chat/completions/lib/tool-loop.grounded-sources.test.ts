@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { enrichServerSearchResultsLine } from './tool-loop';
+import { enrichServerSearchResultsLine, serverToolResultSources } from './tool-loop';
 
 /**
  * A grounded source card used to carry a routing redirect for a URL, a bare
@@ -8,6 +8,8 @@ import { enrichServerSearchResultsLine } from './tool-loop';
  * source beside it carried all three. These pin the frame the reader is sent.
  */
 
+const OPAQUE_PROVIDER_TOKEN =
+  'EqoDCioIBhgCIiQ0NGFlNjc2Yy05NThmLTRkNjQtYTQ3ZS0wNzMxNjZhNzE3ODQSDBlC8ePkQx7r9XmXrRoMbXNhdGVzLWNoYXQtMSIwTWQ2ZXF0V3pJcVhqR1RkUmF4eXpWbnZ4c0Y1K1FyNE1PeFRtWlZGU0dKZz0=';
 const REDIRECT = 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZ123';
 
 function frame(content: unknown[]): string {
@@ -116,6 +118,54 @@ describe('enrichServerSearchResultsLine', () => {
       },
     );
     expect(parseFrame(out)[0]).toMatchObject({ title: 'Intel names its next chief' });
+  });
+
+  it('withholds an opaque provider token from the snippet the reader is sent, without a fetch', async () => {
+    const resolveRedirects = vi.fn();
+    const enrichTitles = vi.fn();
+    const out = await enrichServerSearchResultsLine(
+      frame([
+        {
+          type: 'web_search_result',
+          url: 'https://www.w3.org/TR/WCAG22/',
+          title: 'Web Content Accessibility Guidelines (WCAG) 2.2',
+          encrypted_content: OPAQUE_PROVIDER_TOKEN,
+          page_age: '2024-12-12',
+        },
+      ]),
+      { resolveRedirects: resolveRedirects as never, enrichTitles: enrichTitles as never },
+    );
+
+    expect(parseFrame(out)[0]).toMatchObject({
+      url: 'https://www.w3.org/TR/WCAG22/',
+      title: 'Web Content Accessibility Guidelines (WCAG) 2.2',
+      encrypted_content: '',
+    });
+    expect(out).not.toContain(OPAQUE_PROVIDER_TOKEN);
+    expect(resolveRedirects).not.toHaveBeenCalled();
+    expect(enrichTitles).not.toHaveBeenCalled();
+  });
+
+  it('keeps the opaque token out of the receipt sources too', () => {
+    expect(
+      serverToolResultSources([
+        {
+          type: 'web_search_result',
+          url: 'https://www.w3.org/TR/WCAG22/',
+          title: 'WCAG 2.2',
+          encrypted_content: OPAQUE_PROVIDER_TOKEN,
+        },
+        {
+          type: 'web_search_result',
+          url: 'https://example.com',
+          title: 'Example',
+          encrypted_content: 'A readable summary.',
+        },
+      ]),
+    ).toEqual([
+      { url: 'https://www.w3.org/TR/WCAG22/', title: 'WCAG 2.2' },
+      { url: 'https://example.com', title: 'Example', snippet: 'A readable summary.' },
+    ]);
   });
 
   it('passes a line that carries no search results straight through', async () => {

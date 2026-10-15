@@ -151,6 +151,7 @@ import {
   createAgentEventStreamEmitter,
   createPublicTextDeltaProjector,
 } from './agent-event-stream';
+import { displaySourceSnippet } from '@/lib/sources/display-snippet';
 
 // ─── Bounds ───────────────────────────────────────────────────────────────────
 
@@ -1014,8 +1015,8 @@ export function rankResearchResults(
     const url = typeof record['url'] === 'string' ? record['url'] : '';
     if (!url) return [];
     const title = typeof record['title'] === 'string' ? record['title'] : undefined;
-    const snippetValue = record['encrypted_content'] ?? record['snippet'];
-    const snippet = typeof snippetValue === 'string' ? snippetValue : undefined;
+    const snippet =
+      displaySourceSnippet(record['encrypted_content'] ?? record['snippet']) || undefined;
     const pageAge = record['page_age'] ?? record['date'];
     return [
       {

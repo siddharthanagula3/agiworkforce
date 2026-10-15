@@ -244,6 +244,8 @@ import {
   turnToolCapRowSummary,
   withdrawnToolMessage,
 } from './tool-turn-governor';
+import { prohibitedToolResultMessage, turnProhibitsTool } from './turn-tool-prohibition';
+import { displaySourceSnippet } from '@/lib/sources/display-snippet';
 import { resolveNativeSearchMaxUses } from './request-processor';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
 import { managedCloudE2BSessionScope, type E2BSessionScope } from '@/lib/e2b/session-store';
@@ -1542,15 +1544,32 @@ export async function trimToolResultHistoryKeepingReferences(
   return selected.size;
 }
 
+function timedOutWriteMessage(toolName: string, timeoutMs: number): string {
+  return (
+    `Tool ${toolName} did not finish within ${timeoutMs / 1000}s and was stopped. It may already ` +
+    'have taken effect, so its outcome is unknown. Do not retry it; tell the user the outcome is ' +
+    'unknown.'
+  );
+}
+
+/**
+ * The deadline stops the call, not just the wait: `abort` is the controller
+ * whose signal the executor was given. A write that ran out of time may still
+ * have landed, so it is reported as unknown rather than as failed.
+ */
 export function withToolTimeout(
   run: Promise<ToolLoopToolResult>,
   toolName: string,
   timeoutMs: number,
+  onTimeout: { abort?: AbortController; write?: boolean } = {},
 ): Promise<ToolLoopToolResult> {
   return new Promise<ToolLoopToolResult>((resolve) => {
     const timer = setTimeout(() => {
+      onTimeout.abort?.abort(new Error(`Tool ${toolName} exceeded its ${timeoutMs}ms deadline`));
       resolve({
-        content: `Tool ${toolName} timed out after ${timeoutMs / 1000}s and was abandoned.`,
+        content: onTimeout.write
+          ? timedOutWriteMessage(toolName, timeoutMs)
+          : `Tool ${toolName} timed out after ${timeoutMs / 1000}s and was abandoned.`,
         isError: true,
       });
     }, timeoutMs);
@@ -1606,8 +1625,8 @@ export function serverToolResultSources(content: unknown[]): FetchedSource[] {
     const url = obj['url'];
     if (typeof url !== 'string') continue;
     const title = typeof obj['title'] === 'string' ? obj['title'] : '';
-    const snippet = obj['encrypted_content'];
-    sources.push(typeof snippet === 'string' && snippet ? { url, title, snippet } : { url, title });
+    const snippet = displaySourceSnippet(obj['encrypted_content']);
+    sources.push(snippet ? { url, title, snippet } : { url, title });
   }
   return sources;
 }
@@ -1653,11 +1672,19 @@ export async function enrichServerSearchResultsLine(
   const content = block?.['content'];
   if (!Array.isArray(content)) return line;
 
+  let opaqueSnippetWithheld = false;
   const rows = content.flatMap((entry, index) => {
     if (!entry || typeof entry !== 'object') return [];
     const record = entry as Record<string, unknown>;
     if (record['type'] !== 'web_search_result' || typeof record['url'] !== 'string') return [];
     const reported = typeof record['title'] === 'string' ? record['title'] : '';
+    const reportedSnippet =
+      typeof record['encrypted_content'] === 'string' ? record['encrypted_content'] : '';
+    const snippet = displaySourceSnippet(reportedSnippet);
+    if (snippet !== reportedSnippet) {
+      record['encrypted_content'] = snippet;
+      opaqueSnippetWithheld = true;
+    }
     return [
       {
         index,
@@ -1666,13 +1693,16 @@ export async function enrichServerSearchResultsLine(
         // card already shows beneath the headline. Treated as absent so the
         // page's real title fills the line instead of repeating the host.
         title: isBareDomainTitle(reported) ? '' : reported,
-        snippet: typeof record['encrypted_content'] === 'string' ? record['encrypted_content'] : '',
+        snippet,
+        reportedSnippet: reportedSnippet.length > 0,
         date: typeof record['page_age'] === 'string' ? record['page_age'] : '',
       },
     ];
   });
-  if (rows.length === 0) return line;
-  if (rows.every((row) => row.title && row.snippet && row.date)) return line;
+  const projectedLine = (): SseLine =>
+    opaqueSnippetWithheld ? `data: ${JSON.stringify(event)}\n\n` : line;
+  if (rows.length === 0) return projectedLine();
+  if (rows.every((row) => row.title && row.reportedSnippet && row.date)) return projectedLine();
 
   const resolved = await (overrides.resolveRedirects ?? resolveRoutingRedirectUrls)(rows);
   const enriched = await (overrides.enrichTitles ?? enrichWebSearchResultTitles)(resolved);
@@ -3326,6 +3356,10 @@ export async function executeOfferedToolCall(
     };
   }
 
+  const callAbort = new AbortController();
+  const callSignal = input.signal
+    ? AbortSignal.any([input.signal, callAbort.signal])
+    : callAbort.signal;
   const sessionScope = conversationId
     ? managedCloudE2BSessionScope(userId, conversationId)
     : undefined;
@@ -3384,7 +3418,7 @@ export async function executeOfferedToolCall(
               const { executor } = await resolveExecutor();
               if (executor) await writeSandboxSeedFiles(executor, files, { conversationId });
             },
-            ...(input.signal ? { signal: input.signal } : {}),
+            signal: callSignal,
           },
         );
         span.setAttributes({ [OBSERVABILITY_ATTRIBUTE.toolStatus]: toolSpanStatus(result) });
@@ -3393,6 +3427,7 @@ export async function executeOfferedToolCall(
     );
 
   const startedAt = Date.now();
+  const retrySafety = resolveToolRetrySafety(toolName);
   const result = await withToolTimeout(
     runToolCallOnce({
       idempotencyKey: toolInvocationIdempotencyKey({
@@ -3402,12 +3437,13 @@ export async function executeOfferedToolCall(
         userId,
         organizationId,
       }),
-      retrySafety: resolveToolRetrySafety(toolName),
+      retrySafety,
       toolName,
       execute,
     }),
     toolName,
     TOOL_CALL_DEADLINE_MS,
+    { abort: callAbort, write: !isReadOnlyTool(toolName) },
   );
   const elapsedMs = Math.max(0, Date.now() - startedAt);
 
@@ -3525,7 +3561,8 @@ export async function* runToolLoop(
   }
 
   const deviceHost: DesktopHostDeclaration | undefined = processed.deviceHost;
-  const mcpTools = options.mcpTools ?? [];
+  const turnToolProhibition = processed.turnToolProhibition;
+  const mcpTools = turnToolProhibition?.allTools ? [] : (options.mcpTools ?? []);
   const googleHostedServerIds = googleHostedServerIdsOf(mcpTools);
   // Schemas are admitted against a byte budget rather than sent whole, so the
   // prompt payload stays bounded as the connected count grows. Nothing is
@@ -3729,6 +3766,10 @@ export async function* runToolLoop(
       'this run is unattended, so it cannot ask a human to approve an action that could send data ' +
       'off the system. Do not retry it; report this to the user instead of continuing.'
     );
+  }
+
+  function stoppedBeforeCallMessage(qualifiedName: string): string {
+    return `Tool "${qualifiedName}" was not run: the user stopped this run before it started.`;
   }
 
   async function shouldStopForCancellation(): Promise<boolean> {
@@ -4843,6 +4884,13 @@ export async function* runToolLoop(
     const results: Array<{ tc: PendingToolCall } & ToolLoopToolResult> = [];
 
     const executeTool = (tc: PendingToolCall): Promise<ToolLoopToolResult> => {
+      if (turnProhibitsTool(turnToolProhibition, tc.qualifiedName)) {
+        return Promise.resolve({
+          content: prohibitedToolResultMessage(tc.qualifiedName),
+          isError: true,
+          unavailable: true,
+        });
+      }
       const resumeInput = suspendContext.resumeInput?.get(tc.id);
       const budget = toolGovernor.countCall();
       if (!budget.withinCap) {
@@ -4901,6 +4949,10 @@ export async function* runToolLoop(
         }
       }
       const searchCallOrdinal = webSearchCallsUsed;
+      const callAbort = new AbortController();
+      const callSignal = options.signal
+        ? AbortSignal.any([options.signal, callAbort.signal])
+        : callAbort.signal;
       const executeUntraced = async (): Promise<ToolLoopToolResult> => {
         if (connectorPermissions.isSessionGranted?.(tc.qualifiedName)) {
           if (!options.sessionGrantRefusal)
@@ -4971,7 +5023,7 @@ export async function* runToolLoop(
               ...(processed.chatRequest?.client_timezone
                 ? { clientTimeZone: processed.chatRequest.client_timezone }
                 : {}),
-              ...(options.signal ? { signal: options.signal } : {}),
+              signal: callSignal,
               ...(allowConnectorInputRequired ? { allowInputRequired: true } : {}),
               ...(resumeInput ? { inputResponses: resumeInput.inputResponses } : {}),
               ...(resumeInput?.requestState ? { requestState: resumeInput.requestState } : {}),
@@ -5061,6 +5113,7 @@ export async function* runToolLoop(
         run,
         tc.qualifiedName,
         nestedDeadlineMs(TOOL_CALL_DEADLINE_MS, maxDurationMs, now() - startedAt),
+        { abort: callAbort, write: !isReadOnlyTool(tc.qualifiedName) },
       );
     };
 
@@ -5071,6 +5124,10 @@ export async function* runToolLoop(
     results.push(...parallelResults);
 
     for (const tc of mutating) {
+      if (await shouldStopForCancellation()) {
+        results.push({ tc, content: stoppedBeforeCallMessage(tc.qualifiedName), isError: true });
+        continue;
+      }
       const result = await executeTool(tc);
       results.push({ tc, ...result });
     }
@@ -6481,10 +6538,15 @@ export async function* runToolLoop(
       }
       messages.push(assistantMessage);
 
-      const gatedCalls = pendingToolCalls.map((tc) => ({
-        tc,
-        gate: gateForToolCall(tc, pendingToolCalls),
-      }));
+      const prohibitedCalls = pendingToolCalls.filter((tc) =>
+        turnProhibitsTool(turnToolProhibition, tc.qualifiedName),
+      );
+      const gatedCalls = pendingToolCalls
+        .filter((tc) => !prohibitedCalls.includes(tc))
+        .map((tc) => ({
+          tc,
+          gate: gateForToolCall(tc, pendingToolCalls),
+        }));
       const blockedCalls = gatedCalls.filter((entry) => entry.gate.verdict === 'deny');
       const approvalCalls = gatedCalls.filter((entry) => entry.gate.verdict === 'ask');
       const allowedCalls = gatedCalls
@@ -6501,20 +6563,29 @@ export async function* runToolLoop(
           ? allowedCalls.filter((call) => !isDeviceStepTool(call.qualifiedName))
           : allowedCalls;
 
-      for (const { tc, gate } of blockedCalls) {
-        const escalationDenied = gate.reason === 'lethal_trifecta';
+      const refusedCalls = [...prohibitedCalls.map((tc) => ({ tc, gate: null })), ...blockedCalls];
+      for (const { tc, gate } of refusedCalls) {
+        const escalationDenied = gate?.reason === 'lethal_trifecta';
         logger.warn(
-          { tool: tc.qualifiedName, requestId: processed.requestId, reason: gate.reason },
-          escalationDenied
-            ? '[tool-loop] egress escalation denied on an unattended run: untrusted content + sensitive source + egress path, no human to approve'
-            : '[tool-loop] tool call blocked by the user permission store',
+          {
+            tool: tc.qualifiedName,
+            requestId: processed.requestId,
+            reason: gate?.reason ?? 'turn_prohibition',
+          },
+          gate === null
+            ? '[tool-loop] tool call refused: the user ruled this tool out for the turn'
+            : escalationDenied
+              ? '[tool-loop] egress escalation denied on an unattended run: untrusted content + sensitive source + egress path, no human to approve'
+              : '[tool-loop] tool call blocked by the user permission store',
         );
         const content = await applyToolResultSecretPolicy(
           options.userId,
           tc.qualifiedName,
-          escalationDenied
-            ? refusedToolResultMessage(tc.qualifiedName)
-            : blockedToolResultMessage(tc.qualifiedName),
+          gate === null
+            ? prohibitedToolResultMessage(tc.qualifiedName)
+            : escalationDenied
+              ? refusedToolResultMessage(tc.qualifiedName)
+              : blockedToolResultMessage(tc.qualifiedName),
         );
         await auditToolCall(tc.qualifiedName, 'blocked');
         const blockedCategory = canonicalToolCategory(tc.qualifiedName, mcpTools);

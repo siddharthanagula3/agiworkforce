@@ -203,6 +203,63 @@ describe('runCloudCodeAgentTurn', () => {
     expect(result.stopReason).toBe('done');
   });
 
+  it('runs an approved command through the injected step executor', async () => {
+    const runner = runnerStub();
+    const toolExecutor = vi.fn(async (step: { execute: () => Promise<unknown> }) =>
+      step.execute(),
+    ) as never;
+    await runCloudCodeAgentTurn({
+      ...baseInput,
+      adapter: adapterFor([textTurn('Removed the build directory.')]),
+      runner,
+      priorMessages: [{ role: 'user', content: 'Fix the failing test' }],
+      preApproved: {
+        toolUseId: 't1',
+        toolName: 'run_command',
+        args: { command: 'rm -rf build' },
+        approved: true,
+      },
+      toolExecutor,
+    });
+    expect(toolExecutor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationKey: 'tool:0:t1',
+        toolName: 'run_command',
+        args: { command: 'rm -rf build' },
+        retrySafety: 'unsafe',
+      }),
+    );
+    expect(runner.runCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['an aborted signal', { signal: AbortSignal.abort() }],
+    ['a stop requested elsewhere', { isCancelled: () => true }],
+  ])('does not run an approved command after %s', async (_label, stop) => {
+    const runner = runnerStub();
+    const stream = vi.fn();
+    const result = await runCloudCodeAgentTurn({
+      ...baseInput,
+      ...stop,
+      adapter: { ...adapterFor([]), stream } as unknown as ProviderAdapter,
+      runner,
+      priorMessages: [{ role: 'user', content: 'Fix the failing test' }],
+      preApproved: {
+        toolUseId: 't1',
+        toolName: 'run_command',
+        args: { command: 'rm -rf build' },
+        approved: true,
+      },
+    });
+    expect(runner.runCommand).not.toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
+    expect(result.stopReason).toBe('cancelled');
+    const blocks = result.messages.flatMap((m) =>
+      Array.isArray(m.content) ? m.content : [],
+    ) as ToolResultBlock[];
+    expect(String(blocks[0]?.content)).toContain('Not run: the session was stopped');
+  });
+
   it('tells the model when the user rejects, rather than silently continuing', async () => {
     const runner = runnerStub();
     const result = await runCloudCodeAgentTurn({

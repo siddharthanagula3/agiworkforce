@@ -395,14 +395,43 @@ export async function runCloudCodeAgentTurn(
   let stepsUsed = 0;
   let finalMessage = '';
 
+  // Only the branches that actually reach the workspace go through the
+  // executor. A refusal and an unknown tool produce their answer here and
+  // touch nothing, so recording them as durable steps would be ceremony.
+  const runToolStep = (
+    step: number,
+    toolUseId: string,
+    toolName: string,
+    args: Record<string, unknown>,
+    execute: () => Promise<CloudCodeToolOutcome>,
+  ): Promise<CloudCodeToolOutcome> =>
+    input.toolExecutor
+      ? input.toolExecutor({
+          operationKey: `${TOOL_OPERATION_PREFIX}${step}:${toolUseId}`,
+          step,
+          toolName,
+          args,
+          retrySafety: cloudCodeToolRetrySafety(toolName),
+          execute,
+        })
+      : execute();
+
   if (input.preApproved) {
     const { toolUseId, toolName, args, approved } = input.preApproved;
-    const outcome: CloudCodeToolOutcome = approved
-      ? await runApprovedTool(input.runner, toolName, args, commandDeadlineMs())
-      : {
-          output: `The user declined to run: ${cloudCodeActionLabel(toolName, args)}`,
+    const stoppedBeforeRun = approved && (input.signal.aborted || input.isCancelled?.() === true);
+    const outcome: CloudCodeToolOutcome = stoppedBeforeRun
+      ? {
+          output: `Not run: the session was stopped before ${cloudCodeActionLabel(toolName, args)} started.`,
           isError: true,
-        };
+        }
+      : approved
+        ? await runToolStep(stepsUsed, toolUseId, toolName, args, () =>
+            runApprovedTool(input.runner, toolName, args, commandDeadlineMs()),
+          )
+        : {
+            output: `The user declined to run: ${cloudCodeActionLabel(toolName, args)}`,
+            isError: true,
+          };
     messages.push({ role: 'user', content: [toolResultBlock(toolUseId, outcome)] });
     await input.onEvent?.({
       type: 'tool-end',
@@ -412,6 +441,15 @@ export async function runCloudCodeAgentTurn(
       output: outcome.output,
       isError: outcome.isError,
     });
+    if (stoppedBeforeRun) {
+      return {
+        stopReason: 'cancelled',
+        stepsUsed,
+        finalMessage,
+        messages,
+        usage: createObservedProviderUsage(),
+      };
+    }
   }
 
   const approvalPolicy = input.approvalPolicy ?? CLOUD_CODE_DEFAULT_APPROVAL_POLICY;
@@ -520,23 +558,6 @@ export async function runCloudCodeAgentTurn(
 
       let outcome: CloudCodeToolOutcome;
 
-      // Only the branches that actually reach the workspace go through the
-      // executor. A refusal and an unknown tool produce their answer here and
-      // touch nothing, so recording them as durable steps would be ceremony.
-      const runToolStep = (
-        execute: () => Promise<CloudCodeToolOutcome>,
-      ): Promise<CloudCodeToolOutcome> =>
-        input.toolExecutor
-          ? input.toolExecutor({
-              operationKey: `${TOOL_OPERATION_PREFIX}${stepsUsed}:${call.id}`,
-              step: stepsUsed,
-              toolName: call.name,
-              args: call.input,
-              retrySafety: cloudCodeToolRetrySafety(call.name),
-              execute,
-            })
-          : execute();
-
       const shellCommand =
         call.name === CLOUD_CODE_RUN_COMMAND_TOOL
           ? { command: typeof call.input['command'] === 'string' ? call.input['command'] : '' }
@@ -577,7 +598,7 @@ export async function runCloudCodeAgentTurn(
             },
           };
         } else {
-          outcome = await runToolStep(() =>
+          outcome = await runToolStep(stepsUsed, call.id, call.name, call.input, () =>
             runApprovedTool(input.runner, toolName, args, commandDeadlineMs()),
           );
         }

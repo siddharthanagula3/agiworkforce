@@ -46,6 +46,21 @@ function wireFile(fileName: string, overrides: Record<string, unknown> = {}) {
 }
 
 describe('AssistantTurnSourceCollector', () => {
+  it('persists no summary rather than an opaque provider token', () => {
+    const collector = new AssistantTurnSourceCollector();
+    collector.ingestWireEvent(
+      searchResultsEvent([
+        webResult('https://a.example', 'A', `Ev0D${'Qx9kLm2Pz7Rt'.repeat(12)}`),
+        webResult('https://b.example', 'B', 'A readable summary.'),
+      ]),
+    );
+
+    expect(collector.snapshot()).toMatchObject([
+      { url: 'https://a.example', snippet: '' },
+      { url: 'https://b.example', snippet: 'A readable summary.' },
+    ]);
+  });
+
   it('collects the pages a turn cited, in the order they arrived', () => {
     const collector = new AssistantTurnSourceCollector();
     collector.ingestWireEvent(

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
 import { getModelMetadataById } from '@agiworkforce/types';
 import {
   contextBudgetTokens,
@@ -27,6 +28,26 @@ export interface ContextTrimResult {
   estimatedTokensBefore: number;
   estimatedTokensAfter: number;
   budgetTokens: number;
+  /** Still over budget once everything shrinkable was cut; protected instructions were sent whole. */
+  protectedOverflow?: true;
+}
+
+/**
+ * A system message is policy, format or a turn notice unless it is the dynamic
+ * reference block behind the cache boundary or the span replacement this fit
+ * inserted. Generic shrinking cuts from the end of a message, so cutting policy
+ * silently drops whichever rule came last; it is left whole and an overflow is
+ * reported instead.
+ */
+function isProtectedFromShrinking(
+  message: TrimmableMessage,
+  replacement: TrimmableMessage | null,
+): boolean {
+  return (
+    message.role === 'system' &&
+    message !== replacement &&
+    !message.content.startsWith(SYSTEM_PROMPT_CACHE_BOUNDARY)
+  );
 }
 
 /**
@@ -141,11 +162,13 @@ export function applyDroppedSpanReplacement(
   const next = messages.filter((_, index) => !dropped.has(index));
 
   let running = plan.estimatedTokensBefore;
+  let replacement: TrimmableMessage | null = null;
   if (dropped.size > 0) {
     if (replacementText) {
       let insertAt = 0;
       while (insertAt < next.length && next[insertAt]?.role === 'system') insertAt++;
-      next.splice(insertAt, 0, { role: 'system', content: replacementText });
+      replacement = { role: 'system', content: replacementText };
+      next.splice(insertAt, 0, replacement);
     }
     running = total(next);
   }
@@ -162,6 +185,7 @@ export function applyDroppedSpanReplacement(
       for (let i = next.length - 1; i >= 0 && running > plan.budgetTokens; i--) {
         const message = next[i];
         if (!message || typeof message.content !== 'string') continue;
+        if (isProtectedFromShrinking(message, replacement)) continue;
         const currentTokens = measure(message);
         if (currentTokens <= 16) continue;
         const body = message.content.endsWith(TRUNCATED_MESSAGE_MARKER)
@@ -185,12 +209,21 @@ export function applyDroppedSpanReplacement(
   messages.length = 0;
   messages.push(...next);
 
+  const protectedOverflow = running > plan.budgetTokens;
+  if (protectedOverflow) {
+    logger.warn(
+      { model, estimatedTokensAfter: running, budgetTokens: plan.budgetTokens },
+      '[context-window] protected instructions exceed the budget left after fitting; sent whole',
+    );
+  }
+
   return {
     droppedMessages: dropped.size,
     truncatedMessages: truncated.size,
     estimatedTokensBefore: plan.estimatedTokensBefore,
     estimatedTokensAfter: running,
     budgetTokens: plan.budgetTokens,
+    ...(protectedOverflow ? { protectedOverflow: true as const } : {}),
   };
 }
 
