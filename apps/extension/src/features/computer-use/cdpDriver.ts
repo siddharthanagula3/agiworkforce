@@ -6,6 +6,7 @@ import {
   MAX_CHAT_ATTACHMENT_COUNT,
 } from '@agiworkforce/cloud-contracts';
 import type { ResolvedBrowserUserFile } from './userFileUpload';
+import { toScriptLiteral } from './scriptLiteral';
 import {
   authorizeBrowserToolCapability,
   authorizeBrowserToolUrl,
@@ -420,7 +421,7 @@ async function neutralizeHeldInput(
               'Runtime.callFunctionOn',
               {
                 objectId: fence.focusObjectId,
-                functionDeclaration: `function() { try { return this.isConnected && window.top.location.href === ${JSON.stringify(fence.url)} && (${FOCUSED_FIELD_ELEMENT_JS})(window.top.document) === this && (${ELEMENT_SIGNATURE_JS})(this) === ${JSON.stringify(fence.focusSignature)}; } catch { return false; } }`,
+                functionDeclaration: `function() { try { return this.isConnected && window.top.location.href === ${toScriptLiteral(fence.url)} && (${FOCUSED_FIELD_ELEMENT_JS})(window.top.document) === this && (${ELEMENT_SIGNATURE_JS})(this) === ${toScriptLiteral(fence.focusSignature)}; } catch { return false; } }`,
                 returnByValue: true,
               },
               cleanup.signal,
@@ -428,7 +429,10 @@ async function neutralizeHeldInput(
           : sendDebuggerCommand<CdpObjectResult>(
               tabId,
               'Runtime.evaluate',
-              { expression: `location.href === ${JSON.stringify(fence.url)}`, returnByValue: true },
+              {
+                expression: `location.href === ${toScriptLiteral(fence.url)}`,
+                returnByValue: true,
+              },
               cleanup.signal,
             );
       const state = await readOriginalTarget();
@@ -590,7 +594,7 @@ const ELEMENT_SIGNATURE_JS = `((el) => [
     .slice(0, ${ELEMENT_LABEL_MAX_CHARS}),
 ].join('|'))`;
 
-const DOM_TARGET_HELPERS_JS = `(${createDomTargetHelpers.toString()})(window.top.document, ${ELEMENT_SIGNATURE_JS}, ${JSON.stringify({ maxElements: MAX_DOM_ELEMENTS_FOR_EXTRACTION, maxLocatorCharacters: MAX_CONTEXT_HTML_CHARS, maxDepth: 16 })})`;
+const DOM_TARGET_HELPERS_JS = `(${createDomTargetHelpers.toString()})(window.top.document, ${ELEMENT_SIGNATURE_JS}, ${toScriptLiteral({ maxElements: MAX_DOM_ELEMENTS_FOR_EXTRACTION, maxLocatorCharacters: MAX_CONTEXT_HTML_CHARS, maxDepth: 16 })})`;
 
 const INTERACTABLE_SELECTOR =
   'button,a[href],input,textarea,select,[role="button"],[role="link"],[role="menuitem"],[role="tab"],[role="slider"],[role="checkbox"],[role="switch"],[role="option"],[role="combobox"],[role="textbox"],[role="spinbutton"],[role="radio"],[role="treeitem"],[draggable="true"],[contenteditable]:not([contenteditable="false"]),[tabindex]';
@@ -607,7 +611,7 @@ const RESOLVE_UNIQUE_ELEMENT_JS = `((selector, expectedSignature) => (${DOM_TARG
 
 const POINT_ELEMENT_JS = `((x, y) => {
   const element = (${DOM_TARGET_HELPERS_JS}).pointElement(x, y);
-  return element?.closest(${JSON.stringify(INTERACTABLE_SELECTOR)}) || element;
+  return element?.closest(${toScriptLiteral(INTERACTABLE_SELECTOR)}) || element;
 })`;
 
 /**
@@ -619,7 +623,7 @@ export function buildIndexedElementExpression(
   selector: string,
   expectedSignature?: string,
 ): string {
-  return `${RESOLVE_UNIQUE_ELEMENT_JS}(${JSON.stringify(selector)}, ${JSON.stringify(
+  return `${RESOLVE_UNIQUE_ELEMENT_JS}(${toScriptLiteral(selector)}, ${toScriptLiteral(
     expectedSignature ?? null,
   )})`;
 }
@@ -753,14 +757,14 @@ export function buildUserFileUploadPreparationExpression(
   files: readonly BrowserUploadFilePayload[],
 ): string {
   return `(async () => {
-    if (location.href !== ${JSON.stringify(expectedUrl)}) throw new Error('The page changed before file selection.');
+    if (location.href !== ${toScriptLiteral(expectedUrl)}) throw new Error('The page changed before file selection.');
     const target = ${buildIndexedElementExpression(selector, expectedSignature)};
     let inputType = null;
     try {
       inputType = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'type')?.get?.call(target);
     } catch { inputType = null; }
     if (inputType !== 'file' || target.disabled || target.matches(':disabled')) throw new Error('The approved target is not an enabled file input.');
-    const files = ${JSON.stringify(files)};
+    const files = ${toScriptLiteral(files)};
     if (!target.multiple && files.length > 1) throw new Error('This upload control accepts only one file.');
     if (!crypto.subtle) throw new Error('This page cannot verify approved file bytes.');
     const accepted = target.accept.split(',').map(value => value.trim().toLowerCase()).filter(Boolean);
@@ -776,7 +780,7 @@ export function buildUserFileUploadPreparationExpression(
       if (await digest(file) !== metadata.checksumSha256) throw new Error('Approved file checksum mismatch.');
       transfer.items.add(file);
     }
-    if (location.href !== ${JSON.stringify(expectedUrl)} || !target.isConnected || target.disabled || target.matches(':disabled') || ${ELEMENT_SIGNATURE_JS}(target) !== ${JSON.stringify(expectedSignature)}) throw new Error('The upload target changed before file selection.');
+    if (location.href !== ${toScriptLiteral(expectedUrl)} || !target.isConnected || target.disabled || target.matches(':disabled') || ${ELEMENT_SIGNATURE_JS}(target) !== ${toScriptLiteral(expectedSignature)}) throw new Error('The upload target changed before file selection.');
     return { target, transfer, files: files.map(({ base64, ...metadata }) => metadata) };
   })()`;
 }
@@ -977,7 +981,7 @@ export async function uploadUserFiles(
           throw new Error('The browser could not prepare the approved files.');
         throwIfCdpCancelled(signal);
         await authorizeBrowserToolCapability(expectedUrl, 'upload');
-        const retained = `window.top.location.href === ${JSON.stringify(expectedUrl)} && this.target.isConnected && this.target === ${buildIndexedElementExpression(target.selector, expectedSignature)}`;
+        const retained = `window.top.location.href === ${toScriptLiteral(expectedUrl)} && this.target.isConnected && this.target === ${buildIndexedElementExpression(target.selector, expectedSignature)}`;
         const commit = await sendCommand<CdpObjectResult>(
           tabId,
           'Runtime.callFunctionOn',
@@ -1071,8 +1075,8 @@ async function selectorToCoords(
     {
       objectId,
       functionDeclaration: `function() {
-        if (window.top.location.href !== ${JSON.stringify(originalUrl)} || !this.isConnected || this !== ${buildIndexedElementExpression(selector, expectedSignature)}) throw new Error('The original pointer target changed during reveal.');
-        return (${DOM_TARGET_HELPERS_JS}).pointForElement(this, ${JSON.stringify(preferred)});
+        if (window.top.location.href !== ${toScriptLiteral(originalUrl)} || !this.isConnected || this !== ${buildIndexedElementExpression(selector, expectedSignature)}) throw new Error('The original pointer target changed during reveal.');
+        return (${DOM_TARGET_HELPERS_JS}).pointForElement(this, ${toScriptLiteral(preferred)});
       }`,
       returnByValue: true,
     },
@@ -1144,13 +1148,13 @@ async function assertKnownActivationDestination(
   signal?: AbortSignal,
 ): Promise<ActivationDestination> {
   const target = point
-    ? `${POINT_ELEMENT_JS}(${JSON.stringify(point.x)}, ${JSON.stringify(point.y)})`
+    ? `${POINT_ELEMENT_JS}(${toScriptLiteral(point.x)}, ${toScriptLiteral(point.y)})`
     : `(${FOCUSED_FIELD_ELEMENT_JS})(document)`;
   const expression = `(() => {
     const element = ${target};
     const result = { pageUrl: location.href, targetSignature: element ? (${ELEMENT_SIGNATURE_JS})(element) : null, url: null, kind: 'none' };
     if (!element) return result;
-    const key = ${JSON.stringify(key)};
+    const key = ${toScriptLiteral(key)};
     let current = element;
     let submitter = null;
     let form = null;
@@ -1974,11 +1978,11 @@ export async function selectOption(
       if (remote.exceptionDetails) throw new Error(describeEvalException(remote.exceptionDetails));
       if (!remote.result.objectId) throw new Error('The select target is no longer available.');
       const expression = (mode: 'apply' | 'verify'): string => `function() {
-        if (window.top.location.href !== ${JSON.stringify(originalUrl)}) throw new Error('The select page changed.');
+        if (window.top.location.href !== ${toScriptLiteral(originalUrl)}) throw new Error('The select page changed.');
         const target = this;
         if (!target.isConnected || target !== ${buildIndexedElementExpression(indexed.selector, indexed.signature)}) throw new Error('The original select target changed.');
-        const receipt = (${selectOptionElement.toString()})(target, ${JSON.stringify(choice)}, ${JSON.stringify(mode)});
-        if (window.top.location.href !== ${JSON.stringify(originalUrl)} || !target.isConnected || target !== ${buildIndexedElementExpression(indexed.selector, indexed.signature)}) throw new Error('The select target changed; the site may already have received the change.');
+        const receipt = (${selectOptionElement.toString()})(target, ${toScriptLiteral(choice)}, ${toScriptLiteral(mode)});
+        if (window.top.location.href !== ${toScriptLiteral(originalUrl)} || !target.isConnected || target !== ${buildIndexedElementExpression(indexed.selector, indexed.signature)}) throw new Error('The select target changed; the site may already have received the change.');
         return receipt;
       }`;
       const read = async (mode: 'apply' | 'verify'): Promise<SelectOptionReceipt> => {
@@ -2211,7 +2215,7 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
 
         // Interactable elements with sequential integer indices (P1-2)
         const interactable = [
-          ...inspected.elements.filter(el => el.localName !== 'iframe' && el.localName !== 'frame' && el.matches(${JSON.stringify(INTERACTABLE_SELECTOR)})),
+          ...inspected.elements.filter(el => el.localName !== 'iframe' && el.localName !== 'frame' && el.matches(${toScriptLiteral(INTERACTABLE_SELECTOR)})),
           ...inspected.elements.filter(el => el.matches('main,section,div,ul,ol,article')).slice(0, 2000).filter(el => {
             const style = el.ownerDocument.defaultView.getComputedStyle(el);
             return ((el.scrollHeight > el.clientHeight && /auto|scroll/.test(style.overflowY)) ||
@@ -2269,20 +2273,20 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
           budget -= line.length + 1;
         }
 
-        lines[headerAt] = ${JSON.stringify(ELEMENT_LIST_HEADING)} + idx + ' addressable of ' +
+        lines[headerAt] = ${toScriptLiteral(ELEMENT_LIST_HEADING)} + idx + ' addressable of ' +
           uniqueInteractable.length + ' found):';
         if (inspected.blockedFrames || inspected.limited) lines.push('Some controls were not inspected: cross-origin/inaccessible frames or the bounded snapshot limit. Use a fresh snapshot or manual interaction.');
         lines.push('Open shadow roots and same-origin frames are indexed. Closed shadow interiors are not inspected.');
 
         // Visible text with content fencing (P2-6)
         lines.push('');
-        lines.push(${JSON.stringify(PAGE_CONTENT_FENCE_BEGIN)});
+        lines.push(${toScriptLiteral(PAGE_CONTENT_FENCE_BEGIN)});
         const bodyText = (document.body?.innerText || '').replace(/\\s+/g, ' ').trim();
         const remaining = MAX - lines.join('\\n').length - 50;
         if (remaining > 0) {
           lines.push(bodyText.slice(0, remaining));
         }
-        lines.push(${JSON.stringify(PAGE_CONTENT_FENCE_END)});
+        lines.push(${toScriptLiteral(PAGE_CONTENT_FENCE_END)});
 
         return JSON.stringify({ summary: lines.join('\\n').slice(0, MAX), indexMap });
       })()`,
@@ -2541,7 +2545,7 @@ export async function getFieldValue(
         } catch { inputType = null; }
         if (typeof inputType === 'string') {
           const t = inputType.toLowerCase();
-          if (t === 'password' || t === 'hidden') return ${JSON.stringify(REDACTED_FIELD_PLACEHOLDER)};
+          if (t === 'password' || t === 'hidden') return ${toScriptLiteral(REDACTED_FIELD_PLACEHOLDER)};
           try {
             return Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.get?.call(el) ?? null;
           } catch { return null; }

@@ -294,6 +294,20 @@ describe('resolution refuses anything but the element the index named', () => {
     expect(String(JSON.stringify(result['exceptionDetails']))).toMatch(/No element matches/);
   });
 
+  it('hands a selector with quotes, backslashes, markup and line separators to the page unchanged', () => {
+    const value = `</script>"'\\${String.fromCharCode(0x2028, 0x2029)}`;
+    const probe = document.createElement('span');
+    probe.setAttribute('data-probe', value);
+    document.querySelector('main')!.append(probe);
+    const selector = `main > span[data-probe="${value.replace(/["\\]/g, '\\$&')}"]`;
+    const expression = buildIndexedElementExpression(selector);
+    expect(expression).not.toContain('</script>');
+    const result = evaluateInPage({ expression, returnByValue: false });
+    expect(result['exceptionDetails']).toBeUndefined();
+    const { objectId } = result['result'] as { objectId: string };
+    expect(resolvedObjects.get(objectId)).toBe(probe);
+  });
+
   it('throws when the element at that path is no longer the one indexed', async () => {
     await getPageContent(EVAL_TAB_ID);
     const map = getElementIndexMap(EVAL_TAB_ID);
