@@ -67,6 +67,14 @@ describe('Chrome manifest trust contract', () => {
     expect(manifest['web_accessible_resources']).toBeUndefined();
   });
 
+  it('opens the side panel on a chord Chrome and ChromeOS leave free, so Chrome assigns it', () => {
+    const commands = manifest['commands'] as Record<string, { suggested_key?: unknown }>;
+    expect(commands['_execute_action']?.suggested_key).toEqual({
+      default: 'Alt+Shift+K',
+      mac: 'Command+Shift+K',
+    });
+  });
+
   it('binds page capture to a chord Chrome and ChromeOS leave free, so no browser chord is stolen', () => {
     const commands = manifest['commands'] as Record<string, { suggested_key?: unknown }>;
     expect(commands['capture_page']?.suggested_key).toEqual({
