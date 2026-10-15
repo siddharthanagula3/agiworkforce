@@ -50,9 +50,9 @@ export function buildPanelStyles(): string {
 
     .agi-provider-pill {
       font-size:11px; font-weight:600;
-      background:color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
-      border:1px solid color-mix(in srgb, var(--agi-ext-accent) 34%, transparent);
-      color:var(--agi-ext-accent-text);
+      background:var(--agi-ext-surface);
+      border:1px solid var(--agi-ext-border);
+      color:var(--agi-ext-text-muted);
       border-radius:12px;
       padding:3px 8px;
       margin-right:8px;
@@ -83,17 +83,17 @@ export function buildPanelStyles(): string {
     .agi-action-chip {
       display:inline-flex; align-items:center; gap:4px;
       padding:5px 11px;
-      background:var(--agi-ext-surface); border:1px solid var(--agi-ext-border);
+      background:var(--agi-ext-surface); border:1px solid var(--agi-ext-border-control);
       border-radius:20px;
       font-size:12px; font-weight:500; color:var(--agi-ext-text-muted);
       cursor:pointer;
       transition:background 0.15s,border-color 0.15s,color 0.15s;
       white-space:nowrap;
     }
-    .agi-action-chip:hover {
-      background:var(--agi-ext-hover); border-color:var(--agi-ext-accent); color:var(--agi-ext-accent-text);
+    .agi-action-chip:hover:not(:disabled) {
+      background:var(--agi-ext-hover); color:var(--agi-ext-text);
     }
-    .agi-action-chip:disabled { opacity:0.48; cursor:default; }
+    .agi-action-chip:disabled { color:var(--agi-ext-text-muted); cursor:default; }
 
     /* ── Response area ───────────────────────────────────────────────────── */
     .agi-response-area {
@@ -105,13 +105,13 @@ export function buildPanelStyles(): string {
 
     .agi-response-area:empty::before {
       content:"Ask anything about this page…";
-      color:var(--agi-ext-text-muted); font-style:italic;
+      color:var(--agi-ext-text-placeholder); font-style:italic;
     }
 
     .agi-response-area .agi-thinking {
       display:inline-block;
       width:6px; height:14px;
-      background:var(--agi-ext-accent);
+      background:var(--agi-ext-text-muted);
       border-radius:2px;
       animation:agi-blink 0.9s step-end infinite;
       vertical-align:text-bottom;
@@ -139,11 +139,12 @@ export function buildPanelStyles(): string {
     .agi-access-state-message { color:var(--agi-ext-text-muted); margin-bottom:9px; }
     .agi-access-state--cancelled .agi-access-state-message { margin-bottom:0; }
     .agi-state-action {
-      border:1px solid var(--agi-ext-border-strong); border-radius:999px;
+      border:1px solid var(--agi-ext-border-control); border-radius:999px;
       padding:6px 11px; background:var(--agi-ext-surface); color:var(--agi-ext-text);
       font:inherit; font-weight:600; cursor:pointer;
     }
-    .agi-state-action:hover { background:var(--agi-ext-hover); }
+    .agi-state-action:hover:not(:disabled) { background:var(--agi-ext-hover); }
+    .agi-state-action:disabled { color:var(--agi-ext-text-muted); cursor:wait; }
 
     .agi-disclosure {
       color:var(--agi-ext-text-muted); font-size:11px;
@@ -163,7 +164,7 @@ export function buildPanelStyles(): string {
 
     .agi-textarea {
       flex:1;
-      resize:none; border:1px solid var(--agi-ext-border);
+      resize:none; border:1px solid var(--agi-ext-border-control);
       border-radius:16px; padding:10px 12px;
       font-size:13px; font-family:inherit; color:var(--agi-ext-text);
       background:var(--agi-ext-surface); outline:none;
@@ -172,22 +173,23 @@ export function buildPanelStyles(): string {
       transition:border-color 0.15s,box-shadow 0.15s;
     }
     .agi-textarea:focus-visible {
-      border-color:var(--agi-ext-accent);
+      border-color:var(--agi-ext-focus);
       box-shadow:0 0 0 3px color-mix(in srgb, var(--agi-ext-focus) 20%, transparent);
     }
+    .agi-textarea::placeholder { color:var(--agi-ext-text-placeholder); opacity:1; }
 
     .agi-submit-btn {
       width:34px; height:34px;
-      background:var(--agi-ext-accent);
-      border:none; border-radius:50%; cursor:pointer; color:var(--agi-ext-on-accent);
+      background:var(--agi-ext-primary);
+      border:1px solid var(--agi-ext-border-control); border-radius:50%; cursor:pointer; color:var(--agi-ext-on-primary);
       font-size:16px;
       display:flex; align-items:center; justify-content:center;
       flex-shrink:0;
-      transition:opacity 0.15s,transform 0.15s;
+      transition:background 0.15s,transform 0.15s;
     }
-    .agi-submit-btn:hover { opacity:0.9; }
-    .agi-submit-btn:active { transform:scale(0.93); }
-    .agi-submit-btn:disabled { opacity:0.45; cursor:default; }
+    .agi-submit-btn:hover:not(:disabled) { background:var(--agi-ext-primary-hover); }
+    .agi-submit-btn:active:not(:disabled) { transform:scale(0.93); }
+    .agi-submit-btn:disabled { background:var(--agi-ext-hover); color:var(--agi-ext-text-muted); cursor:default; }
 
     /* ── Footer ──────────────────────────────────────────────────────────── */
     .agi-footer {
@@ -199,15 +201,16 @@ export function buildPanelStyles(): string {
     }
 
     .agi-open-side-panel {
-      background:transparent; border:1px solid var(--agi-ext-border-strong);
+      background:transparent; border:1px solid var(--agi-ext-border-control);
       border-radius:6px; padding:5px 12px;
       font-size:12px; font-weight:500; color:var(--agi-ext-text-muted); cursor:pointer;
       transition:background 0.15s,border-color 0.15s,color 0.15s;
       white-space:nowrap;
     }
-    .agi-open-side-panel:hover {
-      background:var(--agi-ext-hover); border-color:var(--agi-ext-text-muted); color:var(--agi-ext-text);
+    .agi-open-side-panel:hover:not(:disabled) {
+      background:var(--agi-ext-hover); color:var(--agi-ext-text);
     }
+    .agi-open-side-panel:disabled { color:var(--agi-ext-text-muted); cursor:wait; }
 
     button:focus-visible {
       outline:2px solid var(--agi-ext-focus);
@@ -230,7 +233,7 @@ export function buildPanelStyles(): string {
       .agi-panel, .agi-action-chip, .agi-composer, .agi-disclosure,
       .agi-textarea, .agi-access-state, .agi-state-action,
       .agi-open-side-panel { forced-color-adjust:auto; }
-      .agi-provider-pill { color:Highlight; border-color:Highlight; }
+      .agi-provider-pill { color:CanvasText; border-color:CanvasText; }
       .agi-submit-btn { background:Highlight; color:HighlightText; }
       .agi-response-area .agi-thinking { background:Highlight; }
     }

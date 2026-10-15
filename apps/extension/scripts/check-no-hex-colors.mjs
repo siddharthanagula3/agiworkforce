@@ -21,7 +21,6 @@ const MIN_SCANNED_FILES = 20;
  */
 const KNOWN_VIOLATIONS = {
   'src/content.ts': 6,
-  'src/features/cloud-bridge/InviteCodeModal.ts': 3,
   'src/options.ts': 2,
   'src/side_panel.ts': 2,
 };

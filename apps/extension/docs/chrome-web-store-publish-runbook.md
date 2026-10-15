@@ -1,6 +1,6 @@
 # Chrome Web Store Publish Runbook
 
-Canonical release procedure for the existing AGI Browser Companion store item.
+Canonical release procedure for the existing agiworkforce store item.
 
 ## Release boundary
 

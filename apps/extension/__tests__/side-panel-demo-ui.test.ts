@@ -2,6 +2,12 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { getDefaultAutoRoutingProfile } from '@agiworkforce/types';
+import {
+  getManagedEffortControlState,
+  getManagedModelBadgeLabel,
+  getManagedModelPickerOptions,
+} from '../src/features/cloud-bridge/managedModelPicker';
 
 const source = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '../src/side_panel.ts'),
@@ -53,13 +59,29 @@ describe('Chrome side-panel demo surface', () => {
     expect(deleteBody).toContain('_ctx.conversationGeneration === deletionGeneration');
   });
 
-  it('shows catalog-driven effort rows with an honest unresolved Auto state', () => {
+  it('renders effort rows only after the catalog supplies a concrete effort ladder', () => {
     expect(source).toContain("class: 'sp-effort-option'");
     expect(source).toContain('getManagedEffortControlState(');
     expect(source).toContain("state.status !== 'ready' || state.effort === undefined");
-    expect(source).toContain("t('spEffortAuto')");
+    const start = source.indexOf('function appendEffortSection');
+    const effortSection = source.slice(start, source.indexOf('function appendToggleRow', start));
+    expect(
+      effortSection.indexOf("state.status !== 'ready' || state.effort === undefined"),
+    ).toBeLessThan(effortSection.indexOf("t('spEffortHeading')"));
+    expect(getManagedEffortControlState('auto', undefined, undefined)).toMatchObject({
+      status: 'awaiting-route',
+      options: [],
+    });
     expect(source).toContain('getManagedOutboundEffort(');
     expect(source).toContain('return effort === undefined ? {} : { effort }');
+  });
+
+  it('uses the canonical Auto routing label and description instead of a synthetic model name', () => {
+    const profile = getDefaultAutoRoutingProfile();
+    expect(getManagedModelBadgeLabel(profile.id)).toBe(profile.label);
+    expect(getManagedModelPickerOptions(null)).toEqual([
+      { value: profile.id, label: profile.label, description: profile.description },
+    ]);
   });
 
   it('keeps Quick as a per-turn overlay without erasing durable route state on toggle', () => {
@@ -206,14 +228,14 @@ describe('Chrome side-panel demo surface', () => {
     expect(source).toContain('Connect apps');
     expect(source).toContain('Cloud connectors open on Web');
     expect(source).toContain('Team & Enterprise');
-    expect(source).toContain('https://agiworkforce.com/connectors?from=chrome-extension');
-    expect(source).toContain('https://agiworkforce.com/teams?from=chrome-extension');
+    expect(source).toContain('/connectors?from=chrome-extension');
+    expect(source).toContain('/teams?from=chrome-extension');
   });
 
   it('routes inactive retained subscriptions to billing instead of enabling paid Chrome access', () => {
     expect(source).toContain('!isEntitledSubscriptionStatus(access.subscriptionStatus)');
     expect(source).toContain("t('spBillingManage')");
-    expect(source).toContain('https://agiworkforce.com/settings/billing?from=chrome-extension');
+    expect(source).toContain('/settings/billing?from=chrome-extension');
   });
 });
 

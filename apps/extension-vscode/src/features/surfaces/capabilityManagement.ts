@@ -55,6 +55,7 @@ const MCP_STATUS_LABELS: Record<McpServerListResponse['servers'][number]['status
   configured: 'Configured',
   authorized: 'Signed in',
   needs_auth: 'Needs sign-in',
+  needs_approval: 'Needs approval',
   blocked: 'Blocked by your workspace',
 };
 
@@ -222,7 +223,7 @@ export async function manageSkills(adapter: CliCapabilityAdapter): Promise<void>
           items.push({
             label: '$(shield) Allow this folder’s project skills',
             detail: 'Project skills load only after you allow them for this workspace',
-            run: () => adapter.call('skillsConsent', true),
+            run: () => adapter.call('skillsConsent', true, result.value.projectSkillsDigest),
           });
         }
         for (const skill of result.value.skills) {

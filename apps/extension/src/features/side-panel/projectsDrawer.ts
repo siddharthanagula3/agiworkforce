@@ -24,7 +24,7 @@ export const PROJECTS_DRAWER_CSS = `
   }
   .sp-drawer-projects-new-btn {
     background: var(--agi-ext-surface);
-    border: 1px solid var(--agi-ext-border);
+    border: 1px solid var(--agi-ext-border-control);
     border-radius: var(--corner-control);
     color: var(--agi-ext-text-muted);
     font-size: var(--type-label-size);
@@ -33,16 +33,17 @@ export const PROJECTS_DRAWER_CSS = `
     margin-bottom: 8px;
     transition: color var(--duration-instant), border-color var(--duration-instant);
   }
-  .sp-drawer-projects-new-btn:hover {
-    color: var(--agi-ext-accent-text);
-    border-color: var(--agi-ext-accent);
+  .sp-drawer-projects-new-btn:hover:not(:disabled) {
+    color: var(--agi-ext-text);
+    background: var(--agi-ext-hover);
   }
+  .sp-drawer-projects-new-btn:disabled { color: var(--agi-ext-text-muted); cursor: wait; }
   .sp-drawer-projects-form { display: none; flex-direction: column; gap: 6px; margin-bottom: 8px; }
   .sp-drawer-projects-form.open { display: flex; }
   .sp-drawer-projects-input,
   .sp-drawer-projects-textarea {
     background: var(--agi-ext-surface);
-    border: 1px solid var(--agi-ext-border);
+    border: 1px solid var(--agi-ext-border-control);
     border-radius: var(--corner-control);
     color: var(--agi-ext-text);
     font-family: inherit;
@@ -56,7 +57,7 @@ export const PROJECTS_DRAWER_CSS = `
   .sp-drawer-projects-input:focus,
   .sp-drawer-projects-textarea:focus { border-color: var(--agi-ext-focus); }
   .sp-drawer-projects-input::placeholder,
-  .sp-drawer-projects-textarea::placeholder { color: var(--agi-ext-text-placeholder); }
+  .sp-drawer-projects-textarea::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
   .sp-drawer-projects-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
   .sp-drawer-projects-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
   .sp-drawer-project {
@@ -80,7 +81,7 @@ export const PROJECTS_DRAWER_CSS = `
     text-align: left;
     cursor: pointer;
   }
-  .sp-drawer-project-summary:hover { background: var(--agi-ext-hover); }
+  .sp-drawer-project-summary:hover:not(:disabled) { background: var(--agi-ext-hover); }
   .sp-drawer-project-name {
     flex: 1;
     min-width: 0;
@@ -91,7 +92,7 @@ export const PROJECTS_DRAWER_CSS = `
   .sp-drawer-project-count { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); flex-shrink: 0; }
   .sp-drawer-project-active-tag {
     font-size: var(--type-caption-size);
-    color: var(--agi-ext-accent-text);
+    color: var(--agi-ext-text);
     flex-shrink: 0;
   }
   .sp-drawer-project-detail {
@@ -132,7 +133,7 @@ export const PROJECTS_DRAWER_CSS = `
   .sp-drawer-project-actions { display: flex; gap: 6px; flex-wrap: wrap; }
   .sp-drawer-project-btn {
     background: none;
-    border: 1px solid var(--agi-ext-border);
+    border: 1px solid var(--agi-ext-border-control);
     border-radius: var(--corner-control);
     color: var(--agi-ext-text-muted);
     font-size: var(--type-label-size);
@@ -140,13 +141,12 @@ export const PROJECTS_DRAWER_CSS = `
     cursor: pointer;
     transition: color var(--duration-instant), border-color var(--duration-instant), background var(--duration-instant);
   }
-  .sp-drawer-project-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
-  .sp-drawer-project-btn:disabled { cursor: wait; opacity: 0.55; }
+  .sp-drawer-project-btn:hover:not(:disabled):not(.is-confirm) { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
   .sp-drawer-project-btn.is-danger {
     color: var(--agi-ext-danger-text);
     border-color: var(--agi-ext-danger-border);
   }
-  .sp-drawer-project-btn.is-danger:hover {
+  .sp-drawer-project-btn.is-danger:hover:not(:disabled):not(.is-confirm) {
     color: var(--agi-ext-danger-text);
     border-color: var(--agi-ext-danger-border);
     background: var(--agi-ext-danger-bg);
@@ -156,6 +156,8 @@ export const PROJECTS_DRAWER_CSS = `
     background: var(--agi-ext-danger);
     border-color: var(--agi-ext-danger);
   }
+  .sp-drawer-project-btn.is-confirm:hover:not(:disabled) { color: var(--agi-ext-on-danger); background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
+  .sp-drawer-project-btn:disabled { cursor: wait; color: var(--agi-ext-text-muted); background: var(--agi-ext-hover); border-color: var(--agi-ext-border-control); }
   .sp-drawer-project-warning {
     font-size: var(--type-caption-size);
     color: var(--agi-ext-danger-text);
@@ -181,7 +183,7 @@ export const PROJECTS_DRAWER_CSS = `
     text-decoration: underline;
     cursor: pointer;
   }
-  .sp-drawer-projects-status-action:disabled { cursor: wait; opacity: 0.55; }
+  .sp-drawer-projects-status-action:disabled { cursor: wait; color: var(--agi-ext-text-muted); }
 `;
 
 export interface ActiveProjectSelection {

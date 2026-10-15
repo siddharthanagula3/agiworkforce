@@ -7,6 +7,9 @@ import {
   canAccessModelForSubscriptionTier,
   clampEffortToEntitlement,
   getBillingPlanPricing,
+  getDefaultAutoRoutingProfile,
+  getAutoRoutingProfileTiers,
+  getProviderDisplayLabel,
   getModelEffortOptions,
   getModelMetadataById,
   getModelReasoning,
@@ -22,6 +25,8 @@ import {
 import {
   buildModelPickerShortList,
   resolvePlanLockLabel,
+  resolveModelCapabilityKeys,
+  type ModelPickerCapabilityKey,
 } from '@agiworkforce/unified-chat/model-picker';
 import type { ManagedModelAccess } from './freeTrialClient';
 import { CHROME_MANAGED_RUNTIME_PROFILE } from './managedChatRouting';
@@ -36,6 +41,7 @@ export interface ManagedModelPickerOption {
   speed?: ModelSpeed;
   family?: string | null;
   lockLabel?: string;
+  capabilityKeys?: readonly ModelPickerCapabilityKey[];
 }
 
 export interface ManagedModelPickerView {
@@ -54,9 +60,11 @@ export interface ManagedEffortControlState {
   description: string;
 }
 
+const autoProfile = getDefaultAutoRoutingProfile();
 const AUTO_OPTION: ManagedModelPickerOption = {
-  value: 'auto',
-  label: 'Best (auto)',
+  value: autoProfile.id,
+  label: autoProfile.label,
+  description: autoProfile.description,
 };
 
 function capabilityForQuality(qualityTier: string): CapabilityTier | undefined {
@@ -82,6 +90,7 @@ function pickerOption(modelId: string, lockLabel?: string): ManagedModelPickerOp
     capability: capabilityForQuality(metadata.qualityTier),
     ...(metadata.bestFor[0] ? { description: metadata.bestFor[0] } : {}),
     quality: metadata.quality,
+    capabilityKeys: resolveModelCapabilityKeys(metadata.id),
     speed: metadata.speed,
     family: getModelRegistryFacts(metadata.id)?.family ?? null,
     ...(lockLabel ? { lockLabel } : {}),
@@ -185,6 +194,82 @@ export function partitionManagedModelOptions(options: readonly ManagedModelPicke
     primary,
     more: options.filter((option) => option.value !== 'auto' && !promoted.has(option.value)),
   };
+}
+
+export function buildManagedModelPickerMenu(
+  access: ManagedModelAccess | null,
+  selection: string,
+): {
+  auto: ManagedModelPickerOption;
+  current: ManagedModelPickerOption | null;
+  recommended: ManagedModelPickerOption[];
+  all: ManagedModelPickerOption[];
+  remainingCount: number;
+} {
+  const options = getManagedModelPickerOptions(access);
+  const shortList = buildModelPickerShortList({
+    models: options.map((option) => ({
+      id: option.value,
+      displayName: option.label,
+      providerKey: option.provider ?? 'managed_cloud',
+    })),
+    planTier: access?.subscriptionTier ?? null,
+    favouriteModelIds: [],
+    conversationModelId: null,
+    selectedModelId: selection,
+    admitsModel: (modelId) => access?.modelIds.includes(modelId) === true,
+    autoGuidance: autoProfile.description,
+    autoContinuityGuidance: (displayName) => displayName,
+  });
+  const byId = new Map(options.map((option) => [option.value, option]));
+  const toOption = (row: { id: string; guidance: string }): ManagedModelPickerOption => ({
+    ...byId.get(row.id)!,
+    description: row.guidance,
+  });
+  const current = shortList.current ? toOption(shortList.current) : null;
+  const recommended = shortList.recommended.map(toOption);
+  const shown = new Set(
+    [...recommended, ...(current ? [current] : [])].map((option) => option.value),
+  );
+  const all = options
+    .filter((option) => option.value !== autoProfile.id)
+    .map((option) => {
+      const row = shortList.rowsById.get(option.value);
+      return row ? toOption(row) : option;
+    });
+  return {
+    auto: { ...AUTO_OPTION },
+    current,
+    recommended,
+    all,
+    remainingCount: all.filter((option) => !shown.has(option.value)).length,
+  };
+}
+
+export function filterManagedModelOptions(
+  options: readonly ManagedModelPickerOption[],
+  query: string,
+  capability: string | null = null,
+): ManagedModelPickerOption[] {
+  const needle = query.trim().toLocaleLowerCase();
+  return options.filter((option) => {
+    if (capability && !option.capabilityKeys?.some((key) => key === capability)) return false;
+    const text = [
+      option.label,
+      option.description ?? '',
+      option.provider ? getProviderDisplayLabel(option.provider) : '',
+    ]
+      .join(' ')
+      .toLocaleLowerCase();
+    return !needle || text.includes(needle);
+  });
+}
+
+export function canUseManagedQuickRouting(access: ManagedModelAccess | null): boolean {
+  const quickProfile = getAutoRoutingProfileTiers().find(
+    (profile) => profile.profile === 'economy',
+  );
+  return Boolean(quickProfile && access?.allowedAutoModes.includes(quickProfile.id));
 }
 
 export function reconcileManagedModelSelection(

@@ -1,6 +1,11 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getRoutingSlotModel } from '@agiworkforce/types';
+import type { ManagedModelAccess } from '../src/features/cloud-bridge/freeTrialClient';
+
+type FreeTrialClientModule = typeof import('../src/features/cloud-bridge/freeTrialClient');
 
 interface CapturedAgentLoopOptions {
+  model: string;
   signal: AbortSignal;
   assertOwnership: () => Promise<void>;
   resolveOwnedCredential: () => Promise<string>;
@@ -26,7 +31,7 @@ const harness = vi.hoisted(() => {
   const nativeListeners: Array<(message: unknown) => void> = [];
   const storageListeners: Array<(changes: Record<string, unknown>, area: string) => void> = [];
   const captured: { options: CapturedAgentLoopOptions | null } = { options: null };
-  const tab = { id: RUN_TAB_ID, url: `${SITE_A}/start`, windowId: RUN_WINDOW_ID };
+  const tab = { id: RUN_TAB_ID, url: `${SITE_A}/start`, windowId: RUN_WINDOW_ID, active: true };
 
   const event = () => ({
     addListener: vi.fn(),
@@ -168,6 +173,7 @@ const harness = vi.hoisted(() => {
     captured.options = options;
     return new Promise<never>(() => {});
   });
+  const getManagedModelAccess = vi.fn<() => Promise<ManagedModelAccess>>();
 
   return {
     EXTENSION_ID,
@@ -185,11 +191,17 @@ const harness = vi.hoisted(() => {
     debuggerMock,
     tab,
     runAgentLoop,
+    getManagedModelAccess,
   };
 });
 
 vi.mock('../src/features/computer-use/agentLoop', () => ({
   runAgentLoop: harness.runAgentLoop,
+}));
+
+vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
+  ...(await importOriginal<FreeTrialClientModule>()),
+  getManagedModelAccess: harness.getManagedModelAccess,
 }));
 
 import { assertDestinationAllowlisted, navigate } from '../src/features/computer-use/cdpDriver';
@@ -251,11 +263,96 @@ describe('background service worker security guards', () => {
   });
 
   beforeEach(() => {
+    harness.runAgentLoop.mockClear();
+    harness.getManagedModelAccess.mockReset();
+    harness.getManagedModelAccess.mockResolvedValue({
+      subscriptionTier: 'max',
+      modelIds: [getRoutingSlotModel('browser_dom'), getRoutingSlotModel('computer_use')],
+      allowedAutoModes: [],
+    });
     harness.unreadableKeys.clear();
     harness.debuggerMock.sendCommand.mockClear();
     harness.tab.url = `${SITE_A}/start`;
     putStorage(SITE_ALLOWLIST_KEY, [SITE_A, SITE_B]);
     putStorage(CONSENT_KEY, [SITE_A]);
+  });
+
+  describe('browser model selection admission', () => {
+    it('rejects oversized goals before altering browser or run state', async () => {
+      const response = await dispatch({
+        type: 'AGI_START_COMPUTER_USE',
+        goal: 'x'.repeat(4097),
+        tabId: RUN_TAB_ID,
+        runId: 'cu_run_oversized_goal',
+      });
+
+      expect(response['success']).toBe(false);
+      expect(response['error']).toContain('4096 characters or fewer');
+      expect(harness.getManagedModelAccess).not.toHaveBeenCalled();
+      expect(harness.runAgentLoop).not.toHaveBeenCalled();
+      expect(harness.debuggerMock.sendCommand).not.toHaveBeenCalled();
+    });
+
+    it('passes the explicit selected model to the browser loop', async () => {
+      const model = getRoutingSlotModel('computer_use');
+      const response = await dispatch({
+        type: 'AGI_START_COMPUTER_USE',
+        goal: 'read the current page',
+        tabId: RUN_TAB_ID,
+        runId: 'cu_run_explicit_model',
+        modelSelection: model,
+      });
+
+      expect(response['success'], String(response['error'])).toBe(true);
+      expect(harness.runAgentLoop).toHaveBeenCalledOnce();
+      expect(harness.captured.options?.model).toBe(model);
+    });
+
+    it('refuses unavailable model access before adopting or capturing the tab', async () => {
+      harness.getManagedModelAccess.mockRejectedValue(
+        new Error('Account access is unavailable (503)'),
+      );
+      const response = await dispatch({
+        type: 'AGI_START_COMPUTER_USE',
+        goal: 'read the current page',
+        tabId: RUN_TAB_ID,
+        runId: 'cu_run_offline_model_access',
+      });
+
+      expect(response['success']).toBe(false);
+      expect(response['error']).toContain('Account access is unavailable (503)');
+      expect(harness.runAgentLoop).not.toHaveBeenCalled();
+      expect(harness.debuggerMock.sendCommand).not.toHaveBeenCalled();
+    });
+
+    it('refuses an unknown explicit model instead of running the tier default', async () => {
+      const response = await dispatch({
+        type: 'AGI_START_COMPUTER_USE',
+        goal: 'read the current page',
+        tabId: RUN_TAB_ID,
+        runId: 'cu_run_unknown_model',
+        modelSelection: 'unknown-test-model',
+      });
+
+      expect(response['success']).toBe(false);
+      expect(response['error']).toContain('unavailable for Managed Cloud browser actions');
+      expect(harness.runAgentLoop).not.toHaveBeenCalled();
+    });
+
+    it('rejects malformed selection payloads before requesting account model access', async () => {
+      const response = await dispatch({
+        type: 'AGI_START_COMPUTER_USE',
+        goal: 'read the current page',
+        tabId: RUN_TAB_ID,
+        runId: 'cu_run_malformed_model',
+        modelSelection: { id: 'unknown-test-model' },
+      });
+
+      expect(response['success']).toBe(false);
+      expect(response['error']).toContain('valid model selection is required');
+      expect(harness.getManagedModelAccess).not.toHaveBeenCalled();
+      expect(harness.runAgentLoop).not.toHaveBeenCalled();
+    });
   });
 
   describe('ongoing CDP control is re-authorized against the browser-control grant', () => {

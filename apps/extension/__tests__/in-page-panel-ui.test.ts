@@ -32,6 +32,10 @@ const chromeHarness = vi.hoisted(() => {
 
 import { createPanel } from '../src/features/content/in-page-panel/panel';
 import { PANEL_SLIDE_MS } from '../src/features/content/in-page-panel/panelStyles';
+import {
+  MAX_PAGE_TEXT_CHARACTERS,
+  PAGE_TEXT_EXCERPT_NOTICE,
+} from '../src/features/content/in-page-panel/pageActions';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -149,7 +153,7 @@ describe('in-page panel page capture', () => {
     }
   });
 
-  it('truncates to the cap before redaction runs', () => {
+  it('bounds the sanitized excerpt to the capture cap', () => {
     document.body.innerHTML = '<main></main>';
     document.querySelector('main')!.textContent = 'x'.repeat(40_000);
     const innerText = trackInnerText();
@@ -159,6 +163,40 @@ describe('in-page panel page capture', () => {
       expect(shadow.querySelector('.agi-disclosure')?.textContent).toContain(
         '30,000 characters of visible text',
       );
+    } finally {
+      innerText.restore();
+    }
+  });
+
+  it('sends later article text and discloses an excerpt inside the shared capture budget', async () => {
+    document.body.innerHTML = '<main></main>';
+    document.querySelector('main')!.textContent =
+      `${'x'.repeat(6_000)} LATER_ARTICLE_CONCLUSION sk-ant-${'A'.repeat(60)} ${'x'.repeat(MAX_PAGE_TEXT_CHARACTERS)}`;
+    const innerText = trackInnerText();
+    try {
+      const { controller, shadow } = createInspectablePanel();
+      controller.open();
+      const textarea = shadow.querySelector<HTMLTextAreaElement>('.agi-textarea')!;
+      textarea.value = 'Summarize the article';
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      shadow.querySelector<HTMLButtonElement>('.agi-submit-btn')!.click();
+
+      await vi.waitFor(() => {
+        expect(
+          chromeHarness.sendMessage.mock.calls.some(
+            ([message]) => message.type === 'IN_PAGE_PROMPT',
+          ),
+        ).toBe(true);
+      });
+      const sent = chromeHarness.sendMessage.mock.calls.find(
+        ([message]) => message.type === 'IN_PAGE_PROMPT',
+      )?.[0] as { pageContext: string };
+      const pageText = sent.pageContext.split('Visible page text:\n')[1]!;
+      expect(pageText).toContain('LATER_ARTICLE_CONCLUSION');
+      expect(pageText).toContain(PAGE_TEXT_EXCERPT_NOTICE);
+      expect(pageText).toContain('[REDACTED_ANTHROPIC_KEY]');
+      expect(pageText).not.toContain('sk-ant-');
+      expect(pageText.length).toBeLessThanOrEqual(MAX_PAGE_TEXT_CHARACTERS);
     } finally {
       innerText.restore();
     }

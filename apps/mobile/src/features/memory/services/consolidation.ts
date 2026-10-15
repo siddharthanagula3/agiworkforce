@@ -177,8 +177,9 @@ export async function consolidateFactsFromTurn(params: {
   message: string;
   conversationId: string | null;
   enabled?: boolean;
+  includeSensitiveTopics?: boolean;
 }): Promise<ConsolidationResult> {
-  const { message, conversationId, enabled = true } = params;
+  const { message, conversationId, enabled = true, includeSensitiveTopics = false } = params;
   if (!enabled) return { extracted: 0, inserted: 0 };
 
   try {
@@ -197,6 +198,7 @@ export async function consolidateFactsFromTurn(params: {
           source: 'learned',
           conversationId,
           known,
+          includeSensitiveTopics,
         });
         if (!result.fact) continue;
         known = [

@@ -1,3 +1,7 @@
+import {
+  boundPageText,
+  MAX_PAGE_TEXT_CHARACTERS,
+} from '../src/features/content/in-page-panel/pageActions';
 /**
  * @vitest-environment jsdom
  *
@@ -192,16 +196,16 @@ describe('options data-handling disclosure', () => {
     const pageInjection = DATA_HANDLING_DISCLOSURES.find((entry) => entry.id === 'page-injection')!;
 
     expect(pageInjection.body).toContain('read and change all your data on all websites');
-    expect(pageInjection.body).toContain('5,000 characters');
+    expect(pageInjection.body).toContain(`${MAX_PAGE_TEXT_CHARACTERS.toLocaleString()} characters`);
     expect(pageInjection.body).toContain('redacted');
     // The attach is explicit and per-request; the list governs the in-page
     // surfaces. Saying it reads page text "only on approved sites" was the
     // wrong gate and made the disclosure both narrower and untrue.
     expect(pageInjection.body).not.toMatch(/only when you ask for it on a site you approved/);
 
-    const sidePanel = readSource('src/side_panel.ts');
-    expect(sidePanel).toContain('const PAGE_CONTEXT_MAX_CHARS = 5_000;');
-    expect(sidePanel).toContain('sanitizePageText(raw).slice(0, PAGE_CONTEXT_MAX_CHARS)');
+    const captured = boundPageText('x'.repeat(MAX_PAGE_TEXT_CHARACTERS + 1));
+    expect(captured.text).toHaveLength(MAX_PAGE_TEXT_CHARACTERS);
+    expect(captured.truncated).toBe(true);
   });
 
   it('stores the decline the sync gate reads', async () => {

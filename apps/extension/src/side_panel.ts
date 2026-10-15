@@ -23,9 +23,19 @@ import {
 } from '@agiworkforce/utils/composer-paste';
 import { agiCornerCssVars, agiMotionCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 import { getExtensionTokensCssAuto } from './tokens';
+import { agiWebUrl } from './lib/webOrigin';
+import { classifyTaskLocally } from '@agiworkforce/routing';
+import { chooseBrowserContextTabs, TAB_CONTEXT_PICKER_CSS } from './features/side-panel/tabContext';
+import type { BrowserContextTabReference } from './types';
 import { followThemePreference } from './features/appearance/themePreference';
 import { t, tPlural } from './i18n';
 import { pageChipLabel } from './utils';
+import {
+  boundPageText,
+  MAX_PAGE_TEXT_CHARACTERS,
+} from './features/content/in-page-panel/pageActions';
+import type { ComputerUseCommandResponse, ComputerUseApprovalResponseMessage } from './types';
+import { parseBrowserUploadBinding } from './features/computer-use/userFileUpload';
 import {
   canUseBillingPlanCapability,
   classifyManagedQuotaErrorCode,
@@ -33,7 +43,10 @@ import {
   formatUsageResetIn,
   getBillingPlanPricing,
   getModelMetadataById,
+  getModelReasoning,
+  isAutoModeModelId,
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
+  TERMINAL_AGENT_TASK_STATES,
   EFFORT_LABEL,
   isEntitledSubscriptionStatus,
   MAX_CUSTOM_INSTRUCTIONS_CHARS,
@@ -43,7 +56,6 @@ import {
   PREFERRED_LENGTHS,
   PROVIDERS_IN_ORDER,
   RESPONSE_STYLES,
-  TERMINAL_AGENT_TASK_STATES,
   resolveModelEffort,
   USAGE_CRITICAL_REMAINING_PERCENT,
   USAGE_WARNING_REMAINING_PERCENT,
@@ -68,6 +80,7 @@ import {
 import {
   createBrowserConversationId,
   filterConversations,
+  rebindAuthenticatedConversationHistory,
   getActiveConversation,
   getConversation,
   isCloudPersistenceEligible,
@@ -78,6 +91,7 @@ import {
   recordCloudSyncState,
   upsertConversation,
   updateConversationEntry,
+  updateConversationMetadata,
   startNewConversation,
   BROWSER_STORE_KEY,
   type ConversationEntry,
@@ -85,12 +99,22 @@ import {
 } from './features/background/conversation-history';
 import { pullCloudConversationFlags } from './features/cloud-bridge/conversationSync';
 import { wirePopupMenu } from './features/side-panel/menu';
+import {
+  refreshManagedCloudRecentHistory,
+  refreshManagedCloudConversationHistory,
+  CloudHistoryTrustBoundaryError,
+  CloudHistoryWorkspaceChangedError,
+  CloudHistoryCacheWindowError,
+  CloudHistoryUnavailableError,
+} from './features/cloud-bridge/conversationHistoryPull';
+
 import { createChromeShareLink } from './features/cloud-bridge/shareClient';
 import {
   assignConversationOwner,
   claimConversationOwner,
   claimSelectedConversationOwner,
   restoreConversationOwnerIfCurrent,
+  replaceConversationOwner,
   resolveBrowserConversationScope,
 } from './features/background/conversation-session';
 import {
@@ -132,6 +156,8 @@ import {
   streamFailureText,
   type StreamFailureDetail,
   hydrateStoredChatMessage,
+  reconcileManagedRunActivity,
+  requestsCurrentPageContext,
   pageContextStillDescribes,
   resolveComposerPrompt,
   selectModelHistory,
@@ -182,6 +208,7 @@ import {
   sanitizePageText,
   SELECTED_EFFORT_STORAGE_KEY,
   SELECTED_MODEL_STORAGE_KEY,
+  isTrustedExtensionPageSender,
 } from './background/policy';
 import {
   FilePen,
@@ -217,7 +244,6 @@ import {
   buildComputerUsePanel,
   COMPUTER_USE_PANEL_CSS,
   describeCancellationReason,
-  type ComputerUseApprovalDecision,
   type ComputerUsePanelAPI,
 } from './features/side-panel/computerUsePanel';
 import {
@@ -347,20 +373,24 @@ import { planComparisonViews } from './features/side-panel/planComparison';
 import { createManagedChatPortName } from './features/cloud-bridge/managedChatPort';
 import {
   getClerkAccountProfile,
+  getFreshClerkAuthContext,
   isClerkExtensionAuthConfigured,
   observeClerkAuth,
   openClerkSignIn,
 } from './features/cloud-bridge/clerkAuth';
 import {
   agiWorkUnlockPlanLabel,
-  buildManagedModelPickerView,
   formatManagedTierLabel,
   getManagedCapabilityLabel,
   getManagedModelBadgeLabel,
-  getManagedEffortControlState,
-  getManagedOutboundEffort,
   getManagedModelPickerOptions,
   partitionManagedModelOptions,
+  getManagedEffortControlState,
+  getManagedOutboundEffort,
+  buildManagedModelPickerMenu,
+  buildManagedModelPickerView,
+  filterManagedModelOptions,
+  canUseManagedQuickRouting,
   reconcileManagedModelSelection,
   type ManagedModelPickerOption,
 } from './features/cloud-bridge/managedModelPicker';
@@ -438,6 +468,10 @@ function readStoredActiveProject(value: unknown): ActiveProjectSelection | null 
 }
 let historyRestoreInProgress = false;
 let historyRestoreToken = 0;
+let invalidateConversationHistoryUI: () => void = () => {};
+let cloudHistoryOrganizationId: string | null | undefined;
+let cloudHistoryOwnerAbort = new AbortController();
+window.addEventListener('pagehide', () => cloudHistoryOwnerAbort.abort());
 let managedModelAccess: ManagedModelAccess | null = null;
 let cloudAccountRefreshGeneration = 0;
 const scheduledTasksRequestFence = new ManagedCloudOwnerRequestFence();
@@ -472,7 +506,16 @@ function conversationPersistencePresentation(
     };
   }
   const sync = entry.cloudSync;
-  if (!isCloudPersistenceEligible(entry) || sync?.blockedReason === 'non-cloud-runtime') {
+  const importedPlaceholder =
+    entry.messages.length === 0 &&
+    sync?.messagesLoaded === false &&
+    sync.conversationId !== undefined &&
+    sync.organizationId !== undefined &&
+    sync.blockedReason === undefined;
+  if (
+    (!isCloudPersistenceEligible(entry) && !importedPlaceholder) ||
+    sync?.blockedReason === 'non-cloud-runtime'
+  ) {
     return {
       state: 'local',
       label: 'Saved on this device',
@@ -525,7 +568,7 @@ function conversationPersistencePresentation(
     return {
       state: 'cloud',
       label: 'Saved to your account',
-      detail: 'Available on Web, Mobile Cloud, Tauri Desktop Cloud, and Electron Desktop Cloud.',
+      detail: 'Available in your AGI account.',
       cloudIcon: true,
     };
   }
@@ -577,12 +620,6 @@ let managedCloudGateMessage = t('spGateChecking');
 let managedCloudGateAction: ManagedCloudGateAction = 'none';
 let managedCloudGateActionLabel = '';
 let managedCloudGateHref = '';
-
-function agiWebUrl(path: string): string {
-  const url = new URL(path, FREE_TRIAL_GATEWAY);
-  url.searchParams.set('from', 'chrome-extension');
-  return url.toString();
-}
 
 function quotaRecoveryLabel(recovery: ManagedQuotaRecovery): string {
   switch (recovery.action) {
@@ -849,6 +886,8 @@ const _ctx: SharedSidePanelContext = createSharedSidePanelContext();
 const SIDE_PANEL_CLIENT_INSTANCE_ID = crypto.randomUUID();
 let managedChatKeepalivePort: chrome.runtime.Port | null = null;
 let managedChatKeepaliveTimer: ReturnType<typeof setInterval> | null = null;
+let composerComputerUsePanel: ComputerUsePanelAPI | null = null;
+let showComposerComputerUseTab: (() => void) | null = null;
 let contextHandoffPreview: ContextHandoffPreviewController | null = null;
 let activeContextHandoffId: string | null = null;
 let conversationScopePromise: Promise<string> | null = null;
@@ -960,8 +999,12 @@ function stampResolvedRoute(streamId: string, assistant: ChatMessage): void {
   else delete assistant.movedFromModel;
 }
 
+function managedQuickModeActive(): boolean {
+  return _ctx.quickMode && isAutoModeModelId(_ctx.selectedModel);
+}
+
 function managedOutboundEffortPayload(usePersistedSelection = false): { effort?: Effort } {
-  if (_ctx.quickMode && !usePersistedSelection) return {};
+  if (managedQuickModeActive() && !usePersistedSelection) return {};
   const routingSelection = _ctx.selectedModel;
   const effort = getManagedOutboundEffort(
     routingSelection,
@@ -972,7 +1015,7 @@ function managedOutboundEffortPayload(usePersistedSelection = false): { effort?:
   return effort === undefined ? {} : { effort };
 }
 
-function managedOutboundRoutingPayload(quickMode = _ctx.quickMode): {
+function managedOutboundRoutingPayload(quickMode = managedQuickModeActive()): {
   effort?: Effort;
   currentModelKey?: string;
   previousTaskType?: RoutingTaskType;
@@ -1039,8 +1082,8 @@ function modelSpeedLabel(speed: ModelSpeed): string {
   }
 }
 
-const CONNECTORS_URL = 'https://agiworkforce.com/connectors?from=chrome-extension';
-const HELP_URL = 'https://agiworkforce.com/help?from=chrome-extension';
+const CONNECTORS_URL = agiWebUrl('/connectors?from=chrome-extension');
+const HELP_URL = agiWebUrl('/help?from=chrome-extension');
 
 const RECENTS_SEARCH_THRESHOLD = 10;
 
@@ -1092,6 +1135,7 @@ interface ComposerDocument {
 }
 const pendingDocuments: ComposerDocument[] = [];
 interface ComposerAttachmentIntake {
+  kind: 'file' | 'page';
   owner: ManagedCloudOwner;
   conversationGeneration: number;
 }
@@ -1149,6 +1193,8 @@ function serializeMessagesForHistory() {
     timestamp: message.timestamp,
     ...(message.runtime ? { runtime: message.runtime } : {}),
     ...(message.error ? { error: true } : {}),
+    ...(message.errorText ? { errorText: message.errorText } : {}),
+    ...(message.streamCancellation ? { streamCancellation: message.streamCancellation } : {}),
     ...(message.role === 'assistant' && message.streaming ? { streaming: true } : {}),
     ...(message.cloudMessageId ? { cloudMessageId: message.cloudMessageId } : {}),
     ...(message.role === 'assistant' && message.agentEvents
@@ -1260,30 +1306,125 @@ async function loadMessages(): Promise<void> {
   const ownerAtStart = _ctx.managedCloudOwner;
   if (!ownerAtStart) return;
   const expectedGeneration = _ctx.conversationGeneration;
+  const historyOwnerIsCurrent = await rebindAuthenticatedConversationHistory(
+    ownerAtStart,
+    async () => {
+      if (
+        _ctx.conversationGeneration !== expectedGeneration ||
+        !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart)
+      )
+        return false;
+      try {
+        const context = await getFreshClerkAuthContext();
+        return (
+          sameManagedCloudOwner(context?.owner, ownerAtStart) &&
+          _ctx.conversationGeneration === expectedGeneration &&
+          sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart)
+        );
+      } catch {
+        return false;
+      }
+    },
+  );
+  if (
+    !historyOwnerIsCurrent ||
+    _ctx.conversationGeneration !== expectedGeneration ||
+    !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart)
+  )
+    return;
   const scope = await getConversationScope();
   if (
     _ctx.conversationGeneration !== expectedGeneration ||
     !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart)
   )
     return;
-  const lastActive = await getActiveConversation(ownerAtStart);
+  const importIsCurrent = (): boolean =>
+    _ctx.conversationGeneration === expectedGeneration &&
+    _ctx.conversationScope === scope &&
+    sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart);
+  try {
+    const refreshed = await refreshManagedCloudRecentHistory(ownerAtStart, {
+      isCurrent: importIsCurrent,
+      protectsConversation: (id) =>
+        id === _ctx.conversationId &&
+        (_ctx.isStreaming ||
+          _ctx.messages.length > 0 ||
+          hasUnconfirmedStreamCancellation() ||
+          Boolean(
+            (document.getElementById('sp-input') as HTMLTextAreaElement | null)?.value.trim(),
+          )),
+      signal: cloudHistoryOwnerAbort.signal,
+    });
+    if (refreshed.status === 'refreshed' && importIsCurrent())
+      cloudHistoryOrganizationId = refreshed.organizationId;
+  } catch (error) {
+    if (importIsCurrent()) console.warn('[SidePanel] account history refresh unavailable:', error);
+  }
+  if (!importIsCurrent()) return;
+  let lastActive = await getActiveConversation(ownerAtStart);
+  let accountRestoreRefused = false;
+  if (
+    lastActive?.cloudSync?.conversationId &&
+    cloudMirroringEnabledSnapshot() &&
+    lastActive.cloudSync.organizationId !== cloudHistoryOrganizationId
+  )
+    lastActive = undefined;
+  if (lastActive?.cloudSync?.conversationId) {
+    try {
+      lastActive = await refreshManagedCloudConversationHistory(ownerAtStart, lastActive, {
+        isCurrent: importIsCurrent,
+        protectsConversation: (id) =>
+          id === _ctx.conversationId &&
+          (_ctx.isStreaming ||
+            _ctx.messages.length > 0 ||
+            hasUnconfirmedStreamCancellation() ||
+            Boolean(
+              (document.getElementById('sp-input') as HTMLTextAreaElement | null)?.value.trim(),
+            )),
+        signal: cloudHistoryOwnerAbort.signal,
+      });
+    } catch (error) {
+      if (importIsCurrent())
+        console.warn('[SidePanel] saved account chat refresh unavailable:', error);
+      if (
+        lastActive?.cloudSync?.messagesLoaded === false ||
+        error instanceof CloudHistoryTrustBoundaryError ||
+        error instanceof CloudHistoryWorkspaceChangedError ||
+        error instanceof CloudHistoryCacheWindowError ||
+        error instanceof CloudHistoryUnavailableError
+      ) {
+        lastActive = undefined;
+        accountRestoreRefused = true;
+      }
+    }
+  }
   if (
     _ctx.conversationGeneration !== expectedGeneration ||
     !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart)
   )
     return;
-  const conversationOwner = await claimConversationOwner(scope, ownerAtStart, lastActive?.id);
+  let conversationOwner = await claimConversationOwner(scope, ownerAtStart, lastActive?.id);
   if (
     _ctx.conversationGeneration !== expectedGeneration ||
     !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart)
   )
     return;
-  const ownedConversation = await getConversation(ownerAtStart, conversationOwner.conversationId);
+  let ownedConversation = await getConversation(ownerAtStart, conversationOwner.conversationId);
   if (
     _ctx.conversationGeneration !== expectedGeneration ||
     !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart)
   )
     return;
+  if (
+    ownedConversation?.cloudSync?.conversationId &&
+    cloudMirroringEnabledSnapshot() &&
+    (accountRestoreRefused ||
+      ownedConversation.cloudSync.organizationId !== cloudHistoryOrganizationId)
+  ) {
+    conversationOwner = { conversationId: await replaceConversationOwner(scope, ownerAtStart) };
+    if (!importIsCurrent()) return;
+    ownedConversation = undefined;
+  }
   let active =
     ownedConversation ??
     (conversationOwner.seedConversationId && conversationOwner.seedConversationId === lastActive?.id
@@ -1345,6 +1486,9 @@ function resumeLatestStoredManagedRun(expectedGeneration: number): void {
       (message) =>
         message.role === 'assistant' &&
         message.cloudAgentRun &&
+        message.interrupted === true &&
+        message.streamCancellation === undefined &&
+        message.cloudAgentRun.detachable !== false &&
         (message.cloudAgentRun.state === undefined ||
           message.cloudAgentRun.state === 'queued' ||
           message.cloudAgentRun.state === 'running'),
@@ -1355,7 +1499,9 @@ function resumeLatestStoredManagedRun(expectedGeneration: number): void {
       if (
         _ctx.conversationGeneration !== expectedGeneration ||
         !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtAdmission) ||
-        !resumable.cloudAgentRun
+        !resumable.cloudAgentRun ||
+        resumable.streamCancellation !== undefined ||
+        !_ctx.messages.includes(resumable)
       )
         return;
       resumeManagedCloudRun(
@@ -1386,6 +1532,7 @@ function advanceConversationGeneration(): void {
 
 function clearStoredMessages(): void {
   historyRestoreToken += 1;
+  historyRestoreInProgress = false;
   advanceConversationGeneration();
   _ctx.conversationId = createBrowserConversationId();
   leaveTemporaryChat();
@@ -1406,7 +1553,13 @@ function clearStoredMessages(): void {
   });
 }
 
+let pendingBrowserContextTabs: readonly BrowserContextTabReference[] = [];
+let tabContextIntakeAbort: AbortController | null = null;
+
 function clearPendingPageContext(): void {
+  tabContextIntakeAbort?.abort();
+  tabContextIntakeAbort = null;
+  pendingBrowserContextTabs = [];
   _ctx.pendingPageContext = null;
   _ctx.pendingPageContextSource = null;
 }
@@ -1435,13 +1588,15 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   }
 
   historyRestoreToken += 1;
+  historyRestoreInProgress = false;
   clearActivePersistenceState();
   advanceConversationGeneration();
   scheduledTasksRequestFence.invalidate();
   scheduledTaskCreateRequestFence.invalidate();
   resetScheduledTaskDraftForOwnerTransition();
   clearWorkflowsTaskRows();
-  if (_ctx.currentStreamId) cancelCurrentManagedStream(false);
+  const browserRunAtOwnerTransition = composerBrowserRun;
+  if (_ctx.currentStreamId || browserRunAtOwnerTransition) cancelCurrentManagedStream(false);
   stopManagedChatKeepalive();
   if (_ctx.streamTimeoutHandle) {
     clearTimeout(_ctx.streamTimeoutHandle);
@@ -1457,6 +1612,13 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   }
   followUpQueue.clear();
   _ctx.workMode = 'chat';
+  cloudHistoryOwnerAbort.abort();
+  cloudHistoryOwnerAbort = new AbortController();
+  cloudHistoryOrganizationId = undefined;
+  invalidateConversationHistoryUI();
+  if (browserRunAtOwnerTransition) {
+    finishComposerBrowserTask(browserRunAtOwnerTransition, 'The account changed.');
+  }
   _ctx.messages.length = 0;
   turnPayloadByMessageId.clear();
   streamStartedAtById.clear();
@@ -1515,6 +1677,7 @@ function injectStyles(): void {
   const cssText = `
     /* ── AGI design tokens (dark) ── */
     ${getExtensionTokensCssAuto()}
+    ${TAB_CONTEXT_PICKER_CSS}
 
     :root {
       ${cssVarsToString(agiCornerCssVars)}
@@ -1641,7 +1804,7 @@ function injectStyles(): void {
       color: var(--agi-ext-text);
       background: var(--agi-ext-surface);
     }
-    .sp-context-handoff-secondary[aria-disabled='true'] { cursor: not-allowed; opacity: 0.55; }
+    .sp-context-handoff-secondary[aria-disabled='true'] { cursor: not-allowed; color: var(--agi-ext-text-muted); }
     .sp-context-handoff-secondary:focus-visible {
       outline: 2px solid var(--agi-ext-focus);
       outline-offset: 2px;
@@ -1655,15 +1818,15 @@ function injectStyles(): void {
       color: var(--agi-ext-text);
       background: var(--agi-ext-hover);
     }
-    .sp-context-handoff-actions button:disabled { cursor: wait; opacity: 0.55; }
+    .sp-context-handoff-actions button:disabled { cursor: wait; background: var(--agi-ext-hover); color: var(--agi-ext-text-muted); }
     .sp-context-handoff-actions button:focus-visible {
       outline: 2px solid var(--agi-ext-focus);
       outline-offset: 2px;
     }
-    .sp-context-handoff-approve {
-      border-color: var(--agi-ext-accent) !important;
-      background: var(--agi-ext-accent) !important;
-      color: var(--agi-ext-on-accent) !important;
+    .sp-context-handoff-actions .sp-context-handoff-approve {
+      border-color: var(--agi-ext-primary);
+      background: var(--agi-ext-primary);
+      color: var(--agi-ext-on-primary);
       font-weight: 600;
     }
 
@@ -1932,7 +2095,7 @@ function injectStyles(): void {
       cursor: pointer;
     }
     .sp-bubble-retry-btn:hover:not(:disabled) { background: var(--agi-ext-hover); }
-    .sp-bubble-retry-btn:disabled { opacity: 0.5; cursor: default; }
+    .sp-bubble-retry-btn:disabled { color: var(--agi-ext-text-muted); background: var(--agi-ext-hover); cursor: default; }
     /* Interrupted footer: a reply cut off by a reload or a closed tab, not a
        failure, so it takes the neutral text tone, not the danger one. */
     .sp-bubble-interrupted-footer {
@@ -2837,7 +3000,6 @@ function injectStyles(): void {
       height: 14px;
       flex-shrink: 0;
       color: var(--agi-ext-text-muted);
-      opacity: 0.7;
     }
     .tool-call__icon svg { width: 14px; height: 14px; }
     .tool-call__label { color: var(--agi-ext-text-muted); font-weight: 400; font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
@@ -2855,7 +3017,6 @@ function injectStyles(): void {
       width: 12px;
       height: 12px;
       color: var(--agi-ext-text-muted);
-      opacity: 0.6;
       margin-left: auto;
       transition: transform var(--duration-quick) var(--curve-standard);
       flex-shrink: 0;
@@ -2945,7 +3106,7 @@ function injectStyles(): void {
     .sp-agent-step > summary { cursor: pointer; }
     .sp-agent-step > summary::-webkit-details-marker { display: none; }
     .sp-agent-step > summary:hover { background: var(--agi-ext-hover); }
-    .sp-agent-step__icon { flex: 0 0 14px; opacity: 0.78; }
+    .sp-agent-step__icon { flex: 0 0 14px; }
     .sp-agent-step--running .sp-agent-step__icon { animation: sp-spin var(--duration-spin) linear infinite; }
     .sp-agent-step--failed .sp-agent-step__icon { color: var(--agi-ext-danger-text); }
     .sp-agent-step--completed .sp-agent-step__icon { color: var(--agi-ext-success-text); }
@@ -2956,7 +3117,7 @@ function injectStyles(): void {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .sp-agent-step__elapsed { font-size: var(--type-caption-size); line-height: var(--type-caption-height); opacity: 0.65; }
+    .sp-agent-step__elapsed { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); }
     .sp-agent-step__detail {
       margin: 0 5px 6px 26px;
       padding: 8px;
@@ -3055,9 +3216,9 @@ function injectStyles(): void {
     }
     .sp-agent-approval__button:hover { background: var(--agi-ext-hover); }
     .sp-agent-approval__button--approve {
-      border-color: var(--agi-ext-accent);
-      background: var(--agi-ext-accent);
-      color: var(--agi-ext-on-accent);
+      border-color: var(--agi-ext-primary);
+      background: var(--agi-ext-primary);
+      color: var(--agi-ext-on-primary);
     }
     .sp-agent-approval__button:focus-visible {
       outline: 2px solid var(--agi-ext-focus);
@@ -3211,7 +3372,7 @@ function injectStyles(): void {
     .sp-tool-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
     .sp-tool-btn.active { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 15%, transparent); }
     .sp-tool-btn.has-context { color: var(--agi-ext-success-text); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
-    .sp-tool-btn:disabled { opacity: 0.5; cursor: wait; }
+    .sp-tool-btn:disabled { cursor: wait; color: var(--agi-ext-text-muted); background: var(--agi-ext-hover); }
 
     /* ── Mic pulsing indicator ── */
     .sp-mic-pulse {
@@ -3296,7 +3457,7 @@ function injectStyles(): void {
     .sp-save-shortcut-input {
       flex: 1;
       background: var(--agi-ext-bg);
-      border: 1px solid var(--agi-ext-border);
+      border: 1px solid var(--agi-ext-border-control);
       border-radius: var(--corner-compact);
       color: var(--agi-ext-text);
       font-size: var(--type-caption-size);
@@ -3307,8 +3468,8 @@ function injectStyles(): void {
     .sp-save-shortcut-input:focus { border-color: var(--agi-ext-focus); }
     .sp-save-shortcut-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-save-shortcut-btn {
-      background: var(--agi-ext-accent);
-      color: var(--agi-ext-on-accent);
+      background: var(--agi-ext-primary);
+      color: var(--agi-ext-on-primary);
       border: none;
       border-radius: var(--corner-compact);
       padding: 4px 8px;
@@ -3317,7 +3478,7 @@ function injectStyles(): void {
       cursor: pointer;
       white-space: nowrap;
     }
-    .sp-save-shortcut-btn:hover { background: var(--agi-ext-accent-hover); }
+    .sp-save-shortcut-btn:hover { background: var(--agi-ext-primary-hover); }
     .sp-save-shortcut-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
     /* ── Input row (composer §7) ── */
@@ -3357,8 +3518,8 @@ function injectStyles(): void {
       flex-shrink: 0;
       border: 0;
       border-radius: var(--corner-control);
-      background: var(--agi-ext-accent);
-      color: var(--agi-ext-on-accent);
+      background: var(--agi-ext-primary);
+      color: var(--agi-ext-on-primary);
       cursor: pointer;
       font: inherit;
       font-size: var(--type-caption-size);
@@ -3366,8 +3527,8 @@ function injectStyles(): void {
       font-weight: 600;
       padding: 6px 9px;
     }
-    #sp-cloud-gate-action:hover { opacity: 0.88; }
-    #sp-cloud-gate-action:disabled { cursor: wait; opacity: 0.6; }
+    #sp-cloud-gate-action:hover:not(:disabled) { background: var(--agi-ext-primary-hover); }
+    #sp-cloud-gate-action:disabled { cursor: wait; background: var(--agi-ext-hover); color: var(--agi-ext-text-muted); }
     .sp-composer-notice {
       display: none;
       align-items: center;
@@ -3429,7 +3590,7 @@ function injectStyles(): void {
     /* outer composer shell */
     #sp-composer-shell {
       background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
+      border: 1px solid var(--agi-ext-border-control);
       border-radius: var(--corner-panel);
       min-height: 106px;
       padding: 10px 10px 7px;
@@ -3466,7 +3627,7 @@ function injectStyles(): void {
       min-height: 52px;
       overflow-y: auto;
     }
-    #sp-input::placeholder { color: var(--agi-ext-text-placeholder); }
+    #sp-input::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
     /* Slash-command autocomplete. Anchored above the composer because the panel
        is short and a downward menu would fall outside the viewport. */
     #sp-slash-menu, #sp-mention-menu {
@@ -3578,8 +3739,8 @@ function injectStyles(): void {
     .sp-slash-name { color: var(--agi-ext-text); font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; }
     .sp-slash-hint { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     #sp-send-btn {
-      background: var(--agi-ext-accent);
-      color: var(--agi-ext-on-accent);
+      background: var(--agi-ext-primary);
+      color: var(--agi-ext-on-primary);
       border: none;
       border-radius: var(--corner-pill);
       width: var(--control-md);
@@ -3591,11 +3752,11 @@ function injectStyles(): void {
       flex-shrink: 0;
       transition: background var(--duration-quick), transform var(--duration-instant);
     }
-    #sp-send-btn:hover:not(:disabled) { background: var(--agi-ext-accent-hover); transform: scale(1.05); }
+    #sp-send-btn:hover:not(:disabled) { background: var(--agi-ext-primary-hover); transform: scale(1.05); }
     #sp-send-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    #sp-send-btn:disabled { background: var(--agi-ext-overlay); color: var(--agi-ext-border-strong); cursor: not-allowed; transform: none; }
-    #sp-send-btn[data-mode="stop"] { background: var(--agi-ext-danger); color: var(--agi-ext-on-danger); }
-    #sp-send-btn[data-mode="stop"]:hover { background: var(--agi-ext-danger-hover); }
+    #sp-send-btn:disabled { background: var(--agi-ext-hover); color: var(--agi-ext-text-muted); cursor: not-allowed; transform: none; }
+    #sp-send-btn[data-mode="stop"] { background: var(--agi-ext-primary); color: var(--agi-ext-on-primary); }
+    #sp-send-btn[data-mode="stop"]:hover { background: var(--agi-ext-primary-hover); }
 
     /* ── Attachment + button and menu ── */
     .sp-attach-wrapper { position: relative; flex-shrink: 0; }
@@ -3827,7 +3988,7 @@ function injectStyles(): void {
     #sp-auth-input {
       flex: 1;
       background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
+      border: 1px solid var(--agi-ext-border-control);
       border-radius: var(--corner-control);
       color: var(--agi-ext-text);
       font-size: var(--type-caption-size);
@@ -3840,10 +4001,10 @@ function injectStyles(): void {
     }
     #sp-auth-input:focus { border-color: var(--agi-ext-focus); }
     #sp-auth-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    #sp-auth-input::placeholder { color: var(--agi-ext-text-placeholder); }
+    #sp-auth-input::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
     #sp-auth-save-btn {
-      background: var(--agi-ext-accent);
-      color: var(--agi-ext-on-accent);
+      background: var(--agi-ext-primary);
+      color: var(--agi-ext-on-primary);
       border: none;
       border-radius: var(--corner-control);
       padding: 5px 10px;
@@ -3854,7 +4015,7 @@ function injectStyles(): void {
       transition: background var(--duration-quick);
       white-space: nowrap;
     }
-    #sp-auth-save-btn:hover { background: var(--agi-ext-accent-hover); }
+    #sp-auth-save-btn:hover { background: var(--agi-ext-primary-hover); }
     #sp-auth-save-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
     /* ── Connection status pill ── */
@@ -3890,9 +4051,9 @@ function injectStyles(): void {
     #sp-status-pill.connected .sp-status-dot { background: var(--agi-ext-success); }
     #sp-status-pill.disconnected .sp-status-dot { background: var(--agi-ext-danger); }
     #sp-status-pill.cloud {
-      background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
-      color: var(--agi-ext-accent-text);
-      border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent);
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text);
+      border: 1px solid var(--agi-ext-border-control);
     }
     #sp-status-pill.cloud .sp-status-dot { background: var(--agi-ext-accent); }
 
@@ -3987,12 +4148,12 @@ function injectStyles(): void {
     .sp-wf-shortcut-name { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 500; color: var(--agi-ext-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sp-wf-shortcut-meta { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); margin-top: 1px; }
     .sp-wf-shortcut-btns { display: flex; gap: 4px; flex-shrink: 0; }
-    .sp-wf-btn-replay { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 3px 9px; border-radius: var(--corner-control); cursor: pointer; transition: background var(--duration-instant); }
-    .sp-wf-btn-replay:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
-    .sp-wf-btn-replay:disabled { cursor: wait; opacity: 0.6; }
+    .sp-wf-btn-replay { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 3px 9px; border-radius: var(--corner-control); cursor: pointer; transition: background var(--duration-instant); }
+    .sp-wf-btn-replay:hover { background: var(--agi-ext-hover); }
+    .sp-wf-btn-replay:disabled { cursor: wait; background: var(--agi-ext-hover); color: var(--agi-ext-text-muted); }
     .sp-wf-btn-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 3px 7px; border-radius: var(--corner-control); cursor: pointer; transition: color var(--duration-instant), border-color var(--duration-instant); }
     .sp-wf-btn-delete:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
-    .sp-wf-btn-delete:disabled, .sp-wf-task-delete:disabled { cursor: wait; opacity: 0.55; }
+    .sp-wf-btn-delete:disabled, .sp-wf-task-delete:disabled { cursor: wait; color: var(--agi-ext-text-muted); }
     .sp-wf-btn-delete.is-confirm,
     .sp-wf-task-delete.is-confirm { color: var(--agi-ext-on-danger); background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
     .sp-wf-tasks-list { display: flex; flex-direction: column; gap: 6px; }
@@ -4000,7 +4161,7 @@ function injectStyles(): void {
     .sp-wf-task-info { flex: 1; min-width: 0; }
     .sp-wf-task-name { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 500; color: var(--agi-ext-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sp-wf-task-description { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); overflow-wrap: anywhere; }
-    .sp-wf-task-schedule-badge { display: inline-block; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-accent-text); background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: var(--corner-compact); padding: 1px 5px; margin-top: 2px; }
+    .sp-wf-task-schedule-badge { display: inline-block; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text); background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border-control); border-radius: var(--corner-compact); padding: 1px 5px; margin-top: 2px; }
     .sp-wf-task-toggle { appearance: none; width: 30px; height: 16px; border-radius: var(--corner-pill); background: var(--agi-ext-hover); position: relative; cursor: pointer; transition: background var(--duration-quick); flex-shrink: 0; }
     .sp-wf-task-toggle:checked { background: var(--agi-ext-accent); }
     .sp-wf-task-toggle:disabled { cursor: wait; opacity: 0.55; }
@@ -4010,22 +4171,22 @@ function injectStyles(): void {
     .sp-wf-task-delete:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
     .sp-wf-task-result { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 3px 7px; border-radius: var(--corner-control); cursor: pointer; transition: color var(--duration-instant), border-color var(--duration-instant); }
     .sp-wf-task-result:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-focus); }
-    .sp-wf-new-task-btn { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 4px 10px; border-radius: var(--corner-control); cursor: pointer; transition: background var(--duration-instant); }
-    .sp-wf-new-task-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
+    .sp-wf-new-task-btn { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 4px 10px; border-radius: var(--corner-control); cursor: pointer; transition: background var(--duration-instant); }
+    .sp-wf-new-task-btn:hover { background: var(--agi-ext-hover); }
     .sp-wf-new-task-form { display: none; flex-direction: column; gap: 7px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); }
     .sp-wf-new-task-form.open { display: flex; }
     .sp-wf-form-label { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); margin-bottom: 1px; }
-    .sp-wf-form-input { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 5px 8px; outline: none; font-family: inherit; transition: border-color var(--duration-quick); width: 100%; }
+    .sp-wf-form-input { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border-control); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 5px 8px; outline: none; font-family: inherit; transition: border-color var(--duration-quick); width: 100%; }
     .sp-wf-form-input:focus { border-color: var(--agi-ext-focus); }
     .sp-wf-form-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-wf-form-input::placeholder { color: var(--agi-ext-text-placeholder); }
+    .sp-wf-form-input::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
     .sp-wf-form-textarea { resize: vertical; min-height: 72px; box-sizing: border-box; }
-    .sp-wf-form-select { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 5px 8px; outline: none; font-family: inherit; width: 100%; }
+    .sp-wf-form-select { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border-control); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 5px 8px; outline: none; font-family: inherit; width: 100%; }
     .sp-wf-form-select:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-wf-form-save-btn { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border: none; border-radius: var(--corner-control); padding: 6px 14px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; align-self: flex-end; transition: background var(--duration-instant); }
-    .sp-wf-form-save-btn:hover { background: var(--agi-ext-accent-hover); }
+    .sp-wf-form-save-btn { background: var(--agi-ext-primary); color: var(--agi-ext-on-primary); border: none; border-radius: var(--corner-control); padding: 6px 14px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; align-self: flex-end; transition: background var(--duration-instant); }
+    .sp-wf-form-save-btn:hover { background: var(--agi-ext-primary-hover); }
     .sp-wf-form-save-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    .sp-wf-form-save-btn:disabled { cursor: wait; opacity: 0.6; }
+    .sp-wf-form-save-btn:disabled { cursor: wait; background: var(--agi-ext-hover); color: var(--agi-ext-text-muted); }
     .sp-wf-form-cancel-btn { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: var(--corner-control); padding: 6px 10px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; align-self: flex-end; transition: color var(--duration-instant); }
     .sp-wf-form-cancel-btn:hover { color: var(--agi-ext-text); }
     .sp-wf-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
@@ -4039,8 +4200,8 @@ function injectStyles(): void {
     }
     .sp-wf-mutation-status[data-kind="success"] { color: var(--agi-ext-success-text); }
     .sp-wf-mutation-status[data-kind="error"] { color: var(--agi-ext-danger-text); }
-    .sp-wf-create-shortcut-btn { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 4px 10px; border-radius: var(--corner-control); cursor: pointer; transition: background var(--duration-instant); }
-    .sp-wf-create-shortcut-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
+    .sp-wf-create-shortcut-btn { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 4px 10px; border-radius: var(--corner-control); cursor: pointer; transition: background var(--duration-instant); }
+    .sp-wf-create-shortcut-btn:hover { background: var(--agi-ext-hover); }
     .sp-create-shortcut-overlay { display: none; position: fixed; inset: 0; background: var(--agi-ext-scrim); z-index: var(--z-modal); align-items: center; justify-content: center; }
     .sp-create-shortcut-overlay.open { display: flex; }
     .sp-create-shortcut-modal { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-menu); padding: 18px 18px 14px; width: 290px; max-width: 95vw; display: flex; flex-direction: column; gap: 12px; box-shadow: var(--agi-ext-elevation-4); }
@@ -4050,38 +4211,38 @@ function injectStyles(): void {
     .sp-create-shortcut-close:hover { color: var(--agi-ext-text); }
     .sp-create-shortcut-field { display: flex; flex-direction: column; gap: 4px; }
     .sp-create-shortcut-label { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; color: var(--agi-ext-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-    .sp-create-shortcut-input { background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 6px 9px; outline: none; font-family: inherit; transition: border-color var(--duration-quick); width: 100%; box-sizing: border-box; }
+    .sp-create-shortcut-input { background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border-control); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 6px 9px; outline: none; font-family: inherit; transition: border-color var(--duration-quick); width: 100%; box-sizing: border-box; }
     .sp-create-shortcut-input:focus { border-color: var(--agi-ext-focus); }
     .sp-create-shortcut-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-create-shortcut-input::placeholder { color: var(--agi-ext-text-placeholder); }
-    .sp-create-shortcut-textarea { background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); padding: 6px 9px; outline: none; font-family: inherit; transition: border-color var(--duration-quick); width: 100%; box-sizing: border-box; resize: none; height: 70px; line-height: var(--type-caption-height); }
+    .sp-create-shortcut-input::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
+    .sp-create-shortcut-textarea { background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border-control); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); padding: 6px 9px; outline: none; font-family: inherit; transition: border-color var(--duration-quick); width: 100%; box-sizing: border-box; resize: none; height: 70px; line-height: var(--type-caption-height); }
     .sp-create-shortcut-textarea:focus { border-color: var(--agi-ext-focus); }
     .sp-create-shortcut-textarea:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-create-shortcut-textarea::placeholder { color: var(--agi-ext-text-placeholder); }
+    .sp-create-shortcut-textarea::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
     .sp-create-shortcut-input[aria-invalid='true'], .sp-create-shortcut-textarea[aria-invalid='true'] { border-color: var(--agi-ext-danger); }
     .sp-create-shortcut-hint { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     .sp-create-shortcut-hint:empty { display: none; }
     .sp-create-shortcut-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
     .sp-create-shortcut-cancel { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: var(--corner-control); padding: 6px 14px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; transition: color var(--duration-instant); }
     .sp-create-shortcut-cancel:hover { color: var(--agi-ext-text); }
-    .sp-create-shortcut-save { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border: none; border-radius: var(--corner-control); padding: 6px 14px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; transition: background var(--duration-instant); }
-    .sp-create-shortcut-save:hover { background: var(--agi-ext-accent-hover); }
+    .sp-create-shortcut-save { background: var(--agi-ext-primary); color: var(--agi-ext-on-primary); border: none; border-radius: var(--corner-control); padding: 6px 14px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; transition: background var(--duration-instant); }
+    .sp-create-shortcut-save:hover { background: var(--agi-ext-primary-hover); }
     .sp-create-shortcut-save:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     .sp-wf-group-desc { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); line-height: var(--type-caption-height); }
     .sp-wf-group-btns { display: flex; gap: 8px; flex-wrap: wrap; }
     .sp-wf-group-action-btn { display: flex; align-items: center; gap: 5px; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 5px 11px; cursor: pointer; transition: color var(--duration-quick), border-color var(--duration-quick), background var(--duration-quick); }
-    .sp-wf-group-action-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
+    .sp-wf-group-action-btn:hover:not(:disabled) { color: var(--agi-ext-text); border-color: var(--agi-ext-border-control); background: var(--agi-ext-hover); }
     .sp-wf-group-action-btn.active { color: var(--agi-ext-success-text); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
-    .sp-wf-group-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .sp-wf-group-action-btn:disabled { cursor: not-allowed; color: var(--agi-ext-text-muted); }
     .sp-wf-record-bar { display: flex; align-items: center; gap: 8px; }
-    .sp-wf-record-btn { display: flex; align-items: center; gap: 6px; background: var(--agi-ext-danger); border: none; color: var(--agi-ext-on-danger); font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; padding: 8px 16px; border-radius: var(--corner-field); cursor: pointer; transition: background var(--duration-quick), transform var(--duration-instant); flex-shrink: 0; }
-    .sp-wf-record-btn:hover { background: var(--agi-ext-danger-hover); transform: scale(1.02); }
-    .sp-wf-record-btn.recording { background: var(--agi-ext-danger-bg); border: 1px solid var(--agi-ext-danger); color: var(--agi-ext-danger-text); animation: sp-record-pulse calc(var(--duration-pulse) * 1.5) infinite; }
+    .sp-wf-record-btn { display: flex; align-items: center; gap: 6px; background: var(--agi-ext-primary); border: 1px solid var(--agi-ext-primary); color: var(--agi-ext-on-primary); font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; padding: 8px 16px; border-radius: var(--corner-field); cursor: pointer; transition: background var(--duration-quick), transform var(--duration-instant); flex-shrink: 0; }
+    .sp-wf-record-btn:hover { background: var(--agi-ext-primary-hover); transform: scale(1.02); }
+    .sp-wf-record-btn.recording { background: var(--agi-ext-surface); color: var(--agi-ext-text); animation: sp-record-pulse calc(var(--duration-pulse) * 1.5) infinite; border-color: var(--agi-ext-border-control); }
     .sp-wf-record-btn.recording:hover { background: var(--agi-ext-danger-bg); }
     @keyframes sp-record-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--agi-ext-transparent-shadow); }
     50% { box-shadow: 0 0 0 6px var(--agi-ext-danger-shadow); }
     }
-    .sp-wf-record-dot { width: 8px; height: 8px; border-radius: var(--corner-pill); background: var(--agi-ext-on-danger); flex-shrink: 0; }
+    .sp-wf-record-dot { width: 8px; height: 8px; border-radius: var(--corner-pill); background: currentColor; flex-shrink: 0; }
     .sp-wf-record-btn.recording .sp-wf-record-dot { background: var(--agi-ext-danger); animation: sp-pulse var(--duration-pulse) infinite; }
     .sp-wf-action-counter { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); flex: 1; }
     .sp-wf-action-counter strong { color: var(--agi-ext-text); }
@@ -4089,10 +4250,10 @@ function injectStyles(): void {
     .sp-wf-record-status[data-kind="error"] { color: var(--agi-ext-danger-text); }
     .sp-wf-capture-values { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); cursor: pointer; }
     .sp-wf-capture-values input { cursor: pointer; }
-    .sp-wf-save-dialog { display: none; flex-direction: column; gap: 6px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: var(--corner-field); }
+    .sp-wf-save-dialog { display: none; flex-direction: column; gap: 6px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border-control); border-radius: var(--corner-field); }
     .sp-wf-save-dialog.open { display: flex; }
-    .sp-wf-save-dialog-title { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; color: var(--agi-ext-accent-text); }
-    .sp-wf-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; background: color-mix(in srgb, var(--agi-ext-accent) 20%, transparent); color: var(--agi-ext-accent-text); border-radius: var(--corner-field); padding: 0 5px; }
+    .sp-wf-save-dialog-title { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; color: var(--agi-ext-text); }
+    .sp-wf-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; background: var(--agi-ext-surface); color: var(--agi-ext-text); border-radius: var(--corner-field); padding: 0 5px; }
     .sp-model-selector-wrap { position: relative; min-width: 0; }
     #sp-model-selector-btn { display: flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: var(--corner-control); padding: 3px 8px; color: var(--agi-ext-accent-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 500; cursor: pointer; transition: background var(--duration-instant), border-color var(--duration-instant); white-space: nowrap; min-width: 0; max-width: 100%; overflow: hidden; }
     #sp-model-selector-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); border-color: var(--agi-ext-accent); }
@@ -4113,6 +4274,9 @@ function injectStyles(): void {
       flex-shrink: 0;
       object-fit: contain;
       display: block;
+      padding: 2px;
+      background: var(--agi-ext-logo-surface);
+      forced-color-adjust: none;
     }
     .sp-model-option-logo-placeholder {
       width: 16px;
@@ -4163,8 +4327,8 @@ function injectStyles(): void {
       font-weight: 700;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      color: var(--agi-ext-on-accent);
-      background: var(--agi-ext-accent);
+      color: var(--agi-ext-text-muted);
+      background: var(--agi-ext-hover);
       border-radius: var(--corner-compact);
       padding: 1px 5px;
       flex-shrink: 0;
@@ -4185,7 +4349,7 @@ function injectStyles(): void {
       width: 16px;
       height: 16px;
       border-radius: var(--corner-pill);
-      background: linear-gradient(135deg, var(--agi-ext-accent), var(--agi-ext-accent-secondary));
+      background: var(--agi-ext-text-muted);
       flex-shrink: 0;
     }
 
@@ -4353,9 +4517,9 @@ function injectStyles(): void {
       transition: color var(--duration-quick), border-color var(--duration-quick), background var(--duration-quick);
       flex-shrink: 0;
     }
-    .sp-drawer-tool-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
+    .sp-drawer-tool-btn:hover:not(:disabled) { color: var(--agi-ext-text); border-color: var(--agi-ext-border-control); background: var(--agi-ext-hover); }
     .sp-drawer-tool-btn.active { color: var(--agi-ext-success-text); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
-    .sp-drawer-tool-btn:disabled { opacity: 0.5; cursor: wait; }
+    .sp-drawer-tool-btn:disabled { cursor: wait; color: var(--agi-ext-text-muted); background: var(--agi-ext-hover); }
     /* History sub-list inside the drawer.
        CSP note (style-src 'self'): these rules used to be applied via
        element.style.cssText at runtime, which Chrome blocks on extension
@@ -4371,7 +4535,7 @@ function injectStyles(): void {
       width: 100%;
       margin-top: 7px;
       padding: 7px 9px;
-      border: 1px solid var(--agi-ext-border);
+      border: 1px solid var(--agi-ext-border-control);
       border-radius: var(--corner-control);
       background: var(--agi-ext-surface);
       color: var(--agi-ext-text);
@@ -4419,7 +4583,7 @@ function injectStyles(): void {
     .sp-drawer-history-open:hover { background: var(--agi-ext-hover); }
     .sp-drawer-history-open:disabled {
       cursor: not-allowed;
-      opacity: 0.55;
+      color: var(--agi-ext-text-muted);
     }
     .sp-drawer-history-open:disabled:hover { background: transparent; }
     .sp-drawer-history-text { flex: 1; min-width: 0; }
@@ -4579,7 +4743,7 @@ function injectStyles(): void {
       text-transform: uppercase;
       padding: 6px 8px;
       border-radius: var(--corner-control);
-      border: 1px solid var(--agi-ext-border);
+      border: 1px solid var(--agi-ext-border-control);
       background: var(--agi-ext-surface);
       color: var(--agi-ext-text);
     }
@@ -4596,8 +4760,8 @@ function injectStyles(): void {
       transition: color var(--duration-quick), border-color var(--duration-quick), background var(--duration-quick);
     }
     .sp-drawer-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
-    .sp-drawer-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-    .sp-drawer-btn-primary { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border-color: var(--agi-ext-accent); }
+    .sp-drawer-btn:disabled { cursor: not-allowed; background: var(--agi-ext-hover); color: var(--agi-ext-text-muted); }
+    .sp-drawer-btn-primary { background: var(--agi-ext-primary); color: var(--agi-ext-on-primary); border-color: var(--agi-ext-primary); }
     .sp-drawer-btn-primary:hover { background: var(--agi-ext-accent-hover); color: var(--agi-ext-on-accent); border-color: var(--agi-ext-accent); }
     .sp-drawer-btn-danger { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
     .sp-drawer-btn-danger:hover { background: var(--agi-ext-danger-bg); color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
@@ -4634,7 +4798,7 @@ function injectStyles(): void {
     .sp-drawer-allowlist-toggle-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
     .sp-drawer-allowlist-toggle-btn.is-remove { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
     .sp-drawer-allowlist-toggle-btn.is-remove:hover { background: var(--agi-ext-danger-bg); }
-    .sp-drawer-allowlist-toggle-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .sp-drawer-allowlist-toggle-btn:disabled { color: var(--agi-ext-text-muted); cursor: not-allowed; }
     .sp-drawer-allowlist-list { list-style: none; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
     .sp-drawer-allowlist-item {
       display: flex;
@@ -4690,7 +4854,7 @@ function injectStyles(): void {
     .sp-drawer-memory-editor.open { display: flex; }
     .sp-drawer-memory-textarea {
       background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
+      border: 1px solid var(--agi-ext-border-control);
       border-radius: var(--corner-control);
       color: var(--agi-ext-text);
       font-size: var(--type-caption-size);
@@ -4704,7 +4868,7 @@ function injectStyles(): void {
       box-sizing: border-box;
     }
     .sp-drawer-memory-textarea:focus { border-color: var(--agi-ext-focus); }
-    .sp-drawer-memory-textarea::placeholder { color: var(--agi-ext-text-placeholder); }
+    .sp-drawer-memory-textarea::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
     .sp-drawer-memory-editor-actions { display: flex; gap: 6px; justify-content: flex-end; }
     .sp-drawer-memory-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
     .sp-drawer-memory-item {
@@ -4734,7 +4898,7 @@ function injectStyles(): void {
     .sp-drawer-memory-item-delete-btn.is-confirm { color: var(--agi-ext-on-danger); background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
     .sp-drawer-memory-item-textarea {
       background: var(--agi-ext-bg);
-      border: 1px solid var(--agi-ext-border);
+      border: 1px solid var(--agi-ext-border-control);
       border-radius: var(--corner-control);
       color: var(--agi-ext-text);
       font-size: var(--type-caption-size);
@@ -4873,7 +5037,7 @@ function injectStyles(): void {
     .sp-drawer-bridge-input {
       flex: 1;
       background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
+      border: 1px solid var(--agi-ext-border-control);
       border-radius: var(--corner-control);
       color: var(--agi-ext-text);
       font-size: var(--type-code-size);
@@ -4885,7 +5049,7 @@ function injectStyles(): void {
       min-width: 0;
     }
     .sp-drawer-bridge-input:focus { border-color: var(--agi-ext-focus); }
-    .sp-drawer-bridge-input::placeholder { color: var(--agi-ext-text-placeholder); }
+    .sp-drawer-bridge-input::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
     .sp-drawer-bridge-error { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-danger-text); padding: 2px 0; margin-top: 2px; }
     /* Cloud unlock */
     .sp-drawer-cloud-btn {
@@ -4894,10 +5058,10 @@ function injectStyles(): void {
       justify-content: center;
       gap: 6px;
       width: 100%;
-      background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
-      border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent);
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border-control);
       border-radius: var(--corner-control);
-      color: var(--agi-ext-accent-text);
+      color: var(--agi-ext-text);
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
       font-weight: 500;
@@ -4905,7 +5069,7 @@ function injectStyles(): void {
       cursor: pointer;
       transition: background var(--duration-quick), border-color var(--duration-quick);
     }
-    .sp-drawer-cloud-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 20%, transparent); border-color: var(--agi-ext-accent); }
+    .sp-drawer-cloud-btn:hover { background: var(--agi-ext-hover); border-color: var(--agi-ext-accent); }
 
     /* ── AGI Cloud sign-in / quota UI ── */
     .sp-cloud-account {
@@ -5029,16 +5193,16 @@ function injectStyles(): void {
     .sp-quota-upgrade-btn {
       font-size: var(--type-label-size); line-height: var(--type-label-height);
       font-weight: 600;
-      color: var(--agi-ext-accent-text);
-      background: color-mix(in srgb, var(--agi-ext-accent) 10%, transparent);
-      border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 25%, transparent);
+      color: var(--agi-ext-text);
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border-control);
       border-radius: var(--corner-control);
       padding: 3px 8px;
       cursor: pointer;
       white-space: nowrap;
       transition: background var(--duration-instant);
     }
-    .sp-quota-upgrade-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 18%, transparent); }
+    .sp-quota-upgrade-btn:hover { background: var(--agi-ext-hover); }
     .sp-quota-windows {
       display: flex;
       flex-direction: column;
@@ -5147,10 +5311,10 @@ function injectStyles(): void {
       justify-content: center;
       gap: 6px;
       width: 100%;
-      background: var(--agi-ext-accent);
+      background: var(--agi-ext-primary);
       border: none;
       border-radius: var(--corner-control);
-      color: var(--agi-ext-on-accent);
+      color: var(--agi-ext-on-primary);
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
       font-weight: 600;
@@ -5158,7 +5322,7 @@ function injectStyles(): void {
       cursor: pointer;
       transition: opacity var(--duration-quick);
     }
-    .sp-cloud-signin-btn:hover { opacity: 0.88; }
+    .sp-cloud-signin-btn:hover { background: var(--agi-ext-primary-hover); }
     .sp-cloud-token-row {
       display: flex;
       gap: 6px;
@@ -5167,7 +5331,7 @@ function injectStyles(): void {
     .sp-cloud-token-input {
       flex: 1;
       background: var(--agi-ext-bg);
-      border: 1px solid var(--agi-ext-border-strong);
+      border: 1px solid var(--agi-ext-border-control);
       border-radius: var(--corner-control);
       color: var(--agi-ext-text);
       font-size: var(--type-code-size);
@@ -5179,7 +5343,7 @@ function injectStyles(): void {
       transition: border-color var(--duration-quick);
     }
     .sp-cloud-token-input:focus { border-color: var(--agi-ext-focus); }
-    .sp-cloud-token-input::placeholder { color: var(--agi-ext-text-placeholder); }
+    .sp-cloud-token-input::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
     .sp-cloud-token-save-btn {
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border-strong);
@@ -5220,16 +5384,16 @@ function injectStyles(): void {
     }
     #sp-quota-badge.visible { display: flex; }
     #sp-quota-badge.has-prompts {
-      background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
-      color: var(--agi-ext-accent-text);
-      border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 28%, transparent);
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text-muted);
+      border: 1px solid var(--agi-ext-border);
     }
     #sp-quota-badge.exhausted {
       background: var(--agi-ext-danger-bg);
       color: var(--agi-ext-danger-text);
       border: 1px solid var(--agi-ext-danger-border);
     }
-    #sp-quota-badge:hover { opacity: 0.8; }
+    #sp-quota-badge:hover { background: var(--agi-ext-hover); }
 
     /* Drawer footer */
     #sp-drawer-footer {
@@ -5382,7 +5546,7 @@ function injectStyles(): void {
       display: inline;
       font-family: inherit;
     }
-    .sp-ob-learn-more:hover { opacity: 0.8; }
+    .sp-ob-learn-more:hover { text-decoration-thickness: 2px; }
     .sp-ob-learn-more:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
     /* Steps 2-5 body text */
@@ -5519,8 +5683,8 @@ function injectStyles(): void {
       padding: 8px 14px;
       border-radius: var(--corner-field);
       border: none;
-      background: var(--agi-ext-accent);
-      color: var(--agi-ext-on-accent);
+      background: var(--agi-ext-primary);
+      color: var(--agi-ext-on-primary);
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
       font-weight: 600;
@@ -5528,7 +5692,7 @@ function injectStyles(): void {
       transition: background var(--duration-instant);
       font-family: inherit;
     }
-    .sp-ob-btn-next:hover { background: var(--agi-ext-accent-hover); }
+    .sp-ob-btn-next:hover { background: var(--agi-ext-primary-hover); }
     .sp-ob-btn-next:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
     /* ── 2026-08 browser-surface polish ───────────────────────────────────
@@ -5598,6 +5762,7 @@ function injectStyles(): void {
       opacity: 0.58;
     }
     .sp-msg { max-width: 92%; gap: 5px; }
+    .sp-msg-user { max-width: 75%; }
     .sp-msg-assistant { max-width: 100%; }
     .sp-bubble {
       padding: 9px 12px;
@@ -5626,13 +5791,13 @@ function injectStyles(): void {
       min-height: 84px;
       padding: 10px 10px 6px;
       gap: 6px;
-      border-color: var(--agi-ext-border-strong);
+      border-color: var(--agi-ext-border-control);
       border-radius: var(--corner-panel);
       background: var(--agi-ext-surface);
       box-shadow: none;
     }
     #sp-composer-shell:has(#sp-input:focus) {
-      border-color: color-mix(in srgb, var(--agi-ext-accent) 55%, var(--agi-ext-border));
+      border-color: var(--agi-ext-focus);
       box-shadow: none;
     }
     #sp-input-row { align-items: stretch; }
@@ -5790,7 +5955,7 @@ function injectStyles(): void {
       width: 110px;
       height: 110px;
       margin: 0;
-      color: color-mix(in srgb, var(--agi-ext-brand) 30%, var(--agi-ext-text-muted));
+      color: var(--agi-ext-text-muted);
       opacity: 0.55;
     }
     #sp-empty-icon svg { width: 110px; height: 110px; }
@@ -6079,7 +6244,7 @@ function injectStyles(): void {
       height: 6px;
       flex-shrink: 0;
       border-radius: var(--corner-pill);
-      background: var(--agi-ext-accent);
+      background: var(--agi-ext-text-muted);
     }
     .sp-drawer-history-open { min-height: 40px; gap: 10px; }
     .sp-drawer-history-title { font-size: var(--type-body-size); line-height: var(--type-body-height); }
@@ -6139,16 +6304,16 @@ function injectStyles(): void {
 
     @media (max-width: 390px) {
       #sp-header { padding-inline: 10px; }
-    #sp-quota-badge.visible {
+      #sp-quota-badge.visible {
         display: inline-flex;
-        max-width: 38px;
-        padding-inline: 4px;
+        max-width: 104px;
+        padding-inline: 6px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         font-size: var(--type-label-size); line-height: var(--type-label-height);
       }
-      #sp-model-badge { max-width: 82px; }
+      #sp-model-badge { max-width: 132px; }
       #sp-messages { padding-inline: 11px; }
       #sp-input-area { padding-inline: 8px; }
       #sp-composer-shell { padding-inline: 9px; }
@@ -6240,7 +6405,14 @@ function approveToolsAllowedForChat(assistantMessageId: string): void {
     ) {
       continue;
     }
-    resolveManagedToolApproval(assistantMessageId, entry.toolCallId, 'approved');
+    resolveManagedToolApproval(
+      assistantMessageId,
+      entry.toolCallId,
+      'approved',
+      _ctx.managedCloudOwner,
+      _ctx.conversationId,
+      _ctx.conversationGeneration,
+    );
   }
 }
 
@@ -6255,7 +6427,16 @@ function resolveManagedToolApproval(
   assistantMessageId: string,
   toolCallId: string,
   decision: 'approved' | 'rejected',
+  expectedOwner: ManagedCloudOwner | null,
+  expectedConversationId: string,
+  expectedGeneration: number,
 ): void {
+  if (
+    expectedConversationId !== _ctx.conversationId ||
+    expectedGeneration !== _ctx.conversationGeneration ||
+    !sameManagedCloudOwner(expectedOwner, _ctx.managedCloudOwner)
+  )
+    return;
   const assistant = _ctx.messages.find(
     (message) => message.id === assistantMessageId && message.role === 'assistant',
   );
@@ -6273,6 +6454,12 @@ function resolveManagedToolApproval(
     !assistant ||
     !run ||
     !owner ||
+    assistant.streamCancellation !== undefined ||
+    assistant.agentActivity?.status === 'completed' ||
+    assistant.agentActivity?.status === 'failed' ||
+    assistant.agentActivity?.status === 'cancelled' ||
+    (run.state !== undefined && TERMINAL_AGENT_TASK_STATES.has(run.state)) ||
+    assistant.cloudApprovalDecisions?.[toolCallId] !== undefined ||
     _ctx.isStreaming ||
     !pendingCalls.some((entry) => entry.toolCallId === toolCallId)
   ) {
@@ -6327,7 +6514,14 @@ function resolveManagedToolApproval(
       ...(guidance ? { guidance } : {}),
     },
     (response?: { success?: boolean; error?: string }) => {
-      if (_ctx.currentStreamId !== assistant.id) return;
+      if (
+        _ctx.currentStreamId !== assistant.id ||
+        expectedConversationId !== _ctx.conversationId ||
+        expectedGeneration !== _ctx.conversationGeneration ||
+        !sameManagedCloudOwner(expectedOwner, _ctx.managedCloudOwner) ||
+        assistant.streamCancellation !== undefined
+      )
+        return;
       if (chrome.runtime.lastError) {
         handleStreamError(
           assistant.id,
@@ -6455,7 +6649,7 @@ function sendCardAnswer(text: string): void {
   _ctx.needsMessageRebuild = true;
   saveMessages();
   renderMessages();
-  dispatchTurn(userMsg, payload, _ctx.quickMode);
+  dispatchTurn(userMsg, payload, managedQuickModeActive());
 }
 
 function respondToInteractiveCard(
@@ -6614,18 +6808,31 @@ function renderMessages(): void {
         lastUserIndex >= 0 &&
         (msg.role === 'user' ? i === lastUserIndex : i === _ctx.messages.length - 1) &&
         i >= lastUserIndex;
+      const approvalOwner = _ctx.managedCloudOwner ? { ..._ctx.managedCloudOwner } : null;
+      const approvalConversationId = _ctx.conversationId;
+      const approvalGeneration = _ctx.conversationGeneration;
       container.appendChild(
         buildBubbleWithTools(msg, {
           approvalDecisions: msg.cloudApprovalDecisions,
           approvalError: msg.cloudApprovalError,
           approvalGuidance: Object.fromEntries(approvalGuidanceDrafts),
           onResolveApproval: (toolCallId, decision) =>
-            resolveManagedToolApproval(msg.id, toolCallId, decision),
+            resolveManagedToolApproval(
+              msg.id,
+              toolCallId,
+              decision,
+              approvalOwner,
+              approvalConversationId,
+              approvalGeneration,
+            ),
           onApproveForChat: (_toolCallId, toolName) => approveToolForChat(msg.id, toolName),
           onApprovalGuidanceChange: setApprovalGuidanceDraft,
           connectorInput: connectorInputBinding(msg),
           ...agiWorkPlanReviewOption(msg, i),
-          onRetry: (messageId) => retryFailedMessage(messageId),
+          onRetry:
+            msg.streamCancellation === 'pending'
+              ? undefined
+              : (messageId) => retryFailedMessage(messageId),
           onSwitchModel: () => document.getElementById('sp-model-selector-btn')?.click(),
           quotaRecovery: { label: quotaRecoveryLabel, open: openQuotaRecovery },
           ...(regenerable
@@ -6754,8 +6961,6 @@ function updateStreamingBubble(id: string, fullText: string, done: boolean): voi
   scrollToBottom();
 }
 
-const PAGE_CONTEXT_MAX_CHARS = 5_000;
-
 const PAGE_CONTEXT_DENIED_REASON =
   'Chrome would not let the extension read this page. Approve this site under Settings, Site ' +
   'Allowlist in this panel, reload the page, and try again.';
@@ -6770,7 +6975,8 @@ const PAGE_CONTEXT_CHANGED_REASON =
   'The active page changed before it could be read. Go back to the page you asked about and try again.';
 
 export type PageContextCapture =
-  { ok: true; text: string; source: PageContextSource } | { ok: false; reason: string };
+  | { ok: true; text: string; source: PageContextSource; truncated?: boolean; documentId?: string }
+  | { ok: false; reason: string };
 
 function describePageContextFailure(message: string): string {
   if (/chrome:\/\/|extension gallery|chrome-untrusted|view-source/i.test(message)) {
@@ -6789,22 +6995,49 @@ function describePageContextFailure(message: string): string {
  * shows the user why nothing was attached or refuses to send a turn that needs
  * the page, and neither is possible without the reason.
  */
-async function capturePageContext(): Promise<PageContextCapture> {
-  return new Promise((resolve) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const queryFailure = chrome.runtime.lastError?.message;
-      if (queryFailure) {
-        resolve({ ok: false, reason: describePageContextFailure(queryFailure) });
-        return;
-      }
-      const tab = tabs[0];
-      if (!tab?.id) {
-        resolve({ ok: false, reason: 'No page is open in the active tab.' });
-        return;
-      }
-      void readTabText(tab).then(resolve);
-    });
-  });
+async function capturePageContext(
+  selected?: BrowserContextTabReference,
+  maxCharacters = MAX_PAGE_TEXT_CHARACTERS,
+): Promise<PageContextCapture> {
+  try {
+    const limit = Math.min(MAX_PAGE_TEXT_CHARACTERS, Math.floor(maxCharacters));
+    if (limit <= 0) return { ok: false, reason: 'The attached pages exceed the context budget.' };
+    const tab = selected
+      ? await chrome.tabs.get(selected.tabId)
+      : (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
+    if (!tab?.id || !tab.url) return { ok: false, reason: 'No readable website tab is open.' };
+    const url = new URL(tab.url);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
+      return { ok: false, reason: PAGE_CONTEXT_BLOCKED_REASON };
+    if (tab.status === 'loading')
+      return {
+        ok: false,
+        reason: 'This page is still loading. Wait for it to finish and try again.',
+      };
+    if (selected && (tab.url !== selected.url || tab.windowId !== selected.windowId))
+      return { ok: false, reason: PAGE_CONTEXT_CHANGED_REASON };
+    const capture = await readTabText(tab, selected !== undefined);
+    if (!capture.ok) return capture;
+    const current = await chrome.tabs.get(tab.id);
+    if (
+      current.url !== tab.url ||
+      current.windowId !== tab.windowId ||
+      current.status === 'loading'
+    )
+      return { ok: false, reason: PAGE_CONTEXT_CHANGED_REASON };
+    return {
+      ...capture,
+      text: capture.text.slice(0, limit),
+      truncated: capture.truncated || capture.text.length > limit,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: describePageContextFailure(
+        error instanceof Error ? error.message : 'Page access is unavailable.',
+      ),
+    };
+  }
 }
 
 function readTabText(tab: chrome.tabs.Tab, chosen = false): Promise<PageContextCapture> {
@@ -6816,11 +7049,12 @@ function readTabText(tab: chrome.tabs.Tab, chosen = false): Promise<PageContextC
     chrome.scripting.executeScript(
       {
         target: { tabId: tab.id },
-        func: () => {
+        args: [MAX_PAGE_TEXT_CHARACTERS],
+        func: (maxCharacters: number) => {
           const main = document.querySelector('main, article, [role="main"]');
           const mainText = main instanceof HTMLElement ? main.innerText.trim() : '';
           const text = mainText.length >= 200 ? mainText : (document.body?.innerText ?? '');
-          return text.slice(0, 5000);
+          return { text: text.slice(0, maxCharacters + 1), truncated: text.length > maxCharacters };
         },
       },
       (results) => {
@@ -6829,13 +7063,21 @@ function readTabText(tab: chrome.tabs.Tab, chosen = false): Promise<PageContextC
           resolve({ ok: false, reason: describePageContextFailure(scriptFailure) });
           return;
         }
-        const raw = typeof results?.[0]?.result === 'string' ? results[0].result : '';
-        const text = sanitizePageText(raw).slice(0, PAGE_CONTEXT_MAX_CHARS);
+        const result = results?.[0]?.result;
+        const raw = typeof result?.text === 'string' ? result.text : '';
+        const { text, truncated } = boundPageText(
+          sanitizePageText(raw),
+          result?.truncated === true,
+        );
         resolve(
           text.trim()
             ? {
                 ok: true,
                 text,
+                truncated,
+                ...(typeof results?.[0]?.documentId === 'string'
+                  ? { documentId: results[0].documentId }
+                  : {}),
                 source: {
                   tabId: tab.id!,
                   url: tab.url ?? '',
@@ -6874,7 +7116,7 @@ async function readLinkedPage(url: string): Promise<PageContextCapture> {
   const raw = page ? (mainText.length >= 200 ? mainText : (page.body?.textContent ?? '')) : body;
   const text = sanitizePageText(raw.replace(/\s+\n/g, '\n').replace(/[ \t]{2,}/g, ' ')).slice(
     0,
-    PAGE_CONTEXT_MAX_CHARS,
+    MAX_PAGE_TEXT_CHARACTERS,
   );
   if (!text.trim()) return { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON };
   const title = page?.title.trim();
@@ -6885,13 +7127,111 @@ async function readLinkedPage(url: string): Promise<PageContextCapture> {
   };
 }
 
+interface PendingStreamCancellation {
+  owner: ManagedCloudOwner;
+  conversationId: string;
+  conversationGeneration: number;
+  assistant: SidePanelChatMessage;
+  pending: boolean;
+  timer: ReturnType<typeof setTimeout> | null;
+  completion?: Promise<void>;
+}
+
+const pendingStreamCancellations = new Map<string, PendingStreamCancellation>();
+const STREAM_CANCELLATION_TIMEOUT_MS = MANAGED_RUN_CANCELLATION_TIMEOUT_MS;
+
+function ownsStreamCancellation(cancellation: PendingStreamCancellation): boolean {
+  return (
+    sameManagedCloudOwner(cancellation.owner, _ctx.managedCloudOwner) &&
+    cancellation.conversationId === _ctx.conversationId &&
+    cancellation.conversationGeneration === _ctx.conversationGeneration &&
+    _ctx.messages.includes(cancellation.assistant)
+  );
+}
+
+function hasUnconfirmedStreamCancellation(): boolean {
+  return _ctx.messages.some((message) => {
+    if (message.streamCancellation === undefined) return false;
+    const cancellation = pendingStreamCancellations.get(message.id);
+    return cancellation === undefined || ownsStreamCancellation(cancellation);
+  });
+}
+
 async function requestStreamCancellation(streamId: string): Promise<void> {
-  const owner = ownerByStreamId.get(streamId);
+  const previous = pendingStreamCancellations.get(streamId);
+  if (previous && !ownsStreamCancellation(previous))
+    throw new Error('The cancellation belongs to another chat.');
+  if (previous?.pending && ownsStreamCancellation(previous)) return previous.completion;
+  const existingAssistant = _ctx.messages.find(
+    (message) => message.id === streamId && message.role === 'assistant',
+  );
+  const owner =
+    ownerByStreamId.get(streamId) ??
+    (previous && ownsStreamCancellation(previous) ? previous.owner : undefined) ??
+    (existingAssistant?.streamCancellation ? _ctx.managedCloudOwner : undefined);
   if (!owner) throw new Error('Managed Cloud stream owner is unavailable.');
-  const cloudRun =
-    cloudRunsByStreamId.get(streamId) ??
-    _ctx.messages.find((message) => message.id === streamId)?.cloudAgentRun;
-  const response: unknown = await withTimeout(
+  const assistant = existingAssistant ?? {
+    id: streamId,
+    role: 'assistant' as const,
+    content: '',
+    timestamp: Date.now(),
+    runtime: 'managed-cloud' as const,
+  };
+  if (!existingAssistant) _ctx.messages.push(assistant);
+  const cloudRun = cloudRunsByStreamId.get(streamId) ?? assistant?.cloudAgentRun;
+  const cancellation: PendingStreamCancellation = {
+    owner: { ...owner },
+    conversationId: _ctx.conversationId,
+    conversationGeneration: _ctx.conversationGeneration,
+    assistant,
+    pending: true,
+    timer: null,
+  };
+  pendingStreamCancellations.set(streamId, cancellation);
+  while (pendingStreamCancellations.size > MAX_STORED_MESSAGES) {
+    const oldest = pendingStreamCancellations.keys().next().value;
+    if (oldest === undefined) break;
+    const removed = pendingStreamCancellations.get(oldest);
+    if (removed?.timer) clearTimeout(removed.timer);
+    pendingStreamCancellations.delete(oldest);
+  }
+  assistant.streaming = false;
+  assistant.streamCancellation = 'pending';
+  assistant.error = true;
+  assistant.errorText = 'Local streaming stopped. Confirming AGI Cloud cancellation…';
+  _ctx.needsMessageRebuild = true;
+  saveMessages();
+  renderMessages();
+  updateSendButton();
+  const finishPending = (): boolean => {
+    if (pendingStreamCancellations.get(streamId) !== cancellation || !cancellation.pending)
+      return false;
+    cancellation.pending = false;
+    if (cancellation.timer) clearTimeout(cancellation.timer);
+    cancellation.timer = null;
+    return true;
+  };
+  const showCancellationFailure = (error: string): void => {
+    if (!finishPending() || !ownsStreamCancellation(cancellation)) return;
+    assistant.streamCancellation = 'unconfirmed';
+    applyStreamFailure(
+      _ctx.messages,
+      streamId,
+      `${error} Use Retry to retry Stop, or start a new chat.`,
+    );
+    _ctx.needsMessageRebuild = true;
+    saveMessages();
+    renderMessages();
+    updateSendButton();
+  };
+  cancellation.timer = setTimeout(
+    () =>
+      showCancellationFailure(
+        'Local streaming stopped. AGI Cloud cancellation could not be confirmed. The run may still be running.',
+      ),
+    STREAM_CANCELLATION_TIMEOUT_MS,
+  );
+  cancellation.completion = withTimeout(
     chrome.runtime.sendMessage({
       type: 'CANCEL_STREAM',
       owner,
@@ -6899,16 +7239,56 @@ async function requestStreamCancellation(streamId: string): Promise<void> {
       id: streamId,
       ...(cloudRun ? { cloudRun } : {}),
     }),
-    MANAGED_RUN_CANCELLATION_TIMEOUT_MS,
-  );
-  if (
-    !response ||
-    typeof response !== 'object' ||
-    !('success' in response) ||
-    response.success !== true
-  ) {
-    throw new Error('Managed Cloud cancellation has not been confirmed.');
-  }
+    STREAM_CANCELLATION_TIMEOUT_MS,
+  )
+    .then(
+      (response?: {
+        success?: boolean;
+        error?: string;
+        cancellationConfirmed?: boolean;
+        cloudRun?: ManagedCloudAgentRunReference;
+      }) => {
+        if (response?.success !== true) {
+          throw new Error(
+            response?.error ?? 'AGI Cloud cancellation failed. The run may still be running.',
+          );
+        }
+        const confirmed =
+          response.cancellationConfirmed === true &&
+          (!cloudRun ||
+            (response.cloudRun &&
+              response.cloudRun.state !== undefined &&
+              TERMINAL_AGENT_TASK_STATES.has(response.cloudRun.state)));
+        if (!confirmed) {
+          throw new Error(
+            'Local streaming stopped. AGI Cloud has not confirmed that the run stopped.',
+          );
+        }
+        if (!finishPending() || !ownsStreamCancellation(cancellation)) return;
+        if (response.cloudRun) {
+          assistant.cloudAgentRun = { ...response.cloudRun };
+          cloudRunsByStreamId.set(streamId, { ...response.cloudRun });
+        }
+        reconcileManagedRunActivity(assistant);
+        delete assistant.streamCancellation;
+        delete assistant.errorText;
+        delete assistant.error;
+        pendingStreamCancellations.delete(streamId);
+        _ctx.needsMessageRebuild = true;
+        saveMessages();
+        renderMessages();
+        updateSendButton();
+      },
+    )
+    .catch((error: unknown) => {
+      showCancellationFailure(
+        error instanceof Error
+          ? error.message
+          : 'Local streaming stopped. AGI Cloud cancellation could not be confirmed. The run may still be running.',
+      );
+      throw error;
+    });
+  return cancellation.completion;
 }
 
 function stopManagedChatKeepalive(): void {
@@ -7050,7 +7430,245 @@ function resumeManagedCloudRun(
 
 let stoppingStreamId: string | null = null;
 
+interface ComposerBrowserRun {
+  runId: string;
+  owner: ManagedCloudOwner;
+  conversationId: string;
+  conversationGeneration: number;
+  modelSelection: string;
+  startSent: boolean;
+  cancelling: boolean;
+  finalMessage: string | null;
+  activityTimer: ReturnType<typeof setTimeout> | null;
+}
+
+let composerBrowserRun: ComposerBrowserRun | null = null;
+
+function ownsComposerBrowserConversation(run: ComposerBrowserRun): boolean {
+  return (
+    composerBrowserRun === run &&
+    sameManagedCloudOwner(run.owner, _ctx.managedCloudOwner) &&
+    _ctx.conversationId === run.conversationId &&
+    _ctx.conversationGeneration === run.conversationGeneration
+  );
+}
+
+function finishComposerBrowserTask(run: ComposerBrowserRun, content: string, failed = false): void {
+  if (composerBrowserRun !== run) return;
+  if (run.activityTimer) clearTimeout(run.activityTimer);
+  const ownsConversation = ownsComposerBrowserConversation(run);
+  composerBrowserRun = null;
+  if (composerComputerUsePanel?.ownsRun(run.runId)) {
+    composerComputerUsePanel.setRunState(false, run.runId);
+  }
+  _ctx.isStreaming = false;
+  updateSendButton();
+  if (!ownsConversation) return;
+  const assistant = _ctx.messages.find((message) => message.id === run.runId);
+  if (assistant) {
+    assistant.content = content;
+    assistant.streaming = false;
+    if (failed) assistant.error = true;
+  }
+  _ctx.needsMessageRebuild = true;
+  saveMessages();
+  renderMessages();
+}
+
+function noteComposerBrowserActivity(run: ComposerBrowserRun): void {
+  if (composerBrowserRun !== run) return;
+  if (run.activityTimer) clearTimeout(run.activityTimer);
+  run.activityTimer = setTimeout(() => {
+    void (async () => {
+      let state: ComputerUseCommandResponse | undefined;
+      try {
+        state = await chrome.runtime.sendMessage({ type: 'GET_COMPUTER_USE_STATE' });
+      } catch {
+        noteComposerBrowserActivity(run);
+        return;
+      }
+      if (composerBrowserRun !== run) return;
+      if (state?.running === false || (state?.running === true && state.runId !== run.runId)) {
+        finishComposerBrowserTask(
+          run,
+          run.finalMessage ?? 'The background service is no longer tracking this browser task.',
+          run.finalMessage === null,
+        );
+        return;
+      }
+      noteComposerBrowserActivity(run);
+    })();
+  }, 90_000);
+}
+
+function cancelComposerBrowserTask(reason: 'user_stopped' | 'user_cleared' = 'user_stopped'): void {
+  const run = composerBrowserRun;
+  if (!run || run.cancelling) return;
+  run.cancelling = true;
+  if (!run.startSent) {
+    finishComposerBrowserTask(run, 'Browser task stopped before it started.');
+    return;
+  }
+  void (async () => {
+    let response: ComputerUseCommandResponse | undefined;
+    try {
+      response = await chrome.runtime.sendMessage({
+        type: 'CANCEL_COMPUTER_USE',
+        runId: run.runId,
+        reason,
+      });
+    } catch {
+      if (composerBrowserRun !== run) return;
+      run.cancelling = false;
+      composerComputerUsePanel?.showHandoffBanner(
+        'Could not confirm that the browser task stopped. Try Stop again.',
+        'browser_error',
+      );
+      return;
+    }
+    if (composerBrowserRun !== run) return;
+    if (response?.success === true && response.running !== true) {
+      finishComposerBrowserTask(run, 'Browser task stopped.');
+    } else {
+      run.cancelling = false;
+      composerComputerUsePanel?.showHandoffBanner(
+        response?.error ?? 'Could not confirm that the browser task stopped. Try Stop again.',
+        'browser_error',
+      );
+    }
+  })();
+}
+
+function startComposerBrowserTask(goal: string): void {
+  const owner = _ctx.managedCloudOwner;
+  if (!owner || !composerComputerUsePanel || composerBrowserRun) return;
+  const selectedTabs = pendingBrowserContextTabs.map((tab) => ({ ...tab }));
+  const pageContext = _ctx.pendingPageContext;
+  const pageAtAdmission = activePageSource;
+  const run: ComposerBrowserRun = {
+    runId: `cu_run_${crypto.randomUUID()}`,
+    owner: { ...owner },
+    conversationId: _ctx.conversationId,
+    conversationGeneration: _ctx.conversationGeneration,
+    modelSelection: _ctx.selectedModel,
+    startSent: false,
+    cancelling: false,
+    finalMessage: null,
+    activityTimer: null,
+  };
+  composerBrowserRun = run;
+  _ctx.isStreaming = true;
+  _ctx.messages.push(
+    {
+      id: `u-${crypto.randomUUID()}`,
+      role: 'user',
+      content: goal,
+      timestamp: Date.now(),
+      runtime: 'managed-cloud',
+    },
+    {
+      id: run.runId,
+      role: 'assistant',
+      content: 'Starting the browser task…',
+      streaming: true,
+      timestamp: Date.now(),
+      runtime: 'managed-cloud',
+    },
+  );
+  trimLiveMessages();
+  saveMessages();
+  renderMessages();
+  updateSendButton();
+  clearPendingPageContext();
+  composerContextNotice = null;
+  updateContextButton();
+  composerComputerUsePanel.hideHandoffBanner();
+  composerComputerUsePanel.setRunState(true, run.runId);
+  showComposerComputerUseTab?.();
+
+  void (async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!ownsComposerBrowserConversation(run) || run.cancelling) return;
+      if (!composerComputerUsePanel?.ownsRun(run.runId)) {
+        finishComposerBrowserTask(run, 'Browser task stopped before it started.');
+        return;
+      }
+      if (typeof tab?.id !== 'number') {
+        throw new Error('Could not determine the active tab. Please try again.');
+      }
+      if (pageAtAdmission && !pageContextStillDescribes(pageAtAdmission, tab.id, tab.url ?? '')) {
+        throw new Error(PAGE_CONTEXT_CHANGED_REASON);
+      }
+      run.startSent = true;
+      noteComposerBrowserActivity(run);
+      const response = (await chrome.runtime.sendMessage({
+        type: 'AGI_START_COMPUTER_USE',
+        runId: run.runId,
+        goal,
+        tabId: tab.id,
+        modelSelection: run.modelSelection,
+        ...(selectedTabs.length ? { selectedTabs, pageContext: pageContext ?? undefined } : {}),
+      })) as ComputerUseCommandResponse | undefined;
+      if (composerBrowserRun !== run || run.cancelling) return;
+      if (response?.success !== true || response.runId !== run.runId) {
+        throw new Error(response?.error ?? 'Computer use could not start. Please try again.');
+      }
+      if (!ownsComposerBrowserConversation(run)) {
+        cancelComposerBrowserTask();
+        return;
+      }
+      composerComputerUsePanel?.setRunState(true, run.runId, response.runGeneration);
+    } catch (error) {
+      if (composerBrowserRun !== run || run.cancelling) return;
+      const reason =
+        error instanceof Error ? error.message : 'Computer use could not start. Please try again.';
+      finishComposerBrowserTask(run, reason, true);
+      composerComputerUsePanel?.showHandoffBanner(reason, 'browser_error');
+    }
+  })();
+}
+
+function applyComposerBrowserMessage(message: Record<string, unknown>): void {
+  const run = composerBrowserRun;
+  if (!run || run.runId !== message['runId']) return;
+  noteComposerBrowserActivity(run);
+  if (message['type'] === 'AGI_CU_STEP' && ownsComposerBrowserConversation(run)) {
+    const step = message['step'] as Parameters<ComputerUsePanelAPI['appendStep']>[0] | undefined;
+    if (step?.kind === 'final' && typeof step.finalMessage === 'string') {
+      run.finalMessage = step.finalMessage;
+      const assistant = _ctx.messages.find((entry) => entry.id === run.runId);
+      if (assistant) assistant.content = step.finalMessage;
+      _ctx.needsMessageRebuild = true;
+      saveMessages();
+      renderMessages();
+    }
+  } else if (
+    message['type'] === 'AGI_CU_STATE' &&
+    (message['status'] === 'completed' ||
+      message['status'] === 'stopped' ||
+      message['status'] === 'error')
+  ) {
+    const reason = typeof message['reason'] === 'string' ? message['reason'] : null;
+    const content =
+      message['status'] === 'completed'
+        ? (run.finalMessage ?? 'The browser run ended without a final response.')
+        : (describeCancellationReason(reason) ?? reason ?? 'Browser task stopped.');
+    finishComposerBrowserTask(run, content, message['status'] === 'error');
+    if (message['status'] !== 'completed') {
+      composerComputerUsePanel?.showHandoffBanner(
+        content,
+        message['status'] === 'error' ? 'browser_error' : 'run_stopped',
+      );
+    }
+  }
+}
+
 function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
+  if (composerBrowserRun) {
+    cancelComposerBrowserTask();
+    return;
+  }
   const streamId = _ctx.currentStreamId;
   if (!streamId) return;
   const stopped = _ctx.messages.find((message) => message.id === streamId);
@@ -7255,7 +7873,20 @@ function sendMessage(text: string, displayText?: string): void {
   }
   extensionSendQueue.dequeue();
 
-  const slashCmd = expandSlashCommand(prompt);
+  const slashCmd =
+    expandSlashCommand(prompt) ??
+    (requestsCurrentPageContext(prompt) ? { display: prompt, prompt, captureContext: true } : null);
+  if (
+    !slashCmd &&
+    pendingAttachments.length === 0 &&
+    pendingDocuments.length === 0 &&
+    !_ctx.pendingPageContext &&
+    pendingBrowserContextTabs.length === 0 &&
+    classifyTaskLocally(prompt, []).type === 'computer-use'
+  ) {
+    startComposerBrowserTask(prompt);
+    return;
+  }
   const capturePage = slashCmd?.captureContext === true;
   const pageSource = _ctx.pendingPageContextSource;
   const payload: TurnPayload = {
@@ -7287,7 +7918,7 @@ function sendMessage(text: string, displayText?: string): void {
   _ctx.needsMessageRebuild = true;
   saveMessages();
   renderMessages();
-  dispatchTurn(userMsg, payload, _ctx.quickMode);
+  dispatchTurn(userMsg, payload, managedQuickModeActive());
 }
 
 let temporaryEndPending = false;
@@ -7644,6 +8275,8 @@ function canReplayTurn(): boolean {
     _ctx.managedCloudOwner !== null &&
     !_ctx.isStreaming &&
     stoppingStreamId === null &&
+    composerBrowserRun === null &&
+    !hasUnconfirmedStreamCancellation() &&
     !historyRestoreInProgress
   );
 }
@@ -7674,10 +8307,14 @@ function regenerateTurn(messageId: string, modelSelection?: string): void {
   renderModelNotice(null);
   saveMessages();
   renderMessages();
-  dispatchTurn(userMsg, payload, modelSelection ? false : _ctx.quickMode);
+  dispatchTurn(userMsg, payload, modelSelection ? false : managedQuickModeActive());
 }
 
 function retryFailedMessage(messageId: string): void {
+  if (_ctx.messages.find((message) => message.id === messageId)?.streamCancellation) {
+    void requestStreamCancellation(messageId).catch(() => updateSendButton());
+    return;
+  }
   regenerateTurn(messageId);
 }
 
@@ -7701,7 +8338,7 @@ function startAgiWorkPlan(messageId: string, steps: string[]): void {
   renderModelNotice(null);
   saveMessages();
   renderMessages();
-  dispatchTurn(userMsg, { ...payload, agiWorkPlan: steps }, _ctx.quickMode);
+  dispatchTurn(userMsg, { ...payload, agiWorkPlan: steps }, managedQuickModeActive());
 }
 
 function declineAgiWorkPlan(messageId: string): void {
@@ -7875,12 +8512,17 @@ function updateContextButton(): void {
   const attached = _ctx.pendingPageContext !== null;
   const label = contextBtn.querySelector('.sp-attach-menu-label');
   const check = contextBtn.querySelector('.sp-attach-menu-check');
+  const attachedTabs = pendingBrowserContextTabs.length
+    ? tPlural('spTabsAttached', pendingBrowserContextTabs.length)
+    : null;
   contextBtn.classList.toggle('has-context', attached);
   contextBtn.setAttribute('aria-checked', String(attached));
   contextBtn.title = attached
     ? t('spContextBtnAttached')
     : currentPageHostname || t('spContextBtnAttach');
-  if (label) label.textContent = attached ? t('spContextItemAttached') : t('spContextItem');
+  if (label)
+    label.textContent =
+      attachedTabs ?? (attached ? t('spContextItemAttached') : t('spContextItem'));
   if (check) {
     clearChildren(check);
     if (attached) check.appendChild(renderIcon(Check, 14));
@@ -7951,6 +8593,8 @@ function canAdmitComposerMessage(text: string): boolean {
     _ctx.managedCloudOwner !== null &&
     !_ctx.isStreaming &&
     stoppingStreamId === null &&
+    composerBrowserRun === null &&
+    !hasUnconfirmedStreamCancellation() &&
     !historyRestoreInProgress &&
     composerAttachmentIntakes.size === 0 &&
     composerDocumentsSettled() &&
@@ -7963,6 +8607,8 @@ function updateComposerAdmissionControls(): void {
     managedCloudChatState === 'ready' &&
     _ctx.managedCloudOwner !== null &&
     !_ctx.isStreaming &&
+    composerBrowserRun === null &&
+    !hasUnconfirmedStreamCancellation() &&
     !historyRestoreInProgress &&
     composerAttachmentIntakes.size === 0;
   for (const control of document.querySelectorAll<HTMLButtonElement | HTMLInputElement>(
@@ -7990,7 +8636,7 @@ function composerAttachmentContextCurrent(intake: ComposerAttachmentIntake): boo
     intake.conversationGeneration === _ctx.conversationGeneration &&
     sameManagedCloudOwner(intake.owner, _ctx.managedCloudOwner) &&
     managedCloudChatState === 'ready' &&
-    capabilityAllowed(capabilityDocument, 'canUploadFiles')
+    (intake.kind === 'page' || capabilityAllowed(capabilityDocument, 'canUploadFiles'))
   );
 }
 
@@ -7998,15 +8644,17 @@ function composerAttachmentIntakeCurrent(intake: ComposerAttachmentIntake): bool
   return composerAttachmentIntakes.has(intake) && composerAttachmentContextCurrent(intake);
 }
 
-function beginComposerAttachmentIntake(): ComposerAttachmentIntake | null {
+function beginComposerAttachmentIntake(
+  kind: 'file' | 'page' = 'file',
+): ComposerAttachmentIntake | null {
   const owner = _ctx.managedCloudOwner;
   if (
     !owner ||
     managedCloudChatState !== 'ready' ||
-    !capabilityAllowed(capabilityDocument, 'canUploadFiles')
+    (kind === 'file' && !capabilityAllowed(capabilityDocument, 'canUploadFiles'))
   )
     return null;
-  const intake = { owner: { ...owner }, conversationGeneration: _ctx.conversationGeneration };
+  const intake = { kind, owner: { ...owner }, conversationGeneration: _ctx.conversationGeneration };
   composerAttachmentIntakes.add(intake);
   updateAttachmentPreview();
   return intake;
@@ -8526,6 +9174,7 @@ function updateAttachmentPreview(): void {
  * looking at.
  */
 function dropPageContextOnNavigation(tabId: number | undefined, url: string): void {
+  if (pendingBrowserContextTabs.length) return;
   if (pageContextStillDescribes(_ctx.pendingPageContextSource, tabId, url)) return;
   clearPendingPageContext();
   composerContextNotice = t('spContextChipDropped');
@@ -8704,7 +9353,7 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   );
   const learnMoreBtn = el('button', { class: 'sp-ob-learn-more' }, 'Learn more');
   learnMoreBtn.addEventListener('click', () => {
-    chrome.tabs.create({ url: 'https://agiworkforce.com/security' }).catch(() => {});
+    chrome.tabs.create({ url: agiWebUrl('/security') }).catch(() => {});
   });
   row0cText.appendChild(learnMoreBtn);
   row0c.appendChild(row0cIcon);
@@ -9257,6 +9906,9 @@ function buildUI(): void {
     role: 'menu',
     'aria-label': 'Available models',
   });
+  let modelCatalogueOpen = false;
+  let modelSearchQuery = '';
+  let modelCapabilityFilter: string | null = null;
 
   const BUNDLED_PROVIDER_ICON_IDS: ReadonlySet<string> = new Set([
     'agi-cloud',
@@ -9382,6 +10034,9 @@ function buildUI(): void {
     opt.appendChild(checkCell);
     opt.addEventListener('click', () => {
       applyModelSelection(m.value);
+      modelCatalogueOpen = false;
+      modelSearchQuery = '';
+      modelCapabilityFilter = null;
       closeModelDropdown();
       modelSelectorBtn.focus();
     });
@@ -9397,8 +10052,8 @@ function buildUI(): void {
 
   function currentEffortState() {
     return getManagedEffortControlState(
-      _ctx.quickMode ? 'auto-economy' : _ctx.selectedModel,
-      _ctx.quickMode ? undefined : _ctx.currentModelKey,
+      _ctx.selectedModel,
+      _ctx.quickMode && isAutoModeModelId(_ctx.selectedModel) ? undefined : _ctx.currentModelKey,
       _ctx.reasoningEffort,
       managedModelAccess?.subscriptionTier,
     );
@@ -9411,15 +10066,9 @@ function buildUI(): void {
   }
 
   function appendEffortSection(): void {
-    modelDropdownEl.appendChild(el('div', { class: 'sp-menu-heading' }, t('spEffortHeading')));
     const state = currentEffortState();
-    if (state.status !== 'ready' || state.effort === undefined) {
-      const row = el('div', { class: 'sp-effort-option', 'aria-disabled': 'true' });
-      row.appendChild(el('span', { class: 'sp-effort-option-label' }, t('spEffortAuto')));
-      row.setAttribute('title', state.description);
-      modelDropdownEl.appendChild(row);
-      return;
-    }
+    if (state.status !== 'ready' || state.effort === undefined) return;
+    modelDropdownEl.appendChild(el('div', { class: 'sp-menu-heading' }, t('spEffortHeading')));
     const defaultEffort = state.modelId ? resolveModelEffort(state.modelId, undefined) : undefined;
     for (const option of state.options) {
       const isSelected = option === state.effort;
@@ -9468,6 +10117,7 @@ function buildUI(): void {
     description: string,
     checked: boolean,
     onChange: (next: boolean) => void,
+    disabled = false,
   ): void {
     const row = el('div', { class: 'sp-menu-toggle-row' });
     const copy = el('div', { class: 'sp-menu-toggle-copy' });
@@ -9483,6 +10133,7 @@ function buildUI(): void {
       'aria-checked': String(checked),
     }) as HTMLInputElement;
     input.checked = checked;
+    input.disabled = disabled;
     input.setAttribute('aria-label', label);
     input.addEventListener('change', () => onChange(input.checked));
     row.appendChild(input);
@@ -9543,51 +10194,130 @@ function buildUI(): void {
 
   function renderModelDropdown(): void {
     clearChildren(modelDropdownEl);
-    const autoOption = getManagedModelPickerOptions(null)[0];
-    if (autoOption) {
-      modelDropdownEl.appendChild(buildModelOptionRow(autoOption, _ctx.selectedModel === 'auto'));
-    }
-    const view = managedModelAccess
-      ? buildManagedModelPickerView(managedModelAccess, _ctx.selectedModel)
-      : null;
-    const more = view?.more ?? [];
-    if (view?.current) appendModelRows([view.current]);
-    if (view && view.recommended.length > 0) {
+    const menu = buildManagedModelPickerMenu(managedModelAccess, _ctx.selectedModel);
+    const lockedModels = managedModelAccess
+      ? buildManagedModelPickerView(managedModelAccess, _ctx.selectedModel).more.filter(
+          (option) => option.lockLabel,
+        )
+      : [];
+    const catalogue = [...menu.all, ...lockedModels];
+    modelDropdownEl.appendChild(
+      buildModelOptionRow(menu.auto, _ctx.selectedModel === menu.auto.value),
+    );
+    if (menu.current) appendModelRows([menu.current]);
+    if (menu.recommended.length > 0 && !modelCatalogueOpen) {
       modelDropdownEl.appendChild(
-        el('div', { class: 'sp-model-group-header' }, t('spModelsRecommended')),
+        el('div', { class: 'sp-menu-heading' }, t('spModelsRecommended')),
       );
-      appendModelRows(view.recommended);
+      appendModelRows(menu.recommended);
     }
     if (managedModelAccess === null) {
       modelDropdownEl.appendChild(el('div', { class: 'sp-menu-note' }, t('spModelsSignedOut')));
     }
 
+    if (catalogue.length > 0) {
+      const allButton = el('button', {
+        class: 'sp-model-option',
+        type: 'button',
+        role: 'menuitem',
+        'aria-expanded': String(modelCatalogueOpen),
+      });
+      allButton.appendChild(
+        el(
+          'span',
+          { class: 'sp-model-option-name' },
+          modelCatalogueOpen
+            ? t('spModelsBack')
+            : t('spAllModels', [String(menu.remainingCount + lockedModels.length)]),
+        ),
+      );
+      allButton.appendChild(renderIcon(ChevronRight, 12));
+      allButton.addEventListener('click', () => {
+        modelCatalogueOpen = !modelCatalogueOpen;
+        modelSearchQuery = '';
+        modelCapabilityFilter = null;
+        renderModelDropdown();
+        modelDropdownEl.querySelector<HTMLInputElement>('#sp-model-search')?.focus();
+      });
+      modelDropdownEl.appendChild(allButton);
+    }
+
+    if (modelCatalogueOpen) {
+      const search = el('input', {
+        id: 'sp-model-search',
+        class: 'sp-wf-form-input',
+        type: 'search',
+        placeholder: t('spModelsSearch'),
+        'aria-label': t('spModelsSearch'),
+      }) as HTMLInputElement;
+      search.value = modelSearchQuery;
+      search.addEventListener('input', () => {
+        modelSearchQuery = search.value;
+        renderModelDropdown();
+        const replacement = modelDropdownEl.querySelector<HTMLInputElement>('#sp-model-search');
+        replacement?.focus();
+      });
+      modelDropdownEl.appendChild(search);
+      const capability = el('select', {
+        class: 'sp-wf-form-select',
+        'aria-label': t('spModelsCapability'),
+      }) as HTMLSelectElement;
+      capability.appendChild(el('option', { value: '' }, t('spModelsCapability')));
+      const labels = {
+        vision: t('spModelsVision'),
+        thinking: t('spModelsReasoning'),
+        tools: t('spModelsTools'),
+        search: t('spModelsSearchCapability'),
+        codeExecution: t('spModelsCode'),
+        imageGen: t('spModelsImages'),
+        videoGen: t('spModelsVideo'),
+      } as const;
+      const available = new Set(catalogue.flatMap((option) => option.capabilityKeys ?? []));
+      for (const key of available)
+        capability.appendChild(el('option', { value: key }, labels[key]));
+      capability.value = modelCapabilityFilter ?? '';
+      capability.addEventListener('change', () => {
+        modelCapabilityFilter = capability.value || null;
+        renderModelDropdown();
+      });
+      modelDropdownEl.appendChild(capability);
+    }
+
     appendEffortSection();
+    const quickEligible =
+      isAutoModeModelId(_ctx.selectedModel) && canUseManagedQuickRouting(managedModelAccess);
     appendToggleRow(
       'sp-quick-mode-toggle',
       t('spQuickMode'),
       t('spQuickModeDescription'),
-      _ctx.quickMode,
+      quickEligible && _ctx.quickMode,
       applyQuickMode,
+      !quickEligible,
     );
-    appendToggleRow(
-      'sp-thinking-toggle',
-      t('spThinking'),
-      t('spThinkingDescription'),
-      _ctx.thinkingEnabled,
-      (next) => {
-        _ctx.thinkingEnabled = next;
-        chrome.storage.local.set({ agi_thinking_enabled: next }).catch(() => {});
-        renderModelDropdown();
-      },
-    );
+    const reasoning = getModelReasoning(_ctx.selectedModel);
+    if (reasoning.capable && reasoning.canDisableThinking !== false && reasoning.control !== 'none')
+      appendToggleRow(
+        'sp-thinking-toggle',
+        t('spThinking'),
+        t('spThinkingDescription'),
+        _ctx.thinkingEnabled,
+        (next) => {
+          _ctx.thinkingEnabled = next;
+          chrome.storage.local.set({ agi_thinking_enabled: next }).catch(() => {});
+          renderModelDropdown();
+        },
+      );
     appendWorkModeRow();
 
-    if (more.length === 0) return;
-    modelDropdownEl.appendChild(el('div', { class: 'sp-menu-heading' }, t('spMoreModels')));
+    if (!modelCatalogueOpen) return;
+    const allModels = filterManagedModelOptions(catalogue, modelSearchQuery, modelCapabilityFilter);
+    if (allModels.length === 0) {
+      modelDropdownEl.appendChild(el('div', { class: 'sp-menu-note' }, t('spModelsNoMatch')));
+      return;
+    }
 
     const grouped = new Map<string, ManagedModelPickerOption[]>();
-    for (const option of more) {
+    for (const option of allModels) {
       const providerKey = option.provider ?? UNKNOWN_PROVIDER_KEY;
       const bucket = grouped.get(providerKey);
       if (bucket) bucket.push(option);
@@ -9616,20 +10346,21 @@ function buildUI(): void {
     updateModelBadge(_ctx.selectedModel);
     const state = currentEffortState();
     const effortLabel =
-      state.status === 'ready' && state.effort !== undefined
-        ? EFFORT_LABEL[state.effort]
-        : t('spEffortAuto');
+      state.status === 'ready' && state.effort !== undefined ? EFFORT_LABEL[state.effort] : '';
     modelEffortBadge.textContent = state.status === 'ready' ? effortLabel : '';
     modelEffortBadge.hidden = state.status !== 'ready';
     modelModeBadge.hidden = _ctx.workMode !== 'agiwork';
     modelSelectorBtn.title = state.description;
-    const menuLabelArgs = [getModelBadgeLabel(_ctx.selectedModel), effortLabel];
-    modelSelectorBtn.setAttribute(
-      'aria-label',
+    const modelLabel = getModelBadgeLabel(_ctx.selectedModel);
+    const menuLabel =
       _ctx.workMode === 'agiwork'
-        ? t('spModelMenuAriaWork', menuLabelArgs)
-        : t('spModelMenuAria', menuLabelArgs),
-    );
+        ? effortLabel
+          ? t('spModelMenuAriaWork', [modelLabel, effortLabel])
+          : t('spModelMenuAriaWorkNoEffort', [modelLabel])
+        : effortLabel
+          ? t('spModelMenuAria', [modelLabel, effortLabel])
+          : t('spModelMenuAriaNoEffort', [modelLabel]);
+    modelSelectorBtn.setAttribute('aria-label', menuLabel);
   }
   refreshEffortUI = renderModelTrigger;
 
@@ -9675,6 +10406,12 @@ function buildUI(): void {
     if (modelDropdownEl.classList.contains('open')) positionModelDropdown();
   });
   modelDropdownEl.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (
+      (event.target instanceof HTMLInputElement && event.target.type === 'search') ||
+      event.target instanceof HTMLSelectElement
+    ) {
+      if (!['Escape', 'Tab'].includes(event.key)) return;
+    }
     const options = Array.from(
       modelDropdownEl.querySelectorAll<HTMLElement>(
         ".sp-model-option:not(:disabled), .sp-effort-option:not(:disabled):not([aria-disabled='true']), .sp-menu-toggle:not(:disabled)",
@@ -9710,7 +10447,7 @@ function buildUI(): void {
     options[nextIndex]?.focus();
   });
   document.addEventListener('click', (e: MouseEvent) => {
-    if (!modelSelectorWrap.contains(e.target as Node)) {
+    if (!e.composedPath().includes(modelSelectorWrap)) {
       modelDropdownEl.classList.remove('open');
       modelSelectorBtn.classList.remove('open');
       modelSelectorBtn.setAttribute('aria-expanded', 'false');
@@ -9863,6 +10600,15 @@ function buildUI(): void {
     return '';
   }
 
+  function historyActivityAt(entry: ConversationEntry): number {
+    const remote = Date.parse(entry.cloudSync?.remoteUpdatedAt ?? '');
+    if (!Number.isFinite(remote)) return entry.savedAt;
+    return entry.cloudSync?.remoteImportedAt !== undefined &&
+      entry.savedAt > entry.cloudSync.remoteImportedAt
+      ? Math.max(entry.savedAt, remote)
+      : remote;
+  }
+
   async function restoreHistoryEntry(conversationId: string): Promise<boolean> {
     const ownerAtStart = _ctx.managedCloudOwner;
     if (!ownerAtStart || _ctx.isStreaming || historyRestoreInProgress) return false;
@@ -9876,10 +10622,39 @@ function buildUI(): void {
     historyRestoreInProgress = true;
     updateSendButton();
     try {
-      const entry = await getConversation(ownerAtStart, conversationId);
+      let entry = await getConversation(ownerAtStart, conversationId);
       if (!entry || !restoreIsCurrent()) return false;
       const scope = await getConversationScope();
       if (!restoreIsCurrent()) return false;
+      if (entry.cloudSync?.conversationId) {
+        try {
+          entry = await refreshManagedCloudConversationHistory(ownerAtStart, entry, {
+            isCurrent: () => restoreIsCurrent() && _ctx.conversationScope === scope,
+            protectsConversation: (id) =>
+              id === _ctx.conversationId &&
+              (_ctx.isStreaming ||
+                hasUnconfirmedStreamCancellation() ||
+                Boolean(
+                  (document.getElementById('sp-input') as HTMLTextAreaElement | null)?.value.trim(),
+                )),
+            signal: cloudHistoryOwnerAbort.signal,
+          });
+        } catch (error) {
+          if (restoreIsCurrent())
+            showHistoryStatus(
+              error instanceof Error ? error.message : 'Account history could not be refreshed.',
+            );
+          if (
+            entry?.cloudSync?.messagesLoaded === false ||
+            error instanceof CloudHistoryTrustBoundaryError ||
+            error instanceof CloudHistoryWorkspaceChangedError ||
+            error instanceof CloudHistoryCacheWindowError ||
+            error instanceof CloudHistoryUnavailableError
+          )
+            return false;
+        }
+      }
+      if (!entry || !restoreIsCurrent()) return false;
       const conversationOwner = await claimSelectedConversationOwner(scope, ownerAtStart, entry.id);
       if (!restoreIsCurrent()) {
         await restoreConversationOwnerIfCurrent(
@@ -9943,11 +10718,19 @@ function buildUI(): void {
           console.warn('[SidePanel] failed to persist browser conversation branch:', err);
         }
       }
+      if (
+        historyRestoreToken !== restoreToken ||
+        expectedGeneration !== _ctx.conversationGeneration ||
+        !sameManagedCloudOwner(ownerAtStart, _ctx.managedCloudOwner)
+      )
+        return false;
       resumeLatestStoredManagedRun(expectedGeneration);
       return true;
     } finally {
-      historyRestoreInProgress = false;
-      updateSendButton();
+      if (historyRestoreToken === restoreToken) {
+        historyRestoreInProgress = false;
+        updateSendButton();
+      }
     }
   }
 
@@ -10122,13 +10905,16 @@ function buildUI(): void {
     hidden: '',
   });
   let drawerHistoryEntries: ConversationEntry[] = [];
+  let historyListRevision = 0;
+  let recentsOpenRevision = 0;
+  let recentsRefreshAbort: AbortController | null = null;
 
-  let showingArchived = false;
-
-  function showHistoryStatus(text: string): void {
-    drawerHistoryError.textContent = text;
+  function showHistoryStatus(message: string): void {
+    drawerHistoryError.textContent = message;
     drawerHistoryError.removeAttribute('hidden');
   }
+
+  let showingArchived = false;
 
   async function changeHistoryEntry(
     entry: ConversationEntry,
@@ -10174,6 +10960,32 @@ function buildUI(): void {
     }
     await refreshDrawerHistory();
     showHistoryStatus(done);
+  }
+
+  async function changeHistoryStar(entry: ConversationEntry): Promise<void> {
+    const owner = _ctx.managedCloudOwner;
+    if (!owner || !sameManagedCloudOwner(entry.owner, owner)) return;
+    const starred = entry.starred !== true;
+    let saved: ConversationEntry | undefined;
+    try {
+      const context = await getFreshClerkAuthContext();
+      if (!sameManagedCloudOwner(context?.owner, owner)) return;
+      saved = await updateConversationMetadata(owner, entry.id, { starred }, () =>
+        sameManagedCloudOwner(_ctx.managedCloudOwner, owner),
+      );
+    } catch (error) {
+      console.warn('[SidePanel] history change failed:', error);
+      showHistoryStatus(t('spHistoryChangeFailed'));
+      return;
+    }
+    if (!sameManagedCloudOwner(_ctx.managedCloudOwner, owner)) return;
+    if (!saved) {
+      showHistoryStatus(t('spHistoryChangeFailed'));
+      return;
+    }
+    requestCloudConversationSync(entry.id);
+    await refreshDrawerHistory();
+    showHistoryStatus(starred ? t('spHistoryStarred') : t('spHistoryUnstarred'));
   }
 
   function buildHistoryEditor(
@@ -10396,14 +11208,24 @@ function buildUI(): void {
   }
 
   function deleteHistoryEntry(entry: ConversationEntry, deleteBtn: HTMLButtonElement): void {
+    if (deleteBtn.disabled || historyRestoreInProgress) return;
+    if (
+      entry.id === _ctx.conversationId &&
+      (_ctx.isStreaming || hasUnconfirmedStreamCancellation())
+    ) {
+      showHistoryStatus(t('spHistoryStopBeforeDelete'));
+      return;
+    }
+    const owner = _ctx.managedCloudOwner;
+    if (!owner || !sameManagedCloudOwner(entry.owner, owner)) return;
     const deletingCurrentConversation = entry.id === _ctx.conversationId;
     const deletionGeneration = _ctx.conversationGeneration;
     if (deletingCurrentConversation) cancelCurrentManagedStream(false);
-    const owner = _ctx.managedCloudOwner;
-    if (!owner) return;
     deleteBtn.disabled = true;
     showHistoryStatus(t('spHistoryDeleting'));
     void (async () => {
+      const context = await getFreshClerkAuthContext();
+      if (!sameManagedCloudOwner(context?.owner, owner)) return;
       const cloudConversationId = entry.cloudSync?.conversationId;
       if (cloudConversationId) {
         const organizationId = entry.cloudSync?.organizationId;
@@ -10485,9 +11307,13 @@ function buildUI(): void {
           entry.pinned ? t('spHistoryUnpinned') : t('spHistoryPinned'),
         );
       });
+      addItem(entry.starred ? t('spHistoryUnstar') : t('spHistoryStar'), () => {
+        void changeHistoryStar(entry);
+      });
       addItem(t('spHistoryMove'), () => startHistoryMove(entry, item, openButton));
     }
-    if (entry.cloudSync?.conversationId) {
+    const cloudConversationId = entry.cloudSync?.conversationId;
+    if (cloudConversationId) {
       addItem(entry.archived ? t('spHistoryUnarchive') : t('spHistoryArchive'), () => {
         void changeHistoryEntry(
           entry,
@@ -10495,7 +11321,18 @@ function buildUI(): void {
           entry.archived ? t('spHistoryUnarchived') : t('spHistoryArchivedDone'),
         );
       });
+      addItem(t('spHistoryOpenInWeb'), () => {
+        void chrome.tabs.create({
+          url: agiWebUrl(`/chat/${encodeURIComponent(cloudConversationId)}`),
+        });
+      });
     }
+    addItem(t('spHistoryCopySessionId'), () => {
+      void navigator.clipboard.writeText(cloudConversationId ?? entry.id).then(
+        () => showHistoryStatus(t('spHistorySessionIdCopied')),
+        () => showHistoryStatus(t('spHistorySessionIdCopyFailed')),
+      );
+    });
     addItem(t('spHistoryDelete'), () => confirmHistoryDelete(entry, item, moreBtn), true);
     wrapper.appendChild(moreBtn);
     wrapper.appendChild(menu);
@@ -10504,6 +11341,18 @@ function buildUI(): void {
 
   function renderDrawerHistory(entries: ConversationEntry[]): void {
     clearChildren(drawerHistoryList);
+    const owner = _ctx.managedCloudOwner;
+    const generation = _ctx.conversationGeneration;
+    entries = entries.filter(
+      (entry) =>
+        sameManagedCloudOwner(entry.owner, owner) &&
+        !(
+          entry.cloudSync?.messagesLoaded === false && entry.cloudSync.blockedReason !== undefined
+        ) &&
+        (cloudHistoryOrganizationId === undefined ||
+          !entry.cloudSync?.conversationId ||
+          entry.cloudSync.organizationId === cloudHistoryOrganizationId),
+    );
     drawerHistorySearch.hidden = entries.length <= RECENTS_SEARCH_THRESHOLD;
     archivedToggle.hidden = !entries.some((entry) => entry.archived) && !showingArchived;
     archivedToggle.setAttribute('aria-pressed', String(showingArchived));
@@ -10512,7 +11361,12 @@ function buildUI(): void {
       ...listed.filter((entry) => entry.pinned),
       ...listed.filter((entry) => !entry.pinned),
     ];
-    const filteredEntries = filterConversations(ordered, drawerHistorySearch.value);
+    const filteredEntries = filterConversations(ordered, drawerHistorySearch.value).sort(
+      (first, second) =>
+        Number(second.pinned === true) - Number(first.pinned === true) ||
+        Number(second.starred === true) - Number(first.starred === true) ||
+        historyActivityAt(second) - historyActivityAt(first),
+    );
     if (filteredEntries.length === 0) {
       const emptyLabel = showingArchived
         ? t('spHistoryArchivedEmpty')
@@ -10553,39 +11407,96 @@ function buildUI(): void {
       const date = el(
         'div',
         { class: 'sp-drawer-history-date' },
-        entry.pinned
-          ? `${t('spHistoryPinnedMarker')} · ${formatHistoryDate(entry.savedAt)}`
-          : formatHistoryDate(entry.savedAt),
+        [
+          entry.pinned ? t('spHistoryPinnedMarker') : '',
+          entry.starred ? t('spHistoryStarredMarker') : '',
+          formatHistoryDate(historyActivityAt(entry)),
+        ]
+          .filter(Boolean)
+          .join(' · '),
       );
       textCol.appendChild(title);
       textCol.appendChild(date);
       openButton.appendChild(textCol);
       item.appendChild(openButton);
-
+      const rowIsCurrent = (): boolean =>
+        sameManagedCloudOwner(entry.owner, _ctx.managedCloudOwner) &&
+        _ctx.conversationGeneration === generation;
       item.appendChild(buildHistoryMenu(entry, item, openButton));
 
       openButton.addEventListener('click', () => {
-        drawerHistoryError.textContent = t('spHistoryOpening');
-        drawerHistoryError.removeAttribute('hidden');
+        if (!rowIsCurrent() || openButton.disabled) return;
+        const openingRevision = recentsOpenRevision;
+        showHistoryStatus(t('spHistoryOpening'));
         void openStoredConversation(entry.id).then((opened) => {
+          if (
+            openingRevision !== recentsOpenRevision ||
+            recentsSheet.hidden ||
+            !sameManagedCloudOwner(entry.owner, _ctx.managedCloudOwner)
+          )
+            return;
           if (opened) {
             drawerHistoryError.setAttribute('hidden', '');
             closeRecents();
             return;
           }
-          drawerHistoryError.textContent = _ctx.isStreaming
-            ? t('spHistoryStopBeforeOpen')
-            : t('spHistoryOpenFailed');
-          drawerHistoryError.removeAttribute('hidden');
+          showHistoryStatus(
+            _ctx.isStreaming ? t('spHistoryStopBeforeOpen') : t('spHistoryOpenFailed'),
+          );
         });
       });
       drawerHistoryList.appendChild(item);
     }
   }
 
-  async function refreshDrawerHistory(): Promise<void> {
+  async function refreshDrawerHistory(refreshAccount = false): Promise<void> {
     const owner = _ctx.managedCloudOwner;
-    drawerHistoryEntries = owner ? await listConversations(owner) : [];
+    const revision = ++historyListRevision;
+    const generation = _ctx.conversationGeneration;
+    const isCurrent = (): boolean =>
+      revision === historyListRevision &&
+      generation === _ctx.conversationGeneration &&
+      (owner === null
+        ? _ctx.managedCloudOwner === null
+        : sameManagedCloudOwner(owner, _ctx.managedCloudOwner));
+    if (refreshAccount && owner) {
+      recentsRefreshAbort?.abort();
+      const controller = new AbortController();
+      recentsRefreshAbort = controller;
+      try {
+        const scope = await getConversationScope();
+        const refreshed = await refreshManagedCloudRecentHistory(owner, {
+          isCurrent: () => isCurrent() && _ctx.conversationScope === scope,
+          protectsConversation: (id) =>
+            id === _ctx.conversationId &&
+            (_ctx.messages.length > 0 ||
+              _ctx.isStreaming ||
+              hasUnconfirmedStreamCancellation() ||
+              Boolean(
+                (document.getElementById('sp-input') as HTMLTextAreaElement | null)?.value.trim(),
+              )),
+          signal: AbortSignal.any([controller.signal, cloudHistoryOwnerAbort.signal]),
+        });
+        if (refreshed.status === 'refreshed' && isCurrent())
+          cloudHistoryOrganizationId = refreshed.organizationId;
+      } catch {
+        if (isCurrent() && !controller.signal.aborted)
+          showHistoryStatus(
+            'Account history could not be refreshed. Your saved chats remain on this device.',
+          );
+      } finally {
+        if (recentsRefreshAbort === controller) recentsRefreshAbort = null;
+      }
+    }
+    const entries = owner ? await listConversations(owner) : [];
+    if (
+      revision !== historyListRevision ||
+      generation !== _ctx.conversationGeneration ||
+      (owner !== null && !sameManagedCloudOwner(owner, _ctx.managedCloudOwner)) ||
+      (owner === null && _ctx.managedCloudOwner !== null)
+    )
+      return;
+    drawerHistoryEntries = entries;
     renderDrawerHistory(drawerHistoryEntries);
   }
 
@@ -10640,6 +11551,7 @@ function buildUI(): void {
   );
   archivedToggle.addEventListener('click', () => {
     showingArchived = !showingArchived;
+    drawerHistorySearch.value = '';
     renderDrawerHistory(drawerHistoryEntries);
   });
   recentsHeader.appendChild(archivedToggle);
@@ -10655,25 +11567,66 @@ function buildUI(): void {
 
   function closeRecents(): void {
     if (recentsSheet.hidden) return;
+    recentsOpenRevision += 1;
+    recentsRefreshAbort?.abort();
+    recentsRefreshAbort = null;
     recentsSheet.hidden = true;
     historyBtn.focus();
   }
   function openRecents(): void {
+    const revision = ++recentsOpenRevision;
     recentsSheet.hidden = false;
+    showingArchived = false;
     drawerHistoryError.setAttribute('hidden', '');
-    void refreshDrawerHistory()
+    void refreshDrawerHistory(true)
       .then(() => {
+        if (revision !== recentsOpenRevision || recentsSheet.hidden) return;
         if (!drawerHistorySearch.hidden) drawerHistorySearch.focus();
         else recentsClose.focus();
         void pullDrawerHistoryFlags();
       })
-      .catch(() => recentsClose.focus());
+      .catch(() => {
+        if (revision === recentsOpenRevision && !recentsSheet.hidden) recentsClose.focus();
+      });
   }
+  invalidateConversationHistoryUI = () => {
+    recentsRefreshAbort?.abort();
+    recentsRefreshAbort = null;
+    historyListRevision += 1;
+    recentsOpenRevision += 1;
+    drawerHistoryEntries = [];
+    drawerHistorySearch.value = '';
+    drawerHistoryError.textContent = '';
+    drawerHistoryError.setAttribute('hidden', '');
+    renderDrawerHistory([]);
+    if (!recentsSheet.hidden) {
+      recentsSheet.hidden = true;
+      historyBtn.focus();
+    }
+  };
   recentsClose.addEventListener('click', closeRecents);
   recentsSheet.addEventListener('keydown', (event: KeyboardEvent) => {
-    if (event.key !== 'Escape') return;
-    event.preventDefault();
-    closeRecents();
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeRecents();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const controls = Array.from(
+      recentsSheet.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]',
+      ),
+    ).filter((node) => node.getClientRects().length > 0);
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   });
 
   const chatGroupBody = drawerGroupBody(t('spMenuChat'));
@@ -10721,7 +11674,7 @@ function buildUI(): void {
     closeDrawer();
     switchTab('computer-use');
   });
-  viewsSection.appendChild(cuLaunchBtn);
+  if (import.meta.env.DEV) viewsSection.appendChild(cuLaunchBtn);
 
   const runsLaunchBtn = el('button', {
     class: 'sp-drawer-launcher-btn',
@@ -10763,7 +11716,7 @@ function buildUI(): void {
     closeDrawer();
     switchTab('page');
   });
-  viewsSection.appendChild(pageLaunchBtn);
+  if (import.meta.env.DEV) viewsSection.appendChild(pageLaunchBtn);
   const automateGroupBody = drawerGroupBody(t('spMenuAutomate'));
   automateGroupBody.appendChild(viewsSection);
 
@@ -10990,7 +11943,7 @@ function buildUI(): void {
   );
   pairingSecretRow.appendChild(pairingSecretInput);
   pairingSecretRow.appendChild(pairingSecretSaveBtn);
-  pairingSection.appendChild(pairingSecretRow);
+  if (import.meta.env.DEV) pairingSection.appendChild(pairingSecretRow);
 
   const pairingBtnRow = el('div', { class: 'sp-drawer-btn-row' });
   const drawerPairBtn = el(
@@ -12589,7 +13542,7 @@ function buildUI(): void {
   const manageUsageBtn = el('button', { class: 'sp-cloud-link-btn' }, 'Manage usage');
   manageUsageBtn.addEventListener('click', () => {
     void chrome.tabs.create({
-      url: 'https://agiworkforce.com/settings/usage?from=chrome-extension',
+      url: agiWebUrl('/settings/usage?from=chrome-extension'),
     });
   });
   const connectAppsBtn = el('button', { class: 'sp-cloud-link-btn' }, 'Connect apps');
@@ -12598,7 +13551,7 @@ function buildUI(): void {
   });
   const teamsBtn = el('button', { class: 'sp-cloud-link-btn' }, 'Team & Enterprise');
   teamsBtn.addEventListener('click', () => {
-    void chrome.tabs.create({ url: 'https://agiworkforce.com/teams?from=chrome-extension' });
+    void chrome.tabs.create({ url: agiWebUrl('/teams?from=chrome-extension') });
   });
   cloudLinkRow.appendChild(manageUsageBtn);
   cloudLinkRow.appendChild(connectAppsBtn);
@@ -12721,7 +13674,19 @@ function buildUI(): void {
     }
   }
 
+  const extensionSettingsRow = el(
+    'button',
+    { class: 'sp-drawer-row', type: 'button', role: 'menuitem' },
+    t('spExtensionSettings'),
+  );
+  extensionSettingsRow.addEventListener('click', () => {
+    closeDrawer();
+    if (typeof chrome.runtime.openOptionsPage === 'function') chrome.runtime.openOptionsPage();
+    else void chrome.tabs.create({ url: chrome.runtime.getURL('src/options.html') });
+  });
+  drawerMenu.appendChild(extensionSettingsRow);
   for (const group of drawerGroups) {
+    if (!import.meta.env.DEV && group.label !== t('spMenuPairing')) continue;
     const row = el('button', { class: 'sp-drawer-row', type: 'button', role: 'menuitem' });
     row.appendChild(el('span', { class: 'sp-drawer-row-label' }, group.label));
     const rowChevron = el('span', { class: 'sp-drawer-row-chevron' });
@@ -12907,7 +13872,7 @@ function buildUI(): void {
   refreshCloudAccountUI = async function (forceAuthRefresh = false): Promise<void> {
     const refreshGeneration = ++cloudAccountRefreshGeneration;
     clearUsageResetTimer();
-    const accountProfilePromise = getClerkAccountProfile().catch(() => null);
+    const accountProfilePromise = getClerkAccountProfile(forceAuthRefresh).catch(() => null);
     let authContext: Awaited<ReturnType<typeof getManagedCloudAuthContext>>;
     try {
       authContext = await withTimeout(getManagedCloudAuthContext(forceAuthRefresh), 8_000);
@@ -12975,7 +13940,15 @@ function buildUI(): void {
 
     let access: ManagedModelAccess;
     try {
-      access = await getManagedModelAccess(token);
+      try {
+        access = await getManagedModelAccess(token);
+      } catch (error) {
+        if (!(error instanceof Error) || !error.message.includes('Authentication')) throw error;
+        const renewed = await getManagedCloudAuthContext(true);
+        if (refreshGeneration !== cloudAccountRefreshGeneration) return;
+        if (!renewed || !sameManagedCloudOwner(authContext?.owner, renewed.owner)) throw error;
+        access = await getManagedModelAccess(renewed.token);
+      }
     } catch (error) {
       if (refreshGeneration !== cloudAccountRefreshGeneration) return;
       managedModelAccess = null;
@@ -13155,10 +14128,10 @@ function buildUI(): void {
       quotaUpgradeBtn.dataset['destination'] === 'recovery' && recoveryHref
         ? agiWebUrl(recoveryHref)
         : quotaUpgradeBtn.dataset['destination'] === 'billing'
-          ? 'https://agiworkforce.com/settings/billing?from=chrome-extension'
+          ? agiWebUrl('/settings/billing?from=chrome-extension')
           : quotaUpgradeBtn.dataset['destination'] === 'usage'
-            ? 'https://agiworkforce.com/settings/usage?from=chrome-extension'
-            : 'https://agiworkforce.com/pricing?from=chrome-extension&feature=managed_chat';
+            ? agiWebUrl('/settings/usage?from=chrome-extension')
+            : agiWebUrl('/pricing?from=chrome-extension&feature=managed_chat');
     chrome.tabs.create({ url }).catch(() => {});
   });
 
@@ -13301,6 +14274,7 @@ function buildUI(): void {
   document.body.appendChild(tabBar);
 
   const cuPanel: ComputerUsePanelAPI = buildComputerUsePanel();
+  composerComputerUsePanel = cuPanel;
   cuPanel.panelEl.setAttribute('role', 'tabpanel');
   cuPanel.panelEl.setAttribute('aria-labelledby', 'sp-tab-computer-use');
   cuPanel.panelEl.setAttribute('aria-hidden', 'true');
@@ -13366,6 +14340,26 @@ function buildUI(): void {
   chatTabBtn.addEventListener('click', () => switchTab('chat'));
   workflowsTabBtn.addEventListener('click', () => switchTab('workflows'));
   cuTabBtn.addEventListener('click', () => switchTab('computer-use'));
+  showComposerComputerUseTab = () => switchTab('computer-use');
+  cuPanel.panelEl.querySelector('.sp-cu-stop-btn')?.addEventListener(
+    'click',
+    (event) => {
+      if (!composerBrowserRun) return;
+      event.stopImmediatePropagation();
+      cancelComposerBrowserTask();
+    },
+    true,
+  );
+  cuPanel.panelEl.querySelector('.sp-cu-clear-btn')?.addEventListener(
+    'click',
+    (event) => {
+      if (!composerBrowserRun) return;
+      event.stopImmediatePropagation();
+      cuPanel.clearLog();
+      cancelComposerBrowserTask('user_cleared');
+    },
+    true,
+  );
   runsTabBtn.addEventListener('click', () => switchTab('cloud-runs'));
   pageTabBtn.addEventListener('click', () => switchTab('page'));
   const viewTabs = [chatTabBtn, workflowsTabBtn, cuTabBtn, runsTabBtn, pageTabBtn];
@@ -14321,7 +15315,23 @@ function buildUI(): void {
     panel.prepend(el('h1', { class: 'sp-visually-hidden' }, tabBtn.textContent ?? ''));
   }
 
-  chrome.runtime.onMessage.addListener((msg: unknown) => {
+  chrome.runtime.onMessage.addListener((msg: unknown, sender: chrome.runtime.MessageSender) => {
+    if (
+      !isTrustedExtensionPageSender(
+        {
+          id: sender.id,
+          url: sender.url,
+          origin: sender.origin,
+          hasTab: sender.tab !== undefined,
+          tabId: sender.tab?.id,
+          tabUrl: sender.tab?.url,
+        },
+        chrome.runtime.id,
+        chrome.runtime.getURL(''),
+      )
+    ) {
+      return;
+    }
     if (!msg || typeof msg !== 'object') return;
     const m = msg as Record<string, unknown>;
     const runId = m['runId'];
@@ -14329,6 +15339,7 @@ function buildUI(): void {
       typeof m['runGeneration'] === 'number' && Number.isSafeInteger(m['runGeneration'])
         ? m['runGeneration']
         : undefined;
+    applyComposerBrowserMessage(m);
     if (m['type'] === 'AGI_CU_STATE') {
       const status = m['status'];
       if (status === 'running' && typeof runId === 'string' && runGeneration !== undefined) {
@@ -14383,19 +15394,97 @@ function buildUI(): void {
       const requestId = typeof m['requestId'] === 'string' ? m['requestId'] : '';
       const toolName = typeof m['toolName'] === 'string' ? m['toolName'] : 'action';
       const description = typeof m['description'] === 'string' ? m['description'] : '';
+      const tabId =
+        typeof m['tabId'] === 'number' && Number.isSafeInteger(m['tabId']) ? m['tabId'] : undefined;
+      if (
+        !requestId ||
+        typeof runId !== 'string' ||
+        runGeneration === undefined ||
+        tabId === undefined
+      )
+        return;
+      const owner = _ctx.managedCloudOwner;
+      const uploadBinding =
+        toolName === 'upload_file' ? parseBrowserUploadBinding(m['uploadBinding']) : null;
+      if (
+        toolName === 'upload_file' &&
+        (!uploadBinding ||
+          uploadBinding.requestId !== requestId ||
+          uploadBinding.runId !== runId ||
+          uploadBinding.runGeneration !== runGeneration ||
+          uploadBinding.tabId !== tabId ||
+          !sameManagedCloudOwner(owner, uploadBinding.owner))
+      ) {
+        void chrome.runtime.sendMessage({
+          type: 'AGI_CU_APPROVE_RESPONSE',
+          requestId,
+          runId,
+          runGeneration,
+          tabId,
+          allowed: false,
+        });
+        cuPanel.showHandoffBanner(
+          'The file upload request could not be verified, so it was skipped.',
+          'error',
+        );
+        return;
+      }
       switchTab('computer-use');
       cuPanel.showApprovalCard(
         toolName,
         description,
-        m['canAllowForTask'] === true,
-        (decision: ComputerUseApprovalDecision) => {
-          void chrome.runtime.sendMessage({
+        m['canAllowForTask'] === true && toolName !== 'upload_file',
+        (decision, upload) => {
+          const allowed = decision !== 'skip';
+          const response: ComputerUseApprovalResponseMessage = {
             type: 'AGI_CU_APPROVE_RESPONSE',
             requestId,
-            allowed: decision !== 'skip',
+            runId,
+            runGeneration,
+            tabId,
+            allowed,
             forTask: decision === 'allow-for-task',
+            ...(allowed && uploadBinding && upload ? { uploadBinding, upload } : {}),
+          };
+          void chrome.runtime.sendMessage(response).catch(() => {
+            if (allowed && sameManagedCloudOwner(owner, _ctx.managedCloudOwner))
+              cuPanel.showHandoffBanner(
+                'The upload approval could not be delivered. No website upload was confirmed.',
+                'error',
+              );
           });
         },
+        uploadBinding
+          ? {
+              binding: uploadBinding,
+              assertCurrent: async () => {
+                if (
+                  !sameManagedCloudOwner(owner, _ctx.managedCloudOwner) ||
+                  !cuPanel.ownsRun(runId)
+                )
+                  throw new Error('The account or browser run changed before uploading.');
+                const [state, tab] = await Promise.all([
+                  chrome.runtime.sendMessage({
+                    type: 'GET_COMPUTER_USE_STATE',
+                  }) as Promise<ComputerUseCommandResponse>,
+                  chrome.tabs.get(tabId),
+                ]);
+                if (
+                  !sameManagedCloudOwner(owner, _ctx.managedCloudOwner) ||
+                  !cuPanel.ownsRun(runId) ||
+                  state.success !== true ||
+                  state.running !== true ||
+                  state.runId !== runId ||
+                  state.runGeneration !== runGeneration ||
+                  state.tabId !== tabId ||
+                  tab.url !== uploadBinding.tabUrl
+                )
+                  throw new Error(
+                    'The file upload approval is no longer bound to this account, run, and page.',
+                  );
+              },
+            }
+          : undefined,
       );
     }
   });
@@ -14412,6 +15501,7 @@ function buildUI(): void {
         runId: requestedRunId,
         goal,
         tabId,
+        modelSelection: _ctx.selectedModel,
       })) as typeof startResponse;
     } catch (error) {
       if (!cuPanel.ownsRun(requestedRunId)) return;
@@ -14646,18 +15736,18 @@ function buildUI(): void {
           actionLabel: t('spCloudCheckSignIn'),
         });
       } else if (action === 'open_web') {
-        await chrome.tabs.create({ url: 'https://agiworkforce.com' });
+        await chrome.tabs.create({ url: agiWebUrl('/') });
       } else if (action === 'upgrade') {
         await chrome.tabs.create({
-          url: 'https://agiworkforce.com/pricing?from=chrome-extension&feature=managed_chat',
+          url: agiWebUrl('/pricing?from=chrome-extension&feature=managed_chat'),
         });
       } else if (action === 'billing') {
         await chrome.tabs.create({
-          url: 'https://agiworkforce.com/settings/billing?from=chrome-extension',
+          url: agiWebUrl('/settings/billing?from=chrome-extension'),
         });
       } else if (action === 'usage') {
         await chrome.tabs.create({
-          url: 'https://agiworkforce.com/settings/usage?from=chrome-extension',
+          url: agiWebUrl('/settings/usage?from=chrome-extension'),
         });
       } else if (action === 'recovery' && managedCloudGateHref) {
         await chrome.tabs.create({ url: agiWebUrl(managedCloudGateHref) });
@@ -15267,10 +16357,77 @@ function buildUI(): void {
     inputEl.focus();
   });
 
+  const tabsItem = el('button', {
+    class: 'sp-attach-menu-item',
+    type: 'button',
+    role: 'menuitem',
+  });
+  tabsItem.appendChild(renderIcon(Globe, 16));
+  tabsItem.appendChild(el('span', { class: 'sp-attach-menu-label' }, t('spAttachTabsItem')));
+  tabsItem.addEventListener('click', async () => {
+    if (_ctx.isStreaming || composerAttachmentIntakes.size > 0 || !_ctx.managedCloudOwner) return;
+    attachMenu.classList.remove('open');
+    attachBtn.setAttribute('aria-expanded', 'false');
+    const attachmentIntake = beginComposerAttachmentIntake('page');
+    if (!attachmentIntake) return;
+    const owner = { ..._ctx.managedCloudOwner };
+    const conversationId = _ctx.conversationId;
+    const generation = _ctx.conversationGeneration;
+    const intake = new AbortController();
+    tabContextIntakeAbort?.abort();
+    tabContextIntakeAbort = intake;
+    const isCurrent = (): boolean =>
+      !intake.signal.aborted &&
+      sameManagedCloudOwner(owner, _ctx.managedCloudOwner) &&
+      conversationId === _ctx.conversationId &&
+      generation === _ctx.conversationGeneration &&
+      !_ctx.isStreaming;
+    updateAttachmentPreview();
+    try {
+      const selection = await chooseBrowserContextTabs(
+        isCurrent,
+        MANAGED_CHAT_MAX_ATTACHMENTS - pendingAttachments.length,
+        intake.signal,
+      );
+      if (!selection || !isCurrent()) return;
+      const budget = Math.floor(MAX_PAGE_TEXT_CHARACTERS / selection.length);
+      const parts: string[] = [];
+      const sources: BrowserContextTabReference[] = [];
+      for (const tab of selection) {
+        if (!isCurrent()) return;
+        const capture = await capturePageContext(tab, budget);
+        if (!isCurrent()) return;
+        if (!capture.ok) throw new Error(capture.reason);
+        const title = sanitizePageText(tab.title);
+        parts.push(`Tab ${tab.tabId}: ${title} (${new URL(tab.url).origin})\n${capture.text}`);
+        sources.push({
+          ...tab,
+          title,
+          ...(capture.documentId ? { documentId: capture.documentId } : {}),
+        });
+      }
+      if (!isCurrent()) return;
+      const context = boundPageText(parts.join('\n\n')).text;
+      pendingBrowserContextTabs = sources;
+      _ctx.pendingPageContext = context;
+      _ctx.pendingPageContextSource = null;
+      composerContextNotice = tPlural('spTabSnapshotsAttached', sources.length);
+      updateContextButton();
+    } catch (error) {
+      if (isCurrent())
+        composerContextNotice = error instanceof Error ? error.message : t('spAttachTabsFailed');
+    } finally {
+      if (tabContextIntakeAbort === intake) tabContextIntakeAbort = null;
+      finishComposerAttachmentIntake(attachmentIntake);
+      updateAttachmentPreview();
+    }
+  });
+
   const attachMenuItems = [
     fileItem,
     screenshotItem,
     contextBtn,
+    tabsItem,
     linkItem,
     connectorsItem,
     temporaryItem,
@@ -16353,6 +17510,12 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     const existing = _ctx.messages.find((message) => message.id === chunk.id);
     if (existing) {
       existing.cloudAgentRun = { ...chunk.cloudRun };
+      const previousActivity = existing.agentActivity;
+      reconcileManagedRunActivity(existing);
+      if (previousActivity !== existing.agentActivity) {
+        _ctx.needsMessageRebuild = true;
+        renderMessages();
+      }
       if (streamUsedQuick) existing.managedQuickMode = true;
       stampResolvedRoute(chunk.id, existing);
     } else {
@@ -16409,6 +17572,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     }
     const cloudRun = cloudRunsByStreamId.get(chunk.id);
     if (cloudRun) assistant.cloudAgentRun = { ...cloudRun };
+    reconcileManagedRunActivity(assistant);
     trimLiveMessages();
     _ctx.needsMessageRebuild = true;
     renderMessages();
@@ -16513,6 +17677,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       if (startedAt !== undefined) existing.durationMs = Math.max(0, Date.now() - startedAt);
       const cloudRun = cloudRunsByStreamId.get(chunk.id);
       if (cloudRun) existing.cloudAgentRun = { ...cloudRun };
+      reconcileManagedRunActivity(existing);
       const assistantCloudId = assistantCloudIdByStreamId.get(chunk.id);
       if (assistantCloudId && !existing.cloudMessageId) existing.cloudMessageId = assistantCloudId;
       if (isEmptyAssistantTurn(existing)) {
@@ -16556,9 +17721,25 @@ document.addEventListener('visibilitychange', refreshAccountOnReturn);
 window.addEventListener('pagehide', () => void flushProductEvents());
 window.addEventListener('focus', refreshAccountOnReturn);
 chrome.tabs.onUpdated?.addListener((_tabId, changeInfo) => {
+  if (
+    pendingBrowserContextTabs.some((tab) => tab.tabId === _tabId) &&
+    (changeInfo.url !== undefined || changeInfo.status === 'loading')
+  ) {
+    clearPendingPageContext();
+    composerContextNotice = 'An attached tab changed. Choose the tabs again before sending.';
+    updateContextButton();
+    updateAttachmentPreview();
+  }
   if (changeInfo.url !== undefined || changeInfo.status === 'complete') {
     refreshPageHostname();
   }
+});
+chrome.tabs.onRemoved?.addListener((tabId) => {
+  if (!pendingBrowserContextTabs.some((tab) => tab.tabId === tabId)) return;
+  clearPendingPageContext();
+  composerContextNotice = 'An attached tab closed. Choose the tabs again before sending.';
+  updateContextButton();
+  updateAttachmentPreview();
 });
 refreshPageHostname();
 

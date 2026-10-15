@@ -1926,7 +1926,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const captureCompletedLocalMemory = () => {
       if (!shouldCaptureCompletedLocalTurn || completedLocalMemoryCaptured) return;
       completedLocalMemoryCaptured = true;
-      void consolidateFactsFromTurn({ message: content, conversationId });
+      void consolidateFactsFromTurn({
+        message: content,
+        conversationId,
+        includeSensitiveTopics: memorySettings.includeSensitiveTopics,
+      });
     };
 
     const turnMessageCount = userMessage ? 2 : 1;

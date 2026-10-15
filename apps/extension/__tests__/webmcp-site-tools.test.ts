@@ -65,9 +65,23 @@ describe('site tool effect', () => {
 });
 
 describe('site tool approval', () => {
+  it('refuses an unknown name when the page exposes its actual tool registry', async () => {
+    const call = vi.fn(async () => ({ ok: true }));
+    setModelContext({
+      listTools: () => [{ name: 'read_cart', annotations: { readOnlyHint: true } }],
+      callTool: call,
+    });
+    const response = await callTool({ name: 'undeclared_tool' });
+    expect(response).toEqual({
+      success: false,
+      error: 'Tool "undeclared_tool" not found on this page',
+    });
+    expect(call).not.toHaveBeenCalled();
+  });
+
   it('asks on a page the shared approval policy flags, whatever the tool claims', () => {
     const sensitive = planSiteToolCall(
-      { name: 'transfer', effect: 'write' },
+      { name: 'transfer', effect: 'write', source: 'imperative' },
       {},
       'https://chase.com/transfer',
     );
@@ -75,7 +89,7 @@ describe('site tool approval', () => {
     expect(sensitive.reason).toContain('banking');
 
     const ordinary = planSiteToolCall(
-      { name: 'transfer', effect: 'write' },
+      { name: 'transfer', effect: 'write', source: 'imperative' },
       {},
       'https://shop.example.com/cart',
     );

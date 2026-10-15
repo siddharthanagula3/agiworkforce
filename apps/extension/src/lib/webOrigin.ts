@@ -36,3 +36,13 @@ export function configuredAgiWebOrigin(): string | null {
   if (!configured) return DEFAULT_AGI_WEB_ORIGIN;
   return validateAgiWebOrigin(configured);
 }
+
+export function agiWebUrl(path: string): string {
+  const origin = configuredAgiWebOrigin();
+  if (!origin || !path.startsWith('/') || path.startsWith('//')) {
+    throw new Error('AGI web navigation is unavailable.');
+  }
+  const url = new URL(path, origin);
+  if (url.origin !== origin) throw new Error('AGI web navigation is unavailable.');
+  return url.toString();
+}

@@ -43,6 +43,7 @@
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/observability": "workspace:*",
+    "@agiworkforce/provider-protocol": "workspace:*",
     "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/sync": "workspace:*",

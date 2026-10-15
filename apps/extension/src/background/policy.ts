@@ -1,5 +1,6 @@
 import type { RunPageAction, ScheduledTask, WebMCPToolInfo } from '../types';
 import { redactSecrets } from '@agiworkforce/utils/logger';
+import { configuredAgiWebOrigin } from '../lib/webOrigin';
 import {
   evaluateSitePolicy,
   selectBrowser,
@@ -402,9 +403,10 @@ export function validateGatewayUrl(raw: string): string | null {
   if (!raw) return null;
   try {
     const parsed = new URL(raw);
-    if (parsed.protocol !== 'https:') return null;
-    const origin = `https://${parsed.host}`;
-    return GATEWAY_URL_ALLOWLIST_EXACT.has(origin) ? origin : null;
+    if (parsed.username || parsed.password) return null;
+    const origin = parsed.origin;
+    if (parsed.protocol === 'https:' && GATEWAY_URL_ALLOWLIST_EXACT.has(origin)) return origin;
+    return origin === configuredAgiWebOrigin() ? origin : null;
   } catch {
     return null;
   }

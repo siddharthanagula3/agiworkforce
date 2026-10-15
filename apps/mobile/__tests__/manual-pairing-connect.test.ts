@@ -60,6 +60,12 @@ jest.mock('../services/companionNotifications', () => ({
   notifyCompanionMessage: jest.fn(),
 }));
 
+const mockCompanionInstallationId = jest.fn<Promise<string>, []>(async () => 'c'.repeat(64));
+
+jest.mock('../src/features/companion/pairing/installationId', () => ({
+  companionInstallationId: () => mockCompanionInstallationId(),
+}));
+
 import { useConnectionStore } from '../stores/connectionStore';
 import { ManualPairingClaimError } from '../services/manualPairing';
 
@@ -165,6 +171,29 @@ describe('Connection store dispatch key material', () => {
       { metadata: Record<string, unknown> },
     ];
     expect(JSON.stringify(signalingOptions.metadata)).not.toContain(PAIRING_SECRET);
+  });
+
+  it('tells the desktop which install is pairing, so a reconnect is recognised', async () => {
+    useConnectionStore.getState().connect(V3_PAYLOAD);
+
+    await waitFor(() => expect(mockSignalingClient).toHaveBeenCalled());
+    const [signalingOptions] = mockSignalingClient.mock.calls[0] as [
+      { metadata: Record<string, unknown> },
+    ];
+    expect(signalingOptions.metadata['installationId']).toBe('c'.repeat(64));
+  });
+
+  it('still pairs without an installation id when the lookup fails', async () => {
+    mockCompanionInstallationId.mockRejectedValueOnce(new Error('keychain locked'));
+
+    useConnectionStore.getState().connect(V3_PAYLOAD);
+
+    await waitFor(() => expect(mockSignalingClient).toHaveBeenCalled());
+    const [signalingOptions] = mockSignalingClient.mock.calls[0] as [
+      { metadata: Record<string, unknown> },
+    ];
+    expect(signalingOptions.metadata).not.toHaveProperty('installationId');
+    expect(signalingOptions.metadata['dispatchSalt']).toMatch(/^[0-9a-f]+$/);
   });
 
   it('refuses a legacy desktop payload with an update prompt instead of pairing anyway', async () => {

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   configureChromeManifest,
   resolveChromeBuildConfiguration,
@@ -46,6 +46,20 @@ describe('Chrome release manifest configuration', () => {
     expect(manifest.content_security_policy.extension_pages).toContain(
       'https://clerk.agiworkforce.com',
     );
+  });
+
+  it('warns that a development sync host also needs an allowlisted extension ID', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    configureChromeManifest(sourceManifest, {
+      clerkFrontendApi: 'https://development.clerk.accounts.dev',
+      clerkSyncHost: 'http://localhost:3100',
+    });
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('allowed_origins for both development and production'),
+    );
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('will be rejected'));
   });
 
   it('rejects a non-empty key that Chrome cannot parse as public-key material', () => {

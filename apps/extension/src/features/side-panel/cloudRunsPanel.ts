@@ -84,7 +84,7 @@ export const CLOUD_RUNS_PANEL_CSS =
 
   .sp-runs-filter {
     background: none;
-    border: 1px solid var(--agi-ext-border);
+    border: 1px solid var(--agi-ext-border-control);
     border-radius: var(--corner-control);
     color: var(--agi-ext-text-muted);
     font-size: var(--type-label-size);
@@ -100,7 +100,7 @@ export const CLOUD_RUNS_PANEL_CSS =
 
   .sp-runs-icon-btn {
     background: none;
-    border: 1px solid var(--agi-ext-border);
+    border: 1px solid var(--agi-ext-border-control);
     border-radius: var(--corner-control);
     color: var(--agi-ext-text-muted);
     font-size: var(--type-label-size);
@@ -109,14 +109,14 @@ export const CLOUD_RUNS_PANEL_CSS =
     flex-shrink: 0;
   }
 
-  .sp-runs-icon-btn:hover {
-    border-color: var(--agi-ext-accent);
-    color: var(--agi-ext-accent-text);
+  .sp-runs-icon-btn:hover:not(:disabled) {
+    background: var(--agi-ext-hover);
+    color: var(--agi-ext-text);
   }
 
   .sp-runs-icon-btn:disabled {
     cursor: wait;
-    opacity: 0.55;
+    color: var(--agi-ext-text-muted);
   }
 
   .sp-runs-status {
@@ -157,7 +157,7 @@ export const CLOUD_RUNS_PANEL_CSS =
 
   .sp-runs-status-action:disabled {
     cursor: wait;
-    opacity: 0.55;
+    color: var(--agi-ext-text-muted);
   }
 
   #sp-runs-list,
@@ -195,7 +195,7 @@ export const CLOUD_RUNS_PANEL_CSS =
     color: var(--agi-ext-text);
   }
 
-  .sp-run-row:hover {
+  .sp-run-row:hover:not(:disabled) {
     background: var(--agi-ext-hover);
   }
 
@@ -216,14 +216,14 @@ export const CLOUD_RUNS_PANEL_CSS =
 
   .sp-run-badge[data-tone='active'] {
     color: var(--agi-ext-accent-text);
-    border-color: color-mix(in srgb, var(--agi-ext-accent) 40%, transparent);
-    background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
+    border-color: var(--agi-ext-accent);
+    background: var(--agi-ext-surface);
   }
 
   .sp-run-badge[data-tone='attention'] {
     color: var(--agi-ext-warning-text);
-    border-color: color-mix(in srgb, var(--agi-ext-warning) 40%, transparent);
-    background: color-mix(in srgb, var(--agi-ext-warning) 12%, transparent);
+    border-color: var(--agi-ext-warning-border);
+    background: var(--agi-ext-warning-bg);
   }
 
   .sp-run-badge[data-tone='success'] {
@@ -261,8 +261,8 @@ export const CLOUD_RUNS_PANEL_CSS =
   .sp-run-approval {
     margin: 8px 14px;
     padding: 10px 12px;
-    background: color-mix(in srgb, var(--agi-ext-warning) 10%, transparent);
-    border: 1px solid color-mix(in srgb, var(--agi-ext-warning) 40%, transparent);
+    background: var(--agi-ext-warning-bg);
+    border: 1px solid var(--agi-ext-warning-border);
     border-radius: var(--corner-field);
     font-size: var(--type-caption-size);
   }
@@ -290,13 +290,14 @@ export const CLOUD_RUNS_PANEL_CSS =
     min-height: 44px;
     margin-bottom: 8px;
     padding: 6px 8px;
-    border: 1px solid var(--agi-ext-border);
+    border: 1px solid var(--agi-ext-border-control);
     border-radius: var(--corner-control);
     background: var(--agi-ext-surface);
     color: var(--agi-ext-text);
     font: inherit;
     font-size: var(--type-caption-size);
   }
+  .sp-run-approval-guidance::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
 
   .sp-run-approval-btns {
     display: flex;
@@ -304,9 +305,9 @@ export const CLOUD_RUNS_PANEL_CSS =
   }
 
   .sp-run-approve {
-    background: var(--agi-ext-accent);
-    color: var(--agi-ext-on-accent);
-    border: none;
+    background: var(--agi-ext-primary);
+    color: var(--agi-ext-on-primary);
+    border: 1px solid var(--agi-ext-border-control);
     border-radius: var(--corner-control);
     padding: 4px 14px;
     font-size: var(--type-caption-size);
@@ -316,18 +317,21 @@ export const CLOUD_RUNS_PANEL_CSS =
 
   .sp-run-reject {
     background: none;
-    border: 1px solid var(--agi-ext-border);
+    border: 1px solid var(--agi-ext-border-control);
     color: var(--agi-ext-text-muted);
     border-radius: var(--corner-control);
     padding: 4px 14px;
     font-size: var(--type-caption-size);
     cursor: pointer;
   }
+  .sp-run-approve:hover:not(:disabled) { background: var(--agi-ext-primary-hover); }
+  .sp-run-reject:hover:not(:disabled) { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
 
   .sp-run-approve:disabled,
   .sp-run-reject:disabled {
     cursor: wait;
-    opacity: 0.55;
+    color: var(--agi-ext-text-muted);
+    background: var(--agi-ext-hover);
   }
 
   .sp-runs-board {

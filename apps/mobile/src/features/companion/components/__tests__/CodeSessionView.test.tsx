@@ -63,6 +63,37 @@ describe('CodeSessionView', () => {
     expect(mockService.detachCodeSession).toHaveBeenCalledWith('root-1', 'thread-1');
   });
 
+  it('says when an allow is waiting at the computer, and when it was not allowed there', async () => {
+    render(<CodeSessionView rootId="root-1" threadId="thread-1" />);
+    openSession();
+    const held = (status: string, message: string) =>
+      act(() => {
+        ingestRemoteCodeControl('code.session.event', {
+          action: 'code.session.event',
+          version: 1,
+          rootId: 'root-1',
+          threadId: 'thread-1',
+          event: { type: 'approval-held', requestId: 'ap-1', status, message },
+          sentAt: SENT_AT,
+        });
+      });
+
+    held('waiting', 'This needs to be allowed at your computer. A dialog is open there now.');
+    expect(
+      await screen.findByText(
+        'This needs to be allowed at your computer. A dialog is open there now.',
+      ),
+    ).toBeTruthy();
+
+    held('refused', 'Not allowed at your computer. The agent is still waiting for an answer.');
+    expect(
+      await screen.findByText(
+        'Not allowed at your computer. The agent is still waiting for an answer.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Approve Run pnpm test')).toBeTruthy();
+  });
+
   it('answers the approval the phone shows', async () => {
     render(<CodeSessionView rootId="root-1" threadId="thread-1" />);
     openSession();
@@ -75,6 +106,31 @@ describe('CodeSessionView', () => {
       'ap-1',
       true,
     );
+  });
+
+  it('shows a question the turn is waiting on, to be answered on the computer', async () => {
+    render(<CodeSessionView rootId="root-1" threadId="thread-1" />);
+    openSession({
+      status: 'running',
+      pendingApprovals: [],
+      pendingQuestions: [{ turnId: 'turn-1', requestId: 'q-1', question: 'Which branch?' }],
+    });
+
+    expect(await screen.findByText('Which branch?')).toBeTruthy();
+    expect(screen.getByText('Answer on your computer')).toBeTruthy();
+    expect(screen.queryByLabelText(/Approve/)).toBeNull();
+
+    act(() => {
+      ingestRemoteCodeControl('code.session.event', {
+        action: 'code.session.event',
+        version: 1,
+        rootId: 'root-1',
+        threadId: 'thread-1',
+        event: { type: 'user-input-answered', requestId: 'q-1' },
+        sentAt: SENT_AT,
+      });
+    });
+    expect(screen.queryByText('Which branch?')).toBeNull();
   });
 
   it('steers a running turn, stopping it first only when asked', async () => {

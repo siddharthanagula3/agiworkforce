@@ -7,6 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
+import { JSDOM } from 'jsdom';
 
 import { FOCUSED_FIELD_SIGNATURE_JS } from '../src/features/computer-use/cdpDriver';
 
@@ -61,9 +62,14 @@ describe('the focused field script', () => {
   });
 
   it('follows focus into a frame it can read', () => {
-    const card = field('text', 'cardnumber');
-    const frame = frameHolding(() => ({ activeElement: card }));
-    expect(focusedFieldSignature({ activeElement: frame })).toContain('|cardnumber|');
+    const dom = new JSDOM('<iframe></iframe>', { url: document.URL, runScripts: 'outside-only' });
+    const child = dom.window.document.querySelector('iframe')!.contentDocument!;
+    child.body.innerHTML = '<input name="cardnumber">';
+    child.querySelector('input')!.focus();
+    // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
+    const read = dom.window.eval(FOCUSED_FIELD_SIGNATURE_JS) as (doc: Document) => string | null;
+    expect(read(dom.window.document)).toContain('|cardnumber|');
+    dom.window.close();
   });
 
   it('follows focus into a shadow root', () => {

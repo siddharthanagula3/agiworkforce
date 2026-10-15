@@ -91,7 +91,17 @@ import {
   type MemoryWriteResult,
 } from './background/memory-bridge';
 import { runAgentLoop } from './features/computer-use/agentLoop';
-import { ensureOnDetachListener } from './features/computer-use/cdpDriver';
+import { TaskTabs, admitSelectedContextTabs } from './features/browser-tools/taskTabs';
+import { BrowserAgentSiteTools } from './features/tools/browserAgentSiteTools';
+import { ensureOnDetachListener, getTargetSignature } from './features/computer-use/cdpDriver';
+import {
+  parseBrowserUploadBinding,
+  parseBrowserUploadedFilesMetadata,
+  resolveUploadedUserFiles,
+  sameBrowserUploadBinding,
+  type BrowserUploadBinding,
+  type BrowserUploadedFileMetadata,
+} from './features/computer-use/userFileUpload';
 import {
   ComputerUseRunCoordinator,
   ComputerUseStartCoordinator,
@@ -153,18 +163,20 @@ import {
   BROWSER_COMMAND_PROTOCOL_VERSION,
   MAX_LISTED_BROWSER_TABS,
   NATIVE_BROWSER_POLL_MESSAGE,
+  NATIVE_BROWSER_COMMAND_WATCH_MESSAGE,
   NATIVE_BROWSER_RESULT_MESSAGE,
   NATIVE_BROWSER_UNPAIR_MESSAGE,
   NATIVE_PAGE_CAPTURE_MESSAGE,
   SITE_POLICY_ADMIN_UNAVAILABLE,
   evaluateSitePolicy,
+  isBrowserCommandRequest,
+  type BrowserCommand,
   type BrowserTabSummary,
   type SitePolicyAdminState,
 } from '@agiworkforce/types';
-import {
-  captureThroughDebugger,
-  runDesktopBrowserCommand,
-} from './features/native-bridge/desktopCommands';
+import { runDesktopBrowserCommand } from './features/native-bridge/desktopCommands';
+import { NativeBrowserDriver } from './features/native-bridge/nativeBrowserDriver';
+import { awaitCdpOperation, throwIfCdpCancelled } from './features/computer-use/debuggerSession';
 import {
   cancelChromeManagedRun,
   cancelAndConfirmChromeManagedRun,
@@ -175,6 +187,8 @@ import {
 import {
   getManagedCloudAuthContext,
   getManagedModelAccess,
+  MANAGED_CHAT_MAX_INPUT_CHARS,
+  type ManagedCloudAuthContext,
 } from './features/cloud-bridge/freeTrialClient';
 import {
   abortConversationSyncForOwnerChange,
@@ -188,7 +202,7 @@ import { watchCloudMirroringEnabled } from './features/privacy/cloudMirroring';
 import { installBackgroundErrorReporting } from './features/observability/errorReporting';
 import {
   BROWSER_TOOL_DEFINITIONS,
-  resolveComputerUseModel,
+  resolveManagedComputerUseModel,
 } from './features/computer-use/cloudAgentClient';
 import {
   initDownloadLedger,
@@ -207,7 +221,6 @@ import {
 import { readConsoleEntries } from './features/browser-tools/consoleCapture';
 import { authorizeBrowserToolTab } from './features/browser-tools/tabAuthority';
 import { readNetworkEntries } from './features/browser-tools/networkCapture';
-import { signOutClerkIfCurrent } from './features/cloud-bridge/clerkAuth';
 import { sendChromeHeartbeatIfDue } from './features/cloud-bridge/deviceHeartbeat';
 import { flushAutomationAuditOutbox } from './features/observability/automationAudit';
 import {
@@ -617,14 +630,16 @@ async function invalidateRejectedManagedCloudCredential(
   } catch (error) {
     teardownErrors.push(error);
   }
-  let cleared = false;
+  let current: ManagedCloudAuthContext | null = null;
+  let refreshed = false;
   try {
-    cleared = await signOutClerkIfCurrent({ owner: rejected.owner, token: rejected.token });
+    current = await getManagedCloudAuthContext(true);
+    refreshed = true;
   } catch (error) {
-    logger.warn('Failed to clear the exact rejected Managed Cloud credential', error);
+    logger.warn('Failed to refresh the rejected Managed Cloud credential', error);
     teardownErrors.push(error);
   }
-  if (cleared) {
+  if (refreshed && (!current || !sameManagedCloudOwner(current.owner, rejected.owner))) {
     retireManagedCloudOwner(rejected.owner);
     try {
       await invalidateManagedCloudOwner(rejected.owner, true);
@@ -646,6 +661,8 @@ const pendingRequests = new Map<
     reject: (reason: unknown) => void;
     timeout: ReturnType<typeof setTimeout>;
     allowUnsignedResponse: boolean;
+    port: chrome.runtime.Port;
+    removeAbort?: () => void;
   }
 >();
 const pendingContextHandoffApprovals = new Set<string>();
@@ -786,11 +803,16 @@ function resetNativeReconnectState(): void {
 }
 
 async function triggerManualReconnect(): Promise<ExtensionResponse> {
+  activePairedBrowserCommand?.driver?.cancel('The AGI Desktop connection was replaced.');
   resetNativeReconnectState();
-
-  if (state.nativePort) {
+  const previousPort = state.nativePort;
+  state.nativePort = null;
+  nativeSessionSecret = null;
+  _bgCtx.nativeHandshakeInFlight = false;
+  if (previousPort) {
+    rejectPendingNativeRequests(previousPort, 'The AGI Desktop connection was replaced.');
     try {
-      state.nativePort.disconnect();
+      previousPort.disconnect();
     } catch (error) {
       logger.debug('Manual reconnect disconnect failed', error);
     }
@@ -941,14 +963,17 @@ function connectToNativeHost(): void {
 
     logger.info('Connecting to native host', { host: NATIVE_HOST_NAME });
     const port = chrome.runtime.connectNative(NATIVE_HOST_NAME);
-
-    port.onMessage.addListener(handleNativeMessage);
-    port.onDisconnect.addListener(handleNativeDisconnect);
-
     state.nativePort = port;
+    nativeSessionSecret = null;
     state.isNativeConnected = false;
     state.lastNativeError = null;
     _bgCtx.nativeHandshakeInFlight = true;
+    port.onMessage.addListener((message: NativeMessageEnvelope) => {
+      if (state.nativePort === port) handleNativeMessage(message, port);
+    });
+    port.onDisconnect.addListener(() => {
+      if (state.nativePort === port) handleNativeDisconnect();
+    });
 
     void (async () => {
       try {
@@ -956,6 +981,7 @@ function connectToNativeHost(): void {
           type: 'connect',
           extension_id: chrome.runtime.id,
         })) as unknown as NativeResponseEnvelope;
+        if (state.nativePort !== port) return;
         if (!connectResult?.success) {
           throw new Error(connectResult?.error ?? 'Native connect handshake failed');
         }
@@ -966,6 +992,7 @@ function connectToNativeHost(): void {
         const pingResult = (await sendNativeRequest({
           type: 'ping',
         })) as unknown as NativeResponseEnvelope;
+        if (state.nativePort !== port) return;
         if (!pingResult?.success) {
           throw new Error(pingResult?.error ?? 'Native ping failed');
         }
@@ -979,7 +1006,12 @@ function connectToNativeHost(): void {
         state.connectionStatus = 'connected';
         void notifyConnectionStatusChange();
       } catch (error) {
+        if (state.nativePort !== port) return;
         logger.warn('Native host handshake failed', error);
+        rejectPendingNativeRequests(port, 'The AGI Desktop handshake failed.');
+        state.nativePort = null;
+        nativeSessionSecret = null;
+        _bgCtx.nativeHandshakeInFlight = false;
         try {
           port.disconnect();
         } catch (disconnectError) {
@@ -992,7 +1024,7 @@ function connectToNativeHost(): void {
         void notifyConnectionStatusChange();
         scheduleNativeReconnect('handshake_failed');
       } finally {
-        _bgCtx.nativeHandshakeInFlight = false;
+        if (state.nativePort === port) _bgCtx.nativeHandshakeInFlight = false;
       }
     })();
   } catch (error) {
@@ -1014,6 +1046,8 @@ function createRequestId(): string {
 interface NativeRequestOptions {
   timeoutMs?: number;
   requireAuthenticatedSession?: boolean;
+  connection?: { port: chrome.runtime.Port; sessionSecret: ArrayBuffer };
+  signal?: AbortSignal;
 }
 
 function sendNativeRequest(
@@ -1025,6 +1059,26 @@ function sendNativeRequest(
   const timeoutMs = options.timeoutMs ?? NATIVE_REQUEST_TIMEOUT_MS;
   return new Promise((resolve, reject) => {
     void (async () => {
+      if (options.signal?.aborted) {
+        reject(
+          options.signal.reason instanceof Error
+            ? options.signal.reason
+            : new Error('The native request was cancelled.'),
+        );
+        return;
+      }
+      if (
+        options.connection &&
+        (state.nativePort !== options.connection.port ||
+          nativeSessionSecret !== options.connection.sessionSecret ||
+          !state.isNativeConnected)
+      ) {
+        resolve({
+          success: false,
+          error: 'The original AGI Desktop connection is no longer active.',
+        });
+        return;
+      }
       const portReadyForHandshake = !!state.nativePort && _bgCtx.nativeHandshakeInFlight;
       if (!portReadyForHandshake && (!state.nativePort || !state.isNativeConnected)) {
         if (!_bgCtx.nativeReconnectGaveUp) {
@@ -1054,9 +1108,17 @@ function sendNativeRequest(
       const timestamp = Date.now();
       try {
         const mac = await computeEnvelopeMac(id, timestamp, message, activeSessionSecret);
+        if (options.signal?.aborted)
+          throw options.signal.reason instanceof Error
+            ? options.signal.reason
+            : new Error('The native request was cancelled.');
         if (
           !activePort ||
           state.nativePort !== activePort ||
+          (options.connection &&
+            (activePort !== options.connection.port ||
+              activeSessionSecret !== options.connection.sessionSecret ||
+              !state.isNativeConnected)) ||
           (options.requireAuthenticatedSession &&
             (!state.isNativeConnected || nativeSessionSecret !== activeSessionSecret || !mac))
         ) {
@@ -1068,15 +1130,37 @@ function sendNativeRequest(
         }
 
         const timeout = setTimeout(() => {
+          pendingRequests.get(id)?.removeAbort?.();
           pendingRequests.delete(id);
           reject(new Error(`Native request timeout after ${timeoutMs}ms`));
         }, timeoutMs);
+        const abort = (): void => {
+          const pending = pendingRequests.get(id);
+          if (!pending || pending.port !== activePort) return;
+          clearTimeout(pending.timeout);
+          pending.removeAbort?.();
+          pendingRequests.delete(id);
+          reject(
+            options.signal?.reason instanceof Error
+              ? options.signal.reason
+              : new Error('The native request was cancelled.'),
+          );
+        };
         pendingRequests.set(id, {
           resolve,
           reject,
           timeout,
           allowUnsignedResponse: isConnectRequest && !activeSessionSecret,
+          port: activePort,
+          ...(options.signal
+            ? { removeAbort: () => options.signal!.removeEventListener('abort', abort) }
+            : {}),
         });
+        options.signal?.addEventListener('abort', abort, { once: true });
+        if (options.signal?.aborted) {
+          abort();
+          return;
+        }
 
         activePort.postMessage({
           id,
@@ -1088,6 +1172,7 @@ function sendNativeRequest(
         const pending = pendingRequests.get(id);
         if (pending) {
           clearTimeout(pending.timeout);
+          pending.removeAbort?.();
           pendingRequests.delete(id);
         }
         reject(error);
@@ -1188,7 +1273,8 @@ function invalidateWebMCPToolsForNavigation(tabId: number): number {
   return navigationGeneration;
 }
 
-function handleNativeMessage(message: NativeMessageEnvelope): void {
+function handleNativeMessage(message: NativeMessageEnvelope, port: chrome.runtime.Port): void {
+  if (state.nativePort !== port) return;
   // The connect handshake carries session_secret (the raw HMAC key); never log the envelope.
   logger.debug('Received native message', {
     id: message?.id,
@@ -1196,21 +1282,27 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
     success: message?.success,
   });
 
-  const maybeSecret = (message as unknown as Record<string, unknown>)['session_secret'];
-  if (typeof maybeSecret === 'string' && !nativeSessionSecret) {
-    setNativeSessionSecret(maybeSecret);
-  }
-
   if (message && message.id && pendingRequests.has(message.id)) {
     const request = pendingRequests.get(message.id);
     if (request) {
+      if (request.port !== port) return;
+      const maybeSecret = (message as unknown as Record<string, unknown>)['session_secret'];
+      if (
+        request.allowUnsignedResponse &&
+        typeof maybeSecret === 'string' &&
+        !nativeSessionSecret
+      ) {
+        setNativeSessionSecret(maybeSecret);
+      }
       const { resolve, reject, timeout } = request;
       clearTimeout(timeout);
+      request.removeAbort?.();
       pendingRequests.delete(message.id);
 
       const respMac = (message as unknown as Record<string, unknown>)['mac'];
       const respTs = (message as unknown as Record<string, unknown>)['timestamp'];
-      if (nativeSessionSecret) {
+      const responseSessionSecret = nativeSessionSecret;
+      if (responseSessionSecret) {
         if (typeof respMac !== 'string' || typeof respTs !== 'number') {
           logger.warn(
             '[native-mac] Strict mode, rejecting response with missing mac/timestamp ' +
@@ -1227,8 +1319,14 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
         delete body['mac'];
         delete body['timestamp'];
         delete body['session_secret'];
-        void computeEnvelopeMac(message.id, respTs, body)
+        void computeEnvelopeMac(message.id, respTs, body, responseSessionSecret)
           .then((expected) => {
+            if (state.nativePort !== port || nativeSessionSecret !== responseSessionSecret) {
+              reject(
+                new Error('The AGI Desktop connection changed while its response was verified.'),
+              );
+              return;
+            }
             if (expected === null || !timingSafeEqual(expected, respMac)) {
               logger.warn(
                 '[native-mac] Response MAC mismatch, rejecting (potential shuffle attack)',
@@ -1260,18 +1358,25 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
   }
 }
 
+function rejectPendingNativeRequests(port: chrome.runtime.Port, error: string): void {
+  for (const [requestId, pending] of pendingRequests.entries()) {
+    if (pending.port !== port) continue;
+    clearTimeout(pending.timeout);
+    pending.removeAbort?.();
+    pending.reject(new Error(error));
+    pendingRequests.delete(requestId);
+  }
+}
+
 function handleNativeDisconnect(): void {
   nativeSessionSecret = null;
   const error = chrome.runtime.lastError?.message || 'Native host disconnected';
   logger.warn('Native host disconnected', { error });
 
-  for (const [requestId, pending] of pendingRequests.entries()) {
-    clearTimeout(pending.timeout);
-    pending.reject(new Error(error));
-    pendingRequests.delete(requestId);
-  }
+  if (state.nativePort) rejectPendingNativeRequests(state.nativePort, error);
 
   state.nativePort = null;
+  _bgCtx.nativeHandshakeInFlight = false;
   state.isNativeConnected = false;
   state.connectionStatus = 'disconnected';
   state.lastNativeError = error;
@@ -2822,7 +2927,14 @@ async function assertComputerUseOwnership(lease: ComputerUseRunLease): Promise<s
 
   let tab: chrome.tabs.Tab;
   try {
-    tab = await chrome.tabs.get(lease.tabId);
+    const targetTabId = lease.tabId;
+    const authorized = await authorizeBrowserToolTab(targetTabId);
+    computerUseRuns.assertCurrent(lease);
+    if (lease.tabId !== targetTabId) rejectComputerUseOwnership(lease, 'tab_intent_changed');
+    tab = await chrome.tabs.get(targetTabId);
+    computerUseRuns.assertCurrent(lease);
+    if (lease.tabId !== targetTabId || tab.url !== authorized.url)
+      rejectComputerUseOwnership(lease, 'tab_intent_changed');
   } catch {
     rejectComputerUseOwnership(lease, 'tab_intent_changed');
   }
@@ -2882,6 +2994,73 @@ async function updateComputerUseActionState(
       cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
     }
   }
+}
+
+async function assertComputerUseInputCleanupOwnership(
+  lease: ComputerUseRunLease,
+  startGeneration: number,
+): Promise<void> {
+  const assertGeneration = (): void => {
+    const active = computerUseRuns.getActive();
+    const reason = lease.controller.signal.reason as { reasonCode?: unknown } | undefined;
+    const locallyCancelled =
+      lease.controller.signal.aborted &&
+      ['user_stopped', 'user_cleared', 'panel_closed'].includes(String(reason?.reasonCode));
+    if (
+      (active && active !== lease) ||
+      computerUseStarts.getPending() ||
+      computerUseStartGeneration !== startGeneration + (locallyCancelled ? 1 : 0)
+    ) {
+      throw new Error('A newer browser run or start owns this tab.');
+    }
+  };
+  assertGeneration();
+  const context = await getManagedCloudAuthContext(true);
+  assertGeneration();
+  if (
+    !context ||
+    isRetiredManagedCloudOwner(context.owner) ||
+    !sameManagedCloudOwner(context.owner, lease.authOwner)
+  )
+    throw new Error('The original account no longer owns input cleanup.');
+  const tab = await chrome.tabs.get(lease.tabId);
+  assertGeneration();
+  if (
+    !tab.url ||
+    tab.url !== lease.tabIntentUrl ||
+    (lease.windowId !== undefined && tab.windowId !== lease.windowId)
+  )
+    throw new Error('The original browser page changed before input cleanup.');
+  const authorized = await authorizeBrowserToolTab(lease.tabId);
+  assertGeneration();
+  const currentTab = await chrome.tabs.get(lease.tabId);
+  assertGeneration();
+  if (
+    authorized.url !== lease.tabIntentUrl ||
+    currentTab.url !== authorized.url ||
+    currentTab.windowId !== tab.windowId
+  )
+    throw new Error(
+      'The original browser page or permission profile changed before input cleanup.',
+    );
+  const origin = new URL(tab.url).origin;
+  if (!isOriginApprovedForAutomation(origin) || !(await hasBrowserControlConsent(origin)))
+    throw new Error('Browser input cleanup no longer has site and control consent.');
+  assertGeneration();
+  if (lease.windowId !== undefined) {
+    const activeTabs = await chrome.tabs.query({ active: true, windowId: lease.windowId });
+    assertGeneration();
+    if (activeTabs[0]?.id !== lease.tabId)
+      throw new Error('The original browser tab is no longer active.');
+  }
+  const current = await getManagedCloudAuthContext(true);
+  assertGeneration();
+  if (
+    !current ||
+    !sameManagedCloudOwner(current.owner, lease.authOwner) ||
+    isRetiredManagedCloudOwner(current.owner)
+  )
+    throw new Error('The original account changed during input cleanup.');
 }
 
 function isAllowlistedSender(
@@ -3122,10 +3301,24 @@ async function listDesktopBrowserTabs(): Promise<BrowserTabSummary[]> {
 }
 
 const DESKTOP_POLL_TIMEOUT_MS = BROWSER_COMMAND_POLL_WINDOW_MS + 10_000;
-const DESKTOP_HISTORY_SETTLE_MS = 5_000;
 const DESKTOP_POLL_MAX_CONSECUTIVE_FAILURES = 3;
 
+/**
+ * Reads that may name a tab other than the foreground one, as the desktop's
+ * tab picker does. They send the page no input, so they hold that tab to its
+ * site grant and address instead of the foreground lease. Every command that
+ * acts stays on the leased foreground tab.
+ */
+const PAIRED_NAMED_TAB_READS: ReadonlySet<BrowserCommand> = new Set([
+  'browser_read_page',
+  'browser_find',
+]);
+
 let desktopPollRunning = false;
+let activePairedBrowserCommand: {
+  controller: AbortController;
+  driver: NativeBrowserDriver | null;
+} | null = null;
 
 /**
  * Desktop-issued page work, pulled rather than pushed.
@@ -3137,21 +3330,32 @@ let desktopPollRunning = false;
  */
 async function pollDesktopBrowserCommands(): Promise<void> {
   if (desktopPollRunning) return;
+  const port = state.nativePort;
+  const sessionSecret = nativeSessionSecret;
+  if (!port || !sessionSecret || !state.isNativeConnected) return;
+  const connection = { port, sessionSecret };
+  const isCurrentConnection = (): boolean =>
+    state.nativePort === port && nativeSessionSecret === sessionSecret && state.isNativeConnected;
+  const assertConnection = (): void => {
+    if (!isCurrentConnection()) throw new Error('The original AGI Desktop connection changed.');
+  };
   desktopPollRunning = true;
   let failures = 0;
 
   try {
-    while (state.nativePort && state.isNativeConnected) {
+    while (isCurrentConnection()) {
       let command: unknown = null;
       try {
         const response = (await sendNativeRequest(
           { type: NATIVE_BROWSER_POLL_MESSAGE, version: BROWSER_COMMAND_PROTOCOL_VERSION },
-          { timeoutMs: DESKTOP_POLL_TIMEOUT_MS, requireAuthenticatedSession: true },
+          { timeoutMs: DESKTOP_POLL_TIMEOUT_MS, requireAuthenticatedSession: true, connection },
         )) as unknown as { success?: boolean; command?: unknown };
+        assertConnection();
         if (response?.success !== true) throw new Error('Desktop refused the command poll');
         failures = 0;
         command = response.command ?? null;
       } catch (error) {
+        if (!isCurrentConnection()) return;
         failures += 1;
         logger.debug('Desktop browser command poll failed', error);
         if (failures >= DESKTOP_POLL_MAX_CONSECUTIVE_FAILURES) return;
@@ -3161,40 +3365,150 @@ async function pollDesktopBrowserCommands(): Promise<void> {
 
       if (!command) continue;
 
-      const result = await runDesktopBrowserCommand(command, {
-        resolveTabId: (explicitTabId) => resolveBrowserToolTabId(explicitTabId),
-        listTabs: listDesktopBrowserTabs,
-        send: async (tabId, message) =>
-          (await handleMessageAsync({ ...message, tabId } as unknown as ExtensionMessage, {
-            id: chrome.runtime.id,
-            url: chrome.runtime.getURL('side_panel.html'),
-            origin: chrome.runtime.getURL('/').replace(/\/+$/, ''),
-          })) as unknown as Record<string, unknown>,
-        navigate: async (tabId, url) => {
-          await chrome.tabs.update(tabId, { url });
-          // The address after any redirect is only known once the load ends,
-          // and the website rules are checked against that address.
-          const deadline = Date.now() + DESKTOP_HISTORY_SETTLE_MS;
-          while (Date.now() < deadline) {
-            const tab = await chrome.tabs.get(tabId);
-            if (tab.status === 'complete' && !tab.pendingUrl) return;
-            await sleep(100);
+      const paired = {
+        controller: new AbortController(),
+        driver: null as NativeBrowserDriver | null,
+      };
+      activePairedBrowserCommand = paired;
+      const disconnectPaired = (): void =>
+        paired.driver?.cancel('The original AGI Desktop connection disconnected.');
+      const commandId =
+        command &&
+        typeof command === 'object' &&
+        typeof (command as { id?: unknown }).id === 'string'
+          ? (command as { id: string }).id
+          : '';
+      let result: Awaited<ReturnType<typeof runDesktopBrowserCommand>>;
+      try {
+        const assertPairedWork = (): void => {
+          assertConnection();
+          if (activePairedBrowserCommand !== paired)
+            throw new Error('The original paired browser command lease changed.');
+          if (computerUseStarts.getPending() || computerUseRuns.getActive())
+            throw new Error(
+              'Chrome is already running or starting a browser task. Finish or stop it before paired work.',
+            );
+        };
+        const driver = new NativeBrowserDriver(paired.controller, assertPairedWork);
+        paired.driver = driver;
+        port.onDisconnect.addListener(disconnectPaired);
+        const confirmation = await sendNativeRequest(
+          {
+            type: NATIVE_BROWSER_COMMAND_WATCH_MESSAGE,
+            version: BROWSER_COMMAND_PROTOCOL_VERSION,
+            id: commandId,
+            wait: false,
+          },
+          { requireAuthenticatedSession: true, connection, signal: driver.signal },
+        );
+        if ((confirmation as { state?: unknown }).state !== 'active')
+          throw new Error(
+            'The paired command is no longer active, or the desktop browser host needs an update.',
+          );
+        void (async () => {
+          while (activePairedBrowserCommand === paired && !driver.signal.aborted) {
+            try {
+              const status = await sendNativeRequest(
+                {
+                  type: NATIVE_BROWSER_COMMAND_WATCH_MESSAGE,
+                  version: BROWSER_COMMAND_PROTOCOL_VERSION,
+                  id: commandId,
+                  wait: true,
+                },
+                {
+                  timeoutMs: DESKTOP_POLL_TIMEOUT_MS,
+                  requireAuthenticatedSession: true,
+                  connection,
+                  signal: driver.signal,
+                },
+              );
+              if ((status as { state?: unknown }).state !== 'active') {
+                driver.cancel('The desktop requester cancelled or finished this browser command.');
+                return;
+              }
+            } catch (error) {
+              if (!driver.signal.aborted) driver.cancel(errorText(error));
+              return;
+            }
           }
-        },
-        history: async (tabId, direction) => {
-          const before = (await chrome.tabs.get(tabId)).url;
-          if (direction === 'back') await chrome.tabs.goBack(tabId);
-          else await chrome.tabs.goForward(tabId);
-          const deadline = Date.now() + DESKTOP_HISTORY_SETTLE_MS;
-          while (Date.now() < deadline) {
-            const tab = await chrome.tabs.get(tabId);
-            if (tab.url !== before && tab.status === 'complete') return;
-            await sleep(100);
-          }
-        },
-        tabUrl: async (tabId) => (await chrome.tabs.get(tabId)).url ?? '',
-        capture: (tabId) => captureThroughDebugger(tabId),
-      });
+        })();
+        const readsNamedTab =
+          isBrowserCommandRequest(command) && PAIRED_NAMED_TAB_READS.has(command.command);
+        let namedTab: { tabId: number; url: string } | null = null;
+        const assertTabOwnership = async (tabId: number): Promise<void> => {
+          if (!namedTab) return driver.assertOwnership(tabId);
+          throwIfCdpCancelled(driver.signal);
+          assertPairedWork();
+          const current = await authorizeBrowserToolTab(tabId);
+          if (tabId !== namedTab.tabId || current.url !== namedTab.url)
+            throw new Error('The chosen browser tab changed during paired work.');
+          assertPairedWork();
+          throwIfCdpCancelled(driver.signal);
+        };
+        result = await runDesktopBrowserCommand(command, {
+          resolveTabId: async (explicitTabId) => {
+            if (!readsNamedTab || explicitTabId === undefined)
+              return driver.resolveTabId(explicitTabId);
+            throwIfCdpCancelled(driver.signal);
+            assertPairedWork();
+            const tabId = await resolveBrowserToolTabId(explicitTabId);
+            if (tabId === explicitTabId)
+              namedTab = { tabId, url: (await chrome.tabs.get(tabId)).url ?? '' };
+            return tabId;
+          },
+          listTabs: listDesktopBrowserTabs,
+          tabUrl: async (tabId) => {
+            await assertTabOwnership(tabId);
+            return (await chrome.tabs.get(tabId)).url ?? '';
+          },
+          history: (tabId, direction) => driver.history(tabId, direction),
+          send: async (tabId, message) => {
+            await assertTabOwnership(tabId);
+            if (message['type'] === 'START_DOWNLOAD') {
+              if (typeof message['url'] !== 'string')
+                throw new Error('A download URL is required.');
+              const download = await startBrowserToolDownload(
+                tabId,
+                message['url'],
+                message['siteRules'] as
+                  import('@agiworkforce/cloud-contracts').WebDomainRules | undefined,
+                { signal: driver.signal, assertCurrent: () => assertTabOwnership(tabId) },
+              );
+              await assertTabOwnership(tabId);
+              return { success: true, download };
+            }
+            const response = await awaitCdpOperation(
+              handleMessageAsync({ ...message, tabId } as unknown as ExtensionMessage, {
+                id: chrome.runtime.id,
+                url: chrome.runtime.getURL('side_panel.html'),
+                origin: chrome.runtime.getURL('/').replace(/\/+$/, ''),
+              }),
+              driver.signal,
+            );
+            await assertTabOwnership(tabId);
+            return response as unknown as Record<string, unknown>;
+          },
+          navigate: (tabId, url) => driver.navigate(tabId, url),
+          capture: (tabId) => driver.capture(tabId),
+          click: (tabId, selector) => driver.click(tabId, selector),
+          type: (tabId, selector, text, clear) => driver.type(tabId, selector, text, clear),
+        });
+      } catch (error) {
+        result = {
+          version: BROWSER_COMMAND_PROTOCOL_VERSION,
+          id: commandId,
+          ok: false,
+          error: errorText(error),
+        };
+      } finally {
+        paired.controller.abort(new Error('The paired browser command finished.'));
+        port.onDisconnect.removeListener(disconnectPaired);
+        try {
+          await paired.driver?.dispose();
+        } finally {
+          if (activePairedBrowserCommand === paired) activePairedBrowserCommand = null;
+        }
+      }
 
       try {
         await sendNativeRequest(
@@ -3203,7 +3517,7 @@ async function pollDesktopBrowserCommands(): Promise<void> {
             version: BROWSER_COMMAND_PROTOCOL_VERSION,
             result,
           },
-          { requireAuthenticatedSession: true },
+          { requireAuthenticatedSession: true, connection },
         );
       } catch (error) {
         logger.debug('Desktop browser command result was not delivered', error);
@@ -3211,6 +3525,8 @@ async function pollDesktopBrowserCommands(): Promise<void> {
     }
   } finally {
     desktopPollRunning = false;
+    if (!isCurrentConnection() && state.nativePort && state.isNativeConnected)
+      void pollDesktopBrowserCommands();
   }
 }
 
@@ -3284,11 +3600,23 @@ async function handleMessageAsync(
         connectToNativeHost();
       }
       if (state.isNativeConnected) {
+        const port = state.nativePort;
+        const sessionSecret = nativeSessionSecret;
         void sendNativeRequest({ type: 'ping' }).catch((error) => {
+          if (state.nativePort !== port || nativeSessionSecret !== sessionSecret) return;
           logger.warn('Native ping failed during status check', error);
+          if (port)
+            rejectPendingNativeRequests(port, 'The original AGI Desktop connection failed.');
           state.isNativeConnected = false;
           state.connectionStatus = 'disconnected';
           state.nativePort = null;
+          nativeSessionSecret = null;
+          _bgCtx.nativeHandshakeInFlight = false;
+          try {
+            port?.disconnect();
+          } catch (disconnectError) {
+            logger.debug('Native port disconnect after ping failure failed', disconnectError);
+          }
           state.lastNativeError = error instanceof Error ? error.message : 'Native ping failed';
           void notifyConnectionStatusChange();
           scheduleNativeReconnect('status_ping_failed');
@@ -3304,12 +3632,39 @@ async function handleMessageAsync(
       return triggerManualReconnect();
 
     case 'UNPAIR_NATIVE': {
-      // Best effort, and deliberately not fatal: if the desktop cannot be
-      // reached the user still gets to unpair here, and the desktop notices
-      // when this extension stops answering.
-      const unpaired = (await sendNativeRequest({
-        type: NATIVE_BROWSER_UNPAIR_MESSAGE,
-      }).catch(() => null)) as { success?: boolean } | null;
+      activePairedBrowserCommand?.driver?.cancel('The browser was unpaired from Desktop.');
+      const port = state.nativePort;
+      const sessionSecret = nativeSessionSecret;
+      clearNativeReconnectTimer();
+      setNativeReconnectGaveUp(true);
+      setDesktopPaired(false);
+      const unpaired = (
+        port && sessionSecret && state.isNativeConnected
+          ? await sendNativeRequest(
+              {
+                type: NATIVE_BROWSER_UNPAIR_MESSAGE,
+              },
+              { requireAuthenticatedSession: true, connection: { port, sessionSecret } },
+            ).catch(() => null)
+          : null
+      ) as { success?: boolean } | null;
+      if (state.nativePort === port) {
+        if (port) rejectPendingNativeRequests(port, 'The browser was unpaired from Desktop.');
+        state.nativePort = null;
+        nativeSessionSecret = null;
+        state.isNativeConnected = false;
+        state.connectionStatus = 'disconnected';
+        _bgCtx.nativeHandshakeInFlight = false;
+        clearNativeReconnectTimer();
+        setNativeReconnectGaveUp(true);
+        setDesktopPaired(false);
+        try {
+          port?.disconnect();
+        } catch (error) {
+          logger.debug('Native disconnect after unpair failed', error);
+        }
+        void notifyConnectionStatusChange();
+      }
       return { success: unpaired?.success === true } as ExtensionResponse;
     }
 
@@ -4180,7 +4535,7 @@ async function handleMessageAsync(
     case 'AGI_START_COMPUTER_USE' as ExtensionMessage['type']: {
       const cuMsg = message as import('./types').StartComputerUseMessage;
       const cuTabId = cuMsg.tabId;
-      const cuGoal = typeof cuMsg.goal === 'string' ? cuMsg.goal.slice(0, 4096) : '';
+      const cuGoal = typeof cuMsg.goal === 'string' ? cuMsg.goal.trim() : '';
       const cuRunId =
         typeof cuMsg.runId === 'string' && /^cu_run_[A-Za-z0-9_-]{1,128}$/.test(cuMsg.runId)
           ? cuMsg.runId
@@ -4192,6 +4547,21 @@ async function handleMessageAsync(
           error: 'AGI_START_COMPUTER_USE: goal is required',
         } as ExtensionResponse;
       }
+      if (cuGoal.length > 4096) {
+        return {
+          success: false,
+          error: 'AGI_START_COMPUTER_USE: goal must be 4096 characters or fewer',
+        } as ExtensionResponse;
+      }
+      if (
+        cuMsg.pageContext !== undefined &&
+        (typeof cuMsg.pageContext !== 'string' ||
+          cuMsg.pageContext.length > MANAGED_CHAT_MAX_INPUT_CHARS)
+      )
+        return {
+          success: false,
+          error: 'Selected page context is invalid or exceeds its message budget.',
+        } as ExtensionResponse;
       if (typeof cuTabId !== 'number') {
         return {
           success: false,
@@ -4204,6 +4574,13 @@ async function handleMessageAsync(
           error: 'AGI_START_COMPUTER_USE: valid runId is required',
         } as ExtensionResponse;
       }
+
+      if (activePairedBrowserCommand !== null)
+        return {
+          success: false,
+          error:
+            'A paired desktop browser action is still running. Wait for it to finish before starting a Chrome task.',
+        } as ExtensionResponse;
 
       const startGeneration = ++computerUseStartGeneration;
       computerUseStarts.begin(cuRunId, startGeneration);
@@ -4299,13 +4676,58 @@ async function handleMessageAsync(
         return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
       }
 
-      const computerUseModel = resolveComputerUseModel(
-        await getManagedModelAccess(authContext.token)
-          .then((access) => access.subscriptionTier)
-          .catch(() => null),
-      );
+      let computerUseModel: string;
+      try {
+        if (cuMsg.modelSelection !== undefined && typeof cuMsg.modelSelection !== 'string') {
+          return failStart('AGI_START_COMPUTER_USE: valid model selection is required');
+        }
+        const modelAccess = await getManagedModelAccess(authContext.token);
+        computerUseModel = resolveManagedComputerUseModel(modelAccess, cuMsg.modelSelection);
+      } catch (error) {
+        return failStart(
+          `AGI_START_COMPUTER_USE: ${error instanceof Error ? error.message : 'Cloud model access could not be verified'}`,
+        );
+      }
       if (startWasCancelled()) {
         return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
+      }
+
+      let selectedTabs: readonly import('./types').BrowserContextTabReference[];
+      const assertStartCurrent = async (): Promise<void> => {
+        if (startWasCancelled())
+          throw new Error('The browser task start was cancelled or superseded.');
+        const current = await getManagedCloudAuthContext();
+        if (
+          startWasCancelled() ||
+          !current ||
+          isRetiredManagedCloudOwner(current.owner) ||
+          !sameManagedCloudOwner(current.owner, authContext!.owner)
+        )
+          throw new Error('The account changed during browser task admission.');
+        const currentTarget = await authorizeBrowserToolTab(cuTabId);
+        if (startWasCancelled()) throw new Error('The browser task start was cancelled.');
+        const latest = await chrome.tabs.get(cuTabId);
+        if (
+          startWasCancelled() ||
+          currentTarget.url !== cuTab!.url ||
+          latest.url !== cuTab!.url ||
+          latest.windowId !== cuTab!.windowId ||
+          !latest.active
+        )
+          throw new Error('The original browser task tab changed during admission.');
+      };
+      try {
+        await assertStartCurrent();
+        selectedTabs = await admitSelectedContextTabs(
+          cuMsg.selectedTabs,
+          cuTab.windowId,
+          assertStartCurrent,
+        );
+        await assertStartCurrent();
+      } catch (error) {
+        return failStart(
+          error instanceof Error ? error.message : 'Selected tabs could not be admitted.',
+        );
       }
 
       clearPendingComputerUseStart(cuRunId);
@@ -4325,6 +4747,13 @@ async function handleMessageAsync(
       }
 
       const allowedForTask = new Set<string>();
+      const approvedUploadFiles = new WeakMap<
+        Record<string, unknown>,
+        {
+          binding: BrowserUploadBinding;
+          files: BrowserUploadedFileMetadata[];
+        }
+      >();
       const onBeforeAction = async (
         toolName: string,
         args: Record<string, unknown>,
@@ -4338,6 +4767,38 @@ async function handleMessageAsync(
         }
         {
           const requestId = `cu_approve_${crypto.randomUUID()}`;
+          let uploadBinding: BrowserUploadBinding | null = null;
+          if (toolName === 'upload_file') {
+            if (
+              !args ||
+              typeof args !== 'object' ||
+              Array.isArray(args) ||
+              Object.keys(args).length !== 1 ||
+              typeof args['index'] !== 'number' ||
+              !Number.isSafeInteger(args['index']) ||
+              args['index'] < 0
+            )
+              return false;
+            await assertComputerUseOwnership(lease);
+            const tab = await chrome.tabs.get(lease.tabId);
+            const signature = await getTargetSignature(
+              lease.tabId,
+              { index: args['index'] },
+              signal,
+            );
+            await assertComputerUseOwnership(lease);
+            uploadBinding = parseBrowserUploadBinding({
+              requestId,
+              runId: lease.runId,
+              runGeneration: lease.generation,
+              tabId: lease.tabId,
+              tabUrl: tab.url,
+              targetSignature: signature,
+              owner: lease.authOwner,
+            });
+            if (!uploadBinding) return false;
+            approvedUploadFiles.delete(args);
+          }
           const action =
             requirement.reason === 'sensitive_input'
               ? 'Type into this field. The text is hidden here.'
@@ -4349,6 +4810,7 @@ async function handleMessageAsync(
             toolName,
             description: reason ? `${reason} ${action}` : action,
             canAllowForTask: !requirement.alwaysAsk,
+            ...(uploadBinding ? { uploadBinding } : {}),
           });
           const decision = await new Promise<boolean>((resolve, reject) => {
             let settled = false;
@@ -4399,9 +4861,29 @@ async function handleMessageAsync(
                 (msg as Record<string, unknown>)['type'] === 'AGI_CU_APPROVE_RESPONSE' &&
                 (msg as Record<string, unknown>)['requestId'] === requestId
               ) {
+                if (settled) return;
+                if (uploadBinding) {
+                  const response = msg as Record<string, unknown>;
+                  const responseBinding = parseBrowserUploadBinding(response['uploadBinding']);
+                  const files = parseBrowserUploadedFilesMetadata(response['upload']);
+                  if (
+                    response['allowed'] !== true ||
+                    !responseBinding ||
+                    !files ||
+                    !sameBrowserUploadBinding(uploadBinding, responseBinding) ||
+                    response['runId'] !== lease.runId ||
+                    response['runGeneration'] !== lease.generation ||
+                    response['tabId'] !== lease.tabId ||
+                    !computerUseRuns.isCurrent(lease)
+                  ) {
+                    finish(false);
+                    return;
+                  }
+                  approvedUploadFiles.set(args, { binding: uploadBinding, files });
+                }
                 finish(
                   (msg as Record<string, unknown>)['allowed'] === true,
-                  (msg as Record<string, unknown>)['forTask'] === true,
+                  !uploadBinding && (msg as Record<string, unknown>)['forTask'] === true,
                 );
               }
             }
@@ -4413,6 +4895,55 @@ async function handleMessageAsync(
         }
       };
 
+      const resolveUploadFile = async (args: Record<string, unknown>) => {
+        const approval = approvedUploadFiles.get(args);
+        approvedUploadFiles.delete(args);
+        if (!approval)
+          throw new Error('No files were selected and approved for this exact action.');
+        const assertCurrent = async (): Promise<void> => {
+          await assertComputerUseOwnership(lease);
+          const tab = await chrome.tabs.get(lease.tabId);
+          if (
+            tab.url !== approval.binding.tabUrl ||
+            typeof args['index'] !== 'number' ||
+            (await getTargetSignature(
+              lease.tabId,
+              { index: args['index'] },
+              lease.controller.signal,
+            )) !== approval.binding.targetSignature
+          ) {
+            throw new Error('The upload page or target changed after your approval.');
+          }
+          await assertComputerUseOwnership(lease);
+        };
+        return resolveUploadedUserFiles(approval.files, approval.binding, {
+          signal: lease.controller.signal,
+          assertCurrent,
+        });
+      };
+
+      const taskTabs =
+        Number.isSafeInteger(lease.windowId) && lease.windowId !== undefined && lease.windowId >= 0
+          ? new TaskTabs({
+              initialTabId: cuTabId,
+              selectedTabs,
+              windowId: lease.windowId,
+              signal: lease.controller.signal,
+              currentTabId: () => lease.tabId,
+              assertCurrent: () => assertComputerUseOwnership(lease).then(() => undefined),
+              beginTransition: (targetTabId) =>
+                computerUseRuns.beginTabTransition(lease, targetTabId),
+              commitTransition: (transition, url) =>
+                computerUseRuns.commitTabTransition(lease, transition, url),
+              abortTransition: (transition) =>
+                computerUseRuns.abortTabTransition(lease, transition),
+              transitionFailed: () => {
+                if (!computerUseRuns.isCurrent(lease)) return;
+                computerUseStartGeneration += 1;
+                cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
+              },
+            })
+          : undefined;
       const completion = runAgentLoop(cuGoal, cuTabId, {
         model: computerUseModel,
         siteTools,
@@ -4422,11 +4953,23 @@ async function handleMessageAsync(
           siteTools.splice(0, siteTools.length, ...(await discoverRunSiteTools(cuTabId, tab.url)));
         },
         callSiteTool: (pageName, args) => callRunSiteTool(cuTabId, pageName, args),
+        ...(cuMsg.pageContext ? { pageContext: cuMsg.pageContext } : {}),
         runId: lease.runId,
         signal: lease.controller.signal,
         assertOwnership: () => assertComputerUseOwnership(lease).then(() => undefined),
+        assertInputCleanupOwnership: () =>
+          assertComputerUseInputCleanupOwnership(lease, startGeneration),
         resolveOwnedCredential: () => assertComputerUseOwnership(lease),
         onActionStateChange: (active) => updateComputerUseActionState(lease, active),
+        taskTabs,
+        browserSiteTools: new BrowserAgentSiteTools({
+          signal: lease.controller.signal,
+          currentTabId: () => lease.tabId,
+          navigationGeneration: watchWebMCPNavigation,
+          assertCurrent: () => assertComputerUseOwnership(lease).then(() => undefined),
+          send: forwardToContentScript,
+        }),
+        currentTabId: () => lease.tabId,
         onDebuggerDetachedByUser: () => {
           computerUseStartGeneration += 1;
           cancelActiveComputerUseRun('debugger_detached', lease.runId);
@@ -4440,6 +4983,7 @@ async function handleMessageAsync(
         pendingTakeover: () => (lease.takeover ? untilHandedBack(lease, lease.takeover) : null),
         isTakenOver: () => lease.takeover !== null,
         onBeforeAction,
+        resolveUploadFile,
         onProgress: (step) => {
           broadcastComputerUseForCurrentRun(lease, { type: 'AGI_CU_STEP', step });
         },
@@ -4708,6 +5252,14 @@ async function handleMessageAsync(
         } as ExtensionResponse;
       }
       const expectedRunId = rawExpectedRunId;
+      if (!expectedRunId && activePairedBrowserCommand) {
+        activePairedBrowserCommand.driver?.cancel(
+          'The paired browser command was stopped by the user.',
+        );
+        activePairedBrowserCommand.controller.abort(
+          new Error('The paired browser command was stopped by the user.'),
+        );
+      }
       const requestedReason = cancelMessage.reason;
       const reason: ComputerUseCancellationReason =
         requestedReason === 'account_changed' ||
@@ -5307,6 +5859,7 @@ async function handleChatMessage(
         conversationHistory: message.conversationHistory,
         attachments: message.attachments,
         fileAttachments: message.fileAttachments,
+        uploadedAttachments: message.uploadedAttachments,
         extendedThinking: message.extendedThinking,
         ...(message.workMode === 'agiwork' ? { workMode: 'agiwork' as const } : {}),
         ...(message.workMode === 'agiwork' && message.agiWorkPlan
@@ -5380,7 +5933,22 @@ async function handleChatMessage(
               quotaWarning,
             }),
         }),
-        getAuthToken: async () => credential.token,
+        getAuthToken: async () => {
+          activeStream.controller.signal.throwIfAborted();
+          if (activeChatStreams.get(streamKey) !== activeStream)
+            throw new Error('This Managed Cloud turn is no longer current.');
+          const current = await getManagedCloudAuthContext();
+          activeStream.controller.signal.throwIfAborted();
+          if (
+            !current ||
+            activeChatStreams.get(streamKey) !== activeStream ||
+            isRetiredManagedCloudOwner(current.owner) ||
+            !sameManagedCloudOwner(current.owner, owner)
+          )
+            throw new Error('The Managed Cloud account changed before this turn.');
+          activeStream.token = current.token;
+          return current.token;
+        },
       },
     );
 

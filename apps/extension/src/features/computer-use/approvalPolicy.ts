@@ -1,3 +1,5 @@
+import { BROWSER_TOOL_DEFINITIONS, isTaskTabAction } from './browserToolDefinitions';
+
 export type SensitiveSiteClass = 'banking' | 'health' | 'identity_provider' | 'password_manager';
 
 export type AlwaysAskReason =
@@ -7,6 +9,15 @@ export type AlwaysAskReason =
   | 'unidentified_input'
   | 'sensitive_site'
   | 'authorization'
+  | 'authentication'
+  | 'payment'
+  | 'publish'
+  | 'selection'
+  | 'history_navigation'
+  | 'reload'
+  | 'tab_management'
+  | 'window_resize'
+  | 'site_tool'
   | 'permission_change'
   | 'purchase';
 
@@ -21,6 +32,8 @@ export interface ActionApprovalInput {
   readonly args: Record<string, unknown>;
   readonly pageUrl: string | null;
   readonly targetSignature?: string | null;
+  readonly sourceSignature?: string | null;
+  readonly destinationSignature?: string | null;
 }
 
 const SENSITIVE_HOSTS: Readonly<Record<SensitiveSiteClass, readonly string[]>> = {
@@ -136,6 +149,8 @@ const PAGE_READING_TOOLS: ReadonlySet<string> = new Set([
   'scroll',
   'read_dom',
   'find',
+  'list_tabs',
+  'discover_site_tools',
 ]);
 
 const PURCHASE_CONTROL_LABEL =
@@ -153,7 +168,18 @@ export function readsWithoutActing(toolName: string, siteToolEffect?: 'read' | '
 const FILE_INPUT_SELECTOR = /type\s*=\s*["']?file\b/i;
 
 const SENSITIVE_FIELD_LABEL =
-  /\b(card ?number|credit ?card|cc-?number|cvv|cvc|security code|expir\w*|ssn|social security|routing|account ?number|iban|swift|tax ?id|passport|one[- ]time|otp|passcode|verification code|2fa|mfa|pin)\b/i;
+  /\b(password|secret|api[-_ ]?key|token|private[-_ ]?key|recovery[-_ ]?code|card ?number|credit ?card|cc-?number|cvv|cvc|security code|expir\w*|ssn|social security|routing|account ?number|iban|swift|tax ?id|passport|date[-_ ]?of[-_ ]?birth|dob|one[- ]time|otp|passcode|verification code|2fa|mfa|pin)\b/i;
+
+const AUTHENTICATION_CONTROL =
+  /\b(sign[-_ ]?in|log[-_ ]?in|authenticate|enter password|verify identity)\b/i;
+const AUTHORIZATION_CONTROL = /\b(authorize|grant access|allow access|connect account)\b/i;
+const PAYMENT_CONTROL =
+  /\b(pay|payment|purchase|buy|checkout|place order|confirm order|transfer|withdraw|send money)\b/i;
+const PUBLISH_CONTROL = /\b(publish|post|send|submit|delete|remove permanently)\b/i;
+const PERMISSION_CONTROL =
+  /\b(permission|access rights|api[-_ ]?keys|access[-_ ]?tokens|sharing|share|grant|revoke|invite|member role)\b/i;
+const AUTHENTICATION_PATH =
+  /\/(login|log[-_]?in|signin|sign[-_]?in|authenticate|authentication|reset[-_]?password|verify[-_]?identity)\b/i;
 
 const PERMISSION_PATH =
   /\/(settings|account|security|myaccount|admin)\b.*\b(permissions?|connected[-_ ]?apps|connections|applications|authorized[-_]?(apps|applications)|third[-_]party|oauth|api[-_]?keys|tokens|sharing|roles|members)\b/i;
@@ -211,7 +237,10 @@ interface SignatureParts {
 
 function parseSignature(signature: string | null | undefined): SignatureParts | null {
   if (typeof signature !== 'string' || signature.length === 0) return null;
-  const [tag = '', role = '', type = '', name = '', ...rest] = signature.split('|');
+  const parts = signature.split('|');
+  if (parts.length < 5) return null;
+  const [tag = '', role = '', type = '', name = '', ...rest] = parts;
+  if (!/^[a-z][a-z0-9-]*$/i.test(tag)) return null;
   return {
     tag: tag.toLowerCase(),
     role: role.toLowerCase(),
@@ -239,24 +268,93 @@ function targetsFileInput(input: ActionApprovalInput, target: SignatureParts | n
 function targetsSensitiveField(target: SignatureParts | null): boolean {
   if (!target) return false;
   if (target.type === 'password') return true;
-  return SENSITIVE_FIELD_LABEL.test(`${target.name} ${target.label}`);
+  return SENSITIVE_FIELD_LABEL.test(targetLabel(target));
+}
+
+function targetLabel(target: SignatureParts): string {
+  return `${target.name} ${target.label}`
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ');
+}
+
+function controlApprovalReason(target: SignatureParts): AlwaysAskReason | null {
+  const label = targetLabel(target);
+  if (AUTHENTICATION_CONTROL.test(label)) return 'authentication';
+  if (AUTHORIZATION_CONTROL.test(label)) return 'authorization';
+  if (PAYMENT_CONTROL.test(label)) return 'payment';
+  if (PERMISSION_CONTROL.test(label)) return 'permission_change';
+  if (PUBLISH_CONTROL.test(label)) return 'publish';
+  return null;
 }
 
 const ASK_NOT_REQUIRED: ActionApprovalRequirement = { alwaysAsk: false };
 
+export function registeredSiteToolApprovalRequirement(input: {
+  readonly pageUrl: string | null;
+  readonly effect: 'read' | 'write';
+  readonly source: 'imperative' | 'declarative';
+}): ActionApprovalRequirement {
+  if (input.source !== 'imperative' && input.source !== 'declarative') {
+    throw new Error('The page tool has no registered execution surface.');
+  }
+  if (input.effect !== 'read' && input.effect !== 'write') {
+    throw new Error('The page tool has no verified action effect.');
+  }
+  const siteClass = classifySensitiveSite(input.pageUrl);
+  if (siteClass) return { alwaysAsk: true, reason: 'sensitive_site', siteClass };
+  if (isAuthorizationRequest(input.pageUrl)) return { alwaysAsk: true, reason: 'authorization' };
+  if (isPermissionChangePage(input.pageUrl))
+    return { alwaysAsk: true, reason: 'permission_change' };
+  const pageUrl = parseUrl(input.pageUrl);
+  if (!pageUrl || (pageUrl.protocol !== 'http:' && pageUrl.protocol !== 'https:')) {
+    return { alwaysAsk: true, reason: 'unidentified_input' };
+  }
+  if (AUTHENTICATION_PATH.test(pageUrl.pathname))
+    return { alwaysAsk: true, reason: 'authentication' };
+  return ASK_NOT_REQUIRED;
+}
+
 export function approvalRequirement(input: ActionApprovalInput): ActionApprovalRequirement {
   const { toolName } = input;
+  if (!BROWSER_TOOL_DEFINITIONS.some((tool) => tool.function.name === toolName)) {
+    throw new Error(`Unsupported browser action: ${toolName}`);
+  }
   if (toolName === 'download_file') return { alwaysAsk: true, reason: 'download' };
+  if (toolName === 'upload_file') return { alwaysAsk: true, reason: 'upload' };
+  if (toolName === 'select_option') return { alwaysAsk: true, reason: 'selection' };
+  if (toolName === 'go_back' || toolName === 'go_forward')
+    return { alwaysAsk: true, reason: 'history_navigation' };
+  if (toolName === 'reload') return { alwaysAsk: true, reason: 'reload' };
+  if (isTaskTabAction(toolName)) return { alwaysAsk: true, reason: 'tab_management' };
+  if (toolName === 'resize_window') return { alwaysAsk: true, reason: 'window_resize' };
+  if (toolName === 'call_site_tool') return { alwaysAsk: true, reason: 'site_tool' };
+  if (toolName === 'discover_site_tools') return ASK_NOT_REQUIRED;
 
   const target = parseSignature(input.targetSignature);
-  if ((toolName === 'click' || toolName === 'type') && targetsFileInput(input, target)) {
+  const gestures = toolName === 'drag' || toolName === 'swipe';
+  const targets = gestures
+    ? [parseSignature(input.sourceSignature), parseSignature(input.destinationSignature)]
+    : [target];
+  const acts =
+    toolName === 'click' ||
+    toolName === 'type' ||
+    toolName === 'hover' ||
+    toolName === 'press_key' ||
+    gestures;
+  if (acts && targets.some((entry) => targetsFileInput(input, entry))) {
     return { alwaysAsk: true, reason: 'upload' };
   }
-  if (toolName === 'type' && targetsSensitiveField(target)) {
+  if (acts && targets.some(targetsSensitiveField)) {
     return { alwaysAsk: true, reason: 'sensitive_input' };
   }
-  if (toolName === 'click' && completesPurchase(target)) {
+  if (acts && targets.some(completesPurchase)) {
     return { alwaysAsk: true, reason: 'purchase' };
+  }
+  if (acts) {
+    for (const entry of targets) {
+      const reason = entry && controlApprovalReason(entry);
+      if (reason) return { alwaysAsk: true, reason };
+    }
   }
 
   if (toolName === 'navigate') {
@@ -273,17 +371,24 @@ export function approvalRequirement(input: ActionApprovalInput): ActionApprovalR
   const siteClass = classifySensitiveSite(input.pageUrl);
   if (siteClass) return { alwaysAsk: true, reason: 'sensitive_site', siteClass };
 
-  const acts = toolName === 'click' || toolName === 'type';
+  const pageUrl = parseUrl(input.pageUrl);
+  if (acts && pageUrl && AUTHENTICATION_PATH.test(pageUrl.pathname)) {
+    return { alwaysAsk: true, reason: 'authentication' };
+  }
   if (acts && isAuthorizationRequest(input.pageUrl)) {
     return { alwaysAsk: true, reason: 'authorization' };
   }
   if (acts && isPermissionChangePage(input.pageUrl)) {
     return { alwaysAsk: true, reason: 'permission_change' };
   }
-  // Typing lands on whatever holds focus. With no signature for that element
-  // there is nothing to compare against the sensitive-field patterns, so the
-  // gate cannot clear it.
-  if (toolName === 'type' && !target) return { alwaysAsk: true, reason: 'unidentified_input' };
+  if (
+    acts &&
+    (targets.some((entry) => !entry || !targetLabel(entry).trim()) ||
+      !pageUrl ||
+      (pageUrl.protocol !== 'https:' && pageUrl.protocol !== 'http:'))
+  ) {
+    return { alwaysAsk: true, reason: 'unidentified_input' };
+  }
   return ASK_NOT_REQUIRED;
 }
 
@@ -304,13 +409,31 @@ export function describeApprovalReason(requirement: ActionApprovalRequirement): 
     case 'sensitive_input':
       return 'This field looks like it holds a password, payment or identity detail.';
     case 'unidentified_input':
-      return 'The field this would type into could not be identified, so it may be a password or payment field.';
+      return 'The element this would act on could not be identified, so it may be a sensitive field or control.';
     case 'sensitive_site':
       return requirement.siteClass
         ? `This is ${SITE_CLASS_LABEL[requirement.siteClass]}, so every step needs your approval.`
         : 'This is a sensitive site, so every step needs your approval.';
     case 'authorization':
       return 'This page grants another app access to an account.';
+    case 'authentication':
+      return 'Signing in or verifying identity always needs your approval.';
+    case 'payment':
+      return 'This control may make a payment or move money.';
+    case 'publish':
+      return 'This control may send, publish, submit, or delete content.';
+    case 'selection':
+      return 'Changing a dropdown option may submit a form or update the page.';
+    case 'history_navigation':
+      return 'This leaves the current page and may discard unsaved changes.';
+    case 'reload':
+      return 'Reloading may discard unsaved changes or resend a form.';
+    case 'tab_management':
+      return 'This changes the task tab. Closing a tab loses its unsaved changes.';
+    case 'window_resize':
+      return 'Resizing also changes how other tabs in this browser window are displayed.';
+    case 'site_tool':
+      return 'This tool is supplied by the website and may change data or navigate. Its annotations do not authorize it.';
     case 'permission_change':
       return 'This page changes account permissions or access.';
     case 'purchase':

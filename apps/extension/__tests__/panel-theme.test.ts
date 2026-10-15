@@ -36,6 +36,6 @@ describe('extension panel theming', () => {
     }
     expect(panelCss).toContain('width:min(380px, 100vw)');
     expect(panelCss).toContain('focus-visible');
-    expect(launcherCss).toContain('background:var(--agi-ext-accent)');
+    expect(launcherCss).toContain('background:var(--agi-ext-primary)');
   });
 });

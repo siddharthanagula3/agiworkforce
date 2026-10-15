@@ -64,6 +64,7 @@ const V8_RESULTS = {
         consented: true,
       },
     ],
+    projectSkillsDigest: 'digest-of-the-listed-skills',
   },
   'skills/setEnabled': {
     skills: [
@@ -1679,9 +1680,13 @@ describe('LocalRuntimeClient', () => {
     expect((await client.accountToken()).token).toBe('fixture-token');
     const instructions = await client.contextInstructions('/workspace/apps/web');
     expect(instructions.files.map((file) => file.kind)).toEqual(['AGENTS.md', 'CLAUDE.md']);
-    expect((await client.listSkills()).skills[0]?.scope).toBe('user');
+    const listed = await client.listSkills();
+    expect(listed.skills[0]?.scope).toBe('user');
+    expect(listed.projectSkillsDigest).toBe('digest-of-the-listed-skills');
     expect((await client.setSkillEnabled('release-notes', false)).skills[0]?.enabled).toBe(false);
-    expect(await client.setProjectSkillConsent(true)).toMatchObject({ consented: true });
+    expect(await client.setProjectSkillConsent(true, listed.projectSkillsDigest)).toMatchObject({
+      consented: true,
+    });
     expect((await client.listPlugins()).plugins[0]?.id).toBe('reviewer');
     expect((await client.setPluginEnabled('reviewer', false)).plugins[0]?.enabled).toBe(false);
     expect((await client.listMcpServers()).servers[0]?.status).toBe('needs_auth');

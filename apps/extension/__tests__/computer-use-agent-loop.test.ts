@@ -18,6 +18,9 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
+
+const inspection = createCdpInspectionFixture('https://example.com/page');
 
 const chromeMock = vi.hoisted(() => {
   const debuggerCallbacks: Record<string, (() => void) | undefined> = {};
@@ -28,6 +31,15 @@ const chromeMock = vi.hoisted(() => {
     params: unknown,
     callback: (result: unknown) => void,
   ): void => {
+    if (
+      inspection.reply(
+        _target as { tabId: number },
+        method,
+        params as Record<string, unknown>,
+        callback,
+      )
+    )
+      return;
     if (method === 'Page.captureScreenshot') {
       callback({ data: 'FAKE_BASE64_PNG' });
       return;
@@ -137,6 +149,8 @@ const chromeMock = vi.hoisted(() => {
 
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
+Object.assign(chromeMock.debugger, { onEvent: inspection.onEvent });
+beforeEach(() => inspection.reset());
 
 function makeSseStream(lines: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -257,6 +271,17 @@ function stubDomResponses(stubs: DomStub[]): void {
         });
         return;
       }
+      if (method === 'Runtime.evaluate' && expr.startsWith('(() => { const el = ')) {
+        try {
+          callback({
+            // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
+            result: { type: 'string', value: new Function('document', `return ${expr}`)(document) },
+          });
+        } catch (error) {
+          callback({ result: { type: 'undefined' }, exceptionDetails: { text: String(error) } });
+        }
+        return;
+      }
       defaultImpl(target, method, params, callback);
     },
   );
@@ -285,8 +310,12 @@ function makeFindToolCallSseStream(): ReadableStream<Uint8Array> {
 }
 
 import { InjectionDetectedError, runAgentLoop } from '../src/features/computer-use/agentLoop';
-import { COMPUTER_USE_MODEL } from '../src/features/computer-use/cloudAgentClient';
+import {
+  COMPUTER_USE_MODEL,
+  DEFAULT_GATEWAY_BASE,
+} from '../src/features/computer-use/cloudAgentClient';
 import { getRoutingSlotModel } from '@agiworkforce/types';
+import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
 
 describe('computer-use agent loop, one round-trip', () => {
   beforeEach(() => {
@@ -325,6 +354,95 @@ describe('computer-use agent loop, one round-trip', () => {
     vi.clearAllMocks();
   });
 
+  it('does not publish a successful final step when the HTTP 200 provider stream fails', async () => {
+    fetchMock.mockReset().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: makeSseStream([
+        `data: ${JSON.stringify({
+          choices: [
+            {
+              delta: {
+                x_stream_error: {
+                  code: 'provider_rejected_request',
+                  retryable: false,
+                  message:
+                    'The provider rejected this request. Try again, or choose another model.',
+                },
+              },
+              index: 0,
+            },
+          ],
+        })}\n\n`,
+        'data: [DONE]\n\n',
+      ]),
+    });
+    const onProgress = vi.fn();
+    await expect(
+      runAgentLoop('Read this page', 42, { maxSteps: 10, onProgress }),
+    ).rejects.toMatchObject({ name: 'CloudAgentGatewayError', code: 'provider_rejected_request' });
+    expect(onProgress.mock.calls.some(([step]) => step.kind === 'final')).toBe(false);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('dispatches the actual legacy producer tool at block index two without an undefined call', async () => {
+    const assembler = new OpenAIWireAssembler({
+      model: COMPUTER_USE_MODEL,
+      wireMode: 'legacy-web',
+    });
+    const frames = [
+      ...assembler.sseChunks({
+        type: 'tool-use-start',
+        toolUseId: 'read-at-block-two',
+        name: 'read_dom',
+        vendorIndex: 2,
+      }),
+      ...assembler.sseChunks({
+        type: 'tool-use-delta',
+        toolUseId: 'read-at-block-two',
+        deltaJson: '{}',
+      }),
+      ...assembler.sseChunks({ type: 'stop', reason: 'tool_use' }),
+    ];
+    fetchMock
+      .mockReset()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: makeSseStream([
+          ...frames.map((frame) => `data: ${JSON.stringify(frame)}\n\n`),
+          'data: [DONE]\n\n',
+        ]),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+    const onProgress = vi.fn();
+    const result = await runAgentLoop('Read this page', 42, { maxSteps: 3, onProgress });
+    expect(result.finalMessage).toContain('Task complete');
+    expect(onProgress.mock.calls.filter(([step]) => step.kind === 'tool_call')).toEqual([
+      [expect.objectContaining({ toolName: 'read_dom' })],
+    ]);
+    expect(result.history.find((message) => message.role === 'tool')).toMatchObject({
+      tool_call_id: 'read-at-block-two',
+      name: 'read_dom',
+    });
+  });
+
+  it('keeps the selected model on the initial screenshot and every tool continuation', async () => {
+    const model = getRoutingSlotModel('computer_use_premium');
+    expect(model).not.toBe(COMPUTER_USE_MODEL);
+
+    const result = await runAgentLoop('Read the page and tell me what it says', 42, {
+      model,
+      maxSteps: 10,
+    });
+
+    expect(result.cappedAtMaxSteps).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const [, request] of fetchMock.mock.calls as Array<[string, RequestInit]>) {
+      expect(JSON.parse(request.body as string).model).toBe(model);
+    }
+  });
+
   it('calls the gateway, dispatches the CDP action, feeds result back, and returns final message', async () => {
     const result = await runAgentLoop('Read the page and tell me what it says', 42, {
       maxSteps: 10,
@@ -333,7 +451,7 @@ describe('computer-use agent loop, one round-trip', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
     const firstCallArgs = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(firstCallArgs[0]).toBe('https://api.agiworkforce.com/api/llm/v1/chat/completions');
+    expect(firstCallArgs[0]).toBe(`${DEFAULT_GATEWAY_BASE}/api/llm/v1/chat/completions`);
     const firstBody = JSON.parse(firstCallArgs[1].body as string) as {
       model: string;
       tools: Array<{ function: { name: string } }>;
@@ -464,6 +582,7 @@ describe('computer-use agent loop, one round-trip', () => {
   });
 
   it('asks before clicking a file input, naming the upload', async () => {
+    document.body.innerHTML = '<input type="file" name="resume" aria-label="Upload resume">';
     stubDomResponses([
       {
         raw: true,
@@ -494,6 +613,7 @@ describe('computer-use agent loop, one round-trip', () => {
   });
 
   it('refuses a file input outright when the org withholds uploads on the site', async () => {
+    document.body.innerHTML = '<input type="file" name="resume" aria-label="Upload resume">';
     await chromeMock.storage.local.set({
       agi_admin_site_policy: {
         version: 1,
@@ -732,8 +852,8 @@ describe('COMPUTER_USE_MODEL, sourced from models.json catalog', () => {
     expect(COMPUTER_USE_MODEL.length).toBeGreaterThan(0);
   });
 
-  it("resolves to the canonical SLOT_REGISTRY 'computer_use' slot model", () => {
-    expect(COMPUTER_USE_MODEL).toBe(getRoutingSlotModel('computer_use'));
+  it("resolves to the canonical SLOT_REGISTRY 'browser_dom' slot model", () => {
+    expect(COMPUTER_USE_MODEL).toBe(getRoutingSlotModel('browser_dom'));
     expect(COMPUTER_USE_MODEL.length).toBeGreaterThan(0);
   });
 });

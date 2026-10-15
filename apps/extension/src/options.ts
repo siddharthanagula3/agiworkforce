@@ -1,3 +1,4 @@
+import { agiWebUrl } from './lib/webOrigin';
 import { getExtensionTokensCssAuto } from './tokens';
 import {
   FREE_TRIAL_GATEWAY,
@@ -89,6 +90,22 @@ function injectStyles(): void {
       overflow: hidden;
     }
 
+    .opt-section[hidden] { display: none; }
+
+    .opt-access-details {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--agi-ext-border);
+    }
+    .opt-access-details summary {
+      cursor: pointer;
+      color: var(--agi-ext-text-muted);
+    }
+    .opt-access-details summary:focus-visible {
+      outline: 2px solid var(--agi-ext-focus);
+      outline-offset: 2px;
+    }
+    .opt-access-details .opt-row-hint { margin-top: 10px; }
+
     .opt-section-header {
       padding: 14px 16px 10px;
       border-bottom: 1px solid var(--agi-ext-border);
@@ -178,7 +195,7 @@ function injectStyles(): void {
       flex-shrink: 0;
       max-width: 260px;
       background: var(--agi-ext-bg);
-      border: 1px solid var(--agi-ext-border);
+      border: 1px solid var(--agi-ext-border-control);
       border-radius: 6px;
       padding: 6px 10px;
       font-size: 12px;
@@ -188,7 +205,7 @@ function injectStyles(): void {
     }
 
     .opt-policy-select:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    .opt-policy-select:disabled { opacity: 0.6; cursor: not-allowed; }
+    .opt-policy-select:disabled { color: var(--agi-ext-text-muted); background: var(--agi-ext-hover); cursor: not-allowed; }
 
     /* Respect the OS "reduce motion" setting. Five infinite animations (typing
        dots, spinners, pulse states) plus smooth scrolling ran unconditionally,
@@ -237,8 +254,8 @@ function injectStyles(): void {
     }
 
     .opt-allowlist-toggle-btn {
-      background: var(--agi-ext-accent);
-      color: var(--agi-ext-on-accent);
+      background: var(--agi-ext-primary);
+      color: var(--agi-ext-on-primary);
       border: none;
       border-radius: 6px;
       padding: 4px 12px;
@@ -249,12 +266,13 @@ function injectStyles(): void {
       transition: background 0.12s;
     }
 
-    .opt-allowlist-toggle-btn:hover {
-      background: var(--agi-ext-accent-hover);
+    .opt-allowlist-toggle-btn:hover:not(:disabled) {
+      background: var(--agi-ext-primary-hover);
     }
 
     .opt-allowlist-toggle-btn:disabled {
-      opacity: 0.4;
+      background: var(--agi-ext-hover);
+      color: var(--agi-ext-text-muted);
       cursor: not-allowed;
     }
 
@@ -547,8 +565,8 @@ function injectStyles(): void {
     }
 
     .opt-btn-primary {
-      background: var(--agi-ext-accent);
-      color: var(--agi-ext-on-accent);
+      background: var(--agi-ext-primary);
+      color: var(--agi-ext-on-primary);
       border: none;
       border-radius: 6px;
       padding: 6px 16px;
@@ -558,14 +576,15 @@ function injectStyles(): void {
       transition: background 0.12s;
     }
 
-    .opt-btn-primary:hover {
-      background: var(--agi-ext-accent-hover);
+    .opt-btn-primary:hover:not(:disabled) {
+      background: var(--agi-ext-primary-hover);
     }
 
     .opt-btn-primary:disabled,
     .opt-btn-danger:disabled,
     .opt-allowlist-item-remove:disabled {
-      opacity: 0.55;
+      background: var(--agi-ext-hover);
+      color: var(--agi-ext-text-muted);
       cursor: wait;
     }
 
@@ -617,7 +636,7 @@ function injectStyles(): void {
     .opt-bearer-input {
       flex: 1;
       background: var(--agi-ext-bg);
-      border: 1px solid var(--agi-ext-border);
+      border: 1px solid var(--agi-ext-border-control);
       border-radius: 6px;
       padding: 6px 10px;
       font-size: 11px;
@@ -766,7 +785,7 @@ function injectStyles(): void {
     }
 
     .opt-header-account:hover {
-      border-color: color-mix(in srgb, var(--agi-ext-accent) 45%, var(--agi-ext-border));
+      border-color: var(--agi-ext-border-control);
       background: var(--agi-ext-hover);
     }
 
@@ -831,7 +850,7 @@ function injectStyles(): void {
     .opt-field textarea,
     .opt-field select,
     .opt-bearer-input {
-      border-color: var(--agi-ext-border-strong);
+      border-color: var(--agi-ext-border-control);
       background: var(--agi-ext-bg);
     }
 
@@ -915,6 +934,8 @@ function injectStyles(): void {
       .opt-bearer-body,
       .opt-profile-grid,
       .opt-profile-actions { padding-inline: 16px; }
+      .opt-row:has(.opt-policy-select) { flex-direction: column; align-items: stretch; gap: 12px; }
+      .opt-policy-select { width: 100%; max-width: none; }
     }
 
     @media (max-width: 420px) {
@@ -1006,28 +1027,41 @@ function buildPage(): void {
       height: '28',
     }),
   );
-  brand.appendChild(el('span', { class: 'opt-brand-name' }, 'AGI'));
+  brand.appendChild(el('span', { class: 'opt-brand-name' }, chrome.runtime.getManifest().name));
   sidebar.appendChild(brand);
 
   const nav = el('nav', { class: 'opt-nav' });
-  const navItems: Array<{ label: string; target: string }> = [
+  const navItems: Array<{ label: string; target: string; sections?: string[] }> = [
     { label: 'Appearance', target: 'opt-appearance' },
     { label: 'Permissions', target: 'opt-permissions' },
-    { label: 'Privacy', target: 'opt-privacy' },
-    { label: 'Account', target: 'opt-account' },
-    { label: 'Preferences', target: 'opt-preferences' },
+    {
+      label: 'Account',
+      target: 'opt-account',
+      sections: ['opt-account', 'opt-privacy', 'opt-preferences', 'opt-cloud-auth', 'opt-help'],
+    },
     { label: 'Shortcuts', target: 'opt-shortcuts' },
-    { label: 'Help', target: 'opt-help' },
   ];
   const navButtons: HTMLButtonElement[] = [];
 
-  const scrollToSettingsSection = (target: string): void => {
+  const showSettingsSection = (target: string, focus = true): void => {
+    const section = document.getElementById(target);
+    const destination = navItems.find((item) => item.target === target);
+    if (!section || !destination) return;
+    const visible = destination.sections ?? [target];
+    for (const candidate of page.querySelectorAll<HTMLElement>('.opt-section'))
+      candidate.hidden = !visible.includes(candidate.id);
+    const selectedButton = navButtons.find((button) => button.dataset['target'] === target);
+    if (selectedButton) setActiveNavButton(selectedButton);
+    if (!focus) return;
     const reduceMotion =
       typeof window.matchMedia === 'function' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    document
-      .getElementById(target)
-      ?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+    section.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+    const heading = section.querySelector<HTMLElement>('h2');
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
   };
 
   const setActiveNavButton = (active: HTMLButtonElement): void => {
@@ -1052,8 +1086,7 @@ function buildPage(): void {
       item.label,
     ) as HTMLButtonElement;
     navButton.addEventListener('click', () => {
-      scrollToSettingsSection(item.target);
-      setActiveNavButton(navButton);
+      showSettingsSection(item.target);
       navButton.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
     });
     navButtons.push(navButton);
@@ -1065,7 +1098,9 @@ function buildPage(): void {
 
   const header = el('div', { class: 'opt-header' });
   const headerText = el('div');
-  headerText.appendChild(el('h1', { class: 'opt-header-title' }, 'AGI Chrome settings'));
+  headerText.appendChild(
+    el('h1', { class: 'opt-header-title' }, `${chrome.runtime.getManifest().name} settings`),
+  );
   headerText.appendChild(
     el(
       'div',
@@ -1080,7 +1115,7 @@ function buildPage(): void {
     'Account',
   ) as HTMLButtonElement;
   headerAccountButton.addEventListener('click', () => {
-    scrollToSettingsSection('opt-account');
+    showSettingsSection('opt-account');
   });
   header.appendChild(headerAccountButton);
   page.appendChild(header);
@@ -1152,18 +1187,27 @@ function buildPage(): void {
 
   const browserControlBoundary = el('div', { class: 'opt-row' });
   const browserControlBoundaryText = el('div');
-  browserControlBoundaryText.appendChild(
-    el('div', { class: 'opt-row-label' }, 'Browser control boundary'),
-  );
+  browserControlBoundaryText.appendChild(el('div', { class: 'opt-row-label' }, 'Browser access'));
   browserControlBoundaryText.appendChild(
     el(
       'div',
       { class: 'opt-row-hint' },
-      'Computer use uses Chrome DevTools Protocol (CDP) only after you start a run on an approved site that you have separately granted full browser control, once, in the approved-sites list below. Ask before acting is on by default in the side panel; the debugger attaches for one bounded action and detaches afterward. AGI does not expose an unrestricted CDP developer mode.',
+      'Choose which sites AGI can read and control. Ask before acting is on by default, and you can stop a task at any time.',
     ),
   );
   browserControlBoundary.appendChild(browserControlBoundaryText);
   permSection.appendChild(browserControlBoundary);
+
+  const accessDetails = el('details', { class: 'opt-access-details' });
+  accessDetails.appendChild(el('summary', {}, 'How browser access works'));
+  accessDetails.appendChild(
+    el(
+      'div',
+      { class: 'opt-row-hint' },
+      'Computer use uses Chrome DevTools Protocol (CDP) only after you start a run on an approved site that you have separately granted full browser control. The debugger stays attached for the run’s page observation and actions, then detaches when the run ends. AGI does not expose an unrestricted CDP developer mode.',
+    ),
+  );
+  permSection.appendChild(accessDetails);
 
   const sitePolicySection = createSitePermissionPolicySection({
     get: (key) => chrome.storage.local.get(key),
@@ -1176,7 +1220,7 @@ function buildPage(): void {
     el(
       'p',
       { class: 'opt-allowlist-help' },
-      'Approving a site lets the optional page assistant send up to 30,000 characters of redacted visible page text from that origin to AGI Managed Cloud. Adding a site asks you to confirm full browser control for it once; computer use refuses to start on an origin you have not confirmed. Add the current site, then reload it.',
+      'Approve the current site to use its page assistant. Browser control requires a separate confirmation. You can remove access here at any time.',
     ),
   );
 
@@ -1548,9 +1592,11 @@ function buildPage(): void {
 
   page.appendChild(accountSection);
 
-  const profileSection = el('section', { class: 'opt-section', id: 'opt-preferences' });
-  const profileHeader = el('div', { class: 'opt-section-header' });
-  profileHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Autofill Profile'));
+  const profileSection = el('details', { class: 'opt-section', id: 'opt-preferences' });
+  const profileHeader = el('summary', { class: 'opt-section-header' });
+  profileHeader.appendChild(
+    el('h2', { class: 'opt-section-title' }, 'Autofill profile (optional)'),
+  );
   profileHeader.appendChild(
     el(
       'div',
@@ -1933,7 +1979,7 @@ function buildPage(): void {
         'a',
         {
           class: 'opt-link',
-          href: `https://agiworkforce.com${link.path}?from=chrome-extension`,
+          href: agiWebUrl(`${link.path}?from=chrome-extension`),
           target: '_blank',
           rel: 'noreferrer noopener',
         },
@@ -1993,34 +2039,15 @@ function buildPage(): void {
   page.appendChild(helpSection);
 
   const ver = chrome.runtime.getManifest().version;
-  page.appendChild(el('p', { class: 'opt-version' }, `AGI v${ver}`));
+  page.appendChild(
+    el('p', { class: 'opt-version' }, `${chrome.runtime.getManifest().name} v${ver}`),
+  );
 
   shell.appendChild(sidebar);
   shell.appendChild(page);
   document.body.appendChild(shell);
 
-  if (typeof IntersectionObserver === 'function') {
-    const sectionObserver = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (!visible) return;
-        const activeTarget = visible.target.id;
-        for (const button of navButtons) {
-          const selected = button.dataset['target'] === activeTarget;
-          button.classList.toggle('active', selected);
-          if (selected) button.setAttribute('aria-current', 'location');
-          else button.removeAttribute('aria-current');
-        }
-      },
-      { rootMargin: '-18% 0px -65% 0px', threshold: [0, 0.25, 0.6] },
-    );
-    for (const item of navItems) {
-      const section = document.getElementById(item.target);
-      if (section) sectionObserver.observe(section);
-    }
-  }
+  showSettingsSection(navItems[0]!.target, false);
   void beginOptionsAccountRefresh(
     getAuthToken,
     ({ signedIn, unavailable, loading }) => renderAccountRow(signedIn, unavailable, loading),

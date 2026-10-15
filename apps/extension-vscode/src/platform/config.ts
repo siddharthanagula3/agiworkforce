@@ -147,6 +147,9 @@ export const Config = {
     if (raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'max') return raw;
     return 'medium';
   },
+  planModeActive(): boolean {
+    return Config.agentMode() === 'plan' || Config.agentPlanMode();
+  },
   agentThinking(): boolean {
     return get<boolean>('agent.thinking', DEFAULTS.agentThinking);
   },

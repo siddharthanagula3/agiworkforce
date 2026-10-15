@@ -42,6 +42,9 @@ const chromeMock = vi.hoisted(() => {
 
 import {
   getPageActions,
+  boundPageText,
+  MAX_PAGE_TEXT_CHARACTERS,
+  PAGE_TEXT_EXCERPT_NOTICE,
   truncatePageText,
   redactSensitiveText,
 } from '../src/features/content/in-page-panel/pageActions';
@@ -133,6 +136,31 @@ describe('truncatePageText', () => {
     const text = 'x'.repeat(40_000);
     const result = truncatePageText(text);
     expect(result.length).toBe(30_000);
+  });
+});
+
+describe('boundPageText', () => {
+  it('keeps later article content when the full page fits the canonical budget', () => {
+    const text = `${'x'.repeat(6_000)} The article conclusion.`;
+    expect(boundPageText(text)).toEqual({ text, truncated: false });
+  });
+
+  it('includes an excerpt disclosure inside the canonical capture budget', () => {
+    const result = boundPageText('x'.repeat(MAX_PAGE_TEXT_CHARACTERS + 1));
+    expect(result.truncated).toBe(true);
+    expect(result.text).toHaveLength(MAX_PAGE_TEXT_CHARACTERS);
+    expect(result.text).toContain(PAGE_TEXT_EXCERPT_NOTICE);
+  });
+
+  it('preserves truncation information when redaction or whitespace normalization shrinks the text', () => {
+    const result = boundPageText('A shortened excerpt.', true);
+    expect(result.truncated).toBe(true);
+    expect(result.text).toContain('A shortened excerpt.');
+    expect(result.text).toContain(PAGE_TEXT_EXCERPT_NOTICE);
+  });
+
+  it('never turns an empty capture into page content by adding its notice', () => {
+    expect(boundPageText('   ', true)).toEqual({ text: '', truncated: true });
   });
 });
 

@@ -38,19 +38,19 @@ export const ARTIFACTS_DRAWER_CSS = `
   .sp-drawer-artifact-actions { display: flex; gap: 6px; flex-wrap: wrap; }
   .sp-drawer-artifact-btn {
     background: none;
-    border: 1px solid var(--agi-ext-border);
+    border: 1px solid var(--agi-ext-border-control);
     border-radius: var(--corner-control);
-    color: var(--agi-ext-text-muted);
+    color: var(--agi-ext-text);
     font-size: var(--type-label-size);
     padding: 3px 8px;
     cursor: pointer;
-    transition: color var(--duration-instant), border-color var(--duration-instant);
+    transition: color var(--duration-instant), background var(--duration-instant);
   }
-  .sp-drawer-artifact-btn:hover {
-    color: var(--agi-ext-accent-text);
-    border-color: var(--agi-ext-accent);
+  .sp-drawer-artifact-btn:hover:not(:disabled) {
+    color: var(--agi-ext-text);
+    background: var(--agi-ext-hover);
   }
-  .sp-drawer-artifact-btn:disabled { cursor: wait; opacity: 0.55; }
+  .sp-drawer-artifact-btn:disabled { cursor: wait; color: var(--agi-ext-text-muted); }
   .sp-drawer-artifacts-empty,
   .sp-drawer-artifacts-status {
     font-size: var(--type-caption-size);
@@ -70,7 +70,7 @@ export const ARTIFACTS_DRAWER_CSS = `
     text-decoration: underline;
     cursor: pointer;
   }
-  .sp-drawer-artifacts-status-action:disabled { cursor: wait; opacity: 0.55; }
+  .sp-drawer-artifacts-status-action:disabled { cursor: wait; color: var(--agi-ext-text-muted); }
 `;
 
 export interface ArtifactsDrawerDependencies {

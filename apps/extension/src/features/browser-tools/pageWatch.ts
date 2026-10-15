@@ -1,8 +1,8 @@
 import {
   acquireDebugger,
+  debuggerSessionIdentity,
+  onDebuggerDetached,
   onDebuggerEvent,
-  onDebuggerReattached,
-  onDebuggerUserDetach,
   releaseDebugger,
   sendDebuggerCommand,
 } from '../computer-use/debuggerSession';
@@ -10,7 +10,7 @@ import { clearConsoleEntries, CONSOLE_DOMAINS, recordConsoleEvent } from './cons
 import { clearNetworkEntries, NETWORK_DOMAINS, recordNetworkEvent } from './networkCapture';
 import { authorizeBrowserToolTab } from './tabAuthority';
 
-export type PageWatchOwner = 'run' | 'user';
+export type PageWatchOwner = 'run' | 'user' | `run:${string}`;
 
 export interface PageWatchState {
   readonly tabId: number;
@@ -21,8 +21,9 @@ export interface PageWatchState {
 
 const watches = new Map<
   number,
-  { origin: string; owners: Set<PageWatchOwner>; suspended: boolean }
+  { origin: string; owners: Set<PageWatchOwner>; suspended: boolean; session: symbol }
 >();
+const startingWatches = new Map<number, Promise<void>>();
 
 const WATCH_DOMAINS: readonly string[] = [...CONSOLE_DOMAINS, ...NETWORK_DOMAINS];
 
@@ -37,20 +38,22 @@ function wireOnce(): void {
     if (method.startsWith('Network.')) recordNetworkEvent(tabId, method, params);
     else recordConsoleEvent(tabId, method, params);
   });
-  onDebuggerReattached((tabId) => {
-    if (!watches.has(tabId)) return;
-    void enableDomains(tabId);
-  });
-  onDebuggerUserDetach((tabId) => {
+  onDebuggerDetached((tabId) => {
     watches.delete(tabId);
+    clearConsoleEntries(tabId);
+    clearNetworkEntries(tabId);
   });
 }
 
-async function enableDomains(tabId: number): Promise<void> {
+async function enableDomains(tabId: number, session: symbol): Promise<void> {
   for (const domain of WATCH_DOMAINS) {
+    if (debuggerSessionIdentity(tabId) !== session)
+      throw new Error('The page watch debugger session changed.');
     try {
       await sendDebuggerCommand(tabId, `${domain}.enable`);
     } catch {
+      if (debuggerSessionIdentity(tabId) !== session)
+        throw new Error('The page watch debugger session changed.');
       // A domain a target does not implement must not sink the whole watch.
     }
   }
@@ -81,7 +84,9 @@ export async function startPageWatch(
   const authorized = await authorizeBrowserToolTab(tabId);
 
   const existing = watches.get(tabId);
-  if (existing) {
+  if (existing && !startingWatches.has(tabId)) {
+    if (debuggerSessionIdentity(tabId) !== existing.session)
+      throw new Error('The page watch debugger session changed.');
     if (existing.origin !== authorized.origin) {
       existing.origin = authorized.origin;
       clearConsoleEntries(tabId);
@@ -92,17 +97,50 @@ export async function startPageWatch(
     return getPageWatch(tabId)!;
   }
 
-  await acquireDebugger(tabId);
-  watches.set(tabId, { origin: authorized.origin, owners: new Set([owner]), suspended: false });
-  clearConsoleEntries(tabId);
-  clearNetworkEntries(tabId);
+  let starting = startingWatches.get(tabId);
+  if (!starting) {
+    starting = (async () => {
+      const session = await acquireDebugger(tabId);
+      const watch = {
+        origin: authorized.origin,
+        owners: new Set<PageWatchOwner>(),
+        suspended: false,
+        session,
+      };
+      watches.set(tabId, watch);
+      clearConsoleEntries(tabId);
+      clearNetworkEntries(tabId);
+      try {
+        await enableDomains(tabId, session);
+      } catch (error) {
+        if (watches.get(tabId) === watch) watches.delete(tabId);
+        await releaseDebugger(tabId, session);
+        throw error;
+      }
+    })();
+    startingWatches.set(tabId, starting);
+  }
   try {
-    await enableDomains(tabId);
+    await starting;
+  } finally {
+    if (startingWatches.get(tabId) === starting) startingWatches.delete(tabId);
+  }
+  const watch = watches.get(tabId);
+  let current: Awaited<ReturnType<typeof authorizeBrowserToolTab>>;
+  try {
+    current = await authorizeBrowserToolTab(tabId);
   } catch (error) {
-    watches.delete(tabId);
-    await releaseDebugger(tabId);
+    if (watch && watches.get(tabId) === watch && watch.owners.size === 0)
+      await stopAllPageWatches(tabId);
     throw error;
   }
+  if (!watch || watches.get(tabId) !== watch || debuggerSessionIdentity(tabId) !== watch.session)
+    throw new Error('The page watch changed before it could be started.');
+  if (current.origin !== authorized.origin || watch.origin !== current.origin) {
+    await stopAllPageWatches(tabId);
+    throw new Error('The page changed before its watch could be started.');
+  }
+  watch.owners.add(owner);
   return getPageWatch(tabId)!;
 }
 
@@ -112,13 +150,14 @@ export async function stopPageWatch(tabId: number, owner: PageWatchOwner): Promi
   watch.owners.delete(owner);
   if (watch.owners.size > 0) return;
   watches.delete(tabId);
-  await releaseDebugger(tabId);
+  await releaseDebugger(tabId, watch.session);
 }
 
 export async function stopAllPageWatches(tabId: number): Promise<void> {
-  if (!watches.has(tabId)) return;
+  const watch = watches.get(tabId);
+  if (!watch) return;
   watches.delete(tabId);
-  await releaseDebugger(tabId);
+  await releaseDebugger(tabId, watch.session);
 }
 
 /**

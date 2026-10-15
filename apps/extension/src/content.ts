@@ -51,8 +51,12 @@ import {
   validateShortcutActions,
   MAX_CONTEXT_HTML_CHARS,
   sanitizePageText,
+  MAX_WEBMCP_SCHEMA_BYTES,
+  normalizeWebMCPToolsUpdate,
 } from './background/policy';
 import { evaluateSiteAccess } from './features/site-policy/store';
+import { selectOptionElement } from './features/content/selectOption';
+import { BROWSER_COMMAND_TIMEOUT_MS } from '@agiworkforce/types';
 
 function extractPageHtmlSafely(): string {
   try {
@@ -287,6 +291,16 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
     case 'WEBMCP_CALL_TOOL':
       return handleWebMCPCallTool(message as import('./types').WebMCPCallToolMessage);
 
+    case 'WEBMCP_CANCEL_TOOL': {
+      const cancel = message as import('./types').WebMCPCancelToolMessage;
+      if (cancel.pageInstanceId !== webmcpPageInstanceId)
+        return { success: false, error: 'The site-tool document changed.' };
+      const pending = webmcpBrowserCalls.get(cancel.browserAgentCallId);
+      pending?.abort(new DOMException('Browser site-tool call cancelled', 'AbortError'));
+      webmcpBrowserCalls.delete(cancel.browserAgentCallId);
+      return { success: true };
+    }
+
     case 'AGI_RUN_AUTOFILL' as ExtensionMessage['type']:
       return handleRunAutofill();
 
@@ -466,9 +480,8 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
           error: `Select element not found: ${selector}`,
         };
       }
-      element.value = value;
-      element.dispatchEvent(new Event('change', { bubbles: true }));
-      return { type: actionType, success: true, value };
+      const receipt = selectOptionElement(element, { value });
+      return { type: actionType, success: true, value: receipt.selectedValue, ...receipt };
     }
     case 'set_checked': {
       const selector = action.selector ? String(action.selector) : '';
@@ -1281,10 +1294,8 @@ async function handleSelectOption(
     if (!element || element.tagName.toLowerCase() !== 'select') {
       return { success: false, error: `Select element not found: ${selector}` };
     }
-    element.value = value;
-    element.dispatchEvent(new Event('change', { bubbles: true }));
-    element.dispatchEvent(new Event('input', { bubbles: true }));
-    return { success: true, value } as ExtensionResponse;
+    const receipt = selectOptionElement(element, { value });
+    return { success: true, value: receipt.selectedValue, ...receipt } as ExtensionResponse;
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
@@ -1820,6 +1831,9 @@ function initWebMCP(): void {
   }, 1000);
 }
 
+const webmcpPageInstanceId = crypto.randomUUID();
+const webmcpBrowserCalls = new Map<string, AbortController>();
+
 function handleWebMCPDiscoverTools(): ExtensionResponse {
   const discovery = discoverAllTools();
   return {
@@ -1827,6 +1841,7 @@ function handleWebMCPDiscoverTools(): ExtensionResponse {
     supported: discovery.supported,
     tools: discovery.tools,
     url: discovery.url,
+    pageInstanceId: webmcpPageInstanceId,
   } as ExtensionResponse;
 }
 
@@ -1834,8 +1849,64 @@ async function handleWebMCPCallTool(
   message: import('./types').WebMCPCallToolMessage,
 ): Promise<ExtensionResponse> {
   const { toolName, arguments: args } = message;
-  const result = await callTool({ name: toolName, arguments: args });
-  return result as ExtensionResponse;
+  const binding = message.browserAgentBinding;
+  const callId = message.browserAgentCallId;
+  if (binding && (typeof callId !== 'string' || !/^[a-f0-9-]{36}$/.test(callId)))
+    return { success: false, error: 'The browser site-tool call has no valid identity.' };
+  if (binding && webmcpBrowserCalls.has(callId!))
+    return { success: false, error: 'This browser site-tool call is already running.' };
+  const controller = binding ? new AbortController() : null;
+  if (controller) webmcpBrowserCalls.set(callId!, controller);
+  const timeout = controller
+    ? setTimeout(
+        () =>
+          controller.abort(
+            new DOMException(
+              'The website tool timed out; its effects could not be confirmed.',
+              'TimeoutError',
+            ),
+          ),
+        BROWSER_COMMAND_TIMEOUT_MS,
+      )
+    : undefined;
+  const assertCurrent = binding
+    ? (): void => {
+        controller!.signal.throwIfAborted();
+        const discovery = discoverAllTools();
+        const normalized = normalizeWebMCPToolsUpdate(
+          discovery.tools,
+          discovery.url,
+          window.location.href,
+        );
+        const descriptor = normalized?.tools.find((tool) => tool.name === toolName);
+        if (
+          binding.pageInstanceId !== webmcpPageInstanceId ||
+          binding.url !== window.location.href ||
+          !descriptor ||
+          JSON.stringify(descriptor) !== JSON.stringify(binding.descriptor)
+        )
+          throw new Error('The approved browser document or site tool changed.');
+      }
+    : undefined;
+  try {
+    assertCurrent?.();
+    const result = await callTool({
+      name: toolName,
+      arguments: args,
+      ...(assertCurrent ? { assertCurrent, source: binding!.descriptor.source } : {}),
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+    assertCurrent?.();
+    if (new TextEncoder().encode(JSON.stringify(result)).byteLength > MAX_WEBMCP_SCHEMA_BYTES)
+      return { success: false, error: 'The site-tool result exceeded the browser message limit.' };
+    return result as ExtensionResponse;
+  } catch {
+    return { success: false, error: 'The approved document or site tool could not be verified.' };
+  } finally {
+    clearTimeout(timeout);
+    if (controller && webmcpBrowserCalls.get(callId!) === controller)
+      webmcpBrowserCalls.delete(callId!);
+  }
 }
 
 const VALID_MESSAGE_TYPES = new Set([
@@ -1877,6 +1948,7 @@ const VALID_MESSAGE_TYPES = new Set([
   'SET_RECORDING_VALUE_CAPTURE',
   'WEBMCP_DISCOVER_TOOLS',
   'WEBMCP_CALL_TOOL',
+  'WEBMCP_CANCEL_TOOL',
   'AGI_RUN_AUTOFILL',
   'AGI_CU_WATCH_INPUT',
   'AGI_CU_SHOW_ACTION',

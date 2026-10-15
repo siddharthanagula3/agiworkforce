@@ -10,6 +10,7 @@ import {
   type SitePermissionPolicyStorage,
 } from '../options/site-permission-policy';
 import { assertSiteAccess } from '../site-policy/store';
+import type { BrowserProfileCapability } from '@agiworkforce/types';
 
 export const SITE_NOT_APPROVED_FOR_BROWSER_TOOLS =
   'is not on your AGI Workforce approved-sites list. Open the extension options, ' +
@@ -39,6 +40,7 @@ function localStorageArea(): SitePermissionPolicyStorage {
 async function profileForTab(
   url: string,
   storage: SitePermissionPolicyStorage,
+  capability: BrowserProfileCapability,
 ): Promise<string | null> {
   const [profiles, viewer] = await Promise.all([
     readBrowserPermissionProfiles(storage),
@@ -46,7 +48,7 @@ async function profileForTab(
   ]);
   const decision = profileGateFor(profiles, viewer, {
     url,
-    capability: 'automation',
+    capability,
     nowMs: Date.now(),
   });
   if (!decision) return null;
@@ -88,19 +90,31 @@ export async function authorizeBrowserToolTab(
 export async function authorizeBrowserToolUrl(
   url: string,
   storage: SitePermissionPolicyStorage = localStorageArea(),
-): Promise<{ origin: string; profileId: string | null }> {
-  const origin = normalizeApprovedSiteOrigin(new URL(url).origin);
-  if (!origin) throw new Error('Only http and https tabs are supported.');
-
-  await assertSiteAccess(url, 'automation', `"${origin}" ${SITE_NOT_APPROVED_FOR_BROWSER_TOOLS}`);
+): Promise<Omit<AuthorizedTab, 'tabId'>> {
+  const authorized = await authorizeBrowserToolCapability(url, 'automation', storage);
 
   let granted = false;
   try {
-    granted = await hasBrowserControlConsent(origin);
+    granted = await hasBrowserControlConsent(authorized.origin);
   } catch {
     granted = false;
   }
-  if (!granted) throw new Error(browserControlConsentRequiredMessage(origin));
+  if (!granted) throw new Error(browserControlConsentRequiredMessage(authorized.origin));
 
-  return { origin, profileId: await profileForTab(url, storage) };
+  return authorized;
+}
+
+export async function authorizeBrowserToolCapability(
+  url: string,
+  capability: BrowserProfileCapability,
+  storage: SitePermissionPolicyStorage = localStorageArea(),
+): Promise<Omit<AuthorizedTab, 'tabId'>> {
+  const parsed = new URL(url);
+  if (parsed.username || parsed.password)
+    throw new Error('Browser task URLs cannot contain credentials.');
+  const origin = normalizeApprovedSiteOrigin(parsed.origin);
+  if (!origin) throw new Error('Only http and https tabs are supported.');
+  await assertSiteAccess(url, capability, `"${origin}" ${SITE_NOT_APPROVED_FOR_BROWSER_TOOLS}`);
+
+  return { origin, url, profileId: await profileForTab(url, storage, capability) };
 }

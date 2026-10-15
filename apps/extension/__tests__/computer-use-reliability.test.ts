@@ -21,6 +21,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const STABLE_HASH = 'complete|2|buttonSubmit,inputemail';
+const remoteObjects = new Map<string, Element>();
+let remoteObjectSequence = 0;
 
 function defaultSendCommandImpl(
   _target: unknown,
@@ -34,8 +36,43 @@ function defaultSendCommandImpl(
   }
 
   if (method === 'Runtime.evaluate') {
-    const p = params as { expression?: string } | undefined;
+    const p = params as { expression?: string; returnByValue?: boolean } | undefined;
     const expr = p?.expression ?? '';
+
+    if (p?.returnByValue === false) {
+      try {
+        // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
+        const element = new Function('document', `return ${expr}`)(document);
+        if (element instanceof Element) {
+          const objectId = `obj-${++remoteObjectSequence}`;
+          remoteObjects.set(objectId, element);
+          callback({ result: { type: 'object', objectId } });
+        } else callback({ result: { type: typeof element, value: element } });
+      } catch (error) {
+        callback({ result: { type: 'undefined' }, exceptionDetails: { text: String(error) } });
+      }
+      return;
+    }
+    if (expr.includes('width: innerWidth')) {
+      callback({ result: { type: 'object', value: { width: 800, height: 600 } } });
+      return;
+    }
+    if (expr === 'location.href') {
+      callback({ result: { type: 'string', value: location.href } });
+      return;
+    }
+
+    if (expr.startsWith('(() => { const el = ')) {
+      try {
+        callback({
+          // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
+          result: { type: 'string', value: new Function('document', `return ${expr}`)(document) },
+        });
+      } catch (error) {
+        callback({ result: { type: 'undefined' }, exceptionDetails: { text: String(error) } });
+      }
+      return;
+    }
 
     if (expr.includes('document.readyState') && !expr.includes('indexMap')) {
       callback({ result: { type: 'string', value: STABLE_HASH } });
@@ -75,12 +112,46 @@ function defaultSendCommandImpl(
       return;
     }
 
-    if (expr.includes('.value') && expr.includes('querySelector')) {
-      callback({ result: { type: 'string', value: 'typed-value' } });
+    if (
+      expr.includes('const active = document.activeElement') ||
+      expr.includes('const focused = ') ||
+      expr.includes("Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'type')")
+    ) {
+      try {
+        // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
+        const value = new Function('document', `return ${expr}`)(document);
+        callback({ result: { type: typeof value, value } });
+      } catch (error) {
+        callback({ result: { type: 'undefined' }, exceptionDetails: { text: String(error) } });
+      }
       return;
     }
 
     callback({ result: { type: 'object', objectId: 'obj-1' } });
+    return;
+  }
+
+  if (method === 'Runtime.callFunctionOn') {
+    const p = params as { objectId: string; functionDeclaration: string };
+    try {
+      if (p.functionDeclaration.includes('.pointForElement(this,')) {
+        callback({ result: { type: 'object', value: { x: 60, y: 20 } } });
+        return;
+      }
+      // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
+      const fn = new Function(`return (${p.functionDeclaration});`)();
+      const value = fn.call(remoteObjects.get(p.objectId));
+      callback({ result: { type: typeof value, value } });
+    } catch (error) {
+      callback({ result: { type: 'undefined' }, exceptionDetails: { text: String(error) } });
+    }
+    return;
+  }
+
+  if (method === 'DOM.focus') {
+    const p = params as { objectId: string };
+    (remoteObjects.get(p.objectId) as HTMLElement).focus();
+    callback({});
     return;
   }
 
@@ -243,6 +314,9 @@ import {
 } from '../src/features/computer-use/cloudAgentClient';
 
 beforeEach(() => {
+  document.body.innerHTML = '<button>Submit</button><input type="email" name="email">';
+  remoteObjects.clear();
+  remoteObjectSequence = 0;
   vi.clearAllMocks();
   chromeMock.runtime.lastError = null;
   fetchMock.mockReset();
@@ -361,15 +435,12 @@ describe('P1-1: waitForStable gate', () => {
 });
 
 describe('computer-use cancellation reaches CDP action internals', () => {
-  it('does not type after Stop lands during the action focus click', async () => {
+  it('does not type after Stop lands during indexed DOM focus', async () => {
     await getPageContent(42);
     const controller = new AbortController();
     chromeMock.debugger.sendCommand.mockImplementation(
       (target: unknown, method: string, params: unknown, callback: (result: unknown) => void) => {
-        if (
-          method === 'Input.dispatchMouseEvent' &&
-          (params as { type?: string }).type === 'mousePressed'
-        ) {
+        if (method === 'DOM.focus') {
           controller.abort(new Error('Computer-use run cancelled: user stopped'));
         }
         defaultSendCommandImpl(target, method, params, callback);
@@ -381,7 +452,8 @@ describe('computer-use cancellation reaches CDP action internals', () => {
     );
 
     const methods = chromeMock.debugger.sendCommand.mock.calls.map((call) => call[1]);
-    expect(methods).toContain('Input.dispatchMouseEvent');
+    expect(methods).toContain('DOM.focus');
+    expect(methods).not.toContain('Input.dispatchMouseEvent');
     expect(methods).not.toContain('Input.insertText');
   });
 });
@@ -429,7 +501,7 @@ describe('P1-2: index-based targeting', () => {
       })
       .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
 
-    await runAgentLoop('Click by index', 42, { maxSteps: 5 });
+    await runAgentLoop('Click by index', 42, { maxSteps: 5, onBeforeAction: () => true });
 
     expect(chromeMock.debugger.sendCommand).toHaveBeenCalledWith(
       expect.anything(),
@@ -466,7 +538,78 @@ describe('P1-2: index-based targeting', () => {
 });
 
 describe('P1-3: post-action verification', () => {
+  it.each(['', 'A'])(
+    'does not confirm rejected typing when a readonly field retains %j',
+    async (initialValue) => {
+      const input = document.querySelector<HTMLInputElement>('input[name="email"]')!;
+      input.readOnly = true;
+      input.value = initialValue;
+      input.focus();
+      chromeMock.debugger.sendCommand.mockImplementation((target, method, params, callback) => {
+        const expression = (params as { expression?: string })?.expression ?? '';
+        if (
+          method === 'Runtime.evaluate' &&
+          (params as { returnByValue?: boolean })?.returnByValue !== false &&
+          (expression.includes(
+            "Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'type')",
+          ) ||
+            expression.endsWith(')(document)'))
+        ) {
+          try {
+            callback({
+              result: {
+                type: 'string',
+                // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
+                value: new Function('document', `return ${expression}`)(document),
+              },
+            });
+          } catch (error) {
+            callback({ result: { type: 'undefined' }, exceptionDetails: { text: String(error) } });
+          }
+          return;
+        }
+        defaultSendCommandImpl(target, method, params, callback);
+      });
+      fetchMock
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          body: makeToolCallSseStream('type', JSON.stringify({ index: 2, text: 'Ada' })),
+        })
+        .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      const onProgress = vi.fn();
+      await runAgentLoop('Type Ada into the name field', 42, {
+        maxSteps: 3,
+        onBeforeAction: () => true,
+        onProgress,
+      });
+      expect(chromeMock.debugger.sendCommand).toHaveBeenCalledWith(
+        expect.anything(),
+        'Input.insertText',
+        { text: 'Ada' },
+        expect.any(Function),
+      );
+      expect(input.value).toBe(initialValue);
+      expect(onProgress).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'tool_result',
+          toolName: 'type',
+          actionOutcome: expect.objectContaining({
+            status: 'failed',
+            verified: false,
+            verification: expect.objectContaining({ passed: false }),
+          }),
+        }),
+      );
+      const result = onProgress.mock.calls
+        .map(([step]) => step)
+        .find((step) => step.kind === 'tool_result' && step.toolName === 'type');
+      expect(result.toolResult).toContain('no observable change');
+    },
+  );
+
   it('getFieldValue returns the committed field value', async () => {
+    document.querySelector<HTMLInputElement>('input[name="email"]')!.value = 'typed-value';
     const value = await getFieldValue(42, 'input[name="email"]');
     expect(value).toBe('typed-value');
   });
@@ -582,7 +725,7 @@ describe('P1-3: post-action verification', () => {
         return { ok: true, status: 200, body: makeFinalSseStream() };
       });
 
-    await runAgentLoop('Click with verification', 42, { maxSteps: 3 });
+    await runAgentLoop('Click with verification', 42, { maxSteps: 3, onBeforeAction: () => true });
 
     const clickResult = capturedMessages.find(
       (m) =>
@@ -751,18 +894,34 @@ describe('P2-5: approval gate, fail-CLOSED on timeout', () => {
       .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
 
     const denyAll = vi.fn().mockResolvedValue(false);
+    const onProgress = vi.fn();
     const result = await runAgentLoop('Click submit', 42, {
       maxSteps: 5,
       onBeforeAction: denyAll,
+      onProgress,
     });
 
-    expect(denyAll).toHaveBeenCalledWith('click', { index: 1 }, undefined, { alwaysAsk: false });
+    expect(denyAll).toHaveBeenCalledWith('click', { index: 1 }, undefined, {
+      alwaysAsk: true,
+      reason: 'publish',
+    });
 
     const secondBody = JSON.parse(
       (fetchMock.mock.calls[1] as [string, RequestInit])[1].body as string,
     ) as { messages: Array<{ role: string; content: unknown }> };
     const toolMsg = secondBody.messages.find((m) => m.role === 'tool');
     expect(toolMsg?.content as string).toContain('skipped');
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'tool_result',
+        toolName: 'click',
+        actionOutcome: expect.objectContaining({
+          status: 'refused',
+          verified: false,
+          verification: null,
+        }),
+      }),
+    );
     expect(result.finalMessage).toContain('Task complete');
   });
 

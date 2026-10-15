@@ -2,6 +2,7 @@ import type { RoutingTaskType } from '@agiworkforce/routing';
 import type { AgentTaskState } from '@agiworkforce/types/protocol';
 import {
   canUseBillingPlanCapability,
+  getAutoRoutingProfileTiers,
   getModelMetadataById,
   resolveModelEffort,
   type Effort,
@@ -17,6 +18,10 @@ import {
   type ManagedCloudAgentRunReference,
   type ToolApprovalDecisionWire,
   type ToolInputResponseWire,
+  ManagedCloudUploadedChatAttachmentsSchema,
+  chatAttachmentContentPart,
+  MAX_CHAT_ATTACHMENT_COUNT,
+  type ManagedCloudChatAttachment,
 } from '@agiworkforce/cloud-contracts';
 import {
   AccountUnavailableError,
@@ -36,6 +41,8 @@ import {
   type ManagedModelAccess,
   type ManagedQuotaBlock,
   type ManagedQuotaWarningSignal,
+  imageDataUrlByteLength,
+  MANAGED_CHAT_MAX_ATTACHMENT_BYTES,
 } from './freeTrialClient';
 import { resolveChromeManagedChatRoute } from './managedChatRouting';
 import { MEMORY_COMMAND_KINDS, MEMORY_COMMAND_STATUSES } from './memoryClient';
@@ -91,9 +98,14 @@ export interface ChromeManagedChatRequest {
   effort?: Effort;
   pageContext?: string;
   systemPrompt?: string;
-  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  conversationHistory?: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    uploadedAttachments?: ManagedCloudChatAttachment[];
+  }>;
   attachments?: string[];
   fileAttachments?: ManagedChatFileAttachment[];
+  uploadedAttachments?: ManagedCloudChatAttachment[];
   extendedThinking?: boolean;
   workMode?: 'chat' | 'agiwork';
   agiWorkPlan?: string[];
@@ -224,13 +236,20 @@ const DEFAULT_TOOL_INPUT_DEPENDENCIES: Omit<ChromeManagedToolInputDependencies, 
 };
 
 function validateRequest(request: ChromeManagedChatRequest): string | null {
-  if (!STREAM_ID_PATTERN.test(request.id)) return 'Invalid stream identifier.';
-  if (!request.text.trim() || request.text.length > MAX_MESSAGE_CHARS) {
+  if (typeof request.id !== 'string' || !STREAM_ID_PATTERN.test(request.id))
+    return 'Invalid stream identifier.';
+  if (
+    typeof request.text !== 'string' ||
+    !request.text.trim() ||
+    request.text.length > MAX_MESSAGE_CHARS
+  ) {
     return 'Message text must be between 1 and 32,000 characters.';
   }
   if (
     request.modelSelection !== undefined &&
-    (!request.modelSelection.trim() || request.modelSelection.length > MAX_IDENTIFIER_CHARS)
+    (typeof request.modelSelection !== 'string' ||
+      !request.modelSelection.trim() ||
+      request.modelSelection.length > MAX_IDENTIFIER_CHARS)
   ) {
     return 'Invalid model selection.';
   }
@@ -278,6 +297,11 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
     ) {
       return 'Conversation history is malformed.';
     }
+    if (
+      !ManagedCloudUploadedChatAttachmentsSchema.safeParse(message.uploadedAttachments ?? [])
+        .success
+    )
+      return 'Conversation history contains invalid uploaded attachment references.';
   }
   if (!Array.isArray(request.attachments ?? [])) return 'Attachments are malformed.';
   const fileAttachments = request.fileAttachments ?? [];
@@ -295,6 +319,30 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
     ) {
       return 'Attachments are malformed.';
     }
+  }
+  const uploaded = ManagedCloudUploadedChatAttachmentsSchema.safeParse(
+    request.uploadedAttachments ?? [],
+  );
+  if (!uploaded.success)
+    return 'Uploaded attachments are malformed or exceed their message budget.';
+  if (
+    (request.attachments?.length ?? 0) + fileAttachments.length + uploaded.data.length >
+    Math.min(MAX_CHAT_ATTACHMENT_COUNT, MANAGED_CHAT_MAX_ATTACHMENTS)
+  )
+    return 'The combined attachments exceed the message file limit.';
+  try {
+    const inlineBytes = (request.attachments ?? []).reduce(
+      (bytes, attachment) => bytes + imageDataUrlByteLength(attachment),
+      0,
+    );
+    const uploadedBytes = uploaded.data.reduce(
+      (bytes, attachment) => bytes + attachment.byteCount,
+      0,
+    );
+    if (inlineBytes + uploadedBytes > MANAGED_CHAT_MAX_ATTACHMENT_BYTES)
+      return 'The combined attachments exceed the message byte limit.';
+  } catch {
+    return 'Inline attachments must be supported image data URLs.';
   }
   if (
     request.idempotencyKey !== undefined &&
@@ -463,14 +511,35 @@ export async function executeChromeManagedChat(
   }
 
   const userContent = buildUserContent(request.text.trim(), request.pageContext);
+  const uploadedAttachments = ManagedCloudUploadedChatAttachmentsSchema.parse(
+    request.uploadedAttachments ?? [],
+  );
+  const inlineAttachments = [...(request.attachments ?? [])];
+  const historyAttachments: ManagedCloudChatAttachment[] = [];
+  const history = (request.conversationHistory ?? []).map((message): FreeTrialMessage => {
+    const uploaded = ManagedCloudUploadedChatAttachmentsSchema.parse(
+      message.uploadedAttachments ?? [],
+    );
+    historyAttachments.push(...uploaded);
+    return {
+      role: message.role,
+      content:
+        uploaded.length > 0
+          ? [{ type: 'text', text: message.content }, ...uploaded.map(chatAttachmentContentPart)]
+          : message.content,
+    };
+  });
   let finalUserContent: FreeTrialMessage['content'] = userContent;
   try {
-    if (request.attachments?.length || request.fileAttachments?.length) {
-      finalUserContent = createMultimodalUserContent(
-        userContent,
-        request.attachments ?? [],
-        request.fileAttachments ?? [],
-      );
+    if (inlineAttachments.length || uploadedAttachments.length || request.fileAttachments?.length) {
+      finalUserContent = [
+        ...createMultimodalUserContent(
+          userContent,
+          inlineAttachments,
+          request.fileAttachments ?? [],
+        ),
+        ...uploadedAttachments.map(chatAttachmentContentPart),
+      ];
     }
   } catch (error) {
     return {
@@ -528,7 +597,18 @@ export async function executeChromeManagedChat(
   }
 
   const requestedSelection = request.modelSelection?.trim() || 'auto';
-  const selection = request.quickMode === true ? 'auto-economy' : requestedSelection;
+  const quickProfile = getAutoRoutingProfileTiers().find(
+    (profile) => profile.profile === 'economy',
+  );
+  const quickAuto = request.quickMode === true && isAutoSelection(requestedSelection);
+  if (quickAuto && (!quickProfile || !access.allowedAutoModes.includes(quickProfile.id))) {
+    return {
+      status: 'error',
+      code: 'model_not_admitted',
+      message: 'Quick routing is not available for this account. Choose Auto or a model directly.',
+    };
+  }
+  const selection = quickAuto ? quickProfile!.id : requestedSelection;
   if (
     selection !== 'auto' &&
     selection.startsWith('auto-') &&
@@ -554,10 +634,16 @@ export async function executeChromeManagedChat(
     subscriptionTier: access.subscriptionTier,
     history: (request.conversationHistory ?? []).map((message) => ({ ...message })),
     attachments: [
-      ...(request.attachments ?? []).map((attachment) => ({
+      ...inlineAttachments.map((attachment) => ({
         mime: attachmentMime(attachment),
         type: 'image',
       })),
+      ...[...uploadedAttachments, ...historyAttachments.slice(-MAX_CHAT_ATTACHMENT_COUNT)]
+        .slice(0, MAX_CHAT_ATTACHMENT_COUNT)
+        .map((attachment) => ({
+          mime: attachment.mimeType,
+          type: attachment.type === 'image' ? 'image' : 'document',
+        })),
       ...(request.fileAttachments ?? []).map((file) => ({
         mime: file.mimeType,
         type: file.mimeType.startsWith('image/') ? 'image' : 'document',
@@ -583,7 +669,8 @@ export async function executeChromeManagedChat(
   const imageLimit = managedModelImageLimit(routing.modelKey);
   const imageCount =
     (request.attachments?.length ?? 0) +
-    (request.fileAttachments ?? []).filter((file) => file.mimeType.startsWith('image/')).length;
+    (request.fileAttachments ?? []).filter((file) => file.mimeType.startsWith('image/')).length +
+    [...uploadedAttachments, ...historyAttachments].filter((file) => file.type === 'image').length;
   if (imageLimit !== null && imageCount > imageLimit) {
     return {
       status: 'error',
@@ -594,7 +681,7 @@ export async function executeChromeManagedChat(
 
   const messages: FreeTrialMessage[] = [];
   if (request.systemPrompt) messages.push({ role: 'system', content: request.systemPrompt });
-  messages.push(...(request.conversationHistory ?? []).map((message) => ({ ...message })));
+  messages.push(...history);
   messages.push({ role: 'user', content: finalUserContent });
 
   const effort =

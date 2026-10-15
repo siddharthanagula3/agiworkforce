@@ -1,6 +1,6 @@
 {
   "commandOpenSidePanel": {
-    "message": "Open AGI side panel",
+    "message": "Open agiworkforce side panel",
     "description": "chrome://extensions/shortcuts label for the _execute_action command"
   },
   "commandCapturePage": {
@@ -8,7 +8,7 @@
     "description": "chrome://extensions/shortcuts label for the capture_page command"
   },
   "menuAskAgi": {
-    "message": "Ask AGI Workforce about \"%s\"",
+    "message": "Ask agiworkforce about \"%s\"",
     "description": "Context menu on a text selection. %s is Chrome's own selection substitution and must survive translation."
   },
   "menuExplainSelection": {
@@ -571,10 +571,6 @@
     "message": "Dismiss onboarding",
     "description": "First-run onboarding primary button accessible name on the final step"
   },
-  "spEffortAuto": {
-    "message": "Auto",
-    "description": "Composer reasoning-effort value while the route has not been chosen yet"
-  },
   "spHistoryDelete": {
     "message": "Delete chat",
     "description": "Conversation history delete button before the first click"
@@ -607,6 +603,10 @@
     "message": "Stop the current response before opening another chat.",
     "description": "Conversation history error when restore is blocked by streaming"
   },
+  "spHistoryStopBeforeDelete": {
+    "message": "Stop this task and confirm it stopped before deleting this chat.",
+    "description": "Recents notice when the user deletes the open chat while it is streaming or its cancellation is unconfirmed"
+  },
   "spHistoryOpenFailed": {
     "message": "That chat could not be opened. Please try again.",
     "description": "Conversation history error after restore fails"
@@ -618,6 +618,10 @@
   "spAttachUploadFromDevice": {
     "message": "Upload from device",
     "description": "Attachment menu item that opens the device file chooser for images, PDFs and text files"
+  },
+  "spAttachTabsItem": {
+    "message": "Attach tabs",
+    "description": "Attach menu item that opens the picker for including several open tabs as page context"
   },
   "spDocumentUploading": {
     "message": "Uploading…",
@@ -670,6 +674,30 @@
   "spAttachmentCaptureFailed": {
     "message": "This page could not be captured. Try again on a regular website tab.",
     "description": "Composer error when Chrome cannot capture a screenshot"
+  },
+  "spAttachTabsFailed": {
+    "message": "Tabs could not be attached. Try again.",
+    "description": "Composer notice when reading the chosen tabs failed without a more specific reason"
+  },
+  "spTabSnapshotsAttached_one": {
+    "message": "$COUNT$ tab snapshot attached.",
+    "description": "Composer notice after the chosen tabs were read into the next message, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spTabSnapshotsAttached_other": {
+    "message": "$COUNT$ tab snapshots attached.",
+    "description": "Composer notice after the chosen tabs were read into the next message, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
   },
   "spDictationSectionTitle": {
     "message": "Dictation",
@@ -1233,10 +1261,6 @@
       }
     }
   },
-  "spMoreModels": {
-    "message": "More models",
-    "description": "Heading above the models that are not one of the three headline choices"
-  },
   "spModelsSignedOut": {
     "message": "Sign in for models",
     "description": "Shown in the model menu when no account is signed in"
@@ -1295,6 +1319,26 @@
     "message": "Browser page added",
     "description": "Plus-menu item once the current page is attached"
   },
+  "spTabsAttached_one": {
+    "message": "$COUNT$ tab attached",
+    "description": "Page-context menu item label once tabs are attached, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spTabsAttached_other": {
+    "message": "$COUNT$ tabs attached",
+    "description": "Page-context menu item label once tabs are attached, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
   "spConnectors": {
     "message": "Connectors",
     "description": "Plus-menu item that opens the connector directory on the web"
@@ -1340,7 +1384,7 @@
     "description": "Menu row for browser tools"
   },
   "spMenuPairing": {
-    "message": "Desktop pairing",
+    "message": "Desktop connection",
     "description": "Menu row for pairing with the desktop app"
   },
   "spMenuSettings": {
@@ -2453,6 +2497,26 @@
       }
     }
   },
+  "spModelMenuAriaNoEffort": {
+    "message": "Model $MODEL$",
+    "description": "Accessible name of the composer button that opens the model menu when the chosen model has no effort setting yet",
+    "placeholders": {
+      "model": {
+        "content": "$1",
+        "example": "Auto"
+      }
+    }
+  },
+  "spModelMenuAriaWorkNoEffort": {
+    "message": "Model $MODEL$, AGI Work on",
+    "description": "Accessible name of the model menu button while AGI Work is on and the chosen model has no effort setting yet",
+    "placeholders": {
+      "model": {
+        "content": "$1",
+        "example": "Auto"
+      }
+    }
+  },
   "spShortcutDelete": {
     "message": "Delete",
     "description": "Accessible name of the delete button on a saved shortcut or recorded workflow"
@@ -3541,9 +3605,29 @@
     "message": "Chat unpinned.",
     "description": "Confirms a chat was unpinned"
   },
+  "spHistoryStar": {
+    "message": "Star",
+    "description": "Recent chat menu action that stars the chat"
+  },
+  "spHistoryUnstar": {
+    "message": "Unstar",
+    "description": "Recent chat menu action that removes the chat's star"
+  },
+  "spHistoryStarred": {
+    "message": "Chat starred.",
+    "description": "Confirms a chat was starred"
+  },
+  "spHistoryUnstarred": {
+    "message": "Chat unstarred.",
+    "description": "Confirms a chat's star was removed"
+  },
   "spHistoryPinnedMarker": {
     "message": "Pinned",
     "description": "Marks a pinned chat in the recents list"
+  },
+  "spHistoryStarredMarker": {
+    "message": "Starred",
+    "description": "Marks a starred chat in the recents list"
   },
   "spHistoryMove": {
     "message": "Move to project",
@@ -3586,6 +3670,22 @@
   "spHistoryUnarchived": {
     "message": "Chat returned to recents.",
     "description": "Confirms a chat was unarchived"
+  },
+  "spHistoryOpenInWeb": {
+    "message": "Open in Web",
+    "description": "Recent chat menu action that opens the account copy of the chat in AGI on the web"
+  },
+  "spHistoryCopySessionId": {
+    "message": "Copy session ID",
+    "description": "Recent chat menu action that copies the chat's session ID"
+  },
+  "spHistorySessionIdCopied": {
+    "message": "Session ID copied.",
+    "description": "Confirms a chat's session ID was copied"
+  },
+  "spHistorySessionIdCopyFailed": {
+    "message": "The session ID could not be copied. Try again.",
+    "description": "Copying a chat's session ID failed"
   },
   "spHistoryShowArchived": {
     "message": "Archived",
@@ -4102,5 +4202,50 @@
   "spAccountNameSaveFailed": {
     "message": "Your name could not be saved. Try again.",
     "description": "Status when saving the display name fails without a reason"
+  },
+  "spAllModels": {
+    "message": "All models ($COUNT$)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "spModelsBack": {
+    "message": "Back to recommended models"
+  },
+  "spModelsSearch": {
+    "message": "Search models"
+  },
+  "spModelsCapability": {
+    "message": "All capabilities"
+  },
+  "spModelsVision": {
+    "message": "Vision"
+  },
+  "spModelsReasoning": {
+    "message": "Reasoning"
+  },
+  "spModelsTools": {
+    "message": "Tools"
+  },
+  "spModelsSearchCapability": {
+    "message": "Web search"
+  },
+  "spModelsCode": {
+    "message": "Code execution"
+  },
+  "spModelsImages": {
+    "message": "Image generation"
+  },
+  "spModelsVideo": {
+    "message": "Video generation"
+  },
+  "spModelsNoMatch": {
+    "message": "No models match"
+  },
+  "spExtensionSettings": {
+    "message": "Extension settings",
+    "description": "Main menu entry for user-facing extension settings"
   }
 }

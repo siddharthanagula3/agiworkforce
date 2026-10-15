@@ -23,6 +23,7 @@ export interface CloudSettingsState {
   memoryEnabled: boolean;
   referencePastChats: boolean;
   generateMemoryFromHistory: boolean;
+  includeSensitiveTopics: boolean;
   memoryPolicyInitialized: boolean;
   personalization: Personalization;
   settingsUpdatedAt: string | null;
@@ -36,6 +37,7 @@ export interface CloudSettingsState {
   setMemoryEnabled: (enabled: boolean) => void;
   setReferencePastChats: (enabled: boolean) => void;
   setGenerateMemoryFromHistory: (enabled: boolean) => void;
+  setIncludeSensitiveTopics: (enabled: boolean) => void;
   setPersonalization: (partial: Partial<Personalization>) => void;
   _setSettingsUpdatedAt: (iso: string | null) => void;
 }
@@ -72,6 +74,7 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
       memoryEnabled: false,
       referencePastChats: false,
       generateMemoryFromHistory: true,
+      includeSensitiveTopics: false,
       memoryPolicyInitialized: false,
       personalization: defaultPersonalization,
       settingsUpdatedAt: null,
@@ -103,6 +106,7 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
           memoryPolicyInitialized: true,
           settingsUpdatedAt: nowIso(),
         }),
+      setIncludeSensitiveTopics: (enabled) => set({ includeSensitiveTopics: enabled }),
       setPersonalization: (partial) =>
         set({
           personalization: { ...get().personalization, ...partial },

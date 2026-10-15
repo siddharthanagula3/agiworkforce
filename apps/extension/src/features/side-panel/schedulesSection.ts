@@ -71,7 +71,7 @@ export const SCHEDULES_SECTION_CSS = `
     text-decoration: underline;
     cursor: pointer;
   }
-  .sp-schedules-status-action:disabled { cursor: wait; opacity: 0.55; }
+  .sp-schedules-status-action:disabled { cursor: wait; color: var(--agi-ext-text-muted); }
   .sp-schedules-empty {
     padding: 4px 14px 12px;
     font-size: var(--type-caption-size);
@@ -138,7 +138,7 @@ export const SCHEDULES_SECTION_CSS = `
   .sp-schedule-actions { display: flex; gap: 6px; flex-wrap: wrap; }
   .sp-schedule-btn {
     background: none;
-    border: 1px solid var(--agi-ext-border);
+    border: 1px solid var(--agi-ext-border-control);
     border-radius: var(--corner-control);
     color: var(--agi-ext-text-muted);
     font-size: var(--type-label-size);
@@ -146,9 +146,10 @@ export const SCHEDULES_SECTION_CSS = `
     cursor: pointer;
     transition: color var(--duration-instant), border-color var(--duration-instant);
   }
-  .sp-schedule-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
-  .sp-schedule-btn.is-danger { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
-  .sp-schedule-btn:disabled { cursor: wait; opacity: 0.55; }
+  .sp-schedule-btn:hover:not(:disabled) { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
+  .sp-schedule-btn.is-danger,
+  .sp-schedule-btn.is-danger:hover:not(:disabled) { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
+  .sp-schedule-btn:disabled { cursor: wait; color: var(--agi-ext-text-muted); }
   .sp-schedule-approval {
     display: flex;
     flex-direction: column;

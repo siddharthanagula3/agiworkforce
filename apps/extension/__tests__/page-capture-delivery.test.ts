@@ -85,7 +85,7 @@ describe('page context is never silently missing', () => {
       /export type PageContextCapture =\s*\|?\s*\{ ok: true; text: string;[\s\S]{0,80}?\}\s*\|\s*\{ ok: false; reason: string \}/,
     );
     const capture = sidePanel.slice(
-      sidePanel.indexOf('async function capturePageContext()'),
+      sidePanel.indexOf('async function capturePageContext('),
       sidePanel.indexOf('function requestStreamCancellation('),
     );
     expect(capture).not.toMatch(/resolve\(null\)/);

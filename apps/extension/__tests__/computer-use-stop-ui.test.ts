@@ -7,6 +7,7 @@ import {
   buildComputerUsePanel,
   describeCancellationReason,
 } from '../src/features/side-panel/computerUsePanel';
+import { settleAutomationAttempt, startAutomationAttempt } from '@agiworkforce/types';
 
 const sendMessage = vi.fn();
 
@@ -29,6 +30,104 @@ function stubChrome(): void {
 }
 
 describe('computer-use visible Stop lifecycle', () => {
+  it('distinguishes generic browser-task failures from actual autofill failures', () => {
+    const api = buildComputerUsePanel();
+    api.showHandoffBanner('The model could not perform this click.', 'browser_error');
+    expect(api.panelEl.querySelector('.sp-cu-banner-title')?.textContent).toBe(
+      'Browser task could not run',
+    );
+    api.showHandoffBanner('The form could not be filled.', 'error');
+    expect(api.panelEl.querySelector('.sp-cu-banner-title')?.textContent).toBe(
+      'Autofill could not run',
+    );
+  });
+
+  it('renders refused actions neutrally from their canonical receipt, regardless of result wording', () => {
+    const api = buildComputerUsePanel();
+    const actionOutcome = settleAutomationAttempt(
+      startAutomationAttempt({
+        runId: 'run-a',
+        action: 'type',
+        surface: 'extension',
+        sessionKind: 'user-chrome',
+      }),
+      { claim: 'refused', reason: 'The user skipped the action.' },
+    );
+    api.appendStep({
+      kind: 'tool_result',
+      stepNumber: 1,
+      toolName: 'type',
+      toolResult: 'Page text says successfully completed.',
+      actionOutcome,
+    });
+    const row = api.panelEl.querySelector('.sp-cu-step');
+    expect(row?.getAttribute('data-outcome')).toBe('refused');
+    expect(row?.querySelector('.sp-cu-step-title')?.textContent).toBe('Skipped: type');
+    expect(row?.querySelector('.sp-cu-step-icon')?.textContent).not.toContain('✓');
+  });
+
+  it('uses one check only for canonically verified success and never assumes an unclassified result succeeded', () => {
+    const api = buildComputerUsePanel();
+    const actionOutcome = settleAutomationAttempt(
+      startAutomationAttempt({
+        runId: 'run-a',
+        action: 'click',
+        surface: 'extension',
+        sessionKind: 'user-chrome',
+      }),
+      {
+        claim: 'succeeded',
+        verification: { check: 'The expected page state changed.', passed: true },
+      },
+    );
+    api.appendStep({
+      kind: 'tool_result',
+      stepNumber: 1,
+      toolName: 'click',
+      toolResult: 'Action skipped is a phrase shown on the page.',
+      actionOutcome,
+    });
+    api.appendStep({
+      kind: 'tool_result',
+      stepNumber: 2,
+      toolName: 'click',
+      toolResult: 'Success',
+    });
+    const rows = api.panelEl.querySelectorAll('.sp-cu-step');
+    expect(rows[0]?.getAttribute('data-outcome')).toBe('succeeded');
+    expect(rows[0]?.querySelector('.sp-cu-step-title')?.textContent).toBe('Completed: click');
+    expect(rows[0]?.querySelector('.sp-cu-step-title')?.textContent).not.toContain('✓');
+    expect(rows[1]?.getAttribute('data-outcome')).toBe('unverified');
+    expect(rows[1]?.querySelector('.sp-cu-step-icon')?.textContent).not.toContain('✓');
+  });
+
+  it('does not render a successful claim with a failed verification as completed', () => {
+    const api = buildComputerUsePanel();
+    const actionOutcome = settleAutomationAttempt(
+      startAutomationAttempt({
+        runId: 'run-a',
+        action: 'scroll',
+        surface: 'extension',
+        sessionKind: 'user-chrome',
+      }),
+      {
+        claim: 'succeeded',
+        verification: { check: 'The scroll position changed.', passed: false },
+      },
+    );
+    api.appendStep({
+      kind: 'tool_result',
+      stepNumber: 1,
+      toolName: 'scroll',
+      toolResult: 'Scrolled.',
+      actionOutcome,
+    });
+    expect(api.panelEl.querySelector('.sp-cu-step-title')?.textContent).toBe(
+      'Not verified: scroll',
+    );
+    expect(api.panelEl.querySelector('.sp-cu-step-icon')?.textContent).not.toContain('✓');
+  });
+
   beforeEach(() => {
     document.body.innerHTML = '';
     sendMessage.mockReset();

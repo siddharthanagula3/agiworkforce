@@ -1,4 +1,5 @@
 import {
+  finishAgentActivityLocally,
   type AgentActivityArtifactEntry,
   type AgentActivityEntry,
   type AgentActivityState,
@@ -15,6 +16,7 @@ import {
   interactiveCardRendersBeforeProse,
   resolveInteractiveCardRenderer,
   toolApprovalStakes,
+  TERMINAL_AGENT_TASK_STATES,
   type AgentEventSource,
   type InteractiveCard,
   type InteractiveCardRegistry,
@@ -861,7 +863,7 @@ function appendApprovalActions(
   entry: AgentActivityToolEntry,
   options: BubbleInteractionOptions,
 ): void {
-  if (!entry.approval || entry.approval.decision) return;
+  if (entry.status !== 'awaiting-approval' || !entry.approval || entry.approval.decision) return;
   const selected = options.approvalDecisions?.[entry.toolCallId];
   const approval = el('div', { class: 'sp-agent-approval' });
   approval.appendChild(
@@ -892,6 +894,13 @@ function appendApprovalActions(
     const guidance = buildApprovalGuidance(entry, options);
     if (guidance) approval.appendChild(guidance);
     const actions = el('div', { class: 'sp-agent-approval__actions' });
+    let resolving = false;
+    const lockDecision = (): boolean => {
+      if (resolving) return false;
+      resolving = true;
+      for (const button of actions.querySelectorAll('button')) button.disabled = true;
+      return true;
+    };
     const approve = el(
       'button',
       {
@@ -901,9 +910,9 @@ function appendApprovalActions(
       },
       t('spApprovalApprove'),
     );
-    approve.addEventListener('click', () =>
-      options.onResolveApproval?.(entry.toolCallId, 'approved'),
-    );
+    approve.addEventListener('click', () => {
+      if (lockDecision()) options.onResolveApproval?.(entry.toolCallId, 'approved');
+    });
     actions.appendChild(approve);
     const onApproveForChat = options.onApproveForChat;
     if (onApproveForChat && entry.approval.riskLevel !== 'high') {
@@ -916,9 +925,9 @@ function appendApprovalActions(
         },
         t('spApprovalAllowForChat'),
       );
-      approveForChat.addEventListener('click', () =>
-        onApproveForChat(entry.toolCallId, entry.name),
-      );
+      approveForChat.addEventListener('click', () => {
+        if (lockDecision()) onApproveForChat(entry.toolCallId, entry.name);
+      });
       actions.appendChild(approveForChat);
     }
     const decline = el(
@@ -930,9 +939,9 @@ function appendApprovalActions(
       },
       t('spApprovalDecline'),
     );
-    decline.addEventListener('click', () =>
-      options.onResolveApproval?.(entry.toolCallId, 'rejected'),
-    );
+    decline.addEventListener('click', () => {
+      if (lockDecision()) options.onResolveApproval?.(entry.toolCallId, 'rejected');
+    });
     actions.appendChild(decline);
     approval.appendChild(actions);
   } else {
@@ -1007,6 +1016,9 @@ function buildAgentActivityStep(
                 : Clock;
   row.appendChild(renderIcon(icon, 14, 'sp-agent-step__icon'));
   row.appendChild(el('span', { class: 'sp-agent-step__summary' }, activityEntrySummary(entry)));
+  if (status === 'cancelled' || status === 'failed') {
+    row.appendChild(el('span', { class: 'sp-agent-step__elapsed' }, agentTaskStateLabel(status)));
+  }
   if (entry.kind === 'tool' && entry.elapsedMs !== undefined) {
     row.appendChild(
       el('span', { class: 'sp-agent-step__elapsed' }, formatElapsed(entry.elapsedMs)),
@@ -1073,9 +1085,19 @@ function activityStatusIcon(activity: AgentActivityState, needsUser: boolean): s
 }
 
 function buildAgentActivityEl(
-  activity: AgentActivityState,
+  storedActivity: AgentActivityState,
   options: BubbleInteractionOptions,
 ): HTMLElement {
+  const activity =
+    storedActivity.status === 'completed' ||
+    storedActivity.status === 'failed' ||
+    storedActivity.status === 'cancelled'
+      ? finishAgentActivityLocally(storedActivity, {
+          status: storedActivity.status,
+          completedAtMs: storedActivity.completedAtMs ?? storedActivity.updatedAtMs,
+          overrideTerminal: true,
+        })
+      : storedActivity;
   const details = el('details', { class: 'sp-agent-activity', 'data-status': activity.status });
   const summary = document.createElement('summary');
   const elapsed = Math.max(
@@ -1112,6 +1134,19 @@ export function buildBubbleWithTools(
   msg: ChatMessage,
   options: BubbleInteractionOptions = {},
 ): HTMLElement {
+  const canResolveApproval = (): boolean =>
+    msg.streamCancellation === undefined &&
+    (msg.cloudAgentRun?.state === undefined ||
+      !TERMINAL_AGENT_TASK_STATES.has(msg.cloudAgentRun.state));
+  const activityOptions: BubbleInteractionOptions = {
+    ...options,
+    onResolveApproval:
+      options.onResolveApproval && canResolveApproval()
+        ? (toolCallId, decision) => {
+            if (canResolveApproval()) options.onResolveApproval?.(toolCallId, decision);
+          }
+        : undefined,
+  };
   const segments = parseToolCalls(msg.content);
   const hasTools = segments.some((s) => typeof s !== 'string');
   const hasAgentActivity = msg.role === 'assistant' && Boolean(msg.agentActivity);
@@ -1133,7 +1168,8 @@ export function buildBubbleWithTools(
     }
   }
 
-  if (msg.agentActivity) wrapper.appendChild(buildAgentActivityEl(msg.agentActivity, options));
+  if (msg.agentActivity)
+    wrapper.appendChild(buildAgentActivityEl(msg.agentActivity, activityOptions));
   const leadingCards = buildInteractiveCardStack(msg, options, true);
   if (leadingCards) wrapper.appendChild(leadingCards);
   const { markers, all } = answerSourceLists(msg);
@@ -1167,7 +1203,12 @@ export function buildBubbleWithTools(
 
   appendAnswerExtras(wrapper, msg, options, all);
 
-  const toolsErrorFooter = buildErrorFooter(msg, options.onRetry, undefined, options.quotaRecovery);
+  const toolsErrorFooter = buildErrorFooter(
+    msg,
+    options.onRetry,
+    options.onSwitchModel,
+    options.quotaRecovery,
+  );
   if (toolsErrorFooter) wrapper.appendChild(toolsErrorFooter);
   const toolsInterruptedFooter = buildInterruptedFooter(msg, options.onRetry);
   if (toolsInterruptedFooter) wrapper.appendChild(toolsInterruptedFooter);

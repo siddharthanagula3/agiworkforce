@@ -74,6 +74,10 @@ export class ComputerUseStartCoordinator {
 
 export class ComputerUseRunCoordinator {
   private active: ComputerUseRunLease | null = null;
+  private readonly targets = new WeakMap<
+    ComputerUseRunLease,
+    { tabId: number; pending: { token: symbol; tabId: number } | null }
+  >();
 
   begin(input: {
     runId: string;
@@ -85,10 +89,13 @@ export class ComputerUseRunCoordinator {
     credential: string;
   }): ComputerUseRunLease {
     this.cancel('superseded');
+    const target = { tabId: input.tabId, pending: null as { token: symbol; tabId: number } | null };
     const lease: ComputerUseRunLease = {
       runId: input.runId,
       generation: input.generation,
-      tabId: input.tabId,
+      get tabId() {
+        return target.tabId;
+      },
       ...(input.windowId === undefined ? {} : { windowId: input.windowId }),
       tabIntentUrl: input.tabIntentUrl,
       authOwner: input.authOwner,
@@ -99,6 +106,7 @@ export class ComputerUseRunCoordinator {
       completion: null,
       takeover: null,
     };
+    this.targets.set(lease, target);
     this.active = lease;
     return lease;
   }
@@ -141,12 +149,57 @@ export class ComputerUseRunCoordinator {
   setActionInFlight(lease: ComputerUseRunLease, active: boolean): void {
     this.assertCurrent(lease);
     lease.actionInFlight = active;
-    if (!active) lease.lastActionEndedAt = Date.now();
+    if (!active) {
+      lease.lastActionEndedAt = Date.now();
+      const state = this.targets.get(lease);
+      if (state) state.pending = null;
+    }
   }
 
   commitTabIntent(lease: ComputerUseRunLease, url: string): void {
     this.assertCurrent(lease);
     lease.tabIntentUrl = url;
+  }
+
+  beginTabTransition(lease: ComputerUseRunLease, tabId: number): symbol {
+    this.assertCurrent(lease);
+    const state = this.targets.get(lease);
+    if (
+      !state ||
+      state.pending ||
+      !lease.actionInFlight ||
+      lease.windowId === undefined ||
+      !Number.isSafeInteger(tabId) ||
+      tabId < 0
+    )
+      throw new Error('A task tab transition requires one approved active action.');
+    const token = Symbol('task-tab-transition');
+    state.pending = { token, tabId };
+    return token;
+  }
+
+  expectsTabActivation(lease: ComputerUseRunLease, tabId: number, windowId?: number): boolean {
+    return (
+      this.isCurrent(lease) &&
+      lease.actionInFlight &&
+      (lease.windowId === undefined || lease.windowId === windowId) &&
+      this.targets.get(lease)?.pending?.tabId === tabId
+    );
+  }
+
+  commitTabTransition(lease: ComputerUseRunLease, token: symbol, url: string): void {
+    this.assertCurrent(lease);
+    const state = this.targets.get(lease);
+    if (!lease.actionInFlight || !state?.pending || state.pending.token !== token)
+      throw new Error('The task tab transition is no longer current.');
+    state.tabId = state.pending.tabId;
+    state.pending = null;
+    lease.tabIntentUrl = url;
+  }
+
+  abortTabTransition(lease: ComputerUseRunLease, token: symbol): void {
+    const state = this.targets.get(lease);
+    if (state?.pending?.token === token) state.pending = null;
   }
 
   trackCompletion(lease: ComputerUseRunLease, completion: Promise<unknown>): void {

@@ -70,7 +70,8 @@ function formatCount(n: number): string {
 
 const CAPABILITIES_NAMESPACE = 'capabilities';
 
-type AccountMemoryCapability = 'memory' | 'searchPastChats' | 'generateFromHistory';
+type AccountMemoryCapability =
+  'memory' | 'searchPastChats' | 'generateFromHistory' | 'includeSensitiveTopics';
 
 export default function MemoryScreen() {
   const router = useRouter();
@@ -85,6 +86,10 @@ export default function MemoryScreen() {
   const setLocalGenerateMemory = useLocalSettingsStore(
     (state) => state.setGenerateMemoryFromHistory,
   );
+  const localIncludeSensitive = useLocalSettingsStore((state) => state.includeSensitiveTopics);
+  const setLocalIncludeSensitive = useLocalSettingsStore(
+    (state) => state.setIncludeSensitiveTopics,
+  );
   const cloudMemoryEnabled = useCloudSettingsStore((state) => state.memoryEnabled);
   const cloudReferencePastChats = useCloudSettingsStore((state) => state.referencePastChats);
   const cloudGenerateMemory = useCloudSettingsStore((state) => state.generateMemoryFromHistory);
@@ -93,9 +98,14 @@ export default function MemoryScreen() {
   const setCloudGenerateMemory = useCloudSettingsStore(
     (state) => state.setGenerateMemoryFromHistory,
   );
+  const cloudIncludeSensitive = useCloudSettingsStore((state) => state.includeSensitiveTopics);
+  const setCloudIncludeSensitive = useCloudSettingsStore(
+    (state) => state.setIncludeSensitiveTopics,
+  );
   const memoryEnabled = currentIsCloud ? cloudMemoryEnabled : localMemoryEnabled;
   const referencePastChats = currentIsCloud ? cloudReferencePastChats : localReferencePastChats;
   const generateMemoryFromHistory = currentIsCloud ? cloudGenerateMemory : localGenerateMemory;
+  const includeSensitiveTopics = currentIsCloud ? cloudIncludeSensitive : localIncludeSensitive;
   const saveAccountCapability = useCallback(
     (
       key: AccountMemoryCapability,
@@ -136,6 +146,15 @@ export default function MemoryScreen() {
           setCloudGenerateMemory,
         )
     : setLocalGenerateMemory;
+  const setIncludeSensitiveTopics = currentIsCloud
+    ? (value: boolean) =>
+        saveAccountCapability(
+          'includeSensitiveTopics',
+          value,
+          cloudIncludeSensitive,
+          setCloudIncludeSensitive,
+        )
+    : setLocalIncludeSensitive;
 
   useEffect(() => {
     if (!currentIsCloud || !clerkUserId) return;
@@ -154,6 +173,7 @@ export default function MemoryScreen() {
         if (typeof stored.generateFromHistory === 'boolean') {
           cloud.setGenerateMemoryFromHistory(stored.generateFromHistory);
         }
+        cloud.setIncludeSensitiveTopics(stored.includeSensitiveTopics === true);
       })
       .catch(() => undefined);
     return () => {
@@ -501,9 +521,11 @@ export default function MemoryScreen() {
         memoryEnabled={memoryEnabled}
         referencePastChats={referencePastChats}
         generateMemoryFromHistory={generateMemoryFromHistory}
+        includeSensitiveTopics={includeSensitiveTopics}
         onMemoryEnabledChange={setMemoryEnabled}
         onReferencePastChatsChange={setReferencePastChats}
         onGenerateMemoryFromHistoryChange={setGenerateMemoryFromHistory}
+        onIncludeSensitiveTopicsChange={setIncludeSensitiveTopics}
       />
 
       <View className="px-4">

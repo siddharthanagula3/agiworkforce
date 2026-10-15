@@ -6,10 +6,12 @@ import {
   parseRemoteCodeSnapshot,
   parseRemoteCodeStarted,
   parseRemoteCodeTranscript,
+  type RemoteCodeApprovalHold,
   type RemoteCodeDiff,
   type RemoteCodeFileChange,
   type RemoteCodeIndexedMessage,
   type RemoteCodePendingApproval,
+  type RemoteCodePendingQuestion,
   type RemoteCodeRoot,
   type RemoteCodeSessionStatus,
   type RemoteCodeSessionSummary,
@@ -38,6 +40,8 @@ export interface RemoteCodeThread {
   partialResponse: string;
   messages: RemoteCodeTranscriptEntry[];
   pendingApprovals: RemoteCodePendingApproval[];
+  approvalHolds: Record<string, RemoteCodeApprovalHoldNotice>;
+  pendingQuestions: RemoteCodePendingQuestion[];
   fileChanges: RemoteCodeFileChange[];
   diffs: RemoteCodeDiff[];
   testRuns: RemoteCodeTestRun[];
@@ -56,6 +60,23 @@ interface RemoteCodeState {
   threads: Record<string, RemoteCodeThread>;
   starts: Record<string, RemoteCodeSessionStart>;
   reset: () => void;
+}
+
+export interface RemoteCodeApprovalHoldNotice {
+  status: RemoteCodeApprovalHold;
+  message: string;
+}
+
+function holdsFor(
+  holds: Record<string, RemoteCodeApprovalHoldNotice>,
+  approvals: readonly RemoteCodePendingApproval[],
+): Record<string, RemoteCodeApprovalHoldNotice> {
+  return Object.fromEntries(
+    approvals.flatMap((approval) => {
+      const hold = holds[approval.requestId];
+      return hold ? [[approval.requestId, hold]] : [];
+    }),
+  );
 }
 
 export function remoteCodeThreadKey(rootId: string, threadId: string): string {
@@ -164,6 +185,8 @@ export function ingestRemoteCodeSnapshot(payload: unknown): boolean {
         partialResponse: parsed.partialResponse,
         messages: parsed.messages,
         pendingApprovals: parsed.pendingApprovals,
+        approvalHolds: holdsFor(state.threads[key]?.approvalHolds ?? {}, parsed.pendingApprovals),
+        pendingQuestions: parsed.pendingQuestions,
         fileChanges: parsed.fileChanges,
         diffs: state.threads[key]?.diffs ?? [],
         testRuns: state.threads[key]?.testRuns ?? [],
@@ -251,9 +274,37 @@ export function ingestRemoteCodeEvent(payload: unknown): boolean {
         return {
           ...thread,
           pendingApprovals,
+          approvalHolds: holdsFor(thread.approvalHolds, pendingApprovals),
           status: pendingApprovals.length === 0 && thread.activeTurnId ? 'running' : thread.status,
         };
       }
+      case 'approval-held':
+        return thread.pendingApprovals.some((approval) => approval.requestId === event.requestId)
+          ? {
+              ...thread,
+              approvalHolds: {
+                ...thread.approvalHolds,
+                [event.requestId]: { status: event.status, message: event.message },
+              },
+            }
+          : thread;
+      case 'user-input-requested':
+        return {
+          ...thread,
+          pendingQuestions: upsertByKey(
+            thread.pendingQuestions,
+            { turnId: event.turnId, requestId: event.requestId, question: event.question },
+            (question) => question.requestId,
+            REMOTE_CODE_LIMITS.pendingQuestions,
+          ),
+        };
+      case 'user-input-answered':
+        return {
+          ...thread,
+          pendingQuestions: thread.pendingQuestions.filter(
+            (question) => question.requestId !== event.requestId,
+          ),
+        };
       case 'turn-finished':
         return {
           ...thread,
@@ -261,6 +312,8 @@ export function ingestRemoteCodeEvent(payload: unknown): boolean {
           activeTurnId: null,
           partialResponse: '',
           pendingApprovals: [],
+          approvalHolds: {},
+          pendingQuestions: [],
           tools: settleTools(thread.tools),
           messages: event.response
             ? [...thread.messages, { role: 'assistant' as const, text: event.response }].slice(
@@ -297,6 +350,8 @@ export function ingestRemoteCodeEvent(payload: unknown): boolean {
           status: 'failed',
           activeTurnId: null,
           pendingApprovals: [],
+          approvalHolds: {},
+          pendingQuestions: [],
           tools: settleTools(thread.tools),
           hostMessage: event.message,
         };

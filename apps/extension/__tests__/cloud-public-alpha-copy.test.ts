@@ -1,16 +1,4 @@
-/**
- * PA-4 regression: the extension's managed-cloud surface must present AGI Cloud
- * as PUBLIC ALPHA / open-by-default, not invite/waitlist-only or env-gated.
- *
- * Covers:
- *   (a) cloudAgentClient.callCloud, a 403 from the managed-compute gate no longer
- *       claims the operator must set AGI_MANAGED_COMPUTE_PRIVATE_BETA=1; it reflects
- *       the kill-switch / paid-tier truth.
- *   (b) InviteCodeModal, default copy no longer presents managed cloud as
- *       invite/waitlist-only; it is sign-in-centric public-alpha copy.
- *
- * @vitest-environment jsdom
- */
+/** @vitest-environment jsdom */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -40,7 +28,7 @@ const chromeMock = vi.hoisted(() => {
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
-import { callCloud } from '../src/features/computer-use/cloudAgentClient';
+import { callCloud, CloudAgentGatewayError } from '../src/features/computer-use/cloudAgentClient';
 import { InviteCodeModal } from '../src/features/cloud-bridge/InviteCodeModal';
 
 beforeEach(() => {
@@ -55,11 +43,7 @@ afterEach(() => {
 
 describe('callCloud 403 managed-compute message', () => {
   function mock403(bodyText: string): void {
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
-      status: 403,
-      text: vi.fn().mockResolvedValue(bodyText),
-    } as unknown as Response);
+    fetchMock.mockResolvedValueOnce(new Response(bodyText, { status: 403 }));
   }
 
   it('does NOT tell the operator to set AGI_MANAGED_COMPUTE_PRIVATE_BETA=1', async () => {
@@ -70,19 +54,31 @@ describe('callCloud 403 managed-compute message', () => {
     expect(err.message).not.toMatch(/must have it set/i);
   });
 
-  it('frames the 403 as kill-switch gate or missing paid tier (public alpha)', async () => {
-    mock403('public_launch_blocked');
+  it('preserves the policy failure with a cause-neutral account denial', async () => {
+    const message = 'Browser actions are temporarily unavailable. Please try again later.';
+    mock403(
+      JSON.stringify({
+        error: { type: 'policy_error', code: 'public_launch_blocked', message },
+      }),
+    );
     const err = await callCloud([{ role: 'user', content: 'hi' }], 'tok').catch((e) => e as Error);
-    expect(err.message).toMatch(/public alpha/i);
-    expect(err.message).toMatch(/kill-switch/i);
-    expect(err.message).toMatch(/paid/i);
+    expect(err).toBeInstanceOf(CloudAgentGatewayError);
+    expect(err).toMatchObject({ status: 403, code: 'public_launch_blocked' });
+    expect(err.message).toBe(
+      'AGI Cloud browser actions are unavailable for this account right now.',
+    );
+    expect(err.message).not.toMatch(/kill-switch|paid tier|AGI_MANAGED_COMPUTE/i);
   });
 
-  it('still detects the not_private_beta / managed_compute body markers', async () => {
+  it('keeps an unvalidated body marker private while preserving the HTTP failure', async () => {
     mock403('managed_compute_private_beta');
     const err = await callCloud([{ role: 'user', content: 'hi' }], 'tok').catch((e) => e as Error);
-    expect(err.message).toMatch(/403/);
-    expect(err.message).toMatch(/public alpha/i);
+    expect(err).toBeInstanceOf(CloudAgentGatewayError);
+    expect(err).toMatchObject({ status: 403, code: undefined });
+    expect(err.message).toBe(
+      'AGI Cloud browser actions are unavailable for this account right now.',
+    );
+    expect(err.message).not.toContain('managed_compute_private_beta');
   });
 });
 

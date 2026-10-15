@@ -1,281 +1,104 @@
+import { getBrowserToolDefinitions } from './browserToolDefinitions';
+import type { ToolDefinition } from './browserToolDefinitions';
+export { BROWSER_TOOL_DEFINITIONS, type ToolDefinition } from './browserToolDefinitions';
 import { ServerSentEventDecoder } from '@agiworkforce/client-runtime';
 import { validateGatewayUrl } from '../../background/policy';
-import { getAuthToken } from '../cloud-bridge/freeTrialClient';
+import {
+  getAuthToken,
+  readBoundedErrorBody,
+  type ManagedModelAccess,
+  MANAGED_CHAT_MAX_STREAMED_TEXT_CHARS,
+  MANAGED_CHAT_DEFAULT_TIMEOUT_MS,
+} from '../cloud-bridge/freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
+import { ThinkingTagSplitter } from '@agiworkforce/provider-protocol/thinking-tag-splitter';
+import { configuredAgiWebOrigin } from '../../lib/webOrigin';
+import {
+  AgentEventSchema,
+  parseAgentEventDelta,
+  ToolApprovalResumeErrorResponseSchema,
+  type ToolApprovalResumeErrorResponse,
+} from '@agiworkforce/cloud-contracts';
+import { scanSecrets } from '@agiworkforce/utils/logger';
+import { resolveAutoRoute } from '@agiworkforce/routing';
 
 export { getAuthToken };
 
-import { getDefaultModelFor, getRoutingSlotModel } from '@agiworkforce/types';
+import {
+  canAccessModelForSubscriptionTier,
+  classifyManagedQuotaErrorCode,
+  getModelMetadataById,
+  getRoutingSlotModel,
+  isAutoModeModelId,
+  isManagedTrafficPermitted,
+  isModelLive,
+} from '@agiworkforce/types';
 
-export const COMPUTER_USE_MODEL: string = getRoutingSlotModel('computer_use');
+export const COMPUTER_USE_MODEL: string = getRoutingSlotModel('browser_dom');
 
-export function resolveComputerUseModel(tier: string | null | undefined): string {
-  if (!tier) return COMPUTER_USE_MODEL;
-  try {
-    return getDefaultModelFor(tier, 'computer-use');
-  } catch {
-    return COMPUTER_USE_MODEL;
+export function resolveManagedComputerUseModel(
+  access: Pick<ManagedModelAccess, 'subscriptionTier' | 'modelIds' | 'allowedAutoModes'>,
+  selection: string = 'auto',
+): string {
+  const requestedSelection = selection.trim();
+  if (
+    isAutoModeModelId(requestedSelection) &&
+    requestedSelection !== 'auto' &&
+    !access.allowedAutoModes.includes(requestedSelection)
+  ) {
+    throw new Error('The selected Auto profile is not available for this account.');
   }
+  let modelId = requestedSelection;
+  if (isAutoModeModelId(requestedSelection)) {
+    if (access.modelIds.length === 0)
+      throw new Error('No models are available for browser actions on this account.');
+    const route = resolveAutoRoute({
+      selection: requestedSelection,
+      taskType: 'computer-use',
+      subscriptionTier: access.subscriptionTier,
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'chrome/managed-browser-task',
+      requiredCapabilities: ['imageInput', 'functionCalling', 'streaming'],
+      organizationPolicy: {
+        allowedProviders: [],
+        blockedProviders: [],
+        allowedModels: [...access.modelIds],
+        blockedModels: [],
+      },
+    });
+    if (route.status !== 'selected')
+      throw new Error('The selected Auto profile has no admitted browser model for this account.');
+    modelId = route.modelKey;
+  }
+  const metadata = getModelMetadataById(modelId);
+  if (
+    !metadata ||
+    !isModelLive(metadata) ||
+    metadata.status === 'deprecated' ||
+    !isManagedTrafficPermitted(metadata.id)
+  ) {
+    throw new Error('The selected model is unavailable for Managed Cloud browser actions.');
+  }
+  if (
+    !access.modelIds.includes(metadata.id) ||
+    !canAccessModelForSubscriptionTier(metadata.id, access.subscriptionTier)
+  ) {
+    throw new Error('The selected model is not available for browser actions on this account.');
+  }
+  if (
+    !metadata.capabilities.tools ||
+    !metadata.capabilities.vision ||
+    !metadata.capabilities.streaming
+  ) {
+    throw new Error(`${metadata.name} does not support browser tools, screenshots, and streaming.`);
+  }
+  return metadata.id;
 }
 
-export const DEFAULT_GATEWAY_BASE = 'https://api.agiworkforce.com';
+export const DEFAULT_GATEWAY_BASE = configuredAgiWebOrigin() ?? '';
 
 const GATEWAY_URL_OVERRIDE_KEY = 'agi_gateway_url';
 const COMPUTER_USE_MAX_SSE_FRAME_CHARS = 1_048_576;
-
-export interface ToolDefinition {
-  type: 'function';
-  function: {
-    name: string;
-    description: string;
-    parameters: {
-      type: 'object';
-      properties: Record<string, { type: string; description: string; enum?: string[] }>;
-      required?: string[];
-    };
-  };
-}
-
-export const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
-  {
-    type: 'function',
-    function: {
-      name: 'ask_user_to_take_over',
-      description:
-        'Hand the page to the user and wait. Use it when the page needs the user to sign in, ' +
-        'solve a CAPTCHA or other human check, or enter a password, payment card or other ' +
-        'sensitive detail. Returns when the user hands the page back, with the page as it is then.',
-      parameters: {
-        type: 'object',
-        properties: {
-          reason: {
-            type: 'string',
-            description: 'What the user needs to do, in one short sentence.',
-          },
-        },
-        required: ['reason'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'screenshot',
-      description:
-        'Capture a screenshot of the current browser tab. Returns a base64 PNG image. Use this to see the current state of the page before and after actions.',
-      parameters: {
-        type: 'object',
-        properties: {},
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'click',
-      description:
-        'Click on a DOM element. PREFER using index from read_dom (e.g. index:3). ' +
-        'Fall back to CSS selector or screen coordinates only when index is unavailable.',
-      parameters: {
-        type: 'object',
-        properties: {
-          index: {
-            type: 'number',
-            description:
-              'PREFERRED: the integer index of the element as shown in read_dom output ' +
-              '(e.g. [3] button "Submit" → index 3). Re-call read_dom if the index is stale.',
-          },
-          selector: {
-            type: 'string',
-            description:
-              'CSS selector for the element to click. Fallback when index is unavailable.',
-          },
-          x: {
-            type: 'number',
-            description:
-              'X coordinate to click (pixels from left). Use with y when only coords are known.',
-          },
-          y: {
-            type: 'number',
-            description:
-              'Y coordinate to click (pixels from top). Use with x when only coords are known.',
-          },
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'scroll',
-      description: 'Scroll the page by dy pixels (positive = down) or scroll a selector into view.',
-      parameters: {
-        type: 'object',
-        properties: {
-          dy: {
-            type: 'number',
-            description:
-              'Pixels to scroll vertically. Positive = scroll down. Provide either dy or toSelector.',
-          },
-          toSelector: {
-            type: 'string',
-            description: 'CSS selector to scroll into view. Provide either toSelector or dy.',
-          },
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'type',
-      description:
-        'Type text into an input element. PREFER supplying index to target the element directly ' +
-        '(avoids a separate click). The driver will click-focus the indexed element before typing.',
-      parameters: {
-        type: 'object',
-        properties: {
-          text: {
-            type: 'string',
-            description: 'The text to type.',
-          },
-          index: {
-            type: 'number',
-            description:
-              'PREFERRED: integer index of the input element from read_dom. ' +
-              'The driver focuses the element for you. Omit only when focus is already set.',
-          },
-        },
-        required: ['text'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'read_dom',
-      description:
-        'Get a compact text summary of all interactable elements (buttons, links, inputs) and visible page text. Use this to orient yourself before deciding which action to take.',
-      parameters: {
-        type: 'object',
-        properties: {},
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'navigate',
-      description: 'Navigate the browser tab to a URL (http or https only).',
-      parameters: {
-        type: 'object',
-        properties: {
-          url: {
-            type: 'string',
-            description: 'The URL to navigate to. Must be http:// or https://.',
-          },
-        },
-        required: ['url'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'download_file',
-      description:
-        "Download a file to the user's computer from the page you are on. The URL must be on " +
-        "the page's own origin or on the user's approved-site list. Chrome chooses the filename.",
-      parameters: {
-        type: 'object',
-        properties: {
-          url: {
-            type: 'string',
-            description:
-              'The file URL to download. May be relative to the current page. http or https only.',
-          },
-        },
-        required: ['url'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'read_console',
-      description:
-        'Read the console messages and uncaught errors the page has produced while this run has ' +
-        'been attached. Use it to find out why an action had no visible effect.',
-      parameters: {
-        type: 'object',
-        properties: {
-          pattern: {
-            type: 'string',
-            description: 'Case-insensitive regular expression the message text must match.',
-          },
-          level: {
-            type: 'string',
-            description: 'Return only messages at this level.',
-            enum: ['error', 'warning', 'info', 'log', 'debug'],
-          },
-          limit: {
-            type: 'number',
-            description: 'Return at most this many of the most recent messages.',
-          },
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'read_network',
-      description:
-        'Read the requests the page has made while this run has been attached: URL, method, ' +
-        'status, resource type, timing and size. Bodies and headers are never captured.',
-      parameters: {
-        type: 'object',
-        properties: {
-          pattern: {
-            type: 'string',
-            description: 'Case-insensitive regular expression the request URL must match.',
-          },
-          resourceType: {
-            type: 'string',
-            description:
-              'Return only requests of this CDP resource type, for example XHR or Fetch.',
-          },
-          failedOnly: {
-            type: 'string',
-            description: 'Pass "true" to return only requests that failed or returned status 400+.',
-          },
-          limit: {
-            type: 'number',
-            description: 'Return at most this many of the most recent requests.',
-          },
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'find',
-      description:
-        'Find an element on the page by describing what it looks like or does. Returns a CSS selector or coordinate pair. Use read_dom first if possible.',
-      parameters: {
-        type: 'object',
-        properties: {
-          description: {
-            type: 'string',
-            description: 'Natural language description of the element to find.',
-          },
-        },
-        required: ['description'],
-      },
-    },
-  },
-];
 
 export interface TextMessage {
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -309,26 +132,158 @@ export interface CloudAgentResponse {
   tokensUsed: number;
 }
 
-function mergeToolCallDelta(
-  acc: ToolCall[],
-  delta: Array<{
-    index: number;
-    id?: string;
-    type?: string;
-    function?: { name?: string; arguments?: string };
-  }>,
-): void {
-  for (const part of delta) {
-    const idx = part.index;
-    if (!acc[idx]) {
-      acc[idx] = { id: '', type: 'function', function: { name: '', arguments: '' } };
-    }
-    const entry = acc[idx];
-    if (!entry) continue;
-    if (part.id) entry.id += part.id;
-    if (part.function?.name) entry.function.name += part.function.name;
-    if (part.function?.arguments) entry.function.arguments += part.function.arguments;
+export class CloudAgentGatewayError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = 'CloudAgentGatewayError';
   }
+}
+
+function publicGatewayMessage(message: string | undefined): string | null {
+  const text = message?.trim();
+  if (
+    !text ||
+    text.length > 300 ||
+    /[\r\n]|^[{[]|<[^>]+>|\/(?:Users|home|private|var|tmp)\/|\b(?:TypeError|ReferenceError|SyntaxError):|\bat\s+\S+:\d+:\d+/.test(
+      text,
+    ) ||
+    scanSecrets(text).length > 0
+  )
+    return null;
+  return text;
+}
+
+function streamingGatewayFailure(raw: unknown, status: number): CloudAgentGatewayError {
+  const record = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const parsed = AgentEventSchema.safeParse({ ...record, type: 'error' });
+  const event = parsed.success && parsed.data.type === 'error' ? parsed.data : undefined;
+  const code = publicGatewayMessage(event?.code) ?? undefined;
+  return new CloudAgentGatewayError(
+    classifyManagedQuotaErrorCode(code)?.reason ??
+      publicGatewayMessage(event?.message) ??
+      'AGI Cloud request failed while streaming. Try again.',
+    status,
+    code,
+  );
+}
+
+function invalidBrowserAction(status: number): never {
+  throw new CloudAgentGatewayError(
+    'AGI Cloud returned an invalid browser action. Please try again.',
+    status,
+    'protocol_error',
+  );
+}
+
+function mergeToolCallDelta(acc: Map<number, ToolCall>, delta: unknown[], status: number): void {
+  for (const raw of delta) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) invalidBrowserAction(status);
+    const part = raw as Record<string, unknown>;
+    const idx = part['index'];
+    const id = part['id'];
+    const type = part['type'];
+    const fn = part['function'];
+    if (
+      typeof idx !== 'number' ||
+      !Number.isSafeInteger(idx) ||
+      idx < 0 ||
+      (id !== undefined && typeof id !== 'string') ||
+      (type !== undefined && type !== 'function') ||
+      (fn !== undefined && (!fn || typeof fn !== 'object' || Array.isArray(fn)))
+    )
+      invalidBrowserAction(status);
+    const functionDelta = fn as Record<string, unknown> | undefined;
+    const name = functionDelta?.['name'];
+    const args = functionDelta?.['arguments'];
+    if (
+      (name !== undefined && typeof name !== 'string') ||
+      (args !== undefined && typeof args !== 'string')
+    )
+      invalidBrowserAction(status);
+    let entry = acc.get(idx);
+    if (!entry) {
+      entry = { id: '', type: 'function', function: { name: '', arguments: '' } };
+      acc.set(idx, entry);
+    }
+    if (typeof id === 'string') entry.id += id;
+    if (typeof name === 'string') entry.function.name += name;
+    if (typeof args === 'string') entry.function.arguments += args;
+  }
+}
+
+function readCompleteToolCalls(
+  calls: unknown,
+  ids: unknown,
+  status: number,
+  tools: readonly ToolDefinition[],
+): ToolCall[] {
+  const invalid = (): never => invalidBrowserAction(status);
+  if (
+    !Array.isArray(ids) ||
+    ids.length === 0 ||
+    ids.some((id) => typeof id !== 'string' || !id.trim()) ||
+    new Set(ids).size !== ids.length ||
+    !Array.isArray(calls) ||
+    calls.length !== ids.length
+  )
+    return invalid();
+  return calls.map((raw: unknown, index): ToolCall => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return invalid();
+    const call = raw as Record<string, unknown>;
+    const fn = call['function'];
+    if (
+      call['index'] !== index ||
+      call['type'] !== 'function' ||
+      call['id'] !== ids[index] ||
+      !fn ||
+      typeof fn !== 'object' ||
+      Array.isArray(fn)
+    )
+      return invalid();
+    const { name, arguments: args } = fn as Record<string, unknown>;
+    if (
+      typeof name !== 'string' ||
+      typeof args !== 'string' ||
+      !tools.some((tool) => tool.function.name === name)
+    )
+      return invalid();
+    let parsedArgs: unknown;
+    try {
+      parsedArgs = JSON.parse(args);
+    } catch {
+      return invalid();
+    }
+    if (!parsedArgs || typeof parsedArgs !== 'object' || Array.isArray(parsedArgs))
+      return invalid();
+    return { id: ids[index] as string, type: 'function', function: { name, arguments: args } };
+  });
+}
+
+function readToolHandoff(
+  marker: unknown,
+  calls: unknown,
+  finishReason: unknown,
+  status: number,
+  tools: readonly ToolDefinition[],
+): ToolCall[] {
+  if (
+    !marker ||
+    typeof marker !== 'object' ||
+    Array.isArray(marker) ||
+    finishReason !== 'tool_calls'
+  ) {
+    return invalidBrowserAction(status);
+  }
+  return readCompleteToolCalls(
+    calls,
+    (marker as Record<string, unknown>)['tool_call_ids'],
+    status,
+    tools,
+  );
 }
 
 /**
@@ -345,7 +300,54 @@ export async function callCloud(
   gatewayBase: string = DEFAULT_GATEWAY_BASE,
   signal?: AbortSignal,
   model: string = COMPUTER_USE_MODEL,
-  extraTools: readonly ToolDefinition[] = [],
+  tools: readonly ToolDefinition[] = getBrowserToolDefinitions(false),
+): Promise<CloudAgentResponse> {
+  const controller = new AbortController();
+  const cancel = (): void => controller.abort(signal?.reason);
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const resetTimeout = (): void => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      controller.abort(
+        new CloudAgentGatewayError(
+          'AGI Cloud browser response timed out. Try again.',
+          0,
+          'timeout',
+        ),
+      );
+    }, MANAGED_CHAT_DEFAULT_TIMEOUT_MS);
+  };
+  signal?.addEventListener('abort', cancel, { once: true });
+  if (signal?.aborted) cancel();
+  resetTimeout();
+  try {
+    return await callCloudRequest(
+      messages,
+      token,
+      gatewayBase,
+      controller.signal,
+      model,
+      tools,
+      resetTimeout,
+    );
+  } catch (error) {
+    if (controller.signal.aborted && controller.signal.reason instanceof Error)
+      throw controller.signal.reason;
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener('abort', cancel);
+  }
+}
+
+async function callCloudRequest(
+  messages: AgentMessage[],
+  token: string,
+  gatewayBase: string,
+  signal: AbortSignal,
+  model: string,
+  tools: readonly ToolDefinition[],
+  resetTimeout: () => void,
 ): Promise<CloudAgentResponse> {
   const validatedBase = validateGatewayUrl(gatewayBase);
   if (!validatedBase) {
@@ -357,7 +359,7 @@ export async function callCloud(
   const body = JSON.stringify({
     model,
     messages,
-    tools: [...BROWSER_TOOL_DEFINITIONS, ...extraTools],
+    tools,
     tool_choice: 'auto',
     stream: true,
     max_tokens: 2048,
@@ -378,28 +380,45 @@ export async function callCloud(
   });
 
   if (!response.ok) {
-    const errText = await response.text().catch(() => '');
+    const errText = await readBoundedErrorBody(response);
+    let gatewayError: ToolApprovalResumeErrorResponse['error'] | undefined;
+    try {
+      const parsed = ToolApprovalResumeErrorResponseSchema.safeParse(JSON.parse(errText));
+      if (parsed.success) gatewayError = parsed.data.error;
+    } catch {
+      gatewayError = undefined;
+    }
     if (
       response.status === 403 &&
       (errText.includes('public_launch_blocked') ||
         errText.includes('managed_compute_private_beta') ||
         errText.includes('not_private_beta'))
     ) {
-      throw new Error(
-        'callCloud: AGI Cloud is unavailable (403). Managed cloud is public alpha and open ' +
-          'by default, so this is either a temporary incident gate (the ' +
-          'AGI_MANAGED_COMPUTE_PRIVATE_BETA kill-switch is set off on the server) or your ' +
-          'account is not on a paid plan, which computer-use requires. Sign in with a paid ' +
-          'account, or try again later if the service is temporarily gated.',
+      throw new CloudAgentGatewayError(
+        'AGI Cloud browser actions are unavailable for this account right now.',
+        response.status,
+        gatewayError?.code,
       );
     }
     if (response.status === 401) {
-      throw new Error(
-        'callCloud: authentication failed (401). ' +
-          'Sign in to AGI Cloud again from the extension drawer.',
+      throw new CloudAgentGatewayError(
+        'Sign in to AGI Cloud again from the extension drawer.',
+        response.status,
+        gatewayError?.code,
       );
     }
-    throw new Error(`callCloud: gateway returned ${response.status}: ${errText.slice(0, 300)}`);
+    const quota = classifyManagedQuotaErrorCode(gatewayError?.code);
+    const fallback =
+      response.status === 429
+        ? 'AGI Cloud cannot accept this request right now. Check your usage or try again later.'
+        : response.status === 403
+          ? 'AGI Cloud browser actions are not available for this account.'
+          : 'AGI Cloud is temporarily unavailable. Try again later.';
+    throw new CloudAgentGatewayError(
+      quota?.reason ?? publicGatewayMessage(gatewayError?.message) ?? fallback,
+      response.status,
+      gatewayError?.code,
+    );
   }
 
   const reader = response.body?.getReader();
@@ -415,21 +434,35 @@ export async function callCloud(
   const decoder = new TextDecoder();
   const sseDecoder = new ServerSentEventDecoder(COMPUTER_USE_MAX_SSE_FRAME_CHARS);
   let textContent = '';
-  const toolCallsAcc: ToolCall[] = [];
+  const contentSplitter = new ThinkingTagSplitter();
+  const toolCallsAcc = new Map<number, ToolCall>();
+  let toolHandoff: ToolCall[] | null = null;
   let isDone = false;
   let tokensUsed = 0;
+  let streamedCharacters = 0;
 
   const consumeSseData = (data: string): void => {
+    streamedCharacters += data.length;
+    if (streamedCharacters > MANAGED_CHAT_MAX_STREAMED_TEXT_CHARS)
+      throw new CloudAgentGatewayError(
+        'AGI Cloud returned too much browser-action data.',
+        response.status,
+        'protocol_error',
+      );
     if (data === '[DONE]') {
       isDone = true;
       return;
     }
 
     let parsed: {
+      error?: unknown;
       choices?: Array<{
         finish_reason?: string | null;
         delta?: {
           content?: string | null;
+          x_stream_error?: unknown;
+          x_agent_event?: unknown;
+          x_tool_handoff?: unknown;
           tool_calls?: Array<{
             index: number;
             id?: string;
@@ -451,6 +484,10 @@ export async function callCloud(
       return;
     }
 
+    if (parsed?.error !== undefined) {
+      throw streamingGatewayFailure(parsed.error, response.status);
+    }
+
     if (parsed.usage?.total_tokens) {
       tokensUsed = parsed.usage.total_tokens;
     } else if (
@@ -463,17 +500,76 @@ export async function callCloud(
     const choice = parsed.choices?.[0];
     if (!choice) return;
 
-    if (choice.finish_reason === 'stop') isDone = true;
-
     const delta = choice.delta;
-    if (!delta) return;
+    if (delta?.x_stream_error !== undefined && delta.x_stream_error !== null) {
+      throw streamingGatewayFailure(delta.x_stream_error, response.status);
+    }
+    const agentEvent = parseAgentEventDelta(delta?.x_agent_event)?.event;
+    if (agentEvent?.type === 'error') {
+      throw streamingGatewayFailure(agentEvent, response.status);
+    }
+    if (
+      choice.finish_reason === 'error' ||
+      (agentEvent?.type === 'stop' && agentEvent.reason === 'error')
+    ) {
+      throw streamingGatewayFailure(undefined, response.status);
+    }
+    if (
+      choice.finish_reason !== undefined &&
+      choice.finish_reason !== null &&
+      choice.finish_reason !== 'stop' &&
+      choice.finish_reason !== 'tool_calls'
+    )
+      throw new CloudAgentGatewayError(
+        'AGI Cloud could not complete the browser response. No partial action was executed.',
+        response.status,
+        'protocol_error',
+      );
+
+    if (choice.finish_reason === 'stop' && !toolHandoff) isDone = true;
+
+    if (!delta) {
+      if (choice.finish_reason === 'stop' && !toolHandoff) toolCallsAcc.clear();
+      return;
+    }
 
     if (typeof delta.content === 'string') {
-      textContent += delta.content;
+      for (const part of contentSplitter.push(delta.content)) {
+        if (part.type === 'text') textContent += part.text;
+      }
     }
-    if (Array.isArray(delta.tool_calls)) {
-      mergeToolCallDelta(toolCallsAcc, delta.tool_calls);
+    if (delta.tool_calls !== undefined && !Array.isArray(delta.tool_calls)) {
+      invalidBrowserAction(response.status);
     }
+    if (delta.x_tool_handoff !== undefined) {
+      const snapshot = readToolHandoff(
+        delta.x_tool_handoff,
+        delta.tool_calls,
+        choice.finish_reason,
+        response.status,
+        tools,
+      );
+      if (toolHandoff && JSON.stringify(toolHandoff) !== JSON.stringify(snapshot)) {
+        throw new CloudAgentGatewayError(
+          'AGI Cloud returned conflicting browser actions. Please try again.',
+          response.status,
+          'protocol_error',
+        );
+      }
+      toolHandoff = snapshot;
+      toolCallsAcc.clear();
+      snapshot.forEach((call, index) => toolCallsAcc.set(index, call));
+    } else if (Array.isArray(delta.tool_calls)) {
+      if (toolHandoff) {
+        throw new CloudAgentGatewayError(
+          'AGI Cloud changed a browser action after it was complete. Please try again.',
+          response.status,
+          'protocol_error',
+        );
+      }
+      mergeToolCallDelta(toolCallsAcc, delta.tool_calls, response.status);
+    }
+    if (choice.finish_reason === 'stop' && !toolHandoff) toolCallsAcc.clear();
   };
 
   try {
@@ -488,6 +584,7 @@ export async function callCloud(
         throw new DOMException('Computer-use cloud request was cancelled', 'AbortError');
       }
       if (done) break;
+      if (value.length > 0) resetTimeout();
 
       for (const event of sseDecoder.push(decoder.decode(value, { stream: true }))) {
         consumeSseData(event.data);
@@ -516,16 +613,39 @@ export async function callCloud(
       // An event without its terminating blank line is incomplete by SSE rules
       // and is deliberately discarded rather than interpreted as valid output.
     }
+    if (!isDone)
+      throw new CloudAgentGatewayError(
+        'AGI Cloud disconnected before completing the browser response. No partial action was executed.',
+        response.status,
+        'protocol_error',
+      );
+  } catch (error) {
+    void reader.cancel(error).catch(() => undefined);
+    throw error;
   } finally {
     signal?.removeEventListener('abort', cancelReader);
+    void reader.cancel().catch(() => undefined);
+    reader.releaseLock();
   }
 
+  for (const part of contentSplitter.flush(true)) {
+    if (part.type === 'text') textContent += part.text;
+  }
+  contentSplitter.closeThinking();
   const message: AssistantMessage = {
     role: 'assistant',
     content: textContent || null,
   };
-  if (toolCallsAcc.length > 0) {
-    message.tool_calls = toolCallsAcc;
+  if (toolCallsAcc.size > 0) {
+    const calls = Array.from(toolCallsAcc.entries())
+      .sort(([first], [second]) => first - second)
+      .map(([, call], index) => ({ index, ...call }));
+    message.tool_calls = readCompleteToolCalls(
+      calls,
+      calls.map((call) => call.id),
+      response.status,
+      tools,
+    );
   }
 
   return { message, isDone, tokensUsed };

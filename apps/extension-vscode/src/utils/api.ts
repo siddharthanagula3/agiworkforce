@@ -176,7 +176,6 @@ const ACCOUNT_TOKEN_EXPIRES_AT_KEY = 'agiWorkforce.accountTokenExpiresAt';
 const ACCOUNT_TOKEN_EXPIRED_KEY = 'agiWorkforce.accountTokenExpired';
 const ACCOUNT_REFRESH_TOKEN_KEY = 'agiWorkforce.accountRefreshToken';
 const DEFAULT_ENDPOINT = 'https://agiworkforce.com/api/llm/v1';
-const DEFAULT_GATEWAY_ORIGIN = 'https://api.agiworkforce.com';
 
 export async function getApiKey(secrets: vscode.SecretStorage): Promise<string | undefined> {
   return secrets.get(SECRET_KEY);
@@ -402,7 +401,7 @@ export function getCloudWebOrigin(): string {
 }
 
 export function getCloudGatewayOrigin(): string {
-  return DEFAULT_GATEWAY_ORIGIN;
+  return getCloudWebOrigin();
 }
 
 function getModel(): string {

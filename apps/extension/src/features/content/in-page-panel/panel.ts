@@ -20,7 +20,12 @@
 import { sanitizePageText } from '../../../background/policy';
 import { isDomSmallEnoughToRead } from '../../../dom-helpers';
 import type { InPagePromptOutcome, InPagePromptResponse } from '../../../types';
-import { getPageActions, truncatePageText } from './pageActions';
+import {
+  boundPageText,
+  getPageActions,
+  MAX_PAGE_TEXT_CHARACTERS,
+  truncatePageText,
+} from './pageActions';
 import type { PageAction } from './pageActions';
 import { readYouTubeTranscript } from './youtubeTranscript';
 import { buildPanelStyles, PANEL_SLIDE_MS } from './panelStyles';
@@ -341,7 +346,7 @@ function readVisiblePageText(): string {
   const mainText = main?.innerText.trim() ?? '';
   const raw =
     mainText.length >= MIN_MAIN_REGION_CHARS ? mainText : (document.body?.innerText ?? '');
-  return sanitizePageText(truncatePageText(raw));
+  return boundPageText(sanitizePageText(raw)).text;
 }
 
 function capturePageContext(): PageContext {
@@ -366,8 +371,8 @@ function updateDisclosure(
   }
   const volume =
     capturedChars === null
-      ? `up to 30,000 characters of ${content}`
-      : `${capturedChars.toLocaleString()} characters of ${content} (30,000 maximum)`;
+      ? `up to ${MAX_PAGE_TEXT_CHARACTERS.toLocaleString()} characters of ${content}`
+      : `${capturedChars.toLocaleString()} characters of ${content} (${MAX_PAGE_TEXT_CHARACTERS.toLocaleString()} maximum)`;
   disclosure.textContent =
     `This panel can send ${volume} from ${source} to ` +
     'AGI Managed Cloud with your requests. The extension redacts patterns that resemble ' +

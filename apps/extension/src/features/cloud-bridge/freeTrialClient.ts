@@ -7,6 +7,8 @@ import {
 import {
   createManagedCloudAgentRunClient,
   MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENT_COUNT,
+  ManagedCloudChatAttachmentContentPartSchema,
   parseAgentEventDelta,
   parseGeneratedFilesDelta,
   parseInteractiveCardDelta,
@@ -23,6 +25,7 @@ import {
   type ToolApprovalResumeRequest,
   type ToolInputResponseWire,
   type ToolInputResumeRequest,
+  type ManagedCloudChatAttachmentContentPart,
 } from '@agiworkforce/cloud-contracts';
 import {
   classifyManagedQuotaErrorCode,
@@ -52,6 +55,10 @@ import { configuredAgiWebOrigin, DEFAULT_AGI_WEB_ORIGIN } from '../../lib/webOri
 import { platformRequestHeaders } from '../../platformHeaders';
 import { logger } from '../../utils';
 import type { MemoryCommandKind, MemoryCommandStatus } from './memoryClient';
+import {
+  ThinkingTagSplitter,
+  type ThinkingTagPart,
+} from '@agiworkforce/provider-protocol/thinking-tag-splitter';
 
 // The plan default the server derives, so the extension never names a model free cannot reach.
 export const FREE_TRIAL_MODEL: string = getDefaultModelFor(normalizeBillingPlanTier(null), 'chat');
@@ -403,6 +410,10 @@ function isDevBuild(): boolean {
 }
 
 export async function clearAuthToken(): Promise<void> {
+  await clearLocalAuth(false);
+}
+
+async function clearLocalAuth(endClerkSession: boolean): Promise<void> {
   let previousOwner: ManagedCloudOwner | undefined;
   try {
     previousOwner = (await getManagedCloudAuthContext())?.owner;
@@ -420,10 +431,12 @@ export async function clearAuthToken(): Promise<void> {
   } catch {
     // A restarting worker has no surviving in-memory computer-use run.
   }
-  try {
-    await signOutClerk();
-  } catch {
-    // Continue removing local remnants even when the network sign-out fails.
+  if (endClerkSession) {
+    try {
+      await signOutClerk();
+    } catch {
+      // Continue removing local remnants even when the network sign-out fails.
+    }
   }
   try {
     if (
@@ -461,18 +474,18 @@ export async function signOutOfAccount(): Promise<{ webSessionEnded: boolean }> 
     console.warn('[AGI] Ending the web session failed:', error);
     webSessionEnded = false;
   }
-  await clearAuthToken();
+  await clearLocalAuth(true);
   await chrome.storage.local.remove(LEGACY_ACCOUNT_STORAGE_KEYS);
   return { webSessionEnded };
 }
 
 export type FreeTrialContentPart =
   | { type: 'text'; text: string }
+  | ManagedCloudChatAttachmentContentPart
   | {
       type: 'image_url';
       image_url: { url: string; detail: 'auto' | 'low' | 'high' };
-    }
-  | { type: 'file'; file: { asset_id: string } };
+    };
 
 export interface ManagedChatFileAttachment {
   assetId: string;
@@ -489,7 +502,7 @@ export interface FreeTrialMessage {
 
 const SUPPORTED_IMAGE_DATA_URL = /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/]+={0,2}$/i;
 
-function imageDataUrlByteLength(value: string): number {
+export function imageDataUrlByteLength(value: string): number {
   if (!SUPPORTED_IMAGE_DATA_URL.test(value)) {
     throw new Error('Unsupported attachment: expected a base64 PNG, JPEG, WebP, or GIF image');
   }
@@ -557,13 +570,8 @@ function assertMessageShape(message: FreeTrialMessage): void {
       continue;
     }
     if (part.type === 'file') {
-      if (
-        !part.file ||
-        typeof part.file.asset_id !== 'string' ||
-        !MANAGED_CHAT_FILE_ASSET_ID.test(part.file.asset_id)
-      ) {
-        throw new Error('Invalid managed chat file part');
-      }
+      if (!ManagedCloudChatAttachmentContentPartSchema.safeParse(part).success)
+        throw new Error('Invalid managed chat uploaded-file reference');
       continue;
     }
     if (
@@ -577,11 +585,20 @@ function assertMessageShape(message: FreeTrialMessage): void {
   }
 }
 
+function lastUserTurnIndex(messages: readonly FreeTrialMessage[]): number {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === 'user') return index;
+  }
+  return -1;
+}
+
 function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMessage[] {
   const window = selectBoundedMessageWindow(messages);
+  const currentUserTurnIndex = lastUserTurnIndex(window);
   let remaining = MANAGED_CHAT_MAX_INPUT_CHARS;
   const reversed: FreeTrialMessage[] = [];
   let attachmentCount = 0;
+  let uploadedFileCount = 0;
   let attachmentBytes = 0;
 
   for (let index = window.length - 1; index >= 0; index -= 1) {
@@ -607,10 +624,41 @@ function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMes
         if (text) parts.unshift({ ...part, text });
         continue;
       }
+      if (part.type === 'file') {
+        if (
+          uploadedFileCount + attachmentCount >=
+          Math.min(MAX_CHAT_ATTACHMENT_COUNT, MANAGED_CHAT_MAX_ATTACHMENTS)
+        ) {
+          if (index === currentUserTurnIndex)
+            throw new Error('Managed chat attachment budget exceeded');
+          parts.unshift({
+            type: 'text',
+            text: '[An earlier uploaded attachment was omitted because the conversation reached its attachment limit.]',
+          });
+          continue;
+        }
+        uploadedFileCount += 1;
+        parts.unshift(part);
+        continue;
+      }
+      if (
+        uploadedFileCount > 0 &&
+        uploadedFileCount + attachmentCount >=
+          Math.min(MAX_CHAT_ATTACHMENT_COUNT, MANAGED_CHAT_MAX_ATTACHMENTS) &&
+        index < currentUserTurnIndex
+      ) {
+        parts.unshift({
+          type: 'text',
+          text: '[An earlier image was omitted because the conversation reached its attachment limit.]',
+        });
+        continue;
+      }
       attachmentCount += 1;
       if (part.type === 'image_url') attachmentBytes += imageDataUrlByteLength(part.image_url.url);
       if (
         attachmentCount > MANAGED_CHAT_MAX_ATTACHMENTS ||
+        attachmentCount + uploadedFileCount >
+          Math.min(MAX_CHAT_ATTACHMENT_COUNT, MANAGED_CHAT_MAX_ATTACHMENTS) ||
         attachmentBytes > MANAGED_CHAT_MAX_ATTACHMENT_BYTES
       ) {
         throw new Error('Managed chat attachment budget exceeded');
@@ -1065,7 +1113,11 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
     ...(citations.length > 0 || searchResults.length > 0
       ? { sources: { citations, results: searchResults } }
       : {}),
-    terminal: done === true || (typeof finishReason === 'string' && finishReason.length > 0),
+    terminal:
+      done === true ||
+      (typeof finishReason === 'string' &&
+        finishReason.length > 0 &&
+        finishReason !== 'tool_calls'),
     recognized: true,
   };
 }
@@ -1138,7 +1190,7 @@ function accountRefusal(status: number, body: string): Extract<FreeTrialChunk, {
   };
 }
 
-async function readBoundedErrorBody(response: Response): Promise<string> {
+export async function readBoundedErrorBody(response: Response): Promise<string> {
   const reader = response.body?.getReader();
   if (!reader) {
     try {
@@ -1412,6 +1464,17 @@ export async function* streamFreeChat(
     let sawRichOutput = false;
     let streamedTextCharacters = 0;
     let unacknowledgedPublicText = '';
+    const contentSplitter = new ThinkingTagSplitter();
+    const publicTextChunks = (parts: readonly ThinkingTagPart[]): FreeTrialChunk[] => {
+      const chunks: FreeTrialChunk[] = [];
+      for (const part of parts) {
+        if (part.type !== 'text' || !part.text) continue;
+        sawVisibleText = true;
+        unacknowledgedPublicText += part.text;
+        chunks.push({ type: 'text', text: part.text });
+      }
+      return chunks;
+    };
 
     const publishRunReference = (
       patch: Partial<ManagedCloudAgentRunReference>,
@@ -1434,6 +1497,8 @@ export async function* streamFreeChat(
       )) {
         const frame = parseSseData(data);
         if (frame.error) {
+          chunks.push(...publicTextChunks(contentSplitter.flush(true)));
+          contentSplitter.closeThinking();
           chunks.push(frame.error);
           return { chunks, terminal: true };
         }
@@ -1447,9 +1512,7 @@ export async function* streamFreeChat(
             });
             return { chunks, terminal: true };
           }
-          sawVisibleText = true;
-          unacknowledgedPublicText += frame.text;
-          chunks.push({ type: 'text', text: frame.text });
+          chunks.push(...publicTextChunks(contentSplitter.push(frame.text)));
         }
         if (frame.agentEvent) {
           sawAgentActivity = true;
@@ -1477,6 +1540,8 @@ export async function* streamFreeChat(
         }
         if (frame.sources) chunks.push({ type: 'sources', ...frame.sources });
         if (frame.terminal) {
+          chunks.push(...publicTextChunks(contentSplitter.flush(true)));
+          contentSplitter.closeThinking();
           if (!sawVisibleText && !sawAgentActivity && !sawRichOutput) {
             chunks.push({
               type: 'error',
@@ -1502,6 +1567,8 @@ export async function* streamFreeChat(
 
     const followDurableRun = async function* (): AsyncGenerator<FreeTrialChunk> {
       if (!runReference) return;
+      yield* publicTextChunks(contentSplitter.flush(true));
+      contentSplitter.closeThinking();
       const client = createManagedCloudAgentRunClient({
         baseUrl: FREE_TRIAL_GATEWAY,
         getAuthToken: async () => token,
@@ -1611,6 +1678,8 @@ export async function* streamFreeChat(
       while (true) {
         if (controller.signal.aborted) {
           await reader.cancel().catch(() => undefined);
+          yield* publicTextChunks(contentSplitter.flush(true));
+          contentSplitter.closeThinking();
           yield abortError();
           return;
         }
@@ -1633,6 +1702,8 @@ export async function* streamFreeChat(
 
       const final = sseDecoder.finish();
       if (final.incomplete) {
+        yield* publicTextChunks(contentSplitter.flush(true));
+        contentSplitter.closeThinking();
         yield {
           type: 'error',
           message: 'AGI Cloud closed the stream in the middle of an event.',
@@ -1652,6 +1723,8 @@ export async function* streamFreeChat(
       if (runReference) {
         for await (const chunk of followDurableRun()) yield chunk;
       } else {
+        yield* publicTextChunks(contentSplitter.flush(true));
+        contentSplitter.closeThinking();
         yield {
           type: 'error',
           message: 'AGI Cloud closed the stream before completion.',
@@ -1661,6 +1734,8 @@ export async function* streamFreeChat(
     } catch (error) {
       if (controller.signal.aborted) {
         reader.cancel().catch(() => {});
+        yield* publicTextChunks(contentSplitter.flush(true));
+        contentSplitter.closeThinking();
         yield abortError();
         return;
       }
@@ -1668,6 +1743,8 @@ export async function* streamFreeChat(
         error instanceof ServerSentEventFrameLimitError ||
         error instanceof ManagedChatProtocolError
       ) {
+        yield* publicTextChunks(contentSplitter.flush(true));
+        contentSplitter.closeThinking();
         yield {
           type: 'error',
           message: error.message,

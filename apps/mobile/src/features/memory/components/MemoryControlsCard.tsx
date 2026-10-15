@@ -1,5 +1,6 @@
 import { View } from 'react-native';
-import { Brain, MessageSquareText, Sparkles } from 'lucide-react-native';
+import { Brain, LockKeyhole, MessageSquareText, Sparkles } from 'lucide-react-native';
+import { SENSITIVE_MEMORY_SUBJECTS } from '@agiworkforce/context';
 import { Text } from '@/components/ui/text';
 import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
@@ -10,19 +11,25 @@ export interface MemoryControlsCardProps {
   memoryEnabled: boolean;
   referencePastChats: boolean;
   generateMemoryFromHistory: boolean;
+  includeSensitiveTopics: boolean;
   onMemoryEnabledChange: (enabled: boolean) => void;
   onReferencePastChatsChange: (enabled: boolean) => void;
   onGenerateMemoryFromHistoryChange: (enabled: boolean) => void;
+  onIncludeSensitiveTopicsChange: (enabled: boolean) => void;
 }
+
+const SENSITIVE_TOPICS_DESCRIPTION = `Let AGI remember your ${SENSITIVE_MEMORY_SUBJECTS} from chats. While this is off, AGI is designed to keep these only when you say "Remember that" in a chat on the web, desktop, mobile or Chrome, or add them yourself. Memories saved earlier stay until you delete them.`;
 
 export function MemoryControlsCard({
   isCloud,
   memoryEnabled,
   referencePastChats,
   generateMemoryFromHistory,
+  includeSensitiveTopics,
   onMemoryEnabledChange,
   onReferencePastChatsChange,
   onGenerateMemoryFromHistoryChange,
+  onIncludeSensitiveTopicsChange,
 }: MemoryControlsCardProps) {
   const colors = useThemeColors();
 
@@ -68,6 +75,14 @@ export function MemoryControlsCard({
           icon={Sparkles}
           value={memoryEnabled && generateMemoryFromHistory}
           onValueChange={onGenerateMemoryFromHistoryChange}
+          disabled={!memoryEnabled}
+        />
+        <SettingsSwitchRow
+          label="Include sensitive topics in memory"
+          description={SENSITIVE_TOPICS_DESCRIPTION}
+          icon={LockKeyhole}
+          value={memoryEnabled && includeSensitiveTopics}
+          onValueChange={onIncludeSensitiveTopicsChange}
           disabled={!memoryEnabled}
           isLast
         />

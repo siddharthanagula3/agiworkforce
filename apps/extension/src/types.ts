@@ -5,6 +5,7 @@ import type {
   GeneratedFileWire,
   ToolApprovalDecisionWire,
   ToolInputResponseWire,
+  ManagedCloudChatAttachment,
 } from '@agiworkforce/cloud-contracts';
 import type { ManagedCloudOwner } from './features/cloud-bridge/managedCloudAuthority';
 import type {
@@ -15,6 +16,10 @@ import type {
   ManagedQuotaWarningSignal,
 } from './features/cloud-bridge/freeTrialClient';
 import type { SiteToolEffect } from './features/tools/siteToolRegistry';
+import type {
+  BrowserUploadBinding,
+  BrowserUploadedFileMetadata,
+} from './features/computer-use/userFileUpload';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
 export type NativeMessageType =
@@ -52,6 +57,8 @@ export type NativeMessageType =
   | 'RESOLVE_CHAT_INPUT'
   | 'CANCEL_COMPUTER_USE'
   | 'GET_COMPUTER_USE_STATE'
+  | 'AGI_CU_APPROVE_REQUEST'
+  | 'AGI_CU_APPROVE_RESPONSE'
   | 'PAUSE_COMPUTER_USE'
   | 'RESUME_COMPUTER_USE'
   | 'AGI_CU_USER_INPUT'
@@ -76,6 +83,7 @@ export type NativeMessageType =
   | 'BRIDGE_URL_CHANGED'
   | 'WEBMCP_DISCOVER_TOOLS'
   | 'WEBMCP_CALL_TOOL'
+  | 'WEBMCP_CANCEL_TOOL'
   | 'WEBMCP_TOOLS_CHANGED'
   | 'SAVE_SHORTCUT'
   | 'LIST_SHORTCUTS'
@@ -504,9 +512,14 @@ export interface ChatMessageMessage extends BaseMessage {
   id: string;
   text: string;
   pageContext?: string;
-  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  conversationHistory?: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    uploadedAttachments?: ManagedCloudChatAttachment[];
+  }>;
   attachments?: string[];
   fileAttachments?: Array<{ assetId: string; mimeType: string }>;
+  uploadedAttachments?: ManagedCloudChatAttachment[];
   extendedThinking?: boolean;
   modelSelection?: string;
   quickMode?: boolean;
@@ -748,6 +761,7 @@ export interface WebMCPDiscoverToolsResponse {
   tools: WebMCPToolInfo[];
   tabId?: number;
   pageGeneration?: number;
+  pageInstanceId?: string;
   url?: string;
   error?: string;
 }
@@ -756,6 +770,14 @@ export interface WebMCPCallToolMessage extends BaseMessage {
   type: 'WEBMCP_CALL_TOOL';
   toolName: string;
   arguments?: Record<string, unknown>;
+  browserAgentBinding?: import('./features/tools/browserAgentSiteTools').BrowserSiteToolBinding;
+  browserAgentCallId?: string;
+}
+
+export interface WebMCPCancelToolMessage extends BaseMessage {
+  type: 'WEBMCP_CANCEL_TOOL';
+  browserAgentCallId: string;
+  pageInstanceId: string;
 }
 
 export interface WebMCPCallToolResponse {
@@ -935,11 +957,22 @@ export interface RunAutofillMessage {
   tabId?: number;
 }
 
+export interface BrowserContextTabReference {
+  readonly tabId: number;
+  readonly windowId: number;
+  readonly url: string;
+  readonly title: string;
+  readonly documentId?: string;
+}
+
 export interface StartComputerUseMessage {
   type: 'AGI_START_COMPUTER_USE';
   runId: string;
   goal: string;
   tabId: number;
+  modelSelection?: string;
+  selectedTabs?: readonly BrowserContextTabReference[];
+  pageContext?: string;
 }
 
 export interface CancelComputerUseMessage extends BaseMessage {
@@ -971,6 +1004,29 @@ export interface ComputerUseCommandResponse {
   pauseReason?: string;
   tabId?: number;
   error?: string;
+}
+
+export interface ComputerUseApprovalRequestMessage extends BaseMessage {
+  type: 'AGI_CU_APPROVE_REQUEST';
+  requestId: string;
+  runId: string;
+  runGeneration: number;
+  tabId: number;
+  toolName: string;
+  description: string;
+  uploadBinding?: BrowserUploadBinding;
+}
+
+export interface ComputerUseApprovalResponseMessage extends BaseMessage {
+  type: 'AGI_CU_APPROVE_RESPONSE';
+  requestId: string;
+  runId: string;
+  runGeneration: number;
+  tabId: number;
+  allowed: boolean;
+  forTask?: boolean;
+  uploadBinding?: BrowserUploadBinding;
+  upload?: BrowserUploadedFileMetadata[];
 }
 
 export interface StartDownloadMessage extends BaseMessage {
@@ -1114,6 +1170,7 @@ export type ExtensionMessage =
   | BridgeUrlChangedMessage
   | WebMCPDiscoverToolsMessage
   | WebMCPCallToolMessage
+  | WebMCPCancelToolMessage
   | WebMCPToolsChangedMessage
   | AddTabToGroupMessage
   | GetTabGroupStateMessage
@@ -1134,6 +1191,8 @@ export type ExtensionMessage =
   | DeleteCloudConversationMessage
   | RunAutofillMessage
   | StartComputerUseMessage
+  | ComputerUseApprovalRequestMessage
+  | ComputerUseApprovalResponseMessage
   | CancelComputerUseMessage
   | GetComputerUseStateMessage
   | ComputerUseTakeoverMessage

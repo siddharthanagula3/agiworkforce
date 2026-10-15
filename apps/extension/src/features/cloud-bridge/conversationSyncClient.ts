@@ -4,6 +4,7 @@ import {
   managedCloudMetadataLength,
   type GeneratedFileWire,
   type ManagedCloudChatClient,
+  type ManagedCloudChatFetch,
 } from '@agiworkforce/cloud-contracts';
 import type { InteractiveCard } from '@agiworkforce/types';
 import { FREE_TRIAL_GATEWAY, getManagedCloudAuthContext } from './freeTrialClient';
@@ -26,13 +27,15 @@ export class ManagedCloudSignedOutError extends Error {
 
 export function createExtensionCloudChatClient(
   expectedOwner: ManagedCloudOwner,
+  options: { isCurrent?: () => boolean; fetchImpl?: ManagedCloudChatFetch } = {},
 ): ManagedCloudChatClient {
   return createManagedCloudChatClient({
     baseUrl: FREE_TRIAL_GATEWAY,
     getAuthToken: async () => {
+      if (options.isCurrent?.() === false) throw new ManagedCloudOwnerChangedError();
       const context = await getManagedCloudAuthContext();
       if (!context) throw new ManagedCloudSignedOutError();
-      if (!sameManagedCloudOwner(context.owner, expectedOwner)) {
+      if (!sameManagedCloudOwner(context.owner, expectedOwner) || options.isCurrent?.() === false) {
         throw new ManagedCloudOwnerChangedError();
       }
       return context.token;
@@ -42,7 +45,15 @@ export function createExtensionCloudChatClient(
       'X-Requested-With': 'XMLHttpRequest',
       ...platformRequestHeaders(),
     }),
-    fetchImpl: (input, init) => fetch(input, init),
+    fetchImpl: async (input, init) => {
+      if (options.isCurrent?.() === false) throw new ManagedCloudOwnerChangedError();
+      const response = await (options.fetchImpl ?? fetch)(input, init);
+      if (options.isCurrent?.() === false) {
+        await response.body?.cancel().catch(() => undefined);
+        throw new ManagedCloudOwnerChangedError();
+      }
+      return response;
+    },
   });
 }
 

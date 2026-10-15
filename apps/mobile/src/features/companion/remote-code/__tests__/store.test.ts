@@ -131,6 +131,47 @@ describe('remote code store on the phone', () => {
     expect(thread?.messages.at(-1)).toEqual({ role: 'assistant', text: 'Done.' });
   });
 
+  it('shows a question pending when the phone joins, and one asked while it watches', () => {
+    ingestRemoteCodeControl(
+      'code.session.snapshot',
+      snapshot({
+        pendingQuestions: [{ turnId: 'turn-1', requestId: 'q-1', question: 'Which branch?' }],
+      }),
+    );
+    expect(useRemoteCodeStore.getState().threads[KEY]?.pendingQuestions).toEqual([
+      { turnId: 'turn-1', requestId: 'q-1', question: 'Which branch?' },
+    ]);
+
+    ingestRemoteCodeControl(
+      'code.session.event',
+      event({ type: 'user-input-answered', requestId: 'q-1' }),
+    );
+    ingestRemoteCodeControl(
+      'code.session.event',
+      event({
+        type: 'user-input-requested',
+        turnId: 'turn-1',
+        requestId: 'q-2',
+        question: 'Push now?',
+      }),
+    );
+    expect(useRemoteCodeStore.getState().threads[KEY]).toMatchObject({
+      status: 'running',
+      pendingQuestions: [{ requestId: 'q-2', question: 'Push now?' }],
+    });
+
+    ingestRemoteCodeControl(
+      'code.session.event',
+      event({ type: 'turn-finished', turnId: 'turn-1', outcome: 'completed', response: '' }),
+    );
+    expect(useRemoteCodeStore.getState().threads[KEY]?.pendingQuestions).toEqual([]);
+  });
+
+  it('reads a snapshot from a Desktop that predates questions as having none', () => {
+    ingestRemoteCodeControl('code.session.snapshot', snapshot());
+    expect(useRemoteCodeStore.getState().threads[KEY]?.pendingQuestions).toEqual([]);
+  });
+
   it('keeps diffs and test runs across a fresh snapshot, which never carries them', () => {
     ingestRemoteCodeControl('code.session.snapshot', snapshot());
     ingestRemoteCodeControl(
@@ -162,5 +203,49 @@ describe('remote code store on the phone', () => {
       status: 'failed',
       hostMessage: 'The AGI CLI exited.',
     });
+  });
+
+  it('keeps what the computer said about a held allow until the approval is settled', () => {
+    ingestRemoteCodeControl(
+      'code.session.snapshot',
+      snapshot({
+        status: 'awaiting_approval',
+        pendingApprovals: [
+          { turnId: 'turn-1', requestId: 'ap-1', summary: 'Force push', detail: 'git' },
+        ],
+      }),
+    );
+    const held = (status: string, message: string) =>
+      ingestRemoteCodeControl(
+        'code.session.event',
+        event({ type: 'approval-held', requestId: 'ap-1', status, message }),
+      );
+
+    expect(held('waiting', 'A dialog is open at your computer.')).toBe(true);
+    expect(useRemoteCodeStore.getState().threads[KEY]?.approvalHolds).toEqual({
+      'ap-1': { status: 'waiting', message: 'A dialog is open at your computer.' },
+    });
+
+    held('refused', 'Not allowed at your computer.');
+    const refused = useRemoteCodeStore.getState().threads[KEY];
+    expect(refused?.approvalHolds['ap-1']).toEqual({
+      status: 'refused',
+      message: 'Not allowed at your computer.',
+    });
+    expect(refused?.pendingApprovals).toHaveLength(1);
+
+    ingestRemoteCodeControl(
+      'code.session.event',
+      event({ type: 'approval-held', requestId: 'ap-unknown', status: 'waiting', message: 'x' }),
+    );
+    expect(Object.keys(useRemoteCodeStore.getState().threads[KEY]?.approvalHolds ?? {})).toEqual([
+      'ap-1',
+    ]);
+
+    ingestRemoteCodeControl(
+      'code.session.event',
+      event({ type: 'approval-answered', requestId: 'ap-1', approved: true }),
+    );
+    expect(useRemoteCodeStore.getState().threads[KEY]?.approvalHolds).toEqual({});
   });
 });

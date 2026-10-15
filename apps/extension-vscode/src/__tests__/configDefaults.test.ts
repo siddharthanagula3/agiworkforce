@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { __CONFIG_DEFAULTS, SETTINGS_PANEL_SETTING_KEYS } from '../platform/config';
+import * as vscode from 'vscode';
+import { Config, __CONFIG_DEFAULTS, SETTINGS_PANEL_SETTING_KEYS } from '../platform/config';
 
 interface PkgConfigContrib {
   type: string;
@@ -59,6 +60,15 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
 
 describe('Config DEFAULTS ↔ package.json parity', () => {
   const pkgSettings = readPkgConfigSettings();
+
+  afterEach(() => {
+    vi.mocked(vscode.workspace.getConfiguration).mockImplementation((_section?: string) => ({
+      get: vi.fn(<T>(_key: string, defaultValue?: T): T | undefined => defaultValue),
+      update: vi.fn().mockResolvedValue(undefined),
+      has: vi.fn().mockReturnValue(false),
+      inspect: vi.fn().mockReturnValue(undefined),
+    }));
+  });
 
   for (const [defaultsKey, pkgKey] of Object.entries(KEY_MAP) as Array<
     [keyof typeof __CONFIG_DEFAULTS, string]
@@ -171,5 +181,35 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
     );
 
     expect(command?.title).toBe('AGI Workforce: Sign In to AGI Cloud');
+  });
+
+  it('treats agent.mode = plan as active plan mode', () => {
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+      get: vi.fn(<T>(key: string, defaultValue?: T): T | undefined => {
+        if (key === 'agent.mode') return 'plan' as T;
+        if (key === 'agent.planMode') return false as T;
+        return defaultValue;
+      }),
+      update: vi.fn().mockResolvedValue(undefined),
+      has: vi.fn().mockReturnValue(false),
+      inspect: vi.fn().mockReturnValue(undefined),
+    });
+
+    expect(Config.planModeActive()).toBe(true);
+  });
+
+  it('keeps deprecated agent.planMode as a backwards-compatible plan flag', () => {
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+      get: vi.fn(<T>(key: string, defaultValue?: T): T | undefined => {
+        if (key === 'agent.mode') return 'auto' as T;
+        if (key === 'agent.planMode') return true as T;
+        return defaultValue;
+      }),
+      update: vi.fn().mockResolvedValue(undefined),
+      has: vi.fn().mockReturnValue(false),
+      inspect: vi.fn().mockReturnValue(undefined),
+    });
+
+    expect(Config.planModeActive()).toBe(true);
   });
 });

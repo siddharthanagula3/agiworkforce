@@ -11,7 +11,8 @@ const chromeMock = vi.hoisted(() => {
     writable: true,
     value: [],
   });
-  const messageListeners: Array<(message: unknown) => void> = [];
+  const messageListeners: Array<(message: unknown, sender: { id: string; url: string }) => void> =
+    [];
   const event = () => ({ addListener: vi.fn(), removeListener: vi.fn(), hasListener: vi.fn() });
   const area = () => {
     const values: Record<string, unknown> = {};
@@ -55,7 +56,7 @@ const chromeMock = vi.hoisted(() => {
       id: 'test-extension',
       onMessage: {
         ...event(),
-        addListener: vi.fn((listener: (message: unknown) => void) =>
+        addListener: vi.fn((listener: (typeof messageListeners)[number]) =>
           messageListeners.push(listener),
         ),
       },
@@ -309,13 +310,16 @@ describe('side panel Stop confirmation', () => {
   }
   function chunk(message: Record<string, unknown>, patch: Record<string, unknown>): void {
     for (const listener of chromeMock.messageListeners)
-      listener({
-        type: 'CHAT_CHUNK',
-        owner: message.owner,
-        clientInstanceId: message.clientInstanceId,
-        id: message.id,
-        ...patch,
-      });
+      listener(
+        {
+          type: 'CHAT_CHUNK',
+          owner: message.owner,
+          clientInstanceId: message.clientInstanceId,
+          id: message.id,
+          ...patch,
+        },
+        { id: 'test-extension', url: 'chrome-extension://test/side_panel.html' },
+      );
   }
   function queue(): void {
     input().value = 'Queued follow-up';

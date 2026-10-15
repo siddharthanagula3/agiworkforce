@@ -11,7 +11,7 @@
  * @vitest-environment jsdom
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const EVAL_TAB_ID = 7;
 
@@ -25,7 +25,6 @@ let objectSequence = 0;
 
 function evaluateInPage(params: EvaluateParams): Record<string, unknown> {
   try {
-    // eslint-disable-next-line no-eval
     const value: unknown = (0, eval)(params.expression);
     if (params.returnByValue) {
       return { result: { type: typeof value, value } };
@@ -68,6 +67,7 @@ import {
   getElementIndexMap,
   getPageContent,
   click,
+  getTargetSignature,
   unregisterActiveTab,
 } from '../src/features/computer-use/cdpDriver';
 
@@ -109,6 +109,28 @@ function installEvaluatingDebugger(): void {
         callback({ model: { content: [0, 0, 10, 0, 10, 10, 0, 10] } });
         return;
       }
+      if (method === 'Runtime.callFunctionOn') {
+        const p = params as { objectId: string; functionDeclaration: string };
+        const element = resolvedObjects.get(p.objectId)!;
+        const originalHitTest = document.elementFromPoint;
+        Object.defineProperty(document, 'elementFromPoint', {
+          configurable: true,
+          value: () => element,
+        });
+        try {
+          const fn = (0, eval)(`(${p.functionDeclaration})`);
+          const value = fn.call(element);
+          callback({ result: { type: typeof value, value } });
+        } catch (error) {
+          callback({ result: {}, exceptionDetails: { text: String(error) } });
+        } finally {
+          Object.defineProperty(document, 'elementFromPoint', {
+            configurable: true,
+            value: originalHitTest,
+          });
+        }
+        return;
+      }
       callback({});
     },
   );
@@ -121,10 +143,69 @@ beforeEach(() => {
   chromeMock.runtime.lastError = undefined;
   vi.clearAllMocks();
   installEvaluatingDebugger();
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: 10,
+    bottom: 10,
+    width: 10,
+    height: 10,
+    toJSON() {},
+  });
   unregisterActiveTab(EVAL_TAB_ID);
 });
 
+afterEach(() => vi.restoreAllMocks());
+
 describe('the index map addresses exactly one element per index', () => {
+  it('describes an id separately without inventing a name attribute', async () => {
+    document.body.innerHTML =
+      '<button id="upload">Submit file</button><input id="mail" name="email">';
+    const summary = await getPageContent(EVAL_TAB_ID);
+    const button = summary.split('\n').find((line) => line.includes('id="upload"'))!;
+    expect(button).toContain('button');
+    expect(button).not.toContain('name=');
+    expect(summary).toContain('name="email" id="mail"');
+  });
+  it('uses the live containing button signature when a coordinate hits its child icon', async () => {
+    document.body.innerHTML = '<button aria-label="Pay now"><span id="icon"></span></button>';
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => document.querySelector('#icon'),
+    });
+    await expect(getTargetSignature(EVAL_TAB_ID, { x: 10, y: 10 })).resolves.toBe(
+      'button||||Pay now',
+    );
+  });
+
+  it('returns unknown when a coordinate hits an inaccessible frame', async () => {
+    document.body.innerHTML = '<iframe></iframe>';
+    const frame = document.querySelector('iframe')!;
+    Object.defineProperty(frame, 'contentDocument', { configurable: true, value: null });
+    Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: () => frame });
+    await expect(getTargetSignature(EVAL_TAB_ID, { x: 10, y: 10 })).resolves.toBeNull();
+  });
+
+  it('indexes native drag, slider, editable and nested-scroll targets exactly once', async () => {
+    document.body.innerHTML =
+      '<div draggable="true" id="drag">Drag item</div><div role="slider" id="slider">Slider</div><div contenteditable="true" id="editor">Edit</div><div id="scroll" tabindex="0" style="overflow-y:auto">Long content</div>';
+    const scroller = document.querySelector('#scroll')!;
+    Object.defineProperties(scroller, {
+      scrollHeight: { value: 500 },
+      clientHeight: { value: 100 },
+    });
+    const summary = await getPageContent(EVAL_TAB_ID);
+    const mapped = [...getElementIndexMap(EVAL_TAB_ID).values()].map((selector) =>
+      document.querySelector(selector),
+    );
+    for (const id of ['drag', 'slider', 'editor', 'scroll']) {
+      expect(mapped.filter((element) => element?.id === id)).toHaveLength(1);
+    }
+    expect(summary).toContain('4 addressable of 4 found');
+  });
+
   it('gives every index a selector that resolves to exactly one element', async () => {
     await getPageContent(EVAL_TAB_ID);
     const map = getElementIndexMap(EVAL_TAB_ID);
@@ -193,7 +274,7 @@ describe('resolution refuses anything but the element the index named', () => {
     });
     expect(
       String(result['exceptionDetails'] && JSON.stringify(result['exceptionDetails'])),
-    ).toMatch(/elements match button/);
+    ).toMatch(/ambiguous/);
   });
 
   it('throws when the selector matches nothing', () => {
@@ -201,7 +282,7 @@ describe('resolution refuses anything but the element the index named', () => {
       expression: buildIndexedElementExpression('html > body:nth-of-type(1) > nav:nth-of-type(9)'),
       returnByValue: false,
     });
-    expect(String(JSON.stringify(result['exceptionDetails']))).toMatch(/no element matches/);
+    expect(String(JSON.stringify(result['exceptionDetails']))).toMatch(/No element matches/);
   });
 
   it('throws when the element at that path is no longer the one indexed', async () => {

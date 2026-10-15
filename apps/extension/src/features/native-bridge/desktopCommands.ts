@@ -10,6 +10,7 @@ import { sanitizePageText } from '../../background/policy';
 import { authorizeBrowserToolTab, authorizeBrowserToolUrl } from '../browser-tools/tabAuthority';
 import { watchDownloadsStartedBy } from '../browser-tools/downloads';
 import { screenshot as captureTabThroughDebugger } from '../computer-use/cdpDriver';
+import type { NativeTypingReceipt } from '../computer-use/cdpDriver';
 
 export const MAX_DESKTOP_PAGE_TEXT_CHARS = 20_000;
 export const MAX_DESKTOP_FILL_FIELDS = 50;
@@ -32,6 +33,16 @@ export interface DesktopCommandContext {
   history: (tabId: number, direction: 'back' | 'forward') => Promise<void>;
   tabUrl: (tabId: number) => Promise<string>;
   capture: (tabId: number) => Promise<string>;
+  click?: (
+    tabId: number,
+    selector: string,
+  ) => Promise<{ inputSource: 'cdp'; nativeInputAcknowledged: true; targetVerified: true }>;
+  type?: (
+    tabId: number,
+    selector: string,
+    text: string,
+    clear: boolean,
+  ) => Promise<NativeTypingReceipt>;
 }
 
 export function captureThroughDebugger(tabId: number): Promise<string> {
@@ -99,6 +110,7 @@ async function execute(
   request: BrowserCommandRequest,
   tabId: number,
   context: DesktopCommandContext,
+  sourceUrl: string,
 ): Promise<unknown> {
   const { args } = request;
 
@@ -107,7 +119,14 @@ async function execute(
       return context.listTabs();
     case 'browser_read_page': {
       const info = requireSuccess(await context.send(tabId, { type: 'GET_PAGE_INFO' }));
-      const text = await context.send(tabId, { type: 'GET_TEXT', selector: 'body' });
+      if (info['url'] !== sourceUrl || typeof info['title'] !== 'string')
+        throw new Error('The paired page metadata changed before it could be read.');
+      const text = requireSuccess(
+        await context.send(tabId, { type: 'GET_TEXT', selector: 'body' }),
+      );
+      const current = await authorizeBrowserToolTab(tabId);
+      if (current.url !== sourceUrl || typeof text['text'] !== 'string')
+        throw new Error('The paired page changed while its text was being read.');
       return {
         url: typeof info['url'] === 'string' ? info['url'] : '',
         title: typeof info['title'] === 'string' ? info['title'] : '',
@@ -118,46 +137,27 @@ async function execute(
       };
     }
     case 'browser_click':
-      requireSuccess(await context.send(tabId, { type: 'CLICK', selector: requireSelector(args) }));
-      return { clicked: true };
+      if (!context.click) throw new Error('The paired native browser driver is unavailable.');
+      return context.click(tabId, requireSelector(args));
     case 'browser_type': {
       const text = args['text'];
       if (typeof text !== 'string') throw new Error('Text is required.');
-      requireSuccess(
-        await context.send(tabId, {
-          type: 'TYPE',
-          selector: requireSelector(args),
-          text,
-          options: { clear: args['clear'] === true },
-        }),
-      );
-      return { typed: true };
+      if (!context.type) throw new Error('The paired native browser driver is unavailable.');
+      return context.type(tabId, requireSelector(args), text, args['clear'] === true);
     }
     case 'browser_navigate': {
       const url = httpUrl(args['url']);
       await authorizeBrowserToolUrl(url);
+      const current = await authorizeBrowserToolTab(tabId);
+      if (current.url !== sourceUrl)
+        throw new Error(
+          'The paired browser tab changed before navigation. Ask again for the current page.',
+        );
       await context.navigate(tabId, url);
       return { url };
     }
-    case 'browser_screenshot': {
-      // Two ways to photograph a tab, and Chrome gates both: the debugger
-      // wants <all_urls> or activeTab, and captureVisibleTab wants the same,
-      // while a desktop-issued capture has no click behind it to grant
-      // activeTab. Try the debugger, fall back, and say what is missing.
-      try {
-        return { dataUrl: `data:image/png;base64,${await context.capture(tabId)}` };
-      } catch (debuggerError) {
-        const response = await context.send(tabId, { type: 'CAPTURE_SCREENSHOT', format: 'png' });
-        if (response['success'] === true && typeof response['data'] === 'string') {
-          return { dataUrl: response['data'] };
-        }
-        throw new Error(
-          `Chrome would not let the extension photograph this tab. ${
-            debuggerError instanceof Error ? debuggerError.message : ''
-          } Open the AGI Workforce side panel on this tab and approve browser control for this site, then try again.`.trim(),
-        );
-      }
-    }
+    case 'browser_screenshot':
+      return { dataUrl: `data:image/png;base64,${await context.capture(tabId)}` };
     case 'browser_console': {
       const response = requireSuccess(
         await context.send(tabId, { type: 'READ_PAGE_CONSOLE', ...args }),
@@ -334,12 +334,12 @@ export async function runDesktopBrowserCommand(
     if (tabId === null) {
       return failed(raw.id, 'No web page is open in Chrome for that action.');
     }
-    await authorizeBrowserToolTab(tabId);
+    const authorized = await authorizeBrowserToolTab(tabId);
     const rules = siteRulesOf(raw.siteRules);
     const refusal = rules ? await refusalBeforeActing(raw, tabId, rules, context) : null;
     if (refusal) return failed(raw.id, refusal);
     if (rules && MOVES_THE_TAB.has(raw.command)) watchDownloadsStartedBy(rules);
-    const value = await execute(raw, tabId, context);
+    const value = await execute(raw, tabId, context, authorized.url);
     const landed = await readTabUrl(tabId, context);
     if (rules) {
       const blocked = await refusalAfterActing(raw.command, tabId, landed, rules, context);

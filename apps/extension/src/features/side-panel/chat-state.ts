@@ -1,4 +1,8 @@
-import { applyAgentActivityEvent, type AgentActivityState } from '@agiworkforce/client-runtime';
+import {
+  applyAgentActivityEvent,
+  finishAgentActivityLocally,
+  type AgentActivityState,
+} from '@agiworkforce/client-runtime';
 import type {
   GeneratedFileWire,
   ManagedCloudAgentRunReference,
@@ -65,6 +69,7 @@ export interface SidePanelChatMessage {
   durationMs?: number;
   runtime?: 'managed-cloud' | 'local';
   errorText?: string;
+  streamCancellation?: 'pending' | 'unconfirmed';
   errorAction?: 'switch-model';
   errorRecovery?: ManagedQuotaRecovery;
   /**
@@ -102,6 +107,8 @@ export interface StoredSidePanelChatMessage {
   durationMs?: number;
   runtime?: 'managed-cloud' | 'local';
   error?: boolean;
+  errorText?: string;
+  streamCancellation?: 'pending' | 'unconfirmed';
   cloudMessageId?: string;
 }
 
@@ -152,6 +159,22 @@ export function projectCanonicalAgentActivity(
   return activity;
 }
 
+export function reconcileManagedRunActivity(
+  message: SidePanelChatMessage,
+  completedAtMs = Date.now(),
+): void {
+  const status = message.cloudAgentRun?.state;
+  if (
+    !message.agentActivity ||
+    (status !== 'completed' && status !== 'failed' && status !== 'cancelled')
+  )
+    return;
+  message.agentActivity = finishAgentActivityLocally(message.agentActivity, {
+    status,
+    completedAtMs,
+  });
+}
+
 export function hydrateStoredChatMessage(
   message: StoredSidePanelChatMessage,
   id: string,
@@ -161,7 +184,7 @@ export function hydrateStoredChatMessage(
     event: { ...event.event },
   })) as AgentEventEnvelope[] | undefined;
 
-  return {
+  const hydrated: SidePanelChatMessage = {
     id,
     role: message.role,
     content: message.content,
@@ -201,9 +224,28 @@ export function hydrateStoredChatMessage(
     ...(message.durationMs !== undefined ? { durationMs: message.durationMs } : {}),
     ...(message.runtime ? { runtime: message.runtime } : {}),
     ...(message.error ? { error: true } : {}),
+    ...(message.errorText ? { errorText: message.errorText } : {}),
+    ...(message.streamCancellation
+      ? {
+          streamCancellation: 'unconfirmed' as const,
+          error: true,
+          ...(message.streamCancellation === 'pending'
+            ? {
+                errorText:
+                  'Local streaming stopped. Cancellation was interrupted and could not be confirmed. Use Retry to retry Stop, or start a new chat.',
+              }
+            : {}),
+        }
+      : {}),
     ...(message.streaming ? { interrupted: true } : {}),
     ...(message.cloudMessageId ? { cloudMessageId: message.cloudMessageId } : {}),
   };
+  const cancellationRequestedAt = Date.parse(message.cloudAgentRun?.cancellationRequestedAt ?? '');
+  reconcileManagedRunActivity(
+    hydrated,
+    Number.isFinite(cancellationRequestedAt) ? cancellationRequestedAt : message.timestamp,
+  );
+  return hydrated;
 }
 
 function isWebSourceUrl(url: string): boolean {
@@ -314,6 +356,15 @@ export function resolveComposerPrompt(
   return attachmentCount === 1
     ? `Please analyze the attached ${attachmentKind}.`
     : `Please analyze the attached ${attachmentKind}s.`;
+}
+
+export function requestsCurrentPageContext(text: string): boolean {
+  return (
+    /\b(?:this|current|active)\s+(?:(?:web|browser)\s+)?(?:page|tab|website|site)\b/i.test(text) &&
+    /^(?:(?:please\s+)?(?:summari[sz]e|explain|describe|analy[sz]e|read|review|extract|list|find|compare|tell\s+me|give\s+me)\b|(?:can|could|would)\s+you\s+(?:summari[sz]e|explain|describe|analy[sz]e|read|review|extract|list|find|compare)\b|what(?:'s|\s+is|\s+are|\s+does)\b)/i.test(
+      text.trim(),
+    )
+  );
 }
 
 export function trimChatMessages(messages: SidePanelChatMessage[], maximum: number): number {

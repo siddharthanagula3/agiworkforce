@@ -38,6 +38,7 @@ import type { Agent } from './agentStore';
 import { notifyCompanionMessage } from '@/services/companionNotifications';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { companionInstallationId } from '@/src/features/companion/pairing/installationId';
 import { useDispatchTaskStore } from './dispatchTaskStore';
 import {
   ingestRemoteCodeControl,
@@ -1014,12 +1015,16 @@ export const useConnectionStore = create<ConnectionState>()(
 
           if (!isCurrentConnectionAttempt(attemptId)) return;
 
+          const installationId = await companionInstallationId().catch(() => null);
+          if (!isCurrentConnectionAttempt(attemptId)) return;
+
           const sessionMetadata: {
             deviceType: string;
             app: string;
             version: string;
             dispatchSalt: string;
             deviceName?: string;
+            installationId?: string;
           } = {
             deviceType: 'mobile',
             app: 'agiworkforce-mobile',
@@ -1029,6 +1034,7 @@ export const useConnectionStore = create<ConnectionState>()(
             ...(Constants.deviceName?.trim()
               ? { deviceName: Constants.deviceName.trim().slice(0, 120) }
               : {}),
+            ...(installationId ? { installationId } : {}),
           };
 
           try {

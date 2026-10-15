@@ -6,6 +6,8 @@ import WebSocket from 'ws';
 import { z } from 'zod';
 import {
   IDLE_REMOTE_CONTROL_STATE,
+  developerApprovalAllows,
+  developerReviewDecision,
   type DeveloperSessionEvent,
   type DeveloperSessionGroup,
   type LocalDeveloperSession,
@@ -252,6 +254,7 @@ export class VscodeRemoteControl implements vscode.Disposable {
       threadId: answer.threadId,
       turnId: answer.turnId,
       requestId: answer.requestId,
+      decision: answer.approved ? 'approve_once' : 'deny',
       approved: answer.approved,
     });
   }
@@ -294,6 +297,7 @@ export class VscodeRemoteControl implements vscode.Disposable {
         session: toSession(root.id, read.thread),
         messages: read.messages,
         truncated: read.transcriptTruncated,
+        activeTurn: null,
       },
       branch: read.thread.gitBranch ?? null,
       fileChanges: read.fileChanges ?? [],
@@ -334,27 +338,33 @@ export class VscodeRemoteControl implements vscode.Disposable {
       },
       answerApproval: async (answer) => {
         const root = this._root(answer.rootId);
-        await this._runtime(root).respondToApproval({
+        const runtime = this._runtime(root);
+        const approved = developerApprovalAllows(answer.decision);
+        await runtime.respondToApproval({
           threadId: answer.threadId,
           turnId: answer.turnId,
           requestId: answer.requestId,
-          decision: answer.approved ? 'approved' : 'denied',
+          decision: developerReviewDecision(answer),
         });
+        if (answer.decision === 'deny_and_stop') {
+          await runtime.interruptTurn({ threadId: answer.threadId, turnId: answer.turnId });
+        }
         this._relay(root.id, {
           type: 'approval-answered',
           threadId: answer.threadId,
           turnId: answer.turnId,
           requestId: answer.requestId,
-          approved: answer.approved,
+          decision: answer.decision,
+          approved,
         });
         approvalAnsweredOnPhone({
           cwd: root.path,
           threadId: answer.threadId,
           turnId: answer.turnId,
           requestId: answer.requestId,
-          approved: answer.approved,
+          approved,
         });
-        return true;
+        return { status: 'applied' };
       },
       readDiff: (rootId, paths) =>
         paths.length === 0

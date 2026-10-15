@@ -2,15 +2,14 @@ import { createClerkClient } from '@clerk/chrome-extension/client';
 import { configuredAgiWebOrigin } from '../../lib/webOrigin';
 import {
   managedCloudOwnerFromSessionToken,
+  managedCloudSessionTokenClaims,
   normalizeManagedCloudOwner,
-  sameManagedCloudCredential,
   sameManagedCloudOwner,
   type ManagedCloudOwner,
 } from './managedCloudAuthority';
 
 const publishableKey = process.env['CLERK_PUBLISHABLE_KEY']?.trim() ?? '';
 const configuredSyncHost = process.env['CLERK_SYNC_HOST']?.trim() ?? '';
-const WEB_SIGN_IN_URL = 'https://agiworkforce.com/sign-in?redirectTo=%2Fauth%2Fchrome-extension';
 
 interface ClerkOriginResult {
   origin?: string;
@@ -59,13 +58,7 @@ export interface ClerkAccountProfile {
   initials: string;
 }
 
-function getExtensionPageUrl(): string {
-  return chrome.runtime.getURL('src/side_panel.html');
-}
-
-let foregroundClient: ClerkClient | null = null;
-let foregroundLoad: Promise<ClerkClient> | null = null;
-let backgroundClient: Promise<ClerkClient> | null = null;
+let nativeClient: Promise<ClerkClient> | null = null;
 
 export function isClerkExtensionAuthConfigured(): boolean {
   return publishableKey.startsWith('pk_') && Boolean(syncHost.origin) && !syncHost.error;
@@ -86,38 +79,16 @@ function getClientOptions() {
   return { publishableKey, syncHost: syncHost.origin };
 }
 
-async function getForegroundClient(): Promise<ClerkClient> {
+async function getNativeClient(forceRefresh = false): Promise<ClerkClient> {
   assertClerkExtensionAuthConfigured();
-  if (foregroundLoad) return foregroundLoad;
-
-  foregroundClient ??= createClerkClient(getClientOptions());
-  const client = foregroundClient;
-  const pageUrl = getExtensionPageUrl();
-  foregroundLoad = client
-    .load({
-      afterSignOutUrl: pageUrl,
-      signInForceRedirectUrl: pageUrl,
-      signUpForceRedirectUrl: pageUrl,
-      allowedRedirectProtocols: ['chrome-extension:'],
-    })
-    .then(() => client)
-    .catch((error: unknown) => {
-      foregroundLoad = null;
-      throw error;
-    });
-  return foregroundLoad;
-}
-
-async function getBackgroundClient(forceRefresh = false): Promise<ClerkClient> {
-  assertClerkExtensionAuthConfigured();
-  if (forceRefresh) backgroundClient = null;
-  backgroundClient ??= createClerkClient({ ...getClientOptions(), background: true }).catch(
+  if (forceRefresh) nativeClient = null;
+  nativeClient ??= createClerkClient({ ...getClientOptions(), background: true }).catch(
     (error: unknown) => {
-      backgroundClient = null;
+      nativeClient = null;
       throw error;
     },
   );
-  return backgroundClient;
+  return nativeClient;
 }
 
 function isBackgroundServiceWorker(): boolean {
@@ -139,6 +110,27 @@ export interface ClerkAuthContext {
 async function requestBackgroundAuthContext(
   forceRefresh: boolean,
 ): Promise<ClerkAuthContext | null> {
+  const context = await readBackgroundAuthContext(forceRefresh);
+  if (!context || validExtensionCredential(context)) return context;
+  const renewed = forceRefresh ? null : await readBackgroundAuthContext(true);
+  if (renewed && validExtensionCredential(renewed)) return renewed;
+  throw new Error('Unable to obtain an origin-bound AGI Cloud session. Try again.');
+}
+
+function validExtensionCredential(context: ClerkAuthContext): boolean {
+  const claims = managedCloudSessionTokenClaims(context.token);
+  const owner = managedCloudOwnerFromSessionToken(context.token);
+  return Boolean(
+    claims &&
+    claims['azp'] === chrome.runtime.getURL('').replace(/\/$/u, '') &&
+    typeof claims['exp'] === 'number' &&
+    Number.isFinite(claims['exp']) &&
+    claims['exp'] * 1000 > Date.now() &&
+    sameManagedCloudOwner(owner, context.owner),
+  );
+}
+
+async function readBackgroundAuthContext(forceRefresh: boolean): Promise<ClerkAuthContext | null> {
   const response = (await chrome.runtime.sendMessage({
     type: 'GET_CLOUD_AUTH_TOKEN',
     refresh: forceRefresh,
@@ -168,12 +160,14 @@ function resolveSessionOwner(
   session: ClerkSessionLike,
   token: string | null,
 ): ManagedCloudOwner | null {
-  return (
-    normalizeManagedCloudOwner({
-      accountId: clerk.user?.id ?? session?.user?.id,
-      authIncarnation: session?.id,
-    }) ?? managedCloudOwnerFromSessionToken(token)
-  );
+  const tokenOwner = managedCloudOwnerFromSessionToken(token);
+  const resourceOwner = normalizeManagedCloudOwner({
+    accountId: clerk.user?.id ?? session?.user?.id,
+    authIncarnation: session?.id,
+  });
+  return tokenOwner && resourceOwner && sameManagedCloudOwner(tokenOwner, resourceOwner)
+    ? tokenOwner
+    : null;
 }
 
 export async function getFreshClerkAuthContext(
@@ -182,13 +176,22 @@ export async function getFreshClerkAuthContext(
   if (!isClerkExtensionAuthConfigured()) return null;
   if (!isBackgroundServiceWorker()) return requestBackgroundAuthContext(forceRefresh);
 
-  const clerk = await getBackgroundClient(forceRefresh);
+  const clerk = await getNativeClient(forceRefresh);
   const session = clerk.session;
   if (!session) return null;
-  const token = await session.getToken();
+  const extensionOrigin = chrome.runtime.getURL('').replace(/\/$/u, '');
+  const requiresOriginBoundToken = session.lastActiveToken?.jwt?.claims.azp !== extensionOrigin;
+  let token = await session.getToken({ skipCache: forceRefresh || requiresOriginBoundToken });
   if (!token) return null;
-  const owner = resolveSessionOwner(clerk, session, token);
-  if (!owner) throw new Error('AGI Cloud returned an unowned extension session.');
+  let owner = resolveSessionOwner(clerk, session, token);
+  if (clerk.session !== session || !owner || !validExtensionCredential({ token, owner })) {
+    token = await session.getToken({ skipCache: true });
+    if (!token) return null;
+    owner = resolveSessionOwner(clerk, session, token);
+    if (clerk.session !== session || !owner || !validExtensionCredential({ token, owner })) {
+      throw new Error('Unable to obtain an origin-bound AGI Cloud session. Try again.');
+    }
+  }
   return { token, owner };
 }
 
@@ -205,9 +208,11 @@ function compactInitials(displayName: string | null, email: string | null): stri
   return initials.toUpperCase();
 }
 
-export async function getClerkAccountProfile(): Promise<ClerkAccountProfile | null> {
+export async function getClerkAccountProfile(
+  forceRefresh = false,
+): Promise<ClerkAccountProfile | null> {
   if (!isClerkExtensionAuthConfigured()) return null;
-  const clerk = await getForegroundClient();
+  const clerk = await getNativeClient(forceRefresh);
   const user = clerk.user;
   const owner = normalizeManagedCloudOwner({
     accountId: user?.id,
@@ -230,15 +235,17 @@ export async function getClerkAccountProfile(): Promise<ClerkAccountProfile | nu
 
 export async function openClerkSignIn(): Promise<void> {
   assertClerkExtensionAuthConfigured();
-  await chrome.tabs.create({ url: WEB_SIGN_IN_URL });
+  const webOrigin = configuredAgiWebOrigin();
+  if (!webOrigin) throw new Error('AGI account sign-in has an invalid web origin.');
+  const signInUrl = new URL('/sign-in', webOrigin);
+  signInUrl.searchParams.set('redirectTo', '/auth/chrome-extension');
+  await chrome.tabs.create({ url: signInUrl.href });
 }
 
 export async function signOutClerk(): Promise<void> {
   if (!isClerkExtensionAuthConfigured()) return;
-  const clerk = isBackgroundServiceWorker()
-    ? await getBackgroundClient()
-    : await getForegroundClient();
-  await clerk.signOut({ redirectUrl: getExtensionPageUrl() });
+  const clerk = await getNativeClient();
+  await clerk.signOut(() => undefined);
 }
 
 async function fetchSyncHostCsrfToken(baseUrl: string): Promise<string> {
@@ -281,39 +288,7 @@ export async function revokeSyncedWebSession(): Promise<void> {
   }
 }
 
-export async function signOutClerkIfCurrent(expected: ClerkAuthContext): Promise<boolean> {
-  if (!isClerkExtensionAuthConfigured()) return false;
-  const clerk = isBackgroundServiceWorker()
-    ? await getBackgroundClient()
-    : await getForegroundClient();
-  const session = clerk.session;
-  if (!session) return false;
-
-  const resourceOwner = normalizeManagedCloudOwner({
-    accountId: clerk.user?.id ?? session.user?.id,
-    authIncarnation: session.id,
-  });
-  if (resourceOwner && !sameManagedCloudOwner(resourceOwner, expected.owner)) return false;
-
-  const token = await session.getToken();
-  const liveSession = clerk.session;
-  const liveOwner = resolveSessionOwner(clerk, liveSession, token);
-  if (
-    liveSession !== session ||
-    !liveOwner ||
-    !sameManagedCloudCredential(token ? { token, owner: liveOwner } : null, expected)
-  ) {
-    return false;
-  }
-
-  await clerk.signOut({
-    sessionId: expected.owner.authIncarnation,
-    redirectUrl: getExtensionPageUrl(),
-  });
-  return true;
-}
-
 export async function observeClerkAuth(onChange: () => void): Promise<() => void> {
-  const clerk = await getForegroundClient();
+  const clerk = await getNativeClient();
   return clerk.addListener(onChange);
 }

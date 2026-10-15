@@ -1,5 +1,5 @@
 import {
-  approvalRequirement,
+  registeredSiteToolApprovalRequirement,
   describeApprovalReason,
   type ActionApprovalRequirement,
 } from '../computer-use/approvalPolicy';
@@ -48,11 +48,15 @@ export interface SiteToolCallPlan {
  * second per-call prompt.
  */
 export function planSiteToolCall(
-  tool: Pick<SiteToolDescriptor, 'name' | 'effect'>,
-  args: Record<string, unknown>,
+  tool: SiteToolDescriptor,
+  _args: Record<string, unknown>,
   pageUrl: string | null,
 ): SiteToolCallPlan {
-  const requirement = approvalRequirement({ toolName: tool.name, args, pageUrl });
+  const requirement = registeredSiteToolApprovalRequirement({
+    effect: tool.effect,
+    source: tool.source,
+    pageUrl,
+  });
   return {
     effect: tool.effect,
     requiresApproval: requirement.alwaysAsk,

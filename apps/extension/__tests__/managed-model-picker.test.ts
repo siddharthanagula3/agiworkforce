@@ -6,6 +6,7 @@ import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   canAccessManualModelSelection,
   getBillingPlanPricing,
+  getDefaultAutoRoutingProfile,
   getModelEffortOptions,
   getModelReasoning,
   getModelsForTierAndSurface,
@@ -16,8 +17,12 @@ import {
   resolveProviderDisplayId,
   splitEffortsByEntitlement,
 } from '@agiworkforce/types';
+import { buildModelPickerShortList } from '@agiworkforce/unified-chat/model-picker';
 import {
   formatManagedTierLabel,
+  buildManagedModelPickerMenu,
+  filterManagedModelOptions,
+  canUseManagedQuickRouting,
   getManagedEffortControlState,
   getManagedModelBadgeLabel,
   getManagedModelPickerOptions,
@@ -40,7 +45,79 @@ function modelWithEffortGatedOnFree(): string {
 
 describe('managed model picker', () => {
   it('shows only Auto before authenticated admission is loaded', () => {
-    expect(getManagedModelPickerOptions(null)).toEqual([{ value: 'auto', label: 'Best (auto)' }]);
+    const profile = getDefaultAutoRoutingProfile();
+    expect(getManagedModelPickerOptions(null)).toEqual([
+      { value: profile.id, label: profile.label, description: profile.description },
+    ]);
+  });
+
+  it('uses the published web picker recommendations and pins a selected model outside them', () => {
+    const modelIds = getModelsForTierAndSurface('max', 'chrome/managed-chat', {
+      modelTypes: [...CHAT_MODEL_TYPES],
+    }).map((model) => model.id);
+    const access = { subscriptionTier: 'max', modelIds, allowedAutoModes: [] };
+    const options = getManagedModelPickerOptions(access);
+    const profile = getDefaultAutoRoutingProfile();
+    const expected = buildModelPickerShortList({
+      models: options.map((option) => ({
+        id: option.value,
+        displayName: option.label,
+        providerKey: option.provider ?? 'managed_cloud',
+      })),
+      planTier: access.subscriptionTier,
+      favouriteModelIds: [],
+      conversationModelId: null,
+      selectedModelId: profile.id,
+      admitsModel: (id) => modelIds.includes(id),
+      autoGuidance: profile.description,
+      autoContinuityGuidance: (name) => name,
+    });
+    const menu = buildManagedModelPickerMenu(access, profile.id);
+    expect(menu.recommended.map((option) => option.value)).toEqual(
+      expected.recommended.map((row) => row.id),
+    );
+    expect(menu.remainingCount).toBe(modelIds.length - expected.recommended.length);
+    const selected = menu.all.find(
+      (option) => !menu.recommended.some((row) => row.value === option.value),
+    );
+    expect(selected).toBeDefined();
+    const pinned = buildManagedModelPickerMenu(access, selected!.value);
+    expect(pinned.current?.value).toBe(selected!.value);
+    expect(pinned.recommended).toEqual(menu.recommended);
+    expect(pinned.remainingCount).toBe(menu.remainingCount - 1);
+  });
+
+  it('searches actual model and provider names and filters their catalog capabilities', () => {
+    const modelIds = getModelsForTierAndSurface('max', 'chrome/managed-chat', {
+      modelTypes: [...CHAT_MODEL_TYPES],
+    }).map((model) => model.id);
+    const options = buildManagedModelPickerMenu(
+      { subscriptionTier: 'max', modelIds, allowedAutoModes: [] },
+      'auto',
+    ).all;
+    expect(
+      filterManagedModelOptions(options, 'Anthropic').every(
+        (option) => option.provider === 'anthropic',
+      ),
+    ).toBe(true);
+    expect(filterManagedModelOptions(options, 'Anthropic').length).toBeGreaterThan(0);
+    expect(filterManagedModelOptions(options, '', 'tools').map((option) => option.value)).toEqual(
+      options
+        .filter((option) => option.capabilityKeys?.includes('tools'))
+        .map((option) => option.value),
+    );
+    expect(filterManagedModelOptions(options, 'this-model-does-not-exist')).toEqual([]);
+  });
+
+  it('does not offer Quick when the account did not admit its Auto route', () => {
+    expect(canUseManagedQuickRouting(null)).toBe(false);
+    expect(
+      canUseManagedQuickRouting({
+        subscriptionTier: 'max',
+        modelIds: [],
+        allowedAutoModes: ['auto'],
+      }),
+    ).toBe(false);
   });
 
   it('intersects server admission with the bundled capability catalog', () => {
@@ -159,7 +236,9 @@ describe('managed model picker', () => {
 
     expect(state.status).toBe('ready');
     expect(state.gated).toEqual(entitlement.gated);
-    expect(state.options).toEqual(supported.filter((effort) => !entitlement.gated.includes(effort)));
+    expect(state.options).toEqual(
+      supported.filter((effort) => !entitlement.gated.includes(effort)),
+    );
     expect(state.gated).toContain(highest);
     expect(state.effort).toBe(entitlement.cap);
     expect(state.options).toContain(state.effort);
@@ -196,9 +275,7 @@ describe('managed model picker', () => {
     const entitlement = splitEffortsByEntitlement(getModelReasoning(modelId), 'free');
     const gatedEffort = entitlement.gated[0]!;
 
-    expect(getManagedOutboundEffort(modelId, undefined, gatedEffort, 'free')).toBe(
-      entitlement.cap,
-    );
+    expect(getManagedOutboundEffort(modelId, undefined, gatedEffort, 'free')).toBe(entitlement.cap);
     expect(getManagedOutboundEffort(modelId, undefined, gatedEffort, 'pro')).toBe(gatedEffort);
   });
 });

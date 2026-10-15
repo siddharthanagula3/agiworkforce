@@ -50,6 +50,56 @@ async function captureScreenshot(page, filename, options = {}) {
   console.log(`[screenshot] ${outputPath}`);
 }
 
+async function measureComposerContrast(page) {
+  await page.waitForFunction(() => {
+    const button = document.querySelector('.sp-attach-btn');
+    if (!button) return false;
+    const probe = document.createElement('span');
+    probe.style.color = getComputedStyle(button).getPropertyValue('--agi-ext-text-muted');
+    document.body.append(probe);
+    const expected = getComputedStyle(probe).color;
+    probe.remove();
+    return getComputedStyle(button).color === expected;
+  });
+  return page.evaluate(() => {
+    const color = (value) => {
+      const channels = value.match(/[\d.]+/g)?.map(Number);
+      if (!channels || channels.length < 3) throw new Error(`Unsupported CSS color ${value}`);
+      return [channels[0], channels[1], channels[2], channels[3] ?? 1];
+    };
+    const blend = (foreground, background, alpha = foreground[3]) =>
+      foreground.slice(0, 3).map((channel, i) => channel * alpha + background[i] * (1 - alpha));
+    const luminance = (rgb) =>
+      rgb.reduce((sum, channel, i) => {
+        const c = channel / 255;
+        const linear = c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        return sum + linear * [0.2126, 0.7152, 0.0722][i];
+      }, 0);
+    return [
+      ['#sp-input', 'placeholder', '::placeholder', 4.5],
+      ['#sp-cloud-gate-action', 'sign-in action', undefined, 4.5],
+      ['.sp-attach-btn', 'disabled attachment icon', undefined, 3],
+    ].map(([selector, label, pseudo, minimum]) => {
+      const element = document.querySelector(selector);
+      if (!element) throw new Error(`Contrast target missing: ${selector}`);
+      const chain = [];
+      for (let node = element; node; node = node.parentElement) chain.unshift(node);
+      const background = chain.reduce(
+        (rgb, node) => blend(color(getComputedStyle(node).backgroundColor), rgb),
+        [255, 255, 255],
+      );
+      const style = getComputedStyle(element, pseudo);
+      const opacity =
+        chain.reduce((alpha, node) => alpha * Number(getComputedStyle(node).opacity), 1) *
+        (pseudo ? Number(style.opacity) : 1);
+      const foreground = color(style.color);
+      const a = luminance(blend(foreground, background, foreground[3] * opacity));
+      const b = luminance(background);
+      return { label, minimum, contrast: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) };
+    });
+  });
+}
+
 function runChecked(command, args, failureMessage) {
   const result = spawnSync(command, args, {
     cwd: extensionRoot,
@@ -164,6 +214,12 @@ try {
   const extId = new URL(sw.url()).host;
   console.log('extension id:', extId);
   console.log('service worker booted:', sw.url());
+
+  const commands = await sw.evaluate(() => chrome.commands.getAll());
+  const actionShortcut = commands.find((command) => command.name === '_execute_action')?.shortcut;
+  if (!actionShortcut)
+    fail('action shortcut: Chrome did not assign the suggested keyboard binding');
+  console.log('action shortcut:', actionShortcut ?? 'unassigned');
 
   if (screenshotDirectory) {
     await sw.evaluate(() => chrome.storage.local.set({ agi_onboarding_completed: true }));
@@ -463,8 +519,14 @@ try {
     });
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1000);
-    const quickEnabled = await page.getAttribute('#sp-quick-mode-toggle', 'data-active');
-    if (quickEnabled !== 'true') fail(`Quick mode did not restore before test: ${quickEnabled}`);
+    const quickState = await page.evaluate(async () => ({
+      preference: (await chrome.storage.local.get('agi_quick_mode')).agi_quick_mode,
+      active: document.getElementById('sp-quick-mode-toggle')?.getAttribute('data-active'),
+      disabled: document.getElementById('sp-quick-mode-toggle')?.disabled,
+    }));
+    if (quickState.preference !== true || quickState.active !== 'false' || !quickState.disabled) {
+      fail(`Quick must remain unavailable without admitted routing: ${JSON.stringify(quickState)}`);
+    }
 
     const signedOutQuick = await page.evaluate(async () => {
       const originalSendMessage = chrome.runtime.sendMessage.bind(chrome.runtime);
@@ -488,6 +550,7 @@ try {
         captured: globalThis.__agiQuickChatMessage,
         quickEnabled:
           document.getElementById('sp-quick-mode-toggle')?.getAttribute('data-active') === 'true',
+        quickDisabled: document.getElementById('sp-quick-mode-toggle')?.disabled,
         messageCountBefore,
         messageCountAfter: document.querySelectorAll('#sp-messages > *').length,
         thinkingCount: document.querySelectorAll('.sp-thinking-wrap').length,
@@ -495,13 +558,14 @@ try {
     });
     if (
       signedOutQuick.captured !== null ||
-      signedOutQuick.quickEnabled !== true ||
+      signedOutQuick.quickEnabled !== false ||
+      signedOutQuick.quickDisabled !== true ||
       signedOutQuick.messageCountAfter !== signedOutQuick.messageCountBefore ||
       signedOutQuick.thinkingCount !== 0
     ) {
       fail(`Quick bypassed the signed-out owner gate: ${JSON.stringify(signedOutQuick)}`);
     }
-    console.log('\n[quick-owner] preference=restored signedOutOutbound=blocked');
+    console.log('\n[quick-owner] preference=retained signedOutQuick=unavailable outbound=blocked');
     await page.close();
   }
 
@@ -751,6 +815,15 @@ try {
 
     for (const colorScheme of ['dark', 'light']) {
       await page.emulateMedia({ colorScheme });
+      const contrast = await measureComposerContrast(page);
+      for (const item of contrast) {
+        if (item.contrast < item.minimum) {
+          fail(
+            `contrast ${colorScheme}: ${item.label} ${item.contrast.toFixed(2)}:1 < ${item.minimum}:1`,
+          );
+        }
+      }
+      console.log(`[contrast ${colorScheme}] ${JSON.stringify(contrast)}`);
       for (const width of [320, 390, 500]) {
         await page.setViewportSize({ width, height: 800 });
         await page.waitForTimeout(75);

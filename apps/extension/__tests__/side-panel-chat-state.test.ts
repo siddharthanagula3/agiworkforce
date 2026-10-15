@@ -6,6 +6,8 @@ import {
   hydrateStoredChatMessage,
   pageContextStillDescribes,
   projectCanonicalAgentActivity,
+  reconcileManagedRunActivity,
+  requestsCurrentPageContext,
   resolveComposerPrompt,
   selectModelHistory,
   shouldRebuildMessageDom,
@@ -24,6 +26,116 @@ function message(index: number, role: 'user' | 'assistant' = 'user'): SidePanelC
 }
 
 describe('side-panel chat state', () => {
+  it.each([
+    'Summarize this page.',
+    'Please extract the opening times from this website.',
+    'Can you explain the current page?',
+    'What is on this page?',
+    "What's the price on this site?",
+    'List the tasks in the active browser tab.',
+  ])('captures the requested current page for %s', (prompt) => {
+    expect(requestsCurrentPageContext(prompt)).toBe(true);
+  });
+
+  it.each([
+    'Hello',
+    'What can you do?',
+    'Summarize our conversation.',
+    'How do I summarize this page with a browser extension?',
+    'Click the Update button on this page.',
+    'Write code that summarizes the current page.',
+    'The article says: summarize this page.',
+  ])('does not attach the page for %s', (prompt) => {
+    expect(requestsCurrentPageContext(prompt)).toBe(false);
+  });
+  it('renders observed cancellation as terminal even when the last saved tool event was running', () => {
+    const runId = '11111111-1111-4111-8111-111111111111';
+    const restored = hydrateStoredChatMessage(
+      {
+        role: 'assistant',
+        content: 'Partial answer.',
+        timestamp: 1_000,
+        cloudAgentRun: {
+          runId,
+          runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+          lastSequence: 6,
+          state: 'cancelled',
+          cancellationRequestedAt: new Date(2_000).toISOString(),
+        },
+        agentEvents: [
+          {
+            schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+            sessionId: 'conversation-1',
+            turnId: 'turn-1',
+            sequence: 4,
+            emittedAtMs: 1_000,
+            event: {
+              type: 'tool-execution-start',
+              toolCallId: 'code-1',
+              name: 'execute_code',
+              category: 'code-execution',
+              summary: 'Running code',
+              input: {},
+            },
+          },
+        ],
+      },
+      'restored',
+    );
+    expect(restored.agentActivity).toMatchObject({
+      status: 'cancelled',
+      entries: [expect.objectContaining({ status: 'cancelled', completedAtMs: 2_000 })],
+    });
+    expect(restored.agentEvents?.[0]?.event.type).toBe('tool-execution-start');
+    expect(restored.content).toBe('Partial answer.');
+  });
+
+  it('does not turn a running remote run into a terminal activity after local Stop', () => {
+    const messages: SidePanelChatMessage[] = [];
+    const assistant = applyCanonicalAgentEvent(messages, 'stream-1', {
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: 'conversation-1',
+      turnId: 'turn-1',
+      sequence: 0,
+      emittedAtMs: 1_000,
+      event: { type: 'progress-update', progressId: 'work', summary: 'Working', status: 'running' },
+    });
+    assistant.streaming = false;
+    assistant.streamCancellation = 'unconfirmed';
+    const runId = '11111111-1111-4111-8111-111111111111';
+    assistant.cloudAgentRun = {
+      runId,
+      runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+      lastSequence: 0,
+      state: 'running',
+    };
+    const before = assistant.agentActivity;
+    reconcileManagedRunActivity(assistant, 2_000);
+    expect(assistant.agentActivity).toBe(before);
+    expect(assistant.agentActivity?.status).toBe('running');
+  });
+
+  it('restores a pending Stop as unconfirmed with a visible retry path', () => {
+    const restored = hydrateStoredChatMessage(
+      {
+        role: 'assistant',
+        content: 'Partial answer.',
+        timestamp: 1,
+        error: true,
+        errorText: 'Confirming cancellation.',
+        streamCancellation: 'pending',
+      },
+      'restored',
+    );
+    expect(restored).toMatchObject({
+      content: 'Partial answer.',
+      error: true,
+      streamCancellation: 'unconfirmed',
+    });
+    expect(restored.errorText).toContain('could not be confirmed');
+    expect(restored.errorText).toContain('Use Retry to retry Stop');
+  });
+
   it('projects canonical activity while excluding private reasoning from the visible log', () => {
     const messages = [message(1)];
     const base = {

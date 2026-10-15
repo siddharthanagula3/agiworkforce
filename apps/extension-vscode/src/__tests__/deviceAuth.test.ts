@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
+import { createServer } from 'node:http';
 import {
   describeDeviceAuthorizationBrowser,
   deviceAuthorizationOpenTimeoutMs,
@@ -462,10 +463,66 @@ describe('VS Code AGI Cloud credential storage', () => {
     await expect(signOutOfAgiCloud(secrets, post)).resolves.toBe(false);
 
     expect(post).toHaveBeenCalledWith(
-      'https://api.agiworkforce.com/api/auth/logout',
+      'https://agiworkforce.com/api/auth/logout',
       {},
       expect.objectContaining({ Authorization: 'Bearer signed-developer-token' }),
     );
     expect(secrets.entries.size).toBe(0);
+  });
+
+  it('keeps localhost device-account revocation on the configured web API at port 3000', async () => {
+    const original = vscode.workspace.getConfiguration('agiWorkforce');
+    vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+      ...original,
+      inspect: <T>(key: string) =>
+        key === 'apiEndpoint'
+          ? { key, globalValue: 'http://localhost:3000/api/llm/v1' as T }
+          : original.inspect<T>(key),
+    });
+    const secrets = createSecretStorage();
+    await secrets.store(ACCOUNT_TOKEN_KEY, 'synthetic-local-device-token');
+    const post = vi.fn<DeviceAuthPost>().mockResolvedValue({ status: 200, body: '{"ok":true}' });
+    await expect(signOutOfAgiCloud(secrets, post)).resolves.toBe(true);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith(
+      'http://localhost:3000/api/auth/logout',
+      {},
+      expect.objectContaining({ Authorization: 'Bearer synthetic-local-device-token' }),
+    );
+    expect(secrets.entries.size).toBe(0);
+  });
+
+  it('sends the production revocation transport only to the configured private loopback server', async () => {
+    const received: Array<{ path: string; authorization: string | undefined }> = [];
+    const server = createServer((request, response) => {
+      received.push({ path: request.url!, authorization: request.headers.authorization });
+      response.setHeader('content-type', 'application/json');
+      response.end('{"ok":true}');
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string')
+        throw new Error('The private test server did not bind');
+      const original = vscode.workspace.getConfiguration('agiWorkforce');
+      vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+        ...original,
+        inspect: <T>(key: string) =>
+          key === 'apiEndpoint'
+            ? { key, globalValue: `http://127.0.0.1:${address.port}/api/llm/v1` as T }
+            : original.inspect<T>(key),
+      });
+      const secrets = createSecretStorage();
+      await secrets.store(ACCOUNT_TOKEN_KEY, 'synthetic-local-device-token');
+      await expect(signOutOfAgiCloud(secrets)).resolves.toBe(true);
+      expect(received).toEqual([
+        { path: '/api/auth/logout', authorization: 'Bearer synthetic-local-device-token' },
+      ]);
+      expect(secrets.entries.size).toBe(0);
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
   });
 });

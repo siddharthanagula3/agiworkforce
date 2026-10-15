@@ -107,6 +107,35 @@ function agentEvent(sequence = 0): AgentEventEnvelope {
 }
 
 describe('conversation-history', () => {
+  it('preserves stopped partial output, cancellation state and error text through storage normalization', async () => {
+    const warning =
+      'AGI Cloud cancellation could not be confirmed. Use Retry to retry Stop, or start a new chat.';
+    const conversationId = await saveConversation([
+      {
+        role: 'assistant',
+        content: 'The partial reply stays visible.',
+        timestamp: Date.now(),
+        error: true,
+        errorText: warning,
+        streamCancellation: 'unconfirmed',
+        cloudAgentRun: {
+          runId: RUN_ID,
+          runPath: `/api/llm/v1/chat/completions/runs/${RUN_ID}`,
+          lastSequence: 1,
+          state: 'running',
+        },
+      },
+    ]);
+    const restored = await getConversation(conversationId);
+    expect(restored?.messages[0]).toMatchObject({
+      content: 'The partial reply stays visible.',
+      error: true,
+      errorText: warning,
+      streamCancellation: 'unconfirmed',
+      cloudAgentRun: { runId: RUN_ID, state: 'running' },
+    });
+  });
+
   beforeEach(() => {
     for (const key of Object.keys(_store)) delete _store[key];
     chromeMock.runtime.lastError = undefined;

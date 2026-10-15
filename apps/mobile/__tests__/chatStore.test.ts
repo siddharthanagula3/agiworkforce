@@ -1237,6 +1237,7 @@ describe('chatStore, streaming state', () => {
       expect(mockConsolidateFactsFromTurn).toHaveBeenCalledWith({
         message: 'My name is Grace Hopper.',
         conversationId: CONV_ID,
+        includeSensitiveTopics: false,
       });
     });
 

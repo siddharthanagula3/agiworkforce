@@ -28,23 +28,24 @@ export function buildLauncherStyles(): string {
     :host { display:block; }
     .agi-launcher-btn {
       width:48px; height:48px;
-      background:var(--agi-ext-accent);
+      background:var(--agi-ext-primary);
       border-radius:50%;
-      border:1px solid color-mix(in srgb, var(--agi-ext-on-accent) 18%, transparent);
+      border:1px solid var(--agi-ext-border-control);
       cursor:pointer;
       display:flex; align-items:center; justify-content:center;
-      box-shadow:0 8px 24px color-mix(in srgb, var(--agi-ext-accent) 34%, transparent);
+      box-shadow:0 8px 24px var(--agi-ext-modal-shadow);
       pointer-events:all;
-      transition:transform 0.18s,box-shadow 0.18s;
-      color:var(--agi-ext-on-accent);
+      transition:background 0.18s,transform 0.18s,box-shadow 0.18s;
+      color:var(--agi-ext-on-primary);
       font-size:20px;
       line-height:1;
       user-select:none;
       -webkit-user-select:none;
     }
     .agi-launcher-btn:hover {
+      background:var(--agi-ext-primary-hover);
       transform:scale(1.08);
-      box-shadow:0 10px 30px color-mix(in srgb, var(--agi-ext-accent) 44%, transparent);
+      box-shadow:0 10px 30px var(--agi-ext-modal-shadow);
     }
     .agi-launcher-btn:active { transform:scale(0.95); }
     .agi-launcher-btn:focus-visible {
@@ -56,7 +57,7 @@ export function buildLauncherStyles(): string {
       right:56px; bottom:10px;
       background:var(--agi-ext-surface); color:var(--agi-ext-text);
       border:1px solid var(--agi-ext-border);
-      box-shadow:0 8px 24px color-mix(in srgb, black 20%, transparent);
+      box-shadow:0 8px 24px var(--agi-ext-modal-shadow);
       font-size:12px;
       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
       padding:6px 10px; border-radius:10px;

@@ -4,6 +4,7 @@ import {
   ManagedCloudChatHttpError,
   chatSyncPullPath,
   type ChatSyncPullResponse,
+  type ManagedCloudUpdateConversationRequest,
 } from '@agiworkforce/cloud-contracts';
 import {
   applyConversationDeltas,
@@ -16,10 +17,10 @@ import {
   claimCloudConversationBinding,
   cloudMessageSyncFingerprint,
   conversationFlagsNeedSync,
-  conversationProjectNeedsSync,
+  conversationMetadataNeedsSync,
   deleteConversation,
   getConversation,
-  isCloudPersistenceEligible,
+  isCloudMetadataPersistenceEligible,
   listConversations,
   listConversationsNeedingCloudSync,
   pendingCloudMessages,
@@ -205,7 +206,7 @@ async function runConversationFlush(
     const entry = await getConversation(owner, conversationId);
     if (!entry) return;
 
-    if (!isCloudPersistenceEligible(entry)) {
+    if (!isCloudMetadataPersistenceEligible(entry)) {
       await blockCloudPersistence(owner, conversationId, 'non-cloud-runtime');
       return;
     }
@@ -242,20 +243,14 @@ async function flushEligibleConversation(
   signal: AbortSignal,
 ): Promise<void> {
   const conversationId = candidate.id;
-  const needsTitleUpdate =
-    candidate.cloudSync?.conversationId !== undefined &&
-    candidate.cloudSync.syncedTitle !== candidate.title;
+  const needsMetadataUpdate = conversationMetadataNeedsSync(candidate);
   const needsWorkspaceRecovery =
     candidate.cloudSync?.conversationId !== undefined &&
     (candidate.cloudSync.organizationId === undefined ||
       candidate.cloudSync.createAcknowledged !== true);
-  const needsProjectUpdate = conversationProjectNeedsSync(candidate);
-  const needsFlagUpdate = conversationFlagsNeedSync(candidate);
   if (
     selectFlushableMessages(candidate, streaming).length === 0 &&
-    !needsTitleUpdate &&
-    !needsProjectUpdate &&
-    !needsFlagUpdate &&
+    !needsMetadataUpdate &&
     !needsWorkspaceRecovery
   ) {
     return;
@@ -305,6 +300,9 @@ async function flushEligibleConversation(
         createAcknowledged: true,
         organizationId,
         syncedProjectId,
+        syncedPinned: created.pinned,
+        syncedStarred: created.starred,
+        syncedArchived: created.archived,
         lastAttemptAt: Date.now(),
       });
     } catch (error) {
@@ -418,48 +416,48 @@ async function flushEligibleConversation(
     ]).catch(() => undefined);
   }
 
-  if ((entry.projectId ?? null) !== syncedProjectId) {
+  const metadataEntry = await getConversation(owner, conversationId);
+  if (!metadataEntry) return;
+  const metadata: ManagedCloudUpdateConversationRequest = {
+    ...(metadataEntry.title !== metadataEntry.cloudSync?.syncedTitle
+      ? { title: metadataEntry.title }
+      : {}),
+    ...((metadataEntry.projectId ?? null) !== syncedProjectId
+      ? { projectId: metadataEntry.projectId ?? null }
+      : {}),
+    ...(metadataEntry.pinned !== undefined &&
+    metadataEntry.pinned !== metadataEntry.cloudSync?.syncedPinned
+      ? { pinned: metadataEntry.pinned }
+      : {}),
+    ...(metadataEntry.starred !== undefined &&
+    metadataEntry.starred !== metadataEntry.cloudSync?.syncedStarred
+      ? { starred: metadataEntry.starred }
+      : {}),
+    ...(metadataEntry.archived !== undefined &&
+    metadataEntry.archived !== metadataEntry.cloudSync?.syncedArchived
+      ? { archived: metadataEntry.archived }
+      : {}),
+  };
+  if (Object.keys(metadata).length > 0) {
     try {
-      const updated = await client.updateConversation(
-        cloudConversationId,
-        { projectId: entry.projectId ?? null },
-        { signal, organizationId },
-      );
-      syncedProjectId = updated.projectId;
-      await recordCloudSyncState(owner, conversationId, { syncedProjectId });
-    } catch (error) {
-      await handleFlushError(owner, conversationId, error);
-      return;
-    }
-  }
-
-  if (entry.title !== entry.cloudSync?.syncedTitle && messages.length > 0) {
-    try {
-      await client.updateConversation(
-        cloudConversationId,
-        { title: entry.title },
-        { signal, organizationId },
-      );
-      await recordCloudMessagesSynced(owner, conversationId, [], entry.title).catch(
-        () => undefined,
-      );
-    } catch (error) {
-      await handleFlushError(owner, conversationId, error);
-      return;
-    }
-  }
-
-  const latest = await getConversation(owner, conversationId);
-  if (latest && conversationFlagsNeedSync(latest)) {
-    const flags = { pinned: latest.pinned === true, archived: latest.archived === true };
-    try {
-      await client.updateConversation(cloudConversationId, flags, { signal, organizationId });
+      const updated = await client.updateConversation(cloudConversationId, metadata, {
+        signal,
+        organizationId,
+      });
       await recordCloudSyncState(owner, conversationId, {
-        syncedPinned: flags.pinned,
-        syncedArchived: flags.archived,
+        state: 'idle',
+        syncedTitle: updated.title,
+        syncedProjectId: updated.projectId,
+        syncedPinned: updated.pinned,
+        syncedStarred: updated.starred,
+        syncedArchived: updated.archived,
+        blockedReason: undefined,
+        lastError: undefined,
+        retryAfter: undefined,
       });
     } catch (error) {
       await handleFlushError(owner, conversationId, error);
+      return;
     }
   }
 }

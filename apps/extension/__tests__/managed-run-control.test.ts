@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ManagedCloudAgentRunHttpError,
   AGENT_EVENT_SCHEMA_VERSION,
   createManagedCloudAgentRunClient,
+  readManagedCloudAgentRunHandle,
+  MANAGED_CLOUD_AGENT_RUN_ID_HEADER,
+  MANAGED_CLOUD_AGENT_RUN_URL_HEADER,
+  MANAGED_CLOUD_TOOL_LOOP_HEADER,
+  MANAGED_CLOUD_TOOL_LOOP_DURABLE,
 } from '@agiworkforce/cloud-contracts';
 import type {
   ManagedCloudAgentRunClient,
@@ -10,6 +15,7 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import {
   ALL_MANAGED_RUN_STATES,
+  MANAGED_RUN_CANCELLATION_CONFIRMATION_TIMEOUT_MS,
   cancelChromeManagedRun,
   cancelAndConfirmChromeManagedRun,
   findChromeManagedRunByRequestId,
@@ -50,6 +56,8 @@ function completedRun() {
     updatedAt: '2026-07-17T20:00:00.000Z',
   };
 }
+
+afterEach(() => vi.useRealTimers());
 
 describe('Chrome managed run control', () => {
   it.each([401, 403])('classifies HTTP %s as an auth boundary failure', async (status) => {
@@ -161,8 +169,159 @@ describe('Chrome managed run control', () => {
       dependencies({ listRuns: vi.fn(), getRun: vi.fn(), followRun: vi.fn(), cancelRun }),
     );
 
-    expect(cancelRun).toHaveBeenCalledWith(RUN_ID, {});
+    expect(cancelRun).toHaveBeenCalledWith(RUN_ID, { signal: expect.any(AbortSignal) });
     expect(result).toMatchObject({ status: 'success', run: { state: 'cancelled' } });
+  });
+
+  it('follows an actual detachable response reference after202 until a terminal owned snapshot is observed', async () => {
+    const handle = readManagedCloudAgentRunHandle(
+      new Response('', {
+        headers: {
+          [MANAGED_CLOUD_AGENT_RUN_ID_HEADER]: RUN_ID,
+          [MANAGED_CLOUD_AGENT_RUN_URL_HEADER]: reference.runPath,
+          [MANAGED_CLOUD_TOOL_LOOP_HEADER]: MANAGED_CLOUD_TOOL_LOOP_DURABLE,
+        },
+      }),
+    )!;
+    const actualReference = { ...handle, lastSequence: 3 };
+    expect(actualReference).not.toHaveProperty('state');
+    const requested = {
+      ...completedRun(),
+      state: 'running' as const,
+      lastEventSequence: 3,
+      completedAt: null,
+      cancellationRequestedAt: '2026-07-17T20:01:00.000Z',
+    };
+    const stopped = { ...requested, state: 'cancelled' as const, lastEventSequence: 6 };
+    let deliverTerminal!: (response: Response) => void;
+    const terminal = new Promise<Response>((resolve) => {
+      deliverTerminal = resolve;
+    });
+    const requests: Array<{
+      path: string;
+      method: string;
+      token: string | null;
+      signal: AbortSignal | null | undefined;
+    }> = [];
+    const fetchImpl = vi.fn(async (path: string, init?: RequestInit) => {
+      requests.push({
+        path,
+        method: init?.method ?? 'GET',
+        token: new Headers(init?.headers).get('Authorization'),
+        signal: init?.signal,
+      });
+      return init?.method === 'POST'
+        ? Response.json({ run: requested }, { status: 202 })
+        : terminal;
+    });
+    const getAuthToken = vi.fn(async () => 'captured-owner-token');
+    const createClient = vi.fn((token: string) =>
+      createManagedCloudAgentRunClient({
+        baseUrl: 'https://qa.example',
+        getAuthToken: async () => token,
+        fetchImpl,
+      }),
+    );
+    let resolved = false;
+    const result = cancelChromeManagedRun(actualReference, { getAuthToken, createClient }).then(
+      (value) => {
+        resolved = true;
+        return value;
+      },
+    );
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    expect(resolved).toBe(false);
+    expect(requests.map((request) => request.method)).toEqual(['POST', 'GET']);
+    expect(requests.every((request) => request.token === 'Bearer captured-owner-token')).toBe(true);
+    expect(requests[0]!.signal).toBe(requests[1]!.signal);
+    expect(requests[0]!.signal?.aborted).toBe(false);
+    deliverTerminal(Response.json({ run: stopped, events: [], nextAfterSequence: 3 }));
+    expect(await result).toMatchObject({
+      status: 'success',
+      run: { id: RUN_ID, state: 'cancelled', lastEventSequence: 6 },
+    });
+    expect(getAuthToken).toHaveBeenCalledOnce();
+    expect(createClient).toHaveBeenCalledOnce();
+  });
+
+  it('does not mistake a nonterminal follow boundary for confirmed cancellation', async () => {
+    const requested = { ...completedRun(), state: 'running' as const };
+    const followRun = vi.fn(async () => ({
+      run: { ...requested, state: 'needs_approval' as const },
+      lastSequence: 4,
+    }));
+    const result = await cancelChromeManagedRun(
+      reference,
+      dependencies({
+        listRuns: vi.fn(),
+        getRun: vi.fn(),
+        cancelRun: vi.fn(async () => requested),
+        followRun,
+      }),
+    );
+    expect(result).toMatchObject({
+      status: 'error',
+      code: 'server_error',
+      message: expect.stringContaining('without confirming'),
+    });
+  });
+
+  it.each(['run', 'owner'] as const)(
+    'rejects a changed %s during cancellation confirmation',
+    async (changed) => {
+      const requested = { ...completedRun(), state: 'running' as const };
+      const stopped = {
+        ...requested,
+        state: 'cancelled' as const,
+        ...(changed === 'run'
+          ? { id: '22222222-2222-4222-8222-222222222222' }
+          : { userId: 'other-user' }),
+      };
+      const result = await cancelChromeManagedRun(
+        reference,
+        dependencies({
+          listRuns: vi.fn(),
+          getRun: vi.fn(),
+          cancelRun: vi.fn(async () => requested),
+          followRun: vi.fn(async () => ({ run: stopped, lastSequence: 4 })),
+        }),
+      );
+      expect(result).toMatchObject({
+        status: 'error',
+        message: expect.stringContaining('run or owner'),
+      });
+    },
+  );
+
+  it('bounds confirmation without allowing a late terminal callback to report success', async () => {
+    vi.useFakeTimers();
+    let finish!: (value: { run: ReturnType<typeof completedRun>; lastSequence: number }) => void;
+    const followRun = vi.fn(
+      () =>
+        new Promise<{ run: ReturnType<typeof completedRun>; lastSequence: number }>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const operation = cancelChromeManagedRun(
+      reference,
+      dependencies({
+        listRuns: vi.fn(),
+        getRun: vi.fn(),
+        cancelRun: vi.fn(async () => ({ ...completedRun(), state: 'running' as const })),
+        followRun,
+      }),
+    );
+    await vi.waitFor(() => expect(followRun).toHaveBeenCalledOnce());
+    await vi.advanceTimersByTimeAsync(MANAGED_RUN_CANCELLATION_CONFIRMATION_TIMEOUT_MS);
+    expect(await operation).toMatchObject({
+      status: 'error',
+      code: 'server_error',
+      message: expect.stringContaining('deadline'),
+    });
+    expect(followRun.mock.calls[0]![1]?.signal?.aborted).toBe(true);
+    finish({ run: completedRun(), lastSequence: 4 });
+    await Promise.resolve();
+    expect(followRun).toHaveBeenCalledOnce();
   });
 
   it('finds a Chrome run through an exact tenant-scoped request id filter', async () => {
@@ -331,7 +490,7 @@ describe('Chrome Stop authoritative terminal confirmation', () => {
       controller.signal,
     );
     await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(2));
-    expect(readSignal).toBe(controller.signal);
+    expect(readSignal?.aborted).toBe(false);
     controller.abort();
     await expect(result).resolves.toMatchObject({ status: 'error', code: 'server_error' });
     expect(readSignal?.aborted).toBe(true);

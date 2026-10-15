@@ -51,7 +51,9 @@ function decodeBase64UrlSegment(segment: string): string | null {
   }
 }
 
-export function managedCloudOwnerFromSessionToken(token: unknown): ManagedCloudOwner | null {
+export function managedCloudSessionTokenClaims(
+  token: unknown,
+): Readonly<Record<string, unknown>> | null {
   if (typeof token !== 'string') return null;
   const segments = token.split('.');
   if (segments.length !== 3) return null;
@@ -69,7 +71,12 @@ export function managedCloudOwnerFromSessionToken(token: unknown): ManagedCloudO
   }
   if (!claims || typeof claims !== 'object' || Array.isArray(claims)) return null;
 
-  const record = claims as Record<string, unknown>;
+  return claims as Readonly<Record<string, unknown>>;
+}
+
+export function managedCloudOwnerFromSessionToken(token: unknown): ManagedCloudOwner | null {
+  const record = managedCloudSessionTokenClaims(token);
+  if (!record) return null;
   return normalizeManagedCloudOwner({
     accountId: record['sub'],
     authIncarnation: record['sid'],

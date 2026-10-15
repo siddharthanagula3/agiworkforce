@@ -1,4 +1,8 @@
-import type { ComputerUseCommandResponse } from '../../types';
+import type {
+  CancelComputerUseMessage,
+  ComputerUseCommandResponse,
+  GetComputerUseStateMessage,
+} from '../../types';
 import type { AgentLoopStep, AgentLoopUsage } from '../computer-use/agentLoop';
 import { APPROVAL_TIMEOUT_MS } from '../computer-use/agentLoop';
 import {
@@ -7,6 +11,11 @@ import {
 } from '../computer-use/browserControlConsent';
 import { getAuthToken } from '../computer-use/cloudAgentClient';
 import { buildImageViewerButton } from './mediaViewer';
+import {
+  uploadSelectedUserFiles,
+  type BrowserUploadBinding,
+  type BrowserUploadedFileMetadata,
+} from '../computer-use/userFileUpload';
 
 export const COMPUTER_USE_PANEL_CSS = `
   /* Computer Use tab panel */
@@ -27,8 +36,8 @@ export const COMPUTER_USE_PANEL_CSS = `
     align-items: flex-start;
     gap: 10px;
     padding: 10px 14px;
-    background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
-    border-bottom: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent);
+    background: var(--agi-ext-surface);
+    border-bottom: 1px solid var(--agi-ext-border);
     font-size: var(--type-caption-size);
     color: var(--agi-ext-text);
     flex-shrink: 0;
@@ -58,7 +67,7 @@ export const COMPUTER_USE_PANEL_CSS = `
 
   .sp-cu-banner-title {
     font-weight: 600;
-    color: var(--agi-ext-accent-text);
+    color: var(--agi-ext-text);
     margin-bottom: 2px;
   }
 
@@ -123,7 +132,7 @@ export const COMPUTER_USE_PANEL_CSS = `
 
   .sp-cu-clear-btn {
     background: none;
-    border: 1px solid var(--agi-ext-border);
+    border: 1px solid var(--agi-ext-border-control);
     border-radius: var(--corner-control);
     color: var(--agi-ext-text-muted);
     font-size: var(--type-label-size);
@@ -132,10 +141,11 @@ export const COMPUTER_USE_PANEL_CSS = `
     transition: border-color var(--duration-instant), color var(--duration-instant);
   }
 
-  .sp-cu-clear-btn:hover {
-    border-color: var(--agi-ext-accent);
-    color: var(--agi-ext-accent-text);
+  .sp-cu-clear-btn:hover:not(:disabled) {
+    background: var(--agi-ext-hover);
+    color: var(--agi-ext-text);
   }
+  .sp-cu-clear-btn:disabled { color: var(--agi-ext-text-muted); cursor: wait; }
 
   .sp-cu-takeover-btn {
     background: none;
@@ -157,9 +167,9 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-run-btn {
-    background: var(--agi-ext-accent);
-    color: var(--agi-ext-on-accent);
-    border: none;
+    background: var(--agi-ext-primary);
+    color: var(--agi-ext-on-primary);
+    border: 1px solid var(--agi-ext-border-control);
     border-radius: var(--corner-control);
     font-size: var(--type-label-size);
     font-weight: 500;
@@ -169,20 +179,21 @@ export const COMPUTER_USE_PANEL_CSS = `
     flex-shrink: 0;
   }
 
-  .sp-cu-run-btn:hover {
-    background: var(--agi-ext-accent-hover);
+  .sp-cu-run-btn:hover:not(:disabled) {
+    background: var(--agi-ext-primary-hover);
   }
 
   .sp-cu-run-btn:disabled {
     cursor: not-allowed;
-    opacity: 0.55;
+    color: var(--agi-ext-text-muted);
+    background: var(--agi-ext-hover);
   }
 
   .sp-cu-stop-btn {
     display: none;
-    background: var(--agi-ext-danger-bg);
-    color: var(--agi-ext-danger-text);
-    border: 1px solid var(--agi-ext-danger-border);
+    background: var(--agi-ext-primary);
+    color: var(--agi-ext-on-primary);
+    border: 1px solid var(--agi-ext-border-control);
     border-radius: var(--corner-control);
     font-size: var(--type-label-size);
     font-weight: 600;
@@ -195,13 +206,14 @@ export const COMPUTER_USE_PANEL_CSS = `
     display: inline-flex;
   }
 
-  .sp-cu-stop-btn:hover {
-    border-color: var(--agi-ext-danger);
+  .sp-cu-stop-btn:hover:not(:disabled) {
+    background: var(--agi-ext-primary-hover);
   }
 
   .sp-cu-stop-btn:disabled {
     cursor: wait;
-    opacity: 0.65;
+    color: var(--agi-ext-text-muted);
+    background: var(--agi-ext-hover);
   }
 
   /* Action log */
@@ -404,8 +416,9 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   /* Step kind colours */
-  .sp-cu-step.kind-tool_call .sp-cu-step-icon { color: var(--agi-ext-accent-text); }
-  .sp-cu-step.kind-tool_result .sp-cu-step-icon { color: var(--agi-ext-success-text); }
+  .sp-cu-step.kind-tool_call .sp-cu-step-icon { color: var(--agi-ext-text-muted); }
+  .sp-cu-step.kind-tool_result .sp-cu-step-icon { color: var(--agi-ext-text-muted); }
+  .sp-cu-step.kind-tool_result[data-outcome='succeeded'] .sp-cu-step-icon { color: var(--agi-ext-success-text); }
   .sp-cu-step.kind-error .sp-cu-step-icon { color: var(--agi-ext-danger-text); }
   .sp-cu-step.kind-final .sp-cu-step-icon { color: var(--agi-ext-success-text); }
   .sp-cu-step.kind-screenshot .sp-cu-step-icon { color: var(--agi-ext-text-muted); }
@@ -453,8 +466,8 @@ export const COMPUTER_USE_PANEL_CSS = `
   .sp-cu-approval {
     margin: 8px 14px;
     padding: 10px 12px;
-    background: color-mix(in srgb, var(--agi-ext-warning) 10%, transparent);
-    border: 1px solid color-mix(in srgb, var(--agi-ext-warning) 40%, transparent);
+    background: var(--agi-ext-warning-bg);
+    border: 1px solid var(--agi-ext-warning-border);
     border-radius: var(--corner-field);
     font-size: var(--type-caption-size);
   }
@@ -464,14 +477,15 @@ export const COMPUTER_USE_PANEL_CSS = `
   .sp-cu-approval.expired {
     background: transparent;
     border-color: var(--agi-ext-border);
-    opacity: 0.7;
   }
 
   .sp-cu-approval.expired .sp-cu-approval-allow,
   .sp-cu-approval.expired .sp-cu-approval-task,
   .sp-cu-approval.expired .sp-cu-approval-deny {
     cursor: not-allowed;
-    opacity: 0.5;
+    color: var(--agi-ext-text-muted);
+    background: var(--agi-ext-hover);
+    border-color: var(--agi-ext-border-control);
   }
 
   .sp-cu-approval-title {
@@ -502,9 +516,9 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-approval-allow {
-    background: var(--agi-ext-accent);
-    color: var(--agi-ext-on-accent);
-    border: none;
+    background: var(--agi-ext-primary);
+    color: var(--agi-ext-on-primary);
+    border: 1px solid var(--agi-ext-border-control);
     border-radius: var(--corner-control);
     padding: 4px 14px;
     font-size: var(--type-caption-size);
@@ -515,7 +529,7 @@ export const COMPUTER_USE_PANEL_CSS = `
   .sp-cu-approval-task,
   .sp-cu-approval-deny {
     background: none;
-    border: 1px solid var(--agi-ext-border);
+    border: 1px solid var(--agi-ext-border-control);
     color: var(--agi-ext-text-muted);
     border-radius: var(--corner-control);
     padding: 4px 14px;
@@ -523,19 +537,22 @@ export const COMPUTER_USE_PANEL_CSS = `
     cursor: pointer;
   }
 
-  .sp-cu-approval-allow:hover {
-    background: var(--agi-ext-accent-hover);
+  .sp-cu-approval-allow:hover:not(:disabled) {
+    background: var(--agi-ext-primary-hover);
   }
 
-  .sp-cu-approval-task:hover {
+  .sp-cu-approval-task:hover:not(:disabled) {
     border-color: var(--agi-ext-accent);
     color: var(--agi-ext-text);
   }
 
-  .sp-cu-approval-deny:hover {
+  .sp-cu-approval-deny:hover:not(:disabled) {
     border-color: var(--agi-ext-danger-border);
     color: var(--agi-ext-danger-text);
   }
+  .sp-cu-approval-allow:disabled,
+  .sp-cu-approval-task:disabled,
+  .sp-cu-approval-deny:disabled { color: var(--agi-ext-text-muted); background: var(--agi-ext-hover); cursor: not-allowed; }
 
   /* Auth status chip in controls bar */
   .sp-cu-auth-chip {
@@ -557,9 +574,9 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-auth-chip.unauthed {
-    background: color-mix(in srgb, var(--agi-ext-warning) 12%, transparent);
+    background: var(--agi-ext-warning-bg);
     color: var(--agi-ext-warning-text);
-    border: 1px solid color-mix(in srgb, var(--agi-ext-warning) 35%, transparent);
+    border: 1px solid var(--agi-ext-warning-border);
   }
 
   .sp-cu-auth-dot {
@@ -596,6 +613,7 @@ const TOOL_EMOJI: Record<string, string> = {
   click: '\u{1F5B1}', // mouse
   scroll: '\u{1F4DC}', // scroll
   type: '\u{2328}', // keyboard
+  select_option: '\u{25BE}',
   read_dom: '\u{1F4C4}', // document
   navigate: '\u{1F310}', // globe
   find: '\u{1F50D}', // magnifier
@@ -615,7 +633,7 @@ const KIND_EMOJI: Record<string, string> = {
 export type AutofillOutcome = 'escalation' | 'success' | 'error';
 
 /** `run_stopped` reports the end of a browser-control run, not an autofill. */
-export type PanelNoticeKind = AutofillOutcome | 'run_stopped' | 'handoff';
+export type PanelNoticeKind = AutofillOutcome | 'run_stopped' | 'handoff' | 'browser_error';
 
 const BANNER_PRESENTATION: Record<PanelNoticeKind, { title: string; icon: string; style: string }> =
   {
@@ -632,6 +650,11 @@ const BANNER_PRESENTATION: Record<PanelNoticeKind, { title: string; icon: string
     error: {
       title: 'Autofill could not run',
       icon: '\u{26A0}', // warning sign
+      style: 'error',
+    },
+    browser_error: {
+      title: 'Browser task could not run',
+      icon: '\u{26A0}',
       style: 'error',
     },
     run_stopped: {
@@ -678,11 +701,14 @@ export function describeCancellationReason(reason: unknown): string | null {
  * controls bar reads "agent running" forever.
  */
 const RUN_ACTIVITY_TIMEOUT_MS = 90_000;
+const RUN_COMMAND_TIMEOUT_MS = 15_000;
 
 const STOP_REFUSED_MESSAGE =
   'The run could not be stopped and may still be driving the tab. Close the tab to be certain.';
 const RUN_LOST_MESSAGE =
   'The background service stopped reporting on this run, so it is no longer being tracked here.';
+const RUN_STATE_UNAVAILABLE_MESSAGE =
+  'Browser task status is unavailable. The task may still be running. Use Stop to try again.';
 const RUN_RECOVERED_MESSAGE =
   'A browser-control run started before this panel was reopened is still active. Use Stop to end it.';
 
@@ -702,7 +728,11 @@ export interface ComputerUsePanelAPI {
     toolName: string,
     description: string,
     canAllowForTask: boolean,
-    resolve: (decision: ComputerUseApprovalDecision) => void,
+    resolve: (
+      decision: ComputerUseApprovalDecision,
+      upload?: BrowserUploadedFileMetadata[],
+    ) => void,
+    upload?: { binding: BrowserUploadBinding; assertCurrent: () => void | Promise<void> },
   ): void;
   onRunAutofill(handler: () => void): void;
   onStartTask(handler: (goal: string) => void): void;
@@ -835,6 +865,13 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
 
   let activeRunId: string | null = null;
   let activeRunGeneration = 0;
+  let runStateRevision = 0;
+  let cancellationPending = false;
+  let panelClosed = false;
+  const pendingApprovals = new Set<() => void>();
+  const dismissPendingApprovals = (): void => {
+    for (const dismiss of [...pendingApprovals]) dismiss();
+  };
   let runActivityTimer: ReturnType<typeof setTimeout> | null = null;
 
   function clearRunActivityWatchdog(): void {
@@ -851,6 +888,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   }
 
   function setRunState(running: boolean, runId?: string, generation?: number): void {
+    if (panelClosed) return;
     if (
       running &&
       generation !== undefined &&
@@ -860,6 +898,15 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       return;
     }
     if (!running && runId && activeRunId && activeRunId !== runId) return;
+    if (
+      !running ||
+      (runId && runId !== activeRunId) ||
+      (generation !== undefined && generation > activeRunGeneration)
+    ) {
+      dismissPendingApprovals();
+    }
+    runStateRevision += 1;
+    cancellationPending = false;
     activeRunId = running && runId ? runId : running ? activeRunId : null;
     if (running && generation !== undefined && Number.isSafeInteger(generation)) {
       activeRunGeneration = Math.max(activeRunGeneration, generation);
@@ -944,17 +991,29 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     armRunActivityWatchdog();
   }
 
-  async function readBackgroundRunState(): Promise<ComputerUseCommandResponse | null> {
+  async function requestRunCommand(
+    message: GetComputerUseStateMessage | CancelComputerUseMessage,
+  ): Promise<ComputerUseCommandResponse | null> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
-      const response: unknown = await chrome.runtime.sendMessage({
-        type: 'GET_COMPUTER_USE_STATE',
-      });
-      return response && typeof response === 'object'
+      const response: unknown = await Promise.race([
+        chrome.runtime.sendMessage(message),
+        new Promise<null>((resolve) => {
+          timeout = setTimeout(() => resolve(null), RUN_COMMAND_TIMEOUT_MS);
+        }),
+      ]);
+      return response && typeof response === 'object' && !Array.isArray(response)
         ? (response as ComputerUseCommandResponse)
         : null;
     } catch {
       return null;
+    } finally {
+      if (timeout !== undefined) clearTimeout(timeout);
     }
+  }
+
+  async function readBackgroundRunState(): Promise<ComputerUseCommandResponse | null> {
+    return requestRunCommand({ type: 'GET_COMPUTER_USE_STATE' });
   }
 
   /**
@@ -964,9 +1023,28 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
    */
   async function reconcileRunState(): Promise<void> {
     const runId = activeRunId;
+    const generation = activeRunGeneration;
+    const revision = runStateRevision;
     if (!runId) return;
     const state = await readBackgroundRunState();
-    if (state?.running === true && state.runId === runId) {
+    if (
+      panelClosed ||
+      activeRunId !== runId ||
+      activeRunGeneration !== generation ||
+      runStateRevision !== revision ||
+      cancellationPending
+    )
+      return;
+    if (!state || state.success !== true || typeof state.running !== 'boolean') {
+      showHandoffBanner(RUN_STATE_UNAVAILABLE_MESSAGE, 'error');
+      armRunActivityWatchdog();
+      return;
+    }
+    if (
+      state.running === true &&
+      state.runId === runId &&
+      (state.runGeneration === undefined || state.runGeneration === generation)
+    ) {
       armRunActivityWatchdog();
       return;
     }
@@ -980,15 +1058,25 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
    * showing idle over a live run.
    */
   async function adoptBackgroundRun(): Promise<void> {
-    if (activeRunId) return;
+    if (activeRunId || panelClosed) return;
+    const generation = activeRunGeneration;
+    const revision = runStateRevision;
     const state = await readBackgroundRunState();
-    if (state?.running !== true || typeof state.runId !== 'string') return;
-    if (activeRunId) return;
+    if (state?.success !== true || state.running !== true || typeof state.runId !== 'string')
+      return;
+    if (
+      panelClosed ||
+      activeRunId ||
+      activeRunGeneration !== generation ||
+      runStateRevision !== revision
+    )
+      return;
     setRunState(
       true,
       state.runId,
       typeof state.runGeneration === 'number' ? state.runGeneration : undefined,
     );
+    if (!ownsRun(state.runId)) return;
     showHandoffBanner(RUN_RECOVERED_MESSAGE, 'run_stopped');
     if (state.paused === true) setPaused(true, state.pauseReason);
   }
@@ -997,31 +1085,38 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     reason: 'panel_closed' | 'user_cleared' | 'user_stopped',
   ): Promise<void> {
     const runId = activeRunId;
-    if (!runId) return;
+    const generation = activeRunGeneration;
+    const revision = runStateRevision;
+    if (!runId || cancellationPending || panelClosed) return;
+    cancellationPending = true;
+    dismissPendingApprovals();
+    clearRunActivityWatchdog();
     stopBtn.disabled = true;
     stopBtn.textContent = 'Stopping…';
-    let response: unknown;
-    try {
-      response = await chrome.runtime.sendMessage({
-        type: 'CANCEL_COMPUTER_USE',
-        runId,
-        reason,
-      });
-    } catch {
-      // A service-worker restart has no surviving in-memory run to cancel.
-      setRunState(false, runId);
+    const response = await requestRunCommand({
+      type: 'CANCEL_COMPUTER_USE',
+      runId,
+      reason,
+    });
+    if (
+      panelClosed ||
+      activeRunId !== runId ||
+      activeRunGeneration !== generation ||
+      runStateRevision !== revision
+    )
       return;
-    }
+    cancellationPending = false;
     const cancellation = (
       response && typeof response === 'object' ? response : {}
     ) as ComputerUseCommandResponse;
-    if (cancellation.success === true && cancellation.running !== true) {
+    if (cancellation.success === true && cancellation.running === false) {
       setRunState(false, runId);
       return;
     }
     stopBtn.disabled = false;
     stopBtn.textContent = 'Stop';
     showHandoffBanner(cancellation.error ?? STOP_REFUSED_MESSAGE, 'run_stopped');
+    armRunActivityWatchdog();
   }
 
   stopBtn.addEventListener('click', () => {
@@ -1032,6 +1127,9 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     void requestCancellation('user_cleared');
   });
   window.addEventListener('pagehide', () => {
+    panelClosed = true;
+    runStateRevision += 1;
+    dismissPendingApprovals();
     clearRunActivityWatchdog();
     const runId = activeRunId;
     if (!runId) return;
@@ -1057,9 +1155,12 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   authChip.appendChild(authDot);
   authChip.appendChild(authLabel);
 
+  let authChipRequest = 0;
   function refreshAuthChip(): void {
+    const request = ++authChipRequest;
     getAuthToken()
       .then((token) => {
+        if (panelClosed || authChipRequest !== request) return;
         if (token) {
           authChip.className = 'sp-cu-auth-chip authed';
           authLabel.textContent = 'Signed in';
@@ -1071,6 +1172,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
         }
       })
       .catch(() => {
+        if (panelClosed || authChipRequest !== request) return;
         authChip.className = 'sp-cu-auth-chip unauthed';
         authLabel.textContent = 'Auth unavailable';
       });
@@ -1231,6 +1333,12 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
 
   function buildStepEl(step: AgentLoopStep): DocumentFragment {
     const frag = document.createDocumentFragment();
+    const screenshotUrl =
+      step.kind === 'screenshot' &&
+      step.screenshotDataUrl &&
+      /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(step.screenshotDataUrl)
+        ? step.screenshotDataUrl
+        : undefined;
 
     const stepEl = document.createElement('div');
     stepEl.className = `sp-cu-step kind-${step.kind}`;
@@ -1283,8 +1391,28 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
         break;
       }
       case 'tool_result': {
-        iconEl.textContent = KIND_EMOJI['tool_result'] ?? '';
-        titleEl.textContent = `✓ ${step.toolName ?? 'result'}`;
+        const outcome = step.actionOutcome;
+        const verified =
+          outcome?.status === 'succeeded' &&
+          outcome.verified &&
+          outcome.verification?.passed === true;
+        const refused = outcome?.status === 'refused';
+        const failed = outcome?.status === 'failed';
+        stepEl.dataset['outcome'] = verified
+          ? 'succeeded'
+          : refused
+            ? 'refused'
+            : failed
+              ? 'failed'
+              : 'unverified';
+        iconEl.textContent = verified
+          ? '\u{2713}'
+          : refused
+            ? '\u{25CB}'
+            : failed
+              ? '\u{26A0}'
+              : '\u{2022}';
+        titleEl.textContent = `${verified ? 'Completed' : refused ? 'Skipped' : failed ? 'Not verified' : 'Result'}: ${step.toolName ?? 'action'}`;
         if (step.toolResult) {
           detailEl.textContent = step.toolResult.slice(0, 300);
           makeExpandable();
@@ -1311,7 +1439,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       }
       case 'screenshot': {
         iconEl.textContent = TOOL_EMOJI['screenshot'] ?? '';
-        titleEl.textContent = 'Screenshot captured';
+        titleEl.textContent = screenshotUrl ? 'Screenshot captured' : 'Screenshot unavailable';
         break;
       }
     }
@@ -1323,12 +1451,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     stepEl.appendChild(timeEl);
     frag.appendChild(stepEl);
 
-    const screenshotUrl = step.screenshotDataUrl;
-    if (
-      step.kind === 'screenshot' &&
-      screenshotUrl &&
-      /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(screenshotUrl)
-    ) {
+    if (screenshotUrl) {
       const img = document.createElement('img');
       img.src = screenshotUrl;
       img.alt = 'Agent screenshot';
@@ -1341,6 +1464,22 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
 
   function formatToolCallTitle(toolName: string, args?: Record<string, unknown>): string {
     switch (toolName) {
+      case 'resize_window':
+        return `Resize browser window: ${String(args?.['width'] ?? '')} × ${String(args?.['height'] ?? '')}`;
+      case 'list_tabs':
+        return 'Read task tabs';
+      case 'open_tab':
+        return `Open task tab: ${String(args?.['url'] ?? '').slice(0, 60)}`;
+      case 'switch_tab':
+        return `Switch to task tab ${String(args?.['tabId'] ?? '')}`;
+      case 'close_tab':
+        return `Close task-created tab ${String(args?.['tabId'] ?? '')}`;
+      case 'go_back':
+        return 'Go back in the task tab';
+      case 'go_forward':
+        return 'Go forward in the task tab';
+      case 'reload':
+        return 'Reload the task tab';
       case 'click':
         if (args?.['selector']) return `Click: ${String(args['selector']).slice(0, 60)}`;
         if (args?.['x'] !== undefined)
@@ -1348,6 +1487,8 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
         return 'Click';
       case 'type':
         return `Type: "${String(args?.['text'] ?? '').slice(0, 40)}"`;
+      case 'select_option':
+        return `Choose option: ${String(args?.['label'] ?? args?.['value'] ?? '').slice(0, 60)}`;
       case 'navigate':
         return `Navigate to: ${String(args?.['url'] ?? '').slice(0, 60)}`;
       case 'scroll':
@@ -1395,6 +1536,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   }
 
   function clearLog(): void {
+    dismissPendingApprovals();
     logEl.replaceChildren(emptyEl);
     setEmpty(true);
     hideHandoffBanner();
@@ -1410,8 +1552,20 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     toolName: string,
     description: string,
     canAllowForTask: boolean,
-    resolve: (decision: ComputerUseApprovalDecision) => void,
+    resolve: (
+      decision: ComputerUseApprovalDecision,
+      upload?: BrowserUploadedFileMetadata[],
+    ) => void,
+    upload?: { binding: BrowserUploadBinding; assertCurrent: () => void | Promise<void> },
   ): void {
+    if (toolName === 'upload_file' && !upload) {
+      showHandoffBanner(
+        'The file upload request could not be verified, so it was skipped.',
+        'error',
+      );
+      resolve('skip');
+      return;
+    }
     const approvalId = ++approvalCardSequence;
     const card = document.createElement('div');
     card.className = 'sp-cu-approval';
@@ -1446,10 +1600,41 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     denyBtn.textContent = 'Skip';
 
     let settled = false;
+    let inspecting = false;
+    let inspectionStarted = false;
+    let selectedFiles: File[] = [];
+    const uploadController = new AbortController();
+    const fileInput = upload ? document.createElement('input') : null;
+    const filePreview = upload ? document.createElement('div') : null;
+    if (upload && fileInput && filePreview) {
+      fileInput.type = 'file';
+      fileInput.multiple = true;
+      fileInput.className = 'sp-cu-upload-picker';
+      fileInput.setAttribute('aria-label', 'Choose files to upload');
+      filePreview.className = 'sp-cu-approval-desc';
+      filePreview.setAttribute('aria-live', 'polite');
+      cardTitle.textContent = 'Approve file upload';
+      cardDesc.textContent = `${description}\n\nAllow sends the selected files to AGI Cloud for inspection, then sends their approved contents to ${new URL(upload.binding.tabUrl).origin}. Choosing files sends nothing.`;
+      allowBtn.disabled = true;
+      fileInput.addEventListener('change', () => {
+        selectedFiles = Array.from(fileInput.files ?? []);
+        filePreview.textContent = selectedFiles
+          .map((file) => `${file.name} · ${new Intl.NumberFormat().format(file.size)} bytes`)
+          .join('\n');
+        allowBtn.disabled = selectedFiles.length === 0 || inspecting || settled;
+      });
+    }
     const expiry = setTimeout(() => {
       if (settled) return;
       const shouldRestoreFocus = card.contains(document.activeElement);
       settled = true;
+      pendingApprovals.delete(dismiss);
+      uploadController.abort();
+      selectedFiles = [];
+      if (fileInput) {
+        fileInput.disabled = true;
+        fileInput.value = '';
+      }
       clearTimeout(expiry);
       card.classList.add('expired');
       card.setAttribute('role', 'status');
@@ -1457,39 +1642,123 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       allowForTaskBtn.disabled = true;
       denyBtn.disabled = true;
       cardTitle.textContent = `Skipped (no response): ${toolName}`;
-      cardDesc.textContent =
-        'This action timed out after 30 seconds and was skipped automatically.';
+      cardDesc.textContent = upload
+        ? `This approval expired. No file was sent to the website.${inspectionStarted ? ' Files may already have reached AGI Cloud for inspection.' : ''}`
+        : 'This action timed out after 30 seconds and was skipped automatically.';
       if (shouldRestoreFocus) {
         card.tabIndex = -1;
         card.focus();
       }
-      // The loop already resolved DENY on its own timer; this is presentation only.
+      resolve('skip');
     }, APPROVAL_TIMEOUT_MS);
 
-    function cleanup(decision: ComputerUseApprovalDecision): void {
+    function cleanup(
+      decision: ComputerUseApprovalDecision,
+      metadata?: BrowserUploadedFileMetadata[],
+    ): void {
       if (settled) return;
       const shouldRestoreFocus = card.contains(document.activeElement);
       settled = true;
+      pendingApprovals.delete(dismiss);
+      uploadController.abort();
+      selectedFiles = [];
+      if (fileInput) fileInput.value = '';
       clearTimeout(expiry);
-      card.remove();
-      if (shouldRestoreFocus) stopBtn.focus();
-      resolve(decision);
+      if (upload && decision === 'skip' && inspectionStarted) {
+        card.classList.add('expired');
+        card.setAttribute('role', 'status');
+        cardTitle.textContent = 'File upload skipped';
+        cardDesc.textContent =
+          'No file was sent to the website. Files may already have reached AGI Cloud for inspection.';
+        allowBtn.disabled = true;
+        denyBtn.disabled = true;
+        if (fileInput) fileInput.disabled = true;
+        if (shouldRestoreFocus) {
+          card.tabIndex = -1;
+          card.focus();
+        }
+      } else {
+        card.remove();
+        if (shouldRestoreFocus) stopBtn.focus();
+      }
+      resolve(decision, metadata);
     }
+    const dismiss = (): void => cleanup('skip');
+    pendingApprovals.add(dismiss);
 
-    allowBtn.addEventListener('click', () => cleanup('allow'));
-    allowForTaskBtn.addEventListener('click', () => cleanup('allow-for-task'));
+    allowBtn.addEventListener('click', () => {
+      if (!upload) {
+        cleanup('allow');
+        return;
+      }
+      if (settled || inspecting || selectedFiles.length === 0) return;
+      inspecting = true;
+      allowBtn.disabled = true;
+      if (fileInput) fileInput.disabled = true;
+      cardDesc.textContent =
+        'Inspecting your approved files with AGI Cloud. They have not been sent to the website yet.';
+      void (async () => {
+        try {
+          const assertCurrent = async (): Promise<void> => {
+            if (
+              settled ||
+              uploadController.signal.aborted ||
+              activeRunId !== upload.binding.runId ||
+              activeRunGeneration !== upload.binding.runGeneration
+            )
+              throw new Error('The file upload approval is no longer current.');
+            await upload.assertCurrent();
+            if (settled || uploadController.signal.aborted)
+              throw new Error('The file upload approval is no longer current.');
+          };
+          await assertCurrent();
+          inspectionStarted = true;
+          const metadata = await uploadSelectedUserFiles(selectedFiles, upload.binding, {
+            signal: uploadController.signal,
+            assertCurrent,
+          });
+          await assertCurrent();
+          cleanup('allow', metadata);
+        } catch (error) {
+          if (settled) return;
+          inspecting = false;
+          allowBtn.disabled = true;
+          if (fileInput) fileInput.disabled = true;
+          card.classList.add('expired');
+          cardTitle.textContent = 'File upload skipped';
+          cardDesc.textContent = `${error instanceof Error ? error.message : 'File inspection failed.'} No file was sent to the website.${inspectionStarted ? ' Files may already have reached AGI Cloud for inspection.' : ''}`;
+          settled = true;
+          pendingApprovals.delete(dismiss);
+          clearTimeout(expiry);
+          uploadController.abort();
+          selectedFiles = [];
+          if (fileInput) fileInput.value = '';
+          denyBtn.disabled = true;
+          card.setAttribute('role', 'status');
+          resolve('skip');
+        }
+      })();
+    });
     denyBtn.addEventListener('click', () => cleanup('skip'));
+    allowForTaskBtn.addEventListener('click', () => {
+      if (!upload) cleanup('allow-for-task');
+    });
 
     btns.appendChild(allowBtn);
-    if (canAllowForTask) btns.appendChild(allowForTaskBtn);
+    if (canAllowForTask && !upload) btns.appendChild(allowForTaskBtn);
     btns.appendChild(denyBtn);
     card.appendChild(cardTitle);
     card.appendChild(cardDesc);
+    if (fileInput && filePreview) {
+      card.appendChild(fileInput);
+      card.appendChild(filePreview);
+    }
     card.appendChild(btns);
 
     logEl.insertBefore(card, logEl.firstChild);
     logEl.scrollTop = 0;
-    allowBtn.focus();
+    if (fileInput) fileInput.focus();
+    else allowBtn.focus();
   }
 
   function onRunAutofill(handler: () => void): void {

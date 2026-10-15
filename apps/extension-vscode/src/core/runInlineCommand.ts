@@ -52,7 +52,7 @@ export async function runInlineCommand(
   }
 
   const lang = editor.document.languageId;
-  const planModeEnabled = Config.agentPlanMode();
+  const planModeEnabled = Config.planModeActive();
   const autoApplyFixes =
     vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('autoApplyFixes') ?? false;
 

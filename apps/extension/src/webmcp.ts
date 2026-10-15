@@ -7,6 +7,7 @@ import {
   planSiteToolCall,
   type SiteToolEffect,
 } from './features/tools/siteToolRegistry';
+import { authorizeBrowserToolUrl } from './features/browser-tools/tabAuthority';
 
 function escapeAttrValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -38,6 +39,9 @@ export interface WebMCPDiscoveryResult {
 export interface WebMCPCallToolRequest {
   name: string;
   arguments?: Record<string, unknown>;
+  assertCurrent?: () => void;
+  source?: 'imperative' | 'declarative';
+  signal?: AbortSignal;
 }
 
 export interface WebMCPCallToolResponse {
@@ -227,9 +231,33 @@ function toError(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+async function awaitToolOperation<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return operation;
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const finish = (value: T): void => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', abort);
+      resolve(value);
+    };
+    const fail = (error: unknown): void => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', abort);
+      reject(error);
+    };
+    const abort = (): void => fail(signal.reason);
+    signal.addEventListener('abort', abort, { once: true });
+    operation.then(finish, fail);
+    if (signal.aborted) abort();
+  });
+}
+
 async function callToolImperative(
   name: string,
   args: Record<string, unknown>,
+  signal?: AbortSignal,
 ): Promise<WebMCPCallToolResponse | null> {
   const testing = (
     navigator as {
@@ -245,7 +273,12 @@ async function callToolImperative(
 
   if (testing && typeof testing.executeTool === 'function') {
     try {
-      const resultJson = await testing.executeTool(name, JSON.stringify(args));
+      signal?.throwIfAborted();
+      const resultJson = await awaitToolOperation(
+        testing.executeTool(name, JSON.stringify(args), { signal }),
+        signal,
+      );
+      signal?.throwIfAborted();
       const parsedResult = resultJson
         ? (safeJsonParse(resultJson, MAX_WEBMCP_SCHEMA_BYTES) ?? null)
         : null;
@@ -268,7 +301,9 @@ async function callToolImperative(
 
   if (mc && typeof mc.callTool === 'function') {
     try {
-      const result = await mc.callTool({ name, arguments: args });
+      signal?.throwIfAborted();
+      const result = await awaitToolOperation(mc.callTool({ name, arguments: args }), signal);
+      signal?.throwIfAborted();
       return { success: true, result };
     } catch (e) {
       return { success: false, error: toError(e) };
@@ -278,19 +313,28 @@ async function callToolImperative(
   return null;
 }
 
-function callToolViaDom(name: string, args: Record<string, unknown>): WebMCPCallToolResponse {
+function callToolViaDom(
+  name: string,
+  args: Record<string, unknown>,
+  assertCurrent?: () => void,
+): WebMCPCallToolResponse {
   const form = findToolForm(name);
   if (!form) return { success: false, error: `Tool "${name}" not found on this page` };
   try {
     for (const [key, value] of Object.entries(args)) {
+      assertCurrent?.();
       const field = form.querySelector(`[name="${escapeAttrValue(key)}"]`) as
         HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
       if (field) {
         field.value = String(value);
+        assertCurrent?.();
         field.dispatchEvent(new Event('input', { bubbles: true }));
+        assertCurrent?.();
         field.dispatchEvent(new Event('change', { bubbles: true }));
+        assertCurrent?.();
       }
     }
+    assertCurrent?.();
     form.requestSubmit();
     return { success: true, result: { submitted: true, toolName: name } };
   } catch (e) {
@@ -310,30 +354,87 @@ const CANCELLED: WebMCPCallToolResponse = {
  */
 export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCallToolResponse> {
   const { name, arguments: args = {} } = request;
+  request.assertCurrent?.();
   const pageUrl = typeof window === 'undefined' ? null : window.location.href;
-  const plan = planSiteToolCall({ name, effect: declaredEffect(name) }, args, pageUrl);
+  const form = request.source === 'imperative' ? null : findToolForm(name);
+  const testing = (navigator as Navigator & { modelContextTesting?: { listTools?: unknown } })
+    .modelContextTesting;
+  const modelContext = (navigator as Navigator & { modelContext?: { listTools?: unknown } })
+    .modelContext;
+  const hasToolRegistry =
+    typeof testing?.listTools === 'function' || typeof modelContext?.listTools === 'function';
+  const registered = hasToolRegistry
+    ? discoverImperativeTools().find((tool) => tool.name === name)
+    : undefined;
+  const hasImperativeSurface =
+    typeof (navigator as Navigator & { modelContextTesting?: { executeTool?: unknown } })
+      .modelContextTesting?.executeTool === 'function' ||
+    typeof (navigator as Navigator & { modelContext?: { callTool?: unknown } }).modelContext
+      ?.callTool === 'function';
+  if (!form && (!hasImperativeSurface || (hasToolRegistry && !registered)))
+    return { success: false, error: `Tool "${name}" not found on this page` };
+  const plan = planSiteToolCall(
+    (form ? undefined : registered) ?? {
+      name,
+      effect: declaredEffect(name),
+      source: form ? 'declarative' : 'imperative',
+    },
+    args,
+    pageUrl,
+  );
 
   let asked = false;
   const approve = (): boolean => {
+    request.assertCurrent?.();
     if (asked) return true;
     asked = true;
-    return window.confirm(describeSiteToolApproval(name, args, plan));
+    const allowed = window.confirm(describeSiteToolApproval(name, args, plan));
+    request.assertCurrent?.();
+    return allowed;
   };
 
   if (plan.requiresApproval && !approve()) return CANCELLED;
 
-  const imperative = await callToolImperative(name, args);
+  request.assertCurrent?.();
+  const imperative =
+    request.source === 'declarative' ? null : await callToolImperative(name, args, request.signal);
+  request.assertCurrent?.();
   if (imperative?.success) return imperative;
 
-  const form = findToolForm(name);
-  if (!form)
+  if (request.source === 'imperative')
+    return (
+      imperative ?? { success: false, error: 'The approved imperative site tool is unavailable.' }
+    );
+
+  const fallbackForm = findToolForm(name);
+  if (!fallbackForm)
     return imperative ?? { success: false, error: `Tool "${name}" not found on this page` };
 
   // Submitting the page's own form navigates, so it always asks, whatever the
   // tool declared its effect to be.
   if (!approve()) return CANCELLED;
 
-  const fallback = callToolViaDom(name, args);
+  let assertFormCurrent: (() => void) | undefined;
+  if (request.assertCurrent) {
+    const destination = new URL(
+      fallbackForm.getAttribute('action') || window.location.href,
+      window.location.href,
+    ).href;
+    await authorizeBrowserToolUrl(destination);
+    assertFormCurrent = (): void => {
+      request.assertCurrent!();
+      if (
+        !fallbackForm.isConnected ||
+        findToolForm(name) !== fallbackForm ||
+        new URL(fallbackForm.getAttribute('action') || window.location.href, window.location.href)
+          .href !== destination
+      )
+        throw new Error('The approved site-tool form destination changed.');
+    };
+    assertFormCurrent();
+  }
+  request.assertCurrent?.();
+  const fallback = callToolViaDom(name, args, assertFormCurrent);
   if (!imperative) return fallback;
   return fallback.success
     ? { ...fallback, fellBackToDom: true }

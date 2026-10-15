@@ -27,7 +27,8 @@ describe('side panel carries the visible model selection on every CHAT_MESSAGE',
       expect(codeOnly).toContain('...managedOutboundRoutingPayload(quickMode)');
       expect(codeOnly).not.toMatch(/effort:\s*_ctx\.reasoningEffort/);
     }
-    expect(sidePanelSource).toContain('dispatchTurn(userMsg, payload, _ctx.quickMode)');
+    expect(sidePanelSource).toContain('dispatchTurn(userMsg, payload, managedQuickModeActive())');
+    expect(sidePanelSource).not.toMatch(/dispatchTurn\([^;]*_ctx\.quickMode\)/);
   });
 
   it('omits prior route and effort from every Quick request envelope', () => {
@@ -35,7 +36,12 @@ describe('side panel carries the visible model selection on every CHAT_MESSAGE',
     const end = sidePanelSource.indexOf('// Provider display order', start);
     const helper = stripComments(sidePanelSource.slice(start, end));
 
-    expect(helper).toContain('function managedOutboundRoutingPayload(quickMode = _ctx.quickMode)');
+    expect(helper).toContain(
+      'function managedOutboundRoutingPayload(quickMode = managedQuickModeActive())',
+    );
+    expect(sidePanelSource).toMatch(
+      /function managedQuickModeActive\(\): boolean \{\s*return _ctx\.quickMode && isAutoModeModelId\(_ctx\.selectedModel\);/,
+    );
     expect(helper).toContain('if (quickMode) return {};');
     expect(helper).toContain('...managedOutboundEffortPayload(true)');
     expect(helper).toMatch(/currentModelKey:\s*_ctx\.currentModelKey/);

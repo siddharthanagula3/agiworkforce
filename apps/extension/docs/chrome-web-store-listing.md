@@ -12,7 +12,7 @@ The security boundary each justification asserts is specified in
 
 ## Single purpose
 
-AGI Browser Companion gives you one AI assistant in a Chrome side panel that can
+agiworkforce gives you one AI assistant in a Chrome side panel that can
 read the page you are on and, on sites you explicitly approve, act in that page
 on your behalf.
 
@@ -29,7 +29,7 @@ optional link to the AGI Desktop app.
 
 **Detailed description**
 
-> AGI Browser Companion puts an AI assistant in Chrome's side panel.
+> agiworkforce puts an AI assistant in Chrome's side panel.
 >
 > **Chat about the page you are on.** Attach the current page's text to a
 > message with one click, or use a slash command like `/summarize` or
@@ -95,17 +95,17 @@ the extension-pages CSP is `script-src 'self'` with no `unsafe-eval` and no
 
 Tick these in the Dashboard's Privacy tab, and nothing else.
 
-| Category                | Collected | What and why                                                                                                                                                                                                                                  |
-| ----------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Personally identifiable | Yes       | Account email, to sign the user in. Optionally the job-application profile the user types in themselves, used only to fill forms they ask to fill.                                                                                            |
-| Authentication          | Yes       | The user's AGI session token.                                                                                                                                                                                                                 |
-| Website content         | Yes       | Up to 5,000 characters of a page's visible text, with secret-like values redacted, sent to the AGI service only when the user attaches the page, runs a page slash command or the Summarize menu item, or runs an action on an approved site. |
-| Personal communications | No        |                                                                                                                                                                                                                                               |
-| Financial               | No        |                                                                                                                                                                                                                                               |
-| Health                  | No        |                                                                                                                                                                                                                                               |
-| Location                | No        |                                                                                                                                                                                                                                               |
-| Web history             | No        | Browsing history is never collected. A page's URL is sent only as part of a request the user initiated on that page.                                                                                                                          |
-| User activity           | No        |                                                                                                                                                                                                                                               |
+| Category                | Collected | What and why                                                                                                                                                                                                                                   |
+| ----------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Personally identifiable | Yes       | Account email, to sign the user in. Optionally the job-application profile the user types in themselves, used only to fill forms they ask to fill.                                                                                             |
+| Authentication          | Yes       | The user's AGI session token.                                                                                                                                                                                                                  |
+| Website content         | Yes       | Up to 30,000 characters of a page's visible text, with secret-like values redacted, sent to the AGI service only when the user attaches the page, runs a page slash command or the Summarize menu item, or runs an action on an approved site. |
+| Personal communications | No        |                                                                                                                                                                                                                                                |
+| Financial               | No        |                                                                                                                                                                                                                                                |
+| Health                  | No        |                                                                                                                                                                                                                                                |
+| Location                | No        |                                                                                                                                                                                                                                                |
+| Web history             | No        | Browsing history is never collected. A page's URL is sent only as part of a request the user initiated on that page.                                                                                                                           |
+| User activity           | No        |                                                                                                                                                                                                                                                |
 
 Certifications to accept:
 

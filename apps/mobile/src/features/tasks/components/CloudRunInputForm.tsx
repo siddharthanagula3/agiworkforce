@@ -197,9 +197,13 @@ export function CloudRunInputForm({
   );
   const [drafts, setDrafts] = useState(() => initialDrafts(calls));
   const [showErrors, setShowErrors] = useState(false);
-  const answerable = calls.some((call) =>
-    call.prompts.some((prompt) => prompt.mode !== 'unsupported'),
-  );
+  const answerable =
+    calls.some((call) => call.prompts.some((prompt) => prompt.mode !== 'unsupported')) &&
+    calls.every((call) =>
+      call.prompts.every(
+        (prompt) => prompt.mode === 'form' || (prompt.mode === 'url' && prompt.link?.openable),
+      ),
+    );
 
   const errorFor = (
     toolCallId: string,

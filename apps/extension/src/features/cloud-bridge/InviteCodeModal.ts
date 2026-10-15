@@ -33,7 +33,7 @@ function buildModalStyles(): string {
 
     .agi-modal-backdrop {
       position:absolute; inset:0;
-      background:rgba(0,0,0,0.55);
+      background:var(--agi-ext-scrim);
       display:flex; align-items:center; justify-content:center;
       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
       pointer-events:auto;
@@ -47,7 +47,7 @@ function buildModalStyles(): string {
       background:var(--agi-ext-surface);
       border:1px solid var(--agi-ext-border-strong);
       border-radius:12px;
-      box-shadow:0 8px 40px rgba(0,0,0,0.18);
+      box-shadow:0 8px 40px var(--agi-ext-modal-shadow);
       overflow:hidden;
       display:flex; flex-direction:column;
     }
@@ -146,14 +146,15 @@ function buildModalStyles(): string {
       padding:8px 10px;
       font-size:13px; font-family:inherit; color:var(--agi-ext-text);
       background:var(--agi-ext-bg);
-      border:1px solid var(--agi-ext-border-strong);
+      border:1px solid var(--agi-ext-border-control);
       border-radius:6px; outline:none;
       transition:border-color 0.15s, box-shadow 0.15s;
     }
     .agi-input:focus {
-      border-color:var(--agi-ext-accent);
-      box-shadow:0 0 0 3px rgba(33,128,141,0.15);
+      border-color:var(--agi-ext-focus);
+      box-shadow:0 0 0 3px color-mix(in srgb, var(--agi-ext-focus) 20%, transparent);
     }
+    .agi-input::placeholder { color:var(--agi-ext-text-placeholder); opacity:1; }
     .agi-input.mono {
       font-family:'SF Mono',Monaco,'Cascadia Code','Roboto Mono',monospace;
       letter-spacing:0.12em; text-transform:uppercase;
@@ -169,19 +170,19 @@ function buildModalStyles(): string {
     .agi-btn {
       width:100%; padding:9px 16px;
       font-size:13px; font-weight:700;
-      border:none; border-radius:6px; cursor:pointer;
+      border:1px solid var(--agi-ext-border-control); border-radius:6px; cursor:pointer;
       display:flex; align-items:center; justify-content:center; gap:6px;
-      transition:opacity 0.15s, box-shadow 0.15s;
-      background:var(--agi-ext-accent);
-      color:var(--agi-ext-on-accent);
+      transition:background 0.15s;
+      background:var(--agi-ext-primary);
+      color:var(--agi-ext-on-primary);
     }
-    .agi-btn:hover:not(:disabled) { background:var(--agi-ext-accent-hover); }
-    .agi-btn:disabled { opacity:0.5; cursor:not-allowed; }
+    .agi-btn:hover:not(:disabled) { background:var(--agi-ext-primary-hover); }
+    .agi-btn:disabled { background:var(--agi-ext-hover); color:var(--agi-ext-text-muted); cursor:not-allowed; }
 
     /* ── Spinner ── */
     .agi-spinner {
       width:12px; height:12px;
-      border:2px solid var(--agi-ext-on-accent);
+      border:2px solid currentColor;
       border-top-color:transparent;
       border-radius:50%;
       animation:agi-spin 0.7s linear infinite;
@@ -199,7 +200,7 @@ function buildModalStyles(): string {
       color:var(--agi-ext-accent-text); font-size:11px; font-weight:600;
       text-decoration:underline; text-underline-offset:2px; padding:0;
     }
-    .agi-switch-link button:hover { opacity:0.8; }
+    .agi-switch-link button:disabled { color:var(--agi-ext-text-muted); cursor:not-allowed; }
 
     /* ── Success state ── */
     .agi-success {

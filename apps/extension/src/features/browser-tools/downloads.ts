@@ -1,9 +1,11 @@
 import { webDomainAllowed, type WebDomainRules } from '@agiworkforce/cloud-contracts';
-import { assertSiteAccess } from '../site-policy/store';
-import { authorizeBrowserToolTab } from './tabAuthority';
+import { authorizeBrowserToolCapability, authorizeBrowserToolTab } from './tabAuthority';
+import { awaitCdpOperation, throwIfCdpCancelled } from '../computer-use/debuggerSession';
 
 export const DOWNLOAD_LEDGER_STORAGE_KEY = 'agi_session_downloads';
 export const DOWNLOAD_LEDGER_LIMIT = 50;
+export const DOWNLOAD_COMPLETION_TIMEOUT_MS = 5_000;
+const DOWNLOAD_COMPLETION_POLL_INTERVAL_MS = 100;
 
 export type DownloadState = 'in_progress' | 'complete' | 'interrupted';
 
@@ -112,23 +114,118 @@ function applyDelta(delta: chrome.downloads.DownloadDelta): void {
   }
 }
 
-async function refreshDownload(id: number): Promise<void> {
+async function refreshDownload(
+  id: number,
+  assertCurrent?: () => void | Promise<void>,
+): Promise<DownloadRecord | null> {
   const existing = ledger.get(id);
-  if (!existing) return;
+  if (!existing) return null;
   try {
+    await assertCurrent?.();
     const [item] = await chrome.downloads.search({ id });
-    if (!item) return;
-    put({
+    await assertCurrent?.();
+    if (!item || item.id !== id || item.url !== existing.url) return null;
+    const record: DownloadRecord = {
       ...existing,
       filename: item.filename || existing.filename,
       state: stateFromDelta(item.state) ?? existing.state,
       bytesReceived: item.bytesReceived ?? existing.bytesReceived,
       totalBytes: item.totalBytes ?? existing.totalBytes,
       ...(item.error ? { error: item.error } : {}),
-    });
+    };
+    put(record);
+    return record;
   } catch {
     // A search that fails leaves the last known state in place.
   }
+  return null;
+}
+
+export interface DownloadCompletionOptions {
+  readonly assertCurrent: () => void | Promise<void>;
+  readonly signal?: AbortSignal;
+  readonly timeoutMs?: number;
+}
+
+export async function waitForBrowserToolDownload(
+  started: DownloadRecord,
+  options: DownloadCompletionOptions,
+): Promise<DownloadRecord> {
+  const timeoutMs = options.timeoutMs ?? DOWNLOAD_COMPLETION_TIMEOUT_MS;
+  if (
+    !Number.isSafeInteger(timeoutMs) ||
+    timeoutMs < 0 ||
+    timeoutMs > DOWNLOAD_COMPLETION_TIMEOUT_MS
+  ) {
+    throw new Error('The download completion wait is outside its allowed time budget.');
+  }
+  const cancelled = (): void => {
+    if (options.signal?.aborted)
+      throw options.signal.reason instanceof Error
+        ? options.signal.reason
+        : new DOMException('Download verification was cancelled.', 'AbortError');
+  };
+  const assertCurrent = async (): Promise<void> => {
+    cancelled();
+    await options.assertCurrent();
+    cancelled();
+    const current = ledger.get(started.id);
+    if (!current || current.url !== started.url || current.startedAt !== started.startedAt) {
+      throw new Error('The download no longer belongs to this browser action.');
+    }
+  };
+  const deadline = Date.now() + timeoutMs;
+  let observed = started;
+  await assertCurrent();
+  const withinBudget = <T>(
+    operation: Promise<T> | null,
+    durationMs: number,
+  ): Promise<T | undefined> =>
+    new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (value: T | undefined): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        options.signal?.removeEventListener('abort', abort);
+        resolve(value);
+      };
+      const fail = (error: unknown): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        options.signal?.removeEventListener('abort', abort);
+        reject(error);
+      };
+      const abort = (): void => {
+        try {
+          cancelled();
+        } catch (error) {
+          fail(error);
+        }
+      };
+      const timer = setTimeout(() => finish(undefined), durationMs);
+      options.signal?.addEventListener('abort', abort, { once: true });
+      operation?.then(finish, fail);
+      if (options.signal?.aborted) abort();
+    });
+  while (Date.now() < deadline) {
+    await assertCurrent();
+    if (Date.now() >= deadline) return observed;
+    const record = await withinBudget(
+      refreshDownload(started.id, assertCurrent),
+      deadline - Date.now(),
+    );
+    await assertCurrent();
+    if (record) observed = record;
+    if (observed.state !== 'in_progress' || Date.now() >= deadline) return observed;
+    await withinBudget<void>(
+      null,
+      Math.min(DOWNLOAD_COMPLETION_POLL_INTERVAL_MS, deadline - Date.now()),
+    );
+    await assertCurrent();
+  }
+  return observed;
 }
 
 export function initDownloadLedger(onUpdate: DownloadBroadcast): void {
@@ -162,44 +259,83 @@ export async function resolveDownloadUrl(rawUrl: string, tabUrl: string): Promis
       `download: only http and https URLs can be downloaded, got ${resolved.protocol}`,
     );
   }
-  await assertSiteAccess(
-    resolved.toString(),
-    'download',
-    `download: "${resolved.origin}" is neither the page's own origin nor on your AGI ` +
-      'site allowlist. Add it in the extension options before downloading from there.',
-  );
+  await authorizeBrowserToolCapability(tabUrl, 'download');
+  await authorizeBrowserToolCapability(resolved.toString(), 'download');
   return resolved.toString();
+}
+
+export interface DownloadStartOptions {
+  readonly signal?: AbortSignal;
+  readonly assertCurrent?: () => void | Promise<void>;
+}
+
+async function cancelOwnedDownloadStart(id: number, url: string, startedAt: number): Promise<void> {
+  const [item] = await chrome.downloads.search({ id });
+  if (
+    !item ||
+    item.id !== id ||
+    item.url !== url ||
+    !Number.isFinite(Date.parse(item.startTime)) ||
+    Date.parse(item.startTime) < startedAt
+  )
+    throw new Error('The original task download could not be identified for cancellation.');
+  if (item.state === 'in_progress') await chrome.downloads.cancel(id);
 }
 
 export async function startBrowserToolDownload(
   tabId: number,
   rawUrl: string,
   siteRules?: WebDomainRules,
+  options: DownloadStartOptions = {},
 ): Promise<DownloadRecord> {
-  const authorized = await authorizeBrowserToolTab(tabId);
-  const url = await resolveDownloadUrl(rawUrl, authorized.url);
-  if (siteRules && !webDomainAllowed(siteRules, url)) {
-    throw new Error(
-      `${url} is a site your workspace administrator does not allow the assistant to download from.`,
-    );
-  }
-  await ensureHydrated();
-
-  const id = await chrome.downloads.download({ url, conflictAction: 'uniquify' });
-  if (siteRules) guardFinalDownloadUrl(id, siteRules);
-  const record: DownloadRecord = {
-    id,
-    url,
-    filename: '',
-    origin: authorized.origin,
-    state: 'in_progress',
-    bytesReceived: 0,
-    totalBytes: 0,
-    startedAt: Date.now(),
+  const assertCurrent = async (): Promise<void> => {
+    throwIfCdpCancelled(options.signal);
+    await options.assertCurrent?.();
+    throwIfCdpCancelled(options.signal);
   };
-  put(record);
-  void refreshDownload(id);
-  return record;
+  const operation = (async (): Promise<DownloadRecord> => {
+    await assertCurrent();
+    const authorized = await authorizeBrowserToolTab(tabId);
+    await assertCurrent();
+    const url = await resolveDownloadUrl(rawUrl, authorized.url);
+    if (siteRules && !webDomainAllowed(siteRules, url))
+      throw new Error(
+        `${url} is a site your workspace administrator does not allow the assistant to download from.`,
+      );
+    await assertCurrent();
+    await ensureHydrated();
+    await assertCurrent();
+    await authorizeBrowserToolCapability(authorized.url, 'download');
+    await authorizeBrowserToolCapability(url, 'download');
+    await assertCurrent();
+    const startedAt = Date.now();
+    const id = await chrome.downloads.download({ url, conflictAction: 'uniquify' });
+    if (siteRules) guardFinalDownloadUrl(id, siteRules);
+    try {
+      await assertCurrent();
+    } catch (error) {
+      try {
+        await cancelOwnedDownloadStart(id, url, startedAt);
+      } catch {
+        console.warn('Cancellation of the original task download is unconfirmed.');
+      }
+      throw error;
+    }
+    const record: DownloadRecord = {
+      id,
+      url,
+      filename: '',
+      origin: authorized.origin,
+      state: 'in_progress',
+      bytesReceived: 0,
+      totalBytes: 0,
+      startedAt,
+    };
+    put(record);
+    void refreshDownload(id, assertCurrent);
+    return record;
+  })();
+  return awaitCdpOperation(operation, options.signal);
 }
 
 /**
@@ -269,7 +405,7 @@ export async function revealDownload(id: number): Promise<void> {
 }
 
 export function formatDownloadRecord(record: DownloadRecord): string {
-  const name = record.filename || record.url;
+  const name = record.filename.split(/[\\/]/).pop() || record.url;
   if (record.state === 'complete') return `Downloaded ${name} (${record.totalBytes} bytes).`;
   if (record.state === 'interrupted') {
     return `Download of ${name} was interrupted${record.error ? `: ${record.error}` : ''}.`;

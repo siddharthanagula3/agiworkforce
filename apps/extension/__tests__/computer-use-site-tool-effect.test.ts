@@ -62,4 +62,10 @@ describe('a page-declared tool is gated like an action', () => {
 
     expect(requirement).toEqual({ alwaysAsk: true, reason: 'download' });
   });
+
+  it('rejects an unknown native name even when other site tools are admitted', async () => {
+    await expect(
+      resolveApprovalRequirement(1, 'undeclared_tool', {}, { siteTools: [READ_TOOL] }),
+    ).rejects.toThrow('Unsupported browser action');
+  });
 });

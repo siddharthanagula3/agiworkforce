@@ -1,4 +1,3 @@
-
 export const ONBOARDING_COMPLETE_KEY = 'agi_onboarding_completed';
 
 export function isOnboardingComplete(): Promise<boolean> {

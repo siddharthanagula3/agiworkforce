@@ -5,6 +5,7 @@ import { PressableBox } from '@/components/ui/pressable-box';
 import {
   Check,
   ChevronRight,
+  CircleHelp,
   FileEdit,
   FilePlus,
   FlaskConical,
@@ -243,6 +244,20 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
               {approval.detail}
             </Text>
           ) : null}
+          {thread.approvalHolds[approval.requestId] ? (
+            <Text
+              className="mb-3 text-xs"
+              style={{
+                color:
+                  thread.approvalHolds[approval.requestId]?.status === 'refused'
+                    ? colors.agentError
+                    : colors.agentWarning,
+              }}
+              accessibilityRole="alert"
+            >
+              {thread.approvalHolds[approval.requestId]?.message}
+            </Text>
+          ) : null}
           <View className="flex-row gap-2">
             <PressableBox
               onPress={() =>
@@ -280,6 +295,16 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
               </Text>
             </PressableBox>
           </View>
+        </Card>
+      ))}
+
+      {thread.pendingQuestions.map((question) => (
+        <Card key={question.requestId} variant="elevated">
+          <View className="flex-row items-start gap-2">
+            <CircleHelp size={15} color={colors.agentWarning} />
+            <Text className="flex-1 text-sm font-medium text-white">{question.question}</Text>
+          </View>
+          <Text className="mt-2 text-xs text-white/60">Answer on your computer</Text>
         </Card>
       ))}
 

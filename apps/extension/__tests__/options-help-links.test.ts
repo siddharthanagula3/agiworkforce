@@ -42,7 +42,7 @@ const chromeHarness = vi.hoisted(() => {
   });
   (globalThis as Record<string, unknown>).chrome = {
     runtime: {
-      getManifest: () => ({ version: '1.2.3' }),
+      getManifest: () => ({ name: 'agiworkforce', version: '1.2.3' }),
       getURL: (path: string) => `chrome-extension://test/${path}`,
       lastError: undefined,
     },
@@ -93,25 +93,31 @@ vi.mock('../src/features/options/account-state', () => ({
 
 describe('options page, Help', () => {
   it('renders the responsive AGI settings shell and section navigation', async () => {
+    vi.stubEnv('DEV', false);
     await import('../src/options');
+    vi.unstubAllEnvs();
 
     expect(document.querySelector('.opt-shell')).not.toBeNull();
     expect(document.querySelector('.opt-sidebar')).not.toBeNull();
-    expect(document.querySelector('h1.opt-header-title')?.textContent).toBe('AGI Chrome settings');
+    expect(document.querySelector('h1.opt-header-title')?.textContent).toBe(
+      'agiworkforce settings',
+    );
     expect(document.querySelectorAll('h2.opt-section-title').length).toBeGreaterThanOrEqual(5);
     const targets = Array.from(document.querySelectorAll<HTMLButtonElement>('.opt-nav-item')).map(
       (button) => button.dataset.target,
     );
-    expect(targets).toEqual([
-      'opt-appearance',
-      'opt-permissions',
-      'opt-privacy',
-      'opt-account',
-      'opt-preferences',
-      'opt-shortcuts',
-      'opt-help',
-    ]);
+    expect(targets).toEqual(['opt-appearance', 'opt-permissions', 'opt-account', 'opt-shortcuts']);
+    for (const section of ['opt-privacy', 'opt-preferences', 'opt-help']) {
+      expect(document.getElementById(section)).not.toBeNull();
+    }
     for (const target of targets) expect(document.getElementById(target!)).not.toBeNull();
+    expect(
+      [...document.querySelectorAll<HTMLElement>('.opt-section')]
+        .filter((section) => !section.hidden)
+        .map((section) => section.id),
+    ).toEqual(['opt-appearance']);
+    expect(document.querySelector<HTMLDetailsElement>('.opt-access-details')?.open).toBe(false);
+    expect(document.querySelector('#opt-cloud-auth')).toBeNull();
   });
 
   it('keeps Add disabled and never stores a label when no web site is open', async () => {
@@ -145,6 +151,22 @@ describe('options page, Help', () => {
     expect(shortcutsButton!.getAttribute('aria-current')).toBe('location');
     expect(document.querySelectorAll('.opt-nav-item.active')).toHaveLength(1);
     expect(scrollIntoView).toHaveBeenCalled();
+    expect(document.getElementById('opt-shortcuts')?.hidden).toBe(false);
+    expect(document.getElementById('opt-permissions')?.hidden).toBe(true);
+    expect(document.activeElement).toBe(document.querySelector('#opt-shortcuts h2'));
+  });
+
+  it('opens account from the header without leaving a stale section selection', () => {
+    document.querySelector<HTMLButtonElement>('.opt-header-account')!.click();
+    expect(document.getElementById('opt-account')?.hidden).toBe(false);
+    expect(document.getElementById('opt-shortcuts')?.hidden).toBe(true);
+    expect(document.getElementById('opt-privacy')?.hidden).toBe(false);
+    expect(document.getElementById('opt-preferences')?.hidden).toBe(false);
+    expect(document.getElementById('opt-help')?.hidden).toBe(false);
+    expect(document.querySelector<HTMLDetailsElement>('#opt-preferences')?.open).toBe(false);
+    expect(document.querySelector('.opt-nav-item.active')?.getAttribute('data-target')).toBe(
+      'opt-account',
+    );
   });
 
   it('renders Chrome’s current command bindings instead of stale manifest defaults', () => {

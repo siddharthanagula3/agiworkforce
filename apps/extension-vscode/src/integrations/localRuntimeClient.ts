@@ -170,6 +170,12 @@ const capabilitiesSchema = z.object({
   questions: z.boolean().optional(),
   planDecisions: z.boolean().optional(),
   pullRequests: z.boolean().optional(),
+  forkThroughTurn: z.boolean().optional(),
+  threadCompact: z.boolean().optional(),
+  bypassPerTurn: z.boolean().optional(),
+  revertRestore: z.boolean().optional(),
+  mcpApproval: z.boolean().optional(),
+  managedWorktrees: z.boolean().optional(),
 });
 
 const worktreeSummarySchema = z.object({
@@ -608,6 +614,7 @@ const skillListResponseSchema = z.object({
       }),
     )
     .max(2_000),
+  projectSkillsDigest: z.string().min(1).max(200).optional(),
 });
 const skillConsentResponseSchema = z.object({
   consented: z.boolean(),
@@ -653,7 +660,13 @@ const pluginUpdateResponseSchema = pluginListResponseSchema.extend({
 
 export type PluginUpdate = z.infer<typeof pluginUpdateResponseSchema>;
 
-const mcpServerStatusSchema = z.enum(['configured', 'authorized', 'needs_auth', 'blocked']);
+const mcpServerStatusSchema = z.enum([
+  'configured',
+  'authorized',
+  'needs_auth',
+  'blocked',
+  'needs_approval',
+]);
 const mcpServerListResponseSchema = z.object({
   servers: z
     .array(
@@ -1693,10 +1706,16 @@ export class LocalRuntimeClient {
     ) as SkillListResponse;
   }
 
-  async setProjectSkillConsent(granted: boolean): Promise<SkillConsentResponse> {
+  async setProjectSkillConsent(
+    granted: boolean,
+    shownDigest?: string,
+  ): Promise<SkillConsentResponse> {
     const connection = await this.readyConnection();
     return skillConsentResponseSchema.parse(
-      await connection.request('skills/consent', { granted }),
+      await connection.request(
+        'skills/consent',
+        granted && shownDigest !== undefined ? { granted, digest: shownDigest } : { granted },
+      ),
     ) as SkillConsentResponse;
   }
 

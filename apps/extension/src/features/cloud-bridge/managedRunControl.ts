@@ -26,6 +26,8 @@ import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
 
+const UNCONFIRMED_CANCELLATION_MESSAGE =
+  'Cancellation has not been confirmed. The run may still be working.';
 const MAX_VISIBLE_TEXT_CHARACTERS = 512_000;
 export const MANAGED_RUN_CANCELLATION_TIMEOUT_MS = 15_000;
 const RUN_LIST_PAGE_SIZE = 25;
@@ -33,6 +35,7 @@ const RUN_JOURNAL_PAGE_SIZE = 500;
 const RUN_JOURNAL_MAX_PAGES = 8;
 const RUN_JOURNAL_WINDOW_SIZE = RUN_JOURNAL_PAGE_SIZE * RUN_JOURNAL_MAX_PAGES;
 export const ALL_MANAGED_RUN_STATES = AgentTaskStateSchema.options;
+export const MANAGED_RUN_CANCELLATION_CONFIRMATION_TIMEOUT_MS = 15_000;
 
 export interface ChromeManagedRunDependencies {
   getAuthToken: typeof getAuthToken;
@@ -432,19 +435,71 @@ export async function cancelChromeManagedRun(
   if (!run) {
     return { status: 'error', code: 'invalid_request', message: 'Invalid Managed Cloud run.' };
   }
-  const token = await resolvedDependencies.getAuthToken();
-  if (!token) {
-    return { status: 'error', code: 'auth_required', message: 'Sign in to cancel AGI Cloud.' };
-  }
+  const confirmation = new AbortController();
+  const timeoutError = new Error(
+    'AGI Cloud did not confirm a stopped run before the cancellation deadline.',
+  );
+  const forwardAbort = (): void => confirmation.abort(signal?.reason);
+  signal?.addEventListener('abort', forwardAbort, { once: true });
+  if (signal?.aborted) forwardAbort();
+  let rejectAborted!: (reason: unknown) => void;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    rejectAborted = reject;
+  });
+  const onAbort = (): void => rejectAborted(confirmation.signal.reason);
+  confirmation.signal.addEventListener('abort', onAbort, { once: true });
+  if (confirmation.signal.aborted) onAbort();
+  const timeout = setTimeout(
+    () => confirmation.abort(timeoutError),
+    MANAGED_RUN_CANCELLATION_CONFIRMATION_TIMEOUT_MS,
+  );
   try {
-    return {
-      status: 'success',
-      run: await resolvedDependencies
-        .createClient(token)
-        .cancelRun(run.runId, signal ? { signal } : {}),
+    const cancelAndConfirm = async (): Promise<ChromeManagedRunCancellationResult> => {
+      confirmation.signal.throwIfAborted();
+      const token = await resolvedDependencies.getAuthToken();
+      confirmation.signal.throwIfAborted();
+      if (!token) {
+        return { status: 'error', code: 'auth_required', message: 'Sign in to cancel AGI Cloud.' };
+      }
+      const client = resolvedDependencies.createClient(token);
+      const requested = await client.cancelRun(run.runId, { signal: confirmation.signal });
+      confirmation.signal.throwIfAborted();
+      if (requested.id !== run.runId)
+        throw new Error('AGI Cloud returned a different cancellation run.');
+      if (TERMINAL_AGENT_TASK_STATES.has(requested.state))
+        return { status: 'success', run: requested };
+      const followed = await client.followRun(run.runId, {
+        signal: confirmation.signal,
+        afterSequence: requested.lastEventSequence,
+        pageSize: 1,
+        onSnapshot: (snapshot) => {
+          if (snapshot.run.id !== run.runId || snapshot.run.userId !== requested.userId)
+            throw new Error('AGI Cloud changed the cancellation run or owner.');
+        },
+      });
+      confirmation.signal.throwIfAborted();
+      if (followed.run.id !== run.runId || followed.run.userId !== requested.userId)
+        throw new Error('AGI Cloud changed the cancellation run or owner.');
+      if (!TERMINAL_AGENT_TASK_STATES.has(followed.run.state))
+        throw new Error('AGI Cloud acknowledged cancellation without confirming a stopped run.');
+      return { status: 'success', run: followed.run };
     };
+    return await Promise.race([cancelAndConfirm(), aborted]);
   } catch (error) {
+    if (error === timeoutError)
+      return { status: 'error', code: 'server_error', message: timeoutError.message };
+    if (signal?.aborted) {
+      return {
+        status: 'error',
+        code: 'server_error',
+        message: UNCONFIRMED_CANCELLATION_MESSAGE,
+      };
+    }
     return errorResult(error, signal);
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener('abort', forwardAbort);
+    confirmation.signal.removeEventListener('abort', onAbort);
   }
 }
 
@@ -472,14 +527,14 @@ export async function cancelAndConfirmChromeManagedRun(
     return {
       status: 'error',
       code: 'server_error',
-      message: 'Cancellation has not been confirmed. The run may still be working.',
+      message: UNCONFIRMED_CANCELLATION_MESSAGE,
     };
   } catch (error) {
     if (signal?.aborted) {
       return {
         status: 'error',
         code: 'server_error',
-        message: 'Cancellation has not been confirmed. The run may still be working.',
+        message: UNCONFIRMED_CANCELLATION_MESSAGE,
       };
     }
     return errorResult(error, signal);

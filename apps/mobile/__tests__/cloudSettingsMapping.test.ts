@@ -81,6 +81,32 @@ describe('cloudSettingsMapping, language namespace', () => {
   });
 });
 
+describe('cloudSettingsMapping, sensitive topics in memory', () => {
+  beforeEach(() => {
+    useCloudSettingsStore.setState({
+      includeSensitiveTopics: false,
+      memoryEnabled: true,
+      memoryPolicyInitialized: true,
+    });
+  });
+
+  it('mirrors the account choice a web edit writes', () => {
+    applyCloudSettings({ capabilities: { includeSensitiveTopics: true } });
+    expect(useCloudSettingsStore.getState().includeSensitiveTopics).toBe(true);
+
+    applyCloudSettings({ capabilities: { includeSensitiveTopics: false } });
+    expect(useCloudSettingsStore.getState().includeSensitiveTopics).toBe(false);
+  });
+
+  it('never pushes the choice back, so a device that has not read it cannot clear it', () => {
+    useCloudSettingsStore.setState({ includeSensitiveTopics: true });
+    const payload = toCloudSettings(useCloudSettingsStore.getState());
+
+    expect(payload.capabilities).toBeDefined();
+    expect(payload.capabilities).not.toHaveProperty('includeSensitiveTopics');
+  });
+});
+
 describe('cloudSettingsMapping, identity namespace the server actually reads', () => {
   const SERVER_IDENTITY_NAMESPACE = 'general';
   const SERVER_IDENTITY_KEYS = ['aboutYou', 'instructions', 'preferredName', 'workDescription'];

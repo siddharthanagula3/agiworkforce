@@ -11,7 +11,7 @@ export interface PairingState {
 }
 
 import { isBridgePairingCode, normalizePairingCode } from '@agiworkforce/types';
-import { ALLOWED_BRIDGE_HOSTS, DEFAULT_AGI_BRIDGE_URL } from '../../background/policy';
+import { DEFAULT_AGI_BRIDGE_URL, validateBridgeUrl } from '../../background/policy';
 import { normalizeManagedCloudOwner } from '../cloud-bridge/managedCloudAuthority';
 
 // SEC-11: two separate credentials, two separate keys. The bridge secret is
@@ -237,9 +237,8 @@ async function getBridgeBaseUrl(): Promise<string> {
 }
 
 async function getLocalBridgeBaseUrl(): Promise<string> {
-  const baseUrl = await getBridgeBaseUrl();
-  const parsed = new URL(baseUrl);
-  if (!ALLOWED_BRIDGE_HOSTS.has(parsed.hostname)) {
+  const baseUrl = validateBridgeUrl(await getBridgeBaseUrl());
+  if (!baseUrl) {
     throw new Error('Pairing is only supported with local desktop bridge');
   }
   return baseUrl;
@@ -254,6 +253,7 @@ async function postToBridge(
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
+    redirect: 'error',
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 

@@ -1,4 +1,4 @@
-# AGI Browser Companion
+# agiworkforce
 
 Managed Cloud chat, approved-site browser context, and automation for AGI,
 packaged as a Manifest V3 Chrome extension. See

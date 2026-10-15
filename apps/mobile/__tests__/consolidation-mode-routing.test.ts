@@ -35,6 +35,48 @@ describe('consolidateFactsFromTurn, on-device (local) persistence', () => {
     expect(mockInsertMemoryFact).toHaveBeenCalled();
   });
 
+  it('leaves a learned sensitive fact off the device until the opt-in is on', async () => {
+    const off = await consolidateFactsFromTurn({
+      message: 'I am a practicing Catholic.',
+      conversationId: 'c',
+    });
+    expect(off.inserted).toBe(0);
+    expect(mockInsertMemoryFact).not.toHaveBeenCalled();
+
+    const on = await consolidateFactsFromTurn({
+      message: 'I am a practicing Catholic.',
+      conversationId: 'c',
+      includeSensitiveTopics: true,
+    });
+    expect(on.inserted).toBe(1);
+    expect(mockInsertMemoryFact).toHaveBeenCalledWith(
+      expect.objectContaining({ fact: 'User is a practicing Catholic', source: 'learned' }),
+    );
+  });
+
+  it('reads a noted first-person fact the way it reads the same fact about the user', async () => {
+    for (const message of [
+      'Note that I suffer from depression.',
+      'For future reference, I take Lexapro.',
+      'Note that I belong to a union.',
+      'Note that im gay.',
+    ]) {
+      const off = await consolidateFactsFromTurn({ message, conversationId: 'c' });
+      expect(off.inserted).toBe(0);
+    }
+    expect(mockInsertMemoryFact).not.toHaveBeenCalled();
+
+    const on = await consolidateFactsFromTurn({
+      message: 'Note that I suffer from depression.',
+      conversationId: 'c',
+      includeSensitiveTopics: true,
+    });
+    expect(on.inserted).toBe(1);
+    expect(mockInsertMemoryFact).toHaveBeenCalledWith(
+      expect.objectContaining({ fact: 'I suffer from depression', source: 'learned' }),
+    );
+  });
+
   it('skips entirely when disabled (temporary/incognito chat)', async () => {
     const res = await consolidateFactsFromTurn({
       message: 'my name is Katherine Johnson',

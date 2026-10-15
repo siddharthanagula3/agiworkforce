@@ -19,6 +19,15 @@ export interface PageAction {
   readsVideoCaptions?: true;
 }
 
+export const MAX_PAGE_TEXT_CHARACTERS = 30_000;
+export const PAGE_TEXT_EXCERPT_NOTICE =
+  '\n\n[Page excerpt: remaining text was omitted at the capture limit. This is not the full page.]';
+
+export interface BoundedPageText {
+  text: string;
+  truncated: boolean;
+}
+
 const GENERIC_ACTIONS: PageAction[] = [
   {
     id: 'summarize',
@@ -129,12 +138,23 @@ export function getPageActions(url: string): PageAction[] {
   return GENERIC_ACTIONS;
 }
 
-export function truncatePageText(raw: string, maxChars = 30_000): string {
+export function truncatePageText(raw: string, maxChars = MAX_PAGE_TEXT_CHARACTERS): string {
   const collapsed = raw
     .replace(/[\t\u00A0 ]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
   return collapsed.length <= maxChars ? collapsed : collapsed.slice(0, maxChars);
+}
+
+export function boundPageText(raw: string, alreadyTruncated = false): BoundedPageText {
+  const collapsed = truncatePageText(raw, MAX_PAGE_TEXT_CHARACTERS + 1);
+  const truncated = alreadyTruncated || collapsed.length > MAX_PAGE_TEXT_CHARACTERS;
+  const text =
+    truncated && collapsed.length > 0
+      ? collapsed.slice(0, MAX_PAGE_TEXT_CHARACTERS - PAGE_TEXT_EXCERPT_NOTICE.length).trimEnd() +
+        PAGE_TEXT_EXCERPT_NOTICE
+      : collapsed;
+  return { text, truncated };
 }
 
 export { redactSecrets as redactSensitiveText } from '@agiworkforce/utils/logger';

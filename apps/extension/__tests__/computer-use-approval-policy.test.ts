@@ -36,6 +36,17 @@ describe('approvalRequirement', () => {
     ).toEqual({ alwaysAsk: true, reason: 'download' });
   });
 
+  it('always asks for user-selected uploads even on ordinary sites with a known input', () => {
+    expect(
+      approvalRequirement({
+        toolName: 'upload_file',
+        args: { index: 3 },
+        pageUrl: plain,
+        targetSignature: 'input||file|resume|Upload resume',
+      }),
+    ).toEqual({ alwaysAsk: true, reason: 'upload' });
+  });
+
   it('treats a click or type on a file input as an upload', () => {
     expect(
       approvalRequirement({
@@ -133,9 +144,14 @@ describe('approvalRequirement', () => {
   });
 
   it('leaves routine steps on an ordinary page to the ask-before-acting preference', () => {
-    expect(approvalRequirement({ toolName: 'click', args: { index: 1 }, pageUrl: plain })).toEqual({
-      alwaysAsk: false,
-    });
+    expect(
+      approvalRequirement({
+        toolName: 'click',
+        args: { index: 1 },
+        pageUrl: plain,
+        targetSignature: 'button||||Next page',
+      }),
+    ).toEqual({ alwaysAsk: false });
     expect(
       approvalRequirement({
         toolName: 'read_network',
@@ -144,6 +160,112 @@ describe('approvalRequirement', () => {
       }),
     ).toEqual({ alwaysAsk: false });
   });
+
+  it('rejects unsupported actions before they can inherit the full-control preference', () => {
+    expect(() =>
+      approvalRequirement({ toolName: 'execute_arbitrary_script', args: {}, pageUrl: plain }),
+    ).toThrow('Unsupported browser action');
+  });
+
+  it.each(['click', 'hover', 'press_key'])('%s requires an identified live target', (toolName) => {
+    for (const targetSignature of [null, '', 'input', 'input||||']) {
+      expect(approvalRequirement({ toolName, args: {}, pageUrl: plain, targetSignature })).toEqual({
+        alwaysAsk: true,
+        reason: 'unidentified_input',
+      });
+    }
+  });
+
+  it.each(['click', 'hover', 'press_key'])('%s cannot bypass sensitive controls', (toolName) => {
+    for (const [targetSignature, reason] of [
+      ['input||password|password|Password', 'sensitive_input'],
+      ['input||text|creditCardNumber|', 'sensitive_input'],
+      ['input||text|private_key|', 'sensitive_input'],
+      ['input||text|apiToken|', 'sensitive_input'],
+      ['input||file|resume|Upload resume', 'upload'],
+      ['button||||Sign in', 'authentication'],
+      ['button||||Authorize', 'authorization'],
+      ['button||||Pay now', 'purchase'],
+      ['button||||Publish post', 'publish'],
+      ['button||||Revoke access', 'permission_change'],
+    ] as const) {
+      expect(
+        approvalRequirement({ toolName, args: {}, pageUrl: plain, targetSignature }).reason,
+      ).toBe(reason);
+    }
+  });
+
+  it.each(['drag', 'swipe'])('%s binds mandatory approval to both endpoints', (toolName) => {
+    const normal = 'div||||A calendar event';
+    const sensitive = 'input||password|password|Password';
+    for (const [sourceSignature, destinationSignature, reason] of [
+      [sensitive, normal, 'sensitive_input'],
+      [normal, sensitive, 'sensitive_input'],
+      [normal, 'button||||Publish', 'publish'],
+      ['button||||Pay now', normal, 'purchase'],
+      [normal, null, 'unidentified_input'],
+      [null, normal, 'unidentified_input'],
+      ['stale-index', normal, 'unidentified_input'],
+    ] as const) {
+      expect(
+        approvalRequirement({
+          toolName,
+          args: {},
+          pageUrl: plain,
+          sourceSignature,
+          destinationSignature,
+        }),
+      ).toEqual({ alwaysAsk: true, reason });
+    }
+    expect(
+      approvalRequirement({
+        toolName,
+        args: {},
+        pageUrl: plain,
+        sourceSignature: normal,
+        destinationSignature: 'div||||Thursday column',
+      }),
+    ).toEqual({ alwaysAsk: false });
+  });
+
+  it.each(['hover', 'press_key', 'drag', 'swipe'])(
+    '%s retains the mandatory authorization and permission-page gates',
+    (toolName) => {
+      expect(
+        approvalRequirement({
+          toolName,
+          args: {},
+          pageUrl: 'https://app.example.com/oauth/authorize?client_id=a&response_type=code',
+        }).reason,
+      ).toBe('authorization');
+      expect(
+        approvalRequirement({
+          toolName,
+          args: {},
+          pageUrl: 'https://github.com/settings/applications',
+        }).reason,
+      ).toBe('permission_change');
+      expect(
+        approvalRequirement({ toolName, args: {}, pageUrl: 'https://github.com/login' }).reason,
+      ).toBe('authentication');
+    },
+  );
+
+  it.each(['click', 'hover', 'press_key', 'drag', 'swipe'])(
+    '%s asks if the acting page could not be established',
+    (toolName) => {
+      expect(
+        approvalRequirement({
+          toolName,
+          args: {},
+          pageUrl: null,
+          targetSignature: 'button||||Next page',
+          sourceSignature: 'div||||Calendar item',
+          destinationSignature: 'div||||Thursday column',
+        }).reason,
+      ).toBe('unidentified_input');
+    },
+  );
 
   it('explains the reason to the person asked and in a refusal', () => {
     expect(

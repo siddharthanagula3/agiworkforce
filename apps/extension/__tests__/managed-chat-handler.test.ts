@@ -530,6 +530,60 @@ describe('executeChromeManagedChat', () => {
     expect(options.model).toBe(PAID_ECONOMY_MODEL);
   });
 
+  it('preserves a selected concrete model and route receipt even when an old Quick preference is on', async () => {
+    const model = getRoutingSlotModel('browser_dom');
+    const onRouting = vi.fn();
+    const deps = dependencies({
+      getModelAccess: vi.fn(async () => ({
+        subscriptionTier: 'max',
+        modelIds: [model],
+        allowedAutoModes: [],
+      })),
+      onRouting,
+    });
+    const result = await executeChromeManagedChat(
+      {
+        id: 'stream-quick-pinned',
+        text: 'Give me a short answer.',
+        modelSelection: model,
+        quickMode: true,
+      },
+      deps,
+    );
+
+    expect(result.status).toBe('success');
+    expect(deps.streamChat).toHaveBeenCalledOnce();
+    const [, , options] = vi.mocked(deps.streamChat).mock.calls[0]!;
+    expect(options.model).toBe(model);
+    expect(onRouting).toHaveBeenCalledWith(expect.objectContaining({ modelKey: model }));
+  });
+
+  it('refuses Quick Auto when the server did not admit the Economy routing alias', async () => {
+    const deps = dependencies({
+      getModelAccess: vi.fn(async () => ({
+        subscriptionTier: 'max',
+        modelIds: ADMITTED_MANAGED_MODEL_IDS,
+        allowedAutoModes: ['auto'],
+      })),
+    });
+    const result = await executeChromeManagedChat(
+      {
+        id: 'stream-quick-not-admitted',
+        text: 'Give me a short answer.',
+        modelSelection: 'auto',
+        quickMode: true,
+      },
+      deps,
+    );
+
+    expect(result).toMatchObject({
+      status: 'error',
+      code: 'model_not_admitted',
+      message: expect.stringContaining('Quick routing is not available'),
+    });
+    expect(deps.streamChat).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed history at the privileged boundary', async () => {
     const deps = dependencies();
     const result = await executeChromeManagedChat(

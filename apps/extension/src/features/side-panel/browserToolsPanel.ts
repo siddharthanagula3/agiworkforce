@@ -52,7 +52,7 @@ export const BROWSER_TOOLS_PANEL_CSS = `
     flex-shrink: 0;
     min-height: var(--control-sm);
     padding: 4px 10px;
-    border: 1px solid var(--agi-ext-border);
+    border: 1px solid var(--agi-ext-border-control);
     border-radius: var(--corner-control);
     background: var(--agi-ext-bg);
     color: var(--agi-ext-text);
@@ -65,7 +65,7 @@ export const BROWSER_TOOLS_PANEL_CSS = `
   }
 
   .sp-bt-action:disabled {
-    opacity: 0.55;
+    color: var(--agi-ext-text-muted);
     cursor: default;
   }
 
@@ -74,17 +74,19 @@ export const BROWSER_TOOLS_PANEL_CSS = `
     border-color: var(--agi-ext-accent);
     color: var(--agi-ext-on-accent);
   }
+  .sp-bt-action[aria-pressed='true']:hover:not(:disabled) { background: var(--agi-ext-accent); }
 
   .sp-bt-filter {
     width: 100%;
     box-sizing: border-box;
     padding: 6px 10px;
     border: none;
-    border-bottom: 1px solid var(--agi-ext-border);
+    border-bottom: 1px solid var(--agi-ext-border-control);
     background: var(--agi-ext-bg);
     color: var(--agi-ext-text);
     font-size: var(--type-label-size);
   }
+  .sp-bt-filter::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
 
   .sp-bt-list {
     margin: 0;

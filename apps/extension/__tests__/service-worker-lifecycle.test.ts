@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import ts from 'typescript';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const readSource = (rel: string): string => readFileSync(join(here, rel), 'utf8');
@@ -122,10 +123,34 @@ describe('a computer-use run that dies with the worker ends visibly', () => {
   });
 
   it('attaches the debugger detach listener in the first turn of the worker', () => {
-    expect(background).toMatch(/^ensureOnDetachListener\(\);$/m);
-    expect(background).toContain(
-      "import { ensureOnDetachListener } from './features/computer-use/cdpDriver';",
+    const program = ts.createSourceFile('background.ts', background, ts.ScriptTarget.Latest, true);
+    const imported = program.statements.find(
+      (node) =>
+        ts.isImportDeclaration(node) &&
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        node.moduleSpecifier.text === './features/computer-use/cdpDriver',
     );
+    expect(
+      imported &&
+        ts.isImportDeclaration(imported) &&
+        imported.importClause?.namedBindings &&
+        !imported.importClause.isTypeOnly &&
+        ts.isNamedImports(imported.importClause.namedBindings) &&
+        imported.importClause.namedBindings.elements.some(
+          (element) =>
+            element.name.text === 'ensureOnDetachListener' &&
+            (element.propertyName ?? element.name).text === 'ensureOnDetachListener' &&
+            !element.isTypeOnly,
+        ),
+    ).toBe(true);
+    const startupCalls = program.statements.filter(
+      (node) =>
+        ts.isExpressionStatement(node) &&
+        ts.isCallExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        node.expression.expression.text === 'ensureOnDetachListener',
+    );
+    expect(startupCalls).toHaveLength(1);
   });
 
   it('reports that the install is alive in its first turn, not on a timer', () => {

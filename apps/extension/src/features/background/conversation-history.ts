@@ -3,8 +3,12 @@ import {
   ManagedCloudAgentRunReferenceSchema,
   parseGeneratedFilesDelta,
   readPersistedInteractiveCards,
+  ManagedCloudUpdateConversationRequestSchema,
+  CONVERSATION_TITLE_MAX_LENGTH,
   type GeneratedFileWire,
   type ManagedCloudAgentRunReference,
+  type ManagedCloudUpdateConversationRequest,
+  type ManagedCloudConversation,
 } from '@agiworkforce/cloud-contracts';
 import {
   getModelMetadataById,
@@ -34,10 +38,10 @@ export const BROWSER_STORE_KEY = 'agi_browser_conversations_v2';
 const LEGACY_BROWSER_STORE_KEY = 'agi_browser_conversations_v1';
 const LEGACY_HISTORY_KEY = 'agi_conversation_history';
 const LEGACY_ACTIVE_MESSAGES_KEY = 'agi_side_panel_messages';
-const MAX_CONVERSATIONS = 100;
+export const MAX_CONVERSATIONS = 100;
 const MAX_CONVERSATION_SCAN = MAX_CONVERSATIONS * 2;
-const MAX_MESSAGES_PER_CONVERSATION = 100;
-const MAX_HISTORY_CONTENT_CHARS = 64_000;
+export const MAX_MESSAGES_PER_CONVERSATION = 100;
+export const MAX_HISTORY_CONTENT_CHARS = 64_000;
 const MAX_HISTORY_QUERY_CHARS = 200;
 const MAX_SEARCHABLE_CHARS_PER_CONVERSATION = 128_000;
 export const MAX_CONVERSATION_STORE_BYTES = 4 * 1024 * 1024;
@@ -52,7 +56,7 @@ const MAX_AGENT_EVENT_SERIALIZED_CHARS_TOTAL = 512 * 1024;
 const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const CONVERSATION_STORE_LOCK = 'agi-browser-conversation-store-v2';
 const MAX_BACKGROUND_MESSAGES = 100;
-const MAX_CONVERSATION_TITLE_CHARS = 80;
+export const MAX_CONVERSATION_TITLE_CHARS = CONVERSATION_TITLE_MAX_LENGTH;
 const MAX_CONVERSATION_PROJECT_ID_CHARS = 128;
 const BACKGROUND_DELIVERY_ID_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 const AUTO_ROUTE_REASON_PATTERN = /^[a-z_]{1,40}$/;
@@ -60,6 +64,7 @@ export const BACKGROUND_ANSWER_TRUNCATION_NOTICE =
   '\n\n[Answer truncated because it exceeded the browser-local history limit.]';
 
 const MAX_CLOUD_SYNC_ERROR_CHARS = 200;
+const MAX_HISTORY_ERROR_TEXT_CHARS = 1_000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_STORED_MESSAGE_ATTACHMENTS = 20;
 const MAX_STORED_MESSAGE_PAGES = 8;
@@ -98,6 +103,8 @@ export interface HistoryMessage {
   durationMs?: number;
   runtime?: ConversationRuntime;
   error?: boolean;
+  errorText?: string;
+  streamCancellation?: 'pending' | 'unconfirmed';
   cloudMessageId?: string;
   cloudSyncedAt?: number;
   cloudSyncedChars?: number;
@@ -111,7 +118,13 @@ export interface ConversationCloudSyncState {
   syncedTitle?: string;
   syncedProjectId?: string | null;
   syncedPinned?: boolean;
+  syncedStarred?: boolean;
   syncedArchived?: boolean;
+  remoteUpdatedAt?: string;
+  remoteImportedAt?: number;
+  messagesLoaded?: boolean;
+  totalMessageCount?: number;
+  messagesOffset?: number;
   state: 'idle' | 'pending' | 'error' | 'blocked';
   blockedReason?: 'non-cloud-runtime' | 'auth' | 'not-found' | 'workspace';
   lastError?: string;
@@ -129,6 +142,7 @@ export interface ConversationEntry {
   projectId?: string;
   customTitle?: string;
   pinned?: boolean;
+  starred?: boolean;
   archived?: boolean;
   cloudSync?: ConversationCloudSyncState;
 }
@@ -430,6 +444,20 @@ function normalizeHistoryMessage(
   if (message['error'] === true) {
     normalized.error = true;
   }
+  if (typeof message['errorText'] === 'string' && message['errorText'].length > 0) {
+    const text = message['errorText'].slice(
+      0,
+      Math.min(MAX_HISTORY_ERROR_TEXT_CHARS, budget.remainingContentChars),
+    );
+    budget.remainingContentChars -= text.length;
+    if (text) normalized.errorText = text;
+  }
+  if (
+    message['role'] === 'assistant' &&
+    (message['streamCancellation'] === 'pending' || message['streamCancellation'] === 'unconfirmed')
+  ) {
+    normalized.streamCancellation = message['streamCancellation'];
+  }
   if (
     typeof message['cloudMessageId'] === 'string' &&
     UUID_PATTERN.test(message['cloudMessageId'])
@@ -643,9 +671,20 @@ function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | u
     const syncedProjectId = normalizeConversationProjectId(raw['syncedProjectId']);
     if (syncedProjectId) normalized.syncedProjectId = syncedProjectId;
   }
-  if (typeof raw['syncedPinned'] === 'boolean') normalized.syncedPinned = raw['syncedPinned'];
-  if (typeof raw['syncedArchived'] === 'boolean') {
-    normalized.syncedArchived = raw['syncedArchived'];
+  for (const key of ['syncedPinned', 'syncedStarred', 'syncedArchived'] as const) {
+    if (typeof raw[key] === 'boolean') normalized[key] = raw[key];
+  }
+  if (
+    typeof raw['remoteUpdatedAt'] === 'string' &&
+    Number.isFinite(Date.parse(raw['remoteUpdatedAt']))
+  )
+    normalized.remoteUpdatedAt = raw['remoteUpdatedAt'];
+  if (typeof raw['messagesLoaded'] === 'boolean') normalized.messagesLoaded = raw['messagesLoaded'];
+  if (typeof raw['remoteImportedAt'] === 'number' && Number.isFinite(raw['remoteImportedAt']))
+    normalized.remoteImportedAt = raw['remoteImportedAt'];
+  for (const key of ['totalMessageCount', 'messagesOffset'] as const) {
+    if (typeof raw[key] === 'number' && Number.isSafeInteger(raw[key]) && raw[key] >= 0)
+      normalized[key] = raw[key];
   }
   if (
     raw['blockedReason'] === 'non-cloud-runtime' ||
@@ -671,6 +710,15 @@ function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | u
     normalized.organizationId === undefined &&
     normalized.createAcknowledged === undefined &&
     normalized.syncedTitle === undefined &&
+    normalized.syncedProjectId === undefined &&
+    normalized.syncedPinned === undefined &&
+    normalized.syncedStarred === undefined &&
+    normalized.syncedArchived === undefined &&
+    normalized.remoteUpdatedAt === undefined &&
+    normalized.remoteImportedAt === undefined &&
+    normalized.messagesLoaded === undefined &&
+    normalized.totalMessageCount === undefined &&
+    normalized.messagesOffset === undefined &&
     normalized.blockedReason === undefined &&
     normalized.lastError === undefined &&
     normalized.lastAttemptAt === undefined &&
@@ -730,8 +778,9 @@ function normalizeConversationEntry(
     routing: normalizeRoutingState(entry['routing']),
     ...(projectId ? { projectId } : {}),
     ...(customTitle ? { customTitle } : {}),
-    ...(entry['pinned'] === true ? { pinned: true } : {}),
-    ...(entry['archived'] === true ? { archived: true } : {}),
+    ...(typeof entry['pinned'] === 'boolean' ? { pinned: entry['pinned'] } : {}),
+    ...(typeof entry['starred'] === 'boolean' ? { starred: entry['starred'] } : {}),
+    ...(typeof entry['archived'] === 'boolean' ? { archived: entry['archived'] } : {}),
     ...(cloudSync ? { cloudSync } : {}),
   };
   commitHistoryNormalizationBudget(budget, entryBudget);
@@ -1164,6 +1213,7 @@ export async function appendBackgroundTurn(
       ? carryForwardCloudSyncState(existing.messages, normalizedMessages)
       : normalizedMessages;
     const entry: ConversationEntry = {
+      ...(existing ?? {}),
       id: conversationId,
       owner: { ...owner },
       title: existing?.customTitle ?? normalizeConversationTitle(title) ?? deriveTitle(messages),
@@ -1339,6 +1389,49 @@ export async function saveActiveConversation(
   });
 }
 
+export async function rebindAuthenticatedConversationHistory(
+  owner: ManagedCloudOwner,
+  ownerIsCurrent: () => Promise<boolean>,
+): Promise<boolean> {
+  assertManagedCloudOwner(owner);
+  if (!(await ownerIsCurrent())) return false;
+  return mutateStore(async (store) => {
+    if (!(await ownerIsCurrent())) return false;
+    const accountEntries = store.conversations.filter(
+      (entry) => entry.owner.accountId === owner.accountId,
+    );
+    const ids = new Set<string>();
+    for (const entry of accountEntries) {
+      if (ids.has(entry.id)) {
+        throw new Error(
+          'Saved chat session records overlap; history was preserved without rebinding.',
+        );
+      }
+      ids.add(entry.id);
+    }
+    if (accountEntries.every((entry) => sameManagedCloudOwner(entry.owner, owner))) return true;
+    const conversations = store.conversations.map((entry) =>
+      entry.owner.accountId === owner.accountId ? { ...entry, owner: { ...owner } } : entry,
+    );
+    const rebound = boundConversationStoreForWrite({
+      ...store,
+      conversations,
+      activeOwner:
+        store.activeOwner?.accountId === owner.accountId ? { ...owner } : store.activeOwner,
+    });
+    if (
+      rebound.conversations.length !== conversations.length ||
+      rebound.conversations.some((entry, index) => entry !== conversations[index])
+    )
+      throw new Error(
+        'Saved chats exceed the rebound history budget; all original history was preserved.',
+      );
+    if (!(await ownerIsCurrent())) return false;
+    await writeStore(rebound);
+    return ownerIsCurrent();
+  });
+}
+
 export async function getActiveConversation(
   owner: ManagedCloudOwner,
 ): Promise<ConversationEntry | undefined> {
@@ -1430,6 +1523,224 @@ export async function getConversation(
   );
 }
 
+export type ConversationMetadataPatch = Pick<
+  ManagedCloudUpdateConversationRequest,
+  'title' | 'projectId' | 'pinned' | 'starred' | 'archived'
+>;
+
+export async function updateConversationMetadata(
+  owner: ManagedCloudOwner,
+  id: string,
+  patch: ConversationMetadataPatch,
+  ownerIsCurrent: () => boolean | Promise<boolean>,
+): Promise<ConversationEntry | undefined> {
+  assertManagedCloudOwner(owner);
+  if (!isSafeConversationId(id)) throw new Error('Invalid browser conversation id');
+  const parsed = ManagedCloudUpdateConversationRequestSchema.parse(patch);
+  if (
+    parsed.title !== undefined &&
+    (!parsed.title.trim() ||
+      parsed.title.length > MAX_CONVERSATION_TITLE_CHARS ||
+      containsControlCharacter(parsed.title))
+  )
+    throw new Error(`Chat names must contain 1 to ${MAX_CONVERSATION_TITLE_CHARS} characters.`);
+  if (
+    parsed.projectId !== undefined &&
+    parsed.projectId !== null &&
+    normalizeConversationProjectId(parsed.projectId) !== parsed.projectId
+  )
+    throw new Error('Invalid project id');
+  return mutateStore(async (store) => {
+    if (!(await ownerIsCurrent())) return undefined;
+    const index = store.conversations.findIndex(
+      (entry) => entry.id === id && sameManagedCloudOwner(entry.owner, owner),
+    );
+    const existing = index < 0 ? undefined : store.conversations[index];
+    if (!existing) return undefined;
+    let next = applyConversationProject(
+      {
+        ...existing,
+        ...(parsed.title !== undefined
+          ? { title: parsed.title.trim(), customTitle: parsed.title.trim() }
+          : {}),
+        ...(parsed.pinned !== undefined ? { pinned: parsed.pinned } : {}),
+        ...(parsed.starred !== undefined ? { starred: parsed.starred } : {}),
+        ...(parsed.archived !== undefined ? { archived: parsed.archived } : {}),
+      },
+      parsed.projectId,
+    );
+    if (isCloudMetadataPersistenceEligible(next) && conversationMetadataNeedsSync(next)) {
+      next = { ...next, cloudSync: { ...next.cloudSync!, state: 'pending' } };
+    }
+    if (!(await ownerIsCurrent())) return undefined;
+    store.conversations[index] = next;
+    const persisted = await writeStore(store);
+    return persisted.conversations.find(
+      (entry) => entry.id === id && sameManagedCloudOwner(entry.owner, owner),
+    );
+  });
+}
+
+export interface ManagedCloudHistoryImport {
+  conversation: ManagedCloudConversation;
+  messages?: HistoryMessage[];
+  totalMessageCount?: number;
+  messagesOffset?: number;
+}
+
+export async function importManagedCloudConversationHistory(
+  owner: ManagedCloudOwner,
+  organizationId: string | null,
+  imports: readonly ManagedCloudHistoryImport[],
+  ownerIsCurrent: () => boolean | Promise<boolean>,
+  protectsConversation: (conversationId: string) => boolean,
+): Promise<number> {
+  assertManagedCloudOwner(owner);
+  return mutateStore(async (store) => {
+    if (!(await ownerIsCurrent()) || !cloudMirroringEnabledSnapshot()) return 0;
+    const protectedEntries = store.conversations.filter(
+      (entry) =>
+        protectsConversation(entry.id) ||
+        pendingCloudMessages(entry).length > 0 ||
+        entry.cloudSync?.blockedReason === 'non-cloud-runtime' ||
+        entry.messages.some(
+          (message) =>
+            message.runtime !== 'managed-cloud' ||
+            message.streaming === true ||
+            message.streamCancellation !== undefined,
+        ),
+    );
+    let imported = 0;
+    const changedIds = new Set<string>();
+    let conversations = [...store.conversations];
+    for (const incoming of imports.slice(0, MAX_CONVERSATIONS)) {
+      const remote = incoming.conversation;
+      if (
+        !UUID_PATTERN.test(remote.id) ||
+        remote.isTemporary ||
+        remote.organizationId !== organizationId ||
+        !Number.isFinite(Date.parse(remote.updatedAt))
+      )
+        continue;
+      const title = normalizeConversationTitle(remote.title);
+      const projectId =
+        remote.projectId === null ? undefined : normalizeConversationProjectId(remote.projectId);
+      if (!title || (remote.projectId !== null && !projectId)) continue;
+      const existing = conversations.find(
+        (entry) =>
+          sameManagedCloudOwner(entry.owner, owner) &&
+          (entry.cloudSync?.conversationId === remote.id || entry.id === remote.id),
+      );
+      if (existing && protectedEntries.includes(existing)) continue;
+      if (protectsConversation(existing?.id ?? remote.id)) continue;
+      if (
+        existing?.cloudSync?.organizationId !== undefined &&
+        existing.cloudSync.organizationId !== organizationId
+      )
+        continue;
+      if (
+        existing?.cloudSync?.remoteUpdatedAt &&
+        Date.parse(existing.cloudSync.remoteUpdatedAt) > Date.parse(remote.updatedAt)
+      )
+        continue;
+      const sync = existing?.cloudSync;
+      const retainedTitle =
+        existing && sync?.syncedTitle !== existing.title ? existing.title : title;
+      const retainedProjectId =
+        existing && conversationProjectNeedsSync(existing) ? existing.projectId : projectId;
+      const messages =
+        incoming.messages === undefined
+          ? (existing?.messages ?? [])
+          : normalizeMessages(incoming.messages);
+      if (incoming.messages !== undefined && incoming.messages.length > 0 && messages.length === 0)
+        continue;
+      const markedMessages =
+        incoming.messages === undefined
+          ? messages
+          : messages.map((message) => ({
+              ...message,
+              cloudSyncedAt: Date.now(),
+              cloudSyncedChars: message.content.length,
+              cloudSyncedFingerprint: cloudMessageSyncFingerprint(message),
+            }));
+      const entry: ConversationEntry = {
+        ...(existing ?? {}),
+        id: existing?.id ?? remote.id,
+        owner: { ...owner },
+        title: retainedTitle,
+        customTitle: retainedTitle,
+        messages: markedMessages,
+        savedAt: Date.now(),
+        routing:
+          existing?.routing ??
+          normalizeRoutingState({
+            selectedModel: remote.selectedRouteId ?? remote.model ?? 'auto',
+          }),
+        pinned:
+          existing?.pinned !== undefined && existing.pinned !== (sync?.syncedPinned ?? false)
+            ? existing.pinned
+            : remote.pinned,
+        starred:
+          existing?.starred !== undefined && existing.starred !== (sync?.syncedStarred ?? false)
+            ? existing.starred
+            : remote.starred,
+        archived:
+          existing?.archived !== undefined && existing.archived !== (sync?.syncedArchived ?? false)
+            ? existing.archived
+            : remote.archived,
+        cloudSync: {
+          conversationId: remote.id,
+          organizationId,
+          createAcknowledged: true,
+          state: 'idle',
+          syncedTitle: title,
+          syncedProjectId: remote.projectId,
+          syncedPinned: remote.pinned,
+          syncedStarred: remote.starred,
+          syncedArchived: remote.archived,
+          remoteUpdatedAt: remote.updatedAt,
+          remoteImportedAt: Date.now(),
+          messagesLoaded:
+            incoming.messages !== undefined ||
+            (sync?.messagesLoaded ?? Boolean(existing?.messages.length)),
+          ...(incoming.totalMessageCount !== undefined
+            ? { totalMessageCount: incoming.totalMessageCount }
+            : sync?.totalMessageCount !== undefined
+              ? { totalMessageCount: sync.totalMessageCount }
+              : {}),
+          ...(incoming.messagesOffset !== undefined
+            ? { messagesOffset: incoming.messagesOffset }
+            : sync?.messagesOffset !== undefined
+              ? { messagesOffset: sync.messagesOffset }
+              : {}),
+        },
+      };
+      if (retainedProjectId) entry.projectId = retainedProjectId;
+      else delete entry.projectId;
+      conversations = [entry, ...conversations.filter((candidate) => candidate !== existing)];
+      const bounded = boundConversationStoreForWrite({ ...store, conversations });
+      if (protectedEntries.some((candidate) => !bounded.conversations.includes(candidate))) {
+        conversations = conversations.filter((candidate) => candidate !== entry);
+        if (existing) conversations.push(existing);
+        continue;
+      }
+      conversations = bounded.conversations;
+      if (
+        conversations.some(
+          (candidate) => candidate.id === entry.id && sameManagedCloudOwner(candidate.owner, owner),
+        )
+      ) {
+        imported += 1;
+        changedIds.add(entry.id);
+      }
+    }
+    if (!(await ownerIsCurrent()) || !cloudMirroringEnabledSnapshot()) return 0;
+    if ([...changedIds].some(protectsConversation)) return 0;
+    if (imported > 0) await writeStore({ ...store, conversations });
+    return imported;
+  });
+}
+
 export interface ConversationDeletionRecord {
   cloudConversationId?: string;
   organizationId?: string | null;
@@ -1506,6 +1817,21 @@ export function isCloudPersistenceEligible(entry: ConversationEntry): boolean {
   return entry.messages.every((message) => message.runtime === 'managed-cloud');
 }
 
+export function isCloudMetadataPersistenceEligible(entry: ConversationEntry): boolean {
+  if (isCloudPersistenceEligible(entry)) return true;
+  const sync = entry.cloudSync;
+  return (
+    cloudMirroringEnabledSnapshot() &&
+    entry.messages.length === 0 &&
+    sync?.messagesLoaded === false &&
+    sync.conversationId !== undefined &&
+    UUID_PATTERN.test(sync.conversationId) &&
+    sync.organizationId !== undefined &&
+    sync.createAcknowledged === true &&
+    (sync.blockedReason === undefined || sync.blockedReason === 'auth')
+  );
+}
+
 export function cloudMessageSyncFingerprint(message: HistoryMessage): string {
   const serialized = JSON.stringify({
     role: message.role,
@@ -1553,6 +1879,17 @@ export function conversationFlagsNeedSync(entry: ConversationEntry): boolean {
   );
 }
 
+export function conversationMetadataNeedsSync(entry: ConversationEntry): boolean {
+  if (!entry.cloudSync?.conversationId) return false;
+  return (
+    entry.cloudSync.syncedTitle !== entry.title ||
+    conversationProjectNeedsSync(entry) ||
+    (entry.pinned !== undefined && entry.pinned !== (entry.cloudSync.syncedPinned ?? false)) ||
+    (entry.starred !== undefined && entry.starred !== (entry.cloudSync.syncedStarred ?? false)) ||
+    (entry.archived !== undefined && entry.archived !== (entry.cloudSync.syncedArchived ?? false))
+  );
+}
+
 export async function listConversationsNeedingCloudSync(
   owner: ManagedCloudOwner,
 ): Promise<ConversationEntry[]> {
@@ -1560,7 +1897,7 @@ export async function listConversationsNeedingCloudSync(
   const now = Date.now();
   return (await readAfterMutations()).conversations.filter((entry) => {
     if (!sameManagedCloudOwner(entry.owner, owner)) return false;
-    if (!isCloudPersistenceEligible(entry)) return false;
+    if (!isCloudMetadataPersistenceEligible(entry)) return false;
     if (entry.cloudSync?.retryAfter !== undefined && entry.cloudSync.retryAfter > now) return false;
     if (
       entry.cloudSync?.blockedReason === 'not-found' ||
@@ -1571,9 +1908,7 @@ export async function listConversationsNeedingCloudSync(
     return (
       pendingCloudMessages(entry).length > 0 ||
       (entry.cloudSync?.conversationId !== undefined &&
-        (entry.cloudSync.syncedTitle !== entry.title ||
-          conversationProjectNeedsSync(entry) ||
-          conversationFlagsNeedSync(entry) ||
+        (conversationMetadataNeedsSync(entry) ||
           entry.cloudSync.organizationId === undefined ||
           entry.cloudSync.createAcknowledged !== true))
     );
@@ -1593,7 +1928,7 @@ export async function claimCloudConversationBinding(
     );
     const existing = index >= 0 ? store.conversations[index] : undefined;
     if (!existing || index < 0) return undefined;
-    if (!isCloudPersistenceEligible(existing)) return undefined;
+    if (!isCloudMetadataPersistenceEligible(existing)) return undefined;
 
     const hadBinding = existing.cloudSync?.conversationId !== undefined;
     const minted = existing.cloudSync?.conversationId ?? mintCloudConversationId();

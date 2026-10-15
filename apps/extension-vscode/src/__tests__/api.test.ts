@@ -943,7 +943,7 @@ describe('managed chat Idempotency-Key wiring', () => {
 });
 
 describe('getCloudGatewayOrigin', () => {
-  it('uses the fixed trusted origin for account-token revocation', () => {
-    expect(getCloudGatewayOrigin()).toBe('https://api.agiworkforce.com');
+  it('uses the configured trusted web origin for account-token revocation', () => {
+    expect(getCloudGatewayOrigin()).toBe('https://agiworkforce.com');
   });
 });

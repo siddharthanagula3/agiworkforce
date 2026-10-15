@@ -255,22 +255,6 @@ describe('Managed Cloud account/session authority', () => {
     expect(sidePanelSource).toContain('...(request.owner ? { owner: request.owner } : {})');
   });
 
-  it('tears down only rejected-owner computer use before exact Clerk compare-and-clear', () => {
-    const rejectionHelper = sourceBetween(
-      backgroundSource,
-      'async function invalidateRejectedManagedCloudCredential',
-      '// Pending requests waiting for responses',
-    );
-    expect(rejectionHelper).toMatch(
-      /sameManagedCloudOwner\(computerUseLease\.authOwner, rejected\.owner\)[\s\S]*cancelActiveComputerUseRun\('account_changed', computerUseLease\.runId\)/,
-    );
-    expect(rejectionHelper).toContain('invalidateManagedCloudOwner(rejected.owner)');
-    expect(rejectionHelper).toContain(
-      'signOutClerkIfCurrent({ owner: rejected.owner, token: rejected.token })',
-    );
-    expect(rejectionHelper).not.toContain('clearPendingComputerUseStart');
-  });
-
   it('routes chat, resume, approval, and in-page auth failures through rejected-owner teardown', () => {
     const rejectionCalls = backgroundSource.match(
       /result\.code === 'auth_required'[\s\S]{0,120}invalidateRejectedManagedCloudCredential\(activeStream\)/g,
@@ -361,29 +345,5 @@ describe('managedCloudOwnerFromSessionToken', () => {
     expect(
       managedCloudOwnerFromSessionToken(makeSessionToken({ sub: 'user\u0000abc', sid: 'sess_1' })),
     ).toBeNull();
-  });
-});
-
-describe('clerkAuth owner resolution', () => {
-  const clerkAuthSource = readFileSync(
-    resolve(here, '../src/features/cloud-bridge/clerkAuth.ts'),
-    'utf8',
-  );
-
-  it('falls back to token claims instead of throwing on an unhydrated session', () => {
-    const resolver = sourceBetween(
-      clerkAuthSource,
-      'function resolveSessionOwner',
-      'export async function getFreshClerkAuthContext',
-    );
-    expect(resolver).toContain('normalizeManagedCloudOwner(');
-    expect(resolver).toContain('?? managedCloudOwnerFromSessionToken(token)');
-  });
-
-  it('routes both the auth-context and sign-out paths through the same resolver', () => {
-    expect(clerkAuthSource).toContain('const owner = resolveSessionOwner(clerk, session, token);');
-    expect(clerkAuthSource).toContain(
-      'const liveOwner = resolveSessionOwner(clerk, liveSession, token);',
-    );
   });
 });

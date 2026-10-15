@@ -11,5 +11,6 @@
 html,
 body {
   min-height: 100vh;
-  background: var(--agi-ext-bg, #1a1915);
+  color-scheme: light dark;
+  background: var(--agi-ext-bg, Canvas);
 }

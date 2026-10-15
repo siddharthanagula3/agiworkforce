@@ -53,6 +53,8 @@ vi.stubGlobal('chrome', {
 
 const { runDesktopBrowserCommand, MAX_DESKTOP_PAGE_TEXT_CHARS } =
   await import('../src/features/native-bridge/desktopCommands');
+const { BROWSER_PROFILE_SCOPE_STORAGE_KEY, BROWSER_PROFILE_STORAGE_KEY } =
+  await import('../src/features/options/site-permission-policy');
 
 function request(command: string, args: Record<string, unknown> = {}): BrowserCommandRequest {
   return {
@@ -63,9 +65,16 @@ function request(command: string, args: Record<string, unknown> = {}): BrowserCo
   };
 }
 
+const NATIVE_CLICK_RECEIPT = {
+  inputSource: 'cdp',
+  nativeInputAcknowledged: true,
+  targetVerified: true,
+} as const;
+
 function context(
   send: (tabId: number, message: Record<string, unknown>) => Promise<Record<string, unknown>>,
   navigate = vi.fn(() => Promise.resolve()),
+  click = vi.fn((_tabId: number, _selector: string) => Promise.resolve(NATIVE_CLICK_RECEIPT)),
 ) {
   return {
     resolveTabId: () => Promise.resolve(TAB_ID),
@@ -74,6 +83,15 @@ function context(
     history: vi.fn(() => Promise.resolve()),
     tabUrl: vi.fn(() => Promise.resolve(`${SITE}/page`)),
     capture: () => Promise.resolve('iVBORw0KGgo='),
+    click,
+    type: vi.fn((_tabId: number, _selector: string, text: string, _clear: boolean) =>
+      Promise.resolve({
+        inputSource: 'cdp' as const,
+        targetVerified: true as const,
+        valueVerified: true as const,
+        charactersInserted: text.length,
+      }),
+    ),
   };
 }
 
@@ -170,7 +188,7 @@ describe('desktop-issued browser commands', () => {
     );
   });
 
-  it('falls back to the tab capture when the debugger is refused', async () => {
+  it('never falls back to a visible-tab capture when the debugger is refused', async () => {
     approveSite();
     const send = vi.fn(async () => ({ success: true, data: 'data:image/png;base64,zzz' }));
     const result = await runDesktopBrowserCommand(request('browser_screenshot'), {
@@ -181,32 +199,46 @@ describe('desktop-issued browser commands', () => {
       tabUrl: vi.fn(),
       capture: () => Promise.reject(new Error('activeTab required')),
     });
-    expect((result.value as { dataUrl: string }).dataUrl).toBe('data:image/png;base64,zzz');
-  });
-
-  it('says what to approve when neither capture path is allowed', async () => {
-    approveSite();
-    const result = await runDesktopBrowserCommand(request('browser_screenshot'), {
-      resolveTabId: () => Promise.resolve(TAB_ID),
-      send: vi.fn(async () => ({ success: false, error: 'activeTab required' })),
-      navigate: vi.fn(),
-      history: vi.fn(),
-      tabUrl: vi.fn(),
-      capture: () => Promise.reject(new Error('activeTab required')),
-    });
     expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/approve browser control/);
+    expect(result.error).toBe('activeTab required');
+    expect(send).not.toHaveBeenCalled();
   });
 
-  it('carries a click failure back as the page reported it', async () => {
+  it('carries a native click failure back as the driver reported it', async () => {
     approveSite();
-    const send = vi.fn(async () => ({ success: false, error: 'Element not found' }));
+    const send = vi.fn();
+    const click = vi.fn(() => Promise.reject(new Error('Element not found')));
     const result = await runDesktopBrowserCommand(
       request('browser_click', { selector: '#buy' }),
-      context(send),
+      context(send, undefined, click),
     );
     expect(result.ok).toBe(false);
     expect(result.error).toBe('Element not found');
+    expect(click).toHaveBeenCalledWith(TAB_ID, '#buy');
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('refuses page input when the native browser driver is unavailable', async () => {
+    approveSite();
+    const send = vi.fn(async () => ({ success: true }));
+    const base = context(send);
+    const withoutDriver = {
+      resolveTabId: base.resolveTabId,
+      send: base.send,
+      navigate: base.navigate,
+      history: base.history,
+      tabUrl: base.tabUrl,
+      capture: base.capture,
+    };
+    for (const command of [
+      request('browser_click', { selector: '#buy' }),
+      request('browser_type', { selector: '#name', text: 'Ada' }),
+    ]) {
+      const result = await runDesktopBrowserCommand(command, withoutDriver);
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(/native browser driver is unavailable/);
+    }
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('needs a selector to click and an http address to navigate', async () => {
@@ -237,6 +269,76 @@ describe('desktop-issued browser commands', () => {
     );
     expect(result.ok).toBe(true);
     expect(navigate).toHaveBeenCalledWith(TAB_ID, `${SITE}/next`);
+  });
+
+  it.each(['unapproved', 'control', 'profile'] as const)(
+    'refuses a destination without its %s grant',
+    async (missing) => {
+      approveSite();
+      const destination = 'https://destination.example';
+      if (missing !== 'unapproved') {
+        store['agi_site_allowlist'] = [SITE, destination];
+        grantedOrigins.add(`${destination}/*`);
+      }
+      if (missing === 'profile') {
+        store['agi_cu_browser_control_consent'] = [SITE, destination];
+        store[BROWSER_PROFILE_SCOPE_STORAGE_KEY] = {
+          userId: 'qa-owner',
+          workspaceId: 'qa-workspace',
+        };
+        store[BROWSER_PROFILE_STORAGE_KEY] = [
+          {
+            id: 'qa-profile',
+            label: 'Original site',
+            userId: 'qa-owner',
+            workspaceId: 'qa-workspace',
+            sites: [SITE],
+            capabilities: ['automation'],
+            createdAtMs: Date.now(),
+            expiresAtMs: null,
+            revokedAtMs: null,
+          },
+        ];
+      }
+      const navigate = vi.fn(() => Promise.resolve());
+      const result = await runDesktopBrowserCommand(
+        request('browser_navigate', { url: `${destination}/next` }),
+        context(vi.fn(), navigate),
+      );
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(
+        missing === 'unapproved' ? /approved-sites/ : missing === 'control' ? /control/ : /profile/,
+      );
+      expect(navigate).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses a same-origin source-tab replacement during asynchronous destination authorization', async () => {
+    approveSite();
+    const get = vi.spyOn(chrome.tabs, 'get');
+    get.mockResolvedValueOnce({ id: TAB_ID, url: `${SITE}/page` } as chrome.tabs.Tab);
+    get.mockResolvedValueOnce({ id: TAB_ID, url: `${SITE}/different-page` } as chrome.tabs.Tab);
+    const navigate = vi.fn(() => Promise.resolve());
+    const result = await runDesktopBrowserCommand(
+      request('browser_navigate', { url: `${SITE}/next` }),
+      context(vi.fn(), navigate),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('tab changed');
+    expect(navigate).not.toHaveBeenCalled();
+    get.mockRestore();
+  });
+
+  it('refuses credentials in a destination URL before navigation', async () => {
+    approveSite();
+    const navigate = vi.fn(() => Promise.resolve());
+    const result = await runDesktopBrowserCommand(
+      request('browser_navigate', { url: 'https://qa-user:qa-password@allowed.example/next' }),
+      context(vi.fn(), navigate),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('credentials');
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it('goes back and reports the page it landed on', async () => {
@@ -325,13 +427,15 @@ describe('desktop-issued browser commands', () => {
     it('acts on nothing in a tab already on a blocked site', async () => {
       approveSite();
       const send = vi.fn();
+      const ctx = context(send);
       const result = await runDesktopBrowserCommand(
         ruled('browser_click', { selector: '#go' }),
-        context(send),
+        ctx,
       );
       expect(result.ok).toBe(false);
       expect(result.error).toMatch(/does not allow/);
       expect(send).not.toHaveBeenCalled();
+      expect(ctx.click).not.toHaveBeenCalled();
     });
 
     it('goes back and withholds the result when a click lands on a blocked site', async () => {

@@ -72,6 +72,7 @@ export interface CloudCapabilities {
   memory?: boolean;
   searchPastChats?: boolean;
   generateFromHistory?: boolean;
+  includeSensitiveTopics?: boolean;
 }
 
 export interface CloudSettings {
@@ -249,6 +250,9 @@ export function applyCloudSettings(partial: CloudSettings): void {
   }
   if (partial.capabilities?.generateFromHistory !== undefined) {
     store.setGenerateMemoryFromHistory(partial.capabilities.generateFromHistory);
+  }
+  if (typeof partial.capabilities?.includeSensitiveTopics === 'boolean') {
+    store.setIncludeSensitiveTopics(partial.capabilities.includeSensitiveTopics);
   }
 
   if (partial.chat?.autoListen !== undefined) {

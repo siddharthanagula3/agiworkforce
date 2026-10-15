@@ -83,7 +83,6 @@ const clerkAuthMock = vi.hoisted(() => ({
   ),
   getFreshClerkToken: vi.fn(async (): Promise<string | null> => null),
   signOutClerk: vi.fn(async (): Promise<void> => undefined),
-  signOutClerkIfCurrent: vi.fn(async (): Promise<boolean> => false),
 }));
 
 vi.mock('../src/features/cloud-bridge/clerkAuth', () => clerkAuthMock);
@@ -184,7 +183,6 @@ beforeEach(() => {
   clerkAuthMock.getFreshClerkAuthContext.mockResolvedValue(null);
   clerkAuthMock.getFreshClerkToken.mockResolvedValue(null);
   clerkAuthMock.signOutClerk.mockResolvedValue(undefined);
-  clerkAuthMock.signOutClerkIfCurrent.mockResolvedValue(false);
   (globalThis as Record<string, unknown>).chrome = chromeMock;
 });
 
@@ -578,7 +576,7 @@ describe('clearAuthToken', () => {
     chromeMock._sessionStore['agi_clerk_session_token'] = 'sess';
     chromeMock._localStore['agi_dev_bearer_token'] = 'dev';
     await clearAuthToken();
-    expect(clerkAuthMock.signOutClerk).toHaveBeenCalledTimes(1);
+    expect(clerkAuthMock.signOutClerk).not.toHaveBeenCalled();
     expect(chromeMock._sessionStore['agi_clerk_session_token']).toBeUndefined();
     expect(chromeMock._localStore['agi_dev_bearer_token']).toBeUndefined();
   });
@@ -595,7 +593,7 @@ describe('clearAuthToken', () => {
     expect(chromeMock._localStore['agi_autofill_profile']).toBeUndefined();
   });
 
-  it('tears down the exact Managed Cloud owner before options-page sign-out', async () => {
+  it('tears down the exact local Managed Cloud owner without revoking the synced web session', async () => {
     clerkAuthMock.getFreshClerkAuthContext.mockResolvedValueOnce({
       token: 'token-a',
       owner: { accountId: 'account-a', authIncarnation: 'session-a' },
@@ -607,9 +605,7 @@ describe('clearAuthToken', () => {
       type: 'MANAGED_CLOUD_AUTH_CHANGED',
       previousOwner: { accountId: 'account-a', authIncarnation: 'session-a' },
     });
-    expect(chromeMock.runtime.sendMessage.mock.invocationCallOrder[0]).toBeLessThan(
-      clerkAuthMock.signOutClerk.mock.invocationCallOrder[0]!,
-    );
+    expect(clerkAuthMock.signOutClerk).not.toHaveBeenCalled();
   });
 });
 
@@ -878,6 +874,55 @@ describe('streamFreeChat, 5xx server error', () => {
 });
 
 describe('streamFreeChat, SSE happy path', () => {
+  it('keeps reading after a provider tool step until delayed final text and a terminal stop arrive', async () => {
+    const encoder = new TextEncoder();
+    let cancelled = false;
+    let deliveredFinal = false;
+    const cancel = vi.fn(() => {
+      cancelled = true;
+    });
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'call-a', type: 'function', function: { name: 'web_fetch', arguments: '{}' } }] }, finish_reason: 'tool_calls' }] })}\n\n`,
+          ),
+        );
+        setTimeout(() => {
+          if (cancelled) return;
+          deliveredFinal = true;
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ choices: [{ delta: { content: 'The final page summary follows the completed tool step.' }, finish_reason: null }] })}\n\n`,
+            ),
+          );
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`,
+            ),
+          );
+          controller.close();
+        }, 25);
+      },
+      cancel,
+    });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'text/event-stream' }),
+      body,
+    });
+
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+
+    expect(deliveredFinal).toBe(true);
+    expect(chunks).toEqual([
+      { type: 'text', text: 'The final page summary follows the completed tool step.' },
+      { type: 'done' },
+    ]);
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
   it('yields text chunks and a done chunk on successful stream', async () => {
     const sseLines = [
       JSON.stringify({ choices: [{ delta: { content: 'Hello' }, finish_reason: null }] }),
@@ -894,6 +939,60 @@ describe('streamFreeChat, SSE happy path', () => {
     expect((textChunks[0] as { type: 'text'; text: string }).text).toBe('Hello');
     expect((textChunks[1] as { type: 'text'; text: string }).text).toBe(' world');
     expect(doneChunks).toHaveLength(1);
+  });
+
+  it('removes empty and arbitrarily chunked thinking markers from public answer chunks', async () => {
+    const wire = '<thinking></thinking>Before<thinking>private reasoning</thinking>After';
+    const deltas = Array.from(wire).map((content) =>
+      JSON.stringify({ choices: [{ delta: { content }, finish_reason: null }] }),
+    );
+    deltas.push(JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] }));
+    fetchMock.mockResolvedValueOnce(makeStreamResponse(deltas));
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+    const publicText = chunks
+      .filter((chunk): chunk is Extract<FreeTrialChunk, { type: 'text' }> => chunk.type === 'text')
+      .map((chunk) => chunk.text)
+      .join('');
+    expect(publicText).toBe('BeforeAfter');
+    expect(JSON.stringify(chunks)).not.toContain('private reasoning');
+    expect(JSON.stringify(chunks)).not.toContain('<thinking>');
+    expect(chunks.at(-1)).toEqual({ type: 'done' });
+  });
+
+  it('does not mistake an unclosed reasoning block for a rendered answer', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({
+          choices: [
+            { delta: { content: '<thinking>private reasoning</thin' }, finish_reason: null },
+          ],
+        }),
+        JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] }),
+      ]),
+    );
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+    expect(chunks.some((chunk) => chunk.type === 'text')).toBe(false);
+    expect(chunks.at(-1)).toMatchObject({ type: 'error', code: 'protocol_error' });
+    expect(JSON.stringify(chunks)).not.toContain('private reasoning');
+  });
+
+  it('preserves ordinary code text and a trailing partial tag at stream completion', async () => {
+    const answer = '```ts\nif (a < b) return "<think>";\n```\nPartial <thin';
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: answer }, finish_reason: 'stop' }] }),
+      ]),
+    );
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+    expect(
+      chunks
+        .filter(
+          (chunk): chunk is Extract<FreeTrialChunk, { type: 'text' }> => chunk.type === 'text',
+        )
+        .map((chunk) => chunk.text)
+        .join(''),
+    ).toBe(answer);
+    expect(chunks.at(-1)).toEqual({ type: 'done' });
   });
 
   it('does not publish a local prompt counter on successful stream', async () => {
