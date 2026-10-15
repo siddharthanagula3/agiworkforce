@@ -450,6 +450,44 @@ describe('Free capability gate, model-agnostic web search', () => {
     }
   });
 
+  it.each([
+    ['infers', undefined, { required: false, source: null }],
+    ['receives', true, { required: true, source: 'toggle' }],
+  ] as const)(
+    'forces a code run only when the caller turned it on, not when the server %s the flag (PC-F04)',
+    async (_origin, codeExecution, requirement) => {
+      const result = await processRequest(
+        freeTrialRequest(
+          {
+            model: FREE_CHAT_MODEL,
+            messages: [
+              {
+                role: 'user',
+                content: 'Calculate the average of the numbers in this table: 3, 5, 8',
+              },
+            ],
+            ...(codeExecution === undefined ? {} : { code_execution: codeExecution }),
+            stream: true,
+          },
+          `free-ws-code-origin-${String(codeExecution)}`,
+        ),
+        {
+          ok: true,
+          userId: 'user-free',
+          token: 'session-token',
+          boundSurface: 'web',
+          subscription: freeSubscription,
+        },
+      );
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.chatRequest.code_execution).toBe(true);
+        expect(result.executionRequirement).toEqual(requirement);
+      }
+    },
+  );
+
   it('does not force a map card on a no-tools Markdown request that mentions a route (R6-03)', async () => {
     const result = await processRequest(
       freeTrialRequest(

@@ -59,6 +59,15 @@ describe('buildApprovalCheckpointRequest', () => {
 
     expect(request['tool_choice']).toBe('none');
   });
+
+  it('resumes with the caller code-execution switch, not the flag the server inferred', () => {
+    const inferred = { messages: [], code_execution: true } as unknown as ChatCompletionRequest;
+
+    expect(buildApprovalCheckpointRequest(inferred, {})).not.toHaveProperty('code_execution');
+    expect(buildApprovalCheckpointRequest(inferred, { code_execution: true })).toMatchObject({
+      code_execution: true,
+    });
+  });
 });
 
 describe('checkpointRequestForResume', () => {

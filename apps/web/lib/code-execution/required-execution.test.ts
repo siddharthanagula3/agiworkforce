@@ -45,6 +45,7 @@ describe('resolveCodeExecutionRequirement', () => {
     expect(
       resolveCodeExecutionRequirement({
         codeExecutionEnabled: false,
+        requestedByCaller: false,
         userMessage: 'run the code',
       }),
     ).toEqual({ required: false, source: null });
@@ -52,7 +53,11 @@ describe('resolveCodeExecutionRequirement', () => {
 
   it('names the toggle when the toggle asked', () => {
     expect(
-      resolveCodeExecutionRequirement({ codeExecutionEnabled: true, userMessage: 'hello' }),
+      resolveCodeExecutionRequirement({
+        codeExecutionEnabled: true,
+        requestedByCaller: true,
+        userMessage: 'hello',
+      }),
     ).toEqual({ required: true, source: 'toggle' });
   });
 
@@ -60,6 +65,7 @@ describe('resolveCodeExecutionRequirement', () => {
     expect(
       resolveCodeExecutionRequirement({
         codeExecutionEnabled: undefined,
+        requestedByCaller: false,
         userMessage: 'Use Python to compute the sum of the first 200 primes',
       }),
     ).toEqual({ required: true, source: 'explicit_intent' });
@@ -69,6 +75,7 @@ describe('resolveCodeExecutionRequirement', () => {
     expect(
       resolveCodeExecutionRequirement({
         codeExecutionEnabled: undefined,
+        requestedByCaller: false,
         userMessage: 'what is a prime number',
       }),
     ).toEqual({ required: false, source: null });
@@ -78,9 +85,30 @@ describe('resolveCodeExecutionRequirement', () => {
     expect(
       resolveCodeExecutionRequirement({
         codeExecutionEnabled: undefined,
+        requestedByCaller: false,
         userMessage: 'Do not search the web or run code.',
       }),
     ).toEqual({ required: false, source: null });
+  });
+
+  it('offers but does not force a run the server only inferred from the wording', () => {
+    expect(
+      resolveCodeExecutionRequirement({
+        codeExecutionEnabled: true,
+        requestedByCaller: false,
+        userMessage: 'Calculate the average of the numbers in this table: 3, 5, 8',
+      }),
+    ).toEqual({ required: false, source: null });
+  });
+
+  it('still forces an inferred flag when the text asks for a run outright', () => {
+    expect(
+      resolveCodeExecutionRequirement({
+        codeExecutionEnabled: true,
+        requestedByCaller: false,
+        userMessage: 'Run this code and show the output',
+      }),
+    ).toEqual({ required: true, source: 'explicit_intent' });
   });
 });
 

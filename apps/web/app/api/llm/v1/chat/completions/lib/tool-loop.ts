@@ -4261,6 +4261,7 @@ export async function* runToolLoop(
     processed.executionRequirement ??
     resolveCodeExecutionRequirement({
       codeExecutionEnabled: processed.chatRequest?.code_execution,
+      requestedByCaller: processed.chatRequest?.code_execution === true,
       userMessage: lastUserTurnText(processed.chatRequest?.messages),
     });
   const searchRequired = processed.searchRequirement?.required === true;

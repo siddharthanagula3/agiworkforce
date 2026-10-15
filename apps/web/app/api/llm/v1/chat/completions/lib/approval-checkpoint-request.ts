@@ -5,7 +5,11 @@ import type { TurnAttachment } from '@/lib/e2b/attachment-staging';
 import type { CloudAgentApprovalCheckpoint } from '@/lib/services/cloud-agent-run-service';
 import type { ModelSelection } from './capability-preamble';
 import { retargetMessagesToModel } from './managed-failover';
-import type { ChatCompletionRequest, ProcessedRequest } from './request-processor';
+import type {
+  CallerToolFields,
+  ChatCompletionRequest,
+  ProcessedRequest,
+} from './request-processor';
 
 const CHECKPOINT_TURN_ATTACHMENTS_KEY = 'x_turn_attachments';
 const CHECKPOINT_MODEL_SELECTION_KEY = 'x_model_selection';
@@ -30,7 +34,7 @@ const CheckpointModelSelectionSchema = z.discriminatedUnion('kind', [
 
 export function buildApprovalCheckpointRequest(
   chatRequest: ChatCompletionRequest,
-  callerToolFields: Pick<ChatCompletionRequest, 'tools' | 'tool_choice'> = {},
+  callerToolFields: CallerToolFields = {},
   turnAttachments: readonly TurnAttachment[] = [],
   modelSelection?: ModelSelection,
 ): Record<string, unknown> {
@@ -38,6 +42,7 @@ export function buildApprovalCheckpointRequest(
     messages: _messages,
     tools: _serverAndCallerTools,
     tool_choice: _serverOrCallerToolChoice,
+    code_execution: _serverOrCallerCodeExecution,
     ...request
   } = chatRequest;
   return {

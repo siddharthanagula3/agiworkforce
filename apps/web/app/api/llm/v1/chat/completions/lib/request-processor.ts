@@ -740,6 +740,16 @@ export const ChatCompletionRequestSchema = z
 
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
 
+/**
+ * The tool fields as the caller sent them, before the server adds tools or
+ * infers a tool flag from the wording, so a resumed turn starts from what the
+ * caller asked for rather than from what this request derived.
+ */
+export type CallerToolFields = Pick<
+  ChatCompletionRequest,
+  'tools' | 'tool_choice' | 'code_execution'
+>;
+
 export type ManagedSkillSelectionResult =
   { ok: true } | { ok: false; code: 'skill_not_found'; message: string };
 
@@ -1245,7 +1255,7 @@ export type ProcessedRequest = {
   organizationId?: string | null;
   managedUsage?: ManagedUsageRequestReservation;
   chatRequest: ChatCompletionRequest;
-  callerToolFields?: Pick<ChatCompletionRequest, 'tools' | 'tool_choice'>;
+  callerToolFields?: CallerToolFields;
   conversationId: string | undefined;
   conversationIsTemporary?: boolean;
   healthSpaceProjectId?: string | null;
@@ -3118,9 +3128,12 @@ async function processAdmittedRequest(
   const chatRequest = validationResult.data;
   const pickedModel = chatRequest.model;
   if (chatRequest.personalization === false) chatRequest.memory_enabled = false;
-  const callerToolFields: Pick<ChatCompletionRequest, 'tools' | 'tool_choice'> = {
+  const callerToolFields: CallerToolFields = {
     ...(chatRequest.tools !== undefined ? { tools: chatRequest.tools } : {}),
     ...(chatRequest.tool_choice !== undefined ? { tool_choice: chatRequest.tool_choice } : {}),
+    ...(chatRequest.code_execution !== undefined
+      ? { code_execution: chatRequest.code_execution }
+      : {}),
   };
   applyWorkspaceDefaultModel(chatRequest, workspaceControls);
   const modelSelection: ModelSelection = {
@@ -4004,6 +4017,7 @@ async function processAdmittedRequest(
 
   const webSearchRequestedByCaller =
     chatRequest.web_search === true || chatRequest.research === true;
+  const codeExecutionRequestedByCaller = chatRequest.code_execution === true;
   applyImplicitManagedToolIntent(chatRequest, {
     prompt: lastUserText,
     taskType: resolvedTaskType,
@@ -5959,6 +5973,7 @@ async function processAdmittedRequest(
 
   const executionRequirement = resolveCodeExecutionRequirement({
     codeExecutionEnabled: chatRequest.code_execution,
+    requestedByCaller: codeExecutionRequestedByCaller,
     userMessage: lastUserText,
   });
   const executionEnforcement = resolveRequiredExecutionEnforcement({

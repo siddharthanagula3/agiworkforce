@@ -25,13 +25,21 @@ const NOT_REQUIRED: CodeExecutionRequirement = { required: false, source: null }
  * Execution stops being a suggestion the moment the user asked for it. The
  * failure this closes is not a refusal, it is a turn that printed a code block
  * and a result it never obtained.
+ *
+ * A flag the server set from the tool-attachment heuristics only offers the
+ * tool. Forcing it made a turn that merely mentioned a table run code nobody
+ * asked for, so only the caller's own switch or a request in the text forces.
  */
 export function resolveCodeExecutionRequirement(input: {
   codeExecutionEnabled: boolean | undefined;
+  /** The caller turned execution on: the Run code toggle, AGI Work or the API field. */
+  requestedByCaller: boolean;
   userMessage: string;
 }): CodeExecutionRequirement {
   if (input.codeExecutionEnabled === false) return NOT_REQUIRED;
-  if (input.codeExecutionEnabled === true) return { required: true, source: 'toggle' };
+  if (input.codeExecutionEnabled === true && input.requestedByCaller) {
+    return { required: true, source: 'toggle' };
+  }
   if (detectExplicitCodeExecutionIntent(input.userMessage) !== null) {
     return { required: true, source: 'explicit_intent' };
   }
@@ -39,10 +47,7 @@ export function resolveCodeExecutionRequirement(input: {
 }
 
 export type AttachedExecutionToolKind =
-  | 'generic-function'
-  | 'openai-hosted'
-  | 'anthropic-server'
-  | 'google-builtin';
+  'generic-function' | 'openai-hosted' | 'anthropic-server' | 'google-builtin';
 
 const OPENAI_HOSTED_EXECUTION_TYPE = 'code_interpreter';
 const ANTHROPIC_SERVER_EXECUTION_TYPE_PREFIX = 'code_execution_';
