@@ -234,12 +234,12 @@ describe('MarkdownContent footnotes', () => {
     expect(idOf(first)).not.toBe(idOf(second));
   });
 
-  it('keeps the sanitizer prefix on raw html ids and points in-page links at it', () => {
+  it('keeps the sanitizer prefix on raw html ids and leaves other in-page links as written', () => {
     const { container } = render(
-      <MarkdownContent content={'<div id="config">x</div>\n\n[jump](#config)'} />,
+      <MarkdownContent content={'<div id="config">x</div>\n\n[source](#research-source-2)'} />,
     );
     expect(container.querySelector('[id="config"]')).toBeNull();
     expect(container.querySelector('[id="user-content-config"]')).not.toBeNull();
-    expect(container.querySelector('a')?.getAttribute('href')).toBe('#user-content-config');
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('#research-source-2');
   });
 });

@@ -311,7 +311,9 @@ function unwrapCitationParens(
 }
 
 // The sanitizer prefixes every id to stop rendered content from clobbering
-// DOM globals, so an in-page link must name the prefixed id to land.
+// DOM globals, so a footnote link must name the prefixed id to land. Other
+// in-page links can target ids the page renders outside this content, such
+// as research source anchors, and stay as written.
 function sanitizedFragmentHref(href: string): string {
   const fragment = href.slice(FRAGMENT_PREFIX.length);
   if (!fragment || fragment.startsWith(SANITIZED_ID_PREFIX)) return href;
@@ -322,10 +324,14 @@ const MarkdownLink = ({
   href,
   id,
   children,
+  'data-footnote-ref': footnoteRef,
+  'data-footnote-backref': footnoteBackref,
 }: {
   href?: string;
   id?: string;
   children?: React.ReactNode;
+  'data-footnote-ref'?: unknown;
+  'data-footnote-backref'?: unknown;
 }) => {
   const citations = useMarkdownCitations();
   // The sanitizer strips an href it refuses (javascript:, data:) but leaves
@@ -341,9 +347,10 @@ const MarkdownLink = ({
   // citation whose source went missing. Opening it in a new tab lands the
   // reader on a blank page instead of the thing they asked to see.
   const samePage = cleanHref.startsWith(FRAGMENT_PREFIX);
+  const footnoteLink = footnoteRef !== undefined || footnoteBackref !== undefined;
   return (
     <a
-      href={samePage ? sanitizedFragmentHref(cleanHref) : cleanHref}
+      href={samePage && footnoteLink ? sanitizedFragmentHref(cleanHref) : cleanHref}
       id={id}
       className="wrap-anywhere text-primary hover:underline"
       {...(samePage ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
