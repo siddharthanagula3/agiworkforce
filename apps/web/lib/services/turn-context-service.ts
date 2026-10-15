@@ -73,13 +73,6 @@ export function accountMemoryRequested(
   return surface === 'api' ? memoryEnabled === true : memoryEnabled !== false;
 }
 
-/**
- * Only the web chat reads the past-chat citations header and draws a link to
- * each source chat under the answer. The desktop app's own chat, the mobile
- * app and the extension send the same turn but show no such link.
- */
-const PAST_CHAT_LINK_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>(['web']);
-
 function classWithdrawn(manifest: ContextManifest, sourceClass: ContextSourceClass): boolean {
   const entry = manifest.entries.find((candidate) => candidate.sourceClass === sourceClass);
   return entry !== undefined && entry.candidateCount > 0 && entry.includedCount === 0;
@@ -122,6 +115,7 @@ export async function resolveInteractiveTurnContext(
     policy: ManagedMemoryPolicy;
     query: string;
     projectContext: LoadedProjectContext | null;
+    pastChatLinksShown: boolean;
     recordManifest?: boolean;
   },
 ): Promise<InteractiveTurnContext> {
@@ -234,9 +228,7 @@ export async function resolveInteractiveTurnContext(
     projectCitations: project.citations,
     pastChatPrompt: recallDegraded
       ? PAST_CHAT_DEGRADED_NOTICE
-      : formatPastChatContext(excerpts, {
-          sourceLinksShown: PAST_CHAT_LINK_SURFACES.has(input.surface),
-        }),
+      : formatPastChatContext(excerpts, { sourceLinksShown: input.pastChatLinksShown }),
     pastChatSources: recallDegraded ? [] : excerpts.map(pastChatCitation),
     memoryPrompt: formatManagedMemorySystemPrompt(memories),
     memories,
@@ -279,6 +271,7 @@ async function resolvePersonalContextParts(
     memoryEnabled: boolean | undefined;
     query: string;
     projectContext?: LoadedProjectContext | null;
+    pastChatLinksShown: boolean;
     recordManifest?: boolean;
   },
 ): Promise<PersonalContextParts> {
@@ -317,6 +310,7 @@ async function resolvePersonalContextParts(
       policy,
       query: input.query,
       projectContext: input.projectContext ?? null,
+      pastChatLinksShown: input.pastChatLinksShown,
       ...(input.recordManifest === undefined ? {} : { recordManifest: input.recordManifest }),
     });
   } catch (error) {
@@ -349,6 +343,7 @@ export async function resolveFreeOfferingPersonalContext(
     memoryEnabled: boolean | undefined;
     personalization: boolean | undefined;
     query: string;
+    pastChatLinksShown: boolean;
   },
 ): Promise<FreeOfferingPersonalContext> {
   const personalized = input.personalization !== false;
@@ -428,6 +423,7 @@ export async function resolveLocalTurnPersonalContext(
     temporaryChat: false,
     memoryEnabled: true,
     query: '',
+    pastChatLinksShown: false,
     recordManifest: false,
   });
   return {

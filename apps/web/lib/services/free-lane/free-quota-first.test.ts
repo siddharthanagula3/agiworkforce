@@ -36,6 +36,7 @@ type ScanModule8 =
 type ScanModule9 = typeof import('@/lib/server/free-quota-catalogue-cache');
 type ScanModule10 = typeof import('@/lib/moderation');
 type ScanModule11 = typeof import('@agiworkforce/model-registry');
+type ScanModule12 = typeof import('@/lib/services/turn-context-service');
 
 const mocks = vi.hoisted(() => ({
   store: null as unknown as MemoryKeyValueStore | null,
@@ -53,6 +54,7 @@ const mocks = vi.hoisted(() => ({
   termsReviewExpired: false,
   providerMayTrain: false,
   conversationKeptToItsRoute: vi.fn(async (..._args: unknown[]) => false),
+  personalContext: vi.fn(),
 }));
 
 vi.mock('@/lib/server/named-provider-consent', () => ({
@@ -115,6 +117,18 @@ vi.mock(
 vi.mock('@/app/api/chat/conversations/[id]/messages/lib/persist-message', () => ({
   persistConversationMessage: mocks.persistUser,
 }));
+vi.mock('@/lib/services/turn-context-service', async (importOriginal) => {
+  const actual = await importOriginal<ScanModule12>();
+  return {
+    ...actual,
+    resolveFreeOfferingPersonalContext: (
+      ...args: Parameters<ScanModule12['resolveFreeOfferingPersonalContext']>
+    ) => {
+      mocks.personalContext(...args);
+      return actual.resolveFreeOfferingPersonalContext(...args);
+    },
+  };
+});
 vi.mock('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate', async (importOriginal) => ({
   ...(await importOriginal<ScanModule6>()),
   applySecretHandlingToTexts: vi.fn(async (_user: string, texts: string[]) => ({
@@ -320,6 +334,7 @@ beforeEach(async () => {
   mocks.query.mockReset().mockResolvedValue([{ id: 'conversation', data_region: null }]);
   mocks.plan.mockReset().mockResolvedValue('free');
   mocks.conversationKeptToItsRoute.mockReset().mockResolvedValue(false);
+  mocks.personalContext.mockReset();
   mocks.stream.mockReset();
   mocks.media.mockReset();
   mocks.otherProvider.mockReset();
@@ -377,6 +392,20 @@ describe('a Free Auto turn the free quota lane takes first', () => {
     expect(mocks.stream.mock.calls[0]![0]).toBe(FIRST);
     expect(await response!.text()).toContain('Answered from the free quota.');
     expect(mocks.otherProvider).not.toHaveBeenCalled();
+  });
+
+  it('keeps what the client reported about drawing past-chat links (MEM-4)', async () => {
+    mocks.stream.mockImplementation(async () => answered());
+
+    await (await tryFirst(freeAutoBody(), 'links-unreported')).response?.text();
+    await (
+      await tryFirst(freeAutoBody({ x_past_chat_links: true }), 'links-shown')
+    ).response?.text();
+
+    expect(mocks.personalContext.mock.calls.map(([, input]) => input.pastChatLinksShown)).toEqual([
+      false,
+      true,
+    ]);
   });
 
   it('prefers the configured ranking among allocations that end on the same day', async () => {

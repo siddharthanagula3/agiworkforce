@@ -9,6 +9,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import {
   readFreeQuotaMemoryCommand,
+  readFreeQuotaPastChatLinks,
   refuseFreeQuotaKeptOutConversation,
   refuseUnsupportedFreeQuotaPrompt,
   serveFreeQuotaTurn,
@@ -34,6 +35,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
   return serveFreeQuotaTurn(request, scoped, {
     ...parsed.data,
     ...readFreeQuotaMemoryCommand(body),
+    ...readFreeQuotaPastChatLinks(body),
   });
 }
 

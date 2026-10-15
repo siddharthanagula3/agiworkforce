@@ -34,6 +34,7 @@ type ScanModule8 =
   typeof import('@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence');
 type ScanModule9 = typeof import('@/lib/server/free-quota-catalogue-cache');
 type ScanModule10 = typeof import('@/lib/feature-flags/flag-evaluation-service');
+type ScanModule11 = typeof import('@/lib/services/turn-context-service');
 
 const mocks = vi.hoisted(() => ({
   store: null as unknown as MemoryKeyValueStore,
@@ -46,6 +47,7 @@ const mocks = vi.hoisted(() => ({
   hydrate: vi.fn(),
   persistAnswer: vi.fn(),
   consent: vi.fn(),
+  personalContext: vi.fn(),
   spendOnCapacityShortage: null as boolean | null,
 }));
 
@@ -101,6 +103,18 @@ vi.mock(
 vi.mock('@/app/api/chat/conversations/[id]/messages/lib/persist-message', () => ({
   persistConversationMessage: mocks.persistUser,
 }));
+vi.mock('@/lib/services/turn-context-service', async (importOriginal) => {
+  const actual = await importOriginal<ScanModule11>();
+  return {
+    ...actual,
+    resolveFreeOfferingPersonalContext: (
+      ...args: Parameters<ScanModule11['resolveFreeOfferingPersonalContext']>
+    ) => {
+      mocks.personalContext(...args);
+      return actual.resolveFreeOfferingPersonalContext(...args);
+    },
+  };
+});
 vi.mock('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate', async (importOriginal) => ({
   ...(await importOriginal<ScanModule6>()),
   applySecretHandlingToTexts: vi.fn(async (_user: string, texts: string[]) => ({
@@ -303,6 +317,7 @@ beforeEach(async () => {
       acceptedProviderConsent(providerId, Date.now()),
     );
   mocks.spendOnCapacityShortage = null;
+  mocks.personalContext.mockReset();
   mocks.hydrate.mockReset().mockImplementation(async (messages) => {
     const latest = messages.at(-1);
     if (latest && Array.isArray(latest.content)) {
@@ -344,6 +359,20 @@ describe('Free Auto falls back to a ready free quota model on the server', () =>
     expect(mocks.stream.mock.calls[0]![0]).toBe(resolved);
     expect(await served!.text()).toContain('Answered for free.');
     expect(mocks.otherProvider).not.toHaveBeenCalled();
+  });
+
+  it('keeps what the client reported about drawing past-chat links (MEM-4)', async () => {
+    mocks.stream.mockImplementation(async () => sse('[DONE]'));
+
+    await (await fallBack(refusal('free_allowance_exhausted')))?.text();
+    await (
+      await fallBack(refusal('free_allowance_exhausted'), freeAutoBody({ x_past_chat_links: true }))
+    )?.text();
+
+    expect(mocks.personalContext.mock.calls.map(([, input]) => input.pastChatLinksShown)).toEqual([
+      false,
+      true,
+    ]);
   });
 
   it('answers from the first ready model of the configured ranking, not the inventory order', async () => {

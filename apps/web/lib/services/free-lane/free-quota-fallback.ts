@@ -28,7 +28,7 @@ import {
   freeQuotaPlanAllows,
   resolveReadyFreeQuotaOffering,
 } from '@/lib/server/free-quota-catalogue';
-import { serveFreeQuotaTurn } from '@/lib/server/free-quota-turn';
+import { readFreeQuotaPastChatLinks, serveFreeQuotaTurn } from '@/lib/server/free-quota-turn';
 import { conversationKeepsOutOfTraining } from '@/lib/services/health-space-service';
 import type { UserScopedDb } from '@/lib/server/rls-db';
 
@@ -310,7 +310,7 @@ export async function serveFreeQuotaFirst(input: {
     const served = await serveFreeQuotaTurn(
       input.request,
       scoped,
-      { ...turn, model },
+      { ...turn, model, ...readFreeQuotaPastChatLinks(body) },
       {
         requestId,
         requestedModel: turn.model,
@@ -403,7 +403,7 @@ export async function serveFreeQuotaFallback(input: {
     const served = await serveFreeQuotaTurn(
       input.request,
       scoped,
-      { ...turn, model },
+      { ...turn, model, ...readFreeQuotaPastChatLinks(body) },
       {
         requestId,
         requestedModel: turn.model,

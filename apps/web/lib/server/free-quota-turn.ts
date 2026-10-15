@@ -34,6 +34,7 @@ import { readActiveStudyInstruction } from '@/features/study/server/study-sessio
 import type { UserScopedDb } from '@/lib/server/rls-db';
 import {
   PAST_CHAT_CITATIONS_HEADER,
+  PAST_CHAT_LINKS_REQUEST_KEY,
   PROJECT_FILE_CITATIONS_HEADER,
   toProjectSourcesHeaderValue,
   toMemoryCitationsHeaderValue,
@@ -129,6 +130,7 @@ const MemoryCommandSchema = z.object({
 
 export type FreeQuotaTurnRequest = FreeOfferingRequest & {
   memory_command?: z.infer<typeof MemoryCommandSchema>;
+  [PAST_CHAT_LINKS_REQUEST_KEY]?: boolean;
 };
 
 export function readFreeQuotaMemoryCommand(
@@ -138,6 +140,16 @@ export function readFreeQuotaMemoryCommand(
     body && typeof body === 'object' ? (body as { memory_command?: unknown }).memory_command : null,
   );
   return reported.success ? { memory_command: reported.data } : {};
+}
+
+export function readFreeQuotaPastChatLinks(
+  body: unknown,
+): Pick<FreeQuotaTurnRequest, typeof PAST_CHAT_LINKS_REQUEST_KEY> {
+  const shown =
+    body && typeof body === 'object'
+      ? (body as Record<string, unknown>)[PAST_CHAT_LINKS_REQUEST_KEY]
+      : undefined;
+  return shown === true ? { [PAST_CHAT_LINKS_REQUEST_KEY]: true } : {};
 }
 
 type ChatMessage = FreeOfferingMessage;
@@ -1011,6 +1023,7 @@ export async function serveFreeQuotaTurn(
         memoryEnabled: body.memory_enabled,
         personalization: body.personalization,
         query,
+        pastChatLinksShown: body[PAST_CHAT_LINKS_REQUEST_KEY] === true,
       }),
       readActiveStudyInstruction(scoped.db, scoped.userId, body.conversation_id),
     ]);

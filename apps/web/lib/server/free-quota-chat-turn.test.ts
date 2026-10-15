@@ -159,7 +159,8 @@ vi.mock('@agiworkforce/providers-factory', async (importOriginal) => {
   return { ...guarded, streamQwenQuotaChat: mocks.stream, runQwenQuotaProbe: mocks.media };
 });
 
-const { readFreeQuotaMemoryCommand, serveFreeQuotaTurn } = await import('./free-quota-turn');
+const { readFreeQuotaMemoryCommand, readFreeQuotaPastChatLinks, serveFreeQuotaTurn } =
+  await import('./free-quota-turn');
 
 const API_KEY = 'fixture-provider-key';
 const USER_ID = 'fixture-user';
@@ -214,6 +215,7 @@ function send(patch: Record<string, unknown> = {}, turn = 'fixture-turn') {
         ...patch,
       }),
       ...readFreeQuotaMemoryCommand(patch),
+      ...readFreeQuotaPastChatLinks(patch),
     },
   );
 }
@@ -939,6 +941,18 @@ describe('what a free chat turn tells the reader it did', () => {
     expect(response.status).toBe(403);
     expect((await response.json()).error.code).toBe('secrets_blocked');
     expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it('says the past chats are linked only when the client draws those links (MEM-4)', async () => {
+    await (await send({}, 'links-unreported')).text();
+    await (await send({ x_past_chat_links: true }, 'links-shown')).text();
+    await (await send({ x_past_chat_links: 'yes' }, 'links-unreadable')).text();
+
+    expect(mocks.personal.mock.calls.map(([, input]) => input.pastChatLinksShown)).toEqual([
+      false,
+      true,
+      false,
+    ]);
   });
 
   it('names the past chats the reply drew on', async () => {

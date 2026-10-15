@@ -753,6 +753,30 @@ describe("the project's other chats a project chat receives under chat prompt v1
   });
 });
 
+describe('whether a turn says its past chats are linked (MEM-4)', () => {
+  it.each([
+    ['the web chat in a browser', 'web', true, true],
+    ['the web chat in the desktop shell', 'desktop', true, true],
+    ['a client that reports no links', 'web', undefined, false],
+    ['a client that reports something unreadable', 'chrome', false, false],
+  ] as const)('follows what %s reports it draws', async (_client, surface, reported, expected) => {
+    const result = await processRequest(
+      chatRequestFor(
+        `past-chat-links-${surface}-${String(reported)}`,
+        reported === undefined ? {} : { x_past_chat_links: reported },
+        { 'x-agi-surface': surface },
+      ),
+      { ...auth(), boundSurface: 'web' },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(mocks.turnContext).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ surface, pastChatLinksShown: expected }),
+    );
+  });
+});
+
 describe('the product overview chat prompt v7 renders for the turn (PC-F05)', () => {
   const v7 = chatSystemPromptSections(7);
   const overviewLine = (capability: string) =>

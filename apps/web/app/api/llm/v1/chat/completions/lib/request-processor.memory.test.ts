@@ -56,6 +56,7 @@ function turnContextInput(
     policy: MEMORY_ONLY_POLICY,
     query: 'Plan my day.',
     projectContext: null,
+    pastChatLinksShown: false,
     ...overrides,
   };
 }
@@ -290,23 +291,25 @@ describe('resolveInteractiveTurnContext: past chats', () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it('tells a web turn the app links the source chats, and no other surface', async () => {
+  it('tells the turn the app links the source chats only when its client draws those links (MEM-4)', async () => {
     const linkLine = 'The app shows a link to each of these chats with your answer';
 
-    const web = await resolveInteractiveTurnContext(
-      { query: vi.fn().mockResolvedValue([pastChatRow(0)]) },
-      recallInput({ surface: 'web' }),
-    );
-    expect(web.pastChatSources).toHaveLength(1);
-    expect(web.pastChatPrompt).toContain(linkLine);
-
-    for (const surface of ['mobile', 'desktop', 'chrome'] as const) {
-      const other = await resolveInteractiveTurnContext(
+    for (const surface of ['web', 'desktop'] as const) {
+      const linked = await resolveInteractiveTurnContext(
         { query: vi.fn().mockResolvedValue([pastChatRow(0)]) },
-        recallInput({ surface }),
+        recallInput({ surface, pastChatLinksShown: true }),
       );
-      expect(other.pastChatPrompt).toContain('so you have them');
-      expect(other.pastChatPrompt).not.toContain(linkLine);
+      expect(linked.pastChatSources).toHaveLength(1);
+      expect(linked.pastChatPrompt).toContain(linkLine);
+    }
+
+    for (const surface of ['web', 'mobile', 'desktop', 'chrome'] as const) {
+      const unlinked = await resolveInteractiveTurnContext(
+        { query: vi.fn().mockResolvedValue([pastChatRow(0)]) },
+        recallInput({ surface, pastChatLinksShown: false }),
+      );
+      expect(unlinked.pastChatPrompt).toContain('so you have them');
+      expect(unlinked.pastChatPrompt).not.toContain(linkLine);
     }
   });
 });

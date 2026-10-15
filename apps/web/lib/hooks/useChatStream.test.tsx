@@ -18,6 +18,7 @@ import {
 } from '@agiworkforce/types';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { savedMessageId } from '@/features/chat/lib/pending-message-saves';
+import { PAST_CHAT_LINKS_REQUEST_KEY } from '@/lib/chat-project-sources';
 import { useChatStream, saveMessageToDb } from './useChatStream';
 import { IN_FLIGHT_TURN_RECHECK_MS } from './inFlightTurnRecovery';
 
@@ -429,6 +430,22 @@ describe('useChatStream', () => {
       unknown
     >;
     expect(body[FREE_QUOTA_FALLBACK_REQUEST_KEY]).toBe(true);
+  });
+
+  it('tells the server the chat draws a link to each past chat it read (MEM-4)', async () => {
+    mockSseStream([{ choices: [{ delta: { content: 'Ready.' } }] }]);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('What did we agree last week?', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+
+    const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body)) as Record<
+      string,
+      unknown
+    >;
+    expect(body[PAST_CHAT_LINKS_REQUEST_KEY]).toBe(true);
   });
 
   describe('saving a Free Auto reply another free model wrote', () => {
@@ -2946,6 +2963,39 @@ describe('useChatStream', () => {
         (done ? 'data: [DONE]\n\n' : '')
       );
     }
+
+    it('tells the server the chat links past chats when it continues a reply (MEM-4)', async () => {
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+        messages: [
+          {
+            id: 'user-1',
+            role: 'user',
+            content: 'write a long story',
+            createdAt: '2026-07-01T00:00:00.000Z',
+          },
+          {
+            id: '0190a000-0000-7000-8000-0000000000ab',
+            role: 'assistant',
+            content: 'Once upon a time',
+            createdAt: '2026-07-01T00:00:01.000Z',
+            model: 'test/model-1',
+            metadata: { finishReason: 'length' },
+          },
+        ],
+      });
+      const { llmBodies } = mockRoutedFetch(
+        sse([{ choices: [{ delta: { content: ' and so on.' }, finish_reason: 'stop' }] }]),
+      );
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.continueGeneration('0190a000-0000-7000-8000-0000000000ab');
+      });
+
+      expect(llmBodies[0]?.[PAST_CHAT_LINKS_REQUEST_KEY]).toBe(true);
+    });
 
     it("records finish_reason 'length' on the assistant metadata (continuable truncation)", async () => {
       mockSseStream([

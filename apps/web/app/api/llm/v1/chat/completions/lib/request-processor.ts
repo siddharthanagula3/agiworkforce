@@ -315,6 +315,7 @@ import {
   resolveFreeLaneOutcome,
 } from '@/lib/services/free-lane/stage';
 import { keptPrefixLength, type ContextTrimResult } from './context-window';
+import { PAST_CHAT_LINKS_REQUEST_KEY } from '@/lib/chat-project-sources';
 import { compactContextWindow } from './context-compaction';
 import { citationsSentAfterFit } from './reference-citations';
 import { buildInterimRoutePlanId } from '@/lib/cpst-telemetry';
@@ -547,6 +548,7 @@ export const ChatCompletionRequestSchema = z
       })
       .strict()
       .optional(),
+    [PAST_CHAT_LINKS_REQUEST_KEY]: z.boolean().optional(),
     mcp_context: z
       .object({
         prompt: z
@@ -3811,6 +3813,7 @@ async function processAdmittedRequest(
         policy: managedMemoryPolicy,
         query: lastUserMessageText(chatRequest),
         projectContext: ownership.projectContext,
+        pastChatLinksShown: chatRequest[PAST_CHAT_LINKS_REQUEST_KEY] === true,
       }),
     );
   } catch (error) {

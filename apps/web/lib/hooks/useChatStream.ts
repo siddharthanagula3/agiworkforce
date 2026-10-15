@@ -152,6 +152,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import {
   PAST_CHAT_CITATIONS_HEADER,
+  PAST_CHAT_LINKS_REQUEST_KEY,
   PROJECT_FILE_CITATIONS_HEADER,
   readMemoryCitationsHeaderValue,
   readPastChatSourcesHeaderValue,
@@ -4188,6 +4189,7 @@ export function useChatStream(
                   : undefined,
               stream: true,
               [INTERACTIVE_CARD_REQUEST_KEY]: WEB_INTERACTIVE_CARD_CAPABILITY,
+              [PAST_CHAT_LINKS_REQUEST_KEY]: true,
               [FREE_QUOTA_FALLBACK_REQUEST_KEY]: turnRoute.handoffReason ? undefined : true,
               temperature: options.temperature,
               max_tokens: options.maxTokens,
@@ -4581,6 +4583,7 @@ export function useChatStream(
               conversation_id: conversationId,
               assistant_message_id: assistantMessageId,
               stream: true,
+              [PAST_CHAT_LINKS_REQUEST_KEY]: true,
               use_prompt_cache: true,
               ...turnPrivacyRequestFields(
                 {
