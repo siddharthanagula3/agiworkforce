@@ -23,6 +23,15 @@ describe('side-panel dom.el', () => {
     expect(node.textContent).toBe('hello bold');
     expect(node.querySelector('b')?.textContent).toBe('bold');
   });
+
+  it('renders error text that looks like markup as literal text', () => {
+    const message = '<img src=x onerror="alert(1)"><script>alert(2)</script>';
+    const node = el('div', {}, new Error(message).message);
+    expect(node.childNodes).toHaveLength(1);
+    expect(node.childNodes[0].nodeType).toBe(Node.TEXT_NODE);
+    expect(node.textContent).toBe(message);
+    expect(node.querySelector('img, script')).toBeNull();
+  });
 });
 
 describe('side-panel dom.formatTime', () => {

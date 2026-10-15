@@ -8,10 +8,7 @@ export function el<K extends keyof HTMLElementTagNameMap>(
     if (k === 'style') e.style.cssText = v;
     else e.setAttribute(k, v);
   }
-  for (const c of children) {
-    if (typeof c === 'string') e.appendChild(document.createTextNode(c));
-    else e.appendChild(c);
-  }
+  e.append(...children);
   return e;
 }
 
