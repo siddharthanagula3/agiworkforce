@@ -6006,6 +6006,7 @@ async function processAdmittedRequest(
         productCapabilities !== undefined &&
         productArtifactConnectors(subscription.plan_tier, productCapabilities),
       ...(productCapabilities ? { productCapabilities } : {}),
+      sourceLinks: chatRequest[PAST_CHAT_LINKS_REQUEST_KEY] === true,
       promptSelection,
       servingModel: servingModelFor(chatRequest.model, modelSelection),
       chatSetup: chatSetupFor({

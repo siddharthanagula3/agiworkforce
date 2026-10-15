@@ -15,6 +15,8 @@ export const TOOL_SECTION_PREFIX = 'tool.';
 
 const CAPABILITY_SECTION_PREFIX = 'product_capability.';
 
+const SOURCE_LINK_SECTION_PREFIX = 'source_link.';
+
 const ARTIFACTS_CAPABILITY = 'artifacts';
 
 export const CODE_EXECUTION_TOOL_NAMES = ['execute_code', 'code_execution', 'code_interpreter'];
@@ -58,6 +60,8 @@ export interface ChatTurnState {
   readonly setup?: ChatTurnSetup;
   /** Whose Settings to point the user to, for versions that do. */
   readonly settingsGuidance?: SettingsGuidance;
+  /** The client links the saved memories, past chats and project files a turn supplies under the answer. */
+  readonly sourceLinks?: boolean;
 }
 
 export interface ChatTurnClock {
@@ -261,6 +265,30 @@ export function textOnlySetupBlock(
   return lines.length > 0 ? [heading, ...lines].join('\n') : '';
 }
 
+function sourceLinksBlock(
+  section: SectionReader,
+  setup: ChatTurnSetup | undefined,
+  sourceLinks: boolean | undefined,
+): string {
+  if (!sourceLinks || !setup || !('chat' in setup)) return '';
+  const { chat } = setup;
+  const personal = !chat.temporaryChat && (chat.memory === 'on' || chat.memory === 'off');
+  const linked = [
+    personal && chat.memory === 'on' ? 'memory' : '',
+    personal && chat.pastChats ? 'past_chats' : '',
+    chat.project === 'with_files' ? 'project_files' : '',
+  ];
+  const lines = linked
+    .filter((id) => id.length > 0)
+    .map((id) => section(`${SOURCE_LINK_SECTION_PREFIX}${id}`))
+    .filter((line) => line.length > 0);
+  const heading = section('source_links_heading');
+  if (lines.length === 0 || heading.length === 0) return '';
+  return [[heading, ...lines].join('\n'), section('source_links_rules')]
+    .filter((block) => block.length > 0)
+    .join('\n\n');
+}
+
 function turnSetupBlock(section: SectionReader, setup: ChatTurnSetup | undefined): string {
   if (!setup) return '';
   return 'chat' in setup
@@ -368,7 +396,10 @@ export function assembleChatSystemPrompt(
     blocks.push(section('no_tools'), section('citations_none'));
   }
 
-  blocks.push(turnSetupBlock(section, state.setup));
+  blocks.push(
+    turnSetupBlock(section, state.setup),
+    sourceLinksBlock(section, state.setup, state.sourceLinks),
+  );
   if (state.settingsGuidance) {
     blocks.push(
       section(`settings_help_${state.settingsGuidance}`),

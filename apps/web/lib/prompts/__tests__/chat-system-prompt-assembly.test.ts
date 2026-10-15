@@ -135,3 +135,63 @@ describe('which composer renders a version', () => {
     expect(rendersThroughSetupComposer(merged)).toBe(false);
   });
 });
+
+describe('the sources a version says the client links under the answer', () => {
+  const withLinks = {
+    ...merged,
+    source_links_heading: 'LINKS HEADING',
+    'source_link.memory': '- MEMORY LINK',
+    'source_link.past_chats': '- PAST CHAT LINK',
+    'source_link.project_files': '- PROJECT FILE LINK',
+    source_links_rules: 'LINK RULES',
+  };
+  const chat = (overrides: Partial<ChatSetup> = {}) => ({
+    chat: { ...SAVED_CHAT, ...overrides },
+    tools: NO_SETUP_TOOLS,
+    temporaryChatRetentionDays: RETENTION_DAYS,
+  });
+
+  it('lists each source the setup lets reach the turn, after the setup block', () => {
+    const rendered = body(withLinks, { setup: chat({ project: 'with_files' }), sourceLinks: true });
+
+    expect(rendered).toContain(
+      'LINKS HEADING\n- MEMORY LINK\n- PAST CHAT LINK\n- PROJECT FILE LINK\n\nLINK RULES',
+    );
+    expect(rendered.indexOf('LINKS HEADING')).toBeGreaterThan(
+      rendered.indexOf(chatSystemPromptSection(v10, 'setup_heading')),
+    );
+  });
+
+  it('lists only the sources that can reach the turn', () => {
+    expect(
+      body(withLinks, { setup: chat({ memory: 'off', pastChats: false }), sourceLinks: true }),
+    ).not.toContain('LINKS HEADING');
+    expect(
+      body(withLinks, {
+        setup: chat({ memory: 'unavailable', pastChats: false, project: 'with_files' }),
+        sourceLinks: true,
+      }),
+    ).toContain('LINKS HEADING\n- PROJECT FILE LINK\n\nLINK RULES');
+    const temporary = body(withLinks, {
+      setup: chat({ temporaryChat: true, savedChat: false }),
+      sourceLinks: true,
+    });
+    expect(temporary).not.toContain('MEMORY LINK');
+    expect(temporary).not.toContain('PAST CHAT LINK');
+  });
+
+  it('promises no link where the client draws none', () => {
+    expect(body(withLinks, { setup: chat({ project: 'with_files' }) })).not.toContain(
+      'LINKS HEADING',
+    );
+    expect(
+      body(withLinks, {
+        setup: {
+          textOnly: { temporaryChat: false, personalContext: 'read_only', inProject: false },
+          temporaryChatRetentionDays: RETENTION_DAYS,
+        },
+        sourceLinks: true,
+      }),
+    ).not.toContain('LINKS HEADING');
+  });
+});

@@ -152,6 +152,8 @@ export interface CapabilityPreambleInput {
   artifactConnectors?: boolean;
   /** Capability ids from the handshake for this plan and surface. */
   productCapabilities?: readonly string[];
+  /** The client links the saved memories, past chats and project files the turn supplies. */
+  sourceLinks?: boolean;
   /** Selects the prompt version; absent, the manifest pin serves. */
   promptSelection?: ResolvePromptOptions;
   servingModel?: ServingModel | null;
@@ -335,6 +337,7 @@ function buildPublishedCapabilityPreamble(
       ...(input.artifactRuntime === false ? { artifactRuntime: false } : {}),
       ...(input.artifactConnectors ? { artifactConnectors: true } : {}),
       ...(input.productCapabilities ? { productCapabilities: input.productCapabilities } : {}),
+      ...(input.sourceLinks ? { sourceLinks: true } : {}),
       ...carried,
     },
     {
