@@ -24,9 +24,18 @@ import {
 } from '@/lib/prompts/chat-system-prompt';
 import {
   assembleChatSystemPrompt,
+  chatSetupBlock,
   CODE_EXECUTION_TOOL_NAMES,
+  servingModelBlocks,
+  textOnlySetupBlock,
   TOOL_SECTION_PREFIX,
+  type ChatSetup,
   type ChatTurnMemory,
+  type ModelChoice,
+  type SectionReader,
+  type ServingModel,
+  type SettingsGuidance,
+  type TextOnlyChatSetup,
 } from '@/lib/prompts/chat-system-prompt-assembly';
 import { resolvePrompt, type ResolvePromptOptions } from '@/lib/prompts/prompt-registry';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
@@ -88,8 +97,6 @@ export function extractToolNames(tools: unknown[] | undefined): string[] {
 }
 
 export type PreambleSurface = Exclude<CloudChatSurface, 'api'> | 'slack' | 'scheduled';
-
-export type SettingsGuidance = 'web' | 'mobile' | 'account';
 
 const SETTINGS_GUIDANCE: Readonly<Record<PreambleSurface, SettingsGuidance>> = {
   web: 'web',
@@ -158,37 +165,6 @@ export type ModelSelection =
       readonly workspaceDefaultModelId?: string;
     }
   | { readonly kind: 'assigned' };
-
-type ModelChoice =
-  | { readonly kind: 'selected' }
-  | { readonly kind: 'auto'; readonly label: string }
-  | { readonly kind: 'workspace_default'; readonly label: string }
-  | { readonly kind: 'substituted' }
-  | { readonly kind: 'assigned' };
-
-export type ServingModel =
-  | {
-      readonly kind: 'model';
-      readonly name: string;
-      readonly developer: string;
-      readonly knowledgeCutoff: string | null;
-      readonly choice: ModelChoice;
-    }
-  | { readonly kind: 'router'; readonly name: string; readonly developer: string }
-  | { readonly kind: 'unattributed'; readonly name: string };
-
-export interface ChatSetup {
-  readonly savedChat: boolean;
-  readonly temporaryChat: boolean;
-  readonly memory: 'on' | 'off' | 'off_for_chat' | 'off_by_workspace' | 'unavailable';
-  readonly pastChats: boolean;
-  readonly project: 'none' | 'with_files' | 'without_files';
-  readonly projectChats: boolean;
-  readonly personalization: 'applied' | 'none' | 'off' | 'unavailable';
-  readonly toolsSupported: boolean;
-  readonly connectors: 'on' | 'off' | 'unavailable' | 'locked_down';
-  readonly skills: 'on' | 'off' | 'none';
-}
 
 const KNOWLEDGE_CUTOFF = /^(\d{4})-(\d{2})(?:-\d{2})?$/u;
 
@@ -360,33 +336,6 @@ function describeTool(sections: ChatSystemPromptSections, name: string): string 
   return description ? `- ${name}, ${description}` : `- ${name}`;
 }
 
-type SectionReader = (key: string, values?: Readonly<Record<string, string>>) => string;
-
-function servingModelBlocks(section: SectionReader, model: ServingModel | null): string[] {
-  if (!model) return [section('model_unknown')];
-  if (model.kind === 'unattributed') {
-    const values = { modelName: model.name };
-    return [section('model_unattributed', values), section('model_rules_unattributed', values)];
-  }
-  if (model.kind === 'router') {
-    const values = { modelName: model.name, modelDeveloper: model.developer };
-    return [section('model_router', values), section('model_rules_router', values)];
-  }
-  const values = {
-    modelName: model.name,
-    modelDeveloper: model.developer,
-    knowledgeCutoff: model.knowledgeCutoff ?? '',
-    ...('label' in model.choice ? { autoLabel: model.choice.label } : {}),
-  };
-  const serving = [
-    section(`model_${model.choice.kind}`, values),
-    model.knowledgeCutoff ? section('model_knowledge_cutoff', values) : '',
-  ]
-    .filter((text) => text.length > 0)
-    .join(' ');
-  return [serving, section('model_rules', values)];
-}
-
 export function retargetServingModel<T extends { role: string; content: unknown }>(
   messages: readonly T[],
   from: ServingModel | null,
@@ -416,66 +365,11 @@ export function retargetServingModel<T extends { role: string; content: unknown 
   );
 }
 
-function chatSetupLines(
-  section: SectionReader,
-  setup: ChatSetup,
-  toolNames: readonly string[],
-): string[] {
-  const lines: string[] = [];
-  const outsideProject = (key: string): string =>
-    (setup.projectChats ? section(`${key}_in_project`) : '') || section(key);
-  if (setup.temporaryChat) {
-    lines.push(
-      section('chat_temporary', {
-        temporaryChatRetentionDays: String(TEMPORARY_CHAT_RETENTION_DAYS),
-      }),
-    );
-  } else {
-    if (setup.savedChat) lines.push(section('chat_saved'));
-    if (setup.memory !== 'on' && setup.memory !== 'off') {
-      lines.push(outsideProject(`memory_${setup.memory}`));
-    } else {
-      lines.push(section(setup.memory === 'on' ? 'memory_on' : 'memory_off'));
-      if (setup.memory === 'on' && toolNames.some(isMemoryTool)) {
-        lines.push(section('memory_tools'));
-      }
-      lines.push(setup.pastChats ? section('past_chats_on') : outsideProject('past_chats_off'));
-    }
-  }
-
-  if (setup.project === 'with_files') {
-    lines.push(section('project_with_files'));
-    if (toolNames.some(isFileSearchTool)) lines.push(section('project_file_tools'));
-  } else {
-    lines.push(section(setup.project === 'none' ? 'no_project' : 'project_without_files'));
-  }
-  if (setup.projectChats) lines.push(section('project_chats'));
-
-  lines.push(section(`personalization_${setup.personalization}`));
-
-  if (!setup.toolsSupported) {
-    lines.push(section('tools_unsupported'));
-  } else {
-    lines.push(section(`connectors_${setup.connectors}`) || section('connectors_off'));
-    if (setup.connectors === 'on' && setup.temporaryChat) {
-      lines.push(section('connectors_temporary'));
-    }
-    if (setup.skills !== 'none') {
-      lines.push(section(setup.skills === 'on' ? 'skills_on' : 'skills_off'));
-    }
-  }
-  return lines;
-}
-
-function chatSetupBlock(
-  section: SectionReader,
-  setup: ChatSetup | undefined,
-  toolNames: readonly string[],
-): string {
-  const heading = section('setup_heading');
-  if (!setup || heading.length === 0) return '';
-  const lines = chatSetupLines(section, setup, toolNames).filter((line) => line.length > 0);
-  return lines.length > 0 ? [heading, ...lines].join('\n') : '';
+function chatSetupTools(toolNames: readonly string[]) {
+  return {
+    memoryTools: toolNames.some(isMemoryTool),
+    fileSearchTools: toolNames.some(isFileSearchTool),
+  };
 }
 
 function sectionReaderFor(selection: ResolvePromptOptions | undefined): {
@@ -570,7 +464,12 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
 
   const guidance = settingsGuidanceFor(input.surface ?? 'unknown');
   blocks.push(
-    chatSetupBlock(section, input.chatSetup, toolNames),
+    chatSetupBlock(
+      section,
+      input.chatSetup,
+      chatSetupTools(toolNames),
+      TEMPORARY_CHAT_RETENTION_DAYS,
+    ),
     section(`settings_help_${guidance}`),
     section(`account_help_${guidance}`),
     section('disclosure'),
@@ -584,15 +483,6 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
   return joinBlocks(blocks, timeContextFor(section, input.now ?? new Date(), input.timeZone));
 }
 
-export type TextOnlyChatSetup = (
-  | { readonly temporaryChat: boolean; readonly personalContext: 'not_used' }
-  | {
-      readonly temporaryChat: boolean;
-      readonly personalContext: 'read_only' | 'memory_off_for_chat' | 'off_for_chat';
-      readonly inProject: boolean;
-    }
-) & { readonly projectContext?: 'with_files' | 'without_files' };
-
 export interface TextOnlyPreambleInput {
   servingModel?: ServingModel | null;
   artifacts?: boolean;
@@ -600,42 +490,6 @@ export interface TextOnlyPreambleInput {
   timeZone?: string;
   now?: Date;
   setup?: TextOnlyChatSetup;
-}
-
-function textOnlySetupLines(section: SectionReader, setup: TextOnlyChatSetup): string[] {
-  const lines: string[] = [];
-  if (setup.temporaryChat) {
-    lines.push(
-      section('chat_temporary', {
-        temporaryChatRetentionDays: String(TEMPORARY_CHAT_RETENTION_DAYS),
-      }),
-    );
-  }
-  if (setup.personalContext === 'not_used') {
-    if (setup.projectContext) {
-      lines.push(section('memory_off'), section('past_chats_off'), section('personalization_off'));
-    } else {
-      lines.push(section('personal_context_not_used'));
-    }
-  } else {
-    if (setup.personalContext === 'off_for_chat') lines.push(section('personalization_off'));
-    if (!setup.temporaryChat) {
-      lines.push(
-        section(setup.personalContext === 'read_only' ? 'memory_read_only' : 'memory_off_for_chat'),
-      );
-    }
-    if (setup.inProject && !setup.projectContext) lines.push(section('project_not_used'));
-  }
-  if (setup.projectContext) lines.push(section(`project_${setup.projectContext}`));
-  lines.push(section('apps_not_used'));
-  return lines;
-}
-
-function textOnlySetupBlock(section: SectionReader, setup: TextOnlyChatSetup | undefined): string {
-  const heading = section('setup_heading');
-  if (!setup || heading.length === 0) return '';
-  const lines = textOnlySetupLines(section, setup).filter((line) => line.length > 0);
-  return lines.length > 0 ? [heading, ...lines].join('\n') : '';
 }
 
 export function buildTextOnlyPreamble(input: TextOnlyPreambleInput): string {
@@ -657,7 +511,7 @@ export function buildTextOnlyPreamble(input: TextOnlyPreambleInput): string {
     [
       ...identityBlocks(section, input.servingModel ?? null),
       section('no_tools'),
-      textOnlySetupBlock(section, input.setup),
+      textOnlySetupBlock(section, input.setup, TEMPORARY_CHAT_RETENTION_DAYS),
       section('disclosure'),
       section('response_language'),
     ],

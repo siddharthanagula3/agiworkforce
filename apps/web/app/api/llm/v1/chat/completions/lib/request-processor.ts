@@ -432,9 +432,9 @@ import {
   chatSystemPromptDescribesProductCapabilities,
   chatSystemPromptDescribesSetup,
   servingModelFor,
-  type ChatSetup,
   type ModelSelection,
 } from './capability-preamble';
+import type { ChatSetup } from '@/lib/prompts/chat-system-prompt-assembly';
 import {
   createManagedOfficeFileToolDefinition,
   MANAGED_OFFICE_FILE_TOOL_NAME,
