@@ -13,12 +13,19 @@ export function isChineseHqProvider(providerId: string): providerId is ChineseHq
   return (CHINESE_HQ_PROVIDER_IDS as readonly string[]).includes(providerId);
 }
 
+export const NAMED_PROVIDER_CONSENT_SURFACES = Object.freeze([
+  'mobile',
+  'web',
+  'desktop',
+  'cli',
+] as const);
+
 export interface NamedProviderConsent {
   readonly providerId: string;
   readonly accepted: boolean;
   readonly acceptedAt: string;
   readonly disclosureVersion: string;
-  readonly surface: 'mobile' | 'web' | 'desktop' | 'cli';
+  readonly surface: (typeof NAMED_PROVIDER_CONSENT_SURFACES)[number];
 }
 
 export interface ConsentLedger {

@@ -21,6 +21,16 @@ describe('every context source declares its own controls', () => {
     }
   });
 
+  it("puts a project's other chats under the Search past chats switch that governs past chats", () => {
+    const siblingChats = contextSourceClassPolicy('project_sibling_chat');
+    expect(siblingChats.enabledBy).toEqual({
+      kind: 'user_setting',
+      key: 'capabilities.searchPastChats',
+    });
+    expect(siblingChats.enabledBy).toEqual(contextSourceClassPolicy('past_chat').enabledBy);
+    expect(siblingChats.invalidatedBy).toContain('settings_changed');
+  });
+
   it('gives each class a scope, a sensitivity and a retention from the declared vocabularies', () => {
     for (const policy of contextSourceClassPolicies()) {
       expect(CONTEXT_SOURCE_SCOPES, policy.sourceClass).toContain(policy.scope);

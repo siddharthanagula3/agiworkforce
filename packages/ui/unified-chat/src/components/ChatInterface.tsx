@@ -13,7 +13,7 @@ import {
 import { Search, X } from 'lucide-react';
 import { useUiTranslation } from '@agiworkforce/ui';
 import { HostBridgeContext, type ChatHostBridge, useHostBridge } from '../lib/hostBridge';
-import type { ChatRuntime, LocalToolScope } from '../lib/runtime';
+import type { ChatRuntime, InterruptedTurn, LocalToolScope } from '../lib/runtime';
 import type {
   Artifact,
   ChatMessage,
@@ -23,10 +23,12 @@ import type {
 
 import { EmptyState } from './EmptyState';
 import {
+  COMPOSER_SEND_ACCEPTED,
   ChatInput,
   type ChatComposerEditorMode,
   type ChatInputProjectPicker,
   type ChatWorkScope,
+  type ComposerSendOutcome,
   type ComposerSkillSuggestion,
   type ComposerVoiceController,
 } from './ChatInput';
@@ -36,6 +38,13 @@ import type { ManagedUsageWarning } from '@agiworkforce/types';
 import { UsageWarningBanner } from './UsageWarningBanner';
 import { Disclaimer } from './Disclaimer';
 import { MessageList } from './MessageList';
+import { FollowUpQueue } from './FollowUpQueue';
+import { TurnTodoPanel } from './TurnTodoPanel';
+import { InterruptedTurnNotice } from './InterruptedTurnNotice';
+import { AgentQuestionCard } from './AgentQuestionCard';
+import { TurnNotices } from './TurnNotices';
+import type { MessageActionSlots, RegenerateModelOption } from './ActionBar';
+import { useModelStore } from '../stores/modelStore';
 import { ConversationHeader, type ConversationHeaderProps } from './ConversationHeader';
 import { ConversationStatsPanel } from './ConversationStatsPanel';
 import { GoalHandoffChip } from './GoalHandoffChip';
@@ -49,9 +58,9 @@ import { useArtifactStore } from '../stores/artifactStore';
 import type { WritingStyle } from '../lib/writingStyle';
 import { syncPackageStoreFromHost, useHostBridgeSync } from '../hooks/useHostBridgeSync';
 import { SettingsModal } from './SettingsModal';
-import { ArtifactPanel } from './ArtifactPanel';
+import { ArtifactPanel, type ArtifactPanelHostAction } from './ArtifactPanel';
 import { RewindTimeline } from './RewindTimeline';
-import { useAgentControlStore } from '../stores/agentControlStore';
+import { ALL_AGENT_MODES, useAgentControlStore } from '../stores/agentControlStore';
 import { cn } from '../lib/utils';
 import { toUserMessage } from '../lib/network-error';
 
@@ -257,6 +266,8 @@ export interface ChatInterfaceProps {
   projectPicker?: ChatInputProjectPicker;
   canUseAgiWork?: boolean;
   agiWorkUnavailableReason?: string;
+  /** Why the host cannot send right now, such as being offline. Shown on the composer, which keeps its draft. */
+  sendBlockedReason?: string;
   composerHostControls?: ReactNode;
   usageWarning?: ManagedUsageWarning | null;
   onUpgradeUsage?: () => void;
@@ -288,6 +299,19 @@ export interface ChatInterfaceProps {
   onSubmitGoal?: (goal: string) => void | Promise<void>;
   deriveMessageArtifacts?: DeriveMessageArtifacts;
   showProvenanceFooter?: boolean;
+  /**
+   * Branch, read aloud and regenerate-with-model on assistant replies. A host
+   * supplies only the handlers it can carry out; the rest stay hidden.
+   */
+  messageActions?: MessageActionSlots;
+  /**
+   * Models a reply may be retried with. Non-empty turns Retry into a menu; the
+   * retry selects that model and regenerates, so the same admission checks as
+   * any send apply to it.
+   */
+  regenerateModelOptions?: readonly RegenerateModelOption[];
+  /** Host actions on the artifact in the panel, such as pin, archive or delete. */
+  artifactActions?: readonly ArtifactPanelHostAction[];
 }
 
 export function ChatInterface({
@@ -309,6 +333,7 @@ export function ChatInterface({
   projectPicker,
   canUseAgiWork = true,
   agiWorkUnavailableReason,
+  sendBlockedReason,
   composerHostControls,
   usageWarning,
   onUpgradeUsage,
@@ -328,6 +353,9 @@ export function ChatInterface({
   onSubmitGoal,
   deriveMessageArtifacts,
   showProvenanceFooter = true,
+  messageActions,
+  regenerateModelOptions,
+  artifactActions,
 }: ChatInterfaceProps) {
   const { t } = useUiTranslation('chat');
 
@@ -346,6 +374,12 @@ export function ChatInterface({
   useHostBridgeSync(hostBridge);
   const {
     sendMessage,
+    queueFollowUp,
+    editFollowUp,
+    removeFollowUp,
+    sendFollowUpNow,
+    answerQuestion,
+    retryInterruptedTurn: retryInterruptedTurnContent,
     stopGeneration,
     continueGeneration,
     regenerate,
@@ -357,6 +391,29 @@ export function ChatInterface({
     hostBridge,
     externalAddMessage: onAddMessage,
   });
+
+  const canRegenerate = Boolean(runtime?.deleteMessages);
+  const regenerateWithModel = useCallback(
+    (assistantMessageId: string, modelId: string) => {
+      useModelStore.getState().selectModel(modelId);
+      regenerate(assistantMessageId);
+    },
+    [regenerate],
+  );
+  const messageActionSlots = useMemo<MessageActionSlots | undefined>(() => {
+    if (
+      !canRegenerate ||
+      !regenerateModelOptions?.length ||
+      messageActions?.onRegenerateWithModel
+    ) {
+      return messageActions;
+    }
+    return {
+      ...messageActions,
+      onRegenerateWithModel: regenerateWithModel,
+      regenerateModelOptions,
+    };
+  }, [canRegenerate, messageActions, regenerateModelOptions, regenerateWithModel]);
 
   const handleToolApprove = useCallback(
     (messageId: string, toolCallId: string) =>
@@ -417,11 +474,28 @@ export function ChatInterface({
         const currentMode = agentControl.resolve(conversationId, projectId).mode;
         agentControl.setMode(conversationId, currentMode === 'plan' ? 'ask' : 'plan');
       },
+      ...(hostBridge.selectConversation
+        ? {
+            clearConversation: () => {
+              const chat = useChatStore.getState();
+              const activeId = chat.activeConversationId;
+              if (activeId && (chat.messagesByConversation[activeId]?.length ?? 0) === 0) return;
+              const conversationId = hostBridge.createConversation?.('New chat') ?? null;
+              if (!conversationId) throw new Error('Could not start a new chat.');
+              hostBridge.selectConversation?.(conversationId);
+              syncPackageStoreFromHost(hostBridge);
+            },
+          }
+        : {}),
       ...(hostBridge.fetchCodingCheckpoints && hostBridge.rewindCodingCheckpoint
         ? {
             openRewindTimeline: () => setRewindTimelineOpen(true),
           }
         : {}),
+      ...(hostBridge.compactConversation
+        ? { compactConversation: hostBridge.compactConversation }
+        : {}),
+      ...(hostBridge.fetchContextUsage ? { fetchContextUsage: hostBridge.fetchContextUsage } : {}),
     };
   }, [hostBridge, projectPicker?.activeProjectId]);
 
@@ -476,6 +550,7 @@ export function ChatInterface({
     return 'default';
   }, [messages, hasMessages]);
 
+  const invertNextFollowUpRef = useRef(false);
   const handleSend = useCallback(
     (
       content: string,
@@ -487,8 +562,8 @@ export function ChatInterface({
       workScope?: ChatWorkScope,
       skillName?: string,
       localToolScope?: LocalToolScope,
-    ) => {
-      sendMessage(
+    ): ComposerSendOutcome => {
+      const args: Parameters<typeof sendMessage> = [
         content,
         agentMode,
         effort,
@@ -500,10 +575,59 @@ export function ChatInterface({
         undefined,
         skillName,
         localToolScope,
-      );
+      ];
+      const invert = invertNextFollowUpRef.current;
+      invertNextFollowUpRef.current = false;
+      const taken = isStreaming ? queueFollowUp(args, invert) : sendMessage(...args);
+      return taken.started ? COMPOSER_SEND_ACCEPTED : { accepted: false, reason: taken.reason };
     },
-    [sendMessage],
+    [isStreaming, queueFollowUp, sendMessage],
   );
+  const handleFollowUpInvert = useCallback(() => {
+    invertNextFollowUpRef.current = true;
+  }, []);
+  const [interruptedTurns, setInterruptedTurns] = useState<InterruptedTurn[]>([]);
+  useEffect(() => {
+    if (!runtime?.listInterruptedTurns) {
+      setInterruptedTurns([]);
+      return;
+    }
+    let cancelled = false;
+    runtime
+      .listInterruptedTurns()
+      .then((turns) => {
+        if (!cancelled) setInterruptedTurns(turns);
+      })
+      .catch(() => {
+        if (!cancelled) setInterruptedTurns([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [runtime]);
+  const activeInterruptedTurn = interruptedTurns.find(
+    (turn) => turn.conversationId === activeConversationId,
+  );
+  const forgetInterruptedTurn = useCallback(
+    (turn: InterruptedTurn) => {
+      setInterruptedTurns((turns) =>
+        turns.filter((candidate) => candidate.conversationId !== turn.conversationId),
+      );
+      void runtime?.dismissInterruptedTurn?.(turn.conversationId);
+    },
+    [runtime],
+  );
+  const retryInterruptedTurn = useCallback(
+    (turn: InterruptedTurn) => {
+      forgetInterruptedTurn(turn);
+      retryInterruptedTurnContent(turn.content);
+    },
+    [forgetInterruptedTurn, retryInterruptedTurnContent],
+  );
+  const setAvailableAgentModes = useAgentControlStore((s) => s.setAvailableModes);
+  useEffect(() => {
+    setAvailableAgentModes(runtime?.agentModes ?? ALL_AGENT_MODES);
+  }, [runtime, setAvailableAgentModes]);
   const consumedExternalSendIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (
@@ -788,6 +912,7 @@ export function ChatInterface({
               onToolApprove={runtime?.resolveToolApproval ? handleToolApprove : undefined}
               onToolReject={runtime?.resolveToolApproval ? handleToolReject : undefined}
               approvalTurnExpired={runtime?.resolveToolApproval ? !isApprovalTurnLive : undefined}
+              messageActions={messageActionSlots}
             />
           ) : emptyStateSlot !== undefined ? (
             emptyStateSlot
@@ -812,6 +937,24 @@ export function ChatInterface({
             warning={usageWarning ?? null}
             {...(onUpgradeUsage ? { onUpgrade: onUpgradeUsage } : {})}
             {...(onDismissUsageWarning ? { onDismiss: onDismissUsageWarning } : {})}
+          />
+          {activeInterruptedTurn && (
+            <InterruptedTurnNotice
+              turn={activeInterruptedTurn}
+              disabled={isStreaming}
+              onRetry={retryInterruptedTurn}
+              onDismiss={forgetInterruptedTurn}
+            />
+          )}
+          <AgentQuestionCard conversationId={activeConversationId} onAnswer={answerQuestion} />
+          <TurnNotices conversationId={activeConversationId} />
+          <TurnTodoPanel conversationId={activeConversationId} />
+          <FollowUpQueue
+            conversationId={activeConversationId}
+            isStreaming={isStreaming}
+            onEdit={editFollowUp}
+            onRemove={removeFollowUp}
+            onSendNow={sendFollowUpNow}
           />
           {composerSlot !== undefined ? (
             composerSlot
@@ -839,9 +982,13 @@ export function ChatInterface({
                 canUseAgiWork={canUseAgiWork}
                 agiWorkUnavailableReason={agiWorkUnavailableReason}
                 isStreamingOverride={isStreaming}
+                acceptsFollowUps
+                canSteerFollowUps={Boolean(runtime?.steer)}
+                onFollowUpInvert={handleFollowUpInvert}
                 hasMessages={hasMessages}
                 disabled={!runtime}
                 disabledMessage="Connect to start chatting"
+                sendBlockedReason={sendBlockedReason}
                 conversationId={activeConversationId}
                 projectId={projectPicker?.activeProjectId ?? null}
                 supportsCodeExecution={runtime?.supportsCodeExecution ?? false}
@@ -943,6 +1090,7 @@ export function ChatInterface({
                   runtime?.restoreArtifactVersion ? handleRestoreArtifactVersion : undefined
                 }
                 onSaveEdit={handleSaveArtifactEdit}
+                hostActions={artifactActions}
               />
             </div>
           )}

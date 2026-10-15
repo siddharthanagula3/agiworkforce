@@ -148,7 +148,7 @@
     --action-primary: var(--n-950);
     --action-primary-foreground: var(--n-0); /* 18.75 */
 
-    --accent-text: #3a6bdf; /* 4.65 */
+    --accent-text: #305abc; /* 6.11 */
     --accent-fill: #2f5fd0;
     --accent-on-fill: var(--n-0);
     --focus-ring: #3a6bdf; /* 4.65 on background, clears the 3:1 for a control boundary */
@@ -261,6 +261,7 @@
     --z-content-raised: 2;
     --z-control: 10;
     --z-content-sticky: 20;
+    --z-banner: 25;
     --z-panel-backdrop: 30;
     --z-panel: 40;
     --z-panel-raised: 45;

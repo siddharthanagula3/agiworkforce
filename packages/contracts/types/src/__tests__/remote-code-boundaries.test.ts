@@ -33,6 +33,7 @@ const snapshot: RemoteCodeSessionSnapshot = {
   partialResponse: '',
   messages: [],
   pendingApprovals: [],
+  pendingQuestions: [],
   fileChanges: [],
   queuedGuidance: [],
   tools: [],

@@ -1,7 +1,12 @@
 import '../../composer-editor/__tests__/dom-stubs';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatInput, CHAT_COMPOSER_EDITOR_MODES } from '../ChatInput';
+import {
+  COMPOSER_SEND_ACCEPTED,
+  ChatInput,
+  CHAT_COMPOSER_EDITOR_MODES,
+  type ChatInputProps,
+} from '../ChatInput';
 import { COMPOSER_EDITOR_ATTRIBUTE } from '../../composer-editor';
 import { LARGE_PASTE_THRESHOLD } from '../../lib/largePaste';
 import { useChatStore } from '../../stores/chatStore';
@@ -12,7 +17,7 @@ const CONVERSATION_ID = 'conv-editor';
 type ComposerOverrides = Partial<Parameters<typeof ChatInput>[0]>;
 
 async function renderEditorArm(overrides: ComposerOverrides = {}) {
-  const onSend = vi.fn();
+  const onSend = vi.fn((..._args: Parameters<ChatInputProps['onSend']>) => COMPOSER_SEND_ACCEPTED);
   const view = render(
     <ChatInput
       onSend={onSend}

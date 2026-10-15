@@ -1,4 +1,3 @@
-
 export type QueuePriority = 'now' | 'next' | 'later';
 
 export const PRIORITY_ORDER: Record<QueuePriority, number> = {
@@ -101,6 +100,8 @@ export interface MessageQueue {
   dequeueIf(expectedId: string): QueuedCommand;
   dequeueAll(): QueuedCommand[];
   dequeueAllMatching(predicate: (cmd: QueuedCommand) => boolean): QueuedCommand[];
+  /** Replace what a queued command says, keeping its place; false once it has left the queue. */
+  update(commandId: string, value: QueuedCommand['value']): boolean;
   popAllEditable(
     currentInput: string,
     currentCursorOffset: number,

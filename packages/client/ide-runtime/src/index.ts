@@ -63,12 +63,10 @@ export type { GrepOptions, WorkspaceGrepMatch } from './workspace';
 
 export {
   countPorcelainStatus,
-  describeGitHead,
   GIT_OPERATION_PROBES,
   GIT_OPERATIONS,
   isDetachedHead,
   parseAheadBehind,
-  SHORT_SHA_LENGTH,
 } from './git';
 export type { GitHead, GitOperation, GitStatusCounts } from './git';
 

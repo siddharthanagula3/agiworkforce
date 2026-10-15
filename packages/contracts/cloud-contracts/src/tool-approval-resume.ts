@@ -6,9 +6,24 @@ import {
 
 export const TOOL_CALL_ID_MAX_LENGTH = 256;
 
+export const TOOL_APPROVAL_DECISIONS = [
+  'approved',
+  'approved-for-session',
+  'approved-always',
+  'rejected',
+] as const;
+export type ToolApprovalDecisionValue = (typeof TOOL_APPROVAL_DECISIONS)[number];
+
+export const TOOL_APPROVAL_SCOPES = ['once', 'session', 'always'] as const;
+export type ToolApprovalScope = (typeof TOOL_APPROVAL_SCOPES)[number];
+
+export function isApprovingToolDecision(decision: ToolApprovalDecisionValue): boolean {
+  return decision !== 'rejected';
+}
+
 export const ToolApprovalDecisionSchema = z.object({
   tool_call_id: z.string().min(1).max(TOOL_CALL_ID_MAX_LENGTH),
-  decision: z.enum(['approved', 'rejected']),
+  decision: z.enum(TOOL_APPROVAL_DECISIONS),
 });
 export type ToolApprovalDecisionWire = z.infer<typeof ToolApprovalDecisionSchema>;
 
@@ -63,6 +78,7 @@ export const CloudToolApprovalProjectionSchema = z.object({
         name: z.string().min(1).max(200),
         input: z.string().max(100_000).optional(),
         approvalDecision: z.enum(['approved', 'rejected']).optional(),
+        approvalScope: z.enum(TOOL_APPROVAL_SCOPES).optional(),
       }),
     )
     .min(1)
@@ -100,3 +116,37 @@ export const ToolApprovalResumeErrorResponseSchema = z.object({
   }),
 });
 export type ToolApprovalResumeErrorResponse = z.infer<typeof ToolApprovalResumeErrorResponseSchema>;
+
+export const TOOL_APPROVAL_RISK_TIERS = ['low', 'medium', 'high', 'critical'] as const;
+export type ToolApprovalRiskTier = (typeof TOOL_APPROVAL_RISK_TIERS)[number];
+
+export const ToolApprovalReviewWireSchema = z.object({
+  risk_tier: z.enum(TOOL_APPROVAL_RISK_TIERS),
+  destructive: z.boolean(),
+  approval_scopes: z.array(z.enum(TOOL_APPROVAL_SCOPES)).min(1).max(3),
+});
+export type ToolApprovalReviewWire = z.infer<typeof ToolApprovalReviewWireSchema>;
+
+export interface ToolApprovalReview {
+  riskTier: ToolApprovalRiskTier;
+  destructive: boolean;
+  scopes: ToolApprovalScope[];
+}
+
+export function readToolApprovalReview(raw: unknown): ToolApprovalReview | undefined {
+  const parsed = ToolApprovalReviewWireSchema.safeParse(raw);
+  if (!parsed.success) return undefined;
+  return {
+    riskTier: parsed.data.risk_tier,
+    destructive: parsed.data.destructive,
+    scopes: [...new Set(parsed.data.approval_scopes)],
+  };
+}
+
+export const TOOL_APPROVAL_SCOPE_DECISIONS: Readonly<
+  Record<ToolApprovalScope, ToolApprovalDecisionValue>
+> = Object.freeze({
+  once: 'approved',
+  session: 'approved-for-session',
+  always: 'approved-always',
+});

@@ -1,5 +1,6 @@
 import { SignalingClient, endsPairing, type SignalingEvent } from '../signaling';
 import {
+  DISPATCH_NONCE_CACHE_TTL_MS,
   REMOTE_CODE_LIMITS,
   clipRemoteResult,
   clipRemoteText,
@@ -47,6 +48,9 @@ const FINISHED_TASK_STATUSES: ReadonlySet<DispatchTaskLifecycleStatus> = new Set
   'cancelled',
   'rejected',
 ]);
+const MAX_PHONE_NAME_LENGTH = 60;
+const MAX_SALT_LENGTH = 128;
+const ASKS_FOR_SESSIONS = new Set(['code.sessions.list', 'sync_request']);
 
 export type RemoteSocketFactory = (wsUrl: string) => WebSocket;
 
@@ -60,6 +64,18 @@ export interface DispatchTaskPages {
   deliver: (page: number, event: DispatchPageEvent) => boolean;
 }
 
+/** What the phone scans. It carries the pairing secret, so only main may draw it. */
+export interface RemotePairingDisplay {
+  code: string;
+  qrPayload: string;
+  expiresAt: number;
+}
+
+export interface RemotePhoneToConfirm {
+  name: string | null;
+  pairingCode: string;
+}
+
 export interface RemoteControlHostOptions {
   allowInsecureLoopback?: boolean;
   code: Omit<CodeRemoteDependencies, 'send'>;
@@ -68,6 +84,16 @@ export interface RemoteControlHostOptions {
   createSocket: RemoteSocketFactory;
   onStateChanged: (state: RemoteControlState) => void;
   dispatchPages?: DispatchTaskPages;
+  /**
+   * Draws the pairing code where only the person at this computer sees it.
+   * A host that has nowhere safer to draw it leaves it out, and the code is
+   * then published in the state its own window renders.
+   */
+  presentPairing?: (pairing: RemotePairingDisplay | null) => void;
+  /** Asks the person at this computer to allow a phone that has not been allowed yet. */
+  confirmPhone?: (phone: RemotePhoneToConfirm) => Promise<boolean>;
+  /** Refuses a relay this app does not pair through, beyond the secure-connection check. */
+  allowRelayUrl?: (wsUrl: string) => boolean;
   createClient?: (
     options: ConstructorParameters<typeof SignalingClient>[0],
   ) => Pick<SignalingClient, 'sendSignal' | 'close'>;
@@ -89,6 +115,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseStartRequest(
   args: Record<string, unknown>,
   allowInsecureLoopback: boolean,
+  allowRelayUrl: ((wsUrl: string) => boolean) | undefined,
 ): RemoteControlStartRequest {
   const { code, wsUrl, pairToken, expiresAt } = args;
   if (typeof code !== 'string' || !isRelayPairingCode(code)) {
@@ -97,6 +124,9 @@ function parseStartRequest(
   if (typeof wsUrl !== 'string') throw new RemoteControlRefused('The relay address is missing.');
   if (!isSecureRelayUrl(wsUrl, allowInsecureLoopback)) {
     throw new RemoteControlRefused('The relay address must use a secure WebSocket connection.');
+  }
+  if (allowRelayUrl && !allowRelayUrl(wsUrl)) {
+    throw new RemoteControlRefused('The relay address is not one this app pairs through.');
   }
   if (
     typeof pairToken !== 'string' ||
@@ -111,24 +141,40 @@ function parseStartRequest(
   return { code, wsUrl, pairToken, expiresAt };
 }
 
+/**
+ * The name is chosen by whoever is on the other end, and it is shown in a
+ * native prompt asking for trust, so nothing in it may reorder or hide text.
+ */
+function sanitizePhoneName(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const cleaned = raw
+    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .slice(0, MAX_PHONE_NAME_LENGTH);
+  return cleaned === '' ? null : cleaned;
+}
+
+const INSTALLATION_ID = /^[0-9a-f]{64}$/u;
+
+/**
+ * A phone that sends its installation id is known by it. One that does not is
+ * known by what it says it is, which two phones of the same build share.
+ */
+function phoneIdentity(metadata: Record<string, unknown> | null, name: string | null): string {
+  const installationId = metadata?.['installationId'];
+  if (typeof installationId === 'string' && INSTALLATION_ID.test(installationId)) {
+    return JSON.stringify(['installation', installationId]);
+  }
+  const field = (key: string) => (typeof metadata?.[key] === 'string' ? metadata[key] : '');
+  return JSON.stringify([field('deviceType'), field('app'), name ?? '']);
+}
+
 function signedEnvelopeFrom(payload: unknown): unknown {
   if (!isRecord(payload)) return payload;
   const data = payload['data'];
   if (isRecord(data) && typeof data['hmac'] === 'string') return data;
   return payload;
-}
-
-/**
- * The phone names itself, so its name is text from the other end of the pairing.
- * Control characters and bidirectional overrides could make it display as a
- * different name, so they are removed before it is shown.
- */
-function displayableName(raw: string): string | null {
-  const cleaned = raw
-    .replace(/[\p{Cc}\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, '')
-    .trim()
-    .slice(0, 120);
-  return cleaned.length > 0 ? cleaned : null;
 }
 
 export function createRemoteControlHost(options: RemoteControlHostOptions) {
@@ -141,6 +187,29 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
   let registered = false;
   let reconnectAttempts = 0;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let peerAttempt = 0;
+  /**
+   * What the peer says it is comes over the relay unsigned, so it is a claim.
+   * It becomes the phone that was allowed, and the phone that is served, only
+   * when a message arrives signed with the key the scanned secret gives: the
+   * relay, and anyone who only has the pairing code, cannot make one.
+   */
+  let claimed: { secret: string; identity: string; name: string | null } | null = null;
+  let allowedPhone: { secret: string; identity: string; name: string | null } | null = null;
+  let proved = false;
+  /**
+   * The peer the user is being asked about. Today's phone signs a request the
+   * moment it attaches, which is while that question is still on screen. It
+   * is not acted on, but that it verified is kept, so the phone is served as
+   * soon as it is allowed and does not wait for the next thing it sends.
+   */
+  let awaiting: { session: DispatchSession; signed: boolean } | null = null;
+  /**
+   * One nonce record per salt for as long as a signed message could still be
+   * in date. A peer picks its own salt, and the same salt gives the same key,
+   * so a fresh record for it would take again what was already taken once.
+   */
+  const keyed = new Map<string, { session: DispatchSession; at: number }>();
   const receipts = createControlReceiptLedger();
   const pageTasks = new Map<string, PageTask>();
   const createdTasks = new Set<string>();
@@ -160,12 +229,13 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
   }
 
   function publish(patch: Partial<RemoteControlState>): void {
+    if (patch.status !== undefined && patch.status !== 'waiting') options.presentPairing?.(null);
     state = { ...state, ...patch };
     options.onStateChanged(state);
   }
 
   async function send(action: string, payload: Record<string, unknown>): Promise<boolean> {
-    if (!client || !dispatch) return false;
+    if (!client || !dispatch || !proved) return false;
     const envelope = signDispatchEnvelope(dispatch, action, { ...payload, action });
     return client.sendSignal('control', { action, data: envelope });
   }
@@ -317,7 +387,12 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
   }
 
   async function handleControl(payload: unknown): Promise<void> {
-    if (!dispatch) return;
+    if (!dispatch) {
+      if (awaiting && verifyDispatchEnvelope(awaiting.session, signedEnvelopeFrom(payload)).ok) {
+        awaiting.signed = true;
+      }
+      return;
+    }
     const verified = verifyDispatchEnvelope(dispatch, signedEnvelopeFrom(payload));
     if (!verified.ok) {
       if (verified.reason === 'update_required') {
@@ -329,9 +404,30 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
       return;
     }
     const inner = verified.envelope.payload;
+    const firstSigned = !proved;
+    if (firstSigned) trustPeer();
     if (!isRecord(inner)) return;
     const action = typeof inner['action'] === 'string' ? inner['action'] : verified.envelope.type;
+    await handleSigned(action, inner);
+    if (firstSigned && !ASKS_FOR_SESSIONS.has(action)) await sendSessions();
+  }
 
+  function trustPeer(): void {
+    proved = true;
+    allowedPhone = claimed;
+    publish({ reconnectable: true });
+    enqueue(flushPageTasks);
+  }
+
+  async function sendSessions(): Promise<void> {
+    await controller.handleControl('code.sessions.list', {
+      version: 1,
+      requestId: `peer-proved-${Date.now()}`,
+      sentAt: new Date().toISOString(),
+    });
+  }
+
+  async function handleSigned(action: string, inner: Record<string, unknown>): Promise<void> {
     if (action === 'heartbeat') {
       await send('heartbeat_ack', {
         timestamp: typeof inner['timestamp'] === 'number' ? inner['timestamp'] : Date.now(),
@@ -370,35 +466,86 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     refreshAttached();
   }
 
-  function onPeerReady(metadata: Record<string, unknown> | null): void {
+  async function onPeerReady(
+    metadata: Record<string, unknown> | null,
+    eventGeneration: number,
+  ): Promise<void> {
+    const attempt = ++peerAttempt;
+    dispatch = null;
+    proved = false;
+    claimed = null;
+    awaiting = null;
     const salt = metadata?.['dispatchSalt'];
-    if (!pairingSecret || !state.pairingCode || typeof salt !== 'string' || salt.length === 0) {
+    const pairingCode = state.pairingCode;
+    if (
+      !pairingSecret ||
+      !pairingCode ||
+      typeof salt !== 'string' ||
+      salt.length === 0 ||
+      salt.length > MAX_SALT_LENGTH
+    ) {
       publish({
         status: 'error',
         error: 'The phone did not offer a secure session. Update the app, then pair again.',
       });
       return;
     }
+    const phoneName = sanitizePhoneName(metadata?.['deviceName']);
+    const identity = phoneIdentity(metadata, phoneName);
+    const secretAtReady = pairingSecret;
+    options.presentPairing?.(null);
+    let asked: { session: DispatchSession; signed: boolean };
     try {
-      dispatch = createDispatchSession(deriveDispatchKey(state.pairingCode, salt, pairingSecret));
+      asked = { session: sessionKeyedBy(pairingCode, salt, secretAtReady), signed: false };
     } catch {
       publish({ status: 'error', error: 'Secure pairing could not start. Pair again.' });
       return;
     }
-    const phoneName = metadata?.['deviceName'];
-    publish({
-      status: 'connected',
-      error: null,
-      phoneName: typeof phoneName === 'string' ? displayableName(phoneName) : null,
-    });
-    enqueue(flushPageTasks);
-    void controller
-      .handleControl('code.sessions.list', {
-        version: 1,
-        requestId: `peer-ready-${Date.now()}`,
-        sentAt: new Date().toISOString(),
-      })
-      .catch(() => undefined);
+    const known = allowedPhone?.secret === secretAtReady && allowedPhone.identity === identity;
+    let confirmed = known;
+    if (!known) {
+      awaiting = asked;
+      try {
+        confirmed = options.confirmPhone
+          ? await options.confirmPhone({ name: phoneName, pairingCode })
+          : true;
+      } catch {
+        confirmed = false;
+      }
+    }
+    if (eventGeneration !== generation || attempt !== peerAttempt) return;
+    awaiting = null;
+    if (!confirmed) {
+      stop();
+      return;
+    }
+    const secret = pairingSecret;
+    if (!secret || secret !== secretAtReady) return;
+    if (!known) controller.forget();
+    dispatch = asked.session;
+    // A phone taken back without being asked is shown under the name it was
+    // allowed by, not the one this connection sent.
+    const name = known && allowedPhone ? allowedPhone.name : phoneName;
+    claimed = { secret, identity, name };
+    publish({ status: 'connected', error: null, phoneName: name });
+    if (asked.signed) {
+      trustPeer();
+      enqueue(sendSessions);
+    }
+  }
+
+  function sessionKeyedBy(pairingCode: string, salt: string, secret: string): DispatchSession {
+    const now = Date.now();
+    const cutoff = now - DISPATCH_NONCE_CACHE_TTL_MS;
+    for (const [used, entry] of keyed) {
+      const inDate = [...entry.session.nonces.values()].some((takenAt) => takenAt >= cutoff);
+      if (entry.at < cutoff && !inDate) keyed.delete(used);
+    }
+    const kept = keyed.get(salt);
+    const session =
+      kept?.session ?? createDispatchSession(deriveDispatchKey(pairingCode, salt, secret));
+    keyed.set(salt, { session, at: now });
+    return session;
   }
 
   function onEvent(event: SignalingEvent, eventGeneration: number): void {
@@ -408,17 +555,30 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
         if (active) active = { ...active, pairToken: event.pairToken };
         registered = true;
         reconnectAttempts = 0;
-        if (state.status === 'reconnecting') publish({ status: 'waiting', error: null });
+        if (state.status === 'reconnecting') {
+          publish({ status: 'waiting', error: null });
+          if (allowedPhone === null && active && pairingSecret) {
+            options.presentPairing?.({
+              code: active.code,
+              qrPayload: `agiw3:${active.code}:${pairingSecret}`,
+              expiresAt: active.expiresAt,
+            });
+          }
+        }
         return;
       case 'peer_ready':
-        onPeerReady(event.metadata ?? null);
+        void onPeerReady(event.metadata ?? null, eventGeneration);
         return;
       case 'signal':
         if (event.kind === 'control') enqueue(() => handleControl(event.payload));
         return;
       case 'peer_left':
+        peerAttempt += 1;
         dispatch = null;
-        controller.reset();
+        proved = false;
+        claimed = null;
+        awaiting = null;
+        controller.detach();
         publish({ status: 'waiting', phoneName: null, attachedSessions: 0 });
         return;
       case 'session_expired':
@@ -459,8 +619,13 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
 
   function reconnect(): void {
     generation += 1;
+    peerAttempt += 1;
     client = null;
     dispatch = null;
+    proved = false;
+    claimed = null;
+    awaiting = null;
+    controller.detach();
     publish({ status: 'reconnecting', phoneName: null, attachedSessions: 0, error: null });
     const delay = Math.min(
       RECONNECT_BASE_DELAY_MS * 2 ** reconnectAttempts,
@@ -474,19 +639,29 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
   }
 
   function start(args: Record<string, unknown>): RemoteControlState {
-    const request = parseStartRequest(args, options.allowInsecureLoopback === true);
+    const request = parseStartRequest(
+      args,
+      options.allowInsecureLoopback === true,
+      options.allowRelayUrl,
+    );
     stop();
     pairingSecret = generatePairingSecret();
     active = request;
     publish({
       status: 'waiting',
       pairingCode: request.code,
-      qrPayload: `agiw3:${request.code}:${pairingSecret}`,
       expiresAt: request.expiresAt,
       phoneName: null,
       attachedSessions: 0,
+      reconnectable: false,
       error: null,
     });
+    const qrPayload = `agiw3:${request.code}:${pairingSecret}`;
+    if (options.presentPairing) {
+      options.presentPairing({ code: request.code, qrPayload, expiresAt: request.expiresAt });
+    } else {
+      publish({ qrPayload });
+    }
     connect(request);
     return state;
   }
@@ -517,25 +692,32 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
 
   function stop(): RemoteControlState {
     generation += 1;
+    peerAttempt += 1;
     if (reconnectTimer !== null) clearTimeout(reconnectTimer);
     reconnectTimer = null;
     active = null;
     registered = false;
     reconnectAttempts = 0;
+    options.presentPairing?.(null);
     client?.close({ endPairing: true });
     client = null;
     dispatch = null;
+    proved = false;
+    claimed = null;
+    awaiting = null;
+    keyed.clear();
     pairingSecret = null;
+    allowedPhone = null;
     receipts.clear();
     pageTasks.clear();
     createdTasks.clear();
-    controller.reset();
+    controller.forget();
     if (state.status !== 'idle') publish({ ...IDLE_REMOTE_CONTROL_STATE });
     return state;
   }
 
   function handleSessionEvent(rootId: string, event: DeveloperSessionEvent): void {
-    if (!dispatch) return;
+    if (!dispatch || !proved) return;
     enqueue(() => controller.handleSessionEvent(rootId, event));
   }
 

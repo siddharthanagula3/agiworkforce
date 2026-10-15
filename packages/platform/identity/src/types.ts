@@ -202,6 +202,7 @@ export interface IdentityProvider<Request = unknown> {
   readonly name: string;
   /** Whether this deployment holds the credentials the provider needs to verify a token at all. */
   canVerifySessionTokens(): boolean;
+  checkReachable(): Promise<void>;
   authorizedParties(): readonly string[];
   verifySessionToken(
     token: string,

@@ -65,6 +65,7 @@ export {
   initialConnectorInputDraft,
   readConnectorInputLink,
   readConnectorInputPrompts,
+  validateConnectorInputResponses,
 } from './input-request';
 export type {
   ConnectorInputDraft,
@@ -77,4 +78,5 @@ export type {
   ConnectorInputResponse,
   ConnectorInputStringFormat,
   ConnectorInputValue,
+  ConnectorInputValidation,
 } from './input-request';

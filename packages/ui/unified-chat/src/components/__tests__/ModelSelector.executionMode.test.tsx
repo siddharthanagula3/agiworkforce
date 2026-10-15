@@ -402,3 +402,80 @@ describe('ModelSelector execution-boundary admission', () => {
     expect(screen.getByText('always')).toBeTruthy();
   });
 });
+
+describe('ModelSelector BYOK entry from a Local conversation', () => {
+  beforeEach(() => {
+    window.localStorage.setItem('app-mode-store', JSON.stringify({ state: { mode: 'local' } }));
+    useModelStore.setState({
+      models: [localModel, byokModel],
+      selectedModelId: localModel.id,
+      modelCatalogStatus: 'ready',
+      modelCatalogError: null,
+      recentModelIds: [],
+      lastRoutingDecision: null,
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    window.localStorage.clear();
+  });
+
+  function renderWithBridge(requestByokConversation?: (id: string | null) => void) {
+    return render(
+      <HostBridgeContext.Provider
+        value={
+          {
+            getSnapshot: () => ({ activeConversationId: 'conversation-1', conversations: [] }),
+            ...(requestByokConversation ? { requestByokConversation } : {}),
+          } as never
+        }
+      >
+        <ModelSelector />
+      </HostBridgeContext.Provider>,
+    );
+  }
+
+  it('offers a separate BYOK chat and hands the Local conversation id to the host', () => {
+    seedConversation('local_only');
+    const requestByokConversation = vi.fn();
+    renderWithBridge(requestByokConversation);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
+    expect(screen.queryByText('Direct Provider Fixture')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Use a model with your API key/i }));
+
+    expect(requestByokConversation).toHaveBeenCalledWith('conversation-1');
+  });
+
+  it('hides the entry when the host cannot start a BYOK chat', () => {
+    seedConversation('local_only');
+    renderWithBridge();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
+
+    expect(screen.queryByText(/Use a model with your API key/i)).toBeNull();
+  });
+
+  it('hides the entry when no provider key is configured', () => {
+    useModelStore.setState({ models: [localModel] });
+    seedConversation('local_only');
+    renderWithBridge(vi.fn());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
+
+    expect(screen.queryByText(/Use a model with your API key/i)).toBeNull();
+  });
+
+  it('labels a BYOK conversation with the provider whose key it uses', () => {
+    seedConversation('byok');
+    useModelStore.setState({ selectedModelId: byokModel.id });
+    renderWithBridge(vi.fn());
+
+    expect(screen.getByRole('button', { name: 'Select model' }).textContent).toContain(
+      'OpenAI key',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
+    expect(screen.queryByText(/Use a model with your API key/i)).toBeNull();
+  });
+});

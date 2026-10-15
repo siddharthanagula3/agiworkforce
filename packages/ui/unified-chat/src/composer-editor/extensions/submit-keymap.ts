@@ -8,6 +8,7 @@ export const SEND_ON_ENTER: ComposerSendShortcut = 'enter';
 export const ENTER_KEY = 'Enter';
 export const SHIFT_ENTER_KEY = 'Shift-Enter';
 export const MOD_ENTER_KEY = 'Mod-Enter';
+export const MOD_SHIFT_ENTER_KEY = 'Mod-Shift-Enter';
 export const ARROW_UP_KEY = 'ArrowUp';
 export const ARROW_DOWN_KEY = 'ArrowDown';
 export const TAB_KEY = 'Tab';
@@ -16,6 +17,8 @@ export const ESCAPE_KEY = 'Escape';
 export interface ComposerSubmitKeymapOptions {
   resolveSendShortcut: () => ComposerSendShortcut;
   onSubmit: () => void;
+  /** Mod-Shift-Enter: the host's alternate send (steer instead of queue, or the reverse). */
+  onAlternateSubmit?: () => void;
   isMenuActive: () => boolean;
   onMenuKey: (key: string) => boolean;
 }
@@ -51,6 +54,12 @@ export const ComposerSubmitKeymap = Extension.create<ComposerSubmitKeymapOptions
         if (editor.view.composing) return false;
         if (options.isMenuActive()) return false;
         options.onSubmit();
+        return true;
+      },
+      [MOD_SHIFT_ENTER_KEY]: ({ editor }) => {
+        if (editor.view.composing) return false;
+        if (options.isMenuActive()) return false;
+        (options.onAlternateSubmit ?? options.onSubmit)();
         return true;
       },
       [ARROW_UP_KEY]: () => delegate(ARROW_UP_KEY),

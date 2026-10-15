@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { FollowUpQueueMode } from '../queue/followUps';
 
 interface UserProfile {
   fullName: string;
@@ -20,6 +21,7 @@ interface SettingsState {
   genericWebSearchDeploymentEnabled: boolean;
   autoApproveMode: 'ask' | 'smart' | 'full';
   hapticsEnabled: boolean;
+  followUpQueueMode: FollowUpQueueMode;
 
   updateProfile: (updates: Partial<UserProfile>) => void;
   setLanguage: (lang: string) => void;
@@ -28,6 +30,7 @@ interface SettingsState {
   setCodeExecutionDeploymentEnabled: (enabled: boolean) => void;
   setGenericWebSearchDeploymentEnabled: (enabled: boolean) => void;
   setAutoApproveMode: (mode: 'ask' | 'smart' | 'full') => void;
+  setFollowUpQueueMode: (mode: FollowUpQueueMode) => void;
 }
 
 export const REMOVED_PERSISTED_SETTINGS_KEYS = [
@@ -58,6 +61,7 @@ export const useSettingsStore = create<SettingsState>()(
       genericWebSearchDeploymentEnabled: false,
       autoApproveMode: 'ask' as const,
       hapticsEnabled: true,
+      followUpQueueMode: 'steer' as const,
 
       updateProfile: (updates) => set((state) => ({ profile: { ...state.profile, ...updates } })),
 
@@ -69,6 +73,7 @@ export const useSettingsStore = create<SettingsState>()(
       setGenericWebSearchDeploymentEnabled: (enabled) =>
         set({ genericWebSearchDeploymentEnabled: enabled }),
       setAutoApproveMode: (mode) => set({ autoApproveMode: mode }),
+      setFollowUpQueueMode: (mode) => set({ followUpQueueMode: mode }),
     }),
     {
       name: 'chat-settings-store',

@@ -507,6 +507,7 @@
       "tables": [
         "connector_call_events",
         "connector_tool_permissions",
+        "connector_tool_session_grants",
         "github_install_authorizations",
         "organization_shared_connectors",
         "user_connectors",
@@ -659,7 +660,7 @@
     {
       "name": "byok",
       "label": "BYOK",
-      "owner": "packages/contracts/types/src/customModel.ts",
+      "owner": "apps/web/lib/byok-providers.ts",
       "capabilities": [],
       "concepts": [],
       "tables": []

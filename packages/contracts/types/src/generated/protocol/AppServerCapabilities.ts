@@ -59,4 +59,35 @@ export type AppServerCapabilities = {
    */
   planDecisions?: boolean;
   pullRequests?: boolean;
+  /**
+   * `thread/fork` honours `throughTurnId`. A host without it ignores the
+   * field and copies the whole conversation, so a client offers a branch
+   * from a turn only when this is true.
+   */
+  forkThroughTurn?: boolean;
+  /**
+   * `thread/compact` summarizes the conversation the model reads, from a
+   * turn on or the older part of all of it.
+   */
+  threadCompact?: boolean;
+  /**
+   * A `turn/start` that names no `agentMode` runs in the thread's last
+   * saved mode, which is never bypass: bypass ends with the turn that
+   * named it. A host without this keeps whatever the last turn ran in, so
+   * a client names a mode on every turn it sends there.
+   */
+  bypassPerTurn?: boolean;
+  /**
+   * `thread/revert` honours `restore`. A host without it ignores the field
+   * and rewinds both, so a client offers code-only and conversation-only
+   * only when this is true.
+   */
+  revertRestore?: boolean;
+  /**
+   * `mcp/approval/read` and `mcp/approval/grant` let a client ask its user
+   * about a project server that `mcp/list` reports as `needs_approval`.
+   * Without them such a server can be approved only in a terminal.
+   */
+  mcpApproval?: boolean;
+  managedWorktrees?: boolean;
 };

@@ -18,6 +18,7 @@
     "./dom": "./src/dom/index.ts",
     "./i18n": "./src/i18n.ts",
     "./label": "./src/primitives/Label.tsx",
+    "./search-shortcut": "./src/sidebar/searchShortcut.ts",
     "./sheet": "./src/primitives/Sheet.tsx",
     "./sonner": "./src/primitives/SonnerToaster.tsx",
     "./switch": "./src/primitives/Switch.tsx",

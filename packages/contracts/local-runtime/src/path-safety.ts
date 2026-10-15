@@ -1,3 +1,5 @@
+import { HOME_CREDENTIAL_PATHS } from './filesystem';
+
 /**
  * Containment checks for workspace-scoped filesystem access.
  *
@@ -134,24 +136,106 @@ export function relativeWithinRoot(
 }
 
 /**
- * Rejects roots that should never become a workspace regardless of what the
- * user picked in the dialog: network shares, and filesystem/user roots whose
- * grant would be indistinguishable from unrestricted access.
+ * The macOS data volume, where everything a user writes really lives.
+ * `/System/Volumes/Data/Users/me` and `/Users/me` are one folder, and a root
+ * is judged without the prefix so that neither spelling gets past a rule the
+ * other is held to.
  */
-export function isGrantableRoot(value: string, platform: PathPlatform, homeDir?: string): boolean {
+const DATA_VOLUME = ['system', 'volumes', 'data'];
+
+/**
+ * Folders that are the system's, or everybody's, by their path below the
+ * filesystem root: approving one hands over far more than a project. A folder
+ * inside one of them can still be a workspace.
+ */
+const SYSTEM_FOLDERS: Readonly<Record<PathPlatform, readonly string[]>> = {
+  posix: [
+    'users',
+    'home',
+    'root',
+    'private',
+    'private/var',
+    'private/etc',
+    'private/tmp',
+    'var',
+    'etc',
+    'tmp',
+    'usr',
+    'bin',
+    'sbin',
+    'lib',
+    'opt',
+    'system',
+    'system/volumes',
+    'library',
+    'applications',
+    'volumes',
+    'dev',
+    'proc',
+    'sys',
+    'boot',
+    'cores',
+  ],
+  win32: ['windows', 'program files', 'program files (x86)', 'programdata', 'users'],
+};
+
+function startsWith(segments: readonly string[], prefix: readonly string[]): boolean {
+  return (
+    segments.length >= prefix.length &&
+    prefix.every((segment, index) => segments[index] === segment)
+  );
+}
+
+/**
+ * A resolved path as these rules compare it: without regard to case, since a
+ * root is refused on either kind of volume, and without the data volume
+ * prefix.
+ */
+function rootSegments(value: string, platform: PathPlatform): string[] | null {
+  const segments = toComparableSegments(value, platform, false);
+  if (!segments) return null;
+  return platform === 'posix' && startsWith(segments, DATA_VOLUME)
+    ? segments.slice(DATA_VOLUME.length)
+    : segments;
+}
+
+/**
+ * Rejects roots that should never become a workspace regardless of what the
+ * user picked in the dialog: network shares, the filesystem root, a folder
+ * that is the system's or holds every user's files, the home folder and
+ * anything above it, and a folder that is, holds or sits inside one of the
+ * places credentials are kept (`HOME_CREDENTIAL_PATHS`), such as `~/.ssh` or
+ * `~/Library`. A grant on any of them would be indistinguishable from
+ * unrestricted access, or would hand over the keys with the project.
+ *
+ * `value` and every entry of `homeDirs` must already be resolved. The home
+ * folder is given under each spelling it has, since a link or a volume
+ * prefix can give it more than one.
+ */
+export function isGrantableRoot(
+  value: string,
+  platform: PathPlatform,
+  homeDirs: string | readonly string[] = [],
+): boolean {
   if (isUncPath(value)) return false;
 
-  const segments = toComparableSegments(value, platform, defaultCaseSensitivity(platform));
+  const segments = rootSegments(value, platform);
   if (!segments) return false;
 
   const minimumDepth = platform === 'win32' ? 2 : 1;
   if (segments.length < minimumDepth) return false;
 
-  if (homeDir) {
-    const homeSegments = toComparableSegments(homeDir, platform, defaultCaseSensitivity(platform));
-    if (homeSegments && segments.length === homeSegments.length) {
-      const identical = homeSegments.every((segment, index) => segments[index] === segment);
-      if (identical) return false;
+  const belowRoot = platform === 'win32' ? segments.slice(1) : segments;
+  if (SYSTEM_FOLDERS[platform].some((folder) => folder === belowRoot.join('/'))) return false;
+
+  const homes = (typeof homeDirs === 'string' ? [homeDirs] : homeDirs)
+    .map((home) => rootSegments(home, platform))
+    .filter((home): home is string[] => home !== null && home.length > 0);
+  for (const home of homes) {
+    if (startsWith(home, segments)) return false;
+    for (const credential of HOME_CREDENTIAL_PATHS) {
+      const kept = [...home, ...credential.toLowerCase().split('/')];
+      if (startsWith(kept, segments) || startsWith(segments, kept)) return false;
     }
   }
 

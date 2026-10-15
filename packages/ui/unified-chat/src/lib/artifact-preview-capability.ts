@@ -20,12 +20,14 @@
  * driven by `apps/web/features/chat/components/SandboxedIframe.tsx`), and a
  * cross-origin document does not inherit the parent policy.
  *
- * The real fix on desktop is a dedicated artifact origin (a Tauri
- * `register_uri_scheme_protocol` serving that same renderer). Until that lands,
- * this module makes the failure HONEST instead of silent: it measures the actual
- * capability at runtime rather than guessing from user agent or config, so the
- * UI can say "scripts can't run here" exactly when that is true, and say nothing
- * when it isn't (web, dev server, any future artifact origin).
+ * Desktop now has that dedicated origin: the Tauri host registers the
+ * `artifact://` scheme (`register_artifact_sandbox_protocol` in
+ * `apps/desktop/src-tauri/src/lib.rs`, served by `ui/artifact_sandbox.rs`), and
+ * `getArtifactSandboxOrigin` in `artifact-sandbox.ts` routes previews there.
+ * This probe still guards every preview that renders same-document: it measures
+ * the actual capability at runtime rather than guessing from user agent or
+ * config, so the UI can say "scripts can't run here" exactly when that is true,
+ * and say nothing when it isn't (web, dev server, the artifact origin).
  *
  * The measurement is a real capability probe, not a heuristic: a hidden iframe
  * whose srcdoc contains ONE inline script, ours, never model content, that

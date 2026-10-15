@@ -16,11 +16,14 @@ import {
 } from '@agiworkforce/routing';
 import type { ChatHostBridge } from '../lib/hostBridge';
 import { toUserMessage } from '../lib/network-error';
+import { SteerRefusedError } from '../lib/runtime';
 import type {
+  AgentQuestion,
   ChatRuntime,
   CloudApprovalTurnProjection,
   CloudRunReattachment,
   LocalToolScope,
+  StreamEvent,
 } from '../lib/runtime';
 import type { Attachment, ChatMessage, MessageRouting } from '../lib/types';
 import { syncPackageStoreFromHost } from './useHostBridgeSync';
@@ -28,6 +31,10 @@ import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
 import { CLOUD_FALLBACK_MODELS, useModelStore } from '../stores/modelStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { defaultBrowserStorage, enqueuePrompt, getSendQueue } from '../queue/sendQueue';
+import { getFollowUps, resolveFollowUpState, useFollowUpStore } from '../queue/followUps';
+import { readTodoWriteItems, useTurnTodoStore } from '../components/TurnTodoPanel';
+import { useAgentQuestionStore } from '../components/AgentQuestionCard';
+import { useTurnNoticeStore } from '../components/TurnNotices';
 import { CONTINUE_GENERATION_INSTRUCTION, isMessageContinuable } from '../lib/continue-generation';
 import {
   classifyManagedQuotaErrorCode,
@@ -100,6 +107,38 @@ function getRoutingContext(
     }
   }
   return null;
+}
+
+function producesTurnOutput(event: StreamEvent): boolean {
+  switch (event.type) {
+    case 'content':
+      return event.content.trim() !== '';
+    case 'tool_call':
+    case 'tool_approval_request':
+    case 'artifact':
+      return true;
+    case 'generated_files':
+      return event.files.length > 0;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Whether a send was taken: as a turn that started, or as a follow-up the
+ * queue now holds. A send that was turned away has changed nothing, so whoever
+ * holds the text still has to keep it.
+ */
+export type TurnStart = { started: true } | { started: false; reason: string };
+
+const TURN_STARTED: TurnStart = { started: true };
+const NO_RUNTIME_REASON = 'This chat is not connected yet.';
+const REPLY_RUNNING_REASON = 'A reply is still running.';
+const NO_CONVERSATION_REASON = 'Open a conversation before sending a follow-up.';
+const SEND_QUEUE_EMPTY_REASON = 'The message could not be handed to the send queue.';
+
+function turnNotStarted(reason: string): TurnStart {
+  return { started: false, reason };
 }
 
 interface SendReplacement {
@@ -218,6 +257,23 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
     : aggregateIsStreaming;
   const isStreamingRef = useRef(false);
   isStreamingRef.current = isStreaming;
+  const consumedSteerIdsRef = useRef(new Set<string>());
+  const turnOutputRef = useRef(new Set<string>());
+  const withdrawingSteerIdsRef = useRef(new Set<string>());
+  const drainFollowUpsRef = useRef<(conversationId: string) => void>(() => {});
+
+  const placeSteeredMessage = useCallback(
+    (conversationId: string, followUpId: string, content: string) => {
+      useFollowUpStore.getState().remove(conversationId, followUpId);
+      const streamingId = assistantMessageIdsRef.current.get(conversationId);
+      if (streamingId) {
+        useChatStore.getState().updateMessage(conversationId, streamingId, { isStreaming: false });
+        assistantMessageIdsRef.current.delete(conversationId);
+      }
+      addMsg({ role: 'user', content }, conversationId);
+    },
+    [addMsg],
+  );
 
   useEffect(() => {
     if (!runtime?.onStream) return;
@@ -230,6 +286,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       if (!convId) return;
       assistantMessageIdRef.current = assistantMessageIdsRef.current.get(convId) ?? null;
       cloudAgentRunRef.current = cloudAgentRunsRef.current.get(convId) ?? null;
+      if (producesTurnOutput(event)) turnOutputRef.current.add(convId);
 
       switch (event.type) {
         case 'agent_run': {
@@ -362,9 +419,12 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
               )
             : undefined;
           const currentActivity = currentMessage?.metadata?.['agentActivity'] as
-            | AgentActivityState
-            | undefined;
+            AgentActivityState | undefined;
           const agentActivity = applyAgentActivityEvent(currentActivity, event.envelope);
+          if (event.envelope.event.type === 'tool-execution-start') {
+            const todos = readTodoWriteItems(event.envelope.event.name, event.envelope.event.input);
+            if (todos) useTurnTodoStore.getState().setTodos(convId, todos);
+          }
 
           if (!assistantMessageIdRef.current) {
             const id = crypto.randomUUID();
@@ -388,6 +448,8 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           break;
         }
         case 'tool_call': {
+          const todos = readTodoWriteItems(event.toolCall.name, event.toolCall.args);
+          if (todos) useTurnTodoStore.getState().setTodos(convId, todos);
           if (!assistantMessageIdRef.current) {
             const id = crypto.randomUUID();
             assistantMessageIdRef.current = id;
@@ -433,6 +495,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           break;
         }
         case 'tool_result': {
+          useAgentQuestionStore.getState().clear(convId);
           if (assistantMessageIdRef.current) {
             const msgs = store.messagesByConversation[convId];
             const msg = msgs?.find((m) => m.id === assistantMessageIdRef.current);
@@ -622,6 +685,27 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           }
           break;
         }
+        case 'question': {
+          useAgentQuestionStore.getState().ask(convId, event.question);
+          break;
+        }
+        case 'notice': {
+          useTurnNoticeStore.getState().add(convId, event.message);
+          break;
+        }
+        case 'steer_consumed': {
+          const followUps = useFollowUpStore.getState();
+          const steered = followUps.byConversation[convId]?.find(
+            (followUp) => followUp.steerId === event.steerId,
+          );
+          if (!steered) {
+            consumedSteerIdsRef.current.add(event.steerId);
+            break;
+          }
+          placeSteeredMessage(convId, steered.id, steered.content);
+          assistantMessageIdRef.current = null;
+          break;
+        }
         case 'research_status': {
           // Research phases stream long before the first content token, so the
           // placeholder has to be created here or the whole planning/searching
@@ -661,8 +745,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
                 (tc) => tc.status === 'awaiting_approval',
               );
               const currentActivity = msg.metadata?.['agentActivity'] as
-                | AgentActivityState
-                | undefined;
+                AgentActivityState | undefined;
               const completedActivity =
                 currentActivity &&
                 !awaitingApproval &&
@@ -711,9 +794,16 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
             assistantMessageIdRef.current = null;
           }
           store.stopStreaming(convId);
+          useAgentQuestionStore.getState().clear(convId);
+          if (!awaitingApproval) {
+            setTimeout(() => drainFollowUpsRef.current(convId), 0);
+          }
           break;
         }
         case 'error': {
+          useFollowUpStore.getState().hold(convId);
+          drainFollowUpsRef.current(convId);
+          useAgentQuestionStore.getState().clear(convId);
           const quotaBlock = classifyManagedQuotaErrorCode(event.code);
           if (quotaBlock && assistantMessageIdRef.current) {
             const blockedId = assistantMessageIdRef.current;
@@ -745,8 +835,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
             const current = store.messagesByConversation[convId]?.find((m) => m.id === failingId);
             const failureMessage = toUserMessage(event.error, 'Request failed');
             const currentActivity = current?.metadata?.['agentActivity'] as
-              | AgentActivityState
-              | undefined;
+              AgentActivityState | undefined;
             const stillRunning = current?.toolCalls?.some((t) => t.status === 'running');
             store.updateMessage(convId, failingId, {
               isStreaming: false,
@@ -800,9 +889,9 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
     });
 
     return unsubscribe;
-  }, [runtime, addMsg]);
+  }, [runtime, addMsg, placeSteeredMessage]);
 
-  const sendMessage = useCallback(
+  const startTurn = useCallback(
     (
       content: string,
       agentMode?: string,
@@ -815,8 +904,12 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       replacement?: SendReplacement,
       skillName?: string,
       localToolScope?: LocalToolScope,
-    ) => {
-      if (!runtime || isStreamingRef.current) return;
+    ): TurnStart => {
+      if (!runtime) return turnNotStarted(NO_RUNTIME_REASON);
+      const refuse = (reason: string): TurnStart => {
+        toast.error(reason);
+        return turnNotStarted(reason);
+      };
 
       const mediaModeState = useMediaModeStore.getState();
       const sendMediaKind = resolveSendMediaKind(mediaModeState.mediaMode, {
@@ -840,16 +933,13 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         CLOUD_FALLBACK_MODELS.find((model) => model.id === preflightModelState.selectedModelId);
 
       if (!executionMode || !selectedModel) {
-        toast.error('Select a model available for this conversation before sending.');
-        return;
+        return refuse('Select a model available for this conversation before sending.');
       }
       if (!isModelAdmittedForExecutionMode(selectedModel, executionMode)) {
-        toast.error('The selected model is not allowed for this conversation boundary.');
-        return;
+        return refuse('The selected model is not allowed for this conversation boundary.');
       }
       if (!isChatModelSelectable(selectedModel)) {
-        toast.error(selectedModel.unavailableReason ?? 'The selected model is not available.');
-        return;
+        return refuse(selectedModel.unavailableReason ?? 'The selected model is not available.');
       }
 
       let resolvedModelId = preflightModelState.selectedModelId;
@@ -863,8 +953,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       if (requiresRegistryAdmission) {
         const routingContext = getRoutingContext(runtime.getPlatform?.(), executionMode);
         if (!routingContext) {
-          toast.error('Model routing is not available for this runtime boundary.');
-          return;
+          return refuse('Model routing is not available for this runtime boundary.');
         }
 
         const priorMessages =
@@ -904,8 +993,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
             decision.code === 'unknown_selection' &&
             selectedModel.isByok;
           if (!isAdmittedDynamicByokModel) {
-            toast.error(`Model routing unavailable: ${decision.reasons[0] ?? decision.code}`);
-            return;
+            return refuse(`Model routing unavailable: ${decision.reasons[0] ?? decision.code}`);
           }
         } else {
           resolvedModelId = decision.modelKey;
@@ -937,13 +1025,14 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         enqueuePrompt(queue, content);
       } catch (err) {
         if (err instanceof QueueFullError) {
-          toast.error(`Queue is full (lane "${err.lane}"). Please wait for prior sends to drain.`);
-          return;
+          return refuse(
+            `Queue is full (lane "${err.lane}"). Please wait for prior sends to drain.`,
+          );
         }
         throw err;
       }
       const queued = queue.dequeue();
-      if (!queued) return;
+      if (!queued) return turnNotStarted(SEND_QUEUE_EMPTY_REASON);
 
       const store = useChatStore.getState();
 
@@ -977,12 +1066,13 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       const convId = useChatStore.getState().activeConversationId;
 
       if (!convId) {
-        toast.error('Failed to create conversation');
-        return;
+        return refuse('Failed to create conversation');
       }
 
       streamConvIdRef.current = convId;
       store.startStreaming(convId);
+      useTurnTodoStore.getState().clear(convId);
+      useTurnNoticeStore.getState().clear(convId);
 
       const systemPrompt = [
         getSystemPromptForMode(store.activeMode),
@@ -1035,6 +1125,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       cloudAgentRunRef.current = null;
       assistantMessageIdsRef.current.delete(convId);
       cloudAgentRunsRef.current.delete(convId);
+      turnOutputRef.current.delete(convId);
 
       const allMessages = store.messagesByConversation[convId] ?? [];
       const messageHistory = allMessages.map((m) => ({
@@ -1071,8 +1162,53 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         convId,
       );
 
-      void runtime
-        .sendMessage(convId, content, {
+      let supersededKey: string | null = null;
+      // A steer ends the first assistant row and the reply carries on in a new
+      // one, so output is whatever the conversation streamed during this turn.
+      const turnProducedOutput = () => {
+        if (turnOutputRef.current.has(convId)) return true;
+        const assistant = useChatStore
+          .getState()
+          .messagesByConversation[convId]?.find((candidate) => candidate.id === assistantMessageId);
+        return Boolean(
+          assistant &&
+          (assistant.content.trim() ||
+            assistant.toolCalls?.length ||
+            assistant.artifacts?.length ||
+            assistant.generatedFiles?.length),
+        );
+      };
+      const restoreReplaced = () => {
+        if (!replacement) return;
+        const replacedIds = new Set(replacement.snapshot.map((message) => message.id));
+        const failures = (useChatStore.getState().messagesByConversation[convId] ?? []).filter(
+          (message) =>
+            !replacedIds.has(message.id) &&
+            message.role === 'assistant' &&
+            message.metadata?.['finishReason'] === 'error',
+        );
+        useChatStore.getState().setMessages(convId, [...replacement.snapshot, ...failures]);
+      };
+      const settleSuperseded = (sendFailed: boolean) => {
+        const key = supersededKey;
+        if (key === null) return;
+        supersededKey = null;
+        if (!sendFailed && turnProducedOutput()) {
+          void runtime.releaseSupersededMessages?.(key).catch(() => {
+            // Releasing only frees memory held for a restore that is no longer needed.
+          });
+          return;
+        }
+        restoreReplaced();
+        void runtime.restoreSupersededMessages?.(key).catch((err: unknown) => {
+          toast.error(
+            toUserMessage(err, 'The replaced messages could not be put back in this chat.'),
+          );
+        });
+      };
+
+      const send = () =>
+        runtime.sendMessage(convId, content, {
           ...(systemPrompt ? { systemPrompt } : {}),
           model: resolvedModelId,
           ...(resolvedProvider ? { provider: resolvedProvider } : {}),
@@ -1093,9 +1229,22 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           ...(thinkingPolicy.effort ? { effort: thinkingPolicy.effort } : {}),
           ...(attachments && attachments.length > 0 ? { attachments } : {}),
           ...(sendMediaKind ? { mediaMode: sendMediaKind } : {}),
-        })
+        });
+      const sent =
+        replacement && replacement.messageIds.length > 0 && runtime.supersedeMessages
+          ? runtime.supersedeMessages(convId, replacement.messageIds).then((key) => {
+              supersededKey = key;
+              return send();
+            })
+          : send();
+
+      void sent
         .then(() => {
-          if (replacement && replacement.messageIds.length > 0) {
+          if (supersededKey !== null) {
+            settleSuperseded(false);
+            return;
+          }
+          if (replacement && replacement.messageIds.length > 0 && !runtime.supersedeMessages) {
             void runtime.deleteMessages?.(convId, replacement.messageIds).catch(() => {
               // A failed durable delete leaves at most a stale row that the
               // next reload reconciles; it must never fail the visible turn.
@@ -1104,10 +1253,9 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         })
         .catch((err: unknown) => {
           const message = toUserMessage(err, 'Failed to send message');
+          settleSuperseded(true);
+          restoreReplaced();
           const failedStore = useChatStore.getState();
-          if (replacement) {
-            failedStore.setMessages(convId, replacement.snapshot);
-          }
           const failedAssistant = replacement
             ? undefined
             : failedStore.messagesByConversation[convId]?.find(
@@ -1115,8 +1263,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
               );
           if (failedAssistant?.isStreaming) {
             const currentActivity = failedAssistant.metadata?.['agentActivity'] as
-              | AgentActivityState
-              | undefined;
+              AgentActivityState | undefined;
             failedStore.updateMessage(convId, assistantMessageId, {
               isStreaming: false,
               error: message || 'Failed to send message',
@@ -1152,8 +1299,224 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
             useChatStore.getState().stopStreaming(convId);
           }
         });
+      return TURN_STARTED;
     },
     [runtime, addMsg],
+  );
+
+  const sendMessage = useCallback(
+    (...args: Parameters<typeof startTurn>): TurnStart => {
+      if (!runtime) return turnNotStarted(NO_RUNTIME_REASON);
+      if (isStreamingRef.current) return turnNotStarted(REPLY_RUNNING_REASON);
+      const conversationId = useChatStore.getState().activeConversationId;
+      if (conversationId) useFollowUpStore.getState().release(conversationId);
+      return startTurn(...args);
+    },
+    [runtime, startTurn],
+  );
+
+  /**
+   * The follow-up leaves the queue only once its turn has started. A send the
+   * preflight turned away keeps the text, with why, and waits for the user.
+   */
+  const sendFollowUpById = useCallback(
+    (conversationId: string, followUpId: string) => {
+      const followUp = getFollowUps(conversationId).find((item) => item.id === followUpId);
+      if (!followUp || followUp.state !== 'queued') return;
+      const start = startTurn(...(followUp.args as Parameters<typeof startTurn>));
+      const followUpStore = useFollowUpStore.getState();
+      if (!start.started) {
+        followUpStore.update(conversationId, followUpId, { heldReason: start.reason });
+        return;
+      }
+      followUpStore.remove(conversationId, followUpId);
+      followUpStore.release(conversationId);
+    },
+    [startTurn],
+  );
+
+  const withdrawSteeredFollowUps = useCallback(
+    async (conversationId: string) => {
+      const followUpStore = useFollowUpStore.getState();
+      for (const followUp of getFollowUps(conversationId)) {
+        const steerId = followUp.steerId;
+        if (followUp.state !== 'steering' || !steerId) continue;
+        if (withdrawingSteerIdsRef.current.has(steerId)) continue;
+        if (!runtime?.withdrawSteer) {
+          // The runtime took the message and cannot be asked whether it read
+          // it, so it stays for the user to send or remove.
+          followUpStore.update(conversationId, followUp.id, { state: 'queued' });
+          followUpStore.hold(conversationId);
+          continue;
+        }
+        withdrawingSteerIdsRef.current.add(steerId);
+        try {
+          const unread = await runtime.withdrawSteer(conversationId, steerId);
+          if (unread) {
+            followUpStore.update(conversationId, followUp.id, {
+              state: 'queued',
+              steerId: undefined,
+            });
+          } else {
+            followUpStore.remove(conversationId, followUp.id);
+          }
+        } catch {
+          // The runtime may still hold the message, so the queue waits for the
+          // user instead of sending it again; keeping steerId lets a late
+          // steer_consumed place it.
+          followUpStore.update(conversationId, followUp.id, { state: 'queued' });
+          followUpStore.hold(conversationId);
+        } finally {
+          withdrawingSteerIdsRef.current.delete(steerId);
+        }
+      }
+    },
+    [runtime],
+  );
+
+  const drainFollowUps = useCallback(
+    async (conversationId: string) => {
+      const held = useFollowUpStore.getState().held[conversationId];
+      // A steer belongs to the running turn until it ends, by done, stop or
+      // error. Opening a chat whose reply is still streaming must leave it be.
+      if (!held && useChatStore.getState().streamingConversationIds[conversationId]) return;
+      await withdrawSteeredFollowUps(conversationId);
+      if (useFollowUpStore.getState().held[conversationId]) return;
+      const chat = useChatStore.getState();
+      if (chat.activeConversationId !== conversationId) return;
+      if (chat.streamingConversationIds[conversationId]) return;
+      if (!runtime?.supportsConcurrentTurns && chat.isStreaming) return;
+      const next = getFollowUps(conversationId).find(
+        (item) => item.state === 'queued' && item.heldReason === undefined,
+      );
+      if (next) sendFollowUpById(conversationId, next.id);
+    },
+    [runtime, sendFollowUpById, withdrawSteeredFollowUps],
+  );
+  drainFollowUpsRef.current = (conversationId) => {
+    void drainFollowUps(conversationId);
+  };
+
+  useEffect(() => {
+    if (activeConversationId) drainFollowUpsRef.current(activeConversationId);
+  }, [activeConversationId]);
+
+  const queueFollowUp = useCallback(
+    (args: Parameters<typeof startTurn>, invert = false): TurnStart => {
+      const conversationId = useChatStore.getState().activeConversationId;
+      if (!runtime) return turnNotStarted(NO_RUNTIME_REASON);
+      if (!conversationId) return turnNotStarted(NO_CONVERSATION_REASON);
+      const [content, , , attachments] = args;
+      const followUpStore = useFollowUpStore.getState();
+      const state = resolveFollowUpState(
+        useSettingsStore.getState().followUpQueueMode,
+        invert,
+        Boolean(runtime.steer) && !attachments?.length,
+      );
+      const id = crypto.randomUUID();
+      followUpStore.add(conversationId, { id, content, state, args });
+      if (state !== 'steering' || !runtime.steer) return TURN_STARTED;
+      runtime
+        .steer(conversationId, content)
+        .then((steered) => {
+          if (consumedSteerIdsRef.current.delete(steered.id)) {
+            placeSteeredMessage(conversationId, id, content);
+            return;
+          }
+          if (!getFollowUps(conversationId).some((item) => item.id === id)) {
+            void runtime.withdrawSteer?.(conversationId, steered.id).then(
+              (withdrawn) => {
+                if (!withdrawn) toast.info('The reply already read that message.');
+              },
+              (err: unknown) => {
+                toast.error(toUserMessage(err, 'Could not take the message back.'));
+              },
+            );
+            return;
+          }
+          useFollowUpStore.getState().update(conversationId, id, { steerId: steered.id });
+          if (!useChatStore.getState().streamingConversationIds[conversationId]) {
+            drainFollowUpsRef.current(conversationId);
+          }
+        })
+        .catch((err: unknown) => {
+          if (err instanceof SteerRefusedError) {
+            useFollowUpStore
+              .getState()
+              .update(conversationId, id, { state: 'queued', heldReason: err.reason });
+            toast.error(err.reason);
+          } else {
+            useFollowUpStore.getState().update(conversationId, id, { state: 'queued' });
+            toast.error(
+              toUserMessage(err, 'Could not steer the reply; it will send when the reply ends.'),
+            );
+          }
+          if (!useChatStore.getState().streamingConversationIds[conversationId]) {
+            drainFollowUpsRef.current(conversationId);
+          }
+        });
+      return TURN_STARTED;
+    },
+    [runtime, placeSteeredMessage],
+  );
+
+  const editFollowUp = useCallback((id: string, content: string) => {
+    const conversationId = useChatStore.getState().activeConversationId;
+    if (!conversationId) return;
+    const followUp = getFollowUps(conversationId).find((item) => item.id === id);
+    if (!followUp || followUp.state !== 'queued') return;
+    const args = [...followUp.args];
+    args[0] = content;
+    useFollowUpStore
+      .getState()
+      .update(conversationId, id, { content, args, heldReason: undefined });
+  }, []);
+
+  const removeFollowUp = useCallback(
+    (id: string) => {
+      const conversationId = useChatStore.getState().activeConversationId;
+      if (!conversationId) return;
+      const followUp = getFollowUps(conversationId).find((item) => item.id === id);
+      if (!followUp) return;
+      if (followUp.state === 'steering' && followUp.steerId && runtime?.withdrawSteer) {
+        void runtime
+          .withdrawSteer(conversationId, followUp.steerId)
+          .then((withdrawn) => {
+            if (withdrawn) {
+              useFollowUpStore.getState().remove(conversationId, id);
+            } else {
+              toast.info('The reply already read that message.');
+            }
+          })
+          .catch((err: unknown) => {
+            toast.error(toUserMessage(err, 'Could not take the message back.'));
+          });
+        return;
+      }
+      useFollowUpStore.getState().remove(conversationId, id);
+    },
+    [runtime],
+  );
+
+  const answerQuestion = useCallback(
+    async (question: AgentQuestion, answer: string | string[]) => {
+      const conversationId = useChatStore.getState().activeConversationId;
+      if (!runtime?.answerQuestion || !conversationId) {
+        throw new Error('This chat cannot answer the agent here.');
+      }
+      await runtime.answerQuestion(question.id, answer);
+      useAgentQuestionStore.getState().clear(conversationId, question.id);
+    },
+    [runtime],
+  );
+
+  const sendFollowUpNow = useCallback(
+    (id: string) => {
+      const conversationId = useChatStore.getState().activeConversationId;
+      if (!conversationId || isStreamingRef.current) return;
+      sendFollowUpById(conversationId, id);
+    },
+    [sendFollowUpById],
   );
 
   const stopGeneration = useCallback(() => {
@@ -1162,7 +1525,10 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       ? currentStore.activeConversationId
       : streamConvIdRef.current;
     if (runtime && convId) {
+      useFollowUpStore.getState().hold(convId);
+      useAgentQuestionStore.getState().clear(convId);
       runtime.stopGeneration(convId);
+      drainFollowUpsRef.current(convId);
       const partialId = assistantMessageIdsRef.current.get(convId) ?? null;
       if (runtime.supportsContinueGeneration && partialId) {
         const store = useChatStore.getState();
@@ -1309,8 +1675,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       const decision = getRegenerateReplayDecision({
         userMetadata: userMessage.metadata as RegenerateReplayMetadata | undefined,
         assistantMetadata: messages.find((m) => m.id === assistantMessageId)?.metadata as
-          | RegenerateReplayMetadata
-          | undefined,
+          RegenerateReplayMetadata | undefined,
       });
       if (!decision.ok) {
         toast.error(decision.message);
@@ -1320,7 +1685,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       const snapshot = messages.map((message) => ({ ...message }));
       store.setMessages(convId, messages.slice(0, plan.userIndex));
 
-      sendMessage(
+      const start = sendMessage(
         userMessage.content,
         undefined,
         undefined,
@@ -1337,6 +1702,45 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         undefined,
         decision.replay?.webSearchEnabled ? 'web_search' : undefined,
       );
+      if (!start.started) store.setMessages(convId, snapshot);
+    },
+    [runtime, sendMessage],
+  );
+
+  /**
+   * Re-runs a turn the app closed before finishing. The question it left with
+   * no reply is resent in its place, so history keeps one copy of it.
+   */
+  const retryInterruptedTurn = useCallback(
+    (content: string) => {
+      if (!runtime || isStreamingRef.current) return;
+      const store = useChatStore.getState();
+      const convId = store.activeConversationId;
+      if (!convId) return;
+      const messages = store.messagesByConversation[convId] ?? [];
+      const last = messages[messages.length - 1];
+      const isOrphan =
+        last?.role === 'user' &&
+        !last.attachments?.length &&
+        last.content.trim().startsWith(content.trim());
+      if (!last || !isOrphan || !runtime.deleteMessages) {
+        sendMessage(content);
+        return;
+      }
+      const snapshot = messages.map((message) => ({ ...message }));
+      store.setMessages(convId, messages.slice(0, -1));
+      const start = sendMessage(
+        last.content,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { messageIds: [last.id], snapshot },
+      );
+      if (!start.started) store.setMessages(convId, snapshot);
     },
     [runtime, sendMessage],
   );
@@ -1366,8 +1770,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       const decision = getRegenerateReplayDecision({
         userMetadata: userMessage.metadata as RegenerateReplayMetadata | undefined,
         assistantMetadata: messages[plan.userIndex + 1]?.metadata as
-          | RegenerateReplayMetadata
-          | undefined,
+          RegenerateReplayMetadata | undefined,
       });
       if (!decision.ok) {
         toast.error(decision.message);
@@ -1377,7 +1780,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       const snapshot = messages.map((message) => ({ ...message }));
       store.setMessages(convId, messages.slice(0, plan.userIndex));
 
-      sendMessage(
+      const start = sendMessage(
         trimmed,
         undefined,
         undefined,
@@ -1394,6 +1797,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         undefined,
         decision.replay?.webSearchEnabled ? 'web_search' : undefined,
       );
+      if (!start.started) store.setMessages(convId, snapshot);
     },
     [runtime, sendMessage],
   );
@@ -1605,6 +2009,12 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
     : false;
   return {
     sendMessage,
+    queueFollowUp,
+    editFollowUp,
+    removeFollowUp,
+    sendFollowUpNow,
+    answerQuestion,
+    retryInterruptedTurn,
     stopGeneration,
     continueGeneration,
     regenerate,

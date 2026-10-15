@@ -93,6 +93,8 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
           resolveLimit: () => propsRef.current.maxLength ?? null,
           resolveSendShortcut: () => propsRef.current.sendShortcut ?? DEFAULT_SEND_SHORTCUT,
           onSubmit: () => propsRef.current.onSubmit?.(),
+          onAlternateSubmit: () =>
+            (propsRef.current.onAlternateSubmit ?? propsRef.current.onSubmit)?.(),
           isMenuActive: () => propsRef.current.isSlashMenuActive?.() ?? false,
           onMenuKey: (key) => propsRef.current.onSlashMenuKey?.(key) ?? false,
         }),

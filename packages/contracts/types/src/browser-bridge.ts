@@ -197,17 +197,10 @@ export function extensionIdFromLaunchOrigin(origin: string | undefined): string 
   return isValidExtensionId(parsed.hostname) ? parsed.hostname : null;
 }
 
-/**
- * Desktop-initiated page work.
- *
- * The extension asks for work (`NATIVE_BROWSER_POLL_MESSAGE`) and reports back
- * (`NATIVE_BROWSER_RESULT_MESSAGE`) rather than the host pushing: the
- * extension's native client only ever resolves responses to its own requests,
- * so a push would be dropped on the floor. Both message types are versioned
- * because the Rust host predates them and answers an error to either.
- */
+/** The native client consumes responses to its requests, not unsolicited pushes. */
 export const NATIVE_BROWSER_POLL_MESSAGE = 'desktop_browser_poll';
 export const NATIVE_BROWSER_RESULT_MESSAGE = 'desktop_browser_result';
+export const NATIVE_BROWSER_COMMAND_WATCH_MESSAGE = 'desktop_browser_command_watch';
 
 /**
  * The browser telling the shell it is no longer paired.

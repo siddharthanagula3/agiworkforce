@@ -78,6 +78,20 @@ export interface ArtifactCloudUnavailablePublishResult {
 export type ArtifactPublishResult =
   ArtifactLocalPublishResult | ArtifactCloudPublishResult | ArtifactCloudUnavailablePublishResult;
 
+/**
+ * An action the host can carry out on the artifact on screen, listed in the
+ * panel's options menu after Download and Publish. With `confirm`, the panel
+ * asks first and names the consequence, for actions that cannot be undone.
+ * The host reports its own success and failure.
+ */
+export interface ArtifactPanelHostAction {
+  id: string;
+  label: string;
+  destructive?: boolean;
+  confirm?: { title: string; description: string; confirmLabel: string };
+  onSelect: (artifact: Artifact) => void | Promise<void>;
+}
+
 export interface ArtifactPanelProps {
   artifact: Artifact | null;
   viewMode: 'preview' | 'code';
@@ -88,6 +102,7 @@ export interface ArtifactPanelProps {
   onRestoreVersion?: (version: Artifact) => Promise<void>;
   onSaveEdit?: (artifactId: string, content: string) => void | Promise<void>;
   publishArtifact?: () => Promise<ArtifactPublishResult>;
+  hostActions?: readonly ArtifactPanelHostAction[];
 }
 
 function getTypeLabel(artifact: Artifact): string {
@@ -236,9 +251,13 @@ function CodeView({ content }: { content: string }) {
 function DropdownMenu({
   onDownload,
   onPublish,
+  hostActions = [],
+  onHostAction,
 }: {
   onDownload: () => void;
   onPublish: () => void;
+  hostActions?: readonly ArtifactPanelHostAction[];
+  onHostAction: (action: ArtifactPanelHostAction) => void;
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -270,7 +289,7 @@ function DropdownMenu({
             role="menu"
             aria-label="Artifact options"
             className={cn(
-              'absolute end-0 top-full mt-1 z-[var(--z-content-sticky)] min-w-[140px]',
+              'absolute end-0 top-full mt-1 z-[var(--z-dropdown)] min-w-[140px]',
               'rounded-md border border-[var(--chat-border)]',
               'bg-[var(--chat-surface-elevated)] shadow-lg',
               'py-1',
@@ -308,6 +327,26 @@ function DropdownMenu({
               <Globe size={13} />
               Publish
             </button>
+            {hostActions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                role="menuitem"
+                className={cn(
+                  'flex w-full items-center gap-2 px-3 py-1.5 text-sm',
+                  'hover:bg-[var(--chat-surface-hover)] transition-colors',
+                  action.destructive
+                    ? 'text-[var(--chat-destructive-text)]'
+                    : 'text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)]',
+                )}
+                onClick={() => {
+                  close();
+                  onHostAction(action);
+                }}
+              >
+                {action.label}
+              </button>
+            ))}
           </div>
         </>
       )}
@@ -325,6 +364,7 @@ export function ArtifactPanel({
   onRestoreVersion,
   onSaveEdit,
   publishArtifact: publishArtifactProp,
+  hostActions,
 }: ArtifactPanelProps) {
   const { confirm: confirmAction, dialog: confirmDialog } = useConfirmAction();
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -704,7 +744,24 @@ export function ArtifactPanel({
             <Copy size={13} />
           </Button>
 
-          <DropdownMenu onDownload={handleDownload} onPublish={handlePublish} />
+          <DropdownMenu
+            onDownload={handleDownload}
+            onPublish={handlePublish}
+            hostActions={artifact ? hostActions : undefined}
+            onHostAction={(action) => {
+              if (!artifact) return;
+              const run = () => action.onSelect(artifact);
+              if (action.confirm) {
+                confirmAction({
+                  ...action.confirm,
+                  destructive: action.destructive,
+                  onConfirm: run,
+                });
+              } else {
+                void run();
+              }
+            }}
+          />
 
           {onSaveEdit && !isEditing ? (
             <Button

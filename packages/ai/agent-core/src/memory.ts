@@ -183,9 +183,20 @@ export function parseExplicitMemoryCommand(message: string): ExplicitMemoryComma
   return null;
 }
 
+const INLINED_CONTENT_PATTERNS: readonly RegExp[] = [
+  /<([a-z][\w.-]*)>\n<!--[^\n]*-->\n[\s\S]*?(?:\n<\/\1>|$)/giu,
+  /(?:(?:^|\n)(?=[^\n]*\buntrusted\b)[^\n]*\n)?<(untrusted_[a-z][a-z_]*)\b[^>]*>[\s\S]*?(?:<\/\1>|$)/giu,
+  /<(file|directory|stdin)\b[^>\n]*>\n[\s\S]*?(?:\n<\/\1>|$)/giu,
+  /(`{3,}|~{3,})[\s\S]*?(?:\1|$)/gu,
+];
+
+function withoutInlinedContent(message: string): string {
+  return INLINED_CONTENT_PATTERNS.reduce((text, pattern) => text.replace(pattern, '\n'), message);
+}
+
 export function passiveMemoryText(message: string, rememberAnswered: boolean): string {
   if (!message || typeof message !== 'string') return '';
-  return splitMemorySentences(message)
+  return splitMemorySentences(withoutInlinedContent(message))
     .filter((sentence) => {
       const command = matchExplicitCommand(sentence);
       return command === null || (command.kind === 'remember' && !rememberAnswered);
@@ -351,6 +362,7 @@ export type MemoryFactExtractionFallbackReason =
 
 export interface ModelMemoryExtractionOptions {
   runner: MemoryFactExtractionRunner;
+  systemPrompt?: string;
   timeoutMs?: number;
   maxFacts?: number;
   /** Reported for every path that did not use the model, so hosts can log why. */
@@ -516,7 +528,7 @@ export async function extractMemoryFactsWithModel(
     raw = await Promise.race([
       options.runner(
         {
-          systemPrompt: MEMORY_FACT_EXTRACTION_SYSTEM_PROMPT,
+          systemPrompt: options.systemPrompt ?? MEMORY_FACT_EXTRACTION_SYSTEM_PROMPT,
           message: message.slice(0, MAX_MEMORY_EXTRACTION_SOURCE_CHARS),
         },
         controller.signal,

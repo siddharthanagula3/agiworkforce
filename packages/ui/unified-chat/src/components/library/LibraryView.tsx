@@ -1622,7 +1622,7 @@ function LibraryList(props: LibraryListProps) {
 }
 
 const MENU_PANEL_CLASS =
-  'absolute end-0 z-[var(--z-content-sticky)] mt-1 min-w-44 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] p-1 shadow-[var(--chat-shadow-lg)]';
+  'absolute end-0 z-[var(--z-dropdown)] mt-1 min-w-44 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] p-1 shadow-[var(--chat-shadow-lg)]';
 
 const MENU_TRIGGER_CLASS =
   'flex h-8 w-8 items-center justify-center rounded-sm border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';

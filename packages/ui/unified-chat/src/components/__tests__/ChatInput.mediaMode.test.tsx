@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatInput, type ChatInputProps } from '../ChatInput';
+import { COMPOSER_SEND_ACCEPTED, ChatInput, type ChatInputProps } from '../ChatInput';
 import { useChatStore } from '../../stores/chatStore';
 import { useMediaModeStore } from '../../stores/mediaModeStore';
 import { useModelStore } from '../../stores/modelStore';
@@ -8,7 +8,7 @@ import { useModelStore } from '../../stores/modelStore';
 function renderComposer(overrides: Partial<ChatInputProps> = {}) {
   render(
     <ChatInput
-      onSend={vi.fn()}
+      onSend={vi.fn(() => COMPOSER_SEND_ACCEPTED)}
       onStop={vi.fn()}
       onModelSelectorClick={vi.fn()}
       hasMessages={false}

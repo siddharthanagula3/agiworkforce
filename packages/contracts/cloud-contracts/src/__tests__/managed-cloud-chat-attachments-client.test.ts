@@ -4,6 +4,64 @@ import { MAX_CHAT_ATTACHMENT_MESSAGE_BYTES, chatAttachmentSizeLabel } from '../c
 import { createManagedCloudChatAttachmentsClient } from '../managed-cloud-chat-attachments-client';
 
 describe('createManagedCloudChatAttachmentsClient', () => {
+  it('accepts a HTTP upload proxy only on the exact configured loopback origin', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          storageKey: 'owned/fixture.txt',
+          uploadUrl: 'http://localhost:3000/api/uploads/chat-attachment/put',
+          uploadMethod: 'PUT',
+          uploadHeaders: {},
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          attachment: {
+            id: '00000000-0000-4000-8000-000000000001',
+            name: 'fixture.txt',
+            mimeType: 'text/plain',
+            byteCount: 1,
+            type: 'file',
+            url: '/api/files/00000000-0000-4000-8000-000000000001',
+          },
+        }),
+      );
+    const uploadFetchImpl = vi.fn(async () => Response.json({ success: true }));
+    const client = createManagedCloudChatAttachmentsClient({
+      baseUrl: 'http://localhost:3000',
+      fetchImpl,
+      uploadFetchImpl,
+    });
+    await expect(
+      client.upload([new File(['x'], 'fixture.txt', { type: 'text/plain' })]),
+    ).resolves.toHaveLength(1);
+    expect(uploadFetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['http://localhost:3000', 'http://localhost:3001/private'],
+    ['http://localhost:3000', 'http://127.0.0.1:3000/private'],
+    ['http://localhost:3000', 'http://localhost.untrusted.example:3000/private'],
+    ['http://localhost:3000', 'http://user:password@localhost:3000/private'],
+    ['http://remote.example', 'http://remote.example/private'],
+  ])('refuses an insecure upload outside %s at %s', async (baseUrl, uploadUrl) => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        storageKey: 'owned/fixture.txt',
+        uploadUrl,
+        uploadMethod: 'PUT',
+        uploadHeaders: {},
+      }),
+    );
+    const uploadFetchImpl = vi.fn();
+    const client = createManagedCloudChatAttachmentsClient({ baseUrl, fetchImpl, uploadFetchImpl });
+    await expect(
+      client.upload([new File(['x'], 'fixture.txt', { type: 'text/plain' })]),
+    ).rejects.toThrow('insecure upload');
+    expect(uploadFetchImpl).not.toHaveBeenCalled();
+  });
+
   it('propagates cancellation through the presign request and stops before storage upload', async () => {
     const controller = new AbortController();
     let capturedSignal: AbortSignal | null | undefined;

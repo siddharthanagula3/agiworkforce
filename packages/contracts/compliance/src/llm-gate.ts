@@ -1,4 +1,3 @@
-
 import { isDisclosureSatisfied, type DisclosureLedger } from './article50-disclosure';
 import { isProviderRoutingAllowed, type ConsentLedger } from './provider-jurisdiction';
 
@@ -14,9 +13,11 @@ export class Article50DisclosureRequiredError extends Error {
   }
 }
 
+export const CHINESE_HQ_PROVIDER_NOT_OPTED_IN_CODE = 'cn_hq_provider_not_opted_in' as const;
+
 export class ChineseHqProviderNotOptedInError extends Error {
   override readonly name = 'ChineseHqProviderNotOptedInError' as const;
-  readonly code = 'cn_hq_provider_not_opted_in' as const;
+  readonly code = CHINESE_HQ_PROVIDER_NOT_OPTED_IN_CODE;
   readonly providerId: string;
 
   constructor(providerId: string) {

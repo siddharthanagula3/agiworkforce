@@ -45,6 +45,7 @@
   },
   "selector": {
     "bestAuto": "Migliore (automatico)",
+    "byokProviderPrefix": "Chiave {{provider}}",
     "capabilitiesUnverified": "Capacità non verificate",
     "catalogFailed": "Impossibile aggiornare i modelli",
     "catalogFailedHint": "Controlla la connessione di runtime e riprova.",
@@ -82,6 +83,8 @@
     "thinkingOff": "Disattivato",
     "thinkingState": "Pensiero: {{state}}",
     "unavailable": "Non disponibile",
+    "useYourApiKey": "Usa un modello con la tua chiave API",
+    "useYourApiKeyHint": "Apre una chat BYOK separata. Questa chat locale resta su questo dispositivo.",
     "visionCapability": "Visione"
   },
   "counts": {

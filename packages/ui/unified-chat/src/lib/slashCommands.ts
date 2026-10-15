@@ -114,6 +114,8 @@ export interface SlashCommand {
   category?: string;
   handler?: (args: string, ctx: SlashCommandContext) => void | Promise<void>;
   requiresConversation?: boolean;
+  /** Host method the command calls; a typed command runs only when the host has it. */
+  hostCapability?: string;
 }
 
 export interface SlashCommandContext {
@@ -172,6 +174,25 @@ export function listSlashCommands(filter?: {
   return out;
 }
 
+/**
+ * A message typed as `/name args` that names a registered command the host
+ * can run. Anything else, including commands without a host capability such
+ * as `/image`, is left to be sent as text.
+ */
+export function resolveTypedSlashCommand(
+  input: string,
+  host: Record<string, unknown>,
+  conversationId: string | null,
+): { command: SlashCommand; args: string } | null {
+  const parsed = parseSlashCommand(input.trim());
+  if (!parsed) return null;
+  const command = getSlashCommand(parsed.name);
+  if (!command?.handler || !command.hostCapability) return null;
+  if (typeof host[command.hostCapability] !== 'function') return null;
+  if (command.requiresConversation && !conversationId) return null;
+  return { command, args: parsed.args };
+}
+
 export function clearSlashCommands(): void {
   registry.clear();
 }
@@ -179,6 +200,7 @@ export function clearSlashCommands(): void {
 export function registerBuiltinSlashCommands(): void {
   registerSlashCommand({
     name: 'rewind',
+    hostCapability: 'openRewindTimeline',
     description: 'Open the rewind timeline to fork from a prior message',
     argsHint: '[messageId]',
     category: 'control-flow',
@@ -207,8 +229,7 @@ export function registerBuiltinSlashCommands(): void {
       category: 'control-flow',
       handler: (_args, ctx) => {
         const host = ctx.host as
-          | { toggleMediaMode?: (kind: 'image' | 'video') => void }
-          | undefined;
+          { toggleMediaMode?: (kind: 'image' | 'video') => void } | undefined;
         host?.toggleMediaMode?.(kind);
       },
     });
@@ -216,17 +237,41 @@ export function registerBuiltinSlashCommands(): void {
 
   registerSlashCommand({
     name: 'clear',
+    hostCapability: 'clearConversation',
     description: 'Clear the current conversation',
     category: 'control-flow',
     requiresConversation: true,
     handler: (_args, ctx) => {
       const host = ctx.host as { clearConversation?: (id: string | null) => void } | undefined;
-      host?.clearConversation?.(ctx.conversationId);
+      if (!host?.clearConversation) {
+        throw new Error('This app cannot clear the conversation.');
+      }
+      host.clearConversation(ctx.conversationId);
+    },
+  });
+
+  registerSlashCommand({
+    name: 'compact',
+    hostCapability: 'compactConversation',
+    description: 'Summarize older messages to free up context',
+    argsHint: '[code|decisions|errors|debug|todo]',
+    category: 'memory',
+    requiresConversation: true,
+    handler: (args, ctx) => {
+      const host = ctx.host as
+        | { compactConversation?: (conversationId: string, focus?: string) => Promise<void> }
+        | undefined;
+      if (!host?.compactConversation || !ctx.conversationId) {
+        throw new Error('This app cannot compact the conversation.');
+      }
+      const focus = args.trim();
+      return host.compactConversation(ctx.conversationId, focus.length > 0 ? focus : undefined);
     },
   });
 
   registerSlashCommand({
     name: 'model',
+    hostCapability: 'setModel',
     description: 'Switch the active model',
     argsHint: '<model-id>',
     category: 'control-flow',

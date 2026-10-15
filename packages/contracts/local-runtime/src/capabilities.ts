@@ -16,18 +16,13 @@ export const DESKTOP_CAPABILITIES = [
   'git.destructive',
   'browser.site',
   'browser.cdp',
-  'screen.capture',
   'computer.use',
   'application.control',
+  'screen.capture',
   'clipboard.read',
-  'clipboard.monitor',
   'microphone',
-  'simulator.ios',
-  'emulator.android',
-  'mcp.local',
   'local.inference',
   'host.remote',
-  'task.scheduled',
 ] as const;
 
 export type DesktopCapability = (typeof DESKTOP_CAPABILITIES)[number];
@@ -40,7 +35,7 @@ export type PermissionScopeKind = 'workspace' | 'application' | 'site' | 'global
 
 export interface PermissionScope {
   kind: PermissionScopeKind;
-  /** Workspace root id, bundle/executable id, or site origin. Absent for `global`. */
+  /** Approved folder path, bundle/executable id, or site origin. Absent for `global`. */
   target?: string;
 }
 
@@ -72,13 +67,33 @@ export const HIGH_RISK_CAPABILITIES: readonly DesktopCapability[] = [
   'git.destructive',
   'computer.use',
   'application.control',
-  'clipboard.monitor',
   'browser.cdp',
   'host.remote',
 ];
 
 export function isHighRiskCapability(capability: DesktopCapability): boolean {
   return HIGH_RISK_CAPABILITIES.includes(capability);
+}
+
+export const PERMISSION_COMMANDS = ['permission_review', 'permission_revoke'] as const;
+
+export type PermissionCommand = (typeof PERMISSION_COMMANDS)[number];
+
+const PERMISSION_SCOPE_KINDS: readonly PermissionScopeKind[] = [
+  'workspace',
+  'application',
+  'site',
+  'global',
+];
+
+export function isPermissionScope(value: unknown): value is PermissionScope {
+  if (!value || typeof value !== 'object') return false;
+  const { kind, target } = value as { kind?: unknown; target?: unknown };
+  if (typeof kind !== 'string' || !(PERMISSION_SCOPE_KINDS as readonly string[]).includes(kind)) {
+    return false;
+  }
+  if (kind === 'global') return target === undefined;
+  return typeof target === 'string' && target !== '';
 }
 
 export function permissionScopeKey(scope: PermissionScope): string {

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button, translateUiPlural, useUiTranslation } from '@agiworkforce/ui';
-import { ActionBar } from './ActionBar';
+import { ActionBar, type MessageActionSlots } from './ActionBar';
 import { ThinkingBlock } from './ThinkingBlock';
 import { LegacyWebSearchCard } from './WebSearchCard';
 import { CitationPill } from './CitationPill';
@@ -32,6 +32,7 @@ import { MessageLimitCard, readMessagePaywall } from './MessageLimitCard';
 import { artifactDownloadFile } from '../lib/artifact-download';
 import { getStreamErrorNotice } from '../lib/continue-generation';
 import { useHostBridge } from '../lib/hostBridge';
+import { collectTurnCitations } from '../lib/turnCitations';
 import type {
   ChatMessage,
   Artifact,
@@ -63,6 +64,8 @@ interface MessageBubbleProps {
    */
   artifactProjection?: MessageArtifactProjection | null;
   onEdit?: (messageId: string, newContent: string) => void;
+  /** Optional actions the host can carry out; each stays hidden when absent. */
+  actionSlots?: MessageActionSlots;
 }
 
 function readTrimmedMetadataFields(message: ChatMessage): string[] {
@@ -650,6 +653,7 @@ export function MessageBubble({
   onResendApproval,
   artifactProjection,
   onEdit,
+  actionSlots,
 }: MessageBubbleProps) {
   const { t } = useUiTranslation('chat');
   const isUser = message.role === 'user';
@@ -657,6 +661,15 @@ export function MessageBubble({
   const [editDraft, setEditDraft] = useState<string | null>(null);
   const canonicalActivity = message.metadata?.['agentActivity'] as AgentActivityState | undefined;
   const canonicalOwnsToolActivity = hasCanonicalToolActivity(canonicalActivity);
+  const turnCitations = useMemo(
+    () =>
+      message.citations?.length
+        ? message.citations
+        : canonicalActivity
+          ? collectTurnCitations(canonicalActivity, message.webSearchResults)
+          : [],
+    [message.citations, canonicalActivity, message.webSearchResults],
+  );
   const [copied, setCopied] = useState(false);
   const renderedArtifacts = artifactProjection?.artifacts ?? message.artifacts;
   const bodyContent = artifactProjection?.displayContent ?? message.content;
@@ -819,10 +832,9 @@ export function MessageBubble({
         )}
       </div>
 
-      {/* Citations, rendered below text content */}
-      {message.citations && message.citations.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-1">
-          {message.citations.map((citation, idx) => (
+      {turnCitations.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-1" data-testid="message-citations">
+          {turnCitations.map((citation, idx) => (
             <CitationPill key={citation.id ?? idx} citation={citation} />
           ))}
         </div>
@@ -959,7 +971,13 @@ export function MessageBubble({
       )}
 
       {!isStreaming && (
-        <ActionBar messageId={message.id} content={message.content} onRetry={onRetry} />
+        <ActionBar
+          messageId={message.id}
+          content={message.content}
+          model={message.model}
+          onRetry={onRetry}
+          slots={actionSlots}
+        />
       )}
     </div>
   );

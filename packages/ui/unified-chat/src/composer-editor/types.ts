@@ -60,6 +60,7 @@ export interface ComposerEditorProps {
   mention?: ComposerMentionConfig;
   onTextChange?: (text: string) => void;
   onSubmit?: () => void;
+  onAlternateSubmit?: () => void;
   onFocusChange?: (focused: boolean) => void;
   onPasteDecision?: (decision: ComposerAttachmentPasteDecision) => void;
   onPasteCode?: (paste: ComposerCodePaste) => void;

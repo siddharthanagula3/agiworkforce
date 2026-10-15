@@ -45,6 +45,7 @@
   },
   "selector": {
     "bestAuto": "सर्वश्रेष्ठ (ऑटो)",
+    "byokProviderPrefix": "{{provider}} कुंजी",
     "capabilitiesUnverified": "क्षमताएं असत्यापित",
     "catalogFailed": "मॉडल रीफ़्रेश नहीं हो सके",
     "catalogFailedHint": "रनटाइम कनेक्शन जांचें और फिर से प्रयास करें।",
@@ -82,6 +83,8 @@
     "thinkingOff": "बंद",
     "thinkingState": "थिंकिंग: {{state}}",
     "unavailable": "अनुपलब्ध",
+    "useYourApiKey": "अपनी API कुंजी से मॉडल इस्तेमाल करें",
+    "useYourApiKeyHint": "एक अलग BYOK चैट खुलेगी। यह लोकल चैट इसी डिवाइस पर रहेगी।",
     "visionCapability": "विज़न"
   },
   "counts": {

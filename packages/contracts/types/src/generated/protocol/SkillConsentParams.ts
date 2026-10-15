@@ -2,8 +2,17 @@
 
 export type SkillConsentParams = {
   /**
-   * Granting consent lets this workspace's `.agiworkforce/skills` load on
-   * every run of either surface; revoking deletes that record.
+   * Granting consent lets the skills this workspace supplies load on
+   * every run of either surface, until one of them changes; revoking
+   * deletes that record.
    */
   granted: boolean;
+  /**
+   * With `granted`, the `projectSkillsDigest` that `skills/list` returned
+   * for the skills the user was shown. A grant whose digest is no longer
+   * the current one records nothing and is refused with
+   * [`MCP_APPROVAL_STALE_ERROR_CODE`], its `data` the list as it is now.
+   * Not read when revoking.
+   */
+  digest?: string;
 };

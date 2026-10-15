@@ -276,6 +276,19 @@ export function createMessageQueue(options: CreateMessageQueueOptions = {}): Mes
       return matched;
     },
 
+    update: (commandId, value) => {
+      let found = false;
+      mutate((prev) => {
+        const idx = prev.findIndex((cmd) => cmd.id === commandId);
+        if (idx === -1) return prev;
+        found = true;
+        const next = [...prev];
+        next[idx] = Object.freeze({ ...prev[idx]!, value }) as QueuedCommand;
+        return Object.freeze(next);
+      });
+      return found;
+    },
+
     popAllEditable: (currentInput, currentCursorOffset): PopAllEditableResult | undefined => {
       const snapshot = store.getState();
       if (snapshot.length === 0) return undefined;

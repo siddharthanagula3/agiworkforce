@@ -75,6 +75,24 @@ function normalizeBaseUrl(baseUrl: string): string {
   return stripTrailingSlashes(baseUrl);
 }
 
+function isConfiguredLoopbackUpload(uploadUrl: URL, baseUrl: string): boolean {
+  try {
+    const base = new URL(baseUrl);
+    return (
+      base.protocol === 'http:' &&
+      uploadUrl.protocol === 'http:' &&
+      ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname) &&
+      !base.username &&
+      !base.password &&
+      !uploadUrl.username &&
+      !uploadUrl.password &&
+      base.origin === uploadUrl.origin
+    );
+  } catch {
+    return false;
+  }
+}
+
 function reportStatus(
   listener: ManagedCloudChatAttachmentUploadOptions['onStatus'],
   status: ManagedCloudChatAttachmentUploadStatus,
@@ -228,7 +246,11 @@ export function createManagedCloudChatAttachmentsClient(
           const uploadUrl = new URL(presign.uploadUrl);
           const sameOrigin =
             typeof location !== 'undefined' && uploadUrl.origin === location.origin;
-          if (uploadUrl.protocol !== 'https:' && !sameOrigin) {
+          if (
+            uploadUrl.protocol !== 'https:' &&
+            !sameOrigin &&
+            !isConfiguredLoopbackUpload(uploadUrl, baseUrl)
+          ) {
             throw new Error(`Refusing an insecure upload destination for ${file.name}.`);
           }
 

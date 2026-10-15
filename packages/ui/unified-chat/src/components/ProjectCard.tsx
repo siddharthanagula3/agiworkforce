@@ -180,7 +180,7 @@ export function ProjectCard({
             className="absolute inset-0 z-[var(--z-base)] cursor-pointer rounded-xl focus:outline-none"
           />
         )}
-        <div className="pointer-events-none relative z-[var(--z-control)] flex items-start justify-between gap-3">
+        <div className="pointer-events-none relative flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <ProjectCardIcon project={project} />
             <span className="truncate text-sm font-semibold text-[var(--chat-text-primary)]">
@@ -227,7 +227,7 @@ export function ProjectCard({
                     ref={menuPanelRef}
                     role="menu"
                     aria-label={`Options for ${project.name}`}
-                    className="absolute end-0 top-full z-[var(--z-content-sticky)] mt-1 min-w-[152px] rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-1 shadow-e3"
+                    className="absolute end-0 top-full z-[var(--z-dropdown)] mt-1 min-w-[152px] rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-1 shadow-e3"
                   >
                     {/* Order matches the leaders' project row menu: share,
                         edit (rename + settings), archive, delete. Star lives

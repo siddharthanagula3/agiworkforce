@@ -137,6 +137,66 @@ describe('isGrantableRoot', () => {
     expect(isGrantableRoot('/Users/sid/code', 'posix', '/Users/sid')).toBe(true);
   });
 
+  // Each of these was grantable: the folder of every user, the system's own,
+  // the home folder under its other path, and the places keys are kept.
+  it.each([
+    '/Users',
+    '/home',
+    '/private',
+    '/private/var',
+    '/tmp',
+    '/Library',
+    '/Applications',
+    '/Volumes',
+    '/System/Volumes/Data',
+    '/System/Volumes/Data/Users',
+    '/System/Volumes/Data/Users/sid',
+    '/USERS/SID',
+    '/Users/sid/Library',
+    '/Users/sid/Library/Application Support',
+    '/Users/sid/Library/Keychains',
+    '/Users/sid/.ssh',
+    '/Users/sid/.ssh/keys',
+    '/Users/sid/.config',
+    '/Users/sid/.aws',
+    '/Users/sid/.claude',
+    '/System/Volumes/Data/Users/sid/.ssh',
+  ])('refuses %s', (root) => {
+    expect(isGrantableRoot(root, 'posix', ['/Users/sid'])).toBe(false);
+  });
+
+  it('refuses the home folder by any spelling it is given under, and what is above each', () => {
+    const homes = ['/Users/sid', '/Volumes/External/homes/sid'];
+    for (const root of ['/Users/sid', '/Volumes/External/homes/sid', '/Volumes/External/homes']) {
+      expect(isGrantableRoot(root, 'posix', homes), root).toBe(false);
+    }
+    expect(isGrantableRoot('/Volumes/External/homes/sid/code', 'posix', homes)).toBe(true);
+  });
+
+  it.each([
+    '/Users/sid/code',
+    '/Users/sid/Documents/notes',
+    '/Users/sid/.config/nvim',
+    '/Users/sid/.claude/skills/mine',
+    '/Users/sid/Library/Mobile Documents/com~apple~CloudDocs/project',
+    '/System/Volumes/Data/Users/sid/code',
+    '/Users/other/shared-project',
+    '/Volumes/External/project',
+    '/opt/work/app',
+    '/tmp/scratch-project',
+    '/workspace',
+  ])('still allows %s', (root) => {
+    expect(isGrantableRoot(root, 'posix', ['/Users/sid'])).toBe(true);
+  });
+
+  it('refuses the Windows system folders and the folder of every user', () => {
+    for (const root of ['C:\\Windows', 'C:\\Users', 'C:\\Program Files', 'c:\\programdata']) {
+      expect(isGrantableRoot(root, 'win32', 'C:\\Users\\sid'), root).toBe(false);
+    }
+    expect(isGrantableRoot('C:\\Users\\sid\\.ssh', 'win32', 'C:\\Users\\sid')).toBe(false);
+    expect(isGrantableRoot('C:\\Users\\sid\\code', 'win32', 'C:\\Users\\sid')).toBe(true);
+  });
+
   it('allows an ordinary project directory', () => {
     expect(isGrantableRoot('/Users/sid/code/app', 'posix', '/Users/sid')).toBe(true);
     expect(isGrantableRoot('C:\\work\\app', 'win32', 'C:\\Users\\sid')).toBe(true);

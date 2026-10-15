@@ -125,9 +125,19 @@ export class FakeIdentityProvider<
   private emailAddressSequence = 0;
   private matchedRoutes: readonly string[] = [];
   private parties: readonly string[] = [FAKE_AUTHORIZED_PARTY];
+  private reachable = true;
 
   canVerifySessionTokens(): boolean {
     return true;
+  }
+
+  async checkReachable(): Promise<void> {
+    if (!this.reachable) throw new Error('The fake identity provider is unreachable.');
+  }
+
+  setReachable(reachable: boolean): this {
+    this.reachable = reachable;
+    return this;
   }
 
   authorizedParties(): readonly string[] {
@@ -206,6 +216,7 @@ export class FakeIdentityProvider<
     this.tokens.clear();
     this.matchedRoutes = [];
     this.parties = [FAKE_AUTHORIZED_PARTY];
+    this.reachable = true;
     this.calls.deletedUsers.length = 0;
     this.calls.suspendedUsers.length = 0;
     this.calls.revokedSessions.length = 0;

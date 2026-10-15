@@ -637,7 +637,7 @@ export function ArtifactRenderer({
                   onClick={() => setExportMenuOpen(false)}
                   aria-hidden
                 />
-                <div className="absolute end-0 top-full mt-1 z-[var(--z-content-sticky)] min-w-[180px] rounded-md border border-border bg-card shadow-e3 py-1">
+                <div className="absolute end-0 top-full mt-1 z-[var(--z-dropdown)] min-w-[180px] rounded-md border border-border bg-card shadow-e3 py-1">
                   <button
                     type="button"
                     onClick={() => {

@@ -274,11 +274,18 @@ function readPrompt(key: string, raw: unknown): ConnectorInputPrompt {
   const schema = asRecord(params['requestedSchema']);
   const properties = asRecord(schema?.['properties']);
   if (!schema || schema['type'] !== 'object' || !properties) return unsupported;
-  const required = new Set(
-    Array.isArray(schema['required'])
-      ? schema['required'].filter((name): name is string => typeof name === 'string')
-      : [],
-  );
+  const requiredNames = schema['required'];
+  if (
+    requiredNames !== undefined &&
+    (!Array.isArray(requiredNames) ||
+      !requiredNames.every(
+        (name) =>
+          typeof name === 'string' && Object.prototype.hasOwnProperty.call(properties, name),
+      ))
+  ) {
+    return unsupported;
+  }
+  const required = new Set<string>(requiredNames ?? []);
   const fields: ConnectorInputField[] = [];
   for (const [fieldKey, definition] of Object.entries(properties)) {
     const field = readField(fieldKey, definition, required.has(fieldKey));
@@ -485,4 +492,119 @@ export function dismissConnectorInput(
       prompt.mode === 'unsupported' ? [] : [[prompt.key, { action }]],
     ),
   );
+}
+
+export type ConnectorInputValidation =
+  { ok: true; responses: Record<string, ConnectorInputResponse> } | { ok: false; reason: string };
+
+export function validateConnectorInputResponses(
+  prompts: readonly ConnectorInputPrompt[],
+  raw: unknown,
+): ConnectorInputValidation {
+  const answers = asRecord(raw);
+  const keys = answers ? Object.keys(answers) : [];
+  const requested = new Set(prompts.map((prompt) => prompt.key));
+  if (
+    !answers ||
+    prompts.length === 0 ||
+    requested.size !== prompts.length ||
+    keys.length !== requested.size ||
+    !keys.every((key) => requested.has(key))
+  ) {
+    return { ok: false, reason: 'Every requested input needs exactly one answer.' };
+  }
+  const responses: Array<[string, ConnectorInputResponse]> = [];
+  for (const prompt of prompts) {
+    if (prompt.mode === 'unsupported')
+      return { ok: false, reason: 'This input request is unsupported.' };
+    const answer = asRecord(answers[prompt.key]);
+    if (!answer || Object.keys(answer).some((key) => key !== 'action' && key !== 'content')) {
+      return { ok: false, reason: 'An answer has an unknown shape.' };
+    }
+    const action = answer['action'];
+    if (action === 'decline' || action === 'cancel') {
+      if (Object.prototype.hasOwnProperty.call(answer, 'content'))
+        return { ok: false, reason: 'A dismissed request cannot include content.' };
+      responses.push([prompt.key, { action }]);
+      continue;
+    }
+    if (action !== 'accept') return { ok: false, reason: 'An answer has an unknown action.' };
+    if (prompt.mode === 'url') {
+      if (Object.prototype.hasOwnProperty.call(answer, 'content') || !prompt.link?.openable) {
+        return {
+          ok: false,
+          reason: 'A link step needs a permitted link and cannot include form content.',
+        };
+      }
+      responses.push([prompt.key, { action }]);
+      continue;
+    }
+    const content = answer['content'] === undefined ? {} : asRecord(answer['content']);
+    const fieldNames = new Set(prompt.fields.map((field) => field.key));
+    if (!content || Object.keys(content).some((key) => !fieldNames.has(key))) {
+      return { ok: false, reason: 'An answer contains an unrequested field.' };
+    }
+    const accepted: Array<[string, ConnectorInputValue]> = [];
+    for (const field of prompt.fields) {
+      if (!Object.prototype.hasOwnProperty.call(content, field.key)) {
+        if (field.required) return { ok: false, reason: `"${field.key}" is required.` };
+        continue;
+      }
+      const value = content[field.key];
+      let typed: ConnectorInputValue;
+      switch (field.kind) {
+        case 'boolean':
+          if (typeof value !== 'boolean')
+            return { ok: false, reason: `"${field.key}" needs a boolean.` };
+          typed = value;
+          break;
+        case 'number':
+          if (typeof value !== 'number' || !Number.isFinite(value))
+            return { ok: false, reason: `"${field.key}" needs a number.` };
+          typed = value;
+          break;
+        case 'text':
+        case 'choice':
+          if (typeof value !== 'string') return { ok: false, reason: `"${field.key}" needs text.` };
+          if (field.kind === 'choice' && !field.options.some((option) => option.value === value)) {
+            return { ok: false, reason: `"${field.key}" needs a listed choice.` };
+          }
+          typed = value;
+          break;
+        case 'choices':
+          if (
+            !Array.isArray(value) ||
+            !value.every(
+              (entry): entry is string =>
+                typeof entry === 'string' && field.options.some((option) => option.value === entry),
+            ) ||
+            new Set(value).size !== value.length
+          ) {
+            return { ok: false, reason: `"${field.key}" needs distinct listed choices.` };
+          }
+          typed = value;
+          break;
+      }
+      if (field.kind === 'text' && typeof typed === 'string') {
+        typed = typed.trim();
+        if (!field.required && typed === '') continue;
+      }
+      if (
+        field.kind === 'choices' &&
+        Array.isArray(typed) &&
+        field.minItems !== undefined &&
+        typed.length < field.minItems
+      ) {
+        return { ok: false, reason: `"${field.key}" needs at least ${field.minItems} choices.` };
+      }
+      const error = connectorInputFieldError(
+        field,
+        typeof typed === 'number' ? String(typed) : typed,
+      );
+      if (error) return { ok: false, reason: `"${field.key}": ${error}` };
+      accepted.push([field.key, typed]);
+    }
+    responses.push([prompt.key, { action, content: Object.fromEntries(accepted) }]);
+  }
+  return { ok: true, responses: Object.fromEntries(responses) };
 }

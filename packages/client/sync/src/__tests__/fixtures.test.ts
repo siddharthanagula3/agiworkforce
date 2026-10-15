@@ -91,8 +91,6 @@ interface FixtureMessageRecord {
 
 interface FixtureCase {
   name: string;
-  applies: string[];
-  divergenceNote?: string;
   dirtyConversationIds: string[];
   initialConversations: FixtureConversationRecord[];
   initialMessages: Record<string, FixtureMessageRecord[]>;
@@ -106,7 +104,6 @@ interface FixtureCase {
 }
 
 const allCases = pullApplyFixtures.cases as unknown as FixtureCase[];
-const tsCases = allCases.filter((c) => c.applies.includes('ts'));
 
 describe('fixtures: pull-apply.json (every delta is schema-valid)', () => {
   it.each(allCases)('$name, deltas parse against the wire schemas', (c) => {
@@ -122,31 +119,27 @@ describe('fixtures: pull-apply.json (every delta is schema-valid)', () => {
 });
 
 describe('fixtures: pull-apply.json (TS apply outcome)', () => {
-  it.each(tsCases)('$name', (c) => {
+  it.each(allCases)('$name', (c) => {
     const convPort = createInMemoryConversationPort(
-      c.initialConversations.map(
-        (r): SyncConversationRecord => ({
-          id: r.id,
-          title: r.title,
-          createdAt: r.createdAt,
-          updatedAt: r.updatedAt,
-          messageCount: r.messageCount ?? 0,
-          pinned: r.pinned ?? false,
-        }),
-      ),
+      c.initialConversations.map((r): SyncConversationRecord => ({
+        id: r.id,
+        title: r.title,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        messageCount: r.messageCount ?? 0,
+        pinned: r.pinned ?? false,
+      })),
     );
     const msgPort = createInMemoryMessagePort(
       Object.fromEntries(
         Object.entries(c.initialMessages).map(([convId, msgs]) => [
           convId,
-          msgs.map(
-            (m): SyncMessageRecord => ({
-              id: m.id,
-              role: m.role,
-              content: m.content,
-              createdAt: m.createdAt,
-            }),
-          ),
+          msgs.map((m): SyncMessageRecord => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            createdAt: m.createdAt,
+          })),
         ]),
       ),
     );

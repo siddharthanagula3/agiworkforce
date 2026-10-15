@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   countPorcelainStatus,
-  describeGitHead,
   doctorReportIsHealthy,
   formatDoctorReport,
   GIT_OPERATION_PROBES,
@@ -114,11 +113,7 @@ describe('git semantics', () => {
     expect(order).toContain('bisect');
   });
 
-  it('names a head the same way a detached checkout and an empty branch need', () => {
-    expect(describeGitHead({ branch: 'main', headSha: 'abc123def456' })).toBe('main');
-    expect(describeGitHead({ branch: 'main', headSha: null })).toBe('main (no commits yet)');
-    expect(describeGitHead({ branch: null, headSha: 'abc123def456' })).toBe('detached at abc123d');
-    expect(describeGitHead({ branch: null, headSha: null })).toBe('HEAD (no commits yet)');
+  it('reads a head with no branch as detached', () => {
     expect(isDetachedHead({ branch: null, headSha: 'abc' })).toBe(true);
     expect(isDetachedHead({ branch: 'main', headSha: 'abc' })).toBe(false);
   });

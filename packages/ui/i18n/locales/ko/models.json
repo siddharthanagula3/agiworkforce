@@ -45,6 +45,7 @@
   },
   "selector": {
     "bestAuto": "최적 (자동)",
+    "byokProviderPrefix": "{{provider}} 키",
     "capabilitiesUnverified": "기능 미확인",
     "catalogFailed": "모델을 새로고침할 수 없습니다",
     "catalogFailedHint": "런타임 연결을 확인하고 다시 시도하세요.",
@@ -82,6 +83,8 @@
     "thinkingOff": "꺼짐",
     "thinkingState": "사고: {{state}}",
     "unavailable": "사용 불가",
+    "useYourApiKey": "내 API 키로 모델 사용",
+    "useYourApiKeyHint": "별도의 BYOK 채팅이 열립니다. 이 로컬 채팅은 이 기기에 그대로 남습니다.",
     "visionCapability": "비전"
   },
   "counts": {

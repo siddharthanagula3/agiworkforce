@@ -1,4 +1,3 @@
-
 import { command } from '@agiworkforce/client-runtime';
 
 export interface McpServerEntry {
@@ -37,16 +36,16 @@ export async function readSharedConfig(): Promise<Record<string, unknown>> {
   return command<Record<string, unknown>>('read_shared_config');
 }
 
-export async function writeSharedConfig(key: string, value: unknown): Promise<void> {
-  return command<void>('write_shared_config', { key, value });
+export async function writeSharedConfig(key: string, value: unknown): Promise<boolean> {
+  return command<boolean>('write_shared_config', { key, value });
 }
 
 export async function dotfileListMcpServers(): Promise<Record<string, McpServerEntry>> {
   return command<Record<string, McpServerEntry>>('dotfile_list_mcp_servers');
 }
 
-export async function dotfileAddMcpServer(name: string, config: unknown): Promise<void> {
-  return command<void>('dotfile_add_mcp_server', { name, config });
+export async function dotfileAddMcpServer(name: string, config: unknown): Promise<boolean> {
+  return command<boolean>('dotfile_add_mcp_server', { name, config });
 }
 
 export async function dotfileRemoveMcpServer(name: string): Promise<void> {

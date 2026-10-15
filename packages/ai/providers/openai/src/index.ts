@@ -83,13 +83,6 @@ const OPENAI_AUTH_METHODS: readonly AuthMethod[] = [
     required: true,
     label: 'OpenAI API Key',
   },
-  {
-    kind: 'oauth-device-code',
-    deviceCodeUrl: 'https://auth.openai.com/oauth/device/code',
-    tokenUrl: 'https://auth.openai.com/oauth/token',
-    clientId: 'agiworkforce',
-    label: 'ChatGPT Account (Codex)',
-  },
 ];
 
 export interface OpenAIAdapterConfig extends ProviderAdapterConfig {

@@ -306,6 +306,14 @@ export const DEVICE_STEP_DEFINITIONS: Readonly<Record<DeviceStepTool, DeviceStep
   ),
 };
 
+/**
+ * What a hosted page asks of the device outside a step: which steps a cloud
+ * turn may be offered here, and an end to screen control.
+ */
+export const DEVICE_HOST_COMMANDS = ['device_host_declaration', 'computer_stop'] as const;
+
+export type DeviceHostCommand = (typeof DEVICE_HOST_COMMANDS)[number];
+
 export function deviceStepCapability(tool: DeviceStepTool): DeviceStepCapability {
   return DEVICE_STEP_DEFINITIONS[tool].capability;
 }

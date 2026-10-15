@@ -54,6 +54,7 @@
     "apps/web/app/api/cron/grant-referral-rewards/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/health-probe/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/index-retrieval-documents/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
+    "apps/web/app/api/cron/notify-upgrade-waitlist/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/page-security-anomalies/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/purge-deleted-accounts/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/purge-deleted-media/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",

@@ -47,7 +47,15 @@ export function toCodeTurnRecord(record: CloudCodeAgentTurnRecord): CodeTurnReco
 
 export type CodeTranscriptItem =
   | { kind: 'commands'; id: string; at: string; entries: CloudCodeTerminalEntry[] }
-  | { kind: 'task'; id: string; at: string; text: string; mode: CloudCodeTurnMode }
+  | {
+      kind: 'task';
+      id: string;
+      at: string;
+      text: string;
+      mode: CloudCodeTurnMode;
+      /** The turn this task began, when the session can rewind to before it. */
+      rewindTurnId?: string;
+    }
   | { kind: 'steps'; id: string; at: string; steps: CloudCodeAgentStep[] }
   | {
       kind: 'reply';

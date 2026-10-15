@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   CloudToolApprovalProjectionSchema,
+  isApprovingToolDecision,
   readPersistedCloudToolApproval,
+  readToolApprovalReview,
   ToolApprovalDecisionSchema,
   ToolApprovalResumeRequestSchema,
   ToolApprovalResumeErrorResponseSchema,
   TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
+  TOOL_CALL_ID_MAX_LENGTH,
 } from '../tool-approval-resume';
 
 describe('CloudToolApprovalProjectionSchema', () => {
@@ -17,6 +20,20 @@ describe('CloudToolApprovalProjectionSchema', () => {
 
   it('accepts a bounded display-only approval projection', () => {
     expect(CloudToolApprovalProjectionSchema.safeParse(projection).success).toBe(true);
+  });
+
+  it('preserves a selected scope while retaining the existing approved/rejected projection', () => {
+    const scoped = {
+      ...projection,
+      calls: [{ ...projection.calls[0], approvalDecision: 'approved', approvalScope: 'session' }],
+    };
+    expect(CloudToolApprovalProjectionSchema.parse(scoped)).toEqual(scoped);
+    expect(
+      CloudToolApprovalProjectionSchema.safeParse({
+        ...scoped,
+        calls: [{ ...scoped.calls[0], approvalScope: 'all-workspaces' }],
+      }).success,
+    ).toBe(false);
   });
 
   it('rejects an empty projection so stale empty cards cannot masquerade as pending input', () => {
@@ -65,6 +82,23 @@ describe('CloudToolApprovalProjectionSchema', () => {
 });
 
 describe('ToolApprovalDecisionSchema', () => {
+  it('retains the current tool-call boundary for every approval scope', () => {
+    for (const decision of ['approved', 'approved-for-session', 'approved-always', 'rejected']) {
+      expect(
+        ToolApprovalDecisionSchema.safeParse({
+          tool_call_id: 'x'.repeat(TOOL_CALL_ID_MAX_LENGTH),
+          decision,
+        }).success,
+      ).toBe(true);
+      expect(
+        ToolApprovalDecisionSchema.safeParse({
+          tool_call_id: 'x'.repeat(TOOL_CALL_ID_MAX_LENGTH + 1),
+          decision,
+        }).success,
+      ).toBe(false);
+    }
+  });
+
   it('accepts an approved decision', () => {
     expect(
       ToolApprovalDecisionSchema.safeParse({ tool_call_id: 'call_1', decision: 'approved' })
@@ -72,7 +106,20 @@ describe('ToolApprovalDecisionSchema', () => {
     ).toBe(true);
   });
 
-  it('rejects a decision outside approved/rejected (route.ts:54)', () => {
+  it.each(['approved-for-session', 'approved-always'])('accepts the %s scope', (decision) => {
+    expect(ToolApprovalDecisionSchema.safeParse({ tool_call_id: 'call_1', decision }).success).toBe(
+      true,
+    );
+  });
+
+  it('treats every scope except rejected as approving the call', () => {
+    expect(isApprovingToolDecision('approved')).toBe(true);
+    expect(isApprovingToolDecision('approved-for-session')).toBe(true);
+    expect(isApprovingToolDecision('approved-always')).toBe(true);
+    expect(isApprovingToolDecision('rejected')).toBe(false);
+  });
+
+  it('rejects a decision outside the published scopes (route.ts:54)', () => {
     expect(
       ToolApprovalDecisionSchema.safeParse({ tool_call_id: 'call_1', decision: 'maybe' }).success,
     ).toBe(false);
@@ -87,6 +134,16 @@ describe('ToolApprovalResumeRequestSchema', () => {
 
   it('accepts a server-owned run reference plus per-tool decisions', () => {
     expect(ToolApprovalResumeRequestSchema.safeParse(body).success).toBe(true);
+  });
+
+  it('preserves detached transport and steering with a scoped approval', () => {
+    const input = {
+      ...body,
+      tool_approvals: [{ tool_call_id: 'call_1', decision: 'approved-for-session' }],
+      guidance: 'Keep the workspace policy.',
+      detached: true,
+    };
+    expect(ToolApprovalResumeRequestSchema.parse(input)).toEqual(input);
   });
 
   it('rejects the former client-replayed transcript contract', () => {
@@ -169,5 +226,29 @@ describe('ToolApprovalResumeErrorResponseSchema', () => {
     expect(
       ToolApprovalResumeErrorResponseSchema.safeParse({ message: 'bad request' }).success,
     ).toBe(false);
+  });
+});
+
+describe('readToolApprovalReview', () => {
+  it('reads the risk, destructiveness and offered scopes from the approval request', () => {
+    expect(
+      readToolApprovalReview({
+        tool_call_id: 'call_1',
+        risk_tier: 'critical',
+        destructive: true,
+        approval_scopes: ['once', 'session', 'session'],
+      }),
+    ).toEqual({ riskTier: 'critical', destructive: true, scopes: ['once', 'session'] });
+  });
+
+  it('reads nothing from a request without a review, so the card falls back to once', () => {
+    expect(readToolApprovalReview({ tool_call_id: 'call_1' })).toBeUndefined();
+    expect(
+      readToolApprovalReview({
+        risk_tier: 'extreme',
+        destructive: false,
+        approval_scopes: ['once'],
+      }),
+    ).toBeUndefined();
   });
 });

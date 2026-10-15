@@ -99,6 +99,7 @@ export interface AgentActivityTimelineProps {
    */
   screenshotFor?: (toolCallId: string) => string | undefined;
   renderInputRequest?: (entry: AgentActivityToolEntry) => ReactNode;
+  renderApprovalRequest?: (toolCallId: string) => ReactNode;
   /**
    * The connector's own logo for a step, by its server id. Brand assets and the
    * connector catalogue belong to one surface, so they arrive here; a surface
@@ -856,6 +857,7 @@ export function AgentActivityTimeline({
   failureActions,
   screenshotFor,
   renderInputRequest,
+  renderApprovalRequest,
   renderConnectorMark,
 }: AgentActivityTimelineProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -1109,6 +1111,10 @@ export function AgentActivityTimeline({
                 entry.category === 'computer-use' ? screenStepAction(entry) : null;
               const screenshot = screenshotFor?.(entry.toolCallId);
               const awaitingInput = waitingForInput && entry.inputRequest !== undefined;
+              const approvalRequest =
+                entry.status === 'awaiting-approval' && !entry.inputRequest
+                  ? renderApprovalRequest?.(entry.toolCallId)
+                  : null;
               const inputStatus: ToolCallStatus | undefined =
                 entry.inputRequest === undefined
                   ? undefined
@@ -1117,35 +1123,39 @@ export function AgentActivityTimeline({
                     : 'cancelled';
               return (
                 <div key={entry.id} className="relative py-1 ps-7">
-                  <ToolCallCard
-                    id={entry.toolCallId}
-                    name={traceRowName(entry)}
-                    status={
-                      entry.id === lastVisibleSearchId
-                        ? 'complete'
-                        : (inputStatus ?? toToolStatus(entry))
-                    }
-                    requiresApproval={
-                      entry.status === 'awaiting-approval' && entry.inputRequest === undefined
-                    }
-                    riskLevel={entry.approval?.riskLevel}
-                    args={asRecord(entry.input)}
-                    result={connectRequest ? undefined : asResult(entry.output)}
-                    errorDetail={connectRequest ? undefined : entry.error}
-                    elapsedMs={entry.elapsedMs}
-                    startedAt={entry.status === 'running' ? entry.startedAtMs : undefined}
-                    kind={categoryToKind(entry.category)}
-                    iconLetter={isConnectorStep(entry) ? connectorInitial(entry) : undefined}
-                    mark={connectorServerId ? renderConnectorMark?.(connectorServerId) : undefined}
-                    failureReason={connectorFailureReason(entry, connectRequest)}
-                    expired={isApprovalExpired?.(entry.toolCallId) ?? false}
-                    onApprove={onApprove}
-                    onApproveForChat={onApproveForChat}
-                    onReject={onReject}
-                    onCancel={onCancel}
-                    onResend={onResend}
-                    completionLabel={entry.id === lastVisibleSearchId ? 'Done' : undefined}
-                  />
+                  {approvalRequest ?? (
+                    <ToolCallCard
+                      id={entry.toolCallId}
+                      name={traceRowName(entry)}
+                      status={
+                        entry.id === lastVisibleSearchId
+                          ? 'complete'
+                          : (inputStatus ?? toToolStatus(entry))
+                      }
+                      requiresApproval={
+                        entry.status === 'awaiting-approval' && entry.inputRequest === undefined
+                      }
+                      riskLevel={entry.approval?.riskLevel}
+                      args={asRecord(entry.input)}
+                      result={connectRequest ? undefined : asResult(entry.output)}
+                      errorDetail={connectRequest ? undefined : entry.error}
+                      elapsedMs={entry.elapsedMs}
+                      startedAt={entry.status === 'running' ? entry.startedAtMs : undefined}
+                      kind={categoryToKind(entry.category)}
+                      iconLetter={isConnectorStep(entry) ? connectorInitial(entry) : undefined}
+                      mark={
+                        connectorServerId ? renderConnectorMark?.(connectorServerId) : undefined
+                      }
+                      failureReason={connectorFailureReason(entry, connectRequest)}
+                      expired={isApprovalExpired?.(entry.toolCallId) ?? false}
+                      onApprove={onApprove}
+                      onApproveForChat={onApproveForChat}
+                      onReject={onReject}
+                      onCancel={onCancel}
+                      onResend={onResend}
+                      completionLabel={entry.id === lastVisibleSearchId ? 'Done' : undefined}
+                    />
+                  )}
                   {screenAction || screenshot ? (
                     <ComputerUseStepCard
                       action={screenAction}

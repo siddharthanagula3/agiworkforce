@@ -4,7 +4,10 @@
   "description": "Normalizes provider requests and responses to one wire shape, including OpenAI-compatible translation.",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./thinking-tag-splitter": "./src/thinking-tag-splitter.ts"
+  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {

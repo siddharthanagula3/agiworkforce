@@ -6,9 +6,9 @@
  * of truth; the test beside this file fails if the two drift.
  */
 
-import type { DeveloperAgentMode } from '@agiworkforce/types/protocol';
+import type { DeveloperAgentMode, DeveloperReasoningEffort } from '@agiworkforce/types/protocol';
 
-export type { DeveloperAgentMode };
+export type { DeveloperAgentMode, DeveloperReasoningEffort };
 
 /** Every posture on the wire, weakest first. */
 export const DEVELOPER_AGENT_MODES = [
@@ -17,6 +17,25 @@ export const DEVELOPER_AGENT_MODES = [
   'auto',
   'bypass',
 ] as const satisfies readonly DeveloperAgentMode[];
+
+/**
+ * The posture of a turn whose sender named none. The CLI keeps its posture
+ * from one turn to the next, so a shell names one on every turn rather than
+ * let a turn inherit whatever the last one ran in.
+ */
+export const DEVELOPER_UNNAMED_TURN_AGENT_MODE: DeveloperAgentMode = 'ask';
+
+/**
+ * The posture a turn started away from this computer may name, or null to
+ * leave the thread in the mode it was last saved in. Bypass is confirmed here,
+ * by the person at this screen, and a turn a paired phone starts never names
+ * it whatever that turn asks for.
+ */
+export function remoteTurnAgentMode(
+  requested: DeveloperAgentMode | null | undefined,
+): DeveloperAgentMode | null {
+  return requested && requested !== 'bypass' ? requested : null;
+}
 
 export const DEVELOPER_AGENT_MODE_LABELS: Record<DeveloperAgentMode, string> = {
   plan: 'Plan',
@@ -53,6 +72,21 @@ export function normalizeDeveloperAgentMode(
   }
 }
 
+/** Every reasoning level on the wire, least first. */
+export const DEVELOPER_REASONING_EFFORTS = [
+  'low',
+  'medium',
+  'high',
+  'max',
+] as const satisfies readonly DeveloperReasoningEffort[];
+
+export const DEVELOPER_REASONING_EFFORT_LABELS: Record<DeveloperReasoningEffort, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  max: 'Max',
+};
+
 export function developerAgentModeApprovesWithoutAsking(mode: DeveloperAgentMode): boolean {
   return mode === 'auto' || mode === 'bypass';
 }
@@ -69,6 +103,14 @@ export const MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION =
     SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.length - 1
   ]!;
 export const PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE = -32005;
+/** JSON-RPC code of a request refused because another program holds the thread's writer lease. */
+export const THREAD_WRITER_CONFLICT_ERROR_CODE = -32011;
+/**
+ * JSON-RPC code of an `mcp/approval/grant` refused because the launch is no
+ * longer the one the fingerprint names. Its `data` is the approval request
+ * for the launch as it is now.
+ */
+export const MCP_APPROVAL_STALE_ERROR_CODE = -32012;
 
 export type DeveloperSessionNegotiation =
   | { outcome: 'agreed'; protocolVersion: number }

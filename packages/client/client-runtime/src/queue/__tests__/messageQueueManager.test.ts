@@ -124,6 +124,21 @@ describe('createMessageQueue, basic correctness', () => {
     expect(remaining).toEqual(['keep1', 'keep2']);
   });
 
+  it('update rewrites a queued command in place and refuses one that has left', () => {
+    const q = createMessageQueue();
+    const first = q.enqueue(basicCommand({ value: 'first', origin: { kind: 'user', files: 1 } }));
+    q.enqueue(basicCommand({ value: 'second' }));
+
+    expect(q.update(first.id, 'first, edited')).toBe(true);
+    expect(q.getSnapshot().map((c) => c.value)).toEqual(['first, edited', 'second']);
+    expect(q.getSnapshot()[0]).toMatchObject({ id: first.id, origin: { kind: 'user', files: 1 } });
+    expect(Object.isFrozen(q.getSnapshot()[0])).toBe(true);
+
+    q.dequeue();
+    expect(q.update(first.id, 'too late')).toBe(false);
+    expect(q.getSnapshot().map((c) => c.value)).toEqual(['second']);
+  });
+
   it('clear empties the queue', () => {
     const q = createMessageQueue();
     q.enqueue(basicCommand({ value: 'a' }));

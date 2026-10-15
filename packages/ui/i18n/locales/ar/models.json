@@ -45,6 +45,7 @@
   },
   "selector": {
     "bestAuto": "الأفضل (تلقائي)",
+    "byokProviderPrefix": "مفتاح {{provider}}",
     "capabilitiesUnverified": "القدرات غير مؤكدة",
     "catalogFailed": "تعذّر تحديث النماذج",
     "catalogFailedHint": "تحقق من اتصال وقت التشغيل وحاول مرة أخرى.",
@@ -82,6 +83,8 @@
     "thinkingOff": "إيقاف",
     "thinkingState": "التفكير: {{state}}",
     "unavailable": "غير متاح",
+    "useYourApiKey": "استخدم نموذجًا بمفتاح API الخاص بك",
+    "useYourApiKeyHint": "يفتح محادثة BYOK منفصلة. تبقى هذه المحادثة المحلية على هذا الجهاز.",
     "visionCapability": "الرؤية"
   },
   "counts": {

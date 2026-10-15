@@ -37,112 +37,109 @@ function toSegments(suggestions: CommandSuggestion[]): RenderSegment[] {
   return segments;
 }
 
-export interface SlashCommandMenuProps {
-  show: boolean;
+export interface SlashCommandListProps {
   suggestions: CommandSuggestion[];
   selectedIndex: number;
   onSelect: (suggestion: CommandSuggestion) => void;
   onHover: (index: number) => void;
 }
 
-export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
-  show,
+export interface SlashCommandMenuProps extends SlashCommandListProps {
+  show: boolean;
+}
+
+export const SlashCommandList: React.FC<SlashCommandListProps> = ({
   suggestions,
   selectedIndex,
   onSelect,
   onHover,
-}) => {
-  return (
-    <AnimatePresence>
-      {show && suggestions.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.15 }}
-          className="absolute bottom-full start-0 end-0 mb-2 rounded-xl bg-popover border border-border shadow-e3 overflow-hidden z-[var(--z-dropdown)]"
-          role="listbox"
-          aria-label="Slash command suggestions"
-        >
-          <div className="max-h-72 overflow-y-auto">
-            {toSegments(suggestions).map((segment, segmentIndex) => {
-              const rows = segment.entries.map(({ suggestion, index }) => (
-                <button
-                  type="button"
-                  key={suggestion.id ?? suggestion.command}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    onSelect(suggestion);
-                  }}
-                  onMouseEnter={() => onHover(index)}
-                  role="option"
-                  aria-selected={index === selectedIndex}
-                  data-active={index === selectedIndex || undefined}
-                  className={cn(
-                    'w-full text-start px-4 py-3 transition-colors border-b border-border/50 last:border-b-0',
-                    index === selectedIndex ? 'bg-primary/10' : 'hover:bg-accent',
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    {suggestion.icon && (
-                      <span
-                        className="flex h-4 w-4 shrink-0 items-center justify-center"
-                        aria-hidden
-                      >
-                        {suggestion.icon}
-                      </span>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <code className="shrink-0 text-sm font-semibold text-primary">
-                          {suggestion.command}
-                        </code>
-                        <span
-                          title={suggestion.description}
-                          className="truncate text-xs text-muted-foreground"
-                        >
-                          {suggestion.description}
-                        </span>
-                      </div>
-                      {suggestion.example && (
-                        <div className="truncate text-xs text-muted-foreground mt-1">
-                          {suggestion.example}
-                        </div>
-                      )}
-                    </div>
-                    {suggestion.isSkill && (
-                      <span className="ms-auto shrink-0 rounded-full bg-warning-fill/10 px-1.5 py-0.5 text-caption font-medium text-warning-text">
-                        skill
-                      </span>
-                    )}
-                  </div>
-                </button>
-              ));
-
-              if (!segment.label) {
-                return <React.Fragment key={`ungrouped-${segmentIndex}`}>{rows}</React.Fragment>;
-              }
-              return (
-                <div
-                  role="group"
-                  aria-label={segment.label}
-                  key={`${segment.label}-${segmentIndex}`}
-                >
-                  <div className="px-4 pb-1 pt-3 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
-                    {segment.label}
-                  </div>
-                  {rows}
+}) => (
+  <div role="listbox" aria-label="Slash command suggestions">
+    <div className="max-h-72 overflow-y-auto">
+      {toSegments(suggestions).map((segment, segmentIndex) => {
+        const rows = segment.entries.map(({ suggestion, index }) => (
+          <button
+            type="button"
+            key={suggestion.id ?? suggestion.command}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              onSelect(suggestion);
+            }}
+            onMouseEnter={() => onHover(index)}
+            role="option"
+            aria-selected={index === selectedIndex}
+            data-active={index === selectedIndex || undefined}
+            className={cn(
+              'w-full text-start px-4 py-3 transition-colors border-b border-border/50 last:border-b-0',
+              index === selectedIndex ? 'bg-primary/10' : 'hover:bg-accent',
+            )}
+          >
+            <div className="flex items-center gap-3">
+              {suggestion.icon && (
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
+                  {suggestion.icon}
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <code className="shrink-0 text-sm font-semibold text-primary">
+                    {suggestion.command}
+                  </code>
+                  <span
+                    title={suggestion.description}
+                    className="truncate text-xs text-muted-foreground"
+                  >
+                    {suggestion.description}
+                  </span>
                 </div>
-              );
-            })}
+                {suggestion.example && (
+                  <div className="truncate text-xs text-muted-foreground mt-1">
+                    {suggestion.example}
+                  </div>
+                )}
+              </div>
+              {suggestion.isSkill && (
+                <span className="ms-auto shrink-0 rounded-full bg-warning-fill/10 px-1.5 py-0.5 text-caption font-medium text-warning-text">
+                  skill
+                </span>
+              )}
+            </div>
+          </button>
+        ));
+
+        if (!segment.label) {
+          return <React.Fragment key={`ungrouped-${segmentIndex}`}>{rows}</React.Fragment>;
+        }
+        return (
+          <div role="group" aria-label={segment.label} key={`${segment.label}-${segmentIndex}`}>
+            <div className="px-4 pb-1 pt-3 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
+              {segment.label}
+            </div>
+            {rows}
           </div>
-          <div className="px-4 py-2 bg-muted border-t border-border text-xs text-muted-foreground">
-            Use arrow keys to navigate, Enter to select, Esc to close
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-};
+        );
+      })}
+    </div>
+    <div className="px-4 py-2 bg-muted border-t border-border text-xs text-muted-foreground">
+      Use arrow keys to navigate, Enter to select, Esc to close
+    </div>
+  </div>
+);
+
+export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({ show, ...list }) => (
+  <AnimatePresence>
+    {show && list.suggestions.length > 0 && (
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -8 }}
+        transition={{ duration: 0.15 }}
+        className="absolute bottom-full start-0 end-0 mb-2 rounded-xl bg-popover border border-border shadow-e3 overflow-hidden z-[var(--z-dropdown)]"
+      >
+        <SlashCommandList {...list} />
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
 
 export default SlashCommandMenu;

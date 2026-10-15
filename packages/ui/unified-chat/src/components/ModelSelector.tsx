@@ -549,6 +549,18 @@ export function ModelSelector({
 
   const selectedReasoning = getModelReasoning(selectedModelId);
   const selectedRequiresReasoning = requiresReasoning(selectedReasoning);
+  const selectedByokProviderLabel =
+    executionMode === 'byok'
+      ? (() => {
+          const selected = displayModels.find((m) => m.id === selectedModelId);
+          return selected ? getProviderLabel(selected.provider.toLowerCase()) : null;
+        })()
+      : null;
+  const requestByokConversation = hostBridge?.requestByokConversation;
+  const offerByokConversation =
+    executionMode === 'local_only' &&
+    requestByokConversation !== undefined &&
+    candidateModels.some((m) => m.isByok && isChatModelSelectable(m));
 
   useEffect(() => {
     if (selectedRequiresReasoning && effort == null && onEffortChange) {
@@ -581,6 +593,13 @@ export function ModelSelector({
             className,
           )}
         >
+          {selectedByokProviderLabel && !catalogLoadingWithoutModels && (
+            <span className="shrink-0 text-[var(--chat-text-muted)]">
+              {t('selector.byokProviderPrefix', '{{provider}} key', {
+                provider: selectedByokProviderLabel,
+              })}
+            </span>
+          )}
           <span className="max-w-[140px] truncate font-medium">
             {catalogLoadingWithoutModels
               ? t('selector.detectingModels', 'Detecting models…')
@@ -905,6 +924,32 @@ export function ModelSelector({
               );
             })}
           </div>
+
+          {offerByokConversation && (
+            <div className="border-t border-[var(--chat-border)] p-1">
+              <Popover.Close asChild>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => requestByokConversation?.(activeConversation?.id ?? null)}
+                  className={cn(
+                    'flex w-full flex-col items-start rounded-lg px-2 py-1.5 text-left',
+                    'hover:bg-[var(--chat-surface-hover)] transition-colors duration-quick',
+                  )}
+                >
+                  <span className="text-sm text-[var(--chat-text-primary)]">
+                    {t('selector.useYourApiKey', 'Use a model with your API key')}
+                  </span>
+                  <span className="text-xs text-[var(--chat-text-muted)]">
+                    {t(
+                      'selector.useYourApiKeyHint',
+                      'Opens a separate BYOK chat. This Local chat stays on this device.',
+                    )}
+                  </span>
+                </button>
+              </Popover.Close>
+            </div>
+          )}
 
           {/* Footer, manage API keys */}
           {onSettingsClick && !usingFallback && displayModels.length > 0 && (

@@ -41,6 +41,7 @@ export * from './agent-events';
 export * from './cloud-agent-runs';
 export * from './managed-cloud-agent-runs-client';
 export * from './tool-approval-resume';
+export * from './mcp-elicitation';
 export * from './cloud-code-sessions';
 export * from './cloud-code-handoff';
 export * from './managed-cloud-code-client';
@@ -76,3 +77,5 @@ export * from './mobile-intent';
 export * from './bank-accounts';
 export * from './waitlist';
 export * from './localized-pricing';
+
+export * from './workspaces';

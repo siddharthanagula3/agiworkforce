@@ -121,6 +121,23 @@ describe('useChat, regenerate (DES-C04)', () => {
     useSettingsStore.setState({ codeExecutionEnabled: false });
   });
 
+  it('puts the exchange back when the regenerated turn cannot start', () => {
+    seedTranscript(exchange());
+    useModelStore.setState({ selectedModelId: 'no-such-model' });
+    const sendMessage = makeSendSpy();
+    const { result } = renderHook(() =>
+      useChat(makeRuntime({ sendMessage }), { surfaceId: 'regenerate-refused' }),
+    );
+
+    act(() => result.current.regenerate('assistant-1'));
+
+    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/Select a model/));
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(
+      useChatStore.getState().messagesByConversation[CONVERSATION_ID]?.map((m) => m.id),
+    ).toEqual(['user-1', 'assistant-1']);
+  });
+
   it('replaces the exchange and re-sends the original prompt', async () => {
     seedTranscript(exchange());
     const sendMessage = makeSendSpy();

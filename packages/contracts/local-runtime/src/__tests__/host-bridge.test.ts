@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  HOST_IN_WINDOW_SIGN_IN_HOSTS,
   HOST_SHORTCUT_CHOICES,
   HOST_SHORTCUT_KEYS,
   HOST_SHORTCUT_PREFERENCE_KEYS,
@@ -7,6 +8,9 @@ import {
   defaultHostShortcut,
   describeAccelerator,
   describeHostPlatform,
+  desktopDeepLink,
+  hostKeepsSignInInWindow,
+  parseDesktopDeepLink,
 } from '../host-bridge';
 
 describe('host shortcuts', () => {
@@ -27,6 +31,7 @@ describe('host shortcuts', () => {
       'screenshotShortcut',
       'windowShotShortcut',
       'voiceShortcut',
+      'stopShortcut',
     ]);
   });
 
@@ -68,5 +73,50 @@ describe('describeHostPlatform', () => {
     expect(describeHostPlatform('electron-freebsd')).toBeNull();
     expect(describeHostPlatform('')).toBeNull();
     expect(describeHostPlatform('tauri')).toBeNull();
+  });
+});
+
+describe('parseDesktopDeepLink', () => {
+  it('reads back the target and id a link was built from', () => {
+    expect(parseDesktopDeepLink(desktopDeepLink('chat', 'a b/c'))).toEqual({
+      target: 'chat',
+      id: 'a b/c',
+    });
+  });
+
+  it('answers null for an id that is not valid percent-encoding instead of throwing', () => {
+    expect(parseDesktopDeepLink('agiworkforce-cloud://chat/%')).toBeNull();
+    expect(parseDesktopDeepLink('agiworkforce-cloud://chat/%E0%A4%A')).toBeNull();
+  });
+
+  it('answers null for another scheme, an unknown target and an empty id', () => {
+    expect(parseDesktopDeepLink('https://chat/abc')).toBeNull();
+    expect(parseDesktopDeepLink('agiworkforce-cloud://sso-callback/abc')).toBeNull();
+    expect(parseDesktopDeepLink('agiworkforce-cloud://chat/')).toBeNull();
+    expect(parseDesktopDeepLink('not a url')).toBeNull();
+  });
+});
+
+describe('hostKeepsSignInInWindow', () => {
+  it('holds each listed provider over https', () => {
+    expect(HOST_IN_WINDOW_SIGN_IN_HOSTS.length).toBeGreaterThan(0);
+    for (const host of HOST_IN_WINDOW_SIGN_IN_HOSTS) {
+      expect(
+        hostKeepsSignInInWindow(new URL(`https://${host}/o/oauth2/v2/auth?state=abc`)),
+        host,
+      ).toBe(true);
+    }
+  });
+
+  it('sends every other provider, a lookalike host and plain http to the browser', () => {
+    for (const url of [
+      'https://slack.com/oauth/v2/authorize?state=abc',
+      'https://github.com/login/oauth/authorize?state=abc',
+      'https://accounts.google.com.evil.example/o/oauth2/v2/auth',
+      'https://evil-accounts.google.com/o/oauth2/v2/auth',
+      'http://accounts.google.com/o/oauth2/v2/auth',
+    ]) {
+      expect(hostKeepsSignInInWindow(new URL(url)), url).toBe(false);
+    }
   });
 });

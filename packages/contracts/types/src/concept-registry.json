@@ -290,7 +290,8 @@
         "user_custom_connectors",
         "connector_oauth_grants",
         "bank_account_items",
-        "connector_tool_permissions"
+        "connector_tool_permissions",
+        "connector_tool_session_grants"
       ],
       "writeFunctions": [],
       "mutators": ["apps/web/app/api/connectors/route.ts"],
@@ -1552,6 +1553,11 @@
       "table": "account_security_challenges",
       "exempt": [],
       "why": "a single-use WebAuthn challenge or browser handoff, created and consumed within minutes by the ceremony that minted it for its owner, so there is nothing to version"
+    },
+    {
+      "table": "connector_tool_session_grants",
+      "exempt": ["updatedAt", "createdBy", "version"],
+      "why": "a grant is only inserted or deleted, never edited: app_rls holds select, insert and delete on it and no update, so there is no last write to date or version, and the person who allows the tool is its owner, so created_by would repeat user_id"
     }
   ],
   "tableDispositions": [

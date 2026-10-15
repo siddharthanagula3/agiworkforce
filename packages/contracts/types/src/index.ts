@@ -24,8 +24,6 @@ export * from './connector-release';
 
 export * from './message-block-kinds';
 
-export * from './customModel';
-
 export * from './tool-events';
 
 export * from './tool-status';

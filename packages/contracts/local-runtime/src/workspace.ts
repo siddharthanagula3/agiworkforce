@@ -25,11 +25,6 @@ export interface WorkspaceGitState {
   worktree: string;
 }
 
-export interface WorkspaceSnapshot {
-  root: WorkspaceRoot;
-  git: WorkspaceGitState | null;
-}
-
 export const WORKSPACE_ROOT_KINDS = ['folder', 'repository'] as const;
 
 export type WorkspaceRootKind = (typeof WORKSPACE_ROOT_KINDS)[number];
@@ -42,7 +37,6 @@ export const WORKSPACE_COMMANDS = [
   'workspace_pick_root',
   'workspace_list_roots',
   'workspace_revoke_root',
-  'workspace_snapshot',
   'workspace_reveal',
 ] as const;
 

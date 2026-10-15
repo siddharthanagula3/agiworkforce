@@ -1,5 +1,3 @@
-
-
 export interface AuthState {
   userId: string | null;
   email: string | null;
@@ -27,7 +25,6 @@ export interface SettingsState {
   chatFont: string;
   showThinking: boolean;
   alwaysUseAgentMode: boolean;
-  systemPromptOverride: string | null;
 }
 
 export interface SubscriptionsState {
@@ -84,7 +81,6 @@ export const initialSettingsState: SettingsState = {
   chatFont: 'default',
   showThinking: true,
   alwaysUseAgentMode: false,
-  systemPromptOverride: null,
 };
 
 export const initialSubscriptionsState: SubscriptionsState = {

@@ -31,6 +31,7 @@ export {
 
 export {
   CHINESE_HQ_PROVIDER_IDS,
+  NAMED_PROVIDER_CONSENT_SURFACES,
   isChineseHqProvider,
   isProviderRoutingAllowed,
   chineseHqProviderDisplayName,
@@ -48,11 +49,26 @@ export {
 
 export {
   NON_US_VENDOR_TRANSPORTS,
+  NON_US_VENDOR_TRANSPORT_DEPLOYMENTS,
   isNonUsVendorTransport,
+  nonUsVendorTransportDeployment,
   transportResidency,
   type NonUsVendorTransport,
+  type VendorTransportDeployment,
   type ProcessingResidency,
 } from './transport-residency';
+
+export {
+  NAMED_PROVIDER_NOTICE_PRIVACY_PATH,
+  NAMED_PROVIDER_NOTICE_PROVIDER_LIST_PATH,
+  composeFreeModelProviderNotice,
+  hasFreeModelProviderNotice,
+  isNamedProviderConsentCurrent,
+  namedProviderConsentRecord,
+  type FreeModelNoticeProviderId,
+  type NamedProviderNotice,
+  type NamedProviderNoticeLink,
+} from './named-provider-notice';
 
 export {
   DATA_REGIONS,
@@ -83,6 +99,7 @@ export {
 
 export {
   Article50DisclosureRequiredError,
+  CHINESE_HQ_PROVIDER_NOT_OPTED_IN_CODE,
   ChineseHqProviderNotOptedInError,
   assertLlmGate,
   isLlmGateOpen,

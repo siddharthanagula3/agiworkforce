@@ -11,9 +11,42 @@ const GLOBAL_DEFAULT: AgentControlState = {
 
 type ProjectDefault = Pick<AgentControlState, 'mode' | 'effort' | 'temporaryChat'>;
 
+export const ALL_AGENT_MODES: readonly AgentMode[] = ['ask', 'auto', 'plan', 'bypass'];
+
+const clampedStates = new WeakMap<AgentControlState, AgentControlState>();
+const projectStates = new WeakMap<ProjectDefault, AgentControlState>();
+
+/** Same object for the same stored default, for the same reason as below. */
+function projectState(projDefault: ProjectDefault): AgentControlState {
+  const cached = projectStates.get(projDefault);
+  if (cached) return cached;
+  const state: AgentControlState = { ...projDefault, source: 'project-default' };
+  projectStates.set(projDefault, state);
+  return state;
+}
+
+/** Same object for the same input, so a selector over `resolve` stays stable. */
+function clampToAvailable(
+  state: AgentControlState,
+  availableModes: readonly AgentMode[],
+): AgentControlState {
+  if (availableModes.includes(state.mode)) return state;
+  const mode = availableModes.includes('ask') ? 'ask' : (availableModes[0] ?? 'ask');
+  const cached = clampedStates.get(state);
+  if (cached?.mode === mode) return cached;
+  const clamped = { ...state, mode };
+  clampedStates.set(state, clamped);
+  return clamped;
+}
+
 interface AgentControlStore {
   byConversation: Record<string, AgentControlState>;
   byProject: Record<string, ProjectDefault>;
+
+  /** Modes the host runtime enforces. The mode chip offers only these. */
+  availableModes: readonly AgentMode[];
+
+  setAvailableModes: (modes: readonly AgentMode[]) => void;
 
   resolve: (conversationId: string, projectId: string | null) => AgentControlState;
 
@@ -42,21 +75,24 @@ export const useAgentControlStore = create<AgentControlStore>()(
     (set, get) => ({
       byConversation: {},
       byProject: {},
+      availableModes: ALL_AGENT_MODES,
+
+      setAvailableModes: (modes) => set({ availableModes: modes }),
 
       resolve: (conversationId, projectId) => {
-        const { byConversation, byProject } = get();
+        const { byConversation, byProject, availableModes } = get();
 
         const convOverride = byConversation[conversationId];
-        if (convOverride) return convOverride;
+        if (convOverride) return clampToAvailable(convOverride, availableModes);
 
         if (projectId) {
           const projDefault = byProject[projectId];
           if (projDefault) {
-            return { ...projDefault, source: 'project-default' };
+            return clampToAvailable(projectState(projDefault), availableModes);
           }
         }
 
-        return GLOBAL_DEFAULT;
+        return clampToAvailable(GLOBAL_DEFAULT, availableModes);
       },
 
       setMode: (conversationId, mode) =>

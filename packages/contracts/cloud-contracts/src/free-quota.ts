@@ -177,6 +177,8 @@ export type FreeQuotaStatus = z.infer<typeof FreeQuotaModelSchema>['status'];
 export type FreeQuotaModel = z.infer<typeof FreeQuotaModelSchema>;
 export type FreeQuotaCatalogue = z.infer<typeof FreeQuotaCatalogueSchema>;
 export type FreeQuotaMediaCategory = (typeof FREE_QUOTA_MEDIA_CATEGORIES)[number];
+export const FREE_QUOTA_CHAT_DAILY_USE_KIND = 'chat' as const;
+export type FreeQuotaDailyUseKind = FreeQuotaMediaCategory | typeof FREE_QUOTA_CHAT_DAILY_USE_KIND;
 export type FreeQuotaLimitedOffer = z.infer<typeof FreeQuotaLimitedOfferSchema>;
 export type FreeQuotaMediaOffer = z.infer<typeof FreeQuotaMediaOfferSchema>;
 

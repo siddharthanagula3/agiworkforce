@@ -3,16 +3,20 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   DEVELOPER_AGENT_MODES,
+  DEVELOPER_REASONING_EFFORTS,
   DEVELOPER_SESSION_PROTOCOL_VERSION,
   LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
   MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
   PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
   SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
+  THREAD_WRITER_CONFLICT_ERROR_CODE,
+  MCP_APPROVAL_STALE_ERROR_CODE,
   developerAgentModeApprovesWithoutAsking,
   developerSessionUpgradeTarget,
   isDeveloperAgentModeReadOnly,
   negotiateDeveloperSessionProtocol,
   normalizeDeveloperAgentMode,
+  remoteTurnAgentMode,
 } from '../developer-session';
 
 const rustContract = readFileSync(
@@ -56,6 +60,20 @@ describe('developer-session protocol versions', () => {
     expect(Number(errorCode![1])).toBe(PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE);
   });
 
+  it('reads a writer conflict by the code the Rust contract gives it', () => {
+    const errorCode = rustContract.match(
+      /pub const THREAD_WRITER_CONFLICT_ERROR_CODE: i32 = (-?\d+);/u,
+    );
+    expect(Number(errorCode![1])).toBe(THREAD_WRITER_CONFLICT_ERROR_CODE);
+  });
+
+  it('reads a stale MCP approval by the code the Rust contract gives it', () => {
+    const errorCode = rustContract.match(
+      /pub const MCP_APPROVAL_STALE_ERROR_CODE: i32 = (-?\d+);/u,
+    );
+    expect(Number(errorCode![1])).toBe(MCP_APPROVAL_STALE_ERROR_CODE);
+  });
+
   it('names the same four postures as the wire enum', () => {
     const variants = rustContract
       .slice(rustContract.indexOf('pub enum DeveloperAgentMode {'))
@@ -66,9 +84,29 @@ describe('developer-session protocol versions', () => {
       .map((variant) => variant.toLowerCase());
     expect(variants.sort()).toEqual([...DEVELOPER_AGENT_MODES].sort());
   });
+
+  it('names the same reasoning levels as the wire enum, in its order', () => {
+    const variants = rustContract
+      .slice(rustContract.indexOf('pub enum DeveloperReasoningEffort {'))
+      .split('}')[0]!
+      .split('\n')
+      .map((line) => line.trim().replace(/,$/u, ''))
+      .filter((line) => /^[A-Z][A-Za-z]*$/u.test(line))
+      .map((variant) => variant.toLowerCase());
+    expect(variants).toEqual([...DEVELOPER_REASONING_EFFORTS]);
+  });
 });
 
 describe('permission postures', () => {
+  it('never lets a turn started from a paired phone name Bypass permissions', () => {
+    expect(remoteTurnAgentMode('bypass')).toBeNull();
+    expect(remoteTurnAgentMode(undefined)).toBeNull();
+    expect(remoteTurnAgentMode(null)).toBeNull();
+    for (const mode of DEVELOPER_AGENT_MODES.filter((candidate) => candidate !== 'bypass')) {
+      expect(remoteTurnAgentMode(mode)).toBe(mode);
+    }
+  });
+
   it('reads every surface spelling onto one value', () => {
     expect(normalizeDeveloperAgentMode('default')).toBe('ask');
     expect(normalizeDeveloperAgentMode('dontAsk')).toBe('ask');

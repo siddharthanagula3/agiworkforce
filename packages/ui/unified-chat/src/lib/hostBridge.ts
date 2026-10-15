@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { ChatExecutionMode } from '@agiworkforce/types';
+import type { ChatExecutionMode, ManagedUsageSummaryResponse } from '@agiworkforce/types';
 import type { Conversation } from './types';
 
 export interface ChatHostConversation {
@@ -38,8 +38,14 @@ export interface ChatHostBridge {
   setConversationModel?: (id: string, modelId: string | null) => void;
   fetchCloudFile?: (uri: string) => Promise<Blob>;
   openUpgrade?: (requiredTier: string) => void;
+  requestByokConversation?: (conversationId: string | null) => void;
+  fetchPlanUsage?: () => Promise<ManagedUsageSummaryResponse>;
   fetchCodingCheckpoints?: () => Promise<ChatHostCodingCheckpoint[]>;
   rewindCodingCheckpoint?: (checkpointId: string) => Promise<void>;
+  compactConversation?: (conversationId: string, focus?: string) => Promise<void>;
+  fetchContextUsage?: (
+    conversationId: string,
+  ) => Promise<{ tokensUsed: number; contextWindow: number } | null>;
 }
 
 export const HostBridgeContext = createContext<ChatHostBridge | null>(null);

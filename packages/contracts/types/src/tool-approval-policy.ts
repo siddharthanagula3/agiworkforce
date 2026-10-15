@@ -22,6 +22,8 @@ export const DEFAULT_TOOL_APPROVAL_PREFERENCES: ToolApprovalPreferences = {
 
 export const TOOL_APPROVAL_ACTION_LABELS = Object.freeze({
   allow: 'Allow',
+  allowOnce: 'Allow once',
+  allowForConversation: 'Allow for this chat',
   alwaysAllow: 'Always allow',
   allowForChat: 'Allow for this chat',
   ask: 'Ask',

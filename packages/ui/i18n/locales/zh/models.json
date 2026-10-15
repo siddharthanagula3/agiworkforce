@@ -45,6 +45,7 @@
   },
   "selector": {
     "bestAuto": "最佳（自动）",
+    "byokProviderPrefix": "{{provider}} 密钥",
     "capabilitiesUnverified": "能力未验证",
     "catalogFailed": "无法刷新模型",
     "catalogFailedHint": "请检查运行时连接后重试。",
@@ -82,6 +83,8 @@
     "thinkingOff": "关闭",
     "thinkingState": "思考：{{state}}",
     "unavailable": "不可用",
+    "useYourApiKey": "使用你的 API 密钥调用模型",
+    "useYourApiKeyHint": "将打开一个单独的 BYOK 对话。此本地对话仍保留在本设备上。",
     "visionCapability": "视觉"
   },
   "counts": {

@@ -131,3 +131,6 @@ export type {
   OpenAIWireUsage,
   OpenAIWireFinishReason,
 } from './openai-wire-compat';
+
+export { ThinkingTagSplitter, longestTrailingTagPrefix } from './thinking-tag-splitter';
+export type { ThinkingTagPart } from './thinking-tag-splitter';

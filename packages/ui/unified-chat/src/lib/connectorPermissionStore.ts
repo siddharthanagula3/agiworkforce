@@ -1,11 +1,13 @@
 /**
  * Connector permission store.
  *
- *   - Tauri (Desktop): encrypted via master_password.rs vault at
+ *   - Tauri (Desktop): encrypted under the device key at
  *     `~/.agiworkforce/connector-permissions.json`, reached through the
  *     `connector_permission_*` Tauri commands. This is also what the Rust tool
  *     executor reads when it enforces a permission, so the UI and the
- *     enforcement point share one source of truth.
+ *     enforcement point share one source of truth. A store that exists and
+ *     cannot be opened blocks every connector tool there, so `list` reports
+ *     that state instead of an empty list, and `reset` starts it again.
  *   - Any other runtime: unsupported, and says so (CON-26). The previous
  *     "Cloud mode" branch accepted writes and discarded them; see the note above
  *     {@link ConnectorPermissionsUnavailableError}.
@@ -27,6 +29,22 @@ import { defaultPermissionForTool } from '@agiworkforce/types';
 const isTauriEnv: boolean =
   typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
+export type ConnectorPermissionStoreState =
+  | { state: 'ok' }
+  | { state: 'missing' }
+  | { state: 'unreadable'; reason: string; unlockMayFix: boolean };
+
+export interface ConnectorPermissionListing {
+  store: ConnectorPermissionStoreState;
+  permissions: ConnectorToolPermission[];
+}
+
+export interface ConnectorPermissionReset {
+  reset: boolean;
+  /** The file name the unreadable store was kept under, beside the new one. */
+  keptAs: string | null;
+}
+
 export interface ConnectorPermissionStore {
   storage: ConnectorPermissionStorage;
 
@@ -45,7 +63,14 @@ export interface ConnectorPermissionStore {
     destructive?: boolean,
   ): Promise<void>;
 
-  list(connectorId: string): Promise<ConnectorToolPermission[]>;
+  /** The saved permissions for a connector, and whether the store they live in opens. */
+  list(connectorId: string): Promise<ConnectorPermissionListing>;
+
+  /**
+   * Replace a store that cannot be opened with an empty one. The old file is
+   * kept under a new name. Does nothing when the store opens.
+   */
+  reset(): Promise<ConnectorPermissionReset>;
 }
 
 export function getConnectorPermissionStore(): ConnectorPermissionStore {
@@ -87,22 +112,25 @@ class LocalVaultStore implements ConnectorPermissionStore {
     });
   }
 
-  async list(connectorId: string): Promise<ConnectorToolPermission[]> {
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      const raw = await invoke<Array<{ toolName: string; level: string; destructive: boolean }>>(
-        'connector_permission_list',
-        { connectorId },
-      );
-      return raw.map((r) => ({
+  async list(connectorId: string): Promise<ConnectorPermissionListing> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const raw = await invoke<{
+      store: ConnectorPermissionStoreState;
+      permissions: Array<{ toolName: string; level: string; destructive: boolean }>;
+    }>('connector_permission_list', { connectorId });
+    return {
+      store: raw.store,
+      permissions: raw.permissions.map((r) => ({
         toolName: r.toolName,
         level: r.level as ConnectorPermissionLevel,
         destructive: r.destructive,
-      }));
-    } catch (err) {
-      console.warn('[ConnectorPermissions] list failed:', err);
-      return [];
-    }
+      })),
+    };
+  }
+
+  async reset(): Promise<ConnectorPermissionReset> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<ConnectorPermissionReset>('connector_permission_reset');
   }
 }
 
@@ -135,8 +163,12 @@ class UnsupportedRuntimeStore implements ConnectorPermissionStore {
     throw new ConnectorPermissionsUnavailableError('set');
   }
 
-  async list(_connectorId: string): Promise<ConnectorToolPermission[]> {
+  async list(_connectorId: string): Promise<ConnectorPermissionListing> {
     throw new ConnectorPermissionsUnavailableError('list');
+  }
+
+  async reset(): Promise<ConnectorPermissionReset> {
+    throw new ConnectorPermissionsUnavailableError('reset');
   }
 }
 

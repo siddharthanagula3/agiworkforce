@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MAX_ATTACHMENT_BYTES } from '../chat';
 import {
   BILLING_PLAN_PRICING,
+  getBillingPlanPricing,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   SELF_SERVE_PAID_PLAN_TIERS,
   getNextUpgradeTier,
@@ -51,6 +52,17 @@ import {
 } from '../billing-catalog';
 
 describe('billing catalog', () => {
+  it('publishes Max 20x while preserving its stored identifier and existing economics', () => {
+    expect(getBillingPlanPricing('max_15x')).toMatchObject({
+      id: 'max_15x',
+      label: 'Max 20x',
+      monthlyPriceUsd: 200,
+      monthlyPriceInr: 19999,
+    });
+    expect(isMax15xPlanTier('max_15x')).toBe(true);
+    expect(canUseBillingPlanCapability('max_15x', 'video_generation')).toBe(true);
+  });
+
   it('admits Team to self-serve checkout while Enterprise stays sales-assisted', () => {
     expect(SELF_SERVE_PAID_PLAN_TIERS).toEqual(['basic', 'pro', 'max', 'max_15x', 'team']);
     expect(SELF_SERVE_PAID_PLAN_TIERS).not.toContain('enterprise');

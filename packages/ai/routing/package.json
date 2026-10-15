@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./model-picker": "./src/model-picker.ts"
+    "./model-picker": "./src/model-picker.ts",
+    "./release-ledger": "./src/promotion/release-ledger.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -13,6 +14,9 @@
     "*": {
       "model-picker": [
         "./src/model-picker.ts"
+      ],
+      "release-ledger": [
+        "./src/promotion/release-ledger.ts"
       ],
       "*": [
         "./src/index.ts"

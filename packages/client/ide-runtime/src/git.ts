@@ -89,17 +89,3 @@ export interface GitHead {
 export function isDetachedHead(head: GitHead): boolean {
   return head.branch === null;
 }
-
-export const SHORT_SHA_LENGTH = 7;
-
-/**
- * One label for a head, matching the CLI's own rendering: a detached HEAD and a
- * branch with no commits yet read as themselves rather than as "no branch".
- */
-export function describeGitHead(head: GitHead): string {
-  if (head.branch) {
-    return head.headSha ? head.branch : `${head.branch} (no commits yet)`;
-  }
-  if (!head.headSha) return 'HEAD (no commits yet)';
-  return `detached at ${head.headSha.slice(0, SHORT_SHA_LENGTH)}`;
-}

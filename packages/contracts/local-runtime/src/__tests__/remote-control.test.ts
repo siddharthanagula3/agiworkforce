@@ -28,7 +28,11 @@ describe('a remote-control session can always be ended', () => {
   it('leaves nothing a later attach could reuse once the session is idle', () => {
     for (const field of LIVE_PAIRING_FIELDS) {
       const value = IDLE_REMOTE_CONTROL_STATE[field];
-      expect(value === null || value === 0, `${String(field)} survives the stop`).toBe(true);
+      if (field === 'reconnectable') {
+        expect(value, 'reconnect consent survives the stop').toBe(false);
+      } else {
+        expect(value === null || value === 0, `${String(field)} survives the stop`).toBe(true);
+      }
     }
     expect(IDLE_REMOTE_CONTROL_STATE.status).toBe('idle');
     expect(IDLE_REMOTE_CONTROL_STATE.attachedSessions).toBe(0);

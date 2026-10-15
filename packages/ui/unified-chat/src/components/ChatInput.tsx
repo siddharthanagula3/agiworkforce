@@ -16,17 +16,19 @@ import {
   Check,
   ChevronDown,
   Clapperboard,
+  Eraser,
   Folder,
   FolderOpen,
   History,
   Image as ImageIcon,
   ListChecks,
   Mic,
+  Minimize2,
   Plus,
   X,
 } from 'lucide-react';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
-import { useMenuKeyboard, useUiTranslation } from '@agiworkforce/ui';
+import { isApplePlatform, useMenuKeyboard, useUiTranslation } from '@agiworkforce/ui';
 import { reportClientFailure, type ClientFailureDetail } from '../lib/client-failures';
 import { cn } from '../lib/utils';
 import { useChatStore } from '../stores/chatStore';
@@ -34,13 +36,15 @@ import { useModelStore } from '../stores/modelStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { AttachmentMenu } from './AttachmentMenu';
 import { ModelSelector } from './ModelSelector';
-import { SendButton } from './SendButton';
+import { SendButton, type SendButtonMode } from './SendButton';
 import { AgentControl } from './AgentControl';
 import { ThinkingControl } from './ThinkingControl';
 import { PlanModeToggle } from './ChatInputToolbar';
 import { SlashCommandMenu, type CommandSuggestion } from './SlashCommandMenu';
+import { ContextUsageMeter, type ContextUsage } from './ContextUsageMeter';
 import { SkillMentionPicker, type MentionSkill } from './SkillMentionPicker';
 import { matchMentionQuery } from '../lib/mentionQuery';
+import { COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, matchesShortcut } from '../lib/shortcutRegistry';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { VoiceOrbCanvas } from './VoiceOrb';
@@ -57,6 +61,7 @@ import type { ChatAttachmentPolicy, LocalToolScope } from '../lib/runtime';
 import {
   getSlashCommand,
   registerBuiltinSlashCommands,
+  resolveTypedSlashCommand,
   type SlashCommandContext,
 } from '../lib/slashCommands';
 import {
@@ -88,12 +93,19 @@ export type { ComposerVoiceState, ComposerVoiceController } from '../voice/compo
 export interface ChatInputSlashCommandHost {
   togglePlanMode: () => void;
   openRewindTimeline?: (checkpointId?: string) => void;
+  clearConversation?: (conversationId: string | null) => void;
+  compactConversation?: (conversationId: string, focus?: string) => Promise<void>;
+  fetchContextUsage?: (conversationId: string) => Promise<ContextUsage | null>;
 }
 
 export interface ComposerSkillSuggestion {
   name: string;
   description: string;
   reason: string;
+}
+
+function slashFailureMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'That command could not run.';
 }
 
 const SKILL_SUGGESTION_DEBOUNCE_MS = 300;
@@ -134,6 +146,15 @@ export type ChatComposerEditorMode =
 const COMPOSER_EDITOR_ARM_CLASS =
   'w-full [&_.ProseMirror]:min-h-[28px] [&_.ProseMirror]:px-4 [&_.ProseMirror]:pt-3 [&_.ProseMirror]:pb-1 [&_.composer-editor\\_\\_placeholder]:px-4 [&_.composer-editor\\_\\_placeholder]:pt-3';
 
+/**
+ * What became of a send. The composer clears what was typed and attached only
+ * when the host took the message, as a turn or a queued follow-up; a send the
+ * host turned away stays in the box, with the reason shown beside it.
+ */
+export type ComposerSendOutcome = { accepted: true } | { accepted: false; reason: string };
+
+export const COMPOSER_SEND_ACCEPTED: ComposerSendOutcome = { accepted: true };
+
 export interface ChatInputProps {
   onSend: (
     content: string,
@@ -145,7 +166,7 @@ export interface ChatInputProps {
     workScope?: ChatWorkScope,
     skillName?: string,
     localToolScope?: LocalToolScope,
-  ) => void;
+  ) => ComposerSendOutcome;
   onStop: () => void;
   onModelSelectorClick?: () => void;
   allowModelFallbackModels?: boolean;
@@ -161,10 +182,18 @@ export interface ChatInputProps {
   canUseAgiWork?: boolean;
   agiWorkUnavailableReason?: string;
   isStreamingOverride?: boolean;
+  /** A send while a reply runs becomes a follow-up instead of being refused. */
+  acceptsFollowUps?: boolean;
+  /** The runtime can hand a follow-up to the running turn instead of queueing it. */
+  canSteerFollowUps?: boolean;
+  /** Cmd/Ctrl+Shift+Enter: the next follow-up steers if it would queue, or queues if it would steer. */
+  onFollowUpInvert?: () => void;
   hasMessages: boolean;
   className?: string;
   disabled?: boolean;
   disabledMessage?: string;
+  /** Why nothing can be sent right now. The draft stays editable and the reason is shown above it. */
+  sendBlockedReason?: string;
   conversationId?: string | null;
   projectId?: string | null;
   supportsCodeExecution?: boolean;
@@ -199,10 +228,14 @@ export function ChatInput({
   canUseAgiWork = true,
   agiWorkUnavailableReason,
   isStreamingOverride,
+  acceptsFollowUps = false,
+  canSteerFollowUps = false,
+  onFollowUpInvert,
   hasMessages,
   className,
   disabled = false,
   disabledMessage,
+  sendBlockedReason,
   conversationId,
   projectId,
   supportsCodeExecution = false,
@@ -248,6 +281,14 @@ export function ChatInput({
   const attachedFilesRef = useRef<File[]>(attachedFiles);
   attachedFilesRef.current = attachedFiles;
   const hasTextContent = draftContent.trim().length > 0;
+  const followUpQueueMode = useSettingsStore((state) => state.followUpQueueMode);
+  const sendButtonMode: SendButtonMode = !isStreaming
+    ? 'send'
+    : !acceptsFollowUps || (!hasTextContent && attachedFiles.length === 0)
+      ? 'stop'
+      : followUpQueueMode === 'steer' && canSteerFollowUps && attachedFiles.length === 0
+        ? 'send'
+        : 'queue';
   const [isDragOver, setIsDragOver] = useState(false);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
@@ -568,6 +609,16 @@ export function ChatInput({
         icon: <History className="h-4 w-4 text-[var(--chat-text-secondary)]" />,
       },
       {
+        name: 'clear',
+        enabled: Boolean(conversationId && slashCommandHost.clearConversation),
+        icon: <Eraser className="h-4 w-4 text-[var(--chat-text-secondary)]" />,
+      },
+      {
+        name: 'compact',
+        enabled: Boolean(conversationId && slashCommandHost.compactConversation),
+        icon: <Minimize2 className="h-4 w-4 text-[var(--chat-text-secondary)]" />,
+      },
+      {
         name: 'image',
         enabled: mediaGenerationKinds.includes('image'),
         icon: <ImageIcon className="h-4 w-4 text-[var(--chat-text-secondary)]" />,
@@ -617,7 +668,14 @@ export function ChatInput({
         conversationId: conversationId ?? null,
         host: { ...slashCommandHost, toggleMediaMode },
       };
-      void command.handler('', context);
+      try {
+        const result = command.handler('', context);
+        if (result) {
+          result.catch((error: unknown) => setAttachmentError(slashFailureMessage(error)));
+        }
+      } catch (error) {
+        setAttachmentError(slashFailureMessage(error));
+      }
       clearDraftContent(conversationId);
       setSlashSelectedIndex(0);
       focusComposer();
@@ -780,11 +838,32 @@ export function ChatInput({
   }, [thumbnailUrls]);
 
   const handleSend = useCallback(() => {
-    if (disabled || noModelSelected) return;
+    if (disabled || noModelSelected || sendBlockedReason) return;
     const typedContent = draftContent.trim();
     const destinationAttachedFiles =
       attachedFilesDestinationRef.current === attachmentDestinationKey ? attachedFiles : [];
-    if ((!typedContent && destinationAttachedFiles.length === 0) || isStreaming) return;
+    if (!typedContent && destinationAttachedFiles.length === 0) return;
+    if (isStreaming && !acceptsFollowUps) return;
+
+    const typedCommand =
+      slashCommandHost && !isStreaming && destinationAttachedFiles.length === 0
+        ? resolveTypedSlashCommand(typedContent, { ...slashCommandHost }, conversationId ?? null)
+        : null;
+    if (typedCommand) {
+      try {
+        const result = typedCommand.command.handler!(typedCommand.args, {
+          conversationId: conversationId ?? null,
+          host: { ...slashCommandHost, toggleMediaMode },
+        });
+        if (result) {
+          result.catch((error: unknown) => setAttachmentError(slashFailureMessage(error)));
+        }
+      } catch (error) {
+        setAttachmentError(slashFailureMessage(error));
+      }
+      clearDraftContent(conversationId);
+      return;
+    }
 
     const content =
       typedContent ||
@@ -808,43 +887,46 @@ export function ChatInput({
           projectId: activeProjectId,
         }
       : undefined;
-    if (supportsExplicitLocalWebSearch && explicitWebSearchEnabled) {
-      onSend(
-        content,
-        agentMode,
-        effort,
-        attachments,
-        research,
-        activeStyle ?? undefined,
-        workScope,
-        selectedSkill?.name,
-        'web_search',
-      );
-    } else if (selectedSkill) {
-      onSend(
-        content,
-        agentMode,
-        effort,
-        attachments,
-        research,
-        activeStyle ?? undefined,
-        workScope,
-        selectedSkill.name,
-      );
-    } else if (projectPicker) {
-      onSend(
-        content,
-        agentMode,
-        effort,
-        attachments,
-        research,
-        activeStyle ?? undefined,
-        workScope,
-      );
-    } else if (activeStyle) {
-      onSend(content, agentMode, effort, attachments, research, activeStyle);
-    } else {
-      onSend(content, agentMode, effort, attachments, research);
+    const outcome =
+      supportsExplicitLocalWebSearch && explicitWebSearchEnabled
+        ? onSend(
+            content,
+            agentMode,
+            effort,
+            attachments,
+            research,
+            activeStyle ?? undefined,
+            workScope,
+            selectedSkill?.name,
+            'web_search',
+          )
+        : selectedSkill
+          ? onSend(
+              content,
+              agentMode,
+              effort,
+              attachments,
+              research,
+              activeStyle ?? undefined,
+              workScope,
+              selectedSkill.name,
+            )
+          : projectPicker
+            ? onSend(
+                content,
+                agentMode,
+                effort,
+                attachments,
+                research,
+                activeStyle ?? undefined,
+                workScope,
+              )
+            : activeStyle
+              ? onSend(content, agentMode, effort, attachments, research, activeStyle)
+              : onSend(content, agentMode, effort, attachments, research);
+    if (!outcome.accepted) {
+      setAttachmentError(outcome.reason);
+      return;
     }
     clearDraftContent(conversationId);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -859,8 +941,10 @@ export function ChatInput({
   }, [
     disabled,
     noModelSelected,
+    sendBlockedReason,
     draftContent,
     isStreaming,
+    acceptsFollowUps,
     onSend,
     conversationId,
     projectId,
@@ -879,6 +963,8 @@ export function ChatInput({
     workMode,
     activeProjectId,
     selectedSkill,
+    slashCommandHost,
+    toggleMediaMode,
     t,
   ]);
 
@@ -940,6 +1026,16 @@ export function ChatInput({
         return;
       }
 
+      if (
+        matchesShortcut(e, COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, isApplePlatform()) &&
+        !e.nativeEvent.isComposing
+      ) {
+        e.preventDefault();
+        onFollowUpInvert?.();
+        handleSend();
+        return;
+      }
+
       const shortcutMatches =
         sendShortcut === 'mod-enter' ? (e.metaKey || e.ctrlKey) && !e.shiftKey : !e.shiftKey;
       if (e.key === 'Enter' && shortcutMatches && !e.nativeEvent.isComposing) {
@@ -947,7 +1043,7 @@ export function ChatInput({
         handleSend();
       }
     },
-    [handleSend, handleSlashMenuKey, isStreaming, onStop, sendShortcut],
+    [handleSend, handleSlashMenuKey, isStreaming, onFollowUpInvert, onStop, sendShortcut],
   );
 
   const handleEditorTextChange = useCallback(
@@ -1067,6 +1163,17 @@ export function ChatInput({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
+        {sendBlockedReason && (
+          <div
+            role="status"
+            aria-live="polite"
+            data-testid="composer-send-blocked"
+            className="px-3 pt-2 text-caption text-[var(--chat-text-secondary)]"
+          >
+            {sendBlockedReason}
+          </div>
+        )}
+
         {/* Inline attachment validation error, dismissed on next valid add. */}
         {attachmentError && (
           <div
@@ -1140,6 +1247,10 @@ export function ChatInput({
               existingFileNames={attachedFileNames}
               onTextChange={handleEditorTextChange}
               onSubmit={handleSend}
+              onAlternateSubmit={() => {
+                onFollowUpInvert?.();
+                handleSend();
+              }}
               onFocusChange={setFocused}
               onPasteDecision={handleEditorPasteDecision}
               isSlashMenuActive={() => slashMenuOpen}
@@ -1278,6 +1389,13 @@ export function ChatInput({
 
               {hostControls}
 
+              {conversationId && (
+                <ContextUsageMeter
+                  conversationId={conversationId}
+                  fetchInitialUsage={slashCommandHost?.fetchContextUsage}
+                />
+              )}
+
               {/* Agent control chips stay visually attached to the plus button. */}
               {showAgentControl && conversationId && (
                 <AgentControl
@@ -1381,10 +1499,10 @@ export function ChatInput({
                   send). The button's `queue` state exists in the shared API for
                   web parity but is never fabricated here. */}
               <SendButton
-                mode={isStreaming ? 'stop' : 'send'}
+                mode={sendButtonMode}
                 hasContent={hasTextContent || attachedFiles.length > 0}
-                disabled={disabled || noModelSelected}
-                onClick={isStreaming ? onStop : handleSend}
+                disabled={disabled || noModelSelected || Boolean(sendBlockedReason)}
+                onClick={sendButtonMode === 'stop' ? onStop : handleSend}
                 sendShortcutLabel={sendShortcut === 'mod-enter' ? 'Cmd/Ctrl+Enter' : 'Enter'}
                 className="shrink-0"
               />

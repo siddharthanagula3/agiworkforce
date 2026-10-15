@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatInput } from '../ChatInput';
+import { COMPOSER_SEND_ACCEPTED, ChatInput } from '../ChatInput';
 import { useChatStore } from '../../stores/chatStore';
 import { useModelStore } from '../../stores/modelStore';
 import { useAgentControlStore } from '../../stores/agentControlStore';
@@ -69,7 +69,7 @@ describe('composer model picker · reasoning effort', () => {
   it('offers the thinking toggle the picker builds, which the composer never wired', () => {
     render(
       <ChatInput
-        onSend={vi.fn()}
+        onSend={vi.fn(() => COMPOSER_SEND_ACCEPTED)}
         onStop={vi.fn()}
         onModelSelectorClick={vi.fn()}
         hasMessages={false}
@@ -83,7 +83,7 @@ describe('composer model picker · reasoning effort', () => {
   it('turns thinking off and back on through the store the effort chip reads', () => {
     render(
       <ChatInput
-        onSend={vi.fn()}
+        onSend={vi.fn(() => COMPOSER_SEND_ACCEPTED)}
         onStop={vi.fn()}
         onModelSelectorClick={vi.fn()}
         hasMessages={false}

@@ -15,6 +15,7 @@ import {
   type RemoteCodeIndexedMessage,
   type RemoteCodeLiveEvent,
   type RemoteCodePendingApproval,
+  type RemoteCodePendingQuestion,
   type RemoteCodeRequest,
   type RemoteCodeSessionSnapshot,
   type RemoteCodeSessionStatus,
@@ -25,12 +26,13 @@ import {
   type DispatchTaskPendingStep,
   type DispatchTaskLifecycleStatus,
 } from '@agiworkforce/types';
-import type {
-  DeveloperApprovalAnswer,
-  DeveloperSessionEvent,
-  DeveloperSessionList,
-  DeveloperSessionTranscript,
-  DeveloperTurnRequest,
+import {
+  isCredentialPath,
+  type DeveloperApprovalAnswer,
+  type DeveloperSessionEvent,
+  type DeveloperSessionList,
+  type DeveloperSessionTranscript,
+  type DeveloperTurnRequest,
 } from '@agiworkforce/local-runtime-contract';
 import type { DeveloperSessionFileChange } from '@agiworkforce/types/protocol';
 import { logger, redactSecrets } from '../logger';
@@ -64,13 +66,29 @@ export interface DeveloperSessionActivity {
   } | null;
 }
 
+/** Thrown by a dependency when the phone may not reach the folder it named. */
+export class RemoteCommandRefused extends Error {}
+
+/**
+ * What became of an answer the phone sent. `held` means the computer will not
+ * take that allow from a phone alone and is asking the person in front of it;
+ * `settled` says how that ended, and never rejects.
+ */
+export type RemoteApprovalOutcome =
+  | { status: 'applied' }
+  | {
+      status: 'held';
+      message: string;
+      settled: Promise<{ allowed: boolean; message: string }>;
+    };
+
 export interface CodeRemoteDependencies {
   send: (action: string, payload: Record<string, unknown>) => Promise<boolean>;
   listSessions: () => Promise<DeveloperSessionList>;
   readActivity: (rootId: string, threadId: string) => Promise<DeveloperSessionActivity>;
   startTurn: (request: DeveloperTurnRequest) => Promise<{ turnId: string }>;
   interruptTurn: (rootId: string, threadId: string, turnId: string) => Promise<boolean>;
-  answerApproval: (answer: DeveloperApprovalAnswer) => Promise<boolean>;
+  answerApproval: (answer: DeveloperApprovalAnswer) => Promise<RemoteApprovalOutcome>;
   readDiff: (rootId: string, paths: readonly string[]) => Promise<string | null>;
   startSession: (rootId: string, title?: string) => Promise<{ threadId: string }>;
   defaultRoot: () => { id: string; name: string } | null;
@@ -104,6 +122,7 @@ interface ThreadState {
   activeTurnId: string | null;
   partialResponse: string;
   pendingApprovals: Map<string, RemoteCodePendingApproval>;
+  pendingQuestions: Map<string, RemoteCodePendingQuestion>;
   tools: Map<string, ToolInFlight>;
   toolDiffs: Map<string, RemoteCodeDiff>;
   testRuns: RemoteCodeTestRun[];
@@ -177,7 +196,37 @@ function settleTools(tools: RemoteCodeToolRecord[]): RemoteCodeToolRecord[] {
   );
 }
 
+const PATCH_SOURCE = /^(?:--- a\/|\+\+\+ b\/|rename from |rename to |copy from |copy to )(.+)$/u;
+const PATCH_HEADER = /^diff --git a\/(.+) b\/(.+)$/u;
+
+/**
+ * Every file a patch reads from or writes to, not only the one it is filed
+ * under: a rename or a copy carries the contents of the file it came from.
+ */
+function patchSources(patch: string): string[] {
+  const paths: string[] = [];
+  for (const line of patch.split('\n')) {
+    const header = PATCH_HEADER.exec(line);
+    if (header?.[1] && header[2]) paths.push(header[1].trim(), header[2].trim());
+    const source = PATCH_SOURCE.exec(line)?.[1]?.trim();
+    if (source) paths.push(source);
+  }
+  return paths;
+}
+
+export const WITHHELD_DIFF =
+  'Contents withheld: this file holds credentials, so its changes are not sent to the phone.';
+
+/**
+ * Every diff sent to the phone is built here, whichever way it arrived: read
+ * from git, scraped from a tool's output, or stated by the runtime. A change
+ * to a credential file is named and nothing more, the same files the agent's
+ * own file reads refuse.
+ */
 function clipDiff(path: string, patch: string): RemoteCodeDiff {
+  if (isCredentialPath(path) || patchSources(patch).some(isCredentialPath)) {
+    return { path, patch: WITHHELD_DIFF, truncated: false };
+  }
   const safe = redactSecrets(patch);
   const truncated = safe.length > REMOTE_CODE_LIMITS.diffLength;
   return { path, patch: safe.slice(0, REMOTE_CODE_LIMITS.diffLength), truncated };
@@ -213,6 +262,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         activeTurnId: null,
         partialResponse: '',
         pendingApprovals: new Map(),
+        pendingQuestions: new Map(),
         tools: new Map(),
         toolDiffs: new Map(),
         testRuns: [],
@@ -285,23 +335,48 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
           .map((change) => change.path),
       ),
     ];
-    const fromGit = modified.length > 0 ? await deps.readDiff(state.rootId, modified) : null;
-    return [...state.toolDiffs.values(), ...(fromGit ? splitDiffByFile(fromGit) : [])].slice(
-      -REMOTE_CODE_LIMITS.diffs,
-    );
+    const readable = modified.filter((path) => !isCredentialPath(path));
+    const fromGit = readable.length > 0 ? await deps.readDiff(state.rootId, readable) : null;
+    return [
+      ...state.toolDiffs.values(),
+      ...modified.filter(isCredentialPath).map((path) => clipDiff(path, '')),
+      ...(fromGit ? splitDiffByFile(fromGit) : []),
+    ].slice(-REMOTE_CODE_LIMITS.diffs);
   }
 
+  /**
+   * The runtime's answer replaces what this controller remembered, it is not
+   * merged into it. Session events are not relayed while no phone is
+   * connected, so a turn that ended in that time would otherwise stay
+   * "running" here for good, and every later message would wait behind it.
+   */
   async function publishSnapshot(state: ThreadState): Promise<void> {
     const activity = await deps.readActivity(state.rootId, state.threadId);
-    if (activity.activeTurn) {
-      state.activeTurnId = activity.activeTurn.turnId;
-      state.partialResponse = activity.activeTurn.partialResponse;
-      for (const approval of activity.activeTurn.pendingApprovals) {
+    const running = activity.activeTurn;
+    state.activeTurnId = running?.turnId ?? null;
+    state.partialResponse = running?.partialResponse ?? '';
+    state.pendingApprovals.clear();
+    if (running) {
+      for (const approval of running.pendingApprovals) {
         state.pendingApprovals.set(approval.requestId, {
-          turnId: activity.activeTurn.turnId,
+          turnId: running.turnId,
           requestId: approval.requestId,
           summary: approval.summary,
           detail: approval.detail,
+        });
+      }
+    } else {
+      state.tools.clear();
+      state.toolDiffs.clear();
+    }
+    const askedTurn = activity.transcript.activeTurn;
+    state.pendingQuestions.clear();
+    if (askedTurn) {
+      for (const question of askedTurn.questions) {
+        state.pendingQuestions.set(question.requestId, {
+          turnId: askedTurn.turnId,
+          requestId: question.requestId,
+          question: clipRemoteText(question.question, REMOTE_CODE_LIMITS.messageLength).text,
         });
       }
     }
@@ -330,7 +405,12 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
           role: message.role as 'user' | 'assistant',
           text: safeText(message.text, REMOTE_CODE_LIMITS.messageLength),
         })),
-      pendingApprovals: [...state.pendingApprovals.values()],
+      pendingApprovals: [...state.pendingApprovals.values()].slice(
+        -REMOTE_CODE_LIMITS.pendingApprovals,
+      ),
+      pendingQuestions: [...state.pendingQuestions.values()].slice(
+        -REMOTE_CODE_LIMITS.pendingQuestions,
+      ),
       fileChanges,
       queuedGuidance: state.queuedGuidance,
       tools: state.toolHistory,
@@ -343,6 +423,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
     for (const testRun of state.testRuns) {
       await sendEvent(state, { type: 'test-run', testRun });
     }
+    await deliverGuidance(state);
   }
 
   async function startSession(
@@ -561,13 +642,31 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
     for (const reply of request.replies) {
       const approval = state.pendingApprovals.get(reply.toolCallId);
       if (reply.kind !== 'approval' || !approval) continue;
-      await deps.answerApproval({
-        rootId: task.rootId,
-        threadId: task.threadId,
-        turnId: approval.turnId,
-        requestId: approval.requestId,
-        approved: reply.approved,
-      });
+      let outcome: RemoteApprovalOutcome;
+      try {
+        outcome = await deps.answerApproval({
+          rootId: task.rootId,
+          threadId: task.threadId,
+          turnId: approval.turnId,
+          requestId: approval.requestId,
+          decision: reply.approved ? 'approve_once' : 'deny',
+        });
+      } catch (error) {
+        if (!(error instanceof RemoteCommandRefused)) throw error;
+        await sendTaskStatus(task.requestId, 'awaiting_input', {
+          taskId: task.threadId,
+          message: error.message,
+          pending: pendingSteps(state),
+        });
+        continue;
+      }
+      if (outcome.status === 'held') {
+        await sendTaskStatus(task.requestId, 'awaiting_input', {
+          taskId: task.threadId,
+          message: outcome.message,
+          pending: pendingSteps(state),
+        });
+      }
     }
   }
 
@@ -615,6 +714,46 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
     });
   }
 
+  /**
+   * The phone is told what became of its answer whenever it was not simply
+   * applied. An allow the computer holds for its own confirmation, or refuses,
+   * would otherwise look accepted on the phone while nothing happened.
+   */
+  async function answerApproval(
+    state: ThreadState,
+    request: Extract<RemoteCodeRequest, { action: 'code.approval.respond' }>,
+  ): Promise<void> {
+    const requestId = request.approvalRequestId;
+    const held = (status: 'waiting' | 'allowed' | 'refused', message: string) =>
+      sendEvent(state, {
+        type: 'approval-held',
+        requestId,
+        status,
+        message: clipRemoteText(message, REMOTE_CODE_LIMITS.messageLength).text,
+      });
+    let outcome: RemoteApprovalOutcome;
+    try {
+      outcome = await deps.answerApproval({
+        rootId: request.rootId,
+        threadId: request.threadId,
+        turnId: request.turnId,
+        requestId,
+        decision: request.approved ? 'approve_once' : 'deny',
+      });
+    } catch (error) {
+      if (!(error instanceof RemoteCommandRefused)) throw error;
+      await held('refused', error.message);
+      return;
+    }
+    if (outcome.status !== 'held') return;
+    await held('waiting', outcome.message);
+    void outcome.settled
+      .then(({ allowed, message }) => held(allowed ? 'allowed' : 'refused', message))
+      .catch((error: unknown) => {
+        logger.warn('[remote-control] the phone was not told how a held approval ended', error);
+      });
+  }
+
   async function handleRequest(request: RemoteCodeRequest): Promise<void> {
     switch (request.action) {
       case 'code.sessions.list':
@@ -623,7 +762,12 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       case 'code.session.attach': {
         const state = stateFor(request.rootId, request.threadId);
         state.attached = true;
-        await publishSnapshot(state);
+        try {
+          await publishSnapshot(state);
+        } catch (error) {
+          if (error instanceof RemoteCommandRefused) state.attached = false;
+          throw error;
+        }
         return;
       }
       case 'code.session.detach':
@@ -644,13 +788,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       case 'code.approval.respond': {
         const state = stateFor(request.rootId, request.threadId);
         if (!state.pendingApprovals.has(request.approvalRequestId)) return;
-        await deps.answerApproval({
-          rootId: request.rootId,
-          threadId: request.threadId,
-          turnId: request.turnId,
-          requestId: request.approvalRequestId,
-          approved: request.approved,
-        });
+        await answerApproval(state, request);
         return;
       }
     }
@@ -727,6 +865,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         if (state.rootId !== rootId) continue;
         state.activeTurnId = null;
         state.pendingApprovals.clear();
+        state.pendingQuestions.clear();
         state.toolHistory = settleTools(state.toolHistory);
         await sendEvent(state, { type: 'runtime-stopped', message: COPY.runtimeStopped });
       }
@@ -746,6 +885,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       case 'turn-started':
         state.activeTurnId = event.turnId;
         state.partialResponse = '';
+        state.toolDiffs.clear();
         await sendEvent(state, { type: 'turn-started', turnId: event.turnId });
         return;
       case 'output-delta':
@@ -811,6 +951,20 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         }
         return;
       }
+      case 'user-input-requested': {
+        const question: RemoteCodePendingQuestion = {
+          turnId: event.turnId,
+          requestId: event.requestId,
+          question: clipRemoteText(event.question, REMOTE_CODE_LIMITS.messageLength).text,
+        };
+        state.pendingQuestions.set(event.requestId, question);
+        await sendEvent(state, { type: 'user-input-requested', ...question });
+        return;
+      }
+      case 'user-input-answered':
+        state.pendingQuestions.delete(event.requestId);
+        await sendEvent(state, { type: 'user-input-answered', requestId: event.requestId });
+        return;
       case 'turn-diff': {
         // The runtime now states what the turn changed, so the phone stops
         // depending on a diff scraped out of a tool's own text output.
@@ -837,6 +991,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         state.activeTurnId = null;
         state.partialResponse = '';
         state.pendingApprovals.clear();
+        state.pendingQuestions.clear();
         state.tools.clear();
         state.toolHistory = settleTools(state.toolHistory);
         await sendEvent(state, {
@@ -861,8 +1016,22 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
     handleControl,
     handleSessionEvent,
     attachedThreadCount: () => [...threads.values()].filter((state) => state.attached).length,
-    reset: () => {
+    /**
+     * The phone went away and may come back. Nothing is sent to it meanwhile,
+     * and what it queued waits for it, since the one that returns is checked
+     * against the one that left.
+     */
+    detach: () => {
       for (const state of threads.values()) state.attached = false;
+    },
+    /**
+     * This pairing is over, or another phone took its place. Everything kept
+     * for the old one goes with it: a message it queued must never start a
+     * turn for whoever attaches next.
+     */
+    forget: () => {
+      threads.clear();
+      dispatches.clear();
     },
   };
 }

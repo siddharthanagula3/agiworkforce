@@ -45,6 +45,7 @@
   },
   "selector": {
     "bestAuto": "最適（自動）",
+    "byokProviderPrefix": "{{provider}} キー",
     "capabilitiesUnverified": "機能未確認",
     "catalogFailed": "モデルを更新できませんでした",
     "catalogFailedHint": "ランタイム接続を確認して再試行してください。",
@@ -82,6 +83,8 @@
     "thinkingOff": "オフ",
     "thinkingState": "思考: {{state}}",
     "unavailable": "利用不可",
+    "useYourApiKey": "自分の API キーでモデルを使う",
+    "useYourApiKeyHint": "別の BYOK チャットを開きます。このローカルチャットはこのデバイスに残ります。",
     "visionCapability": "ビジョン"
   },
   "counts": {

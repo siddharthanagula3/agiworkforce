@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  MEMORY_FACT_EXTRACTION_SYSTEM_PROMPT,
   extractCandidateMemoryFacts,
   extractMemoryFactsWithModel,
   isMemoryExtractionWorthwhile,
@@ -83,6 +84,19 @@ describe('extractMemoryFactsWithModel', () => {
 
     expect(result.source).toBe('model');
     expect(result.facts).toEqual(['User lives in Berlin', 'User is a data engineer at Acme']);
+  });
+
+  it('sends the system prompt the host resolved, and its own when the host names none', async () => {
+    const prompts: string[] = [];
+    const runner = async (input: { systemPrompt: string }) => {
+      prompts.push(input.systemPrompt);
+      return '[]';
+    };
+
+    await extractMemoryFactsWithModel(NO_TRIGGER_TURN, { runner, systemPrompt: 'Host prompt.' });
+    await extractMemoryFactsWithModel(NO_TRIGGER_TURN, { runner });
+
+    expect(prompts).toEqual(['Host prompt.', MEMORY_FACT_EXTRACTION_SYSTEM_PROMPT]);
   });
 
   it('never drops a fact the pattern extractor already found', async () => {

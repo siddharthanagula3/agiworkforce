@@ -15,6 +15,8 @@ export interface RemoteControlState {
   expiresAt: number | null;
   phoneName: string | null;
   attachedSessions: number;
+  /** A phone was allowed in this session and may reconnect without being asked again. */
+  reconnectable?: boolean;
   error: string | null;
 }
 
@@ -32,6 +34,7 @@ export const IDLE_REMOTE_CONTROL_STATE: RemoteControlState = {
   expiresAt: null,
   phoneName: null,
   attachedSessions: 0,
+  reconnectable: false,
   error: null,
 };
 

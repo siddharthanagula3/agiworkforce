@@ -1,13 +1,13 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatInput } from '../ChatInput';
+import { COMPOSER_SEND_ACCEPTED, ChatInput } from '../ChatInput';
 import { useChatStore } from '../../stores/chatStore';
 import { useModelStore } from '../../stores/modelStore';
 
 function renderComposer(onStop = vi.fn(), withSlashMenu = false) {
   render(
     <ChatInput
-      onSend={vi.fn()}
+      onSend={vi.fn(() => COMPOSER_SEND_ACCEPTED)}
       onStop={onStop}
       onModelSelectorClick={vi.fn()}
       hasMessages

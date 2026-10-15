@@ -8,7 +8,7 @@
  * when they stand the provider in. `check:boundaries` is what keeps the import
  * honest instead: the SDK is reachable from this adapter and nowhere else.
  */
-import { verifyToken as clerkVerifyToken } from '@clerk/backend';
+import { createClerkClient, verifyToken as clerkVerifyToken } from '@clerk/backend';
 import { isClerkAPIResponseError } from '@clerk/backend/errors';
 import * as clerkServer from '@clerk/nextjs/server';
 
@@ -237,6 +237,8 @@ export class ClerkIdentityProvider<Request = unknown> implements IdentityProvide
 
   private client: Promise<ClerkClient> | null = null;
 
+  private reachabilityClient: ReturnType<typeof createClerkClient> | null = null;
+
   constructor(private readonly config: ClerkIdentityConfig = {}) {}
 
   private secretKey(): string | null {
@@ -245,6 +247,15 @@ export class ClerkIdentityProvider<Request = unknown> implements IdentityProvide
 
   canVerifySessionTokens(): boolean {
     return this.secretKey() !== null;
+  }
+
+  async checkReachable(): Promise<void> {
+    const secretKey = this.secretKey();
+    if (!secretKey) {
+      throw new IdentityConfigError(`Reaching the identity API requires ${CLERK_SECRET_KEY_ENV}.`);
+    }
+    this.reachabilityClient ??= createClerkClient({ secretKey });
+    await this.reachabilityClient.jwks.getJwks();
   }
 
   /**
@@ -272,7 +283,10 @@ export class ClerkIdentityProvider<Request = unknown> implements IdentityProvide
   }
 
   private apiClient(): Promise<ClerkClient> {
-    this.client ??= clerkServer.clerkClient();
+    this.client ??= clerkServer.clerkClient().catch((error: unknown) => {
+      this.client = null;
+      throw error;
+    });
     return this.client;
   }
 

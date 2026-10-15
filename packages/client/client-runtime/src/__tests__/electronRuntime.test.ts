@@ -102,11 +102,7 @@ describe('invokeDesktopRuntime', () => {
     const typed = failure as DesktopRuntimeError;
     expect(typed.code).toBe('permission-denied');
     expect(typed.capability).toBe('filesystem.read');
-    expect(typed.toPermissionRequest('because')).toEqual({
-      capability: 'filesystem.read',
-      scope: { kind: 'workspace', target: '/work/a' },
-      reason: 'because',
-    });
+    expect(typed.scope).toEqual({ kind: 'workspace', target: '/work/a' });
   });
 
   it('rejects an unreadable response rather than returning undefined', async () => {
@@ -133,7 +129,7 @@ describe('command routing', () => {
     const invokeRuntime = vi.fn().mockResolvedValue({ ok: true, value: ['a.ts'] });
     const { command } = await loadWith({ invokeRuntime });
 
-    await expect(command.commandWithWarning('file_glob', { pattern: '*' })).resolves.toEqual({
+    await expect(command.commandWithWarning('file_list', { rootId: 'r' })).resolves.toEqual({
       data: ['a.ts'],
     });
   });

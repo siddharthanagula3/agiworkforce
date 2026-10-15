@@ -4,6 +4,7 @@ import {
   parseSlashCommand,
   registerSlashCommand,
   registerBuiltinSlashCommands,
+  resolveTypedSlashCommand,
   getSlashCommand,
   listSlashCommands,
   clearSlashCommands,
@@ -151,6 +152,37 @@ describe('registerBuiltinSlashCommands', () => {
     expect(clearConversation).toHaveBeenCalledWith('c1');
   });
 
+  it('/clear handler reports an error instead of doing nothing when the host cannot clear', () => {
+    registerBuiltinSlashCommands();
+    const run = () => getSlashCommand('clear')!.handler!('', { conversationId: 'c1', host: {} });
+    expect(run).toThrow('cannot clear the conversation');
+    expect(() => getSlashCommand('clear')!.handler!('', { conversationId: 'c1' })).toThrow();
+  });
+
+  it('/compact passes the conversation and optional focus to the host', async () => {
+    registerBuiltinSlashCommands();
+    const compactConversation = vi.fn(async () => undefined);
+    const compact = getSlashCommand('compact')!;
+    expect(compact.requiresConversation).toBe(true);
+
+    await compact.handler!('', { conversationId: 'c1', host: { compactConversation } });
+    expect(compactConversation).toHaveBeenLastCalledWith('c1', undefined);
+
+    await compact.handler!('  code ', { conversationId: 'c1', host: { compactConversation } });
+    expect(compactConversation).toHaveBeenLastCalledWith('c1', 'code');
+  });
+
+  it('/compact reports an error when the host cannot compact', () => {
+    registerBuiltinSlashCommands();
+    const compact = getSlashCommand('compact')!;
+    expect(() => compact.handler!('', { conversationId: 'c1', host: {} })).toThrow(
+      'cannot compact the conversation',
+    );
+    expect(() =>
+      compact.handler!('', { conversationId: null, host: { compactConversation: vi.fn() } }),
+    ).toThrow();
+  });
+
   it('/model handler invokes host.setModel only when arg is non-empty', () => {
     registerBuiltinSlashCommands();
     const setModel = vi.fn();
@@ -162,5 +194,33 @@ describe('registerBuiltinSlashCommands', () => {
       host: { setModel },
     });
     expect(setModel).toHaveBeenCalledWith(fixtureModelId);
+  });
+});
+
+describe('resolveTypedSlashCommand', () => {
+  beforeEach(() => {
+    clearSlashCommands();
+    registerBuiltinSlashCommands();
+  });
+
+  it('runs a typed command with its args when the host supports it', () => {
+    const host = { compactConversation: vi.fn() };
+    const typed = resolveTypedSlashCommand('/compact code', host, 'c1');
+    expect(typed?.command.name).toBe('compact');
+    expect(typed?.args).toBe('code');
+  });
+
+  it('leaves text alone when the host lacks the command or no chat exists', () => {
+    expect(resolveTypedSlashCommand('/compact code', {}, 'c1')).toBeNull();
+    expect(resolveTypedSlashCommand('/compact', { compactConversation: vi.fn() }, null)).toBeNull();
+    expect(
+      resolveTypedSlashCommand('/image a red fox', { toggleMediaMode: vi.fn() }, 'c1'),
+    ).toBeNull();
+    expect(
+      resolveTypedSlashCommand('/unknown thing', { compactConversation: vi.fn() }, 'c1'),
+    ).toBeNull();
+    expect(
+      resolveTypedSlashCommand('plain text', { compactConversation: vi.fn() }, 'c1'),
+    ).toBeNull();
   });
 });

@@ -49,7 +49,12 @@ export {
   getConnectorPermissionStore,
   ConnectorPermissionsUnavailableError,
 } from './lib/connectorPermissionStore';
-export type { ConnectorPermissionStore } from './lib/connectorPermissionStore';
+export type {
+  ConnectorPermissionListing,
+  ConnectorPermissionReset,
+  ConnectorPermissionStore,
+  ConnectorPermissionStoreState,
+} from './lib/connectorPermissionStore';
 export {
   isContinuableFinishReason,
   isMessageContinuable,
@@ -139,6 +144,7 @@ export {
 export { useProjectStore as useChatProjectStore } from './stores/projectStore';
 export { useSettingsStore as useChatSettingsStore } from './stores/settingsStore';
 export { useArtifactStore as useChatArtifactStore } from './stores/artifactStore';
+export { artifactDownloadFile } from './lib/artifact-download';
 export { useAgentControlStore as useChatAgentControlStore } from './stores/agentControlStore';
 
 export {
@@ -148,6 +154,18 @@ export {
   __resetAllSendQueuesForTests,
 } from './queue/sendQueue';
 export type { GetSendQueueOptions } from './queue/sendQueue';
+export { useFollowUpStore, resolveFollowUpState } from './queue/followUps';
+export type { FollowUp, FollowUpQueueMode, FollowUpState } from './queue/followUps';
+export { FollowUpQueue } from './components/FollowUpQueue';
+export type { FollowUpQueueProps } from './components/FollowUpQueue';
+export { TurnTodoPanel, useTurnTodoStore, readTodoWriteItems } from './components/TurnTodoPanel';
+export type { TurnTodo, TurnTodoStatus, TurnTodoPanelProps } from './components/TurnTodoPanel';
+export { InterruptedTurnNotice } from './components/InterruptedTurnNotice';
+export { AgentQuestionCard, useAgentQuestionStore } from './components/AgentQuestionCard';
+export type { AgentQuestionCardProps } from './components/AgentQuestionCard';
+export { TurnNotices, useTurnNoticeStore } from './components/TurnNotices';
+export type { TurnNoticesProps } from './components/TurnNotices';
+export type { InterruptedTurnNoticeProps } from './components/InterruptedTurnNotice';
 
 export { useChat } from './hooks/useChat';
 export { useTheme } from './hooks/useTheme';
@@ -182,6 +200,7 @@ export {
 } from './components/markdown/MermaidDiagram';
 export { preprocessMath } from './components/markdown/preprocessMath';
 export { CitationChip, type MarkdownCitation } from './components/markdown/CitationChip';
+export { collectTurnCitations } from './lib/turnCitations';
 export { ProjectFileCitations } from './components/markdown/ProjectFileCitationChip';
 export {
   findCitationIndexForUrl,
@@ -205,8 +224,9 @@ export type { ChatInterfaceProps } from './components/ChatInterface';
 
 export { EmptyState } from './components/EmptyState';
 export type { EmptyStateProps } from './components/EmptyState';
-export { ChatInput } from './components/ChatInput';
+export { COMPOSER_SEND_ACCEPTED, ChatInput } from './components/ChatInput';
 export type {
+  ComposerSendOutcome,
   ChatInputProps,
   ChatInputProjectPicker,
   ChatInputSlashCommandHost,
@@ -303,6 +323,11 @@ export {
   readMessageResearchStatus,
   type MessageResearchStatus,
 } from './components/ResearchStatusChip';
+export {
+  CompactionMarker,
+  readMessageCompaction,
+  type MessageCompaction,
+} from './components/CompactionMarker';
 export { MessageBubble, MarkdownLite } from './components/MessageBubble';
 export {
   MessageLimitCard,
@@ -315,6 +340,12 @@ export type { MessageLimitCardProps, MessagePaywallBlock } from './components/Me
 export { ThinkingControl } from './components/ThinkingControl';
 export type { ThinkingControlProps } from './components/ThinkingControl';
 export { ActionBar } from './components/ActionBar';
+export type {
+  MessageActionSlots,
+  MessageFeedback,
+  MessageVariantPager,
+  RegenerateModelOption,
+} from './components/ActionBar';
 export { ConversationHeader } from './components/ConversationHeader';
 export type { ConversationHeaderProps } from './components/ConversationHeader';
 export {
@@ -340,6 +371,7 @@ export type { ProvenanceFooterProps } from './components/ProvenanceFooter';
 export { ArtifactPanel } from './components/ArtifactPanel';
 export type {
   ArtifactPanelProps,
+  ArtifactPanelHostAction,
   ArtifactPublishResult,
   ArtifactLocalPublishResult,
 } from './components/ArtifactPanel';
@@ -632,18 +664,32 @@ export type {
   BrowserActivityBadgeProps,
   BrowserAgentStatus,
 } from './components/BrowserActivityBadge';
-export { KeyboardShortcutsDialog } from './components/KeyboardShortcutsDialog';
-export type { KeyboardShortcutsDialogProps } from './components/KeyboardShortcutsDialog';
-export { KeyboardShortcutsOverlay } from './components/KeyboardShortcutsOverlay';
+export {
+  CHAT_SHORTCUTS,
+  COMPOSER_FOLLOW_UP_INVERT_SHORTCUT,
+  findShortcut,
+  findShortcutConflicts,
+  firesInTextFields,
+  formatShortcutKeys,
+  matchesShortcut,
+  shortcutChordKey,
+} from './lib/shortcutRegistry';
 export type {
-  KeyboardShortcutsOverlayProps,
-  ShortcutItem,
-  ShortcutSection,
-} from './components/KeyboardShortcutsOverlay';
+  ShortcutCategory,
+  ShortcutChord,
+  ShortcutConflict,
+  ShortcutDefinition,
+  ShortcutKeyEventLike,
+  ShortcutScope,
+} from './lib/shortcutRegistry';
 export { ChatInputToolbar, PlanModeToggle } from './components/ChatInputToolbar';
 export type { ChatInputToolbarProps, PlanModeToggleProps } from './components/ChatInputToolbar';
-export { SlashCommandMenu } from './components/SlashCommandMenu';
-export type { SlashCommandMenuProps, CommandSuggestion } from './components/SlashCommandMenu';
+export { SlashCommandList, SlashCommandMenu } from './components/SlashCommandMenu';
+export type {
+  SlashCommandListProps,
+  SlashCommandMenuProps,
+  CommandSuggestion,
+} from './components/SlashCommandMenu';
 export { SkillMentionPicker } from './components/SkillMentionPicker';
 export type { SkillMentionPickerProps, MentionSkill } from './components/SkillMentionPicker';
 export { FileMentionPicker } from './components/FileMentionPicker';

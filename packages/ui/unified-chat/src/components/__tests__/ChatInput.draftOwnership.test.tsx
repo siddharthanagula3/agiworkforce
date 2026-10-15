@@ -1,10 +1,10 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatInput } from '../ChatInput';
+import { COMPOSER_SEND_ACCEPTED, ChatInput, type ComposerSendOutcome } from '../ChatInput';
 import { useChatStore } from '../../stores/chatStore';
 import { useModelStore } from '../../stores/modelStore';
 
-function renderComposer(onSend = vi.fn(), supportsResearch = false) {
+function renderComposer(onSend = vi.fn(() => COMPOSER_SEND_ACCEPTED), supportsResearch = false) {
   render(
     <ChatInput
       onSend={onSend}
@@ -53,7 +53,7 @@ describe('ChatInput draft ownership', () => {
 
     render(
       <ChatInput
-        onSend={vi.fn()}
+        onSend={vi.fn(() => COMPOSER_SEND_ACCEPTED)}
         onStop={vi.fn()}
         onModelSelectorClick={vi.fn()}
         hasMessages={false}
@@ -81,7 +81,7 @@ describe('ChatInput draft ownership', () => {
 
     render(
       <ChatInput
-        onSend={vi.fn()}
+        onSend={vi.fn(() => COMPOSER_SEND_ACCEPTED)}
         onStop={vi.fn()}
         onModelSelectorClick={vi.fn()}
         hasMessages={false}
@@ -101,7 +101,7 @@ describe('ChatInput draft ownership', () => {
   });
 
   it('opens the package slash menu and executes /plan without sending literal text', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => COMPOSER_SEND_ACCEPTED);
     const togglePlanMode = vi.fn();
     render(
       <ChatInput
@@ -128,11 +128,59 @@ describe('ChatInput draft ownership', () => {
     expect(useChatStore.getState().draftContent).toBe('');
   });
 
+  it('offers /clear only when the host can clear and runs it without sending text', () => {
+    const onSend = vi.fn(() => COMPOSER_SEND_ACCEPTED);
+    const clearConversation = vi.fn();
+    const props = {
+      onSend,
+      onStop: vi.fn(),
+      onModelSelectorClick: vi.fn(),
+      hasMessages: true,
+      conversationId: 'conv-1',
+    };
+    const { rerender } = render(
+      <ChatInput {...props} slashCommandHost={{ togglePlanMode: vi.fn() }} />,
+    );
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '/cl' } });
+    expect(screen.queryByText('/clear')).toBeNull();
+
+    rerender(
+      <ChatInput {...props} slashCommandHost={{ togglePlanMode: vi.fn(), clearConversation }} />,
+    );
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: '/cl' } });
+    expect(screen.getByText('/clear')).toBeTruthy();
+
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(clearConversation).toHaveBeenCalledWith('conv-1');
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('shows the failure inline when /clear throws', () => {
+    const clearConversation = vi.fn(() => {
+      throw new Error('Could not start a new chat.');
+    });
+    render(
+      <ChatInput
+        onSend={vi.fn(() => COMPOSER_SEND_ACCEPTED)}
+        onStop={vi.fn()}
+        onModelSelectorClick={vi.fn()}
+        hasMessages
+        conversationId="conv-1"
+        slashCommandHost={{ togglePlanMode: vi.fn(), clearConversation }}
+      />,
+    );
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: '/clear' } });
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(screen.getByText('Could not start a new chat.')).toBeTruthy();
+  });
+
   it('exposes the shared plan toolbar control against the host-owned agent mode', () => {
     const togglePlanMode = vi.fn();
     render(
       <ChatInput
-        onSend={vi.fn()}
+        onSend={vi.fn(() => COMPOSER_SEND_ACCEPTED)}
         onStop={vi.fn()}
         onModelSelectorClick={vi.fn()}
         hasMessages={false}
@@ -150,7 +198,7 @@ describe('ChatInput draft ownership', () => {
 
     render(
       <ChatInput
-        onSend={vi.fn()}
+        onSend={vi.fn(() => COMPOSER_SEND_ACCEPTED)}
         onStop={vi.fn()}
         onModelSelectorClick={vi.fn()}
         hasMessages={false}
@@ -184,7 +232,7 @@ describe('ChatInput draft ownership', () => {
   });
 
   it('sends the store-owned draft and clears the originating composer', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => COMPOSER_SEND_ACCEPTED);
     const { textarea } = renderComposer(onSend);
     fireEvent.change(textarea, { target: { value: 'Send this exact draft' } });
 
@@ -202,7 +250,7 @@ describe('ChatInput draft ownership', () => {
   });
 
   it('sends an attachment-only turn instead of enabling a silent no-op', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => COMPOSER_SEND_ACCEPTED);
     renderComposer(onSend);
     const attachment = new File(['quarterly chart'], 'quarterly-chart.png', {
       type: 'image/png',
@@ -225,8 +273,70 @@ describe('ChatInput draft ownership', () => {
     );
   });
 
+  it('keeps the text and the attachment, and says why, when the host turns the send away', () => {
+    const reason = 'Select a model available for this conversation before sending.';
+    const onSend = vi
+      .fn<() => ComposerSendOutcome>()
+      .mockReturnValueOnce({ accepted: false, reason })
+      .mockReturnValue(COMPOSER_SEND_ACCEPTED);
+    const { textarea } = renderComposer(onSend);
+    const attachment = new File(['quarterly chart'], 'quarterly-chart.png', {
+      type: 'image/png',
+    });
+    fireEvent.change(document.querySelector<HTMLInputElement>('input[type="file"]')!, {
+      target: { files: [attachment] },
+    });
+    fireEvent.change(textarea, { target: { value: 'What does this show?' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send message (Enter)' }));
+
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(textarea.value).toBe('What does this show?');
+    expect(useChatStore.getState().draftContent).toBe('What does this show?');
+    expect(screen.getByRole('img', { name: 'quarterly-chart.png' })).toBeTruthy();
+    expect(screen.getByText(reason)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send message (Enter)' }));
+
+    expect(onSend).toHaveBeenCalledTimes(2);
+    expect(onSend.mock.calls[1]).toEqual([
+      'What does this show?',
+      'ask',
+      undefined,
+      [attachment],
+      false,
+    ]);
+    expect(textarea.value).toBe('');
+    expect(screen.queryByRole('img', { name: 'quarterly-chart.png' })).toBeNull();
+    expect(screen.queryByText(reason)).toBeNull();
+  });
+
+  it('clears the box once the host has taken the send', () => {
+    const { onSend, textarea } = renderComposer();
+    fireEvent.change(textarea, { target: { value: 'Summarise this thread' } });
+
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(textarea.value).toBe('');
+    expect(useChatStore.getState().draftContent).toBe('');
+  });
+
+  it('does not send on the Enter that confirms an IME word, and sends once on the next', () => {
+    const { onSend, textarea } = renderComposer();
+    fireEvent.change(textarea, { target: { value: 'nihongo' } });
+
+    fireEvent.keyDown(textarea, { key: 'Enter', isComposing: true });
+    expect(onSend).not.toHaveBeenCalled();
+    expect(textarea.value).toBe('nihongo');
+
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledTimes(1);
+  });
+
   it('purges unsent file bytes when their conversation or trust destination changes', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => COMPOSER_SEND_ACCEPTED);
     const baseProps = {
       onSend,
       onStop: vi.fn(),
@@ -265,7 +375,7 @@ describe('ChatInput draft ownership', () => {
   it('uses a typographic ellipsis in the reply placeholder', () => {
     render(
       <ChatInput
-        onSend={vi.fn()}
+        onSend={vi.fn(() => COMPOSER_SEND_ACCEPTED)}
         onStop={vi.fn()}
         onModelSelectorClick={vi.fn()}
         hasMessages
@@ -277,7 +387,7 @@ describe('ChatInput draft ownership', () => {
   });
 
   it('forwards an enabled Research request only when the active runtime supports it', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => COMPOSER_SEND_ACCEPTED);
     const { textarea } = renderComposer(onSend, true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Add attachment' }));
@@ -295,7 +405,7 @@ describe('ChatInput draft ownership', () => {
   });
 
   it('clears a Research selection when the runtime loses that capability', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => COMPOSER_SEND_ACCEPTED);
     const props = {
       onSend,
       onStop: vi.fn(),
@@ -317,7 +427,7 @@ describe('ChatInput draft ownership', () => {
   });
 
   it('forwards the selected writing style instead of rendering a dead control', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => COMPOSER_SEND_ACCEPTED);
     const { textarea } = renderComposer(onSend);
 
     fireEvent.click(screen.getByRole('button', { name: 'Add attachment' }));

@@ -64,30 +64,6 @@ export type {
   SyncKvStore,
 } from './queue';
 
-export { createOfflineQueue } from './offline-queue';
-export type {
-  MessageRetryStatus,
-  OfflineQueueApi,
-  OfflineQueueLogger,
-  OfflineQueueOptions,
-  OfflineQueueState,
-  OfflineQueueStorage,
-  QueuedMessage,
-  QueuedToolExecution,
-  SyncCallbacks,
-  SyncSummary,
-} from './offline-queue';
-
-export { createOfflineSyncManager, SyncState } from './offline-sync';
-export type {
-  OfflineSyncLogger,
-  OfflineSyncManager,
-  OfflineSyncNetworkHandlers,
-  OfflineSyncOptions,
-  OfflineSyncQueueAdapter,
-  SyncManagerState,
-} from './offline-sync';
-
 export {
   pollDeviceAuthorization,
   refreshDeviceSession,

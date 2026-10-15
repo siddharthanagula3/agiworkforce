@@ -34,6 +34,8 @@ export const REMOTE_CODE_LIMITS = {
   testRuns: 10,
   testOutputLength: 3_000,
   queuedGuidance: 3,
+  pendingQuestions: 20,
+  pendingApprovals: 20,
   sessions: 30,
   roots: 30,
   taskLength: 8_000,
@@ -123,6 +125,12 @@ export interface RemoteCodePendingApproval {
   detail: string;
 }
 
+export interface RemoteCodePendingQuestion {
+  turnId: string;
+  requestId: string;
+  question: string;
+}
+
 export interface RemoteCodeTranscriptEntry {
   role: 'user' | 'assistant';
   text: string;
@@ -148,6 +156,7 @@ export interface RemoteCodeSessionSnapshot {
   partialResponse: string;
   messages: RemoteCodeTranscriptEntry[];
   pendingApprovals: RemoteCodePendingApproval[];
+  pendingQuestions: RemoteCodePendingQuestion[];
   fileChanges: RemoteCodeFileChange[];
   queuedGuidance: string[];
   tools: RemoteCodeToolRecord[];
@@ -175,6 +184,17 @@ export interface RemoteCodeTranscriptPage {
   syncedAt: string;
 }
 
+/**
+ * What became of an allow the phone sent for a request the computer does not
+ * let a phone answer alone. `waiting` means the person at the computer is
+ * being asked; the other two are how that ended. Either way the approval
+ * itself is settled only by `approval-answered`, so after `refused` the agent
+ * is still waiting and the phone may answer again.
+ */
+export const REMOTE_CODE_APPROVAL_HOLDS = ['waiting', 'allowed', 'refused'] as const;
+
+export type RemoteCodeApprovalHold = (typeof REMOTE_CODE_APPROVAL_HOLDS)[number];
+
 export type RemoteCodeLiveEvent =
   | { type: 'turn-started'; turnId: string }
   | { type: 'output-delta'; turnId: string; delta: string }
@@ -189,6 +209,9 @@ export type RemoteCodeLiveEvent =
     }
   | ({ type: 'approval-requested' } & RemoteCodePendingApproval)
   | { type: 'approval-answered'; requestId: string; approved: boolean }
+  | { type: 'approval-held'; requestId: string; status: RemoteCodeApprovalHold; message: string }
+  | ({ type: 'user-input-requested' } & RemoteCodePendingQuestion)
+  | { type: 'user-input-answered'; requestId: string }
   | {
       type: 'turn-finished';
       turnId: string;
@@ -589,6 +612,15 @@ function optionalList<T>(
   return value === undefined ? [] : list(value, max, parse);
 }
 
+function parseQuestion(value: unknown): RemoteCodePendingQuestion | null {
+  if (!isRecord(value)) return null;
+  const turnId = boundedId(value['turnId']);
+  const requestId = boundedId(value['requestId']);
+  const question = text(value['question'], REMOTE_CODE_LIMITS.messageLength);
+  if (!turnId || !requestId || question === null) return null;
+  return { turnId, requestId, question };
+}
+
 function guidanceList(value: unknown): string[] | null {
   return list(value, REMOTE_CODE_LIMITS.queuedGuidance, (entry) =>
     text(entry, REMOTE_CODE_LIMITS.guidanceLength),
@@ -683,7 +715,16 @@ export function parseRemoteCodeSnapshot(payload: unknown): RemoteCodeSessionSnap
         : null;
     },
   );
-  const pendingApprovals = list(base['pendingApprovals'], 20, parseApproval);
+  const pendingApprovals = list(
+    base['pendingApprovals'],
+    REMOTE_CODE_LIMITS.pendingApprovals,
+    parseApproval,
+  );
+  const pendingQuestions = optionalList(
+    base['pendingQuestions'],
+    REMOTE_CODE_LIMITS.pendingQuestions,
+    parseQuestion,
+  );
   const fileChanges = list(base['fileChanges'], REMOTE_CODE_LIMITS.fileChanges, parseFileChange);
   const queuedGuidance = guidanceList(base['queuedGuidance']);
   const tools = optionalList(base['tools'], REMOTE_CODE_LIMITS.tools, parseToolRecord);
@@ -697,6 +738,7 @@ export function parseRemoteCodeSnapshot(payload: unknown): RemoteCodeSessionSnap
     partialResponse === null ||
     !messages ||
     !pendingApprovals ||
+    !pendingQuestions ||
     !fileChanges ||
     !queuedGuidance ||
     !tools ||
@@ -715,6 +757,7 @@ export function parseRemoteCodeSnapshot(payload: unknown): RemoteCodeSessionSnap
     partialResponse,
     messages,
     pendingApprovals,
+    pendingQuestions,
     fileChanges,
     queuedGuidance,
     tools,
@@ -836,6 +879,22 @@ function parseLiveEvent(value: unknown): RemoteCodeLiveEvent | null {
       return requestId && typeof value['approved'] === 'boolean'
         ? { type: 'approval-answered', requestId, approved: value['approved'] }
         : null;
+    }
+    case 'approval-held': {
+      const requestId = boundedId(value['requestId']);
+      const status = REMOTE_CODE_APPROVAL_HOLDS.find((hold) => hold === value['status']);
+      const message = text(value['message'], REMOTE_CODE_LIMITS.messageLength);
+      return requestId && status && message !== null
+        ? { type: 'approval-held', requestId, status, message }
+        : null;
+    }
+    case 'user-input-requested': {
+      const question = parseQuestion(value);
+      return question ? { type: 'user-input-requested', ...question } : null;
+    }
+    case 'user-input-answered': {
+      const requestId = boundedId(value['requestId']);
+      return requestId ? { type: 'user-input-answered', requestId } : null;
     }
     case 'turn-finished': {
       const outcome = value['outcome'];

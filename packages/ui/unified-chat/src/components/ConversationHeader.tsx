@@ -1,10 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BarChart3, Check, Package, Pencil, Share2, X } from 'lucide-react';
+import { BarChart3, Check, MessageCircleDashed, Package, Pencil, Share2, X } from 'lucide-react';
 import { useUiTranslation } from '@agiworkforce/ui';
 import { useChatStore } from '../stores/chatStore';
 
+/**
+ * A chat that is never written to history. `canToggle` is false once the chat
+ * has messages: a conversation cannot move in or out of history mid-thread.
+ */
+export interface TemporaryChatControl {
+  active: boolean;
+  canToggle: boolean;
+  onToggle: () => void;
+}
+
 export interface ConversationHeaderProps {
   onRename?: (conversationId: string, title: string) => void | Promise<void>;
+  temporaryChat?: TemporaryChatControl;
   onShare?: (conversationId: string) => void | Promise<void>;
   onToggleArtifacts?: () => void;
   artifactsOpen?: boolean;
@@ -15,6 +26,7 @@ export interface ConversationHeaderProps {
 
 export function ConversationHeader({
   onRename,
+  temporaryChat,
   onShare,
   onToggleArtifacts,
   artifactsOpen = false,
@@ -54,7 +66,10 @@ export function ConversationHeader({
 
   if (!conversation) return null;
 
-  const title = conversation.title || t('header.newConversation', 'New Conversation');
+  const title = temporaryChat?.active
+    ? t('header.temporaryChat', 'Temporary chat')
+    : conversation.title || t('header.newConversation', 'New Conversation');
+  const canRename = Boolean(onRename) && !temporaryChat?.active;
 
   return (
     <div className="flex items-center justify-between gap-2 border-b border-[var(--chat-border)] px-4 py-2">
@@ -93,7 +108,23 @@ export function ConversationHeader({
           </>
         ) : (
           <>
-            {onRename ? (
+            {temporaryChat && (temporaryChat.canToggle || temporaryChat.active) ? (
+              <HeaderAction
+                label={
+                  temporaryChat.active
+                    ? t(
+                        'header.temporaryChatOn',
+                        "Temporary chat: this chat won't be saved to history",
+                      )
+                    : t('header.temporaryChatOff', 'Start a temporary chat')
+                }
+                onClick={temporaryChat.onToggle}
+                icon={MessageCircleDashed}
+                pressed={temporaryChat.active}
+                disabled={!temporaryChat.canToggle}
+              />
+            ) : null}
+            {canRename ? (
               <HeaderAction
                 label={t('header.renameConversation', 'Rename conversation')}
                 onClick={beginRename}
@@ -143,21 +174,24 @@ function HeaderAction({
   icon: Icon,
   pressed,
   badge,
+  disabled,
 }: {
   label: string;
   onClick: () => void;
   icon: typeof Pencil;
   pressed?: boolean;
   badge?: number;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       title={label}
       aria-label={label}
       {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
-      className="inline-flex items-center gap-1 rounded-compact p-1.5 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-fg)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
+      className="inline-flex items-center gap-1 rounded-compact p-1.5 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-fg)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)] disabled:cursor-default disabled:hover:bg-transparent aria-pressed:text-[var(--chat-fg)]"
     >
       <Icon className="h-4 w-4" aria-hidden />
       {badge === undefined ? null : (

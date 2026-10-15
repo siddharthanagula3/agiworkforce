@@ -152,6 +152,7 @@ describe('host messages the phone accepts', () => {
     partialResponse: 'Editing',
     messages: [{ role: 'user', text: 'go' }],
     pendingApprovals: [{ turnId: 'turn-1', requestId: 'ap-1', summary: 'Run tests', detail: '' }],
+    pendingQuestions: [{ turnId: 'turn-1', requestId: 'q-1', question: 'Which branch?' }],
     fileChanges: [{ path: 'a.ts', kind: 'created', tool: 'write_file', changedAt: SENT_AT }],
     queuedGuidance: [],
     syncedAt: SENT_AT,
@@ -161,6 +162,75 @@ describe('host messages the phone accepts', () => {
     expect(parseRemoteCodeSnapshot(snapshot)).toEqual({ ...snapshot, tools: [] });
     expect(
       parseRemoteCodeSnapshot({ ...snapshot, messages: [{ role: 'system', text: 'x' }] }),
+    ).toBeNull();
+  });
+
+  it('reads a snapshot from a host that predates pending questions as having none', () => {
+    const { pendingQuestions: _pendingQuestions, ...older } = snapshot;
+    expect(parseRemoteCodeSnapshot(older)).toEqual({ ...older, pendingQuestions: [], tools: [] });
+    expect(
+      parseRemoteCodeSnapshot({ ...snapshot, pendingQuestions: [{ requestId: 'q-1' }] }),
+    ).toBeNull();
+  });
+
+  it('reads question events and ignores an unanswerable one', () => {
+    const asked = {
+      action: 'code.session.event',
+      version: 1,
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      event: {
+        type: 'user-input-requested',
+        turnId: 'turn-1',
+        requestId: 'q-1',
+        question: 'Which branch?',
+      },
+      sentAt: SENT_AT,
+    };
+    expect(parseRemoteCodeEvent(asked)).toEqual(asked);
+    expect(
+      parseRemoteCodeEvent({
+        ...asked,
+        event: { type: 'user-input-answered', requestId: 'q-1' },
+      }),
+    ).not.toBeNull();
+    expect(
+      parseRemoteCodeEvent({
+        ...asked,
+        event: { ...asked.event, question: 'x'.repeat(REMOTE_CODE_LIMITS.messageLength + 1) },
+      }),
+    ).toBeNull();
+  });
+
+  it('reads what became of an allow the computer held for its own confirmation', () => {
+    const held = {
+      action: 'code.session.event',
+      version: 1,
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      event: {
+        type: 'approval-held',
+        requestId: 'ap-1',
+        status: 'waiting',
+        message: 'Waiting for you to allow this at your computer.',
+      },
+      sentAt: SENT_AT,
+    };
+    expect(parseRemoteCodeEvent(held)).toEqual(held);
+    for (const status of ['allowed', 'refused']) {
+      expect(parseRemoteCodeEvent({ ...held, event: { ...held.event, status } })).not.toBeNull();
+    }
+    expect(
+      parseRemoteCodeEvent({ ...held, event: { ...held.event, status: 'approved' } }),
+    ).toBeNull();
+    expect(
+      parseRemoteCodeEvent({ ...held, event: { ...held.event, requestId: undefined } }),
+    ).toBeNull();
+    expect(
+      parseRemoteCodeEvent({
+        ...held,
+        event: { ...held.event, message: 'x'.repeat(REMOTE_CODE_LIMITS.messageLength + 1) },
+      }),
     ).toBeNull();
   });
 

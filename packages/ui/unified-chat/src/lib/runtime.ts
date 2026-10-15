@@ -11,6 +11,21 @@ import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/pro
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
 import type { StreamErrorInfo } from './continue-generation';
 
+/**
+ * Token usage for one assistant turn. `inputTokens` is what the model read for
+ * the final call of the turn, so with `contextWindow` it says how full the
+ * conversation's context is. `contextWindow` is absent when neither the model
+ * catalog nor the local runtime reports one.
+ */
+export interface TurnUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  reasoningTokens?: number;
+  contextWindow?: number;
+}
+
 export interface CloudMessageProjection {
   finishReason?: string;
   streamError?: StreamErrorInfo;
@@ -25,13 +40,7 @@ export interface CloudMessageProjection {
     returnCode: number;
     images?: Array<{ mediaType: string; data: string }>;
   };
-  usage?: {
-    inputTokens?: number;
-    outputTokens?: number;
-    cacheReadTokens?: number;
-    cacheWriteTokens?: number;
-    reasoningTokens?: number;
-  };
+  usage?: TurnUsage;
   research?: {
     phase: 'planning' | 'searching' | 'synthesizing' | 'complete' | 'error';
     label?: string;
@@ -77,8 +86,43 @@ export interface CloudRunReattachment {
   hasPersistedApproval?: boolean;
 }
 
-import type { CloudWorkMode } from '@agiworkforce/types';
+import type { AgentMode, CloudWorkMode } from '@agiworkforce/types';
 import type { MediaKind } from '../stores/mediaModeStore';
+
+export interface SteeredMessage {
+  id: string;
+  content: string;
+}
+
+/**
+ * A steer the host refused outright, as when a prompt hook blocks it. Its
+ * `reason` is the host's own wording and is what to show; the steered text
+ * stays with the user to edit or remove and is never sent when the turn ends.
+ */
+export class SteerRefusedError extends Error {
+  readonly reason: string;
+
+  constructor(reason: string) {
+    super(reason);
+    this.name = 'SteerRefusedError';
+    this.reason = reason;
+  }
+}
+
+/** A question the agent asked mid-turn; the turn waits for the answer. */
+export interface AgentQuestion {
+  id: string;
+  question: string;
+  choices: string[];
+  multiSelect: boolean;
+}
+
+/** A turn a previous run of the app started and never finished. */
+export interface InterruptedTurn {
+  conversationId: string;
+  content: string;
+  startedAt: string;
+}
 
 export interface ChatRuntime {
   sendMessage(conversationId: string, content: string, options?: SendMessageOptions): Promise<void>;
@@ -88,6 +132,20 @@ export interface ChatRuntime {
   getMessages?(conversationId: string): Promise<ChatMessage[]>;
 
   deleteMessages?(conversationId: string, messageIds: string[]): Promise<void>;
+
+  /**
+   * Takes the messages an edit or regenerate replaces out of the stored
+   * history before the new turn is sent, so the model never sees them.
+   * Resolves to a key for {@link restoreSupersededMessages} or
+   * {@link releaseSupersededMessages}.
+   */
+  supersedeMessages?(conversationId: string, messageIds: string[]): Promise<string>;
+
+  /** Puts superseded messages back, unchanged, after the new turn failed. */
+  restoreSupersededMessages?(key: string): Promise<void>;
+
+  /** Lets superseded messages go once the new turn produced output. */
+  releaseSupersededMessages?(key: string): Promise<void>;
 
   loadMessages?(conversationId: string): Promise<ChatMessage[]>;
 
@@ -135,7 +193,32 @@ export interface ChatRuntime {
 
   supportsAgentControl?: boolean;
 
+  /** Agent modes this runtime enforces. The mode chip offers only these. */
+  agentModes?: readonly AgentMode[];
+
   supportsReasoningEffort?: boolean;
+
+  /**
+   * Hands a message to the turn running in `conversationId`; the agent reads it
+   * at its next step. A runtime without this can only queue follow-ups until
+   * the turn ends.
+   */
+  steer?(conversationId: string, content: string): Promise<SteeredMessage>;
+
+  /**
+   * Takes back a steered message the turn has not read yet. Resolves `true`
+   * when it was still waiting, `false` once the agent already read it.
+   */
+  withdrawSteer?(conversationId: string, steerId: string): Promise<boolean>;
+
+  /** Answers a question the agent asked; resolves once the turn received it. */
+  answerQuestion?(questionId: string, answer: string | string[]): Promise<void>;
+
+  /** Turns the app was running when it last closed without finishing them. */
+  listInterruptedTurns?(): Promise<InterruptedTurn[]>;
+
+  /** Forgets an interrupted turn once the user retried or dismissed it. */
+  dismissInterruptedTurn?(conversationId: string): Promise<void>;
 
   resolveToolApproval?(
     conversationId: string,
@@ -226,7 +309,10 @@ export type StreamChunk =
   | { type: 'tool_call'; data: ToolCallData }
   | { type: 'tool_result'; data: ToolResultData }
   | { type: 'artifact'; data: Artifact }
-  | { type: 'done' }
+  | { type: 'steer_consumed'; steerId: string }
+  | { type: 'question'; question: AgentQuestion }
+  | { type: 'notice'; message: string }
+  | { type: 'done'; usage?: TurnUsage }
   | { type: 'error'; content: string };
 
 export interface ToolCallData {
@@ -290,6 +376,9 @@ type StreamEventPayload =
       args: Record<string, unknown>;
     }
   | { type: 'artifact'; artifact: Artifact }
+  | { type: 'steer_consumed'; steerId: string }
+  | { type: 'question'; question: AgentQuestion }
+  | { type: 'notice'; message: string }
   | { type: 'search_results'; search: WebSearchResult }
   | { type: 'generated_files'; files: GeneratedFileEntry[] }
   | {

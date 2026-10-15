@@ -1,5 +1,6 @@
 import {
   DEVELOPER_FILE_CHANGES,
+  type DeveloperApprovalRequest,
   type DeveloperFileChange,
   type DeveloperSessionEvent,
   type DeveloperTurnFailure,
@@ -8,6 +9,12 @@ import {
 import type { TurnFailureAction, TurnFailureCode } from '@agiworkforce/types/protocol';
 
 const APPROVAL_SUMMARY_FALLBACK = 'The agent needs approval to continue.';
+const KIND_NAME = /^[A-Za-z]+/u;
+const RISK_LEVELS: readonly NonNullable<DeveloperApprovalRequest['riskLevel']>[] = [
+  'low',
+  'medium',
+  'high',
+];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -153,13 +160,19 @@ export function developerSessionEventFromNotification(
   if (method === 'approval/requested') {
     const requestId = readString(params, 'requestId');
     if (!requestId) return null;
+    const risk = readString(params, 'riskLevel');
+    const reversible = params['reversible'];
     return {
       type: 'approval-requested',
       threadId,
       turnId,
       requestId,
+      kind: KIND_NAME.exec(readString(params, 'kind') ?? '')?.[0] ?? '',
       summary: readString(params, 'summary') ?? APPROVAL_SUMMARY_FALLBACK,
       detail: readString(params, 'detail') ?? '',
+      command: null,
+      riskLevel: RISK_LEVELS.find((level) => level === risk) ?? null,
+      reversible: typeof reversible === 'boolean' ? reversible : null,
     };
   }
 

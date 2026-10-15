@@ -39,7 +39,42 @@ const RE_IMAGE_SLASH = /^\/(image|imagine|draw|generate)\b/i;
 const RE_IMAGE_PHRASE =
   /\b(generate|create|make|draw)\s+(me\s+)?(an?\s+|some\s+)?(\w+\s+){0,2}(image|picture|photo|photograph|illustration|logo|mockup|wireframe|artwork|drawing|painting|sketch|portrait|poster|banner|avatar|thumbnail|wallpaper)\b/i;
 
-const RE_COMPUTER_USE = /\b(click|navigate|fill|submit|automate)\b/i;
+const RE_COMPUTER_REQUEST_PREFIX =
+  /^\s*(?:(?:please\s+)?(?:can|could|would|will)\s+you\s+(?:please\s+)?|please\s+)?/i;
+
+const BROWSER_CURRENT_PAGE_QUALIFIER = String.raw`(?:this|the\s+(?:current|active))\s+(?:[\w-]+\s+){0,2}(?:page|tab)`;
+
+const RE_BROWSER_ACTION_WRAPPER = new RegExp(
+  String.raw`^(?:use\s+(?:(?:the|this)\s+)?(?:(?:current|active)\s+)?browser(?:\s+(?:on|in)\s+${BROWSER_CURRENT_PAGE_QUALIFIER})?\s+to\s+|in\s+(?:(?:the|this)\s+)?(?:(?:current|active)\s+)?browser\s*[:,]?\s+|on\s+${BROWSER_CURRENT_PAGE_QUALIFIER}\s*[:,]?\s+)`,
+  'i',
+);
+
+const RE_BROWSER_WRAPPED_ACTION =
+  /^(click|double[ -]click|right[ -]click|tap|press|hover|drag|swipe|fill(?!\s+me\s+in\b)|type|enter|select|choose|check|uncheck|submit|navigate|open|visit|go|scroll|reload|refresh|upload|download)\b/i;
+
+const RE_BROWSER_TAB_WINDOW_ACTION =
+  /^(?:(?:list|show|read)\s+(?:only\s+)?(?:(?:the|this)\s+)?(?:(?:task[- ]owned|task|browser)\s+)?tabs\b|(?:switch\s+to|close)\s+(?:(?:the|this)\s+)?(?:(?:original|current|previous|task[- ]owned|task[- ]created|task|browser)\s+)?tab\b|resize\s+(?:(?:the|this|current)\s+)?(?:browser\s+)?window\b)/i;
+
+const RE_COMPUTER_USE = /^(click|navigate|fill(?!\s+me\s+in\b)|submit|automate)\b/i;
+
+const RE_BROWSER_PERFORM_ACTION =
+  /^perform\s+(?:an?\s+)?(?:(?:horizontal|vertical)\s+)?(click|double[ -]click|right[ -]click|tap|hover|drag|swipe|scroll)\b/i;
+
+const RE_BROWSER_UI_ACTION =
+  /^(click|double[ -]click|right[ -]click|tap|press|fill(?:\s+in)?|type|enter|select|choose|check|uncheck|submit)\s+[^\n]*\b(button|link|menu|tab|field|input|textbox|text area|form|checkbox|check box|radio button|dropdown|drop-down|option|toggle|control)\b/i;
+
+const RE_BROWSER_NAVIGATION =
+  /^(navigate|open|visit|go)\s+[^\n]*(https?:\/\/\S+|\b(this|current|active)\s+(browser\s+)?(tab|page)\b)/i;
+
+const RE_BROWSER_PAGE_ACTION = /^(scroll|reload|refresh)\s+[^\n]*\b(tab|page|browser)\b/i;
+
+const RE_BROWSER_CURRENT_PAGE_CONTEXT = new RegExp(
+  String.raw`^[^.!?\n]*\b(?:on|in)\s+${BROWSER_CURRENT_PAGE_QUALIFIER}\b`,
+  'i',
+);
+
+const RE_BROWSER_ACTION_TOPIC =
+  /^(?:click|double[ -]click|right[ -]click|tap)\s+(?:handlers?|listeners?|events?|is|are|was|were|means|refers)\b/i;
 
 const RE_CODE_FENCE = /```/;
 
@@ -106,7 +141,19 @@ export function classifyTaskLocally(
   }
 
   const hasScreenshot = attachments?.some((a) => a.type === 'screenshot') ?? false;
-  if (hasScreenshot && RE_COMPUTER_USE.test(message)) {
+  const requestedAction = message.replace(RE_COMPUTER_REQUEST_PREFIX, '');
+  const hasBrowserWrapper = RE_BROWSER_ACTION_WRAPPER.test(requestedAction);
+  let computerRequest = requestedAction
+    .replace(RE_BROWSER_ACTION_WRAPPER, '')
+    .replace(RE_COMPUTER_REQUEST_PREFIX, '');
+  if (hasBrowserWrapper) computerRequest = computerRequest.replace(RE_BROWSER_PERFORM_ACTION, '$1');
+  const describesBrowserAction = RE_BROWSER_ACTION_TOPIC.test(computerRequest);
+  if (
+    hasScreenshot &&
+    RE_COMPUTER_USE.test(computerRequest) &&
+    !describesBrowserAction &&
+    !RE_CODE_FENCE.test(message)
+  ) {
     return { type: 'computer-use', confidence: 0.9 };
   }
 
@@ -117,6 +164,21 @@ export function classifyTaskLocally(
   const cumulativeTokens = sumTokens(message, history);
   if (cumulativeTokens > 50_000) {
     return { type: 'long_context', confidence: 0.9 };
+  }
+
+  if (
+    !RE_CODE_FENCE.test(message) &&
+    !describesBrowserAction &&
+    ((hasBrowserWrapper &&
+      (RE_BROWSER_WRAPPED_ACTION.test(computerRequest) ||
+        RE_BROWSER_TAB_WINDOW_ACTION.test(computerRequest))) ||
+      (RE_BROWSER_WRAPPED_ACTION.test(computerRequest) &&
+        RE_BROWSER_CURRENT_PAGE_CONTEXT.test(computerRequest)) ||
+      RE_BROWSER_UI_ACTION.test(computerRequest) ||
+      RE_BROWSER_NAVIGATION.test(computerRequest) ||
+      RE_BROWSER_PAGE_ACTION.test(computerRequest))
+  ) {
+    return { type: 'computer-use', confidence: 0.9 };
   }
 
   if (RE_CODE_FENCE.test(message) || RE_CODING.test(message)) {

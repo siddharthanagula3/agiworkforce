@@ -163,6 +163,29 @@ describe('boundaries a class declares for itself', () => {
     }
   });
 
+  it("records a project's other chats as switched off when Search past chats is off", async () => {
+    const resolution = await resolveContext({
+      turnId: 'turn-project-chats-off',
+      actor: ACTOR,
+      policy: OPEN_ORGANIZATION_CONTEXT_POLICY,
+      loaders: [
+        loader('project_instruction', ['Plan every trip in euros.']),
+        loader('project_sibling_chat', ['My hotel budget is 300 dollars a night.']),
+      ],
+      disabledToggles: ['capabilities.searchPastChats'],
+    });
+
+    expect(
+      resolution.manifest.entries.find((entry) => entry.sourceClass === 'project_sibling_chat'),
+    ).toMatchObject({
+      candidateCount: 1,
+      includedCount: 0,
+      excluded: [{ reason: 'source_disabled', count: 1 }],
+    });
+    expect(resolution.itemsOf('project_sibling_chat')).toEqual([]);
+    expect(resolution.itemsOf('project_instruction')).toHaveLength(1);
+  });
+
   it('honours the switch each class names, and only that one', async () => {
     const switched = CONTEXT_SOURCE_CLASSES.filter((sourceClass) => {
       const toggle = contextSourceClassPolicy(sourceClass).enabledBy;

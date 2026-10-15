@@ -737,6 +737,19 @@
         }
       }
     },
+    "chrome/managed-browser-task": {
+      "family": "browser",
+      "surface": "chrome",
+      "executionMode": "local",
+      "trustMode": "managed_cloud",
+      "status": "implemented",
+      "allowedHarnessGroups": ["managed-text"],
+      "features": {
+        "computerUse": {
+          "implementation": "implemented"
+        }
+      }
+    },
     "chrome/browser-task": {
       "family": "browser",
       "surface": "chrome",

@@ -45,6 +45,7 @@
   },
   "selector": {
     "bestAuto": "Meilleur (auto)",
+    "byokProviderPrefix": "Clé {{provider}}",
     "capabilitiesUnverified": "Capacités non vérifiées",
     "catalogFailed": "Impossible d'actualiser les modèles",
     "catalogFailedHint": "Vérifiez la connexion d'exécution et réessayez.",
@@ -82,6 +83,8 @@
     "thinkingOff": "Désactivé",
     "thinkingState": "Réflexion : {{state}}",
     "unavailable": "Indisponible",
+    "useYourApiKey": "Utiliser un modèle avec votre clé API",
+    "useYourApiKeyHint": "Ouvre une conversation BYOK distincte. Cette conversation locale reste sur cet appareil.",
     "visionCapability": "Vision"
   },
   "counts": {

@@ -17,6 +17,8 @@ export {
   isHighRiskCapability,
   permissionKey,
   permissionScopeKey,
+  PERMISSION_COMMANDS,
+  isPermissionScope,
 } from './capabilities';
 export type {
   DesktopCapability,
@@ -26,6 +28,7 @@ export type {
   PermissionScope,
   PermissionScopeKind,
   PermissionState,
+  PermissionCommand,
 } from './capabilities';
 
 export {
@@ -62,6 +65,24 @@ export {
   isDeveloperSessionCommand,
   messageKindForDeveloperSessionEvent,
   parseWorkingTreeStatus,
+  DEVELOPER_APPROVAL_DECISIONS,
+  DEVELOPER_CLIENT_CAPABILITIES,
+  DEVELOPER_COMMAND_NEEDS_UPDATE,
+  DEVELOPER_RUNTIME_CAPABILITIES,
+  DEVELOPER_SESSION_ENVIRONMENTS,
+  DEVELOPER_THREAD_REVERT_RESTORES,
+  DEVELOPER_WORKTREE_STARTS,
+  approvedRootId,
+  isDeveloperSessionEnvironment,
+  isDeveloperThreadRevertRestore,
+  isDeveloperWorktreeStart,
+  parseWorktreeRootId,
+  worktreeRootId,
+  DEVELOPER_TURN_LIMITS,
+  developerApprovalAllows,
+  developerReviewDecision,
+  developerRuntimeCapabilities,
+  isDeveloperApprovalDecision,
 } from './developer-sessions';
 export type {
   DeveloperApprovalAnswer,
@@ -87,6 +108,28 @@ export type {
   WorkingTreeChange,
   WorkingTreeChangeState,
   WorkingTreeChanges,
+  DeveloperActiveTurn,
+  DeveloperApprovalDecision,
+  DeveloperApprovalRequest,
+  DeveloperClientCapability,
+  DeveloperMcpApprovalReview,
+  DeveloperMcpApprovalScope,
+  DeveloperMcpServerAwaitingApproval,
+  DeveloperRuntimeCapability,
+  DeveloperTurnSteer,
+  DeveloperUserInputAnswer,
+  DeveloperUserInputRequest,
+  DeveloperCheckpointSectionsRequest,
+  DeveloperSessionEnvironment,
+  DeveloperSessionStartRequest,
+  DeveloperThreadDeleteRequest,
+  DeveloperThreadForkRequest,
+  DeveloperThreadCompactRequest,
+  DeveloperThreadRevertRequest,
+  DeveloperWorktree,
+  DeveloperWorktreeSetupScript,
+  DeveloperWorktreeStart,
+  StartedDeveloperSession,
 } from './developer-sessions';
 
 export {
@@ -102,8 +145,18 @@ export {
   isDeveloperAgentModeReadOnly,
   negotiateDeveloperSessionProtocol,
   normalizeDeveloperAgentMode,
+  DEVELOPER_UNNAMED_TURN_AGENT_MODE,
+  remoteTurnAgentMode,
+  DEVELOPER_REASONING_EFFORTS,
+  DEVELOPER_REASONING_EFFORT_LABELS,
+  THREAD_WRITER_CONFLICT_ERROR_CODE,
+  MCP_APPROVAL_STALE_ERROR_CODE,
 } from './developer-session';
-export type { DeveloperAgentMode, DeveloperSessionNegotiation } from './developer-session';
+export type {
+  DeveloperAgentMode,
+  DeveloperSessionNegotiation,
+  DeveloperReasoningEffort,
+} from './developer-session';
 
 export { BROWSER_PAIRING_COMMANDS } from './browser-bridge';
 export type {
@@ -112,6 +165,7 @@ export type {
   BrowserPairRequestPrompt,
   BrowserPairingCommand,
   BrowserPairingState,
+  BrowserPairRequestNotice,
 } from './browser-bridge';
 
 export { WORKSPACE_COMMANDS, WORKSPACE_ROOT_KINDS, isWorkspaceRootKind } from './workspace';
@@ -120,16 +174,23 @@ export type {
   WorkspaceGitState,
   WorkspaceRoot,
   WorkspaceRootKind,
-  WorkspaceSnapshot,
 } from './workspace';
 
 export {
-  ALWAYS_DENIED_BASENAMES,
   FILESYSTEM_COMMANDS,
   MAX_BINARY_READ_BYTES,
   MAX_GREP_MATCHES,
   MAX_LIST_ENTRIES,
   MAX_TEXT_READ_BYTES,
+  DEPENDENCY_TREE_NAMES,
+  GIT_METADATA_ENTRY,
+  HOME_CREDENTIAL_PATHS,
+  HOOK_MANAGER_PATHS,
+  PROJECT_CONFIG_PATHS,
+  PROTECTED_WORKSPACE_PATHS,
+  foldedFileName,
+  isCredentialPath,
+  isProtectedWorkspacePath,
 } from './filesystem';
 export type {
   FileBinaryContent,
@@ -239,6 +300,14 @@ export {
   hostHasLocalMode,
   isHostCommand,
   parseDesktopDeepLink,
+  ALWAYS_ON_HOST_SHORTCUTS,
+  DEFAULT_HOST_AGENT_NOTIFICATIONS,
+  HOST_AGENT_NOTIFICATION_KINDS,
+  HOST_AGENT_NOTIFICATION_MODES,
+  HOST_IN_WINDOW_SIGN_IN_HOSTS,
+  WINDOW_LAYOUT_COMMANDS,
+  hostKeepsSignInInWindow,
+  hostShortcutMayBeOff,
 } from './host-bridge';
 export type {
   DesktopDeepLink,
@@ -254,6 +323,11 @@ export type {
   HostShortcutStatus,
   HostUpdateAvailability,
   SessionCompletionAlerts,
+  HostAgentNotificationKind,
+  HostAgentNotificationMode,
+  HostAgentNotificationPreferences,
+  HostRestartOutcome,
+  WindowLayoutCommand,
 } from './host-bridge';
 
 export {
@@ -303,6 +377,7 @@ export {
   offeredDeviceStepTools,
   parseDesktopHostDeclaration,
   planDeviceStep,
+  DEVICE_HOST_COMMANDS,
 } from './device-steps';
 export type {
   DesktopHostDeclaration,
@@ -319,6 +394,7 @@ export type {
   DeviceStepRoot,
   DeviceStepScope,
   DeviceStepTool,
+  DeviceHostCommand,
 } from './device-steps';
 
 export {
@@ -378,3 +454,13 @@ export {
   readDesktopSignInChallenge,
   readDesktopSignInCode,
 } from './desktop-sign-in';
+
+export {
+  CODE_LOCAL_ROOT_PARAM,
+  CODE_LOCAL_THREAD_PARAM,
+  LOCAL_SESSION_ROUTE,
+  localSessionFromSearch,
+  localSessionPath,
+} from './local-session-route';
+
+export type { LocalSessionAddress } from './local-session-route';

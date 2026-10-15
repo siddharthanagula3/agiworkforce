@@ -554,6 +554,9 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
       'mcp.connect',
     );
   } catch (err) {
+    // Discovery probes run before the SDK attaches the transport to the client.
+    await transport.close().catch(() => undefined);
+    await client.close().catch(() => undefined);
     throw fenceThrownMcpError(err, serverName, 'connect');
   }
 

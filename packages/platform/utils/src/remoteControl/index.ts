@@ -5,14 +5,19 @@ export {
   type DispatchTaskPages,
   type RemoteControlHost,
   type RemoteControlHostOptions,
+  type RemotePairingDisplay,
+  type RemotePhoneToConfirm,
   type RemoteSocketFactory,
 } from './remoteControlHost';
 export {
+  RemoteCommandRefused,
+  WITHHELD_DIFF,
   createCodeRemoteController,
   parseDispatchTask,
   type CodeRemoteController,
   type CodeRemoteDependencies,
   type DeveloperSessionActivity,
+  type RemoteApprovalOutcome,
 } from './codeRemoteController';
 export {
   DISPATCH_ENVELOPE_VERSION,

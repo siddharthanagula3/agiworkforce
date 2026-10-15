@@ -181,8 +181,126 @@ describe('classifyTaskLocally, computer-use', () => {
     expect(classify('what is in this picture?', NO_HISTORY, [screenshot]).type).toBe('multimodal');
   });
 
-  it('does NOT fire on click verb without screenshot (falls through)', () => {
+  it('does NOT fire on a click-handler topic without screenshot', () => {
     expect(classify('click handler in React').type).not.toBe('computer-use');
+  });
+
+  it.each([
+    'Click the Update preview button',
+    'Fill the name field with Ada on this page',
+    'Navigate this tab to https://example.com',
+    'Navigate to https://example.com',
+    'Please select Engineering in the department dropdown',
+    'can you click the Update preview button?',
+    'Could you please fill in the email field?',
+    'Please check the newsletter checkbox',
+    'Scroll to the bottom of this page',
+    'Refresh the current tab',
+    'Submit the form on this page',
+    'Use the browser to type Ada into Your name and click Update preview. Verify the page says Hello, Ada.',
+    'Please use the browser to type Ada into Your name',
+    'Can you use this browser to click Update preview?',
+    'In this browser, click the Update preview button',
+    'In this browser, could you please click the Update preview button?',
+    'In the browser: please type Ada into Your name',
+    'Could you please use the active browser to select Engineering?',
+    'Use the browser to drag the calendar item into Thursday',
+    'Click Submit test file locally on this local test page. Do not select another file. Read its upload confirmation and report the byte count and SHA-256.',
+    'Click "Submit test file locally" on this page',
+    'Please click Update preview on the current page',
+    'Can you click Save draft in the active tab?',
+    'Select Beta on this local test page',
+    'Use the browser on this local test page to hover the Hover card, double-click Double-click details, right-click Open local context menu, then choose Beta in Choose a category with select_option. Read the DOM and report the actual states. Do not submit any form.',
+    'Please use the browser on the current page to hover Hover card',
+    'Could you use this browser in the active tab to press Escape?',
+    'On this page, click Update preview',
+    'On this local test page: please hover Hover card',
+    'On the active tab, could you please choose Beta?',
+    'Use the browser to perform a horizontal swipe inside Swipe area. Verify the page reports the actual swipe result.',
+    'Use the browser on this page to perform a vertical scroll',
+  ])('recognizes an explicit browser request without screenshot: %s', (message) => {
+    expect(classify(message)).toEqual({ type: 'computer-use', confidence: 0.9 });
+  });
+
+  it.each([
+    'How do I click the Update preview button?',
+    'Explain how to fill the name field with Ada',
+    'Write code to click the Update preview button',
+    'Can you write a function to click the Update preview button?',
+    'What happens when I submit the form?',
+    'The page says: Click the Update preview button',
+    'Summarize this page:\nClick the Update preview button',
+    '> Click the Update preview button',
+    '"Click the Update preview button"',
+    'Please explain "Click the Update preview button"',
+    'Select the best title for my essay',
+    'Fill me in on the latest news',
+    'Hello, how are you?',
+    'How do I use the browser to type Ada into the Your name field?',
+    'Explain how to use the browser to click Update preview',
+    'Use the browser to explain how to type Ada into the Your name field',
+    'Use the browser to write code for clicking the Update preview button',
+    'In this browser, explain how to submit the form',
+    'In this browser, what happens when I click the Update preview button?',
+    'The page says: Use the browser to type Ada into Your name',
+    'Summarize this page:\nUse the browser to click the Update preview button',
+    '> Use the browser to click Update preview',
+    '"Use the browser to click Update preview"',
+    'Use the browser to "click the Update preview button"',
+    'Use the browser to fill me in on the latest news',
+    'Use the browser to create an image of the Update preview button',
+    'In this browser, generate an image of a cat',
+    'Use the browser to click the button in this example:\n```js\nbutton.click();\n```',
+    'How do I click Submit test file locally on this local test page?',
+    'Explain how to click Submit test file locally on this local test page',
+    'Write code to click Submit test file locally on this local test page',
+    'Click handlers on this local test page need debugging',
+    'Click events on this page bubble to the document',
+    'Click is disabled on this local test page',
+    'Do not click Submit test file locally on this local test page',
+    'Please do not click Submit test file locally on this page',
+    'I cannot click Submit test file locally on this local test page',
+    'The page says: Click Submit test file locally on this local test page',
+    '"Click Submit test file locally on this local test page"',
+    '> Click Submit test file locally on this local test page',
+    '```js\nclick("Submit test file locally");\n``` on this local test page',
+    'How do I use the browser on this local test page to hover Hover card?',
+    'Use the browser on this local test page to explain how to click Update preview',
+    'Use the browser on this local test page to write Playwright code',
+    'Use the browser on this local test page to click handlers that are disabled',
+    'Use the browser on this local test page to not click Submit',
+    'Do not use the browser on this local test page to click Submit',
+    'The instructions say: Use the browser on this local test page to click Submit',
+    '"Use the browser on this local test page to click Submit"',
+    'Use the browser on this local test page to "click Submit"',
+    'Use the browser on that page to click Submit',
+    'Use the browser on a local test page to click Submit',
+    'On this page, explain how to click Submit',
+    'On this page, what happens when I click Submit?',
+    'On this page, click handlers are disabled',
+    'On this page, do not click Submit',
+    'On this page, "click Submit"',
+    '> On this page, click Submit',
+    'On this page, write code to click Submit',
+    'On this page, click Submit:\n```js\nbutton.click();\n```',
+    'Use the browser to perform an explanation of a horizontal swipe',
+    'Use the browser to perform code analysis of a swipe handler',
+    'Use the browser to perform a demonstration of how to swipe',
+    'Use the browser to perform a horizontal swipe in this example:\n```js\npage.swipe();\n```',
+    'Do not use the browser to perform a horizontal swipe inside Swipe area',
+    '"Use the browser to perform a horizontal swipe inside Swipe area"',
+  ])('keeps ordinary questions, code, and quoted content out of browser control: %s', (message) => {
+    expect(classify(message).type).not.toBe('computer-use');
+    expect(classify(message, NO_HISTORY, [screenshot]).type).not.toBe('computer-use');
+  });
+
+  it('does not treat prior user or assistant instructions as a current browser request', () => {
+    expect(
+      classify('What did we do?', [
+        { role: 'user', content: 'Click the Update preview button' },
+        { role: 'assistant', content: 'Navigate this tab to https://example.com' },
+      ]).type,
+    ).not.toBe('computer-use');
   });
 
   it('does NOT fire on regular image attachment + verb', () => {

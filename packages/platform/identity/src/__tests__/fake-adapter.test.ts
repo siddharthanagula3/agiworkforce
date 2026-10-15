@@ -41,6 +41,14 @@ describe('fake identity provider', () => {
     await expect(provider.getUser('user_1')).resolves.toBeNull();
   });
 
+  it('answers reachable until a test takes the provider down', async () => {
+    const provider = createFakeIdentityProvider();
+
+    await expect(provider.checkReachable()).resolves.toBe(undefined);
+    provider.setReachable(false);
+    await expect(provider.checkReachable()).rejects.toThrow();
+  });
+
   it('signs out and resets back to an empty world', async () => {
     const provider = createFakeIdentityProvider()
       .signIn({ subject: 'user_1' })

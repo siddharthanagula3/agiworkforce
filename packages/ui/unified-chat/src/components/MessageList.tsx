@@ -1,16 +1,18 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import { useUiTranslation } from '@agiworkforce/ui';
 import { useChatStore } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
 import { MessageBubble, StreamingThinkingStatus } from './MessageBubble';
 import { ProvenanceFooter } from './ProvenanceFooter';
 import { ResearchStatusChip, readMessageResearchStatus } from './ResearchStatusChip';
+import { CompactionMarker, readMessageCompaction } from './CompactionMarker';
 import {
   isMessageContinuable,
   hasStreamError,
   getStreamErrorNotice,
 } from '../lib/continue-generation';
 import type { Artifact, MessageArtifactProjection, MessageRouting } from '../lib/types';
+import type { MessageActionSlots } from './ActionBar';
 
 interface MessageListProps {
   conversationId: string;
@@ -23,9 +25,20 @@ interface MessageListProps {
   onToolReject?: (messageId: string, toolCallId: string) => void;
   approvalTurnExpired?: boolean;
   onEditMessage?: (messageId: string, newContent: string) => void;
+  messageActions?: MessageActionSlots;
 }
 
 const STICK_TO_BOTTOM_THRESHOLD_PX = 120;
+
+function withoutHistoryActions(
+  slots: MessageActionSlots | undefined,
+): MessageActionSlots | undefined {
+  if (!slots) return slots;
+  const rest = { ...slots };
+  delete rest.onBranch;
+  delete rest.onRegenerateWithModel;
+  return rest;
+}
 
 export function MessageList({
   conversationId,
@@ -38,11 +51,16 @@ export function MessageList({
   onToolReject,
   approvalTurnExpired,
   onEditMessage,
+  messageActions,
 }: MessageListProps) {
   const { t } = useUiTranslation('chat');
   const messages = useChatStore((s) => s.messagesByConversation[conversationId] ?? []);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const selectModel = useModelStore((s) => s.selectModel);
+  const compactedMessageActions = useMemo(
+    () => withoutHistoryActions(messageActions),
+    [messageActions],
+  );
   const scrollerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -138,6 +156,8 @@ export function MessageList({
         {messages.map((msg) => {
           const research =
             msg.role === 'assistant' ? readMessageResearchStatus(msg.metadata) : null;
+          const compaction = readMessageCompaction(msg.metadata);
+          const regenerate = compaction ? undefined : onRegenerateMessage;
           return (
             <div key={msg.id} data-message-row={msg.role} className="px-gutter-compact py-3">
               <div className="mx-auto w-full max-w-3xl">
@@ -147,16 +167,18 @@ export function MessageList({
                   }
                 >
                   {research && <ResearchStatusChip status={research} />}
+                  {compaction && <CompactionMarker state={compaction} />}
                   <MessageBubble
                     message={msg}
                     artifactProjection={artifactProjections?.get(msg.id) ?? null}
                     onArtifactClick={onArtifactClick}
-                    onRetry={onRegenerateMessage}
+                    onRetry={regenerate}
                     onToolApprove={onToolApprove}
                     onToolReject={onToolReject}
                     approvalTurnExpired={approvalTurnExpired}
-                    onResendApproval={onRegenerateMessage}
-                    onEdit={onEditMessage}
+                    onResendApproval={regenerate}
+                    onEdit={compaction ? undefined : onEditMessage}
+                    actionSlots={compaction ? compactedMessageActions : messageActions}
                   />
                   {showProvenanceFooter && msg.role === 'assistant' && !msg.isStreaming && (
                     <ProvenanceFooter message={msg} onPinModel={handlePinModel} />

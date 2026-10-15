@@ -36,10 +36,40 @@ export function parseDesktopDeepLink(url: string): DesktopDeepLink | null {
   const target = parsed.host;
   if (!(DESKTOP_DEEP_LINK_TARGETS as readonly string[]).includes(target)) return null;
 
-  const id = decodeURIComponent(parsed.pathname.replace(/^\/+/, '').replace(/\/+$/, ''));
+  let id: string;
+  try {
+    id = decodeURIComponent(parsed.pathname.replace(/^\/+/, '').replace(/\/+$/, ''));
+  } catch {
+    return null;
+  }
   if (id === '') return null;
 
   return { target: target as DesktopDeepLinkTarget, id };
+}
+
+/** Layout the shell holds across its windows and relaunches. */
+export const WINDOW_LAYOUT_COMMANDS = ['window_layout_read', 'window_layout_write'] as const;
+
+export type WindowLayoutCommand = (typeof WINDOW_LAYOUT_COMMANDS)[number];
+
+/**
+ * Sign-in providers the desktop window navigates to itself, so the provider's
+ * callback lands in the window that holds the session. The shell's navigation
+ * policy allows these hosts; a page reads the same list to know when a sign-in
+ * it starts will leave for the user's browser instead.
+ */
+export const HOST_IN_WINDOW_SIGN_IN_HOSTS = [
+  'accounts.google.com',
+  'login.microsoftonline.com',
+  'login.live.com',
+  'appleid.apple.com',
+] as const;
+
+export function hostKeepsSignInInWindow(url: URL): boolean {
+  return (
+    url.protocol === 'https:' &&
+    (HOST_IN_WINDOW_SIGN_IN_HOSTS as readonly string[]).includes(url.hostname)
+  );
 }
 
 /**
@@ -67,7 +97,13 @@ export function isHostCommand(value: unknown): value is HostCommand {
  * empty accelerator means the user chose no shortcut, which is a setting
  * rather than a missing one.
  */
-export const HOST_SHORTCUT_KEYS = ['quickAsk', 'screenshot', 'windowShot', 'voice'] as const;
+export const HOST_SHORTCUT_KEYS = [
+  'quickAsk',
+  'screenshot',
+  'windowShot',
+  'voice',
+  'stop',
+] as const;
 
 export type HostShortcutKey = (typeof HOST_SHORTCUT_KEYS)[number];
 
@@ -86,10 +122,22 @@ export const HOST_SHORTCUT_CHOICES: Record<HostShortcutKey, readonly string[]> =
   screenshot: ['CommandOrControl+Shift+2', 'CommandOrControl+Shift+4', 'CommandOrControl+Alt+S'],
   windowShot: ['CommandOrControl+Shift+1', 'CommandOrControl+Alt+W', 'Alt+Shift+W'],
   voice: ['Alt+Shift+V', 'CommandOrControl+Alt+V', 'CommandOrControl+Alt+D'],
+  stop: ['CommandOrControl+Alt+.', 'Alt+Shift+.', 'CommandOrControl+Alt+K'],
 };
 
 export function defaultHostShortcut(key: HostShortcutKey): string {
   return HOST_SHORTCUT_CHOICES[key][0] ?? NO_HOST_SHORTCUT;
+}
+
+/**
+ * Stop is how a person halts an agent that is moving the pointer, from
+ * whatever app is in front, so it is the one shortcut that is never off. The
+ * panel does not offer none for it and the shell refuses none for it.
+ */
+export const ALWAYS_ON_HOST_SHORTCUTS: readonly HostShortcutKey[] = ['stop'];
+
+export function hostShortcutMayBeOff(key: HostShortcutKey): boolean {
+  return !ALWAYS_ON_HOST_SHORTCUTS.includes(key);
 }
 
 /**
@@ -224,6 +272,13 @@ export interface HostPreferences {
   cliPath: string;
   sessionCompletionAlerts: SessionCompletionAlerts;
   sessionApprovalAlerts: boolean;
+  /**
+   * Optional because the page is deployed ahead of the shells that host it: a
+   * build from before these existed answers without them, and the panel offers
+   * no control the shell would ignore.
+   */
+  stopShortcut?: string;
+  agentNotifications?: HostAgentNotificationPreferences;
 }
 
 export const HOST_SHORTCUT_PREFERENCE_KEYS: Record<HostShortcutKey, keyof HostPreferences> = {
@@ -231,11 +286,42 @@ export const HOST_SHORTCUT_PREFERENCE_KEYS: Record<HostShortcutKey, keyof HostPr
   screenshot: 'screenshotShortcut',
   windowShot: 'windowShotShortcut',
   voice: 'voiceShortcut',
+  stop: 'stopShortcut',
+};
+
+/**
+ * When the desktop shell raises a native notification for a local coding
+ * agent. `unfocused` stays quiet while any AGI Cloud window is in front.
+ */
+export const HOST_AGENT_NOTIFICATION_MODES = ['always', 'unfocused', 'never'] as const;
+
+export type HostAgentNotificationMode = (typeof HOST_AGENT_NOTIFICATION_MODES)[number];
+
+export const HOST_AGENT_NOTIFICATION_KINDS = [
+  'approval',
+  'question',
+  'turn-complete',
+  'turn-failed',
+] as const;
+
+export type HostAgentNotificationKind = (typeof HOST_AGENT_NOTIFICATION_KINDS)[number];
+
+export interface HostAgentNotificationPreferences {
+  when: HostAgentNotificationMode;
+  muted: HostAgentNotificationKind[];
+  sound: boolean;
+}
+
+export const DEFAULT_HOST_AGENT_NOTIFICATIONS: HostAgentNotificationPreferences = {
+  when: 'unfocused',
+  muted: [],
+  sound: true,
 };
 
 export interface HostPreferencesState {
   preferences: HostPreferences;
-  shortcutStatus: Record<HostShortcutKey, HostShortcutStatus>;
+  /** Partial for the same reason as `stopShortcut`: an older shell reports fewer keys. */
+  shortcutStatus: Partial<Record<HostShortcutKey, HostShortcutStatus>>;
 }
 
 export interface HostNotifyRequest {
@@ -257,6 +343,11 @@ export interface HostNotifyRequest {
  * `available` false with `version` equal to `currentVersion` is the answer
  * before any release is published, not a failure: the release route reports no
  * signed installer and the shell says so rather than throwing.
+ *
+ * A shell that updates in place reports `downloading` while it fetches the
+ * newer build and `readyToInstall` once a restart would apply it; then
+ * `restartToUpdate` restarts into it. `openUpdateInstaller` only ever opens
+ * `downloadUrl`, the signed installer to fetch by hand.
  */
 export interface HostUpdateAvailability {
   available: boolean;
@@ -266,7 +357,18 @@ export interface HostUpdateAvailability {
   downloadUrl: string;
   installsAutomatically?: boolean;
   readyToInstall?: boolean;
+  downloading?: boolean;
+  /** ISO timestamp of the shell's most recent check, scheduled or asked for. */
+  checkedAt?: string;
 }
+
+/**
+ * What asking the shell to restart into a downloaded update did: `restarting`
+ * when the app is quitting to install it, `deferred` when the user chose to
+ * keep work that a restart would stop, and `not-ready` when no downloaded
+ * update is waiting.
+ */
+export type HostRestartOutcome = 'restarting' | 'deferred' | 'not-ready';
 
 /**
  * What the desktop shell offers a page it hosts.
@@ -307,6 +409,11 @@ export interface HostBridge {
   notify(request: HostNotifyRequest): Promise<void>;
   checkForUpdate(): Promise<HostUpdateAvailability>;
   openUpdateInstaller(): Promise<void>;
+  /**
+   * Absent from shells that predate it; those never report `readyToInstall`.
+   * Shells that predate the outcome resolve with nothing.
+   */
+  restartToUpdate?(): Promise<HostRestartOutcome | void>;
 }
 
 declare global {

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { MCP_PROTOCOL_ERAS } from './connectors';
+import { TOOL_APPROVAL_RISK_TIERS } from './tool-approval-resume';
 
 export const CONNECTOR_CAPABILITY_SOURCES = [
   'github-adapter',
@@ -62,6 +63,7 @@ export const ConnectorCapabilityCatalogSchema = z.object({
       visibility: z.enum(MCP_TOOL_VISIBILITIES),
       hasApp: z.boolean(),
       readOnly: z.boolean().default(false),
+      riskTier: z.enum(TOOL_APPROVAL_RISK_TIERS).optional(),
     }),
   ),
   resources: z.array(

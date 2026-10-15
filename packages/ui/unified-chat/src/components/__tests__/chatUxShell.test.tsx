@@ -18,8 +18,6 @@ import {
 } from '../BriefStatus';
 import { ChatNotificationBadge, type BadgeNotificationType } from '../ChatNotificationBadge';
 import { BrowserActivityBadge } from '../BrowserActivityBadge';
-import { KeyboardShortcutsDialog } from '../KeyboardShortcutsDialog';
-import { KeyboardShortcutsOverlay } from '../KeyboardShortcutsOverlay';
 import { SlashCommandMenu, type CommandSuggestion } from '../SlashCommandMenu';
 import { SkillMentionPicker, type MentionSkill } from '../SkillMentionPicker';
 import { FileMentionPicker, type MentionFile } from '../FileMentionPicker';
@@ -318,64 +316,6 @@ describe('BrowserActivityBadge', () => {
       />,
     );
     expect(html).toContain('Acting');
-  });
-});
-
-describe('KeyboardShortcutsDialog', () => {
-  it('renders nothing when closed', () => {
-    const html = renderToStaticMarkup(
-      <KeyboardShortcutsDialog isOpen={false} onClose={() => {}} />,
-    );
-    expect(html).toBe('');
-  });
-
-  it('renders shortcut groups when open', () => {
-    const html = renderToStaticMarkup(<KeyboardShortcutsDialog isOpen={true} onClose={() => {}} />);
-    expect(html).toContain('Keyboard Shortcuts');
-    expect(html).toContain('General');
-    expect(html).toContain('Chat');
-  });
-
-  it('renders Escape hint in footer', () => {
-    const html = renderToStaticMarkup(<KeyboardShortcutsDialog isOpen={true} onClose={() => {}} />);
-    expect(html).toContain('Escape');
-  });
-});
-
-describe('KeyboardShortcutsOverlay', () => {
-  it('renders nothing when closed', () => {
-    const html = renderToStaticMarkup(<KeyboardShortcutsOverlay open={false} onClose={() => {}} />);
-    expect(html).toBe('');
-  });
-
-  it('renders sections when open', () => {
-    const html = renderToStaticMarkup(<KeyboardShortcutsOverlay open={true} onClose={() => {}} />);
-    expect(html).toContain('Keyboard Shortcuts');
-    expect(html).toContain('Chat');
-    expect(html).toContain('Navigation');
-  });
-
-  it('renders extra sections when provided', () => {
-    const extras = [
-      {
-        category: 'desktop-extra',
-        label: 'Desktop',
-        shortcuts: [{ description: 'Fullscreen', keys: ['F11'] }],
-      },
-    ];
-    const html = renderToStaticMarkup(
-      <KeyboardShortcutsOverlay open={true} onClose={() => {}} extraSections={extras} />,
-    );
-    expect(html).toContain('Desktop');
-    expect(html).toContain('Fullscreen');
-    expect(html).toContain('F11');
-  });
-
-  it('renders customize link when onOpenSettings provided', () => {
-    const html = renderToStaticMarkup(
-      <KeyboardShortcutsOverlay open={true} onClose={() => {}} onOpenSettings={() => {}} />,
-    );
-    expect(html).toContain('Customize shortcuts');
   });
 });
 

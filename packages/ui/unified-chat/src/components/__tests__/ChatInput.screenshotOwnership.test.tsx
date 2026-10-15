@@ -30,7 +30,7 @@ vi.mock('../AttachmentMenu', async () => {
   };
 });
 
-import { ChatInput } from '../ChatInput';
+import { COMPOSER_SEND_ACCEPTED, ChatInput } from '../ChatInput';
 import { useChatStore } from '../../stores/chatStore';
 import { useModelStore } from '../../stores/modelStore';
 
@@ -56,7 +56,7 @@ describe('ChatInput screenshot ownership', () => {
   it(
     DROPS_STALE_SCREENSHOT_TEST,
     () => {
-      const onSend = vi.fn();
+      const onSend = vi.fn(() => COMPOSER_SEND_ACCEPTED);
       const common = {
         onSend,
         onStop: vi.fn(),
@@ -108,7 +108,7 @@ describe('ChatInput screenshot ownership', () => {
   );
 
   it('merges a delayed screenshot with a file added meanwhile in the same destination', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => COMPOSER_SEND_ACCEPTED);
     render(
       <ChatInput
         onSend={onSend}

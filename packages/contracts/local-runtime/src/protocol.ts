@@ -7,7 +7,7 @@ import type { BrowserPairingState } from './browser-bridge';
 import type { ComputerUseStatus } from './computer-use';
 import type { DeveloperSessionEvent } from './developer-sessions';
 import type { RemoteControlState } from './remote-control';
-import type { DesktopCapability, PermissionRequest, PermissionScope } from './capabilities';
+import type { DesktopCapability, PermissionScope } from './capabilities';
 
 export const DESKTOP_RUNTIME_CHANNEL = 'agi:desktop-runtime';
 export const DESKTOP_RUNTIME_EVENT_CHANNEL = 'agi:desktop-runtime-event';
@@ -26,6 +26,7 @@ export const DESKTOP_RUNTIME_ERROR_CODES = [
   'unsupported-platform',
   'cancelled',
   'runtime-unavailable',
+  'thread-held',
 ] as const;
 
 export type DesktopRuntimeErrorCode = (typeof DESKTOP_RUNTIME_ERROR_CODES)[number];
@@ -73,11 +74,6 @@ export class DesktopRuntimeError extends Error {
     if (shape.capability) this.capability = shape.capability;
     if (shape.scope) this.scope = shape.scope;
   }
-
-  toPermissionRequest(reason: string): PermissionRequest | null {
-    if (!this.capability || !this.scope) return null;
-    return { capability: this.capability, scope: this.scope, reason };
-  }
 }
 
 export const DISPATCH_TASK_RUNNER_READY = 'dispatch_task_runner_ready';
@@ -114,12 +110,6 @@ export interface DispatchTaskReport {
 
 export type DesktopRuntimeEvent =
   | { kind: 'workspace-changed'; rootId: string }
-  | {
-      kind: 'file-changed';
-      rootId: string;
-      path: string;
-      change: 'created' | 'modified' | 'deleted';
-    }
   | { kind: 'permission-changed'; capability: DesktopCapability; scope: PermissionScope }
   | { kind: 'shell-output'; runId: string; stream: 'stdout' | 'stderr'; chunk: string }
   | { kind: 'browser-pairing-changed'; state: BrowserPairingState }

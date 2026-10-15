@@ -4,13 +4,29 @@ const clerkState = vi.hoisted(() => ({
   auth: {} as Record<string, unknown>,
   users: {} as Record<string, unknown>,
   sessions: {} as Record<string, unknown>,
+  jwks: {} as Record<string, unknown>,
+  requestClient: null as null | (() => Promise<unknown>),
+  probeOptions: [] as unknown[],
   middlewareOptions: undefined as unknown,
   matcherPatterns: undefined as unknown,
 }));
 
+type ClerkBackendModule = typeof import('@clerk/backend');
+
+vi.mock('@clerk/backend', async (importOriginal) => ({
+  ...(await importOriginal<ClerkBackendModule>()),
+  createClerkClient: (options: unknown) => {
+    clerkState.probeOptions.push(options);
+    return { jwks: clerkState.jwks };
+  },
+}));
+
 vi.mock('@clerk/nextjs/server', () => ({
   auth: async () => clerkState.auth,
-  clerkClient: async () => ({ users: clerkState.users, sessions: clerkState.sessions }),
+  clerkClient: async () =>
+    clerkState.requestClient
+      ? clerkState.requestClient()
+      : { users: clerkState.users, sessions: clerkState.sessions },
   clerkMiddleware: (handler: (session: unknown, request: unknown) => unknown, options: unknown) => {
     clerkState.middlewareOptions = options;
     return (request: unknown) => handler({}, request);
@@ -44,6 +60,9 @@ beforeEach(() => {
   clerkState.auth = {};
   clerkState.users = {};
   clerkState.sessions = {};
+  clerkState.jwks = {};
+  clerkState.requestClient = null;
+  clerkState.probeOptions = [];
   clerkState.middlewareOptions = undefined;
   clerkState.matcherPatterns = undefined;
 });
@@ -354,5 +373,77 @@ describe('middleware support', () => {
     expect(clerkState.matcherPatterns).toEqual(['/chat']);
     expect(matcher({ nextUrl: { pathname: '/chat' } } as never)).toBe(true);
     expect(matcher({ nextUrl: { pathname: '/pricing' } } as never)).toBe(false);
+  });
+});
+
+describe('checkReachable', () => {
+  it('answers once the identity API serves the instance signing keys', async () => {
+    const getJwks = vi.fn(async () => ({ keys: [{ kid: 'ins_1' }] }));
+    clerkState.jwks = { getJwks };
+
+    await expect(new ClerkIdentityProvider({ secretKey: SECRET }).checkReachable()).resolves.toBe(
+      undefined,
+    );
+    expect(getJwks).toHaveBeenCalledTimes(1);
+    expect(clerkState.probeOptions).toEqual([{ secretKey: SECRET }]);
+  });
+
+  it('probes without the request-bound client, which a cached health check cannot build', async () => {
+    const requestClient = vi.fn(async () => {
+      throw new Error('headers() inside a function cached with unstable_cache()');
+    });
+    clerkState.requestClient = requestClient;
+    clerkState.jwks = { getJwks: vi.fn(async () => ({ keys: [] })) };
+
+    await expect(new ClerkIdentityProvider({ secretKey: SECRET }).checkReachable()).resolves.toBe(
+      undefined,
+    );
+    expect(requestClient).not.toHaveBeenCalled();
+  });
+
+  it('fails when the identity API does not answer', async () => {
+    clerkState.jwks = { getJwks: vi.fn(async () => Promise.reject(new Error('503'))) };
+
+    await expect(new ClerkIdentityProvider({ secretKey: SECRET }).checkReachable()).rejects.toThrow(
+      '503',
+    );
+  });
+
+  it('fails without calling out when no secret key is configured', async () => {
+    const getJwks = vi.fn();
+    clerkState.jwks = { getJwks };
+    vi.stubEnv('CLERK_SECRET_KEY', '');
+
+    await expect(new ClerkIdentityProvider({}).checkReachable()).rejects.toBeInstanceOf(
+      IdentityConfigError,
+    );
+    expect(getJwks).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
+  });
+});
+
+describe('the account API client', () => {
+  it('builds the client again after an attempt that could not, instead of keeping the failure', async () => {
+    clerkState.requestClient = vi
+      .fn<() => Promise<unknown>>()
+      .mockRejectedValueOnce(new Error('headers() inside a function cached with unstable_cache()'))
+      .mockResolvedValue({ users: { getUser: async () => ({ id: 'user_1' }) } });
+    const provider = new ClerkIdentityProvider({ secretKey: SECRET });
+
+    await expect(provider.getUser('user_1')).rejects.toThrow('unstable_cache');
+    await expect(provider.getUser('user_1')).resolves.toMatchObject({ id: 'user_1' });
+  });
+
+  it('keeps one client for the process once it is built', async () => {
+    const requestClient = vi.fn(async () => ({
+      users: { getUser: async (id: string) => ({ id }) },
+    }));
+    clerkState.requestClient = requestClient;
+    const provider = new ClerkIdentityProvider({ secretKey: SECRET });
+
+    await provider.getUser('user_1');
+    await provider.getUser('user_2');
+
+    expect(requestClient).toHaveBeenCalledTimes(1);
   });
 });

@@ -46,14 +46,6 @@ export type AuthMethod =
       label?: string;
     }
   | {
-      kind: 'oauth-device-code';
-      deviceCodeUrl: string;
-      tokenUrl: string;
-      clientId: string;
-      scopes?: string[];
-      label?: string;
-    }
-  | {
       kind: 'aws-signature';
       accessKeyEnvVar?: string;
       secretEnvVar?: string;

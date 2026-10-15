@@ -1,11 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatInput, type ChatInputProps } from '../ChatInput';
+import { COMPOSER_SEND_ACCEPTED, ChatInput, type ChatInputProps } from '../ChatInput';
 import { useChatStore } from '../../stores/chatStore';
 import { useModelStore } from '../../stores/modelStore';
 
 function renderComposer(overrides: Partial<ChatInputProps> = {}) {
-  const onSend = vi.fn();
+  const onSend = vi.fn((..._args: Parameters<ChatInputProps['onSend']>) => COMPOSER_SEND_ACCEPTED);
   render(
     <ChatInput
       onSend={onSend}

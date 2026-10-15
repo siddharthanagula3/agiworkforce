@@ -31,6 +31,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../pri
 import { isMenuPanelOpen, Menu, MenuItem, MenuSeparator } from './Menu';
 import { SessionItem, type SessionItemHandlers } from './SessionItem';
 import { getTemporalGroup, TEMPORAL_LABELS, toSafeDate } from './temporal';
+import { OPEN_SEARCH_SHORTCUT } from './searchShortcut';
 import { resolveProjectIcon, resolveProjectAccentHex, hasKnownProjectIcon } from './project-icons';
 import type {
   SidebarMode,
@@ -109,14 +110,7 @@ export const SIDEBAR_TOOLTIP_DELAY_MS = 200;
 const FOCUS_RING =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]';
 
-// Not Cmd/Ctrl+K: the command palette claims that in the capture phase, so it
-// never reaches search. Exported so the key binding and this badge cannot drift.
-export const OPEN_SEARCH_SHORTCUT = {
-  key: 'F',
-  ctrl: true,
-  meta: true,
-  shift: true,
-} as const;
+export { OPEN_SEARCH_SHORTCUT };
 
 export function openSearchShortcutLabel(isMac: boolean = isApplePlatform()): string {
   const { key, shift } = OPEN_SEARCH_SHORTCUT;

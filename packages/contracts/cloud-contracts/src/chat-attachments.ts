@@ -184,6 +184,62 @@ export type ManagedCloudChatAttachmentCompleteResponse = z.input<
   typeof ManagedCloudChatAttachmentCompleteResponseSchema
 >;
 
+export const ManagedCloudUploadedChatAttachmentsSchema = z
+  .array(ManagedCloudChatAttachmentSchema)
+  .max(MAX_CHAT_ATTACHMENT_COUNT)
+  .superRefine((attachments, context) => {
+    const ids = new Set<string>();
+    let bytes = 0;
+    for (const [index, attachment] of attachments.entries()) {
+      bytes += attachment.byteCount;
+      if (
+        ids.has(attachment.id) ||
+        attachment.url !== `/api/files/${attachment.id}` ||
+        attachment.name.length > 255 ||
+        attachment.name.includes('/') ||
+        attachment.name.includes('\\') ||
+        Array.from(attachment.name).some((character) => {
+          const code = character.charCodeAt(0);
+          return code <= 31 || code === 127;
+        }) ||
+        attachment.mimeType.length > 255 ||
+        !isSupportedChatAttachment(attachment.name, attachment.mimeType) ||
+        (attachment.type === 'image') !== isChatImageMimeType(attachment.mimeType)
+      )
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [index],
+          message: 'Invalid uploaded chat attachment reference.',
+        });
+      ids.add(attachment.id);
+    }
+    if (bytes > MAX_CHAT_ATTACHMENT_BYTES)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Uploaded chat attachments exceed their message byte budget.',
+      });
+  });
+
+export const ManagedCloudChatAttachmentContentPartSchema = z
+  .object({
+    type: z.literal('file'),
+    file: z.object({ asset_id: z.string().uuid() }).strict(),
+  })
+  .strict();
+
+export type ManagedCloudChatAttachmentContentPart = z.infer<
+  typeof ManagedCloudChatAttachmentContentPartSchema
+>;
+
+export function chatAttachmentContentPart(
+  attachment: ManagedCloudChatAttachment,
+): ManagedCloudChatAttachmentContentPart {
+  return ManagedCloudChatAttachmentContentPartSchema.parse({
+    type: 'file',
+    file: { asset_id: attachment.id },
+  });
+}
+
 /**
  * The canonical reference to an uploaded attachment. A text-like upload is
  * read back as text, so its parse status is pending until an extractor has

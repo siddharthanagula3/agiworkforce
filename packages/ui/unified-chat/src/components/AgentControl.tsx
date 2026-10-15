@@ -24,7 +24,6 @@ export interface AgentControlProps {
   className?: string;
 }
 
-const AGENT_MODES: AgentMode[] = ['ask', 'auto', 'plan', 'bypass'];
 const OVERRIDE_LABEL_SUFFIX = ' (overriding project default)';
 
 interface OverrideDotProps {
@@ -79,6 +78,7 @@ interface ModeChipProps {
 function ModeChip({ conversationId, projectId }: ModeChipProps) {
   const state = useAgentControlStore((s) => s.resolve(conversationId, projectId));
   const setMode = useAgentControlStore((s) => s.setMode);
+  const availableModes = useAgentControlStore((s) => s.availableModes);
   const isOverride = state.source === 'conversation-override';
   const [confirmBypassOpen, setConfirmBypassOpen] = useState(false);
 
@@ -123,7 +123,7 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
               </span>
             </div>
             <div className="p-1">
-              {AGENT_MODES.map((mode) => {
+              {availableModes.map((mode) => {
                 const isSelected = mode === state.mode;
                 return (
                   <Popover.Close asChild key={mode}>

@@ -30,8 +30,13 @@ export type ProcessingResidency = 'US' | 'NON_US' | 'UNPUBLISHED';
  * Verified 2026-09-08 against the catalog's own pricing notes and vendor
  * documentation:
  *   - `deepseek` dispatches to `api.deepseek.com`, processed in China.
- *   - `qwen` dispatches to `dashscope-intl.aliyuncs.com`, Alibaba's Singapore
- *     deployment. The adapter defaulted to the Chinese-mainland
+ *   - `qwen` dispatches to `dashscope-intl.aliyuncs.com`, an endpoint of
+ *     Alibaba's Singapore region. Re-read 2026-10-05: the vendor's region page
+ *     makes Singapore the access point and the place request data is stored,
+ *     and separately says the model runs on an inference node within the
+ *     "International (global nodes excluding Chinese mainland)" scope. So the
+ *     request leaves the United States; nothing places the computation in one
+ *     country. The adapter defaulted to the Chinese-mainland
  *     `dashscope.aliyuncs.com` until 2026-08-30.
  *   - `zhipu`, `moonshot` and `minimax` each publish a mainland endpoint and an
  *     "international" one; no vendor document states the international
@@ -59,6 +64,45 @@ export type NonUsVendorTransport = (typeof NON_US_VENDOR_TRANSPORTS)[number];
 
 export function isNonUsVendorTransport(transport: string): transport is NonUsVendorTransport {
   return (NON_US_VENDOR_TRANSPORTS as readonly string[]).includes(transport);
+}
+
+export interface VendorTransportDeployment {
+  /** The vendor region the endpoint belongs to: where a request enters. */
+  readonly accessRegion: string;
+  /** Where the vendor says the request and its result are kept. */
+  readonly storageRegion: string;
+  /** Where the vendor says the model may run, worded for a sentence. */
+  readonly inferenceScope: string;
+  /** The vendor's own name for that scope, kept as the evidence for it. */
+  readonly vendorScopeLabel: string;
+  readonly source: string;
+  readonly verifiedOn: string;
+}
+
+// Each entry is repeated to users in a provider notice and on public pages, so
+// it carries only what the vendor's own region page states, with the page and
+// the day it was read. The three places are separate facts and must stay
+// separate: an access region is not a promise about where the model runs. A
+// transport whose vendor publishes no region for its endpoint stays out.
+export const NON_US_VENDOR_TRANSPORT_DEPLOYMENTS = Object.freeze({
+  qwen: Object.freeze({
+    accessRegion: 'Singapore',
+    storageRegion: 'Singapore',
+    inferenceScope: 'anywhere outside mainland China',
+    vendorScopeLabel: 'International (global nodes excluding Chinese mainland)',
+    source: 'https://help.aliyun.com/en/model-studio/singapore-regional-access-information',
+    verifiedOn: '2026-10-05',
+  }),
+} as const satisfies Partial<Record<NonUsVendorTransport, VendorTransportDeployment>>);
+
+export function nonUsVendorTransportDeployment(
+  transport: string,
+): VendorTransportDeployment | null {
+  const deployments: Readonly<Partial<Record<string, VendorTransportDeployment>>> =
+    NON_US_VENDOR_TRANSPORT_DEPLOYMENTS;
+  return Object.prototype.hasOwnProperty.call(deployments, transport)
+    ? (deployments[transport] ?? null)
+    : null;
 }
 
 /**

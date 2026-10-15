@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 26,
+    "policyVersion": 34,
     "records": [
       {
         "version": 1,
@@ -212,7 +212,7 @@
         "reason": "three samples per arm of golden, refusal, jailbreak, chat and chat-prompt on the Haiku, Luna and Sonnet slots: chat-prompt 21 of 21 on each model against 12, 17 and 12 for chat.system@1, refusal and jailbreak no lower on any model, and every other drop on rows that also fail under chat.system@1. chat.system has no wired traffic split (the chat route passes no prompt selection), so this canary stage served no traffic; the eval run is its only evidence",
         "quality": {
           "gate": "tools/evals compare, chat.system@1 against chat.system@6, three samples per arm",
-          "commit": "87596db85118d1bc38f3fcc69c22ecb234e28a42",
+          "commit": "d0367563725811e26ab69f7cbe106f928a4e321c",
           "verdict": "held",
           "measuredOn": "2026-10-10"
         }
@@ -226,7 +226,7 @@
         "reason": "the pin moves to chat.system@6 on the eval evidence of the canary record, with no canary traffic behind it because chat.system has no traffic split. The version is global: open conversations get the new text on their next turn, which is safe because client history cannot carry signed thinking and checkpoint resumes reuse stored messages",
         "quality": {
           "gate": "tools/evals compare, chat.system@1 against chat.system@6, three samples per arm",
-          "commit": "87596db85118d1bc38f3fcc69c22ecb234e28a42",
+          "commit": "d0367563725811e26ab69f7cbe106f928a4e321c",
           "verdict": "held",
           "measuredOn": "2026-10-10"
         }
@@ -246,6 +246,71 @@
         "channel": "internal",
         "effectiveOn": "2026-10-11",
         "reason": "chat.system@6 plus an artifacts section filled with the explicit markers from the artifacts package, a plan- and surface-aware product capabilities overview filled from the capability handshake, email and writing block rules, a no_tools and capability_honesty that no longer lead with what the turn cannot do, and an artifact runtime whose connected-apps sentence is sent only where connectors are released and the plan includes them. Enters on internal and takes no traffic until a canary advance carries an eval quality signal"
+      },
+      {
+        "version": 27,
+        "artifact": "prompt",
+        "id": "chat.system@8",
+        "channel": "internal",
+        "effectiveOn": "2026-10-14",
+        "reason": "the lane/system-prompt branch's chat.system@5, renumbered past the different chat.system@5 to @7 that main shipped; built on chat.system@4, so it carries none of their additions: names the assistant AGI unless personalization or workspace or project instructions give another name, states the model serving the turn from the registry or that it is not known, and describes this chat's setup (memory, past chats, temporary chat, project knowledge, personalization, connected apps, skills) and the Settings of the surface it runs on from runtime context; enters on internal. A prompt release record routes no traffic: the canary is a percentage rule on the prompt.chat.system flag serving variant v8, the canary and stable records carry its eval quality signal, and the pin moves together with voice.live_instructions@2"
+      },
+      {
+        "version": 28,
+        "artifact": "prompt",
+        "id": "voice.live_instructions@2",
+        "channel": "internal",
+        "effectiveOn": "2026-10-14",
+        "reason": "names the live voice assistant AGI, as chat.system@8 names the chat assistant, says the name is not a claim to be artificial general intelligence and that it never claims to be human or another AI company's assistant or product; enters on internal and is pinned together with chat.system@8, which the prompt release ledger test enforces"
+      },
+      {
+        "version": 29,
+        "artifact": "prompt",
+        "id": "chat.system@9",
+        "channel": "internal",
+        "effectiveOn": "2026-10-14",
+        "reason": "the lane/system-prompt branch's chat.system@6, renumbered; takes over from chat.system@8 as the version the prompt.chat.system flag serves, and v8 stays on internal and does not advance: a chat in a project is told that excerpts from the user's other chats in the project appear further down, with the past-chat and memory lines narrowed to chats outside the project; memory a workspace keeps closed is off for the workspace and only an administrator can turn it on; connected apps the connector switch or lockdown mode withholds are described as unavailable or locked down; web and desktop Settings guidance names General under Settings; and a temporary chat is deleted after its retention unless a legal hold keeps it; enters on internal. A prompt release record routes no traffic: the canary is a percentage rule on the prompt.chat.system flag serving variant v9, the canary and stable records carry its eval quality signal, and the pin moves together with voice.live_instructions@2"
+      },
+      {
+        "version": 30,
+        "artifact": "prompt",
+        "id": "chat.system@10",
+        "channel": "internal",
+        "effectiveOn": "2026-10-14",
+        "reason": "the lane/system-prompt branch's chat.system@7, renumbered; takes over from chat.system@9 as the version the prompt.chat.system flag serves, and v9 stays on internal and does not advance: a chat in a project now receives the user's other chats in that project only when Search past chats is on and memory is on for the chat, as Claude's Search and reference chats toggle governs chat search inside a project, so v10 drops the v9 lines that narrowed the past-chat and memory lines to chats outside the project and otherwise renders as v9; enters on internal. A prompt release record routes no traffic: the canary is a percentage rule on the prompt.chat.system flag serving variant v10, the canary and stable records carry its eval quality signal, and the pin moves together with voice.live_instructions@2"
+      },
+      {
+        "version": 31,
+        "artifact": "prompt",
+        "id": "product.memory_fact_extraction@2",
+        "channel": "internal",
+        "effectiveOn": "2026-10-14",
+        "reason": "tells the extractor to leave out health, race or ethnicity, religious beliefs, politics, sexual orientation, gender identity and union membership, served only while Include sensitive topics in memory is off; enters on internal and takes no traffic until a canary advance carries an eval quality signal"
+      },
+      {
+        "version": 32,
+        "artifact": "prompt",
+        "id": "product.memory_fact_extraction_all_topics@1",
+        "channel": "stable",
+        "effectiveOn": "2026-10-14",
+        "bootstrap": "records the text product.memory_fact_extraction@1 already serves every account, under the id an account with Include sensitive topics in memory on now resolves; an internal and a canary stage would be runs that never happened",
+        "reason": "gives the extraction for accounts that include sensitive topics its own prompt, so it and product.memory_fact_extraction advance through the ledger independently instead of the opt-in pinning version 1 of the other"
+      },
+      {
+        "version": 33,
+        "artifact": "prompt",
+        "id": "product.memory_fact_extraction@3",
+        "channel": "internal",
+        "effectiveOn": "2026-10-14",
+        "reason": "asks for the user's name where version 2 asked for identity, which invited the topics it then tells the model to leave out, and names the details memory never keeps; enters on internal and takes no traffic until a canary advance carries an eval quality signal"
+      },
+      {
+        "version": 34,
+        "artifact": "prompt",
+        "id": "product.memory_fact_extraction_all_topics@2",
+        "channel": "internal",
+        "effectiveOn": "2026-10-14",
+        "reason": "names the details memory never keeps, which version 1 never did, so the extraction for accounts with Include sensitive topics in memory on no longer leaves the English content screen as the only filter on its output; enters on internal and takes no traffic until a canary advance carries an eval quality signal"
       }
     ]
   },

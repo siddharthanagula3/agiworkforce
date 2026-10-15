@@ -137,3 +137,33 @@ describe('ComposerSubmitKeymap · menu delegation', () => {
     expect(pressKey(instance, { key: ESCAPE_KEY })).toBe(false);
   });
 });
+
+describe('ComposerSubmitKeymap · Mod-Shift-Enter', () => {
+  it('runs the alternate submit, not the plain one', () => {
+    const onSubmit = vi.fn();
+    const onAlternateSubmit = vi.fn();
+    const instance = withEditor({ onSubmit, onAlternateSubmit });
+    expect(pressKey(instance, { key: ENTER_KEY, shiftKey: true, ...modifierKey() })).toBe(true);
+    expect(onAlternateSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(composerText(instance)).toBe(SEEDED_TEXT);
+  });
+
+  it('falls back to the plain submit when the host has no alternate', () => {
+    const onSubmit = vi.fn();
+    const instance = withEditor({ onSubmit });
+    pressKey(instance, { key: ENTER_KEY, shiftKey: true, ...modifierKey() });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing while a menu owns the composer', () => {
+    const onAlternateSubmit = vi.fn();
+    const instance = withEditor({
+      onAlternateSubmit,
+      isMenuActive: () => true,
+      onMenuKey: () => false,
+    });
+    pressKey(instance, { key: ENTER_KEY, shiftKey: true, ...modifierKey() });
+    expect(onAlternateSubmit).not.toHaveBeenCalled();
+  });
+});

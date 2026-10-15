@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatInput } from '../ChatInput';
+import { COMPOSER_SEND_ACCEPTED, ChatInput } from '../ChatInput';
 import { useChatStore } from '../../stores/chatStore';
 import { useModelStore } from '../../stores/modelStore';
 import { LARGE_PASTE_THRESHOLD } from '../../lib/largePaste';
@@ -17,7 +17,7 @@ function pasteText(target: HTMLElement, text: string) {
 function renderComposer() {
   render(
     <ChatInput
-      onSend={vi.fn()}
+      onSend={vi.fn(() => COMPOSER_SEND_ACCEPTED)}
       onStop={vi.fn()}
       onModelSelectorClick={vi.fn()}
       hasMessages={false}

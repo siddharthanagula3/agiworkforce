@@ -1,9 +1,8 @@
 {
-  "description": "Golden pull-page apply fixtures (suite b). Each case seeds an initial local state, then replays one or more pull `steps` (each step = one page: conversations/messages/artifacts, applied in that order, conversations first so message/artifact FK-mapping can resolve parents, matching both engines' documented ordering invariant). `expected*` describes the OBSERVABLE end state only, not engine-internal structure, so the same JSON drives both the TS replay (packages/client/sync/src/__tests__/fixtures.test.ts) and the Rust replay (apps/desktop/src-tauri/src/data/cloud_sync.rs's #[cfg(test)] fixture module) via apply_pull_page. `applies` lists which engine(s) a case is valid for; a case tagged only [\"ts\"] documents a real, intentional divergence (see each case's `divergenceNote`) rather than a shared invariant.",
+  "description": "Golden pull-page apply fixtures. Each case seeds an initial local state, then replays one or more pull `steps` (each step = one page: conversations/messages/artifacts, applied in that order, conversations first so message/artifact parent mapping can resolve). `expected*` describes the observable end state only, not internal structure. Replayed by packages/client/sync/src/__tests__/fixtures.test.ts.",
   "cases": [
     {
       "name": "insert_new_conversation",
-      "applies": ["ts", "rust"],
       "dirtyConversationIds": [],
       "initialConversations": [],
       "initialMessages": {},
@@ -39,7 +38,6 @@
     },
     {
       "name": "update_existing_conversation_lww",
-      "applies": ["ts", "rust"],
       "dirtyConversationIds": [],
       "initialConversations": [
         {
@@ -84,7 +82,6 @@
     },
     {
       "name": "tombstone_removes_conversation",
-      "applies": ["ts", "rust"],
       "dirtyConversationIds": [],
       "initialConversations": [
         {
@@ -122,7 +119,6 @@
     },
     {
       "name": "dirty_title_preserved_against_stale_delta",
-      "applies": ["ts", "rust"],
       "dirtyConversationIds": ["c1"],
       "initialConversations": [
         {
@@ -167,7 +163,6 @@
     },
     {
       "name": "tombstone_wins_even_when_dirty",
-      "applies": ["ts", "rust"],
       "dirtyConversationIds": ["c1"],
       "initialConversations": [
         {
@@ -205,8 +200,6 @@
     },
     {
       "name": "message_count_preserved_from_existing_on_update",
-      "applies": ["ts"],
-      "divergenceNote": "Rust's conversations table has no message_count column (messages are counted by SQL query, not stored), not a checkable field on that side.",
       "dirtyConversationIds": [],
       "initialConversations": [
         {
@@ -252,7 +245,6 @@
     },
     {
       "name": "insert_messages_sorted_by_created_at",
-      "applies": ["ts", "rust"],
       "dirtyConversationIds": [],
       "initialConversations": [
         {
@@ -331,7 +323,6 @@
     },
     {
       "name": "tombstone_removes_message",
-      "applies": ["ts", "rust"],
       "dirtyConversationIds": [],
       "initialConversations": [
         {
@@ -384,7 +375,6 @@
     },
     {
       "name": "sort_tie_break_by_id_when_created_at_equal",
-      "applies": ["ts", "rust"],
       "dirtyConversationIds": [],
       "initialConversations": [
         {
@@ -453,8 +443,6 @@
     },
     {
       "name": "orphan_message_then_parent_conversation_arrives",
-      "applies": ["ts", "rust"],
-      "divergenceNote": "Same END state on both engines, reached differently. TS's message port has no FK constraint: after step 1 alone the message is ALREADY visible under conversation id 'c-orphan' (see the extra TS-only intermediate assertion in fixtures.test.ts). Rust's SQLite schema enforces a real foreign key: after step 1 alone the message is buffered in cloud_sync_pending_messages and NOT yet a row in `messages` (see the extra Rust-only intermediate assertion in the fixture-replay test), it is drained into a real row only when step 2 applies the parent conversation. Replayed through apply_pull_page (not the individual fns) specifically so this conv-then-drain-then-msg ordering is exercised.",
       "dirtyConversationIds": [],
       "initialConversations": [],
       "initialMessages": {},
@@ -520,7 +508,6 @@
     },
     {
       "name": "artifact_upsert_then_tombstone_same_page",
-      "applies": ["ts", "rust"],
       "dirtyConversationIds": [],
       "initialConversations": [
         {

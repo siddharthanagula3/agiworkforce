@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConnectorPermissionLevel } from '@agiworkforce/types';
 import {
   ConnectorPermissionsUnavailableError,
@@ -34,6 +34,11 @@ describe('getConnectorPermissionStore, non-Tauri runtime', () => {
     await expect(store.list('github')).rejects.toBeInstanceOf(ConnectorPermissionsUnavailableError);
   });
 
+  it('reset() rejects instead of reporting a reset that did not happen', async () => {
+    const store = getConnectorPermissionStore();
+    await expect(store.reset()).rejects.toBeInstanceOf(ConnectorPermissionsUnavailableError);
+  });
+
   it('a stray __agi_cloud_db__ global does not resurrect a write path', async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).__agi_cloud_db__ = {
@@ -46,5 +51,82 @@ describe('getConnectorPermissionStore, non-Tauri runtime', () => {
     await expect(
       store.set('github', 'create_issue', 'always-allow' as ConnectorPermissionLevel),
     ).rejects.toBeInstanceOf(ConnectorPermissionsUnavailableError);
+  });
+});
+
+describe('getConnectorPermissionStore, Tauri runtime', () => {
+  const invoke = vi.fn();
+
+  async function tauriStore() {
+    const module = await import('../connectorPermissionStore');
+    return module.getConnectorPermissionStore();
+  }
+
+  beforeEach(() => {
+    vi.resetModules();
+    invoke.mockReset();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__TAURI_INTERNALS__ = {};
+    vi.doMock('@tauri-apps/api/core', () => ({ invoke }));
+  });
+
+  afterEach(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (window as any).__TAURI_INTERNALS__;
+    vi.doUnmock('@tauri-apps/api/core');
+    vi.resetModules();
+  });
+
+  it('list() carries the state of the store with the saved permissions', async () => {
+    invoke.mockResolvedValue({
+      store: { state: 'ok' },
+      permissions: [{ toolName: 'create_issue', level: 'blocked', destructive: true }],
+    });
+
+    const store = await tauriStore();
+
+    expect(store.storage).toBe('local-vault');
+    await expect(store.list('github')).resolves.toEqual({
+      store: { state: 'ok' },
+      permissions: [{ toolName: 'create_issue', level: 'blocked', destructive: true }],
+    });
+    expect(invoke).toHaveBeenCalledWith('connector_permission_list', { connectorId: 'github' });
+  });
+
+  it('list() reports an unreadable store instead of an empty list that reads as "nothing set"', async () => {
+    invoke.mockResolvedValue({
+      store: {
+        state: 'unreadable',
+        reason: 'no available key opens this store',
+        unlockMayFix: false,
+      },
+      permissions: [],
+    });
+
+    const listing = await (await tauriStore()).list('github');
+
+    expect(listing.store).toEqual({
+      state: 'unreadable',
+      reason: 'no available key opens this store',
+      unlockMayFix: false,
+    });
+  });
+
+  it('list() rejects when the native side fails, rather than returning []', async () => {
+    invoke.mockRejectedValue(new Error('cannot resolve app data dir'));
+
+    await expect((await tauriStore()).list('github')).rejects.toThrow(
+      'cannot resolve app data dir',
+    );
+  });
+
+  it('reset() returns what the native side did with the old file', async () => {
+    invoke.mockResolvedValue({ reset: true, keptAs: 'connector-permissions.unreadable-1.json' });
+
+    await expect((await tauriStore()).reset()).resolves.toEqual({
+      reset: true,
+      keptAs: 'connector-permissions.unreadable-1.json',
+    });
+    expect(invoke).toHaveBeenCalledWith('connector_permission_reset');
   });
 });
