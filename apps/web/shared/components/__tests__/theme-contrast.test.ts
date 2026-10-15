@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import ts from 'typescript';
 import { describe, it, expect } from 'vitest';
 
 import {
@@ -1481,14 +1482,75 @@ describe('the off-state switch track has a visible boundary (>= 3:1) in both the
     'apps/web/features/settings/sections/PrivacySection.tsx',
     'apps/web/features/settings/components/DeviceSignInToggle.tsx',
   ];
+  const THUMB_OFFSET = /translate-x-|translateX\(/;
+
+  function ownSwitchMarkup(file: string, source: string): string[] {
+    const parsed = ts.createSourceFile(
+      file,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    );
+    const markup: string[] = [];
+    const visit = (node: ts.Node) => {
+      const opening = ts.isJsxElement(node)
+        ? node.openingElement
+        : ts.isJsxSelfClosingElement(node)
+          ? node
+          : null;
+      const roleIsSwitch = opening?.attributes.properties.some((attribute) => {
+        if (!ts.isJsxAttribute(attribute) || attribute.name.getText(parsed) !== 'role') {
+          return false;
+        }
+        const value = attribute.initializer;
+        const literal =
+          value && ts.isJsxExpression(value) && value.expression ? value.expression : value;
+        return (
+          literal !== undefined && ts.isStringLiteralLike(literal) && literal.text === 'switch'
+        );
+      });
+      if (roleIsSwitch) markup.push(node.getText(parsed));
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+    return markup;
+  }
 
   for (const file of SETTINGS_SWITCH_SURFACES) {
     it(`${file} draws its on/off tracks with the shared Switch, not a track of its own`, () => {
       const source = readFileSync(resolve(repoRoot, file), 'utf8');
       expect(source).toMatch(/import \{[^}]*\bSwitch\b[^}]*\} from '@agiworkforce\/ui';/);
-      expect(source).not.toMatch(/translate-x-\[|translateX\(/);
+      for (const element of ownSwitchMarkup(file, source)) {
+        expect(element, 'a role="switch" element moves a thumb of its own').not.toMatch(
+          THUMB_OFFSET,
+        );
+      }
     });
   }
+
+  it('looks for a thumb only inside role="switch" markup', () => {
+    const source = [
+      'const Track = () => <span style={{ transform: `translateX(${x}px)` }} />;',
+      'const Chip = () => <button role="switch" aria-checked={on}>{label}</button>;',
+      'const Own = () => (',
+      '  <button role="switch" aria-checked={on}>',
+      '    <span className={on ? "translate-x-[22px]" : "translate-x-0.5"} />',
+      '  </button>',
+      ');',
+      'const Braced = () => (',
+      "  <div role={'switch'} aria-checked={on}>",
+      '    <span style={{ transform: `translateX(${on ? 23 : 3}px)` }} />',
+      '  </div>',
+      ');',
+    ].join('\n');
+
+    const markup = ownSwitchMarkup('fixture.tsx', source);
+    expect(markup).toHaveLength(3);
+    expect(markup[0]).not.toMatch(THUMB_OFFSET);
+    expect(markup[1]).toMatch(THUMB_OFFSET);
+    expect(markup[2]).toMatch(THUMB_OFFSET);
+  });
 });
 
 describe('status colour has no role-less legacy token', () => {
