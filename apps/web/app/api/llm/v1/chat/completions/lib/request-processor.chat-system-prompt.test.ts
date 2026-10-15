@@ -30,6 +30,7 @@ type ScanModule6 = typeof import('@/lib/services/plugin-installation-service');
 type ScanModule7 = typeof import('@/lib/feature-flags/flag-evaluation-service');
 type ScanModule8 = typeof import('@/lib/services/model-rollout/routing-decision-trace-service');
 type ScanModule9 = typeof import('@/lib/services/turn-context-service');
+type ContextCompactionModule = typeof import('./context-compaction');
 
 const PRO_CHAT_MODEL = getDefaultModelFor('pro', 'chat');
 const CONVERSATION_ID = '9b1f3c2e-6d4a-4f7b-8c1e-2a3b4c5d6e7f';
@@ -153,7 +154,7 @@ const finalFit = vi.hoisted(() => ({
 }));
 
 vi.mock('./context-compaction', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./context-compaction')>();
+  const actual = await importOriginal<ContextCompactionModule>();
   return {
     ...actual,
     compactContextWindow: (input: Parameters<typeof actual.compactContextWindow>[0]) =>
