@@ -6789,7 +6789,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         onRetryAttachmentUpload={handleRetryAttachmentUpload}
                         onRemoveAttachmentUpload={handleRemoveAttachmentUpload}
                         emptyState
-                        attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                         sendPreviewPresentation={sendPreviewPresentation}
                         onUpgradeRequest={handleOpenUpgradeDialog}
                         fastModeDisabledByWorkspace={fastModeDisabledByWorkspace}
@@ -6923,7 +6922,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         attachmentUploadAttempt={attachmentUploadAttempt}
                         onRetryAttachmentUpload={handleRetryAttachmentUpload}
                         onRemoveAttachmentUpload={handleRemoveAttachmentUpload}
-                        attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                         sendPreviewPresentation={sendPreviewPresentation}
                         onUpgradeRequest={handleOpenUpgradeDialog}
                         fastModeDisabledByWorkspace={fastModeDisabledByWorkspace}

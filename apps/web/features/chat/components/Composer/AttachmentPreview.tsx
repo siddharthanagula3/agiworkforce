@@ -1,14 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import {
-  X,
-  FileText,
-  FileSpreadsheet,
-  FileCode,
-  File as FileIcon,
-  Lock,
-} from '@agiworkforce/icons';
+import { X, FileText, FileSpreadsheet, FileCode, File as FileIcon } from '@agiworkforce/icons';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@shared/lib/utils';
 import type { AttachmentPreview as AttachmentPreviewData } from '@features/chat/hooks/use-attachments';
@@ -26,7 +19,6 @@ interface AttachmentPreviewProps {
   onRetry?: (index: number) => void;
   disableRemove?: boolean;
   className?: string;
-  privacyShortLabel?: string;
 }
 
 function formatSize(bytes: number): string {
@@ -100,18 +92,6 @@ function removeLabel(fileName: string, status?: AttachmentUploadVisualStatus): s
   return inFlight ? `Cancel upload of ${fileName}` : `Remove ${fileName}`;
 }
 
-function PrivacyChip({ label }: { label: string }) {
-  return (
-    <div
-      className="absolute -bottom-1 start-1 z-[var(--z-control)] flex items-center gap-0.5 rounded-full border border-border bg-background/90 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-foreground shadow-e1"
-      aria-label={`Outbound destination: ${label}`}
-    >
-      <Lock className="h-4 w-4" />
-      {label}
-    </div>
-  );
-}
-
 function UploadStatus({
   fileName,
   status,
@@ -169,7 +149,6 @@ function ImageThumbnail({
   status,
   onRetry,
   disableRemove,
-  privacyShortLabel,
 }: {
   preview: AttachmentPreviewData;
   index: number;
@@ -177,7 +156,6 @@ function ImageThumbnail({
   status?: AttachmentUploadVisualStatus;
   onRetry?: (index: number) => void;
   disableRemove?: boolean;
-  privacyShortLabel?: string;
 }) {
   return (
     <motion.div
@@ -194,7 +172,6 @@ function ImageThumbnail({
         label={removeLabel(preview.file.name, status)}
         disabled={disableRemove}
       />
-      {privacyShortLabel ? <PrivacyChip label={privacyShortLabel} /> : null}
       <div
         className="h-14 w-14 overflow-hidden rounded-lg border border-border/50 bg-muted/30"
         title={`${preview.file.name}, ${formatSize(preview.file.size)}`}
@@ -222,7 +199,6 @@ function DocumentChip({
   status,
   onRetry,
   disableRemove,
-  privacyShortLabel,
 }: {
   preview: AttachmentPreviewData;
   index: number;
@@ -230,7 +206,6 @@ function DocumentChip({
   status?: AttachmentUploadVisualStatus;
   onRetry?: (index: number) => void;
   disableRemove?: boolean;
-  privacyShortLabel?: string;
 }) {
   const Icon = getDocIcon(preview.file.type);
   const name = preview.file.name;
@@ -266,15 +241,6 @@ function DocumentChip({
             <span className="text-caption text-muted-foreground">
               {formatSize(preview.file.size)}
             </span>
-            {privacyShortLabel ? (
-              <span
-                className="inline-flex items-center gap-0.5 rounded-full border border-border/60 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-muted-foreground"
-                aria-label={`Outbound destination: ${privacyShortLabel}`}
-              >
-                <Lock className="h-4 w-4" />
-                {privacyShortLabel}
-              </span>
-            ) : null}
           </div>
           <UploadStatus
             fileName={name}
@@ -294,7 +260,6 @@ function AttachmentPreviewComponent({
   onRetry,
   disableRemove,
   className,
-  privacyShortLabel,
 }: AttachmentPreviewProps) {
   if (previews.length === 0) return null;
 
@@ -311,7 +276,6 @@ function AttachmentPreviewComponent({
               status={statuses?.[index]}
               onRetry={onRetry}
               disableRemove={disableRemove}
-              privacyShortLabel={privacyShortLabel}
             />
           ) : (
             <DocumentChip
@@ -322,7 +286,6 @@ function AttachmentPreviewComponent({
               status={statuses?.[index]}
               onRetry={onRetry}
               disableRemove={disableRemove}
-              privacyShortLabel={privacyShortLabel}
             />
           ),
         )}

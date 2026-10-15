@@ -2474,7 +2474,7 @@ describe('ChatComposerNew', () => {
       expect(paid).toHaveTextContent('Paid');
       fireEvent.click(promotional);
       expect(screen.queryByRole('button', { name: /select aspect ratio/i })).toBeNull();
-      expect(screen.getByText(/Free quota · .* × .*/)).toBeVisible();
+      expect(screen.queryByText(/Free quota/)).toBeNull();
 
       const textarea = screen.getByRole('textbox', { name: /message input/i });
       fireEvent.change(textarea, { target: { value: 'a blue paper boat' } });
@@ -2728,7 +2728,7 @@ describe('ChatComposerNew', () => {
       fireEvent.click(promotional);
       expect(screen.queryByRole('button', { name: /select video aspect ratio/i })).toBeNull();
       expect(screen.queryByRole('button', { name: /select video quality/i })).toBeNull();
-      expect(screen.getByText('Free quota · 1280 × 720 · 2s')).toBeVisible();
+      expect(screen.queryByText(/Free quota/)).toBeNull();
 
       const textarea = screen.getByRole('textbox', { name: /message input/i });
       fireEvent.change(textarea, { target: { value: 'a paper boat moving across water' } });

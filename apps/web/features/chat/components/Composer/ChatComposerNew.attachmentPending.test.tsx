@@ -122,6 +122,22 @@ describe('a send raced against an attachment that is still being prepared', () =
   });
 });
 
+describe('where a picked file is shown', () => {
+  it('shows the attachment inside the composer box, above the text', async () => {
+    const file = new File(['picture'], 'photo.png', { type: 'image/png' });
+    preparation.prepareChatAttachment.mockResolvedValue({ status: 'ready', file });
+    const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
+
+    pickFile(container, file);
+
+    const remove = await screen.findByRole('button', { name: 'Remove photo.png' });
+    const box = container.querySelector('#chat-composer');
+    expect(box).not.toBeNull();
+    expect(box?.contains(remove)).toBe(true);
+    expect(container.textContent).not.toMatch(/outbound destination|managed/i);
+  });
+});
+
 describe('the reason a shut send control gives to a screen reader', () => {
   it('names the empty draft rather than claiming it will send', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);

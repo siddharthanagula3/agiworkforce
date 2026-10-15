@@ -477,7 +477,6 @@ interface ChatComposerProps {
    * (e.g. "Local", "BYOK", "Managed"). Sourced from the host's SendPreview
    * presentation.
    */
-  attachmentPrivacyShortLabel?: string;
   /**
    * Compact, on-demand outbound-route disclosure shown below the input. This
    * preserves the Local/BYOK/Managed trust boundary without a persistent banner
@@ -785,7 +784,6 @@ const ChatComposerNewComponent = ({
   onEnterVoiceMode,
   clearSignal,
   emptyState = false,
-  attachmentPrivacyShortLabel,
   onUpgradeRequest,
   fastModeDisabledByWorkspace = false,
   onModelChange,
@@ -1271,12 +1269,6 @@ const ChatComposerNewComponent = ({
   );
   const selectedVideoIsPromotional = availableVideoModels.some(
     (model) => model.id === videoModelId && model.source === 'promotional',
-  );
-  const selectedPromotionalImage = promotionalMediaModels.find(
-    (model) => model.key === imageModelId && model.category === 'image',
-  );
-  const selectedPromotionalVideo = promotionalMediaModels.find(
-    (model) => model.key === videoModelId && model.category === 'video',
   );
   const imageAspectOptions = useMemo(
     () => getImageAspectOptionsForModel(imageModelId),
@@ -4687,28 +4679,6 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
-      {/* Attachments */}
-      {attachmentUploadAttempt && uploadAttemptPreviews.length > 0 ? (
-        <AttachmentPreview
-          previews={uploadAttemptPreviews}
-          statuses={attachmentUploadAttempt.statuses}
-          onRetry={handleRetryAttachmentUpload}
-          onRemove={handleRemoveAttachmentUpload}
-          disableRemove={
-            !onRemoveAttachmentUpload ||
-            attachmentUploadAttempt.statuses.every((status) => status.phase === 'complete')
-          }
-          className="mb-2"
-          privacyShortLabel={attachmentPrivacyShortLabel}
-        />
-      ) : null}
-      <AttachmentPreview
-        previews={previews}
-        onRemove={removeFile}
-        className="mb-2"
-        privacyShortLabel={attachmentPrivacyShortLabel}
-      />
-
       {/* AUDIT-FIX MEDIA-VIDEO-01: files that were staged BEFORE the user
           entered image/video mode (the + menu switches mode without touching
           the attachment list). The send is blocked rather than silently
@@ -5222,6 +5192,21 @@ const ChatComposerNewComponent = ({
             emptyState && 'px-space-3 py-1.5 sm:gap-2 sm:px-5 sm:py-space-3',
           )}
         >
+          {attachmentUploadAttempt && uploadAttemptPreviews.length > 0 ? (
+            <AttachmentPreview
+              previews={uploadAttemptPreviews}
+              statuses={attachmentUploadAttempt.statuses}
+              onRetry={handleRetryAttachmentUpload}
+              onRemove={handleRemoveAttachmentUpload}
+              disableRemove={
+                !onRemoveAttachmentUpload ||
+                attachmentUploadAttempt.statuses.every((status) => status.phase === 'complete')
+              }
+              className="px-1 pt-1 pb-0"
+            />
+          ) : null}
+          <AttachmentPreview previews={previews} onRemove={removeFile} className="px-1 pt-1 pb-0" />
+
           {/* Rest-state row: an existing chat keeps plus, textbox and the right
               cluster on one line. The home composer keeps its separate control
               row. items-end pins the controls to the textbox's last line as it
@@ -5768,14 +5753,6 @@ const ChatComposerNewComponent = ({
                     </AnchoredComposerMenu>
                   </div>
 
-                  {selectedPromotionalImage && (
-                    <span className="text-xs text-muted-foreground max-sm:order-2">
-                      Free quota ·{' '}
-                      {selectedPromotionalImage.outputSize?.replaceAll('*', ' × ') ??
-                        'provider default'}
-                    </span>
-                  )}
-
                   {imageSourceFile && imageModelSupportsEdit && (
                     <div className="relative">
                       <button
@@ -5866,21 +5843,6 @@ const ChatComposerNewComponent = ({
                     >
                       Transparent
                     </button>
-                  )}
-
-                  {imageSourceFile &&
-                    imageModelSupportsEdit &&
-                    effectiveImageOperation === 'edit' &&
-                    attachments.length > 1 && (
-                      <span className="text-xs text-muted-foreground">
-                        {`Editing the first image, guided by the other ${attachments.length - 1}`}
-                      </span>
-                    )}
-
-                  {imageSourceFile && !imageModelSupportsEdit && (
-                    <span className="text-xs text-muted-foreground">
-                      This model cannot edit an attached image
-                    </span>
                   )}
                 </div>
               )}
@@ -6076,16 +6038,6 @@ const ChatComposerNewComponent = ({
                         ? { durationSecs: effectiveVideoDurationSecs }
                         : {})}
                     />
-                  )}
-                  {selectedPromotionalVideo && (
-                    <span className="text-xs text-muted-foreground">
-                      Free quota ·{' '}
-                      {selectedPromotionalVideo.outputSize?.replaceAll('*', ' × ') ??
-                        'provider default'}
-                      {selectedPromotionalVideo.durationSeconds !== undefined
-                        ? ` · ${selectedPromotionalVideo.durationSeconds}s`
-                        : ''}
-                    </span>
                   )}
                 </div>
               )}
@@ -6717,7 +6669,6 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.onEnterVoiceMode === next.onEnterVoiceMode &&
     prev.clearSignal === next.clearSignal &&
     prev.emptyState === next.emptyState &&
-    prev.attachmentPrivacyShortLabel === next.attachmentPrivacyShortLabel &&
     prev.sendPreviewPresentation === next.sendPreviewPresentation &&
     prev.onUpgradeRequest === next.onUpgradeRequest &&
     prev.fastModeDisabledByWorkspace === next.fastModeDisabledByWorkspace &&
