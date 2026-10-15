@@ -253,12 +253,18 @@ test('Desktop Cloud renders one collapsed, progressively expandable canonical ac
       name: /Searching official sources · AGI official documentation, Done/u,
     }),
   ).toBeVisible();
-  // The result rows themselves stay out of the transcript. One source list
-  // serves the whole turn from the dock; repeating it under every search buried
-  // the answer under the same links. What the transcript owes the reader is the
+  // The result rows themselves stay out of the trace. One source list serves
+  // the whole turn under the answer; repeating it under every search buried
+  // the answer under the same links. What the trace owes the reader is the
   // count, which the collapsed toggle above already states.
-  await expect(assistant.getByText('Official AGI documentation')).toHaveCount(0);
-  await expect(assistant.getByText('example.com')).toHaveCount(0);
+  const activity = assistant.getByRole('region', { name: 'Agent activity' });
+  await expect(activity.getByText('Official AGI documentation')).toHaveCount(0);
+  await expect(activity.getByText('example.com')).toHaveCount(0);
+  const turnSources = assistant.getByTestId('message-citations');
+  await expect(turnSources.getByRole('button')).toHaveCount(1);
+  await expect(
+    turnSources.getByRole('button', { name: 'Open citation: Official AGI documentation' }),
+  ).toHaveText('example.com');
   await expect(assistant.getByText('Done', { exact: true })).toBeVisible();
   expect(unexpectedDiagnostics).toEqual([]);
 });

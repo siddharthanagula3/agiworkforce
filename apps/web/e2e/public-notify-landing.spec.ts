@@ -7,12 +7,13 @@ import {
   type Response,
 } from '@playwright/test';
 
-import { NOTIFY_CTA, NOTIFY_FORM_ID } from '../lib/surface-status';
+import { NOTIFY_CTA, NOTIFY_FORM_ID, SURFACE_STATUS } from '../lib/surface-status';
 import { mockAuthProvider } from './lib/mock-auth-provider';
 
 const NOTIFY_PAGES = ['/mobile', '/chrome-extension'] as const;
 const EMAIL_LABEL = 'Email address';
 const LOADING_LABEL = 'Loading download options';
+const RETRY_LABEL = 'Retry release check';
 const COOKIE_REGION_NAME = 'Cookie consent';
 const COOKIE_DISMISS_LABEL = 'Close and reject non-essential cookies';
 const SLOW_LINK_KBPS = 400;
@@ -121,18 +122,18 @@ function observeDownloadRequests(page: Page) {
           if (!response?.ok()) {
             await expect(page.getByRole('list', { name: 'Installer checksums' })).toHaveCount(0);
           }
-        } else if (response?.status() === 404) {
-          const unavailable =
-            observation.path === '/api/releases/desktop-cloud/latest'
-              ? 'AGI Desktop downloads unavailable'
-              : 'CLI downloads unavailable';
-          await expect(page.getByRole('status', { name: unavailable, exact: true })).toBeVisible();
-        } else if (observation.state === 'failed' || !response?.ok()) {
-          const error =
-            observation.path === '/api/releases/desktop-cloud/latest'
-              ? page.locator('#desktop-downloads').getByRole('alert')
-              : page.getByRole('status', { name: 'CLI download check failed' });
-          await expect(error).toBeVisible();
+        } else {
+          const surface =
+            observation.path === '/api/releases/desktop-cloud/latest' ? 'desktop' : 'cli';
+          const row = page.locator(`#${surface}-downloads`);
+          if (response?.status() === 404) {
+            await expect(row.locator('.agi-dl-badge')).toHaveText(SURFACE_STATUS[surface]);
+            await expect(row.getByRole('alert')).toHaveCount(0);
+            await expect(row.getByRole('button', { name: RETRY_LABEL })).toHaveCount(0);
+          } else if (observation.state === 'failed' || !response?.ok()) {
+            await expect(row.getByRole('alert')).toBeVisible();
+            await expect(row.getByRole('button', { name: RETRY_LABEL })).toBeVisible();
+          }
         }
       }
       await expect(page.locator('#desktop-downloads')).toBeVisible();

@@ -119,7 +119,9 @@ test.describe('Chat Workflow', () => {
 
     await openRowMenu(row);
     await page.getByRole('menuitem', { name: /^delete$/i }).click();
-    await page.getByRole('menuitem', { name: /^confirm delete$/i }).click();
+    const confirmation = page.getByRole('alertdialog');
+    await expect(confirmation).toContainText(ALPHA_TITLE);
+    await confirmation.getByRole('button', { name: 'Delete chat' }).click();
 
     await expect(rows.filter({ hasText: ALPHA_TITLE })).toHaveCount(0);
     await expect(rows).toHaveCount(before - 1);

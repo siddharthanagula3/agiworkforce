@@ -69,11 +69,21 @@ vi.mock('@/lib/server/media-assets', async (importOriginal) => {
 vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   isMediaStorageConfigured: () => true,
-  readStoredMedia: async (pathname: string) => {
+  streamStoredMedia: async (pathname: string) => {
     const data = storage.objects.get(pathname);
-    return data ? { data, contentType: 'application/octet-stream' } : null;
+    if (!data) return null;
+    return {
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array(data));
+          controller.close();
+        },
+      }),
+      contentType: 'application/octet-stream',
+      contentLength: data.byteLength,
+      contentRange: undefined,
+    };
   },
-  streamStoredMedia: vi.fn(),
   deleteStoredMedia: vi.fn(),
 }));
 

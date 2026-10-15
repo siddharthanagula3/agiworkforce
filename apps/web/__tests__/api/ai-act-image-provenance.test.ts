@@ -45,6 +45,7 @@ const storageMocks = vi.hoisted(() => ({
   del: vi.fn(async () => undefined),
   url: vi.fn((id: string) => `/api/files/${id}`),
   read: vi.fn(),
+  stream: vi.fn(),
 }));
 vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
@@ -54,6 +55,7 @@ vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
   deleteStoredMedia: storageMocks.del,
   authenticatedMediaUrl: storageMocks.url,
   readStoredMedia: storageMocks.read,
+  streamStoredMedia: storageMocks.stream,
 }));
 
 const assetMocks = vi.hoisted(() => ({
@@ -430,9 +432,19 @@ describe('Article 50(2), the mark survives to the download', () => {
     });
     mockFetch.mockImplementation(async () => databaseResponse());
     storageMocks.configured.mockReturnValue(true);
-    storageMocks.read.mockResolvedValue({
-      data: Buffer.from(PNG_B64, 'base64'),
-      contentType: 'image/png',
+    storageMocks.stream.mockImplementation(async () => {
+      const data = Buffer.from(PNG_B64, 'base64');
+      return {
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array(data));
+            controller.close();
+          },
+        }),
+        contentType: 'image/png',
+        contentLength: data.byteLength,
+        contentRange: undefined,
+      };
     });
   });
 

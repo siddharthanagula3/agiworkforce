@@ -110,7 +110,7 @@ describe('the transcript column contains its own content', () => {
     const prose = Array.from(container.querySelectorAll('.message-text'));
     expect(prose.length).toBeGreaterThan(0);
     for (const element of prose) {
-      expect(element.classList.contains('break-words')).toBe(true);
+      expect(element.classList.contains('wrap-anywhere')).toBe(true);
     }
 
     const userProse = prose.find((element) => element.classList.contains('user-bubble'));
