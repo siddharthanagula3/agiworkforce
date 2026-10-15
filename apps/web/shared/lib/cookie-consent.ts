@@ -151,6 +151,14 @@ export async function recordCookieConsentOnServer(record: CookieConsentRecord): 
   }
 }
 
+function discardStoredCookieConsentRecord(): void {
+  try {
+    window.localStorage.removeItem(COOKIE_CONSENT_STORAGE_KEY);
+  } catch {
+    // Storage that refuses removal refuses reads as well, so no older record can apply.
+  }
+}
+
 function storeCookieConsentRecord(record: CookieConsentRecord): boolean {
   if (typeof window === 'undefined') return true;
   const preferences: CookiePreferences = { necessary: true, analytics: record.analytics };
@@ -160,10 +168,12 @@ function storeCookieConsentRecord(record: CookieConsentRecord): boolean {
     unpersistedRecord = null;
   } catch {
     // Storage refused the write (private mode, quota). The decision still
-    // governs this page through unpersistedRecord, because falling back to the
-    // older stored record would restore a consent the visitor just withdrew.
+    // governs this page through unpersistedRecord, and the older stored record
+    // goes, because falling back to it on this page or after a reload would
+    // restore a consent the visitor just withdrew.
     unpersistedRecord = record;
     persisted = false;
+    discardStoredCookieConsentRecord();
   }
   window.dispatchEvent(
     new CustomEvent<CookiePreferences>(COOKIE_CONSENT_UPDATED_EVENT, { detail: preferences }),

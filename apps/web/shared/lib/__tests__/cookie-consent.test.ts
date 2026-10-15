@@ -117,6 +117,31 @@ describe('cookie consent expiry when the notice changes', () => {
   });
 });
 
+describe('a withdrawal the browser refuses to store', () => {
+  it('leaves no older acceptance for the next page load to restore', async () => {
+    window.localStorage.setItem(
+      COOKIE_CONSENT_STORAGE_KEY,
+      JSON.stringify(buildCookieConsentRecord(ALL_ACCEPTED_PREFERENCES)),
+    );
+    vi.resetModules();
+    const page = await import('../cookie-consent');
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota');
+    });
+    try {
+      expect(page.writeCookiePreferences(NECESSARY_ONLY_PREFERENCES)).toBe(false);
+      expect(page.readCookiePreferences()).toEqual(NECESSARY_ONLY_PREFERENCES);
+    } finally {
+      setItem.mockRestore();
+    }
+
+    vi.resetModules();
+    const reloaded = await import('../cookie-consent');
+    expect(reloaded.readCookiePreferences()).toBeNull();
+    expect(reloaded.isAnalyticsAllowed(reloaded.readCookiePreferences())).toBe(false);
+  });
+});
+
 describe('cookie consent server ledger', () => {
   it('posts the analytics decision to the consent ledger with CSRF and notice version', async () => {
     writeCookiePreferences(ALL_ACCEPTED_PREFERENCES);
