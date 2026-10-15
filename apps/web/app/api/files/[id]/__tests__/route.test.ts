@@ -55,6 +55,7 @@ vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
 
 import { GET } from '../route';
 import { createError } from '@/lib/errors';
+import { buildAiGeneratedProvenance } from '@/lib/compliance/ai-act';
 import { freeDailyLimitError } from '@/lib/services/tier-unit-quota-service';
 
 const ASSET_ID = '22222222-2222-4222-8222-222222222222';
@@ -182,6 +183,127 @@ describe('GET /api/files/[id]', () => {
         bytes: stored.byteLength,
       }),
     );
+  });
+
+  describe('the owner viewing media they generated (owner decision on media)', () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]);
+    const generatedImage = (overrides: Record<string, unknown> = {}) =>
+      makeAsset({
+        kind: 'image',
+        mimeType: 'image/png',
+        byteSize: png.byteLength,
+        metadata: {
+          filename: 'lighthouse.png',
+          aiAct: buildAiGeneratedProvenance({
+            kind: 'image',
+            provider: 'fixture',
+            model: 'fixture-image-model',
+          }),
+        },
+        ...overrides,
+      });
+
+    it('serves an image they generated without spending a download allowance, still metered', async () => {
+      mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(generatedImage());
+      mockStreamObject.mockResolvedValue(streamedFile(png, 'image/png'));
+
+      const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
+
+      expect(res.status).toBe(200);
+      expect(mockAssertDownloadAllowance).not.toHaveBeenCalled();
+      expect(mockRecordEgressBytes).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-owner',
+          bytes: png.byteLength,
+          downloadAllowanceExempt: true,
+        }),
+      );
+    });
+
+    it('streams a video they generated without spending a download allowance, still metered', async () => {
+      mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+        makeAsset({
+          kind: 'video',
+          mimeType: 'video/mp4',
+          byteSize: 100,
+          metadata: {
+            filename: 'clip.mp4',
+            aiAct: buildAiGeneratedProvenance({
+              kind: 'video',
+              provider: 'fixture',
+              model: 'fixture-video-model',
+            }),
+          },
+        }),
+      );
+      mockStreamObject.mockResolvedValue({
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(Uint8Array.from([2, 3, 4, 5]));
+            controller.close();
+          },
+        }),
+        contentType: 'video/mp4',
+        contentLength: 4,
+        contentRange: 'bytes 2-5/100',
+      });
+
+      const res = await GET(
+        makeRequest(ASSET_ID, '', { Range: 'bytes=2-5' }),
+        makeContext(ASSET_ID),
+      );
+
+      expect(res.status).toBe(206);
+      expect(mockAssertDownloadAllowance).not.toHaveBeenCalled();
+      expect(mockRecordEgressBytes).toHaveBeenCalledWith(
+        expect.objectContaining({ bytes: 4, downloadAllowanceExempt: true }),
+      );
+    });
+
+    it('keeps the allowance for an image the owner uploaded', async () => {
+      mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+        generatedImage({
+          metadata: { filename: 'photo.png', origin: 'upload', source: 'chat-attachment' },
+        }),
+      );
+      mockStreamObject.mockResolvedValue(streamedFile(png, 'image/png'));
+
+      const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
+
+      expect(res.status).toBe(200);
+      expect(mockAssertDownloadAllowance).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-owner', bytes: png.byteLength }),
+      );
+      expect(mockRecordEgressBytes).toHaveBeenCalledWith(
+        expect.objectContaining({ downloadAllowanceExempt: false }),
+      );
+    });
+
+    it('keeps the allowance for a generated image recorded under another account', async () => {
+      mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+        generatedImage({ userId: 'user-other' }),
+      );
+      mockStreamObject.mockResolvedValue(streamedFile(png, 'image/png'));
+
+      const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
+
+      expect(res.status).toBe(200);
+      expect(mockAssertDownloadAllowance).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-owner' }),
+      );
+    });
+
+    it('still answers 429 for an uploaded file once the Free daily cap is used up', async () => {
+      mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+        generatedImage({ metadata: { filename: 'photo.png', origin: 'upload' } }),
+      );
+      mockStreamObject.mockResolvedValue(streamedFile(png, 'image/png'));
+      mockAssertDownloadAllowance.mockRejectedValueOnce(freeDailyLimitError('egress_bytes'));
+
+      const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
+
+      expect(res.status).toBe(429);
+    });
   });
 
   it('answers 429 with no bytes once the Free daily download cap is used up', async () => {

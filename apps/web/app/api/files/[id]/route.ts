@@ -2,7 +2,10 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { recordEgressBytes } from '@/lib/services/infrastructure-cost';
-import { assertDownloadAllowance } from '@/lib/services/tier-unit-quota-service';
+import {
+  assertDownloadAllowance,
+  downloadSpendsAllowance,
+} from '@/lib/services/tier-unit-quota-service';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -133,6 +136,7 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
   }
 
   const filename = safeFilename(asset.metadata['filename']);
+  const spendsAllowance = downloadSpendsAllowance(asset, userId);
 
   const claim = asset.metadata['aiAct'];
   const provenanceHeaders = hasAiGeneratedProvenance(claim)
@@ -160,7 +164,7 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
       });
     }
     const expectedLength = range ? range.end - range.start + 1 : asset.byteSize;
-    await assertDownloadAllowance({ db, userId, bytes: expectedLength });
+    if (spendsAllowance) await assertDownloadAllowance({ db, userId, bytes: expectedLength });
     const streamed = await streamStoredMedia(asset.storagePathname, range ?? undefined);
     if (!streamed) throw createError.notFound('Video bytes are not available');
     const expectedContentRange = range
@@ -180,6 +184,7 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
       bytes: expectedLength,
       surface: resolveProductAnalyticsSurface(request),
       provider: 'object_storage',
+      downloadAllowanceExempt: !spendsAllowance,
     });
 
     return new NextResponse(streamed.body, {
@@ -213,13 +218,14 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
     filename,
   });
 
-  await assertDownloadAllowance({ db, userId, bytes: data.byteLength });
+  if (spendsAllowance) await assertDownloadAllowance({ db, userId, bytes: data.byteLength });
   const body = new Uint8Array(data);
   recordEgressBytes({
     userId,
     bytes: body.byteLength,
     surface: resolveProductAnalyticsSurface(request),
     provider: 'object_storage',
+    downloadAllowanceExempt: !spendsAllowance,
   });
   return new NextResponse(body, {
     status: 200,

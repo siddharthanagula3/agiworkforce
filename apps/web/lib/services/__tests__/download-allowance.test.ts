@@ -16,17 +16,19 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  countUserFeatureUnitsSince: (...args: unknown[]) => mocks.countUnits(...args),
+  countUserDownloadAllowanceGibSince: (...args: unknown[]) => mocks.countUnits(...args),
 }));
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveEntitledPlanTier: (...args: unknown[]) => mocks.planTier(...args),
 }));
 
+import { buildAiGeneratedProvenance } from '@/lib/compliance/ai-act';
 import {
   MONTHLY_DOWNLOAD_LIMIT_CODE,
   PlanDownloadLimitError,
   assertDownloadAllowance,
+  downloadSpendsAllowance,
   readDownloadUsage,
 } from '../tier-unit-quota-service';
 
@@ -80,11 +82,7 @@ describe('assertDownloadAllowance', () => {
     await expect(assertDownloadAllowance({ db, userId: 'user-1', bytes: GIB })).resolves.toBe(
       undefined,
     );
-    expect(mocks.countUnits).toHaveBeenCalledWith(
-      'user-1',
-      ['network_egress_gib'],
-      expect.any(Date),
-    );
+    expect(mocks.countUnits).toHaveBeenCalledWith('user-1', expect.any(Date));
   });
 
   it('refuses a paid download past the month’s allowance with the upgrade path', async () => {
@@ -145,5 +143,50 @@ describe('assertDownloadAllowance', () => {
       limitBytes: getBillingPlanProductLimits('max')?.monthlyDownloadBytes,
       resetsAt: '2026-11-01T00:00:00.000Z',
     });
+  });
+});
+
+describe('downloadSpendsAllowance (owner decision on media)', () => {
+  const generated = (kind: 'image' | 'video') => ({
+    userId: 'user-1',
+    kind,
+    metadata: {
+      aiAct: buildAiGeneratedProvenance({ kind, provider: 'fixture', model: 'fixture-model' }),
+    },
+  });
+
+  it.each(['image', 'video'] as const)(
+    'spends nothing to serve the owner the %s it generated',
+    (kind) => {
+      expect(downloadSpendsAllowance(generated(kind), 'user-1')).toBe(false);
+    },
+  );
+
+  it('spends the allowance on an image the owner uploaded', () => {
+    expect(
+      downloadSpendsAllowance(
+        {
+          userId: 'user-1',
+          kind: 'image',
+          metadata: { origin: 'upload', source: 'chat-attachment' },
+        },
+        'user-1',
+      ),
+    ).toBe(true);
+  });
+
+  it('spends the allowance on a generated image that belongs to another account', () => {
+    expect(downloadSpendsAllowance(generated('image'), 'user-2')).toBe(true);
+  });
+
+  it('spends the allowance on a file whose record does not prove it was generated as that kind', () => {
+    expect(downloadSpendsAllowance({ ...generated('video'), kind: 'image' }, 'user-1')).toBe(true);
+    expect(downloadSpendsAllowance({ ...generated('image'), kind: 'file' }, 'user-1')).toBe(true);
+    expect(
+      downloadSpendsAllowance(
+        { userId: 'user-1', kind: 'image', metadata: { aiAct: { kind: 'image' } } },
+        'user-1',
+      ),
+    ).toBe(true);
   });
 });

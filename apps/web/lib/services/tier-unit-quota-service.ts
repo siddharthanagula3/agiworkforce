@@ -17,7 +17,11 @@ import {
 } from '@agiworkforce/types';
 import { AppError, ErrorCode, createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { countUserFeatureUnitsSince } from './cogs-ledger-service';
+import { hasAiGeneratedProvenance } from '@/lib/compliance/ai-act';
+import {
+  countUserDownloadAllowanceGibSince,
+  countUserFeatureUnitsSince,
+} from './cogs-ledger-service';
 import { resolveEntitledPlanTier } from './entitlement-resolution';
 import { ManagedUsageRequestError, UPGRADE_HREF } from './managed-usage-request-service';
 
@@ -77,7 +81,11 @@ const UTC_DAY_START = `date_trunc('day', now() at time zone 'utc') at time zone 
 
 type ConsumptionReader =
   | { sql: string; toUnits: (raw: number) => number }
-  | { features: readonly RateCardFeature[]; toUnits: (raw: number) => number };
+  | { features: readonly RateCardFeature[]; toUnits: (raw: number) => number }
+  | {
+      countSince: (userId: string, since: Date) => Promise<number>;
+      toUnits: (raw: number) => number;
+    };
 
 function startOfUtcDay(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -138,7 +146,7 @@ const CONSUMPTION_QUERIES: Readonly<Record<TierMeteredUnit, ConsumptionReader>> 
     toUnits: (raw: number) => Math.ceil(raw),
   },
   egress_bytes: {
-    features: ['network_egress_gib'],
+    countSince: (userId: string, since: Date) => countUserDownloadAllowanceGibSince(userId, since),
     toUnits: (raw: number) => Math.ceil(raw * BYTES_PER_GIBIBYTE),
   },
   email_sends: {
@@ -196,10 +204,14 @@ async function readConsumedTierUnits(
   unit: TierMeteredUnit,
 ): Promise<number> {
   const reader = CONSUMPTION_QUERIES[unit];
-  if ('features' in reader) {
+  if ('features' in reader || 'countSince' in reader) {
     let units: number;
     try {
-      units = await countUserFeatureUnitsSince(userId, reader.features, startOfUtcDay(new Date()));
+      const since = startOfUtcDay(new Date());
+      units =
+        'countSince' in reader
+          ? await reader.countSince(userId, since)
+          : await countUserFeatureUnitsSince(userId, reader.features, since);
     } catch {
       throw new ManagedUsageRequestError(
         'Managed usage billing is temporarily unavailable.',
@@ -444,9 +456,25 @@ export async function readDownloadUsage(input: {
     getBillingPlanProductLimits(input.planTier)?.monthlyDownloadBytes,
   );
   if (limitBytes === null) return { usedBytes: 0, limitBytes: null, resetsAt };
-  const gib = await countUserFeatureUnitsSince(input.userId, ['network_egress_gib'], monthStart);
+  const gib = await countUserDownloadAllowanceGibSince(input.userId, monthStart);
   const usedBytes = Number.isFinite(gib) && gib > 0 ? Math.ceil(gib * BYTES_PER_GIBIBYTE) : 0;
   return { usedBytes, limitBytes, resetsAt };
+}
+
+const GENERATED_MEDIA_KINDS: ReadonlySet<string> = new Set(['image', 'video']);
+
+/**
+ * Decided from the stored record, never from the request: an image or video
+ * the requesting account generated, carrying the provenance claim generation
+ * stored for that kind, is served without spending either download allowance.
+ */
+export function downloadSpendsAllowance(
+  asset: { userId: string; kind: string; metadata: Record<string, unknown> },
+  userId: string,
+): boolean {
+  if (asset.userId !== userId || !GENERATED_MEDIA_KINDS.has(asset.kind)) return true;
+  const claim = asset.metadata['aiAct'];
+  return !hasAiGeneratedProvenance(claim) || (claim as { kind?: unknown }).kind !== asset.kind;
 }
 
 /**

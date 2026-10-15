@@ -16,6 +16,7 @@ import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterpris
 import { normalizeUsageAttribution, type UsageAttribution } from '@/lib/billing/usage-attribution';
 import { normalizePromptStamps } from '@/lib/prompts/prompt-stamp';
 import { trackMeteredCapability } from '@/lib/server/product-analytics';
+import { DOWNLOAD_ALLOWANCE_EXEMPT_KEY } from '@/lib/services/infrastructure-cost';
 
 export const COGS_CAPABILITIES = [
   'chat',
@@ -1323,6 +1324,33 @@ export async function countUserFeatureUnitsSince(
         and event.feature = any($2::text[])
         and event.occurred_at >= $3::timestamptz`,
     [userId, features as unknown as string[], since.toISOString()],
+  );
+  return numberFrom(row?.units);
+}
+
+/**
+ * Bytes served to the account since `since` that spend its download allowance,
+ * in GiB. Egress accrued as exempt stays in the ledger as a cost but is not
+ * counted here.
+ */
+export async function countUserDownloadAllowanceGibSince(
+  userId: string,
+  since: Date,
+  db: DatabaseAdapter = getNeonDb(),
+): Promise<number> {
+  const [row] = await db.query<FeatureUnitsRow>(
+    `select coalesce(sum(event.units), 0)::numeric as units
+       from public.provider_cost_events event
+      where event.user_id = $1
+        and event.feature = $2
+        and event.occurred_at >= $3::timestamptz
+        and coalesce(event.metadata ->> $4, 'false') <> 'true'`,
+    [
+      userId,
+      RATE_CARD_FEATURE_BY_CAPABILITY.egress,
+      since.toISOString(),
+      DOWNLOAD_ALLOWANCE_EXEMPT_KEY,
+    ],
   );
   return numberFrom(row?.units);
 }

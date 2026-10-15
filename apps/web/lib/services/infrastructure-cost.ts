@@ -7,6 +7,8 @@ import type { recordInfrastructureCostEvent } from '@/lib/services/cogs-ledger-s
 
 const BYTES_PER_GIBIBYTE = 1024 ** 3;
 
+export const DOWNLOAD_ALLOWANCE_EXEMPT_KEY = 'downloadAllowanceExempt';
+
 /**
  * The ledger is loaded only when there is something to accrue.
  *
@@ -36,6 +38,8 @@ export function recordEgressBytes(input: {
   surface?: string | null;
   provider: string;
   sourceRef?: string;
+  /** Served without spending the account's download allowance; still a cost. */
+  downloadAllowanceExempt?: boolean;
 }): void {
   if (!Number.isFinite(input.bytes) || input.bytes <= 0) return;
   void accrue({
@@ -46,7 +50,10 @@ export function recordEgressBytes(input: {
     units: input.bytes / BYTES_PER_GIBIBYTE,
     surface: input.surface ?? null,
     sourceRef: input.sourceRef ?? `egress:${randomUUID()}`,
-    metadata: { bytes: Math.round(input.bytes) },
+    metadata: {
+      bytes: Math.round(input.bytes),
+      ...(input.downloadAllowanceExempt ? { [DOWNLOAD_ALLOWANCE_EXEMPT_KEY]: true } : {}),
+    },
   }).catch((error: unknown) => {
     logger.warn({ error }, '[infrastructure-cost] served bytes were not accrued');
   });

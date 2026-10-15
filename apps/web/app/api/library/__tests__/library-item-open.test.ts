@@ -14,6 +14,7 @@ const { mockGetUserScopedDb, mockQuery, mockResolveActiveOrganizationId, assetSt
 vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   countUserFeatureUnitsSince: vi.fn(async () => 0),
+  countUserDownloadAllowanceGibSince: vi.fn(async () => 0),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),

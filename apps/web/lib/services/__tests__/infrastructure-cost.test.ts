@@ -40,6 +40,26 @@ describe('infrastructure accruals', () => {
     expect(accruals()[0]).toMatchObject({ capability: 'egress', units: 2, userId: 'user_1' });
   });
 
+  it('keeps metering exempt downloads, marked so they do not spend an allowance', async () => {
+    recordEgressBytes({
+      userId: 'user_1',
+      bytes: 2048,
+      provider: 'object_storage',
+      downloadAllowanceExempt: true,
+    });
+    recordEgressBytes({ userId: 'user_1', bytes: 1024, provider: 'object_storage' });
+    await vi.waitFor(() => expect(recorded).toHaveBeenCalledTimes(2));
+
+    const [exempt, counted] = recorded.mock.calls.map(
+      (call) => call[0] as { capability: string; metadata: Record<string, unknown> },
+    );
+    expect(exempt).toMatchObject({
+      capability: 'egress',
+      metadata: { bytes: 2048, downloadAllowanceExempt: true },
+    });
+    expect(counted?.metadata).toEqual({ bytes: 1024 });
+  });
+
   it('meters one unit per delivered notification', async () => {
     recordNotificationDeliveries({ userId: 'user_1', provider: 'web_push', deliveries: 3 });
     await vi.waitFor(() => expect(recorded).toHaveBeenCalledTimes(1));
