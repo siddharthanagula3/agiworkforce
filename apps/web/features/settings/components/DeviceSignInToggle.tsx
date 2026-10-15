@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { Switch } from '@agiworkforce/ui';
 
 import {
   fetchStoredPreferenceNamespace,
@@ -102,38 +103,12 @@ export function DeviceSignInToggle() {
             generated gains access to your account, so only approve a code you started yourself.
           </p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={enabled}
+        <Switch
+          checked={enabled}
           aria-label="Approve sign-in from a device code"
           disabled={!loaded || saving}
-          onClick={() => void toggle()}
-          style={{
-            flexShrink: 0,
-            width: 44,
-            height: 24,
-            borderRadius: 'var(--corner-pill)',
-            border: 'none',
-            cursor: !loaded || saving ? 'default' : 'pointer',
-            opacity: loaded ? 1 : 0.5,
-            background: enabled ? 'var(--chat-accent-primary)' : 'var(--settings-border)',
-            transition: 'background 0.15s',
-          }}
-        >
-          <span
-            aria-hidden="true"
-            style={{
-              display: 'block',
-              width: 18,
-              height: 18,
-              borderRadius: '50%',
-              background: 'var(--bg-elev)',
-              transform: `translateX(${enabled ? 23 : 3}px)`,
-              transition: 'transform 0.15s',
-            }}
-          />
-        </button>
+          onCheckedChange={() => void toggle()}
+        />
       </div>
       {error ? (
         <p

@@ -29,7 +29,7 @@ describe('start new chats as temporary', () => {
 
   it('is offered on the privacy screen with an accessible switch', () => {
     expect(privacySource).toContain('aria-label="Start new chats as temporary"');
-    expect(privacySource).toContain('role="switch"');
+    expect(privacySource).toMatch(/<Switch\s[^>]*aria-label="Start new chats as temporary"/);
   });
 
   it('does not resurrect the rememberChats switch that was removed for lying', () => {

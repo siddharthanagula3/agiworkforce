@@ -845,38 +845,11 @@ export function PrivacySection() {
               chat back on from the composer.
             </div>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={newChatsTemporary}
+          <Switch
+            checked={newChatsTemporary}
             aria-label="Start new chats as temporary"
-            onClick={() => setNewChatsTemporary(!newChatsTemporary)}
-            style={{
-              flexShrink: 0,
-              width: 44,
-              height: 24,
-              borderRadius: 'var(--corner-pill)',
-              border: 'none',
-              cursor: 'pointer',
-              background: newChatsTemporary
-                ? 'var(--chat-accent-primary)'
-                : 'var(--settings-border)',
-              transition: 'background 0.15s',
-            }}
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                display: 'block',
-                width: 18,
-                height: 18,
-                borderRadius: '50%',
-                background: 'var(--bg-elev)',
-                transform: `translateX(${newChatsTemporary ? 23 : 3}px)`,
-                transition: 'transform 0.15s',
-              }}
-            />
-          </button>
+            onCheckedChange={setNewChatsTemporary}
+          />
         </div>
 
         {/*

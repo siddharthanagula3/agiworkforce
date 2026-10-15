@@ -18,6 +18,14 @@ describe('VoiceSection', () => {
     expect(document.querySelector('[style*="border-radius: var(--radius-lg)"]')).toBeNull();
   });
 
+  it('draws dictation as the shared switch, whose off state keeps a visible edge', () => {
+    render(<VoiceSection />);
+
+    const toggle = screen.getByRole('switch', { name: 'Dictation' });
+    expect(toggle).toHaveAttribute('data-state', 'checked');
+    expect(toggle.className).toContain('data-[state=unchecked]:border-muted-foreground');
+  });
+
   it('flips the dictation switch and persists the choice', async () => {
     render(<VoiceSection />);
 

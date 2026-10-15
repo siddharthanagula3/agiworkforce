@@ -10,6 +10,7 @@
  * the language dictation transcribes into.
  */
 
+import { Switch } from '@agiworkforce/ui';
 import { defaultLanguage as DEFAULT_LANGUAGE_CODE, SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
@@ -67,38 +68,11 @@ export function VoiceSection() {
               before sending.
             </div>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={dictationEnabled}
+          <Switch
+            checked={dictationEnabled}
             aria-label="Dictation"
-            onClick={() => setDictationEnabled(!dictationEnabled)}
-            style={{
-              flexShrink: 0,
-              width: 44,
-              height: 24,
-              borderRadius: 'var(--corner-pill)',
-              border: 'none',
-              cursor: 'pointer',
-              background: dictationEnabled
-                ? 'var(--chat-accent-primary)'
-                : 'var(--settings-border)',
-              transition: 'background 0.15s',
-            }}
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                display: 'block',
-                width: 18,
-                height: 18,
-                borderRadius: '50%',
-                background: 'var(--bg-elev)',
-                transform: `translateX(${dictationEnabled ? 23 : 3}px)`,
-                transition: 'transform 0.15s',
-              }}
-            />
-          </button>
+            onCheckedChange={setDictationEnabled}
+          />
         </div>
 
         <div

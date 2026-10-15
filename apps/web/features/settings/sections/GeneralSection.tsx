@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Check, Monitor, Sun, Moon } from 'lucide-react';
 import { toast } from 'sonner';
+import { Switch } from '@agiworkforce/ui';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useCurrentUser } from '@/lib/identity/client';
@@ -842,27 +843,15 @@ export function GeneralSection() {
               >
                 Instructions for AGI
               </label>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={instructionsEnabled}
+              <Switch
+                checked={instructionsEnabled}
                 aria-label="Apply instructions for AGI"
                 disabled={!profilePreferencesReady || saving}
-                onClick={() => {
+                onCheckedChange={(next) => {
                   markDirty();
-                  setInstructionsEnabled((current) => !current);
+                  setInstructionsEnabled(next);
                 }}
-                className={`h-6 w-11 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                  instructionsEnabled ? 'bg-primary' : 'bg-muted'
-                }`}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`block h-5 w-5 rounded-full bg-background transition-transform ${
-                    instructionsEnabled ? 'translate-x-[22px]' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
+              />
             </div>
             <p
               id="general-instructions-hint"
@@ -1327,23 +1316,7 @@ function HighContrastRow() {
 
   return (
     <Row label="High contrast">
-      <button
-        type="button"
-        role="switch"
-        aria-checked={highContrast}
-        aria-label="High contrast"
-        onClick={() => setHighContrast(!highContrast)}
-        className={`h-6 w-11 shrink-0 rounded-full transition-colors ${
-          highContrast ? 'bg-primary' : 'bg-muted'
-        }`}
-      >
-        <span
-          aria-hidden="true"
-          className={`block h-5 w-5 rounded-full bg-background transition-transform ${
-            highContrast ? 'translate-x-[22px]' : 'translate-x-0.5'
-          }`}
-        />
-      </button>
+      <Switch checked={highContrast} aria-label="High contrast" onCheckedChange={setHighContrast} />
     </Row>
   );
 }
@@ -1407,23 +1380,11 @@ function CodeBlockWrapRow() {
 
   return (
     <Row label="Wrap long code lines">
-      <button
-        type="button"
-        role="switch"
-        aria-checked={codeBlockWrap}
+      <Switch
+        checked={codeBlockWrap}
         aria-label="Wrap long code lines"
-        onClick={() => setCodeBlockWrap(!codeBlockWrap)}
-        className={`h-6 w-11 shrink-0 rounded-full transition-colors ${
-          codeBlockWrap ? 'bg-primary' : 'bg-muted'
-        }`}
-      >
-        <span
-          aria-hidden="true"
-          className={`block h-5 w-5 rounded-full bg-background transition-transform ${
-            codeBlockWrap ? 'translate-x-[22px]' : 'translate-x-0.5'
-          }`}
-        />
-      </button>
+        onCheckedChange={setCodeBlockWrap}
+      />
     </Row>
   );
 }
@@ -1434,23 +1395,11 @@ function FollowUpSuggestionsRow() {
 
   return (
     <Row label="Show follow-up suggestions in chats">
-      <button
-        type="button"
-        role="switch"
-        aria-checked={enabled}
+      <Switch
+        checked={enabled}
         aria-label="Show follow-up suggestions in chats"
-        onClick={() => setEnabled(!enabled)}
-        className={`h-6 w-11 shrink-0 rounded-full transition-colors ${
-          enabled ? 'bg-primary' : 'bg-muted'
-        }`}
-      >
-        <span
-          aria-hidden="true"
-          className={`block h-5 w-5 rounded-full bg-background transition-transform ${
-            enabled ? 'translate-x-[22px]' : 'translate-x-0.5'
-          }`}
-        />
-      </button>
+        onCheckedChange={setEnabled}
+      />
     </Row>
   );
 }

@@ -286,6 +286,21 @@ describe('GeneralSection appearance controls', () => {
 
     expect(mocks.setHighContrast).toHaveBeenCalledWith(true);
   });
+
+  it('draws every on/off switch as the shared switch, whose off state keeps a visible edge', () => {
+    render(<GeneralSection />);
+
+    for (const name of [
+      'Apply instructions for AGI',
+      'High contrast',
+      'Wrap long code lines',
+      'Show follow-up suggestions in chats',
+    ]) {
+      const control = screen.getByRole('switch', { name });
+      expect(control).toHaveAttribute('data-state');
+      expect(control.className).toContain('data-[state=unchecked]:border-muted-foreground');
+    }
+  });
 });
 
 describe('GeneralSection read-aloud disclosure', () => {

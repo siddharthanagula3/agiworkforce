@@ -1466,6 +1466,28 @@ describe('the off-state switch track has a visible boundary (>= 3:1) in both the
         WCAG_AA_LARGE,
       );
     });
+
+    it(`${theme}: the border clears 3:1 on the card a settings panel sits on`, () => {
+      const border = colorToken(web[theme], '--muted-foreground');
+      expect(contrastRatio(border, colorToken(web[theme], '--card'))).toBeGreaterThanOrEqual(
+        WCAG_AA_LARGE,
+      );
+    });
+  }
+
+  const SETTINGS_SWITCH_SURFACES = [
+    'apps/web/features/settings/sections/GeneralSection.tsx',
+    'apps/web/features/settings/sections/VoiceSection.tsx',
+    'apps/web/features/settings/sections/PrivacySection.tsx',
+    'apps/web/features/settings/components/DeviceSignInToggle.tsx',
+  ];
+
+  for (const file of SETTINGS_SWITCH_SURFACES) {
+    it(`${file} draws its on/off tracks with the shared Switch, not a track of its own`, () => {
+      const source = readFileSync(resolve(repoRoot, file), 'utf8');
+      expect(source).toMatch(/import \{[^}]*\bSwitch\b[^}]*\} from '@agiworkforce\/ui';/);
+      expect(source).not.toMatch(/translate-x-\[|translateX\(/);
+    });
   }
 });
 
