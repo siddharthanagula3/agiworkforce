@@ -184,6 +184,23 @@ const FREE_SUBSCRIPTION: SubscriptionPlan = {
   plan_name: 'Free',
 };
 
+function longestPromotionalOffering(protocol: 'image-sync' | 'video-async') {
+  const [entry] = Object.entries(getProviderOfferings())
+    .filter(([, candidate]) => candidate.quotaProbeProtocol === protocol)
+    .sort(([, a], [, b]) => b.displayName.length - a.displayName.length);
+  expect(entry).toBeDefined();
+  return entry!;
+}
+
+function expectWholeModelName(menuLabel: string, name: string) {
+  const menu = screen.getByRole('dialog', { name: menuLabel });
+  expect(menu).toHaveClass('w-80', 'max-w-[calc(100vw-1rem)]');
+  expect(menu).not.toHaveClass('w-52');
+  const label = within(within(menu).getByRole('button', { name })).getByText(name);
+  expect(label).not.toHaveClass('truncate');
+  expect(label).toHaveClass('break-words');
+}
+
 describe('ChatComposerNew', () => {
   let originalModelId: string;
   let originalFeatureFlags: ReturnType<typeof useBillingStore.getState>['featureFlags'];
@@ -2445,6 +2462,26 @@ describe('ChatComposerNew', () => {
       });
     });
 
+    it('shows a long image model name whole in a menu wide enough for it', () => {
+      const [key, offering] = longestPromotionalOffering('image-sync');
+      chatComposerMocks.promotionalMedia.models = [
+        {
+          key,
+          displayName: offering.displayName,
+          category: 'image',
+          status: 'ready',
+          outputSize: offering.quotaImageSize ?? '1024*1024',
+        },
+      ];
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={vi.fn()} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+      fireEvent.click(screen.getByText('Create image'));
+      fireEvent.click(screen.getByRole('button', { name: /select image model/i }));
+
+      expectWholeModelName('Image model', offering.displayName);
+    });
+
     it('puts an available promotional image route ahead of paid models and sends through the free offering', async () => {
       const [key, offering] = Object.entries(getProviderOfferings()).find(
         ([, candidate]) => candidate.quotaProbeProtocol === 'image-sync',
@@ -2696,6 +2733,28 @@ describe('ChatComposerNew', () => {
       const picker = screen.getByRole('button', { name: /select video model/i });
       expect(picker).toBeInTheDocument();
       expect(picker).not.toHaveTextContent(/no video model available/i);
+    });
+
+    it('shows a long video model name whole in a menu wide enough for it', () => {
+      const [key, offering] = longestPromotionalOffering('video-async');
+      chatComposerMocks.promotionalMedia.models = [
+        {
+          key,
+          displayName: offering.displayName,
+          category: 'video',
+          status: 'ready',
+          outputSize: '1280*720',
+          durationSeconds: 2,
+        },
+      ];
+      useBillingStore.setState({ subscription: MAX_15X_SUBSCRIPTION });
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateVideo={vi.fn()} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+      fireEvent.click(screen.getByText('Create video'));
+      fireEvent.click(screen.getByRole('button', { name: /select video model/i }));
+
+      expectWholeModelName('Video model', offering.displayName);
     });
 
     it('offers a ready promotional video before paid video models with fixed settings', () => {

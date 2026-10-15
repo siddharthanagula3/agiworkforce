@@ -362,6 +362,8 @@ const WORK_BAR_ITEM_CLASS =
   'flex h-7 shrink-0 items-center gap-1 rounded-full px-1.5 text-xs font-medium sm:h-8 sm:px-2 sm:text-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50';
 const WORK_BAR_ITEM_ACTIVE_CLASS = 'text-foreground';
 const WORK_BAR_GLYPH_CLASS = 'h-4 w-4 shrink-0';
+const MEDIA_MODEL_MENU_CLASS = 'w-80 max-w-[calc(100vw-1rem)] p-1';
+const MEDIA_MODEL_NAME_CLASS = 'block break-words';
 
 // One shared empty array for "this conversation has no disabled connectors",
 // so the store selector returns a stable reference and cannot loop under
@@ -6159,7 +6161,7 @@ const ChatComposerNewComponent = ({
                     label="Image model"
                     onRequestClose={() => setShowImageModelMenu(false)}
                     align="end"
-                    className="w-52 p-1"
+                    className={MEDIA_MODEL_MENU_CLASS}
                   >
                     {availableImageModels.map((m, index) => (
                       <button
@@ -6182,7 +6184,7 @@ const ChatComposerNewComponent = ({
                         )}
                       >
                         <span className="min-w-0 flex-1 text-start">
-                          <span className="block truncate">{m.label}</span>
+                          <span className={MEDIA_MODEL_NAME_CLASS}>{m.label}</span>
                           <span
                             id={`image-model-route-${index}`}
                             className="block text-caption text-muted-foreground"
@@ -6256,7 +6258,7 @@ const ChatComposerNewComponent = ({
                     label="Video model"
                     onRequestClose={() => setShowVideoModelMenu(false)}
                     align="end"
-                    className="w-52 p-1"
+                    className={MEDIA_MODEL_MENU_CLASS}
                   >
                     {availableVideoModels.map((m, index) => (
                       <button
@@ -6276,7 +6278,7 @@ const ChatComposerNewComponent = ({
                         )}
                       >
                         <span className="min-w-0 flex-1 text-start">
-                          <span className="block truncate">{m.label}</span>
+                          <span className={MEDIA_MODEL_NAME_CLASS}>{m.label}</span>
                           <span
                             id={`video-model-route-${index}`}
                             className="block text-caption text-muted-foreground"
