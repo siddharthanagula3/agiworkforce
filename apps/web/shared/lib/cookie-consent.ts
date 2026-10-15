@@ -79,13 +79,21 @@ export function isCookieConsentCurrent(record: CookieConsentRecord | null): bool
   return record?.noticeVersion === COOKIE_NOTICE_VERSION;
 }
 
+let unpersistedRecord: CookieConsentRecord | null = null;
+
 export function readCookieConsentRecord(): CookieConsentRecord | null {
   if (typeof window === 'undefined') return null;
+  let stored: CookieConsentRecord | null = null;
   try {
-    return parseCookieConsentRecord(window.localStorage.getItem(COOKIE_CONSENT_STORAGE_KEY));
+    stored = parseCookieConsentRecord(window.localStorage.getItem(COOKIE_CONSENT_STORAGE_KEY));
   } catch {
-    return null;
+    stored = null;
   }
+  const pending = unpersistedRecord;
+  if (pending && (!stored || Date.parse(pending.decidedAt) >= Date.parse(stored.decidedAt))) {
+    return pending;
+  }
+  return stored;
 }
 
 // A browser sending Global Privacy Control has already refused everything that
@@ -143,26 +151,37 @@ export async function recordCookieConsentOnServer(record: CookieConsentRecord): 
   }
 }
 
-function storeCookieConsentRecord(record: CookieConsentRecord): void {
-  if (typeof window === 'undefined') return;
+function storeCookieConsentRecord(record: CookieConsentRecord): boolean {
+  if (typeof window === 'undefined') return true;
   const preferences: CookiePreferences = { necessary: true, analytics: record.analytics };
+  let persisted = true;
   try {
     window.localStorage.setItem(COOKIE_CONSENT_STORAGE_KEY, JSON.stringify(record));
+    unpersistedRecord = null;
   } catch {
-    // Storage refused the write (private mode, quota). The in-memory state
-    // still applies for this page, and the banner returns next visit rather
-    // than pretending a choice was recorded.
+    // Storage refused the write (private mode, quota). The decision still
+    // governs this page through unpersistedRecord, because falling back to the
+    // older stored record would restore a consent the visitor just withdrew.
+    unpersistedRecord = record;
+    persisted = false;
   }
   window.dispatchEvent(
     new CustomEvent<CookiePreferences>(COOKIE_CONSENT_UPDATED_EVENT, { detail: preferences }),
   );
+  return persisted;
 }
 
-export function writeCookiePreferences(preferences: CookiePreferences): void {
-  if (typeof window === 'undefined') return;
+export function writeCookiePreferences(preferences: CookiePreferences): boolean {
+  if (typeof window === 'undefined') return true;
   const record = buildCookieConsentRecord(resolvePreferences(preferences));
-  storeCookieConsentRecord(record);
+  const persisted = storeCookieConsentRecord(record);
   void recordCookieConsentOnServer(record);
+  return persisted;
+}
+
+export function retryCookieConsentPersistence(): boolean {
+  const pending = unpersistedRecord;
+  return pending ? storeCookieConsentRecord(pending) : true;
 }
 
 // The consent centre writes its own ledger row through /api/consent, so this

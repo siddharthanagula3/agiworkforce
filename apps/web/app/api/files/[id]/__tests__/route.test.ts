@@ -5,14 +5,12 @@ type ScanModule0 = typeof import('@/lib/services/tier-unit-quota-service');
 const {
   mockGetUserScopedDb,
   mockGetActiveWorkspaceMediaAssetById,
-  mockGetObject,
   mockStreamObject,
   mockIsConfigured,
   scopedDb,
 } = vi.hoisted(() => ({
   mockGetUserScopedDb: vi.fn(),
   mockGetActiveWorkspaceMediaAssetById: vi.fn(),
-  mockGetObject: vi.fn(),
   mockStreamObject: vi.fn(),
   mockIsConfigured: vi.fn(() => true),
   scopedDb: { query: vi.fn() },
@@ -35,10 +33,14 @@ vi.mock('@/lib/server/media-assets', () => ({
 }));
 
 vi.mock('@/lib/server/media-storage', () => ({
-  readStoredMedia: mockGetObject,
   streamStoredMedia: mockStreamObject,
   isMediaStorageConfigured: mockIsConfigured,
   deleteStoredMedia: vi.fn(),
+}));
+
+const { mockRecordEgressBytes } = vi.hoisted(() => ({ mockRecordEgressBytes: vi.fn() }));
+vi.mock('@/lib/services/infrastructure-cost', () => ({
+  recordEgressBytes: mockRecordEgressBytes,
 }));
 
 const { mockAssertDownloadAllowance } = vi.hoisted(() => ({
@@ -61,6 +63,24 @@ function makeRequest(id: string, query = '', headers?: Record<string, string>) {
 
 function makeContext(id: string) {
   return { params: Promise.resolve({ id }) } as never;
+}
+
+function streamedFile(
+  data: Uint8Array | Buffer,
+  contentType: string,
+  contentLength = data.byteLength,
+) {
+  return {
+    body: new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(data));
+        controller.close();
+      },
+    }),
+    contentType,
+    contentLength,
+    contentRange: undefined,
+  };
 }
 
 function makeAsset(overrides: Record<string, unknown> = {}) {
@@ -93,7 +113,7 @@ describe('GET /api/files/[id]', () => {
     mockGetUserScopedDb.mockRejectedValue(createError.unauthorized());
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
     expect(res.status).toBe(401);
-    expect(mockGetObject).not.toHaveBeenCalled();
+    expect(mockStreamObject).not.toHaveBeenCalled();
   });
 
   it('returns the same 404 for an asset outside the active workspace and never touches storage', async () => {
@@ -105,7 +125,7 @@ describe('GET /api/files/[id]', () => {
       ASSET_ID,
       scopedDb,
     );
-    expect(mockGetObject).not.toHaveBeenCalled();
+    expect(mockStreamObject).not.toHaveBeenCalled();
   });
 
   it('returns 404 for an unknown asset id', async () => {
@@ -130,7 +150,7 @@ describe('GET /api/files/[id]', () => {
 
   it('returns 404 when the stored object is gone', async () => {
     mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(makeAsset());
-    mockGetObject.mockResolvedValue(null);
+    mockStreamObject.mockResolvedValue(null);
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
     expect(res.status).toBe(404);
   });
@@ -141,7 +161,7 @@ describe('GET /api/files/[id]', () => {
     mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
       makeAsset({ byteSize: stored.byteLength }),
     );
-    mockGetObject.mockResolvedValue({ data: stored, contentType: 'application/pdf' });
+    mockStreamObject.mockResolvedValue(streamedFile(stored, 'application/pdf'));
 
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
     expect(res.status).toBe(200);
@@ -153,7 +173,7 @@ describe('GET /api/files/[id]', () => {
     const served = Buffer.from(await res.arrayBuffer());
     const servedHash = createHash('sha256').update(served).digest('hex');
     expect(servedHash).toBe(storedHash);
-    expect(mockGetObject).toHaveBeenCalledWith('media/file/user-owner/x.pdf');
+    expect(mockStreamObject).toHaveBeenCalledWith('media/file/user-owner/x.pdf');
     expect(mockAssertDownloadAllowance).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-owner',
@@ -167,7 +187,7 @@ describe('GET /api/files/[id]', () => {
     mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
       makeAsset({ byteSize: stored.byteLength }),
     );
-    mockGetObject.mockResolvedValue({ data: stored, contentType: 'application/pdf' });
+    mockStreamObject.mockResolvedValue(streamedFile(stored, 'application/pdf'));
     mockAssertDownloadAllowance.mockRejectedValueOnce(freeDailyLimitError('egress_bytes'));
 
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
@@ -189,7 +209,7 @@ describe('GET /api/files/[id]', () => {
     mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
       makeAsset({ mimeType, byteSize: stored.byteLength, metadata: { filename } }),
     );
-    mockGetObject.mockResolvedValue({ data: stored, contentType: mimeType });
+    mockStreamObject.mockResolvedValue(streamedFile(stored, mimeType));
 
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
 
@@ -208,7 +228,7 @@ describe('GET /api/files/[id]', () => {
         metadata: { filename: 'chart.png' },
       }),
     );
-    mockGetObject.mockResolvedValue({ data: stored, contentType: 'image/png' });
+    mockStreamObject.mockResolvedValue(streamedFile(stored, 'image/png'));
 
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
 
@@ -221,7 +241,7 @@ describe('GET /api/files/[id]', () => {
     mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
       makeAsset({ byteSize: stored.byteLength }),
     );
-    mockGetObject.mockResolvedValue({ data: stored, contentType: 'application/pdf' });
+    mockStreamObject.mockResolvedValue(streamedFile(stored, 'application/pdf'));
 
     const res = await GET(makeRequest(ASSET_ID, '?preview=pdf'), makeContext(ASSET_ID));
 
@@ -241,7 +261,7 @@ describe('GET /api/files/[id]', () => {
     const res = await GET(makeRequest(ASSET_ID, '?preview=pdf'), makeContext(ASSET_ID));
 
     expect(res.status).toBe(404);
-    expect(mockGetObject).not.toHaveBeenCalled();
+    expect(mockStreamObject).not.toHaveBeenCalled();
   });
 
   it('sanitizes hostile filenames in Content-Disposition', async () => {
@@ -253,7 +273,7 @@ describe('GET /api/files/[id]', () => {
         metadata: { filename: 'evil"\r\nSet-Cookie: x=1;.csv' },
       }),
     );
-    mockGetObject.mockResolvedValue({ data: stored, contentType: 'text/csv' });
+    mockStreamObject.mockResolvedValue(streamedFile(stored, 'text/csv'));
 
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
     expect(res.status).toBe(200);
@@ -268,7 +288,57 @@ describe('GET /api/files/[id]', () => {
     );
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
     expect(res.status).toBe(413);
-    expect(mockGetObject).not.toHaveBeenCalled();
+    expect(mockStreamObject).not.toHaveBeenCalled();
+  });
+
+  it('returns 413 without buffering when the stored non-video object exceeds the serve cap', async () => {
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(makeAsset({ byteSize: null }));
+    const streamed = streamedFile(Buffer.from('%PDF-1'), 'application/pdf', 31 * 1024 * 1024);
+    const cancel = vi.spyOn(streamed.body, 'cancel');
+    mockStreamObject.mockResolvedValue(streamed);
+    const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
+    expect(res.status).toBe(413);
+    expect(cancel).toHaveBeenCalled();
+    expect(mockRecordEgressBytes).not.toHaveBeenCalled();
+  });
+
+  it('stops reading a non-video stream that runs past the serve cap', async () => {
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(makeAsset({ byteSize: null }));
+    const chunk = new Uint8Array(1024 * 1024);
+    let pulled = 0;
+    mockStreamObject.mockResolvedValue({
+      body: new ReadableStream<Uint8Array>({
+        pull(controller) {
+          pulled += 1;
+          controller.enqueue(chunk);
+        },
+      }),
+      contentType: 'application/pdf',
+      contentLength: 1,
+      contentRange: undefined,
+    });
+    const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
+    expect(res.status).toBe(413);
+    expect(pulled).toBeLessThan(40);
+  });
+
+  it('does not accrue video egress when the stored bytes fail validation', async () => {
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+      makeAsset({ kind: 'video', mimeType: 'video/mp4', byteSize: 100 }),
+    );
+    mockStreamObject.mockResolvedValue({
+      body: new ReadableStream({
+        start(controller) {
+          controller.close();
+        },
+      }),
+      contentType: 'video/mp4',
+      contentLength: 7,
+      contentRange: undefined,
+    });
+    const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
+    expect(res.status).toBe(500);
+    expect(mockRecordEgressBytes).not.toHaveBeenCalled();
   });
 
   it('streams large video assets and advertises byte ranges without buffering', async () => {
@@ -299,7 +369,6 @@ describe('GET /api/files/[id]', () => {
     expect(res.headers.get('accept-ranges')).toBe('bytes');
     expect(res.headers.get('content-type')).toBe('video/mp4');
     expect(res.headers.get('cache-control')).toBe('private, no-store');
-    expect(mockGetObject).not.toHaveBeenCalled();
     expect(mockStreamObject).toHaveBeenCalledWith('media/file/user-owner/x.pdf', undefined);
   });
 
@@ -343,7 +412,7 @@ describe('GET /api/files/[id]', () => {
     mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
       makeAsset({ byteSize: stored.byteLength }),
     );
-    mockGetObject.mockResolvedValue({ data: stored, contentType: 'application/pdf' });
+    mockStreamObject.mockResolvedValue(streamedFile(stored, 'application/pdf'));
     mockAssertDownloadAllowance.mockRejectedValueOnce(
       new PlanDownloadLimitError('Pro includes 2.7 GB of file downloads a month.', '2026-11-01'),
     );

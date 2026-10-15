@@ -8,11 +8,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { getActiveWorkspaceMediaAssetById } from '@/lib/server/media-assets';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import {
-  isMediaStorageConfigured,
-  readStoredMedia,
-  streamStoredMedia,
-} from '@/lib/server/media-storage';
+import { isMediaStorageConfigured, streamStoredMedia } from '@/lib/server/media-storage';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { servedByteHeaders } from '@/lib/security/served-bytes';
 import {
@@ -69,6 +65,33 @@ function parseSingleByteRange(
   return { start, end: Math.min(requestedEnd, size - 1) };
 }
 
+async function readBounded(
+  body: ReadableStream<Uint8Array>,
+  maxBytes: number,
+): Promise<Buffer | null> {
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks, total);
+}
+
+function payloadTooLarge(): NextResponse {
+  return NextResponse.json(
+    { error: { code: 'PAYLOAD_TOO_LARGE', message: 'File exceeds the inline serving limit' } },
+    { status: 413 },
+  );
+}
+
 async function handleGetFile(request: NextRequest, context: RouteContext): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'files-serve');
   if (rateLimitResponse) return rateLimitResponse;
@@ -102,10 +125,7 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
   const isVideo = asset.mimeType.toLowerCase().startsWith('video/');
   const serveCap = isVideo ? MAX_VIDEO_SERVE_BYTES : MAX_SERVE_BYTES;
   if (asset.byteSize != null && asset.byteSize > serveCap) {
-    return NextResponse.json(
-      { error: { code: 'PAYLOAD_TOO_LARGE', message: 'File exceeds the inline serving limit' } },
-      { status: 413 },
-    );
+    return payloadTooLarge();
   }
 
   if (!isMediaStorageConfigured() || !asset.storagePathname) {
@@ -143,12 +163,6 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
     await assertDownloadAllowance({ db, userId, bytes: expectedLength });
     const streamed = await streamStoredMedia(asset.storagePathname, range ?? undefined);
     if (!streamed) throw createError.notFound('Video bytes are not available');
-    recordEgressBytes({
-      userId,
-      bytes: expectedLength,
-      surface: resolveProductAnalyticsSurface(request),
-      provider: 'object_storage',
-    });
     const expectedContentRange = range
       ? `bytes ${range.start}-${range.end}/${asset.byteSize}`
       : undefined;
@@ -160,6 +174,13 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
       await streamed.body.cancel().catch(() => undefined);
       throw createError.internal('Stored video bytes did not match the authenticated asset.');
     }
+
+    recordEgressBytes({
+      userId,
+      bytes: expectedLength,
+      surface: resolveProductAnalyticsSurface(request),
+      provider: 'object_storage',
+    });
 
     return new NextResponse(streamed.body, {
       status: range ? 206 : 200,
@@ -176,24 +197,24 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
     });
   }
 
-  const object = await readStoredMedia(asset.storagePathname);
-  if (!object) {
+  const streamed = await streamStoredMedia(asset.storagePathname);
+  if (!streamed) {
     throw createError.notFound('File bytes are not available');
   }
-  if (object.data.byteLength > MAX_SERVE_BYTES) {
-    return NextResponse.json(
-      { error: { code: 'PAYLOAD_TOO_LARGE', message: 'File exceeds the inline serving limit' } },
-      { status: 413 },
-    );
+  if (streamed.contentLength > MAX_SERVE_BYTES) {
+    await streamed.body.cancel().catch(() => undefined);
+    return payloadTooLarge();
   }
+  const data = await readBounded(streamed.body, MAX_SERVE_BYTES);
+  if (!data) return payloadTooLarge();
 
   const bufferedServed = servedByteHeaders({
-    contentType: asset.mimeType || object.contentType || 'application/octet-stream',
+    contentType: asset.mimeType || streamed.contentType || 'application/octet-stream',
     filename,
   });
 
-  await assertDownloadAllowance({ db, userId, bytes: object.data.byteLength });
-  const body = new Uint8Array(object.data);
+  await assertDownloadAllowance({ db, userId, bytes: data.byteLength });
+  const body = new Uint8Array(data);
   recordEgressBytes({
     userId,
     bytes: body.byteLength,
@@ -204,7 +225,7 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
     status: 200,
     headers: {
       'Content-Type': bufferedServed.contentType,
-      'Content-Length': String(object.data.byteLength),
+      'Content-Length': String(data.byteLength),
       'Content-Disposition': bufferedServed.contentDisposition,
       ...provenanceHeaders,
       'Cache-Control': AUTHENTICATED_MEDIA_CACHE_CONTROL,

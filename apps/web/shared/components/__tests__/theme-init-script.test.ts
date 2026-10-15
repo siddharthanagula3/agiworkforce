@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 import { THEME_INIT_SCRIPT } from '../seo/theme-init-script';
+import { normalizeTheme } from '../ThemeConstants';
 
 const script = readFileSync(resolve(process.cwd(), 'public/theme-init.js'), 'utf8');
 
@@ -34,6 +35,18 @@ describe('theme-init.js', () => {
     expect(root).toHaveAttribute('data-theme', 'light');
     expect(root.style.colorScheme).toBe('light');
   });
+
+  it.each(['light', 'dark', 'not-a-theme', 'Light', ' '])(
+    'agrees with the provider normalizer on %j',
+    (stored) => {
+      const dom = renderWithPersistedTheme(stored);
+      const root = dom.window.document.documentElement;
+      const normalized = normalizeTheme(stored);
+      const expected = normalized === 'system' ? 'dark' : normalized;
+
+      expect(root).toHaveAttribute('data-theme', expected);
+    },
+  );
 
   it('fails closed to dark for an invalid stored value', () => {
     const dom = renderWithPersistedTheme('not-a-theme');

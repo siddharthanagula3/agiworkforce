@@ -1155,7 +1155,7 @@
   display: inline-block;
   width: 0.125em;
   height: 1em;
-  margin-left: 0.25em;
+  margin-inline-start: 0.25em;
   vertical-align: -0.125em;
   border-radius: var(--chat-radius-sm);
   background-color: currentColor;
@@ -1695,7 +1695,7 @@ html[data-contrast='more'] *:focus-visible {
   transition: opacity var(--agi-dur-base) var(--agi-ease-out);
 }
 [data-design='agi'] .agi-chat-meta {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-size: 12px;
   color: var(--agi-ink-quiet);
   font-weight: 500;
@@ -1774,7 +1774,7 @@ html[data-contrast='more'] *:focus-visible {
   height: 1em;
   background: var(--agi-ink);
   vertical-align: -2px;
-  margin-left: 2px;
+  margin-inline-start: 2px;
   animation: agi-blink 1s steps(2) infinite;
 } /* footer */ /* A footer is the quietest thing on the page, and this one was 1213px tall -
    a tenth of the document - carrying a restated pitch and a 12rem ghosted

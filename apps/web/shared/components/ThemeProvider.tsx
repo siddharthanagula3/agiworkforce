@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { ThemeProvider as NextThemesProvider, useTheme as useNextTheme } from 'next-themes';
-import { type Theme, THEME_STORAGE_KEY, DEFAULT_THEME } from './ThemeConstants';
+import {
+  type Theme,
+  THEME_STORAGE_KEY,
+  DEFAULT_THEME,
+  INVALID_THEME_FALLBACK,
+  normalizeTheme,
+} from './ThemeConstants';
 import { ThemeContext } from './ThemeContext';
 
 const NoncedNextThemesProvider = NextThemesProvider as React.ComponentType<
@@ -10,8 +16,12 @@ const NoncedNextThemesProvider = NextThemesProvider as React.ComponentType<
 function ThemeContextBridge({ children }: { children: React.ReactNode }) {
   const { theme: nextTheme, resolvedTheme, setTheme: setNextTheme } = useNextTheme();
 
-  const theme = (nextTheme as Theme | undefined) ?? DEFAULT_THEME;
+  const theme = normalizeTheme(nextTheme);
   const actualTheme: 'light' | 'dark' = resolvedTheme === 'light' ? 'light' : 'dark';
+
+  useEffect(() => {
+    if (nextTheme !== undefined && nextTheme !== theme) setNextTheme(INVALID_THEME_FALLBACK);
+  }, [nextTheme, theme, setNextTheme]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;

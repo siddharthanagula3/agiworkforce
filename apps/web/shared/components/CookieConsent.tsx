@@ -14,6 +14,7 @@ import {
 } from '@agiworkforce/ui/dialog';
 import { Label } from '@agiworkforce/ui/label';
 import { Switch } from '@agiworkforce/ui/switch';
+import { subscribeToClerkSessionChange } from '@/lib/clerk-session';
 import {
   ALL_ACCEPTED_PREFERENCES,
   COOKIE_CONSENT_OPEN_EVENT,
@@ -25,6 +26,7 @@ import {
   isAnalyticsLockedByOptOutSignal,
   readAccountCookieConsent,
   readCookiePreferences,
+  retryCookieConsentPersistence,
   writeCookiePreferences,
   type CookiePreferences,
 } from '@shared/lib/cookie-consent';
@@ -40,6 +42,7 @@ export const CookieConsent = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [preferences, setPreferences] = useState<CookiePreferences>(NECESSARY_ONLY_PREFERENCES);
   const [optedOutBySignal, setOptedOutBySignal] = useState(false);
+  const [persistFailed, setPersistFailed] = useState(false);
   const bannerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -53,20 +56,30 @@ export const CookieConsent = () => {
       return undefined;
     }
     let cancelled = false;
-    const timer = setTimeout(() => {
-      if (readCookiePreferences()) return;
+    let latestLookup = 0;
+    const lookUpAccountDecision = (promptWhenAbsent: boolean) => {
+      latestLookup += 1;
+      const lookup = latestLookup;
       void readAccountCookieConsent().then((accountDecision) => {
-        if (cancelled || readCookiePreferences()) return;
+        if (cancelled || lookup !== latestLookup || readCookiePreferences()) return;
         if (accountDecision) {
           adoptAccountCookieConsent(accountDecision);
           return;
         }
-        setShowBanner(true);
+        if (promptWhenAbsent) setShowBanner(true);
       });
+    };
+    const timer = setTimeout(() => {
+      if (readCookiePreferences()) return;
+      lookUpAccountDecision(true);
     }, PROMPT_DELAY_MS);
+    const unsubscribe = subscribeToClerkSessionChange(() => {
+      if (!readCookiePreferences()) lookUpAccountDecision(false);
+    });
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      unsubscribe();
     };
   }, []);
 
@@ -100,7 +113,7 @@ export const CookieConsent = () => {
     setPreferences(prefs);
     setShowBanner(false);
     setShowSettings(false);
-    writeCookiePreferences(prefs);
+    setPersistFailed(!writeCookiePreferences(prefs));
   }, []);
 
   useEffect(() => {
@@ -132,6 +145,25 @@ export const CookieConsent = () => {
 
   return (
     <>
+      {persistFailed && !showBanner && (
+        <div
+          role="status"
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-[var(--z-notification)] flex justify-center p-3 sm:justify-end sm:p-6"
+        >
+          <div className="pointer-events-auto flex w-full max-w-[32rem] flex-wrap items-center gap-3 rounded-3xl border border-border bg-card p-4 text-base text-card-foreground shadow-e3">
+            <p className="min-w-0 flex-1 leading-6">
+              Your cookie choice applies to this page but could not be saved on this device.
+            </p>
+            <Button
+              variant="outline"
+              className={ACTION_CLASS}
+              onClick={() => setPersistFailed(!retryCookieConsentPersistence())}
+            >
+              Retry saving
+            </Button>
+          </div>
+        </div>
+      )}
       <AnimatePresence>
         {showBanner && (
           <motion.div

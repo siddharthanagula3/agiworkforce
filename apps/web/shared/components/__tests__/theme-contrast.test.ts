@@ -1436,6 +1436,29 @@ describe('the chat focus ring is a visible control boundary (>= 3:1) in both the
   });
 });
 
+describe('the off-state switch track has a visible boundary (>= 3:1) in both themes', () => {
+  const switchSource = readFileSync(
+    resolve(repoRoot, 'packages/ui/ui/src/primitives/Switch.tsx'),
+    'utf8',
+  );
+
+  it('draws the unchecked border with the muted-foreground role', () => {
+    expect(switchSource).toContain('data-[state=unchecked]:border-muted-foreground');
+  });
+
+  for (const theme of ['light', 'dark'] as const) {
+    it(`${theme}: the border clears 3:1 on the page background and on the track fill`, () => {
+      const border = colorToken(web[theme], '--muted-foreground');
+      expect(contrastRatio(border, colorToken(web[theme], '--background'))).toBeGreaterThanOrEqual(
+        WCAG_AA_LARGE,
+      );
+      expect(contrastRatio(border, colorToken(web[theme], '--input'))).toBeGreaterThanOrEqual(
+        WCAG_AA_LARGE,
+      );
+    });
+  }
+});
+
 describe('status colour has no role-less legacy token', () => {
   it('declares no bare success or warning colour that could paint a word with a fill', () => {
     for (const name of ['--color-success', '--color-warning']) {

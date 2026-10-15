@@ -602,3 +602,90 @@ describe('cookie consent under a browser opt-out signal', () => {
     expect(analytics).toHaveProperty('disabled', false);
   });
 });
+
+describe('withdrawal when the local write fails', () => {
+  it('keeps analytics off for the page, says so, and persists on retry', async () => {
+    storeDecision(ALL_ACCEPTED_PREFERENCES);
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota');
+    });
+    try {
+      render(
+        <>
+          <CookieConsent />
+          <AnalyticsConsentGate trackingId={TRACKING_ID} />
+        </>,
+      );
+      await waitFor(() => expect(gaScripts().length).toBeGreaterThan(0));
+
+      await act(async () => {
+        window.dispatchEvent(new Event(COOKIE_CONSENT_OPEN_EVENT));
+      });
+      const dialog = await screen.findByRole('dialog');
+      await act(async () => {
+        fireEvent.click(within(dialog).getByRole('switch', { name: 'Analytics cookies' }));
+      });
+      await act(async () => {
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Save preferences' }));
+      });
+
+      expect(readCookiePreferences()).toEqual({ necessary: true, analytics: false });
+      await waitFor(() => expect(gaScripts()).toHaveLength(0));
+      expect(screen.getByRole('status').textContent).toContain('could not be saved');
+
+      setItem.mockRestore();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Retry saving' }));
+      });
+
+      expect(screen.queryByRole('status')).toBeNull();
+      expect(
+        JSON.parse(window.localStorage.getItem(COOKIE_CONSENT_STORAGE_KEY) ?? '{}'),
+      ).toMatchObject({
+        analytics: false,
+      });
+    } finally {
+      setItem.mockRestore();
+    }
+  });
+});
+
+describe('account lookup retry', () => {
+  it('adopts the account decision when the session becomes ready after the first lookup', async () => {
+    const fetchMock = vi.fn(async () =>
+      setSignedInCookieResponse(document.cookie.includes('__client_uat=1700000000')),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<CookieConsent />);
+      await act(async () => {
+        vi.advanceTimersByTime(1200);
+      });
+      expect(await screen.findByRole('region', { name: 'Cookie consent' })).toBeTruthy();
+
+      setSignedInCookie(true);
+      await act(async () => {
+        window.dispatchEvent(new Event('online'));
+      });
+
+      await waitFor(() =>
+        expect(screen.queryByRole('region', { name: 'Cookie consent' })).toBeNull(),
+      );
+      expect(readCookiePreferences()).toEqual({ necessary: true, analytics: true });
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+function setSignedInCookieResponse(signedIn: boolean): Response {
+  const consents = signedIn
+    ? [{ purpose: 'product_analytics', granted: true, recordedAt: new Date().toISOString() }]
+    : [];
+  return new Response(JSON.stringify({ consents }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}

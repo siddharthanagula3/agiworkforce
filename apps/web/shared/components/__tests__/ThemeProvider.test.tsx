@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, renderHook, act } from '@testing-library/react';
 import { ThemeProvider } from '../ThemeProvider';
 import { useThemeContext } from '@shared/hooks/useThemeContext';
-import { THEME_STORAGE_KEY, DEFAULT_THEME } from '../ThemeConstants';
+import { THEME_STORAGE_KEY, DEFAULT_THEME, normalizeTheme } from '../ThemeConstants';
 
 const mockSetTheme = vi.fn();
 let mockTheme = 'system';
@@ -126,5 +126,39 @@ describe('ThemeProvider DOM integration', () => {
     );
 
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+  });
+});
+
+describe('invalid stored theme', () => {
+  beforeEach(() => {
+    mockSetTheme.mockClear();
+  });
+  afterEach(() => {
+    mockTheme = 'system';
+  });
+
+  it('is exposed as dark and repaired through the theme setter', () => {
+    mockTheme = 'not-a-theme';
+    const { result } = renderHook(() => useThemeContext(), {
+      wrapper: ({ children }) => <ThemeProvider>{children}</ThemeProvider>,
+    });
+    expect(result.current.theme).toBe('dark');
+    expect(result.current.actualTheme).toBe('dark');
+    expect(mockSetTheme).toHaveBeenCalledWith('dark');
+  });
+
+  it('leaves a valid theme alone', () => {
+    mockTheme = 'light';
+    renderHook(() => useThemeContext(), {
+      wrapper: ({ children }) => <ThemeProvider>{children}</ThemeProvider>,
+    });
+    expect(mockSetTheme).not.toHaveBeenCalled();
+  });
+
+  it('normalizes missing to the default and unknown to dark', () => {
+    expect(normalizeTheme(undefined)).toBe('system');
+    expect(normalizeTheme('')).toBe('dark');
+    expect(normalizeTheme('Light')).toBe('dark');
+    expect(normalizeTheme('system')).toBe('system');
   });
 });
