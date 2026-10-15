@@ -474,8 +474,13 @@ function takePendingResult(
   clearTimeout(pending.timer);
   if (pending.signal && pending.onAbort)
     pending.signal.removeEventListener('abort', pending.onAbort);
-  commandWatchers.get(id)?.(state);
+  notifyCommandWatcher(id, state);
   return pending;
+}
+
+function notifyCommandWatcher(id: string, state: 'active' | 'cancelled' | 'completed'): void {
+  const watcher = commandWatchers.get(id);
+  if (typeof watcher === 'function') watcher(state);
 }
 
 function handleCommandWatch(response: ServerResponse, id: unknown, wait: unknown): void {
@@ -492,7 +497,7 @@ function handleCommandWatch(response: ServerResponse, id: unknown, wait: unknown
     sendJson(response, 200, { success: true, state: 'active' });
     return;
   }
-  commandWatchers.get(id)?.('active');
+  notifyCommandWatcher(id, 'active');
   let settled = false;
   const cleanup = (): void => {
     clearTimeout(timer);

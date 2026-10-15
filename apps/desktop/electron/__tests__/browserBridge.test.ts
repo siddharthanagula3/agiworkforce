@@ -528,6 +528,44 @@ describe('loopback pairing bridge', () => {
     await expect(next).resolves.toBe('read');
   });
 
+  it('answers result and watch messages for ids naming no delivered command without dispatching', async () => {
+    context.pairingStore.savePairing(EXTENSION_ID);
+    const pending = context.bridge.sendBrowserCommand('browser_read_page', {});
+    const polled = await nativeMessage({
+      type: NATIVE_BROWSER_POLL_MESSAGE,
+      version: BROWSER_COMMAND_PROTOCOL_VERSION,
+    });
+    const { id } = polled['command'] as { id: string };
+    for (const unknownId of ['__proto__', 'constructor', 'hasOwnProperty', 'toString']) {
+      await expect(
+        nativeMessage({
+          type: NATIVE_BROWSER_RESULT_MESSAGE,
+          version: BROWSER_COMMAND_PROTOCOL_VERSION,
+          result: {
+            version: BROWSER_COMMAND_PROTOCOL_VERSION,
+            id: unknownId,
+            ok: true,
+            value: 'forged',
+          },
+        }),
+      ).resolves.toEqual({ success: true });
+      await expect(
+        nativeMessage({
+          type: NATIVE_BROWSER_COMMAND_WATCH_MESSAGE,
+          version: BROWSER_COMMAND_PROTOCOL_VERSION,
+          id: unknownId,
+          wait: true,
+        }),
+      ).resolves.toEqual({ success: true, state: 'cancelled' });
+    }
+    await nativeMessage({
+      type: NATIVE_BROWSER_RESULT_MESSAGE,
+      version: BROWSER_COMMAND_PROTOCOL_VERSION,
+      result: { version: BROWSER_COMMAND_PROTOCOL_VERSION, id, ok: true, value: 'read' },
+    });
+    await expect(pending).resolves.toBe('read');
+  });
+
   it('settles a registered native watcher when its delivered command is cancelled', async () => {
     context.pairingStore.savePairing(EXTENSION_ID);
     const controller = new AbortController();
