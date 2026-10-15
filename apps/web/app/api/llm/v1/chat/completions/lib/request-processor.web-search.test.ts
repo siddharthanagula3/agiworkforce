@@ -60,6 +60,7 @@ import {
   resolveWebCloudModelRoute,
   shouldOfferGenericWebSearchTool,
 } from './request-processor';
+import { webSearchToolOfferPolicyFor } from '@/lib/web-search/required-search';
 import * as requestProcessorModule from './request-processor';
 import { buildApprovalCheckpointRequest } from './approval-checkpoint-request';
 import {
@@ -107,6 +108,13 @@ const FREE_CHAT_MODEL = (() => {
   if (!model) throw new Error('Canonical Free chat fixture is missing');
   return model.id;
 })();
+
+function carriesTool(tools: readonly unknown[] | undefined, name: string): boolean {
+  return (tools ?? []).some((tool) => {
+    const record = tool as { type?: string; function?: { name?: string } };
+    return record.function?.name === name || record.type === name;
+  });
+}
 
 describe('applyWorkMode', () => {
   it('turns AGI Work into a real tool-using managed-cloud request', () => {
@@ -291,7 +299,7 @@ describe('Free capability gate, model-agnostic web search', () => {
       body: JSON.stringify(body),
     });
 
-  it('admits platform web search on the Free chat router', async () => {
+  it('admits web search on the Free plan model', async () => {
     const result = await processRequest(
       freeTrialRequest(
         {
@@ -325,16 +333,11 @@ describe('Free capability gate, model-agnostic web search', () => {
     if (result.ok) {
       expect(result.resolvedTaskType).toBe('research');
       expect(result.chatRequest.web_search).toBe(true);
-      expect(result.llmRequest.tools).toContainEqual(
-        expect.objectContaining({
-          type: 'function',
-          function: expect.objectContaining({ name: 'web_search' }),
-        }),
-      );
+      expect(carriesTool(result.llmRequest.tools, 'web_search')).toBe(true);
     }
   });
 
-  it('offers required search for an explicit plural web-search request on the Free router', async () => {
+  it('offers required search for an explicit plural web-search request on the Free plan model', async () => {
     const result = await processRequest(
       freeTrialRequest(
         {
@@ -355,9 +358,7 @@ describe('Free capability gate, model-agnostic web search', () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.llmRequest.tools).toContainEqual(
-        expect.objectContaining({ function: expect.objectContaining({ name: 'web_search' }) }),
-      );
+      expect(carriesTool(result.llmRequest.tools, 'web_search')).toBe(true);
     }
   });
 
@@ -442,16 +443,11 @@ describe('Free capability gate, model-agnostic web search', () => {
     }
   });
 
-  it('does not offer ambient URL fetch to an ordinary Free chat on a required-only route', async () => {
-    const requiredOnlyModel = getAllowedModelsForTier('economy').find(
-      (modelId) => getModelMetadataById(modelId)?.webSearchToolOfferPolicy === 'required_only',
-    );
-    expect(requiredOnlyModel).toBeDefined();
-
+  it('does not offer ambient URL fetch to an ordinary Free chat on the plan model', async () => {
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: requiredOnlyModel,
+          model: FREE_CHAT_MODEL,
           messages: [{ role: 'user', content: 'Reply with exactly PONG and nothing else.' }],
           web_search: true,
           web_fetch: true,
@@ -471,24 +467,22 @@ describe('Free capability gate, model-agnostic web search', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.chatSurface).toBe('web');
-      expect(getModelMetadataById(result.chatRequest.model)?.webSearchToolOfferPolicy).toBe(
-        'required_only',
-      );
+      expect(
+        webSearchToolOfferPolicyFor({
+          model: result.chatRequest.model,
+          planTier: freeSubscription.plan_tier,
+        }),
+      ).toBe('required_only');
       expect(result.resolvedTaskType).not.toBe('research');
       expect(result.llmRequest.tools).toBeUndefined();
     }
   });
 
   it('does not force search on an ordinary follow-up after research turns', async () => {
-    const requiredOnlyModel = getAllowedModelsForTier('economy').find(
-      (modelId) => getModelMetadataById(modelId)?.webSearchToolOfferPolicy === 'required_only',
-    );
-    expect(requiredOnlyModel).toBeDefined();
-
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: requiredOnlyModel,
+          model: FREE_CHAT_MODEL,
           messages: [
             { role: 'user', content: 'Search the web for current IANA guidance.' },
             { role: 'assistant', content: 'Earlier answer.' },
@@ -523,15 +517,10 @@ describe('Free capability gate, model-agnostic web search', () => {
     ['Search the web for current AI headlines', 'web_search'],
     ['Read https://example.com and summarize the page', 'url_fetch'],
   ])('keeps the requested %s tool path available', async (prompt, expectedTool) => {
-    const requiredOnlyModel = getAllowedModelsForTier('economy').find(
-      (modelId) => getModelMetadataById(modelId)?.webSearchToolOfferPolicy === 'required_only',
-    );
-    expect(requiredOnlyModel).toBeDefined();
-
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: requiredOnlyModel,
+          model: FREE_CHAT_MODEL,
           messages: [{ role: 'user', content: prompt }],
           web_search: true,
           web_fetch: true,
@@ -550,9 +539,7 @@ describe('Free capability gate, model-agnostic web search', () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.llmRequest.tools).toContainEqual(
-        expect.objectContaining({ function: expect.objectContaining({ name: expectedTool }) }),
-      );
+      expect(carriesTool(result.llmRequest.tools, expectedTool)).toBe(true);
       const checkpointRequest = buildApprovalCheckpointRequest(
         result.chatRequest,
         result.callerToolFields,
@@ -562,47 +549,12 @@ describe('Free capability gate, model-agnostic web search', () => {
     }
   });
 
-  it('refuses a free-trial capability the selected model lacks, naming the way out', async () => {
-    const unsupportedModel = getAllowedModelsForTier('economy').find((modelId) => {
-      const metadata = getModelMetadataById(modelId);
-      return (
-        metadata?.tierPolicy?.minTier === 'free' && metadata.capabilities.codeExecution !== true
-      );
-    });
-    expect(unsupportedModel).toBeDefined();
-
-    const result = await processRequest(
-      freeTrialRequest(
-        {
-          model: FREE_CHAT_MODEL,
-          messages: [{ role: 'user', content: 'Run this snippet and show the output.' }],
-          code_execution: true,
-          stream: false,
-        },
-        'free-cap-code-exec-1',
-      ),
-      { ok: true, userId: 'user-free', token: 'session-token', subscription: freeSubscription },
-    );
-
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      const body = (await result.response.json()) as {
-        error: { code: string; message: string };
-      };
-      expect(result.response.status).toBe(400);
-      expect(body.error.code).toBe('free_trial_model_capability');
-      expect(body.error.message).toContain('code execution');
-      expect(body.error.message).toMatch(/Pick a model that does|turn that option off/i);
-    }
-  });
-
-  it('keeps the Free catalog limited to the explicit zero-cost chat router', () => {
+  it('keeps the Free catalog limited to the one Free plan model', () => {
     const freeModels = getAllowedModelsForTier('economy').filter(
       (modelId) => getModelMetadataById(modelId)?.tierPolicy?.minTier === 'free',
     );
     expect(freeModels).toEqual([FREE_CHAT_MODEL]);
     expect(getModelMetadataById(FREE_CHAT_MODEL)).toMatchObject({
-      provider: 'open_router',
       capabilities: { streaming: true, tools: true, vision: true, json: true, thinking: true },
     });
   });

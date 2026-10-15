@@ -404,12 +404,12 @@ export default function IndiaDpdpNoticePage() {
                     the request passes through OpenRouter. On the Free plan, a chat on the default
                     model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model
                     Studio, on AGI&rsquo;s own key at its international endpoint in Singapore, or
-                    OpenRouter&rsquo;s free router. Which one answers depends on what is available
-                    for that turn, and the reply shows the model that answered. Those providers
-                    handle that content under their own terms and data-use policies; our no-training
-                    statement is about AGI-owned models and is not a promise on their behalf. In
-                    BYOK the request goes from your client straight to the provider on your key,
-                    governed by your own account with them. In Local, none of them are contacted.
+                    OpenAI. Which one answers depends on what is available for that turn, and the
+                    reply shows the model that answered. Those providers handle that content under
+                    their own terms and data-use policies; our no-training statement is about
+                    AGI-owned models and is not a promise on their behalf. In BYOK the request goes
+                    from your client straight to the provider on your key, governed by your own
+                    account with them. In Local, none of them are contacted.
                   </Prose>
                 </Stack>
               </Section>

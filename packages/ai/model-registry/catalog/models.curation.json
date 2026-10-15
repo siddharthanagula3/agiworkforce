@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-10-10",
+  "lastUpdated": "2026-10-13",
   "verificationLog": [
     {
       "date": "2026-09-14",
@@ -517,6 +517,12 @@
       "verifiedBy": "owner-approved-live-probe-qwen-free-quota-text-2026-10-11",
       "status": "CORRECTION",
       "notes": "The owner asked for every text offering in the QwenCloud free quota inventory to be checked and approved the calls. One request of at most 8 output tokens went to each of the 127 chat offerings through the international compatible-mode endpoint at 2026-10-11T16:29Z. 57 answered. 44 returned 404 model_not_found, 24 returned 403 access_denied and 2 (qvq-max-latest, qvq-max-2025-03-25) are not served in compatible mode. Of the 71 chat offerings that carry the 2026-10-09T16:00Z retiresAt recorded on 2026-10-02 from the Model Studio retirement notices, 69 are refused, which agrees with the second reminder the provider sent the owner for the 2026-10-10 decommissioning; qwen-vl-ocr and qwen-turbo still answer, neither is offered by the free picker and the free row of qwen-turbo ended on 2026-08-22, so their dates are left as recorded. qwen3-max-2025-10-30 (qwen-quota-196) carried no retirement and is refused with access_denied, so it now carries retiresAt set to the instant of that refusal, which is the latest it can have stopped serving, not a date the provider announced. No offering the free picker serves was refused. qwen-plus and qwen-turbo answered although their free rows are expired, so those two calls were billed at list price; they should not be probed again."
+    },
+    {
+      "date": "2026-10-13",
+      "verifiedBy": "owner-direction-2026-10-13",
+      "status": "ROSTER",
+      "notes": "openrouter-free (OpenRouter Free Auto, openrouter/free) leaves the catalog on the owner's instruction of 2026-10-13: the free router kept answering that it was overloaded, and it was the only model the Free plan could reach. Asked what should serve Free instead, the owner chose the fast OpenAI family. The row, its route, its synced record and its probe are removed and the id is recorded in catalog/retired-models.json so a conversation that names it still renders a label. The Free Auto slots free_workhorse and free_workhorse_fast move to family:openai/gpt-fast and the slot router_zero_cost is deleted, because no slot is zero cost any more. gpt-6-luna takes tierPolicy.minTier free, which with its existing place in tierAllowedModels.economy is what admits it to the Free plan; a Free turn on it is metered against the Free usage windows in packages/contracts/types/src/managed-usage-limits.ts. The two retired :free aliases that redirected to the router now redirect to the same family. No live provider call was made for this change."
     }
   ],
   "providers": {
@@ -550,8 +556,9 @@
         "nvidia/nemotron-3-nano-30b-a3b": "family:google/gemini-flash-lite",
         "nvidia/nemotron-3-super-120b-a12b": "family:google/gemini-flash-lite",
         "nvidia/nemotron-3-ultra-550b-a55b": "family:google/gemini-flash-lite",
-        "nvidia/nemotron-3-super-120b-a12b:free": "openrouter-free",
-        "google/gemma-4-26b-a4b-it:free": "openrouter-free",
+        "nvidia/nemotron-3-super-120b-a12b:free": "family:openai/gpt-fast",
+        "google/gemma-4-26b-a4b-it:free": "family:openai/gpt-fast",
+        "openrouter-free": "family:openai/gpt-fast",
         "gemini-3.5-flash": "family:google/gemini-flash"
       }
     },
@@ -1220,7 +1227,7 @@
       },
       "promptCacheMinimumTokens": 1024,
       "tierPolicy": {
-        "minTier": "basic"
+        "minTier": "free"
       },
       "costOverride": {
         "inputCost": 0.1,
@@ -1251,7 +1258,9 @@
         "stage": "promoted",
         "stagedOn": "2026-10-07",
         "source": "catalog/model-families.json#openai/gpt-fast"
-      }
+      },
+      "pickerRecommended": true,
+      "transientSameRouteRetries": 1
     },
     "claude-fable-5-1": {
       "id": "claude-fable-5-1",
@@ -3651,39 +3660,6 @@
         "source": "packages/ai/model-registry/catalog/models.curation.json#verificationLog"
       }
     },
-    "openrouter-free": {
-      "id": "openrouter-free",
-      "apiModelId": "openrouter/free",
-      "openRouterSlug": "openrouter/free",
-      "name": "OpenRouter Free Auto",
-      "maxOutputTokens": 8192,
-      "responseBudgetFloorTokens": 8192,
-      "transientSameRouteRetries": 1,
-      "webSearchToolOfferPolicy": "required_only",
-      "provider": "open_router",
-      "modelType": "chat",
-      "role": "router",
-      "openWeight": false,
-      "license": "proprietary",
-      "quality": "fair",
-      "qualityTier": "fast",
-      "bestFor": ["Zero-Cost Drafting", "Experimentation", "Overflow Capacity"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": true,
-        "control": "effort"
-      },
-      "tierPolicy": {
-        "minTier": "free"
-      },
-      "releasedOverride": "February 1, 2026",
-      "lifecycle": {
-        "stage": "promoted",
-        "stagedOn": "2026-09-11",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.free_workhorse"
-      },
-      "pickerRecommended": true
-    },
     "gpt-oss-safeguard-20b": {
       "id": "gpt-oss-safeguard-20b",
       "apiModelId": "openai/gpt-oss-safeguard-20b",
@@ -3813,8 +3789,7 @@
       "family:openai/gpt-fast",
       "family:google/gemini-flash-lite",
       "family:google/gemini-flash",
-      "family:qwen/qwen-flash",
-      "openrouter-free"
+      "family:qwen/qwen-flash"
     ],
     "pro_additions": [
       "family:openai/gpt-balanced",

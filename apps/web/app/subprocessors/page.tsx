@@ -95,7 +95,7 @@ const SUBS: Subprocessor[] = [
   {
     name: 'Model providers (Managed Cloud)',
     purpose:
-      'Inference for Managed Cloud chat: Anthropic, OpenAI, Google, xAI, DeepSeek, Moonshot and Perplexity. Your prompt and any attached content are sent to the provider serving the model you select; for the Free plan’s default model AGI chooses the provider, as the OpenRouter and Qwen rows below say, and for the support assistant AGI chooses the model, as the Cheaper Inference row below says. This applies to Managed Cloud only: in Local Mode nothing is sent, and under BYOK you contract with the provider directly.',
+      'Inference for Managed Cloud chat: Anthropic, OpenAI, Google, xAI, DeepSeek, Moonshot and Perplexity. Your prompt and any attached content are sent to the provider serving the model you select; for the Free plan’s default model AGI chooses the provider, OpenAI or Alibaba, as the Qwen row below says, and for the support assistant AGI chooses the model, as the Cheaper Inference row below says. This applies to Managed Cloud only: in Local Mode nothing is sent, and under BYOK you contract with the provider directly.',
     region: 'United States and other regions, per provider',
     registryProviderIds: [
       'anthropic',
@@ -119,7 +119,7 @@ const SUBS: Subprocessor[] = [
   {
     name: 'OpenRouter',
     purpose:
-      'Inference routing on Managed Cloud, in three situations. (1) For the Qwen and Zhipu models, when AGI holds no key of its own for that provider: prompt content for those passes through OpenRouter on its way to the model provider. When AGI does hold that provider’s key, the request goes direct instead and OpenRouter is not in the path. (2) As a failover for any other catalogued chat model when the direct route to its provider fails. That second case means prompt content for a model you selected from any provider can pass through OpenRouter, and we would rather say so than let the narrower first case imply otherwise. (3) The Free plan’s default model: a Free plan chat on the default model can be answered by OpenRouter’s free router, which picks a free model from the providers it carries. AGI chooses this route, you do not; a turn that needs tools, web search or code execution takes it. Those providers’ terms may allow training on what you send.',
+      'Inference routing on Managed Cloud, in two situations. (1) For the Qwen and Zhipu models, when AGI holds no key of its own for that provider: prompt content for those passes through OpenRouter on its way to the model provider. When AGI does hold that provider’s key, the request goes direct instead and OpenRouter is not in the path. (2) As a failover for any other catalogued chat model when the direct route to its provider fails. That second case means prompt content for a model you selected from any provider can pass through OpenRouter, and we would rather say so than let the narrower first case imply otherwise.',
     region: 'United States',
     registryProviderIds: ['open_router'],
   },

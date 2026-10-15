@@ -178,16 +178,6 @@
       "toolOutcome": "honoured",
       "toolDetail": null
     },
-    "openrouter-free": {
-      "routeId": "open_router/openrouter-free",
-      "probedOn": "2026-09-12",
-      "outcome": "answered",
-      "ttfbMs": 538,
-      "echoedModelId": "inclusionai/ling-3.0-flash-vl:free",
-      "detail": null,
-      "toolOutcome": "honoured",
-      "toolDetail": null
-    },
     "qwen-3.7-plus": {
       "routeId": "qwen/qwen-3.7-plus",
       "probedOn": "2026-09-12",

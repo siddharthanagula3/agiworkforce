@@ -78,41 +78,39 @@ function vendorMayTrain(modelKey: string): boolean {
   return vendor === undefined || !providerKeepsInputsOutOfTraining(vendor);
 }
 
-describe('the probe: a free-plan request that must stay out of training', () => {
-  const probeTasks: AutoRoutingRequest['taskType'][] = ['simple_chat', 'coding'];
-
-  for (const taskType of probeTasks) {
-    const request: AutoRoutingRequest = {
+describe('the probe: a request whose default route may train', () => {
+  const probes: AutoRoutingRequest[] = TIERS.flatMap((subscriptionTier) =>
+    TASKS.map((taskType): AutoRoutingRequest => ({
       selection: 'auto',
       taskType,
-      subscriptionTier: FREE_TIER,
+      subscriptionTier,
       trustMode: MANAGED,
-    };
+    })),
+  ).filter((request) => trainingOffences(resolveAutoRoute(request)).length > 0);
 
-    it(`serves ${taskType} from a provider that may train when nothing asks otherwise`, () => {
-      const decision = resolveAutoRoute(request);
-      expect(decision.status).toBe('selected');
-      expect(trainingOffences(decision)).not.toEqual([]);
-    });
+  it('exists, or the rule is exercised against nothing', () => {
+    expect(probes.length).toBeGreaterThan(0);
+  });
 
-    it(`refuses ${taskType} instead of returning that route`, () => {
+  it('is moved off that route or refused once the rule is on', () => {
+    for (const request of probes) {
       const decision = resolveAutoRoute({ ...request, noTrainingOnly: true });
-      expect(decision).toMatchObject({ status: 'unavailable', code: 'no_eligible_route' });
-      if (decision.status !== 'unavailable') return;
-      expect(decision.reasons.join(' ')).toContain('may train on inputs');
-    });
-  }
+      expect(trainingOffences(decision), JSON.stringify(request)).toEqual([]);
+      if (decision.status === 'unavailable') {
+        expect(decision.reasons.join(' ')).toContain('may train on inputs');
+      }
+    }
+  });
 
   it('is not rescued by a credential set that holds only may-train providers', () => {
-    const decision = resolveAutoRoute({
-      selection: 'auto',
-      taskType: 'simple_chat',
-      subscriptionTier: FREE_TIER,
-      trustMode: MANAGED,
-      noTrainingOnly: true,
-      availableProviderIds: new Set(MAY_TRAIN_PROVIDER_IDS),
-    });
-    expect(decision).toMatchObject({ status: 'unavailable', code: 'no_eligible_route' });
+    for (const request of probes) {
+      const decision = resolveAutoRoute({
+        ...request,
+        noTrainingOnly: true,
+        availableProviderIds: new Set(MAY_TRAIN_PROVIDER_IDS),
+      });
+      expect(trainingOffences(decision), JSON.stringify(request)).toEqual([]);
+    }
   });
 });
 

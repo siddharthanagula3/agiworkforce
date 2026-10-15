@@ -15,7 +15,9 @@ const FREE_QWEN_MODEL = requireCatalogModelId(
   (model) => model.provider === 'qwen' && model.capabilities.tools,
 );
 const BILLED_OPENAI_MODEL = requireCatalogModelId(
-  (model) => model.provider === 'openai' && model.tierPolicy?.minTier === 'basic',
+  (model) =>
+    model.provider === 'openai' &&
+    (model.tierPolicy?.minTier === 'free' || model.tierPolicy?.minTier === 'basic'),
 );
 const PAID_OPENAI_MODEL = requireCatalogModelId(
   (model) => model.provider === 'openai' && model.tierPolicy?.minTier === 'pro',

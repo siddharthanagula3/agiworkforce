@@ -1,4 +1,9 @@
 import { detectExplicitWebSearchIntent, hasExplicitWebSearchOptOut } from '@agiworkforce/search';
+import {
+  canAccessModelForSubscriptionTier,
+  getModelMetadataById,
+  normalizeBillingPlanTier,
+} from '@agiworkforce/types';
 
 import { annotateActiveSpan } from '@/lib/observability/span';
 import {
@@ -169,6 +174,25 @@ export function resolveWebSearchRequirement(
     'web_search.source': requirement.source ?? 'none',
   });
   return requirement;
+}
+
+const FREE_PLAN_TIER = normalizeBillingPlanTier(null);
+
+/**
+ * A Free turn on the plan's own model is paid for out of a small Free window,
+ * so it is offered search and fetch tools only when the turn needs them. A
+ * promoted or event model is paid for by its own budget and keeps its policy.
+ */
+export function webSearchToolOfferPolicyFor(input: {
+  model: string;
+  planTier: string | null | undefined;
+}): 'required_only' | undefined {
+  const modelPolicy = getModelMetadataById(input.model)?.webSearchToolOfferPolicy;
+  if (modelPolicy) return modelPolicy;
+  return input.planTier?.toLowerCase() === FREE_PLAN_TIER &&
+    canAccessModelForSubscriptionTier(input.model, FREE_PLAN_TIER)
+    ? 'required_only'
+    : undefined;
 }
 
 export function shouldOfferWebSearchForTurn(input: {

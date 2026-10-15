@@ -25,10 +25,9 @@ const QUESTIONS = [
         we send your prompt to the model provider serving the model you picked, and what{' '}
         <em>they</em> do with it is governed by their terms, not ours. On the Free plan, a chat on
         the default model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model
-        Studio, on AGI&rsquo;s own key at its international endpoint in Singapore, or
-        OpenRouter&rsquo;s free router. Which one answers depends on what is available for that
-        turn, and the reply shows the model that answered. We are not making a promise on their
-        behalf, and section 02 of the{' '}
+        Studio, on AGI&rsquo;s own key at its international endpoint in Singapore, or OpenAI. Which
+        one answers depends on what is available for that turn, and the reply shows the model that
+        answered. We are not making a promise on their behalf, and section 02 of the{' '}
         <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
         </Link>{' '}

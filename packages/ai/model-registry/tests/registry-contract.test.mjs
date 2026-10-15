@@ -182,7 +182,6 @@ test('emits separated registry records and cross-language artifacts', () => {
   assert.deepEqual(registry.policies.auto.tierAllowedSlots.free, [
     'free_workhorse',
     'free_workhorse_fast',
-    'router_zero_cost',
   ]);
   for (const slotId of registry.policies.auto.tierAllowedSlots.free) {
     const modelKey = registry.policies.auto.slots[slotId].modelKey;
@@ -205,15 +204,6 @@ test('emits separated registry records and cross-language artifacts', () => {
       `${tier} must not admit a free-lane slot`,
     );
   }
-  const taskPreferredSlots = new Set(
-    Object.values(registry.policies.auto.tasks).flatMap((task) =>
-      Object.values(task.preferredSlots).flat(),
-    ),
-  );
-  assert.ok(
-    !taskPreferredSlots.has('router_zero_cost'),
-    'router_zero_cost must stay outside every task preferredSlots list (the fallback candidate pool in auto.ts is filtered by the same reachability set), or Auto could select it on a paid tier without the caller naming it',
-  );
   assert.ok(registry.policies.auto.providerPolicies.usOnly.excludedProviders.includes('moonshot'));
   assert.deepEqual(registry.policies.auto.providerPolicies.usOnly.allowedTiers, [
     'max',
@@ -337,7 +327,7 @@ test('keeps Auto routing profiles out of the compatibility model identity map', 
   );
 });
 
-test('a free-plan model that reasons is never planned less than its whole output cap', () => {
+test('a free-plan router that reasons is never planned less than its whole output cap', () => {
   const registry = JSON.parse(fs.readFileSync(REGISTRY_JSON, 'utf8'));
   const catalog = JSON.parse(fs.readFileSync(COMPATIBILITY_CATALOG, 'utf8'));
   const { auto } = JSON.parse(fs.readFileSync(ROUTING_POLICIES, 'utf8'));
@@ -353,11 +343,11 @@ test('a free-plan model that reasons is never planned less than its whole output
   for (const modelKey of freeModelKeys) {
     const model = catalog.models[modelKey];
     assert.ok(model, `${modelKey} serves a free slot but is missing from the catalog`);
-    if (model.reasoning?.capable !== true) continue;
+    if (model.role !== 'router' || model.reasoning?.capable !== true) continue;
     assert.ok(Number.isInteger(model.maxOutputTokens), `${modelKey} must declare maxOutputTokens`);
     assert.ok(
       model.responseBudgetFloorTokens >= model.maxOutputTokens,
-      `${modelKey} spends reasoning tokens from the same output budget as its answer, so a short-answer budget below its ${model.maxOutputTokens}-token cap can end in reasoning with no answer`,
+      `${modelKey} is a router, so a request cannot cap its reasoning, and it spends reasoning tokens from the same output budget as its answer: a short-answer budget below its ${model.maxOutputTokens}-token cap can end in reasoning with no answer`,
     );
   }
 });

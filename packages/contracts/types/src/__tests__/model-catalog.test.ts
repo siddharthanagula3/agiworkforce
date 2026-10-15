@@ -908,11 +908,11 @@ describe('model catalog helpers', () => {
     }
     const codingFastModel = getRoutingSlotModel('coding_fast');
     expect(getAllowedModelsForTier('economy')).toContain(codingFastModel);
+    expect(canAccessModelForSubscriptionTier(codingFastModel, 'basic')).toBe(true);
     expect(getModelMetadataById(codingFastModel)).toMatchObject({
-      tierPolicy: { minTier: 'basic' },
       capabilities: { tools: true, codeExecution: true },
     });
-    expect(getModelMetadataById(getRoutingSlotModel('router_zero_cost'))).toMatchObject({
+    expect(getModelMetadataById(getRoutingSlotModel('free_workhorse'))).toMatchObject({
       tierPolicy: { minTier: 'free' },
     });
     expect(getModelMetadataById(getRoutingSlotModel('coding_premium'))).not.toBeNull();
@@ -944,9 +944,9 @@ describe('model catalog helpers', () => {
 });
 
 describe('getDefaultModelFor, tier-aware default model resolution', () => {
-  it('returns the zero-cost router for free chat and the workhorse for other kinds', () => {
+  it('returns the free workhorse for free chat and the workhorse for other kinds', () => {
     const workhorse = getRoutingSlotModel('workhorse_general');
-    expect(getDefaultModelFor('free', 'chat')).toBe(getRoutingSlotModel('router_zero_cost'));
+    expect(getDefaultModelFor('free', 'chat')).toBe(getRoutingSlotModel('free_workhorse'));
     expect(getDefaultModelFor('free', 'fast-status')).toBe(workhorse);
     expect(getDefaultModelFor('free', 'computer-use')).toBe(workhorse);
     expect(getDefaultModelFor('free', 'reasoning')).toBe(workhorse);
@@ -1010,16 +1010,16 @@ describe('getDefaultModelFor, tier-aware default model resolution', () => {
     expect(proChat.length).toBeGreaterThan(0);
   });
 
-  it('treats unknown / null tier as free and returns the zero-cost router for chat', () => {
-    const zeroCostRouter = getRoutingSlotModel('router_zero_cost');
-    expect(getDefaultModelFor(null, 'chat')).toBe(zeroCostRouter);
-    expect(getDefaultModelFor(undefined, 'chat')).toBe(zeroCostRouter);
-    expect(getDefaultModelFor('totally-bogus-tier', 'chat')).toBe(zeroCostRouter);
+  it('treats unknown / null tier as free and returns the free workhorse for chat', () => {
+    const freeWorkhorse = getRoutingSlotModel('free_workhorse');
+    expect(getDefaultModelFor(null, 'chat')).toBe(freeWorkhorse);
+    expect(getDefaultModelFor(undefined, 'chat')).toBe(freeWorkhorse);
+    expect(getDefaultModelFor('totally-bogus-tier', 'chat')).toBe(freeWorkhorse);
   });
 
   it('unknown tier falls back to free policy by request kind', () => {
     const workhorse = getRoutingSlotModel('workhorse_general');
-    expect(getDefaultModelFor('pro_plus', 'chat')).toBe(getRoutingSlotModel('router_zero_cost'));
+    expect(getDefaultModelFor('pro_plus', 'chat')).toBe(getRoutingSlotModel('free_workhorse'));
     expect(getDefaultModelFor('pro_plus', 'computer-use')).toBe(workhorse);
   });
 });

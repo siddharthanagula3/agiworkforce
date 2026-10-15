@@ -3,7 +3,7 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { resolveAutoRoute, type AutoRoutingRequest } from '@agiworkforce/routing';
-import { SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER, getRoutingSlotModel } from '@agiworkforce/types';
+import { SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER } from '@agiworkforce/types';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import {
@@ -31,8 +31,8 @@ const MAX_OUTPUT_TOKENS = 400;
 
 /**
  * Support is a company function, not a plan entitlement: every asker is routed
- * on the lowest paid tier, so a signed-out visitor never lands on the zero-cost
- * router, whose shared daily cap and unreliable JSON would fail this engine.
+ * on the lowest paid tier, whatever plan they hold and whether or not they are
+ * signed in.
  */
 const SUPPORT_ROUTING_TIER = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER[0];
 
@@ -110,10 +110,6 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
   const route = resolveAutoRoute(routing);
   if (route.status === 'unavailable') {
     logger.warn({ code: route.code }, '[support-agent] no managed route available');
-    return { status: 'unavailable', reason: 'no_route', route: null };
-  }
-  if (route.modelKey === getRoutingSlotModel('router_zero_cost')) {
-    logger.warn('[support-agent] only the zero-cost router is available; not answering on it');
     return { status: 'unavailable', reason: 'no_route', route: null };
   }
 

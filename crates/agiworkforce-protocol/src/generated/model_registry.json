@@ -77,7 +77,12 @@
         "kind": "reasoning",
         "openWeight": false,
         "license": "proprietary",
-        "aliases": ["openai/gpt-6-luna"],
+        "aliases": [
+          "google/gemma-4-26b-a4b-it:free",
+          "nvidia/nemotron-3-super-120b-a12b:free",
+          "openai/gpt-6-luna",
+          "openrouter-free"
+        ],
         "family": "gpt-fast",
         "version": "6"
       },
@@ -94,6 +99,7 @@
         "stageSource": "catalog/model-families.json#openai/gpt-fast",
         "replacedBy": null
       },
+      "transientSameRouteRetries": 1,
       "speed": "medium",
       "residencyRegions": ["us", "eu", "ae"],
       "evidenceRefs": []
@@ -1456,45 +1462,6 @@
         "stageSource": "packages/ai/model-registry/catalog/models.curation.json#verificationLog",
         "replacedBy": null
       },
-      "speed": "medium",
-      "residencyRegions": ["us", "eu"],
-      "evidenceRefs": []
-    },
-    "openrouter-free": {
-      "identity": {
-        "key": "openrouter-free",
-        "displayName": "OpenRouter Free Auto",
-        "provider": "open_router",
-        "developer": "openrouter",
-        "providerModelId": "openrouter/free",
-        "openRouterSlug": "openrouter/free",
-        "kind": "chat",
-        "role": "router",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": [
-          "google/gemma-4-26b-a4b-it:free",
-          "nvidia/nemotron-3-super-120b-a12b:free",
-          "openrouter/free"
-        ],
-        "family": null,
-        "version": null
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "February 1, 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-02-01",
-        "deprecatedOn": null,
-        "stage": "promoted",
-        "stagedOn": "2026-09-11",
-        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.free_workhorse",
-        "replacedBy": null
-      },
-      "webSearchToolOfferPolicy": "required_only",
-      "transientSameRouteRetries": 1,
       "speed": "medium",
       "residencyRegions": ["us", "eu"],
       "evidenceRefs": []
@@ -12647,7 +12614,6 @@
       "seedance-2.5",
       "openrouter-auto",
       "openrouter-auto-beta",
-      "openrouter-free",
       "or-aion-labs-aion-2-0",
       "or-aion-labs-aion-3-0",
       "or-aion-labs-aion-3-0-mini",
@@ -15551,25 +15517,6 @@
       "isDefault": true,
       "cacheClass": "no_provider_cache",
       "commercialStatus": "customer_byok",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 0,
-        "outputPerMillion": 0
-      }
-    },
-    "open_router/openrouter-free": {
-      "modelKey": "openrouter-free",
-      "provider": "open_router",
-      "providerModelId": "openrouter/free",
-      "harnessId": "open-router/chat-completions-managed",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": true,
-      "cacheClass": "no_provider_cache",
-      "commercialStatus": "authorized_marketplace",
       "dataRetention": "conditional",
       "pricing": {
         "currency": "USD",
@@ -24940,30 +24887,6 @@
       "codeExecution": false,
       "promptCaching": false
     },
-    "openrouter-free": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": false,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": false
-    },
     "gpt-oss-safeguard-20b": {
       "textInput": true,
       "imageInput": false,
@@ -34303,12 +34226,6 @@
       "inputPerMillion": 0,
       "outputPerMillion": 0
     },
-    "openrouter-free": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0,
-      "outputPerMillion": 0
-    },
     "gpt-oss-safeguard-20b": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -37247,11 +37164,6 @@
     "gemini-3.8-flash-tts": { "contextTokens": 8192, "maxOutputTokens": 16384 },
     "openrouter-auto": { "contextTokens": 2000000 },
     "openrouter-auto-beta": { "contextTokens": 2000000 },
-    "openrouter-free": {
-      "contextTokens": 200000,
-      "maxOutputTokens": 8192,
-      "responseBudgetFloorTokens": 8192
-    },
     "gpt-oss-safeguard-20b": { "contextTokens": 131072, "maxOutputTokens": 65536 },
     "qwen-3.8-27b": { "contextTokens": 131042, "maxOutputTokens": 16384 },
     "or-aion-labs-aion-2-0": { "contextTokens": 131072, "maxOutputTokens": 32768 },
@@ -37823,7 +37735,6 @@
     "gemini-3.8-flash-tts": {},
     "openrouter-auto": {},
     "openrouter-auto-beta": {},
-    "openrouter-free": {},
     "gpt-oss-safeguard-20b": {},
     "qwen-3.8-27b": {},
     "or-aion-labs-aion-2-0": {},
@@ -38776,6 +38687,13 @@
       "verifiedBy": "owner-approved-live-probe-qwen-free-quota-text-2026-10-11",
       "status": "CORRECTION",
       "notes": "The owner asked for every text offering in the QwenCloud free quota inventory to be checked and approved the calls. One request of at most 8 output tokens went to each of the 127 chat offerings through the international compatible-mode endpoint at 2026-10-11T16:29Z. 57 answered. 44 returned 404 model_not_found, 24 returned 403 access_denied and 2 (qvq-max-latest, qvq-max-2025-03-25) are not served in compatible mode. Of the 71 chat offerings that carry the 2026-10-09T16:00Z retiresAt recorded on 2026-10-02 from the Model Studio retirement notices, 69 are refused, which agrees with the second reminder the provider sent the owner for the 2026-10-10 decommissioning; qwen-vl-ocr and qwen-turbo still answer, neither is offered by the free picker and the free row of qwen-turbo ended on 2026-08-22, so their dates are left as recorded. qwen3-max-2025-10-30 (qwen-quota-196) carried no retirement and is refused with access_denied, so it now carries retiresAt set to the instant of that refusal, which is the latest it can have stopped serving, not a date the provider announced. No offering the free picker serves was refused. qwen-plus and qwen-turbo answered although their free rows are expired, so those two calls were billed at list price; they should not be probed again."
+    },
+    {
+      "id": "verification/2026-10-13/87",
+      "date": "2026-10-13",
+      "verifiedBy": "owner-direction-2026-10-13",
+      "status": "ROSTER",
+      "notes": "openrouter-free (OpenRouter Free Auto, openrouter/free) leaves the catalog on the owner's instruction of 2026-10-13: the free router kept answering that it was overloaded, and it was the only model the Free plan could reach. Asked what should serve Free instead, the owner chose the fast OpenAI family. The row, its route, its synced record and its probe are removed and the id is recorded in catalog/retired-models.json so a conversation that names it still renders a label. The Free Auto slots free_workhorse and free_workhorse_fast move to family:openai/gpt-fast and the slot router_zero_cost is deleted, because no slot is zero cost any more. gpt-6-luna takes tierPolicy.minTier free, which with its existing place in tierAllowedModels.economy is what admits it to the Free plan; a Free turn on it is metered against the Free usage windows in packages/contracts/types/src/managed-usage-limits.ts. The two retired :free aliases that redirected to the router now redirect to the same family. No live provider call was made for this change."
     }
   ],
   "retiredModels": {
@@ -39851,6 +39769,39 @@
       "id": "nvidia/nemotron-3-ultra-550b-a55b",
       "metadataPreserved": false
     },
+    "openrouter-free": {
+      "id": "openrouter-free",
+      "displayName": "OpenRouter Free Auto",
+      "provider": "open_router",
+      "developer": "openrouter",
+      "modelType": "chat",
+      "contextWindow": 200000,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": false,
+        "webSearch": false,
+        "deepResearch": false,
+        "codeExecution": false,
+        "promptCaching": false
+      },
+      "released": "February 1, 2026",
+      "retiredOn": "2026-10-13",
+      "replacedBy": "gpt-6-luna",
+      "metadataSource": "catalog/models.curation.json#openrouter-free",
+      "metadataPreserved": true
+    },
     "qwen-3.6-27b": {
       "id": "qwen-3.6-27b",
       "displayName": "Qwen3.6 27B",
@@ -40421,14 +40372,8 @@
         "byok": "premium"
       },
       "tierAllowedSlots": {
-        "free": ["free_workhorse", "free_workhorse_fast", "router_zero_cost"],
-        "basic": [
-          "workhorse_general",
-          "reasoning_economy",
-          "coding_fast",
-          "vision_fast",
-          "router_zero_cost"
-        ],
+        "free": ["free_workhorse", "free_workhorse_fast"],
+        "basic": ["workhorse_general", "reasoning_economy", "coding_fast", "vision_fast"],
         "pro": [
           "workhorse_general",
           "general_balanced",
@@ -40443,8 +40388,7 @@
           "search_premium",
           "computer_use_balanced",
           "image_generation",
-          "vision_fast",
-          "router_zero_cost"
+          "vision_fast"
         ],
         "max": [
           "workhorse_general",
@@ -40464,8 +40408,7 @@
           "computer_use_balanced",
           "computer_use_premium",
           "image_generation",
-          "vision_fast",
-          "router_zero_cost"
+          "vision_fast"
         ],
         "enterprise": [
           "workhorse_general",
@@ -40485,8 +40428,7 @@
           "computer_use_balanced",
           "computer_use_premium",
           "image_generation",
-          "vision_fast",
-          "router_zero_cost"
+          "vision_fast"
         ],
         "byok": [
           "workhorse_general",
@@ -40506,8 +40448,7 @@
           "computer_use_balanced",
           "computer_use_premium",
           "image_generation",
-          "vision_fast",
-          "router_zero_cost"
+          "vision_fast"
         ]
       },
       "providerPolicies": {
@@ -40748,19 +40689,14 @@
       },
       "slots": {
         "free_workhorse": {
-          "modelKey": "openrouter-free",
+          "modelKey": "gpt-6-luna",
           "label": "Free Workhorse",
           "description": "Shared free workhorse route. Model and provider are selected by the canonical registry."
         },
         "free_workhorse_fast": {
-          "modelKey": "openrouter-free",
+          "modelKey": "gpt-6-luna",
           "label": "Free Workhorse Fast",
           "description": "Shared free workhorse fast route. Model and provider are selected by the canonical registry."
-        },
-        "router_zero_cost": {
-          "modelKey": "openrouter-free",
-          "label": "Router Zero Cost",
-          "description": "Shared router zero cost route. Model and provider are selected by the canonical registry."
         },
         "general_fast": {
           "modelKey": "gpt-6-luna",
@@ -40985,13 +40921,7 @@
       }
     },
     "legacyTiers": {
-      "economy": [
-        "gpt-6-luna",
-        "gemini-3.5-flash-lite",
-        "gemini-3.8-flash",
-        "qwen-3.8-flash",
-        "openrouter-free"
-      ],
+      "economy": ["gpt-6-luna", "gemini-3.5-flash-lite", "gemini-3.8-flash", "qwen-3.8-flash"],
       "pro_additions": [
         "gpt-6.1-sol",
         "claude-sonnet-5-5",

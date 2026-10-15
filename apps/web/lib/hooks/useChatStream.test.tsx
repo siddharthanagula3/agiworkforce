@@ -13,7 +13,7 @@ import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import {
   listCanonicalModels,
   getProviderOfferings,
-  getRoutingSlotModel,
+  getDefaultModelFor,
   AGENT_EVENT_SCHEMA_VERSION,
 } from '@agiworkforce/types';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
@@ -363,7 +363,7 @@ describe('useChatStream', () => {
   });
 
   it('shows the answer a ready free model gave when Free Auto had reached its limit', async () => {
-    const freeRouter = getRoutingSlotModel('router_zero_cost');
+    const freeRouter = getDefaultModelFor('free', 'chat');
     const [fallbackKey] = Object.entries(getProviderOfferings()).find(
       ([, offering]) => offering.provider === 'qwen' && offering.quotaProbeProtocol === 'chat',
     )!;
@@ -420,7 +420,7 @@ describe('useChatStream', () => {
     await act(async () => {
       await result.current.sendMessage('Hello', {
         conversationId: TEMP_CONVERSATION.id,
-        model: getRoutingSlotModel('router_zero_cost'),
+        model: getDefaultModelFor('free', 'chat'),
       });
     });
 
@@ -432,7 +432,7 @@ describe('useChatStream', () => {
   });
 
   it('shows the free limit card, without reading the free catalogue, when Free Auto is refused', async () => {
-    const freeRouter = getRoutingSlotModel('router_zero_cost');
+    const freeRouter = getDefaultModelFor('free', 'chat');
     vi.mocked(fetch).mockResolvedValueOnce(
       new Response(
         JSON.stringify({

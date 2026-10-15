@@ -344,7 +344,7 @@ describe('runToolLoop, a clean but empty provider step', () => {
     expect(output).not.toContain('x_stream_error');
   });
 
-  it('can retry the observed 4096-token Free router ceiling with 8192 tokens', async () => {
+  it('can retry the observed 4096-token Free plan model ceiling with 8192 tokens', async () => {
     const processed = transientRetryProcessed();
     processed.llmRequest.max_tokens = 4096;
     mockBuildToolLoopStream

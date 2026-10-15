@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getDefaultModelFor, getRoutingSlotModel } from '@agiworkforce/types';
+import { getDefaultModelFor } from '@agiworkforce/types';
 
 type ScanModule0 = typeof import('@/lib/logger');
 type ComplianceModule = typeof import('@agiworkforce/compliance');
@@ -33,7 +33,6 @@ const TASK_TYPES = [
   'agentic',
 ] as const;
 const FREE_MODEL = getDefaultModelFor(FREE_TIER, 'chat');
-const US_FALLBACK_MODEL = getRoutingSlotModel('workhorse_general');
 
 describe('Free while the region checks no developer country', () => {
   beforeEach(() => {
@@ -55,30 +54,19 @@ describe('Free once the region allows only US-developed models', () => {
     policy.usOnly = true;
   });
 
-  it('keeps a Free Auto turn on Auto instead of naming the refused free model', () => {
-    expect(freeModelRefusedInRegion({ model: 'auto' }, FREE_TIER)).toBe(true);
+  it('keeps a Free Auto turn on the plan model, which is US-developed', () => {
+    expect(freeModelRefusedInRegion({ model: 'auto' }, FREE_TIER)).toBe(false);
     expect(freeModelRefusedInRegion({ model: 'auto' }, 'basic')).toBe(false);
   });
 
-  it.each(TASK_TYPES)('serves Free %s from the US-developed fallback slot', (taskType) => {
+  it.each(TASK_TYPES)('serves Free %s from the plan model without the fallback', (taskType) => {
     const decision = resolveWebCloudModelRoute('auto', FREE_TIER, taskType);
-    expect(decision).toMatchObject({
-      status: 'selected',
-      modelKey: US_FALLBACK_MODEL,
-      reason: 'jurisdiction_fallback',
-    });
+    expect(decision).toMatchObject({ status: 'selected', modelKey: FREE_MODEL });
+    if (decision.status === 'selected') expect(decision.reason).not.toBe('jurisdiction_fallback');
   });
 
-  it('does not let Free name the fallback model outside that case', () => {
-    const decision = resolveWebCloudModelRoute(US_FALLBACK_MODEL, FREE_TIER, 'general');
-    expect(decision).toMatchObject({ status: 'unavailable', code: 'explicit_model_ineligible' });
-  });
-
-  it('refuses the free model by name as not available in the region', () => {
+  it('serves the plan model by name in the region', () => {
     const decision = resolveWebCloudModelRoute(FREE_MODEL, FREE_TIER, 'general');
-    expect(decision).toMatchObject({
-      status: 'unavailable',
-      code: 'model_not_available_in_region',
-    });
+    expect(decision).toMatchObject({ status: 'selected', modelKey: FREE_MODEL });
   });
 });

@@ -200,7 +200,10 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
 import type { E2BUnavailableCause } from '@/lib/e2b/unavailability';
-import { nativeSearchToolName } from '@/lib/web-search/required-search';
+import {
+  nativeSearchToolName,
+  webSearchToolOfferPolicyFor,
+} from '@/lib/web-search/required-search';
 import type { UsageAttribution } from '@/lib/billing/usage-attribution';
 import { reserveGroundingPoolUses } from '@/lib/web-search/grounding-pool';
 import {
@@ -4153,7 +4156,10 @@ export async function* runToolLoop(
   const freeWebSearchMustFailClosed =
     processed.chatSurface === 'web' &&
     searchRequired &&
-    getModelMetadataById(processed.requestedModel)?.webSearchToolOfferPolicy === 'required_only';
+    webSearchToolOfferPolicyFor({
+      model: processed.requestedModel,
+      planTier: processed.subscriptionTier,
+    }) === 'required_only';
   const serverOwnedSearchQuery = redactAuditedSecrets(
     lastUserTurnText(processed.chatRequest?.messages),
   )

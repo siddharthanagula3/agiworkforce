@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getProviderOfferings, getRoutingSlotModel } from '@agiworkforce/types';
+import { getProviderOfferings, getDefaultModelFor } from '@agiworkforce/types';
 import { useChatStore, type MessageMetadata } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
@@ -43,7 +43,7 @@ const FREE_LIMIT_REACHED = 'free_limit_reached';
 const [FALLBACK_MODEL] = Object.entries(getProviderOfferings()).find(
   ([, offering]) => offering.provider === 'qwen' && offering.quotaProbeProtocol === 'chat',
 )!;
-const FREE_AUTO = getRoutingSlotModel('router_zero_cost');
+const FREE_AUTO = getDefaultModelFor('free', 'chat');
 const TURN_ENDPOINTS = new Set([
   chatCompletionEndpoint(FREE_AUTO),
   chatCompletionEndpoint(FALLBACK_MODEL),

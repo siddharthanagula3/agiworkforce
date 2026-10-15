@@ -5,6 +5,7 @@ import privacy_2026_09_21 from './privacy/2026-09-21.json';
 import privacy_2026_09_22 from './privacy/2026-09-22.json';
 import privacy_2026_09_27 from './privacy/2026-09-27.json';
 import privacy_2026_09_29 from './privacy/2026-09-29.json';
+import privacy_2026_10_08 from './privacy/2026-10-08.json';
 import acceptableUse_2026_08_05 from './acceptableUse/2026-08-05.json';
 import acceptableUse_2026_09_22 from './acceptableUse/2026-09-22.json';
 import acceptableUse_2026_09_27 from './acceptableUse/2026-09-27.json';
@@ -15,6 +16,7 @@ import subprocessors_2026_09_12 from './subprocessors/2026-09-12.json';
 import subprocessors_2026_09_21 from './subprocessors/2026-09-21.json';
 import subprocessors_2026_09_22 from './subprocessors/2026-09-22.json';
 import subprocessors_2026_09_28 from './subprocessors/2026-09-28.json';
+import subprocessors_2026_10_08 from './subprocessors/2026-10-08.json';
 import security_2026_08_14 from './security/2026-08-14.json';
 import sla_2026_09_04 from './sla/2026-09-04.json';
 import refunds_2026_08_13 from './refunds/2026-08-13.json';
@@ -32,8 +34,10 @@ import copyright_2026_08_06 from './copyright/2026-08-06.json';
 import copyright_2026_09_27 from './copyright/2026-09-27.json';
 import modelLicenses_2026_08_06 from './modelLicenses/2026-08-06.json';
 import indiaPrivacy_2026_08_13 from './indiaPrivacy/2026-08-13.json';
+import indiaPrivacy_2026_10_08 from './indiaPrivacy/2026-10-08.json';
 import dataRights_2026_08_13 from './dataRights/2026-08-13.json';
 import dataUse_2026_08_14 from './dataUse/2026-08-14.json';
+import dataUse_2026_10_08 from './dataUse/2026-10-08.json';
 import disclaimer_2026_09_02 from './disclaimer/2026-09-02.json';
 import agentPermissions_2026_09_02 from './agentPermissions/2026-09-02.json';
 import agentPermissions_2026_09_22 from './agentPermissions/2026-09-22.json';
@@ -50,6 +54,7 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-09-22': privacy_2026_09_22,
     '2026-09-27': privacy_2026_09_27,
     '2026-09-29': privacy_2026_09_29,
+    '2026-10-08': privacy_2026_10_08,
   },
   acceptableUse: {
     '2026-08-05': acceptableUse_2026_08_05,
@@ -68,6 +73,7 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-09-21': subprocessors_2026_09_21,
     '2026-09-22': subprocessors_2026_09_22,
     '2026-09-28': subprocessors_2026_09_28,
+    '2026-10-08': subprocessors_2026_10_08,
   },
   security: {
     '2026-08-14': security_2026_08_14,
@@ -107,12 +113,14 @@ export const ARCHIVED_POLICY_TEXT = {
   },
   indiaPrivacy: {
     '2026-08-13': indiaPrivacy_2026_08_13,
+    '2026-10-08': indiaPrivacy_2026_10_08,
   },
   dataRights: {
     '2026-08-13': dataRights_2026_08_13,
   },
   dataUse: {
     '2026-08-14': dataUse_2026_08_14,
+    '2026-10-08': dataUse_2026_10_08,
   },
   disclaimer: {
     '2026-09-02': disclaimer_2026_09_02,

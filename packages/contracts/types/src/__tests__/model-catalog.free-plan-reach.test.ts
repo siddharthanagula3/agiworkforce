@@ -1,21 +1,23 @@
+import { modelRegistry } from '@agiworkforce/model-registry';
 import { describe, expect, it } from 'vitest';
 
 import modelsCatalog from '../models.json' with { type: 'json' };
 import {
   canAccessModelForSubscriptionTier,
   getAllowedModelsForTier,
-  getModelMetadataById,
+  getDefaultModelFor,
+  getRoutingSlotModel,
   listCanonicalModels,
   normalizeModelId,
+  type RoutingSlot,
 } from '../model-catalog';
 
 /**
- * The free plan is priced at zero to the customer, so it has to be priced at
- * zero to the company: the only models it may reach are the ones a provider
- * gives away. Price is the source of truth here rather than a hand-kept list,
- * which is what makes this survive an upstream re-sync. A model that stops
- * being free upstream stops being free-eligible the moment the catalog records
- * its new price, and this fails until the tier tables agree.
+ * The free plan is priced at zero to the customer and paid for by the company
+ * out of the Free usage windows, so what it may reach is decided in one place:
+ * the Free routing slots. A model that is merely marked free in the tier tables
+ * without a slot serving it would be selectable and never routed, and a slot
+ * serving a model the tables refuse would route to a 403.
  */
 const FREE_TIER = 'free';
 
@@ -23,15 +25,25 @@ const freeReachableModelIds = listCanonicalModels()
   .map((model) => model.id)
   .filter((id) => canAccessModelForSubscriptionTier(id, FREE_TIER));
 
+const freeSlotModelIds = [
+  ...new Set(
+    modelRegistry.policies.auto.tierAllowedSlots.free.map((slot) =>
+      getRoutingSlotModel(slot as RoutingSlot),
+    ),
+  ),
+];
+
 describe('every model a free account can reach', () => {
   it('is a non-empty set, or the free plan serves nothing', () => {
     expect(freeReachableModelIds.length).toBeGreaterThan(0);
   });
 
-  it.each(freeReachableModelIds)('%s costs nothing to serve', (modelId) => {
-    const metadata = getModelMetadataById(modelId);
-    expect(metadata?.inputCost, `${modelId} bills for input`).toBe(0);
-    expect(metadata?.outputCost, `${modelId} bills for output`).toBe(0);
+  it('is exactly what the free routing slots serve', () => {
+    expect([...freeReachableModelIds].sort()).toEqual([...freeSlotModelIds].sort());
+  });
+
+  it('includes the model a free chat opens on', () => {
+    expect(freeReachableModelIds).toContain(getDefaultModelFor(FREE_TIER, 'chat'));
   });
 
   it('is exactly the economy models the free plan is entitled to', () => {

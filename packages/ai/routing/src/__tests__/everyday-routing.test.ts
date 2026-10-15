@@ -79,11 +79,11 @@ describe('everyday chat on paid plans', () => {
     },
   );
 
-  it('keeps Free on its zero-cost slots', () => {
+  it('keeps Free on its own slots', () => {
     const decision = resolveAutoRoute(webAuto({ subscriptionTier: 'free' }));
     expect(decision).toMatchObject({
       status: 'selected',
-      modelKey: getRoutingSlotModel('router_zero_cost'),
+      modelKey: getRoutingSlotModel('free_workhorse'),
     });
   });
 });

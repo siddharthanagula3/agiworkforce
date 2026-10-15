@@ -2,13 +2,13 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-07
+Last updated: 2026-10-13
 
 A free quota model is a QwenCloud model served from the promotional free quota
 on the company's QwenCloud account. Free plan accounts reach one in two ways:
 
 - **Free Auto.** The Free plan's default model. Which of the free quota lane and
-  the OpenRouter free router answers a Free Auto turn first is a configuration
+  the Free plan model answers a Free Auto turn first is a configuration
   value; see Free Auto: which route answers first.
 - **Picked by name.** Every free quota chat model that is ready is listed in the
   model picker's Free section, and a turn sent to one goes to
@@ -31,7 +31,7 @@ The gate logic is `decideFreeQuotaOffering` in
 ## Before anything can serve
 
 Every one of these has to hold in the deployment, or no free quota model serves
-and every Free Auto turn is answered by the free router:
+and every Free Auto turn is answered by the Free plan model:
 
 1. `QWEN_API_KEY` is set. It must be a general-purpose pay-as-you-go key: Model
    Studio states that "Token Plan or Coding Plan dedicated API keys do not
@@ -53,7 +53,7 @@ listed in `AGI_PLATFORM_ADMIN_USER_IDS`, can open the panel or call
 ## Free Auto: which route answers first
 
 The owner decided on 2026-10-07 that a Free Auto turn tries the free quota lane
-first and the OpenRouter free router second, so the allocations that are about
+first and the Free plan model second, so the allocations that are about
 to expire are spent before they lapse. Free quota chat has no cap per account:
 each allocation's shared allowance is the limit.
 
@@ -75,16 +75,17 @@ each allocation's shared allowance is the limit.
 - `quotaFirstByteTimeoutMs` is how long the provider has, from the moment the
   request is sent to it, to return the first frame of its answer.
 
-To go back to the free router first, change the one line to
+To go back to the Free plan model first, change the one line to
 `"order": "router_first"` and deploy. No code changes with it. Under
-`router_first` the lane is tried only after the free router refuses a turn
-because its shared pool is spent, on the first ready model of
+`router_first` the lane is tried only after the Free plan model's turn is
+refused with `free_allowance_exhausted` or `free_capacity_unavailable`, on the
+first ready model of
 `freeAutoFallback.offeringKeys`, and the reply carries the notice that another
 model answered.
 
 ### Which turns the lane takes first
 
-Only a turn that all of these describe; every other turn goes to the free router
+Only a turn that all of these describe; every other turn goes to the Free plan model
 exactly as under `router_first`:
 
 - a Free plan account signed in to the web app, not an API key, the browser
@@ -104,7 +105,7 @@ exactly as under `router_first`:
 The attempt runs inside `dispatchChatCompletions` in
 `apps/web/app/api/llm/v1/chat/completions/route.ts`, after the sign-in, rate
 limit, terms, concurrent-turn, managed compute kill-switch, workspace policy and
-workspace budget checks, and before the free router's own request processing.
+workspace budget checks, and before the Free plan model's own request processing.
 `serveFreeQuotaTurn` then applies the same gates as a model picked by name:
 plan, conversation ownership, workspace privacy, model policy and retention,
 moderation, the content safety preference, secret handling, the provider egress
@@ -147,25 +148,26 @@ preview models the terms review leaves out. Of the 73:
 | 2026-10-31 to 2026-12-13                | 8           | 7,197,131     |
 
 An allocation stops serving at 00:00 UTC on the day its quota ends. From
-2026-12-13 none is left and every Free Auto turn is the free router's.
+2026-12-13 none is left and every Free Auto turn is the Free plan model's.
 
 ### What ends the attempt
 
-| Outcome                                                                                       | What happens                                                                  |
-| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| The first frame of the answer arrives                                                         | The lane answers. A later failure follows the lane's own error handling.      |
-| Platform moderation refuses the message                                                       | The refusal is returned. No provider is asked.                                |
-| The lane already took a turn with the same message id and idempotency key                     | The duplicate refusal is returned. The turn is not answered twice.            |
-| No allocation is ready, a gate refuses, or the provider refuses or fails before a first frame | The free router takes the turn, with its own checks, as under `router_first`. |
+| Outcome                                                                                       | What happens                                                                      |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| The first frame of the answer arrives                                                         | The lane answers. A later failure follows the lane's own error handling.          |
+| Platform moderation refuses the message                                                       | The refusal is returned. No provider is asked.                                    |
+| The lane already took a turn with the same message id and idempotency key                     | The duplicate refusal is returned. The turn is not answered twice.                |
+| No allocation is ready, a gate refuses, or the provider refuses or fails before a first frame | The Free plan model takes the turn, with its own checks, as under `router_first`. |
 
 The allowance reserved for a turn the provider refused with an answer (an HTTP
-error) is given back before the free router is tried. When the provider request
+error) is given back before the Free plan model is tried. When the provider request
 failed with no answer, timed out, or was cut off, how much it spent is unknown,
 so the reservation stands and the meter errs toward stopping that allocation
 early.
 
-If the free router then refuses because its shared pool is spent, the refusal
-is returned with a ready free quota model to switch to when there is one. The
+If the Free plan model's turn is then refused with one of those two codes, the
+refusal is returned with a ready free quota model to switch to when there is
+one. The
 turn is not sent to the lane a second time.
 
 ### What the reader sees
@@ -173,17 +175,17 @@ turn is not sent to the lane a second time.
 - The picker entry is the catalogue's name for Free Auto. A reply the lane
   answered is labelled with the model that answered and "via free pool", and
   carries no notice.
-- A reply the free router answered after the lane handed the turn on is
-  labelled as the free router's replies always are, with no notice: it is the
+- A reply the Free plan model answered after the lane handed the turn on is
+  labelled as the Free plan model's replies always are, with no notice: it is the
   model the reader picked.
-- The notice that another model answered appears only when the free router
+- The notice that another model answered appears only when the Free plan model
   refused and a free quota model then answered.
 
 ### Telling which route is answering
 
 Each attempt logs one line: `[free-lane] a free quota model answered a Free Auto
 turn first`, or `[free-lane] the free quota lane did not answer a Free Auto
-turn; the free router takes it` with a `cause`: `no_ready_offering`, a refusal
+turn; the Free plan model takes it` with a `cause`: `no_ready_offering`, a refusal
 code such as `provider_rate_limited` or `free_quota_exhausted`,
 `failed_before_first_frame`, `connector_tools_not_off` or `earlier_attachment`.
 `no_ready_offering` on every turn means a gate under Before anything can serve
@@ -588,7 +590,7 @@ deployment may lack them, so those answer 200.
 
 ## What users see when a gate lapses
 
-- A Free Auto turn is answered by the free router. Nothing tells the reader the
+- A Free Auto turn is answered by the Free plan model. Nothing tells the reader the
   lane was skipped.
 - The model picker marks every free quota model "Not available right now"
   (`apps/web/features/models/lib/free-quota-types.ts`).

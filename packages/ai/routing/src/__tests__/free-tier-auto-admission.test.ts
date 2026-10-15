@@ -40,17 +40,19 @@ describe('every slot the free tier may route to', () => {
     ).toBe(true);
   });
 
-  it.each([...freeSlots])('%s carries a model priced at zero in and out', (slotId) => {
+  it.each([...freeSlots])('%s carries a model the catalog prices', (slotId) => {
     const modelKey = registry.policies.auto.slots[slotId]?.modelKey as string;
     const metadata = getModelMetadataById(modelKey);
     expect(metadata, `${modelKey} is not in the compiled catalog`).toBeTruthy();
-    expect(metadata?.inputCost, `${modelKey} bills for input on the free plan`).toBe(0);
-    expect(metadata?.outputCost, `${modelKey} bills for output on the free plan`).toBe(0);
+    expect(
+      Number.isFinite(metadata?.inputCost) && Number.isFinite(metadata?.outputCost),
+      `${modelKey} has no price, so a free turn on it could not be metered against the Free windows`,
+    ).toBe(true);
   });
 });
 
 // The bare resolver cannot serve agentic without a harness context, so the task
-// list here is the chat set; the zero-price checks below still cover every task.
+// list here is the chat set; the reach checks below still cover every task.
 const CHAT_TASKS: readonly RoutingTaskType[] = ['simple_chat', 'general', 'coding', 'reasoning'];
 
 const ALL_TASKS = Object.keys(registry.policies.auto.tasks) as RoutingTaskType[];
@@ -68,7 +70,7 @@ describe('a free account routed through Auto', () => {
     expect(decision.modelKey).toBe(getDefaultModelFor(FREE_TIER, 'chat'));
   });
 
-  it.each([...ALL_TASKS])('is never dispatched to a priced model for %s', (taskType) => {
+  it.each([...ALL_TASKS])('is never dispatched outside the free plan for %s', (taskType) => {
     const decision = resolveAutoRoute({
       selection: 'auto',
       taskType,
@@ -81,8 +83,6 @@ describe('a free account routed through Auto', () => {
         canAccessModelForSubscriptionTier(modelKey, FREE_TIER),
         `free Auto offered ${modelKey}, which the free plan may not reach`,
       ).toBe(true);
-      expect(getModelMetadataById(modelKey)?.inputCost).toBe(0);
-      expect(getModelMetadataById(modelKey)?.outputCost).toBe(0);
     }
   });
 

@@ -2919,7 +2919,7 @@ export function getDefaultModelFor(
 ): string {
   const accessTier = normalizeSubscriptionAccessTier(tier ?? 'free');
   if (accessTier === 'free' && kind === 'chat') {
-    return getRoutingSlotModel('router_zero_cost');
+    return getRoutingSlotModel('free_workhorse');
   }
   const normalizedTier = accessTier === 'basic' ? 'free' : normalizeProductTier(tier);
   const policy = getTierPolicy(normalizedTier);
