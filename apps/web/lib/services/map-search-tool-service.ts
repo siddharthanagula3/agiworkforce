@@ -24,15 +24,20 @@ export function isMapSearchTool(name: string): boolean {
 
 const MAP_SEARCH_GEO_CONTEXT_RE =
   /\b(?:on|using|via)\s+(?:a\s+|the\s+|google\s+|open\s*street\s*)?maps?\b|\bmaps?\s+of\b|\b(?:draw|show)\s+(?:me\s+)?(?:a\s+|the\s+)?maps?\b/i;
+// Each phrase needs a travel or place cue, because a match forces the map
+// tool: bare "route", "where is", "directions" and "how far" are everyday
+// words in coding and writing requests.
 const MAP_SEARCH_LOCATION_PHRASE_RE =
-  /\bnearby\b|\bnear me\b|\bwhere is\b|\bwhere are\b|\broutes?\b|\bdirections\b|\bdrive from\b|\bdriving from\b|\broad ?trip\b|\bitinerary\b|\bhow far\b/i;
+  /\bnearby\b|\bnear me\b|\bwhere\s+(?:is|are)\s+(?:the\s+)?(?:nearest|closest)\b|\bwhere\s+(?:is|are)\b[^.?!\n]{1,80}?\blocated\b|\broutes?\s+(?:from|between)\b|\b(?:driving|walking|cycling|biking|transit|hiking|scenic|fastest|shortest|quickest)\s+(?:routes?|directions)\b|\b(?:get|give\s+me|show\s+me|need|want)\s+directions\b|\bdirections\s+from\b|\bdrive from\b|\bdriving from\b|\broad ?trip\b|\bitinerary\b|\bhow\s+far\s+(?:is|are)\b[^.?!\n]{1,80}?\bfrom\b|\bhow\s+far\s+away\b/i;
 const MAP_SEARCH_NEAR_PROPER_NOUN_RE = /\bnear\s+[A-Z]/;
+const MAP_SEARCH_TO_PROPER_NOUN_RE = /\b(?:[Rr]outes?|[Dd]irections)\s+to\s+[A-Z]/;
 
 export function hasMapSearchIntent(userMessage: string): boolean {
   return (
     MAP_SEARCH_GEO_CONTEXT_RE.test(userMessage) ||
     MAP_SEARCH_LOCATION_PHRASE_RE.test(userMessage) ||
-    MAP_SEARCH_NEAR_PROPER_NOUN_RE.test(userMessage)
+    MAP_SEARCH_NEAR_PROPER_NOUN_RE.test(userMessage) ||
+    MAP_SEARCH_TO_PROPER_NOUN_RE.test(userMessage)
   );
 }
 
@@ -84,8 +89,7 @@ function providerSearchUrl(provider: 'google_maps' | 'openstreetmap', query: str
 }
 
 export type MapSearchToolOutcome =
-  | { ok: true; content: string; card: InteractiveCard }
-  | { ok: false; content: string };
+  { ok: true; content: string; card: InteractiveCard } | { ok: false; content: string };
 
 export const MAP_SEARCH_TILES_ACROSS = 2.5;
 export const MAP_SEARCH_TILES_DOWN = 340 / 256;

@@ -81,6 +81,13 @@ describe('map search tool service', () => {
     'Explain in about 300 words how a hash map handles collisions, with one short code example in Python.',
     'Explain how a memory map works in operating systems.',
     'What is a treemap chart?',
+    'Explain how Next.js API routes work.',
+    'Add a route handler for /api/users and route errors to the logger.',
+    'Where is the bug in this function?',
+    'Where are the tests for the parser?',
+    'How far along is the migration?',
+    'Follow the directions in the README to install it.',
+    '## Workshop\n\n- [x] Book the room[^1]\n\n[^1]: Confirm the route with the venue.',
   ])('does not detect map search intent for %s', (userMessage) => {
     expect(hasMapSearchIntent(userMessage)).toBe(false);
   });
@@ -90,6 +97,12 @@ describe('map search tool service', () => {
     'Show coffee shops near me on a map.',
     'Plan a driving route from Austin to Marfa.',
     'Find coffee shops near Union Square.',
+    'What is the best route to Austin?',
+    'Get directions to the airport.',
+    'Where is the nearest pharmacy?',
+    'Where is Union Square located?',
+    'How far is Austin from Dallas?',
+    'Plan a road trip through Utah.',
   ])('detects map search intent for %s', (userMessage) => {
     expect(hasMapSearchIntent(userMessage)).toBe(true);
   });
