@@ -3847,6 +3847,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&workspace);
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn ancestors_of_roots_and_git_metadata_get_metadata_reads_only() {
         let tree = scratch_tree("metadata");
@@ -3890,11 +3891,15 @@ mod tests {
             "(allow file-read* (subpath \"{}\"))",
             tree.join("checkouts").display()
         )));
+        let _ = std::fs::remove_dir_all(&tree);
+    }
+
+    #[test]
+    fn ancestor_directories_lists_each_shared_parent_once() {
         assert_eq!(
             ancestor_directories(&[PathBuf::from("/a/b/c"), PathBuf::from("/a/d")]),
             vec![PathBuf::from("/a"), PathBuf::from("/a/b")]
         );
-        let _ = std::fs::remove_dir_all(&tree);
     }
 
     /// Git inside the real narrow profile, in a repository and in one of its
