@@ -115,6 +115,7 @@ export interface ProjectChatHandoff extends StoredProjectChatHandoff {
 
 const pendingAttachments = new Map<string, File[]>();
 const acknowledgedHandoffIds = new Set<string>();
+const handoffPages = new Map<string, object>();
 
 function createHandoffId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `project-handoff-${Date.now()}`;
@@ -192,11 +193,18 @@ export function readProjectChatHandoff(
   };
 }
 
+export function claimProjectChatHandoff(handoffId: string, page: object): boolean {
+  const claimedBy = handoffPages.get(handoffId);
+  if (claimedBy === undefined) handoffPages.set(handoffId, page);
+  return claimedBy === undefined || claimedBy === page;
+}
+
 export function acknowledgeProjectChatHandoff(
   storage: ProjectChatHandoffStorage,
   handoffId: string,
 ): void {
   acknowledgedHandoffIds.add(handoffId);
+  handoffPages.delete(handoffId);
   let raw: string | null = null;
   try {
     raw = storage.getItem(PROJECT_CHAT_HANDOFF_KEY);

@@ -5,6 +5,7 @@ import { getProviderOfferings } from '@agiworkforce/types';
 
 import {
   acknowledgeProjectChatHandoff,
+  claimProjectChatHandoff,
   HANDOFF_CARRIES_EVERY_COMPOSER_FIELD,
   PROJECT_CHAT_HANDOFF_KEY,
   PROJECT_CHAT_HANDOFF_MAX_AGE_MS,
@@ -176,6 +177,22 @@ describe('project chat handoff', () => {
     expect(readProjectChatHandoff(storage, 'project-1', 'another-handoff')?.sendable).toBe(false);
     expect(readProjectChatHandoff(storage, 'project-1', null)?.sendable).toBe(false);
     expect(readProjectChatHandoff(storage, 'project-1', id)?.sendable).toBe(true);
+  });
+
+  it('belongs to the first page that claims it, Strict Mode replays of that page included', () => {
+    const storage = memoryStorage();
+    const id = saveProjectChatHandoff(storage, {
+      content: 'Claimed once',
+      projectId: 'project-1',
+      meta,
+    });
+
+    const firstPage = {};
+    const laterPage = {};
+
+    expect(claimProjectChatHandoff(id, firstPage)).toBe(true);
+    expect(claimProjectChatHandoff(id, firstPage)).toBe(true);
+    expect(claimProjectChatHandoff(id, laterPage)).toBe(false);
   });
 
   describe('once it has waited too long', () => {

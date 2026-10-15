@@ -498,6 +498,21 @@ describe('the first message sent from a project page', () => {
     expect(sessionStorage.getItem(PROJECT_CHAT_HANDOFF_KEY)).toBeNull();
   });
 
+  // Fails on 97f2481cc6: a second visit to the same handoff URL, such as Back
+  // to a page left while it waited, sent the handoff as soon as the plan read.
+  it('gives the draft back instead of sending when a page it waited on is opened again', async () => {
+    planRequestNeverAnswers();
+    sendFromProjectPage('chat');
+    const left = render(<WebChatPage />);
+    left.unmount();
+
+    signInOnPlan(WORK_TIER);
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(TURN_NOT_STARTED));
+    expect(mocks.composerPrefill).toHaveBeenCalledWith(PROJECT_DRAFT);
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+  });
+
   it('sends nothing once the page is left while it is still waiting for the plan', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     planRequestNeverAnswers();

@@ -368,6 +368,7 @@ import {
 } from '@features/projects';
 import {
   acknowledgeProjectChatHandoff,
+  claimProjectChatHandoff,
   PROJECT_CHAT_HANDOFF_PARAM,
   PROJECT_CHAT_HANDOFF_SETTLE_MS,
   readProjectChatHandoff,
@@ -2557,7 +2558,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
 
   // The project-detail composer is itself a Send control, not a prefill
-  // shortcut. Only the page it navigated to may send its handoff, and only
+  // shortcut. Only the visit it navigated to may send its handoff, and only
   // after Clerk resolves and the plan request has settled (and, on Free, the
   // model promotion has been read), or once that wait runs out. It is
   // acknowledged when the user row is durable (before provider egress). The
@@ -2568,6 +2569,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const projectHandoffModelRestoredRef = useRef<string | null>(null);
   const projectHandoffWaitRef = useRef<{ id: string; endsAt: number } | null>(null);
   const [projectHandoffWaitEnded, setProjectHandoffWaitEnded] = useState<string | null>(null);
+  const projectHandoffPage = useRef<object>({});
   const planRequestFailed = useBillingStore((state) => state.error !== null);
   const planRequestSignedOut = useBillingStore((state) => state.unauthenticated);
   const projectHandoffModelRulesSettled =
@@ -2586,7 +2588,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         return undefined;
       }
 
-      if (!handoff.sendable || planRequestSignedOut) {
+      const sendHere =
+        handoff.sendable &&
+        !planRequestSignedOut &&
+        claimProjectChatHandoff(handoff.id, projectHandoffPage.current);
+      if (!sendHere) {
         acknowledgeProjectChatHandoff(sessionStorage, handoff.id);
         setComposerPrefill(handoff.content);
         if (handoff.attachments) setRestoredAttachments(handoff.attachments);
