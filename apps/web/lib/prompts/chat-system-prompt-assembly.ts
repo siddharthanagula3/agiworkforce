@@ -26,7 +26,11 @@ const FILE_CREATION_TOOL_NAMES = [
   'create_office_file',
 ];
 
-export type ChatTurnMemory = 'on' | 'off';
+/**
+ * `unavailable` is a memory that could not be read for this turn. It is neither
+ * on nor off, so it renders no memory line rather than either of them.
+ */
+export type ChatTurnMemory = 'on' | 'off' | 'unavailable';
 
 export interface ArtifactMarkers {
   readonly html: string;

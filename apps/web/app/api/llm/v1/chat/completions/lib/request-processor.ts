@@ -299,6 +299,7 @@ import {
 } from '@/lib/prompts/product-capability-facts';
 import { promptStampsFor, resolvePromptText } from '@/lib/prompts/prompt-registry';
 import { CHAT_SYSTEM_PROMPT_ID } from '@/lib/prompts/chat-system-prompt';
+import type { ChatTurnMemory } from '@/lib/prompts/chat-system-prompt-assembly';
 import type { PromptId } from '@/lib/prompts/prompt-manifest';
 import {
   orderInstructionBlocks,
@@ -1690,7 +1691,7 @@ export function composeManagedSystemPreamble(input: {
     : stableBlock;
 }
 
-interface ManagedMemoryPolicyRead {
+export interface ManagedMemoryPolicyRead {
   readonly readable: boolean;
   readonly closedByWorkspace: boolean;
   readonly policy: ManagedMemoryPolicy;
@@ -1714,6 +1715,21 @@ function chatMemorySetup(input: {
   if (!input.read.policy.enabled) return input.read.closedByWorkspace ? 'off_by_workspace' : 'off';
   if (!input.memoryOnForChat) return 'off_for_chat';
   return input.contextAssembled ? 'on' : 'unavailable';
+}
+
+/**
+ * The memory state for prompt versions that state memory in one line, from the
+ * same decision the setup block makes. A memory that could not be read is kept
+ * apart from off: called off, it had the model tell the user to switch on a
+ * setting that may already be on.
+ */
+export function chatTurnMemoryFor(input: {
+  read: ManagedMemoryPolicyRead;
+  memoryOnForChat: boolean;
+  contextAssembled: boolean;
+}): ChatTurnMemory {
+  const memory = chatMemorySetup(input);
+  return memory === 'on' || memory === 'unavailable' ? memory : 'off';
 }
 
 function chatConnectorsSetup(input: {
@@ -5844,11 +5860,11 @@ async function processAdmittedRequest(
 
   let connectorsAllowed: boolean | undefined;
   if (chatSurface !== 'api') {
-    const memoryServesTurn =
-      managedMemoryPolicy.enabled &&
-      !conversationIsTemporary &&
-      chatRequest.memory_enabled !== false &&
-      chatRequest.personalization !== false;
+    const turnMemory = chatTurnMemoryFor({
+      read: managedMemoryPolicyRead,
+      memoryOnForChat: chatRequest.memory_enabled !== false,
+      contextAssembled: turnContext !== null,
+    });
     const productCapabilities = productCapabilityFacts({
       userId,
       tier: subscription.plan_tier,
@@ -5889,7 +5905,7 @@ async function processAdmittedRequest(
       timeZone: chatRequest.client_timezone,
       codeExecutionUnavailable,
       attachmentSandboxPaths: stagedAttachmentPaths(turnAttachments),
-      memory: memoryServesTurn ? 'on' : 'off',
+      memory: turnMemory,
       artifacts: true,
       artifactConnectors: productArtifactConnectors(subscription.plan_tier, productCapabilities),
       productCapabilities,

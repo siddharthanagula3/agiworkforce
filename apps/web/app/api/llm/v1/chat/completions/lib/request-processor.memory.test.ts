@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ChatCompletionRequest } from './request-processor';
 import {
   applyMemoryToolCapability,
+  chatTurnMemoryFor,
   isUnreportedToolAssistedTurn,
   prepareManagedAutoMemoryFacts,
 } from './request-processor';
@@ -306,6 +307,48 @@ describe('resolveInteractiveTurnContext: past chats', () => {
       );
       expect(other.pastChatPrompt).toContain('so you have them');
       expect(other.pastChatPrompt).not.toContain(linkLine);
+    }
+  });
+});
+
+describe('chatTurnMemoryFor', () => {
+  const read = (enabled: boolean) => ({
+    readable: true,
+    closedByWorkspace: false,
+    policy: { ...RECALL_POLICY, enabled },
+  });
+  const unreadable = {
+    readable: false,
+    closedByWorkspace: false,
+    policy: { ...RECALL_POLICY, enabled: false },
+  };
+
+  it('is unavailable, not off, when the memory setting could not be read', () => {
+    expect(
+      chatTurnMemoryFor({ read: unreadable, memoryOnForChat: true, contextAssembled: true }),
+    ).toBe('unavailable');
+  });
+
+  it('is unavailable, not on, when memory is on but the turn context could not be assembled', () => {
+    expect(
+      chatTurnMemoryFor({ read: read(true), memoryOnForChat: true, contextAssembled: false }),
+    ).toBe('unavailable');
+  });
+
+  it('keeps on and off for a setting that was read', () => {
+    expect(
+      chatTurnMemoryFor({ read: read(true), memoryOnForChat: true, contextAssembled: true }),
+    ).toBe('on');
+    expect(
+      chatTurnMemoryFor({ read: read(false), memoryOnForChat: true, contextAssembled: true }),
+    ).toBe('off');
+  });
+
+  it('is off when the chat switched memory off, whether or not the setting was read', () => {
+    for (const policyRead of [read(true), unreadable]) {
+      expect(
+        chatTurnMemoryFor({ read: policyRead, memoryOnForChat: false, contextAssembled: true }),
+      ).toBe('off');
     }
   });
 });
