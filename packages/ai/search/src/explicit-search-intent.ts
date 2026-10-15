@@ -59,7 +59,7 @@ const RECENCY_PHRASES: readonly string[] = [
   'this month',
 ];
 
-const SOURCE_PHRASES: readonly string[] = [
+const CITATION_PHRASES: readonly string[] = [
   'cite a link',
   'cite links',
   'cite a source',
@@ -69,18 +69,26 @@ const SOURCE_PHRASES: readonly string[] = [
   'with citations',
   'link to the source',
   'link the source',
-  'give me the link',
-  'send me the link',
   'provide sources',
   'include sources',
   'source it',
 ];
 
+const LINK_REQUEST_PHRASES: readonly string[] = ['give me the link', 'send me the link'];
+
+const SOURCE_PHRASES: readonly string[] = [...CITATION_PHRASES, ...LINK_REQUEST_PHRASES];
+
 /**
- * "Link the source chat" asks for a link to something the user already has, a
- * conversation, message or file of their own, not for sources from the web.
+ * "Link the source chat" and "send me the link to our earlier chat" ask for a
+ * link to the user's own chat, not for sources from the web. The noun has to
+ * sit on the same line: a "Notes:" or "files:" line under "Cite sources" starts
+ * something else. Files, documents and notes are left out because "the source
+ * document for the study" names a public source as often as a private one.
  */
-const PRIVATE_SOURCE_NOUN = String.raw`(?:chats?|conversations?|threads?|messages?|memor(?:y|ies)|files?|documents?|notes?|projects?)`;
+const SAME_LINE_GAP = String.raw`[^\S\n]+`;
+const WORD_END = String.raw`(?![\p{L}\p{N}_])`;
+const OWN_SOURCE_FOLLOWER = String.raw`${SAME_LINE_GAP}(?:chats?|conversations?|threads?|messages?|memor(?:y|ies))${WORD_END}`;
+const OWN_CHAT_LINK_FOLLOWER = String.raw`${SAME_LINE_GAP}to(?:${SAME_LINE_GAP}[\p{L}\p{N}'’-]+){0,3}?${SAME_LINE_GAP}(?:chats?|conversations?)${WORD_END}`;
 
 function escapeForPattern(phrase: string): string {
   return phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -91,13 +99,14 @@ function buildPhrasePattern(phrases: readonly string[], notFollowedBy?: string):
     .map(escapeForPattern)
     .sort((a, b) => b.length - a.length)
     .join('|');
-  const follower = notFollowedBy ? `(?!\\s+${notFollowedBy}(?![\\p{L}\\p{N}_]))` : '';
+  const follower = notFollowedBy ? `(?!${notFollowedBy})` : '';
   return new RegExp(`(?<![\\p{L}\\p{N}_])(?:${alternation})(?![\\p{L}\\p{N}_])${follower}`, 'iu');
 }
 
 const SEARCH_VERB_PATTERN = buildPhrasePattern(SEARCH_VERB_PHRASES);
 const RECENCY_PATTERN = buildPhrasePattern(RECENCY_PHRASES);
-const SOURCE_PATTERN = buildPhrasePattern(SOURCE_PHRASES, PRIVATE_SOURCE_NOUN);
+const CITATION_PATTERN = buildPhrasePattern(CITATION_PHRASES, OWN_SOURCE_FOLLOWER);
+const LINK_REQUEST_PATTERN = buildPhrasePattern(LINK_REQUEST_PHRASES, OWN_CHAT_LINK_FOLLOWER);
 const SEARCH_OPT_OUT_PATTERN =
   /\b(?:do\s+not|don't|dont|never|avoid|without|no)\s+(?:(?:use|perform|performing)\s+)?(?:(?:a|the)\s+)?(?:web\s+search(?:es)?|search(?:ing)?\s+(?:(?:the|on)\s+)?(?:(?:public\s+)?(?:web|internet)|online)|browse(?:ing)?\s+(?:the\s+)?(?:public\s+)?web|look(?:ing)?\s+(?:it|this|that)\s+up)\b/iu;
 const LONG_DASHES = String.fromCharCode(0x2013, 0x2014);
@@ -108,7 +117,7 @@ const REFUSING_MODAL = String.raw`(?:${REFUSING_AUXILIARY}\s+(?:(?:need|have)\s+
 const REFUSING_IMPERATIVE = String.raw`(?:${REFUSAL_CLAUSE_START}|\b(?:and|but|so|then|just|please)\s+)${REFUSING_AUXILIARY}`;
 const REFUSING_COMMAND = String.raw`(?:${REFUSING_IMPERATIVE}|\b${REFUSING_MODAL})`;
 const REFUSED_LIST_ITEM = String.raw`(?:[\p{L}\p{N}'\u2019/-]+\s+)?[\p{L}\p{N}'\u2019/-]+`;
-const REFUSED_SEARCH_NOUN = String.raw`(?:(?:web|internet|online|external|live)\s+)?(?:search(?:es|ing)?|browsing|googling)`;
+const REFUSED_SEARCH_NOUN = String.raw`(?:public\s+)?(?:(?:web|internet|online|external|live)\s+)?(?:search(?:es|ing)?|browsing|googling)`;
 const REFUSED_OTHER_ACTIONS = String.raw`(?!\s+(?:just|only|simply|hesitate|forget|fail|worry|be\s+afraid)\b)\s(?:[^.;:!?,\n${LONG_DASHES}]{1,80}?|[^.;:!?\n${LONG_DASHES}]{1,80}?,)\s(?:or|nor)\s+`;
 
 const SEARCH_REFUSAL_FORMS: Readonly<Record<string, string>> = {
@@ -250,7 +259,7 @@ export function detectExplicitWebSearchIntent(text: string): ExplicitSearchInten
   if (hasExplicitWebSearchOptOut(text)) return null;
   if (SEARCH_VERB_PATTERN.test(text)) return 'search_verb';
   if (RECENCY_PATTERN.test(text)) return 'recency';
-  if (SOURCE_PATTERN.test(text)) return 'sources';
+  if (CITATION_PATTERN.test(text) || LINK_REQUEST_PATTERN.test(text)) return 'sources';
   return null;
 }
 

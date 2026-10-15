@@ -48,12 +48,14 @@ describe('detectExplicitWebSearchIntent', () => {
     expect(detectExplicitWebSearchIntent('answer and give me the link')).toBe('sources');
   });
 
-  it('reads a request to link a chat, message or file the user owns as no request for web sources', () => {
+  it('reads a request to link a chat or message the user owns as no request for web sources', () => {
     for (const text of [
       'Find our Velvet Kestrel discussion and identify/link the source chat if available.',
       'Link the source conversation for that decision.',
-      'Answer from my notes and link to the source document.',
       'Which message said that? Link the source message.',
+      'Give me the link to the chat where we planned the picnic.',
+      'Send me the link to our earlier conversation.',
+      'Can you give me the link to the Velvet Kestrel chat?',
     ]) {
       expect(detectExplicitWebSearchIntent(text)).toBeNull();
     }
@@ -64,8 +66,28 @@ describe('detectExplicitWebSearchIntent', () => {
   });
 
   it.each([
+    [
+      'a source document for a public study',
+      'Link to the source document for the study you mentioned',
+    ],
+    ['a notes line under the request', 'Answer with sources\nNotes: keep it short'],
+    ['a files line under the request', 'Cite sources\nfiles: none'],
+    ['a chat noun on the next line', 'Cite sources\nChat summary: keep it short'],
+    ['a link request for a page', 'Send me the link to the official announcement.'],
+  ])('keeps the sources signal for %s (MEM-6)', (_shape, text) => {
+    expect(detectExplicitWebSearchIntent(text)).toBe('sources');
+  });
+
+  it.each([
     ['a long gap after a source phrase', `link the source${' '.repeat(150_000)}x`],
     ['many source phrases naming a chat', `${'link the source chat, '.repeat(20_000)}end`],
+    ['a long gap after a link request', `send me the link to${' '.repeat(150_000)}x`],
+    [
+      'a long run of words after a link request',
+      `give me the link to${' the'.repeat(50_000)} chat`,
+    ],
+    ['many link requests naming a chat', `${'give me the link to the chat, '.repeat(20_000)}end`],
+    ['a long word after a link request', `send me the link to ${'a'.repeat(150_000)} chat`],
   ])('reads a pasted message with %s in linear time', (_shape, text) => {
     const startedAt = performance.now();
     detectExplicitWebSearchIntent(text);
@@ -304,6 +326,8 @@ describe('hasExplicitWebSearchOptOut', () => {
     "Don't search the public web, answer from my notes.",
     'Answer without searching the public internet.',
     'Do not run code or browse the public web.',
+    'No public web search please.',
+    'No public search.',
   ])('reads %j as a refusal', (text) => {
     expect(hasExplicitWebSearchOptOut(text)).toBe(true);
     expect(detectExplicitWebSearchIntent(text)).toBeNull();
@@ -418,6 +442,12 @@ describe('hasExplicitWebSearchOptOut', () => {
     [
       'a long gap after a public search qualifier',
       `Do not search the public${' '.repeat(150_000)}x`,
+    ],
+    ['a long gap after a refused public noun', `No public${' '.repeat(150_000)}x`],
+    ['a long gap after a refused public web noun', `No public web${' '.repeat(150_000)}x`],
+    [
+      'a long list closed by a refused public noun',
+      `${'no venue, photos, catering, parking, seating, signage, '.repeat(4000)}or public`,
     ],
   ])('reads a pasted message with %s in linear time', (_shape, text) => {
     const startedAt = performance.now();
