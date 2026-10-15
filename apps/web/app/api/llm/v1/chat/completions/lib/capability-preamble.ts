@@ -154,6 +154,8 @@ export interface CapabilityPreambleInput {
   productCapabilities?: readonly string[];
   /** The client links the saved memories, past chats and project files the turn supplies. */
   sourceLinks?: boolean;
+  /** The client renders a fenced email or writing block as a card. */
+  writingCards?: boolean;
   /** Selects the prompt version; absent, the manifest pin serves. */
   promptSelection?: ResolvePromptOptions;
   servingModel?: ServingModel | null;
@@ -338,6 +340,7 @@ function buildPublishedCapabilityPreamble(
       ...(input.artifactConnectors ? { artifactConnectors: true } : {}),
       ...(input.productCapabilities ? { productCapabilities: input.productCapabilities } : {}),
       ...(input.sourceLinks ? { sourceLinks: true } : {}),
+      ...(input.writingCards ? { writingCards: true } : {}),
       ...carried,
     },
     {
@@ -518,6 +521,7 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
 export interface TextOnlyPreambleInput {
   servingModel?: ServingModel | null;
   artifacts?: boolean;
+  writingCards?: boolean;
   promptSelection?: ResolvePromptOptions;
   timeZone?: string;
   now?: Date;
@@ -535,6 +539,7 @@ export function buildTextOnlyPreamble(input: TextOnlyPreambleInput): string {
           ...(input.timeZone ? { timeZone: input.timeZone } : {}),
           ...(input.now ? { now: input.now } : {}),
           ...(input.artifacts ? { artifacts: true } : {}),
+          ...(input.writingCards ? { writingCards: true } : {}),
           artifactRuntime: false,
           memory: input.setup?.personalContext === 'read_only' ? 'on' : 'off',
         },

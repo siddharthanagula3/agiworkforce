@@ -112,6 +112,7 @@ import {
 } from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
 import type { TextOnlyChatSetup } from '@/lib/prompts/chat-system-prompt-assembly';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
+import { surfaceRendersWritingCards } from '@/lib/chat-surface-rendering';
 import { readSurfaceHint } from '@/lib/free-chat-surface-policy';
 import { promptVariantsForSubject } from '@/lib/prompts/prompt-variants';
 import { validatePromotionalChatStream } from '@/features/models/lib/promotional-chat-stream';
@@ -1072,6 +1073,7 @@ export async function serveFreeQuotaTurn(
       servingModel: { kind: 'unattributed', name: offering.displayName },
       promptSelection: { variants: promptVariants },
       setup,
+      writingCards: surfaceRendersWritingCards(readSurfaceHint(request) ?? 'web'),
     });
     const memoryCommandNote =
       body.memory_command && latestUserPrompt

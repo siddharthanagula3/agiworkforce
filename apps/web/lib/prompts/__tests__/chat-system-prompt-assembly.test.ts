@@ -195,3 +195,21 @@ describe('the sources a version says the client links under the answer', () => {
     ).not.toContain('LINKS HEADING');
   });
 });
+
+describe('the email and writing cards a version describes', () => {
+  const withCards = { ...merged, email_and_writing_cards: 'CARD RULES' };
+
+  it('tells the model about the cards only where the client renders them', () => {
+    expect(body(withCards, { writingCards: true })).toContain('CARD RULES');
+    expect(body(withCards, {})).not.toContain('CARD RULES');
+    expect(body(withCards, { writingCards: false })).not.toContain('CARD RULES');
+  });
+
+  it('places them after the format rules', () => {
+    const rendered = body(withCards, { writingCards: true });
+
+    expect(rendered.indexOf('CARD RULES')).toBeGreaterThan(
+      rendered.indexOf(chatSystemPromptSection(v7, 'format_and_length')),
+    );
+  });
+});

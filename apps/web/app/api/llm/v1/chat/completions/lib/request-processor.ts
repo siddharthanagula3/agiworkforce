@@ -404,6 +404,7 @@ import {
   resolveInteractiveTurnContext,
   type InteractiveTurnContext,
 } from '@/lib/services/turn-context-service';
+import { surfaceRendersWritingCards } from '@/lib/chat-surface-rendering';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
 import {
   createSkillToolDefinition,
@@ -6007,6 +6008,7 @@ async function processAdmittedRequest(
         productArtifactConnectors(subscription.plan_tier, productCapabilities),
       ...(productCapabilities ? { productCapabilities } : {}),
       sourceLinks: chatRequest[PAST_CHAT_LINKS_REQUEST_KEY] === true,
+      writingCards: surfaceRendersWritingCards(chatSurface),
       promptSelection,
       servingModel: servingModelFor(chatRequest.model, modelSelection),
       chatSetup: chatSetupFor({

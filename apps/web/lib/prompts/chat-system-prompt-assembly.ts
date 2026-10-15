@@ -62,6 +62,8 @@ export interface ChatTurnState {
   readonly settingsGuidance?: SettingsGuidance;
   /** The client links the saved memories, past chats and project files a turn supplies under the answer. */
   readonly sourceLinks?: boolean;
+  /** The client renders a fenced email or writing block as a card. */
+  readonly writingCards?: boolean;
 }
 
 export interface ChatTurnClock {
@@ -413,6 +415,7 @@ export function assembleChatSystemPrompt(
   if (!describesSetup && state.memory === 'on') blocks.push(section('memory_on'));
   if (!describesSetup && state.memory === 'off') blocks.push(section('memory_off'));
   blocks.push(section('format_and_length'), section('email_and_writing_blocks'));
+  if (state.writingCards) blocks.push(section('email_and_writing_cards'));
   if (state.artifactMarkers) {
     blocks.push(
       section('artifacts', {
