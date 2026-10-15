@@ -1,6 +1,6 @@
 # Unit economics per user profile
 
-Superseded by `docs/research/unit-economics-2026-09-27.md`, which reruns this model on the credit model; the script below now prints that version.
+Superseded by `docs/research/unit-economics-2026-09-27.md`, which reruns this model on the credit model, and then by `docs/research/unit-economics-2026-10-10.md`; the script below now prints the October version.
 
 Status: Historical calculation snapshot
 Owner: Fable (architect)

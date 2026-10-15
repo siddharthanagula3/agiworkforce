@@ -83,12 +83,12 @@ code on 2026-09-05.
 | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | Listener start, stop and restart leak no threads or duplicate events                                    | Met, single-spawn hook with lifecycle tests                       |
 | Holding and releasing the chord produces exactly one session                                            | Met, edge detector with key-repeat suppression and tests          |
-| A focus change cannot inject into the wrong application or field                                        | **Not met**, injection has no target pinning or revalidation      |
+| A focus change cannot inject into the wrong application or field                                        | **Not met**, no injection path exists                             |
 | Secure fields receive no context read, transcript, clipboard or input                                   | **Not met**, no secure-field refusal exists                       |
 | Local mode passes an offline network-denial test                                                        | Unverified                                                        |
 | BYOK and managed modes show the target and never cross boundaries                                       | Partially met, no target is shown on the global path              |
 | Device loss, sleep, crash, network loss, timeout and relaunch recover the transcript                    | **Not met**, no global capture pipeline exists; a release cancels |
-| Unicode, emoji, RTL, CJK, code, Markdown and long text insert with undo                                 | **Not met**, injection is an untested synthetic typing call       |
+| Unicode, emoji, RTL, CJK, code, Markdown and long text insert with undo                                 | **Not met**, no injection path exists                             |
 | Dictionary and snippet precedence is deterministic                                                      | **Not met**, neither exists                                       |
 | Overlay works on multiple monitors, full screen and reduced motion                                      | Unverified                                                        |
 | No raw audio, transcript or surrounding text reaches logs                                               | Unverified                                                        |

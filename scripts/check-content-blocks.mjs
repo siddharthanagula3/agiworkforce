@@ -63,8 +63,6 @@ const TEST_FILE = /\.(?:test|spec)\.tsx?$/;
 export const BLOCK_KIND_READERS_PENDING = Object.freeze({});
 
 export const NOT_BLOCK_KIND_READERS = Object.freeze({
-  'apps/desktop/electron/runtime/localInferenceService.ts':
-    'Reads provider-adapter stream chunks (text-delta, thinking-delta, error, stop), a separate vocabulary from agent events.',
   'apps/desktop/src/runtime/CloudRuntime.ts':
     "Matches only text-delta and stop on agent events; the third match is a stop event's reason.reason === 'error'.",
   'apps/extension/src/features/side-panel/chat-state.ts':

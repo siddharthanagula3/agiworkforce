@@ -1,0 +1,495 @@
+{
+  "status": "dated_read_only_research_evidence",
+  "owner": "founder",
+  "research_date": "2026-10-12",
+  "report_timezone": "America/Chicago",
+  "repository_revision": "1f75a67c1f27b2914dbe4ebd18a842911460d1cb",
+  "database_scope": {
+    "project_name": "AGI WORKFORCE",
+    "branch_name": "production",
+    "database_name": "neondb",
+    "note": "Connected project and branch labels verified; not an audit of all billing channels or all identity accounts. Only SELECT queries were executed."
+  },
+  "privacy": {
+    "raw_messages_read": false,
+    "raw_feedback_read": false,
+    "personal_identifiers_retained": false,
+    "credentials_retained": false,
+    "payment_ids_retained": false
+  },
+  "queries": [
+    {
+      "name": "account_billing_and_legacy_inventory",
+      "sql": "SELECT now() AS queried_at_utc, current_database() AS database_name,\n(SELECT count(*) FROM public.profiles) AS profile_rows,\n(SELECT count(*) FROM public.profiles WHERE created_at >= now()-interval '30 days') AS profiles_created_last_30d,\n(SELECT count(*) FROM public.subscriptions) AS subscription_rows,\n(SELECT count(*) FROM public.subscriptions WHERE plan_tier NOT IN ('free','byok','local-only')) AS nonfree_subscription_rows,\n(SELECT count(*) FROM public.subscriptions WHERE plan_tier NOT IN ('free','byok','local-only') AND status='active') AS active_nonfree_subscription_rows,\n(SELECT count(*) FROM public.subscriptions WHERE plan_tier NOT IN ('free','byok','local-only') AND status='trialing') AS trialing_nonfree_subscription_rows,\n(SELECT count(*) FROM public.subscriptions WHERE stripe_subscription_id IS NOT NULL OR apple_original_transaction_id IS NOT NULL OR google_purchase_token IS NOT NULL) AS subscription_rows_with_payment_identifiers,\n(SELECT count(*) FROM public.processed_stripe_events) AS processed_stripe_event_rows,\n(SELECT count(*) FROM public.organization_billing_invoices WHERE amount_paid_cents > 0) AS positive_paid_org_invoice_rows,\n(SELECT count(*) FROM public.enterprise_offline_payment_records WHERE amount_cents > 0) AS positive_offline_payment_record_rows,\n(SELECT count(*) FROM public.beta_redemptions) AS beta_redemption_rows,\n(SELECT count(*) FROM public.waitlist) AS paid_waitlist_rows,\n(SELECT count(*) FROM public.cloud_managed_waitlist) AS cloud_managed_waitlist_rows,\n(SELECT count(*) FROM public.cloud_waitlist) AS cloud_waitlist_rows,\n(SELECT count(*) FROM public.product_analytics_events) AS analytics_event_rows,\n(SELECT count(distinct user_id) FROM public.product_analytics_events WHERE occurred_at >= now()-interval '30 days') AS analytics_users_last_30d,\n(SELECT count(*) FROM public.product_metric_days) AS product_metric_day_rows,\n(SELECT count(*) FROM public.conversations) AS conversation_rows,\n(SELECT count(distinct user_id) FROM public.conversations) AS conversation_account_count,\n(SELECT count(*) FROM public.messages WHERE role='user') AS user_message_rows,\n(SELECT count(*) FROM public.messages WHERE role='assistant') AS assistant_message_rows,\n(SELECT count(*) FROM public.managed_usage_requests) AS managed_usage_request_rows,\n(SELECT count(*) FROM public.managed_usage_requests WHERE provider_succeeded_at IS NOT NULL) AS requests_with_provider_success,\n(SELECT count(*) FROM public.managed_usage_requests WHERE client_delivered_at IS NOT NULL) AS requests_with_client_delivery,\n(SELECT count(*) FROM public.provider_cost_events) AS provider_cost_event_rows,\n(SELECT count(*) FROM public.cogs_adjustments) AS cogs_adjustment_rows,\n(SELECT count(*) FROM public.feedback) AS feedback_rows",
+      "result": [
+        {
+          "queried_at_utc": "2026-10-12T08:02:22.679Z",
+          "database_name": "neondb",
+          "profile_rows": "61",
+          "profiles_created_last_30d": "10",
+          "subscription_rows": "7",
+          "nonfree_subscription_rows": "1",
+          "active_nonfree_subscription_rows": "1",
+          "trialing_nonfree_subscription_rows": "0",
+          "subscription_rows_with_payment_identifiers": "7",
+          "processed_stripe_event_rows": "342",
+          "positive_paid_org_invoice_rows": "0",
+          "positive_offline_payment_record_rows": "0",
+          "beta_redemption_rows": "0",
+          "paid_waitlist_rows": "1",
+          "cloud_managed_waitlist_rows": "9",
+          "cloud_waitlist_rows": "0",
+          "analytics_event_rows": "0",
+          "analytics_users_last_30d": "0",
+          "product_metric_day_rows": "600",
+          "conversation_rows": "0",
+          "conversation_account_count": "0",
+          "user_message_rows": "0",
+          "assistant_message_rows": "0",
+          "managed_usage_request_rows": "2212",
+          "requests_with_provider_success": "2021",
+          "requests_with_client_delivery": "608",
+          "provider_cost_event_rows": "1975",
+          "cogs_adjustment_rows": "1",
+          "feedback_rows": "15"
+        }
+      ],
+      "interpretation": "The conversations/messages counts refer to legacy tables and must not be used for current Web usage. See current_web_persistence instead. Active nonfree subscription is not cash revenue."
+    },
+    {
+      "name": "billing_usage_provenance",
+      "sql": "SELECT 'subscription_mix' AS dataset, jsonb_agg(x) AS result FROM (SELECT plan_tier,status,count(*) AS rows,count(*) FILTER (WHERE stripe_subscription_id IS NOT NULL) AS stripe_subscription_links,count(*) FILTER (WHERE stripe_coupon_id IS NOT NULL) AS coupon_links,min(created_at) AS first_created,max(updated_at) AS last_updated FROM public.subscriptions GROUP BY plan_tier,status) x\nUNION ALL SELECT 'paid_account_classification',jsonb_agg(x) FROM (SELECT s.plan_tier,s.status,s.current_period_end,s.cancel_at_period_end,s.stripe_coupon_id IS NOT NULL AS coupon_present,p.email ILIKE '%@agiworkforce.com' AS product_domain_email,p.display_name ILIKE $1 OR split_part(p.email,'@',1) ILIKE $1 OR split_part(p.email,'@',1) ILIKE $2 AS founder_name_hint FROM public.subscriptions s LEFT JOIN public.profiles p ON p.id=s.user_id WHERE s.plan_tier NOT IN ('free','byok','local-only')) x\nUNION ALL SELECT 'usage_rollup',jsonb_agg(x) FROM (SELECT status,attempt_outcome,count(*) AS requests,count(distinct user_id) AS accounts,min(created_at) AS first_seen,max(created_at) AS last_seen FROM public.managed_usage_requests GROUP BY status,attempt_outcome) x\nUNION ALL SELECT 'provider_cost_rollup',jsonb_agg(x) FROM (SELECT capability,reconciliation_status,count(*) AS events,count(distinct user_id) AS accounts,sum(provider_cost_cents) AS legacy_provider_cost_cents,sum(billed_cents) AS legacy_billed_cents,sum(provider_estimated_cost_microusd) AS provider_estimated_microusd,sum(provider_reported_cost_microusd) AS provider_reported_microusd,min(occurred_at) AS first_seen,max(occurred_at) AS last_seen FROM public.provider_cost_events GROUP BY capability,reconciliation_status) x\nUNION ALL SELECT 'analytics_consent_latest',jsonb_agg(x) FROM (SELECT purpose,granted,count(*) AS accounts FROM (SELECT DISTINCT ON (user_id,purpose) user_id,purpose,granted FROM public.consent_records WHERE user_id IS NOT NULL ORDER BY user_id,purpose,recorded_at DESC) c WHERE purpose='product_analytics' GROUP BY purpose,granted) x\nUNION ALL SELECT 'feedback_counts',jsonb_agg(x) FROM (SELECT count(*) AS feedback_rows,count(distinct user_id) AS accounts,min(created_at) AS first_seen,max(created_at) AS last_seen FROM public.feedback) x",
+      "result": [
+        {
+          "dataset": "subscription_mix",
+          "result": [
+            {
+              "rows": 6,
+              "status": "canceled",
+              "plan_tier": "free",
+              "coupon_links": 0,
+              "last_updated": "2026-08-18T02:44:00.250429+00:00",
+              "first_created": "2026-07-19T23:03:18.251979+00:00",
+              "stripe_subscription_links": 6
+            },
+            {
+              "rows": 1,
+              "status": "active",
+              "plan_tier": "max_15x",
+              "coupon_links": 0,
+              "last_updated": "2026-07-21T23:15:55.973573+00:00",
+              "first_created": "2026-06-15T09:22:31.412443+00:00",
+              "stripe_subscription_links": 1
+            }
+          ]
+        },
+        {
+          "dataset": "paid_account_classification",
+          "result": [
+            {
+              "status": "active",
+              "plan_tier": "max_15x",
+              "coupon_present": false,
+              "founder_name_hint": true,
+              "current_period_end": "2026-09-29T05:04:05+00:00",
+              "cancel_at_period_end": false,
+              "product_domain_email": null
+            }
+          ]
+        },
+        {
+          "dataset": "usage_rollup",
+          "result": [
+            {
+              "status": "completed",
+              "accounts": 5,
+              "requests": 2021,
+              "last_seen": "2026-09-21T07:40:16.126693+00:00",
+              "first_seen": "2026-07-21T23:20:02.272034+00:00",
+              "attempt_outcome": null
+            },
+            {
+              "status": "declined",
+              "accounts": 1,
+              "requests": 3,
+              "last_seen": "2026-07-21T22:56:02.286325+00:00",
+              "first_seen": "2026-07-21T22:54:24.150202+00:00",
+              "attempt_outcome": null
+            },
+            {
+              "status": "outcome_unknown",
+              "accounts": 2,
+              "requests": 55,
+              "last_seen": "2026-09-10T23:52:50.612757+00:00",
+              "first_seen": "2026-07-23T03:59:07.631234+00:00",
+              "attempt_outcome": null
+            },
+            {
+              "status": "released",
+              "accounts": 3,
+              "requests": 133,
+              "last_seen": "2026-09-08T23:32:59.782287+00:00",
+              "first_seen": "2026-07-22T22:59:20.092644+00:00",
+              "attempt_outcome": null
+            }
+          ]
+        },
+        {
+          "dataset": "provider_cost_rollup",
+          "result": [
+            {
+              "events": 20,
+              "accounts": 20,
+              "last_seen": "2026-09-01T00:00:00+00:00",
+              "capability": "auth",
+              "first_seen": "2026-09-01T00:00:00+00:00",
+              "legacy_billed_cents": 0,
+              "reconciliation_status": "estimated",
+              "legacy_provider_cost_cents": 2500,
+              "provider_reported_microusd": null,
+              "provider_estimated_microusd": 25000000
+            },
+            {
+              "events": 1859,
+              "accounts": 19,
+              "last_seen": "2026-10-12T05:38:28.486692+00:00",
+              "capability": "chat",
+              "first_seen": "2026-08-18T06:28:37.65843+00:00",
+              "legacy_billed_cents": 1085,
+              "reconciliation_status": "estimated",
+              "legacy_provider_cost_cents": 1124,
+              "provider_reported_microusd": null,
+              "provider_estimated_microusd": 675000
+            },
+            {
+              "events": 25,
+              "accounts": 1,
+              "last_seen": "2026-10-03T22:40:01.978912+00:00",
+              "capability": "egress",
+              "first_seen": "2026-10-03T22:37:24.479509+00:00",
+              "legacy_billed_cents": 0,
+              "reconciliation_status": "estimated",
+              "legacy_provider_cost_cents": 25,
+              "provider_reported_microusd": null,
+              "provider_estimated_microusd": 8678
+            },
+            {
+              "events": 20,
+              "accounts": 20,
+              "last_seen": "2026-09-01T00:00:00+00:00",
+              "capability": "email",
+              "first_seen": "2026-09-01T00:00:00+00:00",
+              "legacy_billed_cents": 0,
+              "reconciliation_status": "estimated",
+              "legacy_provider_cost_cents": 2000,
+              "provider_reported_microusd": null,
+              "provider_estimated_microusd": 20000000
+            },
+            {
+              "events": 20,
+              "accounts": 20,
+              "last_seen": "2026-09-01T00:00:00+00:00",
+              "capability": "hosting",
+              "first_seen": "2026-09-01T00:00:00+00:00",
+              "legacy_billed_cents": 0,
+              "reconciliation_status": "estimated",
+              "legacy_provider_cost_cents": 2000,
+              "provider_reported_microusd": null,
+              "provider_estimated_microusd": 20000000
+            },
+            {
+              "events": 4,
+              "accounts": 2,
+              "last_seen": "2026-09-02T01:28:38.582683+00:00",
+              "capability": "image",
+              "first_seen": "2026-08-18T05:07:36.311391+00:00",
+              "legacy_billed_cents": 28,
+              "reconciliation_status": "estimated",
+              "legacy_provider_cost_cents": 28,
+              "provider_reported_microusd": null,
+              "provider_estimated_microusd": null
+            },
+            {
+              "events": 20,
+              "accounts": 20,
+              "last_seen": "2026-09-01T00:00:00+00:00",
+              "capability": "observability",
+              "first_seen": "2026-09-01T00:00:00+00:00",
+              "legacy_billed_cents": 0,
+              "reconciliation_status": "estimated",
+              "legacy_provider_cost_cents": 2600,
+              "provider_reported_microusd": null,
+              "provider_estimated_microusd": 26000000
+            },
+            {
+              "events": 3,
+              "accounts": 1,
+              "last_seen": "2026-09-21T18:27:40.848128+00:00",
+              "capability": "tool",
+              "first_seen": "2026-09-21T18:26:41.507438+00:00",
+              "legacy_billed_cents": 3,
+              "reconciliation_status": "estimated",
+              "legacy_provider_cost_cents": 3,
+              "provider_reported_microusd": null,
+              "provider_estimated_microusd": 30000
+            },
+            {
+              "events": 3,
+              "accounts": 1,
+              "last_seen": "2026-09-06T21:26:43.101012+00:00",
+              "capability": "transcription",
+              "first_seen": "2026-09-06T21:26:15.581719+00:00",
+              "legacy_billed_cents": 3,
+              "reconciliation_status": "estimated",
+              "legacy_provider_cost_cents": 3,
+              "provider_reported_microusd": null,
+              "provider_estimated_microusd": null
+            },
+            {
+              "events": 1,
+              "accounts": 1,
+              "last_seen": "2026-08-18T10:29:29.573992+00:00",
+              "capability": "video",
+              "first_seen": "2026-08-18T10:29:29.573992+00:00",
+              "legacy_billed_cents": 40,
+              "reconciliation_status": "estimated",
+              "legacy_provider_cost_cents": 40,
+              "provider_reported_microusd": null,
+              "provider_estimated_microusd": null
+            }
+          ]
+        },
+        {
+          "dataset": "analytics_consent_latest",
+          "result": [
+            {
+              "granted": false,
+              "purpose": "product_analytics",
+              "accounts": 8
+            },
+            {
+              "granted": true,
+              "purpose": "product_analytics",
+              "accounts": 2
+            }
+          ]
+        },
+        {
+          "dataset": "feedback_counts",
+          "result": [
+            {
+              "accounts": 1,
+              "last_seen": "2026-09-03T18:53:45.155886+00:00",
+              "first_seen": "2026-07-26T02:45:48.108453+00:00",
+              "feedback_rows": 15
+            }
+          ]
+        }
+      ],
+      "interpretation": "Founder-name match is a heuristic only. All cost-event rows reported estimated, with no provider-reported cost; neither legacy billed cents nor customer ledger charges prove collected revenue.",
+      "public_query_parameters": {
+        "1": {
+          "purpose": "founder name classification pattern",
+          "value_retained": false
+        },
+        "2": {
+          "purpose": "founder name classification pattern",
+          "value_retained": false
+        }
+      }
+    },
+    {
+      "name": "test_markers",
+      "sql": "SELECT 'profiles' AS dataset,count(*) AS rows,count(*) FILTER (WHERE id ~* '^(test|demo|seed|fixture|probe|smoke|audit|verify|validation)' OR email ~* '(example\\.(com|org|net)|test\\.local|invalid)$') AS test_marker_rows,count(*) FILTER (WHERE display_name ILIKE $1 OR split_part(email,'@',1) ILIKE $1 OR split_part(email,'@',1) ILIKE $2) AS founder_name_hint_rows FROM public.profiles\nUNION ALL SELECT 'provider_cost_events',count(*),count(*) FILTER (WHERE source_ref ~* '(test|seed|fixture|probe|live.proof|smoke|synthetic|validation|proof|verify|audit)'),NULL FROM public.provider_cost_events\nUNION ALL SELECT 'managed_usage_requests',count(*),count(*) FILTER (WHERE idempotency_key ~* '(test|seed|fixture|probe|live.proof|smoke|synthetic|validation|proof|verify|audit)'),NULL FROM public.managed_usage_requests",
+      "result": [
+        {
+          "dataset": "profiles",
+          "rows": "61",
+          "test_marker_rows": "0",
+          "founder_name_hint_rows": "9"
+        },
+        {
+          "dataset": "provider_cost_events",
+          "rows": "1975",
+          "test_marker_rows": "48",
+          "founder_name_hint_rows": null
+        },
+        {
+          "dataset": "managed_usage_requests",
+          "rows": "2212",
+          "test_marker_rows": "52",
+          "founder_name_hint_rows": null
+        }
+      ],
+      "interpretation": "String markers flag possible verification/seed traffic, not a complete or reliable internal-account exclusion list.",
+      "public_query_parameters": {
+        "1": {
+          "purpose": "founder name classification pattern",
+          "value_retained": false
+        },
+        "2": {
+          "purpose": "founder name classification pattern",
+          "value_retained": false
+        }
+      }
+    },
+    {
+      "name": "current_web_persistence",
+      "sql": "SELECT now() AS queried_at_utc,\n(SELECT count(*) FROM public.web_conversations) AS current_conversation_rows,\n(SELECT count(*) FROM public.web_conversations WHERE deleted_at IS NULL) AS undeleted_conversation_rows,\n(SELECT count(distinct user_id) FROM public.web_conversations) AS conversation_accounts,\n(SELECT count(*) FROM public.web_conversations WHERE activated_at IS NOT NULL) AS activated_conversation_rows,\n(SELECT count(*) FROM public.web_messages) AS current_message_rows,\n(SELECT count(*) FROM public.web_messages WHERE role='user') AS user_message_rows,\n(SELECT count(*) FROM public.web_messages WHERE role='assistant') AS assistant_message_rows,\n(SELECT count(distinct c.user_id) FROM public.web_messages m JOIN public.web_conversations c ON c.id=m.conversation_id WHERE m.role='user' AND m.created_at>=now()-interval '30 days') AS accounts_with_user_message_last_30d,\n(SELECT count(*) FROM public.user_projects WHERE deleted_at IS NULL) AS undeleted_projects,\n(SELECT count(distinct user_id) FROM public.user_projects WHERE deleted_at IS NULL) AS project_accounts,\n(SELECT count(*) FROM public.project_knowledge_files WHERE deleted_at IS NULL) AS undeleted_project_knowledge_files,\n(SELECT count(*) FROM public.research_reports) AS research_report_rows,\n(SELECT count(*) FROM public.research_reports WHERE status='completed') AS completed_research_reports,\n(SELECT count(distinct user_id) FROM public.research_reports) AS research_report_accounts",
+      "result": [
+        {
+          "queried_at_utc": "2026-10-12T08:08:54.027Z",
+          "current_conversation_rows": "1145",
+          "undeleted_conversation_rows": "1026",
+          "conversation_accounts": "48",
+          "activated_conversation_rows": "1009",
+          "current_message_rows": "2376",
+          "user_message_rows": "1284",
+          "assistant_message_rows": "1092",
+          "accounts_with_user_message_last_30d": "10",
+          "undeleted_projects": "9",
+          "project_accounts": "5",
+          "undeleted_project_knowledge_files": "3",
+          "research_report_rows": "8",
+          "completed_research_reports": "4",
+          "research_report_accounts": "2"
+        }
+      ],
+      "instrument_verified_against": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence.ts",
+        "apps/web/app/api/chat/sync/route.ts",
+        "apps/web/app/api/projects/[id]/route.ts"
+      ],
+      "interpretation": "Counts of stored activity are not qualified external users, task acceptance, or cohort retention."
+    },
+    {
+      "name": "observed_repeat_chat_days",
+      "sql": "WITH daily AS (SELECT c.user_id,(m.created_at AT TIME ZONE 'America/Chicago')::date AS activity_day,count(*) AS user_messages FROM public.web_messages m JOIN public.web_conversations c ON c.id=m.conversation_id WHERE m.role='user' AND m.deleted_at IS NULL AND c.deleted_at IS NULL AND m.created_at>=now()-interval '30 days' GROUP BY 1,2),\naccount_days AS (SELECT user_id,count(*) AS active_days,sum(user_messages) AS user_messages FROM daily GROUP BY user_id),\nclassified AS (SELECT d.*,coalesce(p.display_name ILIKE $1 OR split_part(p.email,'@',1) ILIKE $1 OR split_part(p.email,'@',1) ILIKE $2,false) AS founder_name_hint FROM account_days d LEFT JOIN public.profiles p ON p.id=d.user_id)\nSELECT count(*) AS accounts_with_undeleted_user_messages_last_30d,count(*) FILTER (WHERE active_days>=2) AS accounts_on_two_or_more_days,count(*) FILTER (WHERE active_days>=4) AS accounts_on_four_or_more_days,count(*) FILTER (WHERE founder_name_hint) AS accounts_with_founder_name_hint,count(*) FILTER (WHERE NOT founder_name_hint) AS accounts_without_founder_name_hint,count(*) FILTER (WHERE NOT founder_name_hint AND active_days>=2) AS accounts_without_hint_on_two_or_more_days,sum(user_messages) AS undeleted_user_messages_last_30d FROM classified",
+      "result": [
+        {
+          "accounts_with_undeleted_user_messages_last_30d": "9",
+          "accounts_on_two_or_more_days": "1",
+          "accounts_on_four_or_more_days": "0",
+          "accounts_with_founder_name_hint": "3",
+          "accounts_without_founder_name_hint": "6",
+          "accounts_without_hint_on_two_or_more_days": "0",
+          "undeleted_user_messages_last_30d": "34"
+        }
+      ],
+      "interpretation": "Rolling 30-day window; currently undeleted stored user messages and conversations only; activity days use America/Chicago. Founder-name hints are unverified. No-hint accounts are not thereby verified external customers. Deleted/temporary/other-surface activity and migration history can be missed.",
+      "public_query_parameters": {
+        "1": {
+          "purpose": "founder name classification pattern",
+          "value_retained": false
+        },
+        "2": {
+          "purpose": "founder name classification pattern",
+          "value_retained": false
+        }
+      }
+    }
+  ],
+  "stripe_read": {
+    "queried_at_utc": "2026-10-12T08:04:13.421874+00:00",
+    "request_method": "GET",
+    "key_mode": "test",
+    "list_complete_excluding_test_clock_subscriptions": true,
+    "pages": 1,
+    "stripe_subscription_rows": 2,
+    "live_subscription_rows_in_response": 0,
+    "database_subscription_matches": [
+      {
+        "database_class": "db_active_nonfree",
+        "stripe_livemode": false,
+        "stripe_status": "active",
+        "stripe_test_clock": false,
+        "current_period_end_utc": "2026-10-29T05:04:05+00:00"
+      }
+    ],
+    "unmatched_database_fingerprints": 6,
+    "live_account_revenue": "not_verified"
+  },
+  "stripe_method": {
+    "endpoint": "https://api.stripe.com/v1/subscriptions",
+    "parameters": {
+      "limit": 100,
+      "status": "all"
+    },
+    "authentication_mode": "test",
+    "matching": "Database subscription identifiers were MD5-fingerprinted privately and compared with returned IDs. No fingerprints or IDs retained in this artifact.",
+    "result": "The sole active nonfree database subscription matched a Stripe resource with livemode=false. Six canceled legacy fingerprints were not found in this selected test account's default list; this does not establish live-mode status for them.",
+    "limitations": [
+      "No live-mode Stripe read performed.",
+      "Default list excludes subscriptions associated with test clocks unless a customer or test_clock filter is set.",
+      "The database paid row has an older current_period_end than the matched Stripe resource. No billing record was changed."
+    ]
+  },
+  "public_gets": [
+    {
+      "url": "https://agiworkforce.com/api/releases/cli/latest",
+      "http_status": 404,
+      "observed_result": "No CLI release archive is published",
+      "observed_at_utc": "2026-10-12T08:08:56Z"
+    },
+    {
+      "url": "https://agiworkforce.com/api/releases/desktop-cloud/latest",
+      "http_status": 404,
+      "observed_result": "No cloud desktop release is published",
+      "observed_at_utc": "2026-10-12T08:08:56Z"
+    },
+    {
+      "url": "https://agiworkforce.com/api/health",
+      "http_status": 200,
+      "observed_result": "status healthy; dependencyCounts total 18, ok 5, failing 0, unconfigured 4, unobserved 9; configurationFindings 4",
+      "observed_at_utc": "2026-10-12T08:08:56Z",
+      "interpretation": "A healthy response is a liveness/configuration signal, not signup, payment, generation, export or customer-outcome verification."
+    }
+  ],
+  "not_performed": [
+    "customer interviews",
+    "new purchases",
+    "outreach",
+    "ad-account changes",
+    "product changes",
+    "deployment",
+    "schedules",
+    "authenticated comparative product tasks"
+  ],
+  "limitations": [
+    "External paying customers and live cash receipts remain unverified.",
+    "Analytics consent and collection coverage are incomplete for market analysis; zero stored analytics events is not zero usage.",
+    "Survey samples and competitor case studies do not demonstrate AGI demand.",
+    "Queries were executed sequentially, not in a single repeatable-read snapshot; counts are a short observation window, not immutable totals."
+  ],
+  "document_validation": {
+    "date": "2026-10-12",
+    "formatting": "passed",
+    "whitespace": "passed",
+    "local_links_checked": 33,
+    "competitor_families_checked": 20,
+    "aggregate_counts_and_payment_mode_assertions": "passed",
+    "illustrative_arithmetic": "passed",
+    "retained_credentials_and_payment_ids_check": "passed",
+    "repo_organization": "failed: unrelated .pnpm-store root directory",
+    "non_md_artifacts": "failed: 148 unrelated unclassified artifacts; none of this task's new files named",
+    "application_builds_or_tests": "not run; research-only changes"
+  },
+  "founder_clarification": {
+    "date": "2026-10-12",
+    "source": "direct user response in this chat",
+    "paying_customers_reported": 0,
+    "paid_acquisition_gate": "intentional waitlist to learn demand",
+    "monthly_advertising_budget_usd": 0,
+    "interpretation": "Founder statement is distinct from read-only database/payment evidence. No payment behind an intentionally closed checkout is not evidence of purchase refusal. Waitlist interest is not verified willingness to pay. No gate or budget was changed."
+  },
+  "public_redaction": {
+    "original_source_sha256": "efc5be0cd35f6eebe709d9e0f24b6853341a07998934908f2baf00752303f13b",
+    "original_contained_personal_name_inputs": true,
+    "personal_name_inputs_removed": true,
+    "parameter_occurrences_replaced": 9,
+    "query_parameter_values_published": false,
+    "metrics_and_result_values_changed": false,
+    "queries_reexecuted": false,
+    "results_include_classified_rows_not_only_aggregates": true
+  }
+}

@@ -565,6 +565,9 @@ importers:
       '@agiworkforce/observability':
         specifier: workspace:*
         version: link:../../packages/platform/observability
+      '@agiworkforce/provider-protocol':
+        specifier: workspace:*
+        version: link:../../packages/ai/provider-protocol
       '@agiworkforce/provider-runtime':
         specifier: workspace:*
         version: link:../../packages/ai/provider-runtime

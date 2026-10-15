@@ -46,6 +46,7 @@ const cloudModules = [
   'cloud-agent-runs',
   'managed-cloud-agent-runs-client',
   'tool-approval-resume',
+  'mcp-elicitation',
   'cloud-code-sessions',
   'cloud-code-handoff',
   'managed-cloud-code-client',
@@ -81,6 +82,7 @@ const cloudModules = [
   'bank-accounts',
   'waitlist',
   'localized-pricing',
+  'workspaces',
 ];
 
 const cloudMovedFiles = [
@@ -100,6 +102,7 @@ const cloudMovedFiles = [
   '__tests__/me.test.ts',
   '__tests__/sync.test.ts',
   '__tests__/tool-approval-resume.test.ts',
+  '__tests__/mcp-elicitation.test.ts',
   '__tests__/tool-events.test.ts',
   '__tests__/agent-events.test.ts',
   '__tests__/managed-cloud-agent-runs-client.test.ts',
@@ -623,9 +626,6 @@ if (exists('packages/services')) {
 }
 
 for (const rustFile of [
-  'apps/desktop/src-tauri/src/data/cloud_sync.rs',
-  'apps/desktop/src-tauri/src/data/memory_sync.rs',
-  'apps/desktop/src-tauri/src/data/projects_sync.rs',
   'apps/desktop/src-tauri/src/sys/commands/media.rs',
   'crates/agiworkforce-licensing/src/tests.rs',
 ]) {

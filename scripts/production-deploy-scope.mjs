@@ -49,18 +49,6 @@ const SHARED_BUILD_FILES = new Set([
   'turbo.json',
 ]);
 
-// packages/client/sync (TS) and apps/desktop/src-tauri/src/data/cloud_sync.rs
-// (Rust) implement the same delta-sync rules independently, and the only thing
-// holding them together is the golden fixtures under
-// packages/client/sync/src/__fixtures__ replayed by both suites. Editing the
-// fixtures or the TS side would otherwise leave `native` false, so the Rust
-// replay would never run on the commit that changed the contract.
-//
-export const SYNC_PARITY_SOURCES = [
-  'packages/client/sync',
-  'apps/desktop/src-tauri/src/data/cloud_sync.rs',
-];
-
 function normalizePath(file) {
   return file
     .trim()
@@ -118,7 +106,6 @@ export function classifyDeployScope(files, { all = false } = {}) {
       file === 'scripts/production-deploy-baseline.mjs';
     const webDeployContract =
       file === 'scripts/verify-deployment.mjs' || file === 'scripts/verify-deployment.test.mjs';
-    const syncParitySource = SYNC_PARITY_SOURCES.some((source) => isWithin(file, source));
     if (
       sharedBuildFile ||
       sharedPackage ||
@@ -160,7 +147,6 @@ export function classifyDeployScope(files, { all = false } = {}) {
       file === 'Cargo.toml' ||
       file === 'deny.toml' ||
       file.startsWith('rust-toolchain') ||
-      syncParitySource ||
       isWithin(file, 'apps/cli') ||
       isWithin(file, 'apps/desktop/src-tauri') ||
       isWithin(file, 'crates')

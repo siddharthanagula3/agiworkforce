@@ -97,7 +97,7 @@ and this matrix holds more, so there is no declared maturity to show for the res
 | Feature | Declared maturity | web | desktop | mobile | cli | vscode | chrome | api |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Local runtime | not in the feature registry | Absent | Present | Absent | Present | Present | Unverified | Absent |
-| BYOK | not in the feature registry | Present | Unverified | Unverified | Present | Present | Absent | Present |
+| BYOK | not in the feature registry | Present | Present | Unverified | Present | Present | Absent | Present |
 | Global voice | general_availability | Absent | Present | Unverified | Present | Absent | Absent | Absent |
 | Computer use | experimental | Absent | Present | Absent | Absent | Absent | Present | Absent |
 | Filesystem | general_availability | Absent | Present | Absent | Unverified | Unverified | Absent | Absent |
@@ -492,7 +492,7 @@ this document.
 ### BYOK
 
 - **web**: present. `apps/web/lib/byok-providers.ts`, reached by `apps/web/app/docs/byok-env/page.tsx` (import).
-- **desktop**: unverified. Settled by: apps/desktop/src/lib/byok-vault.ts exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this.
+- **desktop**: present. `apps/desktop/src/api/byok.ts`, reached by `apps/desktop/src/features/settings/tabs/ModelsKeys/LocalRuntimeSettings.tsx` (import).
 - **mobile**: unverified. Settled by: A mobile screen that stores a provider key. apps/mobile/app/(app)/settings/cloud-privacy.tsx names the trust boundary; whether it accepts a key is not decidable from the file list.
 - **cli**: present. `apps/cli/src/auth.rs`, reached by `apps/cli/src/lib.rs` (module).
 - **vscode**: present. `apps/extension-vscode/src/integrations/providerSwitchGuard.ts`, reached by `apps/extension-vscode/src/core/commandSetup.ts` (import).

@@ -136,7 +136,7 @@ _Cells by surface (generated):_
 
 - **Deep Research on web works end to end:** plan editing, site limits, progress, stop, partial report, a reader with contents and linked citations, and Markdown/PDF/Word export. The citation UI is strong. The retrieval stack is real: hybrid search, reranking, access-scoped results, and temporary and archived chats excluded from the index.
 - **Memory** reads work everywhere, but writes fail on production (§2.4).
-- **Study mode works in the web chat.** The audit found it broken end to end: a missing CSRF token made "Start studying" return 403, and the study instructions never reached the model. Both are fixed: the token is sent (`3c16cbd0ec`), the active study instruction is added as a developer layer in `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`, and study now runs inside the chat (`44a980b4c1`, `0c9e84472e`).
+- **Study mode works in the web chat.** The audit found it broken end to end: a missing CSRF token made "Start studying" return 403, and the study instructions never reached the model. Both are fixed: the token is sent (`3c16cbd0ec`), the active study instruction is added as a developer layer in `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`, and study now runs inside the chat (`c9f7296fb5`, `18bc094066`).
 - **There is no notebook product.** Projects stand in for one.
 - **Chrome's plain chat never searches the web.** CLI and VS Code search needs the user's own `SEARCH_API_KEY`.
 
@@ -175,13 +175,13 @@ _Cells by surface (generated):_
 
 ### G. Assistants, skills, plugins, connectors and tools
 
-- **Connectors are locked as coming soon** for every account, behind `connectorsReleased()` in `packages/contracts/types/src/connector-release.ts` (`0367c4b140`). The connector bullets below describe the code behind that switch.
+- **Connectors are locked as coming soon** for every account, behind `connectorsReleased()` in `packages/contracts/types/src/connector-release.ts` (`885dbc3374`). The connector bullets below describe the code behind that switch.
 - **Connectors.** Web has a complete connector directory with OAuth, scope explanations and per-conversation connector switches. It has a complete MCP Apps host, which contradicts an older checklist.
 - **Pinned connectors work:** Box, Jira, Asana, HubSpot, Intercom, Figma, Vercel and Slack. Gmail, Google Calendar, Drive, Sheets, Teams, GitLab, BigQuery and Epic/Cerner exist only when the operator configures them (§5).
 - **Custom MCP servers:** the CLI adds local and remote servers; web adds remote ones.
 - **Tool calling is strong on the server:** approval checkpoints bound to the exact call, a 24-hour expiry, idempotency keys, durable runs and run budgets.
 - **Custom assistants exist only in the CLI,** as file-based agents with no edit or delete.
-- **Personal skills are on by default on web** since `ffa5965f88`; `AGI_USER_SKILL_AUTHORING=0` is only an off switch. The audit found them off by default with an Upload button that failed.
+- **Personal skills are on by default on web** since `60ac7a5ac8`; `AGI_USER_SKILL_AUTHORING=0` is only an off switch. The audit found them off by default with an Upload button that failed.
 
 Connector defects:
 
@@ -457,4 +457,4 @@ The Fable second pass overturned or corrected the first audit in these places. T
 
 ---
 
-_Generated tables: `the generated files in audit/missing and audit/partial` (regenerate with `node tool/audit.mjs merge && node tool/audit.mjs status-doc`). Per-cell evidence and remaining text: `audit/ledger/ecosystem-capability-ledger.jsonl`. Live queue: `audit/live-check/codex-live-verification-queue.md`._
+_Generated tables: `the generated files in audit/missing and audit/partial` (regenerate with `pnpm audit:worklist`). Per-cell evidence and remaining text: `audit/ledger/ecosystem-capability-ledger.jsonl`. Live queue: `audit/live-check/codex-live-verification-queue.md`._

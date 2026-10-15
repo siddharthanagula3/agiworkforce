@@ -16,8 +16,14 @@ export const RENDERER_REGISTRY_PATH = 'apps/desktop/src/constants/shortcuts.ts';
 export const RENDERER_HANDLERS_PATH = 'apps/desktop/src/App.tsx';
 export const SHORTCUT_SCREEN_PATH = 'apps/desktop/src/features/settings/KeybindingsSettings.tsx';
 export const VSCODE_MANIFEST_PATH = 'apps/extension-vscode/package.json';
-export const WEB_REGISTRY_PATH = 'apps/web/features/chat/hooks/use-keyboard-shortcuts.ts';
-export const WEB_SHARED_SHORTCUT_PATH = 'packages/ui/ui/src/sidebar/Sidebar.tsx';
+export const WEB_REGISTRY_PATH = 'packages/ui/unified-chat/src/lib/shortcutRegistry.ts';
+export const WEB_HANDLERS_PATH = 'apps/web/features/chat/hooks/use-keyboard-shortcuts.ts';
+export const WEB_SHARED_SHORTCUT_PATH = 'packages/ui/ui/src/sidebar/searchShortcut.ts';
+
+const WEB_FIELD_GATE_PATTERNS = [
+  /return !doc\.firesInEditable && isEditableTarget\(event\.target\);/,
+  /!shortcutYieldsToFocus\(event, doc\)/,
+];
 
 /**
  * Chords a browser keeps for itself. A page that binds one is describing a key
@@ -119,7 +125,9 @@ export function readHandledActions(source) {
 
 function sharedShortcutBlocks(source) {
   const blocks = new Map();
-  for (const entry of source.matchAll(/export const (\w+_SHORTCUT) = \{([\s\S]*?)\n\}/g)) {
+  for (const entry of source.matchAll(
+    /export const (\w+_SHORTCUT)(?::[^=]+)? = \{([\s\S]*?)\n\}/g,
+  )) {
     blocks.set(entry[1], entry[2]);
   }
   return blocks;
@@ -131,35 +139,51 @@ function modifierNames(raw) {
   );
 }
 
-const WEB_FIELD_GATE_PATTERNS = [
-  /return !doc\.firesInEditable && isEditableTarget\(event\.target\);/,
-  /const contextOk = !shortcutYieldsToFocus\(event, doc\);/,
-  /modifierOk && shiftOk && altOk && keyOk && contextOk/,
-];
+function webEntry(body, unresolvedSpread = null) {
+  const id = /id:\s*'([^']+)'/.exec(body);
+  if (id === null) return null;
+  const key = /(?:^|\s)key:\s*'([^']+)'/.exec(body);
+  const scope = /scope:\s*'([^']+)'/.exec(body);
+  return {
+    id: id[1],
+    key: unresolvedSpread === null && key !== null ? key[1] : null,
+    scope: scope === null ? 'app' : scope[1],
+    unresolvedSpread,
+    modifiers: unresolvedSpread === null ? modifierNames(body) : [],
+    firesInEditable: /firesInEditable:\s*true/.test(body),
+  };
+}
 
+/**
+ * Entries of `CHAT_SHORTCUTS`: object literals, possibly spreading a shared
+ * chord, and bare references to a shortcut declared whole elsewhere.
+ */
 export function readWebShortcuts(source, sharedSource = '') {
-  const block = /export const KEYBOARD_SHORTCUT_DOCS[^[]*\[([\s\S]*?)\n\];/.exec(source);
+  const block = /export const CHAT_SHORTCUTS[^[]*\[([\s\S]*?)\n\];/.exec(source);
   if (block === null) return [];
-  const shared = sharedShortcutBlocks(sharedSource);
+  const shared = new Map([...sharedShortcutBlocks(sharedSource), ...sharedShortcutBlocks(source)]);
   const entries = [];
-  for (const raw of block[1].split(/\n  \},?\n/)) {
-    const id = /id:\s*'([^']+)'/.exec(raw);
-    if (id === null) continue;
+  for (const chunk of block[1].split(/\n  \},?\n/)) {
+    let raw = chunk;
+    for (const reference of chunk.matchAll(/^\s*([A-Z][A-Z_]+),\s*$/gm)) {
+      raw = raw.replace(reference[0], '');
+      const whole = shared.get(reference[1]);
+      const entry =
+        whole === undefined
+          ? {
+              id: reference[1],
+              key: null,
+              scope: 'app',
+              unresolvedSpread: reference[1],
+              modifiers: [],
+            }
+          : webEntry(whole);
+      if (entry !== null) entries.push(entry);
+    }
     const spread = /\.\.\.([A-Z][A-Z_]+)/.exec(raw);
     const resolved = spread === null ? '' : (shared.get(spread[1]) ?? null);
-    if (resolved === null) {
-      entries.push({ id: id[1], key: null, unresolvedSpread: spread[1], modifiers: [] });
-      continue;
-    }
-    const body = `${resolved}${raw}`;
-    const key = /(?:^|\s)key:\s*'([^']+)'/.exec(body);
-    entries.push({
-      id: id[1],
-      key: key === null ? null : key[1],
-      unresolvedSpread: null,
-      modifiers: modifierNames(body),
-      firesInEditable: /firesInEditable:\s*true/.test(body),
-    });
+    const entry = resolved === null ? webEntry(raw, spread[1]) : webEntry(`${resolved}\n${raw}`);
+    if (entry !== null) entries.push(entry);
   }
   return entries;
 }
@@ -293,13 +317,17 @@ export function checkShortcutRegistry(repoRoot = REPO_ROOT) {
   }
 
   const webSource = read(repoRoot, WEB_REGISTRY_PATH);
+  const webHandlerSource = read(repoRoot, WEB_HANDLERS_PATH);
   const webShortcuts = readWebShortcuts(webSource, read(repoRoot, WEB_SHARED_SHORTCUT_PATH));
   if (webShortcuts.length === 0) fail('web', `${WEB_REGISTRY_PATH} declares no shortcuts`);
-  const webHandled = readWebHandledIds(webSource);
+  const webHandled = readWebHandledIds(webHandlerSource);
+  if (webHandled.length === 0) fail('web', `${WEB_HANDLERS_PATH} has no handler table`);
   const webChords = new Map();
-  const webYieldsToFields = WEB_FIELD_GATE_PATTERNS.every((pattern) => pattern.test(webSource));
+  const webYieldsToFields = WEB_FIELD_GATE_PATTERNS.every((pattern) =>
+    pattern.test(webHandlerSource),
+  );
   for (const shortcut of webShortcuts) {
-    if (!webHandled.includes(shortcut.id)) {
+    if (shortcut.scope === 'app' && !webHandled.includes(shortcut.id)) {
       fail('web', `${shortcut.id} is documented as a shortcut but nothing handles it`);
     }
     if (shortcut.unresolvedSpread !== null) {
@@ -314,9 +342,10 @@ export function checkShortcutRegistry(repoRoot = REPO_ROOT) {
       continue;
     }
     const chord = normalizeAccelerator([...shortcut.modifiers, shortcut.key].join('+'));
-    const owner = webChords.get(chord);
+    const scopedChord = `${shortcut.scope}:${chord}`;
+    const owner = webChords.get(scopedChord);
     if (owner) fail('web', `${shortcut.id} and ${owner} both claim ${chord}`);
-    webChords.set(chord, shortcut.id);
+    webChords.set(scopedChord, shortcut.id);
     if (
       (shortcut.modifiers.includes('ctrl') || shortcut.modifiers.includes('meta')) &&
       !shortcut.modifiers.includes('shift') &&
@@ -328,7 +357,11 @@ export function checkShortcutRegistry(repoRoot = REPO_ROOT) {
     if (collidesWithScreenReader(shortcut.modifiers)) {
       fail('web', `${shortcut.id} binds ${chord}, which VoiceOver claims`);
     }
-    if (shortcut.modifiers.length === 0 && (shortcut.firesInEditable || !webYieldsToFields)) {
+    if (
+      shortcut.scope === 'app' &&
+      shortcut.modifiers.length === 0 &&
+      (shortcut.firesInEditable || !webYieldsToFields)
+    ) {
       fail(
         'web',
         `${shortcut.id} has no modifier and no context rule that keeps it out of a field`,
@@ -336,8 +369,8 @@ export function checkShortcutRegistry(repoRoot = REPO_ROOT) {
     }
   }
   for (const id of webHandled) {
-    if (!webShortcuts.some((shortcut) => shortcut.id === id)) {
-      fail('web', `${WEB_REGISTRY_PATH} handles ${id}, which is not a documented shortcut`);
+    if (!webShortcuts.some((shortcut) => shortcut.id === id && shortcut.scope === 'app')) {
+      fail('web', `${WEB_HANDLERS_PATH} handles ${id}, which is not a documented shortcut`);
     }
   }
 

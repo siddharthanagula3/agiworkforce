@@ -1,4 +1,3 @@
-/* global console */
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -44,11 +43,13 @@ const SLASH_COMMENT_LANGS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs
 const HASH_COMMENT_LANGS = new Set(['.toml']);
 
 export function workspaceFiles() {
-  const output = execFileSync('git', ['ls-files', '-co', '--exclude-standard'], {
+  const output = execFileSync('git', ['ls-files', '-co', '--exclude-standard', '-z'], {
     cwd: REPO_ROOT,
     encoding: 'utf8',
   });
-  return output.split('\n').filter(Boolean);
+  return [...new Set(output.split('\0').filter(Boolean))].filter((file) =>
+    fs.existsSync(path.join(REPO_ROOT, file)),
+  );
 }
 
 export function readText(relativePath) {
@@ -134,13 +135,24 @@ function extractHashComments(source) {
 export function markdownProseLines(source) {
   const out = [];
   const lines = source.split('\n');
-  let inFence = false;
+  let fence = null;
   for (let i = 0; i < lines.length; i += 1) {
-    if (/^\s*(?:```|~~~)/.test(lines[i])) {
-      inFence = !inFence;
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(lines[i]);
+    if (fence !== null) {
+      if (
+        marker &&
+        marker[1][0] === fence.character &&
+        marker[1].length >= fence.length &&
+        marker[2].trim() === ''
+      ) {
+        fence = null;
+      }
       continue;
     }
-    if (inFence) continue;
+    if (marker && (marker[1][0] !== '`' || !marker[2].includes('`'))) {
+      fence = { character: marker[1][0], length: marker[1].length };
+      continue;
+    }
     out.push({ line: i + 1, text: lines[i] });
   }
   return out;

@@ -13,7 +13,6 @@ import {
   publishRelayVerdict,
   requireReleaseReady,
   requireZeroOpenAlerts,
-  SYNC_PARITY_SOURCES,
   classifyDeployScope,
   formatGithubOutputs,
   isEligibleProductionRun,
@@ -185,7 +184,7 @@ test('shared JavaScript build inputs do not rebuild native binaries', () => {
   assert.match(formatGithubOutputs(scope), /^native=false$/m);
 });
 
-test('Rust builds cover native execution inputs and cross-language sync parity', () => {
+test('Rust builds cover native execution inputs', () => {
   for (const file of [
     '.github/workflows/ci.yml',
     '.cargo/audit.toml',
@@ -196,7 +195,6 @@ test('Rust builds cover native execution inputs and cross-language sync parity',
     'apps/cli/src/main.rs',
     'apps/desktop/src-tauri/src/lib.rs',
     'crates/agiworkforce-protocol/src/lib.rs',
-    'packages/client/sync/src/cursor.ts',
   ]) {
     assert.equal(classifyDeployScope([file]).native, true, file);
   }
@@ -207,6 +205,7 @@ test('Rust builds cover native execution inputs and cross-language sync parity',
     'pnpm-lock.yaml',
     'packages/ai/model-registry/catalog/models.curation.json',
     'packages/ai/routing/src/index.ts',
+    'packages/client/sync/src/cursor.ts',
   ]) {
     assert.equal(classifyDeployScope([file]).native, false, file);
   }
@@ -449,57 +448,6 @@ test('the web promotion verifies the schema ledger before it deploys', () => {
   const workflow = fs.readFileSync('.github/workflows/deploy-production.yml', 'utf8');
   assert.match(workflow, /pnpm db:migrate -- verify/);
   assert.doesNotMatch(workflow, /api-gateway/);
-});
-
-test('editing either half of the sync parity pair selects the lane that runs both', () => {
-  for (const file of [
-    'packages/client/sync/src/__fixtures__/pull-apply.json',
-    'packages/client/sync/src/__fixtures__/cursor-compare.json',
-    'packages/client/sync/src/__fixtures__/push-body.json',
-    'packages/client/sync/src/cursor.ts',
-    'packages/client/sync/src/messages.ts',
-    'apps/desktop/src-tauri/src/data/cloud_sync.rs',
-  ]) {
-    assert.equal(classifyDeployScope([file]).native, true, file);
-  }
-
-  assert.equal(classifyDeployScope(['packages/platform/utils/src/logger.ts']).native, false);
-});
-
-test('the sync parity sources named by the classifier still exist', () => {
-  for (const source of SYNC_PARITY_SOURCES) {
-    assert.equal(fs.existsSync(source), true, source);
-  }
-});
-
-test('CI runs the TS suite and the Rust fixture replay in the same job', () => {
-  const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
-  const stepAt = workflow.indexOf('Cross-language sync parity');
-  assert.notEqual(stepAt, -1);
-
-  const headers = [...workflow.matchAll(/^ {2}[a-z0-9-]+:$/gm)];
-  const owner = headers.filter((header) => header.index < stepAt).at(-1);
-  const next = headers.find((header) => header.index > stepAt);
-  const job = workflow.slice(owner.index, next ? next.index : workflow.length);
-
-  assert.match(job, /if: needs\.scope\.outputs\.native_changed == 'true'/);
-  assert.match(job, /run: pnpm install --frozen-lockfile/);
-  assert.match(job, /pnpm --filter @agiworkforce\/sync test/);
-  assert.match(
-    job,
-    /cargo test --locked -p agiworkforce-desktop --lib data::cloud_sync::fixture_tests/,
-  );
-  assert.match(job, /grep -c ': test\$'/);
-  assert.match(job, /if \[ "\$matched" -eq 0 \]; then/);
-
-  const syncManifest = JSON.parse(fs.readFileSync('packages/client/sync/package.json', 'utf8'));
-  assert.equal(syncManifest.name, '@agiworkforce/sync');
-  assert.equal(typeof syncManifest.scripts.test, 'string');
-
-  const rust = fs.readFileSync('apps/desktop/src-tauri/src/data/cloud_sync.rs', 'utf8');
-  assert.match(rust, /^mod fixture_tests \{$/m);
-  assert.match(rust, /packages\/client\/sync\/src\/__fixtures__\/pull-apply\.json/);
-  assert.match(rust, /packages\/client\/sync\/src\/__fixtures__\/cursor-compare\.json/);
 });
 
 const candidateSha = 'a'.repeat(40);

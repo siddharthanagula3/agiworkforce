@@ -18,7 +18,7 @@ and 8 P3. The audit's text for each is kept as evidence in
 screenshots are not in git.
 
 Each row was mapped to the code on branch `fix/public-site-audit-2026-10-03`,
-which equals production commit `74bece5d10` for the files concerned
+which equals production commit `01bf81b433` for the files concerned
 (`ArtifactPreview.tsx` differs on the branch). The "State" column says how each
 row reproduced: 15 rows were checked by a second reviewer; `AF09` and `AF13`
 reproduce only partly, and `AF05`, `AF07` and `AF14` reproduce fully but were
@@ -62,7 +62,7 @@ setting enforcement. Lanes 1 to 13 belong to
 `audit/prior-audits/public-website-audit-2026-10-03.md`. A label marked
 "(amended)" is a package of another lane that this row changes.
 
-| ID   | Priority | Finding                                                                                                       | Screens                                                                 | State at 74bece5d10                                                                                                                                                                                                                | Start at                                                                    | Work packages                                                     |
+| ID   | Priority | Finding                                                                                                       | Screens                                                                 | State at 01bf81b433                                                                                                                                                                                                                | Start at                                                                    | Work packages                                                     |
 | ---- | -------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | AF01 | P1       | Resolve conflicting artifact privacy guidance                                                                 | Artifacts pane, Settings privacy                                        | Push half fixed in code (`L14.1`): temporary-chat artifacts no longer leave the browser. The on-device filter cannot be reached in a shipped shell and does not survive a reload. Notice wording open (`L14.2`); Preview pass owed | `apps/web/features/onboarding/components/ArtifactPrivacyNotice.tsx`         | L14.1, L14.2                                                      |
 | AF02 | P2       | Unify help access and stop composer obstruction                                                               | Blank chat `/` and `/chat`, Support open and closed, 1180, 768, 500     | Reproduces, verified                                                                                                                                                                                                               | `apps/web/features/support/lib/route-visibility.ts`                         | L15.11, L15.12, L15.13, L15.14                                    |
@@ -129,7 +129,7 @@ on your chats" is enforced. The lead's working papers are `OPTOUT-COVERAGE.json`
 run below); both live in the fix branch's working set, not in git, so the code
 paths named here are the durable anchors.
 
-Everything in this section describes the code at `74bece5d10`, the commit
+Everything in this section describes the code at `01bf81b433`, the commit
 production served on 2026-10-03, which is identical to the branch for every file
 named. The commits that land lane 19 narrow it.
 

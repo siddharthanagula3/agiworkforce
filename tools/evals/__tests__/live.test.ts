@@ -252,6 +252,28 @@ describe('determinism', () => {
     ).not.toBe(fingerprintRequest(request));
   });
 
+  it('sends image fixtures through the provider image contract and PDF fixtures as documents', () => {
+    const files = loadDataset('files');
+    const imageCase = files.cases.find((entry) => entry.family === 'image')!;
+    const imageRequest = buildRequest(imageCase);
+    const imageContent = imageRequest.messages[0]!.content;
+    expect(Array.isArray(imageContent)).toBe(true);
+    if (!Array.isArray(imageContent)) throw new Error('Expected image content blocks');
+    expect(imageContent[0]).toEqual({
+      type: 'image',
+      source: {
+        type: 'base64',
+        mediaType: 'image/png',
+        data: readFileSync(
+          fileURLToPath(new URL('../datasets/fixtures/files/quarterly-bars.png', import.meta.url)),
+        ).toString('base64'),
+      },
+    });
+    const pdfCase = files.cases.find((entry) => entry.family === 'pdf')!;
+    const pdfContent = buildRequest(pdfCase).messages[0]!.content;
+    expect(Array.isArray(pdfContent) && pdfContent[0]!.type).toBe('file');
+  });
+
   it('embeds recorded fixtures as tool results, never fetching a live page', () => {
     const browser = loadDataset('browser');
     const evalCase = browser.cases[0]!;

@@ -57,16 +57,6 @@
       "invocation": "stream_completion("
     },
     {
-      "path": "apps/desktop/electron/runtime/localInferenceService.ts",
-      "line": 168,
-      "invocation": "adapter.stream("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/automation/computer_use/anthropic_agent.rs",
-      "line": 470,
-      "invocation": "invoke_candidate("
-    },
-    {
       "path": "apps/desktop/src-tauri/src/automation/computer_use/observe_plan_act.rs",
       "line": 1093,
       "invocation": "invoke_candidate("
@@ -80,21 +70,6 @@
       "path": "apps/desktop/src-tauri/src/core/agent/autonomous.rs",
       "line": 1365,
       "invocation": ".send_message("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/agent/code_generator.rs",
-      "line": 213,
-      "invocation": ".send_message("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/agent/code_generator.rs",
-      "line": 630,
-      "invocation": ".send_message("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/agent/intelligent_file_access.rs",
-      "line": 283,
-      "invocation": "invoke_candidate("
     },
     {
       "path": "apps/desktop/src-tauri/src/core/agent/planner.rs",
@@ -132,11 +107,6 @@
       "invocation": ".send_message("
     },
     {
-      "path": "apps/desktop/src-tauri/src/core/agi/process_reasoning.rs",
-      "line": 375,
-      "invocation": "invoke_candidate("
-    },
-    {
       "path": "apps/desktop/src-tauri/src/core/agi/reflection.rs",
       "line": 381,
       "invocation": ".send_message("
@@ -144,16 +114,6 @@
     {
       "path": "apps/desktop/src-tauri/src/core/agi/reflection.rs",
       "line": 814,
-      "invocation": ".send_message("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/intent/detector.rs",
-      "line": 290,
-      "invocation": ".send_message("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/llm/council.rs",
-      "line": 328,
       "invocation": ".send_message("
     },
     {
@@ -165,11 +125,6 @@
       "path": "apps/desktop/src-tauri/src/core/llm/llm_router.rs",
       "line": 1615,
       "invocation": "invoke_candidate("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/llm/tool_executor/llm_tools.rs",
-      "line": 61,
-      "invocation": ".send_message("
     },
     {
       "path": "apps/desktop/src-tauri/src/core/research/orchestrator.rs",
@@ -239,56 +194,6 @@
     {
       "path": "apps/desktop/src-tauri/src/sys/commands/chat/send_message_execution.rs",
       "line": 1779,
-      "invocation": "invoke_candidate("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/sys/commands/code_editing.rs",
-      "line": 133,
-      "invocation": "invoke_candidate("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/sys/commands/code_editing.rs",
-      "line": 281,
-      "invocation": "invoke_candidate("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/sys/commands/completion.rs",
-      "line": 94,
-      "invocation": "invoke_candidate("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/sys/commands/completion.rs",
-      "line": 200,
-      "invocation": "invoke_candidate("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/sys/commands/completion.rs",
-      "line": 495,
-      "invocation": "invoke_candidate("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/sys/commands/continuous_job_runner.rs",
-      "line": 1981,
-      "invocation": "invoke_candidate("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/sys/commands/design.rs",
-      "line": 105,
-      "invocation": "invoke_candidate("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/sys/commands/design.rs",
-      "line": 225,
-      "invocation": "invoke_candidate("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/sys/commands/design.rs",
-      "line": 299,
-      "invocation": "invoke_candidate("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/sys/commands/design.rs",
-      "line": 516,
       "invocation": "invoke_candidate("
     },
     {

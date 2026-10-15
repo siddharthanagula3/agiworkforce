@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-27
+Last updated: 2026-10-14
 
 What a deployment must hold before each connector in the directory can be
 connected from the browser, with the exact environment variable names. Values
@@ -159,15 +159,70 @@ set the named variables in production and locally.
 
 ### Gmail, Google Drive, Google Calendar (one Google Cloud project)
 
-- Console: https://console.cloud.google.com/apis/credentials, OAuth client ID
-  of type Web application. Configure the OAuth consent screen and enable the
-  Gmail, Drive and Calendar APIs in the same project.
-- Redirect URI: `<origin>/api/connectors/oauth/callback`.
+Google's documentation was checked on 2026-10-08. Gmail, Drive and Calendar use
+Google's remote MCP servers, as Google Contacts does below. These remain in
+Developer Preview and require membership in the
+[Google Workspace Developer Preview Program](https://developers.google.com/workspace/guides/configure-mcp-servers).
+The [Google codelab](https://codelabs.developers.google.com/google-workspace-mcp-adk)
+also lists a Google Workspace account with smart features enabled and a Cloud
+project with billing enabled. These prerequisites are documented; account
+eligibility, enabled services, verification status, deployed credentials and
+live connection success remain unknown here until checked in the target project
+and deployment. Google requires preview membership for the Workspace account
+and Cloud project; its program page prohibits including preview features in
+public applications before General Availability. OAuth verification does not
+establish preview eligibility or remove that rollout restriction.
+[Workspace Developer Preview](https://developers.google.com/workspace/preview).
+
+1. Select the existing Google Cloud project. Confirm preview eligibility for
+   each connector that uses a preview MCP service.
+   Use the console workflow below; a local `gcloud` installation is unnecessary.
+2. Enable both the ordinary APIs and their dedicated MCP services:
+   `gmail.googleapis.com` and `gmailmcp.googleapis.com`,
+   `drive.googleapis.com` and `drivemcp.googleapis.com`,
+   `calendar-json.googleapis.com` and `calendarmcp.googleapis.com`. AGI's own
+   Gmail tools below call the Gmail API directly with the same grant.
+   [Google MCP service setup](https://developers.google.com/workspace/guides/configure-mcp-servers).
+3. In Google Auth Platform, complete Branding, Audience and Data Access. The
+   support email must be the logged-in Google account or a Google Group that
+   account manages. For a new domain mailbox, sign in with its Workspace account,
+   or register it as a Google account, grant it project owner/editor access and
+   sign in with it. Set monitored developer contact addresses. A domain mailbox
+   alone does not make the support address selectable.
+   [Google branding requirements](https://support.google.com/cloud/answer/15549049?hl=en).
+   For users outside the Workspace organization, choose External and add the
+   authorized test accounts while testing. External production branding requires
+   a public homepage, privacy policy and terms links on authorized domains.
+   [Google app-domain requirements](https://support.google.com/cloud/answer/15549049?hl=en).
+   Verify ownership through Search Console using an account associated with the
+   project. [Google brand verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification).
+4. In Google Auth Platform > Clients, inspect or create a Web application
+   OAuth client. Register `<origin>/api/connectors/oauth/callback` exactly, where
+   `<origin>` is the deployment's configured redirect origin. The path is owned
+   by `CONNECTOR_OAUTH_CALLBACK_PATH` in `packages/contracts/cloud-contracts`;
+   do not substitute Google's example callback for another MCP client.
+5. Set the descriptor and credential variables below in the target environment,
+   together with the shared redirect base and persistent token encryption key.
+   Review the current scope limits before declaring scopes in Data Access.
+   `gmail.readonly` and `drive.metadata.readonly` are restricted scopes;
+   public server access may require restricted-scope verification and a security
+   assessment unless a documented exception applies.
+   [Gmail scope classification](https://developers.google.com/workspace/gmail/api/auth/scopes),
+   [Drive scope classification](https://developers.google.com/workspace/drive/api/guides/api-specific-auth),
+   [Restricted-scope verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification).
+6. Verify the signed-in deployment: the Google `setup` entries clear, Connect
+   completes consent and returns to the app, the grant survives reload, and
+   live tools work within the granted scopes. Exercise denied consent, failed
+   tool calls, reconnect and disconnect, including the sibling-connector
+   revocation case below. Configuration presence alone is not live acceptance.
+
 - Descriptor values: `authorizationUrl`
   `https://accounts.google.com/o/oauth2/v2/auth`, `tokenUrl`
   `https://oauth2.googleapis.com/token`, `revocationUrl`
   `https://oauth2.googleapis.com/revoke`, `authorizationParams`
-  `{"access_type":"offline","prompt":"consent"}` so a refresh token is issued.
+  `{"access_type":"offline","prompt":"consent"}` to request offline access and
+  fresh consent. Confirm the returned grant contains a refresh token.
+  [Google offline access](https://developers.google.com/identity/protocols/oauth2/web-server).
 - `mcpUrl` per connector, from `apps/web/lib/connectors/directory/sources/first-party.json`:
   Gmail `https://gmailmcp.googleapis.com/mcp/v1`, Drive
   `https://drivemcp.googleapis.com/mcp/v1`, Calendar
@@ -178,7 +233,8 @@ set the named variables in production and locally.
   (drafts), `gmail.send`;
   Drive `drive.file`, `drive.readonly` (whole-Drive search, as Claude and
   ChatGPT; `drive.metadata.readonly` stays allowed for older grants); Calendar `calendar.readonly`,
-  `calendar.events`. AGI adds two Gmail tools beside Google's server, both
+  `calendar.calendarlist.readonly` (`list_calendars`), `calendar.events`.
+  AGI adds two Gmail tools beside Google's server, both
   calling the Gmail API with the same grant: `send_draft` sends a draft the
   user has seen (`drafts.send`, which needs `gmail.compose`) and
   `read_attachments` reads a message's attachments as text
@@ -198,7 +254,58 @@ set the named variables in production and locally.
   `CONNECTOR_OAUTH_GOOGLE_DRIVE_CLIENT_SECRET`,
   `CONNECTOR_OAUTH_GOOGLE_CALENDAR_CLIENT_ID`,
   `CONNECTOR_OAUTH_GOOGLE_CALENDAR_CLIENT_SECRET`. One Google client may serve
-  all three descriptors; the names stay separate.
+  all three descriptors; the variable names stay separate. Configure all three
+  descriptors in `CONNECTOR_OAUTH_PROVIDERS_JSON`. A grant made before a scope
+  joined a descriptor, such as `gmail.compose` for drafts or `drive.readonly` for
+  whole-Drive search, needs explicit re-consent before that access works.
+
+**Gmail public-release gate:** Google applies its user-data policy to data
+derived from API responses as well as to the responses themselves. Do not claim
+public readiness or a Limited Use compliance guarantee from local
+implementation tests; the real consent, read and draft journeys must pass on
+the intended review build first.
+[Google Workspace user-data policy](https://developers.google.com/workspace/workspace-api-user-data-developer-policy).
+
+For the verification demo, use a consenting test account and harmless sample
+mail. Record only after the intended review build passes the real consent,
+read and draft journeys; an offline test run is not footage of a working app.
+
+1. On macOS, press Shift-Command-5, select the browser recording area and start
+   recording. Keep the app and Google consent interface in English.
+2. Show the app homepage, privacy/terms links, signed-in app and Gmail Connect
+   control. Narrate what the build under review does with Gmail.
+3. Connect Gmail and show the full Google consent screen, AGI Workforce branding
+   and requested permissions. Never display passwords, client secrets, tokens or
+   authorization codes. The scopes must match the review submission.
+4. Search for a harmless message titled `AGI Gmail Connector Demo`, read its
+   body/thread, and show that the answer matches the actual message. Use only
+   supported operations in the review build.
+5. Request a draft addressed to the test account, approve the action, then open
+   Gmail Drafts to show its real recipient, subject and body.
+6. Show connected-account status after reload and the app's disconnect control.
+   A shared-project disconnect can revoke sibling Google connectors; use a
+   disposable test connection if exercising that action.
+7. Stop recording and upload the demonstration to YouTube with reviewer-accessible
+   visibility, such as Unlisted. Submit the link with scope justifications that
+   describe the tested implementation. Include other selected connectors'
+   real journeys in the submission if those scopes are also being reviewed.
+
+Google requires an accessible English demonstration of the full consent flow
+and implemented uses of the scopes being reviewed.
+[Google demo-video requirements](https://support.google.com/cloud/answer/13804565?hl=en).
+
+**Disconnect qualification:** Google's token revocation removes all previously
+granted scopes and invalidates tokens for all clients in the same project for
+that Google account. Sharing a project therefore means disconnecting Gmail can
+also invalidate Drive and Calendar access; separate client IDs in that project
+do not isolate revocation.
+[Google token revocation](https://developers.google.com/identity/protocols/oauth2/web-server#tokenrevoke).
+The current `apps/web/lib/connectors/oauth-access.ts` attempts provider revocation
+and then deletes the selected connector's local grant whatever the result; it
+does not update sibling Google connectors. Provider revocation is best effort, so
+successful local disconnect does not prove successful upstream revocation. Test
+sibling status and reauthorization explicitly before claiming independent Google
+disconnects.
 
 ### Google Contacts (`google-contacts`, hosted, read-only)
 

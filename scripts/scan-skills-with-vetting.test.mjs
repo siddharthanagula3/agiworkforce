@@ -3,8 +3,9 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import process from 'node:process';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 
 const scanScript = fileURLToPath(new URL('./scan-skills-with-vetting.mjs', import.meta.url));
 
@@ -128,6 +129,60 @@ test('--self-test fails a scanner that waves the hostile fixture through', (t) =
   assert.equal(result.status, 1, result.stdout);
   assert.match(result.stderr, /hostile fixture was not refused/);
 });
+
+for (const [label, benign, expected] of [
+  ['safe', { risk_assessment: { recommendation: 'SAFE' } }, 0],
+  ['caution', { risk_assessment: { recommendation: 'CAUTION' } }, 0],
+  ['null', { risk_assessment: { recommendation: null } }, 1],
+  ['missing', { risk_assessment: {} }, 1],
+  ['unknown', { risk_assessment: { recommendation: 'UNRECOGNIZED' } }, 1],
+]) {
+  test(`--self-test requires an affirmative benign verdict: ${label}`, (t) => {
+    const { scanner } = fixture(
+      t,
+      `#!${process.execPath}\n` +
+        `const fs = require('node:fs');\n` +
+        `const args = process.argv.slice(2);\n` +
+        `const target = args[1];\n` +
+        `const output = args[args.indexOf('--output') + 1];\n` +
+        `const hostile = fs.readFileSync(target + '/SKILL.md', 'utf8').includes('Ignore all previous instructions');\n` +
+        `fs.writeFileSync(output, JSON.stringify(hostile ? { risk_assessment: { recommendation: 'DO_NOT_INSTALL' } } : ${JSON.stringify(benign)}));\n`,
+    );
+    const result = spawnSync(process.execPath, [scanScript, '--self-test'], {
+      encoding: 'utf8',
+      timeout: 30_000,
+      env: { ...process.env, SKILLSPECTOR_BIN: scanner },
+    });
+    assert.equal(result.signal, null, result.stderr);
+    assert.equal(result.status, expected, result.stdout + result.stderr);
+    if (expected === 1) assert.doesNotMatch(result.stdout, /self-test passed/);
+  });
+}
+
+for (const mode of ['missing-output', 'malformed-json']) {
+  test(`--self-test cannot pass when the benign scanner produces ${mode}`, (t) => {
+    const { scanner } = fixture(
+      t,
+      `#!${process.execPath}\n` +
+        `const fs = require('node:fs');\n` +
+        `const args = process.argv.slice(2);\n` +
+        `const output = args[args.indexOf('--output') + 1];\n` +
+        `const hostile = fs.readFileSync(args[1] + '/SKILL.md', 'utf8').includes('Ignore all previous instructions');\n` +
+        `if (hostile) fs.writeFileSync(output, JSON.stringify({ risk_assessment: { recommendation: 'DO_NOT_INSTALL' } }));\n` +
+        (mode === 'missing-output'
+          ? 'else process.exit(2);\n'
+          : `else fs.writeFileSync(output, '{');\n`),
+    );
+    const result = spawnSync(process.execPath, [scanScript, '--self-test'], {
+      encoding: 'utf8',
+      timeout: 30_000,
+      env: { ...process.env, SKILLSPECTOR_BIN: scanner },
+    });
+    assert.equal(result.signal, null, result.stderr);
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.doesNotMatch(result.stdout, /self-test passed/);
+  });
+}
 
 // An uploaded skill lives outside the tree. It has to clear the same bar.
 test('SKILL_VETTING_EXTRA_ROOTS sweeps a package that is not in this repository', (t) => {

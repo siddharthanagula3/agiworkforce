@@ -1,4 +1,30 @@
 {
   "schemaVersion": 1,
-  "entries": []
+  "entries": [
+    {
+      "file": "apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-session-grants.ts",
+      "migration": 364,
+      "reason": "Reads, inserts and revokes the per-conversation connector approvals in connector_tool_session_grants, which 0364 creates. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0364 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 364,
+      "reason": "The data export carries the account's connector_tool_session_grants rows, a table 0364 creates. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0364 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 364,
+      "reason": "Account erasure deletes the account's connector_tool_session_grants rows, a table 0364 creates. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0364 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 364,
+      "reason": "The deletion manifest classifies connector_tool_session_grants, a table 0364 creates, as an operational record. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0364 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/upgrade-waitlist-notice-service.ts",
+      "migration": 365,
+      "reason": "The upgrade waitlist notifier, run by the notify-upgrade-waitlist cron, reads and writes the five upgrade_* delivery columns 0365 adds to waitlist. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0365 is applied."
+    }
+  ]
 }

@@ -1678,7 +1678,7 @@
       "id": "tauri-tree-not-reachable-from-desktop",
       "section": "1.3 Retained Tauri implementation, not a public Desktop capability",
       "kind": "prose",
-      "sentence": "The files below remain in the retained Tauri source tree and are not reachable from the public Electron Desktop selected by D-2026-09-15-04.",
+      "sentence": "The retained Tauri source tree is not reachable from the public Electron Desktop selected by D-2026-09-15-04.",
       "implementation": ["apps/desktop/src-tauri/tauri.conf.json"],
       "reason": "the retained Tauri tree and the shipped Electron desktop are separate build graphs and no guard enumerates unreachability across them yet"
     },
@@ -1686,7 +1686,7 @@
       "id": "public-desktop-is-managed-cloud-only",
       "section": "1.3 Retained Tauri implementation, not a public Desktop capability",
       "kind": "prose",
-      "sentence": "The public Desktop is managed-cloud-only and exposes neither Local/BYOK inference nor these OAuth connector flows.",
+      "sentence": "The public Desktop is managed-cloud-only and exposes neither Local/BYOK inference nor OAuth connector flows from that tree.",
       "implementation": ["apps/desktop/src-tauri/tauri.conf.json"],
       "reason": "the retained Tauri tree and the shipped Electron desktop are separate build graphs and no guard enumerates unreachability across them yet"
     }
@@ -1733,30 +1733,6 @@
       "why": "maintenance-rule"
     },
     {
-      "id": "desktop-gmail-scope-narrowed",
-      "section": "1.3 Retained Tauri implementation, not a public Desktop capability",
-      "kind": "prose",
-      "sentence": "The Gmail client previously also requested `gmail.modify`, which permits changing and deleting mail; it was dropped because the desktop code only calls read and watch endpoints.",
-      "implementation": ["apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs"],
-      "why": "historical-record"
-    },
-    {
-      "id": "desktop-calendar-scope-narrowed",
-      "section": "1.3 Retained Tauri implementation, not a public Desktop capability",
-      "kind": "prose",
-      "sentence": "The calendar client previously also requested the unrestricted `auth/calendar` scope alongside the two narrower scopes shown above, which made it redundant; it was dropped because the desktop code only calls calendar-list and event endpoints.",
-      "implementation": ["apps/desktop/src-tauri/src/features/calendar/google_calendar.rs"],
-      "why": "historical-record"
-    },
-    {
-      "id": "desktop-scope-gap-closed",
-      "section": "1.8 Known gaps this file deliberately records rather than papers over",
-      "kind": "prose",
-      "sentence": "~~`gmail.modify` and the full `auth/calendar` scope were broader than the advertised capability.~~ Fixed 2026-09-03: the desktop Gmail and Google Calendar clients now request only `gmail.readonly`, `gmail.send`, `calendar.readonly`, and `calendar.events`, matching the endpoints each client actually calls.",
-      "implementation": ["apps/desktop/src-tauri/src/features/calendar/google_calendar.rs"],
-      "why": "historical-record"
-    },
-    {
       "id": "github-app-permission-set-undeclared",
       "section": "1.8 Known gaps this file deliberately records rather than papers over",
       "kind": "prose",
@@ -1787,38 +1763,6 @@
       "sentence": "This repository implements none of their tools, so it cannot map a scope to an API call the way a first-party integration could.",
       "implementation": ["apps/web/lib/connectors/mcp-endpoints.ts"],
       "why": "external-fact"
-    },
-    {
-      "id": "desktop-gmail-scope-rationale",
-      "section": "Desktop native scopes",
-      "kind": "prose",
-      "sentence": "The Gmail client had also requested `gmail.modify`, which permits deleting and relabeling mail, but the desktop code only ever calls `users.getProfile`, `users.watch`, `users.history.list` and `users.stop`, all of which `gmail.readonly` alone authorizes.",
-      "implementation": ["apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs"],
-      "why": "historical-record"
-    },
-    {
-      "id": "desktop-calendar-scope-rationale",
-      "section": "Desktop native scopes",
-      "kind": "prose",
-      "sentence": "The calendar client had also requested the unrestricted `auth/calendar` scope, but the desktop code only ever calls `calendarList.list` and the events endpoints, which `calendar.readonly` plus `calendar.events` together authorize without granting calendar deletion or sharing changes.",
-      "implementation": ["apps/desktop/src-tauri/src/features/calendar/google_calendar.rs"],
-      "why": "historical-record"
-    },
-    {
-      "id": "desktop-send-path-is-separate",
-      "section": "Desktop native scopes",
-      "kind": "prose",
-      "sentence": "Neither client makes a message-send or event-delete call through any other scope; sending mail goes through a separate IMAP/SMTP path in `apps/desktop/src-tauri/src/sys/commands/email.rs` that does not use Google OAuth at all.",
-      "implementation": ["apps/desktop/src-tauri/src/sys/commands/email.rs"],
-      "why": "historical-record"
-    },
-    {
-      "id": "outlook-write-scope-is-used",
-      "section": "Desktop native scopes",
-      "kind": "prose",
-      "sentence": "The Outlook Calendar client requests `Calendars.ReadWrite`, not the narrower `Calendars.Read`, and this is not over-broad: `outlook_calendar.rs` calls `create_event`, `update_event`, and `delete_event` against the Graph API in addition to `list_calendars` and `list_events`, so the write scope is used, not requested speculatively.",
-      "implementation": ["apps/desktop/src-tauri/src/features/calendar/outlook_calendar.rs"],
-      "why": "historical-record"
     },
     {
       "id": "rotation-cadence-is-a-calendar-obligation",
@@ -2082,22 +2026,6 @@
       "kind": "prose",
       "sentence": "The review returned GO-WITH-CONDITIONS on seven conditions: the bridge structurally absent from every anonymous published surface, per-call consent rendered in parent chrome, server-side call and spend caps that fail closed, exact origin validation with the capability default off, the cross-origin invariant preserved, audit logging plus a kill switch, and subresource integrity on the sandbox CDN loads.",
       "implementation": ["audit/registers/capability-gaps.csv"],
-      "why": "historical-record"
-    },
-    {
-      "id": "retained-desktop-scope-inventory",
-      "section": "1.3 Retained Tauri implementation, not a public Desktop capability",
-      "kind": "rows",
-      "rows": 3,
-      "implementation": ["apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs"],
-      "why": "historical-record"
-    },
-    {
-      "id": "desktop-native-scope-table",
-      "section": "Desktop native scopes",
-      "kind": "rows",
-      "rows": 3,
-      "implementation": ["apps/desktop/src-tauri/src/features/calendar/outlook_calendar.rs"],
       "why": "historical-record"
     },
     {

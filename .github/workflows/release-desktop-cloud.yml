@@ -13,9 +13,10 @@
 # Version source of truth is the TAG: the workflow stamps the app via
 # electron-builder --config.extraMetadata.version, and the verify step asserts
 # the signed bundle agrees. apps/desktop/package.json keeps the Tauri shell's
-# version stream untouched. AGI Cloud currently updates through the signed DMG
-# exposed by /api/releases/desktop-cloud/latest and /api/download?app=cloud;
-# there is no in-place electron-updater feed.
+# version stream untouched. A first install is the signed DMG from
+# /api/download?app=cloud. An installed app updates in place through Electron's
+# autoUpdater: /api/releases/desktop-cloud/update/<arch>/<version> answers with
+# the zip this release publishes for that architecture.
 #
 # Ops prerequisite (one-time): the `macos-release` GitHub environment must
 # allow deployments from v-cloud-desktop-* tags, alongside v-desktop-*.
@@ -225,6 +226,9 @@ jobs:
           APPLE_API_KEY: ${{ env.APPLE_API_KEY_PATH }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          # The beforePack hook compiles the bundled agi CLI in this step, and
+          # the CLI bakes its crash report destination in at compile time.
+          AGI_CLI_SENTRY_DSN: ${{ secrets.SENTRY_DSN_CLI }}
         working-directory: apps/desktop
         run: |
           set -euo pipefail
@@ -282,6 +286,29 @@ jobs:
             printf '%s\n' "$signature_info" | grep -F 'TeamIdentifier=D2PR62RLT4'
             printf '%s\n' "$signature_info" | grep -E 'flags=.*runtime'
             spctl --assess --type execute --verbose=4 "$app_path"
+            local helper="${app_path}/Contents/Resources/agi-input"
+            if [ ! -x "$helper" ]; then
+              echo "ERROR: ${app_path} does not carry the agi-input helper" >&2
+              exit 1
+            fi
+            if ! lipo -archs "$helper" | tr ' ' '\n' | grep -x "$expected_arch" >/dev/null; then
+              echo "ERROR: ${helper} is $(lipo -archs "$helper"), which cannot run as ${expected_arch}" >&2
+              exit 1
+            fi
+            local cli="${app_path}/Contents/Resources/agi-cli/agi"
+            if [ ! -x "$cli" ]; then
+              echo "ERROR: ${app_path} does not carry the agi CLI" >&2
+              exit 1
+            fi
+            if [ "$(lipo -archs "$cli")" != "$expected_arch" ]; then
+              echo "ERROR: ${cli} is $(lipo -archs "$cli"), expected ${expected_arch}" >&2
+              exit 1
+            fi
+            codesign --verify --strict --verbose=2 "$cli"
+            local cli_signature
+            cli_signature=$(codesign -d --verbose=4 "$cli" 2>&1)
+            printf '%s\n' "$cli_signature" | grep -F 'TeamIdentifier=D2PR62RLT4'
+            printf '%s\n' "$cli_signature" | grep -E 'flags=.*runtime'
             xcrun stapler validate "$app_path" || {
               xcrun stapler staple "$app_path"
               xcrun stapler validate "$app_path"
@@ -302,6 +329,16 @@ jobs:
           for zip in "${zips[@]}"; do
             [ -s "$zip" ] || { echo "ERROR: empty artifact $zip" >&2; exit 1; }
           done
+
+      # Local coding sessions spawn `agi app-server` from the bundle, so the CLI
+      # the signed app carries must speak the protocol this commit declares. The
+      # runner is arm64, so the arm64 bundle's copy is the one it can start.
+      - name: Handshake against the bundled CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/release/verify-cli-protocol-handshake.mjs \
+            "apps/desktop/release/mac-arm64/AGI Cloud.app/Contents/Resources/agi-cli/agi"
 
       # Notarization proves who built the installer, not which bytes arrived.
       # /api/download/checksums serves this file, so the download page can only

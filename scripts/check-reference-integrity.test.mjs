@@ -67,6 +67,26 @@ test('skips fenced code blocks in markdown', () => {
   assert.ok(!lines.includes('inside fence'));
 });
 
+test('a shorter or different fence cannot expose the contents of an open Markdown fence', () => {
+  for (const attemptedClose of ['```', '~~~~']) {
+    const source = ['before', '````md', attemptedClose, 'hidden metadata', '````', 'after'].join(
+      '\n',
+    );
+    assert.deepEqual(
+      markdownProseLines(source).map(({ text }) => text),
+      ['before', 'after'],
+    );
+  }
+});
+
+test('a matching longer fence closes the block while a fence with trailing text does not', () => {
+  const source = ['before', '~~~md', '~~~not a close', 'hidden', '~~~~', 'after'].join('\n');
+  assert.deepEqual(
+    markdownProseLines(source).map(({ text }) => text),
+    ['before', 'after'],
+  );
+});
+
 const index = buildPathIndex([
   'apps/mobile/services/streaming.ts',
   'apps/web/app/page.tsx',

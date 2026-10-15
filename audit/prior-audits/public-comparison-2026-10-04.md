@@ -17,7 +17,7 @@ This file registers 8 rows (`PC01` to `PC08`, the report's `R01` to `R08`): 1 P1
 the screenshots are not in git.
 
 Each row was mapped to the code on branch `fix/public-site-audit-2026-10-03`,
-which equals production commit `74bece5d10` for the files concerned, with two
+which equals production commit `01bf81b433` for the files concerned, with two
 exceptions: `apps/web/lib/surface-status.ts` (helpers added on the branch; the
 registry values are unchanged) and `apps/web/app/connectors/mcp-directory/page.tsx`
 (icon component only). The "State" column says how each row reproduced: 7 rows
@@ -49,7 +49,7 @@ follow-ups. A label marked "(amended)" is a package of another lane (3, 11 or 12
 of `audit/prior-audits/public-website-audit-2026-10-03.md`) that this row
 changes; `L03.4` is that lane's own package.
 
-| ID   | Priority    | Finding                                                                                             | Routes                                                         | State at 74bece5d10                                                                                                                  | Start at                                                                     | Work packages                                                                                   |
+| ID   | Priority    | Finding                                                                                             | Routes                                                         | State at 01bf81b433                                                                                                                  | Start at                                                                     | Work packages                                                                                   |
 | ---- | ----------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | PC01 | P1          | Resolve release availability wording on /use-cases, /features/plugins and /connectors/mcp-directory | `/use-cases`, `/features/plugins`, `/connectors/mcp-directory` | Claim owner fixed in code (`L18.1`): the count names the web and CLI packs are counted apart. Pages open (`L18.2`, `L18.4`, `L03.4`) | `apps/web/lib/surface-status.ts`                                             | L18.1, L18.2, L18.4, L11.4 (amended), L11.9 (amended), L11.10 (amended), L12.7 (amended), L03.4 |
 | PC02 | P2          | Publish an accurate public Study entry                                                              | Public learning journey (no route)                             | Reproduces, verified                                                                                                                 | `apps/web/features/study/lib/study-session.ts`                               | L18.6, L18.7, L18.8                                                                             |

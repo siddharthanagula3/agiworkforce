@@ -300,6 +300,24 @@
       "evidence": ["crates/agiworkforce-utils-image/Cargo.toml", "cargo metadata"]
     },
     {
+      "path": "crates/agiworkforce-worktree",
+      "kind": "crate",
+      "canonicalOwner": "Rust platform and host runtimes",
+      "consumers": ["apps/cli", "apps/desktop/src-tauri"],
+      "deployability": "library",
+      "trustBoundary": "host-authorized Git subprocesses, repository configuration, workspace snapshots and checkpoints",
+      "status": "active",
+      "action": "keep",
+      "evidence": [
+        "crates/agiworkforce-worktree/Cargo.toml",
+        "crates/agiworkforce-worktree/src/lib.rs",
+        "crates/agiworkforce-worktree/src/runner.rs",
+        "crates/agiworkforce-worktree/src/config_guard.rs",
+        "apps/cli/Cargo.toml",
+        "apps/desktop/src-tauri/Cargo.toml"
+      ]
+    },
+    {
       "path": "infrastructure/sandbox",
       "kind": "deploy-target",
       "canonicalOwner": "Web platform",
@@ -740,11 +758,7 @@
       "trustBoundary": "renderer-to-privileged-host command transport",
       "status": "active",
       "action": "keep",
-      "evidence": [
-        "packages/client/desktop-command-client/src/index.ts",
-        "packages/client/desktop-command-client/src/chat.ts",
-        "apps/desktop/src"
-      ]
+      "evidence": ["packages/client/desktop-command-client/src/index.ts", "apps/desktop/src"]
     },
     {
       "path": "packages/client/sync",

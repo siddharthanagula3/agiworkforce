@@ -1559,8 +1559,10 @@
           "mount": "apps/web/app/docs/byok-env/page.tsx"
         },
         "desktop": {
-          "state": "unverified",
-          "settledBy": "apps/desktop/src/lib/byok-vault.ts exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this."
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/api/byok.ts",
+          "mount": "apps/desktop/src/features/settings/tabs/ModelsKeys/LocalRuntimeSettings.tsx"
         },
         "mobile": {
           "state": "unverified",

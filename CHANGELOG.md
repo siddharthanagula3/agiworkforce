@@ -2,9 +2,36 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-14
+Last updated: 2026-10-13
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased, skills catalog trimmed], 2026-10-13
+
+### Removed
+
+- **Eight skills from the Skills catalog.** `co-marketing`,
+  `directory-submissions`, `events`, `image`, `marketing-council`, `revops`,
+  `sms` and `video` are no longer bundled, so they stop appearing in the
+  catalog and stop loading in chat for every account. Bundled skills are on by
+  default and cannot be reinstalled once removed. `marketing-council` answered
+  in the voice of named marketers; `image` and `video` sent people to outside
+  generation tools although the product generates images and video itself; the
+  other five covered narrow business-operations tasks. The catalog now holds
+  62 skills.
+
+## [Unreleased, desktop mail and calendar clients removed], 2026-10-11
+
+### Removed
+
+- **Desktop mail, Gmail and calendar clients.** On upgrade the desktop app
+  deletes the accounts you had connected to them, with their stored passwords
+  and sign-in tokens, because nothing is left in the app that could disconnect
+  them. Your mail, events and contacts are not affected: mail and events were
+  read from the server and never kept on the device, and saved contacts stay.
+  The app does not tell you this happened, and it does not withdraw the access
+  you granted at Google or Microsoft; remove AGI Workforce there if you no
+  longer want it listed (`DESKTOP-MAIL-CALENDAR-ACCOUNTS-REMOVED-SILENTLY-01`).
 
 ## [Unreleased, web public-release audit], 2026-09-14
 

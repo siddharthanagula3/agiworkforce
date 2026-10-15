@@ -824,7 +824,7 @@ Area: Execution panels
 Status: Accessibility / Broken
 Evidence: `apps/desktop/src/features/execution/BrowserPanel.tsx:160` toggles on a `div` with no role; `:208` is a real `<button>` with no handler and no name. Identical pair in `apps/desktop/src/features/execution/ThinkingPanel.tsx:170`. Three more unnamed icon buttons in `apps/desktop/src/features/feedback/MessageFeedbackButtons.tsx:114`. These five are the only unnamed icon-only buttons in the repo.
 Recommended fix: the row becomes `<button aria-expanded>`, the chevron `aria-hidden`; labels on the three feedback controls.
-Overlaps: `DESKTOP-ICON-BUTTON-ARIA-LABEL-GAP-01` is stale: its cited `ArtifactToolbar.tsx` now uses three labelled `<Button>`s. Repoint it here or close it.
+Overlaps: the historical `DESKTOP-ICON-BUTTON-ARIA-LABEL-GAP-01` row was removed after a source read on October 9, 2026 confirmed all three ArtifactToolbar labels and shared Button forwarding. Exact source correction and limits: `audit/checklist/evidence/coverage-desktop-toolbar-canonical-correction-2026-10-09.json` (untracked). The distinct execution-panel and feedback allegations above retain this owner and require their own current verification; no whole mounted accessibility acceptance is claimed.
 
 ### [PG-SHARED-10] Permanently disabled, `aria-hidden` controls decorate the shared Library composer
 

@@ -605,6 +605,267 @@ deployment may lack them, so those answer 200.
 Recording the missing gate brings every model back at once; the panel's
 "Serving now" count shows it.
 
+## Free chat turns
+
+The owner's rule (2026-10-04): the free quota offer is a separate, temporary
+layer. It has its own route, inventory and ledger; a free model is never
+registered as a plan model or a normal route, and the normal chat pipeline is
+not changed for it. When every allowance is spent or expired the product is the
+paid product again with nothing to undo. Everything in this section keeps that
+property: the server half is `serveFreeQuotaTurn` in
+`apps/web/lib/server/free-quota-turn.ts`, and the client half is the route
+decision in `apps/web/features/chat/lib/free-model-handoff.ts`.
+
+### A message is never refused for how it is worded
+
+A free chat turn goes to the selected free model whatever its wording looks
+like. "What is the latest version of React" and "write a Python script to parse
+a CSV" are answered by the model, which is told it has no web access and cannot
+run code (the product prompt for a turn without tools) and says so when a
+question needs live data. Neither the composer nor the route reads the text for
+search, page or code intent.
+
+The route still refuses a `web_search` or `web_fetch` flag sent straight to it
+(HTTP 400, `free_quota_search_unsupported`), and research, code execution,
+Office creation, a skill or connected-app context in the request body (HTTP 400,
+`free_quota_prompt_unsupported`). The web client never sends those to the free
+route: it hands that message to Auto instead (next section), and it leaves the
+search and page flags out of every free chat request.
+
+The Experiential Labs lane (`apps/web/app/api/models/experiential-free`) is a
+different route with its own rules and still reads the wording; the composer
+keeps its older block for those models only.
+
+### An explicit choice is handed to Auto for one message
+
+When the person has chosen something a free chat model cannot serve, Send still
+works. `routeFreeModelTurn` sends that one message through the normal pipeline
+to the account's Auto model, exactly as if Auto had been picked for it:
+
+| Choice                                              | Saved reason                |
+| --------------------------------------------------- | --------------------------- |
+| Deep Research switched on                           | `free_model_research`       |
+| A typed `/search`                                   | `free_model_web_search`     |
+| A typed `/code`, for that message only              | `free_model_code_execution` |
+| An Office output format selected                    | `free_model_office_file`    |
+| A skill selected                                    | `free_model_skill`          |
+| A connected-app prompt or resource attached         | `free_model_connected_app`  |
+| A file that is not an image                         | `free_model_file`           |
+| An image, on a free model that does not read images | `free_model_image`          |
+
+- The conversation's model is not changed: nothing calls the functions that
+  write it, so the next message goes back to the free model.
+- The composer says so before Send ("{Auto} will answer this message because
+  ..."), and the reply keeps a note that names what answered and why. The note
+  is the existing fallback note (`metadata.fallbackReason`, owned by
+  `apps/web/lib/chat-fallback-reason.ts`), saved with the reply. It says what
+  happened ("The conversation's model was not changed."), not what is selected
+  now, because it is shown again on every reload.
+- A reply keeps one reason. When the normal route reports that Deep Research
+  did not run (`research_unsupported_model`), that reason is kept instead of
+  the hand-over reason (`handedOverTurnReason`), so the person is told what
+  they did not get. Any other server reason gives way to the hand-over reason.
+- The user message of a handed-over turn keeps the reason too
+  (`metadata.freeModelHandoff`). Regenerate and edit read it
+  (`freeModelHandoffReplay`): a handed-over `/search` is asked for again and
+  goes to Auto again, where the saved replay options alone would send it to the
+  free model as a plain question. The other choices are already in the replay
+  options, except Deep Research and a connected-app prompt, which Regenerate
+  does not repeat for any model.
+- A typed `/search` or `/code` with nothing after it stays in the draft and the
+  composer asks for the request, since no switch shows the command was typed.
+- The normal pipeline decides the turn. A plan limit, the account's no-training
+  setting or a workspace policy refuses it there, and the person sees that
+  refusal as it is.
+- A handed-over message carries no request for another free model to answer in
+  Auto's place, so the Free Auto fallback
+  (`apps/web/lib/services/free-lane/free-quota-fallback.ts`) never replays it
+  onto a free quota model.
+- Web search has no switch of its own (it follows what the selected model can
+  do), so `/search` is the explicit request. `/search` needs web search on the
+  account; without it the composer says so and sends nothing.
+
+### What a free chat turn reads
+
+As system messages ahead of the conversation, in the order the instruction
+precedence contract gives them (`orderInstructionBlocks`, the resolver the
+normal route uses):
+
+1. The product prompt for a turn without tools, with the date and the browser's
+   time zone.
+2. For a typed "remember ..." or "forget ...", a note that says what the app
+   already did, so the reply cannot contradict it.
+3. The admitted context of the project the chat belongs to, through
+   `resolveFreeOfferingPersonalContext` and the canonical project renderer.
+   Its blocks and citations retain ownership, source controls and context limits. A project that is
+   archived, deleted or not the caller's refuses the turn with HTTP 409
+   `project_context_unavailable`, and a failed read with HTTP 503
+   `project_context_load_failed`, as the normal route does.
+4. Custom instructions, then saved memories and past-chat excerpts, under the
+   settings that already govern them.
+
+All of it is counted in the tokens the turn reserves. The admitted project context
+and the messages pass through the account's secret handling together
+(`applySecretHandlingToTurnTexts`), which records the same `secret_detected`
+audit event as a normal turn and reports the number removed to the reader. The
+response names the memories and the past chats the reply drew on.
+
+### What it does not use, and what the person is told
+
+| Input                                        | What happens                                                 | What the person sees                                                     |
+| -------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| Project files and knowledge                  | Included only when admitted by the canonical project context | A line in the composer while the chat is in a project                    |
+| Connected apps that are switched on          | No tool is offered to the model                              | A line in the composer while any is switched on                          |
+| Web search and opening a page                | No tool; the model is told it has none                       | Nothing for a plain question; `/search` is handed to Auto                |
+| Running code, Office files, skills, research | Handed to Auto when chosen                                   | The hand-over line and the saved note                                    |
+| Files that are not images                    | Handed to Auto                                               | The hand-over line and the saved note                                    |
+| Attachments on earlier messages              | Replaced by a one-line note in the request                   | A line in the composer while the chat holds one, and the picker warning  |
+| The reasoning of a model that always reasons | Not shown                                                    | A line in the composer for those models                                  |
+| Extended thinking                            | No switch is offered for these models                        | Nothing: there is no switch to be on                                     |
+| Saving a new memory from the chat            | Nothing is extracted and the model has no memory tool        | Nothing yet. A typed "remember ..." is still saved by the app, as before |
+| Routing profile and temperature              | Ignored by the route                                         | Nothing: the profile steers Auto only, and web chat sends no temperature |
+| A generated conversation title               | The first 50 characters of the first message stand           | Nothing                                                                  |
+
+The lines come from `freeModelTurnNotes` in
+`apps/web/features/chat/lib/free-model-turn-notes.ts`. A message that is about
+to be handed to Auto shows the hand-over line only, because Auto does use the
+project, the earlier attachments and the connected apps.
+
+Other chats of the same project are not a separate input: their excerpts reach
+a free model only as past-chat excerpts, under the account's Search past chats
+setting, and the project line says so. The project block itself carries the
+project's name and description as well as its instructions.
+
+### The daily chat share
+
+Every chat allowance is one pool shared by all Free accounts, so each account
+has a daily share of it.
+
+- `freeChatDailyShare.tokensPerUser` in `apps/web/config/free-pools.json`, a
+  top-level key beside the inventory. The default is 120,000 per account per
+  UTC day, counted across every free chat model.
+- The arithmetic: every chat offering in the inventory is 1,000,000 tokens, so
+  120,000 is 12 percent of one model's allowance as issued. Of the 90 percent
+  the meter may spend (`quotaExperimentPolicy.allowanceUsablePercent`), 900,000
+  tokens, it is 13.3 percent, so it takes eight accounts at their limit, all on
+  one model, to use that model up in a day.
+- Why not smaller: a turn is admitted only if its reservation fits in what is
+  left of the share, and the reservation is a deliberately high estimate of
+  the whole conversation (about one unit a byte) plus the 4,096 token reply
+  budget. At 30,000 a conversation of about 30 KB could never be sent to a free
+  chat model again and a turn could be refused with almost half the share
+  unspent. At 120,000 the same holds only above about 120 KB. The cost is that
+  fewer accounts share each model, which is the number to lower first if the
+  allowances drain faster than the offer is meant to last.
+- A short first message reserves about 5,000 (the estimate of what is sent plus
+  the reply budget) and is then settled to what the provider reports. These
+  figures are arithmetic, not a measurement of real use.
+- To change it, edit the number and deploy. It must be a whole number above
+  zero; `FreeChatDailyShareSchema` in `apps/web/lib/server/free-pools.ts`
+  refuses anything else at load, and refuses a file that has an inventory but no
+  share, so removing the key cannot remove the protection. The
+  shipped-configuration test in `apps/web/lib/server/free-pools.test.ts` pins
+  the number: update it in the same change.
+- It is counted in the shared state store under
+  `agi-fquota:daily:chat:<account hash>:<date>`, beside the image and video
+  counts, and expires on its own once the day has passed.
+- The turn reserves the same units the model's allowance reserves, immediately
+  before that reservation, and settles them to the total the provider reports.
+- The share follows the model's allowance. It is settled only where the
+  allowance is settled and to the same figure, so whatever a turn still holds
+  in a model's pool it also holds in the account's share. The reservation is
+  given back when the provider refuses the request and when the model's
+  allowance cannot take the turn. It is kept, as the allowance keeps its own,
+  when the provider cannot be reached, when the reply ends or is stopped with
+  no usage report, and when settlement fails. Giving the share back while the
+  pool kept the reservation let one account empty a model with failed or
+  stopped turns while its own share read unused.
+- The cost of that rule: each failed or stopped turn with no usage report keeps
+  its whole reservation, about 5,000 units for a short first message, so about
+  six of them use the day.
+- The units are the reservation's, not provider tokens: the input estimate is
+  conservative, so a turn can be refused while the counted total is well under
+  the configured number, and one long conversation reaches the share after far
+  fewer turns than one-message chats do. The refusal says what is left cannot
+  fit the message; it does not say the share was used.
+- The reply budget is clamped to what is left of the share, as it is to what is
+  left of the model's allowance, so the last turn of the day is shortened rather
+  than refused. A turn whose input alone is more than a whole day's share is
+  answered as too long (HTTP 400, `context_length_exceeded`), not as the limit,
+  in its own sentence: it names the share, says waiting for the reset will not
+  help, and offers a new chat or Free Auto, never another free chat model.
+- At the limit the request is refused before any provider request with HTTP 429
+  and code `free_quota_daily_limit`. The message says what is left of today's
+  share cannot fit this message, states the share, that it covers every free
+  chat model and the reset at the next UTC midnight; the card offers Free Auto
+  and the next plan.
+- It fails closed: an unreadable or unwritable count, or a missing share,
+  refuses the turn with HTTP 503 `free_quota_unavailable` and nothing is sent.
+- A Free Auto turn that falls back onto a free quota model counts against the
+  same share. When the share or the provider agreement stops that fallback, the
+  Free Auto refusal stands as it was and no other free model is offered.
+
+### The provider agreement
+
+Before an account's first request to a free quota model run by a provider on
+the China-headquartered list (`CHINESE_HQ_PROVIDER_IDS` in
+`packages/contracts/compliance/src/provider-jurisdiction.ts`), the person sees a
+notice and agrees, or uses Auto instead.
+
+- The words have one owner: `composeFreeModelProviderNotice` in
+  `packages/contracts/compliance/src/named-provider-notice.ts`. It states the
+  provider's name from that list, that it is headquartered in China, the
+  region requests enter and where the provider says the model may run, both
+  from the residency record (`NON_US_VENDOR_TRANSPORT_DEPLOYMENTS` in
+  `packages/contracts/compliance/src/transport-residency.ts`, which keeps the
+  access region, the storage region and the inference scope as three separate
+  facts with the vendor page and the day it was read), what is sent,
+  that the offer is limited, the Privacy Policy and the provider list, and that
+  it can be turned off in Settings, Privacy. It says nothing about how the
+  provider uses or keeps what it is sent. A test in that package fails if a
+  sentence about training or retention is added.
+- A notice exists only for a provider on that list whose deployment the
+  residency record names (`hasFreeModelProviderNotice`). The route refuses a
+  model whose provider has no notice with HTTP 503 `free_quota_unavailable`:
+  nobody can have agreed to a notice that does not exist. Every free quota
+  model is sent to Alibaba Cloud Model Studio whatever its `provider` field
+  says, so an offering added under another provider id needs its own reviewed
+  deployment record before it can be served; a test checks that every servable
+  inventory model has a notice.
+- The record is a `NamedProviderConsent` with surface `web`, kept per account
+  in `user_settings.settings.provider_consent.<provider id>`. Web writes it
+  through the existing preferences route (`/api/settings/preferences`), so the
+  time on the record is the browser's. No migration was needed.
+- `serveFreeQuotaTurn` reads it once the model is known to be on offer and
+  before the conversation, its context, the saved message or any reservation is
+  touched (`loadNamedProviderConsent` in
+  `apps/web/lib/server/named-provider-consent.ts`), for chat, image and video
+  alike. The agreement counts only if it is accepted, names the provider that
+  runs the model, and carries the version of the notice as it reads today. The
+  version is a hash of the notice text, so changing a sentence asks every
+  account again.
+- Without it the turn is refused with HTTP 403, code
+  `cn_hq_provider_not_opted_in` and the provider id, and nothing is sent. An
+  agreement that cannot be read refuses the turn with HTTP 503. The refusal
+  offers Free Auto for a chat turn only; an image or video request has no such
+  stand-in, and its notice shows "Not now" in place of "Use {Auto} instead".
+- On web the notice opens when a message is about to go to such a model and
+  the account has not agreed, and again whenever the server answers with that
+  code. Nothing is sent or saved until the person agrees. Agreeing sends the
+  held message; "Use {Auto} instead" changes the conversation to Auto and sends
+  nothing to the provider. A message that is being handed to Auto does not ask.
+  A held message that came from the follow-up queue is no longer in the
+  composer, so declining the notice puts its text back in the message box and
+  says so; its attachments cannot be kept.
+- Settings, Privacy shows a switch for each such provider once the account
+  holds an answer for it, given or withdrawn. Turning it off records a
+  withdrawal, and the next request is refused with the code above. An account
+  that never used these models sees no switch. When the stored answer cannot be
+  read the row says so and shows no switch.
+- The mobile app sends its free chat turns to the same route and has no such
+  notice, so those turns are refused with that code until the account has
+  agreed on web.
+
 ## Limited free image and video offer
 
 The owner decided on 2026-10-04 to let accounts whose plan has no paid image or

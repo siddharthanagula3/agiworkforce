@@ -126,7 +126,7 @@ deployment record says which component versions it carries.
 - Service changes rebuild only the owning service.
 - Root dependency/workspace inputs and shared packages select the affected app
   and deployment lanes. They do not rebuild Rust binaries by themselves.
-- Rust sources, Cargo inputs, and cross-language sync parity sources select the
+- Rust sources and Cargo inputs select the
   expensive Linux, macOS, and Windows Rust lanes. Desktop changes independently
   select Desktop E2E. Native execution inputs, including the main CI workflow,
   also select native lanes. Other workflow-only, npm wrapper and Web changes

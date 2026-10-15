@@ -231,6 +231,10 @@
       },
       {
         "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/extension",
         "to": "@agiworkforce/provider-runtime"
       },
       {
@@ -930,7 +934,8 @@
       "agiworkforce-protocol",
       "agiworkforce-sandbox-policy",
       "agiworkforce-utils-absolute-path",
-      "agiworkforce-utils-image"
+      "agiworkforce-utils-image",
+      "agiworkforce-worktree"
     ],
     "edges": [
       {
@@ -982,6 +987,10 @@
         "to": "agiworkforce-utils-image"
       },
       {
+        "from": "agiworkforce-cli",
+        "to": "agiworkforce-worktree"
+      },
+      {
         "from": "agiworkforce-desktop",
         "to": "agiworkforce-agent-core"
       },
@@ -1010,6 +1019,10 @@
         "to": "agiworkforce-sandbox-policy"
       },
       {
+        "from": "agiworkforce-desktop",
+        "to": "agiworkforce-worktree"
+      },
+      {
         "from": "agiworkforce-execpolicy",
         "to": "agiworkforce-utils-absolute-path"
       },
@@ -1028,6 +1041,10 @@
       {
         "from": "agiworkforce-protocol",
         "to": "agiworkforce-utils-image"
+      },
+      {
+        "from": "agiworkforce-worktree",
+        "to": "agiworkforce-sandbox-policy"
       }
     ]
   }

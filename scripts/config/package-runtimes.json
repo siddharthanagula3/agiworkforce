@@ -10,7 +10,8 @@
       "./routing-policies.json": "asset"
     },
     "packages/ai/provider-protocol": {
-      ".": "universal"
+      ".": "universal",
+      "./thinking-tag-splitter": "universal"
     },
     "packages/ai/provider-runtime": {
       ".": "universal",
@@ -72,7 +73,8 @@
     },
     "packages/ai/routing": {
       ".": "universal",
-      "./model-picker": "universal"
+      "./model-picker": "universal",
+      "./release-ledger": "universal"
     },
     "packages/ai/search": {
       ".": "universal"
@@ -258,6 +260,7 @@
       "./sonner": "universal",
       "./switch": "universal",
       "./network-error": "universal",
+      "./search-shortcut": "universal",
       "./translate": "universal"
     },
     "packages/ui/unified-chat": {

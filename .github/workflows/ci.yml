@@ -725,31 +725,6 @@ jobs:
           CARGO_INCREMENTAL: '0'
         run: pnpm check:trust-boundaries
 
-      - name: Cross-language sync parity (TEST-05)
-        # packages/client/sync (TS) and data::cloud_sync (Rust) reimplement the
-        # same delta-sync rules and agree only because both replay the golden
-        # fixtures in packages/client/sync/src/__fixtures__. `turbo --affected`
-        # never selects the TS package for a Rust-only change (it is a
-        # dependency of apps/desktop, not a dependent), so the TS half is run
-        # here by name rather than left to affected-selection. The scope
-        # classifier forces this lane on for fixture-only edits so the Rust half
-        # cannot be skipped on the commit that changes the contract.
-        env:
-          AGIWORKFORCE_SKIP_VENDORED_BWRAP: '1'
-          RUSTFLAGS: ''
-          CARGO_INCREMENTAL: '0'
-        run: |
-          set -euo pipefail
-          pnpm --filter @agiworkforce/sync test
-          # A cargo name filter that matches nothing still exits 0, which would
-          # make this half of the gate silently vacuous if the module is renamed.
-          matched=$(cargo test --locked -p agiworkforce-desktop --lib data::cloud_sync::fixture_tests -- --list | grep -c ': test$' || true)
-          if [ "$matched" -eq 0 ]; then
-            echo "data::cloud_sync::fixture_tests matched no tests, the Rust half of the parity pair is gone" >&2
-            exit 1
-          fi
-          cargo test --locked -p agiworkforce-desktop --lib data::cloud_sync::fixture_tests
-
       - name: Free Rust test artifacts before clippy
         # The native-host build plus full Rust lib tests can leave enough
         # transient target artifacts to exhaust GitHub's ephemeral runner disk
@@ -1205,6 +1180,7 @@ jobs:
             changelog-touch-targets.spec.ts \
             checkout.spec.ts \
             dev-design-studies.spec.ts \
+            download-page.spec.ts \
             enterprise-surface.spec.ts \
             gallery-public.spec.ts \
             help-support-launcher-clearance.spec.ts \

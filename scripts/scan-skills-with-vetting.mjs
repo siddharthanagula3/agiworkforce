@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 
+import { Buffer } from 'node:buffer';
+import console from 'node:console';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -11,6 +14,7 @@ const VETTING_ROOT = join(REPO_ROOT, 'tools', 'skill-vetting');
 const LOCK_PATH = join(REPO_ROOT, 'skills-lock.json');
 
 const BLOCKING_RECOMMENDATIONS = new Set(['DO_NOT_INSTALL']);
+const PERMITTED_RECOMMENDATIONS = new Set(['SAFE', 'CAUTION']);
 
 const FIXTURE_ROOT = 'packages/client/client-runtime/src/plugins/__fixtures__';
 const HOSTILE_FIXTURE = join(REPO_ROOT, FIXTURE_ROOT, 'malicious-skill');
@@ -137,6 +141,9 @@ try {
     } else if (BLOCKING_RECOMMENDATIONS.has(recommendation)) {
       console.error(`❌ ${label}: ${recommendation}${suffix}`);
       blocked += 1;
+    } else if (!PERMITTED_RECOMMENDATIONS.has(recommendation)) {
+      console.error(`❌ ${label}: scanner returned an unknown recommendation${suffix}`);
+      blocked += 1;
     } else {
       console.log(`✅ ${label}: ${recommendation}${suffix}`);
     }
@@ -156,7 +163,7 @@ if (selfTest) {
       `the hostile fixture was not refused (recommendation ${hostile.recommendation ?? 'none'})`,
     );
   }
-  if (benign.error !== undefined || BLOCKING_RECOMMENDATIONS.has(benign.recommendation)) {
+  if (benign.error !== undefined || !PERMITTED_RECOMMENDATIONS.has(benign.recommendation)) {
     failures.push(
       `the ordinary fixture was refused (recommendation ${benign.recommendation ?? 'none'})`,
     );

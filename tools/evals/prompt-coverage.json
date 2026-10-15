@@ -6,6 +6,7 @@
     "voice.live_backend_instructions": "reached only from a live voice session's delegation, same limitation as voice.live_instructions",
     "voice.live_context_rules": "applies inside a live voice session, same limitation as voice.live_instructions",
     "product.memory_fact_extraction": "no corpus yet; extraction is gradeable with the structured-output checks and is the next prompt to cover",
+    "product.memory_fact_extraction_all_topics": "the extraction prompt for accounts with Include sensitive topics in memory on; same reason as product.memory_fact_extraction, and one corpus can grade both",
     "agent.cloud_code_system": "runs inside a sandbox with the agent's file tools; the coding corpus grades written code, not a sandboxed agent loop",
     "tool.places_search_description": "needs live place results to grade a tool choice against; the tools corpus covers tool.url_fetch_description instead"
   }

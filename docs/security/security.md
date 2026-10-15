@@ -278,30 +278,16 @@ DNS-resolution SSRF validation (`assertResolvedPublicHostname`).
 
 ### 1.3 Retained Tauri implementation, not a public Desktop capability
 
-The files below remain in the retained Tauri source tree and are not reachable
-from the public Electron Desktop selected by D-2026-09-15-04. The public Desktop
-is managed-cloud-only and exposes neither Local/BYOK inference nor these OAuth
-connector flows. This inventory records the security properties of retained
-code; it must not be used as evidence of a shipped Desktop feature.
+The retained Tauri source tree is not reachable from the public Electron
+Desktop selected by D-2026-09-15-04. The public Desktop is managed-cloud-only
+and exposes neither Local/BYOK inference nor OAuth connector flows from that
+tree. This inventory records the security properties of retained code; it must
+not be used as evidence of a shipped Desktop feature.
 
-The retained implementation uses the user's **own** OAuth client id/secret,
-PKCE, and tokens encrypted with a machine-derived key into local SQLite.
-
-| Provider         | File                                                                | Scopes requested                                                     |
-| ---------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Gmail            | `apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs` | `gmail.readonly`, `gmail.send`, `userinfo.email`, `userinfo.profile` |
-| Google Calendar  | `apps/desktop/src-tauri/src/features/calendar/google_calendar.rs`   | `calendar.readonly`, `calendar.events`                               |
-| Outlook Calendar | `apps/desktop/src-tauri/src/features/calendar/outlook_calendar.rs`  | `User.Read`, `Calendars.Read`, `Calendars.ReadWrite`                 |
-
-As of 2026-09-03 Gmail and Google Calendar no longer request scopes broader
-than the advertised capability. The Gmail client previously also requested
-`gmail.modify`, which permits changing and deleting mail; it was dropped
-because the desktop code only calls read and watch endpoints. The calendar
-client previously also requested the unrestricted `auth/calendar` scope
-alongside the two narrower scopes shown above, which made it redundant; it was
-dropped because the desktop code only calls calendar-list and event endpoints.
-See section 2 for the full rationale and the exact
-API calls each scope covers.
+The retained tree holds no Gmail, Google Calendar or Outlook Calendar client.
+All three were deleted on 2026-10-11 with the email and calendar tools, and
+migration v89 in `apps/desktop/src-tauri/src/data/db/migrations.rs` deletes
+the account rows and tokens they had stored.
 
 ---
 
@@ -404,10 +390,9 @@ API calls each scope covers.
    other entry from that answer, so an unconfigured connector renders as
    unavailable rather than offering a Connect button that 501s.
 2. ~~`gmail.modify` and the full `auth/calendar` scope were broader than the
-   advertised capability.~~ Fixed 2026-09-03: the desktop Gmail and Google
-   Calendar clients now request only `gmail.readonly`, `gmail.send`,
-   `calendar.readonly`, and `calendar.events`, matching the endpoints each
-   client actually calls. See section 1.3 above and section 2.
+   advertised capability.~~ Closed 2026-10-11: the desktop Gmail and calendar
+   clients are deleted, so the desktop requests neither scope. See section 1.3
+   above.
 3. **The GitHub App installation permission set is not declared in this repo**, so
    it cannot be documented from code.
 4. **The standing per-tool permission UI is no longer GitHub-only, and this
@@ -622,43 +607,6 @@ the vendor's server decides, and the column says so.
 Connector ids not in this table have no reviewed ceiling and are not filtered.
 That includes every `api-key`, `pat`, `connection-string`, and `device-local`
 entry in the catalog, none of which use an OAuth scope parameter at all.
-
-### Desktop native scopes
-
-`apps/desktop` requests real, hardcoded OAuth scopes directly against Google
-and Microsoft, using the user's own OAuth client. The ceilings above are the
-web enforcement point and have no effect on the desktop client, so this table
-is a second, separate record of what the desktop app actually requests.
-
-| Connector        | File                                                                | Scopes requested                                                     |
-| ---------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Gmail            | `apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs` | `gmail.readonly`, `gmail.send`, `userinfo.email`, `userinfo.profile` |
-| Google Calendar  | `apps/desktop/src-tauri/src/features/calendar/google_calendar.rs`   | `calendar.readonly`, `calendar.events`                               |
-| Outlook Calendar | `apps/desktop/src-tauri/src/features/calendar/outlook_calendar.rs`  | `User.Read`, `Calendars.Read`, `Calendars.ReadWrite`                 |
-
-As of 2026-09-03 the Gmail and Google Calendar rows replaced a wider request.
-The Gmail client had also requested `gmail.modify`, which permits deleting and
-relabeling mail, but the desktop code only ever calls `users.getProfile`,
-`users.watch`, `users.history.list` and `users.stop`, all of which
-`gmail.readonly` alone authorizes. The calendar client had also requested the
-unrestricted `auth/calendar` scope, but the desktop code only ever calls
-`calendarList.list` and the events endpoints, which `calendar.readonly` plus
-`calendar.events` together authorize without granting calendar deletion or
-sharing changes. Neither client makes a message-send or event-delete call
-through any other scope; sending mail goes through a separate IMAP/SMTP path
-in `apps/desktop/src-tauri/src/sys/commands/email.rs` that does not use Google
-OAuth at all.
-
-The Outlook Calendar client requests `Calendars.ReadWrite`, not the narrower
-`Calendars.Read`, and this is not over-broad: `outlook_calendar.rs` calls
-`create_event`, `update_event`, and `delete_event` against the Graph API in
-addition to `list_calendars` and `list_events`, so the write scope is used, not
-requested speculatively. `User.Read` is Graph's standard identity baseline,
-needed to resolve the signed-in account.
-
-Section 1.3 and gap 2 of section 1.8 carry the same three rows and the same
-rationale; both records were updated together and neither is stale relative to
-the other.
 
 ---
 

@@ -66,6 +66,7 @@ function workspaceTextFiles() {
   const output = execFileSync('git', ['ls-files', '-co', '--exclude-standard'], {
     cwd: root,
     encoding: 'utf8',
+    maxBuffer: 512 * 1024 * 1024,
   });
   const textExtensions = new Set([
     '.cjs',

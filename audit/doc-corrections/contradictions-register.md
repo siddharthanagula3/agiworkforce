@@ -346,6 +346,7 @@ Also noted by cat-product-gaps:
 
 - **Verdict:** 18 of 88 comparable claims contradicted (20%), in both directions.
 - **Doc to update:** dated snapshot. Add a reconciliation note at its head pointing here.
+- **Related current context scope, October 9, 2026:** the `Desktop` surface entry of `docs/agent-context/repo-map.json` describes Desktop only as Tauri/local-first, while `apps/desktop/package.json` defines an Electron main entry and separate Electron builds (`main`, `build:electron`, `dist:electron`), `RENDERER_MODE` in `apps/desktop/electron/config.ts` defaults the renderer to remote, and the "Bundle Electron main and preload" step of `.github/workflows/release-desktop-cloud.yml` builds Electron main/preload. The map itself also describes the Electron privileged runtime. This is the same evidence-scope risk in a different current documentation owner, recorded as `DOC-AGENT-CONTEXT-DESKTOP-SCOPE-01`. It does not change the historical enterprise finding, establish a missing capability, or verify an installed/public release. Correct that `Desktop` entry to name the public Electron shell and the retained internal Tauri code.
 
 #### CR-045 · code-inventory entries contradicted
 

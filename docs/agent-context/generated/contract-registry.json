@@ -45,7 +45,6 @@
     "country-groups",
     "credits",
     "cross-device",
-    "customModel",
     "database",
     "dependency-registry",
     "design-system",
@@ -205,6 +204,7 @@
     "managed-cloud-settings-client",
     "managed-media",
     "map-config",
+    "mcp-elicitation",
     "me",
     "message-metadata-projection",
     "message-thread",
@@ -228,7 +228,8 @@
     "tool-events",
     "triggers",
     "waitlist",
-    "web-search-allowance"
+    "web-search-allowance",
+    "workspaces"
   ],
-  "generatedProtocolTypeCount": 423
+  "generatedProtocolTypeCount": 471
 }

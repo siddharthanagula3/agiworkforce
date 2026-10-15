@@ -45,7 +45,7 @@
     "item": "multi-tab-sync",
     "surface": "apps/web",
     "status": "missing",
-    "evidence": "Grepped whole repo for BroadcastChannel, SharedWorker, cross-tab/multiTab, and storage-event chat sync, zero hits for chat state. The only cross-tab storage event listener is for idle-logout activity sync (apps/web/shared/hooks/useSessionTimeout.ts:300-314) and the offline mutation queue (apps/web/lib/offline/offlineQueue.ts:64), neither syncs conversations/messages. A related but distinct 30s poll exists only for cross-surface (desktop\u2194web) artifact sync (apps/web/features/chat/hooks/use-artifact-cloud-sync.ts:10-45), not general chat state across browser tabs."
+    "evidence": "Grepped whole repo for BroadcastChannel, SharedWorker, cross-tab/multiTab, and storage-event chat sync, zero hits for chat state. The only cross-tab storage event listener is for idle-logout activity sync (apps/web/shared/hooks/useSessionTimeout.ts:300-314) and the offline mutation queue (apps/web/lib/offline/offlineQueue.ts:64), neither syncs conversations/messages. A related but distinct 30s poll exists only for cross-surface (desktop↔web) artifact sync (apps/web/features/chat/hooks/use-artifact-cloud-sync.ts:10-45), not general chat state across browser tabs."
   },
   {
     "item": "composer",
@@ -237,7 +237,7 @@
     "item": "artifact-versioning",
     "surface": "apps/web",
     "status": "built",
-    "evidence": "packages/platform/artifacts/src/artifact-store.ts implements content-keyed append-only revision history (identical content is a no-op; changed content appends a version); apps/web/features/chat/stores/artifacts-store.ts persists and rehydrates versionsById and exposes getArtifactVersions(); apps/web/features/chat/components/ArtifactsPanel.tsx passes that history into ArtifactPreview; ArtifactPreview.tsx defaults to the latest revision and Previous/Next changes the rendered content. Regression coverage: artifacts-store.test.ts proves v1/v2 history exposure and ArtifactPreview.test.tsx proves v2\u2192v1\u2192v2 UI navigation changes the displayed image."
+    "evidence": "packages/platform/artifacts/src/artifact-store.ts implements content-keyed append-only revision history (identical content is a no-op; changed content appends a version); apps/web/features/chat/stores/artifacts-store.ts persists and rehydrates versionsById and exposes getArtifactVersions(); apps/web/features/chat/components/ArtifactsPanel.tsx passes that history into ArtifactPreview; ArtifactPreview.tsx defaults to the latest revision and Previous/Next changes the rendered content. Regression coverage: artifacts-store.test.ts proves v1/v2 history exposure and ArtifactPreview.test.tsx proves v2→v1→v2 UI navigation changes the displayed image."
   },
   {
     "item": "artifact-inline-targeted-edit",
@@ -303,7 +303,7 @@
     "item": "image-input",
     "surface": "apps/web",
     "status": "built",
-    "evidence": "Image files flow through the same addChatAttachments/file-input pipeline as any attachment (ChatComposerNew.tsx:2669-2672, getAcceptAttribute); plus a dedicated screenshot capture path at lines 888-930 (getDisplayMedia \u2192 canvas \u2192 PNG File) that explicitly produces `image/png` attachments."
+    "evidence": "Image files flow through the same addChatAttachments/file-input pipeline as any attachment (ChatComposerNew.tsx:2669-2672, getAcceptAttribute); plus a dedicated screenshot capture path at lines 888-930 (getDisplayMedia → canvas → PNG File) that explicitly produces `image/png` attachments."
   },
   {
     "item": "web-search",
@@ -315,13 +315,13 @@
     "item": "research-plan",
     "surface": "apps/web",
     "status": "built",
-    "evidence": "apps/web/features/chat/components/research/ResearchActivity.tsx:27-34 PHASE_FALLBACK_LABELS includes 'planning' \u2192 'Planning research'; driven by apps/web/lib/hooks/useChatStream.ts:1321,1360,1691,1701 setResearchState() updates from streamed research-status events; rendered in-message via MessageBubble.tsx:858-864 `<ResearchActivity research={...} .../>`."
+    "evidence": "apps/web/features/chat/components/research/ResearchActivity.tsx:27-34 PHASE_FALLBACK_LABELS includes 'planning' → 'Planning research'; driven by apps/web/lib/hooks/useChatStream.ts:1321,1360,1691,1701 setResearchState() updates from streamed research-status events; rendered in-message via MessageBubble.tsx:858-864 `<ResearchActivity research={...} .../>`."
   },
   {
     "item": "research-report",
     "surface": "apps/web",
     "status": "built",
-    "evidence": "Same research pipeline: phase 'synthesizing' \u2192 'Writing report' label (ResearchActivity.tsx:30) and 'complete' phase; the final report is the assistant message content itself, streamed and persisted through the normal chat pipeline (useChatStream.ts research phase handling at lines 1321-1701)."
+    "evidence": "Same research pipeline: phase 'synthesizing' → 'Writing report' label (ResearchActivity.tsx:30) and 'complete' phase; the final report is the assistant message content itself, streamed and persisted through the normal chat pipeline (useChatStream.ts research phase handling at lines 1321-1701)."
   },
   {
     "item": "cowork-web-session-view",
@@ -657,7 +657,7 @@
     "item": "drag-out-file",
     "surface": "apps/desktop",
     "status": "missing",
-    "evidence": "Whole-repo grep (excluding node_modules/target/dist/out/.next) for 'drag-out', 'dragOut', 'drag_out', 'DragOut', 'DownloadURL', and a dedicated OS-drag plugin returns zero hits. tauri.conf.json:29 sets `dragDropEnabled: false` at the window level (governs drag-IN, not export). The only drag-related backend code is `automation_drag_drop` in apps/desktop/src-tauri/src/sys/commands/automation.rs:443-538, which is coordinate-based UI-automation mouse drag (computer-use driving another app), not the app exposing its own files/artifacts for an OS-level drag-out-to-Finder/Explorer gesture. Surface note (2026-09-13): this evidence is the Tauri app 'AGI Desktop' (src-tauri), frozen and out of scope for parity work; the separately shipped Electron 'AGI Cloud' shell (apps/desktop/electron) loads agiworkforce.com directly in its default remote mode and is not described by this row."
+    "evidence": "Whole-repo grep (excluding node_modules/target/dist/out/.next) for 'drag-out', 'dragOut', 'drag_out', 'DragOut', 'DownloadURL', and a dedicated OS-drag plugin returns zero hits. tauri.conf.json:30 sets `dragDropEnabled: false` at the window level (governs drag-IN, not export). The only drag-related backend code is coordinate-based UI automation: the computer-use `Drag` action (apps/desktop/src-tauri/src/automation/computer_use/types.rs:224), performed by `MouseSimulator::drag_and_drop` in apps/desktop/src-tauri/src/automation/input/mouse.rs:212, and browser-automation `drag_and_drop` in apps/desktop/src-tauri/src/automation/browser/advanced.rs:351. Both drive another app or page, not the app exposing its own files/artifacts for an OS-level drag-out-to-Finder/Explorer gesture. Surface note (2026-09-13): this evidence is the Tauri app 'AGI Desktop' (src-tauri), frozen and out of scope for parity work; the separately shipped Electron 'AGI Cloud' shell (apps/desktop/electron) loads agiworkforce.com directly in its default remote mode and is not described by this row."
   },
   {
     "item": "computer-use-driver",
@@ -1557,7 +1557,7 @@
     "item": "undo-edit",
     "surface": "apps/cli",
     "status": "missing",
-    "evidence": "Grep for 'undo' (case-insensitive) across apps/cli/src returns only unrelated hits in apps/cli/src/memory.rs ('undocumented legacy location', not the word 'undo'). Repo-wide grep for 'undo' across all .rs files shows extensive undo/change-tracking infrastructure in apps/desktop/src-tauri (undo_tools.rs, undo_manager.rs, change_tracker.rs, form_undo.rs, sys/commands/undo.rs) but none of it is shared with or reachable from apps/cli, the CLI's Cargo.toml (apps/cli/Cargo.toml:40-49) depends only on agiworkforce-agent-core/app-server/llm/model-registry/mcp/protocol/sandbox-policy/execpolicy/command-registry/utils-image, none of which contain undo logic (`grep -rln undo crates/agiworkforce-agent-core/src` returns nothing). apps/cli's file-edit tools (features/exec/tools) keep no pre-edit backup/original_content anywhere (grepped for 'backup'/'.bak'/'original_content'/'pre_edit', zero hits), so there is no mechanism to revert a single file edit independent of git; only whole-conversation `rewind` (see above) exists."
+    "evidence": "Grep for 'undo' (case-insensitive) across apps/cli/src returns only unrelated hits in apps/cli/src/memory.rs ('undocumented legacy location', not the word 'undo'). Repo-wide grep for 'undo' across all .rs files shows extensive undo/change-tracking infrastructure in apps/desktop/src-tauri (undo_tools.rs, undo_manager.rs, change_tracker.rs, sys/commands/undo.rs) but none of it is shared with or reachable from apps/cli, the CLI's Cargo.toml (apps/cli/Cargo.toml:40-49) depends only on agiworkforce-agent-core/app-server/llm/model-registry/mcp/protocol/sandbox-policy/execpolicy/command-registry/utils-image, none of which contain undo logic (`grep -rln undo crates/agiworkforce-agent-core/src` returns nothing). apps/cli's file-edit tools (features/exec/tools) keep no pre-edit backup/original_content anywhere (grepped for 'backup'/'.bak'/'original_content'/'pre_edit', zero hits), so there is no mechanism to revert a single file edit independent of git; only whole-conversation `rewind` (see above) exists."
   },
   {
     "item": "context-compaction",
@@ -2019,7 +2019,7 @@
     "item": "signing-secret-verification",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "The product has no inbound Slack HTTP events route, so the unused signing-secret field was removed from both Desktop connection forms, the Tauri request/config contract, and encrypted credential storage. The retained Slack path is outbound bot-token messaging plus the separate MCP OAuth connector; no UI or API claims inbound request-signature verification."
+    "evidence": "The Events API receiver, apps/web/app/api/webhooks/slack/route.ts, checks every request with verifySlackSignature (apps/web/lib/triggers/trigger-signatures.ts) and answers 503 while the signing secret is unset. It feeds user-defined triggers and the first-party Slack assistant (apps/web/lib/slack/slack-assistant.ts), which answers direct messages and mentions as the app. The native Desktop Slack client that once carried a signing-secret field was removed on 2026-10-11 (docs/decisions/wire-or-cut.md). This row's status predates the first-party Slack app (2026-09-28) and has not been re-audited."
   },
   {
     "item": "events-api",
@@ -2031,7 +2031,7 @@
     "item": "socket-mode",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "The uncalled `SlackClient::listen_events` WebSocket helper and its event-stream types were removed together with app-token capture/storage. The retained outbound Slack client contains no Socket Mode connection path, and the real MCP connector requires only its OAuth-derived bot token."
+    "evidence": "No Socket Mode connection path exists: a repository search for apps.connections.open finds nothing. The native Desktop Slack client, whose uncalled listen_events helper had already been removed, was removed on 2026-10-11 (docs/decisions/wire-or-cut.md); the Slack MCP connector needs only its OAuth-derived token."
   },
   {
     "item": "app-mention-handler",
@@ -2043,7 +2043,7 @@
     "item": "thread-reply",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "SlackMessage struct (apps/desktop/src-tauri/src/features/messaging/slack.rs:459-464) has fields ts/channel/text/user only, no thread_ts field anywhere in the file; grepped whole repo for 'thread_ts' in a Slack context with zero hits."
+    "evidence": "The first-party Slack assistant answers a channel mention in its thread: apps/web/lib/slack/slack-assistant.ts sets the reply's threadTs to the mention's thread or timestamp, and postSlackMessage sends it as thread_ts (apps/web/lib/slack/slack-api.ts). The Events API receiver also passes an event's thread_ts to trigger ingest (apps/web/app/api/webhooks/slack/route.ts). The native Desktop Slack client, whose SlackMessage had no thread_ts, was removed on 2026-10-11 (docs/decisions/wire-or-cut.md). This row's status predates the first-party Slack app (2026-09-28) and has not been re-audited."
   },
   {
     "item": "ephemeral-message",
@@ -2055,7 +2055,7 @@
     "item": "block-kit-blocks",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "The uncalled Block Kit payload structs, constructors, and `send_interactive_message` helper were removed from the legacy native Slack client. Retained outbound messaging sends plain text through `chat.postMessage`; no product surface advertises Block Kit composition."
+    "evidence": "The first-party Slack assistant composes Block Kit section and actions blocks in apps/web/lib/slack/slack-messages.ts and sends them through postSlackMessage and postSlackEphemeral (apps/web/lib/slack/slack-api.ts). The native Desktop Slack client was removed on 2026-10-11 (docs/decisions/wire-or-cut.md). This row's status predates the first-party Slack app (2026-09-28) and has not been re-audited."
   },
   {
     "item": "interactive-components",
@@ -2103,7 +2103,7 @@
     "item": "streaming-via-chat-update",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "The uncalled native `chat.update` helper was removed. Retained outbound messaging performs one complete `chat.postMessage` request and no product surface claims streaming Slack replies."
+    "evidence": "A repository search for chat.update finds no Slack call: the first-party Slack assistant posts each answer once with chat.postMessage (postSlackMessage in apps/web/lib/slack/slack-api.ts) and never edits it. The native Desktop Slack client, which sent one complete message per request, was removed on 2026-10-11 (docs/decisions/wire-or-cut.md), and no product surface claims streaming Slack replies."
   },
   {
     "item": "link-unfurling",
@@ -2115,13 +2115,13 @@
     "item": "emoji-reaction-trigger",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Repository search finds no `reaction_added` event handler or inbound Slack event route. The uncalled outbound `reactions.add` helper was also removed from the legacy native client."
+    "evidence": "A repository search for reaction_added finds no hit. The Events API receiver (apps/web/app/api/webhooks/slack/route.ts) forwards an event's type to trigger ingest with no reaction-specific handling, and the first-party Slack assistant only adds and removes its own working reaction on the message it is answering (markWorking in apps/web/lib/slack/slack-assistant.ts, setSlackReaction in apps/web/lib/slack/slack-api.ts). The native Desktop Slack client was removed on 2026-10-11 (docs/decisions/wire-or-cut.md)."
   },
   {
     "item": "file-share-event",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Repository search finds no `file_shared` event handler or inbound Slack event route. The uncalled outbound file-upload helper and payload types were also removed from the legacy native client."
+    "evidence": "A repository search for file_shared finds no Slack event handler. The Events API receiver (apps/web/app/api/webhooks/slack/route.ts) forwards an event's type to trigger ingest with no file handling, and the first-party Slack assistant reads only the names of files attached to a message it answers (apps/web/lib/slack/slack-events.ts). The native Desktop Slack client, whose upload helper had already been removed, was removed on 2026-10-11 (docs/decisions/wire-or-cut.md)."
   },
   {
     "item": "channel-membership-event",
@@ -2133,13 +2133,13 @@
     "item": "agent-service-identity",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'auth.test', 'bot_user_id', 'bot_id' in Slack context, zero hits. The bot_token in SlackConfig (apps/desktop/src-tauri/src/features/messaging/slack.rs:10-14) is used as a generic bearer credential on every API call with no identity-resolution step."
+    "evidence": "The first-party Slack app stores the bot user id Slack returns at install (exchangeSlackOAuthCode in apps/web/lib/slack/slack-api.ts; bot_user_id in apps/web/db/neon/0330_slack_app.sql) and answers as that app on the user's linked account (apps/web/lib/slack/slack-assistant.ts). The Desktop MCP OAuth connector's users.identity call (apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs) names the signed-in user, not an agent. The native Desktop Slack client that used a bot token as a bare bearer credential was removed on 2026-10-11 (docs/decisions/wire-or-cut.md). This row's status predates the first-party Slack app (2026-09-28) and has not been re-audited."
   },
   {
     "item": "per-channel-scoping",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for channel_scope/perChannel/per-channel, zero hits; SlackConfig (slack.rs:10-14) and the messaging_connections table (apps/desktop/src-tauri/src/sys/commands/messaging.rs:145-159) scope credentials at the workspace/connection level only, with no per-channel restriction field anywhere."
+    "evidence": "No field restricts the Slack app to chosen channels: a repository search for channel_scope, perChannel and per-channel finds only notification-channel settings (apps/web/features/settings/sections/NotificationsSection.tsx, apps/mobile/src/features/settings/notifications/index.tsx). The first-party Slack assistant records the channel of each run (apps/web/db/neon/0330_slack_app.sql) and answers a mention in any channel it is in. The native Desktop Slack client, which scoped its credential to a whole workspace connection, was removed on 2026-10-11 (docs/decisions/wire-or-cut.md)."
   },
   {
     "item": "channel-allowlist",
@@ -2151,13 +2151,13 @@
     "item": "channel-scoped-memory",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for channel-keyed memory/context stores tied to Slack, zero hits; messaging_history table (referenced at apps/desktop/src-tauri/src/sys/commands/messaging.rs:410-425) stores raw sent messages per connection/channel_id but is not consumed as agent memory/context anywhere."
+    "evidence": "No channel-keyed memory store tied to Slack exists: the first-party Slack assistant loads account memory only for direct messages (apps/web/lib/slack/slack-assistant-turn.ts) and reads a mention's thread or the channel's recent history from Slack for each answer (apps/web/lib/slack/slack-context.ts) without keeping it. The Desktop code that wrote sent messages to the messaging_history table was removed on 2026-10-11 (docs/decisions/wire-or-cut.md); the table is still created in apps/desktop/src-tauri/src/data/db/migrations.rs, and only the local-data deletion in apps/desktop/src-tauri/src/sys/commands/privacy.rs still touches it."
   },
   {
     "item": "channel-history-ingestion",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "The uncalled Slack `conversations.history` helper and `MessagingRouter::get_message_history` normalization branch were removed. The separately named `get_messaging_history` Tauri command still reads only the local outbound-message table; no live Slack history ingestion is advertised."
+    "evidence": "The first-party Slack assistant reads a mention's thread (conversations.replies through readSlackThread) or the channel's recent history (conversations.history through readSlackHistory) in apps/web/lib/slack/slack-api.ts, called from apps/web/lib/slack/slack-context.ts, as context for each answer. The get_messaging_history Tauri command, which read only the local table of sent messages, was removed on 2026-10-11 (docs/decisions/wire-or-cut.md) with the rest of the native Desktop Slack client. This row's status predates the first-party Slack app (2026-09-28) and has not been re-audited."
   },
   {
     "item": "multiplayer-shared-session",
@@ -2211,7 +2211,7 @@
     "item": "retry-after-rate-limit",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Every SlackClient method in apps/desktop/src-tauri/src/features/messaging/slack.rs (e.g. send_message:31-67, send_interactive_message:69-105, get_conversation_history:107-134) only checks the JSON body's 'ok' field and returns a generic error string on failure, none inspect HTTP status 429 or a Retry-After header, and there is no retry/backoff wrapper around the reqwest client."
+    "evidence": "The first-party Slack app's Web API client turns HTTP 429 into a ratelimited error that carries Retry-After, and postSlackMessage and postSlackEphemeral retry once when the wait is at most ten seconds (callSlackOnce in apps/web/lib/slack/slack-api.ts). The native Desktop Slack client, which ignored HTTP 429 and the Retry-After header, was removed on 2026-10-11 (docs/decisions/wire-or-cut.md). The Desktop MCP connector's Slack calls (oauth.v2.access and users.identity in apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs) have no 429 or Retry-After handling. This row's status predates the first-party Slack app (2026-09-28) and has not been re-audited."
   },
   {
     "item": "app-directory-listing",
@@ -2823,7 +2823,7 @@
     "item": "oauth-oidc-authorization",
     "surface": "packages/tools/mcp",
     "status": "built",
-    "evidence": "crates/agiworkforce-mcp/src/oauth/flow.rs:1-939 implements RFC 9728 protected-resource discovery, RFC 8414 AS metadata, RFC 7591 dynamic client registration, and RFC 6749/7636 authorization-code+PKCE with refresh and step-up (insufficient_scope) support; wired into transport/http.rs:100-181 on 401. Desktop parity in apps/desktop/src-tauri/src/core/mcp/oauth.rs (1193 lines). UI: apps/desktop/src/features/connectors/ConnectorGallery.tsx OAuth flow (lines ~460-570) + stores/mcp/mcpOAuthStore.ts + features/settings/OAuthCredentialsPanel.tsx."
+    "evidence": "crates/agiworkforce-mcp/src/oauth/flow.rs:1-939 implements RFC 9728 protected-resource discovery, RFC 8414 AS metadata, RFC 7591 dynamic client registration, and RFC 6749/7636 authorization-code+PKCE with refresh and step-up (insufficient_scope) support; wired into transport/http.rs:100-181 on 401. Desktop parity in apps/desktop/src-tauri/src/core/mcp/oauth.rs (1193 lines). UI: apps/desktop/src/features/connectors/ConnectorGallery.tsx OAuth flow (lines ~460-570) + api/mcp.ts McpClient OAuth calls + features/settings/OAuthCredentialsPanel.tsx."
   },
   {
     "item": "enterprise-managed-auth",
@@ -2853,7 +2853,7 @@
     "item": "tool-discovery",
     "surface": "packages/tools/mcp",
     "status": "built",
-    "evidence": "crates/agiworkforce-mcp/src/client.rs:364-381 list_tools(); apps/desktop/src-tauri/src/core/mcp/session.rs list_tools + registry.rs:171-212 get_all_tool_schemas(), called from apps/desktop/src-tauri/src/core/agi/tools/mod.rs:3969-3971 to build the agent's tool list. UI: apps/desktop/src/features/mcp/MCPToolBrowser.tsx / MCPToolExplorer.tsx via MCPWorkspace.tsx:1-90, mounted at Connectors/index.tsx:23,67-69."
+    "evidence": "crates/agiworkforce-mcp/src/client.rs:364-381 list_tools(); apps/desktop/src-tauri/src/core/mcp/session.rs list_tools + registry.rs:171-212 get_all_tool_schemas(), called from apps/desktop/src-tauri/src/core/agi/tools/mod.rs:3969-3971 to build the agent's tool list. UI: apps/desktop/src/features/mcp/MCPToolBrowser.tsx via MCPWorkspace.tsx, mounted at Connectors/index.tsx:23,67-69."
   },
   {
     "item": "tool-description-size-cap",
@@ -2895,7 +2895,7 @@
     "item": "connector-observability",
     "surface": "packages/tools/mcp",
     "status": "built",
-    "evidence": "apps/desktop/src/features/mcp/MCPConnectionStatus.tsx:135-506 and features/connectors/ConnectorHealthDashboard.tsx render live server health/response-time/execution-history/tool-performance stats backed by apps/desktop/src/stores/mcp/mcpHealthStore.ts:26-52 (refreshHealth/checkServerHealth -> McpClient calls) and apps/desktop/src-tauri/src/core/mcp/health.rs. Mounted via Connectors/index.tsx:24-28,57-59 (Settings -> Connectors)."
+    "evidence": "apps/desktop/src/features/connectors/ConnectorHealthDashboard.tsx renders live server health, last check, error and response time, backed by refreshHealth in apps/desktop/src/stores/mcpStore.ts (McpClient.getHealth) and apps/desktop/src-tauri/src/core/mcp/health.rs; each server card in apps/desktop/src/features/mcp/MCPServerCard.tsx opens the server's stderr log (MCPLogsViewer.tsx -> mcp_get_server_logs). Mounted in Settings -> Connectors (tabs/Connectors/index.tsx). Execution history and per-tool statistics are still fetched by the store but no component renders them since the unreachable MCPConnectionStatus.tsx was deleted on 2026-10-11."
   },
   {
     "item": "tool-approval-prompt",
@@ -3051,7 +3051,7 @@
     "item": "file-history-store",
     "surface": "packages/sessions",
     "status": "built",
-    "evidence": "apps/desktop/src-tauri/src/core/agent/change_tracker.rs:44-56 Change struct stores before_content/after_content per file mutation; apps/desktop/src-tauri/src/core/agent/undo_manager.rs:298-478 implements undo_file_created/undo_file_modified/undo_file_deleted/undo_file_renamed restoring from before_content. Wired: apps/desktop/src-tauri/src/core/llm/tool_executor/edit_tools.rs:831-843 records changes into the shared ChangeTracker during real edit-tool execution; Tauri commands undo_get_summary/undo_change/undo_last/undo_task registered at apps/desktop/src-tauri/src/lib.rs:2367-2371 and called from apps/desktop/src/api/undo.ts:91-165."
+    "evidence": "apps/desktop/src-tauri/src/core/agent/change_tracker.rs:44-56 Change struct stores before_content/after_content per file mutation; apps/desktop/src-tauri/src/core/agent/undo_manager.rs:298-478 implements undo_file_created/undo_file_modified/undo_file_deleted/undo_file_renamed restoring from before_content. Wired: apps/desktop/src-tauri/src/core/llm/tool_executor/edit_tools.rs:831-843 records changes into the shared ChangeTracker during real edit-tool execution; Tauri commands undo_last/undo_can_undo are registered in apps/desktop/src-tauri/src/lib.rs and called from apps/desktop/src/api/undo.ts through apps/desktop/src/features/undo/undoLastChange.ts; the model's undo tools reach the same manager in apps/desktop/src-tauri/src/core/llm/tool_executor/undo_tools.rs."
   },
   {
     "item": "compaction-engine",
@@ -3399,13 +3399,13 @@
     "item": "config-migration",
     "surface": "packages/settings",
     "status": "built",
-    "evidence": "apps/desktop/src/stores/settingsStore.ts:1587 declares SETTINGS_STORE_VERSION and lines 1714-1780+ implement a real `migrate(persistedState, version)` function with sequential version-gated migrations (v1\u2192v2 model defaults, v2\u2192v3 alwaysUseAgentMode, v3\u2192v4 executionPreferences, v4\u2192v5 compactMode, ... continuing further in the file), wired into zustand's `persist` middleware at line 1585-1587 which backs the live settingsStore used throughout the desktop app."
+    "evidence": "apps/desktop/src/stores/settingsStore.ts:1587 declares SETTINGS_STORE_VERSION and lines 1714-1780+ implement a real `migrate(persistedState, version)` function with sequential version-gated migrations (v1→v2 model defaults, v2→v3 alwaysUseAgentMode, v3→v4 executionPreferences, v4→v5 compactMode, ... continuing further in the file), wired into zustand's `persist` middleware at line 1585-1587 which backs the live settingsStore used throughout the desktop app."
   },
   {
     "item": "shared-settings-across-cli-and-ide",
     "surface": "packages/settings",
     "status": "built",
-    "evidence": "Desktop\u2194CLI: apps/desktop/src-tauri/src/sys/commands/dotfile.rs:58-89 (`shared_config_path()`, `read_shared_config`/`write_shared_config`) reads/writes the identical `~/.agiworkforce/config.toml` the CLI uses, registered as Tauri commands at apps/desktop/src-tauri/src/lib.rs:2856-2857, and surfaced in the UI via apps/desktop/src/features/settings/DotfileSettings.tsx (ConfigEditorSection, calling `dotfiles.readSharedConfig/writeSharedConfig` from packages/client/desktop-command-client/src/dotfiles.ts:44-48), mounted at apps/desktop/src/features/settings/tabs/Developer/index.tsx and reachable via SettingsPanel.tsx:55,706. CLI\u2194IDE(VS Code): apps/extension-vscode/src/integrations/localRuntimeClient.ts:645 spawns the configured `cliPath` with `app-server` as a subprocess; apps/cli/src/lib.rs:1294 loads `config::CliConfig::load_merged()` and passes it at line 1727 into `CliDeveloperSessionHost::new(app_config.clone(), ...)` for the `agi app-server` command, so the VS Code extension's backend session runs under the exact same merged global+project+env config as the standalone CLI."
+    "evidence": "Desktop↔CLI: apps/desktop/src-tauri/src/sys/commands/dotfile.rs:58-89 (`shared_config_path()`, `read_shared_config`/`write_shared_config`) reads/writes the identical `~/.agiworkforce/config.toml` the CLI uses, registered as Tauri commands at apps/desktop/src-tauri/src/lib.rs:2856-2857, and surfaced in the UI via apps/desktop/src/features/settings/DotfileSettings.tsx (ConfigEditorSection, calling `dotfiles.readSharedConfig/writeSharedConfig` from packages/client/desktop-command-client/src/dotfiles.ts:44-48), mounted at apps/desktop/src/features/settings/tabs/Developer/index.tsx and reachable via SettingsPanel.tsx:55,706. CLI↔IDE(VS Code): apps/extension-vscode/src/integrations/localRuntimeClient.ts:645 spawns the configured `cliPath` with `app-server` as a subprocess; apps/cli/src/lib.rs:1294 loads `config::CliConfig::load_merged()` and passes it at line 1727 into `CliDeveloperSessionHost::new(app_config.clone(), ...)` for the `agi app-server` command, so the VS Code extension's backend session runs under the exact same merged global+project+env config as the standalone CLI."
   },
   {
     "item": "appearance-settings",
@@ -3417,7 +3417,7 @@
     "item": "privacy-and-data-controls",
     "surface": "packages/settings",
     "status": "built",
-    "evidence": "Desktop: apps/desktop/src-tauri/src/sys/commands/privacy.rs (449 lines: account deletion with grace period, GDPR export, table-enum-guarded deletion) registered at apps/desktop/src-tauri/src/lib.rs:2359-2364. Reachable UI at apps/desktop/src/features/settings/tabs/Privacy/index.tsx, which calls `onboarding.exportUserData()` \u2192 `export_user_data` command (registered lib.rs:2146) for export and `analyticsDeleteAllData()` for local data clearing, plus apps/desktop/src/features/settings/Privacy/CloudDataSection.tsx for cloud-account export/deletion. Web: apps/web/features/settings/sections/PrivacySection.tsx wired into WebSettingsModal.tsx:41,498."
+    "evidence": "Desktop: apps/desktop/src-tauri/src/sys/commands/privacy.rs (449 lines: account deletion with grace period, GDPR export, table-enum-guarded deletion) registered at apps/desktop/src-tauri/src/lib.rs:2359-2364. Reachable UI at apps/desktop/src/features/settings/tabs/Privacy/index.tsx, which calls `exportLocalData()` → `privacy_export_data` for export and `deleteLocalData()` → `privacy_delete_account` for Delete all data on this device, plus apps/desktop/src/features/settings/Privacy/CloudDataSection.tsx for cloud-account export/deletion. Web: apps/web/features/settings/sections/PrivacySection.tsx wired into WebSettingsModal.tsx:41,498."
   },
   {
     "item": "connected-apps",
@@ -3591,7 +3591,7 @@
     "item": "timezone-handling",
     "surface": "packages/platform",
     "status": "built",
-    "evidence": "apps/web/lib/client/browser-timezone.ts:7-16 (Intl.DateTimeFormat().resolvedOptions().timeZone, validated, sent as a client hint). Used across scheduling on every surface: apps/web/lib/schedules/schedule-time.ts, apps/desktop/src/stores/schedulerStore.ts / calendarStore.ts / features/schedules/DesktopCloudSchedules.tsx, apps/mobile/src/features/schedules/{timing.ts,service.ts,store.ts}."
+    "evidence": "apps/web/lib/client/browser-timezone.ts:7-16 (Intl.DateTimeFormat().resolvedOptions().timeZone, validated, sent as a client hint). Used across scheduling on every surface: apps/web/lib/schedules/schedule-time.ts, apps/desktop/src/stores/schedulerStore.ts / features/schedules/DesktopCloudSchedules.tsx, apps/mobile/src/features/schedules/{timing.ts,service.ts,store.ts}."
   },
   {
     "item": "a11y-kit",
@@ -3675,7 +3675,7 @@
     "item": "egress-controls",
     "surface": "packages/safety",
     "status": "built",
-    "evidence": "The product-owned boundaries are enforced without claiming a machine-wide firewall. App/WebView egress is shared through packages/contracts/trust-boundaries/src/egress-policy.ts:90 isOurCloudHost(), consumed by Desktop guardedFetch (apps/desktop/src/lib/egressGuard.ts:99) and Mobile guardedFetch (apps/mobile/lib/egressGuard.ts:165), which fail-closed-block AGI cloud hosts in Local/BYOK. Web outbound URLs pass DNS-resolved public-host checks through apps/web/lib/egress-policy.ts:145 at the URL-fetch and connector/MCP call sites; Web E2B execution maps none/trusted/full to the real sandbox firewall/allowInternetAccess options in apps/web/lib/e2b/runtime.ts:193-221. CLI model shell execution defaults to NetworkPolicy::Deny and applies Seatbelt no-network rules or Bubblewrap --unshare-net (apps/cli/src/sandbox.rs:262-337; bash/mod.rs:186). Desktop model-authored code now converges on core/agi/SandboxManager: chat code_execute routes there at core/llm/tool_executor/terminal_tools.rs:619-633, the AGI CodeExecutor forces allow_network=false at core/agi/executors/code_executor.rs:428-443, and sandbox.rs:165-245 applies macOS Seatbelt `(deny network*)` or Linux Bubblewrap `--unshare-net`, refusing unsupported/missing enforcement. The direct user command alone may request network access after its high-risk confirmation displays allow_network (sys/commands/code_execution.rs:59-99). Socket-denial and route-convergence tests pass. The unused proxy and Desktop profile stubs were cut rather than represented as controls; approved transparent terminal commands retain their separate optional srt domain allowlist."
+    "evidence": "The product-owned boundaries are enforced without claiming a machine-wide firewall. App/WebView egress is shared through packages/contracts/trust-boundaries/src/egress-policy.ts:90 isOurCloudHost(), consumed by Desktop guardedFetch (apps/desktop/src/lib/egressGuard.ts:99) and Mobile guardedFetch (apps/mobile/lib/egressGuard.ts:165), which fail-closed-block AGI cloud hosts in Local/BYOK. Web outbound URLs pass DNS-resolved public-host checks through apps/web/lib/egress-policy.ts:145 at the URL-fetch and connector/MCP call sites; Web E2B execution maps none/trusted/full to the real sandbox firewall/allowInternetAccess options in apps/web/lib/e2b/runtime.ts:193-221. CLI model shell execution defaults to NetworkPolicy::Deny and applies Seatbelt no-network rules or Bubblewrap --unshare-net (apps/cli/src/sandbox.rs:262-337; bash/mod.rs:186). Desktop model-authored code now converges on core/agi/SandboxManager: chat code_execute routes there at core/llm/tool_executor/terminal_tools.rs:619-633, the AGI CodeExecutor forces allow_network=false at core/agi/executors/code_executor.rs:428-443, and sandbox.rs:165-245 applies macOS Seatbelt `(deny network*)` or Linux Bubblewrap `--unshare-net`, refusing unsupported/missing enforcement. The direct execute_code IPC command, the one path that could request network access, was removed on 2026-10-11 with sys/commands/code_execution.rs, so no renderer call can ask for it. Socket-denial and route-convergence tests pass. The unused proxy and Desktop profile stubs were cut rather than represented as controls; approved transparent terminal commands retain their separate optional srt domain allowlist."
   },
   {
     "item": "refusal-and-appeal-surface",

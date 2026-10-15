@@ -50,6 +50,10 @@
       "reason": "public unauthenticated DMCA-style intake, the reporter has no account to scope by"
     },
     {
+      "path": "apps/web/app/api/cron/notify-upgrade-waitlist/route.ts",
+      "reason": "cron route gated by verifyCronRequest against CRON_SECRET, tells every waitlisted account once paid upgrades open and runs with no request user"
+    },
+    {
       "path": "apps/web/app/api/cron/purge-deleted-media/route.ts",
       "reason": "cron route gated by verifyCronRequest against CRON_SECRET, platform-scoped by design"
     },

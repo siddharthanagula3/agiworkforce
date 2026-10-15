@@ -1,6 +1,8 @@
 # Unit economics per user profile, in credits
 
-Status: Current calculation snapshot
+Superseded by `docs/research/unit-economics-2026-10-10.md`, which reruns this model on the October catalogs with regions, channels, voice and one token budget per plan; the script below now prints that version.
+
+Status: Historical calculation snapshot
 Owner: Billing
 Last updated: 2026-09-27
 

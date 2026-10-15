@@ -329,6 +329,21 @@ provider capacity remains, the limited free media offer (owner decision
 image and video offerings within a daily cap per account. It adds no plan to
 either capability; see `docs/runbooks/free-quota-models.md`.
 
+The provider-funded free chat models on the Free plan are the same kind of
+offer: a separate, temporary layer with its own route, inventory and ledger,
+never a plan model, and gone without trace once every allowance is spent or
+expired (owner decision 2026-10-04). While it runs, a free chat model answers
+any plain question and is never refused for how the question is worded; a
+message that carries an explicit choice the model cannot serve (a requested web
+search, research, running code, an Office file, a skill, a connected app, or a
+file it cannot read) is answered by the account's Auto model for that one
+message, with a saved note, and the conversation stays on the free model. A free
+chat turn uses the canonical admitted project context, including available knowledge
+under its ownership and source controls; each
+account has a daily share of the free chat allowance, and the first request to a
+model run by a named provider asks for the person's agreement. The rules and the
+numbers are in `docs/runbooks/free-quota-models.md`.
+
 Paid plan prices are configured on Web, but new paid subscriptions and upgrades
 remain waitlist/access-code gated. Existing paid entitlements resolve on Mobile
 and Desktop, although those clients are not publicly obtainable until their

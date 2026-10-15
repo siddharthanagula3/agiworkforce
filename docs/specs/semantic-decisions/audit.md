@@ -41,11 +41,11 @@ The audit follows implementation over comments. For example, the header in
 `packages/ai/routing/src/classify.ts` mentions an LLM fallback, but the web request processor
 calls the heuristic and conversation-context functions without that model classifier.
 
-[Call-site discovery](call-sites.json) records 99 expressions in 61 files across apps,
+[Call-site discovery](call-sites.json) records 80 expressions in 49 files across apps,
 packages, crates and services. [The inventory](inventory.csv) assigns purpose, model owner,
 output shape, decision category, reasoning/string needs, fallback, frequency/critical-path
 context and candidacy to each expression. It includes transport wrappers and one displayed
-API example, explicitly distinguished from semantic calls. It is not 99 independent billed
+API example, explicitly distinguished from semantic calls. It is not 80 independent billed
 operations: many expressions are layers of the same request or failover alternatives.
 
 The scanner is a reproducible lexical index, not a dynamic reachability proof. Direct HTTP

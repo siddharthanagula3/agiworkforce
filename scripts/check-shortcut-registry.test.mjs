@@ -12,6 +12,7 @@ import {
   RENDERER_REGISTRY_PATH,
   SHORTCUT_SCREEN_PATH,
   VSCODE_MANIFEST_PATH,
+  WEB_HANDLERS_PATH,
   WEB_REGISTRY_PATH,
   WEB_SHARED_SHORTCUT_PATH,
   checkShortcutRegistry,
@@ -32,6 +33,7 @@ function fixture(edits = {}) {
     RENDERER_HANDLERS_PATH,
     SHORTCUT_SCREEN_PATH,
     VSCODE_MANIFEST_PATH,
+    WEB_HANDLERS_PATH,
     WEB_REGISTRY_PATH,
     WEB_SHARED_SHORTCUT_PATH,
   ]) {
@@ -298,11 +300,7 @@ test('a web shortcut with no modifier that opts into firing inside a field fails
 
 test('a web shortcut with no modifier fails once the handler stops yielding to fields', () => {
   const root = fixture({
-    [WEB_REGISTRY_PATH]: (source) =>
-      source.replace(
-        'const contextOk = !shortcutYieldsToFocus(event, doc);',
-        'const contextOk = true;',
-      ),
+    [WEB_HANDLERS_PATH]: (source) => source.replace('!shortcutYieldsToFocus(event, doc)', 'true'),
   });
   const failures = checkShortcutRegistry(root);
   assert.ok(
@@ -313,7 +311,7 @@ test('a web shortcut with no modifier fails once the handler stops yielding to f
 
 test('a documented web shortcut nothing handles fails', () => {
   const root = fixture({
-    [WEB_REGISTRY_PATH]: (source) =>
+    [WEB_HANDLERS_PATH]: (source) =>
       source.replace("'toggle-sidebar': onToggleSidebar,", "'collapse-sidebar': onToggleSidebar,"),
   });
   const failures = checkShortcutRegistry(root);

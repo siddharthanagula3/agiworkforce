@@ -2,31 +2,45 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-29
+Last updated: 2026-10-15
 
 What is deployable, in what order, from what artifact, with what credential, and
 what happens when a release is wrong. The policy behind the web gate is
 `docs/development/ci-and-deploys.md` and the rollback procedure is
 `docs/runbooks/release-rollback.md`; this file is the shape of the whole thing,
-so nobody has to reconstruct it from seven workflow files.
+so nobody has to reconstruct it from the workflow files.
 
 Every fact here is read from `.github/workflows/` and the registries those
 workflows use. Where a surface has no path for something, the row says so.
 
 ## 1. Deployable components
 
-| Component          | Released by                                      | Trigger            | Artifact                                   |
-| ------------------ | ------------------------------------------------ | ------------------ | ------------------------------------------ |
-| Web application    | `.github/workflows/deploy-production.yml`        | Green CI on `main` | A Vercel deployment of one commit          |
-| Artifact sandbox   | The same workflow, as a separate surface         | Green CI on `main` | A second Vercel deployment                 |
-| Staging web        | `.github/workflows/deploy-staging.yml`           | Green CI on `main` | The same artifact, promoted first          |
-| CLI                | `.github/workflows/release-cli.yml`              | Tag `v-cli-*`      | Signed release archives                    |
-| Desktop            | `.github/workflows/release-desktop.yml`          | Tag `v-desktop-*`  | Signed Tauri bundles                       |
-| Mobile             | `.github/workflows/release-mobile.yml`           | Tag `v-mobile-*`   | Store builds through Expo                  |
-| VS Code extension  | `.github/workflows/release-vscode-extension.yml` | Tag `v-vscode-*`   | A vsix                                     |
-| Chrome extension   | `.github/workflows/release-chrome-extension.yml` | Tag `v-ext-*`      | A packaged extension                       |
-| Signaling server   | `.github/workflows/deploy-signaling-server.yml`  | Its own workflow   | A Fly.io deployment                        |
-| Background workers | Deployed with the web application                | Green CI on `main` | Cron routes inside the one Next.js service |
+| Component          | Released by                                      | Trigger                                    | Artifact                                                       |
+| ------------------ | ------------------------------------------------ | ------------------------------------------ | -------------------------------------------------------------- |
+| Web application    | `.github/workflows/deploy-production.yml`        | Green CI on `main`                         | A Vercel deployment of one commit                              |
+| Artifact sandbox   | The same workflow, as a separate surface         | Green CI on `main`                         | A second Vercel deployment                                     |
+| Staging web        | `.github/workflows/deploy-staging.yml`           | Green CI on `main`                         | The same artifact, promoted first                              |
+| CLI                | `.github/workflows/release-cli.yml`              | Tag `v-cli-*`                              | Signed release archives                                        |
+| Public Desktop     | `.github/workflows/release-desktop-cloud.yml`    | Tag `v-cloud-desktop-*` or manual dispatch | Signed/notarized Electron macOS installers and update archives |
+| Retained Tauri     | `.github/workflows/release-desktop.yml`          | Tag `v-desktop-*`                          | Signed Tauri bundles; retained internal scope                  |
+| Mobile             | `.github/workflows/release-mobile.yml`           | Tag `v-mobile-*`                           | Store builds through Expo                                      |
+| VS Code extension  | `.github/workflows/release-vscode-extension.yml` | Tag `v-vscode-*`                           | A vsix                                                         |
+| Chrome extension   | `.github/workflows/release-chrome-extension.yml` | Tag `v-ext-*`                              | A packaged extension                                           |
+| Signaling server   | `.github/workflows/deploy-signaling-server.yml`  | Its own workflow                           | A Fly.io deployment                                            |
+| Background workers | Deployed with the web application                | Green CI on `main`                         | Cron routes inside the one Next.js service                     |
+
+The public Electron shell uses the hosted Web renderer by default. Its signed
+installers and its arm64 and x64 zip update archives have a separate tag and
+download stream from retained Tauri. Packaged macOS builds update in place:
+`apps/desktop/electron/desktopAutoUpdate.ts` points Electron's `autoUpdater` at
+the Squirrel feed `/api/releases/desktop-cloud/update/<arch>/<version>`, which
+offers the newer release's archive for that architecture and offers nothing
+while the `desktop_update` kill switch holds updates. Desktop Code additionally
+requires a compatible installed CLI/app-server runtime when included in the
+release envelope. A workflow definition does not establish a published
+candidate or applied GitHub environment protection. The retained Tauri workflow
+can publish release artifacts; that does not make it a second public Desktop
+product.
 
 Background workers are the one that surprises people. Every scheduled job is a
 cron route inside the web service rather than a standalone deployable, and
@@ -142,14 +156,15 @@ and fails rather than deploying without them.
 No release credential is in this repository. Each one is a GitHub secret read by
 the workflow that needs it:
 
-| Surface         | Secrets it needs                                                                                        |
-| --------------- | ------------------------------------------------------------------------------------------------------- |
-| Web and sandbox | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `VERCEL_AUTOMATION_BYPASS_SECRET`                 |
-| Migrations      | `AGI_DATABASE_URL`, `NEON_DATABASE_URL`                                                                 |
-| CLI             | `AGI_CLI_RELEASE_SIGNING_KEY`, `SENTRY_DSN_CLI`                                                         |
-| Desktop         | `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, `APPLE_CERTIFICATE`, `APPLE_API_KEY` |
-| Mobile          | `EXPO_TOKEN`, `ASC_API_KEY_ID`, `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE`                                 |
-| Incident paging | `PAGER_WEBHOOK_URL`                                                                                     |
+| Surface         | Secrets it needs                                                                                                |
+| --------------- | --------------------------------------------------------------------------------------------------------------- |
+| Web and sandbox | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `VERCEL_AUTOMATION_BYPASS_SECRET`                         |
+| Migrations      | `AGI_DATABASE_URL`, `NEON_DATABASE_URL`                                                                         |
+| CLI             | `AGI_CLI_RELEASE_SIGNING_KEY`, `SENTRY_DSN_CLI`                                                                 |
+| Public Desktop  | `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_PRIVATE_KEY` |
+| Retained Tauri  | `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, `APPLE_CERTIFICATE`, `APPLE_API_KEY`         |
+| Mobile          | `EXPO_TOKEN`, `ASC_API_KEY_ID`, `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE`                                         |
+| Incident paging | `PAGER_WEBHOOK_URL`                                                                                             |
 
 `scripts/check-action-pins.sh`, run by `.github/workflows/actions-pinned-check.yml`,
 holds every action, GitHub's own included, to a full commit SHA, so a release

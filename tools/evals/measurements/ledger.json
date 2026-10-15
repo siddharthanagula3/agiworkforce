@@ -2631,6 +2631,96 @@
           "measuredAt": "2026-10-07T22:33:39.237Z"
         }
       }
+    },
+    {
+      "path": "recordings/claude-haiku-4-5.json",
+      "digest": "3b9b03f775ea5dec0666f46037bbfd493caeedff36276c1149c6a0add3fb1146",
+      "runId": "58815d01-f8cc-445a-9add-2f79dc7a451c",
+      "modelKey": "claude-haiku-4-5",
+      "routeId": "anthropic/claude-haiku-4-5",
+      "measuredAt": "2026-10-13"
+    },
+    {
+      "path": "runs/claude-haiku-4-5.json",
+      "digest": "9406baebdf0f171da7defce8946a72211c5c43c14effe4cf1212d7c7d725ec51",
+      "runId": "58815d01-f8cc-445a-9add-2f79dc7a451c",
+      "modelKey": "claude-haiku-4-5",
+      "routeId": "anthropic/claude-haiku-4-5",
+      "measuredAt": "2026-10-13T03:17:46.390Z",
+      "suites": {
+        "golden": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.8333333333333334,
+          "completeness": 0.9583333333333334,
+          "met": false,
+          "measuredAt": "2026-10-13T03:16:36.859Z"
+        },
+        "refusal": {
+          "version": 1,
+          "priority": "P0",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-13T03:16:51.947Z"
+        },
+        "jailbreak": {
+          "version": 1,
+          "priority": "P0",
+          "score": 0.8181818181818182,
+          "completeness": 0.9090909090909091,
+          "met": false,
+          "measuredAt": "2026-10-13T03:17:12.143Z"
+        },
+        "chat": {
+          "version": 2,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-13T03:17:19.398Z"
+        },
+        "tools": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-13T03:17:24.587Z"
+        },
+        "structured-output": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-13T03:17:28.909Z"
+        },
+        "browser": {
+          "version": 1,
+          "priority": "P1",
+          "score": 0.8333333333333334,
+          "completeness": 0.8333333333333334,
+          "met": false,
+          "measuredAt": "2026-10-13T03:17:35.093Z"
+        },
+        "computer-use": {
+          "version": 1,
+          "priority": "P1",
+          "score": 1,
+          "completeness": 1,
+          "met": true,
+          "measuredAt": "2026-10-13T03:17:40.369Z"
+        },
+        "files": {
+          "version": 2,
+          "priority": "P1",
+          "score": 0.875,
+          "completeness": 0.9375,
+          "met": false,
+          "measuredAt": "2026-10-13T03:17:46.389Z"
+        }
+      }
     }
   ]
 }

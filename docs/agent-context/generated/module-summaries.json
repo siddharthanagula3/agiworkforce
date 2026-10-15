@@ -75,6 +75,12 @@
       "purpose": "Image decode, transform and cache used by the desktop and CLI."
     },
     {
+      "name": "agiworkforce-worktree",
+      "path": "crates/agiworkforce-worktree",
+      "kind": "crate",
+      "purpose": "Git worktrees, workspace snapshots and per-turn checkpoints shared by the AGI CLI, its app-server and the desktop."
+    },
+    {
       "name": "@agiworkforce/sandbox",
       "path": "infrastructure/sandbox",
       "kind": "deploy-target",
@@ -252,7 +258,7 @@
       "name": "@agiworkforce/sync",
       "path": "packages/client/sync",
       "kind": "package",
-      "purpose": "Managed-cloud delta validation and local apply, with a bigint cursor; pinned to the Rust apply by golden fixtures."
+      "purpose": "Managed-cloud delta validation and local apply, with a bigint cursor; pinned by golden fixtures."
     },
     {
       "name": "@agiworkforce/cloud-contracts",

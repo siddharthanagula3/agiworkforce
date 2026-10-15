@@ -82,6 +82,7 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
   'docs/research/provider-free-value-matrix-2026-09-01.md',
   'docs/research/free-inference-tos-workbook-2026-09-01.md',
   'docs/research/global-distribution-research-2026-10-05.md',
+  'docs/research/unit-economics-2026-10-10.md',
   'docs/architecture/byok-provider-strategy.md',
 ]);
 

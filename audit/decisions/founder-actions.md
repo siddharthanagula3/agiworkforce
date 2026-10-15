@@ -617,7 +617,7 @@ unservable.
 **Why founder assistance is required**
 Whether a paying customer's prompt may reach an upstream that trains on it is a
 data-handling decision, not an engineering one.
-**Exact action** Decided 2026-09-15 (D-2026-09-15-06): the privacy-safe default stays on every plan. What stays with the founder: set the company OpenRouter privacy settings in its dashboard to match (no training-enabled upstreams, data collection denied). At `74bece5d10`, the commit production served on 2026-10-03, background calls and AGI Code do not carry the request-level deny flag, so the dashboard setting this asks for is the only protection for those calls until `L19.0` is deployed (it is on the branch `fix/public-site-audit-2026-10-03`, not in production). `L19.0` does not close this entry: the dashboard setting stays with the founder, and it is the only control for video generation, whose API has no data-policy field.
+**Exact action** Decided 2026-09-15 (D-2026-09-15-06): the privacy-safe default stays on every plan. What stays with the founder: set the company OpenRouter privacy settings in its dashboard to match (no training-enabled upstreams, data collection denied). At `01bf81b433`, the commit production served on 2026-10-03, background calls and AGI Code do not carry the request-level deny flag, so the dashboard setting this asks for is the only protection for those calls until `L19.0` is deployed (it is on the branch `fix/public-site-audit-2026-10-03`, not in production). `L19.0` does not close this entry: the dashboard setting stays with the founder, and it is the only control for video generation, whose API has no data-policy field.
 **Where** `packages/ai/model-registry/catalog/routing-policies.json`,
 `packages/ai/providers/openrouter/src/provider-routing.ts`,
 `docs/research/free-inference-tos-workbook-2026-09-01.md`, the OpenRouter dashboard.
@@ -900,7 +900,7 @@ dated and names its recipients.
 
 **Why founder assistance is required**
 The public policies disclose that some stored files can be fetched by address
-without signing in. The code at `74bece5d10` has private-object paths for generated media and
+without signing in. The code at `01bf81b433` has private-object paths for generated media and
 attachments (commit `84b9ca07ce` changed them), but the older public bucket may
 still be addressable and may still hold customer files that catalogue rows point at
 (`apps/web/lib/server/media-storage.ts`, `apps/web/lib/server/project-knowledge-object-storage.ts`).

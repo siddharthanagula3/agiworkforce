@@ -11,6 +11,10 @@
   },
   "crons": [
     {
+      "path": "/api/cron/notify-upgrade-waitlist",
+      "schedule": "4,19,34,49 * * * *"
+    },
+    {
       "path": "/api/cron/reset-credits",
       "schedule": "0 0 * * *"
     },

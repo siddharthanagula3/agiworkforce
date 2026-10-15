@@ -1,11 +1,14 @@
 #!/usr/bin/env node
+import console from 'node:console';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { execFileSync } from 'node:child_process';
+import { workspaceFiles } from './lib/comment-scan.mjs';
 
 const root = process.cwd();
 const errors = [];
+const currentFiles = workspaceFiles();
+const currentMarkdown = currentFiles.filter((file) => file.endsWith('.md'));
 
 const DOC_TIERS = new Set([
   'agent-context',
@@ -83,10 +86,7 @@ const RETIRED_OK =
   /retired|no longer|stopped existing|was deleted|were removed|was removed|do not create|does not exist/i;
 
 function checkRetiredRootCitations() {
-  const scanned = execFileSync('git', ['ls-files', '*.md'], { cwd: root, encoding: 'utf8' })
-    .split('\n')
-    .filter(Boolean)
-    .filter((file) => file !== 'CHANGELOG.md');
+  const scanned = currentMarkdown.filter((file) => file !== 'CHANGELOG.md');
 
   for (const file of scanned) {
     const lines = fs.readFileSync(path.join(root, file), 'utf8').split('\n');
@@ -104,12 +104,6 @@ function checkRetiredRootCitations() {
       }
     });
   }
-}
-
-function trackedMarkdown() {
-  return execFileSync('git', ['ls-files', '*.md'], { cwd: root, encoding: 'utf8' })
-    .split('\n')
-    .filter(Boolean);
 }
 
 function classify(file) {
@@ -191,13 +185,10 @@ function checkArchiveDirectories(files) {
 
 checkRetiredRootCitations();
 
-const allTracked = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' })
-  .split('\n')
-  .filter(Boolean);
-checkStatusDocuments(trackedMarkdown());
-checkArchiveDirectories(allTracked);
+checkStatusDocuments(currentMarkdown);
+checkArchiveDirectories(currentFiles);
 
-for (const file of trackedMarkdown()) {
+for (const file of currentMarkdown) {
   const problem = classify(file);
   if (problem) errors.push(`${file}: ${problem}`);
 }
@@ -206,12 +197,10 @@ for (const file of trackedMarkdown()) {
 for (const tier of DOC_TIERS) {
   const dir = path.join(root, 'docs', tier);
   if (!fs.existsSync(dir)) continue;
-  const entries = execFileSync('git', ['ls-files', `docs/${tier}`], { cwd: root, encoding: 'utf8' })
-    .split('\n')
-    .filter(Boolean);
+  const entries = currentFiles.filter((file) => file.startsWith(`docs/${tier}/`));
   if (entries.length === 0) {
     errors.push(
-      `docs/${tier}/ is registered as a tier but holds no tracked file; remove it or fill it`,
+      `docs/${tier}/ is registered as a tier but holds no current file; remove it or fill it`,
     );
   }
 }
@@ -224,5 +213,5 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Documentation registry check passed (${trackedMarkdown().length} tracked markdown files).`,
+  `Documentation registry check passed (${currentMarkdown.length} current markdown files).`,
 );

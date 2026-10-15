@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-29
+Last updated: 2026-10-07
 
 A compact map of the repository. Depth lives in `docs/architecture/`; rules for
 changing any of it live in `AGENTS.md`.
@@ -31,14 +31,14 @@ Two workspaces in one repository:
 Six clients on one contract layer. Each has its own build and release workflow;
 none is forced into another's framework conventions.
 
-| Surface                 | Stack                                     |
-| ----------------------- | ----------------------------------------- |
-| `apps/web`              | Next.js 16, App Router                    |
-| `apps/desktop`          | Tauri 2, React 19 + Vite front, Rust back |
-| `apps/mobile`           | Expo / React Native                       |
-| `apps/cli`              | Rust binary `agi`                         |
-| `apps/extension`        | Chrome MV3                                |
-| `apps/extension-vscode` | VS Code                                   |
+| Surface                 | Stack                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| `apps/web`              | Next.js 16, App Router                                                             |
+| `apps/desktop`          | Public Electron/Node host with hosted Web; retained internal Tauri/React/Vite/Rust |
+| `apps/mobile`           | Expo / React Native                                                                |
+| `apps/cli`              | Rust binary `agi`                                                                  |
+| `apps/extension`        | Chrome MV3                                                                         |
+| `apps/extension-vscode` | VS Code                                                                            |
 
 ## The desktop is two shells over one renderer
 
@@ -74,28 +74,30 @@ reach it. `apps/desktop/README.md` states which shell owns what today.
 
 ## Shared packages
 
-| Group                | Owns                                                                                           |
-| -------------------- | ---------------------------------------------------------------------------------------------- |
-| `packages/contracts` | Types, cloud contracts, licensing, compliance, trust boundaries. Depends on nothing else here. |
-| `packages/ai`        | Model registry, routing, provider protocol and runtime, per-provider adapters                  |
-| `packages/client`    | Client runtime, sync, desktop command client                                                   |
-| `packages/ui`        | `unified-chat` (surface-neutral chat), shared UI, design tokens, i18n                          |
-| `packages/platform`  | Data layer, local LLM, artifacts, utilities                                                    |
-| `packages/tools`     | MCP, skills, apply-patch, browser tool                                                         |
-| `packages/guardian`  | Findings pipeline and its GitHub surface                                                       |
+| Group                | Owns                                                                                                                        |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `packages/contracts` | Types, cloud contracts, licensing, compliance, trust boundaries. The types package also consumes the shared model registry. |
+| `packages/ai`        | Model registry, routing, provider protocol and runtime, per-provider adapters                                               |
+| `packages/client`    | Client runtime, sync, desktop command client                                                                                |
+| `packages/ui`        | `unified-chat` (surface-neutral chat), shared UI, design tokens, i18n                                                       |
+| `packages/platform`  | Data layer, local LLM, artifacts, utilities                                                                                 |
+| `packages/tools`     | MCP, skills, apply-patch, browser tool                                                                                      |
+| `packages/guardian`  | Findings pipeline and its GitHub surface                                                                                    |
 
-Dependency direction runs one way: contracts depend on nothing, everything else
-depends on contracts. `pnpm check:boundaries` fails an import that reaches past
-a package's published entrypoints.
+Contracts are the shared product boundary; exact dependency edges are owned by
+the workspace manifests, including the types package's model-registry
+dependency. `pnpm check:boundaries` fails an import that reaches past a
+package's published entrypoints.
 
 `crates/` mirrors this for Rust: `agiworkforce-protocol` is the contract crate,
 built on `execpolicy`, `utils-absolute-path` and `utils-image`. `mcp` and
-`app-server` sit on it, `agent-core` sits on `llm`, and `model-registry`,
-`sandbox-policy`, `command-registry` and `licensing` stand alone. The desktop
-and the CLI both path-depend on `agent-core`, `execpolicy`, `llm`, `mcp`,
-`model-registry`, `protocol` and `sandbox-policy` rather than reimplementing
-them; the CLI adds `app-server`, `command-registry` and `utils-image`, and
-nothing depends on `licensing` yet.
+`app-server` sit on it, `agent-core` sits on `llm`, `worktree` sits on
+`sandbox-policy`, and `model-registry`, `sandbox-policy`, `command-registry` and
+`licensing` stand alone. The desktop and the CLI both path-depend on
+`agent-core`, `execpolicy`, `llm`, `mcp`, `model-registry`, `protocol`,
+`sandbox-policy` and `worktree` rather than reimplementing them; the CLI adds
+`app-server`, `command-registry` and `utils-image`, and nothing depends on
+`licensing` yet.
 
 ## Load-bearing seams
 

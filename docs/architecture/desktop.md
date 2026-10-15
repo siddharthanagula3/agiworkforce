@@ -114,11 +114,11 @@ recovery properties are these:
 - **Rekey and migration.** The database file and its `-wal` and `-shm`
   sidecars are copied before a rekey, restored together if it fails, and
   deleted once it succeeds; these copies are transient and are not a backup.
-- **Cloud-mode rows.** Conversations, messages and artifacts created in
-  managed-cloud mode sync through `/api/chat/sync`
-  (`apps/desktop/src-tauri/src/data/cloud_sync.rs`). An empty store starts its
-  pull cursor at `0`, so a lost or unreadable database is rebuilt from the
-  cloud on the next signed-in sync.
+- **Cloud-mode data.** Conversations, messages and artifacts created in
+  managed-cloud mode are stored by the account through the web API
+  (`apps/desktop/src/runtime/CloudRuntime.ts`) and are not kept in this
+  database, so losing the file does not lose them. They are not readable
+  offline.
 - **Local-mode rows.** Nothing copies them anywhere. A lost file, or a lost
   credential-service key, loses them; the product has no scheduled local
   backup, and says so rather than implying one.

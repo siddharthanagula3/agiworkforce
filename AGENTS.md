@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-22
+Last updated: 2026-10-10
 
 The canonical, tool-neutral operating contract for every coding agent in this repository.
 `CLAUDE.md` is a thin adapter and may not weaken it. Path-scoped rules live in
@@ -173,8 +173,8 @@ of how obvious the button's label seems.
 - ChatGPT and Claude are primary; Perplexity, Gemini, Manus and xAI/Grok are
   additional references. Compare code, make the smallest shared/native change,
   record deviations, and test success, failure and permissions in affected apps.
-  Keep one design system; never invent stacks, copy proprietary layouts or
-  migrate working architecture on unsupported inference.
+  Keep one design system; never invent stacks or migrate working architecture
+  on unsupported inference.
 - The September 21, 2026 baseline and 192 points are inventory, not blanket
   authority or authorization to purchase, install, message, publish, deploy,
   mutate production or schedule jobs. Dated evidence lives in `docs/research/`.

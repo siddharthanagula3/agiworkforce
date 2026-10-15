@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-09-27
+Last updated: 2026-10-15
 
 The register of unresolved defects, risks and required corrections, with the
 execution plan to clear them, as it stood when it was the root active-issues file.
@@ -3063,9 +3063,18 @@ its disclosure version; an API to write it; a surface on web and desktop to
 collect it; then the read in `buildWebCloudAutoRoutingRequest` beside `usOnly`
 and `zeroDataRetentionOnly`. Whether existing users are grandfathered or
 blocked on their next turn is a disclosure decision, not an engineering one.
-**Evidence:** `packages/contracts/compliance/src/provider-jurisdiction.ts:40`,
-called only from `llm-gate.ts:53,65`; zero imports of `@agiworkforce/compliance`
-anywhere in `apps/web`; no `provider_consent` table or column in any migration.
+**Evidence requalified October 9, 2026:** The September 8 claim of zero
+`@agiworkforce/compliance` imports anywhere in `apps/web` is contradicted by
+current source. `apps/web/lib/server/data-region.ts:5-15,41-45,311-317` imports
+and uses shared region selection and route exclusions;
+`apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:15-19,1725-1728`
+imports and uses the shared transport-exclusion helper. These region-policy
+consumers do not establish a server-owned provider-consent record or a mounted
+jurisdiction-consent gate. The earlier provider/tier/routing and migration-absence
+claims above are dated September 8 assessments, not a new exhaustive current
+absence proof or live route test. The current compliance source review (`audit/checklist/reviews/coverage-shared-contract-compliance-2026-10-09-009.json`, untracked)
+keeps the consent/gate gap separate from existing region-policy imports; no
+legal-compliance, deployed-account or provider-routing acceptance is inferred.
 **User impact:** a consent the product presents on mobile is not enforced by the
 service that routes.
 **Dependencies:** Founder decision on the disclosure and on existing users,
@@ -4039,3 +4048,4373 @@ The real upsertConversation/listConversations/getConversation functions ran agai
 Source: `apps/extension/src/features/background/conversation-history.ts:1392`. [Exact harness, source hashes and output](evidence/2026-09-29-ecosystem-review/chrome-review.json). Limits: Real persistence normalization/filtering is tested with callback Chrome storage mocks. Real Clerk login and whole panel rendering are not mounted. Changing session authority comparison globally would weaken the correctly strict in-flight ownership boundary and is not the proposed fix.
 
 Resolution/acceptance: Save account A history under session A1, revoke/sign out, sign in as A2 and require retained history plus safe pending mirror recovery; account B remains isolated. Model persistent data ownership separately from auth-incarnation operation leases, retaining strict stale-stream/approval/cancellation fencing.
+
+## MEMORY-SENSITIVE-OFF-KEEPS-SAVED-01
+
+Severity: Medium. Status: open; recorded 2026-10-02 on `lane/memory-sensitive`.
+
+Claude removes sensitive items already saved to memory when Include sensitive
+topics in memory is turned off or its save notice is declined
+(support.claude.com/en/articles/11817273, read 2026-10-02). Here the switch only
+stops new learning: memories saved before the switch existed, or while it was
+on, stay and are read into every chat until the user deletes them, which is what
+the switch copy and the memory article say.
+
+Start at `apps/web/features/settings/sections/MemorySection.tsx`.
+
+Resolution/acceptance: turning the switch off offers to remove the saved
+sensitive memories, found with `sensitiveMemoryTopic` and confirmed through
+`useConfirmAction`, and a read-time filter leaves them out of context while the
+switch is off. Test both the removal and the filter.
+
+## MEMORY-SENSITIVE-SAVE-NOTICE-01
+
+Severity: Low. Status: open; recorded 2026-10-02 on `lane/memory-sensitive`.
+
+Claude shows a notice above the message box each time it saves something on a
+sensitive topic, so the user can review it or change the setting
+(support.claude.com/en/articles/11817273, read 2026-10-02). Here a sensitive
+memory saved with the switch on, or on an explicit "Remember that", is written
+without one.
+
+Start at `apps/web/lib/services/managed-memory-context-service.ts`.
+
+Resolution/acceptance: the write reports the topic it matched, and web, desktop
+and mobile show the notice with links to the memory and to the setting.
+
+## MEMORY-SENSITIVE-DECLINE-NOTICE-01
+
+Severity: Low. Status: open; recorded 2026-10-02 on `lane/memory-sensitive`.
+
+Claude shows a one-time notice in chat the first time it declines to save a
+memory because it referenced a sensitive topic, and the user can turn on
+Include sensitive topics in memory from it
+(support.claude.com/en/articles/11817273, read 2026-10-02). Here
+`persistManagedAutoMemoryFacts` counts a `sensitive_topic_not_opted_in` refusal
+as excluded and says nothing, so a user who mentions their faith or a diagnosis
+across many chats has nothing remembered and is never told the setting exists.
+The refusal happens in the post-turn recorder, after the answer, so no turn can
+carry it. MEMORY-SENSITIVE-SAVE-NOTICE-01 covers the other notice, on save.
+
+Start at `apps/web/lib/services/managed-memory-context-service.ts`.
+
+Resolution/acceptance: the first such refusal for an account records that a
+notice is due in the account's memory settings; web, desktop and mobile show it
+once above the composer on the next chat, with Turn on and Not now, and either
+answer clears it. Test the server mark (first refusal only, never the content)
+and each surface's notice.
+
+## MEMORY-EXTRACTION-PROMPT-V2-INTERNAL-01
+
+Severity: Medium. Status: open; recorded 2026-10-02 on `lane/memory-sensitive`,
+revised 2026-10-02.
+
+Model extraction is on by default (D-2026-09-15-02). An account with Include
+sensitive topics in memory off is now sent to the model only when the version of
+`product.memory_fact_extraction` its prompt flags select tells the model to
+leave those topics out and names the details memory never keeps
+(`leavesOutSensitiveMemoryTopics` and `leavesOutNeverKeptMemoryDetails` in
+`apps/web/lib/prompts/prompt-manifest.ts`). The pinned version 1 does neither,
+so those accounts, which is every account by default, learn from the pattern
+extractor alone, exactly as with the switch off. That closes the privacy gap
+(a fact the model wrote in another language, or in a phrasing the English
+screen does not read, could be stored), at the cost of the model-assisted
+learning the founder decision chose.
+
+Version 3 (asks for the user's name where version 1 asked for identity, leaves
+out the sensitive topics and the details memory never keeps) is staged on
+internal and is the only version that qualifies; version 2 (version 1 plus the
+leave-out sentence) never names the never-kept details, so it no longer
+qualifies. Version 3 cannot advance without an eval quality signal, and
+`tools/evals/prompt-coverage.json` records no extraction corpus. Accounts with
+the switch on resolve `product.memory_fact_extraction_all_topics`, which
+advances on its own (MEMORY-ALL-TOPICS-PROMPT-NEVER-KEPT-01).
+
+Start at `apps/web/lib/services/model-memory-extraction.ts`.
+
+Resolution/acceptance: an extraction corpus that includes sensitive-topic
+messages in English and in other languages, a promotion-gate run, a canary
+advance of `product.memory_fact_extraction@3` that carries the quality signal,
+then a stable advance and a pin. Model extraction returns for these accounts by
+itself once a version that carries the leave-out sentence and names the
+never-kept details serves, through a prompt flag, a rollout or the pin.
+
+## MEMORY-ALL-TOPICS-PROMPT-NEVER-KEPT-01
+
+Severity: Medium. Status: open; recorded 2026-10-02 on `lane/memory-sensitive`,
+revised 2026-10-02.
+
+Memory never keeps passwords, keys and tokens, payment card and bank account
+details, government ID numbers, biometric identifiers, street addresses and map
+coordinates, criminal history or immigration status, and Claude says the same
+of ID numbers, criminal history, financial account numbers and immigration
+status (support.claude.com/en/articles/11817273, read 2026-10-02).
+`product.memory_fact_extraction_all_topics@1`, the pinned extraction prompt for
+an account with Include sensitive topics in memory on, never names those
+details, which left the English screen in
+`packages/contracts/context/src/memory-content-policy.ts` as the only filter on
+the model's output, so a fact written in another language, such as "User
+estuvo en la carcel", could be stored. Model extraction now runs for these
+accounts only when the served version names the never-kept details
+(`leavesOutNeverKeptMemoryDetails` in
+`apps/web/lib/prompts/prompt-manifest.ts`). Version 2 does, and is staged on
+internal; until it serves, these accounts learn from the pattern extractor
+alone, the same recall cost MEMORY-EXTRACTION-PROMPT-V2-INTERNAL-01 records for
+accounts with the switch off.
+
+Start at `apps/web/lib/services/model-memory-extraction.ts`.
+
+Resolution/acceptance: the extraction corpus
+MEMORY-EXTRACTION-PROMPT-V2-INTERNAL-01 asks for, with never-kept cases in
+English and other languages, grades
+`product.memory_fact_extraction_all_topics@2`, which then advances through
+canary to stable and is pinned.
+
+## MEMORY-SAVE-TOOL-SENSITIVE-OPT-IN-01
+
+Severity: Low. Status: open; recorded 2026-10-02 on `lane/memory-sensitive`.
+
+The save_memory description always says a sensitive fact is kept only while
+Include sensitive topics in memory is on, whatever the member chose, and a save
+the model calls counts as learning, not as the user's request. With the switch
+off, "Can you remember I'm diabetic?" is refused, and the user is told to say
+"Remember that" or turn the switch on in Settings > Memory on the web or in the
+mobile app. ChatGPT is described as saving what the user explicitly asks it to
+remember; founder research entry 10 asks for the official wording, because
+help.openai.com refused the fetch.
+
+Start at `apps/web/lib/server/tools/memory-tools.ts`.
+
+Resolution/acceptance: the switch is passed into the tool definition, and a
+decision is recorded on whether a save the user asked for in plain words counts
+as their request.
+
+## MEMORY-MOBILE-PRE-SWITCH-BUILDS-01
+
+Severity: Low. Status: open; recorded 2026-10-02 on `lane/memory-sensitive`.
+
+Claude says users on older mobile versions do not see the sensitive-topic save
+notice (support.claude.com/en/articles/11817273, read 2026-10-02). Here a mobile
+build released before Include sensitive topics in memory has no switch, so its
+user changes the setting on the web. In Cloud mode the server applies the
+account's choice, but in Local mode such a build learns sensitive topics on the
+device with no filter until it is updated.
+
+Start at `apps/mobile/src/features/memory/services/localMemoryWriter.ts`.
+
+Resolution/acceptance: none in code for builds already shipped; the row closes
+when the minimum supported mobile version carries the switch and the filter.
+
+## MEMORY-COMMANDS-CLI-01
+
+Severity: Medium. Status: open; recorded 2026-10-02 on `lane/memory-sensitive`.
+
+Web, desktop, mobile and Chrome send only the typed text to
+`/api/memory/commands` and report the outcome with `memory_command`, which the
+model is told. The CLI does neither, and the server no longer reads a remember
+out of CLI messages, which also carry inlined files, selections and pages. So a
+"Remember that" typed in the CLI is learned like any other sentence, behind the
+sensitive-topics switch, the tool-assisted gate and a suppressed auto source,
+with no confirmation to the user or the model. `agi memory add` and Settings >
+Memory remain the explicit paths. VS Code has the same gap as
+MEMORY-COMMANDS-VSCODE-01. This row split MEMORY-COMMANDS-CLI-VSCODE-01.
+
+Start at `apps/cli/src/models/streaming.rs:434`.
+
+Resolution/acceptance: the CLI runs the command path on the typed text before
+the turn, reports the outcome with `memory_command`, and the server adds the
+turn note for `cli`.
+
+## MEMORY-COMMANDS-VSCODE-01
+
+Severity: Medium. Status: open; recorded 2026-10-02 on `lane/memory-sensitive`.
+
+The VS Code extension, like the CLI (MEMORY-COMMANDS-CLI-01), never sends the
+typed text to `/api/memory/commands` and never reports `memory_command`, and the
+server no longer reads a remember out of its messages, which carry selections
+and inlined files. A "Remember that" typed in VS Code is learned passively,
+behind the sensitive-topics switch and the other learning gates, with no
+confirmation. Settings > Memory on the web remains the explicit path. This row
+split MEMORY-COMMANDS-CLI-VSCODE-01.
+
+Start at `apps/extension-vscode/src/utils/api.ts:684`.
+
+Resolution/acceptance: the extension runs the command path on the typed text
+before the turn, reports the outcome with `memory_command`, and the server adds
+the turn note for `vscode`.
+
+## AUDIT-ADMIN-GUARD-LEXICAL-CONTROLS-01
+
+Severity: Medium. Status: reproduced against unchanged current source in isolated temporary fixtures on 2026-10-09; mounted product impact unverified.
+
+An otherwise unguarded POST with four guard names only in comments returns no findings. A doWrite export with no audit is accepted when an unrelated export in the same imported module contains recordAuditEvent. No-controls fixture produces four findings and real-controls fixture produces zero.
+
+Source: `scripts/lib/admin-route-guards.mjs:167`. Exact evidence (`audit/checklist/evidence/coverage-admin-controls-2026-10-09.json`, untracked) and bounded review (`audit/checklist/reviews/coverage-ecosystem-instruments-2026-10-09-001.md`, untracked). Checker-only temporary fixtures; does not demonstrate an exploitable mounted admin route.
+
+Resolution/acceptance: Check executable call paths rather than raw substrings, discard comments/strings, and resolve the called service export rather than any call in its module. Require adverse fixtures for dead/commented controls and unrelated audit exports. No implementation fix was made, per the documentation-only audit scope.
+
+October 9 session/header/upload/support qualification: Original exported operator census/classification engines accept a customer-content operator route whose support gate exists only in a comment or an unused import outside the gate-free handler. A real call shape passes, while absent gate, unclassified and malformed entries refuse. Extend the existing whole-file commented/unrelated control-credit owner; no mounted operator access or content disclosure is established. Actual source report (`audit/checklist/reviews/coverage-session-response-header-guard-source-2026-10-09-043.json`, untracked); 28 independent source controls (`audit/checklist/evidence/coverage-session-response-header-inert-controls-2026-10-09-043.json`, untracked); current guard outcomes (`audit/checklist/evidence/coverage-session-response-header-current-source-gates-2026-10-09-043.json`, untracked). Zero new cause, no runtime effects.
+
+## AUDIT-AGENT-DOC-UNTRACKED-SCOPE-01
+
+Severity: Low. Status: reproduced against unchanged current source in isolated temporary fixtures on 2026-10-09; mounted product impact unverified.
+
+In a separate temporary Git repository, apps/unregistered/AGENTS.md passes while untracked (exit 0); staging exactly that same file produces exit 1.
+
+Source: `scripts/check-agent-docs.mjs:79`. Exact evidence (`audit/checklist/evidence/coverage-agent-doc-enumeration-2026-10-09.json`, untracked) and bounded review (`audit/checklist/reviews/coverage-ecosystem-instruments-2026-10-09-001.md`, untracked). No current production privilege bypass demonstrated; scoped contract guard misses pre-staging changes.
+
+Resolution/acceptance: Enumerate tracked plus current nonignored untracked scoped files, retain vendored ownership exclusions, and test both untracked and staged fixtures. No implementation fix was made, per the documentation-only audit scope.
+
+## CHROME-AUTOMATION-OUTBOX-LOST-RECEIPTS-01
+
+Severity: Medium. Status: unchanged source read independently by specialist and lead; deterministic component race reproduced on 2026-10-09. Actual browser, backend and deployed behavior unverified.
+
+`enqueue` reads the current array, pushes and writes a capped replacement without serialization. Two concurrent calls with independent storage snapshots each see the same old queue and the later replacement drops the other receipt. `flushAutomationAuditOutbox` snapshots a batch, awaits acceptance, then removes `batch.length` from the current capped queue rather than removing accepted event IDs. With 200 queued receipts and a new enqueue during a blocked flush, the cap evicts an old receipt; acceptance of the original batch then deletes the new, never-posted receipt.
+
+The real transpiled source was probed with structured-clone-correct Chrome storage mocks, canonical batch limit, blocked fetch and device/auth/origin dependencies mocked. Concurrent expected 2, actual 1; capped enqueue during accepted flush lost the new receipt. Sequential enqueue and clone-isolation controls passed. The component's existing storage fixture returns shared object references and does not reproduce these snapshot races. Exact command, replay steps, controls and output: specialist review (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-001.json`, untracked).
+
+Source: `apps/extension/src/features/observability/automationAudit.ts:128` and `:177`; the worker mounts flushing and the computer-use loop mounts recording. Lead read the complete unchanged owner source. No live Chrome storage, installed extension or network service ran; no source change was made.
+
+Resolution/acceptance: Serialize queue mutations and reconcile acceptance by event ID. Verify concurrent writers and a blocked accepted flush with cap eviction preserve every newer unsent event within the stated retention contract. Retain realistic independent storage snapshots in adverse tests.
+
+## EXT-MIRROR-TEST-FAKE-COVERAGE-01
+
+Severity: Low. Status: existing open instrument defect; additional concrete instances recorded 2026-10-09. The original `security-fixes.test.ts` scope and prior evidence remain open; it was not freshly read or closed in this wave.
+
+The full-file specialist review found two additional instruments with the same tracking concern. `autofill-escalation-agent-integration.test.ts` describes real content/background handler coverage but imports neither; its composed helper test calls `runAgentLoop` directly and itself emits `AGI_CU_STEP` from its supplied callback. Removing the runtime handoff/broadcast does not exercise that purported handler subject. `connection-lifecycle.test.ts` imports reconnect helpers, while broadcaster, timeout and status groups exercise implementations local to the test. Those groups cannot settle corresponding worker execution.
+
+Full-file review, exact locations and separate source claims (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-001.json`, untracked). Local report identities `CHROME-AUTOFILL-INTEGRATION-HANDLERS-UNEXERCISED-01` and `CHROME-LIFECYCLE-TEST-LOCAL-REPLICAS-01` remain preserved instances under this existing canonical tracking owner, rather than duplicate register rows. Lead independently inspected the handler claims, local lifecycle subjects and manual progress emission. Neither case was newly run or mutated; missing production behavior is not inferred.
+
+Resolution/acceptance: Exercise the real message handlers and native worker lifecycle with controlled dependencies, or accurately qualify helper-only coverage. Adverse controls must detect removing the actual producer/consumer behavior. The October9 fourth Chrome packet separately re-read the original security-fixes file through EOF: its private test subjects remain disconnected, while real gateway/Markdown/redactor groups are distinguished. No test or implementation edits were made.
+
+October9 further instances: recorder-redaction.test.ts declares its own patterns and sanitizer; screenshot-tab-restriction.test.ts tests a private tab/window resolver and never captures pixels. The lead independently read the screenshot file fully and recorder subject ranges, and the specialist read both through EOF. Fourth packet current-source receipts (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-004.json`, untracked). These remain instrument-coverage instances under this existing ID; screenshot implementation correctness is separately tracked as CHROME-SCREENSHOT-INACTIVE-TAB-CAPTURE-01. Production recorder behavior and full browser tests were not run.
+
+## AUDIT-CODEOWNERS-COMMENT-ONLY-01
+
+Severity: Medium. Status: reproduced against unchanged guard CLI in isolated temporary fixtures on 2026-10-09.
+
+Prefix every line of current CODEOWNERS with #. Actual unchanged guard returns exit 0 with zero active entries. A marker-absence control returns exit 1.
+
+Source: `scripts/check-codeowners-contract.mjs:54`. Exact fixture results (`audit/checklist/evidence/coverage-governance-guards-2026-10-09.json`, untracked) and full-file review (`audit/checklist/reviews/coverage-ecosystem-governance-2026-10-09-002.json`, untracked). No GitHub ownership setting was changed and no missing reviewer assignment was observed. The instrument fails to establish active ownership. The existing twelve CODEOWNERS/coverage-floor tests passed; no tests or guard code were changed.
+
+Resolution/acceptance: Parse active CODEOWNERS entries and require owner tokens for each protected pattern; demonstrate comment-only, ownerless, deleted and valid fixtures.
+
+## AUDIT-STEP-LEASE-SET-AS-OWNERSHIP-01
+
+Severity: Medium. Status: reproduced against unchanged guard CLI in isolated temporary fixtures on 2026-10-09.
+
+UPDATE cloud_agent_execution_operations SET status=$1, lease_token=$2 WHERE id=$3 passes, although WHERE never compares current lease ownership. Unguarded update control fails; proper WHERE lease_token comparison control passes. Fixture includes a separate locked SELECT to satisfy nonzero scan coverage.
+
+Source: `scripts/check-concurrent-step-lease.mjs:17`. Exact fixture results (`audit/checklist/evidence/coverage-governance-guards-2026-10-09.json`, untracked) and full-file review (`audit/checklist/reviews/coverage-ecosystem-governance-2026-10-09-002.json`, untracked). No SQL ran and no mounted double execution or current unsafe production statement was established. The existing twelve CODEOWNERS/coverage-floor tests passed; no tests or guard code were changed.
+
+Resolution/acceptance: Require current lease comparison in the mutation WHERE clause or verify actual transaction-scoped locked ownership. Reject SET-only token writes, comments/literals and unrelated locks while accepting the real claim transaction.
+
+## CHROME-SSE-READ-AGGREGATE-CAP-01
+
+Severity: Medium. Status: complete owner source reviewed by specialist and lead; unchanged decoder reproduced in isolated transpiled-source probes on 2026-10-09. Live network/browser behavior unverified.
+
+`BoundedSseDecoder.assertWithinLimit` compares `buffer.length + dataLength` with the per-frame limit while draining each line. The buffer still contains later complete frames from the same network read. Three individually valid `data: a` events decode when delivered separately with cap 12 but fail when coalesced into one read. At the actual 1,048,576 frame cap, five individually valid frames decode separately but a combined read fails, although their combined visible output remains below the 4,194,304 total cap.
+
+Source when found: `apps/extension/src/features/cloud-bridge/boundedSseDecoder.ts:35`, `:55`, `:92`. Main replaced that decoder on 2026-09-28 with the shared `ServerSentEventDecoder` (`packages/client/client-runtime/src/sse.ts:59-60,78`), which the managed chat stream and the computer-use cloud client read through; its `assertWithinLimit` makes the same `buffer.length + dataLength` comparison while later frames of the same read are still buffered. Repointed 2026-10-14 by source reading; the probe was not re-run against the shared decoder. Actual-source probe output, controls and caller scope (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-002.json`, untracked). Transport chunk boundaries must not change valid event acceptance. The current parser was fully read; no live transport or extension run was performed.
+
+Resolution/acceptance: Enforce frame bounds on the current partial frame while draining complete later frames, retaining a separately bounded transport buffer and cumulative output budget. Equivalent event sequences must pass or fail identically under separate, combined and arbitrary boundary splits; oversized individual frames must still fail. No implementation change was made.
+
+## CHROME-STREAM-TOTAL-CAP-TEST-INTERCEPTED-01
+
+Severity: Low. Status: source-supported instrument defect with decoder interception reproduced in isolated component probes on 2026-10-09; the original Vitest file was not newly executed.
+
+The cumulative-output cap case supplies one approximately 4 MiB event. The per-frame decoder rejects it against the smaller approximately 1 MiB frame cap before the cumulative-output condition can be reached. The asserted generic `protocol_error` can therefore remain green if the intended cumulative guard is removed.
+
+Full-file specialist evidence, exact test locations and decoder controls (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-002.json`, untracked). This concerns what the test establishes; it does not claim the cumulative guard is missing or broken in production.
+
+Resolution/acceptance: Construct multiple individually valid frames whose cumulative visible payload crosses the total cap; distinguish or instrument the cumulative rejection subject and verify removing that guard invalidates the test. Retain separate oversized-frame cases. No tests or implementation were changed.
+
+## AUDIT-IMMUTABILITY-HISTORICAL-TRIGGER-01
+
+Severity: Medium. Status: open in current source reviewed 2026-10-09; no implementation change.
+
+Immutability guard credits dropped or disabled historical triggers. Trigger collection records create statements without applying later drop or disable operations.
+
+Verification: Actual checker: active trigger passes, absent trigger fails, appended DROP TRIGGER and DISABLE TRIGGER both still pass with protected=1. Exact receipt (`audit/checklist/evidence/coverage-security-guard-controls-2026-10-09.json`, untracked); full-file review (`audit/checklist/reviews/coverage-ecosystem-guards-2026-10-09-003.json`, untracked). The existing seven guard suites passed 90 tests; these additional negative controls expose cases absent from them.
+
+Limit: Only a temporary synthetic migration tree was checked. No SQL was executed or live schema queried; current production trigger state is unknown.
+
+Resolution/acceptance: Make the instrument reject the demonstrated negative case while retaining the valid control. Verify the actual guarded behavior independently before using a green scanner as product acceptance. No guard or product code was edited.
+
+## AUDIT-AUTH-SURFACE-LEXICAL-CONTROLS-01
+
+Severity: Medium. Status: open in current source reviewed 2026-10-09; no implementation change.
+
+Auth guard credits false cookie flags and commented limiter/audit names. Control-name regexes accept comments, and cookie flag detection checks name occurrence anywhere in the source without values.
+
+Verification: Actual checker: missing cookie names fails; false-valued httpOnly/secure with sameSite none and comment-only flags pass; absent limiter/audit names fail twice while comment-only names pass. Exact receipt (`audit/checklist/evidence/coverage-security-guard-controls-2026-10-09.json`, untracked); full-file review (`audit/checklist/reviews/coverage-ecosystem-guards-2026-10-09-003.json`, untracked). The existing seven guard suites passed 90 tests; these additional negative controls expose cases absent from them.
+
+Limit: Synthetic route source was never executed and no cookie/auth state was mutated. This is an instrument defect, not evidence any current real route has unsafe cookies or missing controls.
+
+Resolution/acceptance: Make the instrument reject the demonstrated negative case while retaining the valid control. Verify the actual guarded behavior independently before using a green scanner as product acceptance. No guard or product code was edited.
+
+October 9 privacy/security/license qualification: Comment-only attribute text and undefined values satisfy required-name checks, and five commented-out calls satisfy the write census. Valid flags pass; literal false flags and empty census refuse. Extend the existing cookie/control lexical-credit owner; no unsafe real cookie or browser state alleged. Source: `scripts/check-session-cookie-attributes.mjs:30-53`, `scripts/check-session-cookie-attributes.mjs:123-138`, `scripts/check-session-cookie-attributes.mjs:173-191`. Current source report (`audit/checklist/reviews/coverage-privacy-security-claim-guard-source-2026-10-09-042.json`, untracked); independent controls (`audit/checklist/evidence/coverage-privacy-security-claim-inert-controls-2026-10-09-042.json`, untracked); current checker/test outcomes (`audit/checklist/evidence/coverage-privacy-security-claim-current-source-gates-2026-10-09-042.json`, untracked). Zero new cause; current security-checker failure and prior RLS suite failure remain separately open. No source or runtime mutation.
+
+## AUDIT-RUN-STATE-TOKEN-AS-PREDICATE-01
+
+Severity: Medium. Status: open in current source reviewed 2026-10-09; no implementation change.
+
+Run-state write classifier accepts an inert guard token. Whole-statement substring detection of RUN_HAS_NOT_ENDED does not prove a guard interpolation or state predicate.
+
+Verification: Actual runStateWrites: id-only predicate yields guarded=false; adding a tautological quoted token comparison yields guarded=true; actual state-any predicate positive control also yields true. Exact receipt (`audit/checklist/evidence/coverage-security-guard-controls-2026-10-09.json`, untracked); full-file review (`audit/checklist/reviews/coverage-ecosystem-guards-2026-10-09-003.json`, untracked). The existing seven guard suites passed 90 tests; these additional negative controls expose cases absent from them.
+
+Limit: Exported classifier was executed, not SQL or a run-state transition. Current service race/exploit and database behavior were not run.
+
+Resolution/acceptance: Make the instrument reject the demonstrated negative case while retaining the valid control. Verify the actual guarded behavior independently before using a green scanner as product acceptance. No guard or product code was edited.
+
+## CHROME-SCREENSHOT-INACTIVE-TAB-CAPTURE-01
+
+Severity: Medium. Status: open in current source reviewed 2026-10-09; no implementation changes.
+
+The screenshot branch resolves the content sender tab/window but calls captureVisibleTab with the window alone, then labels the returned image with the sender tab id. After a user switches tabs during awaited page actions, a successful capture can therefore pair the active tab image with the sender document URL/title. The [current Chrome API contract](https://developer.chrome.com/docs/extensions/reference/api/tabs#method-captureVisibleTab), independently checked October 9, specifies the current active tab in the window as the capture target.
+
+Verification: The specialist executed the unchanged selected handler and actual resolver helpers in an isolated transpiled VM. One coherent tab map supplies sender/get/query/capture state: active sender control captures and reports 42; inactive sender42 in window7 with unique active99 captures99 but reports42. Exact component controls and current-source anchors (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-004.json`, untracked). Lead independently read the branch, page-action consumer and current full manifest.
+
+Limit: The outer admission wrapper, real Chrome capture, pixels and permission grants were not run. The scenario requires an admitted sender and capture permission for the captured active tab. Current manifest has narrow required hosts, optional HTTP/HTTPS hosts and activeTab, without all_urls; tabs and optional hosts alone are not evidence of capture authorization. No actual privacy disclosure or permission bypass is asserted.
+
+Resolution/acceptance: Return a screenshot bound to its actual captured identity and refuse or safely retry when the requested sender is not the capturable active target. A real admitted action/tab-switch test must cover success, refusal and denied capture permission. Source remains unchanged.
+
+## DESKTOP-SETTINGS-SYNC-GAP-01
+
+Requalified October 9, 2026. The older assertion that every desktop app mode has zero settings-sync wiring is contradicted by current source. The existing identity is retained; implementation and runtime acceptance are separate.
+
+`apps/desktop/src/services/managedCloudSettingsSync.ts:145-429` implements a coordinator with managed-mode/account eligibility, scoped activation, push/pull, dirty settings, cursor/base rebasing, lifecycle subscriptions and account restoration. Its current client factory and host ports at `:547-603` bind the shared managed settings client, settings store, auth/mode subscriptions and local storage. `apps/desktop/src/App.tsx:720-732` starts it after settings hydration and registers cleanup. Shared reducer ownership remains `packages/client/sync/src/settings.ts`.
+
+The full specialist source receipt (`audit/checklist/reviews/coverage-shared-client-2026-10-09-005.md`, untracked) and independent coordinator/App excerpts establish retained renderer wiring. They do not prove this renderer is the hosted public Electron surface, native store/runtime behavior, deployment, actual accounts, network synchronization, conflict recovery or cross-device acceptance. The original High label is retained pending scope reassessment rather than downgraded from a source-only check. No feature or implementation fix is claimed.
+
+## SHARED-MEMORY-CREDENTIAL-TOPIC-REFUSAL-01
+
+Medium. Confirmed October 9, 2026 against current shared policy and managed web write consumer.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. The credential pattern in `packages/contracts/context/src/memory-content-policy.ts:55` is unchanged on main, and main's manual create route still maps the refusal to forbidden. Line numbers for `apps/web/app/api/memory/route.ts` are main's.
+
+`packages/contracts/context/src/memory-content-policy.ts:55` allows an absent declaration/delimiter and then any following nonspace character. Actual unchanged policy categorizes both “User prefers a password manager” and “Password managers are useful” as credentials. Neither input states a password. Ordinary token-handling/noncredential controls remain eligible and a synthetic stated password remains refused.
+
+`apps/web/lib/services/managed-memory-context-service.ts:501-510,637-669` turns this category into an admission refusal and throws `MemoryIneligibleError` before persistence. The manual create route at `apps/web/app/api/memory/route.ts:143-162` calls that writer and maps the error to forbidden. The specialist receipt (`audit/checklist/reviews/coverage-shared-context-2026-10-09-006.md`, untracked) exercises the actual shared policy and writer with fresh inert dependencies and zero DB calls. Independent root controls (`audit/checklist/evidence/coverage-shared-policy-mapping-controls-2026-10-09.json`, untracked) exercise the actual exported policy, including a different harmless topic sentence.
+
+This is false refusal, not credential disclosure or a Local/BYOK transfer. No mounted HTTP route, account, extraction model, storage, deployment or prevalence was tested. The acceptance target is to preserve stated-secret refusals while admitting harmless credential-management topics, with shared-policy and writer controls. Source remains unchanged.
+
+## SHARED-SYNC-DIRTY-MESSAGE-PULL-OVERWRITE-01
+
+Medium. Confirmed October 9, 2026 for an explicitly bounded current-source mobile sync sequence.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main's 0ce5126800 changed how the merge takes model and provider, but it still assigns incoming content and metadata over a dirty message, and `syncNow` still pulls straight after push. Line numbers are main's.
+
+`apps/mobile/services/cloudSyncEngine.ts:555-565` keeps the dirty ref when a message changes during a push, correctly advancing its CAS revision. Actual `syncNow` then pulls immediately after push at `:962-963`. Pull at `:473-488` applies message rows through `packages/client/sync/src/messages.ts:34-75`, whose merge assigns incoming content and metadata without dirty-message protection.
+
+The specialist actual-source pipeline probe (`audit/checklist/reviews/coverage-shared-client-2026-10-09-005.md`, untracked) uses canonical push/pull schemas, valid UUIDs, fresh stores/cursors/dirty queues and inert API ports. With an in-flight newer local edit and the acknowledged older row in the subsequent nonempty pull, content and metadata revert to the sent snapshot while the dirty ref remains. An empty-pull control preserves the edit; an unchanged-message control clears the dirty ref. The independent root reducer controls (`audit/checklist/evidence/coverage-shared-policy-mapping-controls-2026-10-09.json`, untracked) corroborate unconditional incoming content mapping, without claiming to exercise the full pipeline.
+
+The finding requires a managed eligible mobile sync and a subsequent pull containing that row. React Native, real stores/auth/server/network/database/stream timing and actual frequency were not exercised. No Local/BYOK transfer or deployed lost-edit event is asserted. Preserve dirty local fields while advancing the remote base, with acknowledged-row, clean, empty-pull and tombstone controls. Source remains unchanged.
+
+## AUDIT-CONFIG-KEY-COMMENT-READER-01
+
+Severity: Low. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+The direct dot/bracket env-token scanner includes source comments. In isolated fixed-registry controls, an actual read passes, absent read produces the unused-key error, and comment-only process.env spelling passes with one reported reader. Eleven existing tests pass without this case.
+
+Verification: Exact control receipt (`audit/checklist/evidence/coverage-config-reader-controls-2026-10-09.json`, untracked) and full-file source review (`audit/checklist/reviews/coverage-ecosystem-concept-guards-2026-10-09-007.md`, untracked).
+
+Limit: This is a lexical coverage false green. No live env usage, secret value, bundle, account, provider or application was run.
+
+Acceptance target: Count executable registered-key reads and retain the real/absent controls; use independent usage evidence before declaring config coverage. Source remains unchanged.
+
+## AUDIT-CONCEPT-TEXT-AS-BEHAVIOR-01
+
+Severity: Medium. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+The checker scans raw source for SQL mutation text, event string literals, alias names, sweep table names and export spellings. Actual exported functions credit comment-only fixtures in all five channels. The emitted-event literal feeds actual checkDesignations, and a commented contract export feeds actual checkFacets. Missing-text and executable/declaration controls retain their expected distinctions.
+
+Verification: Exact control receipt (`audit/checklist/evidence/coverage-concept-registry-controls-2026-10-09.json`, untracked) and full-file source review (`audit/checklist/reviews/coverage-ecosystem-concept-guards-2026-10-09-007.md`, untracked).
+
+Limit: Seventeen controls concern independent checker channels, not a simultaneous whole-registry bypass. No mutator, product event, retention sweep, contract consumer, live handler or SQL ran.
+
+Acceptance target: Resolve executable syntax and owning call paths for the behavior being claimed; comments and declarations alone must not establish writes, emissions or retention. Source remains unchanged.
+
+## AUDIT-CONCEPT-PRIMARY-KEY-HISTORY-01
+
+Severity: Low. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+readSchemaInventory applies a fixture rename from id to probe_id, but readPrimaryKeyColumns only collects CREATE-table key spellings and keeps id. Feeding both actual helpers to checkDesignations rejects a concept using the final probe_id identity as a mismatch.
+
+Verification: Exact control receipt (`audit/checklist/evidence/coverage-concept-registry-controls-2026-10-09.json`, untracked) and full-file source review (`audit/checklist/reviews/coverage-ecosystem-concept-guards-2026-10-09-007.md`, untracked).
+
+Limit: The fixture history is source data, never executed SQL. No assertion is made that the current migration chain or applied production schema uses this rename. This is instrument disagreement under a supported source history.
+
+Acceptance target: Advance key evidence through source-ordered schema changes and verify final identity consistently with column inventory, including rename and removal controls. Source remains unchanged.
+
+## AUDIT-CONCEPT-DROPPED-FK-RETAINED-01
+
+Severity: Medium. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+readForeignKeys records a fixture named foreign-key constraint, then ignores a later DROP CONSTRAINT statement. Actual checkFacets still accepts the child-parent claim from the retained map; an empty-map control rejects it. The table and columns remain in the fixture final inventory.
+
+Verification: Exact control receipt (`audit/checklist/evidence/coverage-concept-registry-controls-2026-10-09.json`, untracked) and full-file source review (`audit/checklist/reviews/coverage-ecosystem-concept-guards-2026-10-09-007.md`, untracked).
+
+Limit: SQL was never applied or queried. The result establishes stale source-instrument evidence, not a missing constraint in the current live DB, orphaned rows or an access-control exploit.
+
+Acceptance target: Apply foreign-key removals and renames in migration order; a dropped named constraint must not continue to establish the relationship in facet acceptance. Source remains unchanged.
+
+## AUDIT-CI-COMMENTED-GATE-CREDIT-01
+
+Severity: Medium. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-ci-guardrails.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Removing the protocol-type command from the actual workflow body makes the unchanged complete CI parent checker report its absence. Adding only a YAML comment containing that command removes the error and returns the parent to green. The current parent-source baseline also has zero errors.
+
+Verification: Exact control receipt (`audit/checklist/evidence/coverage-ci-guardrail-controls-2026-10-09.json`, untracked) and full-file source review (`audit/checklist/reviews/coverage-ecosystem-concept-guards-2026-10-09-007.md`, untracked).
+
+Limit: The complete checker source was evaluated with SourceTextModule, current read-only filesystem and actual git inventory. Semgrep-allowlist and action-pin child statuses were intercepted to isolate parent checks, so this is not a full CLI guard or GitHub Actions pass. Fixture data did not edit the workflow.
+
+Acceptance target: Bind required gates to executable workflow steps or approved script chains, and retain absent/comment/real-command controls; no green textual match establishes that the gate ran. Source remains unchanged.
+
+## AUDIT-CI-NATIVE-CONDITION-UNBOUND-01
+
+Severity: Low. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-ci-guardrails.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+requireNativeLanesAgree counts four identical condition lines and checks the four native job names independently. A separate YAML-valid fixture removes conditions from every named native job and assigns all four to unrelated synthetic jobs. YAML parsing verifies this association and the unchanged complete parent checker still reports green. A no-condition control fails.
+
+Verification: Exact control receipt (`audit/checklist/evidence/coverage-ci-guardrail-controls-2026-10-09.json`, untracked) and full-file source review (`audit/checklist/reviews/coverage-ecosystem-concept-guards-2026-10-09-007.md`, untracked).
+
+Limit: The earlier detached-text case is a lexical diagnostic only; the YAML-valid case supports this finding. Two independent child checks were intercepted. No actual workflow, native tests, release, CI spend or GitHub job execution changed.
+
+Acceptance target: Validate each native job and its own condition as one structured claim; unrelated jobs must not satisfy the named-lane agreement requirement. Source remains unchanged.
+
+## AUDIT-CONTENT-DEGRADATION-TEXT-CREDIT-01
+
+Severity: Medium. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-content-blocks.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Content guard credits comments as readers and degradation tests. The actual unchanged guard accepts comment-only required compatibility symbols and a degradation file containing only a MESSAGE_KINDS comment. Removing required reader symbols yields three failures. Its green summary says degraded under test even though this fixture has no executable test body.
+
+Source: `scripts/check-content-blocks.mjs:198-223`. Evidence: coverage-chat-context-guard-controls-2026-10-09.json (`audit/checklist/evidence/coverage-chat-context-guard-controls-2026-10-09.json`, untracked); full source review (`audit/checklist/reviews/coverage-ecosystem-chat-context-guards-2026-10-09-008.json`, untracked).
+
+Limits: Source-owned instrument evidence only; no app, DB, provider, deployment, Gmail privacy failure, legal compliance or product acceptance claim.
+
+Acceptance target: Bind compatibility and degradation evidence to actual executable behavior; preserve actual/absent/comment-only controls. Source remains unchanged.
+
+## AUDIT-TEMPORARY-BOUNDARY-TOKEN-CREDIT-01
+
+Severity: Medium. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+Temporary boundary guard accepts inert comment markers. A direct unguarded loader call plus only isTemporary and ManagedMemoryPolicy comments yields one counted call and zero failures. The direct unguarded control without markers yields both boundary and policy failures.
+
+Source: `scripts/check-context-temporary-boundary.mjs:71-85`. Evidence: coverage-chat-context-guard-controls-2026-10-09.json (`audit/checklist/evidence/coverage-chat-context-guard-controls-2026-10-09.json`, untracked); full source review (`audit/checklist/reviews/coverage-ecosystem-chat-context-guards-2026-10-09-008.json`, untracked).
+
+Limits: Source-owned instrument evidence only; no app, DB, provider, deployment, Gmail privacy failure, legal compliance or product acceptance claim.
+
+Acceptance target: Require an effective temporary/policy boundary for the actual call; keep absent and comment-only controls distinct. Source remains unchanged.
+
+## AUDIT-TEMPORARY-BOUNDARY-ALIASED-CALL-01
+
+Severity: Medium. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+Temporary boundary guard omits aliased loader calls. A valid direct caller plus a second unguarded direct caller produces two counted call sites and two failures. Renaming the second import to readMemories makes the same guard count only the valid caller and report no failures. The valid caller avoids the zero-call CLI failure shortcut.
+
+Source: `scripts/check-context-temporary-boundary.mjs:99-109`. Evidence: coverage-chat-context-guard-controls-2026-10-09.json (`audit/checklist/evidence/coverage-chat-context-guard-controls-2026-10-09.json`, untracked); full source review (`audit/checklist/reviews/coverage-ecosystem-chat-context-guards-2026-10-09-008.json`, untracked).
+
+Limits: Source-owned instrument evidence only; no app, DB, provider, deployment, Gmail privacy failure, legal compliance or product acceptance claim.
+
+Acceptance target: Resolve loader identity through import aliases and include the unguarded aliased call while preserving the compliant caller. Source remains unchanged.
+
+## AUDIT-CONVERSATION-GRAPH-HISTORICAL-CONSTRAINT-01
+
+Severity: Medium. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-conversation-graph.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Conversation graph guard credits dropped historical constraints. The actual exported guard accepts a later fixture migration dropping both required thread constraints because it searches aggregated historical SQL. The absent thread migration control fails. No fixture SQL was executed.
+
+Source: `scripts/check-conversation-graph.mjs:202-208`. Evidence: coverage-chat-context-guard-controls-2026-10-09.json (`audit/checklist/evidence/coverage-chat-context-guard-controls-2026-10-09.json`, untracked); full source review (`audit/checklist/reviews/coverage-ecosystem-chat-context-guards-2026-10-09-008.json`, untracked).
+
+Limits: Source-owned instrument evidence only; no app, DB, provider, deployment, Gmail privacy failure, legal compliance or product acceptance claim.
+
+Acceptance target: Evaluate effective constraints after ordered additions/removals instead of the continued presence of historical creation text. Source remains unchanged.
+
+## AUDIT-CONVERSATION-GRAPH-BLOCK-COMMENT-01
+
+Severity: Medium. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-conversation-graph.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Conversation graph guard treats block-comment SQL as schema. Wrapping the complete thread migration fixture in a SQL block comment still credits its columns and both constraints. The no-thread-migration control rejects the absent columns and constraints. The checker strips only line comments.
+
+Source: `scripts/check-conversation-graph.mjs:95-133,202-203`. Evidence: coverage-chat-context-guard-controls-2026-10-09.json (`audit/checklist/evidence/coverage-chat-context-guard-controls-2026-10-09.json`, untracked); full source review (`audit/checklist/reviews/coverage-ecosystem-chat-context-guards-2026-10-09-008.json`, untracked).
+
+Limits: Source-owned instrument evidence only; no app, DB, provider, deployment, Gmail privacy failure, legal compliance or product acceptance claim.
+
+Acceptance target: Exclude SQL block comments from effective column and constraint evidence; preserve comment-only and executable source controls. Source remains unchanged.
+
+## AUDIT-CRON-ROUTE-TEXT-CREDIT-01
+
+Severity: Medium. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+Cron route guard credits inert refusal and loop-ceiling text. A route fixture missing auth refusal fails; the same fixture with refusal/401 only inside a block comment passes. An unbounded loop fails without a ceiling but passes with an unused or block-commented MAX_ROWS_PER_RUN constant. No route or loop was executed.
+
+Source: `scripts/check-cron-contract.mjs:134-146,184-198`. Evidence: coverage-cron-guard-controls-2026-10-09.json (`audit/checklist/evidence/coverage-cron-guard-controls-2026-10-09.json`, untracked); current full source review (`audit/checklist/reviews/coverage-ecosystem-data-contract-guards-2026-10-09-009.json`, untracked).
+
+Limits: Source guard scope only; no deployed auth/data/privacy/telemetry/deadline/rendering incident, database or provider effect, or product acceptance claimed.
+
+Acceptance target: Bind refusal and loop bounds to effective code and control flow; retain absent, comment-only and unused-constant controls. Source remains unchanged.
+
+## AUDIT-CRON-SCHEDULE-VALIDATION-GAP-01
+
+Severity: Low. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+Cron guard accepts schedules with invalid or empty firing sets. The actual checker accepts 90 30 * * * as slot30:90,59-0 3 * * * with zero slots, and nonnumeric unchecked calendar fields. These source-parser outputs contradict meaningful firing-minute validation; no deployed scheduler behavior was tested.
+
+Source: `scripts/check-cron-contract.mjs:63-96,219-238`. Evidence: coverage-cron-guard-controls-2026-10-09.json (`audit/checklist/evidence/coverage-cron-guard-controls-2026-10-09.json`, untracked); current full source review (`audit/checklist/reviews/coverage-ecosystem-data-contract-guards-2026-10-09-009.json`, untracked).
+
+Limits: Source guard scope only; no deployed auth/data/privacy/telemetry/deadline/rendering incident, database or provider effect, or product acceptance claimed.
+
+Acceptance target: Validate range bounds, nonempty firing sets and supported calendar syntax before registry, overlap and collision acceptance. Source remains unchanged.
+
+## AUDIT-DASHBOARD-PRODUCER-NAME-TEXT-CREDIT-01
+
+Severity: Medium. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+Dashboard guard confuses recorder spelling with executable producer identity. Real source-fixture constants pass and removing the caller fails. Only a withTurn() comment or an unrelated locally bound same-name function also passes. A genuine imported alias is reported missing. A recorder write present only in a comment also earns writer coverage.
+
+Source: `scripts/check-dashboard-producers.mjs:85-98,134-145,173-185`. Evidence: coverage-producer-deadline-guard-controls-2026-10-09.json (`audit/checklist/evidence/coverage-producer-deadline-guard-controls-2026-10-09.json`, untracked); current full source review (`audit/checklist/reviews/coverage-ecosystem-data-contract-guards-2026-10-09-009.json`, untracked).
+
+Limits: Source guard scope only; no deployed auth/data/privacy/telemetry/deadline/rendering incident, database or provider effect, or product acceptance claimed.
+
+Acceptance target: Resolve imported recorder identities and executable write/call bodies; preserve absent/comment/local-name/real-alias controls. Source remains unchanged.
+
+## AUDIT-DEPENDENCY-DEADLINE-CALL-OMISSION-01
+
+Severity: Medium. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+Deadline scan omits executed template and nested fetch calls. An unbounded direct fetch fails. The same unbounded call inside a template interpolation is counted as zero calls and passes. An unbounded inner fetch nested in a timed outer fetch is counted only as one outer call and passes. No fetch was executed.
+
+Source: `scripts/check-dependency-deadlines.mjs:80-90,101-119`. Evidence: coverage-producer-deadline-guard-controls-2026-10-09.json (`audit/checklist/evidence/coverage-producer-deadline-guard-controls-2026-10-09.json`, untracked); current full source review (`audit/checklist/reviews/coverage-ecosystem-data-contract-guards-2026-10-09-009.json`, untracked).
+
+Limits: Source guard scope only; no deployed auth/data/privacy/telemetry/deadline/rendering incident, database or provider effect, or product acceptance claimed.
+
+Acceptance target: Preserve executable template interpolation and independently enumerate nested direct fetch calls while excluding literal/comment text. Source remains unchanged.
+
+## AUDIT-DEPENDENCY-DEADLINE-INIT-ASSUMPTION-01
+
+Severity: Low. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+Named request init earns deadline credit without deadline evidence. A fixture explicitly defines const init={} and forwards it as the second fetch argument; the actual guard returns zero errors. The existing forwarded-init test assumes a caller deadline. Acceptance therefore cannot establish a finite deadline at that call.
+
+Source: `scripts/check-dependency-deadlines.mjs:123-134`. Evidence: coverage-producer-deadline-guard-controls-2026-10-09.json (`audit/checklist/evidence/coverage-producer-deadline-guard-controls-2026-10-09.json`, untracked); current full source review (`audit/checklist/reviews/coverage-ecosystem-data-contract-guards-2026-10-09-009.json`, untracked).
+
+Limits: Source guard scope only; no deployed auth/data/privacy/telemetry/deadline/rendering incident, database or provider effect, or product acceptance claimed.
+
+Acceptance target: Track effective deadline-bearing init provenance or expose this as unverified coverage rather than claiming every scanned request has a deadline. Source remains unchanged.
+
+## AUDIT-DB-SCOPE-TOKEN-AS-PREDICATE-01
+
+Severity: Medium. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-db-isolation.mjs`, `scripts/check-membership-isolation.mjs` and `scripts/check-org-permissions.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for them are main's.
+
+Database scope guard accepts projection and SQL-comment names as predicates. Absent owner/workspace predicates fail, but select owner_id from shared_sessions and select user_id,organization_id from web_conversations pass with no WHERE. An owner_id SQL block comment also passes the owner check. This measures checker false acceptance, not a deployed leak.
+
+Source: `scripts/check-db-isolation.mjs:29-30,1309-1325`. Evidence: coverage-db-isolation-guard-controls-2026-10-09.json (`audit/checklist/evidence/coverage-db-isolation-guard-controls-2026-10-09.json`, untracked); current full source review (`audit/checklist/reviews/coverage-ecosystem-data-contract-guards-2026-10-09-009.json`, untracked).
+
+Limits: Source guard scope only; no deployed auth/data/privacy/telemetry/deadline/rendering incident, database or provider effect, or product acceptance claimed.
+
+Acceptance target: Require an effective predicate for the relevant owner/workspace relation; reject projection/comment-only token controls. Source remains unchanged.
+
+October 9 membership/memory extension under this same canonical owner: Existing canonical owner reused rather than adding separate membership/memory projection-marker rows. Complete fixture guards accept organization_id in a membership projection or SQL comment without a workspace predicate. Memory isolation accepts user_id=user_id plus organization_id in the projection, and accepts both account/workspace marker text only inside a SQL comment. Real predicate and absence controls pair with these acceptances. This extends the original database-guard token-as-predicate finding to two independent duplicated source scanners; it does not infer RLS state, SQL execution or live cross-tenant disclosure.
+
+Additional sources: `scripts/check-membership-isolation.mjs:46,235-242; scripts/check-memory-isolation.mjs:20-25,101-111`. Current full source review (`audit/checklist/reviews/coverage-ecosystem-membership-memory-guards-2026-10-09-024.json`, untracked); independent complete controls (`audit/checklist/evidence/coverage-membership-memory-independent-controls-2026-10-09-024.json`, untracked). The shared acceptance target applies to all three scans; source remains unchanged and runtime/SQL/RLS behavior remains unknown.
+
+October 9 managed/unattended extension under this same canonical owner: Unattended pickup without either gate fails and real rendered gate expressions pass. Projected string data or a SQL comment containing organization_members and ownerMayRunUnattendedSql makes the same unguarded pickup pass as gated. Uppercase module constants resolving to those literal strings also pass, because replacement inserts declaration expression text without proving an effective predicate. Existing token-as-predicate owner is extended.
+
+Additional source: `scripts/check-membership-unattended-work.mjs:59-60,158-164,193-210`. Acceptance target: Require effective account and workspace membership predicates on the selected owner/relation; projected strings, SQL comments and inert declaration text must not discharge the obligation. Actual full source review (`audit/checklist/reviews/coverage-ecosystem-managed-unattended-guards-2026-10-09-025.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-managed-unattended-independent-controls-2026-10-09-025-refined.json`, untracked). Unchanged guard APIs and source CLIs over isolated inert TypeScript/migration text only.35 unchanged tests and36 final independent controls passed;69 fixture syntax parses establish syntax only. Three current textual CLIs exited0. Initial26-control execution stopped on a disproved quoted-table omission assumption and its actual failure is preserved separately. No SQL, application module/entrypoint/service, provider/native/network/browser/build/database or production state executed; source/config/tool files remain unchanged. No current product policy bypass, account loss or deployed incident is accepted.
+
+October 9 money/usage/Work source qualification: Usage pool complete API/CLI falsely reject an account-only query solely because projected string data contains source_surface; its ordinary account-only counterpart passes. Work full CLI accepts user_id only in a SQL comment after WHERE true, and accepts an owner-bearing INSERT CTE while a separate cloud_agent_events DELETE has no owner predicate. This extends the existing token/relationship ownership with both false rejection and false acceptance; no SQL or actual account authorization executes.
+
+Additional source: `scripts/check-usage-pool-is-shared.mjs:94-104; scripts/check-worktask-scope.mjs:71-82`. Acceptance target: Bind policy checks to effective predicate or owner-bearing write behavior for each relevant relation; projected data, comments and ownership on a different relation must not decide the check. Current source report (`audit/checklist/reviews/coverage-ecosystem-money-usage-worktask-guards-2026-10-09-028.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-money-usage-worktask-independent-controls-2026-10-09-028-refined.json`, untracked). Unchanged complete source-instrument APIs and byte-identical CLI copies over isolated inert TypeScript/SQL text only.44 unchanged tests and35 final independent controls passed;62 TypeScript fixture parses establish syntax only. Four actual current source CLIs exited0. Two isolated literal arithmetic expressions execute in a VM; no application or fixture module imports, monetary writes, SQL, database, native host, provider, network, browser, build, installation, production action or real checkout staging occurs. Git used by unchanged tests is confined to scrubbed fixture roots. Initial11-control receipt preserves a failed CLI assertion: /tmp versus /private/tmp prevented the copied guard main from running. Final runner normalizes executable/cwd realpaths and asserts nonempty guard output. Source/tool/config files are unchanged; no current product incident or runtime acceptance is established.
+
+October 9 organization/pagination/tier source qualification: Complete CLI rejects an absent policy, but a CREATE POLICY USING comparison of identical app_has_org_permission string literals passes without invoking any permission helper. Current official CREATE POLICY documentation establishes that an effective Boolean USING condition controls applicable row visibility. This extends token-as-predicate ownership only; no schema/RLS/SQL execution or deployed access is established.
+
+Additional source: `scripts/check-org-permissions.mjs:450-467`. Acceptance target: Require an effective policy predicate bound to the permission helper and relevant relation/command; helper names as literal data cannot establish that predicate. Current source report (`audit/checklist/reviews/coverage-ecosystem-org-pagination-tier-guards-2026-10-09-029.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-org-pagination-tier-independent-controls-2026-10-09-029.json`, untracked). Unchanged complete source guard APIs/CLIs and isolated inert TypeScript/TSX/SQL/Git fixtures only.37 unchanged Node tests and31 independent controls passed;220 fixture syntax parses establish syntax only. Four current source CLIs exited0. Literal fixtures extracted via actual TypeScript AST values, copied role CLI byte identity and nonempty complete CLI output are independently asserted; organization fixtures run fresh subprocesses to avoid graph-cache cross-case state. One literal synthetic function with an injected counter executes in a VM and proves zero terminal calls. No application/fixture module imports, actual authorization/mutation, SQL/database, native host, provider, network, browser, React mount, build, install, production action or real checkout staging. Git init/census and unchanged tests bind throwaway roots with inherited GIT variables scrubbed. Source/tool/config files remain unchanged; no deployed incident or runtime acceptance is established.
+
+October 9 project/prompt/public-share source qualification: The project helper accepts user_id=$2 only in a SELECT projection while WHERE binds only project_id. It also credits an earlier owner/project query in an independent function to a later unscoped read with a different project parameter; reversing source order correctly rejects the latter. Actual discovered nonempty tables, real owner predicates and unscoped refusals are paired controls. Existing effective-predicate/relation ownership is extended; no SQL, RLS or actual authorization executes.
+
+Additional source: `scripts/lib/project-context-boundary.mjs:26-37,141-149,254-274`. Acceptance target: Require an effective owner predicate or proven authorization bound to the relevant query/project/caller; an unrelated projection or earlier independent function cannot authorize a later read. Current source report (`audit/checklist/reviews/coverage-ecosystem-project-prompt-share-guards-2026-10-09-032.json`, untracked); independent controls (`audit/checklist/evidence/coverage-project-prompt-share-independent-controls-2026-10-09-032-final.json`, untracked). Thirty-five unchanged source guard tests, thirty-eight independent inert controls and four individual current source CLIs passed. Fifty-one TypeScript AST syntax/source-kind/binding checks establish fixture subjects. Complete CLI copies are byte-identical, realpath-bound and produce nonempty output. Git fixture operations use explicit throwaway roots and scrub inherited GIT variables; no real checkout staging. Imported modules are unchanged source instruments only; no application/fixture modules, actual SQL/database, project prompt/public share mutation, native/provider/network/browser/build/install/production action or runtime product acceptance. Source/config/tool files remain unchanged. Current CLI findings are textual guard evidence, not deployed incidents.
+
+## AUDIT-DB-INTERPOLATED-SCOPE-WINDOW-01
+
+Severity: Medium. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-db-isolation.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Unrelated neighboring literals satisfy interpolated SQL scope resolution. An interpolated ownerClause=1=1 source fails without any owner constraint. Adding an unrelated neighboring constant with owner_id text inside the600-character search window makes the unchanged guard pass. The resolved variable still has no owner predicate.
+
+Source: `scripts/check-db-isolation.mjs:1232-1246,1327-1329`. Evidence: coverage-db-isolation-guard-controls-2026-10-09.json (`audit/checklist/evidence/coverage-db-isolation-guard-controls-2026-10-09.json`, untracked); current full source review (`audit/checklist/reviews/coverage-ecosystem-data-contract-guards-2026-10-09-009.json`, untracked).
+
+Limits: Source guard scope only; no deployed auth/data/privacy/telemetry/deadline/rendering incident, database or provider effect, or product acceptance claimed.
+
+Acceptance target: Resolve the interpolated value and its actual dependencies; exclude neighboring statements and unrelated string literals from scope evidence. Source remains unchanged.
+
+## AUDIT-DB-RLS-HISTORICAL-TEXT-CREDIT-01
+
+Severity: Medium. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-db-isolation.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Database isolation classification credits commented or disabled RLS. An undecided tenant table fails. Real RLS enable passes; the same enable statement inside a SQL block comment also passes. A later migration disabling RLS retains classification credit from the earlier enable. No migration was applied.
+
+Source: `scripts/check-db-isolation.mjs:1389-1420,1428-1436`. Evidence: coverage-db-isolation-guard-controls-2026-10-09.json (`audit/checklist/evidence/coverage-db-isolation-guard-controls-2026-10-09.json`, untracked); current full source review (`audit/checklist/reviews/coverage-ecosystem-data-contract-guards-2026-10-09-009.json`, untracked).
+
+Limits: Source guard scope only; no deployed auth/data/privacy/telemetry/deadline/rendering incident, database or provider effect, or product acceptance claimed.
+
+Acceptance target: Evaluate effective comment-free schema state in ordered migrations and revoke RLS credit after disable/removal. Source remains unchanged.
+
+## AUDIT-CSS-COMMENTED-RUNTIME-TOKEN-01
+
+Severity: Low. Status: open in current source reviewed October 9, 2026; no implementation edits.
+
+CSS guard credits a commented runtime token definition. Actual complete parent-source baseline passes. An injected hyphenated missing token reference fails. Keeping that reference and adding only a setProperty line comment makes the complete source guard pass because raw source populates runtimeProvided. Two initial fixture calibration failures were corrected before evidence credit.
+
+Source: `scripts/check-css-tokens.mjs:384-403,405-416`. Evidence: coverage-css-runtime-token-controls-2026-10-09.json (`audit/checklist/evidence/coverage-css-runtime-token-controls-2026-10-09.json`, untracked); current full source review (`audit/checklist/reviews/coverage-ecosystem-data-contract-guards-2026-10-09-009.json`, untracked).
+
+Limits: Source guard scope only; no deployed auth/data/privacy/telemetry/deadline/rendering incident, database or provider effect, or product acceptance claimed.
+
+Acceptance target: Collect executable runtime definitions with their relevant scope and reject missing/comment-only controls. Source remains unchanged.
+
+October 9 UI-source qualification: The unchanged theme-token guard collects raw --token: definitions before checking references. A missing --ghost reference refuses, while adding only a CSS-comment definition passes. This repeats the existing CSS comment-definition ownership cause; retain its original runtime setProperty evidence, provenance and severity, with zero new cause. Source: `scripts/check-ui-theme-tokens.mjs:88-104`. Actual source report (`audit/checklist/reviews/coverage-ui-system-source-guards-2026-10-09-050.json`, untracked); fresh original21 source controls (`audit/checklist/evidence/coverage-ui-systems-inert-controls-2026-10-09-050-003.json`, untracked); independent source-premise challenge (`audit/checklist/evidence/coverage-ui-systems-independent-challenge-2026-10-09-050.json`, untracked). Acceptance target extension: Require active CSS definitions as well as executable runtime definitions, with relevant scope; inert comment definitions must not satisfy missing-token proof. Actual source reading and bounded source-instrument controls only. No application or fixture modules, TypeScript package/AST guard or test, fixture parser/compiler/typecheck, browser/render/accessibility/contrast, native/provider/network/SQL/database/build/install/production or full CI acceptance. Earlier hygiene/integrity/supply/security/RLS failures remain unresolved. No ignored/unlisted coverage completion claim. First empty-output controls, the later stdout-only validator and a fixed-temp-prefix metadata qualifier are retained uncredited; only fresh exact original guards with canonical paths, source pins, error/signal and diagnostic-channel checks supply control evidence. Zero new cause; original evidence, provenance and severity retained.
+
+## AUDIT-DEPENDENCY-SIDE-EFFECT-IMPORT-01
+
+Severity: Medium. Status: open current source instrument defect independently reproduced October 9, 2026; source unchanged.
+
+Named React and dynamic React imports fail the actual forbidden rule, while a bare import of the same forbidden package passes in a fresh Git fixture. The guard never inventories that side-effect import.
+
+Source: `scripts/check-dependency-direction.mjs:18-19,40-58`. Evidence: coverage-native-import-egress-controls-2026-10-09.json (`audit/checklist/evidence/coverage-native-import-egress-controls-2026-10-09.json`, untracked); current full source report (`audit/checklist/reviews/coverage-ecosystem-native-boundary-guards-2026-10-09-010.json`, untracked).
+
+Limits: Source instrument evidence only; supplied product/import/window/route/generator/SQL fixtures are not executed. No current production egress, authorization, telemetry, window, device grant, native exclusivity, migration or security incident is proved.
+
+Acceptance target: Inventory static side-effect import declarations with exact binding-independent package specifiers and retain the rejecting named/dynamic controls.
+
+October 9 mock-export/reachability source qualification: The unchanged complete production CLI with a zero ceiling rejects a named import from ./fixtures.mock, while the syntactically valid bare side-effect import of the same module disappears and passes. Existing dependency-direction bare-import owner is extended; no new duplicate defect identity and no imported fixture execution.
+
+Additional source: `scripts/lib/production-mocks.mjs:3-4,65-84`. Acceptance target: Inventory static side-effect imports with exact specifier identity independently of binding declarations in each applicable source scanner. Current source report (`audit/checklist/reviews/coverage-ecosystem-mock-exports-reachability-guards-2026-10-09-027.json`, untracked); final complete controls (`audit/checklist/evidence/coverage-mock-export-reachability-independent-controls-2026-10-09-027-final-fidelity.json`, untracked). Current unchanged source instruments/helpers and inert Git/TypeScript/text fixtures only.34 unchanged Node source-instrument tests passed;27 final primary independent controls and one additional byte-identical Rust-root comparison passed with59 TypeScript syntax parses. Three current source CLIs exited0. Synthetic VM factories use literal objects only; no fixture/application module imports, mounted Vitest/React UI, Cargo/Rust compilation, native host, database, provider, network, installation or production effects. Source copies are byte-identical and Git init/add is confined to scrubbed fixture roots. Initial root-level positive fixture had zero discovered tests, so its original failure is retained; corrected nested discovery and an independent root-level omission control qualify the census. Intermediate cache replay used source text with formatting differences; final replay asserts byte-identical mocked/subject/test sources before comparing cached and fresh paths. No source/tool/config fix or deployed incident is accepted.
+
+## AUDIT-DEPENDENCY-DOMAIN-PREFIX-CREDIT-01
+
+Severity: Low. Status: open current source instrument defect independently reproduced October 9, 2026; source unchanged.
+
+Removing the surface contract import fails; replacing it with the configured package name plus -impostor passes. Prefix matching credits a different package as canonical domain consumption.
+
+Source: `scripts/check-dependency-direction.mjs:130-149,155-170`. Evidence: coverage-native-import-egress-controls-2026-10-09.json (`audit/checklist/evidence/coverage-native-import-egress-controls-2026-10-09.json`, untracked); current full source report (`audit/checklist/reviews/coverage-ecosystem-native-boundary-guards-2026-10-09-010.json`, untracked).
+
+Limits: Source instrument evidence only; supplied product/import/window/route/generator/SQL fixtures are not executed. No current production egress, authorization, telemetry, window, device grant, native exclusivity, migration or security incident is proved.
+
+Acceptance target: Match exact canonical package names or their published subpaths, with an explicit slash or end boundary.
+
+## AUDIT-DESKTOP-EGRESS-TEXT-POLICY-01
+
+Severity: Medium. Status: open current source instrument defect independently reproduced October 9, 2026; source unchanged.
+
+A transport with only raw fetch and absent policy markers fails. Adding only a comment containing isOurCloudHost and isPrivateTrustBoundary makes the unchanged source guard pass.
+
+Source: `scripts/check-desktop-local-egress.mjs:75-82`. Evidence: coverage-native-import-egress-controls-2026-10-09.json (`audit/checklist/evidence/coverage-native-import-egress-controls-2026-10-09.json`, untracked); current full source report (`audit/checklist/reviews/coverage-ecosystem-native-boundary-guards-2026-10-09-010.json`, untracked).
+
+Limits: Source instrument evidence only; supplied product/import/window/route/generator/SQL fixtures are not executed. No current production egress, authorization, telemetry, window, device grant, native exclusivity, migration or security incident is proved.
+
+Acceptance target: Bind executable destination/boundary checks to the actual outbound transport and reject comment-only controls.
+
+October 9 egress/install/provider extension under this same canonical owner: MCP complete CLI rejects a direct dial with no policy and explicit private-network opt-in. Only adding a MCP_EGRESS_POLICY comment in the arguments or using that name as serverName data makes the same missing-policy dial pass. A computed allow+PrivateNetwork property is omitted by the private-network substring test while the policy marker remains. Existing egress text-policy owner is extended; no MCP transport/network or provider path executes.
+
+Additional source: `scripts/check-mcp-dial-egress.mjs:46-64,69-82`. Acceptance target: Bind actual egress policy arguments and effective private-network options to the registered dial; comments/data and unresolved computed property forms must not earn policy acceptance. Actual source review (`audit/checklist/reviews/coverage-ecosystem-egress-install-provider-guards-2026-10-09-026.json`, untracked); complete controls (`audit/checklist/evidence/coverage-egress-install-provider-independent-controls-2026-10-09-026-refined.json`, untracked). Current unchanged guard APIs/CLIs over isolated inert TypeScript/text fixtures only.40 unchanged tests and32 final independent controls passed;61 fixture syntax parses establish syntax only. Five current source CLIs exited0. Initial8-control execution stopped when the synthetic positive fallback used policy={...} but the lexical guard requires policy = {...}; original actual failure and refined execution are preserved. No application modules, SQL, policy resolver, plugin installation, provider/MCP/network/native/browser/database/build or production state executed. Source/config/tool files remain unchanged. No deployed security or product incident is accepted.
+
+October 9 Root051 source qualification: Original complete security egress guard admits an unvetted outside target solely after a comment isAllowedUrl( anywhere in the source module. This extends the existing unbound egress-policy marker owner without another cause; direct target refusal and resolved/manual acceptance remain counterguards. Source: `scripts/check-security-egress-inventory.mjs:365-378`. Frozen reading report (`audit/checklist/reviews/coverage-surface-security-source-guards-2026-10-09-051.json`, untracked); independent premise review (`audit/checklist/evidence/coverage-surface-security-independent-challenge-2026-10-09-051.json`, untracked); actual source controls (`audit/checklist/evidence/coverage-surface-security-inert-controls-2026-10-09-051.json`, untracked). Acceptance target extension: Bind executable allowlist/vetting decisions to the actual target and outbound branch; unrelated/commented module text must not earn policy credit. Current source instrument and inert text/value controls only. No application/fixture compilation or execution, provider/network/browser/native/SQL/database/build/install/production or whole CI acceptance; no current product or security incident asserted. Original severity, evidence, acceptance and producer provenance retained; zero new unique cause.
+
+October 10 Root052 source qualification: The cost-origin source guard searches the whole fetch arguments for self-origin text, so an external first target with an origin-named Referer option or query label is reported as self-invocation. Six exact original source-engine inert controls retain neutral external target, real self target and request-origin counterguards. This extends the existing egress marker-to-effective-subject obligation with a source-reporting false-refusal branch, not another unique cause. Source: `scripts/check-vercel-cost-loops.mjs:47-73`. Frozen source report and embedded actual controls/independent qualifications (`audit/checklist/reviews/coverage-service-governance-source-2026-10-10-052.json`, untracked). Acceptance target extension: Bind origin classification to the effective outbound request destination; unrelated option or query-label data must not establish deployment-origin self-invocation. Preserve actual self-target and cron counterguards. Cost companion severity is Low; original canonical egress-policy severity remains Medium with all previous evidence and acceptance branches retained. No fetch, live billing, scheduling policy, network, provider or application execution; no product/security incident. Alias-target omission remains a held limitation and earns no extra issue. Original severity/provenance/evidence retained; zero new unique cause.
+
+## AUDIT-DESKTOP-EGRESS-CALLEE-OMISSION-01
+
+Severity: Medium. Status: open current source instrument defect independently reproduced October 9, 2026; source unchanged.
+
+Bare fetch outside the transport is rejected. The same inert source call through a fetch alias or globalThis.fetch passes because the scanner recognizes only an unqualified exact fetch spelling.
+
+Source: `scripts/check-desktop-local-egress.mjs:48-55; scripts/lib/url-fetch-egress.mjs:98-107`. Evidence: coverage-native-import-egress-controls-2026-10-09.json (`audit/checklist/evidence/coverage-native-import-egress-controls-2026-10-09.json`, untracked); current full source report (`audit/checklist/reviews/coverage-ecosystem-native-boundary-guards-2026-10-09-010.json`, untracked).
+
+Limits: Source instrument evidence only; supplied product/import/window/route/generator/SQL fixtures are not executed. No current production egress, authorization, telemetry, window, device grant, native exclusivity, migration or security incident is proved.
+
+Acceptance target: Inventory actual global fetch bindings and supported alias/member call forms without treating method declarations as outbound calls.
+
+October 9 egress/install/provider extension under this same canonical owner: Keeping one valid direct MCP dial as a nonempty anchor, an additional imported connectMcpServer alias called without policy is omitted; complete CLI passes and reports only one dial. An entirely empty dial tree correctly fails. Existing egress callee-census owner is extended instead of duplicating the alias obligation. Actual MCP calls are inert source text.
+
+Additional source: `scripts/check-mcp-dial-egress.mjs:22-24,46-49,92-102`. Acceptance target: Enumerate actual transport/dial bindings and all supported call forms across owning sources; direct anchors must not hide aliased unverified paths. Actual source review (`audit/checklist/reviews/coverage-ecosystem-egress-install-provider-guards-2026-10-09-026.json`, untracked); complete controls (`audit/checklist/evidence/coverage-egress-install-provider-independent-controls-2026-10-09-026-refined.json`, untracked). Current unchanged guard APIs/CLIs over isolated inert TypeScript/text fixtures only.40 unchanged tests and32 final independent controls passed;61 fixture syntax parses establish syntax only. Five current source CLIs exited0. Initial8-control execution stopped when the synthetic positive fallback used policy={...} but the lexical guard requires policy = {...}; original actual failure and refined execution are preserved. No application modules, SQL, policy resolver, plugin installation, provider/MCP/network/native/browser/database/build or production state executed. Source/config/tool files remain unchanged. No deployed security or product incident is accepted.
+
+October 9 Root051 source qualification: The complete Mobile architecture guard omits a fetch alias in a UI body while refusing the otherwise identical bare fetch call. This extends the shared bare-binding census cause. Its UI orchestration rule is a separate architecture obligation and does not establish host-policy or destination-security parity, an actual fetch, or a current product incident. Source: `scripts/check-mobile-hygiene.mjs:143-151`. Frozen reading report (`audit/checklist/reviews/coverage-surface-security-source-guards-2026-10-09-051.json`, untracked); independent premise review (`audit/checklist/evidence/coverage-surface-security-independent-challenge-2026-10-09-051.json`, untracked); actual source controls (`audit/checklist/evidence/coverage-surface-security-inert-controls-2026-10-09-051.json`, untracked). Acceptance target extension: For the Mobile UI architecture branch, inventory applicable direct-I/O bindings and supported alias/member calls before applying the orchestration-only rule; preserve the original transport/MCP destination-policy obligations as separate branches. Current source instrument and inert text/value controls only. No application/fixture compilation or execution, provider/network/browser/native/SQL/database/build/install/production or whole CI acceptance; no current product or security incident asserted. Original severity, evidence, acceptance and producer provenance retained; zero new unique cause.
+
+## AUDIT-WINDOW-SESSION-PARTITION-CREDIT-01
+
+Severity: Medium. Status: open current source instrument defect independently reproduced October 9, 2026; source unchanged.
+
+An explicit wrong literal partition fails, but no partition passes. A different literal containing the canonical shared-symbol substring also passes. This establishes checker acceptance, not an observed Electron session.
+
+Source: `scripts/check-desktop-window-session.mjs:76-85`. Evidence: coverage-native-window-telemetry-controls-2026-10-09.json (`audit/checklist/evidence/coverage-native-window-telemetry-controls-2026-10-09.json`, untracked); current full source report (`audit/checklist/reviews/coverage-ecosystem-native-boundary-guards-2026-10-09-010.json`, untracked).
+
+Limits: Source instrument evidence only; supplied product/import/window/route/generator/SQL fixtures are not executed. No current production egress, authorization, telemetry, window, device grant, native exclusivity, migration or security incident is proved.
+
+Acceptance target: Require the applicable explicit canonical partition binding and reject missing or symbol-containing literal controls.
+
+## AUDIT-WINDOW-SANDBOX-COMMENT-CREDIT-01
+
+Severity: Medium. Status: open current source instrument defect independently reproduced October 9, 2026; source unchanged.
+
+Removing contextIsolation fails. A construction with no effective safety values in webPreferences and all three required spellings only in a body comment passes.
+
+Source: `scripts/check-desktop-window-session.mjs:87-95`. Evidence: coverage-native-window-telemetry-controls-2026-10-09.json (`audit/checklist/evidence/coverage-native-window-telemetry-controls-2026-10-09.json`, untracked); current full source report (`audit/checklist/reviews/coverage-ecosystem-native-boundary-guards-2026-10-09-010.json`, untracked).
+
+Limits: Source instrument evidence only; supplied product/import/window/route/generator/SQL fixtures are not executed. No current production egress, authorization, telemetry, window, device grant, native exclusivity, migration or security incident is proved.
+
+Acceptance target: Inspect effective webPreferences property values rather than arbitrary construction-body text; reject comments and unrelated fields.
+
+## AUDIT-WINDOW-CONSTRUCTOR-OMISSION-01
+
+Severity: Medium. Status: open current source instrument defect independently reproduced October 9, 2026; source unchanged.
+
+A hardened baseline passes and a zero-construction tree fails. Adding an unsafe aliased constructor or new BrowserWindow with whitespace before the opening parenthesis leaves the checker green; those additional constructions are invisible.
+
+Source: `scripts/check-desktop-window-session.mjs:46-68,108-117`. Evidence: coverage-native-window-telemetry-controls-2026-10-09.json (`audit/checklist/evidence/coverage-native-window-telemetry-controls-2026-10-09.json`, untracked); current full source report (`audit/checklist/reviews/coverage-ecosystem-native-boundary-guards-2026-10-09-010.json`, untracked).
+
+Limits: Source instrument evidence only; supplied product/import/window/route/generator/SQL fixtures are not executed. No current production egress, authorization, telemetry, window, device grant, native exclusivity, migration or security incident is proved.
+
+Acceptance target: Inventory Electron BrowserWindow constructor bindings and ordinary lexical whitespace forms, retaining zero-window refusal.
+
+## AUDIT-TELEMETRY-COMMENT-EMISSION-CREDIT-01
+
+Severity: Medium. Status: open current source instrument defect independently reproduced October 9, 2026; source unchanged.
+
+An absent declared domain emission fails. Both configured emit spellings entirely inside a block comment pass, so the source instrument credits nonexecuting text as producer coverage.
+
+Source: `scripts/check-desktop-telemetry-domains.mjs:52-79,93-114`. Evidence: coverage-native-window-telemetry-controls-2026-10-09.json (`audit/checklist/evidence/coverage-native-window-telemetry-controls-2026-10-09.json`, untracked); current full source report (`audit/checklist/reviews/coverage-ecosystem-native-boundary-guards-2026-10-09-010.json`, untracked).
+
+Limits: Source instrument evidence only; supplied product/import/window/route/generator/SQL fixtures are not executed. No current production egress, authorization, telemetry, window, device grant, native exclusivity, migration or security incident is proved.
+
+Acceptance target: Bind executable emitter calls and discard comments before deriving producer coverage.
+
+## AUDIT-TELEMETRY-ADJACENT-TEST-CREDIT-01
+
+Severity: Low. Status: open current source instrument defect independently reproduced October 9, 2026; source unchanged.
+
+The same complete emissions under **tests** fail coverage, while an adjacent probe.test.ts with no product emissions passes. The walker excludes one test directory but not test filename forms.
+
+Source: `scripts/check-desktop-telemetry-domains.mjs:21-35,93-114`. Evidence: coverage-native-window-telemetry-controls-2026-10-09.json (`audit/checklist/evidence/coverage-native-window-telemetry-controls-2026-10-09.json`, untracked); current full source report (`audit/checklist/reviews/coverage-ecosystem-native-boundary-guards-2026-10-09-010.json`, untracked).
+
+Limits: Source instrument evidence only; supplied product/import/window/route/generator/SQL fixtures are not executed. No current production egress, authorization, telemetry, window, device grant, native exclusivity, migration or security incident is proved.
+
+Acceptance target: Use canonical production-source classification for both directory and adjacent test forms.
+
+## AUDIT-DEVICE-GRANT-ENTROPY-ASSUMPTION-01
+
+Severity: Medium. Status: open current source instrument defect independently reproduced October 9, 2026; source unchanged.
+
+A one-character alphabet fails. Repeating that same character to the original alphabet length passes with inflated bits, and a regex admitting only A also retains the original alphabet estimate. Both fixtures admit only one code at the examined positions.
+
+Source: `scripts/check-device-auth-grant.mjs:101-109,140-153`. Evidence: coverage-device-grant-controls-2026-10-09.json (`audit/checklist/evidence/coverage-device-grant-controls-2026-10-09.json`, untracked); current full source report (`audit/checklist/reviews/coverage-ecosystem-native-boundary-guards-2026-10-09-010.json`, untracked).
+
+Limits: Source instrument evidence only; supplied product/import/window/route/generator/SQL fixtures are not executed. No current production egress, authorization, telemetry, window, device grant, native exclusivity, migration or security incident is proved.
+
+Acceptance target: Compute a justified distinct accepted-symbol/code-space bound and validate generator/validator consistency rather than raw string length and quantifier sums.
+
+## AUDIT-DEVICE-GRANT-TEXT-POLICY-01
+
+Severity: Medium. Status: open current source instrument defect independently reproduced October 9, 2026; source unchanged.
+
+An inert route with no policy markers fails. Putting all rate/no-store and token pending/refusal/conditional-consume spellings only in block comments makes the whole checker pass. No token route or SQL executes.
+
+Source: `scripts/check-device-auth-grant.mjs:124-131,192-225`. Evidence: coverage-device-grant-controls-2026-10-09.json (`audit/checklist/evidence/coverage-device-grant-controls-2026-10-09.json`, untracked); current full source report (`audit/checklist/reviews/coverage-ecosystem-native-boundary-guards-2026-10-09-010.json`, untracked).
+
+Limits: Source instrument evidence only; supplied product/import/window/route/generator/SQL fixtures are not executed. No current production egress, authorization, telemetry, window, device grant, native exclusivity, migration or security incident is proved.
+
+Acceptance target: Inspect effective route guards, refusal branches and consumed-update conditions with executable source binding; reject comment-only controls.
+
+## AUDIT-DEVICE-GRANT-RANDOM-SOURCE-TEXT-01
+
+Severity: Low. Status: open current source instrument defect independently reproduced October 9, 2026; source unchanged.
+
+A source containing a constant code and no random marker fails. Adding only a crypto.randomBytes comment makes the same source pass the platform-random check. This is an instrument fixture, not the current generator.
+
+Source: `scripts/check-device-auth-grant.mjs:164-176`. Evidence: coverage-device-grant-controls-2026-10-09.json (`audit/checklist/evidence/coverage-device-grant-controls-2026-10-09.json`, untracked); current full source report (`audit/checklist/reviews/coverage-ecosystem-native-boundary-guards-2026-10-09-010.json`, untracked).
+
+Limits: Source instrument evidence only; supplied product/import/window/route/generator/SQL fixtures are not executed. No current production egress, authorization, telemetry, window, device grant, native exclusivity, migration or security incident is proved.
+
+Acceptance target: Require an executable platform random-source call contributing to the generated code, with a comment-only rejecting control.
+
+## AUDIT-DEVICE-GRANT-HISTORICAL-STATUS-01
+
+Severity: Low. Status: open current source instrument defect independently reproduced October 9, 2026; source unchanged.
+
+An invented ghost comparison fails against the base schema text. Introducing ghost historically and replacing its check without ghost in a later migration still passes. A block-comment ALTER vocabulary also gives ghost credit. The effective migration state is not reconstructed.
+
+Source: `scripts/check-device-auth-grant.mjs:74-98,192-198`. Evidence: coverage-device-grant-controls-2026-10-09.json (`audit/checklist/evidence/coverage-device-grant-controls-2026-10-09.json`, untracked); current full source report (`audit/checklist/reviews/coverage-ecosystem-native-boundary-guards-2026-10-09-010.json`, untracked).
+
+Limits: Source instrument evidence only; supplied product/import/window/route/generator/SQL fixtures are not executed. No current production egress, authorization, telemetry, window, device grant, native exclusivity, migration or security incident is proved.
+
+Acceptance target: Evaluate ordered comment-free grant constraint state and remove replaced/dropped vocabulary before comparing route statuses.
+
+## DESKTOP-SINGLE-INSTANCE-MISSING-01
+
+Severity: Medium. Status: narrowed to native lifecycle validation gap October 9, 2026. The older missing dependency and registration premise is contradicted by current source.
+
+The retained manifest declares tauri-plugin-single-instance with deep-link feature at Cargo.toml:63–67. Bootstrap registers it first at lib.rs:206–214 and invokes focus_running_instance. The local callback ignores args/cwd; the helper126–145 returns false if main is absent, performs macOS-only dock visibility restoration, then attempts unminimize/show/focus and logs errors, returning true even after focus errors. Dependency feature configuration does not independently prove plugin-internal URL delivery.
+
+Evidence: native source report (`audit/checklist/reviews/coverage-retained-native-source-2026-10-09-011.json`, untracked) and independent current bootstrap/manifest spans (`audit/checklist/reviews/coverage-ecosystem-native-boundary-guards-2026-10-09-010.json`, untracked), with exact current hashes and actual reading ranges.
+
+Limits: Plugin internals, second-process exclusion, focus/deep-link delivery, platform/release behavior and encrypted database exclusivity were not executed. Retained Tauri evidence gives no public Electron acceptance. This row no longer asserts missing single-instance registration.
+
+Acceptance target: Verify the scoped current second-launch, missing-window/focus-error, deep-link and database ownership paths on applicable native releases; preserve source counterevidence and replace the remaining unknown states with actual receipts.
+
+## AUDIT-DOC-FRESHNESS-DATE-VALIDATION-01
+
+Severity: Low. Status: open current source instrument or consolidation validation gap reviewed October 9, 2026; source unchanged.
+
+Fresh fixture Git commit/header agreement passes and an old header fails. An invalid2026-99-99 header and a2027-01-01 header after both fixture commit and audit date pass; NaN and negative drift do not enter the stale-date branches. No current document is asserted to use either fixture date.
+
+Source: `scripts/check-doc-freshness.mjs:15-16,30-31,54-63`. Evidence: coverage-document-cli-controls-2026-10-09.json (`audit/checklist/evidence/coverage-document-cli-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-document-owner-guards-2026-10-09-011.json`, untracked).
+
+Limits: Source/document audit instrument scope only. No current product extraction, Python/Rust build, deployed schema/ownership, provider behavior, native/app/network/database effect or product acceptance is established.
+
+Acceptance target: Validate actual calendar dates and applicable future-date bounds before comparing header and content-commit provenance.
+
+October 9 scanner/search/supply qualification: The complete original Trivy, ZAP and Semgrep gates each admit matching reviewed acceptance with impossible 2030-99-99 calendar expiry, because a date-shaped regex and lexical comparison supply date validity. Existing invalid-calendar source-proof owner applies; valid future expiry is intentional and remains permitted. No current accepted entry is alleged to use this value. Actual source report (`audit/checklist/reviews/coverage-security-index-supply-guard-source-2026-10-09-044.json`, untracked); 34 independent controls (`audit/checklist/evidence/coverage-security-index-supply-inert-controls-2026-10-09-044.json`, untracked); current guard outcomes (`audit/checklist/evidence/coverage-security-index-supply-current-source-gates-2026-10-09-044.json`, untracked); 31-target independent scope receipt (`audit/checklist/evidence/coverage-supply-chain-nested-target-scope-2026-10-09-044.json`, untracked). Zero new cause; no runtime effects.
+
+## AUDIT-DOC-STATUS-FENCED-MARKER-CREDIT-01
+
+Severity: Low. Status: open current source instrument or consolidation validation gap reviewed October 9, 2026; source unchanged.
+
+Absent markers fail. A document with historical Status, invalid Last updated and Ownerish text entirely in a fenced block passes all three marker checks. The instrument validates substrings rather than maintained header metadata.
+
+Source: `scripts/check-doc-status.mjs:22-38`. Evidence: coverage-document-cli-controls-2026-10-09.json (`audit/checklist/evidence/coverage-document-cli-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-document-owner-guards-2026-10-09-011.json`, untracked).
+
+Limits: Source/document audit instrument scope only. No current product extraction, Python/Rust build, deployed schema/ownership, provider behavior, native/app/network/database effect or product acceptance is established.
+
+Acceptance target: Parse required top-level header fields, current status, nonempty owner and calendar date; reject fenced and substring-only controls.
+
+## AUDIT-DOC-REGISTRY-UNTRACKED-OMISSION-01
+
+Severity: Low. Status: open current source instrument or consolidation validation gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-doc-registry.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+A fresh Git fixture with approved root Markdown passes. Tracking an unknown root Markdown file fails classification, but leaving the same current file untracked passes because only cached paths are enumerated.
+
+Source: `scripts/check-doc-registry.mjs:85-89,109-112,194-202`. Evidence: coverage-document-cli-controls-2026-10-09.json (`audit/checklist/evidence/coverage-document-cli-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-document-owner-guards-2026-10-09-011.json`, untracked).
+
+Limits: Source/document audit instrument scope only. No current product extraction, Python/Rust build, deployed schema/ownership, provider behavior, native/app/network/database effect or product acceptance is established.
+
+Acceptance target: Inventory current nonignored first-party Markdown as well as cached paths, with explicit absent tracked relocation handling.
+
+## AUDIT-DOC-RETIRED-CITATION-WINDOW-01
+
+Severity: Low. Status: open current source instrument or consolidation validation gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-doc-registry.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+An active TODO.md current-queue citation fails. Adding a neighboring sentence that an unrelated experiment was retired passes, without changing the active citation. The general window marker is not bound to the cited file.
+
+Source: `scripts/check-doc-registry.mjs:81-103`. Evidence: coverage-document-cli-controls-2026-10-09.json (`audit/checklist/evidence/coverage-document-cli-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-document-owner-guards-2026-10-09-011.json`, untracked).
+
+Limits: Source/document audit instrument scope only. No current product extraction, Python/Rust build, deployed schema/ownership, provider behavior, native/app/network/database effect or product acceptance is established.
+
+Acceptance target: Bind retirement qualification to the specific removed-file citation and retain an unrelated-neighbor rejecting control.
+
+## AUDIT-DOC-TASKS-OWNER-EXEMPTION-01
+
+Severity: Low. Status: open current source instrument or consolidation validation gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-doc-registry.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+A tracked docs/work/tasks.md passes the current registry because tasks.md basename is exempt before the feature-spec location test. Its current path is outside docs/specs even though the guard message identifies feature-owned tasks as the permitted work owner.
+
+Source: `scripts/check-doc-registry.mjs:146-164`. Evidence: coverage-document-cli-controls-2026-10-09.json (`audit/checklist/evidence/coverage-document-cli-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-document-owner-guards-2026-10-09-011.json`, untracked).
+
+Limits: Source/document audit instrument scope only. No current product extraction, Python/Rust build, deployed schema/ownership, provider behavior, native/app/network/database effect or product acceptance is established.
+
+Acceptance target: Restrict the task-file exemption to its actual authorized feature-spec owner or an explicit enforced alternative.
+
+## AUDIT-DOCUMENT-CLASS-TEXT-CREDIT-01
+
+Severity: Medium. Status: open current source instrument or consolidation validation gap reviewed October 9, 2026; source unchanged.
+
+An absent office/PDF marker set or empty registry fails. Office MIME/extension tokens only in a comment pass, PDF extract/Buffer markers only in a comment pass, and an entirely commented class declaration still supplies all classes. No decoder ran.
+
+Source: `scripts/check-document-classes.mjs:20-29,52-77,126-139`. Evidence: coverage-document-class-domain-controls-2026-10-09.json (`audit/checklist/evidence/coverage-document-class-domain-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-document-owner-guards-2026-10-09-011.json`, untracked).
+
+Limits: Source/document audit instrument scope only. No current product extraction, Python/Rust build, deployed schema/ownership, provider behavior, native/app/network/database effect or product acceptance is established.
+
+Acceptance target: Bind actual exported class declarations and executable decoder acceptance/behavior; reject comment-only registry and decoder controls.
+
+## AUDIT-DOMAIN-VOCABULARY-COMMENT-CREDIT-01
+
+Severity: Low. Status: open current source instrument or consolidation validation gap reviewed October 9, 2026; source unchanged.
+
+A fresh complete two-domain fixture passes and missing typed vocabulary fails. Putting the entire PRODUCT_DOMAINS declaration only in a block comment passes with no corresponding executable/type export.
+
+Source: `scripts/check-domain-ownership.mjs:103-126`. Evidence: coverage-document-class-domain-controls-2026-10-09.json (`audit/checklist/evidence/coverage-document-class-domain-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-document-owner-guards-2026-10-09-011.json`, untracked).
+
+Limits: Source/document audit instrument scope only. No current product extraction, Python/Rust build, deployed schema/ownership, provider behavior, native/app/network/database effect or product acceptance is established.
+
+Acceptance target: Read the actual exported vocabulary binding through the AST and reject comment-only declarations.
+
+## AUDIT-DOMAIN-TABLE-SOURCE-OMISSION-01
+
+Severity: Medium. Status: open current source instrument or consolidation validation gap reviewed October 9, 2026; source unchanged.
+
+After repairing the independent baseline, actual readTableColumns enumerates both supplied multiline tables and unclaimed ownership fails. The same supplied table declarations on single lines yield zero parsed tables and pass when registry table claims are empty. This establishes omitted source-population credit, not a deployed unowned table.
+
+Source: `scripts/check-domain-ownership.mjs:139-145; scripts/check-resource-metadata.mjs:86-104`. Evidence: coverage-document-class-domain-controls-2026-10-09.json (`audit/checklist/evidence/coverage-document-class-domain-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-document-owner-guards-2026-10-09-011.json`, untracked).
+
+Limits: Source/document audit instrument scope only. No current product extraction, Python/Rust build, deployed schema/ownership, provider behavior, native/app/network/database effect or product acceptance is established.
+
+Acceptance target: Inventory table declarations independently of line formatting and require an independently established nonempty/applicable population before ownership completeness credit.
+
+October 9 time-instrument qualification: A positive multiline tasks recurrence/table census remains while an added one-line risky timestamp table is absent from timestamp and table-column projections and the checker returns no errors. The recognized multiline naive timestamp refuses. Inert SQL text is never applied, and no actual current DB schema or unsafe production column is asserted. This is supplementary evidence under the existing single-line source-population omission owner; zero new ID or cause. Source: `scripts/check-time-semantics.mjs:46-83; scripts/check-resource-metadata.mjs:86-104`. Original-engine controls (`audit/checklist/evidence/coverage-workspace-settings-time-inert-controls-2026-10-09-047.json`, untracked); actual source reading (`audit/checklist/reviews/coverage-workspace-settings-time-guard-source-2026-10-09-047.json`, untracked); independent challenge (`audit/checklist/evidence/coverage-workspace-settings-time-independent-challenge-2026-10-09-047.json`, untracked). Zero new cause; existing acceptance target retained.
+
+## AUDIT-EXEC-DOC-TOML-KEY-OMISSION-01
+
+Severity: Low. Status: open current source instrument or consolidation validation gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-executable-docs.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+A missing literal project readme file fails. Quoting the same TOML key passes with the file still missing; actual standard tomllib independently reads the same project.readme value from both fixtures. No Python package builds.
+
+Source: `scripts/check-executable-docs.mjs:77-105`. Evidence: coverage-document-cli-controls-2026-10-09.json (`audit/checklist/evidence/coverage-document-cli-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-document-owner-guards-2026-10-09-011.json`, untracked).
+
+Limits: Source/document audit instrument scope only. No current product extraction, Python/Rust build, deployed schema/ownership, provider behavior, native/app/network/database effect or product acceptance is established.
+
+Acceptance target: Parse the project table with the supported TOML parser and resolve the canonical readme file pointer rather than line spellings.
+
+## AUDIT-EXEC-DOC-RUST-SPELLING-OMISSION-01
+
+Severity: Low. Status: open current source instrument or consolidation validation gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-executable-docs.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Ordinary literal include_str with a missing Markdown file fails. Raw-string and whitespace-before-parenthesis spellings with the same missing path pass because the literal scanner does not enumerate them. Compiler/build consequences remain unexecuted.
+
+Source: `scripts/check-executable-docs.mjs:108-115`. Evidence: coverage-document-cli-controls-2026-10-09.json (`audit/checklist/evidence/coverage-document-cli-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-document-owner-guards-2026-10-09-011.json`, untracked).
+
+Limits: Source/document audit instrument scope only. No current product extraction, Python/Rust build, deployed schema/ownership, provider behavior, native/app/network/database effect or product acceptance is established.
+
+Acceptance target: Inventory supported literal macro inputs across source spellings and preserve the missing-input negative control; independently qualify compiler scope.
+
+## AUDIT-E2E-LOCATOR-LEXICAL-SCOPE-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+Literal parent locator fails and role baseline passes. The same locator only in a comment fails, while the actual call split across three source lines passes. Findings arise from line-based raw patterns rather than executable locator inventory.
+
+Source: `scripts/check-e2e-structure-locators.mjs:22-28`. Evidence: coverage-edge-frame-enterprise-controls-2026-10-09.json (`audit/checklist/evidence/coverage-edge-frame-enterprise-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-edge-frame-enterprise-guards-2026-10-09-012.json`, untracked).
+
+Limits: Current source audit-instrument scope only. Fresh source fixtures are inert; TypeScript/TSX, SQL, NextResponse, browser frames, account/permissions, billing/provider/native/deployed behavior and product acceptance were not executed or established.
+
+Acceptance target: Inventory actual locator call arguments across source lines and distinguish comments from executable calls.
+
+## AUDIT-EDGE-HEADER-TEXT-CREDIT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+A known response builder baseline passes and removing its header set fails. Moving the only header set into a block comment or changing its receiver from response to request passes, without a measured response-header statement.
+
+Source: `scripts/check-edge-middleware.mjs:89-91`. Evidence: coverage-edge-frame-enterprise-controls-2026-10-09.json (`audit/checklist/evidence/coverage-edge-frame-enterprise-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-edge-frame-enterprise-guards-2026-10-09-012.json`, untracked).
+
+Limits: Current source audit-instrument scope only. Fresh source fixtures are inert; TypeScript/TSX, SQL, NextResponse, browser frames, account/permissions, billing/provider/native/deployed behavior and product acceptance were not executed or established.
+
+Acceptance target: Bind required header writes to the response value returned on the applicable path and reject comment/request-only controls.
+
+October 9 session/header/upload/support qualification: The original full header CLI accepts a file whose only header/policy evidence occurs in a comment while the nonempty policy census reports one script-src directive. Missing source/policy census refuses. This shares the existing raw-text header evidence cause; it does not establish an actual missing current response header. Actual source report (`audit/checklist/reviews/coverage-session-response-header-guard-source-2026-10-09-043.json`, untracked); 28 independent source controls (`audit/checklist/evidence/coverage-session-response-header-inert-controls-2026-10-09-043.json`, untracked); current guard outcomes (`audit/checklist/evidence/coverage-session-response-header-current-source-gates-2026-10-09-043.json`, untracked). Zero new cause, no runtime effects.
+
+## AUDIT-EDGE-BUILDER-OMISSION-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+Adding an arrow function returning NextResponse.next beside a valid ordinary builder keeps the guard green with report.builders equal to one. The extra headerless builder is not enumerated. Its mounting or actual request outcome is not asserted.
+
+Source: `scripts/check-edge-middleware.mjs:30-47`. Evidence: coverage-edge-frame-enterprise-controls-2026-10-09.json (`audit/checklist/evidence/coverage-edge-frame-enterprise-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-edge-frame-enterprise-guards-2026-10-09-012.json`, untracked).
+
+Limits: Current source audit-instrument scope only. Fresh source fixtures are inert; TypeScript/TSX, SQL, NextResponse, browser frames, account/permissions, billing/provider/native/deployed behavior and product acceptance were not executed or established.
+
+Acceptance target: Enumerate applicable response construction independently of ordinary function spelling and require each offered builder to be measured.
+
+## AUDIT-EDGE-REDIRECT-QUOTE-OMISSION-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+A builder reading the configured returnTo parameter with single quotes fails. Replacing only those quotes with double quotes passes with the same caller-supplied target source. No redirect URL is requested or resolved.
+
+Source: `scripts/check-edge-middleware.mjs:120-140`. Evidence: coverage-edge-frame-enterprise-controls-2026-10-09.json (`audit/checklist/evidence/coverage-edge-frame-enterprise-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-edge-frame-enterprise-guards-2026-10-09-012.json`, untracked).
+
+Limits: Current source audit-instrument scope only. Fresh source fixtures are inert; TypeScript/TSX, SQL, NextResponse, browser frames, account/permissions, billing/provider/native/deployed behavior and product acceptance were not executed or established.
+
+Acceptance target: Resolve actual configured query-parameter reads independently of quote spelling and qualify returned redirect targets.
+
+## AUDIT-EDGE-MATCHER-SAMPLE-COVERAGE-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+A matcher excluding /product/secret passes because the guard checks only /product, /product/anything and /product/deep/path. This proves a finite sample, not every descendant of a declared prefix or live Next matcher behavior.
+
+Source: `scripts/check-edge-middleware.mjs:157-166`. Evidence: coverage-edge-frame-enterprise-controls-2026-10-09.json (`audit/checklist/evidence/coverage-edge-frame-enterprise-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-edge-frame-enterprise-guards-2026-10-09-012.json`, untracked).
+
+Limits: Current source audit-instrument scope only. Fresh source fixtures are inert; TypeScript/TSX, SQL, NextResponse, browser frames, account/permissions, billing/provider/native/deployed behavior and product acceptance were not executed or established.
+
+Acceptance target: Label sampling scope explicitly or independently prove coverage for the declared route population; retain a same-prefix excluded-path negative control.
+
+## AUDIT-FRAME-DYNAMIC-SANDBOX-CREDIT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+A new iframe lacking a sandbox fails. A dynamic sandbox value declared as the dangerous token pair passes because declaration is true and parsed tokens are null. The fixture is source only and does not establish actual browser privileges.
+
+Source: `scripts/lib/embedded-frames.mjs:39-42,76-80; scripts/check-embedded-frame-sandbox.mjs:72-83`. Evidence: coverage-edge-frame-enterprise-controls-2026-10-09.json (`audit/checklist/evidence/coverage-edge-frame-enterprise-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-edge-frame-enterprise-guards-2026-10-09-012.json`, untracked).
+
+Limits: Current source audit-instrument scope only. Fresh source fixtures are inert; TypeScript/TSX, SQL, NextResponse, browser frames, account/permissions, billing/provider/native/deployed behavior and product acceptance were not executed or established.
+
+Acceptance target: Resolve or fail closed on applicable dynamic sandbox values before static token safety credit; distinguish declaration from token safety.
+
+## AUDIT-FRAME-REF-ASSIGNMENT-IDENTITY-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+An unrelated other.setAttribute sandbox statement before an iframe with ref wanted grants that iframe declared true. The search does not bind setAttribute to the named ref or actual frame.
+
+Source: `scripts/lib/embedded-frames.mjs:54-60,78-80`. Evidence: coverage-edge-frame-enterprise-controls-2026-10-09.json (`audit/checklist/evidence/coverage-edge-frame-enterprise-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-edge-frame-enterprise-guards-2026-10-09-012.json`, untracked).
+
+Limits: Current source audit-instrument scope only. Fresh source fixtures are inert; TypeScript/TSX, SQL, NextResponse, browser frames, account/permissions, billing/provider/native/deployed behavior and product acceptance were not executed or established.
+
+Acceptance target: Bind assignment, frame/ref identity and relevant load ordering before granting declaration credit.
+
+## AUDIT-FRAME-CROSS-ORIGIN-TEXT-CREDIT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+At the dedicated renderer path, an iframe with /same-origin src and both static tokens passes when title contains sandboxOrigin. The origin exception is triggered by raw attribute text rather than validated source origin.
+
+Source: `scripts/lib/embedded-frames.mjs:81; scripts/check-embedded-frame-sandbox.mjs:69,82-83`. Evidence: coverage-edge-frame-enterprise-controls-2026-10-09.json (`audit/checklist/evidence/coverage-edge-frame-enterprise-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-edge-frame-enterprise-guards-2026-10-09-012.json`, untracked).
+
+Limits: Current source audit-instrument scope only. Fresh source fixtures are inert; TypeScript/TSX, SQL, NextResponse, browser frames, account/permissions, billing/provider/native/deployed behavior and product acceptance were not executed or established.
+
+Acceptance target: Bind the dedicated-origin exception to actual configured origin resolution and reject unrelated marker attributes.
+
+## AUDIT-FRAME-CREATED-SANDBOX-MEASUREMENT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+Imperative fixtures with src assigned before sandbox are credited declared. A created frame assigning both escape tokens also yields no tokens field, so the shared escape check returns false. These are helper source observations, not browser execution.
+
+Source: `scripts/lib/embedded-frames.mjs:91-100; scripts/check-embedded-frame-sandbox.mjs:72-83`. Evidence: coverage-edge-frame-enterprise-controls-2026-10-09.json (`audit/checklist/evidence/coverage-edge-frame-enterprise-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-edge-frame-enterprise-guards-2026-10-09-012.json`, untracked).
+
+Limits: Current source audit-instrument scope only. Fresh source fixtures are inert; TypeScript/TSX, SQL, NextResponse, browser frames, account/permissions, billing/provider/native/deployed behavior and product acceptance were not executed or established.
+
+Acceptance target: Carry applicable imperative frame identity, sandbox tokens and source/load ordering into the same safety measurement as JSX frames.
+
+October9 raw-HTML consumer qualification: `scripts/lib/raw-html-sinks.mjs:440-510` credits a created frame record to an unrelated srcdoc receiver and credits imperative token/order cases through the same shared `findCreatedFrames` declaration lacking token fields. The complete guard refuses imperative srcdoc with no sandbox and rejects dangerous/unresolved dynamic JSX literals; its crossOrigin marker exception is unused. These narrower counterguards prevent transferring the separate dynamic/cross-origin findings wholesale. Three imperative cases share this existing created-frame owner; no duplicate receiver/token/order issue is created. Evidence: independent HTML challenge (`audit/checklist/evidence/coverage-html-independent-challenge-2026-10-09-035.json`, untracked), root adoption qualification (`audit/checklist/evidence/coverage-html-independent-challenge-2026-10-09-035-root-adoption-validation.json`, untracked). No actual frame/browser/native/permission execution or deployed incident was accepted.
+
+## AUDIT-ENTERPRISE-ROUTE-TEXT-CREDIT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-org-permissions.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+The actual unchanged test fixture passes and removing CSRF fails. A POST const with permission/CSRF/audited-call markers only in a comment passes; export async function POST with only a permission comment also passes without CSRF/audit measurement. No live handler is invoked.
+
+Source: `scripts/check-enterprise-contracts.mjs:155-157,160-168,251-270`. Evidence: coverage-edge-frame-enterprise-controls-2026-10-09.json (`audit/checklist/evidence/coverage-edge-frame-enterprise-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-edge-frame-enterprise-guards-2026-10-09-012.json`, untracked).
+
+Limits: Current source audit-instrument scope only. Fresh source fixtures are inert; TypeScript/TSX, SQL, NextResponse, browser frames, account/permissions, billing/provider/native/deployed behavior and product acceptance were not executed or established.
+
+Acceptance target: Enumerate actual mutating route exports and bind permission, CSRF and durable audit effects to the relevant executable path.
+
+October 9 organization/pagination/tier source qualification: A resolver-only handler rejects as never deciding. Adding unused string held.has(members.manage) with the actual quoted permission shape makes the full CLI pass despite an unused resolved set. Replacing a genuine roles.manage check with only void string data likewise retains global consulted-permission credit. This extends the existing permission marker/effect owner; per-handler aggregation and syntax omissions retain separate identities.
+
+Additional source: `scripts/check-org-permissions.mjs:66-67,415-443,513-515`. Acceptance target: Bind permission decision and consulted-ID credit to actual enforcing/tested expressions for the relevant handler; inert strings and unrelated permission data cannot establish a server decision. Current source report (`audit/checklist/reviews/coverage-ecosystem-org-pagination-tier-guards-2026-10-09-029.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-org-pagination-tier-independent-controls-2026-10-09-029.json`, untracked). Unchanged complete source guard APIs/CLIs and isolated inert TypeScript/TSX/SQL/Git fixtures only.37 unchanged Node tests and31 independent controls passed;220 fixture syntax parses establish syntax only. Four current source CLIs exited0. Literal fixtures extracted via actual TypeScript AST values, copied role CLI byte identity and nonempty complete CLI output are independently asserted; organization fixtures run fresh subprocesses to avoid graph-cache cross-case state. One literal synthetic function with an injected counter executes in a VM and proves zero terminal calls. No application/fixture module imports, actual authorization/mutation, SQL/database, native host, provider, network, browser, React mount, build, install, production action or real checkout staging. Git init/census and unchanged tests bind throwaway roots with inherited GIT variables scrubbed. Source/tool/config files remain unchanged; no deployed incident or runtime acceptance is established.
+
+## AUDIT-ENTERPRISE-MODEL-TEXT-TEST-CREDIT-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+Declared model resolution return clauses only in comments and model names only in a commented test file satisfy the guard. The existing baseline already uses an empty test body carrying model names; no commercial resolver behavior is measured.
+
+Source: `scripts/check-enterprise-contracts.mjs:200-215; scripts/check-enterprise-contracts.test.mjs:72-74`. Evidence: coverage-edge-frame-enterprise-controls-2026-10-09.json (`audit/checklist/evidence/coverage-edge-frame-enterprise-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-edge-frame-enterprise-guards-2026-10-09-012.json`, untracked).
+
+Limits: Current source audit-instrument scope only. Fresh source fixtures are inert; TypeScript/TSX, SQL, NextResponse, browser frames, account/permissions, billing/provider/native/deployed behavior and product acceptance were not executed or established.
+
+Acceptance target: Bind actual resolver outcomes and behaviorally meaningful current tests before model implementation/test coverage credit.
+
+## AUDIT-ENTERPRISE-SCHEMA-RELATION-HISTORY-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-money-paths.mjs` and `scripts/check-org-permissions.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for them are main's.
+
+A store column absent from agreement migrations fails. Adding it to an unrelated table in a migration containing the agreement name passes; a later agreement column drop is ignored. An unrelated status constraint similarly replaces the projected agreement status list. SQL fixtures are never applied.
+
+Source: `scripts/check-enterprise-contracts.mjs:125-152,218-247`. Evidence: coverage-edge-frame-enterprise-controls-2026-10-09.json (`audit/checklist/evidence/coverage-edge-frame-enterprise-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-edge-frame-enterprise-guards-2026-10-09-012.json`, untracked).
+
+Limits: Current source audit-instrument scope only. Fresh source fixtures are inert; TypeScript/TSX, SQL, NextResponse, browser frames, account/permissions, billing/provider/native/deployed behavior and product acceptance were not executed or established.
+
+Acceptance target: Bind each DDL clause to its actual relation and replay applicable add/drop/constraint history or inspect authoritative schema without attributing unrelated clauses.
+
+October 9 managed/unattended extension under this same canonical owner: An owned work table and an independent owned anchor table cause an ungated work pickup to fail. Dropping work correctly removes it. Recreating the same owned work table in a later migration still leaves it omitted and the complete guard passes with only the anchor; dropped is a permanent set and is not cleared by later CREATE. Existing DDL relation/history owner is extended rather than duplicating the migration-replay obligation.
+
+Additional source: `scripts/check-membership-unattended-work.mjs:73-110,178-186`. Acceptance target: Replay per-relation DDL in order, preserving each final owner/workspace column state and clearing prior drops on valid later recreation; mixed-schema anchors must not hide lost subjects. Actual full source review (`audit/checklist/reviews/coverage-ecosystem-managed-unattended-guards-2026-10-09-025.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-managed-unattended-independent-controls-2026-10-09-025-refined.json`, untracked). Unchanged guard APIs and source CLIs over isolated inert TypeScript/migration text only.35 unchanged tests and36 final independent controls passed;69 fixture syntax parses establish syntax only. Three current textual CLIs exited0. Initial26-control execution stopped on a disproved quoted-table omission assumption and its actual failure is preserved separately. No SQL, application module/entrypoint/service, provider/native/network/browser/build/database or production state executed; source/config/tool files remain unchanged. No current product policy bypass, account loss or deployed incident is accepted.
+
+October 9 money/usage/Work source qualification: Ordered fixture DDL creates wallet with amount_cents, drops it and recreates wallet with only id text. Money census still lists wallet and rejects a parseFloat id writer. The identical final nonmoney schema alone produces no money tables or hazard. This extends existing per-relation DDL-history ownership in the opposite stale-subject direction; no production migration or database is applied.
+
+Additional source: `scripts/check-money-paths.mjs:19-39`. Acceptance target: Replay applicable per-relation DDL in order and derive the final money-column state, preserving prior enterprise/membership history obligations. Current source report (`audit/checklist/reviews/coverage-ecosystem-money-usage-worktask-guards-2026-10-09-028.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-money-usage-worktask-independent-controls-2026-10-09-028-refined.json`, untracked). Unchanged complete source-instrument APIs and byte-identical CLI copies over isolated inert TypeScript/SQL text only.44 unchanged tests and35 final independent controls passed;62 TypeScript fixture parses establish syntax only. Four actual current source CLIs exited0. Two isolated literal arithmetic expressions execute in a VM; no application or fixture module imports, monetary writes, SQL, database, native host, provider, network, browser, build, installation, production action or real checkout staging occurs. Git used by unchanged tests is confined to scrubbed fixture roots. Initial11-control receipt preserves a failed CLI assertion: /tmp versus /private/tmp prevented the copied guard main from running. Final runner normalizes executable/cwd realpaths and asserts nonempty guard output. Source/tool/config files are unchanged; no current product incident or runtime acceptance is established.
+
+October 9 organization/pagination/tier source qualification: The complete CLI rejects a missing declared write policy. A valid CREATE POLICY followed in a later migration by DROP POLICY still passes because scanning returns on historical create-helper text. Current official PostgreSQL DROP POLICY documentation confirms removal and default deny when the last policy is removed under enabled RLS; this is stale guard evidence, not a claim that dropping a policy creates a live access bypass. No SQL is applied.
+
+Additional source: `scripts/check-org-permissions.mjs:450-467`. Acceptance target: Replay applicable per-relation/per-policy DDL in order or inspect authoritative current policy state; historical creation cannot establish a final active write policy. Current source report (`audit/checklist/reviews/coverage-ecosystem-org-pagination-tier-guards-2026-10-09-029.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-org-pagination-tier-independent-controls-2026-10-09-029.json`, untracked). Unchanged complete source guard APIs/CLIs and isolated inert TypeScript/TSX/SQL/Git fixtures only.37 unchanged Node tests and31 independent controls passed;220 fixture syntax parses establish syntax only. Four current source CLIs exited0. Literal fixtures extracted via actual TypeScript AST values, copied role CLI byte identity and nonempty complete CLI output are independently asserted; organization fixtures run fresh subprocesses to avoid graph-cache cross-case state. One literal synthetic function with an injected counter executes in a VM and proves zero terminal calls. No application/fixture module imports, actual authorization/mutation, SQL/database, native host, provider, network, browser, React mount, build, install, production action or real checkout staging. Git init/census and unchanged tests bind throwaway roots with inherited GIT variables scrubbed. Source/tool/config files remain unchanged; no deployed incident or runtime acceptance is established.
+
+October9 reference/retention source qualification: Complete API rejects a new personal-reference table, accepts its final DROP, but still omits it after CREATE/DROP/CREATE because dropped is permanent. A valid cascading child is reached; replacing that FK constraint with ON DELETE SET NULL still retains historical cascade credit. Existing relation/history owner is extended with both final table state and constraint action state. Current primary PostgreSQL documentation distinguishes cascade deletion from set-null and named constraint replacement; no SQL or actual erasure applies.
+
+Additional source: `scripts/check-retention-graph.mjs:63-76,120-123,166-184; scripts/check-resource-metadata.mjs:123-156`. Acceptance target: Replay final per-relation/per-constraint DDL and clear valid recreation/drop/replacement state before subject and cascade reachability credit, preserving existing schema/history obligations. Current source report (`audit/checklist/reviews/coverage-ecosystem-reference-retention-guards-2026-10-09-030.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-reference-retention-independent-controls-2026-10-09-030.json`, untracked). Current unchanged complete source guards/helpers and isolated inert TypeScript/SQL/JSON/Git fixture text only.42unchanged Node tests and25independent controls passed;8TypeScript parses plus scanner/actual array counts establish source-fixture roles. CLI copies are byte-identical, realpaths normalized and nonempty execution output asserted. Git fixture operations address explicit throwaway roots, scrub inherited GIT variables and use only local quoting config. Actual current source CLI statuses are0,0,0,1,0; repository organization rejects root .pnpm-store and specification validation explicitly skips a retired absent set. No application/fixture module imports, SQL/database/erasure/cleanup, native/provider/network/browser/build/install/production effects or real checkout staging. Actual source copies/parses/hashes/searches grant no semantic EOF credit. Source/tool/config files remain unchanged; full runtime product acceptance remains unknown.
+
+October 9 time-instrument qualification: The original timestamp projection retains an earlier server default after a later ALTER COLUMN DROP DEFAULT and retains an earlier zoned type after a later ALTER COLUMN TYPE timestamp. Both inert migration histories return no errors. This extends the existing relation-bound DDL replay owner, with zero duplicate cause or live DB/scheduler acceptance. Source: `scripts/check-time-semantics.mjs:46-83,202-239`. Original-engine controls (`audit/checklist/evidence/coverage-workspace-settings-time-inert-controls-2026-10-09-047.json`, untracked); actual source reading (`audit/checklist/reviews/coverage-workspace-settings-time-guard-source-2026-10-09-047.json`, untracked); independent challenge (`audit/checklist/evidence/coverage-workspace-settings-time-independent-challenge-2026-10-09-047.json`, untracked). Zero new cause; existing acceptance target retained.
+
+## AUDIT-EM-DASH-UNTRACKED-OMISSION-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+In a fresh Git fixture using exact hash-verified unchanged guard/helper bytes, tracked plain-text baseline passes and an untracked file with the forbidden character also passes. Explicitly passing the file or staging that same source makes the guard fail.
+
+Source: `scripts/check-em-dash-in-copy.mjs:46-49,61-65`. Evidence: coverage-em-dash-scope-controls-2026-10-09.json (`audit/checklist/evidence/coverage-em-dash-scope-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-edge-frame-enterprise-guards-2026-10-09-012.json`, untracked).
+
+Limits: Current source audit-instrument scope only. Fresh source fixtures are inert; TypeScript/TSX, SQL, NextResponse, browser frames, account/permissions, billing/provider/native/deployed behavior and product acceptance were not executed or established.
+
+Acceptance target: Include current nonignored worktree files in default discovery or explicitly scope the gate to tracked content; preserve the same-file admission negative control.
+
+## AUDIT-EVAL-SLOT-GATE-TEXT-CREDIT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+An ordinary function writing without a gate is flagged. A gate only in a comment before the write passes, a real gate result assigned and ignored also passes, and an arrow writer is omitted. The guard measures lexical order, not awaited gate success or refusal handling. No fixture slot function executes.
+
+Source: `scripts/lib/eval-safety-floor.mjs:122-157,265-277`. Evidence: coverage-evaluation-policy-controls-2026-10-09.json (`audit/checklist/evidence/coverage-evaluation-policy-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-evaluation-policy-guards-2026-10-09-013.json`, untracked).
+
+Limits: Evaluation source-instrument and explicit synthetic malformed-input scope only. No live measurement/evaluation, actual provider/model inference, released Auto route, promotion/slot write, native/browser/database or product acceptance was executed or established. Reading source/config text in a test is not semantic body coverage of those data files.
+
+Acceptance target: Bind applicable slot writers and awaited gate outcomes to the executable write path, rejecting comment-only, omitted-builder and ignored-refusal controls.
+
+October 9 managed/unattended extension under this same canonical owner: Managed admission accepts a gate only in a comment or unused string, a gate in an unrelated function, and an ignored verdict before job creation. A missing or late direct prompt gate correctly fails. Managed delivery accepts comment-only screening and screening after asset storage; the same unscreened direct writer fails when no marker is supplied. Existing evaluation gate-text owner is extended instead of adding a duplicate gate/refusal identity.
+
+Additional source: `scripts/lib/managed-safety-floor.mjs:73-76,142-178,214-245`. Acceptance target: Bind each actual job/asset write to its executed prompt/byte policy and awaited refusal outcome; textual presence/order in unrelated scopes must not grant coverage. Actual full source review (`audit/checklist/reviews/coverage-ecosystem-managed-unattended-guards-2026-10-09-025.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-managed-unattended-independent-controls-2026-10-09-025-refined.json`, untracked). Unchanged guard APIs and source CLIs over isolated inert TypeScript/migration text only.35 unchanged tests and36 final independent controls passed;69 fixture syntax parses establish syntax only. Three current textual CLIs exited0. Initial26-control execution stopped on a disproved quoted-table omission assumption and its actual failure is preserved separately. No SQL, application module/entrypoint/service, provider/native/network/browser/build/database or production state executed; source/config/tool files remain unchanged. No current product policy bypass, account loss or deployed incident is accepted.
+
+October 9 egress/install/provider extension under this same canonical owner: Plugin ordinary ungated writer is rejected, but comment-only assertPluginPackageInstallable text inside its body discharges the gate. Moving the actual assertion after the admitting write also passes. refuses checks a bare gate/refusal name or textual delegation without binding reachable awaited refusal before the write. Existing evaluation/managed safety gate-text owner is extended; no package scan/signature verification or plugin installation is executed.
+
+Additional source: `scripts/check-plugin-install-gate.mjs:110-124,132-136,149-152`. Acceptance target: Bind every admitted version write to executed successful package policy before mutation; comments, unreachable/ignored refusal and post-write gate text must not establish admission. Actual source review (`audit/checklist/reviews/coverage-ecosystem-egress-install-provider-guards-2026-10-09-026.json`, untracked); complete controls (`audit/checklist/evidence/coverage-egress-install-provider-independent-controls-2026-10-09-026-refined.json`, untracked). Current unchanged guard APIs/CLIs over isolated inert TypeScript/text fixtures only.40 unchanged tests and32 final independent controls passed;61 fixture syntax parses establish syntax only. Five current source CLIs exited0. Initial8-control execution stopped when the synthetic positive fallback used policy={...} but the lexical guard requires policy = {...}; original actual failure and refined execution are preserved. No application modules, SQL, policy resolver, plugin installation, provider/MCP/network/native/browser/database/build or production state executed. Source/config/tool files remain unchanged. No deployed security or product incident is accepted.
+
+## AUDIT-EVAL-SERVED-RUN-COVERAGE-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+The independent fixture first establishes one declared P0 refusal corpus and one resolved served model. A matching below-threshold P0 run is rejected. Relabelling that same failed suite P1 or omitting its declared corpus makes the full audit pass; a P0 score-zero run lacking its threshold also passes because threshold defaults zero.
+
+Source: `scripts/lib/eval-safety-floor.mjs:101-119,284-292`. Evidence: coverage-evaluation-policy-controls-2026-10-09.json (`audit/checklist/evidence/coverage-evaluation-policy-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-evaluation-policy-guards-2026-10-09-013.json`, untracked).
+
+Limits: Evaluation source-instrument and explicit synthetic malformed-input scope only. No live measurement/evaluation, actual provider/model inference, released Auto route, promotion/slot write, native/browser/database or product acceptance was executed or established. Reading source/config text in a test is not semantic body coverage of those data files.
+
+Acceptance target: Bind current required corpus population, priority and thresholds independently to each applicable recorded run; treat missing or downgraded coverage as unverified/failure.
+
+## AUDIT-EVAL-RESOLVED-SERVING-POPULATION-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+A declared family slot lacking a corresponding family active key resolves to an empty served Set. The full fresh source audit remains green and checks no recorded served model. Missing-policy null is rejected, but unresolved/empty resolution is not independently qualified. No current family is claimed unresolved.
+
+Source: `scripts/lib/eval-safety-floor.mjs:66-81,280-292`. Evidence: coverage-evaluation-policy-controls-2026-10-09.json (`audit/checklist/evidence/coverage-evaluation-policy-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-evaluation-policy-guards-2026-10-09-013.json`, untracked).
+
+Limits: Evaluation source-instrument and explicit synthetic malformed-input scope only. No live measurement/evaluation, actual provider/model inference, released Auto route, promotion/slot write, native/browser/database or product acceptance was executed or established. Reading source/config text in a test is not semantic body coverage of those data files.
+
+Acceptance target: Require each applicable serving slot to resolve through current family ownership, and qualify nonempty/applicable serving population before completeness credit.
+
+## AUDIT-EVAL-POLICY-OVERRIDE-VALIDATION-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+A valid default policy passes, and a family override with a negative cost ratio plus invalid string latency ratio also passes the policy audit. Independent comparison shows the string latency ratio causes the upper-ceiling comparison to accept an otherwise excessively slow synthetic candidate. Default tolerance type/range checks do not cover override values.
+
+Source: `scripts/lib/eval-gate-policy.mjs:74-81,103-115; tools/evals/scripts/promotion-gate.mjs:36-37,198`. Evidence: coverage-evaluation-policy-controls-2026-10-09.json (`audit/checklist/evidence/coverage-evaluation-policy-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-evaluation-policy-guards-2026-10-09-013.json`, untracked).
+
+Limits: Evaluation source-instrument and explicit synthetic malformed-input scope only. No live measurement/evaluation, actual provider/model inference, released Auto route, promotion/slot write, native/browser/database or product acceptance was executed or established. Reading source/config text in a test is not semantic body coverage of those data files.
+
+Acceptance target: Apply required finite nonnegative tolerance validation to effective family overrides before using each comparison axis.
+
+## AUDIT-EVAL-NUMERIC-MEASUREMENT-VALIDATION-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+Finite valid candidate passes and an expensive/slow one fails. An explicitly synthetic JSON candidate with score1e309 (parsed Infinity), mean cost-1 and latency-1 passes every comparison. This proves absent numeric range validation at this comparison boundary, not a current live provider measurement or promotion.
+
+Source: `tools/evals/scripts/promotion-gate.mjs:149-199`. Evidence: coverage-evaluation-policy-controls-2026-10-09.json (`audit/checklist/evidence/coverage-evaluation-policy-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-evaluation-policy-guards-2026-10-09-013.json`, untracked).
+
+Limits: Evaluation source-instrument and explicit synthetic malformed-input scope only. No live measurement/evaluation, actual provider/model inference, released Auto route, promotion/slot write, native/browser/database or product acceptance was executed or established. Reading source/config text in a test is not semantic body coverage of those data files.
+
+Acceptance target: Validate finite bounded scores/completeness and finite nonnegative cost/latency/version data before baseline comparison; preserve malformed JSON-number controls.
+
+## AUDIT-EVAL-TOLERANCE-READ-TEXT-CREDIT-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+The actual toleranceKeysRead helper returns scoreDrop when its only supplied occurrence is inside a block comment. The returned inventory is raw lexical text rather than executable tolerance property access; the positive actual-source suite does not disprove this control.
+
+Source: `scripts/lib/eval-gate-policy.mjs:18-28`. Evidence: coverage-evaluation-policy-controls-2026-10-09.json (`audit/checklist/evidence/coverage-evaluation-policy-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-evaluation-policy-guards-2026-10-09-013.json`, untracked).
+
+Limits: Evaluation source-instrument and explicit synthetic malformed-input scope only. No live measurement/evaluation, actual provider/model inference, released Auto route, promotion/slot write, native/browser/database or product acceptance was executed or established. Reading source/config text in a test is not semantic body coverage of those data files.
+
+Acceptance target: Bind tolerance discovery to actual executable property reads and reject comment-only declared-key controls.
+
+## AUDIT-ERROR-PARITY-EMPTY-POPULATION-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+A complete fresh parity fixture passes and a missing member fails. An empty vocabularies/retryability contract plus empty taxonomy classes passes; a nonempty generated vocabulary with no configured consumers also passes. Zero configured subject population can therefore receive parity success.
+
+Source: `scripts/check-error-contract-parity.mjs:72-82,137-154`. Evidence: coverage-error-contract-controls-2026-10-09.json (`audit/checklist/evidence/coverage-error-contract-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-error-contract-guards-2026-10-09-014.json`, untracked).
+
+Limits: Current source audit-instrument scope and inert source fixtures only. No actual client error response, retry loop, server handler, model/provider, browser/native/database/build/network or product acceptance is executed or established. Current real key/value and product-write correctness are not contradicted by malformed fixture acceptance.
+
+Acceptance target: Establish the independently applicable nonempty vocabulary/consumer population before completeness credit, retaining empty-population controls.
+
+## AUDIT-ERROR-PARITY-COMMENT-CREDIT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+The unchanged guard accepts a generated union entirely in a block comment and accepts the entire consumer mapping only in a comment. The baseline missing-member control fails; comment text is nonetheless inventoried as executable binding/consumer coverage. No real handler is shown missing.
+
+Source: `scripts/check-error-contract-parity.mjs:41-59`. Evidence: coverage-error-contract-controls-2026-10-09.json (`audit/checklist/evidence/coverage-error-contract-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-error-contract-guards-2026-10-09-014.json`, untracked).
+
+Limits: Current source audit-instrument scope and inert source fixtures only. No actual client error response, retry loop, server handler, model/provider, browser/native/database/build/network or product acceptance is executed or established. Current real key/value and product-write correctness are not contradicted by malformed fixture acceptance.
+
+Acceptance target: Bind actual exported closed unions and executable consumer mappings, excluding comments and inert text from coverage.
+
+## AUDIT-ERROR-PARITY-STALE-EXEMPTION-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+An exemption for a member the consumer now handles is rejected. Removing that member from both union and consumer leaves its old uncovered exemption accepted because only current members are visited. The source ratchet does not reject orphan exemption identities.
+
+Source: `scripts/check-error-contract-parity.mjs:105-125`. Evidence: coverage-error-contract-controls-2026-10-09.json (`audit/checklist/evidence/coverage-error-contract-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-error-contract-guards-2026-10-09-014.json`, untracked).
+
+Limits: Current source audit-instrument scope and inert source fixtures only. No actual client error response, retry loop, server handler, model/provider, browser/native/database/build/network or product acceptance is executed or established. Current real key/value and product-write correctness are not contradicted by malformed fixture acceptance.
+
+Acceptance target: Reject uncovered keys outside the current canonical vocabulary as stale obligations rather than silently retaining them.
+
+## AUDIT-ERROR-MODEL-COMMENT-DECLARATION-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+A fresh complete model fixture passes and absent classification fails. Commenting out every canonical registry still supplies all codes; class/remedy exported vocabulary text only in comments also passes. No registry/module is executed by these probes.
+
+Source: `scripts/check-error-model.mjs:63-67,96-102,110-140`. Evidence: coverage-error-contract-controls-2026-10-09.json (`audit/checklist/evidence/coverage-error-contract-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-error-contract-guards-2026-10-09-014.json`, untracked).
+
+Limits: Current source audit-instrument scope and inert source fixtures only. No actual client error response, retry loop, server handler, model/provider, browser/native/database/build/network or product acceptance is executed or established. Current real key/value and product-write correctness are not contradicted by malformed fixture acceptance.
+
+Acceptance target: Read actual export bindings/vocabularies and preserve comment-only negative controls before canonical declaration/classification credit.
+
+## AUDIT-ERROR-REGISTRY-VALUE-OMISSION-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `packages/contracts/types/src/errors.ts` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+The guard passes a fixture whose UNAUTHORIZED property value changes to RENAMED_VALUE while the taxonomy still classifies UNAUTHORIZED. Its reader inventories property keys only. The actual current owner defines error-code unions from object values; current keys/values themselves agree and no drift is asserted.
+
+Source: `scripts/check-error-model.mjs:63-67,75-90; packages/contracts/types/src/errors.ts:58,104,124`. Evidence: coverage-error-contract-controls-2026-10-09.json (`audit/checklist/evidence/coverage-error-contract-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-error-contract-guards-2026-10-09-014.json`, untracked).
+
+Limits: Current source audit-instrument scope and inert source fixtures only. No actual client error response, retry loop, server handler, model/provider, browser/native/database/build/network or product acceptance is executed or established. Current real key/value and product-write correctness are not contradicted by malformed fixture acceptance.
+
+Acceptance target: Resolve actual canonical string values or enforce key/value agreement before taxonomy completeness credit.
+
+## AUDIT-ERROR-RETRY-TAXONOMY-TEXT-CREDIT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+A private three-code retry table is detected. Adding only an error-taxonomy comment or an unused isRetryableErrorCode string makes that same private table disappear from violations. A separately recorded two-code table is below the declared heuristic threshold; no runtime retry or actual current private implementation is proved.
+
+Source: `scripts/check-error-model.mjs:251-262`. Evidence: coverage-error-contract-controls-2026-10-09.json (`audit/checklist/evidence/coverage-error-contract-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-error-contract-guards-2026-10-09-014.json`, untracked).
+
+Limits: Current source audit-instrument scope and inert source fixtures only. No actual client error response, retry loop, server handler, model/provider, browser/native/database/build/network or product acceptance is executed or established. Current real key/value and product-write correctness are not contradicted by malformed fixture acceptance.
+
+Acceptance target: Bind actual canonical helper/metadata consumption to retry decisions and reject comment/unused-string exemptions; qualify heuristic detection scope.
+
+## AUDIT-ERROR-UNRAISED-NAME-CREDIT-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+An unraised-code fixture with no matching source name passes. Adding only a block comment containing the quoted code causes the guard to require debt deletion as though the code were raised. The guard measures naming, not error construction/emission.
+
+Source: `scripts/check-error-model.mjs:37-39,208-240`. Evidence: coverage-error-contract-controls-2026-10-09.json (`audit/checklist/evidence/coverage-error-contract-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-error-contract-guards-2026-10-09-014.json`, untracked).
+
+Limits: Current source audit-instrument scope and inert source fixtures only. No actual client error response, retry loop, server handler, model/provider, browser/native/database/build/network or product acceptance is executed or established. Current real key/value and product-write correctness are not contradicted by malformed fixture acceptance.
+
+Acceptance target: Bind actual error construction/emission sites before declaring an unraised obligation satisfied or requiring its removal.
+
+## AUDIT-EXPERIMENT-READER-PRESENCE-CREDIT-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+A populated valid fixture passes and a missing Web reader fails. The same fixture passes with a completely empty reader file. The CLI nonetheless describes each declared experiment as having one assignment flag without inspecting that reader. Current actual Web reader has real key/rule/assignment/exposure functions.
+
+Source: `scripts/check-experiments.mjs:166-171,218-220`. Evidence: isolated controls (`audit/checklist/evidence/coverage-feature-experiment-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-feature-experiment-guards-2026-10-09-015.json`, untracked).
+
+Limits: Current source-instrument and inert source/JSON fixture scope only. No mounted UI, real experiment assignment/exposure, flag-store operation, entitlement/approval decision, browser/native/provider/network/database/build or product acceptance is established. Actual current experiment registry is empty, current experiment reader is implemented and actual ratchet thresholds are finite. The current read-only source gates passed; malformed fixture acceptance is not a current product defect.
+
+Acceptance target: Bind the claimed single assignment and exposure owner behavior to executable definitions or qualify the success output as registry and file-presence validation.
+
+## AUDIT-EXPERIMENT-MEMBER-TYPE-VALIDATION-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+The populated unchanged guard accepts a variant object, a blank variant string and a guardrails array containing null; a missing exclusions array correctly fails. Shared interfaces require string collections, while the source guard validates mostly array shape/count. No actual registry entry currently carries malformed members.
+
+Source: `scripts/check-experiments.mjs:67-86`. Evidence: isolated controls (`audit/checklist/evidence/coverage-feature-experiment-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-feature-experiment-guards-2026-10-09-015.json`, untracked).
+
+Limits: Current source-instrument and inert source/JSON fixture scope only. No mounted UI, real experiment assignment/exposure, flag-store operation, entitlement/approval decision, browser/native/provider/network/database/build or product acceptance is established. Actual current experiment registry is empty, current experiment reader is implemented and actual ratchet thresholds are finite. The current read-only source gates passed; malformed fixture acceptance is not a current product defect.
+
+Acceptance target: Validate the canonical collection member types and semantic variant/guardrail requirements while preserving valid empty-registry behavior.
+
+## AUDIT-FEATURE-VOCABULARY-COMMENT-CREDIT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+The exact shared readVocabulary returns work/code from an entirely commented declaration. The populated experiment fixture passes with all experiment vocabularies/control and workspace feature declarations only inside block comments; removing the vocabularies fails. These regex results are textual inventory, not actual exported contract evidence.
+
+Source: `scripts/check-feature-registry.mjs:83-89; scripts/check-experiments.mjs:173-184`. Evidence: isolated controls (`audit/checklist/evidence/coverage-feature-experiment-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-feature-experiment-guards-2026-10-09-015.json`, untracked).
+
+Limits: Current source-instrument and inert source/JSON fixture scope only. No mounted UI, real experiment assignment/exposure, flag-store operation, entitlement/approval decision, browser/native/provider/network/database/build or product acceptance is established. Actual current experiment registry is empty, current experiment reader is implemented and actual ratchet thresholds are finite. The current read-only source gates passed; malformed fixture acceptance is not a current product defect.
+
+Acceptance target: Resolve actual exported array/union declarations and exclude comments/inert text from the shared vocabulary owner.
+
+## AUDIT-FLAG-QUOTE-COVERAGE-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-feature-flags.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Single-quoted unauthorized keys and evaluator gate imports fail. Semantically corresponding double-quoted keys, evaluator imports and configured gate flag keys pass. Prefix/key/import checks depend on a single quote syntax despite TS supporting both quotes. Fixture imports are never executed.
+
+Source: `scripts/check-feature-flags.mjs:67-68,144-160,173-181`. Evidence: isolated controls (`audit/checklist/evidence/coverage-feature-experiment-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-feature-experiment-guards-2026-10-09-015.json`, untracked).
+
+Limits: Current source-instrument and inert source/JSON fixture scope only. No mounted UI, real experiment assignment/exposure, flag-store operation, entitlement/approval decision, browser/native/provider/network/database/build or product acceptance is established. Actual current experiment registry is empty, current experiment reader is implemented and actual ratchet thresholds are finite. The current read-only source gates passed; malformed fixture acceptance is not a current product defect.
+
+Acceptance target: Recognize actual import/key expressions independently of string quote spelling in all configured guard subjects.
+
+## AUDIT-FLAG-NAMESPACE-CARDINALITY-CREDIT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-feature-flags.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+A schema file exporting nothing passes because namespace and reader counts are both zero. Two namespace IDs mapped to duplicate copies of one existing reader pass; a one-reader shortage fails. Entirely commented namespace declarations/mappings and entirely commented prefix declarations also pass, while missing prefixes fail. Cardinality and path existence do not prove actual namespace identity/reader wiring.
+
+Source: `scripts/check-feature-flags.mjs:112-141`. Evidence: isolated controls (`audit/checklist/evidence/coverage-feature-experiment-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-feature-experiment-guards-2026-10-09-015.json`, untracked).
+
+Limits: Current source-instrument and inert source/JSON fixture scope only. No mounted UI, real experiment assignment/exposure, flag-store operation, entitlement/approval decision, browser/native/provider/network/database/build or product acceptance is established. Actual current experiment registry is empty, current experiment reader is implemented and actual ratchet thresholds are finite. The current read-only source gates passed; malformed fixture acceptance is not a current product defect.
+
+Acceptance target: Validate actual nonempty canonical namespace identities and their executable reader bindings; preserve missing-reader and absent-prefix rejecting controls.
+
+## AUDIT-FLAG-WIRE-INDENTATION-COVERAGE-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-feature-flags.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Adding code_execution to the wire object with four-space indentation fails for an absent resolver record. The same added property with two-space indentation passes because only exactly four-space property lines are inventoried. This is schema-reading instrument coverage, not changed current wire behavior.
+
+Source: `scripts/check-feature-flags.mjs:192-206`. Evidence: isolated controls (`audit/checklist/evidence/coverage-feature-experiment-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-feature-experiment-guards-2026-10-09-015.json`, untracked).
+
+Limits: Current source-instrument and inert source/JSON fixture scope only. No mounted UI, real experiment assignment/exposure, flag-store operation, entitlement/approval decision, browser/native/provider/network/database/build or product acceptance is established. Actual current experiment registry is empty, current experiment reader is implemented and actual ratchet thresholds are finite. The current read-only source gates passed; malformed fixture acceptance is not a current product defect.
+
+Acceptance target: Inventory actual object properties independent of indentation and retain the unrecorded wire-key rejecting control.
+
+## AUDIT-FLAG-RESOLVER-PRESENCE-CREDIT-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-feature-flags.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+The valid allowance names plans in an existing source file. Replacing that file with an unrelated export passes, because the guard splits resolvedBy at the first space and checks only file existence. The current canonical allowance explicitly names parenthesized resolver functions, whose behavior this guard does not verify.
+
+Source: `scripts/check-feature-flags.mjs:215-225`. Evidence: isolated controls (`audit/checklist/evidence/coverage-feature-experiment-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-feature-experiment-guards-2026-10-09-015.json`, untracked).
+
+Limits: Current source-instrument and inert source/JSON fixture scope only. No mounted UI, real experiment assignment/exposure, flag-store operation, entitlement/approval decision, browser/native/provider/network/database/build or product acceptance is established. Actual current experiment registry is empty, current experiment reader is implemented and actual ratchet thresholds are finite. The current read-only source gates passed; malformed fixture acceptance is not a current product defect.
+
+Acceptance target: Bind any claimed named resolver to its actual exported definition or qualify allowance evidence as path-presence only.
+
+## AUDIT-FAKE-SUCCESS-UNRELATED-SETTLED-CREDIT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+A toast before its awaited fetch is detected. Adding only await Promise.resolve() before the same toast suppresses the finding while the write still begins afterward. Any settled text before the first sink qualifies without relation to the write whose outcome the toast claims.
+
+Source: `scripts/lib/fake-affordances.mjs:14-17,96-105`. Evidence: isolated controls (`audit/checklist/evidence/coverage-feature-experiment-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-feature-experiment-guards-2026-10-09-015.json`, untracked).
+
+Limits: Current source-instrument and inert source/JSON fixture scope only. No mounted UI, real experiment assignment/exposure, flag-store operation, entitlement/approval decision, browser/native/provider/network/database/build or product acceptance is established. Actual current experiment registry is empty, current experiment reader is implemented and actual ratchet thresholds are finite. The current read-only source gates passed; malformed fixture acceptance is not a current product defect.
+
+Acceptance target: Relate the success sink to settlement of the relevant mutation, retaining unrelated-await and correctly awaited-write controls.
+
+## AUDIT-FAKE-AFFORDANCE-LINE-SCOPE-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+Inline empty handler and isolated bare identifier controls are detected. A multiline empty handler and multiline bare identifier are omitted. An unformatted identifier placed beside an unrelated entry.name on the same line is also omitted, because any formatting/name marker exempts the whole line. These source-level variants were not rendered or clicked.
+
+Source: `scripts/lib/fake-affordances.mjs:6-9,19-23,84-94`. Evidence: isolated controls (`audit/checklist/evidence/coverage-feature-experiment-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-feature-experiment-guards-2026-10-09-015.json`, untracked).
+
+Limits: Current source-instrument and inert source/JSON fixture scope only. No mounted UI, real experiment assignment/exposure, flag-store operation, entitlement/approval decision, browser/native/provider/network/database/build or product acceptance is established. Actual current experiment registry is empty, current experiment reader is implemented and actual ratchet thresholds are finite. The current read-only source gates passed; malformed fixture acceptance is not a current product defect.
+
+Acceptance target: Bind control and rendered identifier expressions independent of line breaks; correlate formatting with the actual identifier rather than adjacent text.
+
+## AUDIT-FAKE-AFFORDANCE-EMPTY-SCOPE-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+The exact readonly CLI with --root set to a fresh empty fixture exits zero and reports zero counts within the repository ratchet. A fresh populated fixture containing an inline empty handler exits one. Missing configured roots are silently empty and no applicable population assertion is made. No repository ratchet write option was invoked.
+
+Source: `scripts/check-fake-affordances.mjs:19,30-32,48-53,90-92`. Evidence: isolated controls (`audit/checklist/evidence/coverage-feature-experiment-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-feature-experiment-guards-2026-10-09-015.json`, untracked).
+
+Limits: Current source-instrument and inert source/JSON fixture scope only. No mounted UI, real experiment assignment/exposure, flag-store operation, entitlement/approval decision, browser/native/provider/network/database/build or product acceptance is established. Actual current experiment registry is empty, current experiment reader is implemented and actual ratchet thresholds are finite. The current read-only source gates passed; malformed fixture acceptance is not a current product defect.
+
+Acceptance target: Establish the expected applicable source population before completeness credit and distinguish intentionally empty scopes from missing scan roots.
+
+## AUDIT-FAKE-AFFORDANCE-RATCHET-NONFINITE-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+A finite zero dead-control threshold rejects growth to one. Valid JSON carrying 1e999 for each maxFindings entry parses to Infinity and accepts the same growth, because the ratchet checks only typeof number and compares greater-than. Current real threshold values are finite; the raw synthetic JSON is retained because JSON serialization would otherwise replace Infinity with null.
+
+Source: `scripts/lib/fake-affordances.mjs:118-126`. Evidence: isolated controls (`audit/checklist/evidence/coverage-feature-experiment-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-feature-experiment-guards-2026-10-09-015.json`, untracked).
+
+Limits: Current source-instrument and inert source/JSON fixture scope only. No mounted UI, real experiment assignment/exposure, flag-store operation, entitlement/approval decision, browser/native/provider/network/database/build or product acceptance is established. Actual current experiment registry is empty, current experiment reader is implemented and actual ratchet thresholds are finite. The current read-only source gates passed; malformed fixture acceptance is not a current product defect.
+
+Acceptance target: Require finite nonnegative count thresholds before comparison, keeping malformed numeric-overflow controls separate from valid current ratchet evidence.
+
+October 9 mock-export/reachability source qualification: A valid numeric zero ceiling rejects one missing-export/mocking finding. The mock-export ratchet admits missing, nonnumeric, object and JSON-overflow count fields when its reason is sufficiently long. The production CLI admits a raw JSON1e999 ceiling and prints1/Infinity; it still rejects a missing ceiling. Actual repository thresholds remain finite.
+
+Additional source: `scripts/check-mock-exports.mjs:662-688; scripts/lib/production-mocks.mjs:99-111`. Acceptance target: Validate count schema and finite nonnegative integer ceilings before comparison, preserving valid-zero growth rejection and missing-entry errors. Current source report (`audit/checklist/reviews/coverage-ecosystem-mock-exports-reachability-guards-2026-10-09-027.json`, untracked); final complete controls (`audit/checklist/evidence/coverage-mock-export-reachability-independent-controls-2026-10-09-027-final-fidelity.json`, untracked). Current unchanged source instruments/helpers and inert Git/TypeScript/text fixtures only.34 unchanged Node source-instrument tests passed;27 final primary independent controls and one additional byte-identical Rust-root comparison passed with59 TypeScript syntax parses. Three current source CLIs exited0. Synthetic VM factories use literal objects only; no fixture/application module imports, mounted Vitest/React UI, Cargo/Rust compilation, native host, database, provider, network, installation or production effects. Source copies are byte-identical and Git init/add is confined to scrubbed fixture roots. Initial root-level positive fixture had zero discovered tests, so its original failure is retained; corrected nested discovery and an independent root-level omission control qualify the census. Intermediate cache replay used source text with formatting differences; final replay asserts byte-identical mocked/subject/test sources before comparing cached and fresh paths. No source/tool/config fix or deployed incident is accepted.
+
+## SHARED-WORKSPACE-CODE-DISJOINT-ALLOWLIST-01
+
+Severity: High, conditional on conflicting applicable policy layers. Status: open current source defect; root consolidated October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main added opt-in workspace features, but disjoint country, host and MCP lists still intersect to the empty list that means unrestricted. Main also moved the Web resolver into `readMemberControls` and the Code session checks into `openCloudCodeSession`; line numbers for the files main changed are main's.
+
+Root independently read the current canonical composition/predicates and Web effective resolver, Code wrapper and complete Code session route. Sixteen fresh isolated exact-source-fragment controls confirm that nonempty disjoint host/MCP/country restrictions intersect to [], outside hosts/countries and missing country then pass the corresponding predicate, and later applicable lists can repopulate the empty result. Single/overlapping restrictions, MCP disabled toggle and concrete surface deny-all still behave restrictively. Shared012 and Shared016 describe the same sentinel root cause; country is an extension, not another defect ID.
+
+Canonical owner: `packages/contracts/types/src/enterprise/workspace-controls.ts`. Current caller evidence: `apps/web/lib/services/organization-policy-gate.ts:312-368`, `apps/web/lib/services/organization-policy-code-gate.ts:33-44`, `apps/web/app/api/code/sessions/route.ts:83-102` (which opens through `apps/web/lib/services/cloud-code-session-open.ts:132-148`) and `apps/web/lib/services/organization-policy-evaluator.ts:195-225,248-301`.
+
+Evidence: sixteen root source-fragment controls (`audit/checklist/evidence/coverage-workspace-allowlist-root-controls-2026-10-09.json`, untracked); root source/partial-scope receipt (`audit/checklist/reviews/coverage-ecosystem-feature-experiment-guards-2026-10-09-015.json`, untracked); prior Shared012 identity (`audit/checklist/reviews/coverage-shared-contract-tests-2026-10-09-012.json`, untracked); Shared016 current owner and country extension (`audit/checklist/reviews/coverage-shared-contract-source-2026-10-09-016.json`, untracked). Two specialist source records remain separately attributed; one canonical defect row is owned here.
+
+Limits: Conditional current source/pure predicate defect: requires simultaneously applicable nonempty stored restrictions with empty intersection and passage of independent account/rate/CSRF/provisioning/private-beta/proxy/credential/feature/open-session/subscription/managed-compute gates. Actual stored conflicts, applicability, trusted country observations and deployed downstream sandbox/transport behavior are unknown. MCP remains helper-only. Sixteen isolated body controls used explicit type-only syntax erasure and a probe-only presentation label; no product imports, browser/native/provider/network/route/DB/build execution or live egress bypass is established.
+
+Acceptance target: Retain distinct unrestricted and empty deny-all representations through canonical host/MCP/country composition and consumers; preserve individual toggle/surface exceptions and single/overlapping/disjoint/later-layer rejecting controls.
+
+## AUDIT-MATURITY-TABLE-COMMENT-CREDIT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+Entire label and denial declarations inside block comments pass. An active beta label set to null is rejected, but appending a line comment containing beta with a string label makes the same governed user-facing beta feature pass. Raw record keys and an unbound label regex do not establish an exported table or its effective value.
+
+Source: `scripts/check-feature-maturity.mjs:54-85,121-145,232-236`. Evidence: independent controls (`audit/checklist/evidence/coverage-feature-reference-controls-2026-10-09.json`, untracked); current source report (`audit/checklist/reviews/coverage-ecosystem-feature-reference-guards-2026-10-09-016.json`, untracked).
+
+Control cases: `maturity-missing-table-members-rejected`, `maturity-entire-comment-tables-accepted`, `maturity-null-beta-label-rejected`, `maturity-comment-label-overrides-null-accepted`.
+
+Limits: Current source-instrument and inert text/JSON fixtures only. No TypeScript fixture body, application, mounted UI, native device, provider, network, database, build or product acceptance. Current unmodified source CLIs pass: 30 features, 7 below general availability, 14 required roles, 26 scanner-recognized mint sites and two configured text-cap exemptions. Other guards may independently reject a malformed fixture; these findings concern the named guard, not the entire gate chain or a deployed product incident.
+
+Acceptance target: Resolve actual exported maturity tables and their effective label values; exclude comments and preserve missing-member/null-label refusal.
+
+## AUDIT-MATURITY-RECORD-SYNTAX-COVERAGE-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+A multiline bare-key record yields both beta and general_availability. The equivalent compact record yields only beta, quoted property keys yield null, and a closing brace inside a string prematurely truncates the record. These valid source forms can produce missing-stage errors without changing the table.
+
+Source: `scripts/check-feature-maturity.mjs:54-85`. Evidence: independent controls (`audit/checklist/evidence/coverage-feature-reference-controls-2026-10-09.json`, untracked); current source report (`audit/checklist/reviews/coverage-ecosystem-feature-reference-guards-2026-10-09-016.json`, untracked).
+
+Control cases: `record-keys-multiline`, `record-keys-compact-second-key-lost`, `record-keys-quoted-valid-keys-unread`, `record-keys-quoted-close-brace-truncates`.
+
+Limits: Current source-instrument and inert text/JSON fixtures only. No TypeScript fixture body, application, mounted UI, native device, provider, network, database, build or product acceptance. Current unmodified source CLIs pass: 30 features, 7 below general availability, 14 required roles, 26 scanner-recognized mint sites and two configured text-cap exemptions. Other guards may independently reject a malformed fixture; these findings concern the named guard, not the entire gate chain or a deployed product incident.
+
+Acceptance target: Read valid record syntax with nesting that excludes quoted text and recognizes compact/quoted property keys.
+
+## AUDIT-FEATURE-REGISTRY-GATE-SHAPE-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+An explicit all-null primary gate set is rejected. Omitting gates entirely, using an empty object or providing only an unknownLayer key passes. The omitted/empty versions are also counted as having a plan entitlement because undefined differs from null. A well-formed populated fixture passes separately.
+
+Source: `scripts/check-feature-registry.mjs:139-178,314-315`. Evidence: independent controls (`audit/checklist/evidence/coverage-feature-reference-controls-2026-10-09.json`, untracked); current source report (`audit/checklist/reviews/coverage-ecosystem-feature-reference-guards-2026-10-09-016.json`, untracked).
+
+Control cases: `registry-valid-baseline`, `registry-explicit-null-primary-gates-rejected`, `registry-omitted-gates-accepted-counted-entitled`, `registry-empty-gates-accepted-counted-entitled`, `registry-unknown-layer-only-accepted`.
+
+Limits: Current source-instrument and inert text/JSON fixtures only. No TypeScript fixture body, application, mounted UI, native device, provider, network, database, build or product acceptance. Current unmodified source CLIs pass: 30 features, 7 below general availability, 14 required roles, 26 scanner-recognized mint sites and two configured text-cap exemptions. Other guards may independently reject a malformed fixture; these findings concern the named guard, not the entire gate chain or a deployed product incident.
+
+Acceptance target: Validate gate object shape and allowed layers, require a deciding primary gate and count only an actual declared entitlement.
+
+## AUDIT-FEATURE-REGISTRY-MISSING-VOCABULARY-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+Invalid domain, maturity and rolloutFlag values each fail against a present vocabulary. Removing the corresponding domain JSON, maturity source or rollout-flag source makes the same invalid value pass. The configured entitlement/policy/permission/trust source branch still reports missing exports; the weakness is bounded to these three owner paths.
+
+Source: `scripts/check-feature-registry.mjs:94-101,139-145,188-193,222-229`. Evidence: independent controls (`audit/checklist/evidence/coverage-feature-reference-controls-2026-10-09.json`, untracked); current source report (`audit/checklist/reviews/coverage-ecosystem-feature-reference-guards-2026-10-09-016.json`, untracked).
+
+Control cases: `registry-present-domain-vocabulary-rejects-invalid`, `registry-missing-domain-vocabulary-accepts-invalid`, `registry-present-maturity-vocabulary-rejects-invalid`, `registry-missing-maturity-vocabulary-accepts-invalid`, `registry-present-rollout-vocabulary-rejects-invalid`, `registry-missing-rollout-vocabulary-accepts-invalid`.
+
+Limits: Current source-instrument and inert text/JSON fixtures only. No TypeScript fixture body, application, mounted UI, native device, provider, network, database, build or product acceptance. Current unmodified source CLIs pass: 30 features, 7 below general availability, 14 required roles, 26 scanner-recognized mint sites and two configured text-cap exemptions. Other guards may independently reject a malformed fixture; these findings concern the named guard, not the entire gate chain or a deployed product incident.
+
+Acceptance target: Fail closed when every required vocabulary owner is absent or unreadable while preserving valid gate and domain checks.
+
+## AUDIT-FEATURE-REGISTRY-MODULE-COMMENT-CREDIT-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+A module with no registry read is rejected. Adding only a line comment containing registryJson.features makes the unchanged module pass; no fixture module is imported. The check establishes raw marker presence rather than executable type/table binding.
+
+Source: `scripts/check-feature-registry.mjs:302-307`. Evidence: independent controls (`audit/checklist/evidence/coverage-feature-reference-controls-2026-10-09.json`, untracked); current source report (`audit/checklist/reviews/coverage-ecosystem-feature-reference-guards-2026-10-09-016.json`, untracked).
+
+Control cases: `registry-module-missing-reader-rejected`, `registry-module-comment-reader-accepted`.
+
+Limits: Current source-instrument and inert text/JSON fixtures only. No TypeScript fixture body, application, mounted UI, native device, provider, network, database, build or product acceptance. Current unmodified source CLIs pass: 30 features, 7 below general availability, 14 required roles, 26 scanner-recognized mint sites and two configured text-cap exemptions. Other guards may independently reject a malformed fixture; these findings concern the named guard, not the entire gate chain or a deployed product incident.
+
+Acceptance target: Bind the registry consumer to an executable read or qualify this guard as lexical marker inventory.
+
+## AUDIT-FEATURE-LABEL-OPERAND-COVERAGE-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+The same feature-resolving function compares featureId with Computer use. The featureId-first spelling yields one violation; the label-first spelling yields none. Both strings remain inert fixture text, with the same featureId admission marker and source path.
+
+Source: `scripts/check-feature-registry.mjs:120-135`. Evidence: independent controls (`audit/checklist/evidence/coverage-feature-reference-controls-2026-10-09.json`, untracked); current source report (`audit/checklist/reviews/coverage-ecosystem-feature-reference-guards-2026-10-09-016.json`, untracked).
+
+Control cases: `registry-label-right-operand-rejected`, `registry-label-left-operand-unread`.
+
+Limits: Current source-instrument and inert text/JSON fixtures only. No TypeScript fixture body, application, mounted UI, native device, provider, network, database, build or product acceptance. Current unmodified source CLIs pass: 30 features, 7 below general availability, 14 required roles, 26 scanner-recognized mint sites and two configured text-cap exemptions. Other guards may independently reject a malformed fixture; these findings concern the named guard, not the entire gate chain or a deployed product incident.
+
+Acceptance target: Cover both operands of equivalent feature label comparisons without admitting unrelated prose.
+
+## AUDIT-FILE-REFERENCE-COMMENT-CONTRACT-CREDIT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-file-reference-canonical.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+A minimal active contract with all actual required role-to-field mappings passes. Moving the role declaration, the interface fields or the entire contract inside a block comment also passes while the model file is empty. Ordinary missing-role/unknown-field/duplicate-field controls in the unchanged suite still reject their inputs.
+
+Source: `scripts/check-file-reference-canonical.mjs:99-123,137-167`. Evidence: independent controls (`audit/checklist/evidence/coverage-feature-reference-controls-2026-10-09.json`, untracked); current source report (`audit/checklist/reviews/coverage-ecosystem-feature-reference-guards-2026-10-09-016.json`, untracked).
+
+Control cases: `file-active-minimal-contract-control`, `file-comment-roles-credited`, `file-comment-fields-credited`, `file-entire-comment-contract-credited`.
+
+Limits: Current source-instrument and inert text/JSON fixtures only. No TypeScript fixture body, application, mounted UI, native device, provider, network, database, build or product acceptance. Current unmodified source CLIs pass: 30 features, 7 below general availability, 14 required roles, 26 scanner-recognized mint sites and two configured text-cap exemptions. Other guards may independently reject a malformed fixture; these findings concern the named guard, not the entire gate chain or a deployed product incident.
+
+Acceptance target: Resolve actual canonical role exports and declared interface fields; do not accept commented declarations as contract coverage.
+
+## AUDIT-FILE-MINT-CALL-COVERAGE-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-file-reference-canonical.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+A short call using asset.url as identity is rejected and counted. The same borrowed identity after a 700-character property, or supplied through an object shorthand id, is omitted and passes with zero recognized mints. A mint with no id followed by an unrelated object id is counted as one minted identity. The raw 600-character window neither enumerates all calls nor respects call boundaries.
+
+Source: `scripts/check-file-reference-canonical.mjs:36,126-134,175-184,219-223`. Evidence: independent controls (`audit/checklist/evidence/coverage-feature-reference-controls-2026-10-09.json`, untracked); current source report (`audit/checklist/reviews/coverage-ecosystem-feature-reference-guards-2026-10-09-016.json`, untracked).
+
+Control cases: `file-short-borrowed-id-rejected`, `file-long-call-borrowed-id-unread`, `file-shorthand-borrowed-id-unread`, `file-unrelated-subsequent-id-counted`.
+
+Limits: Current source-instrument and inert text/JSON fixtures only. No TypeScript fixture body, application, mounted UI, native device, provider, network, database, build or product acceptance. Current unmodified source CLIs pass: 30 features, 7 below general availability, 14 required roles, 26 scanner-recognized mint sites and two configured text-cap exemptions. Other guards may independently reject a malformed fixture; these findings concern the named guard, not the entire gate chain or a deployed product incident.
+
+Acceptance target: Enumerate mint calls and bind the supplied identity to each actual call across supported argument syntax; qualify counts until that coverage is proven.
+
+## AUDIT-FILE-TEXT-CAP-MARKER-CREDIT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main emptied the text-cap baseline and passes it as a parameter; a module that merely mentions `MAX_FILE_TEXT_CHARS` is still exempt. Line numbers for `scripts/check-file-reference-canonical.mjs` are main's.
+
+An exported independent MAX_OTHER_TEXT_CHARS cap with a Uint8Array marker is rejected. Adding MAX_FILE_TEXT_CHARS only in a comment or unrelated unused string makes that same independent cap pass. Configured legacy exemptions and their stale-entry checks remain active.
+
+Source: `scripts/check-file-reference-canonical.mjs:187-196`. Evidence: independent controls (`audit/checklist/evidence/coverage-feature-reference-controls-2026-10-09.json`, untracked); current source report (`audit/checklist/reviews/coverage-ecosystem-feature-reference-guards-2026-10-09-016.json`, untracked).
+
+Control cases: `file-new-independent-text-cap-rejected`, `file-text-cap-comment-marker-exempts-duplicate`, `file-text-cap-unused-string-marker-exempts-duplicate`.
+
+Limits: Current source-instrument and inert text/JSON fixtures only. No TypeScript fixture body, application, mounted UI, native device, provider, network, database, build or product acceptance. Current unmodified source CLIs pass: 30 features, 7 below general availability, 14 required roles, 26 scanner-recognized mint sites and two configured text-cap exemptions. Other guards may independently reject a malformed fixture; these findings concern the named guard, not the entire gate chain or a deployed product incident.
+
+Acceptance target: Require use of the canonical cap in extraction behavior rather than any raw marker occurrence; retain stale baseline checks.
+
+## AUDIT-GUARD-INVENTORY-INERT-COMMAND-CREDIT-01
+
+Severity: Medium. Status: open current source instrument or documentation scope gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-model-change-suites.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+An ordinary direct guard command is credited and an unwired guard fails. Putting the guard path only in printf text, a shell comment or a different filename with the same prefix earns wiring credit. A self-test filename only inside the printf text also earns selfTestRun. Workflow block comments similarly earn execution credit. No fixture script command or self-test was actually run.
+
+Source: `scripts/check-guard-inventory.mjs:35-49,80-113`. Evidence: independent controls (`audit/checklist/evidence/coverage-inventory-localization-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-inventory-localization-guards-2026-10-09-017.json`, untracked).
+
+Control cases: `inventory-direct-command-valid`, `inventory-unwired-guard-rejected`, `inventory-echo-only-path-credited`, `inventory-comment-only-path-credited`, `inventory-other-filename-prefix-credited`, `inventory-self-test-echo-token-credited`, `inventory-workflow-comment-command-credited`.
+
+Limits: Current source-instrument scope only. Fixture shell/package commands, hook files, application modules and TypeScript bodies never execute. The display-array guard is copied byte-for-byte only to bind its module-relative root to an isolated fixture; generated-artifact fixtures use temporary Git init/add only. All five unchanged current source CLIs exited0, and two unchanged source-instrument suites passed11/11 tests. No whole-chain runtime, hook execution, CI job, mounted UI, locale display, provider/native/network/database/build or product acceptance.
+
+Acceptance target: Bind inventory reachability to executable commands with exact target identity; exclude quoted output, comments, unrelated filename prefixes and inert self-test references.
+
+October 9 model-suite qualification: the complete unchanged exported model-change suite guard accepts a CI run value containing only comments with the affected/TypeScript/Rust command tokens and accepts an echo-only root affected-test script. Direct commands pass; missing commands, a job condition and a literal job warning flag refuse. Source: `scripts/check-model-change-suites.mjs:101-110,185-193,235-239`. This extends the original exact executable-command acceptance target and preserves the separately scoped AUDIT-CI-COMMENTED-GATE-CREDIT-01 parent-check relation, with zero new cause. Six private-root guard-engine controls read registry/YAML/manifests and empty test-named files as inert text/data; no referenced suite, shell/provider/Rust command or synthetic test body executes. Current source report (`audit/checklist/reviews/coverage-model-contract-guard-source-2026-10-09-041.json`, untracked); independent controls (`audit/checklist/evidence/coverage-model-contract-inert-controls-2026-10-09-041.json`, untracked); current guard/tests (`audit/checklist/evidence/coverage-model-contract-current-source-gates-2026-10-09-041.json`, untracked). All56 authored guard-only tests and four original source CLIs passed. Original fixture-path/probe refusals are retained separately. Source/tool/config remain unchanged; prior Root035 failure and all runtime/requirement acceptance remain open.
+
+October 9 scanner/search/supply qualification: The complete original supply-chain engine admits a workflow source run step containing only an echo message quoting pnpm install --frozen-lockfile. That inert quoted text satisfies install census and frozen flags. Removing install markers entirely refuses. This shares the existing raw-text command inventory credit cause; no install or workflow executes. Actual source report (`audit/checklist/reviews/coverage-security-index-supply-guard-source-2026-10-09-044.json`, untracked); 34 independent controls (`audit/checklist/evidence/coverage-security-index-supply-inert-controls-2026-10-09-044.json`, untracked); current guard outcomes (`audit/checklist/evidence/coverage-security-index-supply-current-source-gates-2026-10-09-044.json`, untracked); 31-target independent scope receipt (`audit/checklist/evidence/coverage-supply-chain-nested-target-scope-2026-10-09-044.json`, untracked). Zero new cause; no runtime effects.
+
+## AUDIT-GUARD-WORKFLOW-STEP-BOUNDARY-01
+
+Severity: Medium. Status: open current source instrument or documentation scope gap reviewed October 9, 2026; source unchanged.
+
+A valid workflow step named scripts/check-one.mjs with run echo ok is rejected as unwired when name comes first. Swapping the same mapping fields to put run first makes the guard pass: workflowCommands absorbs the following name field as command text. The installed YAML parser independently confirmed both fixtures parse to identical step objects. Neither workflow actually invokes the guard.
+
+Source: `scripts/check-guard-inventory.mjs:56-77,100-103`. Evidence: independent controls (`audit/checklist/evidence/coverage-inventory-localization-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-inventory-localization-guards-2026-10-09-017.json`, untracked).
+
+Control cases: `inventory-workflow-name-before-run-not-credited`, `inventory-workflow-name-after-run-credited`.
+
+Limits: Current source-instrument scope only. Fixture shell/package commands, hook files, application modules and TypeScript bodies never execute. The display-array guard is copied byte-for-byte only to bind its module-relative root to an isolated fixture; generated-artifact fixtures use temporary Git init/add only. All five unchanged current source CLIs exited0, and two unchanged source-instrument suites passed11/11 tests. No whole-chain runtime, hook execution, CI job, mounted UI, locale display, provider/native/network/database/build or product acceptance.
+
+Acceptance target: Parse run-step values and block scalar boundaries separately from sibling name/env/shell/condition metadata, independently of YAML mapping key order.
+
+October9 source-guard qualification: Fresh syntax-valid YAML companion blocks confirm the complete original checker rejects a comment following a backslash in an actual run value, and also rejects ordinary top-level YAML prose comments outside every run. The valid plain workflow and trailing-comment workflow parse to identical run values; only the added non-run comment text causes a refusal. This extends the existing run-value/source-boundary cause. The original malformed YAML raw-text attempt remains preserved. No workflow shell or Cargo executes; current source CLI is green. Source: `scripts/check-workflow-cargo-features.mjs:99-116`. Actual source reading (`audit/checklist/reviews/coverage-cache-version-workflow-guard-source-2026-10-09-048.json`, untracked); original engine controls (`audit/checklist/evidence/coverage-cache-version-workflow-inert-controls-2026-10-09-048.json`, untracked); valid companions (`audit/checklist/evidence/coverage-cache-version-workflow-valid-companions-2026-10-09-048.json`, untracked); independent challenge (`audit/checklist/evidence/coverage-cache-version-workflow-independent-challenge-2026-10-09-048.json`, untracked). Zero new cause or runtime acceptance.
+
+## AUDIT-HOOK-COMMENT-CREDIT-01
+
+Severity: Medium. Status: open current source instrument or documentation scope gap reviewed October 9, 2026; source unchanged.
+
+Active required hook lines pass, omitted commands fail and a non-executable hook fails. A fixture with every required hook command only commented out, commitlint configuration names only in a comment and package script targets only inside printf strings nevertheless passes. Executable mode and raw substring presence do not establish the required behavior.
+
+Source: `scripts/check-hooks.mjs:23-28,39-48,65-82`. Evidence: independent controls (`audit/checklist/evidence/coverage-inventory-localization-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-inventory-localization-guards-2026-10-09-017.json`, untracked).
+
+Control cases: `hooks-active-required-lines-valid`, `hooks-missing-required-command-rejected`, `hooks-non-executable-rejected`, `hooks-commented-commands-config-and-echo-scripts-accepted`.
+
+Limits: Current source-instrument scope only. Fixture shell/package commands, hook files, application modules and TypeScript bodies never execute. The display-array guard is copied byte-for-byte only to bind its module-relative root to an isolated fixture; generated-artifact fixtures use temporary Git init/add only. All five unchanged current source CLIs exited0, and two unchanged source-instrument suites passed11/11 tests. No whole-chain runtime, hook execution, CI job, mounted UI, locale display, provider/native/network/database/build or product acceptance.
+
+Acceptance target: Validate executable hook/package command and configuration bindings while retaining required-file and executable-mode checks.
+
+## AUDIT-FIXTURE-ARRAY-SYNTAX-COVERAGE-01
+
+Severity: Medium. Status: open current source instrument or documentation scope gap reviewed October 9, 2026; source unchanged.
+
+The direct module-level MODELS array in a TSX fixture with a model-store counterpart is rejected. Indenting the otherwise identical declaration or putting the assignment on the next line passes. An entirely commented declaration instead fails. The line regex distinguishes formatting/comment text rather than actual declarations.
+
+Source: `scripts/check-hardcoded-fixture-arrays.mjs:95-107,120-124`. Evidence: independent controls (`audit/checklist/evidence/coverage-inventory-localization-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-inventory-localization-guards-2026-10-09-017.json`, untracked).
+
+Control cases: `display-array-direct-declaration-rejected`, `display-array-indented-equivalent-omitted`, `display-array-line-break-equivalent-omitted`, `display-array-comment-only-declaration-rejected`.
+
+Limits: Current source-instrument scope only. Fixture shell/package commands, hook files, application modules and TypeScript bodies never execute. The display-array guard is copied byte-for-byte only to bind its module-relative root to an isolated fixture; generated-artifact fixtures use temporary Git init/add only. All five unchanged current source CLIs exited0, and two unchanged source-instrument suites passed11/11 tests. No whole-chain runtime, hook execution, CI job, mounted UI, locale display, provider/native/network/database/build or product acceptance.
+
+Acceptance target: Recognize actual display-array declarations independently of indentation and assignment line breaks and exclude commented declarations; preserve canonical/test exemptions.
+
+## AUDIT-GENERATED-ARTIFACT-SCOPE-DOC-DRIFT-01
+
+Severity: Low. Status: open current source instrument or documentation scope gap reviewed October 9, 2026; source unchanged.
+
+A matching root app-capture.md is rejected when tracked in a temporary index but ignored when present and nonignored yet untracked. The implementation enumerates git ls-files and tracked-ignored entries, whereas the general operating contract describes guard inputs as git ls-files -co. This is a scope/documentation discrepancy. Its prescribed stage-first workflow still detects this exact example after staging; no committed-artifact bypass is asserted.
+
+Source: `scripts/check-generated-artifacts.mjs:8-24,44-76; AGENTS.md:236-237`. Evidence: independent controls (`audit/checklist/evidence/coverage-inventory-localization-controls-2026-10-09.json`, untracked); full current source report (`audit/checklist/reviews/coverage-ecosystem-inventory-localization-guards-2026-10-09-017.json`, untracked).
+
+Control cases: `generated-clean-tracked-baseline`, `generated-tracked-matching-scratch-rejected`, `generated-untracked-matching-scratch-omitted`.
+
+Limits: Current source-instrument scope only. Fixture shell/package commands, hook files, application modules and TypeScript bodies never execute. The display-array guard is copied byte-for-byte only to bind its module-relative root to an isolated fixture; generated-artifact fixtures use temporary Git init/add only. All five unchanged current source CLIs exited0, and two unchanged source-instrument suites passed11/11 tests. No whole-chain runtime, hook execution, CI job, mounted UI, locale display, provider/native/network/database/build or product acceptance.
+
+Acceptance target: State the generated-artifact guard tracking boundary precisely or explicitly cover intended nonignored untracked inputs without exposing private/generated/dependency trees.
+
+## AUDIT-IDE-EDITOR-IMPORT-SYNTAX-01
+
+Severity: Medium. Status: open source-instrument gap.
+
+Source: `scripts/check-ide-core-neutral.mjs:54-60,77-80`. Evidence: actual refined controls (`audit/checklist/evidence/coverage-ide-idempotency-identifier-controls-2026-10-09.json`, untracked); full selected source report (`audit/checklist/reviews/coverage-ecosystem-ide-idempotency-identifier-guards-2026-10-09-018.json`, untracked).
+
+Single-line import is detected and rejected. A syntactically valid multiline named import from vscode is missed and the complete fixture guard passes. A syntactically valid export-from vscode is also missed by the exported scanner. Installed TypeScript parses the fixtures independently; direct imports and dynamic imports are still detected.
+
+Acceptance target: Recognize all actual editor module import/reexport forms while excluding comments; retain direct import rejection.
+
+Verification limits: Current unchanged source guard APIs and inert source fixtures only. TypeScript parser independently confirms selected import/export/callback fixtures are syntactically valid; fixture bodies never execute. SQL semantics use current official PostgreSQL documentation, no database is opened. Temporary Git initialization is confined to fixture roots. Three unchanged Node suites passed31/31,34 final controls passed,and all three current CLIs exited0. No app/browser/host UI/native/provider/database/build/production acceptance; no code fix.
+
+October 9 egress/install/provider extension under this same canonical owner: A business module static single-line declared provider SDK import is rejected. With the valid adapter retained, converting only the forbidden domain import to a dynamic import or multiline named import causes the complete provider API to pass. importedPackages inspects individual lines and its regex has no dynamic import form. Existing restricted import-syntax owner is extended; no SDK is executed or product route imported.
+
+Additional source: `scripts/check-provider-adapter-boundary.mjs:50-51,62-70,108-137`. Acceptance target: Use syntax-aware package import discovery for every relevant static/dynamic form and preserve binding-independent subpath identity before enforcing adapter neutrality. Actual source review (`audit/checklist/reviews/coverage-ecosystem-egress-install-provider-guards-2026-10-09-026.json`, untracked); complete controls (`audit/checklist/evidence/coverage-egress-install-provider-independent-controls-2026-10-09-026-refined.json`, untracked). Current unchanged guard APIs/CLIs over isolated inert TypeScript/text fixtures only.40 unchanged tests and32 final independent controls passed;61 fixture syntax parses establish syntax only. Five current source CLIs exited0. Initial8-control execution stopped when the synthetic positive fallback used policy={...} but the lexical guard requires policy = {...}; original actual failure and refined execution are preserved. No application modules, SQL, policy resolver, plugin installation, provider/MCP/network/native/browser/database/build or production state executed. Source/config/tool files remain unchanged. No deployed security or product incident is accepted.
+
+October 9 mock-export/reachability source qualification: A single-line named mock import is rejected by the complete zero-ceiling CLI. Converting that same declaration into a valid multiline named import yields no finding and the complete CLI passes. Existing IDE/provider restricted-import parser owner is extended; dynamic mock imports remain separately recognized by the production helper.
+
+Additional source: `scripts/lib/production-mocks.mjs:3-4,65-84`. Acceptance target: Use syntax-aware discovery for all relevant static multiline import/export forms while preserving dynamic import controls and comment exclusions. Current source report (`audit/checklist/reviews/coverage-ecosystem-mock-exports-reachability-guards-2026-10-09-027.json`, untracked); final complete controls (`audit/checklist/evidence/coverage-mock-export-reachability-independent-controls-2026-10-09-027-final-fidelity.json`, untracked). Current unchanged source instruments/helpers and inert Git/TypeScript/text fixtures only.34 unchanged Node source-instrument tests passed;27 final primary independent controls and one additional byte-identical Rust-root comparison passed with59 TypeScript syntax parses. Three current source CLIs exited0. Synthetic VM factories use literal objects only; no fixture/application module imports, mounted Vitest/React UI, Cargo/Rust compilation, native host, database, provider, network, installation or production effects. Source copies are byte-identical and Git init/add is confined to scrubbed fixture roots. Initial root-level positive fixture had zero discovered tests, so its original failure is retained; corrected nested discovery and an independent root-level omission control qualify the census. Intermediate cache replay used source text with formatting differences; final replay asserts byte-identical mocked/subject/test sources before comparing cached and fresh paths. No source/tool/config fix or deployed incident is accepted.
+
+October 9 Root033 current source qualification: Direct and dynamic editor imports are refused, while multiline import, re-export and a comment gap between require and its call are omitted. Comment-only require text is falsely refused; independent AST distinguishes real nodes from comments.
+
+Acceptance target: Bind actual import/re-export/require nodes and source kind; preserve direct/dynamic refusal.
+
+Evidence: current source report (`audit/checklist/reviews/coverage-ecosystem-neutral-idempotency-identifier-guards-2026-10-09-033.json`, untracked); actual controls (`audit/checklist/evidence/coverage-neutral-ide-independent-controls-2026-10-09-033.json`, untracked). Current unchanged source instruments and inert text/Git fixtures only. Forty distinct unchanged tests passed (31 Node and 9 Python); the independent repeat of 20 Node tests is included in those 31, not added to the distinct total. Sixty-eight fixture controls/assertions succeeded: 16 IDE, 7 conflict-marker and 45 independent idempotency/identifier cases. The 45 cases include 10 reproduced false acceptances, 22 working refusals, 34 satisfied advertised properties and one unresolved composite scope; assertion success does not mean all advertised guard properties held. Four current source CLIs exited zero. Fourteen TypeScript AST parses and 171 separate Node ESM syntax checks establish syntax only. No application/fixture module import, actual SQL/DB/migration, native/provider/browser/network/build/install/production behavior or real-checkout staging. The conflict reader-denial case imports only a copied source-guard module. Original failures and negative controls are preserved; no source fix or runtime product acceptance.
+
+## AUDIT-IDE-TRUST-SETTING-SYNTAX-01
+
+Severity: Medium. Status: open source-instrument gap.
+
+Source: `scripts/check-ide-core-neutral.mjs:64-68,124-129`. Evidence: actual refined controls (`audit/checklist/evidence/coverage-ide-idempotency-identifier-controls-2026-10-09.json`, untracked); full selected source report (`audit/checklist/reviews/coverage-ecosystem-ide-idempotency-identifier-guards-2026-10-09-018.json`, untracked).
+
+A single-quoted getUserScoped<string> apiEndpoint call requires a manifest restriction and the omission is rejected. Equivalent double-quoted generic and single-quoted inferred-generic calls produce no settings and the same complete fixture guard passes. Actual current config.ts uses the recognized spelling and getUserScoped ignores workspace values, so this is a future scan coverage gap rather than current endpoint leakage.
+
+Acceptance target: Bind manifest restrictions to actual trust-scoped accessor calls regardless of quote spelling or explicit generic arguments.
+
+Verification limits: Current unchanged source guard APIs and inert source fixtures only. TypeScript parser independently confirms selected import/export/callback fixtures are syntactically valid; fixture bodies never execute. SQL semantics use current official PostgreSQL documentation, no database is opened. Temporary Git initialization is confined to fixture roots. Three unchanged Node suites passed31/31,34 final controls passed,and all three current CLIs exited0. No app/browser/host UI/native/provider/database/build/production acceptance; no code fix.
+
+October 9 Root033 current source qualification: Missing restriction for a recognized setting accessor is refused; double-quoted generic and inferred generic accessor forms are omitted. AST verifies the accessor nodes.
+
+Acceptance target: Discover equivalent actual setting accessors before testing declared trust restrictions.
+
+Evidence: current source report (`audit/checklist/reviews/coverage-ecosystem-neutral-idempotency-identifier-guards-2026-10-09-033.json`, untracked); actual controls (`audit/checklist/evidence/coverage-neutral-ide-independent-controls-2026-10-09-033.json`, untracked). Current unchanged source instruments and inert text/Git fixtures only. Forty distinct unchanged tests passed (31 Node and 9 Python); the independent repeat of 20 Node tests is included in those 31, not added to the distinct total. Sixty-eight fixture controls/assertions succeeded: 16 IDE, 7 conflict-marker and 45 independent idempotency/identifier cases. The 45 cases include 10 reproduced false acceptances, 22 working refusals, 34 satisfied advertised properties and one unresolved composite scope; assertion success does not mean all advertised guard properties held. Four current source CLIs exited zero. Fourteen TypeScript AST parses and 171 separate Node ESM syntax checks establish syntax only. No application/fixture module import, actual SQL/DB/migration, native/provider/browser/network/build/install/production behavior or real-checkout staging. The conflict reader-denial case imports only a copied source-guard module. Original failures and negative controls are preserved; no source fix or runtime product acceptance.
+
+## AUDIT-IDE-FORK-COMMENT-REJECTION-01
+
+Severity: Low. Status: open source-instrument gap.
+
+Source: `scripts/check-ide-core-neutral.mjs:140-145`. Evidence: actual refined controls (`audit/checklist/evidence/coverage-ide-idempotency-identifier-controls-2026-10-09.json`, untracked); full selected source report (`audit/checklist/reviews/coverage-ecosystem-ide-idempotency-identifier-guards-2026-10-09-018.json`, untracked).
+
+A config file containing only a comment naming Cursor makes the complete fixture guard report an editor-product branch; the file has no branch or executed API. Its CursorPosition identifier exemption remains accepted. Raw prose matching does not identify a behavioral branch.
+
+Acceptance target: Recognize actual product-name comparisons or branching rather than rejecting an inert comment.
+
+Verification limits: Current unchanged source guard APIs and inert source fixtures only. TypeScript parser independently confirms selected import/export/callback fixtures are syntactically valid; fixture bodies never execute. SQL semantics use current official PostgreSQL documentation, no database is opened. Temporary Git initialization is confined to fixture roots. Three unchanged Node suites passed31/31,34 final controls passed,and all three current CLIs exited0. No app/browser/host UI/native/provider/database/build/production acceptance; no code fix.
+
+October 9 Root033 current source qualification: A comment containing a fork name is falsely refused. A similarly named ordinary identifier remains accepted.
+
+Acceptance target: Inspect actual branching/dependency nodes while excluding comments.
+
+Evidence: current source report (`audit/checklist/reviews/coverage-ecosystem-neutral-idempotency-identifier-guards-2026-10-09-033.json`, untracked); actual controls (`audit/checklist/evidence/coverage-neutral-ide-independent-controls-2026-10-09-033.json`, untracked). Current unchanged source instruments and inert text/Git fixtures only. Forty distinct unchanged tests passed (31 Node and 9 Python); the independent repeat of 20 Node tests is included in those 31, not added to the distinct total. Sixty-eight fixture controls/assertions succeeded: 16 IDE, 7 conflict-marker and 45 independent idempotency/identifier cases. The 45 cases include 10 reproduced false acceptances, 22 working refusals, 34 satisfied advertised properties and one unresolved composite scope; assertion success does not mean all advertised guard properties held. Four current source CLIs exited zero. Fourteen TypeScript AST parses and 171 separate Node ESM syntax checks establish syntax only. No application/fixture module import, actual SQL/DB/migration, native/provider/browser/network/build/install/production behavior or real-checkout staging. The conflict reader-denial case imports only a copied source-guard module. Original failures and negative controls are preserved; no source fix or runtime product acceptance.
+
+## AUDIT-IDEMPOTENCY-INERT-FENCE-CREDIT-01
+
+Severity: Medium. Status: open source-instrument gap.
+
+Source: `scripts/check-idempotency.mjs:101-124`. Evidence: actual refined controls (`audit/checklist/evidence/coverage-ide-idempotency-identifier-controls-2026-10-09.json`, untracked); full selected source report (`audit/checklist/reviews/coverage-ecosystem-ide-idempotency-identifier-guards-2026-10-09-018.json`, untracked).
+
+An enforcement file without a marker yields nine claims-no-key errors. Adding only a line comment containing on conflict makes all nine operation claims pass with identical inert alwaysRun code and a declared unique key. Every operation is allowed to point to the same source file. This demonstrates marker credit; it does not establish a deployed duplicate operation.
+
+Acceptance target: Bind the declared operation and replay identity to an actual enforcement behavior, with comments and unrelated strings excluded.
+
+Verification limits: Current unchanged source guard APIs and inert source fixtures only. TypeScript parser independently confirms selected import/export/callback fixtures are syntactically valid; fixture bodies never execute. SQL semantics use current official PostgreSQL documentation, no database is opened. Temporary Git initialization is confined to fixture roots. Three unchanged Node suites passed31/31,34 final controls passed,and all three current CLIs exited0. No app/browser/host UI/native/provider/database/build/production acceptance; no code fix.
+
+October 9 money/usage/Work source qualification: A third direct reservation with randomUUID key rejects alongside both retained known unsafe anchors. Inserting comment idempotencyKey:stable before the actual random-key property makes objectPropertyValue extract the commented key and complete API/CLI pass all three calls. This extends the existing inert replay-identity credit owner; reservation bodies never execute.
+
+Additional source: `scripts/check-usage-reservation-replay.mjs:133-161,270-290`. Acceptance target: Bind replay identity to the actual object property/expression and enforcement behavior; comments and unrelated literal declarations cannot establish a stable operation key. Current source report (`audit/checklist/reviews/coverage-ecosystem-money-usage-worktask-guards-2026-10-09-028.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-money-usage-worktask-independent-controls-2026-10-09-028-refined.json`, untracked). Unchanged complete source-instrument APIs and byte-identical CLI copies over isolated inert TypeScript/SQL text only.44 unchanged tests and35 final independent controls passed;62 TypeScript fixture parses establish syntax only. Four actual current source CLIs exited0. Two isolated literal arithmetic expressions execute in a VM; no application or fixture module imports, monetary writes, SQL, database, native host, provider, network, browser, build, installation, production action or real checkout staging occurs. Git used by unchanged tests is confined to scrubbed fixture roots. Initial11-control receipt preserves a failed CLI assertion: /tmp versus /private/tmp prevented the copied guard main from running. Final runner normalizes executable/cwd realpaths and asserts nonempty guard output. Source/tool/config files are unchanged; no current product incident or runtime acceptance is established.
+
+October 9 Root033 current source qualification: Two independently recreated comment/string markers make inert alwaysRun owners pass, while missing marker/operation/owner/reason controls refuse.
+
+Acceptance target: Bind actual enforcement to declared operation and replay identity, excluding unrelated comments/literals.
+
+Evidence: current source report (`audit/checklist/reviews/coverage-ecosystem-neutral-idempotency-identifier-guards-2026-10-09-033.json`, untracked); actual controls (`audit/checklist/evidence/coverage-idempotency-identifier-independent-challenge-2026-10-09-033.json`, untracked). Current unchanged source instruments and inert text/Git fixtures only. Forty distinct unchanged tests passed (31 Node and 9 Python); the independent repeat of 20 Node tests is included in those 31, not added to the distinct total. Sixty-eight fixture controls/assertions succeeded: 16 IDE, 7 conflict-marker and 45 independent idempotency/identifier cases. The 45 cases include 10 reproduced false acceptances, 22 working refusals, 34 satisfied advertised properties and one unresolved composite scope; assertion success does not mean all advertised guard properties held. Four current source CLIs exited zero. Fourteen TypeScript AST parses and 171 separate Node ESM syntax checks establish syntax only. No application/fixture module import, actual SQL/DB/migration, native/provider/browser/network/build/install/production behavior or real-checkout staging. The conflict reader-denial case imports only a copied source-guard module. Original failures and negative controls are preserved; no source fix or runtime product acceptance.
+
+## AUDIT-KEY-CONSTRAINT-HISTORY-01
+
+Severity: Medium. Status: open source-instrument gap.
+
+Source: `scripts/check-idempotency.mjs:48-87; scripts/check-identifier-discipline.mjs:30-65`. Evidence: actual refined controls (`audit/checklist/evidence/coverage-ide-idempotency-identifier-controls-2026-10-09.json`, untracked); full selected source report (`audit/checklist/reviews/coverage-ecosystem-ide-idempotency-identifier-guards-2026-10-09-018.json`, untracked).
+
+An absent unique key is rejected, but creating then dropping its index or table constraint retains uniqueness and passes idempotency. Dropping an inline UUID primary key likewise leaves it inventoried and passes identifier discipline. Dropping that key and adding a primary key on email still reports the old UUID column and passes, whereas an inline email primary key fails. The migrations are inert text; applied database state is unknown. Existing concept, conversation and enterprise history issues have different canonical readers; this row combines these two current key owners.
+
+Acceptance target: Derive effective ordered key identity and constraint lifecycle, rather than equating historical declarations with current uniqueness and identifier policy.
+
+Verification limits: Current unchanged source guard APIs and inert source fixtures only. TypeScript parser independently confirms selected import/export/callback fixtures are syntactically valid; fixture bodies never execute. SQL semantics use current official PostgreSQL documentation, no database is opened. Temporary Git initialization is confined to fixture roots. Three unchanged Node suites passed31/31,34 final controls passed,and all three current CLIs exited0. No app/browser/host UI/native/provider/database/build/production acceptance; no code fix.
+
+October 9 Root033 current source qualification: Four independent CREATE/drop or primary-key replacement histories retain old uniqueness/key identity and pass; dropping the dedup column is separately refused.
+
+Acceptance target: Model effective ordered key and index/constraint lifecycle.
+
+Evidence: current source report (`audit/checklist/reviews/coverage-ecosystem-neutral-idempotency-identifier-guards-2026-10-09-033.json`, untracked); actual controls (`audit/checklist/evidence/coverage-idempotency-identifier-independent-challenge-2026-10-09-033.json`, untracked). Current unchanged source instruments and inert text/Git fixtures only. Forty distinct unchanged tests passed (31 Node and 9 Python); the independent repeat of 20 Node tests is included in those 31, not added to the distinct total. Sixty-eight fixture controls/assertions succeeded: 16 IDE, 7 conflict-marker and 45 independent idempotency/identifier cases. The 45 cases include 10 reproduced false acceptances, 22 working refusals, 34 satisfied advertised properties and one unresolved composite scope; assertion success does not mean all advertised guard properties held. Four current source CLIs exited zero. Fourteen TypeScript AST parses and 171 separate Node ESM syntax checks establish syntax only. No application/fixture module import, actual SQL/DB/migration, native/provider/browser/network/build/install/production behavior or real-checkout staging. The conflict reader-denial case imports only a copied source-guard module. Original failures and negative controls are preserved; no source fix or runtime product acceptance.
+
+## AUDIT-IDEMPOTENCY-PARTIAL-INDEX-CREDIT-01
+
+Severity: Medium. Status: open source-instrument gap.
+
+Source: `scripts/check-idempotency.mjs:62-65,164-173`. Evidence: actual refined controls (`audit/checklist/evidence/coverage-ide-idempotency-identifier-controls-2026-10-09.json`, untracked); full selected source report (`audit/checklist/reviews/coverage-ecosystem-ide-idempotency-identifier-guards-2026-10-09-018.json`, untracked).
+
+A nonunique deduplication column is rejected, but CREATE UNIQUE INDEX on that column WHERE false is inventoried exactly as a full unique key and passes the complete fixture guard. Current PostgreSQL documents that a partial unique index constrains only rows satisfying its predicate; no row satisfies false. An organization-scoped composite primary key is intentionally accepted and is retained as counterevidence. Acceptance of a per-row composite is a separate scope observation, not proof that every composite key is defective.
+
+Acceptance target: Retain index predicates and prove that the operation identity is covered; preserve legitimate organization-scoped composite constraints.
+
+Verification limits: Current unchanged source guard APIs and inert source fixtures only. TypeScript parser independently confirms selected import/export/callback fixtures are syntactically valid; fixture bodies never execute. SQL semantics use current official PostgreSQL documentation, no database is opened. Temporary Git initialization is confined to fixture roots. Three unchanged Node suites passed31/31,34 final controls passed,and all three current CLIs exited0. No app/browser/host UI/native/provider/database/build/production acceptance; no code fix.
+
+The SQL inference uses [current PostgreSQL partial-index documentation](https://www.postgresql.org/docs/current/indexes-partial.html), observed2026-10-09; applied database state remains unknown.
+
+October 9 Root033 current source qualification: An isolated UNIQUE index WHERE false passes. Missing uniqueness refuses and legitimate organization-scoped composite passes. PostgreSQL documents uniqueness only among predicate-matching rows; the false-predicate conclusion is an inference over inert SQL, not an applied database observation.
+
+Acceptance target: Retain predicates and prove operation-identity coverage; preserve legitimate scoped composites.
+
+Evidence: current source report (`audit/checklist/reviews/coverage-ecosystem-neutral-idempotency-identifier-guards-2026-10-09-033.json`, untracked); actual controls (`audit/checklist/evidence/coverage-idempotency-identifier-independent-challenge-2026-10-09-033.json`, untracked). Current unchanged source instruments and inert text/Git fixtures only. Forty distinct unchanged tests passed (31 Node and 9 Python); the independent repeat of 20 Node tests is included in those 31, not added to the distinct total. Sixty-eight fixture controls/assertions succeeded: 16 IDE, 7 conflict-marker and 45 independent idempotency/identifier cases. The 45 cases include 10 reproduced false acceptances, 22 working refusals, 34 satisfied advertised properties and one unresolved composite scope; assertion success does not mean all advertised guard properties held. Four current source CLIs exited zero. Fourteen TypeScript AST parses and 171 separate Node ESM syntax checks establish syntax only. No application/fixture module import, actual SQL/DB/migration, native/provider/browser/network/build/install/production behavior or real-checkout staging. The conflict reader-denial case imports only a copied source-guard module. Original failures and negative controls are preserved; no source fix or runtime product acceptance.
+
+## AUDIT-IDENTIFIER-NAMED-PRIMARY-KEY-01
+
+Severity: Medium. Status: open source-instrument gap.
+
+Source: `scripts/check-identifier-discipline.mjs:44-58`. Evidence: actual refined controls (`audit/checklist/evidence/coverage-ide-idempotency-identifier-controls-2026-10-09.json`, untracked); full selected source report (`audit/checklist/reviews/coverage-ecosystem-ide-idempotency-identifier-guards-2026-10-09-018.json`, untracked).
+
+The inline email primary key is rejected. Naming the otherwise ordinary table-level primary-key constraint produces a single invented column named constraint and lets an email primary key pass. The same named syntax hides the serial declaration and passes without a sequential-key exemption. The current PostgreSQL constraint syntax permits a separate constraint name; no database or active production migration is exercised.
+
+Acceptance target: Parse actual named table-constraint columns and their declarations before forbidden/sequential/client-generation policy checks.
+
+Verification limits: Current unchanged source guard APIs and inert source fixtures only. TypeScript parser independently confirms selected import/export/callback fixtures are syntactically valid; fixture bodies never execute. SQL semantics use current official PostgreSQL documentation, no database is opened. Temporary Git initialization is confined to fixture roots. Three unchanged Node suites passed31/31,34 final controls passed,and all three current CLIs exited0. No app/browser/host UI/native/provider/database/build/production acceptance; no code fix.
+
+The SQL syntax is qualified against [current PostgreSQL constraints](https://www.postgresql.org/docs/current/ddl-constraints.html), observed2026-10-09.
+
+October 9 Root033 current source qualification: Named email and sequential primary keys become an invented constraint column and pass. Equivalent inline and unnamed keys refuse. Current official constraint syntax permits naming.
+
+Acceptance target: Parse actual named table-constraint columns before policy checks.
+
+Evidence: current source report (`audit/checklist/reviews/coverage-ecosystem-neutral-idempotency-identifier-guards-2026-10-09-033.json`, untracked); actual controls (`audit/checklist/evidence/coverage-idempotency-identifier-independent-challenge-2026-10-09-033.json`, untracked). Current unchanged source instruments and inert text/Git fixtures only. Forty distinct unchanged tests passed (31 Node and 9 Python); the independent repeat of 20 Node tests is included in those 31, not added to the distinct total. Sixty-eight fixture controls/assertions succeeded: 16 IDE, 7 conflict-marker and 45 independent idempotency/identifier cases. The 45 cases include 10 reproduced false acceptances, 22 working refusals, 34 satisfied advertised properties and one unresolved composite scope; assertion success does not mean all advertised guard properties held. Four current source CLIs exited zero. Fourteen TypeScript AST parses and 171 separate Node ESM syntax checks establish syntax only. No application/fixture module import, actual SQL/DB/migration, native/provider/browser/network/build/install/production behavior or real-checkout staging. The conflict reader-denial case imports only a copied source-guard module. Original failures and negative controls are preserved; no source fix or runtime product acceptance.
+
+## AUDIT-IDENTIFIER-STRING-COMMENT-ERASURE-01
+
+Severity: Medium. Status: open source-instrument gap.
+
+Source: `scripts/check-identifier-discipline.mjs:72-74,92-98`. Evidence: actual refined controls (`audit/checklist/evidence/coverage-ide-idempotency-identifier-controls-2026-10-09.json`, untracked); full selected source report (`audit/checklist/reviews/coverage-ecosystem-ide-idempotency-identifier-guards-2026-10-09-018.json`, untracked).
+
+An array-map callback deriving id from its index is detected. Keeping that identical callback between two separate string constants containing slash-star and star-slash hides it because raw block-comment stripping erases the intervening source. TypeScript independently parses both fixture variants without syntax diagnostics. Final refinement gives both examples a real callback-bound index; the first successful unbound fixture is retained in the receipt but no longer the premise.
+
+Acceptance target: Exclude lexical comments while preserving actual source between delimiters inside strings or templates.
+
+Verification limits: Current unchanged source guard APIs and inert source fixtures only. TypeScript parser independently confirms selected import/export/callback fixtures are syntactically valid; fixture bodies never execute. SQL semantics use current official PostgreSQL documentation, no database is opened. Temporary Git initialization is confined to fixture roots. Three unchanged Node suites passed31/31,34 final controls passed,and all three current CLIs exited0. No app/browser/host UI/native/provider/database/build/production acceptance; no code fix.
+
+October 9 Root033 current source qualification: An actual indexed map callback refuses; the same callback between separate string comment delimiters passes. Both fixture texts pass syntax-only checks. True comment and stable-ID counterguards remain.
+
+Acceptance target: Remove lexical comments while preserving source between delimiters inside literals.
+
+Evidence: current source report (`audit/checklist/reviews/coverage-ecosystem-neutral-idempotency-identifier-guards-2026-10-09-033.json`, untracked); actual controls (`audit/checklist/evidence/coverage-idempotency-identifier-independent-challenge-2026-10-09-033.json`, untracked). Current unchanged source instruments and inert text/Git fixtures only. Forty distinct unchanged tests passed (31 Node and 9 Python); the independent repeat of 20 Node tests is included in those 31, not added to the distinct total. Sixty-eight fixture controls/assertions succeeded: 16 IDE, 7 conflict-marker and 45 independent idempotency/identifier cases. The 45 cases include 10 reproduced false acceptances, 22 working refusals, 34 satisfied advertised properties and one unresolved composite scope; assertion success does not mean all advertised guard properties held. Four current source CLIs exited zero. Fourteen TypeScript AST parses and 171 separate Node ESM syntax checks establish syntax only. No application/fixture module import, actual SQL/DB/migration, native/provider/browser/network/build/install/production behavior or real-checkout staging. The conflict reader-denial case imports only a copied source-guard module. Original failures and negative controls are preserved; no source fix or runtime product acceptance.
+
+October 9 Root051 source qualification: Original complete guard refuses an unbaselined '#123456' literal, but passes that same literal after const url='https://example.invalid' on the same source line. Regex // stripping deletes the actual later color with the quoted URL tail. No source fixture is compiled or rendered. The existing canonical raw comment-erasure owner already requires preservation of source when comment delimiters occur inside strings/templates. Preserve the withdrawn producer ID as an alias; zero new unique cause. Source: `scripts/check-no-hex-colors-mobile.mjs:79-95`. Frozen reading report (`audit/checklist/reviews/coverage-surface-security-source-guards-2026-10-09-051.json`, untracked); independent premise review (`audit/checklist/evidence/coverage-surface-security-independent-challenge-2026-10-09-051.json`, untracked); actual source controls (`audit/checklist/evidence/coverage-surface-security-inert-controls-2026-10-09-051.json`, untracked). Acceptance target extension: Preserve quoted contents and actual code while removing comments, so a delimiter inside a string cannot conceal later color literals. Current source instrument and inert text/value controls only. No application/fixture compilation or execution, provider/network/browser/native/SQL/database/build/install/production or whole CI acceptance; no current product or security incident asserted. Original severity, evidence, acceptance and producer provenance retained; zero new unique cause.
+
+## AUDIT-ACCOUNT-DOMINANCE-TEXT-CREDIT-01
+
+Status: Open source-instrument gap. Severity: Medium. Owner: Platform / guard owner. First seen: 2026-10-09.
+
+Account revocation guard credits unawaited, unreachable, wrong-principal and string-only gates. Source: `scripts/check-identity-account-revocation.mjs:49-56,103-117`.
+
+A properly awaited fixture passes and removing gates fails. Complete guards also pass unawaited calls, if(false) calls, calls for another account and a string containing assertAccountActive(user). Text order and brace depth do not establish awaited execution or principal binding. Current api-auth.ts bounded production branches await the gate for their returned principal; no current account bypass is demonstrated.
+
+Evidence: `coverage-identity-image-interaction-controls-2026-10-09.json` (`audit/checklist/evidence/coverage-identity-image-interaction-controls-2026-10-09.json`, untracked), cases `account-valid-awaited-gates, account-missing-gates-rejected, account-unawaited-gates-credited, account-false-conditional-gates-credited, account-wrong-principal-gates-credited, account-string-gates-credited`; full selected source reading in `coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019` (`audit/checklist/reviews/coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019.md`, untracked).
+
+Required evidence: Bind awaited reachable account checks to the returned credential subject, while preserving rejection of missing and sibling-only gates.
+
+Actual unchanged source guard APIs and isolated inert text fixtures only. TypeScript syntax parsing is independent of guard matching. Only a fixture account decision executes in an isolated VM; actual authentication/application source does not. SQL and Rust remain inert text, never applied or compiled. Five unchanged Node suites passed51/51,39 final controls passed,and five readonly current-source CLIs exited0. Two failed fixture baselines and their refinements remain preserved. No app/native/provider/database/network/browser/build/production acceptance and no source fix.
+
+## AUDIT-ACCOUNT-STATUS-CASE-AS-DENIAL-01
+
+Status: Open source-instrument gap. Severity: Medium. Owner: Platform / guard owner. First seen: 2026-10-09.
+
+Account status guard treats a case label as an access denial. Source: `scripts/check-identity-account-revocation.mjs:180-222`.
+
+Changing fixture suspended/deleted decisions to allowed:true preserves case labels and passes the complete guard. Isolated fixture VM decisions confirm both statuses allow access. A fully block-commented vocabulary is also credited. Current account-status.ts actually denies these states; current configuration deliberately allows active and deletion_scheduled so the latter retains its cancellation window.
+
+Evidence: `coverage-identity-image-interaction-controls-2026-10-09.json` (`audit/checklist/evidence/coverage-identity-image-interaction-controls-2026-10-09.json`, untracked), cases `account-status-case-allow-credited, account-comment-vocabulary-credited, account-valid-awaited-gates`; full selected source reading in `coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019` (`audit/checklist/reviews/coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019.md`, untracked).
+
+Required evidence: Verify actual denied decision outcomes and executable vocabulary rather than mere case-label presence; retain explicit allowed-state reasons.
+
+Actual unchanged source guard APIs and isolated inert text fixtures only. TypeScript syntax parsing is independent of guard matching. Only a fixture account decision executes in an isolated VM; actual authentication/application source does not. SQL and Rust remain inert text, never applied or compiled. Five unchanged Node suites passed51/51,39 final controls passed,and five readonly current-source CLIs exited0. Two failed fixture baselines and their refinements remain preserved. No app/native/provider/database/network/browser/build/production acceptance and no source fix.
+
+## AUDIT-ACCOUNT-RETURN-TYPE-BODY-01
+
+Status: Open source-instrument gap. Severity: Medium. Owner: Platform / guard owner. First seen: 2026-10-09.
+
+Account entry-point scanner mistakes an object return type for the function body. Source: `scripts/check-identity-account-revocation.mjs:60-85,139-157`.
+
+For a syntactically valid typed getClerkAuthUser returning Promise<{userId:string}|null>, functionBody extracts the object type instead of the executable body. An independent TypeScript AST confirms the omitted real body has a credential verifier. With another properly gated recognized entry point present, the complete guard passes and does not check the ungated typed entry. A fixture with no recognized funnel remains fail closed; this requires the demonstrated second funnel.
+
+Evidence: `coverage-identity-image-interaction-controls-2026-10-09.json` (`audit/checklist/evidence/coverage-identity-image-interaction-controls-2026-10-09.json`, untracked), cases `account-return-type-body-missed, account-missing-gates-rejected`; full selected source reading in `coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019` (`audit/checklist/reviews/coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019.md`, untracked).
+
+Required evidence: Find executable function bodies after complete return annotations and check each credential-bearing entry independently.
+
+Actual unchanged source guard APIs and isolated inert text fixtures only. TypeScript syntax parsing is independent of guard matching. Only a fixture account decision executes in an isolated VM; actual authentication/application source does not. SQL and Rust remain inert text, never applied or compiled. Five unchanged Node suites passed51/51,39 final controls passed,and five readonly current-source CLIs exited0. Two failed fixture baselines and their refinements remain preserved. No app/native/provider/database/network/browser/build/production acceptance and no source fix.
+
+## AUDIT-IMAGE-STATE-RELATION-COMMENT-CREDIT-01
+
+Status: Open source-instrument gap. Severity: Medium. Owner: Platform / guard owner. First seen: 2026-10-09.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main also reads the shared contract's `IMAGE_JOB_STATUSES` array, by regex over raw text like the other declarations. Line numbers for `scripts/check-image-job-states.mjs` are main's.
+
+Image state guard credits unrelated relations and commented schema/type declarations. Source: `scripts/check-image-job-states.mjs:41-77,79-115,122-130`.
+
+A valid schema passes and absent status vocabulary fails. Replacing the table name with other_jobs while retaining image constraint-name text passes the complete guard. Fully block-commented SQL and commented TypeScript status unions also pass. Raw substring and declaration matching do not bind executable constraints to the intended relation. Current migration is substantive source, but no deployed schema is inspected.
+
+Evidence: `coverage-identity-image-interaction-controls-2026-10-09.json` (`audit/checklist/evidence/coverage-identity-image-interaction-controls-2026-10-09.json`, untracked), cases `image-valid-schema, image-no-status-vocabulary-rejected, image-unrelated-table-credited, image-block-comment-schema-credited, image-commented-type-unions-credited`; full selected source reading in `coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019` (`audit/checklist/reviews/coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019.md`, untracked).
+
+Required evidence: Bind live relation-specific CHECK declarations and executable TypeScript unions, excluding commented declarations and unrelated tables.
+
+Actual unchanged source guard APIs and isolated inert text fixtures only. TypeScript syntax parsing is independent of guard matching. Only a fixture account decision executes in an isolated VM; actual authentication/application source does not. SQL and Rust remain inert text, never applied or compiled. Five unchanged Node suites passed51/51,39 final controls passed,and five readonly current-source CLIs exited0. Two failed fixture baselines and their refinements remain preserved. No app/native/provider/database/network/browser/build/production acceptance and no source fix.
+
+## AUDIT-IMAGE-STATE-CONSTRAINT-HISTORY-01
+
+Status: Open source-instrument gap. Severity: Medium. Owner: Platform / guard owner. First seen: 2026-10-09.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-image-job-states.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Image state guard retains dropped status and terminal-shape constraints. Source: `scripts/check-image-job-states.mjs:57-113`.
+
+A later fixture migration drops both status and terminal-shape CHECK constraints. Readers retain prior status/classification/terminal sets and the complete guard passes. This is a CHECK-constraint reader limitation, separate from existing primary/unique-key history findings. No actual database migration state or provider job outcome is claimed.
+
+Evidence: `coverage-identity-image-interaction-controls-2026-10-09.json` (`audit/checklist/evidence/coverage-identity-image-interaction-controls-2026-10-09.json`, untracked), cases `image-valid-schema, image-dropped-constraints-retained`; full selected source reading in `coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019` (`audit/checklist/reviews/coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019.md`, untracked).
+
+Required evidence: Fold ordered add/drop/replacement CHECK operations into final relation state before granting schema agreement.
+
+Actual unchanged source guard APIs and isolated inert text fixtures only. TypeScript syntax parsing is independent of guard matching. Only a fixture account decision executes in an isolated VM; actual authentication/application source does not. SQL and Rust remain inert text, never applied or compiled. Five unchanged Node suites passed51/51,39 final controls passed,and five readonly current-source CLIs exited0. Two failed fixture baselines and their refinements remain preserved. No app/native/provider/database/network/browser/build/production acceptance and no source fix.
+
+## AUDIT-IMAGE-ENDING-REFERENCE-CREDIT-01
+
+Status: Open source-instrument gap. Severity: Medium. Owner: Platform / guard owner. First seen: 2026-10-09.
+
+Image termination guard credits comments and unused imports as background execution. Source: `scripts/check-image-job-termination.mjs:67-68,98-112`.
+
+A real fixture background reference passes and removing it fails. Comment-only transition names in background/drain files and an unused named import also pass the complete guard. Word occurrence is sufficient for claimed reachability without the submitting request; no actual background call or reconciliation execution is established by that evidence.
+
+Evidence: `coverage-identity-image-interaction-controls-2026-10-09.json` (`audit/checklist/evidence/coverage-identity-image-interaction-controls-2026-10-09.json`, untracked), cases `termination-actual-background-reference, termination-absent-background-reference-rejected, termination-comment-only-readers-credited, termination-unused-import-credited`; full selected source reading in `coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019` (`audit/checklist/reviews/coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019.md`, untracked).
+
+Required evidence: Distinguish executable calls/reachability from comments and imports and separately establish drain reconciliation.
+
+Actual unchanged source guard APIs and isolated inert text fixtures only. TypeScript syntax parsing is independent of guard matching. Only a fixture account decision executes in an isolated VM; actual authentication/application source does not. SQL and Rust remain inert text, never applied or compiled. Five unchanged Node suites passed51/51,39 final controls passed,and five readonly current-source CLIs exited0. Two failed fixture baselines and their refinements remain preserved. No app/native/provider/database/network/browser/build/production acceptance and no source fix.
+
+## AUDIT-IMAGE-TRANSITION-DECLARATION-BOUNDARY-01
+
+Status: Open source-instrument gap. Severity: Medium. Owner: Platform / guard owner. First seen: 2026-10-09.
+
+Image transition scanner misattributes private bodies and omits exported arrow endings. Source: `scripts/check-image-job-termination.mjs:52-64`.
+
+A private SQL-ending body after an exported previous function is attributed to previous because slicing ends only at the next exported function. In a second syntactically parsed fixture the arrow cancel ending is reachable only from a route, but scanner lists only the ordinary complete function and the complete guard passes. Function declaration boundaries and supported ending forms are incomplete.
+
+Evidence: `coverage-identity-image-interaction-controls-2026-10-09.json` (`audit/checklist/evidence/coverage-identity-image-interaction-controls-2026-10-09.json`, untracked), cases `termination-private-body-misattributed, termination-arrow-ending-omitted`; full selected source reading in `coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019` (`audit/checklist/reviews/coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019.md`, untracked).
+
+Required evidence: Use balanced executable bodies and include actual exported arrow/function forms when enumerating ending transitions.
+
+Actual unchanged source guard APIs and isolated inert text fixtures only. TypeScript syntax parsing is independent of guard matching. Only a fixture account decision executes in an isolated VM; actual authentication/application source does not. SQL and Rust remain inert text, never applied or compiled. Five unchanged Node suites passed51/51,39 final controls passed,and five readonly current-source CLIs exited0. Two failed fixture baselines and their refinements remain preserved. No app/native/provider/database/network/browser/build/production acceptance and no source fix.
+
+## AUDIT-MODE-SOURCE-COMMENT-CREDIT-01
+
+Status: Open source-instrument gap. Severity: Medium. Owner: Platform / guard owner. First seen: 2026-10-09.
+
+Interaction mode guard accepts comment-only selectors, canonical bindings and request schemas. Source: `scripts/check-interaction-modes.mjs:78-114,152-155,182-185,201-222`.
+
+Valid bindings pass and absent selector markers fail. Selector marker/label and interaction-modes.json binding present only in comments pass the complete guard. A block-commented request schema also supplies its expected field and passes. Raw substring/object-key extraction establishes text presence rather than selectable or requestable behavior.
+
+Evidence: `coverage-identity-image-interaction-controls-2026-10-09.json` (`audit/checklist/evidence/coverage-identity-image-interaction-controls-2026-10-09.json`, untracked), cases `modes-valid-fixture, modes-missing-selector-marker-rejected, modes-comment-only-selector-contract-credited, modes-comment-only-schema-credited`; full selected source reading in `coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019` (`audit/checklist/reviews/coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019.md`, untracked).
+
+Required evidence: Resolve executable bindings and request-field ownership while excluding comments; retain missing marker and field rejection.
+
+Actual unchanged source guard APIs and isolated inert text fixtures only. TypeScript syntax parsing is independent of guard matching. Only a fixture account decision executes in an isolated VM; actual authentication/application source does not. SQL and Rust remain inert text, never applied or compiled. Five unchanged Node suites passed51/51,39 final controls passed,and five readonly current-source CLIs exited0. Two failed fixture baselines and their refinements remain preserved. No app/native/provider/database/network/browser/build/production acceptance and no source fix.
+
+## AUDIT-MODE-FEATURE-VOCABULARY-FAIL-OPEN-01
+
+Status: Open source-instrument gap. Severity: Low. Owner: Platform / guard owner. First seen: 2026-10-09.
+
+Interaction mode feature checks skip missing or empty feature vocabulary. Source: `scripts/check-interaction-modes.mjs:175-181,240-242`.
+
+A nonnull ghost feature is rejected against a populated registry. The same complete fixture passes when the feature registry is absent or its features object is empty, because membership checks require features.length>0. Other feature guards can independently reject a missing registry in the full chain, so this is the standalone mode instrument gap rather than a demonstrated whole-chain bypass.
+
+Evidence: `coverage-identity-image-interaction-controls-2026-10-09.json` (`audit/checklist/evidence/coverage-identity-image-interaction-controls-2026-10-09.json`, untracked), cases `modes-unknown-feature-rejected, modes-missing-feature-registry-accepted, modes-empty-feature-registry-accepted`; full selected source reading in `coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019` (`audit/checklist/reviews/coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019.md`, untracked).
+
+Required evidence: Refuse missing/empty mandatory feature vocabulary before validating nonnull mode features.
+
+Actual unchanged source guard APIs and isolated inert text fixtures only. TypeScript syntax parsing is independent of guard matching. Only a fixture account decision executes in an isolated VM; actual authentication/application source does not. SQL and Rust remain inert text, never applied or compiled. Five unchanged Node suites passed51/51,39 final controls passed,and five readonly current-source CLIs exited0. Two failed fixture baselines and their refinements remain preserved. No app/native/provider/database/network/browser/build/production acceptance and no source fix.
+
+## AUDIT-KILL-INERT-READER-CREDIT-01
+
+Status: Open source-instrument gap. Severity: Medium. Owner: Platform / guard owner. First seen: 2026-10-09.
+
+Kill switch guard credits comments and unused strings as readers and handshake wiring. Source: `scripts/check-kill-switch-readers.mjs:100-116,159-237`.
+
+A fixture reader passes and removing it fails. Reader and both handshake markers appearing only in comments still pass with read=1. An unused capability.work string also grants reader credit. Text markers do not demonstrate an admission predicate or a serialized/consumed handshake path. No actual client enforcement defect is claimed.
+
+Evidence: `coverage-identity-image-interaction-controls-2026-10-09.json` (`audit/checklist/evidence/coverage-identity-image-interaction-controls-2026-10-09.json`, untracked), cases `kill-valid-reader, kill-no-reader-rejected, kill-comment-only-reader-and-handshake-credited, kill-unused-key-string-credited`; full selected source reading in `coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019` (`audit/checklist/reviews/coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019.md`, untracked).
+
+Required evidence: Trace actual consuming admission predicates and executable handshake publication/consumption; exclude comments and unused strings.
+
+Actual unchanged source guard APIs and isolated inert text fixtures only. TypeScript syntax parsing is independent of guard matching. Only a fixture account decision executes in an isolated VM; actual authentication/application source does not. SQL and Rust remain inert text, never applied or compiled. Five unchanged Node suites passed51/51,39 final controls passed,and five readonly current-source CLIs exited0. Two failed fixture baselines and their refinements remain preserved. No app/native/provider/database/network/browser/build/production acceptance and no source fix.
+
+## AUDIT-KILL-RUST-CALLER-IDENTITY-01
+
+Status: Open source-instrument gap. Severity: Medium. Owner: Platform / guard owner. First seen: 2026-10-09.
+
+Kill switch Rust caller scan credits unrelated modules and commented calls. Source: `scripts/check-kill-switch-readers.mjs:135-155`.
+
+A gate::from_flags fixture call grants the expected reader credit; no external caller fails. An other::from_flags call and a commented gate::from_flags call both grant the original gate reader credit because only the function name and preceding separator are matched. Rust text is not compiled and actual caller/runtime enforcement remains unverified.
+
+Evidence: `coverage-identity-image-interaction-controls-2026-10-09.json` (`audit/checklist/evidence/coverage-identity-image-interaction-controls-2026-10-09.json`, untracked), cases `kill-rust-no-external-caller-rejected, kill-rust-external-caller-credited, kill-rust-unrelated-caller-credited, kill-rust-comment-caller-credited`; full selected source reading in `coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019` (`audit/checklist/reviews/coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019.md`, untracked).
+
+Required evidence: Bind executable calls to the reader module/function identity and reject commented or unrelated same-name calls.
+
+Actual unchanged source guard APIs and isolated inert text fixtures only. TypeScript syntax parsing is independent of guard matching. Only a fixture account decision executes in an isolated VM; actual authentication/application source does not. SQL and Rust remain inert text, never applied or compiled. Five unchanged Node suites passed51/51,39 final controls passed,and five readonly current-source CLIs exited0. Two failed fixture baselines and their refinements remain preserved. No app/native/provider/database/network/browser/build/production acceptance and no source fix.
+
+## AUDIT-KILL-RUST-TEST-TAIL-TRUNCATION-01
+
+Status: Open source-instrument gap. Severity: Low. Owner: Platform / guard owner. First seen: 2026-10-09.
+
+Kill switch Rust test stripping discards production code after the first test module. Source: `scripts/check-kill-switch-readers.mjs:74-77`.
+
+withoutRustTests returns only the source prefix before the first cfg(test) module marker. An inert fixture with that module first and a production gate function later strips to an empty string and is reported unread despite an external caller. This demonstrates the source-transform false negative; the fixture is not Rust-compiled and no actual native admission failure is established.
+
+Evidence: `coverage-identity-image-interaction-controls-2026-10-09.json` (`audit/checklist/evidence/coverage-identity-image-interaction-controls-2026-10-09.json`, untracked), cases `kill-rust-production-tail-truncated, kill-rust-external-caller-credited`; full selected source reading in `coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019` (`audit/checklist/reviews/coverage-ecosystem-identity-image-interaction-guards-2026-10-09-019.md`, untracked).
+
+Required evidence: Remove only balanced test-module bodies and preserve later production declarations, including multiple test modules.
+
+Actual unchanged source guard APIs and isolated inert text fixtures only. TypeScript syntax parsing is independent of guard matching. Only a fixture account decision executes in an isolated VM; actual authentication/application source does not. SQL and Rust remain inert text, never applied or compiled. Five unchanged Node suites passed51/51,39 final controls passed,and five readonly current-source CLIs exited0. Two failed fixture baselines and their refinements remain preserved. No app/native/provider/database/network/browser/build/production acceptance and no source fix.
+
+October9 endpoint-source qualification: The complete original endpoint CLI rejects an undeclared production host before a test module but accepts it after an earlier cfg(test) module or cfg(test) function, because any first matching attribute sets the scan end for the entire remaining file. This extends the existing first-test-marker tail truncation cause with zero new owner. Rust remains inert text and neither compiled nor executed; actual current production tail occurrences and caller/egress consequences remain unverified. Source: `scripts/check-no-hardcoded-endpoints.mjs:83-87,231-242`. Actual source report (`audit/checklist/reviews/coverage-model-endpoint-trust-guard-source-2026-10-09-049.json`, untracked); original endpoint gates (`audit/checklist/evidence/coverage-model-endpoint-current-source-gates-2026-10-09-049.json`, untracked); original11 observations (`audit/checklist/evidence/coverage-model-endpoint-inert-source-controls-2026-10-09-049.json`, untracked); two fresh unique-binding companions (`audit/checklist/evidence/coverage-model-endpoint-unique-binding-companions-2026-10-09-049.json`, untracked); independent premise challenge (`audit/checklist/evidence/coverage-model-endpoint-independent-challenge-2026-10-09-049.json`, untracked). Acceptance target extension: Remove only appropriately scoped test items or module bodies, preserving unrelated later production declarations and genuine host refusals; do not equate the first cfg(test) attribute with the entire remaining file. Ten original endpoint tests and the current endpoint CLI pass. Original11 observations remain7 counter shapes/4 conditional shapes; the repeated-binding growth fixture is raw physical counting only. Two fresh unique-binding companions repeat budget properties and add zero distinct properties. Fixture syntax/type/runtime validity remains unverified. Model/catalog and trust-boundary launchers are unexecuted. No application/fixture modules, native/provider/network/browser/SQL/database/compiler/build/install/production or full CI acceptance. Earlier hygiene/integrity/supply/security/RLS failures remain unresolved. Zero new cause.
+
+## DESKTOP-TEST-MIRROR-COVERAGE-01
+
+Status: Open, scoped source-qualified finding. Severity: Low. Owner: Desktop / test maintainers. First seen: 2026-10-09.
+
+Desktop command and stream tests assert test-owned mocks or copied subjects. Source: `apps/desktop/src/__tests__/updater-interval.test.ts; windows-compat.test.ts`.
+
+Changing the current UpdateChecker hydration/mounted/native-host effect or interval predicate does not affect the private shouldSkipCheck assertions. A direct Windows plugin remove/open test supplies a mock resolution, calls that mock itself and asserts the caller's own arguments; a production UI/native filesystem or shell regression is absent from its asserted path.
+
+Scope: Current source-instrument limitation only; actual suite/runtime acceptance not established.
+
+Counterevidence: Other cases import actual settings/updater/keyboard/terminal subjects and assert local state/helper/event/command mapping. Actual workflowStore actions and resulting state are asserted against native dependency mocks. Production transport/parser pagination/account/SSE/cancellation/dedup/error paths are meaningfully under assertion.
+
+Required evidence: Exercise actual updater/component and production plugin consumers or accurately label fixture-only tests, preserving meaningful actual hook/store/parser assertions and native trust/permission refusal coverage.
+
+Validation limits: Source-only current imports/control-flow/consumer comparison. No tests, coverage collection, module imports, source evaluation, timers, compiler/build, native/browser/provider/network/DB execution. No coverage percentage, test-pass or public runtime impact claim.
+
+Current source reading and qualification: `coverage-desktop-renderer-source-2026-10-09-002` (`audit/checklist/reviews/coverage-desktop-renderer-source-2026-10-09-002.md`, untracked). Root accepted the bounded producer conclusion after exact current report/packet identities, ranges, EOF and substantive STRING summaries were independently checked. Desktop001 and Desktop002 preserve one identity and the meaningful imported-subject countercoverage. No source correction or actual HTTP/native/DB/application action occurred.
+
+The existing Desktop001 identity is adopted once and extended by Desktop002 updater/windows evidence; imported production hooks/stores/parser tests remain countercoverage. This is neither a claim that all desktop tests are mirrors nor a measured production coverage percentage.
+
+## NATIVE-API-DOWNLOAD-UNDO-NO-SNAPSHOT-01
+
+Status: Open, scoped source-qualified finding. Severity: Medium. Owner: Desktop / retained native owner. First seen: 2026-10-09.
+
+API downloads advertise reversible changes that the undo dispatcher cannot restore. Source: `apps/desktop/src-tauri/src/core/llm/tool_executor/api_tools.rs:125-180`.
+
+An admitted download writes an allowed existing report.txt or new file through fs::write, then records record_tool_executed_with_path(before_content=None,after_content=None,reversible=true). That helper always marks FileModified. Selecting undo dispatches undo_file_modified, whose before_content check returns 'No before content stored for this change'; neither restore nor FileCreated deletion occurs. Existing file bytes were not preserved by this download path.
+
+Scope: Conditional retained internal Tauri source mismatch after existing mode/capability/path/public-destination admission; actual native effects and public Electron applicability unknown.
+
+Counterevidence: Common capabilities, ToolGuard, agent mode, folder/protected-path and PublicHttpClient guards remain; Safe/Plan refuse nonallowlisted api_download and missing safety state fails closed. Download rejects HTTP failure and reports disk-write failure; no receipt is made before successful write. Default api_download tier is Medium notification rather than per-action confirmation, but existing remembered denial/folder permission can prevent dispatch. No native configuration or interaction was executed. FileCreated undo deletion is a different branch and is not selected by this receipt; no deletion of an original was claimed.
+
+Required evidence: A current download path that records correct creation versus modification, preserves prior bytes for overwrites and supplies an undoable receipt, or a verified caller contract proving this action cannot be offered/admitted, removes this condition.
+
+Validation limits: not-run: current source/control-flow/contracts only; no Rust/native/app/browser/provider/network/DB/build/test/install action. Source-supported retained internal Tauri condition, not product/public Electron acceptance or observed side effect.
+
+Current source reading and qualification: `coverage-retained-native-source-2026-10-09-022` (`audit/checklist/reviews/coverage-retained-native-source-2026-10-09-022.md`, untracked). Root accepted the bounded producer conclusion after exact current report/packet identities, ranges, EOF and substantive STRING summaries were independently checked. Download undo reports missing before content; it does not enter FileCreated deletion or establish deletion of originals. No source correction or actual HTTP/native/DB/application action occurred.
+
+## NATIVE-API-CALL-CONTRACT-NARROWING-01
+
+Status: Open, scoped source-qualified finding. Severity: Medium. Owner: Desktop / retained native owner. First seen: 2026-10-09.
+
+Generic API tool narrows its registered body, method and option contract. Source: `apps/desktop/src-tauri/src/core/llm/tool_executor/api_tools.rs:12-48`.
+
+A permitted POST with body:{"name":"example"} follows the registered Object parameter but becomes ApiRequest.body=None because handler only accepts Value::as_str. A permitted method HEAD or OPTIONS is mapped to HttpMethod::Get, while result metadata still echoes the requested method. If the model supplies advertised query_params/auth/timeout_ms, the normal current ToolGuard rejects those parameter names before dispatch; the handler separately constructs empty query params/AuthType::None/fixed30s. Thus these fields are rejected rather than silently applied, and optional object bodies/methods are silently narrowed.
+
+Scope: Conditional retained internal Tauri source mismatch after existing mode/capability/path/public-destination admission; actual native effects and public Electron applicability unknown.
+
+Counterevidence: API call requires user confirmation by default and agent mode/capability/public-destination checks remain. Manual headers and string body can still be represented by the handler; supported GET/POST/PUT/PATCH/DELETE cases avoid method fallback. ApiState execute_public_request reaches the public client; downstream HttpMethod itself supports Head/Options, so this is not an unsupported downstream enum assertion. Guard rejects unallowed option keys; it does not permit arbitrary auth/query/timeout options through the mounted route. This limits the original dropped-options lead.
+
+Required evidence: One canonical registered schema/policy/handler agreement that preserves supported JSON/string bodies, explicit HttpMethod variants and allowed options, or removes those declarations with accurate visible semantics, removes the mismatch.
+
+Validation limits: not-run: current source/control-flow/contracts only; no Rust/native/app/browser/provider/network/DB/build/test/install action. Source-supported retained internal Tauri condition, not product/public Electron acceptance or observed side effect.
+
+Current source reading and qualification: `coverage-retained-native-source-2026-10-09-022` (`audit/checklist/reviews/coverage-retained-native-source-2026-10-09-022.md`, untracked). Root accepted the bounded producer conclusion after exact current report/packet identities, ranges, EOF and substantive STRING summaries were independently checked. Generic API options are rejected by the normal guard; admitted object bodies and HEAD/OPTIONS are narrowed by the handler. No source correction or actual HTTP/native/DB/application action occurred.
+
+## AUDIT-LEGAL-HOLD-SAME-TABLE-OVERWRITE-01
+
+Status: Open source-instrument gap. Severity: Medium. Owner: Platform / legal-hold guard owner. First seen:2026-10-09.
+
+Legal hold scanner lets a later gated delete hide an earlier ungated delete. Source: `scripts/check-legal-hold-coverage.mjs:180-188,204-207`.
+
+One ungated delete is rejected and one predicate-bearing delete is credited. In the complete isolated guard, an ungated delete followed by a gated delete of web_conversations yields no errors or unguarded sites; reversing their order yields one unguarded site. The destroyed Map overwrites the earlier entry for the table. Both statements are syntactically parsed and present, but only the last statement supplies gating credit. No actual SQL/delete/hold race is executed.
+
+Evidence: `coverage-ledger-legal-hold-controls-2026-10-09.json` (`audit/checklist/evidence/coverage-ledger-legal-hold-controls-2026-10-09.json`, untracked), cases `one-ungated-delete-rejected, one-in-statement-predicate-credited, ungated-before-gated-same-table-hidden, gated-before-ungated-same-table-rejected`. Selected source reading: `coverage-ecosystem-ledger-legal-hold-guards-2026-10-09-020` (`audit/checklist/reviews/coverage-ecosystem-ledger-legal-hold-guards-2026-10-09-020.md`, untracked).
+
+Required evidence: Preserve every destructive statement, or aggregate same-table results so any ungated statement remains an open site regardless of order.
+
+Current unchanged source guard APIs and parsed inert TypeScript fixtures only. Contract/gate/baseline/migration bytes copied into fresh temporary roots establish guard inputs, never semantic reading or product behavior. No application module executes, no SQL is applied and no native/provider/database/network/browser/build action occurs.29 unchanged textual guard tests and8 isolated controls passed;2 readonly current-source CLIs exited0. Source remains unchanged.
+
+## AUDIT-LEGAL-HOLD-INERT-GATE-CREDIT-01
+
+Status: Open source-instrument gap. Severity: Medium. Owner: Platform / legal-hold guard owner. First seen:2026-10-09.
+
+Legal hold scanner credits unused refusal strings, unreachable calls and fake exclusion predicates. Source: `scripts/check-legal-hold-coverage.mjs:25,176-188`.
+
+The complete isolated guard rejects a bare ungated delete. Adding an unused isSubjectUnderLegalHold string or a call inside if(false) credits the whole module and clears unguarded sites. A fakeExclusion object with sql:true text interpolated in the delete also passes by its variable name. Comment-only refusal is correctly excluded, limiting the conclusion: this is executable-looking text/identifier credit rather than general comment credit. Current gate/source copies preserve known contract checks; no product hold enforcement failure is inferred.
+
+Evidence: `coverage-ledger-legal-hold-controls-2026-10-09.json` (`audit/checklist/evidence/coverage-ledger-legal-hold-controls-2026-10-09.json`, untracked), cases `one-ungated-delete-rejected, unused-refusal-string-credited, unreachable-refusal-call-credited, fake-exclusion-true-credited, comment-only-refusal-not-credited`. Selected source reading: `coverage-ecosystem-ledger-legal-hold-guards-2026-10-09-020` (`audit/checklist/reviews/coverage-ecosystem-ledger-legal-hold-guards-2026-10-09-020.md`, untracked).
+
+Required evidence: Bind reachable awaited refusal outcomes or genuine hold predicates to each destructive statement and reject unused, unreachable or unrelated same-name markers.
+
+Current unchanged source guard APIs and parsed inert TypeScript fixtures only. Contract/gate/baseline/migration bytes copied into fresh temporary roots establish guard inputs, never semantic reading or product behavior. No application module executes, no SQL is applied and no native/provider/database/network/browser/build action occurs.29 unchanged textual guard tests and8 isolated controls passed;2 readonly current-source CLIs exited0. Source remains unchanged.
+
+## AUDIT-LIFECYCLE-READ-MARKER-TEXT-CREDIT-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Lifecycle read guard accepts qualified projections and SQL data as withdrawal filtering. Source: `scripts/check-lifecycle-semantics.mjs:566-571,602-608`.
+
+The complete guard rejects an aliased read without a marker and an unqualified SELECT marker projection, and accepts a real predicate. It also accepts SELECT c.deleted_at without a WHERE predicate, a SQL data string c.deleted_at, and a SQL data string containing a declared helper symbol without any helper call. markerSatisfied checks qualified-token presence anywhere; the helper path checks a substring anywhere in the statement. This proves source-gate false credit, not execution or actual withdrawn-row disclosure.
+
+Acceptance target: Distinguish SQL predicates/helper invocation from projection/data text and reject these complete-fixture cases while retaining correctly filtered and documented exemption controls.
+
+Validation and limits: Current unchanged source-instrument APIs over syntactically parsed inert fixtures only. Thirty unchanged tests and twenty-one independent complete-guard controls passed; two sandboxed literal-template computations execute no application code, SQL or I/O. The current source CLI exits1 with three unrecorded file/table reads, retained as instrument output rather than promoted product defects. No source/config/tool/application/native/provider/database/network/browser/build edit or run; copied fixture inputs and metadata supply no semantic reading credit.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-lifecycle-semantics-guards-2026-10-09-021.json`, untracked); independent controls (`audit/checklist/evidence/coverage-lifecycle-semantics-independent-controls-2026-10-09-021.json`, untracked).
+
+## AUDIT-LIFECYCLE-FRAGMENT-SCOPE-CREDIT-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Lifecycle template expansion credits predicates from unselected branches and unrelated scopes. Source: `scripts/check-lifecycle-semantics.mjs:332-344,453-474`.
+
+Both a true ternary selecting SQL true instead of active and an unrelated nested function declaring active=deleted_at is null make the complete guard accept an unaliased read. Two isolated literal computations independently produce select id from web_conversations where true. literalBindings stores one global value per name and renderExpression appends every referenced identifier binding without branch or scope identity. The unconditional/conditional list-push distinction remains a real rejecting counterguard.
+
+Acceptance target: Bind fragments to their lexical declaration and conservatively retain every possible statement branch; no predicate from an unselected branch or unrelated scope may discharge the current statement.
+
+Validation and limits: Current unchanged source-instrument APIs over syntactically parsed inert fixtures only. Thirty unchanged tests and twenty-one independent complete-guard controls passed; two sandboxed literal-template computations execute no application code, SQL or I/O. The current source CLI exits1 with three unrecorded file/table reads, retained as instrument output rather than promoted product defects. No source/config/tool/application/native/provider/database/network/browser/build edit or run; copied fixture inputs and metadata supply no semantic reading credit.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-lifecycle-semantics-guards-2026-10-09-021.json`, untracked); independent controls (`audit/checklist/evidence/coverage-lifecycle-semantics-independent-controls-2026-10-09-021.json`, untracked).
+
+## AUDIT-LIFECYCLE-INERT-MUTATION-CREDIT-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Lifecycle recovery sharing and erasure owners receive credit from inert text. Source: `scripts/check-lifecycle-semantics.mjs:701-707,723-729,785-797,871-886`.
+
+The complete guard rejects owners missing required marker/table text. An unused deleted_at string satisfies restore ownership, a comment containing delete from web_conversations satisfies purge, an unused published_artifacts string satisfies revocation, and an unused retrieval_documents string supplies a hard-delete root and derived embedding cascade credit. None of those replacement fixture owners contains the required SQL mutation. This groups related textual owner-credit conditions without claiming any actual product mutation failure.
+
+Acceptance target: Establish a reachable relevant mutation/declared executable writer at each owner; comments and unused table/column strings must not confer restore, purge, revocation or cascading erasure credit.
+
+Validation and limits: Current unchanged source-instrument APIs over syntactically parsed inert fixtures only. Thirty unchanged tests and twenty-one independent complete-guard controls passed; two sandboxed literal-template computations execute no application code, SQL or I/O. The current source CLI exits1 with three unrecorded file/table reads, retained as instrument output rather than promoted product defects. No source/config/tool/application/native/provider/database/network/browser/build edit or run; copied fixture inputs and metadata supply no semantic reading credit.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-lifecycle-semantics-guards-2026-10-09-021.json`, untracked); independent controls (`audit/checklist/evidence/coverage-lifecycle-semantics-independent-controls-2026-10-09-021.json`, untracked).
+
+## AUDIT-LIFECYCLE-RETAINED-CASCADE-MISS-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Lifecycle retained-store check ignores erasure that reaches a child by cascade. Source: `scripts/check-lifecycle-semantics.mjs:955-973`.
+
+A syntactically valid fixture schema declares retrieval_chunks.document_id referencing retrieval_documents ON DELETE CASCADE and marks retrieval_chunks retained. The complete guard rejects direct DELETE FROM retrieval_chunks, but accepts DELETE FROM retrieval_documents from the same declared owner. checkHardDelete computes reached=cascadeClosure yet checks only cleared.has(table) for retained stores. The source-level retained obligation therefore omits a schema-derived destructive path; no database cascade executes.
+
+Acceptance target: Apply retained-store protection to all erasure-reached members, including cascades; retain direct-delete rejection and nonretained cascade coverage.
+
+Validation and limits: Current unchanged source-instrument APIs over syntactically parsed inert fixtures only. Thirty unchanged tests and twenty-one independent complete-guard controls passed; two sandboxed literal-template computations execute no application code, SQL or I/O. The current source CLI exits1 with three unrecorded file/table reads, retained as instrument output rather than promoted product defects. No source/config/tool/application/native/provider/database/network/browser/build edit or run; copied fixture inputs and metadata supply no semantic reading credit.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-lifecycle-semantics-guards-2026-10-09-021.json`, untracked); independent controls (`audit/checklist/evidence/coverage-lifecycle-semantics-independent-controls-2026-10-09-021.json`, untracked).
+
+## AUDIT-SCHEDULE-CLOCK-IMPORT-CLOSURE-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Schedule clock guard omits an explicitly imported TypeScript child. Source: `scripts/check-schedule-clock-injection.mjs:24-35,47-50`.
+
+The complete guard rejects Date.now() in an extensionless child import, but accepts the same child when the root imports ./clock.ts. The root and child pass TypeScript module resolution/typechecking with allowImportingTsExtensions and noEmit. resolveImport appends .ts/.tsx/index.ts to a path already naming the existing file and returns null; the closure contains only the root and missing dependency resolution produces no error. This is a controlled source-closure gap, not evidence that a current schedule uses ambient time.
+
+Acceptance target: Resolve a directly named existing supported source file and fail closed on unresolved in-scope relative imports; preserve extensionless/two-hop and missing-root rejecting controls.
+
+Validation and limits: Unchanged source guard APIs/CLIs over independently constructed inert TypeScript source text. Twenty-four unchanged tests and twenty-two independent controls pass; 33 fixture syntax parses and four schedule type/module-resolution checks execute no fixture/app modules or clocks. Two current readonly source CLIs pass. Lock/build home-path CLI was not invoked. No crypto, DB/SQL, schedule/job, native/provider/network/browser/build/application execution or source/config/tool edits. Instrument scans, copied fixtures and metadata give no additional source EOF credit.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-build-schedule-security-key-guards-2026-10-09-022.json`, untracked); independent controls (`audit/checklist/evidence/coverage-build-schedule-security-key-controls-2026-10-09-022.json`, untracked).
+
+## AUDIT-SCHEDULE-CLOCK-LEXICAL-SCAN-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Schedule clock lexical matcher misses valid calls and rejects inert text. Source: `scripts/check-schedule-clock-injection.mjs:21-22,70-77`.
+
+The complete guard rejects direct Date.now() and accepts an injected clock value. It also accepts `Date['now']()`, `Date . now()`, and `Date.now /* preserved syntax */ ()`, each of which passes TypeScript typechecking. Conversely, a comment or string containing Date.now() makes the guard fail without any executable ambient call. The raw regular expression neither resolves supported member/call syntax nor excludes comments/data. No ambient clock or application module was executed.
+
+Acceptance target: Inspect executable ambient clock operations through lexical/syntax identity and exclude inert text; cover alternate valid member syntax and preserve explicit injected-time acceptance.
+
+Validation and limits: Unchanged source guard APIs/CLIs over independently constructed inert TypeScript source text. Twenty-four unchanged tests and twenty-two independent controls pass; 33 fixture syntax parses and four schedule type/module-resolution checks execute no fixture/app modules or clocks. Two current readonly source CLIs pass. Lock/build home-path CLI was not invoked. No crypto, DB/SQL, schedule/job, native/provider/network/browser/build/application execution or source/config/tool edits. Instrument scans, copied fixtures and metadata give no additional source EOF credit.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-build-schedule-security-key-guards-2026-10-09-022.json`, untracked); independent controls (`audit/checklist/evidence/coverage-build-schedule-security-key-controls-2026-10-09-022.json`, untracked).
+
+## AUDIT-SECURITY-KEY-INERT-CALLER-CREDIT-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-org-permissions.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Key lifecycle reachability credits comments strings and unused imports. Source: `scripts/check-security-key-lifecycle.mjs:225-229`.
+
+The complete CLI rejects an uncalled crypto lifecycle export and ignores an own-test reference, and accepts an actual foreign caller. A foreign production comment, data string or unused import containing the export name also changes the complete CLI to exit0 without any lifecycle invocation. called scans a word-boundary symbol anywhere in each other production file. The existing maintenance-script import test documents reference-level coverage, but cannot establish callable/reachable lifecycle execution.
+
+Acceptance target: Require a resolved executable caller/reference that makes the specific lifecycle action reachable; comments/data/unused imports must not discharge it, while genuine maintenance callers and scoped exceptions retain coverage.
+
+Validation and limits: Unchanged source guard APIs/CLIs over independently constructed inert TypeScript source text. Twenty-four unchanged tests and twenty-two independent controls pass; 33 fixture syntax parses and four schedule type/module-resolution checks execute no fixture/app modules or clocks. Two current readonly source CLIs pass. Lock/build home-path CLI was not invoked. No crypto, DB/SQL, schedule/job, native/provider/network/browser/build/application execution or source/config/tool edits. Instrument scans, copied fixtures and metadata give no additional source EOF credit.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-build-schedule-security-key-guards-2026-10-09-022.json`, untracked); independent controls (`audit/checklist/evidence/coverage-build-schedule-security-key-controls-2026-10-09-022.json`, untracked).
+
+October 9 organization/pagination/tier source qualification: Complete CLI rejects an unchecked mutation but accepts a named permission terminal referenced only as void requireMemberPermission within PUT. A separately evaluated literal synthetic function with injected counter records0calls; service terminal definitions remain valid. This extends the existing reference-as-execution owner with AST identifier graph credit rather than duplicating it.
+
+Additional source: `scripts/check-org-permissions.mjs:259-266,325-335,351-379`. Acceptance target: Require a resolved executable call or effect-bearing reference that establishes the relevant action on its path; inert function references do not establish a permission check. Current source report (`audit/checklist/reviews/coverage-ecosystem-org-pagination-tier-guards-2026-10-09-029.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-org-pagination-tier-independent-controls-2026-10-09-029.json`, untracked). Unchanged complete source guard APIs/CLIs and isolated inert TypeScript/TSX/SQL/Git fixtures only.37 unchanged Node tests and31 independent controls passed;220 fixture syntax parses establish syntax only. Four current source CLIs exited0. Literal fixtures extracted via actual TypeScript AST values, copied role CLI byte identity and nonempty complete CLI output are independently asserted; organization fixtures run fresh subprocesses to avoid graph-cache cross-case state. One literal synthetic function with an injected counter executes in a VM and proves zero terminal calls. No application/fixture module imports, actual authorization/mutation, SQL/database, native host, provider, network, browser, React mount, build, install, production action or real checkout staging. Git init/census and unchanged tests bind throwaway roots with inherited GIT variables scrubbed. Source/tool/config files remain unchanged; no deployed incident or runtime acceptance is established.
+
+## AUDIT-SECURITY-KEY-EXPORT-OMISSION-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Key lifecycle enumeration misses valid export-list default and indented exports. Source: `scripts/check-security-key-lifecycle.mjs:71,104-111,221-223`.
+
+A directly exported uncalled rotateWorkspaceKey in a crypto module makes the complete CLI fail. The same uncalled operation exported through export {rotateWorkspaceKey}, an indented export function, or export default function passes with zero enumerated lifecycle operations. Every source form passes TypeScript syntax parsing. The anchored /^export ... (function|const)/ scanner does not enumerate those valid declarations. No missing current product key operation is asserted.
+
+Acceptance target: Enumerate supported exported lifecycle bindings by syntax/export resolution, including export lists/defaults/leading whitespace, and retain verb/key-material/nonproduction classification controls.
+
+Validation and limits: Unchanged source guard APIs/CLIs over independently constructed inert TypeScript source text. Twenty-four unchanged tests and twenty-two independent controls pass; 33 fixture syntax parses and four schedule type/module-resolution checks execute no fixture/app modules or clocks. Two current readonly source CLIs pass. Lock/build home-path CLI was not invoked. No crypto, DB/SQL, schedule/job, native/provider/network/browser/build/application execution or source/config/tool edits. Instrument scans, copied fixtures and metadata give no additional source EOF credit.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-build-schedule-security-key-guards-2026-10-09-022.json`, untracked); independent controls (`audit/checklist/evidence/coverage-build-schedule-security-key-controls-2026-10-09-022.json`, untracked).
+
+## AUDIT-SECURITY-KEY-STORE-MARKER-CREDIT-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Sealed-store registry credit requires marker text without the corresponding writer. Source: `scripts/check-security-key-lifecycle.mjs:169-179,258-267`.
+
+The complete CLI rejects an unregistered workspace-sealing module and rejects registry table/column/context markers absent from its source. Appending only a comment or unused string containing those three declared markers makes the complete CLI pass, while the fixture function performs no database table/column write or matching context use. workspaceSealFailures accepts source.includes(literal), conferring consistency credit on inert text. This proves an instrument gap; no cryptographic store or key retirement executes.
+
+Acceptance target: Tie each registry field to the actual sealing/writer/context use in its declared module; inert comments/data must not satisfy the coverage proof, with missing/stale registry entries still rejected.
+
+Validation and limits: Unchanged source guard APIs/CLIs over independently constructed inert TypeScript source text. Twenty-four unchanged tests and twenty-two independent controls pass; 33 fixture syntax parses and four schedule type/module-resolution checks execute no fixture/app modules or clocks. Two current readonly source CLIs pass. Lock/build home-path CLI was not invoked. No crypto, DB/SQL, schedule/job, native/provider/network/browser/build/application execution or source/config/tool edits. Instrument scans, copied fixtures and metadata give no additional source EOF credit.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-build-schedule-security-key-guards-2026-10-09-022.json`, untracked); independent controls (`audit/checklist/evidence/coverage-build-schedule-security-key-controls-2026-10-09-022.json`, untracked).
+
+## AUDIT-FAILURE-SKIP-LEXICAL-CREDIT-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-llm-failure-guardrails.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Failure guard skip accounting confuses physical lines and inert annotation text. Source: `scripts/check-llm-failure-guardrails.mjs:170-186,213-232`.
+
+The complete default guard rejects an undeclared test.skip and accepts a real nearby allow comment. Prefixing the executable skip with a closed block comment makes census omit it; an inert string or interior block-comment line containing test.skip creates a false debt site. A nearby unused string containing llm-guardrail-allow: justifies a real skip without a comment directive. isCommentLine classifies the entire physical line and annotation search checks unrestricted text. No application test is executed.
+
+Acceptance target: Classify executable skip sites and actual comment directives with lexical context; closed comment prefixes must not hide following code, and inert strings/block comments must not create skip debt or justification.
+
+Validation and limits: Current unchanged source guards and fully read pure scanner/field-policy APIs only.32 unchanged tests and27 independent complete-guard controls pass;66 fixture syntax parses and3 inert literal expression computations use synthetic values. Git init/add only in disposable fixtures. On the 2026-09-27 copy the failure CLI exited 1 with 77 records under 7 nested checkouts, which main's `git ls-files` inventory no longer reads; both log CLIs exited 0, retaining Node module-type warnings. No real logger/skip/test/credential, app entrypoint, native/provider/database/network/browser/build effects or source/config/tool edits. Instrument scans, copied source and metadata grant no additional semantic EOF credit.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-llm-error-log-guards-2026-10-09-023.json`, untracked); independent controls (`audit/checklist/evidence/coverage-llm-error-log-independent-controls-2026-10-09-023.json`, untracked).
+
+October9 endpoint-source qualification: The complete original endpoint CLI with all original21budget entries retained rejects a direct undeclared host literal but accepts that same declaration after a closed leading block comment on the physical line. It also counts a host inside a non-star-prefixed block-comment interior as an undeclared production literal, while the star-prefixed and single-line comment companions pass. This extends the existing physical-line/comment lexical-ownership cause, preserving its skip/directive observations rather than creating a duplicate endpoint ID. No actual outbound endpoint, current host leak, production bypass or provider request is established. Source: `scripts/check-no-hardcoded-endpoints.mjs:73-80,231-242`. Actual source report (`audit/checklist/reviews/coverage-model-endpoint-trust-guard-source-2026-10-09-049.json`, untracked); original endpoint gates (`audit/checklist/evidence/coverage-model-endpoint-current-source-gates-2026-10-09-049.json`, untracked); original11 observations (`audit/checklist/evidence/coverage-model-endpoint-inert-source-controls-2026-10-09-049.json`, untracked); two fresh unique-binding companions (`audit/checklist/evidence/coverage-model-endpoint-unique-binding-companions-2026-10-09-049.json`, untracked); independent premise challenge (`audit/checklist/evidence/coverage-model-endpoint-independent-challenge-2026-10-09-049.json`, untracked). Acceptance target extension: Treat comment ownership with lexical scope at host and skip census sites, preserving following executable source after closed comment prefixes while excluding actual block-comment interiors and retaining genuine undeclared/over-budget/stale refusals. Ten original endpoint tests and the current endpoint CLI pass. Original11 observations remain7 counter shapes/4 conditional shapes; the repeated-binding growth fixture is raw physical counting only. Two fresh unique-binding companions repeat budget properties and add zero distinct properties. Fixture syntax/type/runtime validity remains unverified. Model/catalog and trust-boundary launchers are unexecuted. No application/fixture modules, native/provider/network/browser/SQL/database/compiler/build/install/production or full CI acceptance. Earlier hygiene/integrity/supply/security/RLS failures remain unresolved. Zero new cause.
+
+## AUDIT-FAILURE-GIT-PATH-OMISSION-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present, and wider. Main's 92b90108f9 replaced the whole-tree walk with the same newline-split `git ls-files` listing, so quoted names now drop from whole-tree scans as well as staged and changed ones. Line numbers for `scripts/check-llm-failure-guardrails.mjs` are main's.
+
+Failure guard staged scan drops quoted Git filenames. Source: `scripts/check-llm-failure-guardrails.mjs:133-149,450-454`.
+
+An ordinary staged production source containing a forbidden stub makes the complete guard fail. The same content under a newline-bearing filename fails a whole-tree scan, but its staged scan passes; a non-ASCII staged name also passes. Git emits quoted/escaped names and gitFiles splits/trims them as literal filesystem paths, then filters them out because existsSync does not resolve the quoted representation. Staging only occurred inside disposable fixture repositories.
+
+Acceptance target: Use NUL-safe Git filename enumeration and exact path preservation; staged special-name sources must retain the same enforcement as ordinary/whole-tree controls.
+
+Validation and limits: Current unchanged source guards and fully read pure scanner/field-policy APIs only.32 unchanged tests and27 independent complete-guard controls pass;66 fixture syntax parses and3 inert literal expression computations use synthetic values. Git init/add only in disposable fixtures. On the 2026-09-27 copy the failure CLI exited 1 with 77 records under 7 nested checkouts, which main's `git ls-files` inventory no longer reads; both log CLIs exited 0, retaining Node module-type warnings. No real logger/skip/test/credential, app entrypoint, native/provider/database/network/browser/build effects or source/config/tool edits. Instrument scans, copied source and metadata grant no additional semantic EOF credit.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-llm-error-log-guards-2026-10-09-023.json`, untracked); independent controls (`audit/checklist/evidence/coverage-llm-error-log-independent-controls-2026-10-09-023.json`, untracked).
+
+## AUDIT-FAILURE-NESTED-CHECKOUT-SCAN-01
+
+Status: Open, scoped source-instrument finding. Severity: Low. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+The workspace script check walks the filesystem into nested Git checkouts such as `.worktrees/`, so a package name declared only inside a nested checkout satisfies a `pnpm --filter` target the workspace itself lacks. Source: `scripts/check-workspace-scripts.mjs:10-33,63-81`.
+
+October 9 source-guard qualification: The original workspace-script check rejects a missing filter target but accepts it when only an unrelated nested-checkout-shaped .worktrees manifest supplies that package name outside the inert declared apps/* workspace. The fixture initializes no nested Git repository. Crossing outer source boundaries supplies positive package-name credit. Current original CLI is green; no actual missing current workspace target or package command executes. Actual source reading (`audit/checklist/reviews/coverage-cache-version-workflow-guard-source-2026-10-09-048.json`, untracked); original engine controls (`audit/checklist/evidence/coverage-cache-version-workflow-inert-controls-2026-10-09-048.json`, untracked); valid companions (`audit/checklist/evidence/coverage-cache-version-workflow-valid-companions-2026-10-09-048.json`, untracked); independent challenge (`audit/checklist/evidence/coverage-cache-version-workflow-independent-challenge-2026-10-09-048.json`, untracked).
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present; `walk` descends every directory outside its fixed ignore list. On the 2026-09-27 copy this was found on, the failure, hygiene, integrity and supply-chain guards walked the filesystem the same way and failed on 77, 27, 21 and 31 findings under nested checkouts. Main's 92b90108f9 (2026-09-28) moved those four guards to `git ls-files -c -o --exclude-standard`, which skips the ignored `.worktrees/` and does not descend into other nested repositories, so that part of this finding is closed on main.
+
+Acceptance target: Define and enforce the current checkout scan boundary, accounting for nested VCS/worktree ownership without broadly exempting genuine current first-party source; preserve ordinary-source enforcement.
+
+## AUDIT-LOG-REDACTION-QUOTED-FIELD-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Log redaction field scanner omits quoted and computed personal keys. Source: `scripts/check-log-redaction.mjs:67-72,98-114`.
+
+With empty declared baseline, the complete redaction guard rejects an unquoted email property but accepts the same field spelled as a quoted or computed literal key. codeOfCall strips key literals and loggedFields only recognizes bare identifier properties. The current runtime name policy still classifies email as personal/denied; this is call-site instrument omission, not observed log disclosure.
+
+Acceptance target: Resolve statically known quoted/computed object field names before applying the current policy, preserving shorthand/explicit/prose controls.
+
+Validation and limits: Current unchanged source guards and fully read pure scanner/field-policy APIs only.32 unchanged tests and27 independent complete-guard controls pass;66 fixture syntax parses and3 inert literal expression computations use synthetic values. Git init/add only in disposable fixtures. On the 2026-09-27 copy the failure CLI exited 1 with 77 records under 7 nested checkouts, which main's `git ls-files` inventory no longer reads; both log CLIs exited 0, retaining Node module-type warnings. No real logger/skip/test/credential, app entrypoint, native/provider/database/network/browser/build effects or source/config/tool edits. Instrument scans, copied source and metadata grant no additional semantic EOF credit.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-llm-error-log-guards-2026-10-09-023.json`, untracked); independent controls (`audit/checklist/evidence/coverage-llm-error-log-independent-controls-2026-10-09-023.json`, untracked).
+
+## AUDIT-LOG-CALL-LEXICAL-BOUNDARY-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Log scanners count parentheses inside message literals as call boundaries. Source: `apps/web/lib/identity/log-hygiene.ts:36-61; scripts/check-log-redaction.mjs:44,75-94`.
+
+Both complete guard APIs can accept calls when a closing parenthesis inside the first message string truncates the raw call scan before later structured data. Redaction detects email in an ordinary message call but misses it after a message containing only a closing parenthesis; hygiene detects bare prompt in an ordinary call but misses it in the corresponding truncated form. Both scanners increment/decrement depth without literal lexical state. No actual logger is invoked.
+
+Acceptance target: Share or consistently implement lexical call boundaries that ignore literal/comment punctuation; keep nested-call and prose stripping controls.
+
+Validation and limits: Current unchanged source guards and fully read pure scanner/field-policy APIs only.32 unchanged tests and27 independent complete-guard controls pass;66 fixture syntax parses and3 inert literal expression computations use synthetic values. Git init/add only in disposable fixtures. On the 2026-09-27 copy the failure CLI exited 1 with 77 records under 7 nested checkouts, which main's `git ls-files` inventory no longer reads; both log CLIs exited 0, retaining Node module-type warnings. No real logger/skip/test/credential, app entrypoint, native/provider/database/network/browser/build effects or source/config/tool edits. Instrument scans, copied source and metadata grant no additional semantic EOF credit.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-llm-error-log-guards-2026-10-09-023.json`, untracked); independent controls (`audit/checklist/evidence/coverage-llm-error-log-independent-controls-2026-10-09-023.json`, untracked).
+
+## AUDIT-LOG-HYGIENE-PROPERTY-REFERENCE-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+LLM log hygiene misses banned content referenced as an object property. Source: `apps/web/lib/identity/log-hygiene.ts:76-85; scripts/check-llm-log-hygiene.mjs:77-84`.
+
+Complete hygiene rejects a structured value sourced from bare prompt, accepts the same banned-name property request.prompt under value, and rejects request . prompt after whitespace alone is changed. BANNED disallows an immediately preceding dot and does not follow field provenance. Redaction also accepts the innocuous value key. This is a source-instrument gap under its raw-content rule; actual runtime logging/redaction and product disclosure are unknown.
+
+Acceptance target: Recognize relevant supported property reference forms/provenance consistently instead of granting content credit based on immediate punctuation; retain derived measurement/prose controls.
+
+Validation and limits: Current unchanged source guards and fully read pure scanner/field-policy APIs only.32 unchanged tests and27 independent complete-guard controls pass;66 fixture syntax parses and3 inert literal expression computations use synthetic values. Git init/add only in disposable fixtures. On the 2026-09-27 copy the failure CLI exited 1 with 77 records under 7 nested checkouts, which main's `git ls-files` inventory no longer reads; both log CLIs exited 0, retaining Node module-type warnings. No real logger/skip/test/credential, app entrypoint, native/provider/database/network/browser/build effects or source/config/tool edits. Instrument scans, copied source and metadata grant no additional semantic EOF credit.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-llm-error-log-guards-2026-10-09-023.json`, untracked); independent controls (`audit/checklist/evidence/coverage-llm-error-log-independent-controls-2026-10-09-023.json`, untracked).
+
+## AUDIT-LOG-REDACTION-MEASUREMENT-CREDIT-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Log redaction credits compound expressions from a measurement-looking substring. Source: `scripts/check-log-redaction.mjs:46-48,118-127`.
+
+Complete redaction rejects raw query:q and accepts simple query:q.length. It also accepts q.length && q, Boolean(q) && q and Number(q) || q under query. Three inert computations with only synthetic q return strings, and the same pure deniedValueSurvives(query, value) rejects each actual result. classifyField supplies a numeric/Boolean proxy and SURVIVING_EXPRESSION matches the whole compound expression only by prefix or substring. No user query or runtime log is used.
+
+Acceptance target: Accept only expressions whose complete result satisfies the field policy, conservatively handling compound operators/branches; preserve simple count and presence controls.
+
+Validation and limits: Current unchanged source guards and fully read pure scanner/field-policy APIs only.32 unchanged tests and27 independent complete-guard controls pass;66 fixture syntax parses and3 inert literal expression computations use synthetic values. Git init/add only in disposable fixtures. On the 2026-09-27 copy the failure CLI exited 1 with 77 records under 7 nested checkouts, which main's `git ls-files` inventory no longer reads; both log CLIs exited 0, retaining Node module-type warnings. No real logger/skip/test/credential, app entrypoint, native/provider/database/network/browser/build effects or source/config/tool edits. Instrument scans, copied source and metadata grant no additional semantic EOF credit.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-llm-error-log-guards-2026-10-09-023.json`, untracked); independent controls (`audit/checklist/evidence/coverage-llm-error-log-independent-controls-2026-10-09-023.json`, untracked).
+
+## AUDIT-MEMBERSHIP-EXIT-REVOKER-TEXT-CREDIT-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+membership exit guard credits inert, unreachable and prematurely ordered revocation calls. Source: `scripts/check-membership-exit-revocation.mjs:28,157-159,191-205`.
+
+The complete guard API rejects a deletion without revocation and accepts an awaited revocation after the delete. It also accepts an unused string containing deprovisionMember(, a revoker call after an unconditional return, and revocation before the deletion. revokes tests a regex anywhere inside the function body; it establishes neither reachable execution nor completion after the membership exit. No membership, credential or SQL mutation runs.
+
+Acceptance target: Bind the imported revoker and awaited reachable completion after each membership-ending statement; inert strings, unreachable statements and revocation before the exit must not establish coverage.
+
+Validation and limits: Current unchanged source-instrument APIs and complete CLIs over isolated inert TypeScript/text/SQL fixtures only.38 unchanged tests,33 primary controls and4 additional full CLI controls passed;59 fixture syntax parses establish syntax only. Four current-source CLIs exited0. SQL is never executed; no application entrypoint/module/service/native/provider/database/network/browser/build action or source/config/tool edit. Template/SQL text semantics are qualified at source scope; copied fixtures and metadata grant no semantic EOF credit. Actual runtime product policy and public Electron behavior remain unknown.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-membership-memory-guards-2026-10-09-024.json`, untracked); independent controls (`audit/checklist/evidence/coverage-membership-memory-independent-controls-2026-10-09-024.json`, untracked); full CLI quote/counterguard controls (`audit/checklist/evidence/coverage-membership-memory-SQL-closure-controls-2026-10-09-024.json`, untracked).
+
+## AUDIT-MEMBERSHIP-EXIT-CALLER-OMISSION-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+membership exit caller census omits arrows, aliases and double-quoted imports. Source: `scripts/check-membership-exit-revocation.mjs:29,83-90,127-152,198-205`.
+
+A service deletion with one correctly revoking named caller and another named caller that forgets is rejected. Keeping the same service and valid caller, converting only the forgotten caller to an arrow, an aliased imported call, or a double-quoted named import makes the complete guard accept. functionSpans enumerates only function declarations, importsFrom accepts only single-quoted patterns, and callersOf searches the original unaliased name. This is source-census omission, not evidence that a current deployed caller omits offboarding.
+
+Acceptance target: Enumerate every executable caller using binding identity, including arrow exports, import aliases and both quote styles; one accepted caller must not hide another unverified caller.
+
+Validation and limits: Current unchanged source-instrument APIs and complete CLIs over isolated inert TypeScript/text/SQL fixtures only.38 unchanged tests,33 primary controls and4 additional full CLI controls passed;59 fixture syntax parses establish syntax only. Four current-source CLIs exited0. SQL is never executed; no application entrypoint/module/service/native/provider/database/network/browser/build action or source/config/tool edit. Template/SQL text semantics are qualified at source scope; copied fixtures and metadata grant no semantic EOF credit. Actual runtime product policy and public Electron behavior remain unknown.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-membership-memory-guards-2026-10-09-024.json`, untracked); independent controls (`audit/checklist/evidence/coverage-membership-memory-independent-controls-2026-10-09-024.json`, untracked); full CLI quote/counterguard controls (`audit/checklist/evidence/coverage-membership-memory-SQL-closure-controls-2026-10-09-024.json`, untracked).
+
+## AUDIT-MEMBERSHIP-ISOLATION-REVOKER-TEXT-CREDIT-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-membership-isolation.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+membership isolation guard credits unused imports and unrelated revoker functions. Source: `scripts/check-membership-isolation.mjs:51,208-232`.
+
+The complete isolation CLI rejects a membership deletion without revocation. An unused deprovisionMember import alone makes that same deletion pass, as does a separate never-called function containing a revoker. The guard tests a bare name over the whole module before inspecting individual statements. Actual referenced caller checks remain present but are also textual. No current account or credential is modified.
+
+Acceptance target: Bind awaited reachable revocation to the ending statement or every actual caller; a bare import or unrelated function must not discharge the obligation.
+
+Validation and limits: Current unchanged source-instrument APIs and complete CLIs over isolated inert TypeScript/text/SQL fixtures only.38 unchanged tests,33 primary controls and4 additional full CLI controls passed;59 fixture syntax parses establish syntax only. Four current-source CLIs exited0. SQL is never executed; no application entrypoint/module/service/native/provider/database/network/browser/build action or source/config/tool edit. Template/SQL text semantics are qualified at source scope; copied fixtures and metadata grant no semantic EOF credit. Actual runtime product policy and public Electron behavior remain unknown.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-membership-memory-guards-2026-10-09-024.json`, untracked); independent controls (`audit/checklist/evidence/coverage-membership-memory-independent-controls-2026-10-09-024.json`, untracked); full CLI quote/counterguard controls (`audit/checklist/evidence/coverage-membership-memory-SQL-closure-controls-2026-10-09-024.json`, untracked).
+
+## AUDIT-MEMORY-CONTENT-RETURN-SCAN-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+memory isolation guard overlooks content returned through select star. Source: `scripts/check-memory-isolation.mjs:89-113`.
+
+The complete repository API rejects an explicit content read without owner/workspace predicates and accepts real predicates. select * from user_memories where user_id=$1 passes at a request-scoped service path without any workspace predicate. returnsMemoryContent requires the literal content token after select/returning, so a star that includes the table content column is not classified as returning it. This does not establish a real tenant disclosure.
+
+Acceptance target: Conservatively classify star projections and other content-bearing projections before workspace checks; expose unresolved return shapes as unknown rather than accepting their absence of a content token.
+
+Validation and limits: Current unchanged source-instrument APIs and complete CLIs over isolated inert TypeScript/text/SQL fixtures only.38 unchanged tests,33 primary controls and4 additional full CLI controls passed;59 fixture syntax parses establish syntax only. Four current-source CLIs exited0. SQL is never executed; no application entrypoint/module/service/native/provider/database/network/browser/build action or source/config/tool edit. Template/SQL text semantics are qualified at source scope; copied fixtures and metadata grant no semantic EOF credit. Actual runtime product policy and public Electron behavior remain unknown.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-membership-memory-guards-2026-10-09-024.json`, untracked); independent controls (`audit/checklist/evidence/coverage-membership-memory-independent-controls-2026-10-09-024.json`, untracked); full CLI quote/counterguard controls (`audit/checklist/evidence/coverage-membership-memory-SQL-closure-controls-2026-10-09-024.json`, untracked).
+
+Source-schema premise: `apps/web/db/neon/0010_memory.sql:1-9`, actually read through EOF, declares content text not null at line4. No applied migration or live schema state is claimed.
+
+## AUDIT-MEMORY-MEMBERSHIP-SQL-LITERAL-OMISSION-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-membership-isolation.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+membership and memory guards omit executable SQL quote and table-name forms. Source: `scripts/check-membership-isolation.mjs:134-148,196-212; scripts/check-memory-isolation.mjs:57-77,116-134; scripts/check-memory-write-gate.mjs:21-40,98-109`.
+
+An ordinary unscoped backtick membership query fails; a double-quoted query and an uppercased membership-table query are omitted by the complete CLI. Memory isolation omits ordinary single- and double-quoted queries; a full CLI accepts a single-quoted unscoped content query while reporting one touching module. The memory write API reports zero writers for a single-quoted insert. Its CLI correctly rejects an otherwise empty writer sweep, so an additional mixed-tree control is required: with a known gate-module backtick writer retained, the ordinary backtick rogue insert fails but the same single-quoted rogue insert passes and the CLI reports only the registered writer. This identifies restricted lexical discovery, not SQL execution or a deployed bypass.
+
+Acceptance target: Discover all executable SQL literal forms and supported table-identifier case before scoped/writer checks; retain the empty-sweep refusal and mixed-tree countercontrols.
+
+Validation and limits: Current unchanged source-instrument APIs and complete CLIs over isolated inert TypeScript/text/SQL fixtures only.38 unchanged tests,33 primary controls and4 additional full CLI controls passed;59 fixture syntax parses establish syntax only. Four current-source CLIs exited0. SQL is never executed; no application entrypoint/module/service/native/provider/database/network/browser/build action or source/config/tool edit. Template/SQL text semantics are qualified at source scope; copied fixtures and metadata grant no semantic EOF credit. Actual runtime product policy and public Electron behavior remain unknown.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-membership-memory-guards-2026-10-09-024.json`, untracked); independent controls (`audit/checklist/evidence/coverage-membership-memory-independent-controls-2026-10-09-024.json`, untracked); full CLI quote/counterguard controls (`audit/checklist/evidence/coverage-membership-memory-SQL-closure-controls-2026-10-09-024.json`, untracked).
+
+October 9 managed/unattended extension under this same canonical owner: Unattended ordinary backtick queued-work query fails. The same inert query written as a single-quoted JavaScript SQL string or with uppercase WORK is omitted, and the complete API passes with two owned schema tables and zero pickups. Quoted SQL table names are recognized in this exact fixture: the first expected omission assertion failed, was retained, and the corrected rejecting counter passed. Existing restricted SQL literal-discovery owner is extended without the rejected quoted-name claim.
+
+Additional source: `scripts/check-membership-unattended-work.mjs:138-145,186,193-199`. Acceptance target: Discover all supported executable SQL literal forms and identifier case before policy checks; preserve the recognized quoted-table counter and expose unsupported shapes as unknown. Actual full source review (`audit/checklist/reviews/coverage-ecosystem-managed-unattended-guards-2026-10-09-025.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-managed-unattended-independent-controls-2026-10-09-025-refined.json`, untracked). Unchanged guard APIs and source CLIs over isolated inert TypeScript/migration text only.35 unchanged tests and36 final independent controls passed;69 fixture syntax parses establish syntax only. Three current textual CLIs exited0. Initial26-control execution stopped on a disproved quoted-table omission assumption and its actual failure is preserved separately. No SQL, application module/entrypoint/service, provider/native/network/browser/build/database or production state executed; source/config/tool files remain unchanged. No current product policy bypass, account loss or deployed incident is accepted.
+
+Unattended quote-probe fidelity closure: original lexical fixture changed embedded SQL apostrophes to double quotes. Two additional complete controls (`audit/checklist/evidence/coverage-managed-unattended-SQL-literal-closure-2026-10-09-025.json`, untracked) assert identical TypeScript AST literal SQL values for the original queued query in backtick and escaped single-quoted JavaScript strings. The backtick query rejects while the identical single-quoted query is omitted. This stronger source proof replaces any assumption that the initial altered SQL alone established identical query semantics; no SQL executes.
+
+October 9 money/usage/Work source qualification: With an independent owned backtick anchor retained, an ordinary unowned backtick Work SELECT rejects. Its exact TypeScript AST SQL value written in either single or double quotes is omitted and the complete CLI reports only the anchor. Uppercase PUBLIC.CLOUD_AGENT_RUNS is likewise omitted. This extends the existing SQL literal/case owner; empty Work census still rejects and no SQL executes.
+
+Additional source: `scripts/check-worktask-scope.mjs:55-63`. Acceptance target: Discover every supported source SQL literal and table-identifier case before scoped checks; retain same-value quote fidelity and mixed-tree empty-census counterguards. Current source report (`audit/checklist/reviews/coverage-ecosystem-money-usage-worktask-guards-2026-10-09-028.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-money-usage-worktask-independent-controls-2026-10-09-028-refined.json`, untracked). Unchanged complete source-instrument APIs and byte-identical CLI copies over isolated inert TypeScript/SQL text only.44 unchanged tests and35 final independent controls passed;62 TypeScript fixture parses establish syntax only. Four actual current source CLIs exited0. Two isolated literal arithmetic expressions execute in a VM; no application or fixture module imports, monetary writes, SQL, database, native host, provider, network, browser, build, installation, production action or real checkout staging occurs. Git used by unchanged tests is confined to scrubbed fixture roots. Initial11-control receipt preserves a failed CLI assertion: /tmp versus /private/tmp prevented the copied guard main from running. Final runner normalizes executable/cwd realpaths and asserts nonempty guard output. Source/tool/config files are unchanged; no current product incident or runtime acceptance is established.
+
+## AUDIT-MEMORY-WRITE-GATE-TEXT-CREDIT-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+memory write guard accepts comment/string gate names and ignored refusal decisions. Source: `scripts/check-memory-write-gate.mjs:9,49-55`.
+
+The complete repository API rejects an ungated template-literal insert and accepts a fixture that returns before writing when admission refuses. The same ungated writer passes after only appending a comment or unused string containing memoryWriteAdmission(. Calling admission and ignoring its result also passes. GATE_CALLS checks unrestricted whole-module text and does not bind eligibility to each write. No real memory or policy result is used.
+
+Acceptance target: Require every reachable memory-writing statement to depend on an awaited shared admission decision that stops the write on refusal; literal/comment matches and ignored results must not satisfy the gate.
+
+Validation and limits: Current unchanged source-instrument APIs and complete CLIs over isolated inert TypeScript/text/SQL fixtures only.38 unchanged tests,33 primary controls and4 additional full CLI controls passed;59 fixture syntax parses establish syntax only. Four current-source CLIs exited0. SQL is never executed; no application entrypoint/module/service/native/provider/database/network/browser/build action or source/config/tool edit. Template/SQL text semantics are qualified at source scope; copied fixtures and metadata grant no semantic EOF credit. Actual runtime product policy and public Electron behavior remain unknown.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-membership-memory-guards-2026-10-09-024.json`, untracked); independent controls (`audit/checklist/evidence/coverage-membership-memory-independent-controls-2026-10-09-024.json`, untracked); full CLI quote/counterguard controls (`audit/checklist/evidence/coverage-membership-memory-SQL-closure-controls-2026-10-09-024.json`, untracked).
+
+## AUDIT-MEMORY-WRITE-CALLER-COVERAGE-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+memory write guard lets one textual caller exempt every store path. Source: `scripts/check-memory-write-gate.mjs:88-109`.
+
+With no gated caller the store is rejected. Adding one route that checks admission causes the complete repository API to accept the store even while a second imported route invokes it without admission. A separate unused string containing the store import specifier and gate symbol also exempts it. drivenByAGatedCaller returns true for any one textual source match; neither actual import/call reachability nor all-callers coverage is established. No real store executes.
+
+Acceptance target: Track actual import and call bindings and require every store entry path to enforce refusal before writes; a single gated caller or an inert import-specifier string must not exempt unrelated paths.
+
+Validation and limits: Current unchanged source-instrument APIs and complete CLIs over isolated inert TypeScript/text/SQL fixtures only.38 unchanged tests,33 primary controls and4 additional full CLI controls passed;59 fixture syntax parses establish syntax only. Four current-source CLIs exited0. SQL is never executed; no application entrypoint/module/service/native/provider/database/network/browser/build action or source/config/tool edit. Template/SQL text semantics are qualified at source scope; copied fixtures and metadata grant no semantic EOF credit. Actual runtime product policy and public Electron behavior remain unknown.
+
+Full-file review (`audit/checklist/reviews/coverage-ecosystem-membership-memory-guards-2026-10-09-024.json`, untracked); independent controls (`audit/checklist/evidence/coverage-membership-memory-independent-controls-2026-10-09-024.json`, untracked); full CLI quote/counterguard controls (`audit/checklist/evidence/coverage-membership-memory-SQL-closure-controls-2026-10-09-024.json`, untracked).
+
+## AUDIT-MANAGED-SAFETY-SUBJECT-CLOSURE-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Managed safety census omits aliased creators/writers and server delivery modules. Source: `scripts/lib/managed-safety-floor.mjs:25-26,29,38-42,73-76,142-178`.
+
+With a valid admission and screened delivery retained as nonempty anchors, an additional aliased generation creator is absent from the admission census. An aliased asset writer and an unscreened delivery under apps/web/lib/server are absent from the delivery census. The complete API passes and reports only the anchors. Known direct creator/write names are found and absent gates fail in paired controls.
+
+Acceptance target: Enumerate actual creator/write bindings and all owning delivery entry paths; unresolved aliases or moved modules must remain unknown rather than disappearing behind nonempty anchors.
+
+Validation and limits: Unchanged guard APIs and source CLIs over isolated inert TypeScript/migration text only.35 unchanged tests and36 final independent controls passed;69 fixture syntax parses establish syntax only. Three current textual CLIs exited0. Initial26-control execution stopped on a disproved quoted-table omission assumption and its actual failure is preserved separately. No SQL, application module/entrypoint/service, provider/native/network/browser/build/database or production state executed; source/config/tool files remain unchanged. No current product policy bypass, account loss or deployed incident is accepted.
+
+Full source review (`audit/checklist/reviews/coverage-ecosystem-managed-unattended-guards-2026-10-09-025.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-managed-unattended-independent-controls-2026-10-09-025-refined.json`, untracked); retained initial probe failure (`audit/checklist/evidence/coverage-managed-unattended-independent-controls-2026-10-09-025.json`, untracked).
+
+## AUDIT-MANAGED-SAFETY-VOCABULARY-TEXT-CREDIT-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Managed safety vocabulary accepts comment-only moderation rule entries. Source: `scripts/lib/managed-safety-floor.mjs:79-109,112-135,206-209`.
+
+An actually empty RULES array fails. An array with no executable rule entries but two commented id/category objects passes the complete managed audit while the same declared categories and real admission/delivery anchors remain. TypeScript parsing confirms valid source syntax; the comment-only array contains no real elements. Raw category extraction does not bind an executable rule.
+
+Acceptance target: Read actual declared categories and executable rule entries through syntax/binding-aware parsing; comments and inert data must not satisfy policy-rule coverage.
+
+Validation and limits: Unchanged guard APIs and source CLIs over isolated inert TypeScript/migration text only.35 unchanged tests and36 final independent controls passed;69 fixture syntax parses establish syntax only. Three current textual CLIs exited0. Initial26-control execution stopped on a disproved quoted-table omission assumption and its actual failure is preserved separately. No SQL, application module/entrypoint/service, provider/native/network/browser/build/database or production state executed; source/config/tool files remain unchanged. No current product policy bypass, account loss or deployed incident is accepted.
+
+Full source review (`audit/checklist/reviews/coverage-ecosystem-managed-unattended-guards-2026-10-09-025.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-managed-unattended-independent-controls-2026-10-09-025-refined.json`, untracked); retained initial probe failure (`audit/checklist/evidence/coverage-managed-unattended-independent-controls-2026-10-09-025.json`, untracked).
+
+## AUDIT-UNATTENDED-PICKUP-EXEMPTION-TEXT-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Unattended guard omits queued claims when running state appears in SET. Source: `scripts/check-membership-unattended-work.mjs:35-38,45-57,193-204`.
+
+An ungated update setting status='ready' where status='queued' fails with one pickup. Changing only the assigned state to 'running' makes the complete guard accept with zero pickups, because ALREADY_RUNNING sees the SET assignment before distinguishing a preexisting running row. A real ending update with WHERE status='running' is correctly exempt. A user_id=$1 equality merely projected by SELECT is also treated as a caller predicate and hides the pickup.
+
+Acceptance target: Classify pickup/ending/request semantics from the effective row-selection predicate and mutation, distinguishing SET state from WHERE state and projection data from a caller constraint.
+
+Validation and limits: Unchanged guard APIs and source CLIs over isolated inert TypeScript/migration text only.35 unchanged tests and36 final independent controls passed;69 fixture syntax parses establish syntax only. Three current textual CLIs exited0. Initial26-control execution stopped on a disproved quoted-table omission assumption and its actual failure is preserved separately. No SQL, application module/entrypoint/service, provider/native/network/browser/build/database or production state executed; source/config/tool files remain unchanged. No current product policy bypass, account loss or deployed incident is accepted.
+
+Full source review (`audit/checklist/reviews/coverage-ecosystem-managed-unattended-guards-2026-10-09-025.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-managed-unattended-independent-controls-2026-10-09-025-refined.json`, untracked); retained initial probe failure (`audit/checklist/evidence/coverage-managed-unattended-independent-controls-2026-10-09-025.json`, untracked).
+
+## AUDIT-UNATTENDED-BASELINE-STATEMENT-COVERAGE-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+One unattended baseline entry silences additional statements for the same file/table. Source: `scripts/check-membership-unattended-work.mjs:188-190,213-218,234-244`.
+
+A single documented exception for one ungated pickup passes with recorded=1. Adding an independent ungated queued-work UPDATE in the same source file over the same table also passes with recorded=2 using that unchanged single entry. The key is file#table; no statement identity or count ratchet distinguishes the new obligation. A baseline entry whose original pickup becomes gated correctly fails as stale. The baseline sql field is intended future remediation, so equality with the original current statement is not required by this finding.
+
+Acceptance target: Bind retained exceptions to independently identified current statement obligations and reject new or materially changed ungated statements; preserve separately the intended remediation SQL and ownership.
+
+Validation and limits: Unchanged guard APIs and source CLIs over isolated inert TypeScript/migration text only.35 unchanged tests and36 final independent controls passed;69 fixture syntax parses establish syntax only. Three current textual CLIs exited0. Initial26-control execution stopped on a disproved quoted-table omission assumption and its actual failure is preserved separately. No SQL, application module/entrypoint/service, provider/native/network/browser/build/database or production state executed; source/config/tool files remain unchanged. No current product policy bypass, account loss or deployed incident is accepted.
+
+Full source review (`audit/checklist/reviews/coverage-ecosystem-managed-unattended-guards-2026-10-09-025.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-managed-unattended-independent-controls-2026-10-09-025-refined.json`, untracked); retained initial probe failure (`audit/checklist/evidence/coverage-managed-unattended-independent-controls-2026-10-09-025.json`, untracked).
+
+## AUDIT-UNATTENDED-BASELINE-TYPE-VALIDATION-01
+
+Status: Open, scoped source-instrument finding. Severity: Low. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Unattended baseline accepts nontext SQL owner and reason fields. Source: `scripts/check-membership-unattended-work.mjs:239-244`.
+
+A baseline missing SQL/owner and carrying a short string reason is rejected. An otherwise matching entry with sql={}, owner={} and numeric reason=7 passes. Truthy object fields and undefined numeric .length do not establish a textual remediation clause, owner path or substantive reason.
+
+Acceptance target: Validate the baseline object shape, nonempty textual fields and substantive textual reason before granting any exception; reject objects/numbers in text fields.
+
+Validation and limits: Unchanged guard APIs and source CLIs over isolated inert TypeScript/migration text only.35 unchanged tests and36 final independent controls passed;69 fixture syntax parses establish syntax only. Three current textual CLIs exited0. Initial26-control execution stopped on a disproved quoted-table omission assumption and its actual failure is preserved separately. No SQL, application module/entrypoint/service, provider/native/network/browser/build/database or production state executed; source/config/tool files remain unchanged. No current product policy bypass, account loss or deployed incident is accepted.
+
+Full source review (`audit/checklist/reviews/coverage-ecosystem-managed-unattended-guards-2026-10-09-025.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-managed-unattended-independent-controls-2026-10-09-025-refined.json`, untracked); retained initial probe failure (`audit/checklist/evidence/coverage-managed-unattended-independent-controls-2026-10-09-025.json`, untracked).
+
+## AUDIT-OUTBOUND-INSPECTION-TEXT-CREDIT-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-public-share-dlp.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Outbound inspection guard accepts commented policy and commented or neighboring channel wiring. Source: `scripts/check-outbound-inspection-coverage.mjs:38-45,59-69; scripts/lib/outbound-inspection.mjs:9-14`.
+
+Complete CLI rejects missing wiring and absent policy markers. Comment-only inspectOutboundContent({channel: share}) text supplies the missing call site, and comments containing resolveMode, block fallback, recordAuditEvent and dlp_content_blocked make an always-allowed synthetic inspector pass. A real dynamic channel call can earn share coverage from an unrelated later object inside the800-character window. A different explicit first channel does not earn share coverage. These controls establish lexical source false credit, without executing any inspector or publish function.
+
+Acceptance target: Bind policy fallback/audit behavior and channel values to executable inspected flows and effective verdict handling; comments and unrelated neighboring data must not discharge control or channel coverage.
+
+Validation and limits: Current unchanged guard APIs/CLIs over isolated inert TypeScript/text fixtures only.40 unchanged tests and32 final independent controls passed;61 fixture syntax parses establish syntax only. Five current source CLIs exited0. Initial8-control execution stopped when the synthetic positive fallback used policy={...} but the lexical guard requires policy = {...}; original actual failure and refined execution are preserved. No application modules, SQL, policy resolver, plugin installation, provider/MCP/network/native/browser/database/build or production state executed. Source/config/tool files remain unchanged. No deployed security or product incident is accepted.
+
+Full source review (`audit/checklist/reviews/coverage-ecosystem-egress-install-provider-guards-2026-10-09-026.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-egress-install-provider-independent-controls-2026-10-09-026-refined.json`, untracked); retained initial probe failure (`audit/checklist/evidence/coverage-egress-install-provider-independent-controls-2026-10-09-026.json`, untracked).
+
+October 9 project/prompt/public-share source qualification: The complete public-share CLI rejects an uninspected direct write but accepts a comment-only inspector, an inspector in another independent function, and an actual inspector call whose decision is ignored before publication. AST and function/order checks distinguish comments and unrelated calls; a real before-write refusal control passes. Existing outbound-inspection textual-credit ownership is extended without claiming any current deployed content publication.
+
+Additional source: `scripts/check-public-share-dlp.mjs:51-65,96-118`. Acceptance target: Bind inspection to the exact content and publishing control path and enforce its verdict before the write; comments, unrelated calls and ignored decisions cannot supply admission. Current source report (`audit/checklist/reviews/coverage-ecosystem-project-prompt-share-guards-2026-10-09-032.json`, untracked); independent controls (`audit/checklist/evidence/coverage-project-prompt-share-independent-controls-2026-10-09-032-final.json`, untracked). Thirty-five unchanged source guard tests, thirty-eight independent inert controls and four individual current source CLIs passed. Fifty-one TypeScript AST syntax/source-kind/binding checks establish fixture subjects. Complete CLI copies are byte-identical, realpath-bound and produce nonempty output. Git fixture operations use explicit throwaway roots and scrub inherited GIT variables; no real checkout staging. Imported modules are unchanged source instruments only; no application/fixture modules, actual SQL/database, project prompt/public share mutation, native/provider/network/browser/build/install/production action or runtime product acceptance. Source/config/tool files remain unchanged. Current CLI findings are textual guard evidence, not deployed incidents.
+
+## AUDIT-PLUGIN-ADMISSION-WRITE-CENSUS-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Plugin installation guard omits arrow writers and unqualified insert forms. Source: `scripts/check-plugin-install-gate.mjs:31-35,88-107,139-156`.
+
+An ordinary named ungated installation writer fails. A tree with only an arrow writer correctly fails the empty census. Keeping a valid gated named writer as a nonempty anchor, an additional arrow writer or an insert with an unqualified plugin_installations name disappears from the census and the full CLI passes while reporting only one installation write. Actual SQL table resolution remains unexecuted and unknown; the lexical scan does not expose the unresolved form.
+
+Acceptance target: Enumerate reachable installation admission writes across function and SQL identifier forms before evaluating gates; nonempty anchors must not hide unresolved additional writers.
+
+Validation and limits: Current unchanged guard APIs/CLIs over isolated inert TypeScript/text fixtures only.40 unchanged tests and32 final independent controls passed;61 fixture syntax parses establish syntax only. Five current source CLIs exited0. Initial8-control execution stopped when the synthetic positive fallback used policy={...} but the lexical guard requires policy = {...}; original actual failure and refined execution are preserved. No application modules, SQL, policy resolver, plugin installation, provider/MCP/network/native/browser/database/build or production state executed. Source/config/tool files remain unchanged. No deployed security or product incident is accepted.
+
+Full source review (`audit/checklist/reviews/coverage-ecosystem-egress-install-provider-guards-2026-10-09-026.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-egress-install-provider-independent-controls-2026-10-09-026-refined.json`, untracked); retained initial probe failure (`audit/checklist/evidence/coverage-egress-install-provider-independent-controls-2026-10-09-026.json`, untracked).
+
+## AUDIT-PLUGIN-EXPORTED-HELPER-CALLER-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Plugin gate treats an exported writer as a private helper covered by one local caller. Source: `scripts/check-plugin-install-gate.mjs:127-136,147-152`.
+
+The complete installation CLI accepts an exported ungated helper that admits an installed version when another same-module exported function calls it after a gate. gatedBy enumerates same-module named callers but never requires that the writing helper be private. The exported helper itself is an available independently callable source entry; its direct external callers and current production adoption remain unknown. The paired ungated lone helper fails.
+
+Acceptance target: Only discharge a helper through enclosing callers after proving its actual private reachability, or require all exported/direct entry paths to enforce admission before writes; same-module callers must not establish closure of an exported writer.
+
+Validation and limits: Current unchanged guard APIs/CLIs over isolated inert TypeScript/text fixtures only.40 unchanged tests and32 final independent controls passed;61 fixture syntax parses establish syntax only. Five current source CLIs exited0. Initial8-control execution stopped when the synthetic positive fallback used policy={...} but the lexical guard requires policy = {...}; original actual failure and refined execution are preserved. No application modules, SQL, policy resolver, plugin installation, provider/MCP/network/native/browser/database/build or production state executed. Source/config/tool files remain unchanged. No deployed security or product incident is accepted.
+
+Full source review (`audit/checklist/reviews/coverage-ecosystem-egress-install-provider-guards-2026-10-09-026.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-egress-install-provider-independent-controls-2026-10-09-026-refined.json`, untracked); retained initial probe failure (`audit/checklist/evidence/coverage-egress-install-provider-independent-controls-2026-10-09-026.json`, untracked).
+
+## AUDIT-POLICY-GATE-RESOLVER-CENSUS-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Policy gate scope check reports success when named resolver declarations are absent or unsupported. Source: `scripts/check-policy-gate-scope.mjs:10-27,47-49; scripts/lib/policy-gate-scope.mjs:10-15,23-37,44-46`.
+
+Four expected gate files containing no account resolver pass and print that all four resolve from membership. A recognized annotated export async function with a request parameter is rejected and a membership resolver passes. Converting the request-scoped resolver to an arrow export or removing only the return type annotation makes it omitted and the full CLI pass. The guard tests four specific declaration forms without requiring any resolver census; no resolver function is executed.
+
+Acceptance target: Establish a complete actual account-level resolver census and reject missing/unsupported shapes before scope checks; a successful file-existence walk cannot prove membership-derived resolver behavior.
+
+Validation and limits: Current unchanged guard APIs/CLIs over isolated inert TypeScript/text fixtures only.40 unchanged tests and32 final independent controls passed;61 fixture syntax parses establish syntax only. Five current source CLIs exited0. Initial8-control execution stopped when the synthetic positive fallback used policy={...} but the lexical guard requires policy = {...}; original actual failure and refined execution are preserved. No application modules, SQL, policy resolver, plugin installation, provider/MCP/network/native/browser/database/build or production state executed. Source/config/tool files remain unchanged. No deployed security or product incident is accepted.
+
+Full source review (`audit/checklist/reviews/coverage-ecosystem-egress-install-provider-guards-2026-10-09-026.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-egress-install-provider-independent-controls-2026-10-09-026-refined.json`, untracked); retained initial probe failure (`audit/checklist/evidence/coverage-egress-install-provider-independent-controls-2026-10-09-026.json`, untracked).
+
+## AUDIT-PROVIDER-SDK-UNDECLARED-DOMAIN-IMPORT-01
+
+Status: Open, scoped source-instrument finding. Severity: Medium. Owner: Ecosystem / source guard. First seen: 2026-10-09.
+
+Provider boundary guard accepts a vendor SDK first imported outside an adapter. Source: `scripts/check-provider-adapter-boundary.mjs:82-89,117-137`.
+
+With a correctly declared SDK imported by its adapter retained, a business module statically importing xai-sdk passes despite looksLikeProviderSdk recognizing the configured provider spelling. Undeclared vendor packages trigger an error only inside adapter branches; non-adapter undeclared packages continue at line133. The existing suite tests undeclared adapter imports but omits this domain-first case. The synthetic SDK is never installed, resolved or imported.
+
+Acceptance target: Reject recognized provider SDK imports outside an adapter regardless of whether an adapter already placed the package in the declared list; preserve declared-adapter and forbidden-domain countercontrols.
+
+Validation and limits: Current unchanged guard APIs/CLIs over isolated inert TypeScript/text fixtures only.40 unchanged tests and32 final independent controls passed;61 fixture syntax parses establish syntax only. Five current source CLIs exited0. Initial8-control execution stopped when the synthetic positive fallback used policy={...} but the lexical guard requires policy = {...}; original actual failure and refined execution are preserved. No application modules, SQL, policy resolver, plugin installation, provider/MCP/network/native/browser/database/build or production state executed. Source/config/tool files remain unchanged. No deployed security or product incident is accepted.
+
+Full source review (`audit/checklist/reviews/coverage-ecosystem-egress-install-provider-guards-2026-10-09-026.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-egress-install-provider-independent-controls-2026-10-09-026-refined.json`, untracked); retained initial probe failure (`audit/checklist/evidence/coverage-egress-install-provider-independent-controls-2026-10-09-026.json`, untracked).
+
+## AUDIT-MOCK-EXPORT-DISCOVERY-CENSUS-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 mock-export/reachability source qualification: A fresh nested JS test missing bar is directly detected by checkTestFile, but complete discovery scans only the valid TypeScript anchor and passes. A direct-root TS test missing bar is also detected directly, yet the ** pathspec yields zero tests and the complete API passes. The paired nested TypeScript fixture rejects the same omission. Zero subjects are allowed even in an otherwise valid isolated Git root.
+
+Additional source: `scripts/check-mock-exports.mjs:16-25,690-719,729-768`. Acceptance target: Enumerate all intended configured test file extensions and depth forms, then distinguish intentionally empty scope from missing/undiscovered subjects before completeness credit. Current source report (`audit/checklist/reviews/coverage-ecosystem-mock-exports-reachability-guards-2026-10-09-027.json`, untracked); final complete controls (`audit/checklist/evidence/coverage-mock-export-reachability-independent-controls-2026-10-09-027-final-fidelity.json`, untracked). Current unchanged source instruments/helpers and inert Git/TypeScript/text fixtures only.34 unchanged Node source-instrument tests passed;27 final primary independent controls and one additional byte-identical Rust-root comparison passed with59 TypeScript syntax parses. Three current source CLIs exited0. Synthetic VM factories use literal objects only; no fixture/application module imports, mounted Vitest/React UI, Cargo/Rust compilation, native host, database, provider, network, installation or production effects. Source copies are byte-identical and Git init/add is confined to scrubbed fixture roots. Initial root-level positive fixture had zero discovered tests, so its original failure is retained; corrected nested discovery and an independent root-level omission control qualify the census. Intermediate cache replay used source text with formatting differences; final replay asserts byte-identical mocked/subject/test sources before comparing cached and fresh paths. No source/tool/config fix or deployed incident is accepted.
+
+## AUDIT-MOCK-EXPORT-IMPORT-ORIGINAL-TEXT-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 mock-export/reachability source qualification: Complete guard API rejects a fixed factory missing required bar. Adding only a comment containing importOriginal or unused string importActual makes the factory nonfixed and eliminates both the required-export finding and drift. A literal pure VM factory still returns only foo. Removing the marker text restores rejection.
+
+Additional source: `scripts/check-mock-exports.mjs:304-319,573-583,634-643`. Acceptance target: Require actual source-bound importOriginal/importActual composition or explicitly expose an unresolved factory; comment and data tokens must not silently discharge omission checks. Current source report (`audit/checklist/reviews/coverage-ecosystem-mock-exports-reachability-guards-2026-10-09-027.json`, untracked); final complete controls (`audit/checklist/evidence/coverage-mock-export-reachability-independent-controls-2026-10-09-027-final-fidelity.json`, untracked). Current unchanged source instruments/helpers and inert Git/TypeScript/text fixtures only.34 unchanged Node source-instrument tests passed;27 final primary independent controls and one additional byte-identical Rust-root comparison passed with59 TypeScript syntax parses. Three current source CLIs exited0. Synthetic VM factories use literal objects only; no fixture/application module imports, mounted Vitest/React UI, Cargo/Rust compilation, native host, database, provider, network, installation or production effects. Source copies are byte-identical and Git init/add is confined to scrubbed fixture roots. Initial root-level positive fixture had zero discovered tests, so its original failure is retained; corrected nested discovery and an independent root-level omission control qualify the census. Intermediate cache replay used source text with formatting differences; final replay asserts byte-identical mocked/subject/test sources before comparing cached and fresh paths. No source/tool/config fix or deployed incident is accepted.
+
+## AUDIT-MOCK-EXPORT-FACTORY-RETURN-PATH-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 mock-export/reachability source qualification: A synthetic factory first returns foo/bar inside a false branch, then returns only foo. The complete guard credits both first-branch keys and passes, while the isolated literal-only VM evaluation has only foo and the subject requires bar. A single incomplete return is rejected.
+
+Additional source: `scripts/check-mock-exports.mjs:224-242,313-319`. Acceptance target: Establish all reachable fixed return paths or report unresolved control flow; a single syntactic first return cannot prove every factory outcome satisfies required exports. Current source report (`audit/checklist/reviews/coverage-ecosystem-mock-exports-reachability-guards-2026-10-09-027.json`, untracked); final complete controls (`audit/checklist/evidence/coverage-mock-export-reachability-independent-controls-2026-10-09-027-final-fidelity.json`, untracked). Current unchanged source instruments/helpers and inert Git/TypeScript/text fixtures only.34 unchanged Node source-instrument tests passed;27 final primary independent controls and one additional byte-identical Rust-root comparison passed with59 TypeScript syntax parses. Three current source CLIs exited0. Synthetic VM factories use literal objects only; no fixture/application module imports, mounted Vitest/React UI, Cargo/Rust compilation, native host, database, provider, network, installation or production effects. Source copies are byte-identical and Git init/add is confined to scrubbed fixture roots. Initial root-level positive fixture had zero discovered tests, so its original failure is retained; corrected nested discovery and an independent root-level omission control qualify the census. Intermediate cache replay used source text with formatting differences; final replay asserts byte-identical mocked/subject/test sources before comparing cached and fresh paths. No source/tool/config fix or deployed incident is accepted.
+
+## AUDIT-MOCK-EXPORT-RUNTIME-EXPORT-CENSUS-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 mock-export/reachability source qualification: An export-star barrel exposing foo/bar is assigned zero exports, so the complete missing-bar check and drift both pass; the corresponding explicit reexport list is rejected. In the opposite direction, export { type Shape } is counted as a missing runtime export and creates drift despite a factory covering the only runtime foo export. TypeScript AST marks Shape as type-only and synthetic transpilation erases it.
+
+Additional source: `scripts/check-mock-exports.mjs:337-355,579-582,638-641`. Acceptance target: Resolve relevant barrel runtime exports and exclude every type-only export form before required-export and drift calculations; retain explicit-reexport rejection and type erasure counterguards. Current source report (`audit/checklist/reviews/coverage-ecosystem-mock-exports-reachability-guards-2026-10-09-027.json`, untracked); final complete controls (`audit/checklist/evidence/coverage-mock-export-reachability-independent-controls-2026-10-09-027-final-fidelity.json`, untracked). Current unchanged source instruments/helpers and inert Git/TypeScript/text fixtures only.34 unchanged Node source-instrument tests passed;27 final primary independent controls and one additional byte-identical Rust-root comparison passed with59 TypeScript syntax parses. Three current source CLIs exited0. Synthetic VM factories use literal objects only; no fixture/application module imports, mounted Vitest/React UI, Cargo/Rust compilation, native host, database, provider, network, installation or production effects. Source copies are byte-identical and Git init/add is confined to scrubbed fixture roots. Initial root-level positive fixture had zero discovered tests, so its original failure is retained; corrected nested discovery and an independent root-level omission control qualify the census. Intermediate cache replay used source text with formatting differences; final replay asserts byte-identical mocked/subject/test sources before comparing cached and fresh paths. No source/tool/config fix or deployed incident is accepted.
+
+## AUDIT-MOCK-EXPORT-DESKTOP-ALIAS-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 mock-export/reachability source qualification: Current Desktop compiler/Vite alias owners map @ to src. A discovered Desktop test and subject using @/lib/mocked require omitted bar, but the complete guard resolves the mock to null and passes both checks. Replacing the configured alias with the equivalent relative specifier makes the complete fixture reject.
+
+Additional source: `scripts/check-mock-exports.mjs:398-427,575-582; apps/desktop/tsconfig.json:12-19; apps/desktop/vite.config.ts:250-260`. Acceptance target: Resolve first-party surface aliases from their current canonical configuration or mark unresolved configured aliases as incomplete coverage before passing the check. Current source report (`audit/checklist/reviews/coverage-ecosystem-mock-exports-reachability-guards-2026-10-09-027.json`, untracked); final complete controls (`audit/checklist/evidence/coverage-mock-export-reachability-independent-controls-2026-10-09-027-final-fidelity.json`, untracked). Current unchanged source instruments/helpers and inert Git/TypeScript/text fixtures only.34 unchanged Node source-instrument tests passed;27 final primary independent controls and one additional byte-identical Rust-root comparison passed with59 TypeScript syntax parses. Three current source CLIs exited0. Synthetic VM factories use literal objects only; no fixture/application module imports, mounted Vitest/React UI, Cargo/Rust compilation, native host, database, provider, network, installation or production effects. Source copies are byte-identical and Git init/add is confined to scrubbed fixture roots. Initial root-level positive fixture had zero discovered tests, so its original failure is retained; corrected nested discovery and an independent root-level omission control qualify the census. Intermediate cache replay used source text with formatting differences; final replay asserts byte-identical mocked/subject/test sources before comparing cached and fresh paths. No source/tool/config fix or deployed incident is accepted.
+
+## AUDIT-MOCK-EXPORT-CACHE-STATE-01
+
+Severity: Low. Status: open current source-instrument gap; source unchanged.
+
+October 9 mock-export/reachability source qualification: First scan caches a one-export module and foo-only subject. Mutating those same absolute files to add and require omitted bar still passes through the exported API. A fresh fixture with byte-identical final mocked/subject/test sources rejects. Global maps have no invocation/content invalidation. The standalone current CLI uses a fresh process; no current reused caller is accepted.
+
+Additional source: `scripts/check-mock-exports.mjs:541-556,729-755`. Acceptance target: Bound source caches to an invocation or current source identity, preserving fresh-process behavior and making repeated guard API calls re-read changed files. Current source report (`audit/checklist/reviews/coverage-ecosystem-mock-exports-reachability-guards-2026-10-09-027.json`, untracked); final complete controls (`audit/checklist/evidence/coverage-mock-export-reachability-independent-controls-2026-10-09-027-final-fidelity.json`, untracked). Current unchanged source instruments/helpers and inert Git/TypeScript/text fixtures only.34 unchanged Node source-instrument tests passed;27 final primary independent controls and one additional byte-identical Rust-root comparison passed with59 TypeScript syntax parses. Three current source CLIs exited0. Synthetic VM factories use literal objects only; no fixture/application module imports, mounted Vitest/React UI, Cargo/Rust compilation, native host, database, provider, network, installation or production effects. Source copies are byte-identical and Git init/add is confined to scrubbed fixture roots. Initial root-level positive fixture had zero discovered tests, so its original failure is retained; corrected nested discovery and an independent root-level omission control qualify the census. Intermediate cache replay used source text with formatting differences; final replay asserts byte-identical mocked/subject/test sources before comparing cached and fresh paths. No source/tool/config fix or deployed incident is accepted.
+
+## AUDIT-PRODUCTION-MOCK-COMMENT-STRING-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-money-paths.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 mock-export/reachability source qualification: The complete byte-identical CLI with a zero mock-import ceiling rejects an ordinary static mock import. Adding two string literals containing /* and */ on opposite sides causes the raw block-comment regex to erase that real import and the same CLI passes. TypeScript independently parses one actual import and no actual block comment occurs. No fixture import executes.
+
+Additional source: `scripts/lib/production-mocks.mjs:1,44-49,65-73`. Acceptance target: Distinguish comment tokens from string/template content before scanning executable import declarations and retain both real-comment exclusion and live-import rejection controls. Current source report (`audit/checklist/reviews/coverage-ecosystem-mock-exports-reachability-guards-2026-10-09-027.json`, untracked); final complete controls (`audit/checklist/evidence/coverage-mock-export-reachability-independent-controls-2026-10-09-027-final-fidelity.json`, untracked). Current unchanged source instruments/helpers and inert Git/TypeScript/text fixtures only.34 unchanged Node source-instrument tests passed;27 final primary independent controls and one additional byte-identical Rust-root comparison passed with59 TypeScript syntax parses. Three current source CLIs exited0. Synthetic VM factories use literal objects only; no fixture/application module imports, mounted Vitest/React UI, Cargo/Rust compilation, native host, database, provider, network, installation or production effects. Source copies are byte-identical and Git init/add is confined to scrubbed fixture roots. Initial root-level positive fixture had zero discovered tests, so its original failure is retained; corrected nested discovery and an independent root-level omission control qualify the census. Intermediate cache replay used source text with formatting differences; final replay asserts byte-identical mocked/subject/test sources before comparing cached and fresh paths. No source/tool/config fix or deployed incident is accepted.
+
+October 9 money/usage/Work source qualification: The complete money API rejects a parseFloat hazard on a valid money writer. String literals containing /* and */ on opposite sides erase the actual hazard during raw block-comment removal and the same writer passes. The previously recorded production-import proof remains intact; this extends its lexical erasure owner.
+
+Additional source: `scripts/check-money-paths.mjs:132-199`. Acceptance target: Identify comments separately from quoted string/template content before hazard scanning; retain both genuine comment exclusion and actual money-hazard rejection. Current source report (`audit/checklist/reviews/coverage-ecosystem-money-usage-worktask-guards-2026-10-09-028.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-money-usage-worktask-independent-controls-2026-10-09-028-refined.json`, untracked). Unchanged complete source-instrument APIs and byte-identical CLI copies over isolated inert TypeScript/SQL text only.44 unchanged tests and35 final independent controls passed;62 TypeScript fixture parses establish syntax only. Four actual current source CLIs exited0. Two isolated literal arithmetic expressions execute in a VM; no application or fixture module imports, monetary writes, SQL, database, native host, provider, network, browser, build, installation, production action or real checkout staging occurs. Git used by unchanged tests is confined to scrubbed fixture roots. Initial11-control receipt preserves a failed CLI assertion: /tmp versus /private/tmp prevented the copied guard main from running. Final runner normalizes executable/cwd realpaths and asserts nonempty guard output. Source/tool/config files are unchanged; no current product incident or runtime acceptance is established.
+
+October 9 organization/pagination/tier source qualification: A complete API fixture discovers an actual page reader and rejects its missing helper. Quoted /* and */ markers placed around that reader cause raw block-comment removal to erase it; complete API reports0paged routes and passes. TypeScript syntax parses retain the actual reader and source string literals. This extends the existing quoted-marker erasure owner.
+
+Additional source: `scripts/check-pagination-contract.mjs:29-30,46-60`. Acceptance target: Recognize true comment tokens independently from quoted content before page-reader discovery; retain genuine comment exclusion and actual query-reader detection. Current source report (`audit/checklist/reviews/coverage-ecosystem-org-pagination-tier-guards-2026-10-09-029.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-org-pagination-tier-independent-controls-2026-10-09-029.json`, untracked). Unchanged complete source guard APIs/CLIs and isolated inert TypeScript/TSX/SQL/Git fixtures only.37 unchanged Node tests and31 independent controls passed;220 fixture syntax parses establish syntax only. Four current source CLIs exited0. Literal fixtures extracted via actual TypeScript AST values, copied role CLI byte identity and nonempty complete CLI output are independently asserted; organization fixtures run fresh subprocesses to avoid graph-cache cross-case state. One literal synthetic function with an injected counter executes in a VM and proves zero terminal calls. No application/fixture module imports, actual authorization/mutation, SQL/database, native host, provider, network, browser, React mount, build, install, production action or real checkout staging. Git init/census and unchanged tests bind throwaway roots with inherited GIT variables scrubbed. Source/tool/config files remain unchanged; no deployed incident or runtime acceptance is established.
+
+October9 reference/retention source qualification: Complete CLI accepts a data string naming an absent path without a comment marker and rejects a real comment referencing that path. Adding // only inside the data string makes it falsely reject as a source-comment reference. Independent TypeScript scanner reports0actual comment tokens. Existing quoted comment-boundary owner is extended with false rejection as well as its prior false erasure.
+
+Additional source: `scripts/lib/comment-scan.mjs:58-115; scripts/check-reference-integrity.mjs:174-196`. Acceptance target: Distinguish true language comment tokens from quoted payloads before extracting/erasing references, retaining actual comment detection and inert string exclusion. Current source report (`audit/checklist/reviews/coverage-ecosystem-reference-retention-guards-2026-10-09-030.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-reference-retention-independent-controls-2026-10-09-030.json`, untracked). Current unchanged complete source guards/helpers and isolated inert TypeScript/SQL/JSON/Git fixture text only.42unchanged Node tests and25independent controls passed;8TypeScript parses plus scanner/actual array counts establish source-fixture roles. CLI copies are byte-identical, realpaths normalized and nonempty execution output asserted. Git fixture operations address explicit throwaway roots, scrub inherited GIT variables and use only local quoting config. Actual current source CLI statuses are0,0,0,1,0; repository organization rejects root .pnpm-store and specification validation explicitly skips a retired absent set. No application/fixture module imports, SQL/database/erasure/cleanup, native/provider/network/browser/build/install/production effects or real checkout staging. Actual source copies/parses/hashes/searches grant no semantic EOF credit. Source/tool/config files remain unchanged; full runtime product acceptance remains unknown.
+
+October 9 project/prompt/public-share source qualification: A valid actual unscoped query is found and refused. String literals containing /* and */ on opposite sides of that same function cause raw block-comment removal to erase the query; the helper then passes. The TypeScript AST retains the function, and raw extractStatements sees its query. This extends existing quoted-marker erasure ownership; no fixture/application module or SQL executes.
+
+Additional source: `scripts/lib/project-context-boundary.mjs:99-101,254-266`. Acceptance target: Recognize actual comments independently of quoted string/template content before query discovery; retain real-comment exclusion and actual unscoped-query refusal. Current source report (`audit/checklist/reviews/coverage-ecosystem-project-prompt-share-guards-2026-10-09-032.json`, untracked); independent controls (`audit/checklist/evidence/coverage-project-prompt-share-independent-controls-2026-10-09-032-final.json`, untracked). Thirty-five unchanged source guard tests, thirty-eight independent inert controls and four individual current source CLIs passed. Fifty-one TypeScript AST syntax/source-kind/binding checks establish fixture subjects. Complete CLI copies are byte-identical, realpath-bound and produce nonempty output. Git fixture operations use explicit throwaway roots and scrub inherited GIT variables; no real checkout staging. Imported modules are unchanged source instruments only; no application/fixture modules, actual SQL/database, project prompt/public share mutation, native/provider/network/browser/build/install/production action or runtime product acceptance. Source/config/tool files remain unchanged. Current CLI findings are textual guard evidence, not deployed incidents.
+
+## AUDIT-MODULE-REACHABILITY-MISSING-TARGET-01
+
+Severity: Low. Status: open current source-instrument gap; source unchanged.
+
+October 9 mock-export/reachability source qualification: Running the unchanged complete CLI with an isolated empty cwd passes and prints success for Rust crate roots and TypeScript surfaces while reading no target source files. A present Rust source root lacking an entry rejects; a present ordinary orphan rejects. Current repository roots exist and its actual CLI passes; no current product missing-root defect is proved.
+
+Additional source: `scripts/check-module-reachability.mjs:119-120,440-441,489-503`. Acceptance target: Require applicable target presence and nonempty entry/source census, or report explicit nonapplicability/incomplete scope rather than blanket reachability success. Current source report (`audit/checklist/reviews/coverage-ecosystem-mock-exports-reachability-guards-2026-10-09-027.json`, untracked); final complete controls (`audit/checklist/evidence/coverage-mock-export-reachability-independent-controls-2026-10-09-027-final-fidelity.json`, untracked). Current unchanged source instruments/helpers and inert Git/TypeScript/text fixtures only.34 unchanged Node source-instrument tests passed;27 final primary independent controls and one additional byte-identical Rust-root comparison passed with59 TypeScript syntax parses. Three current source CLIs exited0. Synthetic VM factories use literal objects only; no fixture/application module imports, mounted Vitest/React UI, Cargo/Rust compilation, native host, database, provider, network, installation or production effects. Source copies are byte-identical and Git init/add is confined to scrubbed fixture roots. Initial root-level positive fixture had zero discovered tests, so its original failure is retained; corrected nested discovery and an independent root-level omission control qualify the census. Intermediate cache replay used source text with formatting differences; final replay asserts byte-identical mocked/subject/test sources before comparing cached and fresh paths. No source/tool/config fix or deployed incident is accepted.
+
+## AUDIT-MODULE-REACHABILITY-CARGO-ROOTS-01
+
+Severity: Low. Status: open current source-instrument gap; source unchanged.
+
+October 9 mock-export/reachability source qualification: A complete isolated CLI fixture includes Cargo.toml with autobins=false and one explicit src/main.rs binary. An unreferenced nested src/bin/nested/unselected.rs is still placed in the root stack and the check passes. A second complete CLI rejects an ordinary source with the exact same unused body. Independent final closure asserts byte-identical manifest, main and unused Rust bodies across both roots; only unused file location changes. Current official Cargo target documentation establishes that disabled autodiscovery leaves manually configured binary targets. The actual package compiled graph is unverified.
+
+Additional source: `scripts/check-module-reachability.mjs:104-115,126-138`. Acceptance target: Derive Rust entrypoints from the authoritative package target configuration and include only relevant discovered/declared targets before source reachability claims. Current source report (`audit/checklist/reviews/coverage-ecosystem-mock-exports-reachability-guards-2026-10-09-027.json`, untracked); final complete controls (`audit/checklist/evidence/coverage-mock-export-reachability-independent-controls-2026-10-09-027-final-fidelity.json`, untracked). Current unchanged source instruments/helpers and inert Git/TypeScript/text fixtures only.34 unchanged Node source-instrument tests passed;27 final primary independent controls and one additional byte-identical Rust-root comparison passed with59 TypeScript syntax parses. Three current source CLIs exited0. Synthetic VM factories use literal objects only; no fixture/application module imports, mounted Vitest/React UI, Cargo/Rust compilation, native host, database, provider, network, installation or production effects. Source copies are byte-identical and Git init/add is confined to scrubbed fixture roots. Initial root-level positive fixture had zero discovered tests, so its original failure is retained; corrected nested discovery and an independent root-level omission control qualify the census. Intermediate cache replay used source text with formatting differences; final replay asserts byte-identical mocked/subject/test sources before comparing cached and fresh paths. No source/tool/config fix or deployed incident is accepted.
+
+## AUDIT-MONEY-ROUNDING-INTEGER-CREDIT-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-money-paths.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 money/usage/Work source qualification: Complete API rejects an unrounded rate product. Wrapping it in Math.abs passes even though the independent literal VM result Math.abs(1*0.5) is0.5. Placing an unrelated Math.round(0) earlier on the same line also makes the unrounded product pass. Genuine Math.round of that product is accepted and its literal result is an integer. No fixture monetary writer runs.
+
+Additional source: `scripts/check-money-paths.mjs:87-119`. Acceptance target: Bind integer-resolution credit to the actual money expression and to a helper that establishes whole minor units; unrelated tokens or Math.abs must not discharge it. Current source report (`audit/checklist/reviews/coverage-ecosystem-money-usage-worktask-guards-2026-10-09-028.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-money-usage-worktask-independent-controls-2026-10-09-028-refined.json`, untracked). Unchanged complete source-instrument APIs and byte-identical CLI copies over isolated inert TypeScript/SQL text only.44 unchanged tests and35 final independent controls passed;62 TypeScript fixture parses establish syntax only. Four actual current source CLIs exited0. Two isolated literal arithmetic expressions execute in a VM; no application or fixture module imports, monetary writes, SQL, database, native host, provider, network, browser, build, installation, production action or real checkout staging occurs. Git used by unchanged tests is confined to scrubbed fixture roots. Initial11-control receipt preserves a failed CLI assertion: /tmp versus /private/tmp prevented the copied guard main from running. Final runner normalizes executable/cwd realpaths and asserts nonempty guard output. Source/tool/config files are unchanged; no current product incident or runtime acceptance is established.
+
+## AUDIT-MONEY-IDENTIFIER-CENSUS-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-money-paths.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 money/usage/Work source qualification: With a valid independent money-table anchor, an uppercase unquoted AMOUNT_CENTS column or quoted lowercase wallet table is omitted from the schema census and its parseFloat writer is not examined. With ordinary wallet schema retained, quoting only the lowercase wallet name in the writer also omits that writer. Ordinary lowercase unquoted writer/schema detects the float. Current PostgreSQL lexical documentation qualifies these equivalent identifier forms; no SQL is applied.
+
+Additional source: `scripts/check-money-paths.mjs:17-39,61-85`. Acceptance target: Normalize supported SQL identifiers and preserve their relation/column binding in both schema and writer discovery; mixed-tree anchors must not hide skipped money subjects. Current source report (`audit/checklist/reviews/coverage-ecosystem-money-usage-worktask-guards-2026-10-09-028.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-money-usage-worktask-independent-controls-2026-10-09-028-refined.json`, untracked). Unchanged complete source-instrument APIs and byte-identical CLI copies over isolated inert TypeScript/SQL text only.44 unchanged tests and35 final independent controls passed;62 TypeScript fixture parses establish syntax only. Four actual current source CLIs exited0. Two isolated literal arithmetic expressions execute in a VM; no application or fixture module imports, monetary writes, SQL, database, native host, provider, network, browser, build, installation, production action or real checkout staging occurs. Git used by unchanged tests is confined to scrubbed fixture roots. Initial11-control receipt preserves a failed CLI assertion: /tmp versus /private/tmp prevented the copied guard main from running. Final runner normalizes executable/cwd realpaths and asserts nonempty guard output. Source/tool/config files are unchanged; no current product incident or runtime acceptance is established.
+
+## AUDIT-USAGE-POOL-STATEMENT-TEXT-CLASSIFICATION-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 money/usage/Work source qualification: Complete API and byte-identical CLI reject an ordinary source_surface predicate. A semicolon inside memo string x;y separates the table from its later predicate and passes. Changing memo data to drop categorically exempts the actual filtered SELECT and passes. Account-only query passes as a valid counterguard. These are inert source statements, not account-pool execution.
+
+Additional source: `scripts/check-usage-pool-is-shared.mjs:78-104`. Acceptance target: Recognize actual SQL statement/token roles before boundaries and DDL exemptions; semicolons and DDL words inside literal data must not hide effective filters. Current source report (`audit/checklist/reviews/coverage-ecosystem-money-usage-worktask-guards-2026-10-09-028.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-money-usage-worktask-independent-controls-2026-10-09-028-refined.json`, untracked). Unchanged complete source-instrument APIs and byte-identical CLI copies over isolated inert TypeScript/SQL text only.44 unchanged tests and35 final independent controls passed;62 TypeScript fixture parses establish syntax only. Four actual current source CLIs exited0. Two isolated literal arithmetic expressions execute in a VM; no application or fixture module imports, monetary writes, SQL, database, native host, provider, network, browser, build, installation, production action or real checkout staging occurs. Git used by unchanged tests is confined to scrubbed fixture roots. Initial11-control receipt preserves a failed CLI assertion: /tmp versus /private/tmp prevented the copied guard main from running. Final runner normalizes executable/cwd realpaths and asserts nonempty guard output. Source/tool/config files are unchanged; no current product incident or runtime acceptance is established.
+
+## AUDIT-USAGE-POOL-CENSUS-COVERAGE-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 money/usage/Work source qualification: An uppercase CREDIT_TRANSACTIONS query with a real surface predicate is omitted while a lowercase account-only anchor supplies a nonempty one-file census; complete API/CLI pass. With every configured source directory absent, complete API/CLI report zero files and pass. Ordinary lowercase surface-filter query rejects. Repository roots currently exist and current CLI scans39 files, so no present missing-root product failure is claimed.
+
+Additional source: `scripts/check-usage-pool-is-shared.mjs:38-50,107-145`. Acceptance target: Discover supported identifier case and require applicable configured roots/subjects or explicit nonapplicability before presenting a complete shared-pool check. Current source report (`audit/checklist/reviews/coverage-ecosystem-money-usage-worktask-guards-2026-10-09-028.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-money-usage-worktask-independent-controls-2026-10-09-028-refined.json`, untracked). Unchanged complete source-instrument APIs and byte-identical CLI copies over isolated inert TypeScript/SQL text only.44 unchanged tests and35 final independent controls passed;62 TypeScript fixture parses establish syntax only. Four actual current source CLIs exited0. Two isolated literal arithmetic expressions execute in a VM; no application or fixture module imports, monetary writes, SQL, database, native host, provider, network, browser, build, installation, production action or real checkout staging occurs. Git used by unchanged tests is confined to scrubbed fixture roots. Initial11-control receipt preserves a failed CLI assertion: /tmp versus /private/tmp prevented the copied guard main from running. Final runner normalizes executable/cwd realpaths and asserts nonempty guard output. Source/tool/config files are unchanged; no current product incident or runtime acceptance is established.
+
+## AUDIT-USAGE-RESERVATION-KEY-BINDING-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 money/usage/Work source qualification: Both known unsafe-file anchors remain present. A direct randomUUID key rejects, but const key=randomUUID() followed by explicit idempotencyKey:key passes because the binding is unresolved. A helper exported as mintKey rejects when imported under that name, but the identical helper body imported as mintKey as buildKey passes because lookup uses the local alias rather than original export. TypeScript AST independently verifies that alias identity. Compact shorthand counterguard rejects as missing-key text; no claim that it traced randomUUID in that form.
+
+Additional source: `scripts/check-usage-reservation-replay.mjs:169-179,194-215,233-290`. Acceptance target: Resolve actual local key bindings and imported original export identity, retaining direct/unaliased rejection and making unresolved relevant expressions explicit rather than silently stable. Current source report (`audit/checklist/reviews/coverage-ecosystem-money-usage-worktask-guards-2026-10-09-028.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-money-usage-worktask-independent-controls-2026-10-09-028-refined.json`, untracked). Unchanged complete source-instrument APIs and byte-identical CLI copies over isolated inert TypeScript/SQL text only.44 unchanged tests and35 final independent controls passed;62 TypeScript fixture parses establish syntax only. Four actual current source CLIs exited0. Two isolated literal arithmetic expressions execute in a VM; no application or fixture module imports, monetary writes, SQL, database, native host, provider, network, browser, build, installation, production action or real checkout staging occurs. Git used by unchanged tests is confined to scrubbed fixture roots. Initial11-control receipt preserves a failed CLI assertion: /tmp versus /private/tmp prevented the copied guard main from running. Final runner normalizes executable/cwd realpaths and asserts nonempty guard output. Source/tool/config files are unchanged; no current product incident or runtime acceptance is established.
+
+## AUDIT-USAGE-RESERVATION-CALLEE-CENSUS-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 money/usage/Work source qualification: Complete API/CLI reject a third direct named reservation with a random key alongside both known unsafe anchors. Aliasing the same reservation function to reserve and calling reserve with the random key leaves only the two anchors in the call census and passes. This tests omission in a nonempty complete fixture; it does not claim that a wholly empty current CLI passes.
+
+Additional source: `scripts/check-usage-reservation-replay.mjs:270-290,292-350`. Acceptance target: Bind invocation discovery to actual reservation symbols and supported alias forms, or report unresolved invocation coverage before claiming none new. Current source report (`audit/checklist/reviews/coverage-ecosystem-money-usage-worktask-guards-2026-10-09-028.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-money-usage-worktask-independent-controls-2026-10-09-028-refined.json`, untracked). Unchanged complete source-instrument APIs and byte-identical CLI copies over isolated inert TypeScript/SQL text only.44 unchanged tests and35 final independent controls passed;62 TypeScript fixture parses establish syntax only. Four actual current source CLIs exited0. Two isolated literal arithmetic expressions execute in a VM; no application or fixture module imports, monetary writes, SQL, database, native host, provider, network, browser, build, installation, production action or real checkout staging occurs. Git used by unchanged tests is confined to scrubbed fixture roots. Initial11-control receipt preserves a failed CLI assertion: /tmp versus /private/tmp prevented the copied guard main from running. Final runner normalizes executable/cwd realpaths and asserts nonempty guard output. Source/tool/config files are unchanged; no current product incident or runtime acceptance is established.
+
+## AUDIT-WORKTASK-COMMENT-CENSUS-01
+
+Severity: Low. Status: open current source-instrument gap; source unchanged.
+
+October 9 money/usage/Work source qualification: A byte-identical full CLI correctly rejects a source tree containing no Work query. Adding only a source block comment containing an owned backtick query makes the same inert tree report one owner-scoped Work statement and pass. No query or application module executes.
+
+Additional source: `scripts/check-worktask-scope.mjs:55-63,87-105`. Acceptance target: Count actual relevant source SQL expressions and preserve empty-subject refusal; query text inside source comments cannot establish reviewed Work statements. Current source report (`audit/checklist/reviews/coverage-ecosystem-money-usage-worktask-guards-2026-10-09-028.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-money-usage-worktask-independent-controls-2026-10-09-028-refined.json`, untracked). Unchanged complete source-instrument APIs and byte-identical CLI copies over isolated inert TypeScript/SQL text only.44 unchanged tests and35 final independent controls passed;62 TypeScript fixture parses establish syntax only. Four actual current source CLIs exited0. Two isolated literal arithmetic expressions execute in a VM; no application or fixture module imports, monetary writes, SQL, database, native host, provider, network, browser, build, installation, production action or real checkout staging occurs. Git used by unchanged tests is confined to scrubbed fixture roots. Initial11-control receipt preserves a failed CLI assertion: /tmp versus /private/tmp prevented the copied guard main from running. Final runner normalizes executable/cwd realpaths and asserts nonempty guard output. Source/tool/config files are unchanged; no current product incident or runtime acceptance is established.
+
+## AUDIT-WORKTASK-SWEEP-BOUND-TEXT-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 money/usage/Work source qualification: The full unchanged CLI rejects an unowned UPDATE where true in the specifically exempted reaper path as an unbounded sweep. Adding only SQL comment updated_at < now() limit1 makes it pass with an independent owned anchor retained. Existing tests still reject a bounded-looking query in another filename. This establishes raw bound-marker credit, not a runtime reaper incident.
+
+Additional source: `scripts/check-worktask-scope.mjs:32-33,71-95`. Acceptance target: Prove effective staleness and limit expressions on the actual sweep before granting the filename exemption; SQL-comment markers must not discharge those bounds. Current source report (`audit/checklist/reviews/coverage-ecosystem-money-usage-worktask-guards-2026-10-09-028.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-money-usage-worktask-independent-controls-2026-10-09-028-refined.json`, untracked). Unchanged complete source-instrument APIs and byte-identical CLI copies over isolated inert TypeScript/SQL text only.44 unchanged tests and35 final independent controls passed;62 TypeScript fixture parses establish syntax only. Four actual current source CLIs exited0. Two isolated literal arithmetic expressions execute in a VM; no application or fixture module imports, monetary writes, SQL, database, native host, provider, network, browser, build, installation, production action or real checkout staging occurs. Git used by unchanged tests is confined to scrubbed fixture roots. Initial11-control receipt preserves a failed CLI assertion: /tmp versus /private/tmp prevented the copied guard main from running. Final runner normalizes executable/cwd realpaths and asserts nonempty guard output. Source/tool/config files are unchanged; no current product incident or runtime acceptance is established.
+
+## AUDIT-ORG-PERMISSION-HANDLER-AGGREGATION-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-org-permissions.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 organization/pagination/tier source qualification: A complete valid CLI fixture passes and an unchecked PUT rejects. In a new route exporting a protected PUT and an unchecked DELETE, union of reachable terminal kinds is nonempty and the complete CLI passes both handlers. Actual TypeScript syntax for both handler bodies is retained; neither handler executes.
+
+Additional source: `scripts/check-org-permissions.mjs:505-515`. Acceptance target: Require authorization proof independently for every relevant mutating handler/path; a protected sibling cannot discharge another handler. Current source report (`audit/checklist/reviews/coverage-ecosystem-org-pagination-tier-guards-2026-10-09-029.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-org-pagination-tier-independent-controls-2026-10-09-029.json`, untracked). Unchanged complete source guard APIs/CLIs and isolated inert TypeScript/TSX/SQL/Git fixtures only.37 unchanged Node tests and31 independent controls passed;220 fixture syntax parses establish syntax only. Four current source CLIs exited0. Literal fixtures extracted via actual TypeScript AST values, copied role CLI byte identity and nonempty complete CLI output are independently asserted; organization fixtures run fresh subprocesses to avoid graph-cache cross-case state. One literal synthetic function with an injected counter executes in a VM and proves zero terminal calls. No application/fixture module imports, actual authorization/mutation, SQL/database, native host, provider, network, browser, React mount, build, install, production action or real checkout staging. Git init/census and unchanged tests bind throwaway roots with inherited GIT variables scrubbed. Source/tool/config files remain unchanged; no deployed incident or runtime acceptance is established.
+
+## AUDIT-ORG-PERMISSION-HANDLER-CENSUS-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-org-permissions.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 organization/pagination/tier source qualification: A direct exported unchecked mutation rejects. Rewriting a new unchecked async erase function as export { erase as DELETE } omits that handler entirely; the complete valid anchor fixture still reports3mutating routes and passes. Independent syntax parsing retains the alias; this is nonempty-scope omission.
+
+Additional source: `scripts/check-org-permissions.mjs:400-405,484-485`. Acceptance target: Enumerate actual exported mutating handler identities through supported declaration and export-list alias forms, or expose unresolved coverage. Current source report (`audit/checklist/reviews/coverage-ecosystem-org-pagination-tier-guards-2026-10-09-029.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-org-pagination-tier-independent-controls-2026-10-09-029.json`, untracked). Unchanged complete source guard APIs/CLIs and isolated inert TypeScript/TSX/SQL/Git fixtures only.37 unchanged Node tests and31 independent controls passed;220 fixture syntax parses establish syntax only. Four current source CLIs exited0. Literal fixtures extracted via actual TypeScript AST values, copied role CLI byte identity and nonempty complete CLI output are independently asserted; organization fixtures run fresh subprocesses to avoid graph-cache cross-case state. One literal synthetic function with an injected counter executes in a VM and proves zero terminal calls. No application/fixture module imports, actual authorization/mutation, SQL/database, native host, provider, network, browser, React mount, build, install, production action or real checkout staging. Git init/census and unchanged tests bind throwaway roots with inherited GIT variables scrubbed. Source/tool/config files remain unchanged; no deployed incident or runtime acceptance is established.
+
+## AUDIT-ORG-PERMISSION-IMPORT-GRAPH-COVERAGE-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-org-permissions.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 organization/pagination/tier source qualification: The complete CLI accepts a handler calling the declared permission terminal via named import. The equivalent namespace import and namespace.requireMemberPermission call is rejected as reaching no permission check. Actual service export and fresh-process graph are retained. This is false rejection, not a product permission bypass.
+
+Additional source: `scripts/check-org-permissions.mjs:282-297,351-379`. Acceptance target: Resolve namespace/member symbol identity to the actual owned terminal while retaining unchecked-handler rejection and effect-sensitive proof. Current source report (`audit/checklist/reviews/coverage-ecosystem-org-pagination-tier-guards-2026-10-09-029.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-org-pagination-tier-independent-controls-2026-10-09-029.json`, untracked). Unchanged complete source guard APIs/CLIs and isolated inert TypeScript/TSX/SQL/Git fixtures only.37 unchanged Node tests and31 independent controls passed;220 fixture syntax parses establish syntax only. Four current source CLIs exited0. Literal fixtures extracted via actual TypeScript AST values, copied role CLI byte identity and nonempty complete CLI output are independently asserted; organization fixtures run fresh subprocesses to avoid graph-cache cross-case state. One literal synthetic function with an injected counter executes in a VM and proves zero terminal calls. No application/fixture module imports, actual authorization/mutation, SQL/database, native host, provider, network, browser, React mount, build, install, production action or real checkout staging. Git init/census and unchanged tests bind throwaway roots with inherited GIT variables scrubbed. Source/tool/config files remain unchanged; no deployed incident or runtime acceptance is established.
+
+## AUDIT-ORG-PERMISSION-RLS-CONNECTION-TEXT-CREDIT-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-org-permissions.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 organization/pagination/tier source qualification: With real declared write-policy anchors retained, a registered RLS route containing only a string getUserScopedDb( and an inert PUT passes the complete CLI connection check. No scoped database connection or route effect occurs; regular absent-policy controls still reject.
+
+Additional source: `scripts/check-org-permissions.mjs:494-502`. Acceptance target: Bind the scoped connection check to the actual connection used by the relevant mutation; source data containing its name must not discharge it. Current source report (`audit/checklist/reviews/coverage-ecosystem-org-pagination-tier-guards-2026-10-09-029.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-org-pagination-tier-independent-controls-2026-10-09-029.json`, untracked). Unchanged complete source guard APIs/CLIs and isolated inert TypeScript/TSX/SQL/Git fixtures only.37 unchanged Node tests and31 independent controls passed;220 fixture syntax parses establish syntax only. Four current source CLIs exited0. Literal fixtures extracted via actual TypeScript AST values, copied role CLI byte identity and nonempty complete CLI output are independently asserted; organization fixtures run fresh subprocesses to avoid graph-cache cross-case state. One literal synthetic function with an injected counter executes in a VM and proves zero terminal calls. No application/fixture module imports, actual authorization/mutation, SQL/database, native host, provider, network, browser, React mount, build, install, production action or real checkout staging. Git init/census and unchanged tests bind throwaway roots with inherited GIT variables scrubbed. Source/tool/config files remain unchanged; no deployed incident or runtime acceptance is established.
+
+## AUDIT-ORG-ROLE-LINE-CENSUS-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 organization/pagination/tier source qualification: All3required baseline migration files remain present. The complete copied CLI rejects an inline owner/admin array includes gate and an inline current_app_org_role() in SQL gate. Only formatting either actual form across lines makes the same source guard pass. Independent TypeScript parses retain actual array semantics; no SQL or handler executes.
+
+Additional source: `scripts/check-org-role-checks.mjs:28-38,53-58,81-91`. Acceptance target: Scan structural role gates across supported formatting and SQL tokens rather than each physical line, preserving baseline/stale-entry checks. Current source report (`audit/checklist/reviews/coverage-ecosystem-org-pagination-tier-guards-2026-10-09-029.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-org-pagination-tier-independent-controls-2026-10-09-029.json`, untracked). Unchanged complete source guard APIs/CLIs and isolated inert TypeScript/TSX/SQL/Git fixtures only.37 unchanged Node tests and31 independent controls passed;220 fixture syntax parses establish syntax only. Four current source CLIs exited0. Literal fixtures extracted via actual TypeScript AST values, copied role CLI byte identity and nonempty complete CLI output are independently asserted; organization fixtures run fresh subprocesses to avoid graph-cache cross-case state. One literal synthetic function with an injected counter executes in a VM and proves zero terminal calls. No application/fixture module imports, actual authorization/mutation, SQL/database, native host, provider, network, browser, React mount, build, install, production action or real checkout staging. Git init/census and unchanged tests bind throwaway roots with inherited GIT variables scrubbed. Source/tool/config files remain unchanged; no deployed incident or runtime acceptance is established.
+
+## AUDIT-PAGINATION-MARKER-AS-BEHAVIOR-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 organization/pagination/tier source qualification: Complete API rejects a discovered page reader with no cursor helper and accepts a genuine keyset fixture. Adding only unused keysetSql string data makes the unpaged query count as keyset and pass; unrelated offset string data makes a genuine keyset query fail as offset. A loading primitive with no consumer rejects, while a prompt string containing <PaginationContent/> passes. Replacing an actual buildPage export with only a comment export function buildPage also passes its helper-export check. All are inert source text with literal fixture fidelity asserted.
+
+Additional source: `scripts/check-pagination-contract.mjs:50-64,79-81,136-165,207-229`. Acceptance target: Bind helper exports, cursor/offset behavior and rendered consumers to actual declarations, uses and relevant page queries; data/comments cannot establish them and unrelated words cannot classify them. Current source report (`audit/checklist/reviews/coverage-ecosystem-org-pagination-tier-guards-2026-10-09-029.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-org-pagination-tier-independent-controls-2026-10-09-029.json`, untracked). Unchanged complete source guard APIs/CLIs and isolated inert TypeScript/TSX/SQL/Git fixtures only.37 unchanged Node tests and31 independent controls passed;220 fixture syntax parses establish syntax only. Four current source CLIs exited0. Literal fixtures extracted via actual TypeScript AST values, copied role CLI byte identity and nonempty complete CLI output are independently asserted; organization fixtures run fresh subprocesses to avoid graph-cache cross-case state. One literal synthetic function with an injected counter executes in a VM and proves zero terminal calls. No application/fixture module imports, actual authorization/mutation, SQL/database, native host, provider, network, browser, React mount, build, install, production action or real checkout staging. Git init/census and unchanged tests bind throwaway roots with inherited GIT variables scrubbed. Source/tool/config files remain unchanged; no deployed incident or runtime acceptance is established.
+
+## AUDIT-PAGINATION-PARAMETER-CENSUS-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 organization/pagination/tier source qualification: A route using the expected params.get cursor form is discovered and a missing helper rejects. Using paramsAlias.get on the same parameter object leaves the actual cursor read in valid TypeScript but complete API reports0paged routes and passes the fixture. Real valid contract/helper anchors remain.
+
+Additional source: `scripts/check-pagination-contract.mjs:46-60`. Acceptance target: Resolve supported aliases of actual URL/search parameter receivers before route classification or explicitly retain unresolved subjects. Current source report (`audit/checklist/reviews/coverage-ecosystem-org-pagination-tier-guards-2026-10-09-029.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-org-pagination-tier-independent-controls-2026-10-09-029.json`, untracked). Unchanged complete source guard APIs/CLIs and isolated inert TypeScript/TSX/SQL/Git fixtures only.37 unchanged Node tests and31 independent controls passed;220 fixture syntax parses establish syntax only. Four current source CLIs exited0. Literal fixtures extracted via actual TypeScript AST values, copied role CLI byte identity and nonempty complete CLI output are independently asserted; organization fixtures run fresh subprocesses to avoid graph-cache cross-case state. One literal synthetic function with an injected counter executes in a VM and proves zero terminal calls. No application/fixture module imports, actual authorization/mutation, SQL/database, native host, provider, network, browser, React mount, build, install, production action or real checkout staging. Git init/census and unchanged tests bind throwaway roots with inherited GIT variables scrubbed. Source/tool/config files remain unchanged; no deployed incident or runtime acceptance is established.
+
+## AUDIT-PLAN-TIER-COMPARISON-SYNTAX-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-plan-tier-predicates.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 organization/pagination/tier source qualification: Complete source API rejects an actual single-quoted planTier===pro comparison. The equivalent double-quoted or multiline comparison passes, as does an actual comparison after a leading closed block comment because the whole line is skipped. A string containing the banned comparison alone falsely rejects. Independent current catalog extraction matches9private tier strings; present vocabulary drift is not a finding.
+
+Additional source: `scripts/check-plan-tier-predicates.mjs:191-195,216-218,221-236`. Acceptance target: Bind raw tier policy detection to actual comparison expressions across supported quote/formatting forms; real comments/data and closed leading comments must be distinguished. Current source report (`audit/checklist/reviews/coverage-ecosystem-org-pagination-tier-guards-2026-10-09-029.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-org-pagination-tier-independent-controls-2026-10-09-029.json`, untracked). Unchanged complete source guard APIs/CLIs and isolated inert TypeScript/TSX/SQL/Git fixtures only.37 unchanged Node tests and31 independent controls passed;220 fixture syntax parses establish syntax only. Four current source CLIs exited0. Literal fixtures extracted via actual TypeScript AST values, copied role CLI byte identity and nonempty complete CLI output are independently asserted; organization fixtures run fresh subprocesses to avoid graph-cache cross-case state. One literal synthetic function with an injected counter executes in a VM and proves zero terminal calls. No application/fixture module imports, actual authorization/mutation, SQL/database, native host, provider, network, browser, React mount, build, install, production action or real checkout staging. Git init/census and unchanged tests bind throwaway roots with inherited GIT variables scrubbed. Source/tool/config files remain unchanged; no deployed incident or runtime acceptance is established.
+
+## AUDIT-REFERENCE-CANONICAL-SUFFIX-CREDIT-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October9 reference/retention source qualification: Complete CLI rejects an ordinary missing canonical link. README link apps/mobile/src/guard_probe.ts passes when only examples/archive/apps/mobile/src/guard_probe.ts exists. Independent filesystem check proves the actual named target absent; suffix fallback supplies credit.
+
+Additional source: `scripts/lib/comment-scan.mjs:169-184; scripts/check-reference-integrity.mjs:205-228`. Acceptance target: Require the exact applicable root/relative target or an explicit enforced alias; a suffix match on a different canonical path cannot close a broken reference. Current source report (`audit/checklist/reviews/coverage-ecosystem-reference-retention-guards-2026-10-09-030.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-reference-retention-independent-controls-2026-10-09-030.json`, untracked). Current unchanged complete source guards/helpers and isolated inert TypeScript/SQL/JSON/Git fixture text only.42unchanged Node tests and25independent controls passed;8TypeScript parses plus scanner/actual array counts establish source-fixture roles. CLI copies are byte-identical, realpaths normalized and nonempty execution output asserted. Git fixture operations address explicit throwaway roots, scrub inherited GIT variables and use only local quoting config. Actual current source CLI statuses are0,0,0,1,0; repository organization rejects root .pnpm-store and specification validation explicitly skips a retired absent set. No application/fixture module imports, SQL/database/erasure/cleanup, native/provider/network/browser/build/install/production effects or real checkout staging. Actual source copies/parses/hashes/searches grant no semantic EOF credit. Source/tool/config files remain unchanged; full runtime product acceptance remains unknown.
+
+## AUDIT-REFERENCE-PROVENANCE-SCOPE-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October9 reference/retention source qualification: Complete CLI rejects a current missing Markdown link and a real source comment citing a missing file. Adding an unrelated Previously clause to the Markdown line suppresses that current link; adjoining a historical removed-module comment likewise suppresses the current comment via combined block text. Actual TypeScript comment syntax is retained.
+
+Additional source: `scripts/check-reference-integrity.mjs:148-184,201-208,390-395`. Acceptance target: Scope provenance exemption to the specific historical reference; unrelated current links/comments in the same line or adjacent block remain checked. Current source report (`audit/checklist/reviews/coverage-ecosystem-reference-retention-guards-2026-10-09-030.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-reference-retention-independent-controls-2026-10-09-030.json`, untracked). Current unchanged complete source guards/helpers and isolated inert TypeScript/SQL/JSON/Git fixture text only.42unchanged Node tests and25independent controls passed;8TypeScript parses plus scanner/actual array counts establish source-fixture roles. CLI copies are byte-identical, realpaths normalized and nonempty execution output asserted. Git fixture operations address explicit throwaway roots, scrub inherited GIT variables and use only local quoting config. Actual current source CLI statuses are0,0,0,1,0; repository organization rejects root .pnpm-store and specification validation explicitly skips a retired absent set. No application/fixture module imports, SQL/database/erasure/cleanup, native/provider/network/browser/build/install/production effects or real checkout staging. Actual source copies/parses/hashes/searches grant no semantic EOF credit. Source/tool/config files remain unchanged; full runtime product acceptance remains unknown.
+
+## AUDIT-REFERENCE-GIT-PATH-CENSUS-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October9 reference/retention source qualification: In an explicit fresh Git fixture with core.quotepath=true, docs/café.md exists and contains an ordinary missing link, but the complete CLI passes because newline Git census emits a quoted escaped path. Setting only local core.quotepath=false in an otherwise identical fresh fixture makes the actual path discovered and the link rejected. No global Git config or real checkout changes.
+
+Additional source: `scripts/lib/comment-scan.mjs:46-51; scripts/check-reference-integrity.mjs:362-375`. Acceptance target: Use an exact NUL-safe path census or decode Git output correctly; supported current Unicode filenames must remain actual scannable subjects regardless of quoting config. Current source report (`audit/checklist/reviews/coverage-ecosystem-reference-retention-guards-2026-10-09-030.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-reference-retention-independent-controls-2026-10-09-030.json`, untracked). Current unchanged complete source guards/helpers and isolated inert TypeScript/SQL/JSON/Git fixture text only.42unchanged Node tests and25independent controls passed;8TypeScript parses plus scanner/actual array counts establish source-fixture roles. CLI copies are byte-identical, realpaths normalized and nonempty execution output asserted. Git fixture operations address explicit throwaway roots, scrub inherited GIT variables and use only local quoting config. Actual current source CLI statuses are0,0,0,1,0; repository organization rejects root .pnpm-store and specification validation explicitly skips a retired absent set. No application/fixture module imports, SQL/database/erasure/cleanup, native/provider/network/browser/build/install/production effects or real checkout staging. Actual source copies/parses/hashes/searches grant no semantic EOF credit. Source/tool/config files remain unchanged; full runtime product acceptance remains unknown.
+
+## AUDIT-REFERENCE-ALLOWLIST-REASON-TYPE-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October9 reference/retention source qualification: Source API rejects a short string rationale. A complete CLI fixture with a missing README link passes when intentional pathPrefix README.md carries reason:{}; the object has no20character string rationale, yet truthiness/undefined length defeats validation before suppression.
+
+Additional source: `scripts/check-reference-integrity.mjs:315-320,338-345,467-469`. Acceptance target: Require a substantive rationale of the declared string type and length before granting exemption, retaining ordinary valid reasons and short/invalid-type rejection. Current source report (`audit/checklist/reviews/coverage-ecosystem-reference-retention-guards-2026-10-09-030.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-reference-retention-independent-controls-2026-10-09-030.json`, untracked). Current unchanged complete source guards/helpers and isolated inert TypeScript/SQL/JSON/Git fixture text only.42unchanged Node tests and25independent controls passed;8TypeScript parses plus scanner/actual array counts establish source-fixture roles. CLI copies are byte-identical, realpaths normalized and nonempty execution output asserted. Git fixture operations address explicit throwaway roots, scrub inherited GIT variables and use only local quoting config. Actual current source CLI statuses are0,0,0,1,0; repository organization rejects root .pnpm-store and specification validation explicitly skips a retired absent set. No application/fixture module imports, SQL/database/erasure/cleanup, native/provider/network/browser/build/install/production effects or real checkout staging. Actual source copies/parses/hashes/searches grant no semantic EOF credit. Source/tool/config files remain unchanged; full runtime product acceptance remains unknown.
+
+## AUDIT-RETENTION-INVENTORY-COMMENT-CREDIT-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October9 reference/retention source qualification: Complete API with valid current schema/inventory anchors rejects a new email-bearing table outside every erasure rule. Adding only a // commented row inside USER_SCOPED_TABLES makes it named/reached and pass. Independently parsed actual array element count is unchanged; no erasure/SQL executes.
+
+Additional source: `scripts/check-retention-graph.mjs:79-117,136-162`. Acceptance target: Bind named inventory entries to actual typed array/object declarations; comment text cannot establish a subject disposition or named graph node. Current source report (`audit/checklist/reviews/coverage-ecosystem-reference-retention-guards-2026-10-09-030.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-reference-retention-independent-controls-2026-10-09-030.json`, untracked). Current unchanged complete source guards/helpers and isolated inert TypeScript/SQL/JSON/Git fixture text only.42unchanged Node tests and25independent controls passed;8TypeScript parses plus scanner/actual array counts establish source-fixture roles. CLI copies are byte-identical, realpaths normalized and nonempty execution output asserted. Git fixture operations address explicit throwaway roots, scrub inherited GIT variables and use only local quoting config. Actual current source CLI statuses are0,0,0,1,0; repository organization rejects root .pnpm-store and specification validation explicitly skips a retired absent set. No application/fixture module imports, SQL/database/erasure/cleanup, native/provider/network/browser/build/install/production effects or real checkout staging. Actual source copies/parses/hashes/searches grant no semantic EOF credit. Source/tool/config files remain unchanged; full runtime product acceptance remains unknown.
+
+## AUDIT-SPEC-DIFF-TOPLEVEL-TYPE-01
+
+Severity: Low. Status: open current source-instrument gap; source unchanged.
+
+October9 reference/retention source qualification: Complete CLI rejects a null roadmap top level with its descriptive object-validation error. Adding --diff against a valid prior set instead throws TypeError at Object.keys before reporting the collected descriptive error. Both outcomes fail closed; this is an instrument diagnostics/robustness defect, not false product acceptance.
+
+Additional source: `scripts/check-spec-artifacts.mjs:65-69,122-128,176-188`. Acceptance target: Do not diff invalid top-level values before descriptive validation; null/array/nonobject previous and current artifacts retain deterministic scoped diagnostics. Current source report (`audit/checklist/reviews/coverage-ecosystem-reference-retention-guards-2026-10-09-030.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-reference-retention-independent-controls-2026-10-09-030.json`, untracked). Current unchanged complete source guards/helpers and isolated inert TypeScript/SQL/JSON/Git fixture text only.42unchanged Node tests and25independent controls passed;8TypeScript parses plus scanner/actual array counts establish source-fixture roles. CLI copies are byte-identical, realpaths normalized and nonempty execution output asserted. Git fixture operations address explicit throwaway roots, scrub inherited GIT variables and use only local quoting config. Actual current source CLI statuses are0,0,0,1,0; repository organization rejects root .pnpm-store and specification validation explicitly skips a retired absent set. No application/fixture module imports, SQL/database/erasure/cleanup, native/provider/network/browser/build/install/production effects or real checkout staging. Actual source copies/parses/hashes/searches grant no semantic EOF credit. Source/tool/config files remain unchanged; full runtime product acceptance remains unknown.
+
+## AUDIT-REPO-REQUIRED-DIRECTORY-TYPE-01
+
+Severity: Low. Status: open current source-instrument gap; source unchanged.
+
+October9 reference/retention source qualification: Complete inert Git-root CLI accepts actual required directories and rejects absent docs/agent-context. Replacing only that nested directory with a literal data file makes the same complete CLI pass; independent stat confirms it is not a directory. No real repository path is replaced.
+
+Additional source: `scripts/check-repo-organization.mjs:159-175`. Acceptance target: Verify actual required directory type and supported link policy rather than existence alone; preserve absent-path rejection and real directory acceptance. Current source report (`audit/checklist/reviews/coverage-ecosystem-reference-retention-guards-2026-10-09-030.json`, untracked); complete independent controls (`audit/checklist/evidence/coverage-reference-retention-independent-controls-2026-10-09-030.json`, untracked). Current unchanged complete source guards/helpers and isolated inert TypeScript/SQL/JSON/Git fixture text only.42unchanged Node tests and25independent controls passed;8TypeScript parses plus scanner/actual array counts establish source-fixture roles. CLI copies are byte-identical, realpaths normalized and nonempty execution output asserted. Git fixture operations address explicit throwaway roots, scrub inherited GIT variables and use only local quoting config. Actual current source CLI statuses are0,0,0,1,0; repository organization rejects root .pnpm-store and specification validation explicitly skips a retired absent set. No application/fixture module imports, SQL/database/erasure/cleanup, native/provider/network/browser/build/install/production effects or real checkout staging. Actual source copies/parses/hashes/searches grant no semantic EOF credit. Source/tool/config files remain unchanged; full runtime product acceptance remains unknown.
+
+## AUDIT-RETRY-SEMANTICS-COMMENT-CREDIT-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 retry/runbook/registry source qualification: The complete current guard rejects an actual zero maxAttempts and absent classification declarations. An appended // maxAttempts comment overwrites that parsed zero to the required floor while the independently parsed object still has exactly one actual maxAttempts property valued zero. Comment-only classification exports, tool retrySafety/vocabulary and user retry function also pass while their actual AST declarations are absent.
+
+Additional source: `scripts/check-retry-semantics.mjs:30-38,80-88,98-117,127-139`. Acceptance target: Bind policy values, exported classification/type fields, tool safety members and surface evidence to actual source declarations or scoped behavioral evidence; comments cannot replace required live obligations. Current source report (`audit/checklist/reviews/coverage-ecosystem-retry-runbook-registry-guards-2026-10-09-031.json`, untracked); independent controls (`audit/checklist/evidence/coverage-retry-runbook-registry-independent-controls-2026-10-09-031-refined.json`, untracked). Actual current unchanged complete source guards, byte-identical realpath-bound CLI copies and isolated inert TypeScript/JSON/Git fixture text only. Forty existing Node guard tests and thirty-seven independent controls passed; twenty-three TypeScript AST syntax/source-kind checks establish fixture roles. Four individual current source CLIs exited zero. Initial macOS /var-versus-/private temporary-path identity rejection was preserved before any control ran, then the scratch root was normalized; the byte-identity, realpath and nonempty complete CLI assertions remain required. One malformed-root flag refusal is retained as a counterguard. No application/fixture module imports, referenced command execution, SQL/database, Work operation, native/provider/network/browser/build/install/production effects or real checkout staging. Source/tool/config files remain unchanged; these are instrument limits rather than deployed product incidents or runtime acceptance.
+
+## AUDIT-RETRY-REGISTRY-EMPTY-OBLIGATIONS-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main added context-window checks to `scripts/check-model-registry-integrity.mjs` and moved the free-plan disclosure read in `scripts/check-privacy-claims.mjs` to the shared compliance package, but an emptied registry and an empty cookie page still pass. Line numbers for those files and for `packages/ai/model-registry/scripts/compile.mjs` are main's.
+
+October 9 retry/runbook/registry source qualification: A complete retry CLI accepts a valid-shaped contract with zero policy fields, classification markers, safety vocabulary members and user retry surfaces. A complete registry CLI accepts empty vocabularies and cast roots while an inert app source contains a real unchecked cast. With one declared JSON vocabulary and an actual predicate, an empty JSON member bucket also passes with members zero. Current normal contracts are nonempty; no claim that they are currently erased is made.
+
+Additional source: `scripts/check-retry-semantics.mjs:53-76,87-94,116-123,127-145,148-163; scripts/check-registry-references.mjs:57-65,101-104,167-169,204-219`. Acceptance target: Validate canonical contract population and field shapes against declared owner obligations before accepting a scan; preserve meaningful zero-work refusals and nonempty current owner/counterguard evidence. Current source report (`audit/checklist/reviews/coverage-ecosystem-retry-runbook-registry-guards-2026-10-09-031.json`, untracked); independent controls (`audit/checklist/evidence/coverage-retry-runbook-registry-independent-controls-2026-10-09-031-refined.json`, untracked). Actual current unchanged complete source guards, byte-identical realpath-bound CLI copies and isolated inert TypeScript/JSON/Git fixture text only. Forty existing Node guard tests and thirty-seven independent controls passed; twenty-three TypeScript AST syntax/source-kind checks establish fixture roles. Four individual current source CLIs exited zero. Initial macOS /var-versus-/private temporary-path identity rejection was preserved before any control ran, then the scratch root was normalized; the byte-identity, realpath and nonempty complete CLI assertions remain required. One malformed-root flag refusal is retained as a counterguard. No application/fixture module imports, referenced command execution, SQL/database, Work operation, native/provider/network/browser/build/install/production effects or real checkout staging. Source/tool/config files remain unchanged; these are instrument limits rather than deployed product incidents or runtime acceptance.
+
+October 9 model-population qualification: the complete unchanged compatibility-catalog CLI passes an existing empty model/provider catalog while its three source roots are absent. The complete unchanged registry-integrity CLI passes a private current-registry clone with model/route/harness/capability/limit/pricing maps emptied, reporting0models/0routes. Missing canonical catalog refuses; empty models with current routes or empty routes with current models refuses. Source: `scripts/check-model-catalog-integrity.mjs:124-136,211-251; scripts/check-model-registry-integrity.mjs:76-83,96-282`. This extends the same obligation-population cause and acceptance target with zero new cause. Current original guards pass with401models/509routes and the suite guard refuses zero adapters; separate strict schema/generated-artifact compilation at `packages/ai/model-registry/scripts/compile.mjs:2939-2944` and declared CI steps remain counterguards. No actual catalog/registry erasure, overall-chain malformed-input acceptance or product outage is established. Current source report (`audit/checklist/reviews/coverage-model-contract-guard-source-2026-10-09-041.json`, untracked); independent controls (`audit/checklist/evidence/coverage-model-contract-inert-controls-2026-10-09-041.json`, untracked); current guard/tests (`audit/checklist/evidence/coverage-model-contract-current-source-gates-2026-10-09-041.json`, untracked). All56 authored guard-only tests and four original source CLIs passed. Original fixture-path/probe refusals are retained separately. Source/tool/config remain unchanged; prior Root035 failure and all runtime/requirement acceptance remain open.
+
+October 9 privacy/security/license qualification: An existing empty cookie page bypasses all seven required sentence/backing checks while the remaining baseline disclosure data stays present. An existing empty notice document passes with no attribution obligations. Changed cookie copy, missing signal file, leading denied license and unknown license refuse. Extend the existing nonempty-obligation acceptance target; no current document erasure or product incident claimed. Source: `scripts/check-privacy-claims.mjs:136-137`, `scripts/check-privacy-claims.mjs:167-215`, `scripts/check-licenses.mjs:84-88`, `scripts/check-licenses.mjs:151-159`. Current source report (`audit/checklist/reviews/coverage-privacy-security-claim-guard-source-2026-10-09-042.json`, untracked); independent controls (`audit/checklist/evidence/coverage-privacy-security-claim-inert-controls-2026-10-09-042.json`, untracked); current checker/test outcomes (`audit/checklist/evidence/coverage-privacy-security-claim-current-source-gates-2026-10-09-042.json`, untracked). Zero new cause; current security-checker failure and prior RLS suite failure remain separately open. No source or runtime mutation.
+
+## AUDIT-UNSAFE-RETRY-INERT-SOURCE-CREDIT-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 retry/runbook/registry source qualification: The complete CLI rejects missing actual safety and an absent parking token. It accepts a safety property written only in a comment, counts a commented-out executor as one actual Work operation, and accepts a claim file with every bound/unsafe/outcome marker inside comments and zero actual function declarations. AST checks establish inactive source roles without running any executor.
+
+Additional source: `scripts/check-unsafe-retry.mjs:64-85,107-127`. Acceptance target: Count actual executor calls and direct safety arguments, and bind replay/parking evidence to actual claim implementation; source comments must not establish call counts or enforcing branches. Current source report (`audit/checklist/reviews/coverage-ecosystem-retry-runbook-registry-guards-2026-10-09-031.json`, untracked); independent controls (`audit/checklist/evidence/coverage-retry-runbook-registry-independent-controls-2026-10-09-031-refined.json`, untracked). Actual current unchanged complete source guards, byte-identical realpath-bound CLI copies and isolated inert TypeScript/JSON/Git fixture text only. Forty existing Node guard tests and thirty-seven independent controls passed; twenty-three TypeScript AST syntax/source-kind checks establish fixture roles. Four individual current source CLIs exited zero. Initial macOS /var-versus-/private temporary-path identity rejection was preserved before any control ran, then the scratch root was normalized; the byte-identity, realpath and nonempty complete CLI assertions remain required. One malformed-root flag refusal is retained as a counterguard. No application/fixture module imports, referenced command execution, SQL/database, Work operation, native/provider/network/browser/build/install/production effects or real checkout staging. Source/tool/config files remain unchanged; these are instrument limits rather than deployed product incidents or runtime acceptance.
+
+## AUDIT-UNSAFE-RETRY-CALL-ARGUMENT-BINDING-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 retry/runbook/registry source qualification: A call whose second argument has only other.retrySafety passes despite no direct retrySafety field. A string containing an opening parenthesis causes the lexical call collector to absorb an unrelated later retrySafety object and accept an actual missing argument field. Conversely, a closing parenthesis string hides a real direct safety field and is falsely rejected. Independent actual AST argument/property boundaries prove each fixture role.
+
+Additional source: `scripts/check-unsafe-retry.mjs:48-57,68-76`. Acceptance target: Parse actual call boundaries and resolve the intended direct argument/property binding, preserving valid shorthand safety and missing-safety rejection; string/comment delimiters and neighboring data cannot alter the safety subject. Current source report (`audit/checklist/reviews/coverage-ecosystem-retry-runbook-registry-guards-2026-10-09-031.json`, untracked); independent controls (`audit/checklist/evidence/coverage-retry-runbook-registry-independent-controls-2026-10-09-031-refined.json`, untracked). Actual current unchanged complete source guards, byte-identical realpath-bound CLI copies and isolated inert TypeScript/JSON/Git fixture text only. Forty existing Node guard tests and thirty-seven independent controls passed; twenty-three TypeScript AST syntax/source-kind checks establish fixture roles. Four individual current source CLIs exited zero. Initial macOS /var-versus-/private temporary-path identity rejection was preserved before any control ran, then the scratch root was normalized; the byte-identity, realpath and nonempty complete CLI assertions remain required. One malformed-root flag refusal is retained as a counterguard. No application/fixture module imports, referenced command execution, SQL/database, Work operation, native/provider/network/browser/build/install/production effects or real checkout staging. Source/tool/config files remain unchanged; these are instrument limits rather than deployed product incidents or runtime acceptance.
+
+## AUDIT-RUNBOOK-COMMAND-TOKENIZATION-01
+
+Severity: Low. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-runbook-commands.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 retry/runbook/registry source qualification: A direct missing node target is rejected, but PROBE_ENV=1 node scripts/missing.mjs resolves to no target and passes. pnpm --filter=@probe/absent ok loses its filter and credits the unrelated root script. A valid existing target quoted as node "scripts/probe.mjs" is falsely treated as a literal quote-bearing missing path. No target command is executed.
+
+Additional source: `scripts/check-runbook-commands.mjs:75-113,225-255`. Acceptance target: Parse supported shell command forms and package filter ownership conservatively; valid quoted paths must resolve and recognized prefixes/options must not discard or misbind repository targets. Current source report (`audit/checklist/reviews/coverage-ecosystem-retry-runbook-registry-guards-2026-10-09-031.json`, untracked); independent controls (`audit/checklist/evidence/coverage-retry-runbook-registry-independent-controls-2026-10-09-031-refined.json`, untracked). Actual current unchanged complete source guards, byte-identical realpath-bound CLI copies and isolated inert TypeScript/JSON/Git fixture text only. Forty existing Node guard tests and thirty-seven independent controls passed; twenty-three TypeScript AST syntax/source-kind checks establish fixture roles. Four individual current source CLIs exited zero. Initial macOS /var-versus-/private temporary-path identity rejection was preserved before any control ran, then the scratch root was normalized; the byte-identity, realpath and nonempty complete CLI assertions remain required. One malformed-root flag refusal is retained as a counterguard. No application/fixture module imports, referenced command execution, SQL/database, Work operation, native/provider/network/browser/build/install/production effects or real checkout staging. Source/tool/config files remain unchanged; these are instrument limits rather than deployed product incidents or runtime acceptance.
+
+## AUDIT-RUNBOOK-GLOB-PARENT-CREDIT-01
+
+Severity: Low. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-runbook-commands.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 retry/runbook/registry source qualification: A current runbook references scripts/missing-*.mjs. The scripts directory exists with only probe.mjs and no independently enumerated matching name, yet the guard passes. An absent glob parent is correctly rejected. This establishes path existence credit only, not an operator command failure.
+
+Additional source: `scripts/check-runbook-commands.mjs:149-155,264-267`. Acceptance target: Require an actual supported glob match with a documented path/type scope, or refuse unsupported glob syntax; an existing parent alone cannot establish a referenced artifact. Current source report (`audit/checklist/reviews/coverage-ecosystem-retry-runbook-registry-guards-2026-10-09-031.json`, untracked); independent controls (`audit/checklist/evidence/coverage-retry-runbook-registry-independent-controls-2026-10-09-031-refined.json`, untracked). Actual current unchanged complete source guards, byte-identical realpath-bound CLI copies and isolated inert TypeScript/JSON/Git fixture text only. Forty existing Node guard tests and thirty-seven independent controls passed; twenty-three TypeScript AST syntax/source-kind checks establish fixture roles. Four individual current source CLIs exited zero. Initial macOS /var-versus-/private temporary-path identity rejection was preserved before any control ran, then the scratch root was normalized; the byte-identity, realpath and nonempty complete CLI assertions remain required. One malformed-root flag refusal is retained as a counterguard. No application/fixture module imports, referenced command execution, SQL/database, Work operation, native/provider/network/browser/build/install/production effects or real checkout staging. Source/tool/config files remain unchanged; these are instrument limits rather than deployed product incidents or runtime acceptance.
+
+## AUDIT-RUNBOOK-NESTED-DISCOVERY-01
+
+Severity: Low. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-runbook-commands.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 retry/runbook/registry source qualification: With a valid top-level runbook present, a nested docs/runbooks/nested/current.md explicitly marked Current and naming a missing script is omitted and the guard passes. Moving the same current body to top-level current.md yields the expected missing-target error. The fixture obligation is current, not an inferred historical archived document.
+
+Additional source: `scripts/check-runbook-commands.mjs:31-41,209-223`. Acceptance target: Define and enforce the complete current runbook inventory recursively or through an authoritative registry; nested current documents must not be silently omitted from all-runbook claims. Current source report (`audit/checklist/reviews/coverage-ecosystem-retry-runbook-registry-guards-2026-10-09-031.json`, untracked); independent controls (`audit/checklist/evidence/coverage-retry-runbook-registry-independent-controls-2026-10-09-031-refined.json`, untracked). Actual current unchanged complete source guards, byte-identical realpath-bound CLI copies and isolated inert TypeScript/JSON/Git fixture text only. Forty existing Node guard tests and thirty-seven independent controls passed; twenty-three TypeScript AST syntax/source-kind checks establish fixture roles. Four individual current source CLIs exited zero. Initial macOS /var-versus-/private temporary-path identity rejection was preserved before any control ran, then the scratch root was normalized; the byte-identity, realpath and nonempty complete CLI assertions remain required. One malformed-root flag refusal is retained as a counterguard. No application/fixture module imports, referenced command execution, SQL/database, Work operation, native/provider/network/browser/build/install/production effects or real checkout staging. Source/tool/config files remain unchanged; these are instrument limits rather than deployed product incidents or runtime acceptance.
+
+## AUDIT-RUNBOOK-INHERITED-SCRIPT-CREDIT-01
+
+Severity: Low. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-runbook-commands.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 retry/runbook/registry source qualification: A package manifest owns only script ok. A runbook instructs pnpm toString; Object.hasOwn(scripts,"toString") is false but the inherited in test is true, so the guard passes. An ordinary nonexistent own script is rejected. No package-manager command was executed.
+
+Additional source: `scripts/check-runbook-commands.mjs:116-146,245-255`. Acceptance target: Validate an own manifest script entry and its supported value type; inherited JavaScript object members cannot establish package scripts. Current source report (`audit/checklist/reviews/coverage-ecosystem-retry-runbook-registry-guards-2026-10-09-031.json`, untracked); independent controls (`audit/checklist/evidence/coverage-retry-runbook-registry-independent-controls-2026-10-09-031-refined.json`, untracked). Actual current unchanged complete source guards, byte-identical realpath-bound CLI copies and isolated inert TypeScript/JSON/Git fixture text only. Forty existing Node guard tests and thirty-seven independent controls passed; twenty-three TypeScript AST syntax/source-kind checks establish fixture roles. Four individual current source CLIs exited zero. Initial macOS /var-versus-/private temporary-path identity rejection was preserved before any control ran, then the scratch root was normalized; the byte-identity, realpath and nonempty complete CLI assertions remain required. One malformed-root flag refusal is retained as a counterguard. No application/fixture module imports, referenced command execution, SQL/database, Work operation, native/provider/network/browser/build/install/production effects or real checkout staging. Source/tool/config files remain unchanged; these are instrument limits rather than deployed product incidents or runtime acceptance.
+
+## AUDIT-REGISTRY-SOURCE-KIND-CREDIT-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-tool-registry.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 retry/runbook/registry source qualification: A vocabulary/predicate file whose entire source is commented out has zero actual statements but is credited with two members and an exported predicate. A source containing only a commented input as ProbeMode phrase is falsely reported as an unchecked cast, while the corresponding real cast is correctly rejected. Missing vocabulary source and normal valid vocabulary remain counterguards.
+
+Additional source: `scripts/check-registry-references.mjs:67-76,80-95,126-137`. Acceptance target: Read actual array/union/predicate declarations and actual cast expressions, with source kind preserved; comments or quoted marker text cannot supply members, exported admission predicates or unchecked casts. Current source report (`audit/checklist/reviews/coverage-ecosystem-retry-runbook-registry-guards-2026-10-09-031.json`, untracked); independent controls (`audit/checklist/evidence/coverage-retry-runbook-registry-independent-controls-2026-10-09-031-refined.json`, untracked). Actual current unchanged complete source guards, byte-identical realpath-bound CLI copies and isolated inert TypeScript/JSON/Git fixture text only. Forty existing Node guard tests and thirty-seven independent controls passed; twenty-three TypeScript AST syntax/source-kind checks establish fixture roles. Four individual current source CLIs exited zero. Initial macOS /var-versus-/private temporary-path identity rejection was preserved before any control ran, then the scratch root was normalized; the byte-identity, realpath and nonempty complete CLI assertions remain required. One malformed-root flag refusal is retained as a counterguard. No application/fixture module imports, referenced command execution, SQL/database, Work operation, native/provider/network/browser/build/install/production effects or real checkout staging. Source/tool/config files remain unchanged; these are instrument limits rather than deployed product incidents or runtime acceptance.
+
+October 9 Root034 skill/tool source qualification: Tool exports or execution-list names contained only in comments/strings count as real offered names and cause false refusal; complete C18 confirms a comment-only unknown export is refused. A commented or template-literal metadata table placed before the actual table supplies a phantom declaration, accepting an actually undeclared offered tool; C16 confirms complete CLI acceptance. These extend the existing source-kind owner: inert text cannot supply registry declaration/reference nodes. Original vocabulary/cast cases remain independently attributed.
+
+Additional source: `scripts/check-registry-references.mjs:67-76,80-95,126-137; scripts/check-tool-registry.mjs:61-102`. Acceptance target: Preserve actual source kind when resolving registry arrays, exported constants, metadata declarations, predicates and casts; comment/literal examples cannot supply inventory, admission or unsafe-use evidence.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-tool-skill-approval-guards-2026-10-09-034.json`, untracked); independent source controls (`audit/checklist/evidence/coverage-skill-tool-registry-independent-challenge-2026-10-09-034.json`, untracked); root adoption checks (`audit/checklist/evidence/coverage-skill-tool-registry-independent-challenge-2026-10-09-034-root-adoption-validation.json`, untracked). Root adopted frozen source/fixture/control receipts after1468 current identity/range/verdict assertions. Sixty distinct independently replayed inert source controls:22 properties satisfied,27 API-or-CLI false acceptances,11 false refusals. Twenty complete byte-identical realpath-bound CLI controls include10false acceptances and2false refusals; initial omitted-owner API cases alone are rejected by empty-owner CLI validation, while fresh conventional-writer companions establish complete CLI acceptance. Seventeen unchanged tests are a subset of the parent30, not47distinct tests. Successful AST syntax parse invocations are226harness plus231independent; not typechecking or runtime proof. Original malformed literal16diagnostics and scratch-root admission failures are retained. Six adverse receipt controls rejected. Only unchanged source guard APIs/CLIs execute; fixtures and application modules remain inert. No actual tool/skill/authority grant, application/native/provider/browser/network/SQL/database/build/install/production effect, source/config/tool edits or checkout staging. Current application correctness and deployed availability remain unknown.
+
+October9 source-guard qualification: Comment-only version vocabulary/constants/references and comment-only cache registries/account/workspace markers satisfy their complete original instruments. This extends the existing actual declaration/reference source-kind owner. Actual current version and authentication owners exist; the cache checker does not establish reset/cancel invocation, and that broader behavior remains a stated acceptance limit. No separate cache-comment ID or actual browser leak is adopted. Source: `scripts/check-version-registry.mjs:32-45,100-114,129-150; scripts/lib/workspace-cache-scope.mjs:18-44; scripts/check-workspace-cache-scope.mjs:44-74`. Actual source reading (`audit/checklist/reviews/coverage-cache-version-workflow-guard-source-2026-10-09-048.json`, untracked); original engine controls (`audit/checklist/evidence/coverage-cache-version-workflow-inert-controls-2026-10-09-048.json`, untracked); valid companions (`audit/checklist/evidence/coverage-cache-version-workflow-valid-companions-2026-10-09-048.json`, untracked); independent challenge (`audit/checklist/evidence/coverage-cache-version-workflow-independent-challenge-2026-10-09-048.json`, untracked). Zero new cause or runtime acceptance.
+
+## AUDIT-REGISTRY-UNTRUSTED-RECORD-CAST-EXEMPTION-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 retry/runbook/registry source qualification: The guard rejects a direct input as ProbeMode cast but exempts Object.keys(input) as ProbeMode[] and Object.entries(input) as ProbeMode[] where input is an unconstrained Record<string,unknown> function parameter. AST checks prove a real cast of that input expression, with no canonical vocabulary-backed record owner. The intended canonical-record exception remains separate; no runtime boundary bypass is claimed.
+
+Additional source: `scripts/check-registry-references.mjs:21-22,80-95`. Acceptance target: Restrict a keys/entries exception to an independently resolved record bound to the canonical vocabulary, or validate membership; textual Object.keys/entries alone does not admit externally supplied keys or entry tuples. Current source report (`audit/checklist/reviews/coverage-ecosystem-retry-runbook-registry-guards-2026-10-09-031.json`, untracked); independent controls (`audit/checklist/evidence/coverage-retry-runbook-registry-independent-controls-2026-10-09-031-refined.json`, untracked). Actual current unchanged complete source guards, byte-identical realpath-bound CLI copies and isolated inert TypeScript/JSON/Git fixture text only. Forty existing Node guard tests and thirty-seven independent controls passed; twenty-three TypeScript AST syntax/source-kind checks establish fixture roles. Four individual current source CLIs exited zero. Initial macOS /var-versus-/private temporary-path identity rejection was preserved before any control ran, then the scratch root was normalized; the byte-identity, realpath and nonempty complete CLI assertions remain required. One malformed-root flag refusal is retained as a counterguard. No application/fixture module imports, referenced command execution, SQL/database, Work operation, native/provider/network/browser/build/install/production effects or real checkout staging. Source/tool/config files remain unchanged; these are instrument limits rather than deployed product incidents or runtime acceptance.
+
+## AUDIT-PROJECT-BASELINE-FILEWIDE-EXEMPTION-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present for the project-context baseline. Main emptied the approval-mode baseline (`AUTO_MODE_BASELINE`) once the scheduled executor stopped pinning `auto`, so the same path-only exemption has no entry there today. Line numbers for `scripts/check-tool-gate-approval-mode.mjs` are main's.
+
+October 9 project/prompt/public-share source qualification: Two independently discovered unscoped queries in the baselined retrieval-index-service.ts file yield two raw helper findings and zero run findings. Identical bodies under an unbaselined path yield two findings. The stated exception names an already-authorised function/callers, but suppression keys only on the file, so future unrelated reads receive the same exemption. Current production exception correctness is not disproved.
+
+Additional source: `scripts/check-project-context-boundary.mjs:18-34`. Acceptance target: Bind the retained exception to its actual query/function and proven authorization path; unrelated reads in the same file must remain governed. Current source report (`audit/checklist/reviews/coverage-ecosystem-project-prompt-share-guards-2026-10-09-032.json`, untracked); independent controls (`audit/checklist/evidence/coverage-project-prompt-share-independent-controls-2026-10-09-032-final.json`, untracked). Thirty-five unchanged source guard tests, thirty-eight independent inert controls and four individual current source CLIs passed. Fifty-one TypeScript AST syntax/source-kind/binding checks establish fixture subjects. Complete CLI copies are byte-identical, realpath-bound and produce nonempty output. Git fixture operations use explicit throwaway roots and scrub inherited GIT variables; no real checkout staging. Imported modules are unchanged source instruments only; no application/fixture modules, actual SQL/database, project prompt/public share mutation, native/provider/network/browser/build/install/production action or runtime product acceptance. Source/config/tool files remain unchanged. Current CLI findings are textual guard evidence, not deployed incidents.
+
+October 9 Root034 source qualification: The approval baseline names the scheduled executor path. Adding a second independently AST-observed unsafe auto call in that same file still yields zero failures with one baselined path, while the direct unsafe unbaselined caller refuses. This repeats the existing source-path-only exception mechanism; its canonical ID is retained and expanded, with no new baseline issue count. The unattended file/table baseline owner remains separately attributed because its key and statement obligations differ.
+
+Additional source: `scripts/check-project-context-boundary.mjs:18-34; scripts/check-tool-gate-approval-mode.mjs:69-93`. Acceptance target: Bind retained source-path exceptions to actual independently identified operations and reject new unrelated obligations in the same file; preserve documented existing exceptions and stale-baseline refusal.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-tool-skill-approval-guards-2026-10-09-034.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-tool-approval-containment-independent-controls-2026-10-09-034-refined.json`, untracked). Unchanged complete guard APIs and byte-identical realpath-bound CLIs over isolated inert source under explicit /tmp. Twenty-four distinct final case assertions succeeded, including13false acceptances and2false refusals against advertised properties; success does not mean guard properties held. Twenty-four TypeScript AST syntax/source-kind checks distinguish calls/properties/declarations from comments and literals. Source fixtures and application modules never import or execute; no TypeScript typecheck, actual tool loop, policy, model/provider/native/browser/network/SQL/DB/build/install/production action or checkout staging. Thirty unchanged source-guard tests and four current source CLIs passed. The original same-case successful receipt under macOS os.tmpdir remains preserved; the refined /tmp repeat is not counted as24additional distinct controls. Current production gate/role/cap correctness and tool outcomes remain unknown; no source fix or deployed incident is asserted.
+
+October 9 Root034 skill/tool source qualification: The designated legal skill-tool module receives a whole-file exemption: appending an independently observed shell tool beside the legal skill tool still passes the complete CLI C13. A conventional illegal tool in another skill module refuses, and the sole legal skill tool passes. This repeats the existing path-only exemption mechanism; the legal module whitelist differs from a baseline entry but also fails to bind the permitted operation. Existing project/approval baseline and unattended file/table distinctions remain retained.
+
+Additional source: `scripts/check-project-context-boundary.mjs:18-34; scripts/check-tool-gate-approval-mode.mjs:69-93; scripts/check-skill-authority.mjs:123-136`. Acceptance target: Bind each file exception to its named permitted operation/tool and reject independent additions in the same file; preserve genuine legal tools and explicit retained exceptions.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-tool-skill-approval-guards-2026-10-09-034.json`, untracked); independent source controls (`audit/checklist/evidence/coverage-skill-tool-registry-independent-challenge-2026-10-09-034.json`, untracked); root adoption checks (`audit/checklist/evidence/coverage-skill-tool-registry-independent-challenge-2026-10-09-034-root-adoption-validation.json`, untracked). Root adopted frozen source/fixture/control receipts after1468 current identity/range/verdict assertions. Sixty distinct independently replayed inert source controls:22 properties satisfied,27 API-or-CLI false acceptances,11 false refusals. Twenty complete byte-identical realpath-bound CLI controls include10false acceptances and2false refusals; initial omitted-owner API cases alone are rejected by empty-owner CLI validation, while fresh conventional-writer companions establish complete CLI acceptance. Seventeen unchanged tests are a subset of the parent30, not47distinct tests. Successful AST syntax parse invocations are226harness plus231independent; not typechecking or runtime proof. Original malformed literal16diagnostics and scratch-root admission failures are retained. Six adverse receipt controls rejected. Only unchanged source guard APIs/CLIs execute; fixtures and application modules remain inert. No actual tool/skill/authority grant, application/native/provider/browser/network/SQL/database/build/install/production effect, source/config/tool edits or checkout staging. Current application correctness and deployed availability remain unknown.
+
+## AUDIT-PROJECT-CONTEXT-CALL-BINDING-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 project/prompt/public-share source qualification: An unchecked loader/render is rejected and a real null refusal before render passes. A const missing=!ctx expression with no conditional refusal passes, as does a null refusal only after rendering. A renderer without any loader is rejected, but an unused independent loader function makes the unscoped render pass. AST/function/order checks establish that the accepted text does not guard that render.
+
+Additional source: `scripts/lib/project-context-boundary.mjs:167-201,203-252`. Acceptance target: Bind loader result, lifecycle/account admission, effective refusal and render argument along the relevant control/data flow; unrelated calls or inert/late tests cannot discharge the obligation. Current source report (`audit/checklist/reviews/coverage-ecosystem-project-prompt-share-guards-2026-10-09-032.json`, untracked); independent controls (`audit/checklist/evidence/coverage-project-prompt-share-independent-controls-2026-10-09-032-final.json`, untracked). Thirty-five unchanged source guard tests, thirty-eight independent inert controls and four individual current source CLIs passed. Fifty-one TypeScript AST syntax/source-kind/binding checks establish fixture subjects. Complete CLI copies are byte-identical, realpath-bound and produce nonempty output. Git fixture operations use explicit throwaway roots and scrub inherited GIT variables; no real checkout staging. Imported modules are unchanged source instruments only; no application/fixture modules, actual SQL/database, project prompt/public share mutation, native/provider/network/browser/build/install/production action or runtime product acceptance. Source/config/tool files remain unchanged. Current CLI findings are textual guard evidence, not deployed incidents.
+
+## AUDIT-PROMPT-LAYER-RESOLVER-TEXT-CREDIT-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 project/prompt/public-share source qualification: An unresolved actual system-message object is refused. Adding an unused canonical resolver import makes auditAssembly pass with resolved one while the actual AST has zero calls. A commented import likewise passes with zero actual import declarations. A genuine resolver call and stale/empty-reason refusals remain paired counterguards.
+
+Additional source: `scripts/lib/prompt-layer-assembly.mjs:33-42,78-80`. Acceptance target: Require assembly data to pass through the canonical layer resolver; import/comment/symbol presence without a bound live resolver call must not establish resolution. Current source report (`audit/checklist/reviews/coverage-ecosystem-project-prompt-share-guards-2026-10-09-032.json`, untracked); independent controls (`audit/checklist/evidence/coverage-project-prompt-share-independent-controls-2026-10-09-032-final.json`, untracked). Thirty-five unchanged source guard tests, thirty-eight independent inert controls and four individual current source CLIs passed. Fifty-one TypeScript AST syntax/source-kind/binding checks establish fixture subjects. Complete CLI copies are byte-identical, realpath-bound and produce nonempty output. Git fixture operations use explicit throwaway roots and scrub inherited GIT variables; no real checkout staging. Imported modules are unchanged source instruments only; no application/fixture modules, actual SQL/database, project prompt/public share mutation, native/provider/network/browser/build/install/production action or runtime product acceptance. Source/config/tool files remain unchanged. Current CLI findings are textual guard evidence, not deployed incidents.
+
+## AUDIT-PROMPT-SYSTEM-LITERAL-DISCOVERY-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 project/prompt/public-share source qualification: AST-confirmed system-message objects with a quoted role property or more than two hundred characters between role and content are omitted. Separate nearby roleOnly and unrelated content objects are falsely treated as an assembler. The complete empty census CLI correctly fails; these are member-census errors in nonempty scans, not a claim that every empty helper result yields CLI success.
+
+Additional source: `scripts/lib/prompt-layer-assembly.mjs:25-31,66-75`. Acceptance target: Discover actual supported message literals and bind role/content to the same object, preserving quoted keys and content beyond arbitrary lexical windows while excluding unrelated objects/types/comments. Current source report (`audit/checklist/reviews/coverage-ecosystem-project-prompt-share-guards-2026-10-09-032.json`, untracked); independent controls (`audit/checklist/evidence/coverage-project-prompt-share-independent-controls-2026-10-09-032-final.json`, untracked). Thirty-five unchanged source guard tests, thirty-eight independent inert controls and four individual current source CLIs passed. Fifty-one TypeScript AST syntax/source-kind/binding checks establish fixture subjects. Complete CLI copies are byte-identical, realpath-bound and produce nonempty output. Git fixture operations use explicit throwaway roots and scrub inherited GIT variables; no real checkout staging. Imported modules are unchanged source instruments only; no application/fixture modules, actual SQL/database, project prompt/public share mutation, native/provider/network/browser/build/install/production action or runtime product acceptance. Source/config/tool files remain unchanged. Current CLI findings are textual guard evidence, not deployed incidents.
+
+## AUDIT-PROMPT-BASELINE-READ-FAILURE-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 project/prompt/public-share source qualification: An isolated Git repository contains a committed published-v1 digest a and current rewritten digest b. Complete CLI under HEAD refuses the rewrite. --base audit-nonexistent-base exits zero and reports nothing published yet because every Git-show error becomes null. A genuine existing commit without a published lock retains its intentional first-publication success.
+
+Additional source: `scripts/lib/prompt-versions-append-only.mjs:12-24; scripts/check-prompt-versions-append-only.mjs:24-32`. Acceptance target: Prove the requested revision exists and distinguish an absent lock at a valid revision from Git/read failures; unavailable baselines must fail closed without relabeling existing publication as absent. Current source report (`audit/checklist/reviews/coverage-ecosystem-project-prompt-share-guards-2026-10-09-032.json`, untracked); independent controls (`audit/checklist/evidence/coverage-project-prompt-share-independent-controls-2026-10-09-032-final.json`, untracked). Thirty-five unchanged source guard tests, thirty-eight independent inert controls and four individual current source CLIs passed. Fifty-one TypeScript AST syntax/source-kind/binding checks establish fixture subjects. Complete CLI copies are byte-identical, realpath-bound and produce nonempty output. Git fixture operations use explicit throwaway roots and scrub inherited GIT variables; no real checkout staging. Imported modules are unchanged source instruments only; no application/fixture modules, actual SQL/database, project prompt/public share mutation, native/provider/network/browser/build/install/production action or runtime product acceptance. Source/config/tool files remain unchanged. Current CLI findings are textual guard evidence, not deployed incidents.
+
+October 9 Root040 UI-gap qualification extends this existing baseline-read failure owner, without creating a second alias: the current tracker guard is given explicit refs/heads/agi-audit-nonexistent-baseline-20261009. A separate scrubbed read-only Git rev-parse --verify probe proves that revision is absent (exit128). The unchanged tracker guard then exits0 and relabels the failure as a new baseline, with341 real current records. An explicit base can therefore lack any before-count comparison while reporting success. Source `scripts/check-ui-gaps.mjs:134-170` treats all nonzero git-show statuses as file absence. The same acceptance target already governs this owner: establish revision identity and distinguish a missing file at a valid revision from Git/read failure. Current normal341-record guard passes, invalid ref syntax refuses in source, and locally absent automatic refs intentionally skip comparisons; no hosted CI outcome or existing product status is inferred. Actual read-only CLI receipts (`audit/checklist/evidence/coverage-ui-gap-current-source-guard-2026-10-09-040.json`, untracked), full source review (`audit/checklist/reviews/coverage-ui-gap-contract-guard-source-2026-10-09-040.json`, untracked). No source/Git/CSV mutation or application runtime ran.
+
+## AUDIT-PROMPT-DIGEST-ARRAY-SHAPE-01
+
+Severity: Low. Status: open current source-instrument gap; source unchanged.
+
+October 9 project/prompt/public-share source qualification: Empty objects and arrays are rejected, but digests:["a"] passes the nonempty object-like check. A complete isolated committed/current array-lock CLI exits zero and reports one published stamp, with array index zero serving as the stamp. The actual current lock has thirteen normal published entries; separate manifest tests and prompt content behavior were not executed.
+
+Additional source: `scripts/lib/prompt-versions-append-only.mjs:26-37`. Acceptance target: Validate a nonarray own-keyed digest map and the authoritative stamp/digest schema before append-only comparison; preserve normal additions and rewrite/removal refusal. Current source report (`audit/checklist/reviews/coverage-ecosystem-project-prompt-share-guards-2026-10-09-032.json`, untracked); independent controls (`audit/checklist/evidence/coverage-project-prompt-share-independent-controls-2026-10-09-032-final.json`, untracked). Thirty-five unchanged source guard tests, thirty-eight independent inert controls and four individual current source CLIs passed. Fifty-one TypeScript AST syntax/source-kind/binding checks establish fixture subjects. Complete CLI copies are byte-identical, realpath-bound and produce nonempty output. Git fixture operations use explicit throwaway roots and scrub inherited GIT variables; no real checkout staging. Imported modules are unchanged source instruments only; no application/fixture modules, actual SQL/database, project prompt/public share mutation, native/provider/network/browser/build/install/production action or runtime product acceptance. Source/config/tool files remain unchanged. Current CLI findings are textual guard evidence, not deployed incidents.
+
+## AUDIT-PUBLIC-SHARE-PUBLISHER-CALL-BINDING-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-public-share-dlp.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 project/prompt/public-share source qualification: A named exported publisher and actual uninspected route call are refused. An arrow exported publisher or import alias save is omitted and the complete CLI passes with one real writer discovered. A separate local nonpublishing publish function is falsely accused solely because its bare name equals an unrelated writer export. AST and import/function-role checks establish each identity.
+
+Additional source: `scripts/check-public-share-dlp.mjs:77-86,104-118`. Acceptance target: Resolve actual publishing exports, imports/aliases and calls to their owner; supported export forms must be governed and unrelated same-name functions must not inherit another module's publishing obligation. Current source report (`audit/checklist/reviews/coverage-ecosystem-project-prompt-share-guards-2026-10-09-032.json`, untracked); independent controls (`audit/checklist/evidence/coverage-project-prompt-share-independent-controls-2026-10-09-032-final.json`, untracked). Thirty-five unchanged source guard tests, thirty-eight independent inert controls and four individual current source CLIs passed. Fifty-one TypeScript AST syntax/source-kind/binding checks establish fixture subjects. Complete CLI copies are byte-identical, realpath-bound and produce nonempty output. Git fixture operations use explicit throwaway roots and scrub inherited GIT variables; no real checkout staging. Imported modules are unchanged source instruments only; no application/fixture modules, actual SQL/database, project prompt/public share mutation, native/provider/network/browser/build/install/production action or runtime product acceptance. Source/config/tool files remain unchanged. Current CLI findings are textual guard evidence, not deployed incidents.
+
+## AUDIT-PUBLIC-SHARE-TSX-CENSUS-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-public-share-dlp.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 project/prompt/public-share source qualification: A complete fixture has a legitimate inspected .ts route writer, an uninspected exported .tsx publishing helper and its .ts route caller. The CLI passes and reports only one writer despite two independently present insertion-bearing sources. Ordinary uninspected .ts writers and an empty publisher census are refused. No TSX application module or SQL runs.
+
+Additional source: `scripts/check-public-share-dlp.mjs:26-43`. Acceptance target: Define and enforce the complete production publisher source inventory, including supported .tsx owners, without allowing an unrelated valid writer to hide omitted publishing paths. Current source report (`audit/checklist/reviews/coverage-ecosystem-project-prompt-share-guards-2026-10-09-032.json`, untracked); independent controls (`audit/checklist/evidence/coverage-project-prompt-share-independent-controls-2026-10-09-032-final.json`, untracked). Thirty-five unchanged source guard tests, thirty-eight independent inert controls and four individual current source CLIs passed. Fifty-one TypeScript AST syntax/source-kind/binding checks establish fixture subjects. Complete CLI copies are byte-identical, realpath-bound and produce nonempty output. Git fixture operations use explicit throwaway roots and scrub inherited GIT variables; no real checkout staging. Imported modules are unchanged source instruments only; no application/fixture modules, actual SQL/database, project prompt/public share mutation, native/provider/network/browser/build/install/production action or runtime product acceptance. Source/config/tool files remain unchanged. Current CLI findings are textual guard evidence, not deployed incidents.
+
+## AUDIT-CONFLICT-STAGED-CONTENT-BINDING-01
+
+Severity: Low. Status: open source-instrument gap.
+
+Source: `scripts/check-no-conflict-markers.py:4,79-86,97-107`.
+
+October 9 Root033 current source qualification: An isolated indexed file contains three independently observed markers, while its clean worktree bytes make the complete copied CLI return clean. When current and indexed bytes both contain markers, detection refuses. Fresh CI with aligned bytes remains a counterguard; no fresh-CI bypass is claimed.
+
+Acceptance target: Bind the check to its documented index/commit subject or explicitly enforce the intended worktree scope.
+
+Evidence: current source report (`audit/checklist/reviews/coverage-ecosystem-neutral-idempotency-identifier-guards-2026-10-09-033.json`, untracked); actual controls (`audit/checklist/evidence/coverage-conflict-marker-independent-controls-2026-10-09-033.json`, untracked). Current unchanged source instruments and inert text/Git fixtures only. Forty distinct unchanged tests passed (31 Node and 9 Python); the independent repeat of 20 Node tests is included in those 31, not added to the distinct total. Sixty-eight fixture controls/assertions succeeded: 16 IDE, 7 conflict-marker and 45 independent idempotency/identifier cases. The 45 cases include 10 reproduced false acceptances, 22 working refusals, 34 satisfied advertised properties and one unresolved composite scope; assertion success does not mean all advertised guard properties held. Four current source CLIs exited zero. Fourteen TypeScript AST parses and 171 separate Node ESM syntax checks establish syntax only. No application/fixture module import, actual SQL/DB/migration, native/provider/browser/network/build/install/production behavior or real-checkout staging. The conflict reader-denial case imports only a copied source-guard module. Original failures and negative controls are preserved; no source fix or runtime product acceptance.
+
+## AUDIT-CONFLICT-READER-ERROR-CLEAN-01
+
+Severity: Medium. Status: open source-instrument gap.
+
+Source: `scripts/check-no-conflict-markers.py:67-76,97-111`.
+
+October 9 Root033 current source qualification: The discovered existing nonexcluded marked file normally yields three hits. Injecting only Path.open PermissionError yields zero hits and main prints clean with exit zero. Missing Git still fails closed. No real permission change, current repository read denial or product incident is observed.
+
+Acceptance target: Refuse discovered readable-file scan errors; preserve intentional tracked-absent and nonfile skips and Git enumeration refusal.
+
+Evidence: current source report (`audit/checklist/reviews/coverage-ecosystem-neutral-idempotency-identifier-guards-2026-10-09-033.json`, untracked); actual controls (`audit/checklist/evidence/coverage-conflict-marker-independent-controls-2026-10-09-033.json`, untracked). Current unchanged source instruments and inert text/Git fixtures only. Forty distinct unchanged tests passed (31 Node and 9 Python); the independent repeat of 20 Node tests is included in those 31, not added to the distinct total. Sixty-eight fixture controls/assertions succeeded: 16 IDE, 7 conflict-marker and 45 independent idempotency/identifier cases. The 45 cases include 10 reproduced false acceptances, 22 working refusals, 34 satisfied advertised properties and one unresolved composite scope; assertion success does not mean all advertised guard properties held. Four current source CLIs exited zero. Fourteen TypeScript AST parses and 171 separate Node ESM syntax checks establish syntax only. No application/fixture module import, actual SQL/DB/migration, native/provider/browser/network/build/install/production behavior or real-checkout staging. The conflict reader-denial case imports only a copied source-guard module. Original failures and negative controls are preserved; no source fix or runtime product acceptance.
+
+## AUDIT-TOOL-APPROVAL-POLICY-BINDING-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-tool-gate-approval-mode.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 Root034 source qualification: A direct auto literal is refused and manual/policy-expression controls pass. An auto constant named approvalMode, an inert loopInputs comment preceding auto, or a comment-only earlier approvalMode property all pass the complete guard. AST observes the actual auto initializer/property independently of comments. Double-quoted manual is falsely refused although AST identifies the same literal value. These are source-predicate results over inert calls, not typechecked or deployed caller acceptance.
+
+Additional source: `scripts/check-tool-gate-approval-mode.mjs:37-59`. Acceptance target: Resolve actual option properties, literal values and policy-producing bindings; unrelated names/comments cannot discharge policy provenance and equivalent manual literals remain accepted.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-tool-skill-approval-guards-2026-10-09-034.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-tool-approval-containment-independent-controls-2026-10-09-034-refined.json`, untracked). Unchanged complete guard APIs and byte-identical realpath-bound CLIs over isolated inert source under explicit /tmp. Twenty-four distinct final case assertions succeeded, including13false acceptances and2false refusals against advertised properties; success does not mean guard properties held. Twenty-four TypeScript AST syntax/source-kind checks distinguish calls/properties/declarations from comments and literals. Source fixtures and application modules never import or execute; no TypeScript typecheck, actual tool loop, policy, model/provider/native/browser/network/SQL/DB/build/install/production action or checkout staging. Thirty unchanged source-guard tests and four current source CLIs passed. The original same-case successful receipt under macOS os.tmpdir remains preserved; the refined /tmp repeat is not counted as24additional distinct controls. Current production gate/role/cap correctness and tool outcomes remain unknown; no source fix or deployed incident is asserted.
+
+## AUDIT-TOOL-APPROVAL-DECLARATION-TEXT-EXEMPTION-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-tool-gate-approval-mode.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 Root034 source qualification: One real auto call is refused. Adding only a comment or an unrelated string spelling function runToolLoop( makes the complete same caller pass. AST verifies one actual call and zero function declarations in both exempting variants. Raw call census stays nonempty. No actual canonical loop declaration/shadowing is the premise.
+
+Additional source: `scripts/check-tool-gate-approval-mode.mjs:44-46`. Acceptance target: Limit declaration exclusion to its actual declaration node and continue checking independent calls; comment/literal declaration text cannot skip a whole entry scan.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-tool-skill-approval-guards-2026-10-09-034.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-tool-approval-containment-independent-controls-2026-10-09-034-refined.json`, untracked). Unchanged complete guard APIs and byte-identical realpath-bound CLIs over isolated inert source under explicit /tmp. Twenty-four distinct final case assertions succeeded, including13false acceptances and2false refusals against advertised properties; success does not mean guard properties held. Twenty-four TypeScript AST syntax/source-kind checks distinguish calls/properties/declarations from comments and literals. Source fixtures and application modules never import or execute; no TypeScript typecheck, actual tool loop, policy, model/provider/native/browser/network/SQL/DB/build/install/production action or checkout staging. Thirty unchanged source-guard tests and four current source CLIs passed. The original same-case successful receipt under macOS os.tmpdir remains preserved; the refined /tmp repeat is not counted as24additional distinct controls. Current production gate/role/cap correctness and tool outcomes remain unknown; no source fix or deployed incident is asserted.
+
+## AUDIT-TOOL-RESULT-CAP-CONTENT-BINDING-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 Root034 source qualification: Removing all cap text refuses, while a cap call on other data or a comment-only cap call makes uncapped pushed raw content pass. AST observes the pushed content expression and independently distinguishes the unrelated real call from zero actual calls in the comment fixture. No source cap helper or real message data is executed.
+
+Additional source: `scripts/check-tool-gate-result-containment.mjs:61-63`. Acceptance target: Bind each relevant pushed content value to an effective output-cap result; comments and unrelated calls cannot provide containment evidence.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-tool-skill-approval-guards-2026-10-09-034.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-tool-approval-containment-independent-controls-2026-10-09-034-refined.json`, untracked). Unchanged complete guard APIs and byte-identical realpath-bound CLIs over isolated inert source under explicit /tmp. Twenty-four distinct final case assertions succeeded, including13false acceptances and2false refusals against advertised properties; success does not mean guard properties held. Twenty-four TypeScript AST syntax/source-kind checks distinguish calls/properties/declarations from comments and literals. Source fixtures and application modules never import or execute; no TypeScript typecheck, actual tool loop, policy, model/provider/native/browser/network/SQL/DB/build/install/production action or checkout staging. Thirty unchanged source-guard tests and four current source CLIs passed. The original same-case successful receipt under macOS os.tmpdir remains preserved; the refined /tmp repeat is not counted as24additional distinct controls. Current production gate/role/cap correctness and tool outcomes remain unknown; no source fix or deployed incident is asserted.
+
+## AUDIT-TOOL-RESULT-ROLE-OBJECT-BINDING-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 Root034 source qualification: A direct single-quoted system role and a computed role refuse. A double-quoted system role followed by a separate tool object, or a comment-only earlier tool role inside the system object, both pass. AST observes the actual system role. A valid tool role after500padding characters instead falsely refuses because discovery reads only400characters. These cases test exact object binding and bounded-window loss; no deployed system promotion is observed.
+
+Additional source: `scripts/check-tool-gate-result-containment.mjs:31-36`. Acceptance target: Inspect each actual message object and resolve its own role; adjacent objects/comments cannot supply it and arbitrary character windows cannot erase an existing literal role.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-tool-skill-approval-guards-2026-10-09-034.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-tool-approval-containment-independent-controls-2026-10-09-034-refined.json`, untracked). Unchanged complete guard APIs and byte-identical realpath-bound CLIs over isolated inert source under explicit /tmp. Twenty-four distinct final case assertions succeeded, including13false acceptances and2false refusals against advertised properties; success does not mean guard properties held. Twenty-four TypeScript AST syntax/source-kind checks distinguish calls/properties/declarations from comments and literals. Source fixtures and application modules never import or execute; no TypeScript typecheck, actual tool loop, policy, model/provider/native/browser/network/SQL/DB/build/install/production action or checkout staging. Thirty unchanged source-guard tests and four current source CLIs passed. The original same-case successful receipt under macOS os.tmpdir remains preserved; the refined /tmp repeat is not counted as24additional distinct controls. Current production gate/role/cap correctness and tool outcomes remain unknown; no source fix or deployed incident is asserted.
+
+## AUDIT-TOOL-RESULT-WRITE-DISCOVERY-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 Root034 source qualification: A system message using spacing before the call parenthesis or an aliased object passes beside one known safe write; AST observes both actual writes. A comment-only safe-looking write also satisfies the CLI census despite zero AST writes. A genuinely absent write is refused by the CLI. Current tool-loop5272–5280 contains a real aliased assistantMessage with a safe assistant role, so current alias omission is confirmed while its actual writer supplies safe-role counterevidence.
+
+Additional source: `scripts/check-tool-gate-result-containment.mjs:26-39,67-73`. Acceptance target: Enumerate actual write call expressions and object/value bindings independent of formatting; preserve zero-census refusal over real nodes and exclude comment-only text.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-tool-skill-approval-guards-2026-10-09-034.json`, untracked); final independent controls (`audit/checklist/evidence/coverage-tool-approval-containment-independent-controls-2026-10-09-034-refined.json`, untracked). Unchanged complete guard APIs and byte-identical realpath-bound CLIs over isolated inert source under explicit /tmp. Twenty-four distinct final case assertions succeeded, including13false acceptances and2false refusals against advertised properties; success does not mean guard properties held. Twenty-four TypeScript AST syntax/source-kind checks distinguish calls/properties/declarations from comments and literals. Source fixtures and application modules never import or execute; no TypeScript typecheck, actual tool loop, policy, model/provider/native/browser/network/SQL/DB/build/install/production action or checkout staging. Thirty unchanged source-guard tests and four current source CLIs passed. The original same-case successful receipt under macOS os.tmpdir remains preserved; the refined /tmp repeat is not counted as24additional distinct controls. Current production gate/role/cap correctness and tool outcomes remain unknown; no source fix or deployed incident is asserted.
+
+## AUDIT-SKILL-AUTHORITY-EXPORT-CENSUS-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 Root034 skill/tool source qualification: Actual exported arrow, indented function, export-list and default-function writers are omitted by the lexical census. Four initial API fixtures have zero recognized connector-owner symbols and are refused by the complete CLI; fresh C11/C12/C19/C20 keep another conventional mutating export, then the same actual imported writer is missed by the complete CLI with nonempty owners/modules. Missing and genuinely empty owners remain refusing counterguards.
+
+Additional source: `scripts/check-skill-authority.mjs:62-69`. Acceptance target: Resolve actual owner exports and writer bindings independently of formatting/export syntax; unrelated recognized writers cannot hide additional exported authority.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-tool-skill-approval-guards-2026-10-09-034.json`, untracked); independent source controls (`audit/checklist/evidence/coverage-skill-tool-registry-independent-challenge-2026-10-09-034.json`, untracked); root adoption checks (`audit/checklist/evidence/coverage-skill-tool-registry-independent-challenge-2026-10-09-034-root-adoption-validation.json`, untracked). Root adopted frozen source/fixture/control receipts after1468 current identity/range/verdict assertions. Sixty distinct independently replayed inert source controls:22 properties satisfied,27 API-or-CLI false acceptances,11 false refusals. Twenty complete byte-identical realpath-bound CLI controls include10false acceptances and2false refusals; initial omitted-owner API cases alone are rejected by empty-owner CLI validation, while fresh conventional-writer companions establish complete CLI acceptance. Seventeen unchanged tests are a subset of the parent30, not47distinct tests. Successful AST syntax parse invocations are226harness plus231independent; not typechecking or runtime proof. Original malformed literal16diagnostics and scratch-root admission failures are retained. Six adverse receipt controls rejected. Only unchanged source guard APIs/CLIs execute; fixtures and application modules remain inert. No actual tool/skill/authority grant, application/native/provider/browser/network/SQL/database/build/install/production effect, source/config/tool edits or checkout staging. Current application correctness and deployed availability remain unknown.
+
+## AUDIT-SKILL-TOOL-DEFINITION-SYNTAX-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 Root034 skill/tool source qualification: A conventional single-quoted function tool outside the legal skill module refuses. Actual double-quoted function values or quoted type keys are missed; C03 confirms complete CLI acceptance of the double-quoted tool beside nonempty owner/module census. The conventional legal skill tool passes.
+
+Additional source: `scripts/check-skill-authority.mjs:72-74,123-136`. Acceptance target: Recognize actual tool-definition object properties and literal values independently of quote spelling; distinguish real objects from examples.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-tool-skill-approval-guards-2026-10-09-034.json`, untracked); independent source controls (`audit/checklist/evidence/coverage-skill-tool-registry-independent-challenge-2026-10-09-034.json`, untracked); root adoption checks (`audit/checklist/evidence/coverage-skill-tool-registry-independent-challenge-2026-10-09-034-root-adoption-validation.json`, untracked). Root adopted frozen source/fixture/control receipts after1468 current identity/range/verdict assertions. Sixty distinct independently replayed inert source controls:22 properties satisfied,27 API-or-CLI false acceptances,11 false refusals. Twenty complete byte-identical realpath-bound CLI controls include10false acceptances and2false refusals; initial omitted-owner API cases alone are rejected by empty-owner CLI validation, while fresh conventional-writer companions establish complete CLI acceptance. Seventeen unchanged tests are a subset of the parent30, not47distinct tests. Successful AST syntax parse invocations are226harness plus231independent; not typechecking or runtime proof. Original malformed literal16diagnostics and scratch-root admission failures are retained. Six adverse receipt controls rejected. Only unchanged source guard APIs/CLIs execute; fixtures and application modules remain inert. No actual tool/skill/authority grant, application/native/provider/browser/network/SQL/database/build/install/production effect, source/config/tool edits or checkout staging. Current application correctness and deployed availability remain unknown.
+
+## AUDIT-SKILL-AUTHORITY-REFERENCE-BINDING-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+October 9 Root034 skill/tool source qualification: An owner writer name inside a comment/string or an unrelated same-named local function triggers false refusal without an actual owner import. A comment-only tool example also triggers refusal. C17 confirms complete CLI refusal for documentation-only authority text. Actual imported conventional owner writers and actual conventional illegal tools remain refusing counterguards.
+
+Additional source: `scripts/check-skill-authority.mjs:101-108,123-136`. Acceptance target: Resolve actual imported authority bindings and tool-definition nodes; comments, examples and same-named local functions cannot establish owner authority reach.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-tool-skill-approval-guards-2026-10-09-034.json`, untracked); independent source controls (`audit/checklist/evidence/coverage-skill-tool-registry-independent-challenge-2026-10-09-034.json`, untracked); root adoption checks (`audit/checklist/evidence/coverage-skill-tool-registry-independent-challenge-2026-10-09-034-root-adoption-validation.json`, untracked). Root adopted frozen source/fixture/control receipts after1468 current identity/range/verdict assertions. Sixty distinct independently replayed inert source controls:22 properties satisfied,27 API-or-CLI false acceptances,11 false refusals. Twenty complete byte-identical realpath-bound CLI controls include10false acceptances and2false refusals; initial omitted-owner API cases alone are rejected by empty-owner CLI validation, while fresh conventional-writer companions establish complete CLI acceptance. Seventeen unchanged tests are a subset of the parent30, not47distinct tests. Successful AST syntax parse invocations are226harness plus231independent; not typechecking or runtime proof. Original malformed literal16diagnostics and scratch-root admission failures are retained. Six adverse receipt controls rejected. Only unchanged source guard APIs/CLIs execute; fixtures and application modules remain inert. No actual tool/skill/authority grant, application/native/provider/browser/network/SQL/database/build/install/production effect, source/config/tool edits or checkout staging. Current application correctness and deployed availability remain unknown.
+
+## AUDIT-TOOL-OFFERABLE-EXPORT-SYNTAX-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-tool-registry.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 Root034 skill/tool source qualification: Actual double-quoted, extra-space, typed or export-list tool constants, and double-quoted execution-list members are omitted. A normal unknown exported tool refuses; complete C08 instead accepts the double-quoted unknown offer beside normal metadata and baseline tool inventory. These are source inventory controls rather than executed tool offers.
+
+Additional source: `scripts/check-tool-registry.mjs:61-83`. Acceptance target: Inventory actual exported tool constants and named array/set members with equivalent syntax; omitted names must remain subject to metadata admission.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-tool-skill-approval-guards-2026-10-09-034.json`, untracked); independent source controls (`audit/checklist/evidence/coverage-skill-tool-registry-independent-challenge-2026-10-09-034.json`, untracked); root adoption checks (`audit/checklist/evidence/coverage-skill-tool-registry-independent-challenge-2026-10-09-034-root-adoption-validation.json`, untracked). Root adopted frozen source/fixture/control receipts after1468 current identity/range/verdict assertions. Sixty distinct independently replayed inert source controls:22 properties satisfied,27 API-or-CLI false acceptances,11 false refusals. Twenty complete byte-identical realpath-bound CLI controls include10false acceptances and2false refusals; initial omitted-owner API cases alone are rejected by empty-owner CLI validation, while fresh conventional-writer companions establish complete CLI acceptance. Seventeen unchanged tests are a subset of the parent30, not47distinct tests. Successful AST syntax parse invocations are226harness plus231independent; not typechecking or runtime proof. Original malformed literal16diagnostics and scratch-root admission failures are retained. Six adverse receipt controls rejected. Only unchanged source guard APIs/CLIs execute; fixtures and application modules remain inert. No actual tool/skill/authority grant, application/native/provider/browser/network/SQL/database/build/install/production effect, source/config/tool edits or checkout staging. Current application correctness and deployed availability remain unknown.
+
+## AUDIT-TOOL-METADATA-OBJECT-BINDING-01
+
+Severity: Medium. Status: open current source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-tool-registry.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 Root034 skill/tool source qualification: Quoted actual tool keys or quoted required field keys are falsely refused at the API. A required top-level facet absent from the actual entry is instead credited by a comment, unrelated notes string or nested object; C14/C15 confirm complete CLI acceptance with the facet missing. Normal metadata passes and genuinely absent facets/metadata refuse. Entry-shape and facet-shape candidates share this actual metadata-object binding owner.
+
+Additional source: `scripts/check-tool-registry.mjs:86-102,133-138`. Acceptance target: Resolve the real metadata table entries and their own top-level fields, accepting equivalent quoted keys while excluding comments, strings and nested properties from required facets.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-tool-skill-approval-guards-2026-10-09-034.json`, untracked); independent source controls (`audit/checklist/evidence/coverage-skill-tool-registry-independent-challenge-2026-10-09-034.json`, untracked); root adoption checks (`audit/checklist/evidence/coverage-skill-tool-registry-independent-challenge-2026-10-09-034-root-adoption-validation.json`, untracked). Root adopted frozen source/fixture/control receipts after1468 current identity/range/verdict assertions. Sixty distinct independently replayed inert source controls:22 properties satisfied,27 API-or-CLI false acceptances,11 false refusals. Twenty complete byte-identical realpath-bound CLI controls include10false acceptances and2false refusals; initial omitted-owner API cases alone are rejected by empty-owner CLI validation, while fresh conventional-writer companions establish complete CLI acceptance. Seventeen unchanged tests are a subset of the parent30, not47distinct tests. Successful AST syntax parse invocations are226harness plus231independent; not typechecking or runtime proof. Original malformed literal16diagnostics and scratch-root admission failures are retained. Six adverse receipt controls rejected. Only unchanged source guard APIs/CLIs execute; fixtures and application modules remain inert. No actual tool/skill/authority grant, application/native/provider/browser/network/SQL/database/build/install/production effect, source/config/tool edits or checkout staging. Current application correctness and deployed availability remain unknown.
+
+## AUDIT-RAW-ERROR-WRAPPER-BINDING-01
+
+Severity: Medium. Status: open source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/lib/raw-error-to-user.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+October 9 Root035 source qualification: An actual raw-error setter refuses and an import of the actual canonical UI toUserMessage passes. A local function named toUserMessage that returns err.message, or a caller-supplied same-named function parameter, also receives wrapper credit. AST witnesses actual local return/parameter and source calls; the helper does not resolve the canonical import/binding. These cases prove insufficient source-wrapper provenance, not a current rendered leak.
+
+Additional source: `scripts/lib/raw-error-to-user.mjs:82-95`. Acceptance target: Resolve actual conversion-wrapper bindings and exclude pass-through or caller-supplied same-named functions from canonical conversion credit.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-error-html-rls-write-guards-2026-10-09-035.json`, untracked); actual controls (`audit/checklist/evidence/coverage-raw-error-independent-controls-2026-10-09-035-refined.json`, untracked). Twenty distinct unchanged source-API/complete CLI property controls have11satisfied properties and9false acceptances; fourteen inert TypeScript AST syntax/source-shape checks. The initial successful same-case receipt remains preserved; refined complete CLI controls use three distinct byte-identical realpath trees and add no distinct cases. Independent fixture/pin/verdict metadata109assertions and5rejecting controls passed. Canonical UI error helper and actual flagged Gmail source were read as text, never imported/executed. Fifty-five unchanged authored tests:54passed/1failed; current RLS CLI1 reproduces the failing repository-positive assertion, other3CLIs0. No application/fixture modules, actual error UI/DOM, SQL/database/native/provider/browser/network/build/install/production effects or checkout staging; no source/config/tool changes or runtime incident accepted.
+
+## AUDIT-RAW-ERROR-SOURCE-SHAPE-COVERAGE-01
+
+Severity: Medium. Status: open source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main added mobile sinks, a JSX child check and a timer exclusion, but `failure.message`, computed `err['message']` and `toast['error']`, and quoted `'isError'` keys are still missed. Line numbers for `scripts/lib/raw-error-to-user.mjs` are main's.
+
+October 9 Root035 source qualification: AST-observed Error-typed failure.message, computed err[message] and toast[error] access, and quoted actual isError/content keys are missed while equivalent conventional identifiers refuse. Actual comments/logging remain accepting counterguards; conventional interpolated failure objects refuse. The direct non-prose result-message exclusion is explicitly declared by this helper and retained separately rather than included in the issue.
+
+Additional source: `scripts/lib/raw-error-to-user.mjs:61-79,89-95,124-150`. Acceptance target: Discover actual equivalent error-message/sink/property bindings independent of local spelling and quoted/computed syntax, preserving declared out-of-scope logger and direct-result cases.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-error-html-rls-write-guards-2026-10-09-035.json`, untracked); actual controls (`audit/checklist/evidence/coverage-raw-error-independent-controls-2026-10-09-035-refined.json`, untracked). Twenty distinct unchanged source-API/complete CLI property controls have11satisfied properties and9false acceptances; fourteen inert TypeScript AST syntax/source-shape checks. The initial successful same-case receipt remains preserved; refined complete CLI controls use three distinct byte-identical realpath trees and add no distinct cases. Independent fixture/pin/verdict metadata109assertions and5rejecting controls passed. Canonical UI error helper and actual flagged Gmail source were read as text, never imported/executed. Fifty-five unchanged authored tests:54passed/1failed; current RLS CLI1 reproduces the failing repository-positive assertion, other3CLIs0. No application/fixture modules, actual error UI/DOM, SQL/database/native/provider/browser/network/build/install/production effects or checkout staging; no source/config/tool changes or runtime incident accepted.
+
+## AUDIT-RAW-ERROR-BASELINE-COUNT-VALIDATION-01
+
+Severity: Low. Status: open source-instrument gap.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/lib/raw-error-to-user.mjs` and `scripts/check-raw-error-to-user.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for them are main's.
+
+October 9 Root035 source qualification: A valid zero allowance refuses one actual finding, retained numeric one passes, and a missing count uses zero. Setting the allowance to the string not-a-count instead makes the API and complete byte-identical CLI accept the same actual raw-error source. Numeric coercion makes the comparison false; CLI still reports one remaining with none new. Each final CLI case has its own source/guard/baseline tree; malformed allowance bytes and exact nonempty outputs are preserved.
+
+Additional source: `scripts/lib/raw-error-to-user.mjs:164-172; scripts/check-raw-error-to-user.mjs:64-80`. Acceptance target: Validate baseline count schema as bounded nonnegative integers before comparing current findings; invalid values must fail closed without weakening genuine retained counts.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-error-html-rls-write-guards-2026-10-09-035.json`, untracked); actual controls (`audit/checklist/evidence/coverage-raw-error-independent-controls-2026-10-09-035-refined.json`, untracked). Twenty distinct unchanged source-API/complete CLI property controls have11satisfied properties and9false acceptances; fourteen inert TypeScript AST syntax/source-shape checks. The initial successful same-case receipt remains preserved; refined complete CLI controls use three distinct byte-identical realpath trees and add no distinct cases. Independent fixture/pin/verdict metadata109assertions and5rejecting controls passed. Canonical UI error helper and actual flagged Gmail source were read as text, never imported/executed. Fifty-five unchanged authored tests:54passed/1failed; current RLS CLI1 reproduces the failing repository-positive assertion, other3CLIs0. No application/fixture modules, actual error UI/DOM, SQL/database/native/provider/browser/network/build/install/production effects or checkout staging; no source/config/tool changes or runtime incident accepted.
+
+October9 source-guard qualification: The original theme baseline API refuses numeric ceiling growth but suppresses the same findings when the per-file allowance is a nonnumeric string. Numeric coercion creates the same existing malformed-count cause. Current theme baseline values are numeric; intentional per-file ceilings and113 remaining unpaired source occurrences are retained, without a malformed current-data or contrast incident claim. Source: `scripts/lib/theme-only-text-colours.mjs:41-47; scripts/check-theme-only-text-colours.mjs:61-62`. Actual source reading (`audit/checklist/reviews/coverage-cache-version-workflow-guard-source-2026-10-09-048.json`, untracked); original engine controls (`audit/checklist/evidence/coverage-cache-version-workflow-inert-controls-2026-10-09-048.json`, untracked); valid companions (`audit/checklist/evidence/coverage-cache-version-workflow-valid-companions-2026-10-09-048.json`, untracked); independent challenge (`audit/checklist/evidence/coverage-cache-version-workflow-independent-challenge-2026-10-09-048.json`, untracked). Zero new cause or runtime acceptance.
+
+## AUDIT-GMAIL-RLS-BOUNDARY-REGRESSION-01
+
+Severity: Medium. Status: open current source-contract regression; source unchanged.
+
+October 9 Root035 source qualification: The actual unchanged55-test suite has54pass/1fail: the repository-positive RLS assertion. A separate current RLS CLI run exits1 on gmail-data-policy.ts, which is absent from the actual67-entry allowlist. Current source really imports/defaults/uses getNeonDb and queries web_conversations/cloud_agent_runs. SQL source explicitly binds userId and organizationId for its reads/update, and Gmail admission/route/cache checks are counterevidence to an unscoped-query premise. No database query, caller ownership or deployed policy was exercised; this is a concrete source-contract/test regression, not an established cross-tenant incident.
+
+Additional source: `apps/web/lib/connectors/gmail-data-policy.ts:7,56-83,109-117,154-158; scripts/check-rls-boundary.test.mjs:39-42`. Acceptance target: Restore the current source RLS boundary/test contract while preserving the actual user/org/provenance checks. Resolve the database owner/authorized scoped exception rather than disabling the guard or changing the test expectation.
+
+Current source report (`audit/checklist/reviews/coverage-ecosystem-error-html-rls-write-guards-2026-10-09-035.json`, untracked); actual controls (`audit/checklist/evidence/coverage-error-html-rls-write-current-source-gates-2026-10-09-035.json`, untracked). Twenty distinct unchanged source-API/complete CLI property controls have11satisfied properties and9false acceptances; fourteen inert TypeScript AST syntax/source-shape checks. The initial successful same-case receipt remains preserved; refined complete CLI controls use three distinct byte-identical realpath trees and add no distinct cases. Independent fixture/pin/verdict metadata109assertions and5rejecting controls passed. Canonical UI error helper and actual flagged Gmail source were read as text, never imported/executed. Fifty-five unchanged authored tests:54passed/1failed; current RLS CLI1 reproduces the failing repository-positive assertion, other3CLIs0. No application/fixture modules, actual error UI/DOM, SQL/database/native/provider/browser/network/build/install/production effects or checkout staging; no source/config/tool changes or runtime incident accepted.
+
+October 9 independent RLS/write qualification preserves the existing Gmail source-contract regression, with 55 authored tests / 54 passes / 1 failure and direct RLS source CLI exit 1. The challenge independently validates the preserved receipts and does not add a second Gmail defect or a deployed cross-tenant incident. Root separately read the actual raw and scoped connection-owner signatures through EOF: getNeonDb returns DatabaseAdapter and getUserScopedDb accepts NextRequest and returns Promise<UserScopedDb>. Four same-case fixtures were refined to an awaited scoped call with db destructuring; the original synthetic string/direct-return shapes are retained as limited historical fixtures. These syntax-only witnesses do not validate authentication, factory policy or deployed RLS. Explicit Gmail user/org query predicates remain counterevidence. Evidence: independent RLS/write challenge (`audit/checklist/evidence/coverage-rls-write-independent-challenge-2026-10-09-035.json`, untracked), root adoption qualification (`audit/checklist/evidence/coverage-rls-write-independent-challenge-2026-10-09-035-root-adoption-validation.json`, untracked).
+
+## AUDIT-HTML-SANITIZER-MODULE-CREDIT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October9,2026; source unchanged.
+
+An imported cleanHtml function that returns its input receives sanitizer credit when another function or a comment in the same defining module contains DOMPurify.sanitize. A declared but nonexported helper is also credited to an import. The AST witnesses distinguish actual bodies, absent exports and comment text. Ordinary imported/direct purifier controls accept, while an isolated pass-through helper and sanitizer-prefix plus dirty suffix refuse. The condition is insufficient source-function/import provenance; no runtime import or sanitizer exploit was executed.
+
+Source: `scripts/lib/raw-html-sinks.mjs:184-192,336-369`. Evidence: independent HTML challenge (`audit/checklist/evidence/coverage-html-independent-challenge-2026-10-09-035.json`, untracked); root adoption qualification (`audit/checklist/evidence/coverage-html-independent-challenge-2026-10-09-035-root-adoption-validation.json`, untracked).
+
+Limits: Fifty distinct inert source API/complete realpath CLI cases:21property-satisfied,24conditional falseacceptances and5scope/manual-trust/census observations. Initial48 and fresh reversed50 replays yield148CLI runs without adding distinct cases. Twenty-five adverse controls and607root identity/source/range/fixture/verdict assertions retained;113final AST syntax witness records are not typechecking or fixture execution. Current real inventory has integer counts; no actual application sanitizer/React/DOM/WebView/frame/browser/native/permissions or deployed exploit is established. Existing55-test suite has54passes/1RLS failure and current sourceCLI codes0/0/1/0; those unchanged failures remain explicit.
+
+Acceptance target: Bind sanitizer approval to the actual exported function and its value flow, excluding unrelated module/comment markers.
+
+## AUDIT-HTML-VALUE-BINDING-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October9,2026; source unchanged.
+
+Caller parameters shadowing the imported DOMPurify name, a cleanHtml function or a safe literal still receive sanitizer/static credit. An overwritten safe literal is resolved from its earlier declaration. A mutated JSX sandbox policy similarly receives its earlier safe token value. Current raw helper rejects genuinely dangerous and unresolved dynamic JSX values, so the existing separate frame-guard dynamic-name finding must not be copied wholesale. These are binding/write tracking conditions in source measurement.
+
+Source: `scripts/lib/raw-html-sinks.mjs:210-253,372-410,440-475`. Evidence: independent HTML challenge (`audit/checklist/evidence/coverage-html-independent-challenge-2026-10-09-035.json`, untracked); root adoption qualification (`audit/checklist/evidence/coverage-html-independent-challenge-2026-10-09-035-root-adoption-validation.json`, untracked).
+
+Limits: Fifty distinct inert source API/complete realpath CLI cases:21property-satisfied,24conditional falseacceptances and5scope/manual-trust/census observations. Initial48 and fresh reversed50 replays yield148CLI runs without adding distinct cases. Twenty-five adverse controls and607root identity/source/range/fixture/verdict assertions retained;113final AST syntax witness records are not typechecking or fixture execution. Current real inventory has integer counts; no actual application sanitizer/React/DOM/WebView/frame/browser/native/permissions or deployed exploit is established. Existing55-test suite has54passes/1RLS failure and current sourceCLI codes0/0/1/0; those unchanged failures remain explicit.
+
+Acceptance target: Resolve the actual lexical binding and relevant writes at each sink and frame policy; preserve refusal for unresolved and dangerous values.
+
+## AUDIT-HTML-STRUCTURAL-TEST-TEXT-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October9,2026; source unchanged.
+
+A configured structural module returning raw is credited when the test contains cleanSvg( and expect( only in a comment or an unused string, with no corresponding AST calls. Missing and marker-free tests refuse. Configured trust of an ordinary pass-through fixture is an explicit manual-trust observation rather than a newly proven sanitizer defect. The current application sanitizeSvg implementation/test was not executed by this challenge.
+
+Source: `scripts/lib/raw-html-sinks.mjs:355-369; scripts/check-raw-html-sinks.mjs:144-154`. Evidence: independent HTML challenge (`audit/checklist/evidence/coverage-html-independent-challenge-2026-10-09-035.json`, untracked); root adoption qualification (`audit/checklist/evidence/coverage-html-independent-challenge-2026-10-09-035-root-adoption-validation.json`, untracked).
+
+Limits: Fifty distinct inert source API/complete realpath CLI cases:21property-satisfied,24conditional falseacceptances and5scope/manual-trust/census observations. Initial48 and fresh reversed50 replays yield148CLI runs without adding distinct cases. Twenty-five adverse controls and607root identity/source/range/fixture/verdict assertions retained;113final AST syntax witness records are not typechecking or fixture execution. Current real inventory has integer counts; no actual application sanitizer/React/DOM/WebView/frame/browser/native/permissions or deployed exploit is established. Existing55-test suite has54passes/1RLS failure and current sourceCLI codes0/0/1/0; those unchanged failures remain explicit.
+
+Acceptance target: Require actual test exercise bound to the configured sanitizer; do not count inert comments/strings as calls or assertions.
+
+## AUDIT-HTML-SINK-SYNTAX-CENSUS-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October9,2026; source unchanged.
+
+Computed innerHTML, insertAdjacentHTML, document.write and srcdoc syntax, a comment-separated assignment and a quoted dangerouslySetInnerHTML property escape the complete source census. Every fixture retains a real independent literal sink anchor; TS/JS/TSX AST witnesses establish nonempty assignments/calls/properties. Ordinary dirty dot forms refuse. Counting an inert string remains source-kind ambiguity because embedded scripts are intentionally scanned; that observation is not promoted as a blanket false-positive defect.
+
+Source: `scripts/check-raw-html-sinks.mjs:43-59,76-103; scripts/lib/raw-html-sinks.mjs:94-154`. Evidence: independent HTML challenge (`audit/checklist/evidence/coverage-html-independent-challenge-2026-10-09-035.json`, untracked); root adoption qualification (`audit/checklist/evidence/coverage-html-independent-challenge-2026-10-09-035-root-adoption-validation.json`, untracked).
+
+Limits: Fifty distinct inert source API/complete realpath CLI cases:21property-satisfied,24conditional falseacceptances and5scope/manual-trust/census observations. Initial48 and fresh reversed50 replays yield148CLI runs without adding distinct cases. Twenty-five adverse controls and607root identity/source/range/fixture/verdict assertions retained;113final AST syntax witness records are not typechecking or fixture execution. Current real inventory has integer counts; no actual application sanitizer/React/DOM/WebView/frame/browser/native/permissions or deployed exploit is established. Existing55-test suite has54passes/1RLS failure and current sourceCLI codes0/0/1/0; those unchanged failures remain explicit.
+
+Acceptance target: Discover equivalent parsed sink nodes across supported TS/JS/TSX syntax while preserving an explicit policy for script-carrying strings.
+
+## AUDIT-HTML-INVENTORY-COUNT-VALIDATION-01
+
+Severity: Low. Status: open current source instrument gap reviewed October9,2026; source unchanged.
+
+Omitted, nonnumeric-string and object count values accept a nonempty dirty sink because both count comparisons are false; CLI totals explicitly contain NaN. Duplicate file/kind entries inflate the displayed accepted census. Numeric strings are currently coerced and recorded as schema observations. Real current inventory uses integer values; numeric0/2 mismatch, short reason and unknown kind countercontrols refuse. This finding concerns validation/accounting of the guard inventory, not a malformed current product sink disposition.
+
+Source: `scripts/check-raw-html-sinks.mjs:63-74,105-133`. Evidence: independent HTML challenge (`audit/checklist/evidence/coverage-html-independent-challenge-2026-10-09-035.json`, untracked); root adoption qualification (`audit/checklist/evidence/coverage-html-independent-challenge-2026-10-09-035-root-adoption-validation.json`, untracked).
+
+Limits: Fifty distinct inert source API/complete realpath CLI cases:21property-satisfied,24conditional falseacceptances and5scope/manual-trust/census observations. Initial48 and fresh reversed50 replays yield148CLI runs without adding distinct cases. Twenty-five adverse controls and607root identity/source/range/fixture/verdict assertions retained;113final AST syntax witness records are not typechecking or fixture execution. Current real inventory has integer counts; no actual application sanitizer/React/DOM/WebView/frame/browser/native/permissions or deployed exploit is established. Existing55-test suite has54passes/1RLS failure and current sourceCLI codes0/0/1/0; those unchanged failures remain explicit.
+
+Acceptance target: Validate finite nonnegative integer counts and unique file/kind identities before comparison and census; preserve deliberate manual trust separately.
+
+## AUDIT-HTML-SCAN-ROOT-READ-FAILURE-01
+
+Severity: Low. Status: open current source instrument gap reviewed October9,2026; source unchanged.
+
+Replacing an expected scan root with inert text produces ENOTDIR, silently skips that root and succeeds over a separate nonempty literal anchor. A discovered broken source symlink produces ENOENT and fails. The scope is present-root directory traversal failure; missing platform roots and declared test/build exclusions are separate supported scope, and actual OS permission denial was not executed.
+
+Source: `scripts/check-raw-html-sinks.mjs:47-60,76-85`. Evidence: independent HTML challenge (`audit/checklist/evidence/coverage-html-independent-challenge-2026-10-09-035.json`, untracked); root adoption qualification (`audit/checklist/evidence/coverage-html-independent-challenge-2026-10-09-035-root-adoption-validation.json`, untracked).
+
+Limits: Fifty distinct inert source API/complete realpath CLI cases:21property-satisfied,24conditional falseacceptances and5scope/manual-trust/census observations. Initial48 and fresh reversed50 replays yield148CLI runs without adding distinct cases. Twenty-five adverse controls and607root identity/source/range/fixture/verdict assertions retained;113final AST syntax witness records are not typechecking or fixture execution. Current real inventory has integer counts; no actual application sanitizer/React/DOM/WebView/frame/browser/native/permissions or deployed exploit is established. Existing55-test suite has54passes/1RLS failure and current sourceCLI codes0/0/1/0; those unchanged failures remain explicit.
+
+Acceptance target: Distinguish intentionally absent roots from present roots whose traversal fails, and report unknown coverage or fail closed for the latter.
+
+## AUDIT-RLS-CONNECTION-REACHABILITY-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+Both complete CLIs accept with one real nonempty allowlisted anchor offender. R07 independently parsed computed property cooks to getNeonDb on the imported namespace; R08 has an actual exported wrapper raw-factory call, and its consumer calls that wrapper while querying web_conversations. Same-file full handle token/table co-occurrence is absent for each subject. Counterguards: R01 direct unallowlisted handle/owned table refuses; R05 named-import alias retains the canonical import token and refuses; R06 namespace direct property refuses; R02 scoped source accepts; R04 current authored test intentionally refuses a coincidental feedback identifier; this designed conservative predicate is not promoted as a defect; R11 raw handle only in an unrelated string also conservatively refuses; observed diagnostic overstatement is not automatically a new defect. Group scope: Conditional source-instrument coverage gap. No actual application wrapper, factory call, database connection, deployed BYPASSRLS execution or cross-tenant incident was exercised. Root owns exact canonical dedup/adoption.
+
+Source: `scripts/check-rls-boundary.mjs:17-20,85-96,107-113`. Evidence: independent RLS/write challenge (`audit/checklist/evidence/coverage-rls-write-independent-challenge-2026-10-09-035.json`, untracked); root adoption qualification (`audit/checklist/evidence/coverage-rls-write-independent-challenge-2026-10-09-035-root-adoption-validation.json`, untracked).
+
+Limits: Fifty distinct inert source cases: 21 satisfied properties, 18 conditional false acceptances, 2 conditional false refusals and 9 scope observations. Original 50 complete CLI and 28 API cases plus fresh reversed replays are the same subjects. Four request-shaped fixture refinements add no distinct cases. Current promoted syntax parsing has 396 invocations; 583 includes historical completed repeated-subject validation. Syntax parsing is neither typechecking nor fixture execution. Independent 4,988 normal / 8,230 total checks, 16 rejecting controls, final freeze 2,629 normal / 2,750 total checks with 8 rejecting controls, and 1,032 root metadata checks are preserved. The original setup and validation failures are retained. No actual application/request/authentication/database/RLS/audit-persistence/provider/browser/native/SQL execution, product acceptance or deployed incident is established. The authored source suite remains 55 tests, 54 passed and 1 failed; source CLI exits remain 0/0/1/0. Source, configuration and tools are unchanged.
+
+Acceptance target: Bind table-query discovery to actual connection provenance across the supported lexical and module shapes.
+
+## AUDIT-RLS-TABLE-SOURCE-IDENTITY-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+Actual TypeScript query argument AST values both cook to select * from web_conversations, using a Unicode escape or string concatenation. Raw token patterns omit the canonical table and the complete CLI accepts beside its one admitted anchor offender. Counterguards: R01 canonical ordinary table spelling refuses; R03 actual comment-only table is removed and accepts. Group scope: Equivalent static source-string identity only; SQL is inert text, not SQL validation or a database query. No current production occurrence claimed.
+
+Source: `scripts/check-rls-boundary.mjs:19-20,37-42,91-95`. Evidence: independent RLS/write challenge (`audit/checklist/evidence/coverage-rls-write-independent-challenge-2026-10-09-035.json`, untracked); root adoption qualification (`audit/checklist/evidence/coverage-rls-write-independent-challenge-2026-10-09-035-root-adoption-validation.json`, untracked).
+
+Limits: Fifty distinct inert source cases: 21 satisfied properties, 18 conditional false acceptances, 2 conditional false refusals and 9 scope observations. Original 50 complete CLI and 28 API cases plus fresh reversed replays are the same subjects. Four request-shaped fixture refinements add no distinct cases. Current promoted syntax parsing has 396 invocations; 583 includes historical completed repeated-subject validation. Syntax parsing is neither typechecking nor fixture execution. Independent 4,988 normal / 8,230 total checks, 16 rejecting controls, final freeze 2,629 normal / 2,750 total checks with 8 rejecting controls, and 1,032 root metadata checks are preserved. The original setup and validation failures are retained. No actual application/request/authentication/database/RLS/audit-persistence/provider/browser/native/SQL execution, product acceptance or deployed incident is established. The authored source suite remains 55 tests, 54 passed and 1 failed; source CLI exits remain 0/0/1/0. Source, configuration and tools are unchanged.
+
+Acceptance target: Compare owned-table identity in supported static query arguments rather than only their raw source spelling.
+
+## AUDIT-RLS-WAIVER-REASON-SHAPE-01
+
+Severity: Low. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+An actual two-line reason on the exact subject path passes the complete CLI, although both reason diagnostic and remediation text require a one-line reason. Counterguards: R16 too-short reason refuses; R15 duplicate exact path refuses; R14 stale exact path refuses; R17/R22 unknown keys refuse; R13 honest ordinary waiver accepts. Group scope: Low conditional format-contract limitation only. R19 schemaVersion value acceptance is a separate observation without verified value contract. R20 filewide waiver is explicit current design; no table-level waiver promise was invented.
+
+Source: `scripts/check-rls-boundary.mjs:72-80,132-134`. Evidence: independent RLS/write challenge (`audit/checklist/evidence/coverage-rls-write-independent-challenge-2026-10-09-035.json`, untracked); root adoption qualification (`audit/checklist/evidence/coverage-rls-write-independent-challenge-2026-10-09-035-root-adoption-validation.json`, untracked).
+
+Limits: Fifty distinct inert source cases: 21 satisfied properties, 18 conditional false acceptances, 2 conditional false refusals and 9 scope observations. Original 50 complete CLI and 28 API cases plus fresh reversed replays are the same subjects. Four request-shaped fixture refinements add no distinct cases. Current promoted syntax parsing has 396 invocations; 583 includes historical completed repeated-subject validation. Syntax parsing is neither typechecking nor fixture execution. Independent 4,988 normal / 8,230 total checks, 16 rejecting controls, final freeze 2,629 normal / 2,750 total checks with 8 rejecting controls, and 1,032 root metadata checks are preserved. The original setup and validation failures are retained. No actual application/request/authentication/database/RLS/audit-persistence/provider/browser/native/SQL execution, product acceptance or deployed incident is established. The authored source suite remains 55 tests, 54 passed and 1 failed; source CLI exits remain 0/0/1/0. Source, configuration and tools are unchanged.
+
+Acceptance target: Enforce the stated one-line reason requirement while preserving exact-path, stale-entry, duplicate and unknown-key checks.
+
+## AUDIT-SCRIPT-DB-CLIENT-DISCOVERY-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+Actual AST module identities are pg under double-quoted import, double-quoted require and spaced require. Each source retains the actual ordinary db.query update and no audit recording call, yet API and complete CLI accept. Counterguards: W01 ordinary single-quoted pg write refuses; W08 double-quoted Neon module write still refuses; W04/W28 read-only pg/Neon sources accept. Group scope: Conditional source client-discovery gap. Fixtures were syntax parsed only, never resolved/imported/executed. Installed pg availability and database behavior are unknown.
+
+Source: `scripts/check-unaudited-db-writes.mjs:9,64-68`. Evidence: independent RLS/write challenge (`audit/checklist/evidence/coverage-rls-write-independent-challenge-2026-10-09-035.json`, untracked); root adoption qualification (`audit/checklist/evidence/coverage-rls-write-independent-challenge-2026-10-09-035-root-adoption-validation.json`, untracked).
+
+Limits: Fifty distinct inert source cases: 21 satisfied properties, 18 conditional false acceptances, 2 conditional false refusals and 9 scope observations. Original 50 complete CLI and 28 API cases plus fresh reversed replays are the same subjects. Four request-shaped fixture refinements add no distinct cases. Current promoted syntax parsing has 396 invocations; 583 includes historical completed repeated-subject validation. Syntax parsing is neither typechecking nor fixture execution. Independent 4,988 normal / 8,230 total checks, 16 rejecting controls, final freeze 2,629 normal / 2,750 total checks with 8 rejecting controls, and 1,032 root metadata checks are preserved. The original setup and validation failures are retained. No actual application/request/authentication/database/RLS/audit-persistence/provider/browser/native/SQL execution, product acceptance or deployed incident is established. The authored source suite remains 55 tests, 54 passed and 1 failed; source CLI exits remain 0/0/1/0. Source, configuration and tools are unchanged.
+
+Acceptance target: Discover the actual database-client module identity across supported quote and whitespace syntax.
+
+## AUDIT-SCRIPT-DB-WRITE-AUDIT-ATTRIBUTION-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+Comments naming each of four audit markers, an unrelated string, an unused ledger variable, a SELECT from an audit table, an INSERT into a different audit-name-suffix table, or an audit INSERT only under literal false all cause API and complete CLI acceptance of the preceding actual mutation. Independent AST distinguishes queries from comments/literals and marks the unreachable audit branch; no sink INSERT exists for the inert/read-only cases. Counterguards: W01 mutation without any marker refuses; W02/W03/W26 actual audit/ledger INSERT source accepts; W23 removed rehearsal name refuses staleness. Group scope: Conditional source attribution/identity gap, not an audit loss or database incident. W22 basename exemption is deliberately scoped observation: actual rehearsal target safety was not read/executed here, so no production waiver incident is inferred.
+
+Source: `scripts/check-unaudited-db-writes.mjs:22-28,64-70`. Evidence: independent RLS/write challenge (`audit/checklist/evidence/coverage-rls-write-independent-challenge-2026-10-09-035.json`, untracked); root adoption qualification (`audit/checklist/evidence/coverage-rls-write-independent-challenge-2026-10-09-035-root-adoption-validation.json`, untracked).
+
+Limits: Fifty distinct inert source cases: 21 satisfied properties, 18 conditional false acceptances, 2 conditional false refusals and 9 scope observations. Original 50 complete CLI and 28 API cases plus fresh reversed replays are the same subjects. Four request-shaped fixture refinements add no distinct cases. Current promoted syntax parsing has 396 invocations; 583 includes historical completed repeated-subject validation. Syntax parsing is neither typechecking nor fixture execution. Independent 4,988 normal / 8,230 total checks, 16 rejecting controls, final freeze 2,629 normal / 2,750 total checks with 8 rejecting controls, and 1,032 root metadata checks are preserved. The original setup and validation failures are retained. No actual application/request/authentication/database/RLS/audit-persistence/provider/browser/native/SQL execution, product acceptance or deployed incident is established. The authored source suite remains 55 tests, 54 passed and 1 failed; source CLI exits remain 0/0/1/0. Source, configuration and tools are unchanged.
+
+Acceptance target: Bind a mutation disposition to the actual audit or migration-ledger recording call and its sink identity; exclude comments, unused markers, read-only audit queries, wrong tables and unreachable recording branches.
+
+## AUDIT-SCRIPT-DB-WRITE-SOURCE-KIND-01
+
+Severity: Medium. Status: open current source instrument gap reviewed October 9, 2026; source unchanged.
+
+W18 concatenation cooks to the ordinary UPDATE query but API/CLI accepts. W19 has only a readonly query and mutation text in a comment yet API/CLI refuses. W27 really includes an audit INSERT argument cooking to security_audit_logs through a Unicode escape but raw sink pattern omits it and API/CLI refuses. Counterguards: W01 ordinary UPDATE discovery refuses correctly; W02 plain actual security_audit_logs INSERT accepts; W20 unused mutation literal is retained as conservative-token observation, not presumed runtime write; W21/check prefix,W24/nested mjs,W25/js are explicit discovery-scope observations with no promised admission verdict. Group scope: Conditional source-call/string identity and refusal precision. SQL remains inert and no audit INSERT or database mutation ran. Current deployed behavior is unknown.
+
+Source: `scripts/check-unaudited-db-writes.mjs:11-28,64-69`. Evidence: independent RLS/write challenge (`audit/checklist/evidence/coverage-rls-write-independent-challenge-2026-10-09-035.json`, untracked); root adoption qualification (`audit/checklist/evidence/coverage-rls-write-independent-challenge-2026-10-09-035-root-adoption-validation.json`, untracked).
+
+Limits: Fifty distinct inert source cases: 21 satisfied properties, 18 conditional false acceptances, 2 conditional false refusals and 9 scope observations. Original 50 complete CLI and 28 API cases plus fresh reversed replays are the same subjects. Four request-shaped fixture refinements add no distinct cases. Current promoted syntax parsing has 396 invocations; 583 includes historical completed repeated-subject validation. Syntax parsing is neither typechecking nor fixture execution. Independent 4,988 normal / 8,230 total checks, 16 rejecting controls, final freeze 2,629 normal / 2,750 total checks with 8 rejecting controls, and 1,032 root metadata checks are preserved. The original setup and validation failures are retained. No actual application/request/authentication/database/RLS/audit-persistence/provider/browser/native/SQL execution, product acceptance or deployed incident is established. The authored source suite remains 55 tests, 54 passed and 1 failed; source CLI exits remain 0/0/1/0. Source, configuration and tools are unchanged.
+
+Acceptance target: Classify supported mutation and audit-recording query arguments using their actual static source value and distinguish executable calls from comments.
+
+## AUDIT-SECURITY-GATE-EXTERNAL-EXCLUSION-CENSUS-01
+
+Severity: Medium. Status: open conditional source-instrument gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-security-gates.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Adding an unregistered literal-true warning step to the already loaded security-scanning gate-owning workflow is accepted by the complete unchanged source CLI. Primary workflow warnings are enumerated, external workflow warnings are not.
+
+Counterguards: An unregistered primary warning refuses, and converting an actually registered external gate to a warning also refuses.
+
+Source: `scripts/check-security-gates.mjs:475-494`. Evidence: eight exact-function controls (`audit/checklist/evidence/coverage-security-ci-inert-controls-2026-10-09-037.json`, untracked), six complete unchanged CLI controls (`audit/checklist/evidence/coverage-security-ci-unchanged-cli-controls-2026-10-09-037.json`, untracked) and actual current guard/test results (`audit/checklist/evidence/coverage-security-ci-current-source-gates-2026-10-09-037.json`, untracked). The six CLI subjects are replays of the eight focused controls, not six additional unique cases.
+
+Limits: Current real repository guard and seven authored tests pass. All workflow run fields in controls are inert data. No application/fixture module, hosted action, container, network, provider, database, build, installation, deployment, protected setting, account permission or production incident was exercised. Desired ruleset files are not proof of applied enforcement. The earlier Root035 RLS guard failure remains separate and unresolved.
+
+Acceptance target: Enumerate exclusions for every declared loaded gate-owning workflow and bind identities to workflow/job/step, preserving existing primary and external gate refusals.
+
+## AUDIT-SECURITY-GATE-JOB-WARNING-01
+
+Severity: Medium. Status: open conditional source-instrument gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-security-gates.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Adding a literal-true continue-on-error flag to the registered primary security job leaves the complete unchanged source CLI accepted because it only checks the selected step. This is a bounded guard input-coverage failure; hosted GitHub evaluation and merge effects remain unknown.
+
+Counterguards: A literal-true warning flag on the registered step refuses. The original checked-in workflow baseline passes without the adverse job mutation.
+
+Source: `scripts/check-security-gates.mjs:456-473`. Evidence: eight exact-function controls (`audit/checklist/evidence/coverage-security-ci-inert-controls-2026-10-09-037.json`, untracked), six complete unchanged CLI controls (`audit/checklist/evidence/coverage-security-ci-unchanged-cli-controls-2026-10-09-037.json`, untracked) and actual current guard/test results (`audit/checklist/evidence/coverage-security-ci-current-source-gates-2026-10-09-037.json`, untracked). The six CLI subjects are replays of the eight focused controls, not six additional unique cases.
+
+Limits: Current real repository guard and seven authored tests pass. All workflow run fields in controls are inert data. No application/fixture module, hosted action, container, network, provider, database, build, installation, deployment, protected setting, account permission or production incident was exercised. Desired ruleset files are not proof of applied enforcement. The earlier Root035 RLS guard failure remains separate and unresolved.
+
+Acceptance target: Qualify both job and step blocking conditions for registered gates; conservatively refuse unsupported warning expressions rather than claiming verified blocking behavior.
+
+## AUDIT-SECURITY-EXCLUSION-OWNER-SHAPE-01
+
+Severity: Low. Status: open conditional source-instrument gap reviewed October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-security-gates.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+Replacing the required primary warning exclusion fields with reason=[], owner={} and tracking=true is accepted by the complete unchanged source CLI. Truthiness does not establish a meaningful reason, owner or tracking identifier.
+
+Counterguards: An empty owner string is refused by the exact current predicate. Current registry fields are normal text; no malformed current owner record or hidden incident is claimed.
+
+Source: `scripts/check-security-gates.mjs:489-493`. Evidence: eight exact-function controls (`audit/checklist/evidence/coverage-security-ci-inert-controls-2026-10-09-037.json`, untracked), six complete unchanged CLI controls (`audit/checklist/evidence/coverage-security-ci-unchanged-cli-controls-2026-10-09-037.json`, untracked) and actual current guard/test results (`audit/checklist/evidence/coverage-security-ci-current-source-gates-2026-10-09-037.json`, untracked). The six CLI subjects are replays of the eight focused controls, not six additional unique cases.
+
+Limits: Current real repository guard and seven authored tests pass. All workflow run fields in controls are inert data. No application/fixture module, hosted action, container, network, provider, database, build, installation, deployment, protected setting, account permission or production incident was exercised. Desired ruleset files are not proof of applied enforcement. The earlier Root035 RLS guard failure remains separate and unresolved.
+
+Acceptance target: Validate nonempty meaningful string fields for exclusion reason, owner and tracking and reject nontext data, with current valid exclusions retained.
+
+## AUDIT-SECURITY-CONTROL-INERT-REACHABILITY-01
+
+Severity: Medium. Status: open source-instrument finding reviewed October 9, 2026; source unchanged.
+
+The complete unchanged CLI accepts a discovered purge control when a production route only imports its name and returns a literal. With a namespace import, a comment or returned string containing the control name also accepts. No fixture route/control is executed. This qualifies the instrument claim of a production caller; it does not prove a currently deployed security control is bypassed.
+
+Counterguards: A missing production importer, an unused namespace importer and a test-only importer all refuse. A route that actually calls the named control accepts, and every accepted case reports one real discovered control module/export rather than an empty census.
+
+Evidence: nine complete unchanged CLI controls (`audit/checklist/evidence/coverage-security-control-reachability-inert-controls-2026-10-09-038.json`, untracked), sixteen authored tests and real source guard (`audit/checklist/evidence/coverage-security-control-reachability-current-source-gates-2026-10-09-038.json`, untracked), and actual source report (`audit/checklist/reviews/coverage-security-control-ci-owner-source-2026-10-09-038.json`, untracked). The nine distinct cases comprise five counterguards and four conditional false acceptances across these two owners. Actual current guard passes with 57 control modules, 49 exports and one baseline-accounted uncalled tested control.
+
+Limits: Source guard execution reads private inert text; fixture TypeScript is never imported or executed. No application/native/provider/network/SQL/database/build/install/hosted CI/production action or effective security enforcement is accepted. Named-import and namespace-name heuristics are source references, not proof of invocation. This packet does not replace the unresolved Root035 RLS failure or unrelated lexical guard owners.
+
+Acceptance target: Resolve actual executable value references and calls for the advertised control-caller claim, excluding unused import bindings and inert comments/strings while preserving actual calls, supported re-exports and test-only refusal.
+
+## AUDIT-SECURITY-CONTROL-BASELINE-OWNER-SHAPE-01
+
+Severity: Low. Status: open source-instrument finding reviewed October 9, 2026; source unchanged.
+
+A baseline for the actually discovered orphan purge control with control={} and owner=[] is accepted by the complete unchanged CLI. Truthiness alone cannot name the promised control or responsible file. The checked-in exception uses normal textual fields; this is a conditional malformed-input instrument gap.
+
+Counterguards: An empty owner string refuses, missing metadata is rejected by the passing authored tests, and stale wired exceptions are rejected. No malformed current baseline or hosted/runtime incident is observed.
+
+Evidence: nine complete unchanged CLI controls (`audit/checklist/evidence/coverage-security-control-reachability-inert-controls-2026-10-09-038.json`, untracked), sixteen authored tests and real source guard (`audit/checklist/evidence/coverage-security-control-reachability-current-source-gates-2026-10-09-038.json`, untracked), and actual source report (`audit/checklist/reviews/coverage-security-control-ci-owner-source-2026-10-09-038.json`, untracked). The nine distinct cases comprise five counterguards and four conditional false acceptances across these two owners. Actual current guard passes with 57 control modules, 49 exports and one baseline-accounted uncalled tested control.
+
+Limits: Source guard execution reads private inert text; fixture TypeScript is never imported or executed. No application/native/provider/network/SQL/database/build/install/hosted CI/production action or effective security enforcement is accepted. Named-import and namespace-name heuristics are source references, not proof of invocation. This packet does not replace the unresolved Root035 RLS failure or unrelated lexical guard owners.
+
+Acceptance target: Require meaningful nonempty textual control and responsible-file metadata, validating the owner under the declared source-root policy while retaining missing/stale exception refusals.
+
+## AUDIT-UI-GAP-STATIC-PREMISE-OVERRIDE-01
+
+Severity: Medium. Status: open source-qualified finding reviewed October 9, 2026; source unchanged.
+
+The exact current reconcileCurrentPremises stage overwrites an incoming GAP-004 Open status and unique criteria/evidence with private Done claims. Incoming GAP-004 Open/GAP-005 Blocked states both become Done before the merge checks equality, so that conflict is no longer refused. These are bounded transform controls; current target implementation and a full CSV/CI/hosted import outcome were not tested.
+
+Counterguards: An unregistered ID is preserved. The direct merger correctly refuses original differing statuses; render-only mode does not call overrides or duplicate merge. No checked-in canonical status is declared wrong solely from this source observation.
+
+Evidence: root source review (`audit/checklist/reviews/coverage-audit-import-excel-owner-source-2026-10-09-039.json`, untracked), seven pure-function controls (`audit/checklist/evidence/coverage-audit-import-inert-controls-2026-10-09-039.json`, untracked).
+
+Limits: No complete importer/CSV writer, application/fixture module, native/Rust tests/build, workbook I/O, provider/network, SQL/database, install, Git mutation or production action ran. Source transform controls use exact pure function text and inert values. Installed writer spans are outside-repository dependency evidence with missing archive checksum, excluded from first-party/full-file credit. No observed data loss, current status corruption, approved caller bypass or public Electron runtime acceptance is claimed.
+
+Acceptance target: Keep supplied audit claims and verification provenance independently, require content/current-evidence qualification before status changes, and resolve conflicts before collapsing aliases instead of replacing mutable truth with private importer constants.
+
+## AUDIT-UI-GAP-DUPLICATE-CRITERIA-LOSS-01
+
+Severity: Medium. Status: open source-qualified finding reviewed October 9, 2026; source unchanged.
+
+For same-status GAP-004/GAP-005 records with a unique secondary required detail/title, the exact mergeKnownDuplicate transform removes GAP-005 and retains neither of those fields in the result. It preserves secondary evidence, suggested fix and image, which do not necessarily contain the dropped criterion. This conditional schema-valid stage gap is not a claim that current checked-in duplicate text already differs.
+
+Counterguards: Missing duplicate pairs and differing direct statuses refuse; secondary evidence/recommendation/images and mergedFrom are retained, with image deduplication. No real CSV or importer writer executed.
+
+Evidence: root source review (`audit/checklist/reviews/coverage-audit-import-excel-owner-source-2026-10-09-039.json`, untracked), seven pure-function controls (`audit/checklist/evidence/coverage-audit-import-inert-controls-2026-10-09-039.json`, untracked).
+
+Limits: No complete importer/CSV writer, application/fixture module, native/Rust tests/build, workbook I/O, provider/network, SQL/database, install, Git mutation or production action ran. Source transform controls use exact pure function text and inert values. Installed writer spans are outside-repository dependency evidence with missing archive checksum, excluded from first-party/full-file credit. No observed data loss, current status corruption, approved caller bypass or public Electron runtime acceptance is claimed.
+
+Acceptance target: Require exact requirement/acceptance equivalence or retain all independent secondary clauses and field provenance before removing a duplicate row.
+
+## NATIVE-EXCEL-EDIT-UNATTACHED-SHEETS-01
+
+Severity: High. Status: open source-qualified finding reviewed October 9, 2026; source unchanged.
+
+The retained editor writes source cells and supported edits into a separate Worksheet map, passes an unused workbook parameter to apply_edit, and saves a fresh Workbook without attaching any sheet. The registered native command forwards that path. Current installed writer source starts with an empty vector and creates a blank sheet on save; it creates the output path, so equal readable-source/writable-output paths can replace original content. This is source derivation; no workbook was edited or overwritten.
+
+Counterguards: Unsupported edit variants, path traversal/protected-path/empty input and propagated edit/save errors refuse. The create path explicitly attaches sheets through workbook.add_worksheet. Native startup, caller permissions/approval, dependency archive authenticity, actual compiled linkage and public Electron applicability remain unknown.
+
+Evidence: root source review (`audit/checklist/reviews/coverage-audit-import-excel-owner-source-2026-10-09-039.json`, untracked), original retained candidate (`audit/checklist/reviews/coverage-retained-native-source-2026-10-09-039.json`, untracked). The original qualified Native039 pair remains frozen and its pending relation is resolved into this canonical ID.
+
+Limits: No complete importer/CSV writer, application/fixture module, native/Rust tests/build, workbook I/O, provider/network, SQL/database, install, Git mutation or production action ran. Source transform controls use exact pure function text and inert values. Installed writer spans are outside-repository dependency evidence with missing archive checksum, excluded from first-party/full-file credit. No observed data loss, current status corruption, approved caller bypass or public Electron runtime acceptance is claimed.
+
+Acceptance target: Attach every preserved/edited worksheet to the saved workbook and prove supported edits preserve existing cells/sheets/formulas/metadata before exposing overwrite behavior; preserve unsupported-edit refusal and source/output access controls.
+
+## AUDIT-UI-GAP-MARKDOWN-HASH-ONLY-01
+
+Severity: Low. Status: open source-instrument finding reviewed October 9, 2026; source unchanged.
+
+The complete unchanged checker accepts private Markdown containing only the exact CSV SHA marker while all341 actual tracker rows and their criteria/evidence are absent. It validates CSV identities and SHA presence,without checking the Markdown is the rendered projection. Current checked-in Markdown is not claimed incomplete; this is a conditional malformed generated-input acceptance gap.
+
+Counterguards: Complete current Markdown passes; wrong hash and empty Markdown refuse. All cases use the same copied actual341-row CSV and baseline, and the original tracker/source stay unchanged. No renderer/importer writer or product module executes.
+
+Evidence: four complete unchanged CLI controls (`audit/checklist/evidence/coverage-ui-gap-renderer-guard-inert-controls-2026-10-09-040.json`, untracked) with exits0/0/1/1, current guard and absent-ref proof (`audit/checklist/evidence/coverage-ui-gap-current-source-guard-2026-10-09-040.json`, untracked), and full source report (`audit/checklist/reviews/coverage-ui-gap-contract-guard-source-2026-10-09-040.json`, untracked). Metadata and copied data checks add no semantic reading of the341 CSV records. No importer/renderer write, product/application/fixture module, network/provider/native/SQL/DB/Git mutation/build/install or hosted CI/production acceptance.
+
+Acceptance target: Compare the complete generated Markdown with the canonical renderer output or validate all required row/detail/evidence/lineage content, preserving existing CSV/hash/schema refusals.
+
+## AUDIT-MODEL-IMPROVEMENT-FILE-EXEMPTION-01
+
+Severity: Medium. Status: open current source-instrument gap; source unchanged.
+
+The complete unchanged source checker accepts an exported training-preference control inside the exempt PrivacySection file while the identical active control in DataSection refuses. The exception documented for a removed-control comment is applied at whole-file/pattern scope, so the instrument can falsely report the preference absent. No current product opt-in or training sink is alleged.
+
+Counterguards: Current original source passes2393 modules, the baseline passes, the exact active control in another file refuses, a training export in the exempt file refuses, and missing privacy copy refuses. AST proves the adverse text is an exported variable initializer without running it.
+
+Source: `scripts/check-model-improvement-eligibility.mjs:56-63,92-100`. Acceptance target: Bind the exception to the exact inactive source comment or remove comment matches before scanning executable declarations; preserve other-file controls, export/call patterns, missing claims, nonzero source census and stale-exemption checks. Current full source report (`audit/checklist/reviews/coverage-model-contract-guard-source-2026-10-09-041.json`, untracked); independent controls (`audit/checklist/evidence/coverage-model-contract-inert-controls-2026-10-09-041.json`, untracked); actual current source guard/tests (`audit/checklist/evidence/coverage-model-contract-current-source-gates-2026-10-09-041.json`, untracked).
+
+Limits: The complete original source checker ran on private inert TSX/data roots; two actual TypeScript parser checks establish template and active-export syntax/source roles without executing the fixture. Five eligibility controls preserve the current text claims and distinguish file-specific exemption from all-file/global preference refusal. Current original source is populated and passes; no current training opt-in, customer-content sink or privacy incident is alleged. No source edits, application/fixture/provider/native/network/SQL/DB/build/install/Git mutation or product/runtime acceptance. Prior Root035 failure stays unresolved.
+
+## AUDIT-PRIVACY-CLAIM-INERT-BACKING-01
+
+Severity: Medium. Status: open source/documentation finding.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-privacy-claims.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+The complete unchanged privacy CLI accepts a fixture whose consent/switch/centre/storage backing is entirely commented out, and separately accepts a null chat notice with only a commented disclosure name. Missing actual backing files and changed published claims refuse. Literal source markers can therefore back the claimed published behavior without executable backing. Current real CLI passes; no live GPC/training/privacy failure is established.
+
+Source: `scripts/check-privacy-claims.mjs:146-152,191-204`. Acceptance target: Resolve executable references and rendered disclosure use for the pinned claims; exclude comments and retain missing-file/copy/marker counterguards.
+
+Actual full source report (`audit/checklist/reviews/coverage-privacy-security-claim-guard-source-2026-10-09-042.json`, untracked), 24 independent controls (`audit/checklist/evidence/coverage-privacy-security-claim-inert-controls-2026-10-09-042.json`, untracked) and 44 authored tests/current source checker exits (`audit/checklist/evidence/coverage-privacy-security-claim-current-source-gates-2026-10-09-042.json`, untracked). The tests passed44/44 with0fail/0skip; individual current checker exits are privacy0/security1/cookie0/license0/selftest0. Controls are13counterguards/11conditional gaps across distinct owners and3AST-only syntax checks. Fresh private roots isolate cases, proof/component/fixture code remains inert, and no application/native/provider/network/SQL/database/build/install/Git/production effects or legal/runtime/product acceptance is claimed. Prior Root035 RLS failure remains unresolved.
+
+## AUDIT-SECURITY-CLAIM-INERT-PROOF-CREDIT-01
+
+Severity: Medium. Status: open source/documentation finding; source unchanged.
+
+The complete unchanged security-claims CLI accepts implementation and named-test references containing only comments and guard/selftest files containing zero bytes. Missing proof/selftest files and an empty proof array refuse. File presence and substring references therefore receive the checker's indexed-and-proved claim without any executable assertion. Current hosted guard/test/proof execution and effective security are unverified.
+
+Source: `scripts/check-security-claims.mjs:121-166,261-265`. Acceptance target: Bind proof references to meaningful executable tests/guard assertions and actual implementation symbols; retain strict reference, entry-shape, missing-proof and selftest refusals.
+
+Actual full source report (`audit/checklist/reviews/coverage-privacy-security-claim-guard-source-2026-10-09-042.json`, untracked), 24 independent controls (`audit/checklist/evidence/coverage-privacy-security-claim-inert-controls-2026-10-09-042.json`, untracked) and 44 authored tests/current source checker exits (`audit/checklist/evidence/coverage-privacy-security-claim-current-source-gates-2026-10-09-042.json`, untracked). The tests passed44/44 with0fail/0skip; individual current checker exits are privacy0/security1/cookie0/license0/selftest0. Controls are13counterguards/11conditional gaps across distinct owners and3AST-only syntax checks. Fresh private roots isolate cases, proof/component/fixture code remains inert, and no application/native/provider/network/SQL/database/build/install/Git/production effects or legal/runtime/product acceptance is claimed. Prior Root035 RLS failure remains unresolved.
+
+## AUDIT-SECURITY-CLAIM-TABLE-CONTENT-UNBOUND-01
+
+Severity: Low. Status: open source/documentation finding; source unchanged.
+
+An unchanged full security-claims CLI accepts changing a fixture table verdict from deny to allow while keeping its two rows and original index/proof references. Table count and connector-ID set checks bind inventory shape rather than cell content or scope values. This is a conditional table/index instrument gap, separate from missing executable proof; no real security verdict mutation is claimed.
+
+Source: `scripts/check-security-claims.mjs:242-245,313-326,346-363`. Acceptance target: Bind falsifiable table criteria and canonical scope values to their current owners and evidence, while preserving row-count/ID checks as inventory controls.
+
+Actual full source report (`audit/checklist/reviews/coverage-privacy-security-claim-guard-source-2026-10-09-042.json`, untracked), 24 independent controls (`audit/checklist/evidence/coverage-privacy-security-claim-inert-controls-2026-10-09-042.json`, untracked) and 44 authored tests/current source checker exits (`audit/checklist/evidence/coverage-privacy-security-claim-current-source-gates-2026-10-09-042.json`, untracked). The tests passed44/44 with0fail/0skip; individual current checker exits are privacy0/security1/cookie0/license0/selftest0. Controls are13counterguards/11conditional gaps across distinct owners and3AST-only syntax checks. Fresh private roots isolate cases, proof/component/fixture code remains inert, and no application/native/provider/network/SQL/database/build/install/Git/production effects or legal/runtime/product acceptance is claimed. Prior Root035 RLS failure remains unresolved.
+
+## AUDIT-LICENSE-EXPRESSION-PREFIX-CREDIT-01
+
+Severity: Medium. Status: open source/documentation finding; source unchanged.
+
+A complete byte-identical original license CLI in a fresh private root exits0 for a notice License value MIT AND AGPL-3.0 while the leading AGPL-3.0 and unknown-token controls exit1. The first-token parser discards the remaining declared expression, including a token in the repository denied set. Current real notices and selftest pass; no actual forbidden port/dependency or legal conclusion is established.
+
+Source: `scripts/check-licenses.mjs:73-78,92-100`. Acceptance target: Parse the complete declared license expression under the repository policy and refuse disallowed/unknown obligations without treating a leading allowed token as the whole declaration.
+
+Actual full source report (`audit/checklist/reviews/coverage-privacy-security-claim-guard-source-2026-10-09-042.json`, untracked), 24 independent controls (`audit/checklist/evidence/coverage-privacy-security-claim-inert-controls-2026-10-09-042.json`, untracked) and 44 authored tests/current source checker exits (`audit/checklist/evidence/coverage-privacy-security-claim-current-source-gates-2026-10-09-042.json`, untracked). The tests passed44/44 with0fail/0skip; individual current checker exits are privacy0/security1/cookie0/license0/selftest0. Controls are13counterguards/11conditional gaps across distinct owners and3AST-only syntax checks. Fresh private roots isolate cases, proof/component/fixture code remains inert, and no application/native/provider/network/SQL/database/build/install/Git/production effects or legal/runtime/product acceptance is claimed. Prior Root035 RLS failure remains unresolved.
+
+## AUDIT-LICENSE-MISSING-FIELD-UPSTREAM-SKIP-01
+
+Severity: Medium. Status: open source/documentation finding; source unchanged.
+
+A complete byte-identical original CLI exits0 for a Port notice block declaring anthropics/claude-code as Upstream when its License field is absent. The actual selftest catches that same denied upstream with MIT present. The early missing-license continue skips the independently denied-upstream policy. Ordinary narrative sections without attribution fields remain outside this finding. No actual prohibited port or legal compliance conclusion is established.
+
+Source: `scripts/check-licenses.mjs:84-90,102-107`. Acceptance target: Identify attribution records from their declared upstream/port fields, require their license field and enforce denied-upstream checks even when another required field is missing.
+
+Actual full source report (`audit/checklist/reviews/coverage-privacy-security-claim-guard-source-2026-10-09-042.json`, untracked), 24 independent controls (`audit/checklist/evidence/coverage-privacy-security-claim-inert-controls-2026-10-09-042.json`, untracked) and 44 authored tests/current source checker exits (`audit/checklist/evidence/coverage-privacy-security-claim-current-source-gates-2026-10-09-042.json`, untracked). The tests passed44/44 with0fail/0skip; individual current checker exits are privacy0/security1/cookie0/license0/selftest0. Controls are13counterguards/11conditional gaps across distinct owners and3AST-only syntax checks. Fresh private roots isolate cases, proof/component/fixture code remains inert, and no application/native/provider/network/SQL/database/build/install/Git/production effects or legal/runtime/product acceptance is claimed. Prior Root035 RLS failure remains unresolved.
+
+## AUDIT-CSP-MODULE-SANDBOX-CREDIT-01
+
+Severity: Medium. Status: open conditional source-instrument finding.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main added a check for host sources that admit every host; the module-wide `sandboxed` credit is unchanged. Line numbers for `scripts/check-security-response-headers.mjs` are main's.
+
+An unchanged full header CLI refuses a standalone emitted policy with unsafe-inline, then accepts the same emitted policy when an independent unused literal in that module contains default-src none. The default restriction belongs to a separate policy; module-wide credit does not establish that the unsafe policy is sandboxed. The existing test covers genuine same-policy sandbox literals assembled with join, which remains valid countercoverage. This is a conditional source-instrument gap; no current emitted unsafe policy or live browser exploit is established.
+
+Source: `scripts/check-security-response-headers.mjs:130-134,142-148`. Acceptance target: Bind each script-src allowance to the default-src of the actual same emitted policy while retaining legitimate directive assembly.
+
+Actual full source report (`audit/checklist/reviews/coverage-session-response-header-guard-source-2026-10-09-043.json`, untracked), 28 independently isolated controls (`audit/checklist/evidence/coverage-session-response-header-inert-controls-2026-10-09-043.json`, untracked) and 39 authored guard tests/current source exits (`audit/checklist/evidence/coverage-session-response-header-current-source-gates-2026-10-09-043.json`, untracked). Controls are18counterguards/10conditional gaps. All39 tests pass0fail0skip, and the four current source CLIs pass. Inert source strings never execute/import a fixture or application handler. No HTTP/browser/authentication/upload/provider/native/SQL/database/build/install/production behavior or runtime/product acceptance is established. Current Root042 security-claims failure and prior Root035 RLS failure remain separately unresolved.
+
+## AUDIT-CORS-HEADER-SETTER-CENSUS-01
+
+Severity: Medium. Status: open conditional source-instrument finding.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-security-response-headers.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+The unchanged full header CLI refuses a session-reading fixture with an object-literal wildcard origin, but admits its counterpart using response.headers.set with the same wildcard while reporting zero wildcard origins. The matcher requires a quoted header key followed by a colon. This proves a conditional source-census omission in a valid setter spelling; HTTP/CORS behavior, current credential exposure and a browser exploit remain unverified.
+
+Source: `scripts/check-security-response-headers.mjs:35-38,157-177`. Acceptance target: Enumerate supported response-header writes independently of object-literal spelling, retaining public noncredentialed wildcard and session-read counterguards.
+
+Actual full source report (`audit/checklist/reviews/coverage-session-response-header-guard-source-2026-10-09-043.json`, untracked), 28 independently isolated controls (`audit/checklist/evidence/coverage-session-response-header-inert-controls-2026-10-09-043.json`, untracked) and 39 authored guard tests/current source exits (`audit/checklist/evidence/coverage-session-response-header-current-source-gates-2026-10-09-043.json`, untracked). Controls are18counterguards/10conditional gaps. All39 tests pass0fail0skip, and the four current source CLIs pass. Inert source strings never execute/import a fixture or application handler. No HTTP/browser/authentication/upload/provider/native/SQL/database/build/install/production behavior or runtime/product acceptance is established. Current Root042 security-claims failure and prior Root035 RLS failure remain separately unresolved.
+
+## AUDIT-SESSION-LIFETIME-INERT-PROOF-CREDIT-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The complete original exported lifetime engine admits four credential classes when all three bound-source proof modules contain only comments. A separate fixture also replaces the required lifetime gate invocation with a comment and passes. Removing that invocation entirely or removing a bound module refuses. This is source-proof reference credit without an executable bound/call; current authentication, expiry enforcement and provider/session security are not inferred from these inert fixtures.
+
+Source: `scripts/check-session-lifetime-enforcement.mjs:165-179`. Acceptance target: Bind the declared age-bound predicates and their gate calls to executable code and the authenticated credential path; retain missing-module/call and nonempty credential census checks.
+
+Actual full source report (`audit/checklist/reviews/coverage-session-response-header-guard-source-2026-10-09-043.json`, untracked), 28 independently isolated controls (`audit/checklist/evidence/coverage-session-response-header-inert-controls-2026-10-09-043.json`, untracked) and 39 authored guard tests/current source exits (`audit/checklist/evidence/coverage-session-response-header-current-source-gates-2026-10-09-043.json`, untracked). Controls are18counterguards/10conditional gaps. All39 tests pass0fail0skip, and the four current source CLIs pass. Inert source strings never execute/import a fixture or application handler. No HTTP/browser/authentication/upload/provider/native/SQL/database/build/install/production behavior or runtime/product acceptance is established. Current Root042 security-claims failure and prior Root035 RLS failure remain separately unresolved.
+
+## AUDIT-CREDENTIAL-VERIFIER-LOCAL-NAME-EXEMPTION-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The original lifetime engine keeps its baseline four-class census and admits an additional external.verifySignedLinkToken call when an unused local function has the same name. Global declared-name filtering removes the method name without resolving its receiver or call identity. The four real classified verifier names and zero-census refusal remain counterguards; no existing unbounded mounted credential route or authentication bypass is established.
+
+Source: `scripts/check-session-lifetime-enforcement.mjs:120-132`. Acceptance target: Resolve local wrapper/call identities and receivers before excluding credential verifiers; classify an independent external method despite an unrelated local name.
+
+Actual full source report (`audit/checklist/reviews/coverage-session-response-header-guard-source-2026-10-09-043.json`, untracked), 28 independently isolated controls (`audit/checklist/evidence/coverage-session-response-header-inert-controls-2026-10-09-043.json`, untracked) and 39 authored guard tests/current source exits (`audit/checklist/evidence/coverage-session-response-header-current-source-gates-2026-10-09-043.json`, untracked). Controls are18counterguards/10conditional gaps. All39 tests pass0fail0skip, and the four current source CLIs pass. Inert source strings never execute/import a fixture or application handler. No HTTP/browser/authentication/upload/provider/native/SQL/database/build/install/production behavior or runtime/product acceptance is established. Current Root042 security-claims failure and prior Root035 RLS failure remain separately unresolved.
+
+## AUDIT-UPLOAD-INSPECTION-INERT-CREDIT-01
+
+Severity: Medium. Status: open conditional source-instrument finding.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main lets a staged-upload route name several completing files and checks each one with the same textual proof. Line numbers for `scripts/check-upload-inspection-coverage.mjs` are main's.
+
+A complete unchanged upload CLI still counts three byte-ingesting routes and both required deferrals when the scanner module, direct route inspection and both completion inspection names exist only in comments. The unchanged no-scan route, missing scanner and missing completing module controls refuse. Source-name presence receives inspection credit without executable inspection. This is a conditional source guard gap; no actual unsafe upload, MIME/credential scan failure or customer data effect is demonstrated.
+
+Source: `scripts/check-upload-inspection-coverage.mjs:53-60,76-97; scripts/lib/upload-ingest.mjs:20-30`. Acceptance target: Resolve executable byte-inspection calls and scanner predicates on each upload/completion path, preserving stale-deferral, missing-module and uninspected-route refusals.
+
+Actual full source report (`audit/checklist/reviews/coverage-session-response-header-guard-source-2026-10-09-043.json`, untracked), 28 independently isolated controls (`audit/checklist/evidence/coverage-session-response-header-inert-controls-2026-10-09-043.json`, untracked) and 39 authored guard tests/current source exits (`audit/checklist/evidence/coverage-session-response-header-current-source-gates-2026-10-09-043.json`, untracked). Controls are18counterguards/10conditional gaps. All39 tests pass0fail0skip, and the four current source CLIs pass. Inert source strings never execute/import a fixture or application handler. No HTTP/browser/authentication/upload/provider/native/SQL/database/build/install/production behavior or runtime/product acceptance is established. Current Root042 security-claims failure and prior Root035 RLS failure remain separately unresolved.
+
+## AUDIT-UPLOAD-REQUEST-RECEIVER-CENSUS-01
+
+Severity: Medium. Status: open conditional source-instrument finding.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-upload-inspection-coverage.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+The unchanged full upload CLI admits an additional uninspected route whose Request parameter is named incoming and whose body reads incoming.arrayBuffer. Its baseline recognized request/req routes and both fixed deferrals stay nonempty and still pass. The byte-read matcher binds receiver spelling rather than the route request parameter. Upstream response bytes and request.json exclusions remain intentional countercoverage; no current mounted route omission or unsafe upload is asserted.
+
+Source: `scripts/lib/upload-ingest.mjs:6-17; scripts/check-upload-inspection-coverage.mjs:70-74`. Acceptance target: Resolve the route request parameter and aliases when enumerating caller byte reads, without classifying upstream response traffic as uploads.
+
+Actual full source report (`audit/checklist/reviews/coverage-session-response-header-guard-source-2026-10-09-043.json`, untracked), 28 independently isolated controls (`audit/checklist/evidence/coverage-session-response-header-inert-controls-2026-10-09-043.json`, untracked) and 39 authored guard tests/current source exits (`audit/checklist/evidence/coverage-session-response-header-current-source-gates-2026-10-09-043.json`, untracked). Controls are18counterguards/10conditional gaps. All39 tests pass0fail0skip, and the four current source CLIs pass. Inert source strings never execute/import a fixture or application handler. No HTTP/browser/authentication/upload/provider/native/SQL/database/build/install/production behavior or runtime/product acceptance is established. Current Root042 security-claims failure and prior Root035 RLS failure remain separately unresolved.
+
+## AUDIT-SCANNER-REPORT-SHAPE-CLEAN-CREDIT-01
+
+Severity: Medium. Status: open conditional source-instrument finding.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present for Trivy and ZAP; `normalizeTrivyReport` and `normalizeZapReport` read `report?.Results ?? []` and `report?.site ?? []`, so a report without either collection yields zero findings. The Semgrep half found on the 2026-09-27 copy is closed on main: `scripts/check-semgrep-findings.mjs` now requires `results` and `errors` arrays and fails a report that lists scanner errors. Line numbers for `scripts/check-scan-findings.mjs` are main's.
+
+The complete unchanged Trivy and ZAP source gates each admit an unrelated valid JSON object as zero findings when their recognized result collection is missing. Recognized empty collections remain valid; missing files and invalid JSON refuse. This proves a conditional report-contract validation gap, not an observed scanner failure or hosted bypass. No scanner runs.
+
+Source: `scripts/check-scan-findings.mjs:43-47,80-84`. Acceptance target: Require a recognized scanner report contract and applicable error-state validation before awarding clean result credit, retaining legitimate empty findings and independent process-failure counterguards.
+
+Actual full source report (`audit/checklist/reviews/coverage-security-index-supply-guard-source-2026-10-09-044.json`, untracked), 34 independent controls (`audit/checklist/evidence/coverage-security-index-supply-inert-controls-2026-10-09-044.json`, untracked) and current guard outcomes (`audit/checklist/evidence/coverage-security-index-supply-current-source-gates-2026-10-09-044.json`, untracked). Controls are 19 counterguards / 15 conditional gaps. Actual authored guard suite has 41 tests: 40 pass, 1 fail, 0 skip; on the 2026-09-27 copy the supply-chain source CLI also failed on 31 findings under nested checkouts, which main's `git ls-files` inventory no longer reads, while both acceptance allowlists and the search-index source CLI passed. Current Root042 security-claims failure and prior Root035 RLS failure remain unresolved. Source strings and report data do not execute a fixture module, application, scanner, SQL, database, workflow, container, install, browser, provider or production behavior; no runtime/product acceptance.
+
+## AUDIT-SCANNER-UNKNOWN-SEVERITY-DOWNGRADE-01
+
+Severity: Medium. Status: open conditional source-instrument finding.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-scan-findings.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+The complete unchanged Trivy source gate refuses a recognized unaccepted HIGH vulnerability but admits a nonempty vulnerability collection whose severity is misspelled CRITCAL: unknown severity maps to rank zero and disappears below the HIGH floor. No current scanner emits this synthetic value; this is conditional source input-validation evidence, not a missed real vulnerability or production exposure.
+
+Source: `scripts/check-scan-findings.mjs:34-36,43-53,232-236`. Acceptance target: Reject or explicitly quarantine unrecognized severity values in recognized nonempty finding data instead of silently assigning below-floor severity.
+
+Actual full source report (`audit/checklist/reviews/coverage-security-index-supply-guard-source-2026-10-09-044.json`, untracked), 34 independent controls (`audit/checklist/evidence/coverage-security-index-supply-inert-controls-2026-10-09-044.json`, untracked) and current guard outcomes (`audit/checklist/evidence/coverage-security-index-supply-current-source-gates-2026-10-09-044.json`, untracked). Controls are 19 counterguards / 15 conditional gaps. Actual authored guard suite has 41 tests: 40 pass, 1 fail, 0 skip; on the 2026-09-27 copy the supply-chain source CLI also failed on 31 findings under nested checkouts, which main's `git ls-files` inventory no longer reads, while both acceptance allowlists and the search-index source CLI passed. Current Root042 security-claims failure and prior Root035 RLS failure remain unresolved. Source strings and report data do not execute a fixture module, application, scanner, SQL, database, workflow, container, install, browser, provider or production behavior; no runtime/product acceptance.
+
+## AUDIT-SUPPLY-CHAIN-BASE-ARG-OMISSION-01
+
+Severity: Medium. Status: open conditional source-instrument finding.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-supply-chain.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+The complete original supply-chain engine refuses a direct moving base image, but omits the same locally available literal when supplied through ARG and an interpolated FROM. Its image census becomes zero while the real frozen-install source census remains nonempty, and the engine passes. Authored pinned-ARG coverage and direct digest/tag checks are retained. No Docker/build/image resolution or external format assumption is exercised; this is conditional source-census evidence.
+
+Source: `scripts/check-supply-chain.mjs:57-69,537-553`. Acceptance target: Resolve locally declared base image arguments or refuse unresolved base-image census before granting image pinning credit, preserving legitimate digest references and bounded resource checks.
+
+Actual full source report (`audit/checklist/reviews/coverage-security-index-supply-guard-source-2026-10-09-044.json`, untracked), 34 independent controls (`audit/checklist/evidence/coverage-security-index-supply-inert-controls-2026-10-09-044.json`, untracked) and current guard outcomes (`audit/checklist/evidence/coverage-security-index-supply-current-source-gates-2026-10-09-044.json`, untracked). Controls are 19 counterguards / 15 conditional gaps. Actual authored guard suite has 41 tests: 40 pass, 1 fail, 0 skip; on the 2026-09-27 copy the supply-chain source CLI also failed on 31 findings under nested checkouts, which main's `git ls-files` inventory no longer reads, while both acceptance allowlists and the search-index source CLI passed. Current Root042 security-claims failure and prior Root035 RLS failure remain unresolved. Source strings and report data do not execute a fixture module, application, scanner, SQL, database, workflow, container, install, browser, provider or production behavior; no runtime/product acceptance.
+
+## AUDIT-SEARCH-INDEX-TRIGGER-BINDING-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The unchanged complete search-index source guard admits a source-shaped two-kind inventory after both CREATE TRIGGER statements are removed while unused retrieval_track function definitions remain. The guard collects lexical function bodies and infers enqueue/withdraw/refresh coverage without verifying installation. Missing contracts and loader kinds refuse. No DDL, migration, database, query or current missing trigger is executed or alleged.
+
+Source: `scripts/check-search-index-coverage.mjs:126-157; scripts/lib/search-index-coverage.mjs:16-30`. Acceptance target: Resolve the live trigger bindings to tracking function bodies on the relevant source tables before claiming lifecycle coverage; retain append-only migration and valid source-kind constraints.
+
+Actual full source report (`audit/checklist/reviews/coverage-security-index-supply-guard-source-2026-10-09-044.json`, untracked), 34 independent controls (`audit/checklist/evidence/coverage-security-index-supply-inert-controls-2026-10-09-044.json`, untracked) and current guard outcomes (`audit/checklist/evidence/coverage-security-index-supply-current-source-gates-2026-10-09-044.json`, untracked). Controls are 19 counterguards / 15 conditional gaps. Actual authored guard suite has 41 tests: 40 pass, 1 fail, 0 skip; on the 2026-09-27 copy the supply-chain source CLI also failed on 31 findings under nested checkouts, which main's `git ls-files` inventory no longer reads, while both acceptance allowlists and the search-index source CLI passed. Current Root042 security-claims failure and prior Root035 RLS failure remain unresolved. Source strings and report data do not execute a fixture module, application, scanner, SQL, database, workflow, container, install, browser, provider or production behavior; no runtime/product acceptance.
+
+## AUDIT-SEARCH-LIFECYCLE-INERT-PREDICATE-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The complete unchanged search source guard refuses an artifact loader arm with its lifecycle predicate removed, then admits the same arm when the predicate exists only in a comment. Raw arm.includes grants filtering credit without an executable query condition. Missing source/loader-kind controls still refuse. No actual loader, database withdrawal, stale passage or product access is measured.
+
+Source: `scripts/check-search-index-coverage.mjs:162-171; scripts/lib/search-index-coverage.mjs:81-91`. Acceptance target: Bind lifecycle acceptance to executable query predicates on each actual source-loader arm and preserve intentional valid lifecycle alternatives.
+
+Actual full source report (`audit/checklist/reviews/coverage-security-index-supply-guard-source-2026-10-09-044.json`, untracked), 34 independent controls (`audit/checklist/evidence/coverage-security-index-supply-inert-controls-2026-10-09-044.json`, untracked) and current guard outcomes (`audit/checklist/evidence/coverage-security-index-supply-current-source-gates-2026-10-09-044.json`, untracked). Controls are 19 counterguards / 15 conditional gaps. Actual authored guard suite has 41 tests: 40 pass, 1 fail, 0 skip; on the 2026-09-27 copy the supply-chain source CLI also failed on 31 findings under nested checkouts, which main's `git ls-files` inventory no longer reads, while both acceptance allowlists and the search-index source CLI passed. Current Root042 security-claims failure and prior Root035 RLS failure remain unresolved. Source strings and report data do not execute a fixture module, application, scanner, SQL, database, workflow, container, install, browser, provider or production behavior; no runtime/product acceptance.
+
+## AUDIT-SEARCH-LOADER-SWITCH-REGION-CREDIT-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The unchanged original search CLI admits an actual artifact loader arm missing its lifecycle predicate when a later unused switch outside that loader supplies a same-named case with the predicate. The fixed 12,000-character region collects case labels across switch boundaries and later duplicate keys overwrite the real arm. A fully removed predicate without that unrelated switch refuses. This is conditional source ownership/region evidence; no runtime loader failure is established.
+
+Source: `scripts/lib/search-index-coverage.mjs:73-91; scripts/check-search-index-coverage.mjs:162-171`. Acceptance target: Resolve the actual loader switch boundaries and each owned case body without later unrelated switch text overwriting the canonical arm.
+
+Actual full source report (`audit/checklist/reviews/coverage-security-index-supply-guard-source-2026-10-09-044.json`, untracked), 34 independent controls (`audit/checklist/evidence/coverage-security-index-supply-inert-controls-2026-10-09-044.json`, untracked) and current guard outcomes (`audit/checklist/evidence/coverage-security-index-supply-current-source-gates-2026-10-09-044.json`, untracked). Controls are 19 counterguards / 15 conditional gaps. Actual authored guard suite has 41 tests: 40 pass, 1 fail, 0 skip; on the 2026-09-27 copy the supply-chain source CLI also failed on 31 findings under nested checkouts, which main's `git ls-files` inventory no longer reads, while both acceptance allowlists and the search-index source CLI passed. Current Root042 security-claims failure and prior Root035 RLS failure remain unresolved. Source strings and report data do not execute a fixture module, application, scanner, SQL, database, workflow, container, install, browser, provider or production behavior; no runtime/product acceptance.
+
+## AUDIT-VISUAL-SINK-FLOW-CENSUS-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The complete original visual source checker refuses direct same-line frame.dataUrl logging but admits the same value when its logging call spans lines or when a destructured pixel alias is logged. It requires dotted field and sink markers on one physical line rather than following their value. The current shared contract still selects pixel-free telemetry, bounds sampling/buffering and releases blob frames; those real safeguards remain counterevidence. No actual pixel leak, capture, logging or browser flow runs.
+
+Source: `scripts/check-visual-session-telemetry.mjs:122-133`. Acceptance target: Follow owned frame values into supported sinks across lines and aliases, retaining real metadata projection and missing/empty contract refusals.
+
+Actual source report (`audit/checklist/reviews/coverage-voice-stream-metering-guard-source-2026-10-09-045.json`, untracked), 36 independently isolated controls (`audit/checklist/evidence/coverage-voice-stream-metering-inert-controls-2026-10-09-045-refined-wording.json`, untracked) and 29 authored guard tests / four current source CLIs (`audit/checklist/evidence/coverage-voice-stream-metering-current-source-gates-2026-10-09-045.json`, untracked). Controls are 22 counterguards and 14 conditional gaps grouped into ten causes. All 29 authored tests and four CLIs pass. The failed initial scratch census expectation and original completed receipt are preserved. Fresh complete replay leaves all 36 fixtures, expected exits and outcomes unchanged while qualifying the synthetic test marker and unprovided alias import as inert source data. Independent challenge narrows comment-proof exclusion separately from stored mute replay binding. No app/fixture-module/provider/voice/media/camera/stream/SQL/database/browser/native/network/build/install/production behavior or runtime/product acceptance. Prior Root044 supply-chain nested-scope failure, Root042 security-claims failure and Root035 RLS failure remain separately unresolved.
+
+## AUDIT-VOICE-METER-INERT-SETTLEMENT-CREDIT-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The complete original metering engine refuses a recognized completed settlement missing billedSeconds, then admits that counterpart when billedSeconds exists only in a comment. It also admits both required operation settlements when their complete direct call texts are comments. Nonempty census is retained but its rows are inert. Current quota and valid source inventories pass; no usage settlement, quota arithmetic, SQL, managed billing or voice session is executed.
+
+Source: `scripts/check-voice-session-metering.mjs:69-93,114-127`. Acceptance target: Resolve executable settlement calls and actual usage object properties before granting operation census or summed-field write credit; retain missing quota and failed-field refusals.
+
+Actual source report (`audit/checklist/reviews/coverage-voice-stream-metering-guard-source-2026-10-09-045.json`, untracked), 36 independently isolated controls (`audit/checklist/evidence/coverage-voice-stream-metering-inert-controls-2026-10-09-045-refined-wording.json`, untracked) and 29 authored guard tests / four current source CLIs (`audit/checklist/evidence/coverage-voice-stream-metering-current-source-gates-2026-10-09-045.json`, untracked). Controls are 22 counterguards and 14 conditional gaps grouped into ten causes. All 29 authored tests and four CLIs pass. The failed initial scratch census expectation and original completed receipt are preserved. Fresh complete replay leaves all 36 fixtures, expected exits and outcomes unchanged while qualifying the synthetic test marker and unprovided alias import as inert source data. Independent challenge narrows comment-proof exclusion separately from stored mute replay binding. No app/fixture-module/provider/voice/media/camera/stream/SQL/database/browser/native/network/build/install/production behavior or runtime/product acceptance. Prior Root044 supply-chain nested-scope failure, Root042 security-claims failure and Root035 RLS failure remain separately unresolved.
+
+## AUDIT-VOICE-METER-ALIASED-SETTLEMENT-CENSUS-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The unchanged complete voice metering engine admits an extra alias-named source call containing a completed usage object without its required field; its finalizeManagedUsageRequest import target ./usage is unprovided inert data, while separate baseline settlements keep both operation classes nonempty. The scanner recognizes only a direct fixed function name followed by an immediate object. No current aliased mounted settlement or undercharged allowance is alleged.
+
+Source: `scripts/check-voice-session-metering.mjs:69-72,110-127`. Acceptance target: Resolve imported aliases and relevant call identity when enumerating settlement writes, retaining baseline nonempty operation census and legitimate failed/refused outcomes.
+
+Actual source report (`audit/checklist/reviews/coverage-voice-stream-metering-guard-source-2026-10-09-045.json`, untracked), 36 independently isolated controls (`audit/checklist/evidence/coverage-voice-stream-metering-inert-controls-2026-10-09-045-refined-wording.json`, untracked) and 29 authored guard tests / four current source CLIs (`audit/checklist/evidence/coverage-voice-stream-metering-current-source-gates-2026-10-09-045.json`, untracked). Controls are 22 counterguards and 14 conditional gaps grouped into ten causes. All 29 authored tests and four CLIs pass. The failed initial scratch census expectation and original completed receipt are preserved. Fresh complete replay leaves all 36 fixtures, expected exits and outcomes unchanged while qualifying the synthetic test marker and unprovided alias import as inert source data. Independent challenge narrows comment-proof exclusion separately from stored mute replay binding. No app/fixture-module/provider/voice/media/camera/stream/SQL/database/browser/native/network/build/install/production behavior or runtime/product acceptance. Prior Root044 supply-chain nested-scope failure, Root042 security-claims failure and Root035 RLS failure remain separately unresolved.
+
+## AUDIT-VOICE-PARITY-INERT-PROOF-CREDIT-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The complete original parity engine admits one source-shaped session whose disposal calls and pending-mute assignment/reference are solely comments while event cases remain nonempty and both surface vocabularies agree. Removing the corresponding assignment or close-disposal marker entirely refuses. This is conditional executable-proof validation evidence; no current media/resource leak, mounted muted state, web/mobile runtime or provider event runs.
+
+Source: `scripts/check-voice-session-parity.mjs:70-86,119-132`. Acceptance target: Exclude comment-only disposal and pending-mute markers from executable proof on the applicable methods and branches, preserving genuine event parity and missing-surface checks. Stored mute read/send binding remains the separate AUDIT-VOICE-PENDING-MUTE-REPLAY-CREDIT-01 target.
+
+Actual source report (`audit/checklist/reviews/coverage-voice-stream-metering-guard-source-2026-10-09-045.json`, untracked), 36 independently isolated controls (`audit/checklist/evidence/coverage-voice-stream-metering-inert-controls-2026-10-09-045-refined-wording.json`, untracked) and 29 authored guard tests / four current source CLIs (`audit/checklist/evidence/coverage-voice-stream-metering-current-source-gates-2026-10-09-045.json`, untracked). Controls are 22 counterguards and 14 conditional gaps grouped into ten causes. All 29 authored tests and four CLIs pass. The failed initial scratch census expectation and original completed receipt are preserved. Fresh complete replay leaves all 36 fixtures, expected exits and outcomes unchanged while qualifying the synthetic test marker and unprovided alias import as inert source data. Independent challenge narrows comment-proof exclusion separately from stored mute replay binding. No app/fixture-module/provider/voice/media/camera/stream/SQL/database/browser/native/network/build/install/production behavior or runtime/product acceptance. Prior Root044 supply-chain nested-scope failure, Root042 security-claims failure and Root035 RLS failure remain separately unresolved.
+
+## AUDIT-VOICE-CLOSED-DISPOSE-BRANCH-CREDIT-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The complete unchanged parity engine accepts a session.closed case without disposal when a later session.usage.updated case disposes instead. Its suffix search begins at the closed label and crosses later case boundaries; separate close and fail methods still dispose. No live closed-session resource behavior or current product failure is observed.
+
+Source: `scripts/check-voice-session-parity.mjs:77-87`. Acceptance target: Bind session.closed disposal to its owned executable branch and allowed delegates without borrowing from unrelated subsequent cases.
+
+Actual source report (`audit/checklist/reviews/coverage-voice-stream-metering-guard-source-2026-10-09-045.json`, untracked), 36 independently isolated controls (`audit/checklist/evidence/coverage-voice-stream-metering-inert-controls-2026-10-09-045-refined-wording.json`, untracked) and 29 authored guard tests / four current source CLIs (`audit/checklist/evidence/coverage-voice-stream-metering-current-source-gates-2026-10-09-045.json`, untracked). Controls are 22 counterguards and 14 conditional gaps grouped into ten causes. All 29 authored tests and four CLIs pass. The failed initial scratch census expectation and original completed receipt are preserved. Fresh complete replay leaves all 36 fixtures, expected exits and outcomes unchanged while qualifying the synthetic test marker and unprovided alias import as inert source data. Independent challenge narrows comment-proof exclusion separately from stored mute replay binding. No app/fixture-module/provider/voice/media/camera/stream/SQL/database/browser/native/network/build/install/production behavior or runtime/product acceptance. Prior Root044 supply-chain nested-scope failure, Root042 security-claims failure and Root035 RLS failure remain separately unresolved.
+
+## AUDIT-VOICE-PENDING-MUTE-REPLAY-CREDIT-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The original full parity engine admits a session retaining a real pendingMuted assignment but replacing its start branch read/send with an unrelated local pendingMuted=null and return. A name anywhere in handleMessage supplies replay credit without reading stored mute or sending it. Removing the storage assignment refuses. This is conditional source-proof evidence; no muted-state incident, media/device or running session is exercised.
+
+Source: `scripts/check-voice-session-parity.mjs:70-74`. Acceptance target: Resolve the stored mute read and applied state on the session-start branch before claiming replay, retaining legitimate delayed application and unstarted-session guards.
+
+Actual source report (`audit/checklist/reviews/coverage-voice-stream-metering-guard-source-2026-10-09-045.json`, untracked), 36 independently isolated controls (`audit/checklist/evidence/coverage-voice-stream-metering-inert-controls-2026-10-09-045-refined-wording.json`, untracked) and 29 authored guard tests / four current source CLIs (`audit/checklist/evidence/coverage-voice-stream-metering-current-source-gates-2026-10-09-045.json`, untracked). Controls are 22 counterguards and 14 conditional gaps grouped into ten causes. All 29 authored tests and four CLIs pass. The failed initial scratch census expectation and original completed receipt are preserved. Fresh complete replay leaves all 36 fixtures, expected exits and outcomes unchanged while qualifying the synthetic test marker and unprovided alias import as inert source data. Independent challenge narrows comment-proof exclusion separately from stored mute replay binding. No app/fixture-module/provider/voice/media/camera/stream/SQL/database/browser/native/network/build/install/production behavior or runtime/product acceptance. Prior Root044 supply-chain nested-scope failure, Root042 security-claims failure and Root035 RLS failure remain separately unresolved.
+
+## AUDIT-STREAM-INERT-TRANSLATION-CREDIT-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The original complete stream checker admits a translator with its terminal yield replaced only by a comment, a mapper with its usage case replaced only by a comment, and a provider index whose actual stream is null but an unused string names a canonical translator. Removing each marker entirely refuses. Four actual current conformance files import their real translators and contain substantive assertions; their source is preserved as counterevidence. OpenAI intentionally allows trailing usage after stop, so no universal terminal-last rule or actual current translator failure is asserted.
+
+Source: `scripts/check-stream-protocol.mjs:117-129,148-165`. Acceptance target: Bind canonical translation, mapper handling and terminal emission credit to executable owned code while preserving each provider legitimate ordering contract.
+
+Actual source report (`audit/checklist/reviews/coverage-voice-stream-metering-guard-source-2026-10-09-045.json`, untracked), 36 independently isolated controls (`audit/checklist/evidence/coverage-voice-stream-metering-inert-controls-2026-10-09-045-refined-wording.json`, untracked) and 29 authored guard tests / four current source CLIs (`audit/checklist/evidence/coverage-voice-stream-metering-current-source-gates-2026-10-09-045.json`, untracked). Controls are 22 counterguards and 14 conditional gaps grouped into ten causes. All 29 authored tests and four CLIs pass. The failed initial scratch census expectation and original completed receipt are preserved. Fresh complete replay leaves all 36 fixtures, expected exits and outcomes unchanged while qualifying the synthetic test marker and unprovided alias import as inert source data. Independent challenge narrows comment-proof exclusion separately from stored mute replay binding. No app/fixture-module/provider/voice/media/camera/stream/SQL/database/browser/native/network/build/install/production behavior or runtime/product acceptance. Prior Root044 supply-chain nested-scope failure, Root042 security-claims failure and Root035 RLS failure remain separately unresolved.
+
+## AUDIT-STREAM-CONFORMANCE-FILE-CREDIT-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The complete unchanged stream checker refuses an absent terminal-discipline path but admits an export-only file containing no test or assertion. Its authored synthetic baseline likewise uses that export-only file. All four current provider conformance files are independently reread and contain meaningful translator/ordering/error/refusal assertions; no broad absence of present tests is claimed, and none of those app/provider tests run.
+
+Source: `scripts/check-stream-protocol.mjs:151-155; scripts/check-stream-protocol.test.mjs:76-83`. Acceptance target: Require applicable executable conformance assertions and actual validation evidence rather than test-path existence, retaining real provider-specific terminal discipline.
+
+Actual source report (`audit/checklist/reviews/coverage-voice-stream-metering-guard-source-2026-10-09-045.json`, untracked), 36 independently isolated controls (`audit/checklist/evidence/coverage-voice-stream-metering-inert-controls-2026-10-09-045-refined-wording.json`, untracked) and 29 authored guard tests / four current source CLIs (`audit/checklist/evidence/coverage-voice-stream-metering-current-source-gates-2026-10-09-045.json`, untracked). Controls are 22 counterguards and 14 conditional gaps grouped into ten causes. All 29 authored tests and four CLIs pass. The failed initial scratch census expectation and original completed receipt are preserved. Fresh complete replay leaves all 36 fixtures, expected exits and outcomes unchanged while qualifying the synthetic test marker and unprovided alias import as inert source data. Independent challenge narrows comment-proof exclusion separately from stored mute replay binding. No app/fixture-module/provider/voice/media/camera/stream/SQL/database/browser/native/network/build/install/production behavior or runtime/product acceptance. Prior Root044 supply-chain nested-scope failure, Root042 security-claims failure and Root035 RLS failure remain separately unresolved.
+
+## AUDIT-STREAM-SESSION-ID-EXPRESSION-CREDIT-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The full unchanged stream checker refuses an explicit random session ID expression, then admits that expression when a comment containing conversationId is appended. A substring search supplies derivation credit without a semantic data dependency. Valid actual-shaped direct and shorthand conversation expressions pass; no current split conversation ledger or actual emitter/provider behavior is executed.
+
+Source: `scripts/check-stream-protocol.mjs:85-105`. Acceptance target: Resolve the emitter session ID actual conversation value and local binding rather than a comment/string substring, preserving legitimate fallback and shorthand expressions.
+
+Actual source report (`audit/checklist/reviews/coverage-voice-stream-metering-guard-source-2026-10-09-045.json`, untracked), 36 independently isolated controls (`audit/checklist/evidence/coverage-voice-stream-metering-inert-controls-2026-10-09-045-refined-wording.json`, untracked) and 29 authored guard tests / four current source CLIs (`audit/checklist/evidence/coverage-voice-stream-metering-current-source-gates-2026-10-09-045.json`, untracked). Controls are 22 counterguards and 14 conditional gaps grouped into ten causes. All 29 authored tests and four CLIs pass. The failed initial scratch census expectation and original completed receipt are preserved. Fresh complete replay leaves all 36 fixtures, expected exits and outcomes unchanged while qualifying the synthetic test marker and unprovided alias import as inert source data. Independent challenge narrows comment-proof exclusion separately from stored mute replay binding. No app/fixture-module/provider/voice/media/camera/stream/SQL/database/browser/native/network/build/install/production behavior or runtime/product acceptance. Prior Root044 supply-chain nested-scope failure, Root042 security-claims failure and Root035 RLS failure remain separately unresolved.
+
+## AUDIT-STREAM-YIELD-OBJECT-CENSUS-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The complete original stream checker refuses an unrecognized type in a direct yielded object when type is first, but admits the same object when delta precedes type. The matcher only enumerates first-property type literals. Canonical terminal source and test inventory remain nonempty; no actual provider emits the synthetic type and no runtime/client failure is observed.
+
+Source: `scripts/check-stream-protocol.mjs:68-69,138-146`. Acceptance target: Enumerate direct yielded object type properties independently of order and preserve the deliberate exclusion of nested vendor payload types.
+
+Actual source report (`audit/checklist/reviews/coverage-voice-stream-metering-guard-source-2026-10-09-045.json`, untracked), 36 independently isolated controls (`audit/checklist/evidence/coverage-voice-stream-metering-inert-controls-2026-10-09-045-refined-wording.json`, untracked) and 29 authored guard tests / four current source CLIs (`audit/checklist/evidence/coverage-voice-stream-metering-current-source-gates-2026-10-09-045.json`, untracked). Controls are 22 counterguards and 14 conditional gaps grouped into ten causes. All 29 authored tests and four CLIs pass. The failed initial scratch census expectation and original completed receipt are preserved. Fresh complete replay leaves all 36 fixtures, expected exits and outcomes unchanged while qualifying the synthetic test marker and unprovided alias import as inert source data. Independent challenge narrows comment-proof exclusion separately from stored mute replay binding. No app/fixture-module/provider/voice/media/camera/stream/SQL/database/browser/native/network/build/install/production behavior or runtime/product acceptance. Prior Root044 supply-chain nested-scope failure, Root042 security-claims failure and Root035 RLS failure remain separately unresolved.
+
+## AUDIT-TEST-HYGIENE-EXECUTABLE-MASK-01
+
+Severity: Medium. Status: open conditional source-instrument finding.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-test-hygiene.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+The complete original masking engine omits source-shaped focused/retry calls within executable template substitutions and a separate focused call between two quoted comment delimiters. Direct calls refuse and inert quoted focus text remains excluded. All fixtures are source data, never executed.
+
+Source: `scripts/check-test-hygiene.mjs:84-88,99-113,129-133`. Acceptance target: Preserve executable template substitutions and lex comment delimiters within their actual literal scope; continue excluding inert marker text and refusing direct focused/retry calls.
+
+Actual source report (`audit/checklist/reviews/coverage-test-evidence-instrument-source-2026-10-09-046.json`, untracked), 32 independent controls (`audit/checklist/evidence/coverage-test-evidence-inert-controls-2026-10-09-046.json`, untracked), current guard outcomes (`audit/checklist/evidence/coverage-test-evidence-current-source-gates-2026-10-09-046.json`, untracked) and independent challenge (`audit/checklist/evidence/coverage-test-evidence-independent-challenge-2026-10-09-046.json`, untracked). Controls: 18 counterguards / 14 conditional gaps grouped into eight causes. Original authored source-guard suite: 25 tests, 24 pass, one fail, zero skip. On the 2026-09-27 copy the hygiene and integrity source CLIs failed on 27 and 21 findings under nested checkouts, which main's `git ls-files` inventory no longer reads; the vacuity CLI passed. No source/config/tool edit, app/fixture/spec module execution, coverage/tier/package tests, browser/provider/SQL/native/network/build/install/production or runtime/product acceptance. Prior Root044 supply, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+## AUDIT-TEST-INTEGRITY-CALLBACK-CENSUS-01
+
+Severity: Low. Status: open conditional source-instrument finding.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-test-integrity.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+The full original scanner reports an assertion-free block or function callback, but omits a syntactically valid expression callback returning undefined and accepts it. This is incomplete callback census, not evidence that any current application test lacks its oracle. The implementation explicitly searches for block bodies; this is a bounded acceptance gap, not a demonstrated violation of a promise to prove every semantic test oracle. Current expression-callback gate requirements remain unknown.
+
+Source: `scripts/check-test-integrity.mjs:155-203,455-463`. Acceptance target: Define the intended callback acceptance scope explicitly; include applicable expression callbacks if the gate requires them. Retain block/function/parameterized callback guards without claiming semantic oracle completeness.
+
+Actual source report (`audit/checklist/reviews/coverage-test-evidence-instrument-source-2026-10-09-046.json`, untracked), 32 independent controls (`audit/checklist/evidence/coverage-test-evidence-inert-controls-2026-10-09-046.json`, untracked), current guard outcomes (`audit/checklist/evidence/coverage-test-evidence-current-source-gates-2026-10-09-046.json`, untracked) and independent challenge (`audit/checklist/evidence/coverage-test-evidence-independent-challenge-2026-10-09-046.json`, untracked). Controls: 18 counterguards / 14 conditional gaps grouped into eight causes. Original authored source-guard suite: 25 tests, 24 pass, one fail, zero skip. On the 2026-09-27 copy the hygiene and integrity source CLIs failed on 27 and 21 findings under nested checkouts, which main's `git ls-files` inventory no longer reads; the vacuity CLI passed. No source/config/tool edit, app/fixture/spec module execution, coverage/tier/package tests, browser/provider/SQL/native/network/build/install/production or runtime/product acceptance. Prior Root044 supply, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+## AUDIT-TEST-INTEGRITY-NONEMPTY-CATCH-01
+
+Severity: Low. Status: open conditional source-instrument finding.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-test-integrity.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+The complete engine refuses an empty catch around an assertion-bearing try but accepts the same source-shaped try with void error in the catch and no rethrow or alternative failing oracle. A real rethrow is separately accepted. No test fixture or assertion is executed. The implementation explicitly targets empty catch handlers. The broader no-op-handler case is a bounded acceptance gap; semantic catch-oracle completeness is not an established current promise.
+
+Source: `scripts/check-test-integrity.mjs:283-296`. Acceptance target: Keep the present guarantee explicitly bounded to empty catches, or validate applicable nonempty handlers for rethrow or a preserved failing oracle when broader coverage is required. Retain intentional bare try and meaningful error assertions.
+
+Actual source report (`audit/checklist/reviews/coverage-test-evidence-instrument-source-2026-10-09-046.json`, untracked), 32 independent controls (`audit/checklist/evidence/coverage-test-evidence-inert-controls-2026-10-09-046.json`, untracked), current guard outcomes (`audit/checklist/evidence/coverage-test-evidence-current-source-gates-2026-10-09-046.json`, untracked) and independent challenge (`audit/checklist/evidence/coverage-test-evidence-independent-challenge-2026-10-09-046.json`, untracked). Controls: 18 counterguards / 14 conditional gaps grouped into eight causes. Original authored source-guard suite: 25 tests, 24 pass, one fail, zero skip. On the 2026-09-27 copy the hygiene and integrity source CLIs failed on 27 and 21 findings under nested checkouts, which main's `git ls-files` inventory no longer reads; the vacuity CLI passed. No source/config/tool edit, app/fixture/spec module execution, coverage/tier/package tests, browser/provider/SQL/native/network/build/install/production or runtime/product acceptance. Prior Root044 supply, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+## AUDIT-TEST-INTEGRITY-INERT-VACUITY-01
+
+Severity: Medium. Status: open conditional source-instrument finding.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/check-test-integrity.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+The complete original raw-source vacuity scan reports a comment-only or quoted expect(true).toBeTruthy example while the actual-shaped callback retains a real assertion. Masked callback analysis still correctly excludes quoted inner test bodies. Instrument false-red property only, no current genuine failures dismissed.
+
+Source: `scripts/check-test-integrity.mjs:421-444`. Acceptance target: Match executable vacuity forms while retaining relevant literal operands and excluding comment/quoted examples; preserve real literal vacuity and self-comparison enforcement.
+
+Actual source report (`audit/checklist/reviews/coverage-test-evidence-instrument-source-2026-10-09-046.json`, untracked), 32 independent controls (`audit/checklist/evidence/coverage-test-evidence-inert-controls-2026-10-09-046.json`, untracked), current guard outcomes (`audit/checklist/evidence/coverage-test-evidence-current-source-gates-2026-10-09-046.json`, untracked) and independent challenge (`audit/checklist/evidence/coverage-test-evidence-independent-challenge-2026-10-09-046.json`, untracked). Controls: 18 counterguards / 14 conditional gaps grouped into eight causes. Original authored source-guard suite: 25 tests, 24 pass, one fail, zero skip. On the 2026-09-27 copy the hygiene and integrity source CLIs failed on 27 and 21 findings under nested checkouts, which main's `git ls-files` inventory no longer reads; the vacuity CLI passed. No source/config/tool edit, app/fixture/spec module execution, coverage/tier/package tests, browser/provider/SQL/native/network/build/install/production or runtime/product acceptance. Prior Root044 supply, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+## AUDIT-TEST-SOURCE-NONEMPTY-CENSUS-01
+
+Severity: Medium. Status: open conditional source-instrument finding.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main's integrity guard lists its default scope with `git ls-files` and returns an empty list when that command fails, so an empty default census still passes; the vacuity guard is unchanged. Line numbers for `scripts/check-test-integrity.mjs` are main's.
+
+Both complete original default source CLIs run over a private empty directory, report zero scanned files and exit zero. Current hygiene rejects the empty file census; changed/staged no-change scans may legitimately be empty and must remain distinct. No current repository empty scope or product tests are alleged.
+
+Source: `scripts/check-test-integrity.mjs:473-501; scripts/check-vacuous-e2e.mjs:58-76,108-111`. Acceptance target: Require an intentional nonempty default source census, while preserving legitimately empty changed/staged subsets and clear zero-scope diagnostics.
+
+Actual source report (`audit/checklist/reviews/coverage-test-evidence-instrument-source-2026-10-09-046.json`, untracked), 32 independent controls (`audit/checklist/evidence/coverage-test-evidence-inert-controls-2026-10-09-046.json`, untracked), current guard outcomes (`audit/checklist/evidence/coverage-test-evidence-current-source-gates-2026-10-09-046.json`, untracked) and independent challenge (`audit/checklist/evidence/coverage-test-evidence-independent-challenge-2026-10-09-046.json`, untracked). Controls: 18 counterguards / 14 conditional gaps grouped into eight causes. Original authored source-guard suite: 25 tests, 24 pass, one fail, zero skip. On the 2026-09-27 copy the hygiene and integrity source CLIs failed on 27 and 21 findings under nested checkouts, which main's `git ls-files` inventory no longer reads; the vacuity CLI passed. No source/config/tool edit, app/fixture/spec module execution, coverage/tier/package tests, browser/provider/SQL/native/network/build/install/production or runtime/product acceptance. Prior Root044 supply, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+## AUDIT-E2E-BARE-CALL-CENSUS-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The complete original source CLI refuses a line-start bare test with conditional skip, but accepts that call following another statement or modified as test.only because no bare line-start test enters its census. The hygiene guard separately catches direct test.only; no composite CI bypass or spec runtime is claimed.
+
+Source: `scripts/check-vacuous-e2e.mjs:27-28,65-75`. Acceptance target: Enumerate applicable actual test calls independent of physical line placement and supported modifiers, preserving annotations and explicit source scope.
+
+Actual source report (`audit/checklist/reviews/coverage-test-evidence-instrument-source-2026-10-09-046.json`, untracked), 32 independent controls (`audit/checklist/evidence/coverage-test-evidence-inert-controls-2026-10-09-046.json`, untracked), current guard outcomes (`audit/checklist/evidence/coverage-test-evidence-current-source-gates-2026-10-09-046.json`, untracked) and independent challenge (`audit/checklist/evidence/coverage-test-evidence-independent-challenge-2026-10-09-046.json`, untracked). Controls: 18 counterguards / 14 conditional gaps grouped into eight causes. Original authored source-guard suite: 25 tests, 24 pass, one fail, zero skip. On the 2026-09-27 copy the hygiene and integrity source CLIs failed on 27 and 21 findings under nested checkouts, which main's `git ls-files` inventory no longer reads; the vacuity CLI passed. No source/config/tool edit, app/fixture/spec module execution, coverage/tier/package tests, browser/provider/SQL/native/network/build/install/production or runtime/product acceptance. Prior Root044 supply, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+## AUDIT-E2E-SKIP-CALLBACK-ATTRIBUTION-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+A private source spec has two callbacks and both conditional skip occurrences in only the first callback; the second retains an unconditional assertion. The complete original guard reports every test can skip itself from aggregate counts. Annotation and direct one-test refusal controls remain intact; no browser/spec execution occurs.
+
+Source: `scripts/check-vacuous-e2e.mjs:65-84`. Acceptance target: Attribute conditional skips to their owning callbacks before claiming every test can skip; preserve real conditional availability cases and annotated exceptions.
+
+Actual source report (`audit/checklist/reviews/coverage-test-evidence-instrument-source-2026-10-09-046.json`, untracked), 32 independent controls (`audit/checklist/evidence/coverage-test-evidence-inert-controls-2026-10-09-046.json`, untracked), current guard outcomes (`audit/checklist/evidence/coverage-test-evidence-current-source-gates-2026-10-09-046.json`, untracked) and independent challenge (`audit/checklist/evidence/coverage-test-evidence-independent-challenge-2026-10-09-046.json`, untracked). Controls: 18 counterguards / 14 conditional gaps grouped into eight causes. Original authored source-guard suite: 25 tests, 24 pass, one fail, zero skip. On the 2026-09-27 copy the hygiene and integrity source CLIs failed on 27 and 21 findings under nested checkouts, which main's `git ls-files` inventory no longer reads; the vacuity CLI passed. No source/config/tool edit, app/fixture/spec module execution, coverage/tier/package tests, browser/provider/SQL/native/network/build/install/production or runtime/product acceptance. Prior Root044 supply, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+## AUDIT-COVERAGE-CONFIG-OWNER-BINDING-01
+
+Severity: Medium. Status: open conditional source-instrument finding; source unchanged.
+
+The complete original parser takes an earlier unrelated package script threshold of 1 instead of scripts.test:coverage floor 75, and an earlier comment project list instead of the actual configuration. Actual runCoverage source consumes these values but is never executed. Existing nonempty/duplicate/null/report/failure/stale checks remain source counterevidence; no current floor or measured coverage success is claimed. Current actual root floor is 75 and the real project owner has no shown mismatch. Later runner/report/failure/nonempty/stale checks remain counterguards, so this parser falsifier does not establish an automatic green coverage bypass.
+
+Source: `scripts/lib/coverage-floors.mjs:1-24; scripts/run-coverage.mjs:16-21,60-64`. Acceptance target: Bind the root floor to scripts.test:coverage and project scope to the actual executable configuration; preserve current nonempty/duplicate/null/report/failure/stale evidence refusals.
+
+Actual source report (`audit/checklist/reviews/coverage-test-evidence-instrument-source-2026-10-09-046.json`, untracked), 32 independent controls (`audit/checklist/evidence/coverage-test-evidence-inert-controls-2026-10-09-046.json`, untracked), current guard outcomes (`audit/checklist/evidence/coverage-test-evidence-current-source-gates-2026-10-09-046.json`, untracked) and independent challenge (`audit/checklist/evidence/coverage-test-evidence-independent-challenge-2026-10-09-046.json`, untracked). Controls: 18 counterguards / 14 conditional gaps grouped into eight causes. Original authored source-guard suite: 25 tests, 24 pass, one fail, zero skip. On the 2026-09-27 copy the hygiene and integrity source CLIs failed on 27 and 21 findings under nested checkouts, which main's `git ls-files` inventory no longer reads; the vacuity CLI passed. No source/config/tool edit, app/fixture/spec module execution, coverage/tier/package tests, browser/provider/SQL/native/network/build/install/production or runtime/product acceptance. Prior Root044 supply, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+## AUDIT-WORKSPACE-POLICY-INERT-ENFORCEMENT-PROOF-01
+
+Severity: Medium. Status: open conditional source-instrument qualification, October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main added a fourth enforcement shape, `evaluateManagedComputeAccess`, matched in raw source text the same way. Line numbers for `scripts/lib/workspace-policy-enforcement.mjs` are main's.
+
+The complete original engine accepts enforcement proof solely in a comment and credits detached act-shaped data without proving gate invocation; route-family comments also qualify publication. Real source-shaped proof, missing proof, excluded storage, all-empty key census and missing served family counterguards remain. Nonfeature identifier semantics are explicitly limited by the current instrument.
+
+Source: `scripts/lib/workspace-policy-enforcement.mjs:80-81,86-95,129-134,174-187,200-207`. Actual source report (`audit/checklist/reviews/coverage-workspace-settings-time-guard-source-2026-10-09-047.json`, untracked); original source guard outcomes (`audit/checklist/evidence/coverage-workspace-settings-time-current-source-gates-2026-10-09-047.json`, untracked); complete original-engine inert controls (`audit/checklist/evidence/coverage-workspace-settings-time-inert-controls-2026-10-09-047.json`, untracked); independent premise challenge (`audit/checklist/evidence/coverage-workspace-settings-time-independent-challenge-2026-10-09-047.json`, untracked).
+
+Controls: policy-inert-comment-proof, policy-uninvoked-act-data, policy-inert-published-family.
+
+Acceptance target: Bind applicable enforcement and published-family proof to executable decision/gate/return ownership while retaining explicit narrow source shapes and missing-proof refusals.
+
+Limits: Inert source fixtures are never executed as application/modules or SQL. Current44 authored source-guard tests and four source CLIs pass. Their green outcomes do not establish production/browser/native/provider/database/scheduler behavior, fixture framework/type validity, a global CI bypass or product acceptance. Earlier Root046 hygiene/integrity, Root044 supply-chain, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+## AUDIT-WORKSPACE-POLICY-PARTIAL-KEY-CENSUS-01
+
+Severity: Low. Status: open conditional source-instrument qualification, October 9, 2026.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `scripts/lib/workspace-policy-enforcement.mjs` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+A contract source containing only the recognized feature vocabulary returns one declared key and no error when that feature marker exists; absent control/code declarations do not invalidate the nonempty census. An entirely empty census refuses. Current actual contract reports 23 keys, and a broader semantic completeness requirement or composite CI bypass is not established.
+
+Source: `scripts/lib/workspace-policy-enforcement.mjs:19-46,156-164`. Actual source report (`audit/checklist/reviews/coverage-workspace-settings-time-guard-source-2026-10-09-047.json`, untracked); original source guard outcomes (`audit/checklist/evidence/coverage-workspace-settings-time-current-source-gates-2026-10-09-047.json`, untracked); complete original-engine inert controls (`audit/checklist/evidence/coverage-workspace-settings-time-inert-controls-2026-10-09-047.json`, untracked); independent premise challenge (`audit/checklist/evidence/coverage-workspace-settings-time-independent-challenge-2026-10-09-047.json`, untracked).
+
+Controls: policy-partial-key-census, policy-zero-key-census.
+
+Acceptance target: Explicitly define required vocabulary-family acceptance; refuse unreadable required declarations if the gate depends on a complete contract census, preserving legitimate schema changes.
+
+Limits: Inert source fixtures are never executed as application/modules or SQL. Current44 authored source-guard tests and four source CLIs pass. Their green outcomes do not establish production/browser/native/provider/database/scheduler behavior, fixture framework/type validity, a global CI bypass or product acceptance. Earlier Root046 hygiene/integrity, Root044 supply-chain, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+## AUDIT-WORK-CLIENT-PERSISTENCE-BINDING-01
+
+Severity: Medium. Status: open conditional source-instrument qualification, October 9, 2026; source unchanged.
+
+A separate recognized preference store keeps the positive census while a double-quoted or aliased zustand Work persistence binding is omitted and the source checker returns zero. Direct whole-store, explicit held-field and wholly empty store census refuse. No browser storage or fixture module executes, and no actual current product store omission is asserted.
+
+Source: `scripts/check-work-client-state.mjs:82-90,109-111`. Actual source report (`audit/checklist/reviews/coverage-workspace-settings-time-guard-source-2026-10-09-047.json`, untracked); original source guard outcomes (`audit/checklist/evidence/coverage-workspace-settings-time-current-source-gates-2026-10-09-047.json`, untracked); complete original-engine inert controls (`audit/checklist/evidence/coverage-workspace-settings-time-inert-controls-2026-10-09-047.json`, untracked); independent premise challenge (`audit/checklist/evidence/coverage-workspace-settings-time-independent-challenge-2026-10-09-047.json`, untracked).
+
+Controls: work-double-quoted-binding, work-aliased-binding, work-whole-store-refusal, work-empty-census.
+
+Acceptance target: Resolve the applicable middleware import and persistence call bindings across supported syntax before claiming scanned stores keep preferences only.
+
+Limits: Inert source fixtures are never executed as application/modules or SQL. Current44 authored source-guard tests and four source CLIs pass. Their green outcomes do not establish production/browser/native/provider/database/scheduler behavior, fixture framework/type validity, a global CI bypass or product acceptance. Earlier Root046 hygiene/integrity, Root044 supply-chain, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+October9 source-guard qualification: The cache sweep census rejects a direct unregistered single-quoted persist store but omits an unregistered store whose name uses double quotes or whose persist callee is aliased. A separate recognized store keeps the scan nonempty. This extends the existing browser persistence source-census binding owner with zero new cause; actual current unswept store or browser persistence is unexecuted. Source: `scripts/lib/workspace-cache-scope.mjs:48-51; scripts/check-workspace-cache-scope.mjs:86-102`. Actual source reading (`audit/checklist/reviews/coverage-cache-version-workflow-guard-source-2026-10-09-048.json`, untracked); original engine controls (`audit/checklist/evidence/coverage-cache-version-workflow-inert-controls-2026-10-09-048.json`, untracked); valid companions (`audit/checklist/evidence/coverage-cache-version-workflow-valid-companions-2026-10-09-048.json`, untracked); independent challenge (`audit/checklist/evidence/coverage-cache-version-workflow-independent-challenge-2026-10-09-048.json`, untracked). Zero new cause or runtime acceptance.
+
+## AUDIT-WORK-CLIENT-PARTIALIZER-OWNERSHIP-01
+
+Severity: Medium. Status: open conditional source-instrument qualification, October 9, 2026; source unchanged.
+
+The selected partialize text block can occur only in a comment, and a real source-shaped partializer spreading the whole state omits literal held-field names. Both pass despite retaining a recognized Work store. Missing partializer and explicit held fields refuse. The fixtures remain inert source; product persistence behavior is unexecuted.
+
+Source: `scripts/check-work-client-state.mjs:47-66,88-100`. Actual source report (`audit/checklist/reviews/coverage-workspace-settings-time-guard-source-2026-10-09-047.json`, untracked); original source guard outcomes (`audit/checklist/evidence/coverage-workspace-settings-time-current-source-gates-2026-10-09-047.json`, untracked); complete original-engine inert controls (`audit/checklist/evidence/coverage-workspace-settings-time-inert-controls-2026-10-09-047.json`, untracked); independent premise challenge (`audit/checklist/evidence/coverage-workspace-settings-time-independent-challenge-2026-10-09-047.json`, untracked).
+
+Controls: work-comment-partializer, work-partializer-spread, work-whole-store-refusal, work-explicit-held-field.
+
+Acceptance target: Bind the partializer to the applicable persist options and qualify its actual returned state, retaining missing-block and explicit held-field refusals.
+
+Limits: Inert source fixtures are never executed as application/modules or SQL. Current44 authored source-guard tests and four source CLIs pass. Their green outcomes do not establish production/browser/native/provider/database/scheduler behavior, fixture framework/type validity, a global CI bypass or product acceptance. Earlier Root046 hygiene/integrity, Root044 supply-chain, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+## AUDIT-WORK-CLIENT-RUN-KEY-FLOW-01
+
+Severity: Medium. Status: open conditional source-instrument qualification, October 9, 2026; source unchanged.
+
+A source-shaped runId-derived key assigned to a variable passes when setItem receives that variable; the same direct runId key refuses. A positive separate preference store prevents an empty census explanation. No localStorage operation executes or current product data leak is claimed.
+
+Source: `scripts/check-work-client-state.mjs:29-30,69-76,103-106`. Actual source report (`audit/checklist/reviews/coverage-workspace-settings-time-guard-source-2026-10-09-047.json`, untracked); original source guard outcomes (`audit/checklist/evidence/coverage-workspace-settings-time-current-source-gates-2026-10-09-047.json`, untracked); complete original-engine inert controls (`audit/checklist/evidence/coverage-workspace-settings-time-inert-controls-2026-10-09-047.json`, untracked); independent premise challenge (`audit/checklist/evidence/coverage-workspace-settings-time-independent-challenge-2026-10-09-047.json`, untracked).
+
+Controls: work-run-key-alias, work-direct-run-key.
+
+Acceptance target: Qualify supported per-run key origins at the storage call or bound the claim to direct argument identifiers, retaining current direct-key refusals.
+
+Limits: Inert source fixtures are never executed as application/modules or SQL. Current44 authored source-guard tests and four source CLIs pass. Their green outcomes do not establish production/browser/native/provider/database/scheduler behavior, fixture framework/type validity, a global CI bypass or product acceptance. Earlier Root046 hygiene/integrity, Root044 supply-chain, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+October9 source-guard qualification: The original cache checker refuses an unswept direct literal key but omits that same literal assigned to a variable used by setItem. This is a bounded new context for the existing storage-key-origin flow owner, whose earlier case follows per-run IDs. Literal-only helper scope is explicit; any broader dynamic-key completeness requirement and current browser incident remain unknown. Source: `scripts/lib/workspace-cache-scope.mjs:54-63; scripts/check-workspace-cache-scope.mjs:104-118`. Actual source reading (`audit/checklist/reviews/coverage-cache-version-workflow-guard-source-2026-10-09-048.json`, untracked); original engine controls (`audit/checklist/evidence/coverage-cache-version-workflow-inert-controls-2026-10-09-048.json`, untracked); valid companions (`audit/checklist/evidence/coverage-cache-version-workflow-valid-companions-2026-10-09-048.json`, untracked); independent challenge (`audit/checklist/evidence/coverage-cache-version-workflow-independent-challenge-2026-10-09-048.json`, untracked). Zero new cause or runtime acceptance. Acceptance target extension: Qualify supported per-run and sweep-required client key origins at storage calls, or explicitly bound the respective source claim to direct literal/identifier forms while retaining direct-key refusals.
+
+## AUDIT-SETTINGS-OUTCOME-VOCABULARY-CENSUS-01
+
+Severity: Medium. Status: open conditional source-instrument qualification, October 9, 2026; source unchanged.
+
+The complete original engine reports no errors for an absent outcome array with otherwise valid scopes, mandates, registry and migration text. A recognized array missing unreadable_value refuses. The real current owner contains all required outcomes, and resolver/application/SQL runtime acceptance is unestablished.
+
+Source: `scripts/check-settings-precedence.mjs:51-56,194-207`. Actual source report (`audit/checklist/reviews/coverage-workspace-settings-time-guard-source-2026-10-09-047.json`, untracked); original source guard outcomes (`audit/checklist/evidence/coverage-workspace-settings-time-current-source-gates-2026-10-09-047.json`, untracked); complete original-engine inert controls (`audit/checklist/evidence/coverage-workspace-settings-time-inert-controls-2026-10-09-047.json`, untracked); independent premise challenge (`audit/checklist/evidence/coverage-workspace-settings-time-independent-challenge-2026-10-09-047.json`, untracked).
+
+Controls: settings-absent-outcome-vocabulary, settings-omitted-required-member, settings-complete-vocabulary.
+
+Acceptance target: Refuse an unreadable required outcome vocabulary before testing membership, preserving current duplicate/invalid scope and missing outcome member guards.
+
+Limits: Inert source fixtures are never executed as application/modules or SQL. Current44 authored source-guard tests and four source CLIs pass. Their green outcomes do not establish production/browser/native/provider/database/scheduler behavior, fixture framework/type validity, a global CI bypass or product acceptance. Earlier Root046 hygiene/integrity, Root044 supply-chain, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+## AUDIT-SETTINGS-INERT-OWNER-EXCLUSION-01
+
+Severity: Medium. Status: open conditional source-instrument qualification, October 9, 2026; source unchanged.
+
+The same private client precedence source that refuses passes when only a comment naming @agiworkforce/types is added. The scanner checks raw substring ownership without proving a canonical resolver binding. Current shared resolver source was actually reread and remains counterevidence against any current missing-owner product claim.
+
+Source: `scripts/check-settings-precedence.mjs:166-180`. Actual source report (`audit/checklist/reviews/coverage-workspace-settings-time-guard-source-2026-10-09-047.json`, untracked); original source guard outcomes (`audit/checklist/evidence/coverage-workspace-settings-time-current-source-gates-2026-10-09-047.json`, untracked); complete original-engine inert controls (`audit/checklist/evidence/coverage-workspace-settings-time-inert-controls-2026-10-09-047.json`, untracked); independent premise challenge (`audit/checklist/evidence/coverage-workspace-settings-time-independent-challenge-2026-10-09-047.json`, untracked).
+
+Controls: settings-inert-owner-marker, settings-private-client-order.
+
+Acceptance target: Bind client precedence exclusion to the applicable canonical resolver dependency/use while retaining legitimate canonical consumers and plain private-order refusals.
+
+Limits: Inert source fixtures are never executed as application/modules or SQL. Current44 authored source-guard tests and four source CLIs pass. Their green outcomes do not establish production/browser/native/provider/database/scheduler behavior, fixture framework/type validity, a global CI bypass or product acceptance. Earlier Root046 hygiene/integrity, Root044 supply-chain, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+## AUDIT-TIME-INERT-ZONE-PROOF-01
+
+Severity: Medium. Status: open conditional source-instrument qualification, October 9, 2026; source unchanged.
+
+Comment-only named module and consumer markers satisfy the complete original DST and presentation source checks while containing no executable implementation. Missing markers, recognized zoneless/empty recurrence, missing timestamp default and the exact forbidden fixed-zone marker refuse. No Intl, timezone calculation, scheduler, SQL or fixture application executes.
+
+Source: `scripts/check-time-semantics.mjs:168-199,253-278`. Actual source report (`audit/checklist/reviews/coverage-workspace-settings-time-guard-source-2026-10-09-047.json`, untracked); original source guard outcomes (`audit/checklist/evidence/coverage-workspace-settings-time-current-source-gates-2026-10-09-047.json`, untracked); complete original-engine inert controls (`audit/checklist/evidence/coverage-workspace-settings-time-inert-controls-2026-10-09-047.json`, untracked); independent premise challenge (`audit/checklist/evidence/coverage-workspace-settings-time-independent-challenge-2026-10-09-047.json`, untracked).
+
+Controls: time-inert-zone-proof, time-missing-zoned-markers, time-fixed-reader-zone.
+
+Acceptance target: Bind applicable zone proof to the named executable implementation and consumer use, preserving current marker-absence and fixed-zone counterguards without claiming runtime DST correctness from source strings.
+
+Limits: Inert source fixtures are never executed as application/modules or SQL. Current44 authored source-guard tests and four source CLIs pass. Their green outcomes do not establish production/browser/native/provider/database/scheduler behavior, fixture framework/type validity, a global CI bypass or product acceptance. Earlier Root046 hygiene/integrity, Root044 supply-chain, Root042 security-claim and Root035 RLS failures remain unresolved.
+
+## AUDIT-VERSION-NEGOTIATED-FLOOR-BINDING-01
+
+Severity: Medium. Status: open conditional source-instrument qualification, October9,2026; source unchanged.
+
+The complete original version engine rejects a negotiated constant without any floor marker but accepts the same artifact with only an unrelated MIN_UNRELATED_VERSION export. The fallback scans the entire carrier and does not bind the floor to the named artifact. Current three negotiated constant entries explicitly name minimum symbols; the fourth negotiated entry is referenced and outside this fallback. No current old-client acceptance incident or negotiation executes.
+
+Source: `scripts/check-version-registry.mjs:151-161`. Actual source report (`audit/checklist/reviews/coverage-cache-version-workflow-guard-source-2026-10-09-048.json`, untracked); original source tests/checks (`audit/checklist/evidence/coverage-cache-version-workflow-current-source-gates-2026-10-09-048.json`, untracked); original33 control properties (`audit/checklist/evidence/coverage-cache-version-workflow-inert-controls-2026-10-09-048.json`, untracked); six fresh valid companions (`audit/checklist/evidence/coverage-cache-version-workflow-valid-companions-2026-10-09-048.json`, untracked); independent syntax qualification (`audit/checklist/evidence/coverage-cache-version-workflow-syntax-qualification-2026-10-09-048.json`, untracked); independent premise challenge (`audit/checklist/evidence/coverage-cache-version-workflow-independent-challenge-2026-10-09-048.json`, untracked).
+
+Controls: version-negotiated-no-floor, version-unrelated-negotiated-floor, version-missing-explicit-floor.
+
+Acceptance target: Bind the minimum/supported version proof to the declared artifact or explicitly require its named minimum carrier, preserving missing-file/explicit-minimum refusals.
+
+Limits: Current27 original tests and five source CLIs pass. Original33 control shapes retain17 source counterguards/16 gaps; malformed YAML/standalone TSX observations are raw-only, with six fresh independently parsed/measured companions repeating existing properties. No application/fixture modules, TypeScript typecheck/framework, rendering/contrast, shell workflow/Cargo/compiler/build/install, native/provider/network/SQL/database/production or full CI acceptance. Earlier hygiene/integrity/supply/security/RLS failures remain unresolved.
+
+## AUDIT-THEME-PAIR-ELEMENT-BINDING-01
+
+Severity: Medium. Status: open conditional source-instrument qualification, October9,2026; source unchanged.
+
+The complete original string engine reports an unpaired light shade when alone and retains the wrong-family refusal, but suppresses it when a dark counterpart belongs to a separate sibling element or only a JSX comment on the same physical line. Its documented same-element intent is measured by a whole-line regex. No rendering, contrast measurement or actual unreadable current element is accepted. Fresh exact syntax-valid TSX wrappers were independently parsed without diagnostics and the complete original engine reproduced sibling/comment acceptance; original standalone raw strings and their parse diagnostics stay preserved. Syntax does not establish framework/type/render/contrast behavior.
+
+Source: `scripts/lib/theme-only-text-colours.mjs:16-24`. Actual source report (`audit/checklist/reviews/coverage-cache-version-workflow-guard-source-2026-10-09-048.json`, untracked); original source tests/checks (`audit/checklist/evidence/coverage-cache-version-workflow-current-source-gates-2026-10-09-048.json`, untracked); original33 control properties (`audit/checklist/evidence/coverage-cache-version-workflow-inert-controls-2026-10-09-048.json`, untracked); six fresh valid companions (`audit/checklist/evidence/coverage-cache-version-workflow-valid-companions-2026-10-09-048.json`, untracked); independent syntax qualification (`audit/checklist/evidence/coverage-cache-version-workflow-syntax-qualification-2026-10-09-048.json`, untracked); independent premise challenge (`audit/checklist/evidence/coverage-cache-version-workflow-independent-challenge-2026-10-09-048.json`, untracked).
+
+Controls: valid-theme-sibling-counterpart, valid-theme-comment-counterpart, theme-unpaired-element, theme-wrong-family-counterpart, valid-theme-paired.
+
+Acceptance target: Scope applicable counterpart proof to actual class tokens on the same element, preserving genuine dark-scoped and paired source cases without treating comment/other-element text as contrast proof.
+
+Limits: Current27 original tests and five source CLIs pass. Original33 control shapes retain17 source counterguards/16 gaps; malformed YAML/standalone TSX observations are raw-only, with six fresh independently parsed/measured companions repeating existing properties. No application/fixture modules, TypeScript typecheck/framework, rendering/contrast, shell workflow/Cargo/compiler/build/install, native/provider/network/SQL/database/production or full CI acceptance. Earlier hygiene/integrity/supply/security/RLS failures remain unresolved.
+
+## AUDIT-WORKFLOW-CARGO-FEATURE-ARGUMENT-CENSUS-01
+
+Severity: Medium. Status: open conditional source-instrument qualification, October9,2026; source unchanged.
+
+The complete original source CLI rejects a double-quoted absent qualified feature while single-quoted and bare spellings of the same inert argument pass with zero qualified references. Pure builtin shlex tokenization yields identical argv for these three forms; no shell workflow or Cargo executes. Equals-form text is also omitted but Cargo interpretation is unknown. Current original CLI checks five references across29 workflows and fourteen crate source records, without proving broader syntax or runtime execution.
+
+Source: `scripts/check-workflow-cargo-features.mjs:69-96`. Actual source report (`audit/checklist/reviews/coverage-cache-version-workflow-guard-source-2026-10-09-048.json`, untracked); original source tests/checks (`audit/checklist/evidence/coverage-cache-version-workflow-current-source-gates-2026-10-09-048.json`, untracked); original33 control properties (`audit/checklist/evidence/coverage-cache-version-workflow-inert-controls-2026-10-09-048.json`, untracked); six fresh valid companions (`audit/checklist/evidence/coverage-cache-version-workflow-valid-companions-2026-10-09-048.json`, untracked); independent syntax qualification (`audit/checklist/evidence/coverage-cache-version-workflow-syntax-qualification-2026-10-09-048.json`, untracked); independent premise challenge (`audit/checklist/evidence/coverage-cache-version-workflow-independent-challenge-2026-10-09-048.json`, untracked).
+
+Controls: workflow-unknown-double-quoted-feature, workflow-unknown-single-quoted-feature, workflow-unknown-bare-feature, workflow-valid-feature.
+
+Acceptance target: Enumerate supported feature arguments after shell-token ownership is established, preserving actual absent-crate/feature refusals and distinguishing unverified argument forms and non-run YAML text.
+
+Limits: Current27 original tests and five source CLIs pass. Original33 control shapes retain17 source counterguards/16 gaps; malformed YAML/standalone TSX observations are raw-only, with six fresh independently parsed/measured companions repeating existing properties. No application/fixture modules, TypeScript typecheck/framework, rendering/contrast, shell workflow/Cargo/compiler/build/install, native/provider/network/SQL/database/production or full CI acceptance. Earlier hygiene/integrity/supply/security/RLS failures remain unresolved.
+
+## AUDIT-UI-BUTTON-CONTROL-CLASSIFICATION-01
+
+Severity: Low. Status: open conditional source-instrument qualification, October 9, 2026; source unchanged.
+
+variantTableFailures treats absence of any module-level disabled word as proof that a size table is presentational. The unchanged original CLI accepts an undersized literal button using its cva table when that word is absent, reporting zero inspected tables; the otherwise comparable sized/undersized disabled-bearing controls pass/refuse. This is conditional guard classification, not an accepted current product target-size incident.
+
+Source: `scripts/check-ui-buttons.mjs:80-113`. Actual source report (`audit/checklist/reviews/coverage-ui-system-source-guards-2026-10-09-050.json`, untracked); current original tests and CLIs (`audit/checklist/evidence/coverage-ui-systems-current-source-gates-2026-10-09-050.json`, untracked); fresh original21 source controls (`audit/checklist/evidence/coverage-ui-systems-inert-controls-2026-10-09-050-003.json`, untracked); independent source-premise challenge (`audit/checklist/evidence/coverage-ui-systems-independent-challenge-2026-10-09-050.json`, untracked).
+
+Controls: button-sized-control, button-undersized-control, button-control-without-disabled-word.
+
+Acceptance target: Bind the table classification to actual rendered control consumers while retaining genuine presentational cva tables and current successful control/callsite checks.
+
+Limits: Actual source reading and bounded source-instrument controls only. No application or fixture modules, TypeScript package/AST guard or test, fixture parser/compiler/typecheck, browser/render/accessibility/contrast, native/provider/network/SQL/database/build/install/production or full CI acceptance. Earlier hygiene/integrity/supply/security/RLS failures remain unresolved. No ignored/unlisted coverage completion claim. First empty-output controls, the later stdout-only validator and a fixed-temp-prefix metadata qualifier are retained uncredited; only fresh exact original guards with canonical paths, source pins, error/signal and diagnostic-channel checks supply control evidence.
+
+## AUDIT-UI-MOTION-SELECTOR-COVERAGE-01
+
+Severity: Low. Status: open conditional source-instrument qualification, October 9, 2026; source unchanged.
+
+The guard unions important property names from any selector whose last token matches one required universal selector. Star-only and panel-narrowed rules pass its blanket-complete claim, although they do not establish the complete unscoped element and pseudo-element selector set. The original complete-selector control passes and missing-property control refuses. No browser or operating-system motion result is accepted.
+
+Source: `scripts/check-ui-motion.mjs:81-118,185-204`. Actual source report (`audit/checklist/reviews/coverage-ui-system-source-guards-2026-10-09-050.json`, untracked); current original tests and CLIs (`audit/checklist/evidence/coverage-ui-systems-current-source-gates-2026-10-09-050.json`, untracked); fresh original21 source controls (`audit/checklist/evidence/coverage-ui-systems-inert-controls-2026-10-09-050-003.json`, untracked); independent source-premise challenge (`audit/checklist/evidence/coverage-ui-systems-independent-challenge-2026-10-09-050.json`, untracked).
+
+Controls: motion-three-selector-coverage, motion-missing-OS-property, motion-star-only-coverage, motion-narrowed-panel-coverage.
+
+Acceptance target: Require the intended OS and in-app selector set with properties bound to each applicable element/pseudo-element selector, preserving genuine equivalent complete rule forms.
+
+Limits: Actual source reading and bounded source-instrument controls only. No application or fixture modules, TypeScript package/AST guard or test, fixture parser/compiler/typecheck, browser/render/accessibility/contrast, native/provider/network/SQL/database/build/install/production or full CI acceptance. Earlier hygiene/integrity/supply/security/RLS failures remain unresolved. No ignored/unlisted coverage completion claim. First empty-output controls, the later stdout-only validator and a fixed-temp-prefix metadata qualifier are retained uncredited; only fresh exact original guards with canonical paths, source pins, error/signal and diagnostic-channel checks supply control evidence.
+
+## AUDIT-UI-ICON-MARKER-SUBJECT-BINDING-01
+
+Severity: Low. Status: open conditional source-instrument qualification, October 9, 2026; source unchanged.
+
+The icon-control branch accepts title= anywhere in raw attributes, including an unrelated data-note string; the emoji branch accepts aria-hidden anywhere in a nearby four-line window, including an unrelated string declaration. Exact original controls refuse an unnamed imported icon button and an unhidden emoji, while those unrelated markers suppress the respective refusal. Both ownership predicates are explicit; this is source proof binding only, with fixture accessibility/render behavior unverified.
+
+Source: `scripts/check-ui-icons.mjs:94-129,132-153`. Actual source report (`audit/checklist/reviews/coverage-ui-system-source-guards-2026-10-09-050.json`, untracked); current original tests and CLIs (`audit/checklist/evidence/coverage-ui-systems-current-source-gates-2026-10-09-050.json`, untracked); fresh original21 source controls (`audit/checklist/evidence/coverage-ui-systems-inert-controls-2026-10-09-050-003.json`, untracked); independent source-premise challenge (`audit/checklist/evidence/coverage-ui-systems-independent-challenge-2026-10-09-050.json`, untracked).
+
+Controls: icon-explicit-name, icon-missing-name, icon-unrelated-title-text, emoji-unhidden, emoji-unrelated-nearby-hidden-text.
+
+Acceptance target: Bind accessible-name evidence to the actual control attribute/content and decoration-hidden evidence to the actual glyph subject, retaining named imported icons and genuine decorative-glyph source cases.
+
+Limits: Actual source reading and bounded source-instrument controls only. No application or fixture modules, TypeScript package/AST guard or test, fixture parser/compiler/typecheck, browser/render/accessibility/contrast, native/provider/network/SQL/database/build/install/production or full CI acceptance. Earlier hygiene/integrity/supply/security/RLS failures remain unresolved. No ignored/unlisted coverage completion claim. First empty-output controls, the later stdout-only validator and a fixed-temp-prefix metadata qualifier are retained uncredited; only fresh exact original guards with canonical paths, source pins, error/signal and diagnostic-channel checks supply control evidence.
+
+## AUDIT-UI-PREFERENCE-INERT-MARKER-PROOF-01
+
+Severity: Low. Status: open conditional source-instrument qualification, October 9, 2026; source unchanged.
+
+The pre-paint check tests raw marker words and the typography preference check tests raw selector/property text. Comment-only pre-paint markers and a commented offered-size selector pass the complete original CLIs; their missing-marker or missing-selector controls refuse. The pre-paint positive marker fixture is also source marker text and supplies no runtime implementation proof. This is conditional implementation-proof strength, not a claim that current theme or font preferences fail.
+
+Source: `scripts/check-ui-theme-tokens.mjs:122-154; scripts/check-ui-typography.mjs:107-124`. Actual source report (`audit/checklist/reviews/coverage-ui-system-source-guards-2026-10-09-050.json`, untracked); current original tests and CLIs (`audit/checklist/evidence/coverage-ui-systems-current-source-gates-2026-10-09-050.json`, untracked); fresh original21 source controls (`audit/checklist/evidence/coverage-ui-systems-inert-controls-2026-10-09-050-003.json`, untracked); independent source-premise challenge (`audit/checklist/evidence/coverage-ui-systems-independent-challenge-2026-10-09-050.json`, untracked).
+
+Controls: theme-prepaint-marker-counter, theme-prepaint-missing-markers, theme-prepaint-comment-only-markers, typography-offered-size-selector, typography-missing-size-selector, typography-commented-size-selector.
+
+Acceptance target: Require active source implementation for configured theme and reading preferences; comment-only marker/selector text must not stand in for executable or applicable rules, while real current implementations and missing-marker refusals remain recognized.
+
+Limits: Actual source reading and bounded source-instrument controls only. No application or fixture modules, TypeScript package/AST guard or test, fixture parser/compiler/typecheck, browser/render/accessibility/contrast, native/provider/network/SQL/database/build/install/production or full CI acceptance. Earlier hygiene/integrity/supply/security/RLS failures remain unresolved. No ignored/unlisted coverage completion claim. First empty-output controls, the later stdout-only validator and a fixed-temp-prefix metadata qualifier are retained uncredited; only fresh exact original guards with canonical paths, source pins, error/signal and diagnostic-channel checks supply control evidence.
+
+## AUDIT-EGRESS-TEMPLATE-TARGET-CENSUS-01
+
+Severity: Medium. Status: open conditional source-instrument finding, October 9, 2026; source unchanged.
+
+Original complete guard refuses fetch(row.endpoint) without vetting, but admits fetch(`https://${row.host}/send`) under the same anchored inert source tree. The helper emits a call with null target for the template, and main skips it before target ownership or vetting checks. No fetch is executed.
+
+Source: `scripts/lib/url-fetch-egress.mjs:98-121; scripts/check-security-egress-inventory.mjs:329-336`. Frozen reading report (`audit/checklist/reviews/coverage-surface-security-source-guards-2026-10-09-051.json`, untracked); independent premise review (`audit/checklist/evidence/coverage-surface-security-independent-challenge-2026-10-09-051.json`, untracked); actual source controls (`audit/checklist/evidence/coverage-surface-security-inert-controls-2026-10-09-051.json`, untracked).
+
+Counterguards: Direct unvetted target refuses; resolved/manual target passes. fetch(new URL(row.endpoint)) refuses. Pure targetIsRepoChosen results for complete constructor expressions do not establish original-main acceptance because its scanner tokenizes a different subject. Tool/shared transport presence checks remain active; inert shared anchors are never claimed implementations. Five original-CLI companions use complete exact authored transport/tool/search/MCP fixture text, decoded as inert literal bytes; the same direct refusal/manual admission/comment credit/template omission/constructor refusal persist. No fixture imports or execution.
+
+Acceptance target: Preserve complete first-argument expressions through call inventory and qualify host-bearing template interpolations before accepting the target, while preserving direct refusal and legitimate repository-owned literals.
+
+Limits: Current source instrument and inert text/value controls only. No application/fixture compilation or execution, provider/network/browser/native/SQL/database/build/install/production or whole CI acceptance; no current product or security incident asserted.
+
+Five complete authored-context original-CLI companions (`audit/checklist/evidence/coverage-root051-egress-authored-context-companions-2026-10-09.json`, untracked) preserve direct/constructor refusals, resolved/manual admission and the template omission without executing fixture modules.
+
+## AUDIT-SURFACE-ROUTE-LITERAL-NAVIGATION-01
+
+Severity: Low. Status: open conditional source-instrument finding, October 9, 2026; source unchanged.
+
+Exact collectRouteLiterals/analyzeRouteNavigation functions return no violation for an unrelated exported string '/forgotten' in another source file. Removing that string or keeping it only in the route's own file returns a violation. The accepted string need not belong to a navigation call.
+
+Source: `scripts/check-surface-invariants.mjs:112-165`. Frozen reading report (`audit/checklist/reviews/coverage-surface-security-source-guards-2026-10-09-051.json`, untracked); independent premise review (`audit/checklist/evidence/coverage-surface-security-independent-challenge-2026-10-09-051.json`, untracked); actual source controls (`audit/checklist/evidence/coverage-surface-security-inert-controls-2026-10-09-051.json`, untracked).
+
+Counterguards: Own-file literal and absent literal refuse. A router.push literal is accepted; grouped/dynamic normalization and declared-screen branches are separately covered by authored tests.
+
+Acceptance target: Bind route references to applicable executable navigation or navigator declarations, or report arbitrary string evidence as unverified navigation.
+
+Limits: Current source instrument and inert text/value controls only. No application/fixture compilation or execution, provider/network/browser/native/SQL/database/build/install/production or whole CI acceptance; no current product or security incident asserted.
+
+## AUDIT-SURFACE-KEYBINDING-DEFAULT-ARITY-01
+
+Severity: Low. Status: open conditional source-instrument finding, October 9, 2026; source unchanged.
+
+Exact requiredArity('optional = 1, required: string') returns0 because the loop breaks at the default parameter. The later required parameter is not examined; consumers use this result for zero-argument keybinding eligibility. This control does not compile a handler or invoke a real command.
+
+Source: `scripts/check-surface-invariants.mjs:453-460; scripts/check-surface-invariants.mjs:486-555`. Frozen reading report (`audit/checklist/reviews/coverage-surface-security-source-guards-2026-10-09-051.json`, untracked); independent premise review (`audit/checklist/evidence/coverage-surface-security-independent-challenge-2026-10-09-051.json`, untracked); actual source controls (`audit/checklist/evidence/coverage-surface-security-inert-controls-2026-10-09-051.json`, untracked).
+
+Counterguards: A first required parameter before a default returns1. A default-only parameter list returns0; authored tests also refuse absent/unknown commands.
+
+Acceptance target: Count later required parameters after initialized parameters when determining zero-argument eligibility, retaining genuinely optional/default/rest-only acceptance.
+
+Limits: Current source instrument and inert text/value controls only. No application/fixture compilation or execution, provider/network/browser/native/SQL/database/build/install/production or whole CI acceptance; no current product or security incident asserted. Exact requiredArity result and source consumer relationship only; no complete command-registration parser/control invocation or actual keybinding execution is established.
+
+Later exact pure collectCommandArities/analyzeKeybindings composition confirms the source classifier result. Six actual composition observations (`audit/checklist/evidence/coverage-root051-keybinding-pure-call-composition-2026-10-09.json`, untracked). No full CLI or VS Code execution.
+
+## AUDIT-MOBILE-COLOR-BADGE-LINE-CREDIT-01
+
+Severity: Low. Status: open conditional source-instrument finding, October 9, 2026; source unchanged.
+
+Original complete guard passes const x=<Badge/>; const style={color:'red'} with an empty baseline, because any <Badge marker on the line suppresses every named-color match. The exempt color need not be a Badge prop. No component renders.
+
+Source: `scripts/check-no-hex-colors-mobile.mjs:95-101`. Frozen reading report (`audit/checklist/reviews/coverage-surface-security-source-guards-2026-10-09-051.json`, untracked); independent premise review (`audit/checklist/evidence/coverage-surface-security-independent-challenge-2026-10-09-051.json`, untracked); actual source controls (`audit/checklist/evidence/coverage-surface-security-inert-controls-2026-10-09-051.json`, untracked).
+
+Counterguards: Original complete guard rejects named color red without a Badge marker. Current Badge color prop is admitted by the exemption; this is source acceptance, not rendered or desired-product proof. Moving the unrelated Badge to a separate line restores the named-color refusal.
+
+Acceptance target: Bind named-color exemption to the allowed Badge attribute/value rather than the complete source line.
+
+Limits: Current source instrument and inert text/value controls only. No application/fixture compilation or execution, provider/network/browser/native/SQL/database/build/install/production or whole CI acceptance; no current product or security incident asserted.
+
+Four named-color branch companions (`audit/checklist/evidence/coverage-root051-named-color-predicate-companions-2026-10-09.json`, untracked) retain no-Badge/separate-line refusals and current Badge prop admission; fixture syntax/render validity remains unknown.
+
+## AUDIT-MOBILE-HYGIENE-UI-EXTENSION-CENSUS-01
+
+Severity: Low. Status: open conditional source-instrument finding, October 9, 2026; source unchanged.
+
+Original complete Mobile hygiene guard refuses a feature/components/Fixture.tsx containing bare fetch(target), but accepts the same source body at Fixture.jsx. The overall walker recognizes .jsx while the feature-components UI selector recognizes only .tsx. No component or fetch executes.
+
+Source: `scripts/check-mobile-hygiene.mjs:8; scripts/check-mobile-hygiene.mjs:133-140; scripts/check-mobile-hygiene.mjs:181-207`. Frozen reading report (`audit/checklist/reviews/coverage-surface-security-source-guards-2026-10-09-051.json`, untracked); independent premise review (`audit/checklist/evidence/coverage-surface-security-independent-challenge-2026-10-09-051.json`, untracked); actual source controls (`audit/checklist/evidence/coverage-surface-security-inert-controls-2026-10-09-051.json`, untracked).
+
+Counterguards: Identical .tsx UI/direct-fetch source refuses. Feature directory/index ownership is supplied in both inert trees, so the difference is the UI source selector.
+
+Acceptance target: Apply the UI architecture ratchet to supported component source extensions or explicitly constrain the eligibility claim, preserving direct-I/O refusal for recognized files.
+
+Limits: Current source instrument and inert text/value controls only. No application/fixture compilation or execution, provider/network/browser/native/SQL/database/build/install/production or whole CI acceptance; no current product or security incident asserted.
+
+## AUDIT-WEB-MODAL-WHOLE-FILE-MARKER-CREDIT-01
+
+Severity: Low. Status: open conditional source-instrument finding, October 9, 2026; source unchanged.
+
+For source text containing a literal aria-modal=true dialog, exact whole-file keyboard predicate returns true for only a // useDialogKeyboard( comment, unused string or call under if(false), and for an unrelated Other function's hook. Scroll-lock predicate returns true for only commented/unused-string/unreachable document.body.style.overflow='hidden'. Current scanner uses these predicates to omit the file from its missing-contract/unlocked census. Thus lexical credit can meet the source ratchet without a bound executable modal effect. Adopt the existing pending Web030 whole-file modal marker owner once, preserving its exact original producer/report. Original Web modal source predicates read raw whole-file text and can credit inert/unrelated markers; its TypeScript AST discovery and React/Vitest suite remain unexecuted. Current surface-invariants production readSource strips comments before menu/dialog checks: the executed raw comment-only controls establish exported-predicate acceptance only and supply zero current Node CLI comment-credit proof. Unrelated executable Radix imports and Escape strings remain distinct module-wide evidence; the intentionally minimal bare executable Escape floor is preserved. No lack-of-full-focus-trap defect is inferred.
+
+Source: `apps/web/shared/components/layout/__tests__/modal-scroll-lock.test.tsx:118-120; apps/web/shared/components/layout/__tests__/modal-scroll-lock.test.tsx:200-250; scripts/check-surface-invariants.mjs:641-643; scripts/check-surface-invariants.mjs:674-680; scripts/check-surface-invariants.mjs:29-30; scripts/check-surface-invariants.mjs:659; scripts/check-surface-invariants.mjs:683-688; scripts/check-surface-invariants.mjs:696`. Frozen reading report (`audit/checklist/reviews/coverage-surface-security-source-guards-2026-10-09-051.json`, untracked); independent premise review (`audit/checklist/evidence/coverage-surface-security-independent-challenge-2026-10-09-051.json`, untracked); actual source controls (`audit/checklist/evidence/coverage-surface-security-inert-controls-2026-10-09-051.json`, untracked).
+
+Counterguards: No-marker fixture is rejected by both exact predicates; normal hook and normal overflow-assignment strings are credited. Actual shared keyboard and overlay hooks were independently read through EOF and implement focus/Escape/Tab/restore behavior. Existing primitive render/wheel tests and explicit unlocked allowlist/staleness checks are separate meaningful assertions.
+
+Acceptance target: Bind applicable keyboard and scroll-lock proof to the discovered modal/menu's executable control, preserving the guard's stated minimal keyboard floor and existing primitive assertions.
+
+Limits: Only exact two regex predicates were executed on inert text witnesses. Full TypeScript AST claimsModal, source discovery, Vitest/React/DOM/browser/hook execution and fixture syntax/runtime validity were not executed. No current actual modal keyboard/scrolling failure is asserted from these source-control cases. Current source instrument and inert text/value controls only. No application/fixture compilation or execution, provider/network/browser/native/SQL/database/build/install/production or whole CI acceptance; no current product or security incident asserted.
+
+Original producer: coverage-web-remaining-source-2026-10-09-030; original frozen report SHA256 bfdceb01e2dd630347e87e9a6851a7150b377b014693c32fea4eda4aeba62c07. This adopts the existing pending ID once; current Root051 supplies source/caller qualification, zero new unique cause. Raw Node comment controls are exported-predicate-only observations; no original Node CLI comment credit or full focus-trap requirement is asserted.
+
+## AUDIT-CI-OBSERVATION-GREEN-REPORT-01
+
+Severity: Low. Status: open conditional source-reporting finding, October 10, 2026; source unchanged.
+
+Exact original pure attribution and formatting functions return an empty report and 'All gates green' for an absent requested head, empty history or a timed-out-only observed job. When a baseline run exists but its gate observation is absent, an observed current failure receives a regression reason saying the baseline was green. These inert values do not establish live CI execution.
+
+Source: `scripts/ci-failure-attribution.mjs:23-34; scripts/ci-failure-attribution.mjs:54-95`. Frozen source report and embedded actual controls/independent qualifications (`audit/checklist/reviews/coverage-service-governance-source-2026-10-10-052.json`, untracked).
+
+Counterguards: Explicit success observations produce a legitimate empty report. A missing named baseline COMMIT with an observed red gate is explicitly unattributed. Seven meaningful authored tests pass, preserving requested-head anchoring, baseline failure/success and readable attribution. The authored automatic workflow caller requires a completed CI failure on push/main in the same repository; manual dispatch also exists. A timed-out-only inert witness is not proof that this automatic caller ran.
+
+Acceptance target: Carry observation completeness and per-gate conclusions into the reporting result. Require affirmative success evidence before saying green, distinguish absent/unknown/non-success observations, and preserve explicit missing-baseline-commit unattribution.
+
+Owner qualification: One observation-to-green reporting obligation spans the branches. Existing workflow-command credit, source evidence-reference validation and swallowed file-read failure owners do not establish the same CI result-observation cause; bounded conceptual qualification supports a distinct Low source-reporting proposal, without proving global alias absence.
+
+Limits: Original pure functions over inert arrays and seven authored tests only. Network main, tokens, GitHub API, live workflow/CI, deployment consequences and whole CI status remain unverified.
+
+## AUDIT-COMMIT-PATHSPEC-LOCK-OWNERSHIP-01
+
+Severity: Low. Status: open conditional source finding, October 11, 2026; current named source identity qualified.
+
+The 600-iteration mkdir loop installs cleanup only when its own acquisition succeeds. If all attempts fail while another process's lock still exists, the following directory-presence predicate passes and reaches git add/commit without acquisition. This is a conditional serialization defect in the operator helper; no wait, shell, concurrent Git mutation or lost commit was executed or observed.
+
+Source: `scripts/commit-pathspec.sh:32-42`. Frozen source review (`audit/checklist/reviews/coverage-release-dev-operations-source-2026-10-10-053.json`, untracked) and independent source trace (`audit/checklist/evidence/coverage-root053-independent-premise-review-2026-10-11.json`, untracked).
+
+Counterguards and ownership: Successful mkdir installs the EXIT trap and serializes normally. An absent lock after exhaustion refuses. Argument/path checks and post-commit unexpected-file warning remain separate guards.
+
+Acceptance target: Record acquisition independently of directory presence and refuse after exhausted retries.
+
+Limits: Individual source reading and scoped inert predicates/static traces only. Original operational modules, authored suites, application/fixtures, network/browser/native/SQL, production and whole-product acceptance remain unverified.
+
+## AUDIT-R2-CORS-READBACK-POLICY-01
+
+Severity: Low. Status: open conditional source finding, October 11, 2026; current named source identity qualified.
+
+The exact matchesExpected predicate accepts its first rule when origins/count and required methods match, even with missing declared allowed headers or altered exposed ETag/max age. Fourteen inert exact-predicate controls preserve seven counterguards and demonstrate seven accepted policy drifts. Bounded current presign/upload consumer reads establish that method/header contracts exist; they do not establish a deployed policy or browser failure.
+
+Source: `scripts/r2-apply-cors.mjs:9-34,75-85,134-143`. Exact predicate controls (`audit/checklist/evidence/coverage-r2-cors-exact-predicate-controls-2026-10-11.json`, untracked), independent review (`audit/checklist/evidence/coverage-root053-independent-premise-review-2026-10-11.json`, untracked) and frozen source report (`audit/checklist/reviews/coverage-release-dev-operations-source-2026-10-10-053.json`, untracked).
+
+Counterguards and ownership: Missing first rule, missing/extra origins, a wrong origin and missing required methods refuse. PUT failures record failure. The wildcard response-header setter census owner checks a different producer/mechanism and is not duplicated.
+
+Acceptance target: Compare the intended policy fields and successful GET result before verified output; retain existing origin/method guards.
+
+Limits: Individual source reading and scoped inert predicates/static traces only. Original operational modules, authored suites, application/fixtures, network/browser/native/SQL, production and whole-product acceptance remain unverified.
+
+## AUDIT-SKILL-VETTING-SELFTEST-NULL-VERDICT-01
+
+Severity: Low. Status: open conditional source finding, October 11, 2026; current named source identity qualified.
+
+Ordinary processing increments blocked for a null recommendation. With hostile DO_NOT_INSTALL and benign null without error, the later self-test checks only benign error/blocking-set membership, prints passed and exits before the ordinary blocked summary. Eight inert exact-source predicate cases independently qualify this reporting branch. No original gate, scanner, hostile/benign executable fixture or provider ran.
+
+Source: `scripts/scan-skills-with-vetting.mjs:128-141,150-174`. Independent source/predicate review (`audit/checklist/evidence/coverage-skill-vetting-selftest-independent-review-2026-10-11.json`, untracked) and frozen source report (`audit/checklist/reviews/coverage-release-dev-operations-source-2026-10-10-053.json`, untracked).
+
+Counterguards and ownership: Scanner timeout/error and missing recommendation fail ordinary processing; hostile not-blocked and benign DO_NOT_INSTALL/error fail self-test. Seven formal Tool001/002 causes cover different exit/symlink/scoring/namespace/offset/cache mechanisms. Bounded dedup does not prove global alias absence.
+
+Acceptance target: Require an affirmative permitted benign recommendation and retain ordinary verdict-validation failures in self-test outcome.
+
+Limits: Individual source reading and scoped inert predicates/static traces only. Original operational modules, authored suites, application/fixtures, network/browser/native/SQL, production and whole-product acceptance remain unverified.
+
+## AUDIT-WEB-ROUTE-ORACLE-CATCHALL-PREFIX-01
+
+Severity: Low. Status: open conditional source finding, October 11, 2026; current named source identity qualified.
+
+Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main changed `apps/web/__tests__/settings-navigation-loops.test.ts` after the 2026-09-27 copy this was found on without changing the cited logic; line numbers for it are main's.
+
+The routeExists catch-all branch accepts by requested segment count without comparing fixed prefix segments. The current API catch-all filename /api/connectors/directory/[...id] supplies an independent three-segment witness for an unrelated target. This is a test-oracle source mechanism, not a mounted broken redirect, runtime 404 or product navigation result.
+
+Source: `apps/web/__tests__/settings-navigation-loops.test.ts:46-63,109-116,248`. Frozen Web report (`audit/checklist/reviews/coverage-web-settings-auth-source-2026-10-10-035.json`, untracked) and independent premise qualification (`audit/checklist/evidence/coverage-web035-independent-premise-review-2026-10-11.json`, untracked).
+
+Counterguards and ownership: Exact/static membership, ordinary dynamic literal-segment/length matching, shorter-target rejection, nonempty census anchors and cycle detection remain. A similarly named separately declared test helper is not a caller. Existing raw navigation marker/quote/permission text owners have distinct mechanisms.
+
+Acceptance target: Match fixed route segments before accepting catch-all suffixes, with explicit API/page applicability and preserved static/dynamic counterguards.
+
+Limits: Individual source reading and scoped inert predicates/static traces only. Original operational modules, authored suites, application/fixtures, network/browser/native/SQL, production and whole-product acceptance remain unverified.
+
+## TOOL-VETTING-NO-LLM-OFFLINE-DOCUMENTATION-01
+
+Severity: Low. Status: open conditional source finding, October 11, 2026; current named source identity qualified.
+
+README16 describes the no-LLM analyzer set as offline, including the registered supply-chain OSV lookup. The --no-llm flag only disables use_llm; a nonempty uncached extracted dependency list can still reach the OSV HTTP POST branch. The documentation scope is wider than the current implementation. No actual scan, extraction/parser, graph, transfer, OSV request or network incident was executed.
+
+Source: `tools/skill-vetting/README.md:16; tools/skill-vetting/src/skillspector/cli.py:90-104; tools/skill-vetting/src/skillspector/nodes/analyzers/static_patterns_supply_chain.py:774-775,947-962; tools/skill-vetting/src/skillspector/nodes/analyzers/osv_client.py:250-267`. Frozen Tool report (`audit/checklist/reviews/coverage-shared-tool-vetting-resources-source-2026-10-10-003.json`, untracked) and independent current source review (`audit/checklist/evidence/coverage-tool003-independent-premise-review-2026-10-11.json`, untracked).
+
+Counterguards and ownership: No packages and fully cached packages return before HTTP. Network/API failures use static fallback. The flag's own help promises skipping LLM rather than all networking. Declared CI wiring and samples do not prove actual dependency lookup or public-product installation.
+
+Acceptance target: Describe conditional OSV network/cache behavior separately from disabled LLM analysis; require explicit policy if offering an offline mode.
+
+Limits: Individual source reading and scoped inert predicates/static traces only. Original operational modules, authored suites, application/fixtures, network/browser/native/SQL, production and whole-product acceptance remain unverified.
+
+## AUDIT-DPDP-REJECTION-ERROR-BINDING-01
+
+Severity: Low. Status: open conditional source finding, October 11, 2026; current named source identity qualified.
+
+expectReject records pass for any exception, without checking error code, constraint or intended trigger identity. A query throws for a permission, syntax, connection, or unrelated constraint error instead of the intended append-only rule; the helper still records the named negative check as pass.
+
+Source: `scripts/verify-dpdp-schema.mjs:11-17,194-203`. Frozen repository guard report (`audit/checklist/reviews/coverage-repository-guard-configurations-source-2026-10-11-054.json`, untracked) and independent complete-source premise review (`audit/checklist/evidence/coverage-root054-independent-source-premise-review-2026-10-11.json`, untracked).
+
+Counterguards and ownership: Earlier schema/trigger metadata and positive inserts limit some missing-schema premises. The app_rls visibility check proves a readable matching row exists, but not UPDATE/DELETE execution privileges or the source of rejection. The final summary fails if some other recorded check failed; the negative helper itself can still grant false credit. Root's source-specific search of both canonical owners found no equivalent named cause; generic harness and migration owners are not automatically extended.
+
+Acceptance target: Bind each expected rejection to its intended error/constraint or trigger behavior while preserving positive inserts, structural checks and visibility controls.
+
+Severity and limits: Low conditional source instrument/data-flow discrepancy; no runtime or production acceptance. No original operational module, SQL/database role, installer, authored test/fixture, network/browser/native process, production action or product acceptance was executed. No source fix was made.
+
+## AUDIT-DPDP-GRANT-CLEANUP-01
+
+Severity: Medium. Status: open conditional source finding, October 11, 2026; current named source identity qualified.
+
+The GRANT and role/claim setup run before entering the only try/finally, and the broader writes/cleanup have no enclosing rollback/finalizer. Once grant180 completes, an exception at set-role181 or set-config182 leaves control outside try183, so revoke207 is not scheduled by the script. Later sequential cleanup can also stop before client.end.
+
+Source: `scripts/verify-dpdp-schema.mjs:180-207`. Frozen repository guard report (`audit/checklist/reviews/coverage-repository-guard-configurations-source-2026-10-11-054.json`, untracked) and independent complete-source premise review (`audit/checklist/evidence/coverage-root054-independent-source-premise-review-2026-10-11.json`, untracked).
+
+Counterguards and ownership: The finally reliably schedules reset/revoke for failures inside its probe block when its own earlier cleanup queries succeed. The script explicitly revokes the temporary privileges on the normal path. The permission/row state of any actual database and an external cleanup owner are unknown. Root's source-specific search of both canonical owners found no equivalent named cause; generic harness and migration owners are not automatically extended.
+
+Acceptance target: Ensure temporary privilege setup and every failure path are enclosed by cleanup/rollback that restores the intended pre-probe role and privilege state.
+
+Severity and limits: Medium conditional impact: setup failure after a successful shared-role UPDATE/DELETE grant can bypass the script's revoke. Runtime/database state is unknown; the peer's sealed Low recommendation remains historical, with this separate root disposition. No original operational module, SQL/database role, installer, authored test/fixture, network/browser/native process, production action or product acceptance was executed. No source fix was made.
+
+## CLI-DOCTOR-FIXED-PROBE-CLOBBER-01
+
+Severity: Medium. Status: open source finding, October 11, 2026. Owner: CLI maintainers.
+
+`writable_path_check` selects the existing state directory or its fallback parent, writes `ok` to the fixed `.agi-doctor-write-test` name, and removes that same path after a successful write. It does not reserve a new file exclusively or establish ownership of an existing path. A preexisting writable regular file at that name therefore has its contents replaced and can then be deleted; if removal fails, the replacement contents remain. This is a source deduction, not an observed incident. Rust documents that [std::fs::write replaces existing file contents](https://doc.rust-lang.org/stable/std/fs/fn.write.html), checked October 11, 2026.
+
+Source: `apps/cli/src/doctor.rs:360-416`, captured SHA `96fd7b4dbf333a7a2dc53e1d3a325a692e42a618eb862be95789da3486676b12`. `run_doctor` calls `collect_doctor_report`; its state-directory checks pass the config, managed-session, cache and daemon-log directories to the probe. Full captured CLI/mobile reading (`audit/checklist/reviews/coverage-cli-mobile-source-2026-10-11-040.json`, untracked) and independent bounded cause assessment (`audit/checklist/evidence/coverage-cli040-independent-two-cause-assessment-2026-10-11.json`, untracked).
+
+Counterguards and ownership: An absent probe path is normally created and removed. A failed write prevents the `and_then` removal, and failed config-directory resolution reports failure. These branches do not preserve a preexisting writable file. The narrowly compared checkpoint parent-symlink defect concerns a different operation and trigger; no equivalent named cause was found in source-specific searches of the two canonical registers. Exhaustive semantic deduplication remains unknown.
+
+Acceptance target: Reserve a distinct probe file exclusively and remove only the file this invocation created. Preserve any preexisting same-name file and its bytes while retaining writable-directory diagnostics and failure reporting.
+
+Limits: No diagnostic, filesystem probe, Rust code or authored test was executed. The local caller chain is source-qualified; public dispatch, deployed applicability, concurrency and actual data loss remain unverified. Source code was not changed.
+
+## CLI-OUTPUT-PREVIEW-UTF8-BOUNDARY-01
+
+Severity: Medium. Status: open source finding, October 11, 2026. Owner: CLI maintainers.
+
+`output_preview` checks line count and byte length, then uses `&output[..77]` for outputs of at most three lines and more than 80 bytes. It does not establish a character boundary at byte 77. Valid multibyte output reaching that branch can panic. A single line of thirty three-byte characters is a derived, unexecuted witness: 90 bytes, with byte 77 inside a character. Rust's [string Range SliceIndex contract](https://doc.rust-lang.org/stable/std/slice/trait.SliceIndex.html) documents the non-character-boundary panic, checked October 11, 2026.
+
+Source: `apps/cli/src/conversations.rs:284-394`, captured SHA `76a6474a173fe9d1312b134b4d75a796dd41294c770ca91aa2df373f05bd25dd`. Markdown export passes message content to `render_message_content`; the ToolResult branch passes content directly to `output_preview`, including success and error results. Full captured CLI/mobile reading (`audit/checklist/reviews/coverage-cli-mobile-source-2026-10-11-040.json`, untracked) and independent bounded cause assessment (`audit/checklist/evidence/coverage-cli040-independent-two-cause-assessment-2026-10-11.json`, untracked).
+
+Counterguards and ownership: More than three lines uses a line-count summary; at most 80 bytes returns the original output. ASCII and a boundary exactly at 77 are safe. The neighboring `format_tool_args` derives a boundary with `char_indices`, but that guard is absent from `output_preview`. The installer stdout defect is a different token-transport mechanism; no equivalent named cause was found in source-specific searches of the two canonical registers. Exhaustive semantic deduplication remains unknown. The preserved root candidate's neighboring-function label `input_summary` was inaccurate and is excluded; the source name is `format_tool_args`.
+
+Acceptance target: Choose a character-safe preview boundary while preserving short-output and line-count behavior. Valid one-to-three-line multibyte tool output must not panic.
+
+Limits: No formatter, Rust code, transcript export or authored test was executed. The local export chain is source-qualified; public invocation, outer panic handling and deployed behavior remain unknown. Source code was not changed.

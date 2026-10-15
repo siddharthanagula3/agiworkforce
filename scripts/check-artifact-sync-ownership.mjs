@@ -531,15 +531,6 @@ if (duplicatedSyncPrimitives.length > MAX_DUPLICATED_SYNC_PRIMITIVES) {
   );
 }
 
-requireIncludes(
-  'apps/desktop/src-tauri/src/data/cloud_sync.rs',
-  '../../../../../packages/client/sync/src/__fixtures__/pull-apply.json',
-);
-requireIncludes(
-  'apps/desktop/src-tauri/src/data/cloud_sync.rs',
-  '../../../../../packages/client/sync/src/__fixtures__/cursor-compare.json',
-);
-
 if (exists('pnpm-lock.yaml')) {
   const lockfile = readText('pnpm-lock.yaml');
   for (const [importer, dependencies] of [

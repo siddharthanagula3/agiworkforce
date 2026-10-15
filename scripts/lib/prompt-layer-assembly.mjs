@@ -26,7 +26,7 @@ const SKIP_DIRECTORIES = new Set([
 // `|`, and the same object literal carries the content that goes with it.
 const SYSTEM_MESSAGE = /role:\s*(['"])system\1(?!\s*\|)/gu;
 
-const MESSAGE_CONTENT = /\bcontent\s*:/u;
+const MESSAGE_CONTENT = /\bcontent\s*[:,}]/u;
 
 const LITERAL_WINDOW = 200;
 

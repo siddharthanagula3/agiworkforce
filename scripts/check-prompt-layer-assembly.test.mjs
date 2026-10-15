@@ -27,6 +27,12 @@ export function build(text) {
 }
 `;
 
+const SHORTHAND_CONTENT = `
+export function prepend(messages, blocks) {
+  messages.unshift(...blocks.map((content) => ({ role: 'system' as const, content })));
+}
+`;
+
 const ROLE_UNION = `
 export interface Message {
   role: 'system' | 'user' | 'assistant';
@@ -47,6 +53,10 @@ function tree(files) {
 test('a role union in a type declaration is not an assembly site', () => {
   assert.equal(assemblesSystemMessage(ROLE_UNION), false);
   assert.equal(assemblesSystemMessage(UNRESOLVED), true);
+});
+
+test('a shorthand content property is an assembly site', () => {
+  assert.equal(assemblesSystemMessage(SHORTHAND_CONTENT), true);
 });
 
 test('a system role with no content beside it is not an assembly site', () => {

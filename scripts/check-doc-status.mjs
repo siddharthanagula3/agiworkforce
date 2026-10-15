@@ -1,7 +1,9 @@
 #!/usr/bin/env node
+import console from 'node:console';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { markdownProseLines } from './lib/comment-scan.mjs';
 
 const root = process.cwd();
 const errors = [];
@@ -19,7 +21,38 @@ const currentDocs = [
 
 const headerDebt = new Set([]);
 
-const requiredMarkers = ['Status:', 'Owner', 'Last updated:'];
+const requiredFields = ['Status', 'Owner', 'Last updated'];
+
+function metadataHeader(source) {
+  const fields = new Map();
+  let titleSeen = false;
+  for (const { text } of markdownProseLines(source)) {
+    if (text.trim() === '') continue;
+    if (!titleSeen && fields.size === 0 && /^ {0,3}# [^#]/.test(text)) {
+      titleSeen = true;
+      continue;
+    }
+    const field =
+      /^ {0,3}(?:(Status|Owner|Last updated):|\*\*(Status|Owner|Last updated):\*\*|\*\*(Status|Owner|Last updated)\*\*:)[ \t]*(.*)$/.exec(
+        text,
+      );
+    if (field) {
+      const name = field[1] ?? field[2] ?? field[3];
+      const values = fields.get(name) ?? [];
+      values.push(field[4].trim());
+      fields.set(name, values);
+    } else if (!/^ {0,3}[A-Za-z][A-Za-z /-]*:/.test(text)) {
+      break;
+    }
+  }
+  return fields;
+}
+
+function isCalendarDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000-')) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
 
 for (const docPath of currentDocs) {
   const absolutePath = path.join(root, docPath);
@@ -28,15 +61,20 @@ for (const docPath of currentDocs) {
     continue;
   }
 
-  const body = fs.readFileSync(absolutePath, 'utf8');
-  for (const marker of requiredMarkers) {
-    if (!body.includes(marker)) {
+  const fields = metadataHeader(fs.readFileSync(absolutePath, 'utf8'));
+  for (const field of requiredFields) {
+    const values = fields.get(field) ?? [];
+    if (values.length !== 1 || values[0] === '') {
       if (headerDebt.has(docPath)) {
-        warnings.push(`Known current-doc metadata debt: ${docPath} missing ${marker}`);
+        warnings.push(`Known current-doc metadata debt: ${docPath} invalid ${field}`);
       } else {
-        errors.push(`Current doc missing ${marker}: ${docPath}`);
+        errors.push(`Current doc requires one nonempty ${field} header: ${docPath}`);
       }
     }
+  }
+  const updated = fields.get('Last updated')?.[0];
+  if (updated !== undefined && !isCalendarDate(updated)) {
+    errors.push(`Current doc has an invalid Last updated calendar date: ${docPath}`);
   }
 }
 

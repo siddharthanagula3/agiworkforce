@@ -38,6 +38,7 @@ const SETTINGS_REGISTRIES = [
       'apps/desktop/src/features/settings/SettingsPanel.tsx',
       'apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx',
       'apps/desktop/src/features/settings/AutomationPermissionsModal.tsx',
+      'apps/desktop/src/features/settings/MasterPasswordLaunchUnlock.tsx',
     ],
     aliases: () => ({
       '@/*': absolute('apps/desktop/src'),

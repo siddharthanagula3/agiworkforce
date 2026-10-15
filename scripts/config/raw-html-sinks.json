@@ -9,12 +9,6 @@
   ],
   "sinks": [
     {
-      "file": "apps/desktop/src/features/artifacts/ArtifactRendererView.tsx",
-      "kind": "srcdoc-attribute",
-      "count": 1,
-      "reason": "The web artifact frame's sandbox comes from getWebSandboxPermissions, which keeps only members of SAFE_WEB_SANDBOX_PERMISSIONS and drops allow-scripts unless the artifact enables scripts; it is computed, so the literal check cannot read it."
-    },
-    {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
       "kind": "inner-html-assignment",
       "count": 4,

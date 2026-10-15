@@ -1,8 +1,9 @@
 #!/usr/bin/env node
+import console from 'node:console';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { execFileSync } from 'node:child_process';
+import { workspaceFiles } from './lib/comment-scan.mjs';
 
 const root = process.cwd();
 const errors = [];
@@ -76,12 +77,8 @@ function vendoredSkillPrefixes() {
 
 const VENDORED_PREFIXES = vendoredSkillPrefixes();
 const isVendored = (file) => VENDORED_PREFIXES.some((prefix) => file.startsWith(prefix));
-const scoped = execFileSync('git', ['ls-files', '*AGENTS.md', '*CLAUDE.md'], {
-  cwd: root,
-  encoding: 'utf8',
-})
-  .split('\n')
-  .filter(Boolean)
+const scoped = workspaceFiles()
+  .filter((file) => /(?:AGENTS|CLAUDE)\.md$/.test(file))
   .filter((file) => file.includes('/') && !KNOWN_SCOPED.has(file) && !isVendored(file));
 
 for (const file of scoped) {
