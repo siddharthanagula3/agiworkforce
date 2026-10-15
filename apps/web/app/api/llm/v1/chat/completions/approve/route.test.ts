@@ -8,6 +8,7 @@ vi.mock('@agiworkforce/types', async (importOriginal) => ({
 type ScanModule0 = typeof import('@/lib/services/cloud-agent-run-service');
 type ScanModule1 = typeof import('@/lib/services/managed-usage-request-service');
 type ScanModule2 = typeof import('@/lib/services/managed-usage-accounting-service');
+type RequestProcessorModule = typeof import('../lib/request-processor');
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const CHECKPOINT_ID = '0190a000-0000-7000-8000-000000000002';
@@ -35,7 +36,8 @@ vi.mock('@/lib/managed-compute-gate', () => ({
 }));
 
 const mockProcessRequest = vi.fn();
-vi.mock('../lib/request-processor', () => ({
+vi.mock('../lib/request-processor', async (importOriginal) => ({
+  ...(await importOriginal<RequestProcessorModule>()),
   processRequest: (...args: unknown[]) => mockProcessRequest(...args),
   toManagedSkillFromUserSkill: vi.fn(),
   resolveNativeSearchMaxUses: () => 3,
