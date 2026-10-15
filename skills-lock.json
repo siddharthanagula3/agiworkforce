@@ -20,6 +20,14 @@
       "declaredVersion": "2.0.0",
       "computedHash": "sha256-tree-v1:cd44386b4579ab79f7675cea2530f764c0dcb6e2a26dbbade8adca1965e53b97"
     },
+    "accessibility": {
+      "path": ".agents/skills/accessibility",
+      "source": "https://github.com/addyosmani/web-quality-skills @ afa8da942115f2961fdbfa80807ea0b232ff6c00 (skills/accessibility)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "2.0",
+      "computedHash": "sha256-tree-v1:54ea695202577c302d68e20aa538862c0cc0357fef9c111506144f60916acf30"
+    },
     "ads": {
       "path": ".agents/skills/ads",
       "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/ads)",
@@ -51,6 +59,14 @@
       "audience": "product",
       "declaredVersion": "2.0.1",
       "computedHash": "sha256-tree-v1:522e00c7aa9ccb010ba3296339bbd475d7ba46518661ff2b80b27107914ad436"
+    },
+    "animate": {
+      "path": ".agents/skills/animate",
+      "source": "https://github.com/emilkowalski/skills @ 2d228630ba1446365f614a108cb8252f1feda202 (skills/animate)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "2d228630ba1446365f614a108cb8252f1feda202",
+      "computedHash": "sha256-tree-v1:10f2c4e2fbf8f18f34d16b9bb76eb411301b1f7530f76f99d9f297ae454d4f82"
     },
     "antislop": {
       "path": ".agents/skills/antislop",
@@ -100,13 +116,13 @@
       "declaredVersion": "dd43e13ff9b4c92222461df30270514278d5b70b",
       "computedHash": "sha256-tree-v1:6921d36d950279fdb632be504f7b56b1cca8bd88f39e7108ca21c1f6e48369a0"
     },
-    "apple-design": {
-      "path": ".agents/skills/apple-design",
-      "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/apple-design)",
+    "api-and-interface-design": {
+      "path": ".agents/skills/api-and-interface-design",
+      "source": "https://github.com/addyosmani/agent-skills @ 1be8e34187e34647bb83adc3a1323b26ae6f6abe (skills/api-and-interface-design)",
       "sourceType": "github",
       "audience": "developer",
-      "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
-      "computedHash": "sha256-tree-v1:ece86dc2cb8a48faa6ff3206103b5981eb8118c2d1d3375786c2baae9caeb2be"
+      "declaredVersion": "1be8e34187e34647bb83adc3a1323b26ae6f6abe",
+      "computedHash": "sha256-tree-v1:bbd5ff01b478431e12b2bfa677d6cc80d75d2d1be5f81961ff19b0fa105f4031"
     },
     "artifact-design": {
       "path": ".agents/skills/artifact-design",
@@ -132,6 +148,14 @@
       "declaredVersion": "1.1.0",
       "computedHash": "sha256-tree-v1:e7b21747603220d10baf0f921c7ec4ec3da10c3ee062909c0ab1628bc6152ce9"
     },
+    "chrome-extensions": {
+      "path": ".agents/skills/chrome-extensions",
+      "source": "https://github.com/googlechrome/modern-web-guidance @ b31dc0a43ff5d19bcf386a3476a216f3b39a6f55 (skills/chrome-extensions)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "b31dc0a43ff5d19bcf386a3476a216f3b39a6f55",
+      "computedHash": "sha256-tree-v1:bf3d33f24a0712b48503ef0b273c89e8c3addc9e39fd7e8c144e05102b32ec49"
+    },
     "churn-prevention": {
       "path": ".agents/skills/churn-prevention",
       "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/churn-prevention)",
@@ -140,13 +164,29 @@
       "declaredVersion": "2.0.0",
       "computedHash": "sha256-tree-v1:5a5f5f349d2a13855e14082d11a6fbd4616cf6bc73f6931d175b2450c248fa5b"
     },
-    "co-marketing": {
-      "path": ".agents/skills/co-marketing",
-      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/co-marketing)",
+    "clerk-chrome-extension-patterns": {
+      "path": ".agents/skills/clerk-chrome-extension-patterns",
+      "source": "https://github.com/clerk/skills @ a02dbd2a933b8929525129a6cb9dcf6ed66d0adf (skills/clerk-chrome-extension-patterns)",
       "sourceType": "github",
-      "audience": "product",
-      "declaredVersion": "2.0.1",
-      "computedHash": "sha256-tree-v1:54003827d9e02e30166db187c74ff674dac0834c54b30a74373b19ba13a51ff0"
+      "audience": "developer",
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:9762714ebafa7ffcfb8b25940922343e4250e1bf32976c7b703d34a340517afd"
+    },
+    "clerk-nextjs-patterns": {
+      "path": ".agents/skills/clerk-nextjs-patterns",
+      "source": "https://github.com/clerk/skills @ a02dbd2a933b8929525129a6cb9dcf6ed66d0adf (skills/clerk-nextjs-patterns)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "2.2.0",
+      "computedHash": "sha256-tree-v1:358ebf1b950baf7aa0baa57711571d3e928e30a8b22cd9a0e0ccbd06b2ccbf9d"
+    },
+    "clerk-testing": {
+      "path": ".agents/skills/clerk-testing",
+      "source": "https://github.com/clerk/skills @ a02dbd2a933b8929525129a6cb9dcf6ed66d0adf (skills/clerk-testing)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "1.2.1",
+      "computedHash": "sha256-tree-v1:38f117f11dd49b44157cb33cd4b37304f2307dfa0818e31464b600f243634bb4"
     },
     "code-review": {
       "path": ".agents/skills/code-review",
@@ -212,6 +252,14 @@
       "declaredVersion": "2.0.2",
       "computedHash": "sha256-tree-v1:197d3a1e513df875f3f02497feba984daba2e97ba8ab5fed7405430941d42bbc"
     },
+    "core-web-vitals": {
+      "path": ".agents/skills/core-web-vitals",
+      "source": "https://github.com/addyosmani/web-quality-skills @ afa8da942115f2961fdbfa80807ea0b232ff6c00 (skills/core-web-vitals)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "2.0",
+      "computedHash": "sha256-tree-v1:73d3e261af44edc7ccc2c31cc655ddaa2da16225b9ce91a389c6e270b8c37261"
+    },
     "cro": {
       "path": ".agents/skills/cro",
       "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/cro)",
@@ -260,14 +308,6 @@
       "declaredVersion": "ccbc15639c97057cbfcf32ecebc38ef716e4bb37",
       "computedHash": "sha256-tree-v1:70bf53cb0d61fbbe54e33b34ef1ce6ae1ebe3b188a6bcf6dd180e47ea4a10289"
     },
-    "directory-submissions": {
-      "path": ".agents/skills/directory-submissions",
-      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/directory-submissions)",
-      "sourceType": "github",
-      "audience": "product",
-      "declaredVersion": "2.0.0",
-      "computedHash": "sha256-tree-v1:131473046060d8ba7b33131253fec76d0d1a27061f85ee7b7350bf944d8bd25f"
-    },
     "document-creation": {
       "path": ".agents/skills/document-creation",
       "source": "AGI Workforce repository",
@@ -283,6 +323,14 @@
       "audience": "product",
       "declaredVersion": "da38ec1ee89d41e5380e652a97382695003396e7",
       "computedHash": "sha256-tree-v1:36867d0db06b452e68f56e0ce5d5fd0afe8f9312afba5f8b61504974ceeda4d5"
+    },
+    "eas-app-stores": {
+      "path": ".agents/skills/eas-app-stores",
+      "source": "https://github.com/expo/skills @ d4f484024fec15196bfd3c272e953e3f983972cf (plugins/expo/skills/eas-app-stores)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "1.1.0",
+      "computedHash": "sha256-tree-v1:ff917dec1608a6a0151b2fc35c749ec4835d44be4dae9ded56fdb6b84225850c"
     },
     "emails": {
       "path": ".agents/skills/emails",
@@ -300,13 +348,53 @@
       "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
       "computedHash": "sha256-tree-v1:1c6440bc64540bb46df5bfbe8015be9f434109083dd4838c1b01201ba214cda7"
     },
-    "events": {
-      "path": ".agents/skills/events",
-      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/events)",
+    "expo-animation": {
+      "path": ".agents/skills/expo-animation",
+      "source": "https://github.com/expo/skills @ d4f484024fec15196bfd3c272e953e3f983972cf (plugins/expo/skills/expo-animation)",
       "sourceType": "github",
-      "audience": "product",
+      "audience": "developer",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:438c1fdc00535b7845d4c086409ee04b423468c6feebd1bb0826f3b852b0094f"
+      "computedHash": "sha256-tree-v1:6b9a94552b32b10b39301bb38c572d4e77ec8f5e824241f4bc105386a967e659"
+    },
+    "expo-data-fetching": {
+      "path": ".agents/skills/expo-data-fetching",
+      "source": "https://github.com/expo/skills @ d4f484024fec15196bfd3c272e953e3f983972cf (plugins/expo/skills/expo-data-fetching)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:642738427b3f092525dd0b6bb9e2dc4a9fcb21fbc601ed867192884aa9e90d29"
+    },
+    "expo-dev-client": {
+      "path": ".agents/skills/expo-dev-client",
+      "source": "https://github.com/expo/skills @ d4f484024fec15196bfd3c272e953e3f983972cf (plugins/expo/skills/expo-dev-client)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "1.1.0",
+      "computedHash": "sha256-tree-v1:b224c06d4bad7b21a4eb09d7d8cd06c6b573d32c014781aefdae0eac0a8e1821"
+    },
+    "expo-native-ui": {
+      "path": ".agents/skills/expo-native-ui",
+      "source": "https://github.com/expo/skills @ d4f484024fec15196bfd3c272e953e3f983972cf (plugins/expo/skills/expo-native-ui)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "1.1.1",
+      "computedHash": "sha256-tree-v1:312d40584bdf7c4ebbf1827a1bd07998933ea0e53dda0787895ce53d898c7614"
+    },
+    "expo-router": {
+      "path": ".agents/skills/expo-router",
+      "source": "https://github.com/expo/skills @ d4f484024fec15196bfd3c272e953e3f983972cf (plugins/expo/skills/expo-router)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "1.0.1",
+      "computedHash": "sha256-tree-v1:15c042f12354447d5805310bc62215e4ff407ec1587b42357590283eab4c320d"
+    },
+    "expo-upgrade": {
+      "path": ".agents/skills/expo-upgrade",
+      "source": "https://github.com/expo/skills @ d4f484024fec15196bfd3c272e953e3f983972cf (plugins/expo/skills/expo-upgrade)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:1607b0051e88945fa6c0aa52884a970b11d5db1f8ab36fb10be8854ea00063fe"
     },
     "extract-design-system": {
       "path": ".agents/skills/extract-design-system",
@@ -315,14 +403,6 @@
       "audience": "developer",
       "declaredVersion": "1873741ba8dea755e35e6e15134f7918cd58e036",
       "computedHash": "sha256-tree-v1:3962b7ba47a8fa0e6ae5959aa7a9a3b4ba12af85138230bcb8f13b0d895611f0"
-    },
-    "find-animation-opportunities": {
-      "path": ".agents/skills/find-animation-opportunities",
-      "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/find-animation-opportunities)",
-      "sourceType": "github",
-      "audience": "developer",
-      "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
-      "computedHash": "sha256-tree-v1:69536cb282f3873212ba4b059a96a115b5a1eceffa59df051d3ad4536f87065d"
     },
     "free-tools": {
       "path": ".agents/skills/free-tools",
@@ -347,22 +427,6 @@
       "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:00eb031c8a266fdacdb9c41f983df8cc450ab62dc093edc935211c454e2ffe9e"
-    },
-    "image": {
-      "path": ".agents/skills/image",
-      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/image)",
-      "sourceType": "github",
-      "audience": "product",
-      "declaredVersion": "2.0.1",
-      "computedHash": "sha256-tree-v1:b00e52c6eb03d0667e45286fc41bffbee3095834e1c63b77178ef4fe476b1362"
-    },
-    "image-to-code": {
-      "path": ".agents/skills/image-to-code",
-      "source": "https://github.com/Leonxlnx/taste-skill @ ccbc15639c97057cbfcf32ecebc38ef716e4bb37 (skills/image-to-code)",
-      "sourceType": "github",
-      "audience": "developer",
-      "declaredVersion": "ccbc15639c97057cbfcf32ecebc38ef716e4bb37",
-      "computedHash": "sha256-tree-v1:bc32e00674a1d4541b331ba6a40b3badf0d93af15e824f9bc16141bfa76e5dd4"
     },
     "influencer-marketing": {
       "path": ".agents/skills/influencer-marketing",
@@ -404,14 +468,6 @@
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:1c14aa6fcbc26babdaee02a2aae846e5c8116896a5d1e355d5e28a8a8cfdfb37"
     },
-    "marketing-council": {
-      "path": ".agents/skills/marketing-council",
-      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/marketing-council)",
-      "sourceType": "github",
-      "audience": "product",
-      "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:f6bb72f229743c3428c9dbcacac9f69325c53b089fbcdb9d04fbe28610406417"
-    },
     "marketing-ideas": {
       "path": ".agents/skills/marketing-ideas",
       "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/marketing-ideas)",
@@ -444,6 +500,14 @@
       "declaredVersion": "2.0.0",
       "computedHash": "sha256-tree-v1:671e1ac1b45749b64a1b9d53068f0f12896d73888119cf160321df52169a9471"
     },
+    "mobile-native": {
+      "path": ".agents/skills/mobile-native",
+      "source": "https://github.com/emilkowalski/skills @ 2d228630ba1446365f614a108cb8252f1feda202 (skills/mobile-native)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "2d228630ba1446365f614a108cb8252f1feda202",
+      "computedHash": "sha256-tree-v1:e76008b0d76032700e296eeff4a6db6c4a3f416d0af156b6dd70bdda7e862d25"
+    },
     "model-orchestration": {
       "path": ".agents/skills/model-orchestration",
       "source": "AGI Workforce repository",
@@ -459,6 +523,30 @@
       "audience": "developer",
       "declaredVersion": "02e0b2f852b39ea00c43283f999b83fc12079273",
       "computedHash": "sha256-tree-v1:22b5d712f6fef95a92672a94604c5552bcef9a3a41ac92214af14a983445a446"
+    },
+    "neon-postgres": {
+      "path": ".agents/skills/neon-postgres",
+      "source": "https://github.com/neondatabase/agent-skills @ bfd013c352ed31b57a573e4f60263afc5fdd7f7a (skills/neon-postgres)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "bfd013c352ed31b57a573e4f60263afc5fdd7f7a",
+      "computedHash": "sha256-tree-v1:cb14152ad08b08b7d514e32e68c7ba7b1b95938cfaf7eb2ad55c246b89c14e9c"
+    },
+    "neon-postgres-branches": {
+      "path": ".agents/skills/neon-postgres-branches",
+      "source": "https://github.com/neondatabase/agent-skills @ bfd013c352ed31b57a573e4f60263afc5fdd7f7a (skills/neon-postgres-branches)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "bfd013c352ed31b57a573e4f60263afc5fdd7f7a",
+      "computedHash": "sha256-tree-v1:1b953b617e1778aec285b64f8d94b67379fa9608d89b21752db4ea2a7f5d436b"
+    },
+    "observability-and-instrumentation": {
+      "path": ".agents/skills/observability-and-instrumentation",
+      "source": "https://github.com/addyosmani/agent-skills @ 1be8e34187e34647bb83adc3a1323b26ae6f6abe (skills/observability-and-instrumentation)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "1be8e34187e34647bb83adc3a1323b26ae6f6abe",
+      "computedHash": "sha256-tree-v1:5487f8a253ff1ceb23a15c361a86375196ebbfca8bf83aa272a173e7e24c091e"
     },
     "offers": {
       "path": ".agents/skills/offers",
@@ -492,13 +580,13 @@
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:9a65a7cfc6a33583357ee1c9e531acdcb7cf3234a9594985e5eea31ac095fbe2"
     },
-    "pick-ui-library": {
-      "path": ".agents/skills/pick-ui-library",
-      "source": "https://github.com/emilkowalski/skills @ d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7 (skills/pick-ui-library)",
+    "performance-optimization": {
+      "path": ".agents/skills/performance-optimization",
+      "source": "https://github.com/addyosmani/agent-skills @ 1be8e34187e34647bb83adc3a1323b26ae6f6abe (skills/performance-optimization)",
       "sourceType": "github",
       "audience": "developer",
-      "declaredVersion": "d23d7f88a2e21c9e4b1418c7abe420f5c1052ba7",
-      "computedHash": "sha256-tree-v1:27cebe322d30aaf7fb4da75fe9af2bd5a01750ccdcf0a77aa2a7c16f62c07ba1"
+      "declaredVersion": "1be8e34187e34647bb83adc3a1323b26ae6f6abe",
+      "computedHash": "sha256-tree-v1:c7b6febf722185b379620b8a6a473b58971b4b1b661f415ebf75219c11031061"
     },
     "pipeline-review": {
       "path": ".agents/skills/pipeline-review",
@@ -564,6 +652,14 @@
       "declaredVersion": "1.1.1",
       "computedHash": "sha256-tree-v1:c31239404ff7f77b56a72a1f2212d2154c7cda7ab7af49f11307374a28b60d34"
     },
+    "react-native-testing": {
+      "path": ".agents/skills/react-native-testing",
+      "source": "https://github.com/callstack/react-native-testing-library @ 5678d04ea90505762ff3ef63a9fd12c66eea28e6 (skills/react-native-testing)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "5678d04ea90505762ff3ef63a9fd12c66eea28e6",
+      "computedHash": "sha256-tree-v1:aa26382fcc2009676553764f6ea4f4ca918f0629d9c664e9a83d62daa1a1068a"
+    },
     "recruiting-pipeline": {
       "path": ".agents/skills/recruiting-pipeline",
       "source": "https://github.com/anthropics/knowledge-work-plugins @ da38ec1ee89d41e5380e652a97382695003396e7 (human-resources/skills/recruiting-pipeline)",
@@ -612,13 +708,21 @@
       "declaredVersion": "da38ec1ee89d41e5380e652a97382695003396e7",
       "computedHash": "sha256-tree-v1:13dc19ff57f52f47d3d3a4caed0b301d82cb618baf897f124a9f5604c7ce6c6c"
     },
-    "revops": {
-      "path": ".agents/skills/revops",
-      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/revops)",
+    "rust-async-patterns": {
+      "path": ".agents/skills/rust-async-patterns",
+      "source": "https://github.com/wshobson/agents @ 46891e7e60da0e52baf1050b7b6391b64e84c6d9 (plugins/systems-programming/skills/rust-async-patterns)",
       "sourceType": "github",
-      "audience": "product",
-      "declaredVersion": "2.0.0",
-      "computedHash": "sha256-tree-v1:003913bfc11e15f2e47852b8984ac8f649ec2630a503eb636465af8b97b7145a"
+      "audience": "developer",
+      "declaredVersion": "46891e7e60da0e52baf1050b7b6391b64e84c6d9",
+      "computedHash": "sha256-tree-v1:83955075125c3a65e6747753db06281717759ef7adb287c20d02621853860852"
+    },
+    "rust-best-practices": {
+      "path": ".agents/skills/rust-best-practices",
+      "source": "https://github.com/apollographql/skills @ 5f02fcfcebec678e2e55777b639e32346622a963 (skills/rust-best-practices)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "1.1.2",
+      "computedHash": "sha256-tree-v1:bb74ab8bc73c811d89666eb6dbc5b21213c6bf8593c09603e22a73ae068401dd"
     },
     "sales-enablement": {
       "path": ".agents/skills/sales-enablement",
@@ -668,14 +772,6 @@
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:3e808a8f26f6cda032bdaf26b09241b468c1c4ef525cf251f253d94a1a2e8fa2"
     },
-    "sms": {
-      "path": ".agents/skills/sms",
-      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/sms)",
-      "sourceType": "github",
-      "audience": "product",
-      "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:3c5412e7910e19bd686c089d3a71f6e42445916159f7297bd5537883e76c846f"
-    },
     "social": {
       "path": ".agents/skills/social",
       "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/social)",
@@ -692,6 +788,14 @@
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:d9da3b5961ac69a93f599c01d965acca37a5daf9a5bd36d81bfee2399de54a8f"
     },
+    "supabase-postgres-best-practices": {
+      "path": ".agents/skills/supabase-postgres-best-practices",
+      "source": "https://github.com/supabase/agent-skills @ c9be0e931b7930f7d02126d04774d904c381e7d7 (skills/supabase-postgres-best-practices)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "1.1.1",
+      "computedHash": "sha256-tree-v1:2f81c7f1b362f2c038b4f51bbf64c96547c7ef4e20bc63475881f1ef5b789618"
+    },
     "systematic-debugging": {
       "path": ".agents/skills/systematic-debugging",
       "source": "AGI Workforce repository",
@@ -699,6 +803,14 @@
       "audience": "product",
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:7058bc70a85ac1e7aa7ad8b92f967e2a40aeb57d5ae0b4f7d9c301237d77d225"
+    },
+    "tanstack-query-best-practices": {
+      "path": ".agents/skills/tanstack-query-best-practices",
+      "source": "https://github.com/deckardger/tanstack-agent-skills @ b2fc14c974b2ca09b38de09c28237f240175205b (skills/tanstack-query)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "b2fc14c974b2ca09b38de09c28237f240175205b",
+      "computedHash": "sha256-tree-v1:a1730e8a658aa50ef91779d4312435f44700a88e845cb2abee7e2c496485d569"
     },
     "ticket-triage": {
       "path": ".agents/skills/ticket-triage",
@@ -724,6 +836,14 @@
       "declaredVersion": null,
       "computedHash": "sha256-tree-v1:cf095a1ea48673468f7c2f98adfb620f7ce35b42429ae487d05b53be1ded503b"
     },
+    "typescript-advanced-types": {
+      "path": ".agents/skills/typescript-advanced-types",
+      "source": "https://github.com/wshobson/agents @ 46891e7e60da0e52baf1050b7b6391b64e84c6d9 (plugins/javascript-typescript/skills/typescript-advanced-types)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "46891e7e60da0e52baf1050b7b6391b64e84c6d9",
+      "computedHash": "sha256-tree-v1:f8c2924d22d3c4e511a73ec4392f3077efe372e54d8f05a8a63d68ea692d6acc"
+    },
     "vercel-composition-patterns": {
       "path": ".agents/skills/vercel-composition-patterns",
       "source": "https://github.com/vercel-labs/agent-skills @ 063bee94c3f4df8453406c830b0a7df0f2860278 (skills/composition-patterns)",
@@ -740,13 +860,29 @@
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:dbc8b5af55a7d8f7f7733368114ee5dab255bd6926c611451f688edc6e40a082"
     },
-    "video": {
-      "path": ".agents/skills/video",
-      "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/video)",
+    "vercel-react-native-skills": {
+      "path": ".agents/skills/vercel-react-native-skills",
+      "source": "https://github.com/vercel-labs/agent-skills @ 063bee94c3f4df8453406c830b0a7df0f2860278 (skills/react-native-skills)",
       "sourceType": "github",
-      "audience": "product",
-      "declaredVersion": "2.1.0",
-      "computedHash": "sha256-tree-v1:0f072a8c0f45f43a8b34cd61a8202ad91e0cd3d9c400ca0eb14a41647b260cb5"
+      "audience": "developer",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:9b38e93fe7c8f9c8f2b9cdebaff7f4115c62346b74fa90b1d8f26cc1b2ce7bc2"
+    },
+    "verification-before-completion": {
+      "path": ".agents/skills/verification-before-completion",
+      "source": "https://github.com/obra/superpowers @ bb92a77741419a4ab5f06e711a283343f1ada0c3 (skills/verification-before-completion)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+      "computedHash": "sha256-tree-v1:6d6669ace8f6c00d187bcc756cd014520de85700e4856f9b98a92588cb150a68"
+    },
+    "vitest": {
+      "path": ".agents/skills/vitest",
+      "source": "https://github.com/antfu/skills @ feb0f3aba6566426f12230e7fc7a10d97c1293bb (skills/vitest)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": "2026.9.25",
+      "computedHash": "sha256-tree-v1:c810025675fd5d4aefde76e95677d46ee142f492da099ff16c019879e388b4ce"
     },
     "web-design-guidelines": {
       "path": ".agents/skills/web-design-guidelines",
