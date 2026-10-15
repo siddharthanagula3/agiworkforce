@@ -109,6 +109,65 @@ describe('library requests', () => {
     );
   });
 
+  it('names the cap and when it resets when a refused library file carries them', async () => {
+    const reason =
+      'Free accounts can download 25 MB of files a day, and today’s allowance is used up. Download more after midnight UTC, or upgrade for a higher limit.';
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-14T19:00:00.000Z') });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json(
+          {
+            error: {
+              code: 'RATE_LIMIT_EXCEEDED',
+              message: reason,
+              details: {
+                code: 'free_daily_download_limit_reached',
+                resetsAt: '2026-10-15T00:00:00.000Z',
+                recovery: { action: 'upgrade', href: '/pricing' },
+              },
+            },
+          },
+          { status: 429 },
+        ),
+      ),
+    );
+    try {
+      const failure = await libraryItemToFile(item('mug')).catch((caught: unknown) => caught);
+      expect(failure).toBeInstanceOf(LibraryFileError);
+      expect(failure).toMatchObject({
+        status: 429,
+        limit: { reason, resetsAt: '2026-10-15T00:00:00.000Z' },
+      });
+      expect((failure as Error).message).toBe(`${reason} Resets in 5 hours.`);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the wait message for a burst limit that names no cap', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json(
+          {
+            error: {
+              code: 'RATE_LIMIT_EXCEEDED',
+              message: 'Too many requests. Please wait before trying again.',
+              retry_after_seconds: 12,
+            },
+          },
+          { status: 429, headers: { 'Retry-After': '12' } },
+        ),
+      ),
+    );
+    const failure = await libraryItemToFile(item('deck')).catch((caught: unknown) => caught);
+    expect(failure).toMatchObject({ status: 429, retryAfterSeconds: 12, limit: null });
+    expect((failure as Error).message).toBe(
+      'You are going a little fast. Try again in 12 seconds.',
+    );
+  });
+
   it('picks a glyph by kind and treats video by its mime type', () => {
     expect(libraryFileGlyph({ file_name: 'a.png', mime_type: 'image/png' })).toBeTruthy();
     expect(libraryFileGlyph({ file_name: 'a.mp4', mime_type: 'video/mp4' })).not.toBe(

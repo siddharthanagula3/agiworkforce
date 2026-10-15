@@ -20,7 +20,8 @@ import {
   type LibraryItem,
   type LibraryListResponse,
 } from '@agiworkforce/cloud-contracts';
-import type { GeneratedFileKind } from '@agiworkforce/types';
+import { z } from 'zod';
+import { formatUsageResetIn, type GeneratedFileKind } from '@agiworkforce/types';
 import { Popover, PopoverContent, PopoverTrigger, Spinner } from '@agiworkforce/ui';
 import { iconKindFor } from '@agiworkforce/unified-chat';
 import { cn } from '@shared/lib/utils';
@@ -97,19 +98,45 @@ export async function fetchRecentLibraryFiles(
   return body.items ?? [];
 }
 
+const LibraryFileLimitBodySchema = z.object({
+  error: z.object({
+    message: z.string().trim().min(1),
+    details: z.object({ resetsAt: z.string().datetime({ offset: true }) }),
+  }),
+});
+
+export interface LibraryFileLimit {
+  reason: string;
+  resetsAt: string;
+}
+
 export class LibraryFileError extends Error {
   readonly status: number;
   readonly retryAfterSeconds: number | null;
+  readonly limit: LibraryFileLimit | null;
 
-  constructor(status: number, retryAfterSeconds: number | null) {
-    super(libraryFileErrorMessage(status, retryAfterSeconds));
+  constructor(
+    status: number,
+    retryAfterSeconds: number | null,
+    limit: LibraryFileLimit | null = null,
+  ) {
+    super(libraryFileErrorMessage(status, retryAfterSeconds, limit));
     this.name = 'LibraryFileError';
     this.status = status;
     this.retryAfterSeconds = retryAfterSeconds;
+    this.limit = limit;
   }
 }
 
-function libraryFileErrorMessage(status: number, retryAfterSeconds: number | null): string {
+function libraryFileErrorMessage(
+  status: number,
+  retryAfterSeconds: number | null,
+  limit: LibraryFileLimit | null,
+): string {
+  if (limit) {
+    const reset = formatUsageResetIn(limit.resetsAt);
+    return reset ? `${limit.reason} ${reset}.` : limit.reason;
+  }
   if (status === 429 && retryAfterSeconds !== null) {
     const unit = retryAfterSeconds === 1 ? 'second' : 'seconds';
     return `You are going a little fast. Try again in ${retryAfterSeconds} ${unit}.`;
@@ -124,12 +151,23 @@ function parseRetryAfterSeconds(header: string | null): number | null {
   return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : null;
 }
 
+async function readLibraryFileLimit(response: Response): Promise<LibraryFileLimit | null> {
+  try {
+    const parsed = LibraryFileLimitBodySchema.safeParse(await response.json());
+    if (!parsed.success) return null;
+    return { reason: parsed.data.error.message, resetsAt: parsed.data.error.details.resetsAt };
+  } catch {
+    return null;
+  }
+}
+
 export async function libraryItemToFile(item: LibraryItem): Promise<File> {
   const response = await fetch(item.uri, { credentials: 'include' });
   if (!response.ok) {
     throw new LibraryFileError(
       response.status,
       parseRetryAfterSeconds(response.headers.get('Retry-After')),
+      response.status === 429 ? await readLibraryFileLimit(response) : null,
     );
   }
   const blob = await response.blob();
