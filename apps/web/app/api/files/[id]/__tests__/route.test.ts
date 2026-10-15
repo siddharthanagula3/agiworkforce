@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'crypto';
 type ScanModule0 = typeof import('@/lib/services/tier-unit-quota-service');
+type InfrastructureCostModule = typeof import('@/lib/services/infrastructure-cost');
 
 const {
   mockGetUserScopedDb,
@@ -39,7 +40,8 @@ vi.mock('@/lib/server/media-storage', () => ({
 }));
 
 const { mockRecordEgressBytes } = vi.hoisted(() => ({ mockRecordEgressBytes: vi.fn() }));
-vi.mock('@/lib/services/infrastructure-cost', () => ({
+vi.mock('@/lib/services/infrastructure-cost', async (importOriginal) => ({
+  ...(await importOriginal<InfrastructureCostModule>()),
   recordEgressBytes: mockRecordEgressBytes,
 }));
 
