@@ -35,7 +35,10 @@ import { ProjectShareDialog } from '@/features/projects/components/ProjectShareD
 import { ProjectStudio } from '@/features/projects/components/ProjectStudio';
 import { useManagedCloudProjects } from '@/features/projects';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
-import { saveProjectChatHandoff } from '@/features/projects/lib/project-chat-handoff';
+import {
+  projectChatHandoffHref,
+  saveProjectChatHandoff,
+} from '@/features/projects/lib/project-chat-handoff';
 import { SchedulesEntitlementLoading, SchedulesPage } from '@/features/schedules';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -236,8 +239,9 @@ export default function ProjectDetailPage() {
       meta?: ComposerSendMeta,
     ): void | false => {
       if (!project) return false;
+      let handoffId: string;
       try {
-        saveProjectChatHandoff(sessionStorage, {
+        handoffId = saveProjectChatHandoff(sessionStorage, {
           content,
           projectId: project.id,
           attachments,
@@ -269,7 +273,7 @@ export default function ProjectDetailPage() {
         return false;
       }
       setActiveProject(project.id);
-      router.push(`/chat?projectId=${encodeURIComponent(project.id)}`);
+      router.push(projectChatHandoffHref(project.id, handoffId));
     },
     [project, router, setActiveProject],
   );

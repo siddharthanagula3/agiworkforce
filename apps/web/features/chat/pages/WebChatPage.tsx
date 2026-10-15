@@ -368,6 +368,8 @@ import {
 } from '@features/projects';
 import {
   acknowledgeProjectChatHandoff,
+  PROJECT_CHAT_HANDOFF_PARAM,
+  PROJECT_CHAT_HANDOFF_SETTLE_MS,
   readProjectChatHandoff,
 } from '@features/projects/lib/project-chat-handoff';
 import { takeStagedLibraryAttachments } from '@features/library/lib/library-chat-handoff';
@@ -494,6 +496,8 @@ function clientFallbackTitle(firstUserContent: string): string {
 
 const BLOCKED_SEND_TOAST =
   'Your last message is still starting. This one was saved here, send it again in a moment.';
+const PROJECT_TURN_NOT_STARTED_TOAST =
+  'The project turn did not start. Your draft is ready to send again.';
 const FREE_IMAGE_LOOKUP_FAILED_TOAST =
   'Free image availability could not be checked, so your request was not sent. It is back in the message box: try again in a moment.';
 const FREE_IMAGE_CHAT_CHANGED_TOAST =
@@ -1470,6 +1474,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
 
   const urlProjectId = searchParams?.get('projectId') ?? null;
+  const urlProjectHandoffId = searchParams?.get(PROJECT_CHAT_HANDOFF_PARAM) ?? null;
   useEffect(() => {
     if (urlProjectId) setActiveProject(urlProjectId);
   }, [urlProjectId, setActiveProject, projectsReady]);
@@ -2552,29 +2557,54 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
 
   // The project-detail composer is itself a Send control, not a prefill
-  // shortcut. Claim its handoff only after Clerk resolves and the plan request
-  // has settled (and, on Free, the model promotion has been read), then
-  // acknowledge it when the user row is durable (before provider egress). The
+  // shortcut. Only the page it navigated to may send its handoff, and only
+  // after Clerk resolves and the plan request has settled (and, on Free, the
+  // model promotion has been read), or once that wait runs out. It is
+  // acknowledged when the user row is durable (before provider egress). The
   // ref closes React Strict Mode replay while the claim is in flight; a
-  // pre-commit failure puts the exact text back in the composer instead of
-  // losing it.
+  // handoff that is not sent puts the exact text back in the composer instead
+  // of losing it.
   const projectHandoffInFlightRef = useRef<string | null>(null);
   const projectHandoffModelRestoredRef = useRef<string | null>(null);
+  const projectHandoffWaitRef = useRef<{ id: string; endsAt: number } | null>(null);
+  const [projectHandoffWaitEnded, setProjectHandoffWaitEnded] = useState<string | null>(null);
   const planRequestFailed = useBillingStore((state) => state.error !== null);
+  const planRequestSignedOut = useBillingStore((state) => state.unauthenticated);
   const projectHandoffModelRulesSettled =
     (billingPolicyReady || planRequestFailed) && (!isWebsiteFreeTrial || freeModelPromotionReady);
   useEffect(() => {
-    if (!authLoaded || !userId || !projectHandoffModelRulesSettled) return;
+    if (!authLoaded || !userId) return undefined;
     try {
-      const handoff = readProjectChatHandoff(sessionStorage, urlProjectId);
-      if (!handoff) return;
-      if (projectHandoffInFlightRef.current === handoff.id) return;
+      const handoff = readProjectChatHandoff(sessionStorage, urlProjectId, urlProjectHandoffId);
+      if (!handoff) return undefined;
+      if (projectHandoffInFlightRef.current === handoff.id) return undefined;
 
       if (handoff.attachmentsUnavailable) {
         acknowledgeProjectChatHandoff(sessionStorage, handoff.id);
         setComposerPrefill(handoff.content);
         toast.error('Reattach the project files, then send again. No model was called.');
-        return;
+        return undefined;
+      }
+
+      if (!handoff.sendable || planRequestSignedOut) {
+        acknowledgeProjectChatHandoff(sessionStorage, handoff.id);
+        setComposerPrefill(handoff.content);
+        if (handoff.attachments) setRestoredAttachments(handoff.attachments);
+        toast.error(PROJECT_TURN_NOT_STARTED_TOAST);
+        return undefined;
+      }
+
+      if (!projectHandoffModelRulesSettled && projectHandoffWaitEnded !== handoff.id) {
+        const wait =
+          projectHandoffWaitRef.current?.id === handoff.id
+            ? projectHandoffWaitRef.current
+            : { id: handoff.id, endsAt: Date.now() + PROJECT_CHAT_HANDOFF_SETTLE_MS };
+        projectHandoffWaitRef.current = wait;
+        const waitEnd = setTimeout(
+          () => setProjectHandoffWaitEnded(handoff.id),
+          Math.max(0, wait.endsAt - Date.now()),
+        );
+        return () => clearTimeout(waitEnd);
       }
 
       if (handoff.modelId && isSelectableModelId(handoff.modelId)) {
@@ -2586,7 +2616,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         ) {
           projectHandoffModelRestoredRef.current = handoff.id;
           setSelectedModelId(snapshotModelId);
-          return;
+          return undefined;
         }
       }
 
@@ -2610,19 +2640,23 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         if (committed) return;
         acknowledgeProjectChatHandoff(sessionStorage, handoff.id);
         setComposerPrefill(handoff.content);
-        toast.error('The project turn did not start. Your draft is ready to send again.');
+        toast.error(PROJECT_TURN_NOT_STARTED_TOAST);
       });
     } catch {
       // The source handler refuses navigation when storage is unavailable. If
       // it becomes unavailable after navigation, keep the destination usable.
     }
+    return undefined;
   }, [
     activeProjectDefaultModelId,
     authLoaded,
+    planRequestSignedOut,
     projectHandoffModelRulesSettled,
+    projectHandoffWaitEnded,
     selectedModelId,
     sendContent,
     setSelectedModelId,
+    urlProjectHandoffId,
     urlProjectId,
     userId,
   ]);

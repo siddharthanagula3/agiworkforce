@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ComposerSendMeta } from '@/features/chat/components/Composer/ChatComposerNew';
 import { getProviderOfferings } from '@agiworkforce/types';
@@ -7,6 +7,9 @@ import {
   acknowledgeProjectChatHandoff,
   HANDOFF_CARRIES_EVERY_COMPOSER_FIELD,
   PROJECT_CHAT_HANDOFF_KEY,
+  PROJECT_CHAT_HANDOFF_MAX_AGE_MS,
+  PROJECT_CHAT_HANDOFF_PARAM,
+  projectChatHandoffHref,
   readProjectChatHandoff,
   saveProjectChatHandoff,
 } from './project-chat-handoff';
@@ -65,18 +68,19 @@ describe('project chat handoff', () => {
 
   it('survives a composer field the schema has never heard of', () => {
     const storage = memoryStorage();
+    let id = '';
 
-    expect(() =>
-      saveProjectChatHandoff(storage, {
+    expect(() => {
+      id = saveProjectChatHandoff(storage, {
         content: 'Start the project chat',
         projectId: 'project-1',
         meta: { ...meta, aFieldAddedTomorrow: true } as ComposerSendMeta,
-      }),
-    ).not.toThrow();
+      });
+    }).not.toThrow();
 
     // Dropped rather than stored, and the send still happens. Rejecting the
     // whole handoff over an unknown key is what broke every project chat.
-    const read = readProjectChatHandoff(storage, 'project-1');
+    const read = readProjectChatHandoff(storage, 'project-1', id);
     expect(read?.meta).not.toHaveProperty('aFieldAddedTomorrow');
     expect(read?.content).toBe('Start the project chat');
   });
@@ -92,7 +96,7 @@ describe('project chat handoff', () => {
       meta,
     });
 
-    const first = readProjectChatHandoff(storage, 'project-1');
+    const first = readProjectChatHandoff(storage, 'project-1', id);
     expect(first).toMatchObject({
       id,
       content: 'Build the release plan',
@@ -100,53 +104,102 @@ describe('project chat handoff', () => {
       skillId: 'Planning',
       meta,
       attachmentsUnavailable: false,
+      sendable: true,
     });
     expect(first?.userMessageId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(first?.assistantMessageId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(first?.attachments).toEqual([attachment]);
-    expect(readProjectChatHandoff(storage, 'project-1')).toMatchObject({
+    expect(readProjectChatHandoff(storage, 'project-1', id)).toMatchObject({
       id,
       userMessageId: first?.userMessageId,
       assistantMessageId: first?.assistantMessageId,
     });
 
     acknowledgeProjectChatHandoff(storage, id);
-    expect(readProjectChatHandoff(storage, 'project-1')).toBeNull();
+    expect(readProjectChatHandoff(storage, 'project-1', id)).toBeNull();
   });
 
   it('snapshots the selected model into the handoff', () => {
     const storage = memoryStorage();
-    saveProjectChatHandoff(storage, {
+    const id = saveProjectChatHandoff(storage, {
       content: 'Plan',
       projectId: 'project-1',
       modelId: 'model-snapshot',
       meta,
     });
-    expect(readProjectChatHandoff(storage, 'project-1')?.modelId).toBe('model-snapshot');
+    expect(readProjectChatHandoff(storage, 'project-1', id)?.modelId).toBe('model-snapshot');
   });
 
   it('deletes and refuses a stale cross-project handoff', () => {
     const storage = memoryStorage();
-    saveProjectChatHandoff(storage, {
+    const id = saveProjectChatHandoff(storage, {
       content: 'Private project prompt',
       projectId: 'project-1',
       meta,
     });
 
-    expect(readProjectChatHandoff(storage, 'project-2')).toBeNull();
-    expect(readProjectChatHandoff(storage, 'project-1')).toBeNull();
+    expect(readProjectChatHandoff(storage, 'project-2', id)).toBeNull();
+    expect(readProjectChatHandoff(storage, 'project-1', id)).toBeNull();
   });
 
   it('waits for the destination project id without consuming the claim', () => {
     const storage = memoryStorage();
-    saveProjectChatHandoff(storage, {
+    const id = saveProjectChatHandoff(storage, {
       content: 'Keep me pending',
       projectId: 'project-1',
       meta,
     });
-    expect(readProjectChatHandoff(storage, null)).toBeNull();
-    expect(readProjectChatHandoff(storage, 'project-1')).toMatchObject({
+    expect(readProjectChatHandoff(storage, null, id)).toBeNull();
+    expect(readProjectChatHandoff(storage, 'project-1', id)).toMatchObject({
       content: 'Keep me pending',
+    });
+  });
+
+  it('links the chat page to the handoff it carries', () => {
+    const href = projectChatHandoffHref('project 1', 'handoff-1');
+    const url = new URL(href, 'http://localhost');
+    expect(url.pathname).toBe('/chat');
+    expect(url.searchParams.get('projectId')).toBe('project 1');
+    expect(url.searchParams.get(PROJECT_CHAT_HANDOFF_PARAM)).toBe('handoff-1');
+  });
+
+  // Checked against the code before the expiry and the page binding: there
+  // `sendable` did not exist, so every assertion on it below failed.
+  it('may be sent only by the page the project page navigated to', () => {
+    const storage = memoryStorage();
+    const id = saveProjectChatHandoff(storage, {
+      content: 'Send me from the page I was handed to',
+      projectId: 'project-1',
+      meta,
+    });
+
+    expect(readProjectChatHandoff(storage, 'project-1', 'another-handoff')?.sendable).toBe(false);
+    expect(readProjectChatHandoff(storage, 'project-1', null)?.sendable).toBe(false);
+    expect(readProjectChatHandoff(storage, 'project-1', id)?.sendable).toBe(true);
+  });
+
+  describe('once it has waited too long', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('is no longer sendable, but its draft can still be read back', () => {
+      vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-15T12:00:00.000Z') });
+      const storage = memoryStorage();
+      const id = saveProjectChatHandoff(storage, {
+        content: 'An old draft that must not send itself',
+        projectId: 'project-1',
+        meta,
+      });
+
+      vi.advanceTimersByTime(PROJECT_CHAT_HANDOFF_MAX_AGE_MS);
+      expect(readProjectChatHandoff(storage, 'project-1', id)?.sendable).toBe(true);
+
+      vi.advanceTimersByTime(1);
+      expect(readProjectChatHandoff(storage, 'project-1', id)).toMatchObject({
+        content: 'An old draft that must not send itself',
+        sendable: false,
+      });
     });
   });
 

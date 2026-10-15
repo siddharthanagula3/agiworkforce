@@ -1,15 +1,22 @@
 import { z } from 'zod';
 
 import type { ComposerSendMeta } from '@/features/chat/components/Composer/ChatComposerNew';
+import { NEW_CHAT_PATH } from '@features/chat/lib/new-chat-entry';
 import { CHAT_OUTPUT_FORMATS } from '@/lib/chat-output-format';
 import { useModelStore } from '@shared/stores/model-store';
 
 export const PROJECT_CHAT_HANDOFF_KEY = 'agi.project.pendingHandoff.v1';
+export const PROJECT_CHAT_HANDOFF_PARAM = 'handoff';
+export const PROJECT_CHAT_HANDOFF_SETTLE_MS = 8_000;
+// Must outlast the navigation plus the settle wait; past it a handoff is a draft
+// to give back, never a turn to send.
+export const PROJECT_CHAT_HANDOFF_MAX_AGE_MS = 60_000;
 
 type ProjectChatHandoffStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 const ProjectChatHandoffSchema = z.object({
   id: z.string().min(1).max(200),
+  createdAt: z.number().int().nonnegative(),
   userMessageId: z.string().uuid(),
   assistantMessageId: z.string().uuid(),
   content: z.string().trim().min(1).max(100_000),
@@ -103,6 +110,7 @@ export const HANDOFF_CARRIES_EVERY_COMPOSER_FIELD: ExactKeys<
 export interface ProjectChatHandoff extends StoredProjectChatHandoff {
   attachments?: File[];
   attachmentsUnavailable: boolean;
+  sendable: boolean;
 }
 
 const pendingAttachments = new Map<string, File[]>();
@@ -110,6 +118,11 @@ const acknowledgedHandoffIds = new Set<string>();
 
 function createHandoffId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `project-handoff-${Date.now()}`;
+}
+
+export function projectChatHandoffHref(projectId: string, handoffId: string): string {
+  const params = new URLSearchParams({ projectId, [PROJECT_CHAT_HANDOFF_PARAM]: handoffId });
+  return `${NEW_CHAT_PATH}?${params.toString()}`;
 }
 
 export function saveProjectChatHandoff(
@@ -126,6 +139,7 @@ export function saveProjectChatHandoff(
   const id = createHandoffId();
   const stored = ProjectChatHandoffSchema.parse({
     id,
+    createdAt: Date.now(),
     userMessageId: crypto.randomUUID(),
     assistantMessageId: crypto.randomUUID(),
     content: input.content,
@@ -148,6 +162,7 @@ export function saveProjectChatHandoff(
 export function readProjectChatHandoff(
   storage: ProjectChatHandoffStorage,
   expectedProjectId: string | null,
+  handedOffId: string | null,
 ): ProjectChatHandoff | null {
   if (!expectedProjectId) return null;
   const raw = storage.getItem(PROJECT_CHAT_HANDOFF_KEY);
@@ -171,6 +186,9 @@ export function readProjectChatHandoff(
     ...parsed.data,
     ...(attachments ? { attachments: [...attachments] } : {}),
     attachmentsUnavailable: parsed.data.attachmentCount > 0 && !attachments,
+    sendable:
+      parsed.data.id === handedOffId &&
+      Date.now() - parsed.data.createdAt <= PROJECT_CHAT_HANDOFF_MAX_AGE_MS,
   };
 }
 

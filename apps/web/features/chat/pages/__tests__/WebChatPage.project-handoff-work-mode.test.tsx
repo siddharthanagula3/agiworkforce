@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FREE_MODEL_PROMOTION_PATH } from '@agiworkforce/cloud-contracts';
 import {
@@ -31,12 +31,14 @@ const mocks = vi.hoisted(() => ({
     return true;
   }),
   toastError: vi.fn(),
+  composerPrefill: vi.fn(),
+  searchParams: new URLSearchParams(),
 }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
   useParams: () => ({}),
-  useSearchParams: () => new URLSearchParams({ projectId: PROJECT_ID }),
+  useSearchParams: () => mocks.searchParams,
   usePathname: () => '/chat',
 }));
 
@@ -116,7 +118,10 @@ vi.mock('@/lib/hooks/useMediaGeneration', async (importOriginal) => {
 
 vi.mock('../../components/Composer/ChatComposerNew', async (importOriginal) => ({
   ...(await importOriginal()),
-  ChatComposerNew: () => null,
+  ChatComposerNew: ({ prefillText }: { prefillText?: string }) => {
+    mocks.composerPrefill(prefillText);
+    return null;
+  },
   SEND_GUARD_BLOCKED: 'guard-blocked',
 }));
 vi.mock('../../components/messages/ChatMessageList', async (importOriginal) => ({
@@ -253,6 +258,8 @@ import WebChatPage from '../WebChatPage';
 import promotionConfig from '@/config/free-model-promotion.json';
 import {
   PROJECT_CHAT_HANDOFF_KEY,
+  PROJECT_CHAT_HANDOFF_SETTLE_MS,
+  projectChatHandoffHref,
   saveProjectChatHandoff,
 } from '@/features/projects/lib/project-chat-handoff';
 import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
@@ -268,6 +275,7 @@ const PROMOTED_MODEL = Object.values(MODEL_FAMILY_REGISTRY).find(
     family.provider === promotionConfig.provider && family.tier === promotionConfig.modelFamilyTier,
 )?.activeModelId;
 const PROMOTION_ENDS_AT = new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000).toISOString();
+const TURN_NOT_STARTED = 'The project turn did not start. Your draft is ready to send again.';
 
 function signInOnPlan(tier: BillingPlanTier) {
   const planLabel = getBillingPlanPricing(tier).label;
@@ -287,11 +295,32 @@ function signInOnPlan(tier: BillingPlanTier) {
   });
 }
 
-function sendFromProjectPage(workMode: CloudWorkMode) {
-  saveProjectChatHandoff(sessionStorage, {
+function arriveFromProjectPage(input: Parameters<typeof saveProjectChatHandoff>[1]): string {
+  const handoffId = saveProjectChatHandoff(sessionStorage, input);
+  mocks.searchParams = new URL(
+    projectChatHandoffHref(input.projectId, handoffId),
+    'http://localhost',
+  ).searchParams;
+  return handoffId;
+}
+
+function sendFromProjectPage(workMode: CloudWorkMode, modelId?: string) {
+  arriveFromProjectPage({
     content: PROJECT_DRAFT,
     projectId: PROJECT_ID,
+    ...(modelId ? { modelId } : {}),
     meta: { workMode, projectId: PROJECT_ID, memoryEnabled: true },
+  });
+}
+
+function planRequestNeverAnswers() {
+  useBillingStore.setState({
+    user: null,
+    subscription: null,
+    initialized: false,
+    isLoading: true,
+    unauthenticated: false,
+    error: null,
   });
 }
 
@@ -308,6 +337,8 @@ describe('the first message sent from a project page', () => {
     useChatStore.getState().reset();
     mocks.sendMessage.mockClear();
     mocks.toastError.mockClear();
+    mocks.composerPrefill.mockClear();
+    mocks.searchParams = new URLSearchParams({ projectId: PROJECT_ID });
     sessionStorage.removeItem(PROJECT_CHAT_HANDOFF_KEY);
     vi.stubGlobal(
       'fetch',
@@ -327,6 +358,7 @@ describe('the first message sent from a project page', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     sessionStorage.removeItem(PROJECT_CHAT_HANDOFF_KEY);
     useBillingStore.setState({
@@ -334,6 +366,7 @@ describe('the first message sent from a project page', () => {
       subscription: null,
       initialized: false,
       isLoading: true,
+      unauthenticated: false,
       error: null,
     });
   });
@@ -368,12 +401,7 @@ describe('the first message sent from a project page', () => {
     expect(PROMOTED_MODEL).not.toBe(FREE_TRIAL_MODEL);
     signInOnPlan(FREE_TIER);
     useModelStore.getState().setSelectedModelId(PROMOTED_MODEL!);
-    saveProjectChatHandoff(sessionStorage, {
-      content: PROJECT_DRAFT,
-      projectId: PROJECT_ID,
-      modelId: PROMOTED_MODEL!,
-      meta: { workMode: 'chat', projectId: PROJECT_ID, memoryEnabled: true },
-    });
+    sendFromProjectPage('chat', PROMOTED_MODEL!);
 
     render(<WebChatPage />);
     await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
@@ -395,12 +423,7 @@ describe('the first message sent from a project page', () => {
     });
     const [snapshot] = AVAILABLE_MODELS.map((model) => model.id);
     useModelStore.getState().setSelectedModelId(snapshot!);
-    saveProjectChatHandoff(sessionStorage, {
-      content: PROJECT_DRAFT,
-      projectId: PROJECT_ID,
-      modelId: snapshot!,
-      meta: { workMode: 'chat', projectId: PROJECT_ID, memoryEnabled: true },
-    });
+    sendFromProjectPage('chat', snapshot!);
 
     render(<WebChatPage />);
     await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
@@ -411,16 +434,84 @@ describe('the first message sent from a project page', () => {
     signInOnPlan(WORK_TIER);
     const [current, other] = AVAILABLE_MODELS.map((model) => model.id);
     useModelStore.getState().setSelectedModelId(current!);
-    saveProjectChatHandoff(sessionStorage, {
-      content: PROJECT_DRAFT,
-      projectId: PROJECT_ID,
-      modelId: other!,
-      meta: { workMode: 'chat', projectId: PROJECT_ID, memoryEnabled: true },
-    });
+    sendFromProjectPage('chat', other!);
 
     render(<WebChatPage />);
     await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
     expect(useModelStore.getState().selectedModelId).toBe(other);
     expect(mocks.sendMessage.mock.calls[0]![1]?.model).toBe(other);
+  });
+
+  // Each of the next three failed on eb35dd4485: the wait for the plan had no
+  // way out, so a 401 or a request that never answered sent nothing, put
+  // nothing back and said nothing, and a handoff with no page binding was sent
+  // by whichever visit to the project's chat came first.
+  it('puts the draft back with the failure toast, calling no model, when /api/me answers 401', async () => {
+    useBillingStore.setState({
+      user: null,
+      subscription: null,
+      initialized: true,
+      isLoading: false,
+      unauthenticated: true,
+      error: null,
+    });
+    sendFromProjectPage('chat');
+
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(TURN_NOT_STARTED));
+    expect(mocks.composerPrefill).toHaveBeenCalledWith(PROJECT_DRAFT);
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(PROJECT_CHAT_HANDOFF_KEY)).toBeNull();
+  });
+
+  it('stops waiting for a plan request that never answers and sends the snapshotted model', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    planRequestNeverAnswers();
+    const [snapshot] = AVAILABLE_MODELS.map((model) => model.id);
+    useModelStore.getState().setSelectedModelId(snapshot!);
+    sendFromProjectPage('chat', snapshot!);
+
+    render(<WebChatPage />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PROJECT_CHAT_HANDOFF_SETTLE_MS - 1);
+    });
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(mocks.sendMessage).toHaveBeenCalledTimes(1);
+    const [content, options] = mocks.sendMessage.mock.calls[0]!;
+    expect(content).toBe(PROJECT_DRAFT);
+    expect(options?.model).toBe(snapshot);
+  });
+
+  it('never sends a handoff to a later visit that the project page did not navigate to', async () => {
+    signInOnPlan(WORK_TIER);
+    sendFromProjectPage('chat');
+    mocks.searchParams = new URLSearchParams({ projectId: PROJECT_ID });
+
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(TURN_NOT_STARTED));
+    expect(mocks.composerPrefill).toHaveBeenCalledWith(PROJECT_DRAFT);
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(PROJECT_CHAT_HANDOFF_KEY)).toBeNull();
+  });
+
+  it('sends nothing once the page is left while it is still waiting for the plan', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    planRequestNeverAnswers();
+    sendFromProjectPage('chat');
+
+    const page = render(<WebChatPage />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PROJECT_CHAT_HANDOFF_SETTLE_MS / 2);
+    });
+    page.unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PROJECT_CHAT_HANDOFF_SETTLE_MS);
+    });
+
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
   });
 });
