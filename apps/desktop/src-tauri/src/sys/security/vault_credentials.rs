@@ -426,11 +426,11 @@ pub fn reseal_under_install_key(
 mod tests {
     use std::sync::{Arc, Mutex};
 
+    use super::super::master_password::test_support::{
+        fixture_passphrase, other_fixture_passphrase,
+    };
     use super::super::master_password::{MasterPasswordManager, UnlockOutcome};
     use super::*;
-
-    const TEST_FIXTURE_PASSPHRASE: &str = "Alpha-Beta-Unique-Phrase-9"; // gitleaks:allow
-    const NEW_FIXTURE_PASSPHRASE: &str = "Gamma-Delta-Other-Phrase-7"; // gitleaks:allow
 
     const SHARED_VERIFIER_KDF_VERSION: u32 = 2;
     const FIRST_KDF_VERSION: u32 = 1;
@@ -495,9 +495,9 @@ mod tests {
         fn unlocked_under_a_shared_verifier_row() -> Self {
             let vault = Self::without_a_password();
             let manager = vault.manager.lock().unwrap();
-            manager.store_legacy_row(TEST_FIXTURE_PASSPHRASE, SHARED_VERIFIER_KDF_VERSION);
+            manager.store_legacy_row(fixture_passphrase(), SHARED_VERIFIER_KDF_VERSION);
             manager
-                .unlock(TEST_FIXTURE_PASSPHRASE, |_, _, _| {
+                .unlock(fixture_passphrase(), |_, _, _| {
                     Err(MasterPasswordError::CryptoError(
                         "fixture: stay on the stored row".to_string(),
                     ))
@@ -511,7 +511,7 @@ mod tests {
             self.manager
                 .lock()
                 .unwrap()
-                .setup_with(TEST_FIXTURE_PASSPHRASE, |conn, new_key| {
+                .setup_with(fixture_passphrase(), |conn, new_key| {
                     seal_existing_under_password(conn, new_key).map(|_| ())
                 })
         }
@@ -529,14 +529,14 @@ mod tests {
             let vault = Self::without_a_password();
             let manager = vault.manager.lock().unwrap();
             manager.store_legacy_row_at(
-                TEST_FIXTURE_PASSPHRASE,
+                fixture_passphrase(),
                 FIRST_KDF_VERSION,
                 ITERATIONS_BEFORE_MAY_2026,
             );
             let keys =
-                manager.candidate_purpose_keys(TEST_FIXTURE_PASSPHRASE, KeyPurpose::McpCredentials);
+                manager.candidate_purpose_keys(fixture_passphrase(), KeyPurpose::McpCredentials);
             manager
-                .unlock(TEST_FIXTURE_PASSPHRASE, |_, _, _| {
+                .unlock(fixture_passphrase(), |_, _, _| {
                     Err(MasterPasswordError::CryptoError(
                         "fixture: stay on the stored row".to_string(),
                     ))
@@ -565,7 +565,7 @@ mod tests {
         fn store_a_key_no_key_opens(&self) {
             self.store(
                 LOST_API_KEY_ROW,
-                &seal_with_key(&[5u8; 32], "fixture-lost-key").unwrap(),
+                &seal_with_key(&rand::random::<[u8; 32]>(), "fixture-lost-key").unwrap(),
             );
         }
 
@@ -777,7 +777,7 @@ mod tests {
             .manager
             .lock()
             .unwrap()
-            .setup(TEST_FIXTURE_PASSPHRASE)
+            .setup(fixture_passphrase())
             .unwrap();
         assert!(vault.needs_migration());
         vault.lock();
@@ -786,7 +786,7 @@ mod tests {
             "the answer does not depend on the vault being open"
         );
 
-        vault.unlock(TEST_FIXTURE_PASSPHRASE).unwrap();
+        vault.unlock(fixture_passphrase()).unwrap();
         let sealed = seal(Some(&vault.helper), UNMIGRATED_API_KEY).unwrap();
         vault
             .db
@@ -814,7 +814,7 @@ mod tests {
         vault.lock();
 
         assert!(matches!(
-            vault.unlock(NEW_FIXTURE_PASSPHRASE),
+            vault.unlock(other_fixture_passphrase()),
             Err(MasterPasswordError::InvalidPassword)
         ));
         assert_eq!(
@@ -823,7 +823,7 @@ mod tests {
             "a refused password upgrades nothing"
         );
 
-        vault.unlock(TEST_FIXTURE_PASSPHRASE).expect("unlock");
+        vault.unlock(fixture_passphrase()).expect("unlock");
 
         let new_purpose_key = vault.purpose_key();
         assert_ne!(new_purpose_key, old_purpose_key);
@@ -844,19 +844,17 @@ mod tests {
         assert_eq!(vault.stored(SERVER_CREDENTIAL_ROW), server_credential);
 
         vault.lock();
-        vault
-            .unlock(TEST_FIXTURE_PASSPHRASE)
-            .expect("second unlock");
+        vault.unlock(fixture_passphrase()).expect("second unlock");
         assert_eq!(vault.purpose_key(), new_purpose_key);
         assert_eq!(vault.opens(API_KEY_ROW).unwrap(), API_KEY);
 
         vault
-            .change_password(TEST_FIXTURE_PASSPHRASE, NEW_FIXTURE_PASSPHRASE)
+            .change_password(fixture_passphrase(), other_fixture_passphrase())
             .expect("password change after the upgrade");
         assert_eq!(vault.opens(SECOND_API_KEY_ROW).unwrap(), SECOND_API_KEY);
 
         vault
-            .remove_password(NEW_FIXTURE_PASSPHRASE)
+            .remove_password(other_fixture_passphrase())
             .expect("password removal after the upgrade");
         assert_eq!(
             open_with_install_key(&vault.stored(API_KEY_ROW)).unwrap(),
@@ -874,7 +872,7 @@ mod tests {
         vault.refuse_updates_to(SECOND_API_KEY_ROW);
 
         vault
-            .unlock(TEST_FIXTURE_PASSPHRASE)
+            .unlock(fixture_passphrase())
             .expect("the vault still opens");
 
         assert_eq!(vault.every_row(), before);
@@ -894,7 +892,7 @@ mod tests {
         );
         vault.lock();
 
-        let outcome = vault.unlock(TEST_FIXTURE_PASSPHRASE).expect("unlock");
+        let outcome = vault.unlock(fixture_passphrase()).expect("unlock");
 
         assert_eq!(outcome, UnlockOutcome::default());
         let new_purpose_key = vault.purpose_key();
@@ -914,7 +912,7 @@ mod tests {
 
         vault.lock();
         assert_eq!(
-            vault.unlock(TEST_FIXTURE_PASSPHRASE).unwrap(),
+            vault.unlock(fixture_passphrase()).unwrap(),
             UnlockOutcome::default()
         );
         assert_eq!(vault.purpose_key(), new_purpose_key);
@@ -929,7 +927,7 @@ mod tests {
         vault.lock();
 
         let outcome = vault
-            .unlock(TEST_FIXTURE_PASSPHRASE)
+            .unlock(fixture_passphrase())
             .expect("the vault still opens");
 
         assert_eq!(outcome.keys_not_upgraded, vec!["lostprovider".to_string()]);
@@ -951,7 +949,7 @@ mod tests {
                 .manager
                 .lock()
                 .unwrap()
-                .candidate_purpose_keys(TEST_FIXTURE_PASSPHRASE, KeyPurpose::McpCredentials),
+                .candidate_purpose_keys(fixture_passphrase(), KeyPurpose::McpCredentials),
             old_keys,
             "the stored row was not replaced"
         );
@@ -959,7 +957,7 @@ mod tests {
         vault.delete(LOST_API_KEY_ROW);
         vault.lock();
         assert_eq!(
-            vault.unlock(TEST_FIXTURE_PASSPHRASE).unwrap(),
+            vault.unlock(fixture_passphrase()).unwrap(),
             UnlockOutcome::default()
         );
         assert_eq!(vault.opens(API_KEY_ROW).unwrap(), API_KEY);
@@ -974,7 +972,7 @@ mod tests {
         let before = vault.every_row();
 
         let change = vault
-            .change_password(TEST_FIXTURE_PASSPHRASE, NEW_FIXTURE_PASSPHRASE)
+            .change_password(fixture_passphrase(), other_fixture_passphrase())
             .expect_err("a key would be lost");
         let MasterPasswordError::UnreadableSavedKeys { providers } = &change else {
             panic!("expected the unreadable key to be named");
@@ -984,19 +982,19 @@ mod tests {
         assert!(!change.to_string().contains("Cryptographic"), "{change}");
 
         assert!(matches!(
-            vault.remove_password(TEST_FIXTURE_PASSPHRASE),
+            vault.remove_password(fixture_passphrase()),
             Err(MasterPasswordError::UnreadableSavedKeys { .. })
         ));
 
         assert_eq!(vault.every_row(), before);
-        assert!(vault.verifies(TEST_FIXTURE_PASSPHRASE));
-        assert!(!vault.verifies(NEW_FIXTURE_PASSPHRASE));
+        assert!(vault.verifies(fixture_passphrase()));
+        assert!(!vault.verifies(other_fixture_passphrase()));
         assert!(vault.helper.is_configured());
         assert_eq!(vault.opens(API_KEY_ROW).unwrap(), API_KEY);
 
         vault.delete(LOST_API_KEY_ROW);
         vault
-            .change_password(TEST_FIXTURE_PASSPHRASE, NEW_FIXTURE_PASSPHRASE)
+            .change_password(fixture_passphrase(), other_fixture_passphrase())
             .expect("nothing would be lost now");
         assert_eq!(vault.opens(API_KEY_ROW).unwrap(), API_KEY);
     }
@@ -1012,7 +1010,7 @@ mod tests {
             VAULT_LOCKED_MESSAGE
         );
 
-        vault.unlock(TEST_FIXTURE_PASSPHRASE).expect("unlock");
+        vault.unlock(fixture_passphrase()).expect("unlock");
 
         assert_eq!(
             open_with_install_key(&vault.stored(APP_SECRET_ROW)).unwrap(),
@@ -1031,7 +1029,7 @@ mod tests {
         let old_purpose_key = vault.purpose_key();
 
         vault
-            .change_password(TEST_FIXTURE_PASSPHRASE, NEW_FIXTURE_PASSPHRASE)
+            .change_password(fixture_passphrase(), other_fixture_passphrase())
             .expect("password change");
 
         let new_purpose_key = vault.purpose_key();
@@ -1050,10 +1048,12 @@ mod tests {
 
         vault.lock();
         assert!(matches!(
-            vault.unlock(TEST_FIXTURE_PASSPHRASE),
+            vault.unlock(fixture_passphrase()),
             Err(MasterPasswordError::InvalidPassword)
         ));
-        vault.unlock(NEW_FIXTURE_PASSPHRASE).expect("new password");
+        vault
+            .unlock(other_fixture_passphrase())
+            .expect("new password");
         assert_eq!(vault.opens(API_KEY_ROW).unwrap(), API_KEY);
         assert_eq!(vault.opens(SECOND_API_KEY_ROW).unwrap(), SECOND_API_KEY);
     }
@@ -1066,7 +1066,7 @@ mod tests {
         let server_credential = vault.stored(SERVER_CREDENTIAL_ROW);
 
         vault
-            .change_password(TEST_FIXTURE_PASSPHRASE, NEW_FIXTURE_PASSPHRASE)
+            .change_password(fixture_passphrase(), other_fixture_passphrase())
             .expect("password change");
 
         assert_eq!(vault.stored(UNMIGRATED_API_KEY_ROW), unmigrated);
@@ -1085,7 +1085,7 @@ mod tests {
         vault.refuse_updates_to(SECOND_API_KEY_ROW);
 
         let failure = vault
-            .change_password(TEST_FIXTURE_PASSPHRASE, NEW_FIXTURE_PASSPHRASE)
+            .change_password(fixture_passphrase(), other_fixture_passphrase())
             .expect_err("the second re-seal is refused");
         assert!(
             failure.to_string().contains("nothing was changed"),
@@ -1093,12 +1093,12 @@ mod tests {
         );
 
         assert_eq!(vault.every_row(), before);
-        assert!(vault.verifies(TEST_FIXTURE_PASSPHRASE));
-        assert!(!vault.verifies(NEW_FIXTURE_PASSPHRASE));
+        assert!(vault.verifies(fixture_passphrase()));
+        assert!(!vault.verifies(other_fixture_passphrase()));
         assert_eq!(vault.opens(API_KEY_ROW).unwrap(), API_KEY);
 
         vault.lock();
-        vault.unlock(TEST_FIXTURE_PASSPHRASE).expect("old password");
+        vault.unlock(fixture_passphrase()).expect("old password");
         assert_eq!(vault.opens(API_KEY_ROW).unwrap(), API_KEY);
         assert_eq!(vault.opens(SECOND_API_KEY_ROW).unwrap(), SECOND_API_KEY);
         assert_eq!(vault.opens(APP_SECRET_ROW).unwrap(), APP_SECRET);
@@ -1111,7 +1111,7 @@ mod tests {
         vault.lock();
 
         vault
-            .change_password(TEST_FIXTURE_PASSPHRASE, NEW_FIXTURE_PASSPHRASE)
+            .change_password(fixture_passphrase(), other_fixture_passphrase())
             .expect("password change");
 
         assert_eq!(vault.opens(API_KEY_ROW).unwrap(), API_KEY);
@@ -1125,16 +1125,16 @@ mod tests {
         let before = vault.every_row();
 
         assert!(matches!(
-            vault.change_password(NEW_FIXTURE_PASSPHRASE, NEW_FIXTURE_PASSPHRASE),
+            vault.change_password(other_fixture_passphrase(), other_fixture_passphrase()),
             Err(MasterPasswordError::InvalidPassword)
         ));
         assert!(matches!(
-            vault.remove_password(NEW_FIXTURE_PASSPHRASE),
+            vault.remove_password(other_fixture_passphrase()),
             Err(MasterPasswordError::InvalidPassword)
         ));
 
         assert_eq!(vault.every_row(), before);
-        assert!(vault.verifies(TEST_FIXTURE_PASSPHRASE));
+        assert!(vault.verifies(fixture_passphrase()));
     }
 
     #[test]
@@ -1145,7 +1145,7 @@ mod tests {
         let server_credential = vault.stored(SERVER_CREDENTIAL_ROW);
 
         vault
-            .remove_password(TEST_FIXTURE_PASSPHRASE)
+            .remove_password(fixture_passphrase())
             .expect("password removal");
 
         assert!(!vault.helper.is_configured());
@@ -1173,7 +1173,7 @@ mod tests {
         vault.refuse_updates_to(SECOND_API_KEY_ROW);
 
         let failure = vault
-            .remove_password(TEST_FIXTURE_PASSPHRASE)
+            .remove_password(fixture_passphrase())
             .expect_err("the second re-seal is refused");
         assert!(
             failure.to_string().contains("nothing was changed"),
@@ -1182,7 +1182,7 @@ mod tests {
 
         assert_eq!(vault.every_row(), before);
         assert!(vault.helper.is_configured());
-        assert!(vault.verifies(TEST_FIXTURE_PASSPHRASE));
+        assert!(vault.verifies(fixture_passphrase()));
         assert_eq!(vault.opens(API_KEY_ROW).unwrap(), API_KEY);
     }
 

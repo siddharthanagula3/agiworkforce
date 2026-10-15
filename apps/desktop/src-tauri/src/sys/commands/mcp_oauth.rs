@@ -2950,8 +2950,6 @@ mod tests {
         }
     }
 
-    const VAULT_FIXTURE_PASSPHRASE: &str = "Alpha-Beta-Unique-Phrase-9"; // gitleaks:allow
-
     struct VaultProfile {
         db: Arc<std::sync::Mutex<rusqlite::Connection>>,
         manager: Arc<std::sync::Mutex<crate::sys::security::MasterPasswordManager>>,
@@ -2978,7 +2976,9 @@ mod tests {
                 std::sync::Mutex::new(rusqlite::Connection::open_in_memory().unwrap()),
             ));
             manager.init_table().unwrap();
-            manager.setup(VAULT_FIXTURE_PASSPHRASE).unwrap();
+            manager
+                .setup(crate::sys::security::master_password::test_support::fixture_passphrase())
+                .unwrap();
             let manager = Arc::new(std::sync::Mutex::new(manager));
 
             Self {

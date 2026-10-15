@@ -1134,6 +1134,42 @@ pub fn derive_key_base64(
     Ok(general_purpose::STANDARD.encode(&key))
 }
 
+/// Passphrases for tests elsewhere in the crate, drawn at random so that no
+/// test holds a fixed secret.
+#[cfg(test)]
+pub(crate) mod test_support {
+    use rand::Rng;
+    use std::sync::LazyLock;
+
+    static FIXTURE_PASSPHRASE: LazyLock<String> = LazyLock::new(random_passphrase);
+    static OTHER_FIXTURE_PASSPHRASE: LazyLock<String> = LazyLock::new(|| loop {
+        let other = random_passphrase();
+        if other != *FIXTURE_PASSPHRASE {
+            break other;
+        }
+    });
+
+    /// A new passphrase that meets [`super::PasswordPolicy::CURRENT`]: six
+    /// runs of a lowercase letter, an uppercase letter and a digit.
+    pub(crate) fn random_passphrase() -> String {
+        let mut rng = rand::thread_rng();
+        let mut pick = |first: u8, span: u8| char::from(first + rng.gen_range(0..span));
+        (0..6)
+            .flat_map(|_| [pick(b'a', 26), pick(b'A', 26), pick(b'0', 10)])
+            .collect()
+    }
+
+    /// One passphrase for the whole test run.
+    pub(crate) fn fixture_passphrase() -> &'static str {
+        &FIXTURE_PASSPHRASE
+    }
+
+    /// A second passphrase for the run, never equal to [`fixture_passphrase`].
+    pub(crate) fn other_fixture_passphrase() -> &'static str {
+        &OTHER_FIXTURE_PASSPHRASE
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1773,6 +1809,32 @@ mod tests {
         assert_eq!(password_rule_violation(&eleven_characters), too_short);
         assert_eq!(password_rule_violation(valid_test_passphrase()), None);
         assert_eq!(password_rule_violation("lowercase-words-123"), None);
+    }
+
+    #[test]
+    fn the_passphrases_other_tests_draw_meet_the_rule_and_differ() {
+        for _ in 0..64 {
+            assert_eq!(
+                password_rule_violation(&test_support::random_passphrase()),
+                None
+            );
+        }
+        assert_eq!(
+            password_rule_violation(test_support::fixture_passphrase()),
+            None
+        );
+        assert_eq!(
+            password_rule_violation(test_support::other_fixture_passphrase()),
+            None
+        );
+        assert_eq!(
+            test_support::fixture_passphrase(),
+            test_support::fixture_passphrase()
+        );
+        assert_ne!(
+            test_support::fixture_passphrase(),
+            test_support::other_fixture_passphrase()
+        );
     }
 
     #[test]

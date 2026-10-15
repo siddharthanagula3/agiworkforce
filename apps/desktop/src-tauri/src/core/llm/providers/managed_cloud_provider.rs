@@ -829,10 +829,11 @@ mod tests {
     };
     use base64::Engine;
 
-    fn managed_test_token(subject: &str, session_id: &str, nonce: &str) -> String {
+    fn managed_test_token(subject: &str, session_id: &str) -> String {
         let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(br#"{"alg":"none"}"#);
         let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
-            serde_json::json!({ "sub": subject, "sid": session_id, "jti": nonce }).to_string(),
+            serde_json::json!({ "sub": subject, "sid": session_id, "jti": uuid::Uuid::new_v4() })
+                .to_string(),
         );
         format!("{header}.{payload}.test-signature")
     }
@@ -840,8 +841,8 @@ mod tests {
     #[tokio::test]
     async fn managed_goal_cannot_use_a_replacement_accounts_bearer() {
         let _guard = AppModeTestGuard::cloud().await;
-        let account_a_token = managed_test_token("account-a", "session-a", "token-a");
-        let account_b_token = managed_test_token("account-b", "session-b", "token-b");
+        let account_a_token = managed_test_token("account-a", "session-a");
+        let account_b_token = managed_test_token("account-b", "session-b");
         replace_access_token_for_managed_boundary_test(Some(account_a_token));
         let account_a_boundary =
             capture_managed_auth_boundary().expect("account A boundary should be captured");
@@ -877,8 +878,9 @@ mod tests {
     #[tokio::test]
     async fn managed_goal_accepts_a_rotated_token_from_the_same_account_session() {
         let _guard = AppModeTestGuard::cloud().await;
-        let original = managed_test_token("account-a", "session-a", "token-a1");
-        let rotated = managed_test_token("account-a", "session-a", "token-a2");
+        let original = managed_test_token("account-a", "session-a");
+        let rotated = managed_test_token("account-a", "session-a");
+        assert_ne!(original, rotated);
         replace_access_token_for_managed_boundary_test(Some(original));
         let boundary =
             capture_managed_auth_boundary().expect("account A boundary should be captured");
@@ -897,8 +899,8 @@ mod tests {
     #[tokio::test]
     async fn managed_goal_rejects_a_new_session_for_the_same_account() {
         let _guard = AppModeTestGuard::cloud().await;
-        let old_session = managed_test_token("account-a", "session-a1", "token-a1");
-        let new_session = managed_test_token("account-a", "session-a2", "token-a2");
+        let old_session = managed_test_token("account-a", "session-a1");
+        let new_session = managed_test_token("account-a", "session-a2");
         replace_access_token_for_managed_boundary_test(Some(old_session));
         let boundary =
             capture_managed_auth_boundary().expect("old account A boundary should be captured");
@@ -919,7 +921,6 @@ mod tests {
         replace_access_token_for_managed_boundary_test(Some(managed_test_token(
             "account-a",
             "session-a",
-            "token-a",
         )));
         let provider = ManagedCloudProvider::new().expect("ManagedCloudProvider::new");
         let request = LLMRequest::new(

@@ -2236,7 +2236,7 @@ mod tests {
         manager
             .lock()
             .unwrap()
-            .setup("Alpha-Beta-Unique-Phrase-9") // gitleaks:allow
+            .setup(crate::sys::security::master_password::test_support::fixture_passphrase())
             .unwrap();
         assert!(encryption.is_unlocked());
         assert!(locked_saved_keys(&encryption).is_empty());

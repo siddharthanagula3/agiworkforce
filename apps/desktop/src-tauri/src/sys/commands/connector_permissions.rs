@@ -742,9 +742,8 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
+    use crate::sys::security::master_password::test_support::fixture_passphrase;
     use crate::sys::security::MasterPasswordManager;
-
-    const VAULT_FIXTURE_PASSPHRASE: &str = "Alpha-Beta-Unique-Phrase-9"; // gitleaks:allow
 
     const SAVED_PERMISSIONS: &str = r#"{"gmail":{"send":{"level":"blocked","destructive":false}}}"#;
 
@@ -771,7 +770,7 @@ mod tests {
                 .manager
                 .lock()
                 .unwrap()
-                .setup(VAULT_FIXTURE_PASSPHRASE)
+                .setup(fixture_passphrase())
                 .unwrap();
             vault
         }
@@ -785,7 +784,7 @@ mod tests {
             self.manager
                 .lock()
                 .unwrap()
-                .unlock(VAULT_FIXTURE_PASSPHRASE, |_, _, _| Ok(()))
+                .unlock(fixture_passphrase(), |_, _, _| Ok(()))
                 .unwrap();
         }
     }
@@ -1155,7 +1154,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = store_path(&dir);
         let vault = Vault::without_a_password();
-        let vault_key = vec![9u8; 32];
+        let vault_key = rand::random::<[u8; 32]>().to_vec();
+        let other_key = rand::random::<[u8; 32]>().to_vec();
+        assert_ne!(vault_key, other_key);
         let kept_path = dir
             .path()
             .join("connector-permissions.unreadable-20261011T123456789Z.json");
@@ -1187,13 +1188,16 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(merge_kept_stores(&path, &[vec![1u8; 32]]).unwrap(), 0);
+        assert_eq!(merge_kept_stores(&path, &[other_key]).unwrap(), 0);
         assert!(
             kept_path.exists(),
             "a key that does not open it merges nothing"
         );
 
-        assert_eq!(merge_kept_stores(&path, &[vault_key.clone()]).unwrap(), 1);
+        assert_eq!(
+            merge_kept_stores(&path, std::slice::from_ref(&vault_key)).unwrap(),
+            1
+        );
 
         let merged = load_store(&path, &vault.enc).unwrap();
         let level = |tool: &str| merged["gmail"][tool].level.clone();
