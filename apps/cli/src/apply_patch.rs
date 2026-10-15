@@ -45,7 +45,12 @@ pub(crate) struct PatchTarget {
 /// ceilings. No `-p` is passed: an explicit `-p1` refuses a patch whose
 /// names have no folder in them, such as `--- x.rs`, which git otherwise
 /// reads as they stand.
+///
+/// `cwd` arrives canonical, which on Windows is a `\\?\` path: Git for
+/// Windows given a repository by that name cannot read its configuration and
+/// stops. Git is handed the plain form of the same path whenever one exists.
 fn git_apply(cwd: &Path) -> tokio::process::Command {
+    let cwd = dunce::simplified(cwd);
     let mut command = agiworkforce_worktree::host_git_async();
     command.arg("apply").current_dir(cwd);
     let own = cwd.join(agiworkforce_sandbox_policy::GIT_METADATA_ENTRY);
@@ -141,9 +146,11 @@ async fn patch_file_names(patch: &str, cwd: &Path) -> std::result::Result<PatchN
 
 /// Refuses a name that is absolute or climbs out of the folder it is taken
 /// from. Git refuses these when it applies too; this does not wait for it.
+/// A name with a root and no drive, `/etc/x` on Windows, lands at the root of
+/// the current drive, so it is absolute here too.
 fn refuse_escaping_name(name: &str) -> std::result::Result<(), String> {
     let path = Path::new(name);
-    if path.is_absolute() {
+    if path.is_absolute() || path.has_root() {
         return Err(format!(
             "Refusing patch, header references absolute path: {name}"
         ));

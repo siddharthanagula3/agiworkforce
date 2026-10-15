@@ -890,9 +890,13 @@ async fn execute_tool_with_scoped_permissions(
                     output: "Protected file change is denied by saved permissions.".into(),
                 });
             }
+            // An existing file resolves canonical, `\\?\` on Windows, and a new
+            // one does not; in plain form each file is listed once.
             let mut paths: Vec<_> = targets
                 .iter()
-                .flat_map(|(requested, path)| [requested.clone(), path.clone()])
+                .flat_map(|(requested, path)| {
+                    [requested, path].map(|path| dunce::simplified(path).to_path_buf())
+                })
                 .collect();
             paths.sort();
             paths.dedup();

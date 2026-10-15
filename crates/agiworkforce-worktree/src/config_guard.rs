@@ -945,12 +945,16 @@ fn named_outside(target: &Path, modules: &Path) -> bool {
 /// The submodule paths of the work tree at `top`, whose git directory is
 /// `git_dir` or the one git finds there: every path `.gitmodules` names and
 /// every gitlink in the index. A path that would leave `top` is not one git
-/// checks out, so it is skipped.
+/// checks out, so it is skipped. `git_dir` is canonical, a `\\?\` path on
+/// Windows that Git for Windows reads as no repository, so git is given its
+/// plain form.
 fn submodule_paths(top: &Path, git_dir: Option<&Path>) -> Result<BTreeSet<PathBuf>> {
     let run = |args: &[&str]| -> Result<Output> {
         let mut command = configured_git_command_blocking(top)?;
         if let Some(git_dir) = git_dir {
-            command.env("GIT_DIR", git_dir).env("GIT_WORK_TREE", top);
+            command
+                .env("GIT_DIR", dunce::simplified(git_dir))
+                .env("GIT_WORK_TREE", top);
         }
         command.args(args);
         run_blocking(command, "list the repository's submodules")
