@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { explicitlyRefusedItems, hasExplicitWebSearchOptOut } from '@agiworkforce/search';
 
 import { hasExplicitCodeExecutionOptOut } from '@/lib/code-execution/explicit-execution-intent';
@@ -35,6 +36,29 @@ export type TurnToolProhibition = {
   readonly codeExecution: boolean;
   readonly webSearch: boolean;
 };
+
+export const TurnToolProhibitionSchema = z
+  .object({ allTools: z.boolean(), codeExecution: z.boolean(), webSearch: z.boolean() })
+  .strict();
+
+/**
+ * A resumed turn is the same turn, but the last user-role message it is
+ * rebuilt from can be a steer, approval guidance or a search-retry directive
+ * the loop appended, which carries none of the refusal. The refusal recorded
+ * when the turn began is therefore kept alongside whatever the new text adds.
+ */
+export function mergeTurnToolProhibitions(
+  current: TurnToolProhibition | null,
+  recorded: TurnToolProhibition | null | undefined,
+): TurnToolProhibition | null {
+  if (!recorded) return current;
+  if (!current) return recorded;
+  return {
+    allTools: current.allTools || recorded.allTools,
+    codeExecution: current.codeExecution || recorded.codeExecution,
+    webSearch: current.webSearch || recorded.webSearch,
+  };
+}
 
 export function resolveTurnToolProhibition(
   text: string,

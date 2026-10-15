@@ -55,6 +55,7 @@ import { managedConversationGrantScope } from '../../../lib/connector-tool-sessi
 import { hostedToolRunsUnasked, loadToolApprovalPolicy } from '../../../lib/tool-approval-policy';
 import {
   checkpointRequestForResume,
+  checkpointTurnToolProhibition,
   restoreCheckpointedTurn,
 } from '../../../lib/approval-checkpoint-request';
 import { applySecretHandlingToTexts } from '../../../lib/secret-handling-gate';
@@ -209,6 +210,7 @@ async function handlePausedRunResume(
   }
   const processResult = await processRequest(buildSyntheticRequest(request, claim), authResult, {
     workspaceControls: workspaceControls.controls,
+    turnToolProhibition: checkpointTurnToolProhibition(claim.checkpoint.request),
   });
   if (!processResult.ok) {
     await releaseClaim(db, userId, claim);

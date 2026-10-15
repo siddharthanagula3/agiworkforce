@@ -62,7 +62,11 @@ import {
 } from './request-processor';
 import { webSearchToolOfferPolicyFor } from '@/lib/web-search/required-search';
 import * as requestProcessorModule from './request-processor';
-import { buildApprovalCheckpointRequest } from './approval-checkpoint-request';
+import {
+  buildApprovalCheckpointRequest,
+  checkpointRequestForResume,
+  checkpointTurnToolProhibition,
+} from './approval-checkpoint-request';
 import {
   WEB_SEARCH_INJECTION_PROVIDERS,
   providerInjectsWebSearchTool,
@@ -485,6 +489,68 @@ describe('Free capability gate, model-agnostic web search', () => {
         expect(result.chatRequest.code_execution).toBe(true);
         expect(result.executionRequirement).toEqual(requirement);
       }
+    },
+  );
+
+  it.each([
+    ['a steer', 'Also mention which one is largest.'],
+    ['approval guidance', 'Approved. Keep the summary to one sentence.'],
+  ] as const)(
+    'keeps a refused code run off when a resumed turn ends on %s (PC-F04)',
+    async (_lastMessage, lastUserText) => {
+      const refusal = 'Summarise these numbers in words: 3, 5, 8. Do not run any code.';
+      const auth = {
+        ok: true as const,
+        userId: 'user-free',
+        token: 'session-token',
+        boundSurface: 'web' as const,
+        subscription: freeSubscription,
+      };
+      const began = await processRequest(
+        freeTrialRequest(
+          {
+            model: FREE_CHAT_MODEL,
+            messages: [{ role: 'user', content: refusal }],
+            code_execution: true,
+            stream: true,
+          },
+          `free-ws-code-refused-${lastUserText.length}`,
+        ),
+        auth,
+      );
+      expect(began.ok).toBe(true);
+      if (!began.ok) return;
+      expect(began.executionRequirement).toEqual({ required: false, source: null });
+
+      const checkpoint = buildApprovalCheckpointRequest(
+        began.chatRequest,
+        began.callerToolFields,
+        [],
+        began.modelSelection,
+        began.turnToolProhibition,
+      );
+      const resumed = await processRequest(
+        freeTrialRequest(
+          {
+            ...checkpointRequestForResume(checkpoint, true),
+            messages: [
+              { role: 'user', content: refusal },
+              { role: 'assistant', content: 'Three, five and eight.' },
+              { role: 'user', content: lastUserText },
+            ],
+            stream: true,
+          },
+          `free-ws-code-refused-resume-${lastUserText.length}`,
+        ),
+        auth,
+        { turnToolProhibition: checkpointTurnToolProhibition(checkpoint) },
+      );
+
+      expect(resumed.ok).toBe(true);
+      if (!resumed.ok) return;
+      expect(resumed.chatRequest.code_execution).toBe(false);
+      expect(resumed.executionRequirement).toEqual({ required: false, source: null });
+      expect(carriesTool(resumed.llmRequest.tools, EXECUTE_CODE_TOOL)).toBe(false);
     },
   );
 

@@ -366,6 +366,27 @@ describe('POST /api/llm/v1/chat/completions/resume-device', () => {
     );
   });
 
+  it('resumes under the refusal the turn began with, outside the replayed request (PC-F04)', async () => {
+    const refusedCode = { allTools: false, codeExecution: true, webSearch: false };
+    mocks.claim.mockResolvedValue(
+      claimed(
+        buildApprovalCheckpointRequest(
+          claimed().checkpoint.request as unknown as ChatCompletionRequest,
+          {},
+          [],
+          undefined,
+          refusedCode,
+        ),
+      ),
+    );
+
+    await (await POST(resume(resumeBody()))).text();
+
+    const [synthetic, , options] = mocks.processRequest.mock.calls[0]!;
+    expect(options).toMatchObject({ turnToolProhibition: refusedCode });
+    expect(await (synthetic as NextRequest).json()).not.toHaveProperty('x_turn_tool_prohibition');
+  });
+
   it('advertises no workflow run for a turn that fell back to the request', async () => {
     mocks.runTurn.mockResolvedValue({ transport: 'inline', readable: doneStream() });
 

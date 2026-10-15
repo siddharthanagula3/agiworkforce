@@ -4,6 +4,7 @@ import { getDefaultAutoRoutingProfile, getDefaultModelFor } from '@agiworkforce/
 import {
   buildApprovalCheckpointRequest,
   checkpointRequestForResume,
+  checkpointTurnToolProhibition,
   restoreCheckpointedTurn,
 } from './approval-checkpoint-request';
 import type { ModelSelection } from './capability-preamble';
@@ -67,6 +68,45 @@ describe('buildApprovalCheckpointRequest', () => {
     expect(buildApprovalCheckpointRequest(inferred, { code_execution: true })).toMatchObject({
       code_execution: true,
     });
+  });
+});
+
+describe('the refusal a checkpoint keeps (PC-F04)', () => {
+  const refusedCode = { allTools: false, codeExecution: true, webSearch: false };
+  const turn = {
+    messages: [],
+    model: 'm',
+    stream: true,
+    code_execution: false,
+  } as unknown as ChatCompletionRequest;
+
+  it('is read back for the resumed turn', () => {
+    const request = buildApprovalCheckpointRequest(
+      turn,
+      { code_execution: true },
+      [],
+      undefined,
+      refusedCode,
+    );
+
+    expect(checkpointTurnToolProhibition(request)).toEqual(refusedCode);
+  });
+
+  it('stays out of the request a resume replays, on Free and paid plans alike', () => {
+    const request = buildApprovalCheckpointRequest(turn, {}, [], undefined, refusedCode);
+
+    for (const freeTier of [true, false]) {
+      expect(checkpointRequestForResume(request, freeTier)).not.toHaveProperty(
+        'x_turn_tool_prohibition',
+      );
+    }
+  });
+
+  it('reads as no refusal for a checkpoint saved without one or holding something else', () => {
+    expect(checkpointTurnToolProhibition(buildApprovalCheckpointRequest(turn))).toBeUndefined();
+    expect(
+      checkpointTurnToolProhibition({ x_turn_tool_prohibition: { codeExecution: 'yes' } }),
+    ).toBeUndefined();
   });
 });
 

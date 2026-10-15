@@ -279,6 +279,29 @@ describe('POST /api/llm/v1/chat/completions/runs/[runId]/resume', () => {
     );
   });
 
+  it('resumes under the refusal the turn began with, outside the replayed request (PC-F04)', async () => {
+    const refusedCode = { allTools: false, codeExecution: true, webSearch: false };
+    runMocks.claim.mockResolvedValue({
+      ...claim,
+      checkpoint: {
+        ...claim.checkpoint,
+        request: buildApprovalCheckpointRequest(
+          claim.checkpoint.request as unknown as ChatCompletionRequest,
+          {},
+          [],
+          undefined,
+          refusedCode,
+        ),
+      },
+    });
+
+    await (await POST(makeRequest({}), context)).text();
+
+    const [synthetic, , options] = mockProcessRequest.mock.calls[0]!;
+    expect(options).toMatchObject({ turnToolProhibition: refusedCode });
+    expect(await (synthetic as NextRequest).json()).not.toHaveProperty('x_turn_tool_prohibition');
+  });
+
   it('returns the pause to the user when the turn cannot be validated', async () => {
     mockProcessRequest.mockResolvedValue({
       ok: false,

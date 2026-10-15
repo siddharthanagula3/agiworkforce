@@ -119,6 +119,8 @@ import {
   CloudAgentApprovalDecisionError,
   CloudAgentApprovalCheckpointNotFoundError,
 } from '@/lib/services/cloud-agent-run-service';
+import { buildApprovalCheckpointRequest } from '../lib/approval-checkpoint-request';
+import type { ChatCompletionRequest } from '../lib/request-processor';
 import { POST } from './route';
 
 type TypesModule = typeof import('@agiworkforce/types');
@@ -308,6 +310,30 @@ describe('POST /api/llm/v1/chat/completions/approve, durable checkpoint boundary
     await response.text();
     const synthetic = mockProcessRequest.mock.calls[0]![0] as NextRequest;
     expect((await synthetic.json()).messages).toEqual(messages);
+  });
+
+  it('resumes under the refusal the turn began with, outside the replayed request (PC-F04)', async () => {
+    const refusedCode = { allTools: false, codeExecution: true, webSearch: false };
+    checkpointMocks.claim.mockResolvedValue({
+      ...claimedCheckpoint,
+      checkpoint: {
+        ...claimedCheckpoint.checkpoint,
+        request: buildApprovalCheckpointRequest(
+          claimedCheckpoint.checkpoint.request as unknown as ChatCompletionRequest,
+          {},
+          [],
+          undefined,
+          refusedCode,
+        ),
+      },
+    });
+
+    const response = await POST(makeRequest(resumeBody()));
+    await response.text();
+
+    const [synthetic, , options] = mockProcessRequest.mock.calls[0]!;
+    expect(options).toMatchObject({ turnToolProhibition: refusedCode });
+    expect(await (synthetic as NextRequest).json()).not.toHaveProperty('x_turn_tool_prohibition');
   });
 
   it('preserves ordinary no-conversation approval continuity', async () => {

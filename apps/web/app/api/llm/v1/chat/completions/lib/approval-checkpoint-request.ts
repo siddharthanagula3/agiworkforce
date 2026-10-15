@@ -10,9 +10,16 @@ import type {
   ChatCompletionRequest,
   ProcessedRequest,
 } from './request-processor';
+import { TurnToolProhibitionSchema, type TurnToolProhibition } from './turn-tool-prohibition';
 
 const CHECKPOINT_TURN_ATTACHMENTS_KEY = 'x_turn_attachments';
 const CHECKPOINT_MODEL_SELECTION_KEY = 'x_model_selection';
+const CHECKPOINT_TURN_TOOL_PROHIBITION_KEY = 'x_turn_tool_prohibition';
+const CHECKPOINT_PRIVATE_KEYS: readonly string[] = [
+  CHECKPOINT_TURN_ATTACHMENTS_KEY,
+  CHECKPOINT_MODEL_SELECTION_KEY,
+  CHECKPOINT_TURN_TOOL_PROHIBITION_KEY,
+];
 
 const CheckpointTurnAttachmentsSchema = z.array(
   z.object({
@@ -37,6 +44,7 @@ export function buildApprovalCheckpointRequest(
   callerToolFields: CallerToolFields = {},
   turnAttachments: readonly TurnAttachment[] = [],
   modelSelection?: ModelSelection,
+  turnToolProhibition?: TurnToolProhibition | null,
 ): Record<string, unknown> {
   const {
     messages: _messages,
@@ -51,22 +59,15 @@ export function buildApprovalCheckpointRequest(
     stream: true,
     ...(turnAttachments.length > 0 ? { [CHECKPOINT_TURN_ATTACHMENTS_KEY]: turnAttachments } : {}),
     ...(modelSelection ? { [CHECKPOINT_MODEL_SELECTION_KEY]: modelSelection } : {}),
+    ...(turnToolProhibition ? { [CHECKPOINT_TURN_TOOL_PROHIBITION_KEY]: turnToolProhibition } : {}),
   };
 }
 
 function replayableCheckpointRequest(request: Record<string, unknown>): Record<string, unknown> {
-  if (
-    !Object.hasOwn(request, CHECKPOINT_TURN_ATTACHMENTS_KEY) &&
-    !Object.hasOwn(request, CHECKPOINT_MODEL_SELECTION_KEY)
-  ) {
-    return request;
-  }
-  const {
-    [CHECKPOINT_TURN_ATTACHMENTS_KEY]: _turnAttachments,
-    [CHECKPOINT_MODEL_SELECTION_KEY]: _modelSelection,
-    ...replayable
-  } = request;
-  return replayable;
+  if (!CHECKPOINT_PRIVATE_KEYS.some((key) => Object.hasOwn(request, key))) return request;
+  return Object.fromEntries(
+    Object.entries(request).filter(([key]) => !CHECKPOINT_PRIVATE_KEYS.includes(key)),
+  );
 }
 
 export function checkpointRequestForResume(
@@ -81,6 +82,13 @@ export function checkpointRequestForResume(
     ...freeRequest
   } = replayable;
   return freeRequest;
+}
+
+export function checkpointTurnToolProhibition(
+  request: Record<string, unknown>,
+): TurnToolProhibition | undefined {
+  const parsed = TurnToolProhibitionSchema.safeParse(request[CHECKPOINT_TURN_TOOL_PROHIBITION_KEY]);
+  return parsed.success ? parsed.data : undefined;
 }
 
 function checkpointTurnAttachments(request: Record<string, unknown>): TurnAttachment[] {

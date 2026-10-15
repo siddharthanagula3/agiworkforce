@@ -58,6 +58,7 @@ import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/we
 import { applySecretHandlingToTexts } from '../lib/secret-handling-gate';
 import {
   checkpointRequestForResume,
+  checkpointTurnToolProhibition,
   restoreCheckpointedTurn,
 } from '../lib/approval-checkpoint-request';
 
@@ -230,7 +231,10 @@ async function handleDeviceStepResume(request: NextRequest, authResult: AuthGate
   const processResult = await processRequest(
     buildSyntheticRequest(request, claim, isFreeTierRequest),
     authResult,
-    { workspaceControls: workspaceControls.controls },
+    {
+      workspaceControls: workspaceControls.controls,
+      turnToolProhibition: checkpointTurnToolProhibition(claim.checkpoint.request),
+    },
   );
   if (!processResult.ok) {
     await releaseClaim(db, userId, claim);

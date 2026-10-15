@@ -7,6 +7,7 @@ import { WEB_SEARCH_TOOL } from '@/lib/web-search/web-search-tool';
 import type { ChatCompletionRequest } from './request-processor';
 import {
   applyTurnToolProhibition,
+  mergeTurnToolProhibitions,
   prohibitedToolResultMessage,
   resolveTurnToolProhibition,
   turnProhibitsTool,
@@ -110,6 +111,28 @@ describe('applyTurnToolProhibition', () => {
     const request = { web_search: true, code_execution: true } as ChatCompletionRequest;
     applyTurnToolProhibition(request, null);
     expect(request).toEqual({ web_search: true, code_execution: true });
+  });
+});
+
+describe('mergeTurnToolProhibitions (PC-F04)', () => {
+  const codeOnly = { allTools: false, codeExecution: true, webSearch: false };
+  const webOnly = { allTools: false, codeExecution: false, webSearch: true };
+
+  it('keeps the refusal a resumed turn began with when its last message refuses nothing', () => {
+    expect(mergeTurnToolProhibitions(null, codeOnly)).toEqual(codeOnly);
+  });
+
+  it('adds what the new message refuses to what the turn already refused', () => {
+    expect(mergeTurnToolProhibitions(webOnly, codeOnly)).toEqual({
+      allTools: false,
+      codeExecution: true,
+      webSearch: true,
+    });
+  });
+
+  it('is the new refusal alone when nothing was recorded', () => {
+    expect(mergeTurnToolProhibitions(webOnly, null)).toEqual(webOnly);
+    expect(mergeTurnToolProhibitions(null, undefined)).toBeNull();
   });
 });
 

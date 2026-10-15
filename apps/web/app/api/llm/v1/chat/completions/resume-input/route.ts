@@ -67,6 +67,7 @@ import {
 } from '@/lib/security/secrets-audit';
 import {
   checkpointRequestForResume,
+  checkpointTurnToolProhibition,
   restoreCheckpointedTurn,
 } from '../lib/approval-checkpoint-request';
 
@@ -269,7 +270,10 @@ async function handleToolInputResume(
   const processResult = await processRequest(
     buildSyntheticRequest(request, claim, isFreeTierRequest),
     authResult,
-    { workspaceControls: workspaceControls.controls },
+    {
+      workspaceControls: workspaceControls.controls,
+      turnToolProhibition: checkpointTurnToolProhibition(claim.checkpoint.request),
+    },
   );
   if (!processResult.ok) {
     await releaseClaim(db, userId, claim);

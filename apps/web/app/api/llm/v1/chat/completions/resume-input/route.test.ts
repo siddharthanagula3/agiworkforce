@@ -457,6 +457,29 @@ describe('POST /api/llm/v1/chat/completions/resume-input, durable MRTR boundary'
     );
   });
 
+  it('resumes under the refusal the turn began with, outside the replayed request (PC-F04)', async () => {
+    const refusedCode = { allTools: false, codeExecution: true, webSearch: false };
+    checkpointMocks.claim.mockResolvedValue({
+      ...claimedCheckpoint,
+      checkpoint: {
+        ...claimedCheckpoint.checkpoint,
+        request: buildApprovalCheckpointRequest(
+          claimedCheckpoint.checkpoint.request as unknown as ChatCompletionRequest,
+          {},
+          [],
+          undefined,
+          refusedCode,
+        ),
+      },
+    });
+
+    await (await POST(makeRequest(resumeBody()))).text();
+
+    const [synthetic, , options] = mockProcessRequest.mock.calls[0]!;
+    expect(options).toMatchObject({ turnToolProhibition: refusedCode });
+    expect(await (synthetic as NextRequest).json()).not.toHaveProperty('x_turn_tool_prohibition');
+  });
+
   it('releases the checkpoint lease when current request validation cannot proceed', async () => {
     mockProcessRequest.mockResolvedValue({
       ok: false,

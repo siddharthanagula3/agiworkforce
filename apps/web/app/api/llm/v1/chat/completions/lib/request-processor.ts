@@ -474,6 +474,7 @@ import { PAID_UPGRADE_ACCESS_NOTE } from '@/lib/billing/paid-upgrade-copy';
 import { CHAT_TURN_PHASE } from './turn-phases';
 import {
   applyTurnToolProhibition,
+  mergeTurnToolProhibitions,
   resolveTurnToolProhibition,
   type TurnToolProhibition,
 } from './turn-tool-prohibition';
@@ -2872,6 +2873,8 @@ const MAX_TOTAL_LENGTH = 1000000;
 export interface ProcessRequestOptions {
   workspaceControls?: ResolvedWorkspaceControls | null;
   scopedDbPromise?: Promise<UserScopedDb>;
+  /** What the user ruled out when a resumed turn began, read back from its checkpoint. */
+  turnToolProhibition?: TurnToolProhibition | null;
 }
 
 export function workspaceFeaturesForChatRequest(
@@ -4092,10 +4095,13 @@ async function processAdmittedRequest(
     taskType: resolvedTaskType,
     planTier: subscription.plan_tier,
   });
-  const turnToolProhibition = resolveTurnToolProhibition(lastUserText, {
-    surface: chatSurface,
-    searchRequested: chatRequest.search_requested === true,
-  });
+  const turnToolProhibition = mergeTurnToolProhibitions(
+    resolveTurnToolProhibition(lastUserText, {
+      surface: chatSurface,
+      searchRequested: chatRequest.search_requested === true,
+    }),
+    options.turnToolProhibition,
+  );
   applyTurnToolProhibition(chatRequest, turnToolProhibition);
   resolvedTaskType = resolveToolAwareTaskType(resolvedTaskType, chatRequest);
   const requestedMaxOutputTokens = chatRequest.max_tokens ?? chatRequest.max_completion_tokens;

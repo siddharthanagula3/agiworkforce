@@ -68,6 +68,7 @@ import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import {
   checkpointRequestForResume,
+  checkpointTurnToolProhibition,
   restoreCheckpointedTurn,
 } from '../lib/approval-checkpoint-request';
 
@@ -247,7 +248,10 @@ async function handleToolApproval(
   const processResult = await processRequest(
     buildSyntheticRequest(request, claim, isFreeTierRequest),
     authResult,
-    { workspaceControls: workspaceControls.controls },
+    {
+      workspaceControls: workspaceControls.controls,
+      turnToolProhibition: checkpointTurnToolProhibition(claim.checkpoint.request),
+    },
   );
   if (!processResult.ok) {
     await releaseClaim(db, userId, claim);
