@@ -13,6 +13,7 @@ import {
   STREAM_INTERRUPTED_CODE,
   STREAM_INTERRUPTED_MESSAGE,
   FREE_ALLOWANCE_EXHAUSTED_CODE,
+  FREE_USAGE_LIMIT_REACHED_MESSAGE,
   mapClassifiedUpstreamError,
   streamErrorFrame,
   toolFailureMessage,
@@ -571,5 +572,13 @@ describe('a connection that drops after part of the answer arrived', () => {
     });
 
     expect(copy.code).toBe('provider_rate_limited');
+  });
+});
+
+describe('a free account that reached its own usage limit', () => {
+  it('is not sent to Usage for a reset time that page never shows a free account', () => {
+    expect(FREE_USAGE_LIMIT_REACHED_MESSAGE).not.toMatch(/\bUsage\b/);
+    expect(FREE_USAGE_LIMIT_REACHED_MESSAGE).not.toMatch(/\bresets? (at|in|on)\b/i);
+    expect(FREE_USAGE_LIMIT_REACHED_MESSAGE).toMatch(/your own provider key/);
   });
 });

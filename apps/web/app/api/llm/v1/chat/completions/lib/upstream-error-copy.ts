@@ -104,9 +104,11 @@ export const STREAM_INTERRUPTED_MESSAGE =
 
 const PICK_A_MODEL = 'pick a specific model from the model picker';
 
-// The reader's OWN limit: it names their account, points at where the reset is
-// shown, and never reads as a provider's problem or a self serve upsell.
-export const FREE_USAGE_LIMIT_REACHED_MESSAGE = `You have reached the free usage limit on your account. Open Usage to see when it resets, or use your own provider key to keep going. ${PAID_UPGRADE_ACCESS_NOTE}`;
+// The reader's OWN limit: it names their account and never reads as a
+// provider's problem or a self serve upsell. Usage shows a free account no
+// meters or reset times, so the reset is stated beside this message only when
+// the response carries one.
+export const FREE_USAGE_LIMIT_REACHED_MESSAGE = `You have reached the free usage limit on your account. Try again after it resets, or use your own provider key to keep going. ${PAID_UPGRADE_ACCESS_NOTE}`;
 
 export { FREE_ALLOWANCE_EXHAUSTED_CODE };
 
