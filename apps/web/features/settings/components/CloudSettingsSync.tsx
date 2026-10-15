@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSession } from '@/lib/identity/client';
@@ -76,6 +76,11 @@ export function CloudSettingsSync() {
   const localeRef = useRef(currentLocale);
   localeRef.current = currentLocale;
 
+  const themeRevision = useRef(0);
+  useLayoutEffect(() => {
+    themeRevision.current += 1;
+  }, [theme]);
+
   const write = useCallback<(namespace: string, patch: Record<string, unknown>) => void>(
     (namespace, patch) => {
       writeQueue.current = writeQueue.current.then(async () => {
@@ -114,6 +119,7 @@ export function CloudSettingsSync() {
     }
 
     let cancelled = false;
+    const themeRevisionAtRead = themeRevision.current;
     void getCsrfToken().catch(() => {});
     void Promise.all([
       fetchStoredPreferenceNamespace<AppearanceNamespace>(APPEARANCE_NAMESPACE),
@@ -124,7 +130,7 @@ export function CloudSettingsSync() {
         if (cancelled) return;
         const { theme: storedTheme, ...storeFields } = fromAppearanceNamespace(storedAppearance);
         if (Object.keys(storeFields).length > 0) useSettingsStore.setState(storeFields);
-        if (storedTheme) setTheme(storedTheme);
+        if (storedTheme && themeRevision.current === themeRevisionAtRead) setTheme(storedTheme);
 
         const accountCommands = readAccountCustomCommands(storedCommands);
         useSettingsStore.setState({

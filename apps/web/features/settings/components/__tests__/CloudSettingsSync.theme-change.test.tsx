@@ -85,6 +85,50 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+describe('changing the theme while the account settings are still being read', () => {
+  it('keeps the newer local choice over the late account value, then saves it', async () => {
+    let answerAppearanceRead: (stored: { theme: string }) => void = () => undefined;
+    preferences.fetchStoredPreferenceNamespace.mockImplementation((namespace: string) =>
+      namespace === 'appearance'
+        ? new Promise((resolve) => {
+            answerAppearanceRead = resolve;
+          })
+        : Promise.resolve({ locale: 'en' }),
+    );
+    render(
+      <ThemeProvider>
+        <CloudSettingsSync />
+        <ThemeProbe />
+      </ThemeProvider>,
+    );
+    await settle();
+    expect(screen.getByRole('button')).toHaveTextContent('system');
+
+    fireEvent.click(screen.getByRole('button'));
+    await settle();
+    expect(screen.getByRole('button')).toHaveTextContent('dark');
+
+    await act(async () => {
+      answerAppearanceRead({ theme: 'light' });
+    });
+    await settle();
+    expect(screen.getByRole('button')).toHaveTextContent('dark');
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button')).toHaveTextContent('dark');
+    const appearanceWrites = preferences.savePreferenceNamespace.mock.calls.filter(
+      ([namespace]) => namespace === 'appearance',
+    );
+    expect(appearanceWrites).toHaveLength(1);
+    expect(appearanceWrites[0]?.[1]).toMatchObject({ theme: 'dark' });
+  });
+});
+
 describe('changing the theme after the account settings hydrated', () => {
   it('keeps the new theme instead of reading the account value back over it, then saves it', async () => {
     render(
