@@ -285,7 +285,7 @@ export function parseElicitationInputRequests(raw: unknown): ElicitationPrompt[]
   return prompts;
 }
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@][^\s@.]*\.[^\s@]+$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function validString(

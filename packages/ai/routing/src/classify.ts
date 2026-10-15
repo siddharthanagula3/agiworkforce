@@ -61,12 +61,12 @@ const RE_BROWSER_PERFORM_ACTION =
   /^perform\s+(?:an?\s+)?(?:(?:horizontal|vertical)\s+)?(click|double[ -]click|right[ -]click|tap|hover|drag|swipe|scroll)\b/i;
 
 const RE_BROWSER_UI_ACTION =
-  /^(click|double[ -]click|right[ -]click|tap|press|fill(?:\s+in)?|type|enter|select|choose|check|uncheck|submit)\s+[^\n]*\b(button|link|menu|tab|field|input|textbox|text area|form|checkbox|check box|radio button|dropdown|drop-down|option|toggle|control)\b/i;
+  /^(click|double[ -]click|right[ -]click|tap|press|fill(?:\s+in)?|type|enter|select|choose|check|uncheck|submit)\s+(?:\S[^\n]*)?\b(button|link|menu|tab|field|input|textbox|text area|form|checkbox|check box|radio button|dropdown|drop-down|option|toggle|control)\b/i;
 
 const RE_BROWSER_NAVIGATION =
-  /^(navigate|open|visit|go)\s+[^\n]*(https?:\/\/\S+|\b(this|current|active)\s+(browser\s+)?(tab|page)\b)/i;
+  /^(navigate|open|visit|go)\s+(?:\S[^\n]*)?(https?:\/\/\S+|\b(this|current|active)\s+(browser\s+)?(tab|page)\b)/i;
 
-const RE_BROWSER_PAGE_ACTION = /^(scroll|reload|refresh)\s+[^\n]*\b(tab|page|browser)\b/i;
+const RE_BROWSER_PAGE_ACTION = /^(scroll|reload|refresh)\s+(?:\S[^\n]*)?\b(tab|page|browser)\b/i;
 
 const RE_BROWSER_CURRENT_PAGE_CONTEXT = new RegExp(
   String.raw`^[^.!?\n]*\b(?:on|in)\s+${BROWSER_CURRENT_PAGE_QUALIFIER}\b`,

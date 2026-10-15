@@ -392,6 +392,8 @@ describe('explicitlyRefusedItems', () => {
       ['tools', 'web search', 'connected services', 'files', 'images', 'video', 'artifacts'],
     ],
     ['Do not browse, run code, or use external tools.', ['browse', 'code', 'tools']],
+    ['Do not browse , run code ,  or use external tools.', ['browse', 'code', 'tools']],
+    ["Don't search the web\tor run code, just answer.", ['search the web', 'code']],
     ['Answer from memory. No tools at all.', ['tools']],
     ["Don't search the web or run code, just answer.", ['search the web', 'code']],
     ["Don't guess, check the docs or search the web.", ['guess']],

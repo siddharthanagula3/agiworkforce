@@ -120,7 +120,8 @@ const REFUSED_LIST_PATTERN = new RegExp(
   String.raw`(?:${REFUSING_IMPERATIVE}|\b(?:without|avoid)|${REFUSAL_CLAUSE_START}(?:no|not))(?!\s+(?:just|only|simply|hesitate|forget|fail|worry|worries|mind|stop|be\s+afraid|problem|problems|thanks|idea|doubt|matter|way|sure|need\s+to\s+ask)\b)[^\S\n]+([^.;:!?\n${LONG_DASHES}]{1,400})(?=[.;:!?\n${LONG_DASHES}]|$)`,
   'giu',
 );
-const REFUSED_LIST_SEPARATOR = /\s*,\s*(?:(?:or|nor)\s+)?|\s+(?:or|nor)\s+/giu;
+const REFUSED_LIST_SEPARATOR = /,\s*(?:(?:or|nor)\s+)?|\s(?:or|nor)\s+/giu;
+const WHITESPACE_CHARACTER = /\s/u;
 const LIST_CLOSING_CONJUNCTION = /\b(?:or|nor)\b/iu;
 const REFUSED_ITEM_TRAILING_QUALIFIER =
   /(?:\s+(?:at\s+all|this\s+time|for\s+(?:this(?:\s+one)?|now)|here|today|now|please|either|again))+$/u;
@@ -152,13 +153,21 @@ function refusedItemsOfClause(clause: string, offset: number): RefusedItem[] {
   const separators: string[] = [];
   let cursor = 0;
   for (const separator of clause.matchAll(REFUSED_LIST_SEPARATOR)) {
+    let separatorStart = separator.index;
+    while (
+      separatorStart > cursor &&
+      WHITESPACE_CHARACTER.test(clause.charAt(separatorStart - 1))
+    ) {
+      separatorStart -= 1;
+    }
+    const separatorEnd = separator.index + separator[0].length;
     segments.push({
-      text: clause.slice(cursor, separator.index),
+      text: clause.slice(cursor, separatorStart),
       start: cursor,
-      end: separator.index,
+      end: separatorStart,
     });
-    separators.push(separator[0]);
-    cursor = separator.index + separator[0].length;
+    separators.push(clause.slice(separatorStart, separatorEnd));
+    cursor = separatorEnd;
   }
   segments.push({ text: clause.slice(cursor), start: cursor, end: clause.length });
 

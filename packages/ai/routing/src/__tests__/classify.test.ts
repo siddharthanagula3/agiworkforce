@@ -316,6 +316,23 @@ describe('classifyTaskLocally, computer-use', () => {
     expect(classify('CLICK the menu', NO_HISTORY, [screenshot]).type).toBe('computer-use');
     expect(classify('Submit it', NO_HISTORY, [screenshot]).type).toBe('computer-use');
   });
+
+  it.each([
+    ['tap', `tap ${' '.repeat(150_000)}!`],
+    ['go', `go ${' '.repeat(150_000)}!`],
+    ['scroll', `scroll ${' '.repeat(150_000)}!`],
+  ])('reads a long gap after %s in linear time', (_verb, message) => {
+    const startedAt = performance.now();
+    expect(classify(message).type).not.toBe('computer-use');
+    expect(performance.now() - startedAt).toBeLessThan(2000);
+  });
+
+  it('still recognizes a browser request after a long gap', () => {
+    expect(classify(`click ${' '.repeat(150_000)}the submit button`)).toEqual({
+      type: 'computer-use',
+      confidence: 0.9,
+    });
+  });
 });
 
 describe('classifyTaskLocally, multimodal', () => {

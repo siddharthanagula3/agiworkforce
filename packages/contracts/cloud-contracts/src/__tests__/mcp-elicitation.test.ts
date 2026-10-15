@@ -164,6 +164,9 @@ describe('validateElicitationResponses', () => {
     [{ repo: 'agi/web', count: 2.5 }, 'count'],
     [{ repo: 'agi/web', count: 9 }, 'count'],
     [{ repo: 'agi/web', count: 2, email: 'nope' }, 'email'],
+    [{ repo: 'agi/web', count: 2, email: 'a@b' }, 'email'],
+    [{ repo: 'agi/web', count: 2, email: 'a@b.' }, 'email'],
+    [{ repo: 'agi/web', count: 2, email: `!@!.${'!.'.repeat(1_990)} ` }, 'email'],
     [{ repo: 'agi/web', count: 2, branch: 'prod' }, 'branch'],
     [{ repo: 'agi/web', count: 2, labels: ['bug', 'docs', 'ui'] }, 'labels'],
     [{ repo: 'agi/web', count: 2, extra: 'x' }, 'extra'],
@@ -171,6 +174,16 @@ describe('validateElicitationResponses', () => {
     const result = validateElicitationResponses(form, { k1: { action: 'accept', content } });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toContain(name);
+  });
+
+  it('accepts a dotted email address', () => {
+    const result = validateElicitationResponses(form, {
+      k1: {
+        action: 'accept',
+        content: { repo: 'agi/web', count: 2, email: 'first.last@mail.example.co' },
+      },
+    });
+    expect(result.ok).toBe(true);
   });
 
   it.each(['decline', 'cancel'] as const)(
