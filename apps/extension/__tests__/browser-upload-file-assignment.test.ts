@@ -1,5 +1,6 @@
 import { File as NodeFile } from 'node:buffer';
 import { createHash, webcrypto } from 'node:crypto';
+import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildUserFileUploadPreparationExpression,
@@ -16,26 +17,48 @@ const file = {
   base64: bytes.toString('base64'),
 };
 const signature = 'input||file||';
+let dom: JSDOM;
 let input: HTMLInputElement;
+const nativeFiles = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files');
+const assignedFiles = new WeakMap<object, unknown[]>();
 
 beforeEach(() => {
-  document.body.innerHTML = '<input id="upload" type="file" accept=".txt">';
-  input = document.getElementById('upload') as HTMLInputElement;
-  Object.defineProperty(input, 'files', { value: [], writable: true, configurable: true });
-  vi.stubGlobal('File', NodeFile);
-  vi.stubGlobal('crypto', webcrypto);
-  vi.stubGlobal(
-    'DataTransfer',
-    class {
-      files: NodeFile[] = [];
-      items = { add: (file: NodeFile) => this.files.push(file) };
+  dom = new JSDOM('<input id="upload" type="file" accept=".txt">', {
+    url: location.href,
+    runScripts: 'outside-only',
+  });
+  input = dom.window.document.getElementById('upload') as HTMLInputElement;
+  Object.defineProperty(HTMLInputElement.prototype, 'files', {
+    configurable: true,
+    get(this: object) {
+      return assignedFiles.get(this) ?? [];
     },
-  );
+    set(this: object, value: unknown[]) {
+      assignedFiles.set(this, value);
+    },
+  });
+  const transfer = class {
+    files: NodeFile[] = [];
+    items = { add: (file: NodeFile) => this.files.push(file) };
+  };
+  for (const [name, value] of Object.entries({
+    File: NodeFile,
+    crypto: webcrypto,
+    DataTransfer: transfer,
+  })) {
+    vi.stubGlobal(name, value);
+    Object.defineProperty(dom.window, name, { value, configurable: true });
+  }
 });
 afterEach(() => {
-  document.body.replaceChildren();
+  if (nativeFiles) Object.defineProperty(HTMLInputElement.prototype, 'files', nativeFiles);
+  dom.window.close();
   vi.unstubAllGlobals();
 });
+
+function filesOf(target: Element): unknown[] {
+  return assignedFiles.get(target) ?? [];
+}
 
 async function execute(files = [file], expectedSignature = signature) {
   const expression = buildUserFileUploadPreparationExpression(
@@ -44,8 +67,8 @@ async function execute(files = [file], expectedSignature = signature) {
     location.href,
     files,
   );
-  // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
-  const prepared = await new Function(`return ${expression};`)();
+  // llm-guardrail-allow: executes the repository-owned upload expression inside this isolated test fixture.
+  const prepared = await dom.window.eval(expression);
   commitPreparedUserFileUpload(prepared);
   return verifyCommittedUserFileUpload(prepared);
 }
@@ -60,7 +83,7 @@ describe('production fixed file assignment function', () => {
       bytesVerified: true,
       eventTrusted: false,
     });
-    expect(input.files?.[0]?.name).toBe(file.name);
+    expect((filesOf(input)[0] as NodeFile).name).toBe(file.name);
     expect(events).toEqual([
       { type: 'input', trusted: false },
       { type: 'change', trusted: false },
@@ -73,19 +96,18 @@ describe('production fixed file assignment function', () => {
       'checksum mismatch',
     );
     await expect(execute([file, file])).rejects.toThrow('only one file');
-    expect(input.files).toHaveLength(0);
+    expect(filesOf(input)).toHaveLength(0);
   });
 
   it('accepts an actual file-input brand from an adopted DOM realm', async () => {
-    const frame = document.createElement('iframe');
-    document.body.append(frame);
+    const frame = dom.window.document.createElement('iframe');
+    dom.window.document.body.append(frame);
     const adopted = frame.contentDocument!.createElement('input');
     adopted.id = 'upload';
     adopted.type = 'file';
     input.replaceWith(adopted);
     input = adopted;
-    Object.defineProperty(input, 'files', { value: [], writable: true, configurable: true });
-    expect(input instanceof HTMLInputElement).toBe(false);
+    expect(input instanceof dom.window.HTMLInputElement).toBe(false);
     await expect(execute()).resolves.toMatchObject({
       fileCount: 1,
       bytesVerified: true,
@@ -96,11 +118,11 @@ describe('production fixed file assignment function', () => {
   it('performs no input mutation or change event during asynchronous preparation', async () => {
     const events = vi.fn();
     input.addEventListener('change', events);
-    // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
-    const prepared = await new Function(
-      `return ${buildUserFileUploadPreparationExpression('#upload', signature, location.href, [file])};`,
-    )();
-    expect(input.files).toHaveLength(0);
+    // llm-guardrail-allow: executes the repository-owned upload expression inside this isolated test fixture.
+    const prepared = await dom.window.eval(
+      buildUserFileUploadPreparationExpression('#upload', signature, location.href, [file]),
+    );
+    expect(filesOf(input)).toHaveLength(0);
     expect(events).not.toHaveBeenCalled();
     commitPreparedUserFileUpload(prepared);
     expect(events).toHaveBeenCalledTimes(1);
@@ -111,12 +133,12 @@ describe('production fixed file assignment function', () => {
   });
 
   it('rejects a file input disabled through its parent fieldset', async () => {
-    const fieldset = document.createElement('fieldset');
+    const fieldset = dom.window.document.createElement('fieldset');
     fieldset.disabled = true;
-    document.body.append(fieldset);
+    dom.window.document.body.append(fieldset);
     fieldset.append(input);
     expect(input.disabled).toBe(false);
     await expect(execute()).rejects.toThrow('enabled file input');
-    expect(input.files).toHaveLength(0);
+    expect(filesOf(input)).toHaveLength(0);
   });
 });

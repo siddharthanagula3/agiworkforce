@@ -33,9 +33,7 @@ describe('Get help drawer entry', () => {
   });
 
   it('opens the help centre and says where the visit came from', () => {
-    expect(panelSource).toContain(
-      "const HELP_URL = 'https://agiworkforce.com/help?from=chrome-extension';",
-    );
+    expect(panelSource).toContain("const HELP_URL = agiWebUrl('/help?from=chrome-extension');");
     expect(drawerRow('sp-drawer-help-btn')).toContain('chrome.tabs.create({ url: HELP_URL })');
   });
 

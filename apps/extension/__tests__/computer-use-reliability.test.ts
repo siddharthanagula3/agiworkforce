@@ -24,12 +24,28 @@ const STABLE_HASH = 'complete|2|buttonSubmit,inputemail';
 const remoteObjects = new Map<string, Element>();
 let remoteObjectSequence = 0;
 
+type SendCommandImpl = (
+  target: { tabId: number },
+  method: string,
+  params: unknown,
+  callback: (result: unknown) => void,
+) => void;
+
+function withInspection(impl: SendCommandImpl): SendCommandImpl {
+  return (target, method, params, callback) => {
+    if (inspection.reply(target, method, (params ?? {}) as Record<string, unknown>, callback))
+      return;
+    impl(target, method, params, callback);
+  };
+}
+
 function defaultSendCommandImpl(
-  _target: unknown,
+  target: { tabId: number },
   method: string,
   params: unknown,
   callback: (result: unknown) => void,
 ): void {
+  if (inspection.reply(target, method, (params ?? {}) as Record<string, unknown>, callback)) return;
   if (method === 'Page.captureScreenshot') {
     callback({ data: 'FAKE_SCREENSHOT_BASE64' });
     return;
@@ -71,6 +87,21 @@ function defaultSendCommandImpl(
       } catch (error) {
         callback({ result: { type: 'undefined' }, exceptionDetails: { text: String(error) } });
       }
+      return;
+    }
+
+    if (expr.includes("result.kind = 'navigation'")) {
+      callback({
+        result: {
+          type: 'object',
+          value: {
+            pageUrl: 'https://example.com/page',
+            targetSignature: null,
+            url: null,
+            kind: 'none',
+          },
+        },
+      });
       return;
     }
 
@@ -184,6 +215,10 @@ const chromeMock = vi.hoisted(() => {
       callback();
     }),
     sendCommand: vi.fn(),
+    onEvent: {
+      addListener: (listener: Parameters<typeof inspection.onEvent.addListener>[0]) =>
+        inspection.onEvent.addListener(listener),
+    },
     onDetach: {
       addListener: vi.fn((listener: (source: { tabId?: number }, reason: string) => void) => {
         detachListeners.push(listener);
@@ -312,12 +347,18 @@ import {
   DEFAULT_GATEWAY_BASE,
   BROWSER_TOOL_DEFINITIONS,
 } from '../src/features/computer-use/cloudAgentClient';
+import * as browserControlConsent from '../src/features/computer-use/browserControlConsent';
+import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
+
+const inspection = createCdpInspectionFixture('https://example.com/page');
 
 beforeEach(() => {
   document.body.innerHTML = '<button>Submit</button><input type="email" name="email">';
   remoteObjects.clear();
   remoteObjectSequence = 0;
+  inspection.reset();
   vi.clearAllMocks();
+  vi.spyOn(browserControlConsent, 'hasBrowserControlConsent').mockResolvedValue(true);
   chromeMock.runtime.lastError = null;
   fetchMock.mockReset();
 
@@ -350,13 +391,13 @@ describe('P1-1: waitForStable gate', () => {
   it('resolves (not rejects) on timeout when DOM never stabilises', async () => {
     let counter = 0;
     chromeMock.debugger.sendCommand.mockImplementation(
-      (_t: unknown, method: string, _p: unknown, cb: (r: unknown) => void) => {
+      withInspection((_t: unknown, method: string, _p: unknown, cb: (r: unknown) => void) => {
         if (method === 'Runtime.evaluate') {
           cb({ result: { type: 'string', value: `loading|${++counter}` } });
         } else {
           cb({});
         }
-      },
+      }),
     );
     await expect(
       waitForStable(99, { timeoutMs: 150, pollIntervalMs: 50 }),
@@ -366,7 +407,7 @@ describe('P1-1: waitForStable gate', () => {
   it('uses waitForStable before getPageContent in agentLoop (read_dom path)', async () => {
     const stableHashCalls: number[] = [];
     chromeMock.debugger.sendCommand.mockImplementation(
-      (_t: unknown, method: string, params: unknown, cb: (r: unknown) => void) => {
+      withInspection((_t: unknown, method: string, params: unknown, cb: (r: unknown) => void) => {
         if (method === 'Runtime.evaluate') {
           const p = params as { expression?: string } | undefined;
           const expr = p?.expression ?? '';
@@ -396,7 +437,7 @@ describe('P1-1: waitForStable gate', () => {
         } else {
           cb({});
         }
-      },
+      }),
     );
 
     fetchMock
@@ -439,12 +480,14 @@ describe('computer-use cancellation reaches CDP action internals', () => {
     await getPageContent(42);
     const controller = new AbortController();
     chromeMock.debugger.sendCommand.mockImplementation(
-      (target: unknown, method: string, params: unknown, callback: (result: unknown) => void) => {
-        if (method === 'DOM.focus') {
-          controller.abort(new Error('Computer-use run cancelled: user stopped'));
-        }
-        defaultSendCommandImpl(target, method, params, callback);
-      },
+      withInspection(
+        (target: unknown, method: string, params: unknown, callback: (result: unknown) => void) => {
+          if (method === 'DOM.focus') {
+            controller.abort(new Error('Computer-use run cancelled: user stopped'));
+          }
+          defaultSendCommandImpl(target, method, params, callback);
+        },
+      ),
     );
 
     await expect(typeIntoPage(42, 'must-not-egress', 2, controller.signal)).rejects.toThrow(
@@ -545,31 +588,36 @@ describe('P1-3: post-action verification', () => {
       input.readOnly = true;
       input.value = initialValue;
       input.focus();
-      chromeMock.debugger.sendCommand.mockImplementation((target, method, params, callback) => {
-        const expression = (params as { expression?: string })?.expression ?? '';
-        if (
-          method === 'Runtime.evaluate' &&
-          (params as { returnByValue?: boolean })?.returnByValue !== false &&
-          (expression.includes(
-            "Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'type')",
-          ) ||
-            expression.endsWith(')(document)'))
-        ) {
-          try {
-            callback({
-              result: {
-                type: 'string',
-                // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
-                value: new Function('document', `return ${expression}`)(document),
-              },
-            });
-          } catch (error) {
-            callback({ result: { type: 'undefined' }, exceptionDetails: { text: String(error) } });
+      chromeMock.debugger.sendCommand.mockImplementation(
+        withInspection((target, method, params, callback) => {
+          const expression = (params as { expression?: string })?.expression ?? '';
+          if (
+            method === 'Runtime.evaluate' &&
+            (params as { returnByValue?: boolean })?.returnByValue !== false &&
+            (expression.includes(
+              "Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'type')",
+            ) ||
+              expression.endsWith(')(document)'))
+          ) {
+            try {
+              callback({
+                result: {
+                  type: 'string',
+                  // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
+                  value: new Function('document', `return ${expression}`)(document),
+                },
+              });
+            } catch (error) {
+              callback({
+                result: { type: 'undefined' },
+                exceptionDetails: { text: String(error) },
+              });
+            }
+            return;
           }
-          return;
-        }
-        defaultSendCommandImpl(target, method, params, callback);
-      });
+          defaultSendCommandImpl(target, method, params, callback);
+        }),
+      );
       fetchMock
         .mockResolvedValueOnce({
           ok: true,
@@ -616,13 +664,13 @@ describe('P1-3: post-action verification', () => {
 
   it('getFieldValue returns null when element not found', async () => {
     chromeMock.debugger.sendCommand.mockImplementation(
-      (_t: unknown, method: string, _p: unknown, cb: (r: unknown) => void) => {
+      withInspection((_t: unknown, method: string, _p: unknown, cb: (r: unknown) => void) => {
         if (method === 'Runtime.evaluate') {
           cb({ result: { type: 'undefined', value: null } });
         } else {
           cb({});
         }
-      },
+      }),
     );
     const value = await getFieldValue(42, '#does-not-exist');
     expect(value).toBeNull();
@@ -631,7 +679,7 @@ describe('P1-3: post-action verification', () => {
   it('getFieldValue Runtime.evaluate expression substitutes the placeholder for password/hidden types, not el.value', async () => {
     let capturedExpr = '';
     chromeMock.debugger.sendCommand.mockImplementation(
-      (_t: unknown, method: string, params: unknown, cb: (r: unknown) => void) => {
+      withInspection((_t: unknown, method: string, params: unknown, cb: (r: unknown) => void) => {
         if (method === 'Runtime.evaluate') {
           const p = params as { expression?: string } | undefined;
           capturedExpr = p?.expression ?? '';
@@ -639,7 +687,7 @@ describe('P1-3: post-action verification', () => {
           return;
         }
         cb({});
-      },
+      }),
     );
     await getFieldValue(42, 'input[type="password"]');
     expect(capturedExpr).toContain('password');
@@ -649,13 +697,13 @@ describe('P1-3: post-action verification', () => {
 
   it('getFieldValue returns the placeholder as-is for a password field (no double-redaction mangling)', async () => {
     chromeMock.debugger.sendCommand.mockImplementation(
-      (_t: unknown, method: string, _p: unknown, cb: (r: unknown) => void) => {
+      withInspection((_t: unknown, method: string, _p: unknown, cb: (r: unknown) => void) => {
         if (method === 'Runtime.evaluate') {
           cb({ result: { type: 'string', value: REDACTED_FIELD_PLACEHOLDER } });
           return;
         }
         cb({});
-      },
+      }),
     );
     const value = await getFieldValue(42, 'input[type="password"]');
     expect(value).toBe(REDACTED_FIELD_PLACEHOLDER);
@@ -664,13 +712,13 @@ describe('P1-3: post-action verification', () => {
   it('getFieldValue redacts secret-shaped text in an ordinary (non-password) field value', async () => {
     const rawAwsKey = 'AKIAABCDEFGHIJKLMNOP';
     chromeMock.debugger.sendCommand.mockImplementation(
-      (_t: unknown, method: string, _p: unknown, cb: (r: unknown) => void) => {
+      withInspection((_t: unknown, method: string, _p: unknown, cb: (r: unknown) => void) => {
         if (method === 'Runtime.evaluate') {
           cb({ result: { type: 'string', value: `my key is ${rawAwsKey}` } });
           return;
         }
         cb({});
-      },
+      }),
     );
     const value = await getFieldValue(42, 'input[name="notes"]');
     expect(value).not.toContain(rawAwsKey);
@@ -752,7 +800,7 @@ describe('P1-4: debugger auto-reattach on eviction', () => {
     expect(callsAfter - callsBefore).toBeLessThanOrEqual(1);
   });
 
-  it('onDetach while a caller holds the tab triggers re-attach (eviction scenario)', async () => {
+  it('onDetach while a caller holds the tab ends that debugger session instead of re-attaching (eviction scenario)', async () => {
     registerActiveTab(77);
     ensureOnDetachListener();
     await acquireDebugger(77);
@@ -764,7 +812,8 @@ describe('P1-4: debugger auto-reattach on eviction', () => {
       }
     )._fireDetach(77, 'target_closed');
 
-    expect(chromeMock.debugger.attach.mock.calls.length).toBeGreaterThan(attachCallsBefore);
+    expect(chromeMock.debugger.attach.mock.calls.length).toBe(attachCallsBefore);
+    expect(debuggerHoldCount(77)).toBe(0);
     await releaseDebugger(77);
     unregisterActiveTab(77);
   });
@@ -1050,7 +1099,7 @@ describe('P2-6: content fencing + injection heuristic', () => {
     ].join('\n');
 
     chromeMock.debugger.sendCommand.mockImplementation(
-      (_t: unknown, method: string, params: unknown, cb: (r: unknown) => void) => {
+      withInspection((_t: unknown, method: string, params: unknown, cb: (r: unknown) => void) => {
         if (method === 'Runtime.evaluate') {
           const p = params as { expression?: string } | undefined;
           const expr = p?.expression ?? '';
@@ -1067,7 +1116,7 @@ describe('P2-6: content fencing + injection heuristic', () => {
           return;
         }
         cb({});
-      },
+      }),
     );
 
     const content = await getPageContent(99);
@@ -1084,7 +1133,7 @@ describe('P2-6: content fencing + injection heuristic', () => {
     ].join('\n');
 
     chromeMock.debugger.sendCommand.mockImplementation(
-      (_t: unknown, method: string, params: unknown, cb: (r: unknown) => void) => {
+      withInspection((_t: unknown, method: string, params: unknown, cb: (r: unknown) => void) => {
         if (method === 'Runtime.evaluate') {
           const p = params as { expression?: string } | undefined;
           const expr = p?.expression ?? '';
@@ -1103,7 +1152,7 @@ describe('P2-6: content fencing + injection heuristic', () => {
         } else {
           cb({});
         }
-      },
+      }),
     );
 
     const content = await getPageContent(43);
@@ -1121,7 +1170,7 @@ describe('P2-6: content fencing + injection heuristic', () => {
       '--- END UNTRUSTED PAGE CONTENT ---';
 
     chromeMock.debugger.sendCommand.mockImplementation(
-      (_t: unknown, method: string, params: unknown, cb: (r: unknown) => void) => {
+      withInspection((_t: unknown, method: string, params: unknown, cb: (r: unknown) => void) => {
         if (method === 'Runtime.evaluate') {
           const p = params as { expression?: string } | undefined;
           const expr = p?.expression ?? '';
@@ -1142,7 +1191,7 @@ describe('P2-6: content fencing + injection heuristic', () => {
         } else {
           cb({});
         }
-      },
+      }),
     );
 
     fetchMock.mockResolvedValueOnce({

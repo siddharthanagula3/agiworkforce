@@ -212,6 +212,7 @@ describe('callTool, execution via modelContextTesting.executeTool', () => {
     expect(executeTool).toHaveBeenCalledWith(
       'translate',
       JSON.stringify({ text: 'Hello', lang: 'fr' }),
+      { signal: undefined },
     );
   });
 
@@ -354,6 +355,7 @@ describe('callTool, complex argument shapes', () => {
     expect(executeTool).toHaveBeenCalledWith(
       'nested',
       JSON.stringify({ filter: { status: 'active', page: 1 } }),
+      { signal: undefined },
     );
   });
 
@@ -362,7 +364,9 @@ describe('callTool, complex argument shapes', () => {
     stubModelContextTesting({ executeTool });
 
     await callTool({ name: 'batch', arguments: { ids: [1, 2, 3] } });
-    expect(executeTool).toHaveBeenCalledWith('batch', JSON.stringify({ ids: [1, 2, 3] }));
+    expect(executeTool).toHaveBeenCalledWith('batch', JSON.stringify({ ids: [1, 2, 3] }), {
+      signal: undefined,
+    });
   });
 
   it('defaults arguments to empty object when not provided', async () => {
@@ -370,7 +374,7 @@ describe('callTool, complex argument shapes', () => {
     stubModelContextTesting({ executeTool });
 
     await callTool({ name: 'no-args' });
-    expect(executeTool).toHaveBeenCalledWith('no-args', '{}');
+    expect(executeTool).toHaveBeenCalledWith('no-args', '{}', { signal: undefined });
   });
 });
 

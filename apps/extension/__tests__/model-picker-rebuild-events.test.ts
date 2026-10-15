@@ -14,6 +14,7 @@ import {
 } from '@agiworkforce/types';
 import {
   buildManagedModelPickerMenu,
+  buildManagedModelPickerView,
   canUseManagedQuickRouting,
   filterManagedModelOptions,
   type ManagedModelPickerOption,
@@ -75,6 +76,7 @@ function harness() {
     modelDropdownEl: dropdown,
     managedModelAccess: access,
     buildManagedModelPickerMenu,
+    buildManagedModelPickerView,
     filterManagedModelOptions,
     canUseManagedQuickRouting,
     getModelReasoning,
@@ -88,6 +90,7 @@ function harness() {
     clearChildren: (element: HTMLElement) => element.replaceChildren(),
     appendEffortSection: vi.fn(),
     appendToggleRow: vi.fn(),
+    appendWorkModeRow: vi.fn(),
     applyQuickMode: vi.fn(),
     el,
     renderIcon: () => el('span'),

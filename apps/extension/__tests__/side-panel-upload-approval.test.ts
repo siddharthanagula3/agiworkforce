@@ -54,7 +54,7 @@ function harness() {
   const context = { managedCloudOwner: binding.owner };
   let card:
     | {
-        complete: (allowed: boolean, upload?: unknown[]) => void;
+        complete: (decision: 'allow' | 'allow-for-task' | 'skip', upload?: unknown[]) => void;
         options: { assertCurrent: () => Promise<void> };
       }
     | undefined;
@@ -66,7 +66,7 @@ function harness() {
     tabId: binding.tabId,
   }));
   const getTab = vi.fn(async () => ({ id: binding.tabId, url: binding.tabUrl }));
-  const show = vi.fn((_tool, _description, complete, options) => {
+  const show = vi.fn((_tool, _description, _canAllowForTask, complete, options) => {
     card = { complete, options };
   });
   const dependencies = {

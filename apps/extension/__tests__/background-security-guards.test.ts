@@ -440,10 +440,14 @@ describe('background service worker security guards', () => {
       expect(pageNavigations()).toEqual([]);
     });
 
-    it('still rejects an off-allowlist destination before consent is consulted', async () => {
+    it('rejects an off-allowlist destination before consent is consulted and an unconsented one after', async () => {
       await expect(navigate(RUN_TAB_ID, 'https://evil.example/steal')).rejects.toThrow(
-        /not on your AGI site allowlist/,
+        /not on your AGI Workforce approved-sites list/,
       );
+      await expect(assertDestinationAllowlisted(`${SITE_B}/inbox`)).rejects.toThrow(
+        /full Chrome DevTools Protocol control/,
+      );
+      putStorage(CONSENT_KEY, [SITE_A, SITE_B]);
       await expect(assertDestinationAllowlisted(`${SITE_B}/inbox`)).resolves.toBeUndefined();
     });
   });

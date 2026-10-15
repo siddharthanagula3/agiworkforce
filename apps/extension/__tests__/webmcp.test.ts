@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 if (typeof globalThis.CSS === 'undefined') {
@@ -452,7 +451,9 @@ describe('callTool', () => {
 
     const response = await callTool({ name: 'compute', arguments: { x: 10 } });
 
-    expect(executeTool).toHaveBeenCalledWith('compute', JSON.stringify({ x: 10 }));
+    expect(executeTool).toHaveBeenCalledWith('compute', JSON.stringify({ x: 10 }), {
+      signal: undefined,
+    });
     expect(response).toEqual({ success: true, result: { answer: 42 } });
   });
 
@@ -564,7 +565,7 @@ describe('callTool', () => {
 
     await callTool({ name: 'no-args' });
 
-    expect(executeTool).toHaveBeenCalledWith('no-args', '{}');
+    expect(executeTool).toHaveBeenCalledWith('no-args', '{}', { signal: undefined });
   });
 
   it('handles non-Error thrown values in executeTool', async () => {

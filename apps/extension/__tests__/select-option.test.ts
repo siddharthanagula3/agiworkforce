@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { selectOptionElement } from '../src/features/content/selectOption';
 import * as driver from '../src/features/computer-use/cdpDriver';
 import * as sitePolicy from '../src/features/site-policy/store';
+import * as browserControlConsent from '../src/features/computer-use/browserControlConsent';
+import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
+
+const inspection = createCdpInspectionFixture(document.location.href);
 
 function fixture(markup = '<option value="a">Alpha</option><option value="b">Beta</option>') {
   document.body.innerHTML = `<select id="choice" aria-label="Category">${markup}</select>`;
@@ -152,11 +156,12 @@ describe('indexed select driver settlement', () => {
   let afterApply: () => void;
   const send = vi.fn(
     (
-      _target: unknown,
+      target: { tabId: number },
       method: string,
       params: Record<string, unknown>,
       callback: (result: unknown) => void,
     ) => {
+      if (inspection.reply(target, method, params, callback)) return;
       try {
         if (method === 'Runtime.evaluate') {
           if (String(params['expression']).includes('indexMap')) {
@@ -192,18 +197,21 @@ describe('indexed select driver settlement', () => {
   );
 
   beforeEach(async () => {
+    inspection.reset();
     original = fixture();
     afterApply = () => {};
     send.mockClear();
     vi.spyOn(sitePolicy, 'assertSiteAccess').mockResolvedValue(undefined);
+    vi.spyOn(browserControlConsent, 'hasBrowserControlConsent').mockResolvedValue(true);
     vi.stubGlobal('chrome', {
       runtime: { lastError: null },
+      storage: { local: { get: vi.fn(async () => ({})), set: vi.fn(async () => undefined) } },
       debugger: {
         attach: (_t: unknown, _v: unknown, cb: () => void) => cb(),
         detach: (_t: unknown, cb: () => void) => cb(),
         sendCommand: send,
         onDetach: { addListener: vi.fn() },
-        onEvent: { addListener: vi.fn() },
+        onEvent: inspection.onEvent,
       },
     });
     await driver.getPageContent(42);

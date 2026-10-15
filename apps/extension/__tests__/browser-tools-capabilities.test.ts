@@ -186,7 +186,7 @@ describe('downloads', () => {
   it('refuses a destination that is neither the page origin nor allowlisted', async () => {
     approveSite();
     await expect(resolveDownloadUrl(`${OTHER}/payload.exe`, `${SITE}/article`)).rejects.toThrow(
-      /site allowlist/,
+      /approved-sites list/,
     );
   });
 

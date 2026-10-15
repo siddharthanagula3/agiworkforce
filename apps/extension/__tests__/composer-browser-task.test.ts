@@ -31,10 +31,19 @@ const sendSource = program.statements
   .filter(
     (node) =>
       ts.isFunctionDeclaration(node) &&
-      ['sendMessage', 'canAdmitComposerMessage'].includes(node.name?.text ?? ''),
+      [
+        'sendMessage',
+        'canAdmitComposerMessage',
+        'dispatchTurn',
+        'continueTurnWithMemory',
+        'continueTurn',
+        'postTurn',
+      ].includes(node.name?.text ?? ''),
   )
   .map((node) => node.getText(program))
   .join('\n');
+
+const IMAGE_DATA_URL = 'data:image/png;base64,AA==';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -101,7 +110,7 @@ function harness() {
     showHandoffBanner: vi.fn(),
   };
   const saveMessages = vi.fn();
-  const pendingAttachments: { mimeType?: string }[] = [];
+  const pendingAttachments: { dataUrl: string; mimeType: string }[] = [];
   const dependencies = {
     _ctx: context,
     chrome: { tabs: { query }, runtime: { sendMessage: send } },
@@ -124,10 +133,36 @@ function harness() {
     resolveComposerPrompt,
     requestsCurrentPageContext,
     managedCloudChatState: 'ready',
+    stoppingStreamId: null,
+    projectChatAwaitsAccountCopy: () => false,
+    ensureProjectChatInAccount: vi.fn(async () => true),
+    ensureTemporaryConversation: vi.fn(async () => 'temporary-conversation'),
+    renderMemoryNotice: vi.fn(),
+    MEMORY_COMMAND_HINT: /(?!)/u,
+    runChatMemoryCommand: vi.fn(async () => undefined),
+    setThinkingLabel: vi.fn(),
+    showThinking: vi.fn(),
+    t: (key: string) => key,
+    capabilityAllowed: () => true,
+    capabilityDocument: {},
+    selectedModelImageLimitNotice: () => null,
+    composerImageCount: () => pendingAttachments.length,
+    pendingDocuments: [] as unknown[],
+    pendingBrowserContextTabs: [] as unknown[],
+    promptShortcuts: [],
+    expandPromptShortcut: (prompt: string) => prompt,
+    advanceConversationGeneration: vi.fn(),
+    renderModelNotice: vi.fn(),
+    takeComposerDocuments: () => [],
+    turnAttachmentDescriptors: () => [],
+    pageReference: (source: unknown) => source,
+    turnPayloadByMessageId: new Map(),
     hasUnconfirmedStreamCancellation: () => false,
     managedQuickModeActive: () => context.quickMode,
     historyRestoreInProgress: false,
-    composerAttachmentIntakeCount: 0,
+    composerAttachmentIntakes: new Set(),
+    composerDocumentsSettled: () => true,
+    pendingAttachmentCount: () => pendingAttachments.length,
     pendingAttachments,
     extensionSendQueue: { enqueue: vi.fn(), dequeue: vi.fn() },
     QueueFullError: Error,
@@ -314,11 +349,11 @@ describe('browser tasks from the real composer functions', () => {
     expect(h.dependencies.capturePageContext).toHaveBeenCalledOnce();
     expect(h.send).not.toHaveBeenCalled();
     const attached = harness();
-    attached.pendingAttachments.push({ mimeType: 'image/png' });
+    attached.pendingAttachments.push({ dataUrl: IMAGE_DATA_URL, mimeType: 'image/png' });
     attached.api.sendMessage('Click the Update preview button');
     expect(attached.api.getRun()).toBeNull();
     expect(attached.send).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'CHAT_MESSAGE', attachments: [{ mimeType: 'image/png' }] }),
+      expect.objectContaining({ type: 'CHAT_MESSAGE', attachments: [IMAGE_DATA_URL] }),
       expect.any(Function),
     );
   });

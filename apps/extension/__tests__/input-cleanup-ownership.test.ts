@@ -54,6 +54,12 @@ function harness() {
         query: async () => [{ id: state.activeTab }],
       },
     },
+    authorizeBrowserToolTab: async (tabId: number) => ({
+      tabId,
+      url: state.url,
+      origin: new URL(state.url).origin,
+      profileId: null,
+    }),
     isOriginApprovedForAutomation: () => state.approved,
     hasBrowserControlConsent: async () => state.granted,
   };

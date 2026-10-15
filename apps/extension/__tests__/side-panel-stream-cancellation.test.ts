@@ -5,6 +5,8 @@ import ts from 'typescript';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
+import { MANAGED_RUN_CANCELLATION_TIMEOUT_MS } from '../src/features/cloud-bridge/managedRunControl';
+import { withTimeout } from '../src/utils';
 import { sameManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
 import {
   applyStreamFailure,
@@ -88,6 +90,11 @@ function harness() {
     chrome: { runtime: { sendMessage: send } },
     MAX_STORED_MESSAGES: 50,
     TERMINAL_AGENT_TASK_STATES,
+    MANAGED_RUN_CANCELLATION_TIMEOUT_MS,
+    withTimeout,
+    logger: { warn: vi.fn() },
+    streamStartedAtById: new Map(),
+    updateAttachmentPreview: vi.fn(),
     composerBrowserRun: null,
     cancelComposerBrowserTask: vi.fn(),
     stopManagedChatKeepalive: vi.fn(),
@@ -96,13 +103,16 @@ function harness() {
     quickModeByStreamId: new Map(),
     managedCloudChatState: 'ready',
     historyRestoreInProgress: false,
-    composerAttachmentIntakeCount: 0,
+    stoppingStreamId: null,
+    composerAttachmentIntakes: new Set(),
+    composerDocumentsSettled: () => true,
+    pendingAttachmentCount: () => 0,
     pendingAttachments: [],
     resolveComposerPrompt,
     sendMessage: sendPrompt,
   };
   const compiled = ts.transpileModule(
-    `${source.slice(start, end)}\n${functions.join('\n')}\nreturn { stop: () => cancelCurrentManagedStream(true), canAdmitComposerMessage, retryFailedMessage, serializeMessagesForHistory };`,
+    `${source.slice(start, end)}\n${functions.join('\n')}\nreturn { stop: () => cancelCurrentManagedStream(false), canAdmitComposerMessage, retryFailedMessage, serializeMessagesForHistory };`,
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
   );
   // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
@@ -172,7 +182,7 @@ describe('side panel Stop admission and recovery', () => {
     test.responses[0]!.reject(new Error('Message port closed'));
     await vi.waitFor(() => expect(test.assistant.streamCancellation).toBe('unconfirmed'));
     expect(test.assistant.content).toBe('The partial reply stays visible.');
-    expect(test.assistant.errorText).toContain('cancellation could not be confirmed');
+    expect(test.assistant.errorText).toContain('Message port closed');
     expect(test.canAdmitComposerMessage('Dependent task')).toBe(false);
   });
 
@@ -184,10 +194,10 @@ describe('side panel Stop admission and recovery', () => {
     expect(test.assistant.streamCancellation).toBe('unconfirmed');
     test.retryFailedMessage(test.assistant.id);
     test.responses[0]!.settle({ success: true, cancellationConfirmed: true, cloudRun: cancelled });
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
     expect(test.assistant.streamCancellation).toBe('pending');
     test.responses[1]!.settle({ success: true, cancellationConfirmed: true, cloudRun: cancelled });
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
     expect(test.assistant.streamCancellation).toBeUndefined();
   });
 

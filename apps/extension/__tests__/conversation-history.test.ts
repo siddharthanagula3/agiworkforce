@@ -588,7 +588,7 @@ describe('conversation-history', () => {
         {
           id: 'oversized-title',
           owner: OWNER,
-          title: 'x'.repeat(81),
+          title: 'x'.repeat(501),
           messages: [{ role: 'user', content: 'discard me', timestamp: now }],
           savedAt: now,
           routing: { selectedModel: 'auto' },

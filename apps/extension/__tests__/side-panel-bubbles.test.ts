@@ -294,9 +294,12 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
     });
     const resolve = vi.fn();
 
-    const node = buildBubbleWithTools(assistant, { onResolveApproval: resolve });
-    node.querySelector<HTMLButtonElement>('[aria-label="Approve create_calendar_event"]')?.click();
-    node.querySelector<HTMLButtonElement>('[aria-label="Decline create_calendar_event"]')?.click();
+    buildBubbleWithTools(assistant, { onResolveApproval: resolve })
+      .querySelector<HTMLButtonElement>('[aria-label="Approve create_calendar_event"]')
+      ?.click();
+    buildBubbleWithTools(assistant, { onResolveApproval: resolve })
+      .querySelector<HTMLButtonElement>('[aria-label="Decline create_calendar_event"]')
+      ?.click();
 
     expect(resolve).toHaveBeenNthCalledWith(1, 'call-1', 'approved');
     expect(resolve).toHaveBeenNthCalledWith(2, 'call-1', 'rejected');

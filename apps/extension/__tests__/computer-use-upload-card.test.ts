@@ -87,7 +87,7 @@ beforeEach(() => {
   panel.setRunState(true, binding.runId, binding.runGeneration);
   decision = vi.fn();
   assertCurrent = vi.fn(async () => {});
-  panel.showApprovalCard('upload_file', 'Upload to the resume input.', decision, {
+  panel.showApprovalCard('upload_file', 'Upload to the resume input.', false, decision, {
     binding,
     assertCurrent,
   });
@@ -107,7 +107,7 @@ describe('user-selected browser upload approval', () => {
     expect(decision).not.toHaveBeenCalled();
 
     allow();
-    await vi.waitFor(() => expect(decision).toHaveBeenCalledWith(true, metadata));
+    await vi.waitFor(() => expect(decision).toHaveBeenCalledWith('allow', metadata));
     expect(inspection.upload).toHaveBeenCalledOnce();
     expect(inspection.upload.mock.calls[0]?.[0][0].name).toBe('resume.txt');
     expect(inspection.upload.mock.calls[0]?.[1]).toEqual(binding);
@@ -117,7 +117,7 @@ describe('user-selected browser upload approval', () => {
     chooseFile();
     skip();
     expect(inspection.upload).not.toHaveBeenCalled();
-    expect(decision).toHaveBeenCalledWith(false, undefined);
+    expect(decision).toHaveBeenCalledWith('skip', undefined);
   });
 
   it('aborts inspection on Skip and ignores a late inspected completion', async () => {
@@ -138,7 +138,7 @@ describe('user-selected browser upload approval', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(decision).toHaveBeenCalledOnce();
-    expect(decision).toHaveBeenCalledWith(false, undefined);
+    expect(decision).toHaveBeenCalledWith('skip', undefined);
   });
 
   it('cancels the approval and inspector when the active run stops', async () => {
@@ -149,7 +149,7 @@ describe('user-selected browser upload approval', () => {
     const signal = inspection.upload.mock.calls[0]?.[2].signal as AbortSignal;
     panel.setRunState(false, binding.runId);
     expect(signal.aborted).toBe(true);
-    expect(decision).toHaveBeenCalledWith(false, undefined);
+    expect(decision).toHaveBeenCalledWith('skip', undefined);
     expect(filePicker().disabled).toBe(true);
     expect(filePicker().value).toBe('');
   });
@@ -158,7 +158,7 @@ describe('user-selected browser upload approval', () => {
     assertCurrent.mockRejectedValue(new Error('The account changed.'));
     chooseFile();
     allow();
-    await vi.waitFor(() => expect(decision).toHaveBeenCalledWith(false));
+    await vi.waitFor(() => expect(decision).toHaveBeenCalledWith('skip'));
     expect(inspection.upload).not.toHaveBeenCalled();
     expect(panel.panelEl.textContent).toContain('The account changed.');
     expect(panel.panelEl.textContent).toContain('No file was sent to the website');
@@ -168,9 +168,9 @@ describe('user-selected browser upload approval', () => {
     inspection.upload.mockRejectedValue(new Error('File inspection rejected this file.'));
     chooseFile();
     allow();
-    await vi.waitFor(() => expect(decision).toHaveBeenCalledWith(false));
+    await vi.waitFor(() => expect(decision).toHaveBeenCalledWith('skip'));
     expect(panel.panelEl.textContent).toContain('File inspection rejected this file.');
     expect(panel.panelEl.textContent).toContain('No file was sent to the website');
-    expect(decision).not.toHaveBeenCalledWith(true, expect.anything());
+    expect(decision).not.toHaveBeenCalledWith('allow', expect.anything());
   });
 });

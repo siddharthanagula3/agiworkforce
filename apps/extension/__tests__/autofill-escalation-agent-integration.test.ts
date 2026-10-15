@@ -42,11 +42,13 @@ const chromeMock = vi.hoisted(() => {
   };
 
   const defaultSendCommandImpl = (
-    _target: unknown,
+    target: { tabId: number },
     method: string,
     params: unknown,
     callback: (result: unknown) => void,
   ): void => {
+    if (inspection.reply(target, method, (params ?? {}) as Record<string, unknown>, callback))
+      return;
     if (method === 'Page.captureScreenshot') {
       callback({ data: 'FAKE_BASE64_PNG' });
       return;
@@ -103,6 +105,10 @@ const chromeMock = vi.hoisted(() => {
     onDetach: {
       addListener: vi.fn(),
       removeListener: vi.fn(),
+    },
+    onEvent: {
+      addListener: (listener: Parameters<typeof inspection.onEvent.addListener>[0]) =>
+        inspection.onEvent.addListener(listener),
     },
     _defaultSendCommandImpl: defaultSendCommandImpl,
   };
@@ -220,6 +226,9 @@ import { makeEscalationDecision } from '../src/features/computer-use/escalationE
 import { ASHBY_ALWAYS_ESCALATE_KEYS } from '../src/features/content/autofill/ashby';
 
 import { runAgentLoop } from '../src/features/computer-use/agentLoop';
+import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
+
+const inspection = createCdpInspectionFixture('https://boards.greenhouse.io/acmecorp/jobs/123');
 
 function buildGreenhouseDom(): void {
   document.body.innerHTML = `
@@ -443,6 +452,7 @@ describe('AGI_START_COMPUTER_USE background handler → runAgentLoop', () => {
     chromeMock.runtime.lastError = null;
     chromeMock.sentMessages.length = 0;
 
+    inspection.reset();
     chromeMock.debugger.sendCommand.mockImplementation(chromeMock.debugger._defaultSendCommandImpl);
     chromeMock.debugger.attach.mockImplementation((_t: unknown, _v: unknown, cb: () => void) =>
       cb(),
@@ -545,6 +555,7 @@ describe('Full chain: AGI_RUN_AUTOFILL → shouldEscalate → AGI_START_COMPUTER
     chromeMock.runtime.lastError = null;
     chromeMock.sentMessages.length = 0;
 
+    inspection.reset();
     chromeMock.debugger.sendCommand.mockImplementation(chromeMock.debugger._defaultSendCommandImpl);
     chromeMock.debugger.attach.mockImplementation((_t: unknown, _v: unknown, cb: () => void) =>
       cb(),

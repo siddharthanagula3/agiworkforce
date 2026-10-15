@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getFieldValue, REDACTED_FIELD_PLACEHOLDER } from '../src/features/computer-use/cdpDriver';
+import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
+
+const inspection = createCdpInspectionFixture(document.location.href);
 
 const send = vi.fn(
   (
-    _target: unknown,
+    target: { tabId: number },
     method: string,
     params: { expression?: string },
     callback: (result: unknown) => void,
   ) => {
+    if (inspection.reply(target, method, params, callback)) return;
     if (method !== 'Runtime.evaluate') {
       callback({});
       return;
@@ -23,6 +27,7 @@ const send = vi.fn(
 );
 
 beforeEach(() => {
+  inspection.reset();
   document.body.replaceChildren();
   send.mockClear();
   vi.stubGlobal('chrome', {
@@ -32,7 +37,7 @@ beforeEach(() => {
       detach: (_t: unknown, callback: () => void) => callback(),
       sendCommand: send,
       onDetach: { addListener: vi.fn() },
-      onEvent: { addListener: vi.fn() },
+      onEvent: inspection.onEvent,
     },
   });
 });

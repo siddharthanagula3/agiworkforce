@@ -106,7 +106,7 @@ vi.mock('../src/features/cloud-bridge/managedChatHandler', async (importOriginal
 
 vi.mock('../src/features/cloud-bridge/managedRunControl', async (importOriginal) => ({
   ...(await importOriginal<ManagedRunControlModule>()),
-  cancelChromeManagedRun: harness.cancelRun,
+  cancelAndConfirmChromeManagedRun: harness.cancelRun,
 }));
 
 const owner = { accountId: 'user-a', authIncarnation: 'session-a' };
@@ -202,7 +202,7 @@ describe('background stream cancellation', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
-  it('stops locally immediately but reports a server refusal without claiming remote cancellation', async () => {
+  it('keeps the stream running and reports a server refusal without claiming remote cancellation', async () => {
     await startChat('stream-server-failure');
     let settleCancellation!: (result: ChromeManagedRunCancellationResult) => void;
     harness.cancelRun.mockReturnValue(
@@ -213,25 +213,15 @@ describe('background stream cancellation', () => {
 
     const cancellation = dispatch({ type: 'CANCEL_STREAM', id: 'stream-server-failure', owner });
     await vi.waitFor(() => expect(harness.cancelRun).toHaveBeenCalledOnce());
-    expect(signal?.aborted).toBe(true);
-    expect(chunks()).toContainEqual(
-      expect.objectContaining({
-        done: true,
-        error: 'Local streaming stopped. Cancelling AGI Cloud…',
-      }),
-    );
+    expect(signal?.aborted).toBe(false);
     expect(chunks().some((chunk) => chunk['error'] === 'Cancelled.')).toBe(false);
 
     settleCancellation({ status: 'error', code: 'server_error', message: 'Server refused Stop.' });
     const response = await cancellation;
     expect(response['success']).toBe(false);
-    expect(response['error']).toContain('AGI Cloud cancellation failed: Server refused Stop.');
-    expect(response['error']).toContain('may still be running');
-    expect(chunks().at(-1)).toMatchObject({
-      done: true,
-      error: response['error'],
-      cloudRun: { state: 'running' },
-    });
+    expect(response['error']).toBe('Server refused Stop.');
+    expect(signal?.aborted).toBe(false);
+    expect(chunks().some((chunk) => chunk['done'] === true)).toBe(false);
   });
 
   it('uses the admitted account credential and reports the confirmed cancelled server state', async () => {

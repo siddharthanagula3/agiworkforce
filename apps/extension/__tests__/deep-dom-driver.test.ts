@@ -1,18 +1,41 @@
 import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as driver from '../src/features/computer-use/cdpDriver';
+import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
+
+const inspection = createCdpInspectionFixture(document.location.href);
 
 let dom: JSDOM;
 const objects = new Map<string, Element>();
 let sequence = 0;
 let afterFocus = (_element: HTMLElement) => {};
+let currentTarget: Element | null = null;
+
+function nextHop(element: Element): Element | null {
+  if (element.parentElement) return element.parentElement;
+  const root = element.getRootNode();
+  if ('host' in root) return (root as ShadowRoot).host;
+  return element.ownerDocument.defaultView?.frameElement ?? null;
+}
+function hitIn(scope: Document | ShadowRoot): Element | null {
+  for (let element = currentTarget; element; element = nextHop(element))
+    if (element.getRootNode() === scope) return element;
+  return null;
+}
+function layOut(win: Window & typeof globalThis, scope: Document | ShadowRoot): void {
+  win.Element.prototype.getBoundingClientRect = () =>
+    ({ left: 0, top: 0, right: 100, bottom: 20, width: 100, height: 20, x: 0, y: 0 }) as DOMRect;
+  (scope as Document).elementFromPoint = () => hitIn(scope) as Element;
+}
+
 const send = vi.fn(
   (
-    _target: unknown,
+    target: { tabId: number },
     method: string,
     params: Record<string, unknown>,
     callback: (result: unknown) => void,
   ) => {
+    if (inspection.reply(target, method, params, callback)) return;
     try {
       if (method === 'Runtime.evaluate') {
         // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
@@ -25,8 +48,11 @@ const send = vi.fn(
       } else if (method === 'Runtime.callFunctionOn') {
         // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
         const fn = dom.window.eval(`(${String(params.functionDeclaration)})`);
-        const value = fn.call(objects.get(String(params.objectId)));
+        currentTarget = objects.get(String(params.objectId)) ?? null;
+        const value = fn.call(currentTarget);
         callback({ result: { type: typeof value, value } });
+      } else if (method === 'DOM.getBoxModel') {
+        callback({ model: { content: [0, 0, 10, 0, 10, 10, 0, 10] } });
       } else if (method === 'DOM.focus') {
         const element = objects.get(String(params.objectId)) as HTMLElement;
         element.focus();
@@ -40,7 +66,10 @@ const send = vi.fn(
 );
 
 beforeEach(() => {
+  inspection.reset();
   dom = new JSDOM('<body></body>', { url: document.URL, runScripts: 'outside-only' });
+  currentTarget = null;
+  layOut(dom.window as unknown as Window & typeof globalThis, dom.window.document);
   objects.clear();
   sequence = 0;
   afterFocus = () => {};
@@ -52,7 +81,7 @@ beforeEach(() => {
       detach: (_t: unknown, cb: () => void) => cb(),
       sendCommand: send,
       onDetach: { addListener: vi.fn() },
-      onEvent: { addListener: vi.fn() },
+      onEvent: inspection.onEvent,
     },
   });
 });
@@ -78,7 +107,10 @@ function framedInput(label: string) {
   child.body.append(host);
   const input = child.createElement('input');
   input.setAttribute('aria-label', label);
-  host.attachShadow({ mode: 'open' }).append(input);
+  const shadow = host.attachShadow({ mode: 'open' });
+  shadow.append(input);
+  layOut(frame.contentWindow as unknown as Window & typeof globalThis, child);
+  (shadow as unknown as Document).elementFromPoint = () => hitIn(shadow);
   return { frame, child, input };
 }
 

@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as driver from '../src/features/computer-use/cdpDriver';
+import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
+
+const inspection = createCdpInspectionFixture(document.location.href);
 
 const state = {
   hook: (_method: string, _params: Record<string, unknown>) => {},
@@ -9,11 +12,12 @@ const state = {
 const objects = new Map<string, unknown>();
 const send = vi.fn(
   (
-    _target: unknown,
+    target: { tabId: number },
     method: string,
     params: Record<string, unknown>,
     callback: (result: unknown) => void,
   ) => {
+    if (inspection.reply(target, method, params, callback)) return;
     state.hook(method, params);
     if (method === 'Runtime.evaluate') {
       // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
@@ -51,6 +55,7 @@ function register(cleanup?: () => Promise<void> | void): void {
 }
 
 beforeEach(() => {
+  inspection.reset();
   document.body.innerHTML =
     '<input id="name" type="text" name="name" aria-label="Your name"><input id="other" type="text" name="name" aria-label="Your name">';
   document.getElementById('name')!.focus();
@@ -72,7 +77,7 @@ beforeEach(() => {
       detach: (_t: unknown, cb: () => void) => cb(),
       sendCommand: send,
       onDetach: { addListener: vi.fn() },
-      onEvent: { addListener: vi.fn() },
+      onEvent: inspection.onEvent,
     },
   });
 });

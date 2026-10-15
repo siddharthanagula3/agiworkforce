@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as driver from '../src/features/computer-use/cdpDriver';
+import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
+
+const inspection = createCdpInspectionFixture(document.location.href);
 
 const objects = new Map<string, HTMLElement>();
 const rectangles = new Map<Element, DOMRect>();
@@ -23,11 +26,12 @@ function rectangle(top: number): DOMRect {
 
 const send = vi.fn(
   (
-    _target: unknown,
+    target: { tabId: number },
     method: string,
     params: Record<string, unknown>,
     callback: (result: unknown) => void,
   ) => {
+    if (inspection.reply(target, method, params, callback)) return;
     try {
       if (method === 'Runtime.evaluate') {
         if (String(params['expression']).includes('indexMap')) {
@@ -92,6 +96,7 @@ function commands(method: string) {
 }
 
 beforeEach(async () => {
+  inspection.reset();
   document.body.innerHTML =
     '<button id="upload">Submit test file locally</button><div id="destination" draggable="true">Destination</div><div id="overlay"></div>';
   objects.clear();
@@ -128,7 +133,7 @@ beforeEach(async () => {
       detach: (_t: unknown, cb: () => void) => cb(),
       sendCommand: send,
       onDetach: { addListener: vi.fn() },
-      onEvent: { addListener: vi.fn() },
+      onEvent: inspection.onEvent,
     },
   });
   await driver.getPageContent(42);

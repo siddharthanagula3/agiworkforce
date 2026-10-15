@@ -15,10 +15,12 @@ const source = readFileSync(
   'utf8',
 );
 const program = ts.createSourceFile('side_panel.ts', source, ts.ScriptTarget.Latest, true);
-const captureHelper = program.statements.find(
-  (node) => ts.isFunctionDeclaration(node) && node.name?.text === 'capturePageContext',
+const captureHelpers = program.statements.filter(
+  (node) =>
+    ts.isFunctionDeclaration(node) &&
+    ['capturePageContext', 'readTabText'].includes(node.name?.text ?? ''),
 );
-if (!captureHelper) throw new Error('Production page capture function was not found');
+if (captureHelpers.length !== 2) throw new Error('Production page capture function was not found');
 
 type CaptureResult =
   | { ok: true; text: string; source: { tabId: number; url: string }; truncated?: boolean }
@@ -40,12 +42,18 @@ function captureHarness() {
       callback([{ result }]);
     },
   );
+  const tab = {
+    id: 17,
+    url: 'https://approved.example/article',
+    windowId: 1,
+    status: 'complete',
+  };
   const dependencies = {
     chrome: {
       runtime: { lastError: undefined },
       tabs: {
-        query: (_options: unknown, callback: (tabs: unknown[]) => void) =>
-          callback([{ id: 17, url: 'https://approved.example/article' }]),
+        query: async () => [tab],
+        get: async () => tab,
       },
       scripting: { executeScript },
     },
@@ -53,10 +61,12 @@ function captureHarness() {
     sanitizePageText,
     MAX_PAGE_TEXT_CHARACTERS,
     PAGE_CONTEXT_EMPTY_REASON: 'This page had no readable text to attach.',
+    PAGE_CONTEXT_BLOCKED_REASON: 'This page cannot be read.',
+    PAGE_CONTEXT_CHANGED_REASON: 'The page changed while it was being read.',
     describePageContextFailure: (message: string) => message,
   };
   const compiled = ts.transpileModule(
-    `${captureHelper!.getText(program)}\nreturn capturePageContext;`,
+    `${captureHelpers.map((node) => node.getText(program)).join('\n')}\nreturn capturePageContext;`,
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
   );
   // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.

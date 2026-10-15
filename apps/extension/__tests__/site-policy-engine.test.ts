@@ -90,6 +90,7 @@ import { authorizeBrowserToolTab } from '../src/features/browser-tools/tabAuthor
 
 const PARTNER = 'https://partner.example';
 const BLOCKED = 'https://leak.example';
+const OPEN = 'https://open.example';
 
 function setUserAllowlist(origins: string[]): void {
   local[SITE_ALLOWLIST_STORAGE_KEY] = origins;
@@ -345,13 +346,15 @@ describe('extension store, admin policy carriers', () => {
 
 describe('the admin blocklist reaches every gate', () => {
   beforeEach(() => {
-    setUserAllowlist([PARTNER, BLOCKED]);
+    setUserAllowlist([PARTNER, BLOCKED, OPEN]);
     setAdminPolicy({
       version: 1,
       blocklist: [{ pattern: BLOCKED }, { pattern: PARTNER, capabilities: ['download', 'upload'] }],
     });
     grantedOrigins.add(`${PARTNER}/*`);
     grantedOrigins.add(`${BLOCKED}/*`);
+    grantedOrigins.add(`${OPEN}/*`);
+    local['agi_cu_browser_control_consent'] = [PARTNER, BLOCKED, OPEN];
   });
 
   it('cdpDriver refuses to navigate to a user-approved origin the org blocked', async () => {
@@ -376,7 +379,7 @@ describe('the admin blocklist reaches every gate', () => {
 
   it('downloads still refuse an origin nobody approved', async () => {
     await expect(
-      resolveDownloadUrl('https://unknown.example/f.pdf', `${PARTNER}/page`),
-    ).rejects.toThrow(/site allowlist/);
+      resolveDownloadUrl('https://unknown.example/f.pdf', `${OPEN}/page`),
+    ).rejects.toThrow(/approved-sites list/);
   });
 });

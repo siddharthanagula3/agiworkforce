@@ -29,6 +29,16 @@ vi.mock('../src/features/browser-tools/tabAuthority', async (importOriginal) => 
     origin: 'https://example.com',
     profileId: null,
   })),
+  authorizeBrowserToolUrl: vi.fn(async (url: string) => ({
+    url,
+    origin: 'https://example.com',
+    profileId: null,
+  })),
+  authorizeBrowserToolCapability: vi.fn(async (url: string) => ({
+    url,
+    origin: 'https://example.com',
+    profileId: null,
+  })),
 }));
 vi.mock('../src/features/site-policy/store', async (importOriginal) => ({
   ...(await importOriginal<SitePolicyStoreModule>()),

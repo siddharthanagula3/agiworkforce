@@ -56,6 +56,10 @@ const chromeMock = vi.hoisted(() => ({
     detach: vi.fn((_target: unknown, callback: () => void) => callback()),
     sendCommand: vi.fn(),
     onDetach: { addListener: vi.fn(), removeListener: vi.fn() },
+    onEvent: {
+      addListener: (listener: Parameters<typeof inspection.onEvent.addListener>[0]) =>
+        inspection.onEvent.addListener(listener),
+    },
   },
   tabs: { get: vi.fn(async () => ({ id: EVAL_TAB_ID, url: 'http://localhost/form' })) },
 }));
@@ -70,6 +74,9 @@ import {
   getTargetSignature,
   unregisterActiveTab,
 } from '../src/features/computer-use/cdpDriver';
+import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
+
+const inspection = createCdpInspectionFixture('http://localhost/form');
 
 const PAGE_HTML = `
   <main>
@@ -92,11 +99,12 @@ const PAGE_HTML = `
 function installEvaluatingDebugger(): void {
   chromeMock.debugger.sendCommand.mockImplementation(
     (
-      _target: unknown,
+      target: { tabId: number },
       method: string,
       params: unknown,
       callback: (result: unknown) => void,
     ): void => {
+      if (inspection.reply(target, method, params as Record<string, unknown>, callback)) return;
       if (method === 'Runtime.evaluate') {
         callback(evaluateInPage(params as EvaluateParams));
         return;
@@ -138,6 +146,7 @@ function installEvaluatingDebugger(): void {
 
 beforeEach(() => {
   document.body.innerHTML = PAGE_HTML;
+  inspection.reset();
   resolvedObjects.clear();
   objectSequence = 0;
   chromeMock.runtime.lastError = undefined;

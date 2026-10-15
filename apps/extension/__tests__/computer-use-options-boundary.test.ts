@@ -23,7 +23,9 @@ describe('computer-use options trust boundary', () => {
 
   it('keeps the disclosure tied to the enforced default and approved-run detach lifecycle', async () => {
     expect(background).toMatch(/agi_cu_ask_before_acting'\]\s*!==\s*false/);
-    expect(session).toMatch(/await fn\(\);[\s\S]*finally \{[\s\S]*await releaseDebugger\(tabId\)/);
+    expect(session).toMatch(
+      /await fn\(\);[\s\S]*finally \{[\s\S]*await releaseDebugger\(tabId, session\)/,
+    );
     expect(options).toContain('then detaches when the run ends');
     const detach = vi.fn((_target: unknown, callback: () => void) => callback());
     vi.stubGlobal('chrome', {

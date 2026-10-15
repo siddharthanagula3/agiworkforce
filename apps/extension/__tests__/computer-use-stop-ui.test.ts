@@ -153,7 +153,7 @@ describe('computer-use visible Stop lifecycle', () => {
         reason: 'user_stopped',
       });
     });
-    expect(stop?.classList.contains('visible')).toBe(false);
+    await vi.waitFor(() => expect(stop?.classList.contains('visible')).toBe(false));
     expect(start?.disabled).toBe(false);
   });
 
