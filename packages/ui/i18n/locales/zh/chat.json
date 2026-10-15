@@ -496,7 +496,9 @@
     "imageFailed": "图片加载失败",
     "imageFailedLabel": "图片加载失败: {{alt}}",
     "openImage": "在新标签页中打开图片",
-    "openImageLabel": "在新标签页中打开图片: {{alt}}"
+    "openImageLabel": "在新标签页中打开图片: {{alt}}",
+    "retryImage": "重试",
+    "downloadImage": "下载图片"
   },
   "richBlock": {
     "email": "邮件",
@@ -515,6 +517,7 @@
     "copyFailed": "复制失败，剪贴板不可用",
     "openInMail": "在邮件应用中打开",
     "bodyCopiedForMail": "正文太长，无法放入邮件链接，已为你复制。请粘贴到新邮件中。",
+    "mailCopyFailed": "此邮件内容过长，无法放入邮件链接，且复制失败，因此未打开邮件应用。请重试。",
     "expandWriting": "放大阅读和编辑",
     "closeWriting": "关闭放大的文字",
     "editWriting": "编辑文字"

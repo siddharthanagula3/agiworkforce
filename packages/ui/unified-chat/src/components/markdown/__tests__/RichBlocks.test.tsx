@@ -134,6 +134,27 @@ describe('email blocks', () => {
     expect(within(card).getByRole('status').textContent).toContain('too long for a mail link');
   });
 
+  it('does not open the mail app when copying a long body fails, and says to try again', async () => {
+    writeText.mockRejectedValue(new Error('denied'));
+    const longBody = 'paragraph '.repeat(400).trim();
+    const { container } = render(
+      <MarkdownContent
+        content={`\`\`\`email\nTo: jane@example.com\nSubject: Notes\n\n${longBody}\n\`\`\``}
+      />,
+    );
+    const card = emailCard(container);
+    const before = window.location.href;
+
+    await act(async () => {
+      fireEvent.click(within(card).getByRole('link', { name: 'Open in mail app' }));
+    });
+
+    expect(window.location.href).toBe(before);
+    const status = within(card).getByRole('status');
+    expect(status.getAttribute('aria-live')).toBe('polite');
+    expect(status.textContent).toContain('Try again');
+  });
+
   it('offers no Send action, because no surface can send email from a card yet', () => {
     const { container } = render(<MarkdownContent content={EMAIL_FENCE} />);
     const card = emailCard(container);

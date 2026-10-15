@@ -2,6 +2,8 @@ import { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize';
 
 const RESPONSIVE_IMAGE_TAGS: ReadonlySet<string> = new Set(['picture', 'source']);
 
+export const SANITIZED_ID_PREFIX = defaultSchema.clobberPrefix ?? '';
+
 export const MARKDOWN_SANITIZE_SCHEMA: SanitizeSchema = {
   ...defaultSchema,
   tagNames: (defaultSchema.tagNames ?? []).filter((tag) => !RESPONSIVE_IMAGE_TAGS.has(tag)),

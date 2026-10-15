@@ -230,3 +230,38 @@ describe('MessageBubble canonical agent activity', () => {
     expect(html).toContain('Web search');
   });
 });
+
+describe('MessageBubble long unbroken tokens', () => {
+  const token = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_'.repeat(4);
+
+  it('lets the user bubble shrink and wrap anywhere', () => {
+    const message: ChatMessage = {
+      id: 'u1',
+      role: 'user',
+      content: token,
+      createdAt: '2026-05-06T12:00:00.000Z',
+    };
+    const html = renderToStaticMarkup(<MessageBubble message={message} isLast={false} />);
+    const bubble = html.match(/<div class="([^"]*)">ABCDEFGHIJ/);
+    expect(bubble?.[1]).toContain('wrap-anywhere');
+    expect(bubble?.[1]).toContain('min-w-0');
+    expect(bubble?.[1]).toContain('max-w-full');
+    expect(bubble?.[1]).not.toContain('break-words');
+    expect(html).toMatch(/data-role="user"[^>]*class="[^"]*min-w-0/);
+  });
+
+  it('wraps long tokens in assistant prose, inline code and links', () => {
+    const html = renderMessage(
+      `${token}\n\n\`${token}\`\n\n[${token}](https://example.com/${token})`,
+    );
+    expect(html).toMatch(/<p class="[^"]*wrap-anywhere/);
+    expect(html).toMatch(/<code class="[^"]*wrap-anywhere/);
+    expect(html).toMatch(/<a [^>]*class="[^"]*wrap-anywhere/);
+  });
+
+  it('keeps fenced code scrolling instead of wrapping', () => {
+    const html = renderMessage('```text\n' + token + '\n```');
+    expect(html).toContain('code-block-container');
+    expect(html).not.toMatch(/code-block-body[^>]*wrap-anywhere/);
+  });
+});

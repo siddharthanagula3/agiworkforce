@@ -496,7 +496,9 @@
     "imageFailed": "Impossibile caricare l'immagine",
     "imageFailedLabel": "Impossibile caricare l'immagine: {{alt}}",
     "openImage": "Apri l'immagine in una nuova scheda",
-    "openImageLabel": "Apri l'immagine in una nuova scheda: {{alt}}"
+    "openImageLabel": "Apri l'immagine in una nuova scheda: {{alt}}",
+    "retryImage": "Riprova",
+    "downloadImage": "Scarica immagine"
   },
   "richBlock": {
     "email": "Email",
@@ -515,6 +517,7 @@
     "copyFailed": "Copia non riuscita, appunti non disponibili",
     "openInMail": "Apri nell’app di posta",
     "bodyCopiedForMail": "Questo messaggio è troppo lungo per un link email, quindi è stato copiato. Incollalo nella nuova email.",
+    "mailCopyFailed": "Questo messaggio è troppo lungo per un link email e non è stato possibile copiarlo, quindi l'app di posta non è stata aperta. Riprova.",
     "expandWriting": "Apri in grande per leggere e modificare",
     "closeWriting": "Chiudi testo ingrandito",
     "editWriting": "Modifica testo"

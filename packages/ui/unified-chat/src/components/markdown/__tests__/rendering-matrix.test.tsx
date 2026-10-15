@@ -100,14 +100,14 @@ describe('long content', () => {
 
     const link = screen.getByRole('link');
     expect(link.getAttribute('href')).toBe(LONG_URL);
-    expect(link.className).toContain('break-words');
+    expect(link.className).toContain('wrap-anywhere');
   });
 
   it('breaks a paragraph with no whitespace at all', () => {
     const container = renderMarkdown('x'.repeat(4000));
 
     const paragraph = container.querySelector('p');
-    expect(paragraph?.className).toContain('break-words');
+    expect(paragraph?.className).toContain('wrap-anywhere');
     expect(paragraph?.textContent).toHaveLength(4000);
   });
 
@@ -115,8 +115,8 @@ describe('long content', () => {
     const token = 'y'.repeat(600);
     const container = renderMarkdown(`- ${token}\n\n| a |\n| --- |\n| ${token} |`);
 
-    expect(container.querySelector('li')?.className).toContain('break-words');
-    expect(container.querySelector('td')?.className).toContain('break-words');
+    expect(container.querySelector('li')?.className).toContain('wrap-anywhere');
+    expect(container.querySelector('td')?.className).toContain('wrap-anywhere');
   });
 
   it('keeps an extremely long code line scrollable instead of wrapping it', () => {

@@ -59,7 +59,16 @@ describe('ArtifactRenderer', () => {
     const artifact = makeArtifact({ id: 'a3', type: 'markdown', content: '# Hello World' });
     render(<ArtifactRenderer artifact={artifact} />);
     expect(screen.getByTestId('markdown-artifact')).toBeDefined();
-    expect(screen.getByText(/# Hello World/)).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Hello World' })).toBeDefined();
+  });
+
+  it('colours the markdown artifact with theme role tokens, not a fixed palette', () => {
+    const artifact = makeArtifact({ id: 'a3b', type: 'markdown', content: 'text' });
+    render(<ArtifactRenderer artifact={artifact} isDark />);
+    const surface = screen.getByTestId('markdown-artifact');
+    expect(surface.className).toContain('bg-background');
+    expect(surface.className).toContain('text-foreground');
+    expect(surface.className).not.toMatch(/zinc|bg-white/);
   });
 
   it('refuses to render an svg artifact whose root element is not <svg>', () => {

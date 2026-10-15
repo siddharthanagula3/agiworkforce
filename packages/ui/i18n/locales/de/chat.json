@@ -496,7 +496,9 @@
     "imageFailed": "Bild konnte nicht geladen werden",
     "imageFailedLabel": "Bild konnte nicht geladen werden: {{alt}}",
     "openImage": "Bild in neuem Tab öffnen",
-    "openImageLabel": "Bild in neuem Tab öffnen: {{alt}}"
+    "openImageLabel": "Bild in neuem Tab öffnen: {{alt}}",
+    "retryImage": "Erneut versuchen",
+    "downloadImage": "Bild herunterladen"
   },
   "richBlock": {
     "email": "E-Mail",
@@ -515,6 +517,7 @@
     "copyFailed": "Kopieren fehlgeschlagen, Zwischenablage nicht verfügbar",
     "openInMail": "In Mail-App öffnen",
     "bodyCopiedForMail": "Diese Nachricht ist zu lang für einen Mail-Link und wurde daher kopiert. Füge sie in die neue E-Mail ein.",
+    "mailCopyFailed": "Diese Nachricht ist zu lang für einen Mail-Link und konnte nicht kopiert werden, daher wurde die Mail-App nicht geöffnet. Versuche es erneut.",
     "expandWriting": "Groß öffnen zum Lesen und Bearbeiten",
     "closeWriting": "Vergrößerten Text schließen",
     "editWriting": "Text bearbeiten"

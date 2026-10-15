@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -200,5 +200,25 @@ describe('MarkdownContent images', () => {
     expect(container.querySelector('picture, source')).toBeNull();
     expect(referencesUrl(container, `${ATTACKER_HOST}/s.png`)).toBe(false);
     expect(imageSources(container)).toEqual([PNG_DATA_URL]);
+  });
+});
+
+describe('MarkdownContent image failure recovery', () => {
+  it('offers a bounded retry and keeps the download link after a load failure', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<MarkdownContent content="![chart](/files/chart.png)" />);
+
+    for (let failure = 0; failure < 2; failure += 1) {
+      fireEvent.error(container.querySelector('img') as HTMLImageElement);
+      expect(screen.getByRole('link', { name: 'Download image' }).getAttribute('href')).toBe(
+        '/files/chart.png',
+      );
+      await user.click(screen.getByRole('button', { name: 'Retry' }));
+      expect(container.querySelector('img')).not.toBeNull();
+    }
+
+    fireEvent.error(container.querySelector('img') as HTMLImageElement);
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Download image' })).toBeTruthy();
   });
 });

@@ -593,9 +593,9 @@ function UserBubbleBody({ content }: { content: string }) {
   return (
     <div
       className={cn(
-        'w-fit max-w-full rounded-2xl bg-[var(--chat-user-bubble-bg)] px-4 py-2.5',
+        'w-fit min-w-0 max-w-full rounded-2xl bg-[var(--chat-user-bubble-bg)] px-4 py-2.5',
         'text-[15px] leading-relaxed text-[var(--chat-text-primary)]',
-        'whitespace-pre-wrap break-words',
+        'whitespace-pre-wrap wrap-anywhere',
       )}
     >
       {content}
@@ -813,7 +813,7 @@ export function MessageBubble({
           <LegacyWebSearchCard key={search.id} search={search} />
         ))}
 
-      <div className="text-[15px] leading-relaxed text-[var(--chat-text-primary)] break-words">
+      <div className="text-[15px] leading-relaxed text-[var(--chat-text-primary)] min-w-0 max-w-full wrap-anywhere">
         {isStreaming && !message.content.trim() && !canonicalActivity ? (
           <StreamingThinkingStatus />
         ) : (

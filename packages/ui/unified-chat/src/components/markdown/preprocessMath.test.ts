@@ -161,3 +161,24 @@ describe('preprocessMath, scanner parity with the expression it replaced', () =>
     expect(preprocessMath(inline)).toBe(inline);
   });
 });
+
+describe('preprocessMath code ranges', () => {
+  it('leaves one-line display math inside a fenced block untouched', () => {
+    const fenced = '```latex\n$$x+y$$\n```';
+    expect(preprocessMath(fenced)).toBe(fenced);
+  });
+
+  it('leaves display math inside an unterminated fence untouched while streaming', () => {
+    const streaming = '```latex\n$$x+y$$\nmore';
+    expect(preprocessMath(streaming)).toBe(streaming);
+  });
+
+  it('leaves display math inside inline code untouched', () => {
+    const inline = '`$$x+y$$`';
+    expect(preprocessMath(inline)).toBe(inline);
+  });
+
+  it('still lifts one-line display math outside code', () => {
+    expect(preprocessMath('```\ncode\n```\n$$x+y$$')).toBe('```\ncode\n```\n\n$$\nx+y\n$$\n');
+  });
+});

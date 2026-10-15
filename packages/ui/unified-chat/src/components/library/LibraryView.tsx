@@ -551,10 +551,15 @@ export function LibraryView({
     [transport, setRowError],
   );
 
+  const probedThumbnailIds = useRef<Set<string>>(new Set());
+
   const handleThumbnailError = useCallback(
     async (item: LibraryItem) => {
+      if (probedThumbnailIds.current.has(item.id)) return;
+      probedThumbnailIds.current.add(item.id);
       try {
         const response = await transport.fetchAsset(item.uri);
+        void response.body?.cancel().catch(() => undefined);
         if (response.status === 404 || response.status === 410) {
           setUnavailableIds((current) => new Set(current).add(item.id));
         }
@@ -1445,7 +1450,7 @@ function LibraryGrid(props: LibraryListProps) {
               <>
                 {unavailable ? (
                   <p className="px-0.5 text-xs text-[var(--chat-destructive-text)]" role="status">
-                    The stored bytes are gone. Remove this entry.
+                    This file is unavailable right now. Try again later, or remove this entry.
                   </p>
                 ) : null}
                 {rowError ? (
@@ -1576,7 +1581,7 @@ function LibraryList(props: LibraryListProps) {
                     </button>
                     {unavailable ? (
                       <span className="mt-1 block text-xs text-[var(--chat-destructive-text)]">
-                        The stored bytes are gone. Remove this entry.
+                        This file is unavailable right now. Try again later, or remove this entry.
                       </span>
                     ) : null}
                     {rowError ? (

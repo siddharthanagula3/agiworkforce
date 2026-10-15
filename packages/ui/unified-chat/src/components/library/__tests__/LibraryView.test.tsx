@@ -400,8 +400,36 @@ describe('shared LibraryView', () => {
       fireEvent.error(await screen.findByTestId('library-thumbnail'));
 
       await waitFor(() => expect(fetchAsset).toHaveBeenCalledWith('/api/files/asset-1'));
-      expect(await screen.findByText(/stored bytes are gone/i)).toBeTruthy();
+      expect(await screen.findByText(/file is unavailable right now/i)).toBeTruthy();
       expect(screen.queryByTestId('library-thumbnail')).toBeNull();
+    });
+  });
+
+  describe('thumbnail failure probe', () => {
+    it('classifies a failed thumbnail with one fetch per item and discards the body', async () => {
+      const cancel = vi.fn(async () => undefined);
+      const fetchAsset = vi.fn(
+        async () => ({ status: 500, ok: false, body: { cancel } }) as unknown as Response,
+      );
+      render(
+        <LibraryView
+          transport={makeTransport({
+            fetchAsset,
+            inlinePreviewUri: (uri) => uri,
+            listPage: pageOf([
+              { ...ITEM, file_name: 'flaky.png', mime_type: 'image/png', previewable: true },
+            ]),
+          })}
+        />,
+      );
+
+      const thumbnail = await screen.findByTestId('library-thumbnail');
+      fireEvent.error(thumbnail);
+      await waitFor(() => expect(cancel).toHaveBeenCalledTimes(1));
+      fireEvent.error(thumbnail);
+      await Promise.resolve();
+
+      expect(fetchAsset).toHaveBeenCalledTimes(1);
     });
   });
 

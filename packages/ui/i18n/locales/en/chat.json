@@ -496,7 +496,9 @@
     "imageFailed": "Image failed to load",
     "imageFailedLabel": "Image failed to load: {{alt}}",
     "openImage": "Open image in a new tab",
-    "openImageLabel": "Open image in a new tab: {{alt}}"
+    "openImageLabel": "Open image in a new tab: {{alt}}",
+    "retryImage": "Retry",
+    "downloadImage": "Download image"
   },
   "richBlock": {
     "email": "Email",
@@ -515,6 +517,7 @@
     "copyFailed": "Copy failed, clipboard unavailable",
     "openInMail": "Open in mail app",
     "bodyCopiedForMail": "This message is too long for a mail link, so it was copied. Paste it into the new email.",
+    "mailCopyFailed": "This message is too long for a mail link and could not be copied, so the mail app was not opened. Try again.",
     "expandWriting": "Open larger to read and edit",
     "closeWriting": "Close expanded text",
     "editWriting": "Edit text"

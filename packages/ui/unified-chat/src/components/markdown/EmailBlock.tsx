@@ -42,7 +42,7 @@ export function EmailBlock({ parsed, streaming }: EmailBlockProps) {
   const { t } = useUiTranslation('chat');
   const idPrefix = useId();
   const [edits, setEdits] = useState<Partial<EmailDraft>>({});
-  const [mailNotice, setMailNotice] = useState(false);
+  const [mailNotice, setMailNotice] = useState<'copied' | 'failed' | null>(null);
   const { copyState, copy } = useRichBlockCopy();
   const draft: EmailDraft = { ...parsed.draft, ...edits };
   const bodyRef = useAutoHeight(draft.body);
@@ -67,13 +67,13 @@ export function EmailBlock({ parsed, streaming }: EmailBlockProps) {
   const mailto = emailMailtoLink(draft);
   const handleOpenInMail = async (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (mailto.bodyIncluded) {
-      setMailNotice(false);
+      setMailNotice(null);
       return;
     }
     event.preventDefault();
     const copied = await copy(draft.body);
-    setMailNotice(copied);
-    window.location.href = mailto.href;
+    setMailNotice(copied ? 'copied' : 'failed');
+    if (copied) window.location.href = mailto.href;
   };
 
   const copyLabel =
@@ -122,19 +122,25 @@ export function EmailBlock({ parsed, streaming }: EmailBlockProps) {
     copyState === 'failed' || mailNotice ? (
       <p
         role="status"
+        aria-live="polite"
         className={cn(
           'border-b border-[var(--chat-border-subtle)] px-4 py-2 text-sm',
-          copyState === 'failed'
+          copyState === 'failed' || mailNotice === 'failed'
             ? 'text-[var(--chat-destructive-text)]'
             : 'text-[var(--chat-text-secondary)]',
         )}
       >
-        {copyState === 'failed'
-          ? copyLabel
-          : t(
-              'richBlock.bodyCopiedForMail',
-              'This message is too long for a mail link, so it was copied. Paste it into the new email.',
-            )}
+        {mailNotice === 'failed'
+          ? t(
+              'richBlock.mailCopyFailed',
+              'This message is too long for a mail link and could not be copied, so the mail app was not opened. Try again.',
+            )
+          : copyState === 'failed'
+            ? copyLabel
+            : t(
+                'richBlock.bodyCopiedForMail',
+                'This message is too long for a mail link, so it was copied. Paste it into the new email.',
+              )}
       </p>
     ) : null;
 

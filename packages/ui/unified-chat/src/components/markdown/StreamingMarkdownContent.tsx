@@ -130,6 +130,7 @@ export interface StreamingMarkdownContentProps {
   citations?: readonly MarkdownCitation[];
   trustedImageUrls?: readonly string[];
   announce?: boolean;
+  footnoteScope?: string;
 }
 
 function StreamingMarkdownContentImpl({
@@ -138,6 +139,7 @@ function StreamingMarkdownContentImpl({
   citations,
   trustedImageUrls,
   announce = true,
+  footnoteScope,
 }: StreamingMarkdownContentProps) {
   const splitterRef = useRef<MarkdownBlockSplitter | null>(null);
   const singleUnitFromRef = useRef<string | null>(null);
@@ -184,6 +186,7 @@ function StreamingMarkdownContentImpl({
             citations={citations}
             trustedImageUrls={trustedImageUrls}
             linkifyNumericCitations={!isStreaming}
+            footnoteScope={footnoteScope}
           />
           {UNIT_SEPARATOR}
         </React.Fragment>
@@ -195,6 +198,7 @@ function StreamingMarkdownContentImpl({
         citations={citations}
         trustedImageUrls={trustedImageUrls}
         linkifyNumericCitations={!isStreaming}
+        footnoteScope={footnoteScope}
       />
     </>
   );

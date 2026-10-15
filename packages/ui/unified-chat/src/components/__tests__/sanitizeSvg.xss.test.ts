@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { sanitizeSvg } from '../ArtifactRenderer';
+import { sanitizeSvg } from '../../lib/sanitize-svg';
 
 const SVG = 'http://www.w3.org/2000/svg';
 

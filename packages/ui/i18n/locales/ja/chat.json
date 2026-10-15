@@ -496,7 +496,9 @@
     "imageFailed": "画像を読み込めませんでした",
     "imageFailedLabel": "画像を読み込めませんでした: {{alt}}",
     "openImage": "画像を新しいタブで開く",
-    "openImageLabel": "画像を新しいタブで開く: {{alt}}"
+    "openImageLabel": "画像を新しいタブで開く: {{alt}}",
+    "retryImage": "再試行",
+    "downloadImage": "画像をダウンロード"
   },
   "richBlock": {
     "email": "メール",
@@ -515,6 +517,7 @@
     "copyFailed": "コピーできませんでした。クリップボードを利用できません",
     "openInMail": "メールアプリで開く",
     "bodyCopiedForMail": "本文がメールリンクには長すぎるため、コピーしました。新しいメールに貼り付けてください。",
+    "mailCopyFailed": "このメッセージはメールリンクには長すぎ、コピーもできなかったため、メールアプリは開きませんでした。もう一度お試しください。",
     "expandWriting": "大きく開いて読む・編集する",
     "closeWriting": "拡大表示を閉じる",
     "editWriting": "テキストを編集"

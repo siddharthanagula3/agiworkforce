@@ -7,7 +7,7 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import { Button, useUiTranslation } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import { markdownImageSource, trustedImageKeys } from './markdownImageSources';
-import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
+import { MARKDOWN_SANITIZE_SCHEMA, SANITIZED_ID_PREFIX } from './markdownSanitizeSchema';
 import { preprocessMath } from './preprocessMath';
 import { reactNodeText } from './reactNodeText';
 import { MarkdownTable } from './MarkdownTable';
@@ -45,19 +45,53 @@ const TrustedImagesContext = createContext<ReadonlySet<string>>(NO_TRUSTED_IMAGE
 const LinkContentContext = createContext(false);
 const approvedImageKeys = new Set<string>();
 
-const UnavailableImage = ({ alt }: { alt?: string }) => {
+const IMAGE_MAX_RETRIES = 2;
+
+const UnavailableImage = ({
+  alt,
+  href,
+  onRetry,
+}: {
+  alt?: string;
+  href?: string;
+  onRetry?: () => void;
+}) => {
   const { t } = useUiTranslation('chat');
   const failed = t('markdown.imageFailed', 'Image failed to load');
   return (
-    <span
-      className={IMAGE_NOTICE_CLASS}
-      role="img"
-      aria-label={
-        alt ? t('markdown.imageFailedLabel', 'Image failed to load: {{alt}}', { alt }) : failed
-      }
-    >
+    <span className={cn(IMAGE_NOTICE_CLASS, 'flex-wrap gap-y-1.5')}>
       <ImageOff className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span className="truncate">{alt || failed}</span>
+      <span
+        role="img"
+        aria-label={
+          alt ? t('markdown.imageFailedLabel', 'Image failed to load: {{alt}}', { alt }) : failed
+        }
+        className="min-w-0 truncate"
+      >
+        {alt || failed}
+      </span>
+      {onRetry ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          className="pointer-coarse:min-h-11"
+          onClick={onRetry}
+        >
+          {t('markdown.retryImage', 'Retry')}
+        </Button>
+      ) : null}
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          download
+          className="text-primary hover:underline"
+        >
+          {t('markdown.downloadImage', 'Download image')}
+        </a>
+      ) : null}
     </span>
   );
 };
@@ -101,6 +135,7 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
   const insideLink = useContext(LinkContentContext);
   const source = useMemo(() => (src ? markdownImageSource(src) : null), [src]);
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const [attempt, setAttempt] = useState(0);
   const [approvedKey, setApprovedKey] = useState<string | null>(null);
   const linkRef = useRef<HTMLAnchorElement>(null);
   const focusAfterApproval = useRef(false);
@@ -112,7 +147,23 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
   }, [approvedKey]);
 
   if (!src) return null;
-  if (!source || status === 'error') return <UnavailableImage alt={alt} />;
+  if (!source) return <UnavailableImage alt={alt} />;
+  if (status === 'error') {
+    return (
+      <UnavailableImage
+        alt={alt}
+        {...(source.kind === 'embedded' ? {} : { href: source.src })}
+        {...(attempt < IMAGE_MAX_RETRIES
+          ? {
+              onRetry: () => {
+                setAttempt((current) => current + 1);
+                setStatus('loading');
+              },
+            }
+          : {})}
+      />
+    );
+  }
 
   const crossOrigin = source.kind === 'cross-origin';
   if (crossOrigin && !trustedImages.has(source.key) && !approvedImageKeys.has(source.key)) {
@@ -137,6 +188,7 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
       {/* Data/blob and arbitrary remote sources cannot use a host-specific
           image optimizer safely, so this renderer intentionally uses img. */}
       <img
+        key={attempt}
         src={source.src}
         alt={alt || ''}
         title={title}
@@ -258,7 +310,23 @@ function unwrapCitationParens(
   return out;
 }
 
-const MarkdownLink = ({ href, children }: { href?: string; children?: React.ReactNode }) => {
+// The sanitizer prefixes every id to stop rendered content from clobbering
+// DOM globals, so an in-page link must name the prefixed id to land.
+function sanitizedFragmentHref(href: string): string {
+  const fragment = href.slice(FRAGMENT_PREFIX.length);
+  if (!fragment || fragment.startsWith(SANITIZED_ID_PREFIX)) return href;
+  return `${FRAGMENT_PREFIX}${SANITIZED_ID_PREFIX}${fragment}`;
+}
+
+const MarkdownLink = ({
+  href,
+  id,
+  children,
+}: {
+  href?: string;
+  id?: string;
+  children?: React.ReactNode;
+}) => {
   const citations = useMarkdownCitations();
   // The sanitizer strips an href it refuses (javascript:, data:) but leaves
   // the anchor behind, and a protocol-relative href passes it untouched while
@@ -275,8 +343,9 @@ const MarkdownLink = ({ href, children }: { href?: string; children?: React.Reac
   const samePage = cleanHref.startsWith(FRAGMENT_PREFIX);
   return (
     <a
-      href={cleanHref}
-      className="break-words text-primary hover:underline"
+      href={samePage ? sanitizedFragmentHref(cleanHref) : cleanHref}
+      id={id}
+      className="wrap-anywhere text-primary hover:underline"
       {...(samePage ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
     >
       <LinkContentContext.Provider value={true}>{children}</LinkContentContext.Provider>
@@ -287,7 +356,9 @@ const MarkdownLink = ({ href, children }: { href?: string; children?: React.Reac
 const MarkdownParagraph = ({ children }: { children?: React.ReactNode }) => {
   const citations = useMarkdownCitations();
   return (
-    <p className="mb-3 break-words leading-relaxed">{unwrapCitationParens(children, citations)}</p>
+    <p className="mb-3 wrap-anywhere leading-relaxed">
+      {unwrapCitationParens(children, citations)}
+    </p>
   );
 };
 
@@ -378,10 +449,12 @@ const MarkdownOrderedList = ({
 const MarkdownListItem = ({
   children,
   className,
+  id,
   node,
 }: {
   children?: React.ReactNode;
   className?: string;
+  id?: string;
   node?: { position?: { start?: { offset?: number } } };
 }) => {
   const citations = useMarkdownCitations();
@@ -392,7 +465,7 @@ const MarkdownListItem = ({
     isTask && toggle && offset !== undefined ? taskIndexAtOffset(toggle.source, offset) : -1;
   const content = unwrapCitationParens(children, citations);
   return (
-    <li className={cn('mb-1 break-words', isTask && 'list-none')}>
+    <li id={id} className={cn('mb-1 wrap-anywhere', isTask && 'list-none')}>
       {taskIndex >= 0 ? (
         <TaskItemIndexContext.Provider value={taskIndex}>{content}</TaskItemIndexContext.Provider>
       ) : (
@@ -428,7 +501,7 @@ const MarkdownTableCell = ({
   return (
     <td
       className={cn(
-        'border border-border px-3 py-2 align-top break-words',
+        'border border-border px-3 py-2 align-top wrap-anywhere',
         markdownTableAlignmentClass(align, style?.textAlign),
       )}
     >
@@ -448,7 +521,7 @@ const MarkdownTableHeader = ({
 }) => (
   <th
     className={cn(
-      'sticky top-0 z-[var(--z-content-raised)] border border-border bg-muted px-3 py-2 align-top font-semibold break-words',
+      'sticky top-0 z-[var(--z-content-raised)] border border-border bg-muted px-3 py-2 align-top font-semibold wrap-anywhere',
       markdownTableAlignmentClass(align, style?.textAlign),
     )}
   >
@@ -462,8 +535,16 @@ const TRAILING_NEWLINE_PATTERN = /\n$/;
 interface HastNode {
   type?: string;
   tagName?: string;
+  value?: string;
   properties?: { className?: unknown };
   children?: readonly HastNode[];
+}
+
+function hasMultilineFenceBody(node: HastNode | undefined): boolean {
+  const code = node?.children?.find((child) => child.type === 'element');
+  if (code?.tagName !== 'code') return false;
+  const text = (code.children ?? []).map((child) => child.value ?? '').join('');
+  return text.replace(TRAILING_NEWLINE_PATTERN, '').includes('\n');
 }
 
 function fenceLanguage(node: HastNode | undefined): string {
@@ -504,6 +585,13 @@ const MarkdownPre = ({
         language={language}
         source={reactNodeText(children).replace(TRAILING_NEWLINE_PATTERN, '')}
       />
+    );
+  }
+  if (language === '' && hasMultilineFenceBody(node)) {
+    return (
+      <pre {...rest}>
+        <CodeBlock className="language-text">{children}</CodeBlock>
+      </pre>
     );
   }
   return <pre {...rest}>{children}</pre>;
@@ -559,6 +647,7 @@ export interface MarkdownContentProps {
   linkifyNumericCitations?: boolean;
   literalHtml?: boolean;
   onTaskToggle?: (index: number) => void;
+  footnoteScope?: string;
 }
 
 /**
@@ -597,7 +686,14 @@ function MarkdownContentImpl({
   linkifyNumericCitations = true,
   literalHtml,
   onTaskToggle,
+  footnoteScope,
 }: MarkdownContentProps) {
+  // The sanitizer prefixes every id itself, so footnote ids are generated
+  // without that prefix; MarkdownLink adds it to in-page hrefs.
+  const remarkRehypeOptions = useMemo(
+    () => ({ clobberPrefix: footnoteScope ? `${footnoteScope.replace(/\W/g, '')}-` : '' }),
+    [footnoteScope],
+  );
   const trustedImages = useMemo(
     () => (trustedImageUrls?.length ? trustedImageKeys(trustedImageUrls) : NO_TRUSTED_IMAGES),
     [trustedImageUrls],
@@ -626,6 +722,7 @@ function MarkdownContentImpl({
             <Tooltip.Provider delayDuration={150} skipDelayDuration={300}>
               <ReactMarkdown
                 remarkPlugins={literalHtml ? LITERAL_HTML_REMARK_PLUGINS : REMARK_PLUGINS}
+                remarkRehypeOptions={remarkRehypeOptions}
                 rehypePlugins={REHYPE_PLUGINS}
                 urlTransform={markdownUrlTransform}
                 components={markdownComponents}

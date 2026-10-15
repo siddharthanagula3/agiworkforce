@@ -38,6 +38,30 @@ function inlineCodeSpanEnd(content: string, open: number): number {
   return -1;
 }
 
+export function codeRanges(content: string): Array<readonly [number, number]> {
+  const ranges: Array<readonly [number, number]> = [];
+  let i = 0;
+  while (i < content.length) {
+    if (content[i] === '`') {
+      if (content.startsWith('```', i)) {
+        const end = content.indexOf('```', i + 3);
+        const stop = end === -1 ? content.length : end + 3;
+        ranges.push([i, stop]);
+        i = stop;
+        continue;
+      }
+      const spanEnd = inlineCodeSpanEnd(content, i);
+      if (spanEnd !== -1) {
+        ranges.push([i, spanEnd + 1]);
+        i = spanEnd + 1;
+        continue;
+      }
+    }
+    i += 1;
+  }
+  return ranges;
+}
+
 export function normalizeMathDelimiters(content: string): string {
   let out = '';
   let i = 0;

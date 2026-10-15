@@ -33,7 +33,8 @@ import { ChartArtifact } from './artifact-components/ChartArtifact';
 import { ReactPreview } from './artifact-components/ReactPreview';
 import { ArtifactSandboxFrame } from './artifact-components/ArtifactSandboxFrame';
 import { ArtifactVersionHistory } from './artifact-components/ArtifactVersionHistory';
-import { MermaidArtifact, sanitizeSvg } from './ArtifactRenderer';
+import { MermaidArtifact } from './ArtifactRenderer';
+import { sanitizeSvg } from '../lib/sanitize-svg';
 
 async function writeToClipboard(text: string): Promise<boolean> {
   try {

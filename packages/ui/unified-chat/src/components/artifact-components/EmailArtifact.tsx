@@ -1,8 +1,8 @@
 import { Check, Copy, Mail } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
 import type { Artifact } from '../../lib/types';
-import { MarkdownLite } from '../MessageBubble';
+import { MarkdownContent } from '../markdown/MarkdownContent';
 
 export interface EmailArtifactProps {
   artifact: Artifact;
@@ -64,15 +64,26 @@ export function emailToText(parsed: ParsedEmail): string {
 
 export function EmailArtifact({ artifact, className }: EmailArtifactProps) {
   const parsed = useMemo(() => parseEmail(artifact.content), [artifact.content]);
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copied = copyState === 'copied';
+  const copyFailed = copyState === 'failed';
+
+  useEffect(
+    () => () => {
+      if (resetTimer.current) clearTimeout(resetTimer.current);
+    },
+    [],
+  );
 
   const handleCopy = useCallback(async () => {
+    if (resetTimer.current) clearTimeout(resetTimer.current);
     try {
       await navigator.clipboard.writeText(emailToText(parsed));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopyState('copied');
+      resetTimer.current = setTimeout(() => setCopyState('idle'), 2000);
     } catch {
-      /* clipboard unavailable */
+      setCopyState('failed');
     }
   }, [parsed]);
 
@@ -122,7 +133,9 @@ export function EmailArtifact({ artifact, className }: EmailArtifactProps) {
           <button
             type="button"
             onClick={() => void handleCopy()}
-            aria-label={copied ? 'Copied' : 'Copy email as text'}
+            aria-label={
+              copied ? 'Copied' : copyFailed ? 'Retry copying email as text' : 'Copy email as text'
+            }
             className="flex h-7 shrink-0 items-center gap-1.5 rounded-compact px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             {copied ? (
@@ -130,14 +143,24 @@ export function EmailArtifact({ artifact, className }: EmailArtifactProps) {
             ) : (
               <Copy className="h-3.5 w-3.5" aria-hidden="true" />
             )}
-            {copied ? 'Copied' : 'Copy'}
+            {copied ? 'Copied' : copyFailed ? 'Retry' : 'Copy'}
           </button>
         </div>
+        <p
+          role="status"
+          aria-live="polite"
+          data-testid="email-copy-status"
+          className={copyFailed ? 'mt-2 text-xs text-foreground' : 'sr-only'}
+        >
+          {copyFailed ? 'Could not copy the email. Try again.' : ''}
+        </p>
       </div>
 
       {/* Body */}
       <div className="overflow-auto max-h-[600px] px-4 py-4" data-testid="email-body">
-        <MarkdownLite content={parsed.body} className="text-sm text-foreground leading-relaxed" />
+        <div className="text-sm text-foreground leading-relaxed">
+          <MarkdownContent content={parsed.body} />
+        </div>
       </div>
     </div>
   );

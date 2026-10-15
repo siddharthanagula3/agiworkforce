@@ -496,7 +496,9 @@
     "imageFailed": "Impossible de charger l'image",
     "imageFailedLabel": "Impossible de charger l'image: {{alt}}",
     "openImage": "Ouvrir l'image dans un nouvel onglet",
-    "openImageLabel": "Ouvrir l'image dans un nouvel onglet: {{alt}}"
+    "openImageLabel": "Ouvrir l'image dans un nouvel onglet: {{alt}}",
+    "retryImage": "Réessayer",
+    "downloadImage": "Télécharger l'image"
   },
   "richBlock": {
     "email": "E-mail",
@@ -515,6 +517,7 @@
     "copyFailed": "Échec de la copie, presse-papiers indisponible",
     "openInMail": "Ouvrir dans l’app de messagerie",
     "bodyCopiedForMail": "Ce message est trop long pour un lien e-mail, il a donc été copié. Collez-le dans le nouvel e-mail.",
+    "mailCopyFailed": "Ce message est trop long pour un lien e-mail et n'a pas pu être copié, l'application de messagerie n'a donc pas été ouverte. Réessayez.",
     "expandWriting": "Agrandir pour lire et modifier",
     "closeWriting": "Fermer le texte agrandi",
     "editWriting": "Modifier le texte"

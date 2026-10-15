@@ -2,7 +2,7 @@ import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { MermaidConfig } from 'mermaid';
 
 import { reportClientFailure } from '../../lib/client-failures';
-import { sanitizeSvg } from '../ArtifactRenderer';
+import { sanitizeSvg } from '../../lib/sanitize-svg';
 import { renderMermaidInOwnedHost } from './mermaid-render';
 import { mermaidExternalResource } from './mermaidExternalResources';
 

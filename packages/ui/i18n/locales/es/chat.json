@@ -496,7 +496,9 @@
     "imageFailed": "No se pudo cargar la imagen",
     "imageFailedLabel": "No se pudo cargar la imagen: {{alt}}",
     "openImage": "Abrir imagen en una pestaña nueva",
-    "openImageLabel": "Abrir imagen en una pestaña nueva: {{alt}}"
+    "openImageLabel": "Abrir imagen en una pestaña nueva: {{alt}}",
+    "retryImage": "Reintentar",
+    "downloadImage": "Descargar imagen"
   },
   "richBlock": {
     "email": "Correo",
@@ -515,6 +517,7 @@
     "copyFailed": "No se pudo copiar, portapapeles no disponible",
     "openInMail": "Abrir en la app de correo",
     "bodyCopiedForMail": "Este mensaje es demasiado largo para un enlace de correo, así que se copió. Pégalo en el nuevo correo.",
+    "mailCopyFailed": "Este mensaje es demasiado largo para un enlace de correo y no se pudo copiar, así que no se abrió la aplicación de correo. Inténtalo de nuevo.",
     "expandWriting": "Abrir en grande para leer y editar",
     "closeWriting": "Cerrar texto ampliado",
     "editWriting": "Editar texto"

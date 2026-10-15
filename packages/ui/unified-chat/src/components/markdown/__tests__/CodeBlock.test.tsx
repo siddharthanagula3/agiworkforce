@@ -147,3 +147,13 @@ describe('CodeBlock non-fenced and mermaid branches', () => {
     view.unmount();
   });
 });
+
+describe('CodeBlock language token', () => {
+  it('keeps a hyphenated language token whole in the header', () => {
+    const view = mountClient(<CodeBlock className="language-shell-session">$ ls</CodeBlock>);
+    expect(view.container.querySelector('.code-block-lang-label')?.textContent).toBe(
+      'shell-session',
+    );
+    view.unmount();
+  });
+});

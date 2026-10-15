@@ -191,3 +191,55 @@ describe('MarkdownContent literal HTML', () => {
     expect(container.innerHTML).toContain('&lt;img');
   });
 });
+
+describe('MarkdownContent unlabeled fences', () => {
+  it('renders a multiline fence without a language as a code block with plain-text language', () => {
+    const { container } = render(<MarkdownContent content={'```\nline one\nline two\n```'} />);
+    expect(container.querySelector('.code-block-container')).not.toBeNull();
+    expect(container.querySelector('.code-block-lang-label')?.textContent).toBe('text');
+  });
+
+  it('keeps inline code inline', () => {
+    const { container } = render(<MarkdownContent content="use `npm test` here" />);
+    expect(container.querySelector('.code-block-container')).toBeNull();
+  });
+
+  it('leaves one-line display math in a fence as written', () => {
+    const { container } = render(<MarkdownContent content={'```latex\n$$x+y$$\n```'} />);
+    expect(container.querySelector('.katex')).toBeNull();
+    expect(container.textContent).toContain('$$x+y$$');
+  });
+});
+
+describe('MarkdownContent footnotes', () => {
+  it('links each reference to its definition and back through matching ids', () => {
+    const { container } = render(
+      <MarkdownContent content={'Claim[^1] and more.\n\n[^1]: The note.'} />,
+    );
+    const reference = container.querySelector('sup a') as HTMLAnchorElement;
+    const target = reference.getAttribute('href')?.slice(1) ?? '';
+    const definition = container.querySelector(`li[id="${target}"]`);
+    expect(definition).not.toBeNull();
+    const back = definition?.querySelector('a') as HTMLAnchorElement;
+    expect(container.querySelector(`a[id="${back.getAttribute('href')?.slice(1)}"]`)).toBe(
+      reference,
+    );
+  });
+
+  it('keeps footnote ids unique between two messages on one page', () => {
+    const first = render(<MarkdownContent content={'A[^1]\n\n[^1]: one'} footnoteScope="m1" />);
+    const second = render(<MarkdownContent content={'B[^1]\n\n[^1]: two'} footnoteScope="m2" />);
+    const idOf = (view: typeof first) => view.container.querySelector('li')?.getAttribute('id');
+    expect(idOf(first)).toBeTruthy();
+    expect(idOf(first)).not.toBe(idOf(second));
+  });
+
+  it('keeps the sanitizer prefix on raw html ids and points in-page links at it', () => {
+    const { container } = render(
+      <MarkdownContent content={'<div id="config">x</div>\n\n[jump](#config)'} />,
+    );
+    expect(container.querySelector('[id="config"]')).toBeNull();
+    expect(container.querySelector('[id="user-content-config"]')).not.toBeNull();
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('#user-content-config');
+  });
+});

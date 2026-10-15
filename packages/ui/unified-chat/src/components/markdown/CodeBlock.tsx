@@ -22,7 +22,7 @@ import './codeBlock.css';
 
 type CopyState = 'idle' | 'copied' | 'failed';
 
-const LANGUAGE_CLASS_PATTERN = /language-(\w+)/;
+const LANGUAGE_CLASS_PATTERN = /language-([\w+#.-]+)/;
 const TRAILING_NEWLINE_PATTERN = /\n$/;
 const COPIED_RESET_MS = 2000;
 const COPY_FAILED_RESET_MS = 4000;
@@ -241,7 +241,7 @@ export const CodeBlock = ({
 
   if (!match) {
     return (
-      <code className="rounded-md bg-[var(--chat-surface-hover)] px-1.5 py-0.5 font-mono text-[13px] text-[var(--chat-text-primary)]">
+      <code className="rounded-md bg-[var(--chat-surface-hover)] wrap-anywhere px-1.5 py-0.5 font-mono text-[13px] text-[var(--chat-text-primary)]">
         {children}
       </code>
     );
