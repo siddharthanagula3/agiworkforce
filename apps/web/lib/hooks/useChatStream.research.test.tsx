@@ -239,6 +239,56 @@ describe('useChatStream deep research handling', () => {
     ]);
   });
 
+  it('keeps an opaque provider token out of a streamed raw search result snippet', async () => {
+    const opaqueToken = `Ev0D${'Qx9kLm2Pz7Rt'.repeat(12)}`;
+    installFetch([
+      {
+        choices: [
+          {
+            delta: {
+              x_search_results: {
+                type: 'web_search_tool_result',
+                content: [
+                  {
+                    type: 'web_search_result',
+                    url: 'https://a.com',
+                    title: 'A',
+                    encrypted_content: opaqueToken,
+                  },
+                  {
+                    type: 'web_search_result',
+                    url: 'https://b.com',
+                    title: 'B',
+                    encrypted_content: 'A readable summary.',
+                  },
+                ],
+              },
+            },
+            index: 0,
+          },
+        ],
+      },
+      contentDelta('Answer [1][2]'),
+    ]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('what changed');
+    });
+
+    const msg = assistantMessage();
+    expect(msg?.metadata?.searchResults).toEqual([
+      { url: 'https://a.com', title: 'A', snippet: '', retrievedAt: expect.any(String) },
+      {
+        url: 'https://b.com',
+        title: 'B',
+        snippet: 'A readable summary.',
+        retrievedAt: expect.any(String),
+      },
+    ]);
+    expect(JSON.stringify(msg?.metadata)).not.toContain(opaqueToken);
+  });
+
   it('dedupes sources that only differ by tracking query parameters', async () => {
     installFetch([
       researchStatus('searching'),

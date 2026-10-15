@@ -19,6 +19,7 @@ import { Button, EmptyState, translateUiPlural } from '@agiworkforce/ui';
 import { citationPublisherDomain } from '@agiworkforce/unified-chat';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
 import { formatSourceDate } from '../../utils/research-sources';
+import { displaySourceSnippet } from '@/lib/sources/display-snippet';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { ResearchReportView, type ReportArtifactInput } from './ResearchReportView';
@@ -94,6 +95,7 @@ function SourceRow({ source, badge }: { source: ResearchSource; badge?: number }
   // A grounded result's title IS its publisher's domain, so printing the host
   // under it repeats the same word twice and says nothing.
   const retrievedOn = formatSourceDate(source.retrievedAt);
+  const snippet = displaySourceSnippet(source.snippet);
   const subtitle = [
     displayTitle === displayHost ? null : displayHost,
     source.publishedDate,
@@ -151,9 +153,9 @@ function SourceRow({ source, badge }: { source: ResearchSource; badge?: number }
           {displayTitle}
         </h4>
         {subtitle && <p className="truncate text-caption text-muted-foreground">{subtitle}</p>}
-        {source.snippet && (
+        {snippet && (
           <p className="line-clamp-2 text-caption leading-relaxed text-muted-foreground">
-            {source.snippet}
+            {snippet}
           </p>
         )}
       </div>

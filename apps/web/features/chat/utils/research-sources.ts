@@ -1,3 +1,4 @@
+import { displaySourceSnippet } from '@/lib/sources/display-snippet';
 import { normalizeSourceUrlKey } from '@/lib/web-search/source-url-key';
 
 import type { ResearchSource } from '../stores/research-panel-store';
@@ -85,10 +86,11 @@ export function collectMessageResearchSources(
     const results = Array.isArray(searchResults) ? searchResults : (searchResults.results ?? []);
     results.forEach((result, index) => {
       if (!result.url) return;
+      const snippet = displaySourceSnippet(result.snippet);
       collected.push({
         url: result.url,
         title: result.title || '',
-        snippet: result.snippet,
+        ...(snippet ? { snippet } : {}),
         favicon: result.favicon,
         ...(result.publishedDate ? { publishedDate: result.publishedDate } : {}),
         ...((result.retrievedAt ?? result.provenance?.retrievedAt)

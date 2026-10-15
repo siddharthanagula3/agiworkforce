@@ -243,6 +243,7 @@ import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-
 import type { MemoryCommandReport } from '@/features/chat/hooks/use-explicit-memory-commands';
 import type { RoutingProfileChoice } from '@agiworkforce/types';
 import { createAgentEventLedger, type AgentEventLedger } from '@/lib/streaming/agent-event-id';
+import { displaySourceSnippet } from '@/lib/sources/display-snippet';
 
 interface SendMessageOptions {
   model?: string;
@@ -1985,7 +1986,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       event.sources.map((source) => ({
         url: source.url,
         title: source.title || source.url,
-        snippet: source.snippet ?? '',
+        snippet: displaySourceSnippet(source.snippet),
       })),
     );
   };
@@ -3343,7 +3344,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               .map((r) => ({
                 url: r['url'] as string,
                 title: (r['title'] as string) || (r['url'] as string),
-                snippet: (r['encrypted_content'] as string) || '',
+                snippet: displaySourceSnippet(r['encrypted_content']),
                 ...(typeof r['page_age'] === 'string' && r['page_age']
                   ? { publishedDate: r['page_age'] }
                   : {}),

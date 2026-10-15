@@ -222,3 +222,17 @@ describe('orderSourcesByCitation', () => {
     expect(more.map((source) => source.citationIndex)).toEqual([1]);
   });
 });
+
+describe('collectMessageResearchSources, saved snippets', () => {
+  it('shows no summary for a saved source whose snippet is an opaque provider token', () => {
+    const { searchSources } = collectMessageResearchSources({
+      searchResults: [
+        { url: 'https://a.com', title: 'A', snippet: `Ev0D${'Qx9kLm2Pz7Rt'.repeat(12)}` },
+        { url: 'https://b.com', title: 'B', snippet: 'A readable summary.' },
+      ],
+    });
+
+    expect(searchSources[0]).not.toHaveProperty('snippet');
+    expect(searchSources[1]?.snippet).toBe('A readable summary.');
+  });
+});
