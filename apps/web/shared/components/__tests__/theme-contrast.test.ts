@@ -818,6 +818,16 @@ describe('the marketing design-system palette clears AA in both themes', () => {
     });
   }
 
+  it('light: public pages sit on white, with neutral near-white panels', () => {
+    expect(colorToken(THEMES.light, '--agi-ground')).toBe('#ffffff');
+    expect(colorToken(THEMES.light, '--agi-card')).toBe('#ffffff');
+    for (const name of ['--agi-ground-2', '--agi-ground-3'] as const) {
+      const [red, green, blue] = channels(colorToken(THEMES.light, name));
+      expect(red === green && green === blue).toBe(true);
+      expect(relativeLuminance(colorToken(THEMES.light, name))).toBeGreaterThanOrEqual(0.85);
+    }
+  });
+
   it('paints the primary button with the ink pair, in one place, for both themes', () => {
     expect(token(BASE, '--agi-button-bg')).toBe('var(--agi-ink)');
     expect(token(BASE, '--agi-button-bg-hover')).toBe('var(--agi-ink-2)');

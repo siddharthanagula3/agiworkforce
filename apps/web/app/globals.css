@@ -1547,13 +1547,13 @@ html[data-contrast='more'] *:focus-visible {
 [data-theme='light'] [data-design='agi'],
 [data-theme='light'][data-design='agi'] {
   color-scheme: light;
-  --agi-ground: #faf6ee;
-  --agi-ground-2: #f3ecdf;
-  --agi-ground-3: #ebe2d1;
+  --agi-ground: #ffffff;
+  --agi-ground-2: #f7f7f7;
+  --agi-ground-3: #efefef;
   --agi-bg: var(--agi-ground);
   --agi-bg-2: var(--agi-ground-2);
   --agi-bg-3: var(--agi-ground-3);
-  --agi-card: #fffdf8;
+  --agi-card: #ffffff;
   --agi-ink: #1c150b;
   --agi-ink-2: #524839;
   --agi-ink-3: #665a47;
@@ -1565,7 +1565,7 @@ html[data-contrast='more'] *:focus-visible {
 
   --agi-accent: #854500;
   --agi-accent-hover: #6b3700;
-  --agi-accent-ink: #faf6ee;
+  --agi-accent-ink: #ffffff;
   --agi-accent-text: #854500;
   --agi-accent-soft: rgba(133, 69, 0, 0.12);
 
@@ -1582,8 +1582,8 @@ html[data-contrast='more'] *:focus-visible {
   --agi-surface-wash: rgba(30, 22, 10, 0.025);
   --agi-line-soft: rgba(30, 22, 10, 0.05);
   --agi-glow-soft: rgba(156, 84, 7, 0.1);
-  --agi-console-tint: rgba(243, 236, 223, 0.85);
-  --agi-console-tint-strong: rgba(255, 253, 248, 0.92);
+  --agi-console-tint: rgba(247, 247, 247, 0.85);
+  --agi-console-tint-strong: rgba(255, 255, 255, 0.92);
   --agi-error: #c23a2c;
   --agi-success: #1f6b43;
   --agi-shadow: rgba(30, 22, 10, 0.14);
