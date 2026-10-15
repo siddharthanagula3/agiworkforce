@@ -6628,11 +6628,41 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn under(root: &str, relative: &str) -> String {
+        relative
+            .split('/')
+            .fold(PathBuf::from(root), |path, name| path.join(name))
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn in_user_home(relative: &str) -> String {
+        under(
+            if cfg!(windows) {
+                r"C:\Users\user"
+            } else {
+                "/home/user"
+            },
+            relative,
+        )
+    }
+
+    fn outside_every_default_root(relative: &str) -> String {
+        under(
+            if cfg!(windows) {
+                r"D:\agi-fixture"
+            } else {
+                "/opt/agi-fixture"
+            },
+            relative,
+        )
+    }
+
     #[tokio::test]
     async fn test_allowed_tool() {
         let guard = ToolExecutionGuard::new();
         let result = guard
-            .validate_tool_call("file_read", &json!({"path": "/home/user/test.txt"}))
+            .validate_tool_call("file_read", &json!({"path": in_user_home("test.txt")}))
             .await;
         assert!(result.is_ok());
     }
@@ -6645,7 +6675,7 @@ mod tests {
             .validate_tool_call(
                 "file_write",
                 &json!({
-                    "path": "/home/user/test.txt",
+                    "path": in_user_home("test.txt"),
                     "content": "updated",
                     "expected_sha256": uppercase_hash,
                 }),
@@ -6662,7 +6692,7 @@ mod tests {
                 "multi_edit",
                 &json!({
                     "edits": [{
-                        "path": "/home/user/test.txt",
+                        "path": in_user_home("test.txt"),
                         "old_text": "before",
                         "new_text": "after"
                     }]
@@ -6677,7 +6707,7 @@ mod tests {
                 "multi_edit",
                 &json!({
                     "edits": [{
-                        "path": "/home/user/test.txt",
+                        "path": in_user_home("test.txt"),
                         "old_text": "before",
                         "new_text": "after",
                         "expected_sha256": hash
@@ -6710,7 +6740,7 @@ mod tests {
         let result = guard
             .validate_tool_call(
                 "document_read",
-                &json!({"file_path": "/home/user/test.pdf"}),
+                &json!({"file_path": in_user_home("test.pdf")}),
             )
             .await;
         assert!(result.is_ok());
@@ -7383,7 +7413,7 @@ mod tests {
                 "coding_checkpoint_create",
                 &serde_json::json!({
                     "name": "before edit",
-                    "paths": ["/home/user/project/src/main.rs"]
+                    "paths": [in_user_home("project/src/main.rs")]
                 }),
             )
             .await
@@ -8824,8 +8854,8 @@ mod tests {
     #[tokio::test]
     async fn a_folder_granted_for_reading_reads_and_does_not_write() {
         let guard = ToolExecutionGuard::new();
-        let folder = "/opt/agi-fixture/project";
-        let file = "/opt/agi-fixture/project/notes.txt";
+        let folder = &outside_every_default_root("project");
+        let file = &outside_every_default_root("project/notes.txt");
 
         assert!(
             guard
@@ -8874,7 +8904,7 @@ mod tests {
     #[tokio::test]
     async fn the_pass_before_folder_consent_defers_only_the_granted_folder_rule() {
         let guard = ToolExecutionGuard::new();
-        let file = "/opt/agi-fixture/project/notes.txt";
+        let file = &outside_every_default_root("project/notes.txt");
 
         guard
             .validate_before_folder_consent("file_read", &json!({ "path": file }))
@@ -8909,7 +8939,7 @@ mod tests {
                 .is_err(),
             "consent was not given, so the second pass refuses"
         );
-        guard.set_readable_paths(vec![PathBuf::from("/opt/agi-fixture/project")]);
+        guard.set_readable_paths(vec![PathBuf::from(outside_every_default_root("project"))]);
         for _ in 0..40 {
             guard
                 .validate_after_folder_consent("file_read", &json!({ "path": file }))

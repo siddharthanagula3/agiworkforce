@@ -127,9 +127,16 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("granted for reading only"));
-        assert!(granted
-            .writable_new_path(&folder.path().join("new").join("..").join("x.txt"), "test")
-            .is_err());
+        for parent_named in [
+            folder.path().join("new").join("..").join("x.txt"),
+            folder.path().join("..").join("x.txt"),
+        ] {
+            assert!(granted
+                .writable_new_path(&parent_named, "test")
+                .unwrap_err()
+                .to_string()
+                .contains("names a parent folder"));
+        }
     }
 
     #[test]

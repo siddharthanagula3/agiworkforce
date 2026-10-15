@@ -1142,6 +1142,25 @@ mod sandbox_launch_tests {
         executor
     }
 
+    fn assert_names_the_folder(root: &Path, folder: &Path, context: &str) {
+        let spellings = agiworkforce_sandbox_policy::host_path::resolve_root_spellings(root)
+            .expect("the write root resolves");
+        assert_eq!(spellings.walked, root, "{context}");
+        assert_eq!(
+            spellings.canonical,
+            folder.canonicalize().unwrap(),
+            "{context}: the root is the granted folder, through the system's own links"
+        );
+        #[cfg(unix)]
+        assert_eq!(root, folder.canonicalize().unwrap(), "{context}");
+        #[cfg(windows)]
+        assert!(
+            !root.to_string_lossy().starts_with(r"\\?\"),
+            "{context}: a working directory is never spelled verbatim: {}",
+            root.display()
+        );
+    }
+
     #[tokio::test]
     async fn a_cwd_inside_the_project_writes_to_the_project() {
         let project = tempfile::tempdir().expect("project");
@@ -1154,11 +1173,7 @@ mod sandbox_launch_tests {
             .await
             .expect("write root");
 
-        assert_eq!(
-            root,
-            project.path().canonicalize().unwrap(),
-            "the root is the granted folder, through the system's own links"
-        );
+        assert_names_the_folder(&root, project.path(), "cwd inside the project");
     }
 
     #[tokio::test]
@@ -1172,7 +1187,7 @@ mod sandbox_launch_tests {
                 .terminal_write_root(Some(&cwd))
                 .await
                 .expect("write root");
-            assert_eq!(root, project.path().canonicalize().unwrap(), "cwd {cwd}");
+            assert_names_the_folder(&root, project.path(), &format!("cwd {cwd}"));
         }
     }
 

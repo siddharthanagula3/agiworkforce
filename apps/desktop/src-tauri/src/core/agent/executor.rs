@@ -511,6 +511,21 @@ impl TaskExecutor {
 mod tests {
     use super::*;
 
+    fn outside_the_project(relative: &str) -> String {
+        relative
+            .split('/')
+            .fold(
+                std::path::PathBuf::from(if cfg!(windows) {
+                    r"D:\agi-fixture"
+                } else {
+                    "/opt/agi-fixture"
+                }),
+                |path, name| path.join(name),
+            )
+            .to_string_lossy()
+            .into_owned()
+    }
+
     #[test]
     fn a_shell_action_is_told_to_hooks_as_the_terminal_tool_with_its_whole_command_line() {
         let (tool_name, parameters) = hook_call(&Action::ExecuteCommand {
@@ -566,14 +581,15 @@ mod tests {
             );
         }
 
+        let elsewhere = outside_the_project("elsewhere/a.txt");
         let already_absolute = Action::ReadFile {
-            path: "/elsewhere/a.txt".to_string(),
+            path: elsewhere.clone(),
         };
         let Action::ReadFile { path } = step_in_folder(&already_absolute, Some(project.path()))
         else {
             panic!("a read step stays a read step");
         };
-        assert_eq!(path, "/elsewhere/a.txt");
+        assert_eq!(path, elsewhere);
         let Action::ReadFile { path } = step_in_folder(&relative, None) else {
             panic!("a read step stays a read step");
         };
@@ -765,7 +781,7 @@ mod tests {
     #[tokio::test]
     async fn the_step_guard_leaves_granted_folders_to_the_agent_loop() {
         let guard = ToolExecutionGuard::new();
-        let granted_elsewhere = "/opt/agi-fixture/project/notes.txt".to_string();
+        let granted_elsewhere = outside_the_project("project/notes.txt");
 
         assert_eq!(
             guard_refusal(
@@ -792,7 +808,7 @@ mod tests {
         assert!(guard_refusal(
             &guard,
             &Action::ReadFile {
-                path: "/opt/agi-fixture/../../etc/passwd".to_string()
+                path: outside_the_project("../../etc/passwd")
             }
         )
         .await

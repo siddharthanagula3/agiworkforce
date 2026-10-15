@@ -2344,8 +2344,9 @@ mod tests {
     fn folder_request_keeps_authoritative_paths_with_pending_channel() {
         let state = ToolConfirmationState::new();
         let directory = tempfile::tempdir().expect("temp folder");
-        let canonical_directory =
-            std::fs::canonicalize(directory.path()).expect("canonical temp folder");
+        let canonical_directory = shown_spelling(
+            &std::fs::canonicalize(directory.path()).expect("canonical temp folder"),
+        );
         let file_path = canonical_directory.join("notes.txt");
         let request = ToolConfirmationRequest {
             request_id: "folder-request".to_string(),
@@ -2541,10 +2542,12 @@ mod tests {
     #[test]
     fn folder_request_rejects_traversal_and_unknown_capabilities() {
         let directory = tempfile::tempdir().expect("temp folder");
-        let directory = directory
-            .path()
-            .canonicalize()
-            .expect("canonical temp folder");
+        let directory = shown_spelling(
+            &directory
+                .path()
+                .canonicalize()
+                .expect("canonical temp folder"),
+        );
         let base = ToolConfirmationRequest {
             request_id: "folder-request-invalid".to_string(),
             tool_name: FOLDER_ACCESS_TOOL_NAME.to_string(),

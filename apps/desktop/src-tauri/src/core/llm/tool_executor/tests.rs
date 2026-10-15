@@ -2523,6 +2523,17 @@ async fn the_planning_tools_pass_the_guard_with_their_declared_parameters() {
     }
 }
 
+fn platform_absolute(relative: &str) -> String {
+    relative
+        .split('/')
+        .fold(
+            PathBuf::from(if cfg!(windows) { r"D:\" } else { "/" }),
+            |path, name| path.join(name),
+        )
+        .to_string_lossy()
+        .into_owned()
+}
+
 fn call(name: &str, arguments: Value) -> ToolCall {
     ToolCall {
         id: format!("test_{name}"),
@@ -2544,10 +2555,11 @@ fn an_alias_is_promoted_before_any_gate_reads_the_arguments() {
         "a hook or guard rule on `command` must see the alias as `command`"
     );
 
+    let notes = platform_absolute("tmp/notes.txt");
     let read = executor
-        .normalized_arguments(&call("file_read", json!({ "file_path": "/tmp/notes.txt" })))
+        .normalized_arguments(&call("file_read", json!({ "file_path": notes })))
         .expect("arguments");
-    assert_eq!(read.get("path"), Some(&json!("/tmp/notes.txt")));
+    assert_eq!(read.get("path"), Some(&json!(notes)));
     assert!(!read.contains_key("file_path"));
 
     let video = executor
@@ -2637,13 +2649,18 @@ fn text_over_the_read_limit_is_cut_on_a_character_boundary() {
 #[tokio::test]
 async fn a_relative_path_is_resolved_once_against_the_project_for_every_gate() {
     let mut executor = ToolExecutor::new(create_registry_with_all_tools());
-    executor.project_folder = Some("/work/project".to_string());
+    let project = platform_absolute("work/project");
+    executor.project_folder = Some(project.clone());
+    let in_project = |relative: &str| {
+        Path::new(&project)
+            .join(relative)
+            .to_string_lossy()
+            .into_owned()
+    };
     let guard = crate::sys::security::ToolExecutionGuard::new();
 
-    for (relative, resolved) in [
-        ("src/a.ts", "/work/project/src/a.ts"),
-        ("etc/hosts", "/work/project/etc/hosts"),
-    ] {
+    for relative in ["src/a.ts", "etc/hosts"] {
+        let resolved = in_project(relative);
         let read = executor
             .normalized_arguments(&call("file_read", json!({ "path": relative })))
             .expect("arguments");
@@ -2668,7 +2685,7 @@ async fn a_relative_path_is_resolved_once_against_the_project_for_every_gate() {
             json!({ "path": "repo", "file_path": "src/lib.rs" }),
         ))
         .expect("arguments");
-    assert_eq!(diff.get("path"), Some(&json!("/work/project/repo")));
+    assert_eq!(diff.get("path"), Some(&json!(in_project("repo"))));
     assert_eq!(
         diff.get("file_path"),
         Some(&json!("src/lib.rs")),
@@ -2681,15 +2698,13 @@ async fn a_relative_path_is_resolved_once_against_the_project_for_every_gate() {
             json!({ "edits": [{ "path": "src/a.ts", "old_text": "a", "new_text": "b" }] }),
         ))
         .expect("arguments");
-    assert_eq!(edits["edits"][0]["path"], json!("/work/project/src/a.ts"));
+    assert_eq!(edits["edits"][0]["path"], json!(in_project("src/a.ts")));
 
+    let elsewhere = platform_absolute("elsewhere/notes.txt");
     let absolute = executor
-        .normalized_arguments(&call(
-            "file_read",
-            json!({ "path": "/elsewhere/notes.txt" }),
-        ))
+        .normalized_arguments(&call("file_read", json!({ "path": elsewhere })))
         .expect("arguments");
-    assert_eq!(absolute.get("path"), Some(&json!("/elsewhere/notes.txt")));
+    assert_eq!(absolute.get("path"), Some(&json!(elsewhere)));
 
     if let Some(home) = dirs::home_dir() {
         let in_home = executor

@@ -239,8 +239,20 @@ impl GrantedFolders {
     /// existing ancestor resolved, then the missing names below it. Refused
     /// unless that ancestor is inside a folder granted for changes, and
     /// refused when any missing name is already a link, since a write would
-    /// follow a link to a missing target to wherever it points.
+    /// follow a link to a missing target to wherever it points. A `..` is
+    /// refused outright: `std::path::absolute` removes it by spelling on
+    /// Windows and keeps it elsewhere, so the same path would be judged two
+    /// ways.
     pub fn writable_new_path(&self, path: &Path, operation: &str) -> Result<PathBuf> {
+        if path
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir))
+        {
+            return Err(anyhow::anyhow!(
+                "Access denied: path '{}' names a parent folder ('..')",
+                path.display()
+            ));
+        }
         let absolute = std::path::absolute(path)
             .map_err(|error| anyhow::anyhow!("Invalid path '{}': {error}", path.display()))?;
         let mut missing = Vec::new();
