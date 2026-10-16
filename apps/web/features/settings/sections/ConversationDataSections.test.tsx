@@ -306,7 +306,7 @@ describe('Web conversation data settings', () => {
     expect(useChatStore.getState().conversations).toEqual([]);
   });
 
-  it('asks for the export archive and says the download link is emailed', async () => {
+  it('asks for the export archive and says the download link is emailed when it will be', async () => {
     const fetchMock = vi.spyOn(global, 'fetch').mockImplementation(async (input) =>
       String(input) === '/api/user/export'
         ? new Response(
@@ -314,6 +314,7 @@ describe('Web conversation data settings', () => {
               archive: {
                 id: 'export-1',
                 status: 'preparing',
+                delivery: 'email',
                 requestedAt: '2026-09-28T10:00:00.000Z',
                 readyAt: null,
                 expiresAt: null,
@@ -338,7 +339,7 @@ describe('Web conversation data settings', () => {
       ),
     );
     expect(
-      await screen.findByText(/email you a download link that works for 24 hours/i),
+      await screen.findByText(/email you a download link when it's ready/i),
     ).toBeInTheDocument();
   });
 

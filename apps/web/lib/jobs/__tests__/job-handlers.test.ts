@@ -33,6 +33,7 @@ vi.mock('@/lib/services/schedule-notification-service', () => ({
 vi.mock('@/lib/services/notification-email-service', () => ({
   sendScheduleCompletionEmail: mocks.sendScheduleCompletionEmail,
   sendDataExportReadyEmail: vi.fn(),
+  isNotificationEmailConfigured: vi.fn(() => false),
 }));
 vi.mock('@/lib/services/audit-streaming-service', () => ({
   drainAuditDestination: mocks.drainAuditDestination,

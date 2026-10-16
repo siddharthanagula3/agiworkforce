@@ -24,13 +24,8 @@ import {
 } from '../services/conversation-data-service';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
 import { toUserMessage } from '@/lib/user-error-message';
-import {
-  DATA_EXPORT_DOWNLOAD_HOURS,
-  DataExportArchiveResponseSchema,
-  MANAGED_CLOUD_DATA_EXPORT_PATH,
-} from '@agiworkforce/cloud-contracts';
-import { addCsrfHeaders } from '@/lib/client/csrf';
 import { SaveStatusLine } from '../components/SaveStatusLine';
+import { DataExportRow } from '../components/DataExportRow';
 import { UsOnlyRoutingPanel } from '../components/UsOnlyRoutingPanel';
 import { ProductAnalyticsConsentRow } from '../components/ProductAnalyticsConsentRow';
 import { MarketingEmailConsentRow } from '../components/MarketingEmailConsentRow';
@@ -228,9 +223,6 @@ export function PrivacySection() {
   );
   const saveInFlight = useRef(false);
 
-  const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
-  const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [bulkAction, setBulkAction] = useState<BulkConversationAction | null>(null);
   const [conversationActionError, setConversationActionError] = useState<string | null>(null);
   const [conversationActionNotice, setConversationActionNotice] = useState<string | null>(null);
@@ -300,27 +292,6 @@ export function PrivacySection() {
 
   function toggle(key: ToggleKey) {
     void savePrivacy({ ...state, [key]: !state[key] });
-  }
-
-  async function handleExport() {
-    setExporting(true);
-    setExportError(null);
-    setExportNotice(null);
-    try {
-      const res = await fetch(MANAGED_CLOUD_DATA_EXPORT_PATH, {
-        method: 'POST',
-        headers: await addCsrfHeaders(),
-      });
-      if (!res.ok) throw new Error('Export failed');
-      DataExportArchiveResponseSchema.parse(await res.json());
-      setExportNotice(
-        `We're preparing your export. We'll email you a download link that works for ${DATA_EXPORT_DOWNLOAD_HOURS} hours.`,
-      );
-    } catch (err) {
-      setExportError(toUserMessage(err, 'Export failed. Please try again.'));
-    } finally {
-      setExporting(false);
-    }
   }
 
   async function handleArchiveAllChats() {
@@ -940,57 +911,7 @@ export function PrivacySection() {
           </a>
         </div>
 
-        {/* Export data row */}
-        <div
-          id="export-data"
-          style={{
-            padding: 'var(--space-4) 0',
-            borderBottom: '1px solid var(--settings-border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 'var(--space-4)',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>Export data</div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-              Get a copy of your account data and the files you stored. We email you a download
-              link.
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <button
-              type="button"
-              onClick={handleExport}
-              disabled={exporting}
-              style={{
-                padding: 'var(--space-2) var(--space-4)',
-                fontSize: 12,
-                fontWeight: 600,
-                color: exporting ? 'var(--text-3)' : 'var(--text-1)',
-                background: 'transparent',
-                border: '1px solid var(--settings-border)',
-                borderRadius: 'var(--radius-md)',
-                cursor: exporting ? 'not-allowed' : 'pointer',
-                opacity: exporting ? 0.6 : 1,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {exporting ? 'Preparing...' : 'Export data'}
-            </button>
-            {exportError && (
-              <span role="alert" style={{ fontSize: 12, color: 'var(--chat-accent-primary-text)' }}>
-                {exportError}
-              </span>
-            )}
-            {exportNotice && (
-              <span role="status" style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                {exportNotice}
-              </span>
-            )}
-          </div>
-        </div>
+        <DataExportRow />
 
         {/* What this browser sends to the account, in one line. It replaces a
             whole Sync page that described other surfaces' behaviour and showed

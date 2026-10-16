@@ -12,6 +12,7 @@ import {
   DATA_EXPORT_DOWNLOAD_HOURS,
   managedCloudDataExportArchivePath,
   type DataExportArchive,
+  type DataExportDelivery,
 } from '@agiworkforce/cloud-contracts';
 import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
@@ -36,7 +37,10 @@ import {
   StoredZipWriter,
   storedZipEntryOverhead,
 } from '@/lib/server/stored-zip-writer';
-import { sendDataExportReadyEmail } from '@/lib/services/notification-email-service';
+import {
+  isNotificationEmailConfigured,
+  sendDataExportReadyEmail,
+} from '@/lib/services/notification-email-service';
 
 const BUILD_ARCHIVE_JOB = 'data-export.build-archive';
 const ARCHIVE_PART_BYTES = 8 * 1024 * 1024;
@@ -68,6 +72,7 @@ interface BuildArchivePayload {
   exportId: string;
   requestedAt: string;
   origin: string;
+  delivery: DataExportDelivery;
   workspaces: (string | null)[];
   volume: number;
   cursor: ArchiveCursor | null;
@@ -178,6 +183,10 @@ function readVolumes(value: unknown): StoredVolume[] {
   );
 }
 
+function readDelivery(value: unknown): DataExportDelivery {
+  return value === 'email' ? 'email' : 'in_app';
+}
+
 function readBuildPayload(payload: Record<string, unknown>): BuildArchivePayload {
   const workspaces = payload['workspaces'];
   const volume = payload['volume'];
@@ -194,6 +203,7 @@ function readBuildPayload(payload: Record<string, unknown>): BuildArchivePayload
     exportId: requireString(payload, 'exportId'),
     requestedAt: requireString(payload, 'requestedAt'),
     origin: requireString(payload, 'origin'),
+    delivery: readDelivery(payload['delivery']),
     workspaces: workspaces as (string | null)[],
     volume,
     cursor: readCursor(payload['cursor'] ?? null),
@@ -389,7 +399,14 @@ function archiveFromJob(row: DataExportJobRow): DataExportArchive | null {
   const exportId = row.payload['exportId'];
   const requestedAt = row.payload['requestedAt'];
   if (typeof exportId !== 'string' || typeof requestedAt !== 'string') return null;
-  const base = { id: exportId, requestedAt, readyAt: null, expiresAt: null, volumes: [] };
+  const base = {
+    id: exportId,
+    delivery: readDelivery(row.payload['delivery']),
+    requestedAt,
+    readyAt: null,
+    expiresAt: null,
+    volumes: [],
+  };
   if (row.status === 'queued' || row.status === 'running') return { ...base, status: 'preparing' };
   if (row.status !== 'succeeded') return { ...base, status: 'failed' };
   const result = row.result ?? {};
@@ -466,6 +483,21 @@ export async function resolveDataExportDownload(
   return { key: stored.key, fileName: `agi-export-${date}${suffix}.zip` };
 }
 
+async function verifiedExportRecipient(userId: string): Promise<string | null> {
+  const identity = await getIdentityUser(userId);
+  return identity?.primaryEmailVerification === 'verified' ? identity.primaryEmail : null;
+}
+
+async function resolveDataExportDelivery(userId: string): Promise<DataExportDelivery> {
+  if (!isNotificationEmailConfigured()) return 'in_app';
+  try {
+    return (await verifiedExportRecipient(userId)) ? 'email' : 'in_app';
+  } catch (error) {
+    logger.warn({ err: error }, '[data-export] the account email could not be checked');
+    return 'in_app';
+  }
+}
+
 export async function requestDataExportArchive(input: {
   db: DatabaseAdapter;
   userId: string;
@@ -482,6 +514,7 @@ export async function requestDataExportArchive(input: {
 
   const exportId = randomUUID();
   const requestedAt = new Date().toISOString();
+  const delivery = await resolveDataExportDelivery(input.userId);
   const json = Buffer.from(JSON.stringify(await input.collect(), null, 2));
   await putPrivateObject({
     key: exportJsonKey(input.userId, exportId),
@@ -497,6 +530,7 @@ export async function requestDataExportArchive(input: {
       exportId,
       requestedAt,
       origin: input.origin,
+      delivery,
       workspaces: await listDataExportWorkspaces(input.db, input.userId),
       volume: 1,
       cursor: null,
@@ -507,6 +541,7 @@ export async function requestDataExportArchive(input: {
     archive: {
       id: exportId,
       status: 'preparing',
+      delivery,
       requestedAt,
       readyAt: null,
       expiresAt: null,
@@ -703,8 +738,7 @@ export async function sendDataExportReadyEmailJob(
   if (!archive || archive.status !== 'ready' || !archive.expiresAt) {
     return { skipped: archive?.status ?? 'missing' };
   }
-  const identity = await getIdentityUser(userId);
-  const address = identity?.primaryEmailVerification === 'verified' ? identity.primaryEmail : null;
+  const address = await verifiedExportRecipient(userId);
   if (!address) return { skipped: 'no_verified_email' };
 
   const result = await sendDataExportReadyEmail({

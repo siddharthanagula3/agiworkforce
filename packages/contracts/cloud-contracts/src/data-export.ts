@@ -13,6 +13,9 @@ export function managedCloudDataExportArchivePath(exportId: string, volume: numb
 export const DATA_EXPORT_ARCHIVE_STATUSES = ['preparing', 'ready', 'failed', 'expired'] as const;
 export type DataExportArchiveStatus = (typeof DATA_EXPORT_ARCHIVE_STATUSES)[number];
 
+export const DATA_EXPORT_DELIVERY_METHODS = ['email', 'in_app'] as const;
+export type DataExportDelivery = (typeof DATA_EXPORT_DELIVERY_METHODS)[number];
+
 export const DataExportArchiveVolumeSchema = z.object({
   volume: z.number().int().positive(),
   byteCount: z.number().int().nonnegative(),
@@ -24,6 +27,7 @@ export type DataExportArchiveVolume = z.infer<typeof DataExportArchiveVolumeSche
 export const DataExportArchiveSchema = z.object({
   id: z.string().min(1),
   status: z.enum(DATA_EXPORT_ARCHIVE_STATUSES),
+  delivery: z.enum(DATA_EXPORT_DELIVERY_METHODS),
   requestedAt: z.string().min(1),
   readyAt: z.string().nullable(),
   expiresAt: z.string().nullable(),
