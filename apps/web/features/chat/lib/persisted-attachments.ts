@@ -75,6 +75,8 @@ function singleLine(value: string): string {
 /**
  * Sent as a turn of its own after the reply, never inside the reply's text: a
  * line in the model's own words is one it learns to write into later replies.
+ * The model chose each name, so a name travels quoted, as data, inside a turn
+ * that otherwise carries the user's authority.
  */
 export function createdFilesHistoryTurn(
   message: Message,
@@ -84,7 +86,7 @@ export function createdFilesHistoryTurn(
   if (files.length === 0) return null;
   const listed = files.slice(0, MAX_CREATED_FILE_REFERENCES).map((file) => {
     const format = file.kind && file.kind !== 'other' ? file.kind : file.mimeType;
-    return `${singleLine(file.fileName)} (format: ${singleLine(format)}, file id: ${singleLine(file.id)})`;
+    return `${JSON.stringify(singleLine(file.fileName))} (format: ${singleLine(format)}, file id: ${singleLine(file.id)})`;
   });
   const unlisted = files.length - listed.length;
   if (unlisted > 0) listed.push(`and ${unlisted} more`);

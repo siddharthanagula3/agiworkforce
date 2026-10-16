@@ -2974,7 +2974,7 @@ describe('useChatStream', () => {
         kind: 'xlsx',
       };
       const filesNote =
-        'The previous assistant reply created these files: audit_round6_shop.xlsx (format: xlsx, file id: f3d1c2b4-0a9e-4c8b-9f1e-7d6a5b4c3e21).';
+        'The previous assistant reply created these files: "audit_round6_shop.xlsx" (format: xlsx, file id: f3d1c2b4-0a9e-4c8b-9f1e-7d6a5b4c3e21).';
 
       function seed(finishReason: string) {
         useChatStore.setState({
