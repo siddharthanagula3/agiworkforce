@@ -282,6 +282,113 @@ describe('semantic recall', () => {
   });
 });
 
+const RECALL_QUESTION =
+  'Find our earlier conversation about the Juniper Lantern picnic and continue that plan. Tell me the codename, seating count and color, pickup day, and coordinator we decided, and link the source conversation.';
+const SEED =
+  'Our planning topic is Juniper Lantern picnic. We decided on the codename ORCHID-6842, 11 orange benches, Saturday pickup, and the coordinator role named Copper Finch.';
+
+function excerpt(overrides: Partial<PastChatExcerpt>): PastChatExcerpt {
+  return {
+    conversationId: 'conversation-1',
+    messageId: 'message-1',
+    title: 'Chat',
+    role: 'user',
+    content: SEED,
+    createdAt: '2026-10-15T22:41:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('a recall question asked before', () => {
+  it('drops an earlier ask of the same question and keeps the chat that holds the answer', () => {
+    const selected = selectRelevantPastChatExcerpts(
+      [
+        excerpt({ conversationId: 'old-test', messageId: 'old-ask', content: RECALL_QUESTION }),
+        excerpt({ conversationId: 'seed', messageId: 'seed-1' }),
+      ],
+      RECALL_QUESTION,
+    );
+
+    expect(selected.map((item) => item.messageId)).toEqual(['seed-1']);
+  });
+
+  it('keeps an assistant reply that quotes the question, since it may carry the answer', () => {
+    const selected = selectRelevantPastChatExcerpts(
+      [excerpt({ role: 'assistant', messageId: 'reply', content: RECALL_QUESTION })],
+      RECALL_QUESTION,
+    );
+
+    expect(selected.map((item) => item.messageId)).toEqual(['reply']);
+  });
+});
+
+describe('a chat newer than the conversation index', () => {
+  function indexedOnlyOldDb(freshRows: unknown[]) {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('embedding is not null')) return [{ present: true }];
+      if (sql.includes('as lexical_rank')) {
+        return [
+          {
+            chunk_id: 'chunk-old',
+            document_id: 'document-old',
+            source_kind: 'conversation',
+            source_id: 'old-test',
+            title: 'Recall test',
+            content: RECALL_QUESTION,
+            start_offset: 0,
+            end_offset: RECALL_QUESTION.length,
+            metadata: { messageId: 'old-ask', role: 'user' },
+            chunk_version: 1,
+            indexed_at: '2026-10-13T10:00:00.000Z',
+            lexical_rank: 1,
+            semantic_rank: 1,
+          },
+        ];
+      }
+      if (sql.includes('m.id = any(')) {
+        return [row({ id: 'old-ask', conversation_id: 'old-test', content: RECALL_QUESTION })];
+      }
+      if (sql.includes('m.created_at >=')) return freshRows;
+      return [];
+    });
+    return { query, transaction: vi.fn(), execute: vi.fn() };
+  }
+
+  it('finds a seed written after the last index run, by keyword', async () => {
+    const db = indexedOnlyOldDb([
+      row({ id: 'seed-1', conversation_id: 'seed', content: SEED, title: 'Juniper seed' }),
+    ]);
+
+    const result = await resolvePastChatContext(db as never, {
+      userId: 'user-1',
+      query: RECALL_QUESTION,
+    });
+
+    expect(result.mode).toBe('semantic');
+    expect(result.citations.map((citation) => citation.messageId)).toEqual(['seed-1']);
+    expect(result.prompt).toContain('ORCHID-6842');
+    const freshSql =
+      (db.query.mock.calls as unknown as [string][])
+        .map(([sql]) => sql)
+        .find((sql) => sql.includes('m.created_at >=')) ?? '';
+    expect(freshSql).toContain('c.user_id = $1');
+    expect(freshSql).toContain('c.google_user_data_at is null');
+  });
+
+  it('ignores a recent message that shares only a word with the question', async () => {
+    const db = indexedOnlyOldDb([
+      row({ id: 'unrelated', conversation_id: 'other', content: 'Notes from the picnic.' }),
+    ]);
+
+    const result = await resolvePastChatContext(db as never, {
+      userId: 'user-1',
+      query: RECALL_QUESTION,
+    });
+
+    expect(result.citations).toEqual([]);
+  });
+});
+
 describe('recent chats', () => {
   it('never reads a conversation that holds Google user data', async () => {
     const query = vi.fn().mockResolvedValue([row()]);

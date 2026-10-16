@@ -22,6 +22,10 @@ const MAX_QUERY_TERMS = 4;
 const CANDIDATE_LIMIT = 50;
 const SEMANTIC_HIT_LIMIT = 12;
 const SEMANTIC_HITS_PER_CONVERSATION = 3;
+/** Covers the conversation index's ten-minute refresh with room for a backlog. */
+const UNINDEXED_WINDOW_MS = 2 * 3_600_000;
+const FRESH_MATCH_MIN_TERMS = 3;
+const RESTATEMENT_OVERLAP = 0.8;
 
 /** A chat nobody has touched in this long is context about the past, not the present. */
 export const PAST_CHAT_FRESHNESS_MS = 90 * 86_400_000;
@@ -149,6 +153,23 @@ function relevanceScore(excerpt: PastChatExcerpt, terms: readonly string[]): num
   return score;
 }
 
+function sharedTermCount(content: string, terms: readonly string[]): number {
+  const haystack = content.toLowerCase();
+  return terms.filter((term) => haystack.includes(term)).length;
+}
+
+/** An earlier ask of the same question carries no answer, only the question. */
+function restatesQuestion(excerpt: PastChatExcerpt, queryTerms: readonly string[]): boolean {
+  if (excerpt.role !== 'user' || queryTerms.length < FRESH_MATCH_MIN_TERMS) return false;
+  const excerptTerms = pastChatQueryTerms(excerpt.content);
+  if (excerptTerms.length === 0) return false;
+  const shared = excerptTerms.filter((term) => queryTerms.includes(term)).length;
+  return (
+    shared / queryTerms.length >= RESTATEMENT_OVERLAP &&
+    shared / excerptTerms.length >= RESTATEMENT_OVERLAP
+  );
+}
+
 export function pastChatCitation(excerpt: PastChatExcerptSource): PastChatCitation {
   return {
     id: excerpt.source.id,
@@ -172,7 +193,7 @@ export function selectRelevantPastChatExcerpts<T extends PastChatExcerpt & { sco
   const deduped = new Map<string, T>();
   for (const candidate of candidates) {
     const content = candidate.content.trim();
-    if (!content) continue;
+    if (!content || restatesQuestion(candidate, terms)) continue;
     const key = candidate.messageId || `${candidate.conversationId}:${content}`;
     if (!deduped.has(key)) deduped.set(key, { ...candidate, content });
   }
@@ -425,6 +446,7 @@ async function loadKeywordPastChatExcerpts(
   db: ManagedMemoryContextDb,
   params: PastChatLookup,
   scope: MemoryScope,
+  since?: Date,
 ): Promise<PastChatExcerptSource[]> {
   const terms = pastChatQueryTerms(params.query).slice(0, MAX_QUERY_TERMS);
   if (terms.length === 0) return [];
@@ -441,6 +463,9 @@ async function loadKeywordPastChatExcerpts(
   const termFilter = terms
     .map((term) => `m.content ilike $${values.push(`%${term}%`)}`)
     .join(' or ');
+  const sinceFilter = since
+    ? `and m.created_at >= $${values.push(since.toISOString())}::timestamptz`
+    : '';
 
   const rows = await db.query<PastChatMessageRow>(
     `select m.id,
@@ -460,6 +485,7 @@ async function loadKeywordPastChatExcerpts(
         and m.deleted_at is null
         and m.role in ('user', 'assistant')
         and (${termFilter})
+        ${sinceFilter}
         ${projectFilter}
       order by m.created_at desc
       limit ${CANDIDATE_LIMIT}`,
@@ -474,8 +500,10 @@ async function loadKeywordPastChatExcerpts(
 
 /**
  * Semantic first, keyword only where the account has no conversation index yet.
- * Throws rather than returning empty: an empty result and a failed lookup are
- * different answers and the caller has to be able to tell them apart.
+ * The index refreshes on a schedule, so messages newer than its window are also
+ * read by keyword, and kept only where they share several of the question's
+ * terms. Throws rather than returning empty: an empty result and a failed lookup
+ * are different answers and the caller has to be able to tell them apart.
  */
 export async function retrievePastChatCandidates(
   db: ManagedMemoryContextDb,
@@ -485,7 +513,19 @@ export async function retrievePastChatCandidates(
   if (!params.query.trim()) return { excerpts: [], mode: 'semantic' };
   try {
     const semantic = await loadSemanticPastChatExcerpts(db, params, scope);
-    if (semantic !== null) return { excerpts: semantic, mode: 'semantic' };
+    if (semantic !== null) {
+      const terms = pastChatQueryTerms(params.query);
+      const unindexed = await loadKeywordPastChatExcerpts(
+        db,
+        params,
+        scope,
+        new Date(Date.now() - UNINDEXED_WINDOW_MS),
+      );
+      const fresh = unindexed.filter(
+        (excerpt) => sharedTermCount(excerpt.content, terms) >= FRESH_MATCH_MIN_TERMS,
+      );
+      return { excerpts: [...semantic, ...fresh], mode: 'semantic' };
+    }
     return { excerpts: await loadKeywordPastChatExcerpts(db, params, scope), mode: 'keyword' };
   } catch (error) {
     throw new PastChatRetrievalError(error);
