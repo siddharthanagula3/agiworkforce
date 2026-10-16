@@ -47,6 +47,7 @@ import {
 } from '@/lib/hooks/useChatStream';
 import { interactiveCardNeedsResume } from '@/app/api/interactive-cards/response-contract';
 import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
+import { conversationUnavailableToastOptions } from '@/lib/conversation-load-error';
 import { useConversations } from '@/lib/hooks/useConversations';
 import {
   ManagedCloudAgentRunHttpError,
@@ -2125,13 +2126,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               setBareChatSessionId(null);
               setActiveConversation(null);
               router.replace(surfaceRootHref);
-              toast.error(message, {
-                id: `conversation-unavailable-${urlConversationId}`,
-                action: {
-                  label: 'Retry',
-                  onClick: () => router.push(surfaceConversationHref(urlConversationId)),
-                },
-              });
+              toast.error(
+                message,
+                conversationUnavailableToastOptions(message, urlConversationId, () =>
+                  router.push(surfaceConversationHref(urlConversationId)),
+                ),
+              );
             }
           });
         }

@@ -11,6 +11,7 @@ import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { resolveNewChatTemporary } from '@/lib/temporary-chat-policy';
 import { readPersistedAttachments } from '@/features/chat/lib/persisted-attachments';
 import { readPersistedRouteLane } from '@/features/chat/lib/routeLane';
+import { CONVERSATION_NOT_FOUND_MESSAGE } from '@/lib/conversation-load-error';
 import { hasPendingDraftClear } from '@/features/chat/lib/pending-draft-clear';
 import { observeConversationDraftRevision } from '@/features/chat/services/conversation-draft';
 import {
@@ -52,8 +53,6 @@ const CONVERSATIONS_LIST_RETRY_BASE_DELAY_MS = 1_000;
 const CONVERSATIONS_LIST_RETRY_MAX_DELAY_MS = 30_000;
 const CONVERSATIONS_LIST_RETRY_MAX_ATTEMPTS = 5;
 const CONVERSATION_NOT_FOUND_STATUSES = new Set([404, 403]);
-const CONVERSATION_NOT_FOUND_MESSAGE =
-  'This conversation is unavailable. It may have been deleted.';
 const CONVERSATION_LOAD_RETRY_MESSAGE =
   "Couldn't load this conversation. Check your connection and try again.";
 
