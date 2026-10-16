@@ -10,9 +10,28 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: vi.fn(() => null) }));
 
+import { CLERK_SECRET_KEY_ENV } from '@agiworkforce/identity';
+import { ONCALL_ROTATION_ENV } from '@/lib/server/incident/on-call';
+import {
+  OUT_OF_BAND_WEBHOOK_ENV,
+  STATUS_MIRROR_WRITE_URL_ENV,
+} from '@/lib/server/incident/out-of-band';
+import { INCIDENT_CHANNEL_WEBHOOK_ENV, PAGER_WEBHOOK_ENV } from '@/lib/server/incident/pager';
+
 import { GET } from './route';
 
 const CRON_SECRET = 'probe-drill-secret';
+
+// Each one lets the probe or its alert reach a service through the stubbed
+// fetch; the CI job that runs this file sets the Clerk key for every test.
+const NETWORK_REACHING_ENV = [
+  CLERK_SECRET_KEY_ENV,
+  PAGER_WEBHOOK_ENV,
+  INCIDENT_CHANNEL_WEBHOOK_ENV,
+  OUT_OF_BAND_WEBHOOK_ENV,
+  STATUS_MIRROR_WRITE_URL_ENV,
+  ONCALL_ROTATION_ENV,
+];
 
 function authorizedRequest() {
   return new Request('http://localhost/api/cron/health-probe', {
@@ -28,6 +47,7 @@ beforeEach(() => {
   delete process.env['DATABASE_URL'];
   delete process.env['AGI_DATABASE_URL'];
   delete process.env['STRIPE_SECRET_KEY'];
+  for (const name of NETWORK_REACHING_ENV) delete process.env[name];
   process.env['CRON_SECRET'] = CRON_SECRET;
   process.env['RESEND_API_KEY'] = 'test-key';
   process.env['AGI_SUPPORT_FROM_EMAIL'] = 'support@agiworkforce.com';
