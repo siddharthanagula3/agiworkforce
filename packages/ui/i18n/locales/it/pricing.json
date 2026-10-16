@@ -87,15 +87,11 @@
   "premiumSeatsUnavailable": "Le postazioni Premium non sono ancora in vendita nella tua valuta.",
   "premiumSeatsInSettings": "Le postazioni Premium si assegnano a ogni membro in Impostazioni, Team.",
   "basicFeature5": "2 chat contemporaneamente e fino a 50 strumenti connettore",
-  "basicFeature6": "2 attività pianificate e sandbox gestite da 10 minuti",
   "proFeature5": "Deep Research, AGI Work, generazione di immagini e accesso all'API gestita",
-  "proFeature6": "Attività pianificate",
   "maxFeature4": "Progetti e server MCP personalizzati illimitati, con {{storage}} di archiviazione",
   "maxFeature5": "8 chat contemporaneamente e fino a 300 strumenti connettore",
-  "maxFeature6": "10 attività pianificate e sandbox gestite da 30 minuti",
   "max15xFeature4": "Progetti e server MCP personalizzati illimitati, con {{storage}} di archiviazione",
   "max15xFeature5": "12 chat contemporaneamente e fino a 500 strumenti connettore",
-  "max15xFeature6": "25 attività pianificate e sandbox gestite da 60 minuti",
   "chatsAtOnce": "{{chats}} chat contemporaneamente",
   "unlimitedProjectsWithStorage": "Progetti illimitati e {{storage}} di archiviazione",
   "heroEyebrow": "Prezzi",
@@ -238,5 +234,8 @@
   "projectsWithStorage_other": "{{count}} progetti con {{storage}} di archiviazione della conoscenza",
   "dailyUploads_one": "{{count}} file caricato al giorno, fino a {{size}} ciascuno",
   "dailyUploads_many": "{{count}} file caricati al giorno, fino a {{size}} ciascuno",
-  "dailyUploads_other": "{{count}} file caricati al giorno, fino a {{size}} ciascuno"
+  "dailyUploads_other": "{{count}} file caricati al giorno, fino a {{size}} ciascuno",
+  "scheduledTasksAndSandboxes_one": "{{count}} attività pianificata e sandbox gestite da {{minutes}} minuti",
+  "scheduledTasksAndSandboxes_many": "{{count}} attività pianificate e sandbox gestite da {{minutes}} minuti",
+  "scheduledTasksAndSandboxes_other": "{{count}} attività pianificate e sandbox gestite da {{minutes}} minuti"
 }

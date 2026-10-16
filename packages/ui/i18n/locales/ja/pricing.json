@@ -87,15 +87,11 @@
   "premiumSeatsUnavailable": "Premium シートは、お使いの通貨ではまだ販売していません。",
   "premiumSeatsInSettings": "Premium シートは、設定のチームでメンバーごとに設定します。",
   "basicFeature5": "同時に 2 チャット、コネクタツール最大 50",
-  "basicFeature6": "スケジュールタスク 2 件、マネージドサンドボックス 10 分",
   "proFeature5": "Deep Research、AGI Work、画像生成、マネージド API アクセス",
-  "proFeature6": "スケジュールタスク",
   "maxFeature4": "プロジェクトとカスタム MCP サーバーは無制限、ストレージは {{storage}}",
   "maxFeature5": "同時に 8 チャット、コネクタツール最大 300",
-  "maxFeature6": "スケジュールタスク 10 件、マネージドサンドボックス 30 分",
   "max15xFeature4": "プロジェクトとカスタム MCP サーバーは無制限、ストレージは {{storage}}",
   "max15xFeature5": "同時に 12 チャット、コネクタツール最大 500",
-  "max15xFeature6": "スケジュールタスク 25 件、マネージドサンドボックス 60 分",
   "chatsAtOnce": "同時に {{chats}} チャット",
   "unlimitedProjectsWithStorage": "プロジェクトは無制限、ストレージは {{storage}}",
   "heroEyebrow": "料金",
@@ -236,5 +232,7 @@
   "projectsWithStorage_one": "{{count}} プロジェクト、ナレッジストレージ {{storage}}",
   "projectsWithStorage_other": "{{count}} プロジェクト、ナレッジストレージ {{storage}}",
   "dailyUploads_one": "毎日 {{count}} 件のファイルアップロード、各 {{size}} まで",
-  "dailyUploads_other": "毎日 {{count}} 件のファイルアップロード、各 {{size}} まで"
+  "dailyUploads_other": "毎日 {{count}} 件のファイルアップロード、各 {{size}} まで",
+  "scheduledTasksAndSandboxes_one": "スケジュールタスク {{count}} 件、マネージドサンドボックス {{minutes}} 分",
+  "scheduledTasksAndSandboxes_other": "スケジュールタスク {{count}} 件、マネージドサンドボックス {{minutes}} 分"
 }

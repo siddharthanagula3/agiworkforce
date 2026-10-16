@@ -121,6 +121,7 @@ import {
   planFeatureLead,
   planTierBody,
   pricingUsageExplainer,
+  sandboxMinutes,
   teamPlanFeatures,
   teamSeatRows,
   withIncludedTax,
@@ -163,8 +164,6 @@ const USAGE_WITHOUT_BASELINE_KEY: Partial<Record<ComparedPlan, string>> = {
   free: 'compareFreeUsage',
 };
 
-const MINUTE_MS = 60_000;
-
 // AGI trains on no plan's content. The Free plan is served by providers' free
 // models, whose own terms may allow training, so its cell says so.
 const UPGRADE_SETTLE_ATTEMPTS = 6;
@@ -199,9 +198,8 @@ function countCell(
 }
 
 function sandboxCell(plan: BillingPlanTier, t: TFunction<'pricing'>): PlanComparisonCell {
-  const limits = getBillingPlanProductLimits(plan);
-  return countCell(limits?.maxSandboxes, t, (sandboxes) =>
-    t('compareSandboxLimit', { sandboxes, minutes: (limits?.sandboxTtlMs ?? 0) / MINUTE_MS }),
+  return countCell(getBillingPlanProductLimits(plan)?.maxSandboxes, t, (sandboxes) =>
+    t('compareSandboxLimit', { sandboxes, minutes: sandboxMinutes(plan) }),
   );
 }
 

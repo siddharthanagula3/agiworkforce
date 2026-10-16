@@ -87,15 +87,11 @@
   "premiumSeatsUnavailable": "Места Premium пока не продаются в вашей валюте.",
   "premiumSeatsInSettings": "Места Premium назначаются каждому участнику в разделе «Настройки», «Команда».",
   "basicFeature5": "2 чата одновременно и до 50 инструментов коннекторов",
-  "basicFeature6": "2 запланированные задачи и управляемые песочницы на 10 минут",
   "proFeature5": "Deep Research, AGI Work, генерация изображений и доступ к управляемому API",
-  "proFeature6": "Запланированные задачи",
   "maxFeature4": "Неограниченные проекты и собственные MCP-серверы, {{storage}} хранилища",
   "maxFeature5": "8 чатов одновременно и до 300 инструментов коннекторов",
-  "maxFeature6": "10 запланированных задач и управляемые песочницы на 30 минут",
   "max15xFeature4": "Неограниченные проекты и собственные MCP-серверы, {{storage}} хранилища",
   "max15xFeature5": "12 чатов одновременно и до 500 инструментов коннекторов",
-  "max15xFeature6": "25 запланированных задач и управляемые песочницы на 60 минут",
   "chatsAtOnce": "Чатов одновременно: {{chats}}",
   "unlimitedProjectsWithStorage": "Неограниченные проекты и {{storage}} хранилища",
   "heroEyebrow": "Цены",
@@ -240,5 +236,9 @@
   "dailyUploads_one": "{{count}} загрузка файла в день, до {{size}} на файл",
   "dailyUploads_few": "{{count}} загрузки файлов в день, до {{size}} на файл",
   "dailyUploads_many": "{{count}} загрузок файлов в день, до {{size}} на файл",
-  "dailyUploads_other": "{{count}} загрузки файлов в день, до {{size}} на файл"
+  "dailyUploads_other": "{{count}} загрузки файлов в день, до {{size}} на файл",
+  "scheduledTasksAndSandboxes_one": "{{count}} запланированная задача и управляемые песочницы на {{minutes}} мин",
+  "scheduledTasksAndSandboxes_few": "{{count}} запланированные задачи и управляемые песочницы на {{minutes}} мин",
+  "scheduledTasksAndSandboxes_many": "{{count}} запланированных задач и управляемые песочницы на {{minutes}} мин",
+  "scheduledTasksAndSandboxes_other": "{{count}} запланированной задачи и управляемые песочницы на {{minutes}} мин"
 }

@@ -113,6 +113,19 @@ function concurrencyFeature(plan: BillingPlanTier, connectorKey: string, t: Pric
   return typeof chats === 'number' ? t('chatsAtOnce', { chats }) : null;
 }
 
+const MINUTE_MS = 60_000;
+
+export function sandboxMinutes(plan: BillingPlanTier): number {
+  return (getBillingPlanProductLimits(plan)?.sandboxTtlMs ?? 0) / MINUTE_MS;
+}
+
+function scheduledTasksAndSandboxesFeature(plan: BillingPlanTier, t: PricingT) {
+  const tasks = getBillingPlanProductLimits(plan)?.maxScheduledTasks;
+  const minutes = sandboxMinutes(plan);
+  if (typeof tasks !== 'number' || tasks <= 0 || minutes <= 0) return null;
+  return t('scheduledTasksAndSandboxes', { count: tasks, minutes });
+}
+
 function projectsWithStorageFeature(plan: BillingPlanTier, t: PricingT) {
   const limits = getBillingPlanProductLimits(plan);
   const storage = limits?.knowledgeStorageBytes;
@@ -159,7 +172,7 @@ export function individualPlanFeatures(
         t('basicFeature2'),
         projectsWithStorageFeature('basic', t),
         concurrencyFeature('basic', 'basicFeature5', t),
-        t('basicFeature6'),
+        scheduledTasksAndSandboxesFeature('basic', t),
         t('basicFeature3'),
       ]);
     case 'pro':
@@ -168,7 +181,7 @@ export function individualPlanFeatures(
         t('proFeature5'),
         projectsWithStorageFeature('pro', t),
         concurrencyFeature('pro', 'proFeature2', t),
-        t('proFeature6'),
+        scheduledTasksAndSandboxesFeature('pro', t),
       ]);
     case 'max':
       return presentCopy([
@@ -176,7 +189,7 @@ export function individualPlanFeatures(
         `All ${FLAGSHIP_MODEL_COUNT} flagship models unlocked for manual selection`,
         projectsAndStorageFeature('max', 'maxFeature4', t),
         concurrencyFeature('max', 'maxFeature5', t),
-        t('maxFeature6'),
+        scheduledTasksAndSandboxesFeature('max', t),
       ]);
     case 'max_15x':
       return presentCopy([
@@ -184,7 +197,7 @@ export function individualPlanFeatures(
         t('max15xFeature3'),
         projectsAndStorageFeature('max_15x', 'max15xFeature4', t),
         concurrencyFeature('max_15x', 'max15xFeature5', t),
-        t('max15xFeature6'),
+        scheduledTasksAndSandboxesFeature('max_15x', t),
       ]);
   }
 }

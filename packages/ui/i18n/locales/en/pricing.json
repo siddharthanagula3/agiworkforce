@@ -176,15 +176,11 @@
   "premiumSeatsUnavailable": "Premium seats are not sold in your currency yet.",
   "premiumSeatsInSettings": "Premium seats are set for each member in Settings, Team.",
   "basicFeature5": "2 chats at once and up to 50 connector tools",
-  "basicFeature6": "2 scheduled tasks and 10-minute managed sandboxes",
   "proFeature5": "Deep Research, AGI Work, image generation and managed API access",
-  "proFeature6": "Scheduled tasks",
   "maxFeature4": "Unlimited projects and custom MCP servers, with {{storage}} of storage",
   "maxFeature5": "8 chats at once and up to 300 connector tools",
-  "maxFeature6": "10 scheduled tasks and 30-minute managed sandboxes",
   "max15xFeature4": "Unlimited projects and custom MCP servers, with {{storage}} of storage",
   "max15xFeature5": "12 chats at once and up to 500 connector tools",
-  "max15xFeature6": "25 scheduled tasks and 60-minute managed sandboxes",
   "chatsAtOnce": "{{chats}} chats at once",
   "unlimitedProjectsWithStorage": "Unlimited projects and {{storage}} of storage",
   "everythingInPlan": "Everything in {{plan}}, plus:",
@@ -236,5 +232,7 @@
   "projectsWithStorage_one": "{{count}} project with {{storage}} of knowledge storage",
   "projectsWithStorage_other": "{{count}} projects with {{storage}} of knowledge storage",
   "dailyUploads_one": "{{count}} file upload a day, up to {{size}} each",
-  "dailyUploads_other": "{{count}} file uploads a day, up to {{size}} each"
+  "dailyUploads_other": "{{count}} file uploads a day, up to {{size}} each",
+  "scheduledTasksAndSandboxes_one": "{{count}} scheduled task and {{minutes}}-minute managed sandboxes",
+  "scheduledTasksAndSandboxes_other": "{{count}} scheduled tasks and {{minutes}}-minute managed sandboxes"
 }

@@ -87,15 +87,11 @@
   "premiumSeatsUnavailable": "Premium 좌석은 아직 사용 중인 통화로 판매하지 않습니다.",
   "premiumSeatsInSettings": "Premium 좌석은 설정의 팀에서 구성원별로 지정합니다.",
   "basicFeature5": "동시 채팅 2개, 커넥터 도구 최대 50개",
-  "basicFeature6": "예약 작업 2개, 10분 관리형 샌드박스",
   "proFeature5": "Deep Research, AGI Work, 이미지 생성, 관리형 API 액세스",
-  "proFeature6": "예약 작업",
   "maxFeature4": "무제한 프로젝트와 맞춤 MCP 서버, 저장소 {{storage}}",
   "maxFeature5": "동시 채팅 8개, 커넥터 도구 최대 300개",
-  "maxFeature6": "예약 작업 10개, 30분 관리형 샌드박스",
   "max15xFeature4": "무제한 프로젝트와 맞춤 MCP 서버, 저장소 {{storage}}",
   "max15xFeature5": "동시 채팅 12개, 커넥터 도구 최대 500개",
-  "max15xFeature6": "예약 작업 25개, 60분 관리형 샌드박스",
   "chatsAtOnce": "동시 채팅 {{chats}}개",
   "unlimitedProjectsWithStorage": "무제한 프로젝트와 저장소 {{storage}}",
   "heroEyebrow": "요금제",
@@ -236,5 +232,7 @@
   "projectsWithStorage_one": "프로젝트 {{count}}개, 지식 저장소 {{storage}}",
   "projectsWithStorage_other": "프로젝트 {{count}}개, 지식 저장소 {{storage}}",
   "dailyUploads_one": "하루 파일 업로드 {{count}}개, 파일당 최대 {{size}}",
-  "dailyUploads_other": "하루 파일 업로드 {{count}}개, 파일당 최대 {{size}}"
+  "dailyUploads_other": "하루 파일 업로드 {{count}}개, 파일당 최대 {{size}}",
+  "scheduledTasksAndSandboxes_one": "예약 작업 {{count}}개, {{minutes}}분 관리형 샌드박스",
+  "scheduledTasksAndSandboxes_other": "예약 작업 {{count}}개, {{minutes}}분 관리형 샌드박스"
 }

@@ -176,15 +176,11 @@
   "premiumSeatsUnavailable": "Las licencias Premium todavía no se venden en tu moneda.",
   "premiumSeatsInSettings": "Las licencias Premium se asignan a cada miembro en Ajustes, Equipo.",
   "basicFeature5": "2 chats a la vez y hasta 50 herramientas de conectores",
-  "basicFeature6": "2 tareas programadas y entornos gestionados de 10 minutos",
   "proFeature5": "Deep Research, AGI Work, generación de imágenes y acceso a la API gestionada",
-  "proFeature6": "Tareas programadas",
   "maxFeature4": "Proyectos y servidores MCP personalizados ilimitados, con {{storage}} de almacenamiento",
   "maxFeature5": "8 chats a la vez y hasta 300 herramientas de conectores",
-  "maxFeature6": "10 tareas programadas y entornos gestionados de 30 minutos",
   "max15xFeature4": "Proyectos y servidores MCP personalizados ilimitados, con {{storage}} de almacenamiento",
   "max15xFeature5": "12 chats a la vez y hasta 500 herramientas de conectores",
-  "max15xFeature6": "25 tareas programadas y entornos gestionados de 60 minutos",
   "chatsAtOnce": "{{chats}} chats a la vez",
   "unlimitedProjectsWithStorage": "Proyectos ilimitados y {{storage}} de almacenamiento",
   "everythingInPlan": "Todo lo de {{plan}}, más:",
@@ -238,5 +234,8 @@
   "projectsWithStorage_other": "{{count}} proyectos con {{storage}} de almacenamiento de conocimiento",
   "dailyUploads_one": "{{count}} archivo subido al día, de hasta {{size}} cada uno",
   "dailyUploads_many": "{{count}} archivos subidos al día, de hasta {{size}} cada uno",
-  "dailyUploads_other": "{{count}} archivos subidos al día, de hasta {{size}} cada uno"
+  "dailyUploads_other": "{{count}} archivos subidos al día, de hasta {{size}} cada uno",
+  "scheduledTasksAndSandboxes_one": "{{count}} tarea programada y entornos gestionados de {{minutes}} minutos",
+  "scheduledTasksAndSandboxes_many": "{{count}} tareas programadas y entornos gestionados de {{minutes}} minutos",
+  "scheduledTasksAndSandboxes_other": "{{count}} tareas programadas y entornos gestionados de {{minutes}} minutos"
 }

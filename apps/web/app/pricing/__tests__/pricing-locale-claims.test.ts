@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { SUPPORTED_LANGUAGES } from '@agiworkforce/i18n';
 import { SURFACE_NAMES } from '@/lib/surface-status';
+import { individualPlanFeatures } from '@/features/billing/lib/plan-card-copy';
 
 import {
   BILLING_PLAN_PRICING,
@@ -159,25 +160,56 @@ describe('pricing locale bundles, plan feature claims', () => {
     }
   });
 
-  it('keeps the Pro scheduled-task label free of release promises and literal quotas in every locale', () => {
+  it('computes every plan card scheduled-task line from the catalog, with no release promise or typed quota in any locale', async () => {
     const bundles = pricingBundles();
     expect(bundles.map(([locale]) => locale).sort()).toEqual(
       SUPPORTED_LANGUAGES.map((language) => language.code).sort(),
     );
     expect(BILLING_PLAN_PRODUCT_LIMITS.pro.maxScheduledTasks).not.toBe(0);
-    expect(bundles.find(([locale]) => locale === 'en')?.[1]['proFeature6']).toBe('Scheduled tasks');
 
     for (const [locale, bundle] of bundles) {
-      const copy = bundle['proFeature6'] ?? '';
-      expect(copy.trim(), `${locale}/pricing.json proFeature6 is empty`).not.toBe('');
-      expect(copy, `${locale}/pricing.json proFeature6 repeats a quota`).not.toMatch(/\p{N}|\{\{/u);
-      const compact = copy.replace(/\s/gu, '').toLowerCase();
-      for (const surface of [SURFACE_NAMES.cli, SURFACE_NAMES.vscode]) {
-        expect(
-          compact,
-          `${locale}/pricing.json proFeature6 promises an unreleased developer surface`,
-        ).not.toContain(surface.replace(/\s/gu, '').toLowerCase());
+      for (const retired of ['basicFeature6', 'proFeature6', 'maxFeature6', 'max15xFeature6']) {
+        expect(bundle, `${locale}/pricing.json still types ${retired}`).not.toHaveProperty(retired);
       }
+      const forms = Object.entries(bundle).filter(([key]) =>
+        key.startsWith('scheduledTasksAndSandboxes_'),
+      );
+      expect(forms.map(([key]) => key)).toContain('scheduledTasksAndSandboxes_other');
+      for (const [key, copy] of forms) {
+        expect(copy, `${locale}/pricing.json ${key}`).toContain('{{minutes}}');
+        if (!key.endsWith('_one')) {
+          expect(copy, `${locale}/pricing.json ${key}`).toContain('{{count}}');
+        }
+        expect(copy, `${locale}/pricing.json ${key} types a quota`).not.toMatch(/\p{N}/u);
+        const compact = copy.replace(/\s/gu, '').toLowerCase();
+        for (const surface of [SURFACE_NAMES.cli, SURFACE_NAMES.vscode]) {
+          expect(
+            compact,
+            `${locale}/pricing.json ${key} promises an unreleased developer surface`,
+          ).not.toContain(surface.replace(/\s/gu, '').toLowerCase());
+        }
+      }
+    }
+
+    const { createInstance } = await import('i18next');
+    const { resources } = await import('@agiworkforce/i18n');
+    const instance = createInstance();
+    await instance.init({
+      lng: 'en',
+      resources,
+      ns: ['pricing', 'models'],
+      defaultNS: 'pricing',
+      interpolation: { escapeValue: false },
+    });
+    const t = instance.getFixedT('en', 'pricing');
+    for (const plan of ['basic', 'pro', 'max', 'max_15x'] as const) {
+      const { maxScheduledTasks, sandboxTtlMs } = BILLING_PLAN_PRODUCT_LIMITS[plan];
+      expect(
+        individualPlanFeatures(plan, t, { image: null, video: null }),
+        `${plan} card`,
+      ).toContain(
+        `${maxScheduledTasks} scheduled tasks and ${sandboxTtlMs / 60_000}-minute managed sandboxes`,
+      );
     }
   });
 });

@@ -87,15 +87,11 @@
   "premiumSeatsUnavailable": "Os assentos Premium ainda não são vendidos na sua moeda.",
   "premiumSeatsInSettings": "Os assentos Premium são definidos para cada membro em Configurações, Equipe.",
   "basicFeature5": "2 conversas ao mesmo tempo e até 50 ferramentas de conectores",
-  "basicFeature6": "2 tarefas agendadas e sandboxes gerenciadas de 10 minutos",
   "proFeature5": "Deep Research, AGI Work, geração de imagens e acesso à API gerenciada",
-  "proFeature6": "Tarefas agendadas",
   "maxFeature4": "Projetos e servidores MCP personalizados ilimitados, com {{storage}} de armazenamento",
   "maxFeature5": "8 conversas ao mesmo tempo e até 300 ferramentas de conectores",
-  "maxFeature6": "10 tarefas agendadas e sandboxes gerenciadas de 30 minutos",
   "max15xFeature4": "Projetos e servidores MCP personalizados ilimitados, com {{storage}} de armazenamento",
   "max15xFeature5": "12 conversas ao mesmo tempo e até 500 ferramentas de conectores",
-  "max15xFeature6": "25 tarefas agendadas e sandboxes gerenciadas de 60 minutos",
   "chatsAtOnce": "{{chats}} conversas ao mesmo tempo",
   "unlimitedProjectsWithStorage": "Projetos ilimitados e {{storage}} de armazenamento",
   "heroEyebrow": "Preços",
@@ -238,5 +234,8 @@
   "projectsWithStorage_other": "{{count}} projetos com {{storage}} de armazenamento de conhecimento",
   "dailyUploads_one": "{{count}} envio de arquivo por dia, de até {{size}} cada",
   "dailyUploads_many": "{{count}} envios de arquivo por dia, de até {{size}} cada",
-  "dailyUploads_other": "{{count}} envios de arquivo por dia, de até {{size}} cada"
+  "dailyUploads_other": "{{count}} envios de arquivo por dia, de até {{size}} cada",
+  "scheduledTasksAndSandboxes_one": "{{count}} tarefa agendada e sandboxes gerenciadas de {{minutes}} minutos",
+  "scheduledTasksAndSandboxes_many": "{{count}} tarefas agendadas e sandboxes gerenciadas de {{minutes}} minutos",
+  "scheduledTasksAndSandboxes_other": "{{count}} tarefas agendadas e sandboxes gerenciadas de {{minutes}} minutos"
 }

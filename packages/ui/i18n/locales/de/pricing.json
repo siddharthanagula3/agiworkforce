@@ -87,15 +87,11 @@
   "premiumSeatsUnavailable": "Premium-Plätze werden in Ihrer Währung noch nicht verkauft.",
   "premiumSeatsInSettings": "Premium-Plätze werden pro Mitglied unter Einstellungen, Team festgelegt.",
   "basicFeature5": "2 gleichzeitige Chats und bis zu 50 Connector-Tools",
-  "basicFeature6": "2 geplante Aufgaben und verwaltete Sandboxes mit 10 Minuten",
   "proFeature5": "Deep Research, AGI Work, Bildgenerierung und verwalteter API-Zugriff",
-  "proFeature6": "Geplante Aufgaben",
   "maxFeature4": "Unbegrenzte Projekte und eigene MCP-Server, mit {{storage}} Speicher",
   "maxFeature5": "8 gleichzeitige Chats und bis zu 300 Connector-Tools",
-  "maxFeature6": "10 geplante Aufgaben und verwaltete Sandboxes mit 30 Minuten",
   "max15xFeature4": "Unbegrenzte Projekte und eigene MCP-Server, mit {{storage}} Speicher",
   "max15xFeature5": "12 gleichzeitige Chats und bis zu 500 Connector-Tools",
-  "max15xFeature6": "25 geplante Aufgaben und verwaltete Sandboxes mit 60 Minuten",
   "chatsAtOnce": "{{chats}} gleichzeitige Chats",
   "unlimitedProjectsWithStorage": "Unbegrenzte Projekte und {{storage}} Speicher",
   "heroEyebrow": "Preise",
@@ -236,5 +232,7 @@
   "projectsWithStorage_one": "{{count}} Projekt mit {{storage}} Wissensspeicher",
   "projectsWithStorage_other": "{{count}} Projekte mit {{storage}} Wissensspeicher",
   "dailyUploads_one": "{{count}} Datei-Upload pro Tag, bis zu {{size}} pro Datei",
-  "dailyUploads_other": "{{count}} Datei-Uploads pro Tag, bis zu {{size}} pro Datei"
+  "dailyUploads_other": "{{count}} Datei-Uploads pro Tag, bis zu {{size}} pro Datei",
+  "scheduledTasksAndSandboxes_one": "{{count}} geplante Aufgabe und verwaltete Sandboxes mit {{minutes}} Minuten",
+  "scheduledTasksAndSandboxes_other": "{{count}} geplante Aufgaben und verwaltete Sandboxes mit {{minutes}} Minuten"
 }

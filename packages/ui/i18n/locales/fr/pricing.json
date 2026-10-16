@@ -87,15 +87,11 @@
   "premiumSeatsUnavailable": "Les sièges Premium ne sont pas encore vendus dans votre devise.",
   "premiumSeatsInSettings": "Les sièges Premium se définissent pour chaque membre dans Paramètres, Équipe.",
   "basicFeature5": "2 conversations simultanées et jusqu'à 50 outils de connecteurs",
-  "basicFeature6": "2 tâches planifiées et bacs à sable gérés de 10 minutes",
   "proFeature5": "Deep Research, AGI Work, génération d'images et accès à l'API gérée",
-  "proFeature6": "Tâches planifiées",
   "maxFeature4": "Projets et serveurs MCP personnalisés illimités, avec {{storage}} de stockage",
   "maxFeature5": "8 conversations simultanées et jusqu'à 300 outils de connecteurs",
-  "maxFeature6": "10 tâches planifiées et bacs à sable gérés de 30 minutes",
   "max15xFeature4": "Projets et serveurs MCP personnalisés illimités, avec {{storage}} de stockage",
   "max15xFeature5": "12 conversations simultanées et jusqu'à 500 outils de connecteurs",
-  "max15xFeature6": "25 tâches planifiées et bacs à sable gérés de 60 minutes",
   "chatsAtOnce": "{{chats}} conversations simultanées",
   "unlimitedProjectsWithStorage": "Projets illimités et {{storage}} de stockage",
   "heroEyebrow": "Tarifs",
@@ -238,5 +234,8 @@
   "projectsWithStorage_other": "{{count}} projets avec {{storage}} de stockage de connaissances",
   "dailyUploads_one": "{{count}} fichier importé par jour, jusqu'à {{size}} chacun",
   "dailyUploads_many": "{{count}} fichiers importés par jour, jusqu'à {{size}} chacun",
-  "dailyUploads_other": "{{count}} fichiers importés par jour, jusqu'à {{size}} chacun"
+  "dailyUploads_other": "{{count}} fichiers importés par jour, jusqu'à {{size}} chacun",
+  "scheduledTasksAndSandboxes_one": "{{count}} tâche planifiée et bacs à sable gérés de {{minutes}} minutes",
+  "scheduledTasksAndSandboxes_many": "{{count}} tâches planifiées et bacs à sable gérés de {{minutes}} minutes",
+  "scheduledTasksAndSandboxes_other": "{{count}} tâches planifiées et bacs à sable gérés de {{minutes}} minutes"
 }
