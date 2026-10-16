@@ -133,7 +133,6 @@ describe('chat system prompt version 11 in the manifest', () => {
       'model_unknown',
       'setup_heading',
       'memory_unavailable',
-      'memory_off_by_workspace',
       'connectors_locked_down',
       'settings_help_web',
       'chat_temporary',
@@ -141,6 +140,9 @@ describe('chat system prompt version 11 in the manifest', () => {
       'tool.execute_code',
     ]) {
       expect(v11[key], key).toBe(v10[key]);
+    }
+    for (const key of ['memory_off', 'memory_off_for_chat', 'memory_off_by_workspace']) {
+      expect(v11[key]?.startsWith(`${v10[key]} If `), key).toBe(true);
     }
   });
 
@@ -266,6 +268,46 @@ describe('the source links version 11 tells the model about (R8-NOTE01)', () => 
     );
     expect(preamble).not.toContain(text('source_link.memory'));
     expect(preamble).not.toContain(text('source_link.past_chats'));
+  });
+});
+
+describe('what version 11 says to a remember or forget request while memory is off', () => {
+  it.each([
+    ['off', 'say that memory is off, so nothing from this chat is saved to memory'],
+    ['off_for_chat', 'say that memory is off for this chat, so nothing from it is saved'],
+    [
+      'off_by_workspace',
+      'say that their workspace administrator turned memory off, so nothing is saved, and that they cannot turn it on themselves',
+    ],
+  ] as const)('tells a turn with memory %s what to answer', (memory, guidance) => {
+    const preamble = render({
+      memory: 'off',
+      chatSetup: { ...SETUP, memory, pastChats: false },
+    });
+
+    expect(preamble).toContain(text(`memory_${memory}`));
+    expect(text(`memory_${memory}`)).toContain('you to remember or forget something, say that');
+    expect(text(`memory_${memory}`)).toContain(guidance);
+    expect(chatSystemPromptSection(v10, `memory_${memory}`)).not.toContain('remember or forget');
+  });
+
+  it('points to Memory in Settings, as the Settings guidance does, where the user can change it', () => {
+    expect(text('memory_off')).toContain('under Memory in Settings');
+    expect(text('memory_off_for_chat')).toContain('under Memory in Settings');
+    expect(text('settings_help_web')).toContain('Memory for memory and past-chat search');
+    expect(text('memory_off_by_workspace')).not.toContain('Settings');
+  });
+
+  it('gives a text-only turn with memory off for the chat the same guidance', () => {
+    const preamble = String(
+      buildTextOnlyPreamble({
+        now: NOW,
+        promptSelection: SELECTION,
+        setup: { temporaryChat: false, personalContext: 'memory_off_for_chat', inProject: false },
+      }),
+    );
+
+    expect(preamble).toContain(text('memory_off_for_chat'));
   });
 });
 

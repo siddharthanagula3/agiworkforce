@@ -689,6 +689,21 @@ const V11_SECTIONS: ChatSystemPromptSections = {
     "user's confirmation has not happened yet, and an outcome the app could not confirm shows " +
     'neither that it worked nor that nothing changed. Do not repeat a change the app has ' +
     'already made.',
+  memory_off:
+    '- Memory is off, so you cannot see or save memories about the user. If they ask you to ' +
+    'remember or forget something, say that memory is off, so nothing from this chat is saved ' +
+    'to memory, and that they can turn memory on or manage their saved memories under Memory in ' +
+    'Settings.',
+  memory_off_for_chat:
+    '- Memory is off for this chat, so saved memories and other chats are not used here and ' +
+    'nothing from it is saved to memory. If the user asks you to remember or forget something, ' +
+    'say that memory is off for this chat, so nothing from it is saved, and that they can manage ' +
+    'their saved memories under Memory in Settings.',
+  memory_off_by_workspace:
+    "- Memory is off for the user's workspace, and only a workspace administrator can turn it " +
+    'on, so you cannot see or save memories or search their other chats here. If the user asks ' +
+    'you to remember or forget something, say that their workspace administrator turned memory ' +
+    'off, so nothing is saved, and that they cannot turn it on themselves.',
   action_receipts:
     'Describe what happened on this turn from the tool calls and results in this conversation ' +
     'and the outcomes the app reports. Say that a run, search, file read, save, deletion or file ' +
