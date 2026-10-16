@@ -43,8 +43,26 @@ export interface VendorDirectoryEntry {
   readonly source: 'vendor-directory';
 }
 
-export const VENDOR_DIRECTORY_ENTRIES: readonly VendorDirectoryEntry[] =
-  vendorDirectoryJson as VendorDirectoryEntry[];
+const ANTHROPIC_PUBLISHER = /^anthropic(\b|$)/iu;
+const ANTHROPIC_HOST = /(^|\.)(anthropic\.com|claude\.(ai|com))$/iu;
+
+function isAnthropicPublished(entry: VendorDirectoryEntry): boolean {
+  if (ANTHROPIC_PUBLISHER.test(entry.publisher.name.trim())) return true;
+  return [entry.publisher.url, entry.websiteUrl, entry.supportUrl].some((url) => {
+    const host = url ? hostnameOf(url) : null;
+    return host !== null && ANTHROPIC_HOST.test(host);
+  });
+}
+
+export function withoutAnthropicPublished(
+  entries: readonly VendorDirectoryEntry[],
+): VendorDirectoryEntry[] {
+  return entries.filter((entry) => !isAnthropicPublished(entry));
+}
+
+export const VENDOR_DIRECTORY_ENTRIES: readonly VendorDirectoryEntry[] = withoutAnthropicPublished(
+  vendorDirectoryJson as VendorDirectoryEntry[],
+);
 
 const VENDOR_BADGE: DirectoryBadge = 'official';
 const VENDOR_AUTH_MODE: DirectoryAuthMode = 'unknown';
@@ -317,7 +335,7 @@ export function planVendorDirectory(
   const created: DirectoryRecord[] = [];
   const withoutEndpoint: VendorDirectoryEntry[] = [];
   const skipped: VendorDirectoryEntry[] = [];
-  for (const entry of entries) {
+  for (const entry of withoutAnthropicPublished(entries)) {
     const match = findMatch(entry, index, claimed);
     if (match) {
       claimed.add(match.record.id);

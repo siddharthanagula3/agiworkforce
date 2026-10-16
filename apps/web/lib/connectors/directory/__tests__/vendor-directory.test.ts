@@ -20,6 +20,7 @@ import {
   buildVendorRecord,
   listingNoteFor,
   planVendorDirectory,
+  withoutAnthropicPublished,
   type VendorDirectoryEntry,
 } from '@/lib/connectors/directory/vendor-directory';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
@@ -86,6 +87,47 @@ describe('vendor-directory.json', () => {
       expect(candidate.description).not.toContain(EM_DASH);
       expect(ASSISTANT_BRAND.test(`${candidate.summary} ${candidate.description}`)).toBe(false);
     }
+  });
+
+  it('lists nothing published by Anthropic and links no page on Anthropic or Claude domains', () => {
+    const hosted = /(^|\.)(anthropic\.com|claude\.(ai|com))$/iu;
+    for (const candidate of VENDOR_DIRECTORY_ENTRIES) {
+      expect(candidate.publisher.name).not.toMatch(/anthropic/iu);
+      for (const url of [
+        candidate.publisher.url,
+        candidate.websiteUrl,
+        candidate.documentationUrl,
+        candidate.privacyPolicyUrl,
+        candidate.supportUrl,
+      ]) {
+        const host = url ? hostnameOf(url) : null;
+        expect(host === null || !hosted.test(host)).toBe(true);
+      }
+    }
+  });
+
+  it('points the Google apps at the Google documentation and support pages', () => {
+    for (const id of ['gmail', 'google-calendar', 'google-drive']) {
+      const vendor = entry(id);
+      expect(hostnameOf(vendor.documentationUrl ?? '')).toBe('developers.google.com');
+      expect(hostnameOf(vendor.supportUrl ?? '')).toBe('support.google.com');
+    }
+  });
+
+  it('drops an entry published by Anthropic or hosted on its domains', () => {
+    const base = entry('gmail');
+    const anthropic = {
+      ...base,
+      id: 'injected-anthropic',
+      publisher: { name: 'Anthropic', url: 'https://anthropic.com/' },
+    };
+    const hostedOnClaude = {
+      ...base,
+      id: 'injected-claude-support',
+      supportUrl: 'https://support.claude.com/en/',
+    };
+    const kept = withoutAnthropicPublished([base, anthropic, hostedOnClaude]);
+    expect(kept.map((candidate) => candidate.id)).toEqual(['gmail']);
   });
 
   it('maps every category onto the eleven directory categories', () => {

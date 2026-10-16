@@ -23,7 +23,7 @@
   {
     "connectorId": "gmail",
     "name": "Gmail",
-    "description": "Search, draft, and send email through Gmail.",
+    "description": "Search, read, draft, and label email in Gmail.",
     "url": "https://gmailmcp.googleapis.com/mcp/v1",
     "transport": "streamable-http",
     "authMode": "oauth",
@@ -135,7 +135,7 @@
   {
     "connectorId": "jira",
     "name": "Jira",
-    "description": "Search, create, and update issues in Jira for developers and project teams.",
+    "description": "Search, read, and create issues in Jira for developers and project teams.",
     "url": "https://mcp.atlassian.com/v2/mcp",
     "transport": "streamable-http",
     "authMode": "oauth",
@@ -209,7 +209,7 @@
   {
     "connectorId": "canva",
     "name": "Canva",
-    "description": "Create, edit, and export designs in Canva.",
+    "description": "Read and edit designs in Canva.",
     "url": "https://mcp.canva.com/mcp",
     "transport": "streamable-http",
     "authMode": "oauth",

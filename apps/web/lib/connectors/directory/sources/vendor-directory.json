@@ -132,7 +132,7 @@
       "url": "https://business.adobe.com/products/experience-manager"
     },
     "websiteUrl": "https://business.adobe.com/products/experience-manager",
-    "documentationUrl": "https://www.adobe.com/go/aem_claude_mcp_docs",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://experienceleague.adobe.com/en/docs/experience-manager-cloud-service/content/compliance/data-privacy/aem-readiness",
     "supportUrl": "mailto:aemcs-mcp-feedback@adobe.com",
     "categories": ["Productivity", "Design", "Sales and marketing"],
@@ -432,7 +432,7 @@
       "url": "https://www.apollo.io/"
     },
     "websiteUrl": "https://www.apollo.io/",
-    "documentationUrl": "https://knowledge.apollo.io/hc/en-us/articles/43827318678541-Integrate-Apollo-with-Claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.apollo.io/privacy-policy",
     "supportUrl": "https://www.apollo.io/submit-a-request",
     "categories": ["Sales and marketing", "Data", "Productivity"],
@@ -452,9 +452,9 @@
       "url": "https://appfolio.com/"
     },
     "websiteUrl": "https://appfolio.com/",
-    "documentationUrl": "https://knowledge.appfolio.com/en/articles/15123460-connecting-claude-to-appfolio-realm-x",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.appfolio.com/privacy",
-    "supportUrl": "https://knowledge.appfolio.com/en/articles/15123460-connecting-claude-to-appfolio-realm-x",
+    "supportUrl": null,
     "categories": ["Productivity", "Code", "Data"],
     "capabilities": ["interactive"],
     "source": "vendor-directory"
@@ -552,7 +552,7 @@
       "url": "https://www.audible.com/"
     },
     "websiteUrl": "https://www.audible.com/",
-    "documentationUrl": "https://help.audible.com/s/article/connect-audible-to-claude?language=en_US",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.audible.com/legal/privacy-notices",
     "supportUrl": "https://www.audible.com/contactus",
     "categories": ["Productivity", "Design", "Sales and marketing"],
@@ -780,26 +780,6 @@
     "source": "vendor-directory"
   },
   {
-    "id": "biorxiv",
-    "externalDirectoryId": "ae97efbb-8a1a-4c03-9e86-6925f002703a",
-    "name": "bioRxiv",
-    "summary": "Access to bioRxiv and medRxiv preprint data.",
-    "description": "The bioRxiv connector gives the assistant access to bioRxiv and medRxiv preprint servers, hosting research papers in biological and medical sciences posted before peer review. Search for preprints by topic, funder, or category. Track publication outcomes and analyze research trends across the life sciences.You can use the bioRxiv connector to:Conduct a Literature Review: \"I'm researching CRISPR applications in cancer therapy.",
-    "mcpUrl": null,
-    "transport": null,
-    "publisher": {
-      "name": "Anthropic",
-      "url": "https://anthropic.com/"
-    },
-    "websiteUrl": "https://anthropic.com/",
-    "documentationUrl": "https://claude.com/resources/tutorials/using-the-biorxiv-and-medrxiv-connector-in-claude",
-    "privacyPolicyUrl": "https://www.anthropic.com/privacy",
-    "supportUrl": "https://support.anthropic.com/",
-    "categories": ["Life sciences", "Health", "Data"],
-    "capabilities": [],
-    "source": "vendor-directory"
-  },
-  {
     "id": "bitly",
     "externalDirectoryId": null,
     "name": "Bitly",
@@ -832,7 +812,7 @@
       "url": "https://blackbaud.com/"
     },
     "websiteUrl": "https://blackbaud.com/",
-    "documentationUrl": "https://support.claude.com/en/articles/12923221-using-the-blackbaud-connector-in-claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.blackbaud.com/company/privacy-policy",
     "supportUrl": "https://www.blackbaud.com/training-support/support/howto",
     "categories": ["Data", "Code", "Productivity"],
@@ -972,7 +952,7 @@
       "url": "https://www.brevo.com/"
     },
     "websiteUrl": "https://www.brevo.com/",
-    "documentationUrl": "https://help.brevo.com/hc/en-us/articles/35030032898194-Brevo-connector-for-Claude-Use-your-Brevo-data-and-campaigns-in-Claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.brevo.com/legal/privacypolicy/",
     "supportUrl": "https://help.brevo.com/hc/en-us",
     "categories": ["Sales and marketing", "Productivity", "Communication"],
@@ -1032,7 +1012,7 @@
       "url": "https://www.briskteaching.com/"
     },
     "websiteUrl": "https://www.briskteaching.com/",
-    "documentationUrl": "https://help.briskteaching.com/hc/en-us/articles/50241696224020-Set-up-the-Brisk-Connector-for-Claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.briskteaching.com/privacy/terms",
     "supportUrl": "mailto:hello@briskteaching.com",
     "categories": ["Productivity", "Code", "Design"],
@@ -1172,7 +1152,7 @@
       "url": "https://carta.com/"
     },
     "websiteUrl": "https://carta.com/",
-    "documentationUrl": "https://docs.carta.com/api-platform/docs/claude-plugins-setup",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://carta.com/legal/privacy/privacy-policy/",
     "supportUrl": "mailto:plugins@carta.com",
     "categories": ["Financial services", "Data", "Productivity"],
@@ -1232,31 +1212,11 @@
       "url": "https://www.cdata.com/cloud/ai/"
     },
     "websiteUrl": "https://www.cdata.com/cloud/ai/",
-    "documentationUrl": "https://cloud.cdata.com/docs/Claude-Client.html",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.cdata.com/company/legal/privacy/",
     "supportUrl": "https://docs.cloud.cdata.com/en/docs#get-support",
     "categories": ["Data", "Code", "Legal"],
     "capabilities": ["read-write"],
-    "source": "vendor-directory"
-  },
-  {
-    "id": "chembl",
-    "externalDirectoryId": "12149a49-2ede-482e-a764-2caef8b059e1",
-    "name": "ChEMBL",
-    "summary": "Access to the ChEMBL Database.",
-    "description": "The ChEMBL connector gives the assistant access to the ChEMBL Database, a manually curated resource of bioactive drug-like compounds with quantitative binding and functional data against biological targets. Search for compounds by name or structure, retrieve bioactivity data (IC50, EC50, Ki values), find drug targets and mechanisms of action, access ADMET properties, and discover approved drugs by indication.You can use the ChEMBL connector to:Research a Drug Target: \"I'm interested in EGFR inhibitors.",
-    "mcpUrl": null,
-    "transport": null,
-    "publisher": {
-      "name": "Anthropic",
-      "url": "https://anthropic.com/"
-    },
-    "websiteUrl": "https://anthropic.com/",
-    "documentationUrl": "https://claude.com/resources/tutorials/using-the-chembl-connector-in-claude",
-    "privacyPolicyUrl": "https://www.anthropic.com/privacy",
-    "supportUrl": "https://support.anthropic.com/",
-    "categories": ["Life sciences", "Health", "Data"],
-    "capabilities": [],
     "source": "vendor-directory"
   },
   {
@@ -1372,7 +1332,7 @@
       "url": "https://clay.com/"
     },
     "websiteUrl": "https://clay.com/",
-    "documentationUrl": "https://www.notion.so/clayrun/Clay-Claude-MCP-Server-Documentation-2ef7e66eb01480c9820de48041591aeb",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://privacy.clay.com/policies",
     "supportUrl": "mailto:support@clay.com",
     "categories": ["Sales and marketing", "Data", "Communication"],
@@ -1417,26 +1377,6 @@
     "supportUrl": "https://help.clickup.com/hc/en-us",
     "categories": ["Productivity", "Data", "Communication"],
     "capabilities": ["read-write"],
-    "source": "vendor-directory"
-  },
-  {
-    "id": "clinical-trials",
-    "externalDirectoryId": "49e7b000-f306-47f5-80ac-7b764d04cdbe",
-    "name": "Clinical Trials",
-    "summary": "Access ClinicalTrials.gov data.",
-    "description": "The Clinical Trials connector gives the assistant access to ClinicalTrials.gov, the NIH/NLM registry of FDA-regulated clinical studies conducted worldwide. Search for trials by condition, eligibility criteria, sponsor, or investigator. Analyze endpoints, find recruiting studies, and identify experienced research sites for clinical development planning.You can use the Clinical Trials connector to:Match a Patient to Trials: \"I have a 62-year-old female patient with metastatic breast cancer in New York.",
-    "mcpUrl": null,
-    "transport": null,
-    "publisher": {
-      "name": "Anthropic",
-      "url": "https://anthropic.com/"
-    },
-    "websiteUrl": "https://anthropic.com/",
-    "documentationUrl": "https://claude.com/resources/tutorials/using-the-clinicaltrials-gov-connector-in-claude",
-    "privacyPolicyUrl": "https://www.anthropic.com/privacy",
-    "supportUrl": "https://support.anthropic.com/",
-    "categories": ["Life sciences", "Health", "Data"],
-    "capabilities": ["read"],
     "source": "vendor-directory"
   },
   {
@@ -1520,26 +1460,6 @@
     "source": "vendor-directory"
   },
   {
-    "id": "cms-coverage",
-    "externalDirectoryId": "2526be5d-ad2a-4441-9a4f-f728812631bf",
-    "name": "CMS Coverage",
-    "summary": "Access the CMS Coverage Database.",
-    "description": "The CMS Coverage connector gives the assistant access to Medicare Part B coverage policies from the CMS Coverage Database, including National Coverage Determinations (NCDs) and Local Coverage Determinations (LCDs). Check coverage criteria for medical services, review documentation requirements for prior authorization, and stay current on policy changes that affect your practice.You can use the CMS Coverage connector to:Check Coverage for a Procedure: \"Does Medicare Part B cover genetic testing for breast cancer?\"Prepare Prior Authorization: \"I need to prepare a prior authorization for a PET…",
-    "mcpUrl": null,
-    "transport": null,
-    "publisher": {
-      "name": "Anthropic",
-      "url": "https://anthropic.com/"
-    },
-    "websiteUrl": "https://anthropic.com/",
-    "documentationUrl": "https://claude.com/resources/tutorials/using-the-cms-coverage-connector-in-claude",
-    "privacyPolicyUrl": "https://www.anthropic.com/privacy",
-    "supportUrl": "https://support.anthropic.com/",
-    "categories": ["Life sciences", "Health", "Code"],
-    "capabilities": [],
-    "source": "vendor-directory"
-  },
-  {
     "id": "cocounsel-legal",
     "externalDirectoryId": "084ce5af-6b81-471a-a754-d1a50d3f61a1",
     "name": "CoCounsel Legal",
@@ -1612,7 +1532,7 @@
       "url": "https://commonroom.io/"
     },
     "websiteUrl": "https://commonroom.io/",
-    "documentationUrl": "https://www.commonroom.io/docs/using-common-room/common-room-for-claude-connector-and-plugin/",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.commonroom.io/privacy-policy/",
     "supportUrl": "mailto:support@commonroom.io",
     "categories": ["Sales and marketing", "Data", "Code"],
@@ -1732,7 +1652,7 @@
       "url": "https://coteach.ai/"
     },
     "websiteUrl": "https://coteach.ai/",
-    "documentationUrl": "https://tlvi.notion.site/Coteach-Claude-connector-37a252dfaae08059a6c3f4f234dbf812",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://coteach.ai/privacy",
     "supportUrl": "mailto:info@coteach.ai",
     "categories": ["Productivity", "Design"],
@@ -1812,7 +1732,7 @@
       "url": "https://courtroom5.com/"
     },
     "websiteUrl": "https://courtroom5.com/",
-    "documentationUrl": "https://courtroom5.com/claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://courtroom5.com/privacy",
     "supportUrl": "mailto:support@courtroom5.com",
     "categories": ["Productivity", "Legal"],
@@ -1911,7 +1831,7 @@
       "name": "Daloopa",
       "url": "https://daloopa.com/?utm_campaign=2026-8-Q3-Marketing-Referrals-Claude-MCP&amp;utm_source=claude&amp;utm_medium=referral"
     },
-    "websiteUrl": "https://daloopa.com/?utm_campaign=2026-8-Q3-Marketing-Referrals-Claude-MCP&amp;utm_source=claude&amp;utm_medium=referral",
+    "websiteUrl": "https://daloopa.com/?utm_medium=referral",
     "documentationUrl": "https://docs.daloopa.com/docs/daloopa-mcp",
     "privacyPolicyUrl": "https://docs.daloopa.com/docs/daloopa-privacy-and-data-collection-disclosure-for-mcp-access",
     "supportUrl": "mailto:mcp@daloopa.com",
@@ -2112,7 +2032,7 @@
       "url": "https://www.definely.com/"
     },
     "websiteUrl": "https://www.definely.com/",
-    "documentationUrl": "https://help.definely.com/en/articles/634922-definely-connector-for-claude-user-guide",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.definely.com/privacy-policy",
     "supportUrl": "mailto:support@definely.com",
     "categories": ["Productivity", "Data", "Legal"],
@@ -2132,7 +2052,7 @@
       "url": "https://descript.com/"
     },
     "websiteUrl": "https://descript.com/",
-    "documentationUrl": "https://help.descript.com/hc/en-us/articles/45008080343053-Connect-Descript-to-Claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.descript.com/privacy",
     "supportUrl": "https://web.descript.com/chat",
     "categories": ["Design", "Productivity", "Code"],
@@ -2232,7 +2152,7 @@
       "url": "https://web.diffit.me/"
     },
     "websiteUrl": "https://web.diffit.me/",
-    "documentationUrl": "https://web.diffit.me/diffit-in-claude-for-k12",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://web.diffit.me/privacy-policy",
     "supportUrl": "mailto:support@diffit.me",
     "categories": ["Productivity", "Code", "Sales and marketing"],
@@ -2252,7 +2172,7 @@
       "url": "https://digits.com/"
     },
     "websiteUrl": "https://digits.com/",
-    "documentationUrl": "https://help.digits.com/business-connections/digits-mcp-claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://my.digits.com/legal/privacy-policy",
     "supportUrl": "mailto:help@digits.com",
     "categories": ["Financial services", "Data", "Productivity"],
@@ -2412,7 +2332,7 @@
       "url": "https://www.dropbox.com/"
     },
     "websiteUrl": "https://www.dropbox.com/",
-    "documentationUrl": "https://help.dropbox.com/integrations/connect-dropbox-to-claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.dropbox.com/privacy",
     "supportUrl": "https://www.dropbox.com/get_help",
     "categories": ["Productivity", "Sales and marketing", "Data"],
@@ -2892,7 +2812,7 @@
       "url": "https://www.functionhealth.com/"
     },
     "websiteUrl": "https://www.functionhealth.com/",
-    "documentationUrl": "https://services.functionhealth.com/auth0/acul/claude_connector_docs.html",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.functionhealth.com/legal/privacy-policy",
     "supportUrl": "https://www.functionhealth.com/contact-us",
     "categories": ["Health", "Code", "Productivity"],
@@ -2972,7 +2892,7 @@
       "url": "https://www.gainsight.com/"
     },
     "websiteUrl": "https://www.gainsight.com/",
-    "documentationUrl": "https://support.gainsight.com/Staircase_AI/Staircase_AI_Features/Connect_Staircase_AI_to_LLMs_Using_MCP#Install_Staircase_AI_MCP_for_Claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.gainsight.com/policy/privacy/",
     "supportUrl": "https://support.gainsight.com/",
     "categories": ["Productivity", "Data", "Sales and marketing"],
@@ -3092,9 +3012,9 @@
       "url": "https://google.com/"
     },
     "websiteUrl": "https://google.com/",
-    "documentationUrl": "https://support.claude.com/en/articles/11088742-using-the-gmail-and-google-calendar-integrations",
+    "documentationUrl": "https://developers.google.com/workspace/gmail/api/guides/configure-mcp-server",
     "privacyPolicyUrl": "https://policies.google.com/privacy",
-    "supportUrl": "https://support.claude.com/en/articles/11088742-using-the-gmail-and-google-calendar-integrations",
+    "supportUrl": "https://support.google.com/mail",
     "categories": ["Communication", "Data", "Productivity"],
     "capabilities": ["read-write"],
     "source": "vendor-directory"
@@ -3172,9 +3092,9 @@
       "url": "https://google.com/"
     },
     "websiteUrl": "https://google.com/",
-    "documentationUrl": "https://support.claude.com/en/articles/11088742-using-the-gmail-and-google-calendar-integrations",
+    "documentationUrl": "https://developers.google.com/workspace/calendar/api/guides/configure-mcp-server",
     "privacyPolicyUrl": "https://policies.google.com/privacy",
-    "supportUrl": "https://support.claude.com/en/articles/11088742-using-the-gmail-and-google-calendar-integrations",
+    "supportUrl": "https://support.google.com/calendar",
     "categories": ["Productivity", "Communication"],
     "capabilities": ["read-write"],
     "source": "vendor-directory"
@@ -3212,9 +3132,9 @@
       "url": "https://google.com/"
     },
     "websiteUrl": "https://google.com/",
-    "documentationUrl": "https://support.claude.com/en/articles/10166901-using-the-google-drive-integration",
+    "documentationUrl": "https://developers.google.com/workspace/drive/api/guides/configure-mcp-server",
     "privacyPolicyUrl": "https://policies.google.com/privacy",
-    "supportUrl": "https://support.claude.com/en/articles/10166901-using-the-google-drive-integration",
+    "supportUrl": "https://support.google.com/drive",
     "categories": ["Productivity", "Data", "Sales and marketing"],
     "capabilities": ["read-write"],
     "source": "vendor-directory"
@@ -3492,7 +3412,7 @@
       "url": "https://www.helix.com/"
     },
     "websiteUrl": "https://www.helix.com/",
-    "documentationUrl": "https://www.helix.com/resources/helix-genosphere-claude-connector",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.helix.com/privacy-policy",
     "supportUrl": "mailto:lifesciences@helix.com",
     "categories": ["Life sciences", "Health", "Data"],
@@ -3637,26 +3557,6 @@
     "supportUrl": "mailto:clientsupport@ibisworld.com",
     "categories": ["Financial services", "Data", "Productivity"],
     "capabilities": ["read"],
-    "source": "vendor-directory"
-  },
-  {
-    "id": "icd-10-codes",
-    "externalDirectoryId": "bd8c051d-df35-44c0-a8b8-084b700e1f21",
-    "name": "ICD-10 Codes",
-    "summary": "Access ICD-10-CM and ICD-10-PCS code sets.",
-    "description": "The ICD-10 Codes connector gives the assistant access to the complete ICD-10-CM (diagnosis) and ICD-10-PCS (procedure) code sets for medical classification and billing.You can use the ICD-10 Codes connector to:Find diagnosis codes: \"I need the ICD-10 code for type 2 diabetes with kidney complications\"Validate codes for claim submission: \"I'm submitting a claim with code E11. Is this valid?\"Explore code hierarchies: \"Show me how diabetes codes are organized\"Search procedure codes: \"Find ICD-10-PCS codes for laparoscopic appendectomy\"",
-    "mcpUrl": null,
-    "transport": null,
-    "publisher": {
-      "name": "Anthropic",
-      "url": "https://anthropic.com/"
-    },
-    "websiteUrl": "https://anthropic.com/",
-    "documentationUrl": "https://claude.com/resources/tutorials/using-the-icd-10-connector-in-claude",
-    "privacyPolicyUrl": "https://www.anthropic.com/privacy",
-    "supportUrl": "https://support.anthropic.com/",
-    "categories": ["Health", "Code", "Data"],
-    "capabilities": [],
     "source": "vendor-directory"
   },
   {
@@ -3912,7 +3812,7 @@
       "url": "https://quickbooks.intuit.com/"
     },
     "websiteUrl": "https://quickbooks.intuit.com/",
-    "documentationUrl": "https://quickbooks.intuit.com/learn-support/en-us/help-article/accounting-bookkeeping/use-quickbooks-connector-claude/L3YBlo6Ht_US_en_US?uid=mmzgz9ag",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.intuit.com/privacy/statement/",
     "supportUrl": "https://quickbooks.intuit.com/learn-support/en-us",
     "categories": ["Productivity", "Financial services", "Data"],
@@ -3932,7 +3832,7 @@
       "url": "https://turbotax.intuit.com/"
     },
     "websiteUrl": "https://turbotax.intuit.com/",
-    "documentationUrl": "https://ttlc.intuit.com/turbotax-support/en-us/help-article/tax-return/access-turbotax-tools-claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.intuit.com/privacy/statement/",
     "supportUrl": "https://ttlc.intuit.com/turbotax-support/en-us",
     "categories": ["Financial services"],
@@ -4212,7 +4112,7 @@
       "url": "https://lattice.com/"
     },
     "websiteUrl": "https://lattice.com/",
-    "documentationUrl": "https://help.lattice.com/hc/en-us/articles/40952435311127-Set-up-Lattice-MCP-with-Claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://lattice.com/trust/privacy-policy",
     "supportUrl": "https://help.lattice.com/hc/en-us/articles/11104389885719-Contact-Customer-Care",
     "categories": ["Productivity", "Sales and marketing", "Code"],
@@ -4252,7 +4152,7 @@
       "url": "https://learningcommons.org/"
     },
     "websiteUrl": "https://learningcommons.org/",
-    "documentationUrl": "https://docs.learningcommons.org/knowledge-graph/integrations/claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://learningcommons.org/privacy-policy/",
     "supportUrl": "mailto:support@learningcommons.org",
     "categories": ["Productivity", "Data", "Sales and marketing"],
@@ -4432,7 +4332,7 @@
       "url": "https://www.lseg.com/en"
     },
     "websiteUrl": "https://www.lseg.com/en",
-    "documentationUrl": "https://www.lseg.com/en/solutions/ai-finance-solutions/anthropic",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.lseg.com/en/policies/privacy-statement",
     "supportUrl": "https://www.lseg.com/en/product-support",
     "categories": ["Financial services", "Data", "Productivity"],
@@ -4632,7 +4532,7 @@
       "url": "https://malwarebytes.com/"
     },
     "websiteUrl": "https://malwarebytes.com/",
-    "documentationUrl": "https://help.malwarebytes.com/hc/en-us/articles/47985341083675-Using-Malwarebytes-in-Claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.malwarebytes.com/legal/privacy-policy",
     "supportUrl": "https://help.malwarebytes.com/",
     "categories": ["Productivity", "Data", "Communication"],
@@ -4652,7 +4552,7 @@
       "url": "https://www.medidata.com/"
     },
     "websiteUrl": "https://www.medidata.com/",
-    "documentationUrl": "http://claude.com/resources/tutorials/using-the-clinicaltrialsgov-connector-in-claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://learn.medidata.com/en-US/bundle/imedidata/page/medidata_privacy_policy.html",
     "supportUrl": "mailto:helpdesk@mdsol.com",
     "categories": ["Life sciences", "Health", "Data"],
@@ -4780,26 +4680,6 @@
     "source": "vendor-directory"
   },
   {
-    "id": "microsoft-365",
-    "externalDirectoryId": "ce0c9cda-5ea5-44c5-9cf2-40810dfa6582",
-    "name": "Microsoft 365",
-    "summary": "Access SharePoint, OneDrive, Outlook, and Teams context directly in the assistant.",
-    "description": "Access SharePoint, OneDrive, Outlook, and Teams context directly in the assistant. Search and analyze documents across sites and libraries, review email threads and communications, and gather insights from calendar and chat. Make Microsoft 365 a native part of your the assistant workflows while respecting all existing permissions and security controls.",
-    "mcpUrl": null,
-    "transport": null,
-    "publisher": {
-      "name": "Anthropic",
-      "url": "https://anthropic.com/"
-    },
-    "websiteUrl": "https://anthropic.com/",
-    "documentationUrl": "https://support.claude.com/en/articles/12542951-enabling-and-using-the-microsoft-365-connector",
-    "privacyPolicyUrl": "https://www.anthropic.com/legal/privacy",
-    "supportUrl": "https://support.claude.com/en/",
-    "categories": ["Communication", "Productivity", "Code"],
-    "capabilities": ["read"],
-    "source": "vendor-directory"
-  },
-  {
     "id": "microsoft-learn",
     "externalDirectoryId": "89a7ddf5-2a6b-410c-be11-aa0e1a1b35a6",
     "name": "Microsoft Learn",
@@ -4871,10 +4751,10 @@
       "name": "Miro",
       "url": "https://miro.com/?utm_campaign=glb-27q1-nsp-pn-c2_akc-miro-mcp-launch-no-sl&amp;utm_source=partner-sourced&amp;utm_medium=partner&amp;utm_term=claude-connectors&amp;src=-partner_glb"
     },
-    "websiteUrl": "https://miro.com/?utm_campaign=glb-27q1-nsp-pn-c2_akc-miro-mcp-launch-no-sl&amp;utm_source=partner-sourced&amp;utm_medium=partner&amp;utm_term=claude-connectors&amp;src=-partner_glb",
-    "documentationUrl": "https://developers.miro.com/docs/miro-mcp/?utm_campaign=glb-27q1-nsp-pn-c2_akc-miro-mcp-launch-no-sl&amp;utm_source=partner-sourced&amp;utm_medium=partner&amp;utm_term=claude-connectors&amp;src=-partner_glb",
-    "privacyPolicyUrl": "https://miro.com/legal/customer-data-processing-addendum/?utm_campaign=glb-27q1-nsp-pn-c2_akc-miro-mcp-launch-no-sl&amp;utm_source=partner-sourced&amp;utm_medium=partner&amp;utm_term=claude-connectors&amp;src=-partner_glb",
-    "supportUrl": "https://help.miro.com/hc/en-us/?utm_campaign=glb-27q1-nsp-pn-c2_akc-miro-mcp-launch-no-sl&amp;utm_source=partner-sourced&amp;utm_medium=partner&amp;utm_term=claude-connectors&amp;src=-partner_glb",
+    "websiteUrl": "https://miro.com/?utm_campaign=glb-27q1-nsp-pn-c2_akc-miro-mcp-launch-no-sl&amp;utm_source=partner-sourced&amp;utm_medium=partner&amp;src=-partner_glb",
+    "documentationUrl": "https://developers.miro.com/docs/miro-mcp/?utm_campaign=glb-27q1-nsp-pn-c2_akc-miro-mcp-launch-no-sl&amp;utm_source=partner-sourced&amp;utm_medium=partner&amp;src=-partner_glb",
+    "privacyPolicyUrl": "https://miro.com/legal/customer-data-processing-addendum/?utm_campaign=glb-27q1-nsp-pn-c2_akc-miro-mcp-launch-no-sl&amp;utm_source=partner-sourced&amp;utm_medium=partner&amp;src=-partner_glb",
+    "supportUrl": "https://help.miro.com/hc/en-us/?utm_campaign=glb-27q1-nsp-pn-c2_akc-miro-mcp-launch-no-sl&amp;utm_source=partner-sourced&amp;utm_medium=partner&amp;src=-partner_glb",
     "categories": ["Code", "Productivity", "Design"],
     "capabilities": ["read-write"],
     "source": "vendor-directory"
@@ -5197,26 +5077,6 @@
     "supportUrl": "mailto:developers@makenotion.com",
     "categories": ["Productivity", "Data", "Sales and marketing"],
     "capabilities": ["read-write"],
-    "source": "vendor-directory"
-  },
-  {
-    "id": "npi-registry",
-    "externalDirectoryId": "9ef2b31c-71e1-4183-9b8a-b9590f33940b",
-    "name": "NPI Registry",
-    "summary": "Access US National Provider Identifier (NPI) Registry.",
-    "description": "The NPI Registry connector gives the assistant access to the US National Provider Identifier (NPI) Registry, containing information about all HIPAA-covered healthcare providers in the United States. Look up provider credentials, search for specialists by location and specialty, and validate NPI numbers for credentialing and referral workflows.You can use the NPI Registry connector to:Verify a Provider for Credentialing: \"I need to verify the credentials for NPI 1245319599.",
-    "mcpUrl": null,
-    "transport": null,
-    "publisher": {
-      "name": "Anthropic",
-      "url": "https://anthropic.com/"
-    },
-    "websiteUrl": "https://anthropic.com/",
-    "documentationUrl": "https://claude.com/resources/tutorials/using-the-npi-registry-connector-in-claude",
-    "privacyPolicyUrl": "https://www.anthropic.com/privacy",
-    "supportUrl": "https://support.anthropic.com/",
-    "categories": ["Health", "Life sciences", "Data"],
-    "capabilities": [],
     "source": "vendor-directory"
   },
   {
@@ -5592,7 +5452,7 @@
       "url": "https://pitchbook.com/"
     },
     "websiteUrl": "https://pitchbook.com/",
-    "documentationUrl": "https://help.pitchbook.com/s/article/PitchBook-Premium-for-Claude-by-Anthropic",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://pitchbook.com/privacy-policy",
     "supportUrl": "mailto:support@pitchbook.com",
     "categories": ["Financial services", "Data", "Code"],
@@ -5816,26 +5676,6 @@
     "privacyPolicyUrl": "https://www.tryprofound.com/legal/privacy-policy",
     "supportUrl": "mailto:support@tryprofound.com",
     "categories": ["Sales and marketing", "Data", "Code"],
-    "capabilities": ["read"],
-    "source": "vendor-directory"
-  },
-  {
-    "id": "pubmed",
-    "externalDirectoryId": "81cc5080-a204-4aa1-a694-fa868a3c8721",
-    "name": "PubMed",
-    "summary": "Search biomedical literature from PubMed.",
-    "description": "Provides access to PubMed's biomedical citations and PubMed Central's full-text archive. Search articles, retrieve metadata and abstracts, access full-text content (when available in PMC), find related research, and more.You can use the PubMed connector to: Search recent publications: \"How many cancer research articles have been published this month?\"Summarize research papers: \"Summarize the research paper 'Nucleoporin-mediated regulation of cell identity genes'\"Query scientific mechanisms: \"What is known about the mechanisms of DNA repair including the roles of Rad51 and Brca1 in PubMed?\"",
-    "mcpUrl": null,
-    "transport": null,
-    "publisher": {
-      "name": "Anthropic",
-      "url": "https://anthropic.com/"
-    },
-    "websiteUrl": "https://anthropic.com/",
-    "documentationUrl": "https://support.claude.com/en/articles/12614801-using-the-pubmed-connector-in-claude",
-    "privacyPolicyUrl": "https://www.anthropic.com/legal/privacy",
-    "supportUrl": "https://support.claude.com/en/",
-    "categories": ["Life sciences", "Health", "Data"],
     "capabilities": ["read"],
     "source": "vendor-directory"
   },
@@ -6092,7 +5932,7 @@
       "url": "https://resy.com/"
     },
     "websiteUrl": "https://resy.com/",
-    "documentationUrl": "https://www.americanexpress.com/content/dam/amex/en-us/credit-cards/benefits/resy/resy_mcp_app_claude.pdf",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://resy.com/privacy",
     "supportUrl": "https://resy.com/about-and-help",
     "categories": ["Productivity", "Data"],
@@ -6492,7 +6332,7 @@
       "url": "https://sketchup.trimble.com/"
     },
     "websiteUrl": "https://sketchup.trimble.com/",
-    "documentationUrl": "https://help.sketchup.com/en/sketchup-claude-connector",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.trimble.com/en/our-commitment/responsible-business/data-privacy-and-security/data-privacy-center/privacy-notice",
     "supportUrl": "https://sketchup.trimble.com/en/help",
     "categories": ["Design", "Code", "Productivity"],
@@ -6532,7 +6372,7 @@
       "url": "https://slidesgpt.com/"
     },
     "websiteUrl": "https://slidesgpt.com/",
-    "documentationUrl": "https://slidesgpt.com/mcp-docs/claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://slidesgpt.com/privacy",
     "supportUrl": "mailto:team@slidesgpt.com",
     "categories": ["Productivity", "Sales and marketing", "Communication"],
@@ -6552,7 +6392,7 @@
       "url": "https://www.smartsheet.com/"
     },
     "websiteUrl": "https://www.smartsheet.com/",
-    "documentationUrl": "https://help.smartsheet.com/articles/2483656-install-smartsheet-connector-claude#toc-get-started",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.smartsheet.com/legal/privacy",
     "supportUrl": "https://help.smartsheet.com/contact",
     "categories": ["Productivity", "Data"],
@@ -6792,7 +6632,7 @@
       "url": "https://stubhub.com/"
     },
     "websiteUrl": "https://stubhub.com/",
-    "documentationUrl": "https://support.stubhub.com/articles/61000310240-using-stubhub-in-chatgpt-and-claude",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.stubhub.com/legal?section=pp",
     "supportUrl": "https://support.stubhub.com/",
     "categories": ["Productivity", "Sales and marketing", "Data"],
@@ -7532,7 +7372,7 @@
       "url": "https://upwork.com/"
     },
     "websiteUrl": "https://upwork.com/",
-    "documentationUrl": "https://support.upwork.com/hc/en-us/articles/52050708559251-How-to-use-Claude-with-Upwork",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.upwork.com/legal#privacy",
     "supportUrl": "https://support.upwork.com/hc/en-us",
     "categories": ["Productivity", "Code", "Data"],
@@ -7912,7 +7752,7 @@
       "url": "https://www.xero.com/"
     },
     "websiteUrl": "https://www.xero.com/",
-    "documentationUrl": "https://central.xero.com/s/article/Connect-Xero-using-the-Xero-connector-in-Claude?userregion=true",
+    "documentationUrl": null,
     "privacyPolicyUrl": "https://www.xero.com/legal/privacy/",
     "supportUrl": "https://central.xero.com/0/",
     "categories": ["Financial services", "Productivity", "Sales and marketing"],

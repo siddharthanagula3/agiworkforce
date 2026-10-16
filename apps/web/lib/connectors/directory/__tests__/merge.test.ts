@@ -286,7 +286,7 @@ describe('applyFirstPartyTargets', () => {
       internalRecord({ id: 'gmail', description: 'Gmail.' }),
     ]);
 
-    expect(gmail?.description).toBe('Search, draft, and send email through Gmail.');
+    expect(gmail?.description).toBe('Search, read, draft, and label email in Gmail.');
   });
 
   it('wires a hosted pre-registered provider onto its catalog record', () => {
