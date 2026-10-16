@@ -1,6 +1,6 @@
 import { MetadataRoute } from 'next';
 
-import { DISALLOW_APP, SITE_URL } from '@/lib/seo/site';
+import { DISALLOW_APP, OG_IMAGE_PATH, SITE_URL } from '@/lib/seo/site';
 
 const disallow = [...DISALLOW_APP];
 
@@ -17,6 +17,10 @@ const AI_CRAWLERS = [
   'Meta-ExternalAgent',
 ];
 
+const SHARE_IMAGE_ALLOW = [`${OG_IMAGE_PATH}$`, `${OG_IMAGE_PATH}?`];
+
+const ALLOWED_CRAWLERS = ['*', ...AI_CRAWLERS, 'Googlebot', 'bingbot', 'Applebot'];
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
@@ -31,6 +35,8 @@ export default function robots(): MetadataRoute.Robots {
       { userAgent: 'Googlebot', allow: '/', disallow, crawlDelay: 0.5 },
       { userAgent: 'bingbot', allow: '/', disallow },
       { userAgent: 'Applebot', allow: '/', disallow },
+
+      { userAgent: ALLOWED_CRAWLERS, allow: SHARE_IMAGE_ALLOW },
 
       { userAgent: 'CCBot', disallow: '/' },
     ],

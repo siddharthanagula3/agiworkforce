@@ -9,8 +9,10 @@ export const SITE_LEGAL_NAME = 'AGI Automation LLC';
 
 export const TWITTER_HANDLE = '@agiworkforce';
 
+export const OG_IMAGE_PATH = '/api/og';
+
 export const OG_IMAGE = {
-  url: '/api/og?v=2',
+  url: `${OG_IMAGE_PATH}?v=2`,
   width: 1200,
   height: 630,
   alt: 'AGI: ChatGPT, Claude, Gemini and more in one app, beside a preview of the AGI chat workspace',

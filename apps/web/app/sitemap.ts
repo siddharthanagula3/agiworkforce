@@ -68,7 +68,6 @@ const routes: RouteConfig[] = [
 
   { path: '/about', priority: 0.7, changeFrequency: 'monthly' },
   { path: '/founder', priority: 0.5, changeFrequency: 'monthly' },
-  { path: '/blog', priority: 0.7, changeFrequency: 'monthly' },
   { path: '/release-notes', priority: 0.6, changeFrequency: 'weekly' },
   { path: '/careers', priority: 0.6, changeFrequency: 'weekly' },
   { path: '/customers', priority: 0.7, changeFrequency: 'monthly' },

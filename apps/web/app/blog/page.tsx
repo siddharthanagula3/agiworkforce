@@ -16,6 +16,7 @@ export const metadata = buildMetadata({
   description:
     'AGI has not published a blog post. Product announcements are dated and published in the release notes, each on its own page.',
   path: '/blog',
+  robots: { index: false, follow: true },
 });
 
 export default function BlogPage() {

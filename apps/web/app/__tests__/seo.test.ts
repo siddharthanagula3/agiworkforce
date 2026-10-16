@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -19,7 +19,15 @@ import {
   SURFACE_PLATFORMS,
   UNRELEASED_SURFACES,
   releasedPlatforms,
+  surfaceAvailabilitySummary,
 } from '@/lib/surface-status';
+
+vi.mock('@/features/marketing/components/MarketingLanding', () => ({
+  MarketingLanding: () => null,
+}));
+vi.mock('@/lib/server/free-media-offer-reader', () => ({
+  readFreeMediaOfferForRender: async () => null,
+}));
 
 function og(meta: ReturnType<typeof buildMetadata>) {
   return meta.openGraph as {
@@ -123,6 +131,36 @@ describe('robots', () => {
     }
   });
 
+  it('lets every allowed crawler fetch the share image and nothing else under /api/', () => {
+    const shareRule = rules.find((r) => Array.isArray(r.userAgent));
+    const allow = (shareRule?.allow ?? []) as string[];
+    const group = shareRule?.userAgent as string[];
+    expect(allow).toEqual(['/api/og$', '/api/og?']);
+    for (const bot of ['*', ...AI_BOTS, 'Googlebot', 'bingbot', 'Applebot']) {
+      expect(group, `${bot} should get the share image allow`).toContain(bot);
+    }
+    expect(group).not.toContain('CCBot');
+
+    const longestMatch = (patterns: string[], path: string) =>
+      Math.max(
+        0,
+        ...patterns
+          .filter((pattern) =>
+            pattern.endsWith('$') ? path === pattern.slice(0, -1) : path.startsWith(pattern),
+          )
+          .map((pattern) => pattern.length),
+      );
+    const disallow = (rules.find((r) => r.userAgent === '*')?.disallow ?? []) as string[];
+    const shareUrl = new URL(OG_IMAGE.url, SITE_URL);
+    const sharePath = `${shareUrl.pathname}${shareUrl.search}`;
+    expect(longestMatch(allow, sharePath)).toBeGreaterThan(longestMatch(disallow, sharePath));
+    for (const blocked of ['/api/me', '/api/health', '/api/user/export', '/api/ogre']) {
+      expect(longestMatch(allow, blocked), `${blocked} must stay blocked`).toBeLessThan(
+        longestMatch(disallow, blocked),
+      );
+    }
+  });
+
   it('points at the absolute sitemap URL', () => {
     expect(result.sitemap).toBe(`${SITE_URL}/sitemap.xml`);
   });
@@ -145,6 +183,10 @@ describe('sitemap', () => {
     }
   });
 
+  it('leaves the empty blog out while it has no posts', () => {
+    expect(paths).not.toContain('/blog');
+  });
+
   it('lists the homepage at priority 1.0', () => {
     const home = entries.find((e) => e.url === SITE_URL);
     expect(home?.priority).toBe(1.0);
@@ -165,6 +207,22 @@ describe('sitemap', () => {
   });
 });
 
+describe('the empty blog', () => {
+  it('stays reachable for people but is marked noindex', () => {
+    const source = readFileSync(join(process.cwd(), 'app/blog/page.tsx'), 'utf8');
+    expect(source).toMatch(/robots:\s*\{\s*index:\s*false,\s*follow:\s*true\s*\}/);
+  });
+});
+
+describe('homepage description', () => {
+  it('states release status from the surface registry, not a surface count', async () => {
+    const { metadata } = await import('@/app/page');
+    const description = String(metadata.description);
+    expect(description).toContain(surfaceAvailabilitySummary());
+    expect(description).not.toMatch(/\bsix\b/i);
+  });
+});
+
 describe('structured data', () => {
   it('WebSite schema has NO SearchAction (no public site search)', () => {
     const schema = webSiteSchema();
@@ -177,6 +235,13 @@ describe('structured data', () => {
     const schema = organizationSchema();
     expect(schema['@type']).toBe('Organization');
     expect(schema['url']).toBe(SITE_URL);
+  });
+
+  it('SoftwareApplication carries no offers, rating, download or install claims', () => {
+    const schema = softwareApplicationSchema();
+    for (const key of ['offers', 'aggregateRating', 'review', 'downloadUrl', 'installUrl']) {
+      expect(schema[key], key).toBeUndefined();
+    }
   });
 
   it('SoftwareApplication schema is well-formed', () => {

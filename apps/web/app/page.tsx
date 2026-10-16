@@ -2,10 +2,10 @@ import type { Metadata } from 'next';
 import { MarketingLanding } from '@/features/marketing/components/MarketingLanding';
 import { readFreeMediaOfferForRender } from '@/lib/server/free-media-offer-reader';
 import { OG_IMAGE } from '@/lib/seo/site';
+import { surfaceAvailabilitySummary } from '@/lib/surface-status';
 
 const TITLE = 'AGI: ChatGPT, Claude, Gemini and more in one app';
-const DESCRIPTION =
-  'The AI application suite for six surfaces. Local models, your own keys, or AGI managed cloud. You see the route before anything leaves your device.';
+const DESCRIPTION = `One AI workspace for chat, code and research, with models from OpenAI, Anthropic, Google and more. ${surfaceAvailabilitySummary()}`;
 const SHARE_DESCRIPTION =
   'Chat, code, research and automate with models from OpenAI, Anthropic, Google and more, in one workspace. Free to start.';
 
