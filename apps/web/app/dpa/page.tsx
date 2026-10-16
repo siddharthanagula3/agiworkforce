@@ -768,9 +768,9 @@ export default function DpaPage() {
                     stand in for individual intimation where the individuals are identifiable.
                   </Prose>
                   <Prose>
-                    <strong>How that notice is delivered, honestly.</strong> The product sends email
-                    to one account at a time, and no procedure for emailing a set of affected users
-                    has been built or exercised. A notice to individuals is therefore delivered
+                    <strong>How that notice is delivered.</strong> The product sends email to one
+                    account at a time, and no procedure for emailing a set of affected users has
+                    been built or exercised. A notice to individuals is therefore delivered
                     in-product on next sign-in and as a dated public notice at a stable URL, with
                     direct email only where an address is held and someone sends it. That is a limit
                     of the product today, published here so no incident response is planned around a

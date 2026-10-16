@@ -94,7 +94,7 @@ const DOCS: { href: string; label: string; body: string }[] = [
   {
     href: '/trust',
     label: 'Trust posture',
-    body: 'Compliance, audits, and security claims with honest dates.',
+    body: 'Compliance, audits, and security claims, each with its date.',
   },
   {
     href: '/security',
@@ -124,7 +124,7 @@ const DOCS: { href: string; label: string; body: string }[] = [
   {
     href: '/data-use',
     label: 'How we use your data',
-    body: 'Plain-English answers to the questions people actually ask: training, who can read your chats, selling, retention, deletion, residency, each linking to the section of the privacy policy that governs it.',
+    body: 'Plain-English answers to common questions: training, who can read your chats, selling, retention, deletion, residency, each linking to the section of the privacy policy that governs it.',
   },
   {
     href: '/privacy/india',

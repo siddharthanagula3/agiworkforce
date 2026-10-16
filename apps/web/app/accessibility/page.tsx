@@ -81,7 +81,7 @@ export default function AccessibilityPage() {
             <>
               We aim for WCAG 2.1 AA across the web app and the marketing site. Below is what
               we&rsquo;ve done, what is in flight, and the known gaps. If you hit a barrier, email
-              contact@agiworkforce.com, and we treat it as a P0. Last updated:{' '}
+              contact@agiworkforce.com, and we treat it as a top priority. Last updated:{' '}
               {POLICY_LAST_UPDATED.accessibility}. <PolicyVersionsLink policy="accessibility" />
             </>
           }
@@ -115,7 +115,7 @@ export default function AccessibilityPage() {
             <Prose>
               Signed in, open Settings, Help and choose Report an accessibility barrier; the ticket
               and every reply stay there. Or email contact@agiworkforce.com. Either way we treat it
-              as a P0.
+              as a top priority.
             </Prose>
             <ButtonRow>
               <Button href="/settings/help">Report from Settings, Help</Button>

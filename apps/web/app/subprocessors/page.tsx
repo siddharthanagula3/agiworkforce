@@ -325,8 +325,8 @@ export default function SubprocessorsPage() {
               </h2>
               <Prose>
                 Three reviews of what actually leaves this product, on 14 August, 12 September and
-                21 September, found this page had been wrong in both directions, and we would rather
-                publish the correction than quietly reissue the list.
+                21 September, found this page had been wrong in both directions. Each correction is
+                listed below.
               </Prose>
             </div>
             <NoteList items={CORRECTIONS} />

@@ -501,10 +501,10 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
         <strong>Why, and how it is protected:</strong> delivering notifications you asked for, and
         understanding which builds are being downloaded.{' '}
         <strong>
-          Two honest caveats. The hash in the download record uses a fixed salt, so it is
-          pseudonymous rather than anonymous: anyone holding both the hash and a candidate address
-          can confirm a match. And the download endpoint separately writes the raw IP to application
-          logs for abuse detection, which the hashing does not cover.
+          Two caveats. The hash in the download record uses a fixed salt, so it is pseudonymous
+          rather than anonymous: anyone holding both the hash and a candidate address can confirm a
+          match. And the download endpoint separately writes the raw IP to application logs for
+          abuse detection, which the hashing does not cover.
         </strong>{' '}
         Both are improvements we owe you rather than controls we are claiming.
       </>
@@ -643,9 +643,8 @@ const BASIS_LEDGER: readonly LedgerRow[] = [
         <strong>Data used:</strong> download records: hashed IP, user-agent, referrer, coarse
         country, plus the raw IP in server logs, as section 01 says.
         <br />
-        <strong>Basis:</strong> <strong>legitimate interests.</strong> Narrow, and the honest
-        caveats about the fixed salt and the raw log entry are in section 01 rather than buried
-        here.
+        <strong>Basis:</strong> <strong>legitimate interests.</strong> Narrow. The caveats about the
+        fixed salt and the raw log entry are in section 01.
       </>
     ),
   },
@@ -1312,10 +1311,9 @@ export default function PrivacyPage() {
                     Who at AGI can see your content
                   </h2>
                   <Prose>
-                    In Managed Cloud we store your conversations and files, so the honest answer is
-                    not &ldquo;nobody&rdquo;. Access to your content by people at AGI is limited to
-                    those who need it to operate or support the service, and to the cases in the
-                    table below. The text filter described in the{' '}
+                    In Managed Cloud we store your conversations and files. Access to your content
+                    by people at AGI is limited to those who need it to operate or support the
+                    service, and to the cases in the table below. The text filter described in the{' '}
                     <Link href={CANONICAL_POLICY_ROUTES.acceptableUse} className="agi-ds-link">
                       acceptable use policy
                     </Link>{' '}

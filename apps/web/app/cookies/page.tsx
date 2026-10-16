@@ -37,7 +37,7 @@ export const metadata = buildMetadata({
 const SECTIONS = [
   '01 · Cookies we set',
   '02 · What else we put on your device',
-  '03 · Two things people usually get told wrong',
+  '03 · Two common misconceptions',
   '04 · Do Not Track and Global Privacy Control',
   '05 · Your choices',
 ] as const;
@@ -427,7 +427,7 @@ export default function CookiesPage() {
               <Section id="s-03" labelledBy="agi-cookies-myths-title" rule>
                 <Stack gap="loose">
                   <h2 className="agi-ds-h2" id="agi-cookies-myths-title">
-                    03 &middot; Two things people usually get told wrong.
+                    03 &middot; Two common misconceptions.
                   </h2>
                   <NoteList items={MISCONCEPTIONS} />
                 </Stack>

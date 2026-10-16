@@ -112,10 +112,9 @@ export default function ModelLicensesPage() {
                 The licence attached to the model that produced your output governs what you may do
                 with it, and that is not the same for every model in the picker.
               </strong>{' '}
-              This table is generated from the same model registry the router reads, so it cannot
-              drift from what actually runs. Last updated: {POLICY_LAST_UPDATED.modelLicenses}.
-              Model list last synced: {modelRegistry.lastUpdated}.{' '}
-              <PolicyVersionsLink policy="modelLicenses" />
+              This table is generated from the same model registry the router reads, rather than
+              written by hand. Last updated: {POLICY_LAST_UPDATED.modelLicenses}. Model list last
+              synced: {modelRegistry.lastUpdated}. <PolicyVersionsLink policy="modelLicenses" />
             </>
           }
           ctas={[]}

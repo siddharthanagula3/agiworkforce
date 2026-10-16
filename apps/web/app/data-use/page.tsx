@@ -21,17 +21,17 @@ const QUESTIONS = [
     body: (
       <>
         <strong>No.</strong> AGI does not train AGI-owned models on your prompts, responses or
-        files. That is a flat answer with one thing worth understanding behind it: in Managed Cloud
-        we send your prompt to the model provider serving the model you picked, and what{' '}
-        <em>they</em> do with it is governed by their terms, not ours. On the Free plan, a chat on
-        the default model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model
-        Studio, on AGI&rsquo;s own key at its international endpoint in Singapore, or OpenAI. Which
-        one answers depends on what is available for that turn, and the reply shows the model that
-        answered. We are not making a promise on their behalf, and section 02 of the{' '}
+        files. One thing to understand: in Managed Cloud we send your prompt to the model provider
+        serving the model you picked, and what <em>they</em> do with it is governed by their terms,
+        not ours. On the Free plan, a chat on the default model goes to a provider AGI chooses, not
+        one you pick: Alibaba Cloud Model Studio, on AGI&rsquo;s own key at its international
+        endpoint in Singapore, or OpenAI. Which one answers depends on what is available for that
+        turn, and the reply shows the model that answered. We make no promise on their behalf, as
+        section 02 of the{' '}
         <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
         </Link>{' '}
-        says so in those words.
+        states.
       </>
     ),
   },
@@ -39,10 +39,10 @@ const QUESTIONS = [
     title: 'Who at AGI can read my chats?',
     body: (
       <>
-        In Managed Cloud your conversations are stored by us, so the honest answer is not
-        &ldquo;nobody&rdquo;: it is that access is limited to people who need it to operate or
-        support the service, and that two layers of access control scope every request to the
-        account that owns it. What those layers are, and where they stop, is section 01 of the{' '}
+        In Managed Cloud your conversations are stored by us, so people at AGI can access them, but
+        access is limited to people who need it to operate or support the service, and two layers of
+        access control scope every request to the account that owns it. What those layers are, and
+        where they stop, is section 01 of the{' '}
         <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
         </Link>{' '}
@@ -58,14 +58,13 @@ const QUESTIONS = [
     title: 'Does it depend on how I run it?',
     body: (
       <>
-        <strong>More than anything else on this page.</strong> There are three modes and they give
-        genuinely different answers. In <strong>Local</strong>, the conversation runs on your
-        machine and we receive nothing. In <strong>BYOK</strong>, the request goes from your client
-        straight to the provider on your own key and we are not in the path. In{' '}
-        <strong>Managed Cloud</strong>, it goes through us and we store it. One caveat people get
-        wrong: Local is part of the CLI, while BYOK is part of the CLI and is coming soon to VS
-        Code. <strong>Web and Desktop are cloud-only</strong>, so work on those surfaces uses
-        Managed Cloud. The full comparison is section 00 of the{' '}
+        <strong>Yes.</strong> There are three modes, and they give different answers. In{' '}
+        <strong>Local</strong>, the conversation runs on your machine and we receive nothing. In{' '}
+        <strong>BYOK</strong>, the request goes from your client straight to the provider on your
+        own key and we are not in the path. In <strong>Managed Cloud</strong>, it goes through us
+        and we store it. Note that Local is part of the CLI, while BYOK is part of the CLI and is
+        coming soon to VS Code. <strong>Web and Desktop are cloud-only</strong>, so work on those
+        surfaces uses Managed Cloud. The full comparison is section 00 of the{' '}
         <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
         </Link>
@@ -83,8 +82,7 @@ const QUESTIONS = [
         <Link href={CANONICAL_POLICY_ROUTES.subprocessors} className="agi-ds-link">
           /subprocessors
         </Link>
-        . That page names its own past mistakes at the bottom, which is the fastest way to judge
-        whether to believe it.
+        . That page also lists its past corrections at the bottom.
       </>
     ),
   },
@@ -92,13 +90,13 @@ const QUESTIONS = [
     title: 'How long do you keep things?',
     body: (
       <>
-        It differs by the kind of data, and rather than round it off here, section 05 of the{' '}
+        It differs by the kind of data. Section 05 of the{' '}
         <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
         </Link>{' '}
-        gives a row per category with the job that enforces it. Two things worth knowing before you
-        read it: where no automatic expiry exists, it says so instead of quoting a number, and it
-        has a table of what deliberately survives deleting your account.
+        gives a row per category with the job that enforces it. Where no automatic expiry exists, it
+        says so instead of quoting a number, and it has a table of what is kept after you delete
+        your account.
       </>
     ),
   },
@@ -139,9 +137,9 @@ const QUESTIONS = [
     body: (
       <>
         <strong>The United States.</strong> We do not offer data residency in the EU, the UK or
-        India, so using Managed Cloud means your data is transferred there. If residency is a
-        requirement for you, we do not currently meet it, and you should know that before you sign
-        up rather than during procurement. The transfer mechanisms are section 08 of the{' '}
+        India, so using Managed Cloud means your data is transferred there. If you require data
+        residency, we do not currently meet that requirement. The transfer mechanisms are section 08
+        of the{' '}
         <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
         </Link>{' '}
@@ -158,10 +156,9 @@ const QUESTIONS = [
     body: (
       <>
         Cancelling a subscription does not delete your account or your content. The account
-        continues on the free tier and your data stays until you delete it. What we cannot promise
-        is a shutdown commitment, because no code enforces one; the honest position is that export
-        works today and you should use it if that risk matters to you. The billing mechanics
-        themselves are on{' '}
+        continues on the free tier and your data stays until you delete it. We make no commitment
+        about your data if the service shuts down. Export is available today, and you can use it at
+        any time to keep your own copy. The billing mechanics themselves are on{' '}
         <Link href={CANONICAL_POLICY_ROUTES.refunds} className="agi-ds-link">
           the refund policy
         </Link>
@@ -173,8 +170,8 @@ const QUESTIONS = [
     title: 'Are you GDPR or DPDP compliant?',
     body: (
       <>
-        Those are not badges anyone issues, so a yes would be worth nothing. What we can give you is
-        the working: a per-regime status ledger with dates and what would prove each line at{' '}
+        Compliance with either is not a single yes or no, so we publish a per-regime status ledger
+        with dates and what would prove each line at{' '}
         <Link href={CANONICAL_POLICY_ROUTES.trust} className="agi-ds-link">
           /trust
         </Link>
@@ -186,8 +183,7 @@ const QUESTIONS = [
         <Link href={CANONICAL_POLICY_ROUTES.security} className="agi-ds-link">
           /security
         </Link>
-        . We hold no SOC 2 report and no ISO 27001 certificate, and we say so in the same places we
-        say what we do have.
+        . We hold no SOC 2 report and no ISO 27001 certificate.
       </>
     ),
   },
@@ -204,11 +200,10 @@ export default function DataUsePage() {
           title="How we use your data."
           lede={
             <>
-              The privacy policy is the document that governs. It is also long, because it has to be
-              complete.{' '}
+              The privacy policy is the document that governs.{' '}
               <strong>
-                This page answers the questions people actually arrive with, and links to the part
-                of the policy that governs each answer.
+                This page answers common questions about your data and links to the part of the
+                policy that governs each answer.
               </strong>{' '}
               Where the two ever disagree, the{' '}
               <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
@@ -224,7 +219,7 @@ export default function DataUsePage() {
         <Section id="questions" labelledBy="agi-data-use-questions-title" rule>
           <Stack gap="loose">
             <h2 className="agi-ds-h2" id="agi-data-use-questions-title">
-              The questions, in the order people ask them.
+              Common questions about your data.
             </h2>
             <NoteList items={QUESTIONS} />
           </Stack>
@@ -233,15 +228,11 @@ export default function DataUsePage() {
         <Section id="why" labelledBy="agi-data-use-why-title" rule ground="2">
           <Stack gap="loose">
             <h2 className="agi-ds-h2" id="agi-data-use-why-title">
-              Why this page cannot drift.
+              The governing documents.
             </h2>
             <Prose>
-              A friendly summary of a legal document is a liability the moment the document changes
-              and the summary does not: you end up with two published answers and no way to tell
-              which is current. So this page deliberately states no retention window, no recipient
-              name and no commitment of its own. Every concrete fact above is a link into the policy
-              that owns it. If you are editing this page and find yourself typing a number, link to
-              the section instead.
+              Each answer above is a summary. The privacy policy governs, and the pages below set
+              out retention, recipients, your rights and compliance status in full.
             </Prose>
             <ButtonRow>
               <Button href={CANONICAL_POLICY_ROUTES.privacy} variant="secondary">

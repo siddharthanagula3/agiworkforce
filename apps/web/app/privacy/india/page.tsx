@@ -44,9 +44,9 @@ const SECTIONS = [
   '04 · Who else receives it',
   '05 · How long we keep it',
   '06 · Where it goes, and out of India',
-  '07 · Your rights, and what actually happens',
+  '07 · Your rights, and how each is handled',
   '08 · Grievance redressal',
-  '09 · Children, stated honestly',
+  '09 · Children',
   '10 · Security and breach',
   '11 · Language, and changes',
 ] as const;
@@ -458,7 +458,7 @@ export default function IndiaDpdpNoticePage() {
               <Section id="s-07" labelledBy="agi-india-07-title" rule ground="2">
                 <Stack gap="loose">
                   <h2 className="agi-ds-h2" id="agi-india-07-title">
-                    07 &middot; Your rights, and what actually happens.
+                    07 &middot; Your rights, and how each is handled.
                   </h2>
                   <Ledger caption="Your rights" rows={RIGHTS} />
                   <Prose size="sm">
@@ -504,7 +504,7 @@ export default function IndiaDpdpNoticePage() {
               <Section id="s-09" labelledBy="agi-india-09-title" rule ground="2">
                 <Stack gap="tight">
                   <h2 className="agi-ds-h2" id="agi-india-09-title">
-                    09 &middot; Children, stated honestly.
+                    09 &middot; Children.
                   </h2>
                   <Prose>
                     Under this Act a child is anyone under 18, and processing a child&rsquo;s data
@@ -519,14 +519,13 @@ export default function IndiaDpdpNoticePage() {
                       We do not currently perform verifiable parental consent or age verification.
                     </strong>{' '}
                     The age is whatever is typed, it is checked once in the browser and not kept,
-                    and nobody checks the permission. That is a gap against this Act, we are naming
-                    it rather than implying otherwise, and it is tracked as an open item. Because an
-                    account can be created from the age of {ACCOUNT_MINIMUM_AGE}, people this Act
-                    treats as children can hold accounts here, and we cannot tell which accounts
-                    those are. If you believe we hold a child&rsquo;s personal data without a
-                    parent&rsquo;s consent, use the grievance contact above and we will delete it.
-                    We do not run behavioural advertising or tracking directed at children in any
-                    mode.
+                    and nobody checks the permission. That is a gap against this Act, and it is
+                    tracked as an open item. Because an account can be created from the age of{' '}
+                    {ACCOUNT_MINIMUM_AGE}, people this Act treats as children can hold accounts
+                    here, and we cannot tell which accounts those are. If you believe we hold a
+                    child&rsquo;s personal data without a parent&rsquo;s consent, use the grievance
+                    contact above and we will delete it. We do not run behavioural advertising or
+                    tracking directed at children in any mode.
                   </Prose>
                 </Stack>
               </Section>

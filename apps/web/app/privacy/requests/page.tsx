@@ -77,10 +77,9 @@ export default async function DataRightsPage() {
           title="Exercise your rights."
           lede={
             <>
-              Everything on this page is a control, not a description of one. What is self-serve is
-              self-serve; what needs a human says so and tells you exactly what happens when you
-              press the button. Last updated: {POLICY_LAST_UPDATED.dataRights}. The notice that
-              explains what we collect and why is at{' '}
+              Each control on this page says whether it is self-serve or needs a person, and what
+              happens when you use it. Last updated: {POLICY_LAST_UPDATED.dataRights}. The notice
+              that explains what we collect and why is at{' '}
               <Link href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-ds-link">
                 /privacy/india
               </Link>{' '}

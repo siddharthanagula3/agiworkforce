@@ -317,7 +317,7 @@ const DELETION: { label: string; value: string }[] = [
       'The scheduled purge runs account-data erasure before deleting the sign-in identity. It stops if the erasure result is marked incomplete.',
   },
   {
-    label: 'It actually runs',
+    label: 'When it runs',
     value: `A cron-authenticated job runs daily at ${PUBLISHED_RETENTION_CRON_TIMES.deletedAccounts} and claims up to 100 pending accounts per run, stopping early enough in the invocation to finish the account it is on. Separate scheduled jobs purge deleted media at ${PUBLISHED_RETENTION_CRON_TIMES.deletedMedia} and temporary chats at ${PUBLISHED_RETENTION_CRON_TIMES.temporaryChats}, and sandboxes are reclaimed at ${PUBLISHED_RETENTION_CRON_TIMES.sandboxMinute} minutes past every hour rather than once a day. This is the mechanism behind the 24-hour deletion window in the privacy policy.`,
   },
   {
@@ -444,7 +444,7 @@ const NOT_DONE: { label: string; value: string }[] = [
   {
     label: 'Legacy credential formats',
     value:
-      'Some second-factor secrets stored before the current encryption scheme are still readable in their original format, and no migration job has rewritten them. New enrolments use the current scheme. Until that migration runs, the honest statement is that our encryption-at-rest posture is not uniform across every historical row.',
+      'Some second-factor secrets stored before the current encryption scheme are still readable in their original format, and no migration job has rewritten them. New enrolments use the current scheme. Until that migration runs, our encryption-at-rest posture is not uniform across every historical row.',
   },
 ];
 
@@ -489,9 +489,9 @@ export default function SecurityPage() {
                       The mode decides the whole risk model.
                     </h2>
                     <Prose>
-                      Most of this page only applies to one of the three. In Local mode the honest
-                      answer to &ldquo;which of your subprocessors touches my data&rdquo; is none of
-                      them, because none of our infrastructure is in the path at all.
+                      Most of this page only applies to one of the three. In Local mode the answer
+                      to &ldquo;which of your subprocessors touches my data&rdquo; is none of them,
+                      because none of our infrastructure is in the path at all.
                     </Prose>
                   </div>
                   <FactGrid items={BOUNDARIES} />
@@ -623,8 +623,7 @@ export default function SecurityPage() {
                         {CONTACT_EMAIL}
                       </Link>{' '}
                       with <strong>{CONTACT_SUBJECTS.security}</strong> in the subject line. This is
-                      the mailbox that is actually monitored; we would rather publish one address
-                      that works than a dedicated alias that bounces.
+                      the monitored mailbox for security reports.
                     </Prose>
                   </div>
                   <Ledger
@@ -686,7 +685,7 @@ export default function SecurityPage() {
                     The rest of the trust surface.
                   </h2>
                   <ButtonRow>
-                    <Button href="/trust">Dated posture ledger</Button>
+                    <Button href="/trust">Trust and compliance status</Button>
                     <Button href="/status" variant="secondary">
                       Live status
                     </Button>

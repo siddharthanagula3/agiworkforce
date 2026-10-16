@@ -28,9 +28,9 @@ import {
 import '@/features/marketing/components/pages/company/company.css';
 
 export const metadata = buildMetadata({
-  title: 'Trust: a dated posture ledger',
+  title: 'Trust and compliance status',
   description:
-    'A dated posture ledger: what is true today, what artifact would prove it, and what we have not done. No certifications are claimed.',
+    'What is true today, what artifact would prove it, and what we have not done. No certifications are claimed.',
   path: '/trust',
 });
 
@@ -48,7 +48,7 @@ const NEXT_REVIEW = new Intl.DateTimeFormat('en-GB', {
 const SECTIONS = [
   { label: 'What we hold, and what we do not', id: 'compliance' },
   { label: 'Control by control, dated', id: 'posture' },
-  { label: 'Do not take our word for it', id: 'verify' },
+  { label: 'Checks you can run yourself', id: 'verify' },
   { label: 'The documents behind the rows', id: 'evidence' },
   { label: 'When this page last moved', id: 'changes' },
   { label: 'Go deeper on any of it', id: 'related' },
@@ -290,7 +290,7 @@ export default function TrustPage() {
           id="agi-trust-title"
           eyebrow="Trust"
           title="Claims with dates, and the ones we cannot make."
-          lede="A posture ledger, not a badge wall. Every row says what is true today and what artifact would prove it. We hold no SOC 2 report, ISO 27001 certificate or third-party penetration test, and say so here."
+          lede="Every row says what is true today and what artifact would prove it. We hold no SOC 2 report, ISO 27001 certificate or third-party penetration test, and say so here."
           ctas={[
             { href: '/security', label: 'Read the mechanisms' },
             { href: '#verify', label: 'Verify us yourself', variant: 'secondary' },
@@ -321,8 +321,8 @@ export default function TrustPage() {
                       What we hold, and what we do not.
                     </h2>
                     <Prose>
-                      A certification claim is only as good as the document behind it, so each row
-                      names the document. Several of these rows say the document does not exist.
+                      Each row names the document behind it. Several of these rows say the document
+                      does not exist.
                     </Prose>
                   </div>
                   <Ledger caption="Certifications and obligations" rows={COMPLIANCE} />
@@ -352,12 +352,11 @@ export default function TrustPage() {
                 <Stack gap="loose">
                   <div>
                     <h2 className="agi-ds-h2" id="agi-trust-verify-title">
-                      Do not take our word for it.
+                      Checks you can run yourself.
                     </h2>
                     <Prose>
-                      Most of what this page asserts is externally observable. If any of these
-                      checks disagree with the tables above, the tables are wrong and we want to
-                      know.
+                      Most of what this page asserts is externally observable. If a check disagrees
+                      with the tables above, please tell us.
                     </Prose>
                   </div>
                   <NoteList items={VERIFY} />

@@ -175,6 +175,11 @@
           "digest": "a4af1df817f7046f",
           "note": "The Free plan’s default route changed in the model registry on 2026-10-13: OpenRouter’s free router was removed from the catalogue on the owner’s instruction because it kept answering that it was overloaded, and the Free plan’s own model became an OpenAI model that AGI pays for out of the Free usage allowance. Section 01 named Alibaba Cloud Model Studio or OpenRouter’s free router as the recipient of a Free plan chat on the default model; it now names Alibaba Cloud Model Studio or OpenAI, says the model that answers at OpenAI is one of OpenAI’s own, and says a turn that needs tools, web search or code execution is answered by OpenAI. The sentence that the providers behind OpenRouter’s free models may train on what you send is removed with the route it described. The opening summary no longer says the Free plan runs on the free models providers give away. The statements that Qwen and Zhipu go through OpenRouter when AGI holds no key of its own, and that OpenRouter is the failover for every other chat model, are unchanged. The text was revised on 2026-10-13; the date moved to 2026-10-15, the day it shipped.",
           "summary": "Changes who can receive a Free plan chat on the default model. It was Alibaba Cloud Model Studio, at its international endpoint in Singapore, or OpenRouter’s free router; it is now Alibaba Cloud Model Studio or OpenAI, and a turn that needs tools, web search or code execution is answered by OpenAI. OpenRouter’s free router no longer answers Free plan chats, so the sentence about its providers training on what you send is removed. The summary at the top says the Free plan runs on a model AGI chooses within a small usage allowance. OpenRouter still carries the Qwen and Zhipu models when AGI holds no key of its own and is still the failover for other chat models."
+        },
+        {
+          "date": "2026-10-15",
+          "digest": "df5bffa66ee9b408",
+          "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. Two honest caveats reads Two caveats, the download basis no longer says the caveats are in section 01 rather than buried here, and the access answer drops so the honest answer is not nobody, leaving the sentence that limits access by people at AGI to those who need it and to the cases in the table. The fixed salt, the raw IP in application logs and the limits on access are unchanged, and visitors are not asked to choose again. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
@@ -234,6 +239,11 @@
           "digest": "41f506a60140024e",
           "note": "Date moved to 2026-10-08, the public launch day, on the owner’s instruction. Two factual corrections to the deletion and breach-notice paragraphs: both said the product sends only support-escalation and scheduled-task email, or has no account-lifecycle mailing path, which was false. They now say no confirmation email is sent on deletion, that the product mails one account at a time, and that no procedure for emailing a set of affected users has been built or exercised. No processing commitment changed. The age rule changed: the Children (s. 9) row no longer says accounts are for adults; accounts are open from the age of 13, anyone under 18 needs permission from a parent or guardian, and sign-up asks for an age that is checked in the browser, refused under 13 and not kept. It still says AGI performs no age verification and no verifiable parental consent. Same-day revision before release on the owner’s answer: the special categories row of Annex I adds that the health-records exclusion governs what a Customer submits under the DPA, and that the HealthEx connector is a personal feature, offered only in the United States and not available inside an organisation workspace, outside the DPA, for which AGI is not a HIPAA covered entity or business associate. The date stays because the 2026-10-08 version has not shipped. Routing correction the same evening, after the Free default route changed in apps/web/lib/services/free-lane: the page said a request goes to the provider serving the model you select, which is incomplete for the Free plan’s default model. It now says AGI chooses the provider for that model, Alibaba Cloud Model Studio on AGI’s own key at its international endpoint in Singapore or OpenRouter’s free router, written to be true in either configured order. Second same-day revision before release: the HealthEx sentence in Annex I says that, like every connector, it is coming soon and cannot be connected yet, because connectors are locked behind connectorsReleased() in packages/contracts/types/src/connector-release.ts.",
           "summary": "Corrects two statements about email. Deleting an account sends no confirmation email, and the addendum no longer gives as the reason that the product sends no account email. The breach-notice paragraph now says the product emails one account at a time and that no procedure for emailing a set of affected users has been built or exercised. The age rule changes: the children row no longer says accounts are for adults. Sign-up asks for an age and refuses anyone under 13, anyone under 18 needs permission from a parent or guardian, and we still perform no age verification and no verifiable parental consent. Annex I now says the ban on submitting health records applies to what a business customer submits under the DPA, and that the HealthEx connector is a separate personal feature, offered only in the United States and not inside an organisation workspace, which the DPA does not cover. Also states that on the Free plan a chat on the default model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model Studio, at its international endpoint in Singapore, or OpenRouter’s free router, depending on what is available for that turn."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "ac62a055b7e84298",
+          "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The heading How that notice is delivered, honestly drops the word honestly. How notice reaches individuals and its limits are unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
@@ -276,6 +286,11 @@
           "date": "2026-10-08",
           "digest": "a3ef139dffb5e3bb",
           "note": "The storage table now says the Free plan notice key keeps a one-way fingerprint of each account that has seen it instead of the account id, and lists the free model promotion notice key, which only the catch-all row covered while sign-out still cleared it. Both keys survive sign-out since the founder's 2026-10-15 decision to keep notice dismissals across sign-out. Nothing new is stored, less identifying data is kept and no choice changed, so the date and the notice version stay."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "1f6168821c5b4e50",
+          "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. Section 03 and its contents label read Two common misconceptions, where they said Two things people usually get told wrong. No cookie, storage key or choice changed, and visitors are not asked to choose again. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
@@ -373,6 +388,11 @@
           "digest": "05e02deb775f4c5d",
           "note": "The Free plan’s default route changed in the model registry on 2026-10-13: OpenRouter’s free router was removed from the catalogue on the owner’s instruction because it kept answering that it was overloaded, and the Free plan’s own model became an OpenAI model that AGI pays for out of the Free usage allowance. No row is added, removed or renamed and no provider id changes. The OpenRouter row loses its third situation, the Free plan’s default model, and now lists two: the Qwen and Zhipu models when AGI holds no key of its own, and failover for other chat models. The model providers row says the provider AGI chooses for the Free plan’s default model is OpenAI or Alibaba, where it pointed at the OpenRouter and Qwen rows. The text was revised on 2026-10-13; the date moved to 2026-10-15, the day it shipped.",
           "summary": "OpenRouter no longer answers Free plan chats on the default model, so that use is removed from its row; it still carries the Qwen and Zhipu models when AGI holds no key of its own and is still the failover for other chat models. A Free plan chat on the default model now goes to OpenAI or to Alibaba Cloud Model Studio, and the model providers row says so. No subprocessor is added or removed."
+        },
+        {
+          "date": "2026-10-15",
+          "digest": "1b4dcf6a427e32db",
+          "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The corrections introduction drops we would rather publish the correction than quietly reissue the list and says each correction is listed below. No recipient, role, provider or correction changed. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
@@ -440,6 +460,11 @@
           "digest": "2635d67cf80d0fa3",
           "note": "Same-day revision before release, a targeted correction of three rows and not a re-review of the page: the provider API keys row no longer says BYOK keys are encrypted under a device-derived key, which the CLI does not do, and says where they are kept; the CLI credential row drops the word released and adds the owner-only file store used on Linux or when the keyring is off, and the artifact row states the content security policy as packages/contracts/types/src/artifact-csp.ts builds it, with scripts, styles, images and fonts allowed from the pinned CDN hosts, counted from that module. The date stays because the 2026-10-08 version has not shipped. The page heading now reads Last updated where it read Reviewed, on the owner’s instruction, because the date moved for targeted corrections and not for a review of every row; the list of what we have not done no longer carries an As of date for the same reason. No row changed.",
           "summary": "The date at the top is now labelled Last updated, not Reviewed, because it marks targeted corrections and not a review of every row."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "3ed7f4e151dc1f79",
+          "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. Drops the words the honest answer and the honest statement from the Local mode and two-factor secrets passages, renames the deletion row It actually runs to When it runs, shortens the reason given for the single security mailbox, and the link to /trust reads Trust and compliance status. The uneven encryption at rest for older two-factor secrets, the deletion schedule and the reporting address are unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
@@ -466,6 +491,11 @@
           "digest": "61e55c8967477be2",
           "note": "Date moved to 2026-10-08, the public launch day, on the owner’s instruction. Two factual corrections, no service commitment, credit or exclusion changed: the count of domains with no instrument is now computed from the objective catalogue, one of sixteen where the page said three of fourteen; and the coverage row says alerts go by email to the on-call rotation when one is configured and otherwise to one monitored mailbox, instead of asserting a small rotation exists. The lede now reads Last updated where it read Reviewed, on the owner’s instruction, and the list under What this page is not no longer carries an As of date, since the date marks two corrections and not a review of that list. No commitment changed.",
           "summary": "Corrects two statements. One of the sixteen service domains has no measurement yet, where the page said three of fourteen. Alerts go by email to an on-call rotation when one is configured and otherwise to a single monitored mailbox; there is still no round-the-clock coverage. No commitment, credit or exclusion changed. The date is now labelled Last updated, not Reviewed."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "a00745b9edac5f57",
+          "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The no 24/7 coverage row says we do not offer 24/7 support where it said we do not claim it because a small team could not staff it honestly, the service level introduction drops the claim that a target and what is measured cannot drift apart, and the link to /trust reads Trust and compliance status. Every target, window and the absence of round-the-clock coverage are unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
@@ -537,6 +567,11 @@
           "digest": "ad2044fbd196d614",
           "note": "Re-issued on 2026-10-08, the public launch date, on the owner’s instruction. No change to the text.",
           "summary": "Re-issued on the public launch date, 2026-10-08. No change to the text."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "f7e357e17c8e5006",
+          "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. Two sentences said a reported barrier is treated as a P0, an internal priority label; they now say it is treated as a top priority. How to report a barrier is unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
@@ -614,6 +649,11 @@
           "digest": "dfe72fe1d109ff54",
           "note": "Date moved to 2026-10-08, the public launch day, on the owner’s instruction. A targeted correction of rows, recorded in the page’s own change record, not a re-review of every row: the artifact sandboxing row no longer says no network egress, since the policy allows scripts, styles, images and fonts from the pinned CDN hosts; the Local and CLI key rows drop the word released; and the CLI key row adds the owner-only file store used on Linux or when the keyring is off. The move is not a review of the page. The age rule changed, so a fourth row is corrected: the DPDP parental consent row said the web surface has no age gate; web sign-up now asks for an age and refuses anyone under 13, the age is self-declared and not stored, and the permission required below 18 is not verified. The row still reads Not implemented. The heading now reads Last updated where it read Last reviewed, on the owner’s instruction, since the move was not a review of the page; the Next review date is unchanged. No row changed in this step.",
           "summary": "Corrects three rows. Artifact sandboxing blocks fetch, XHR and WebSocket calls but is not full network isolation: scripts, styles, images and fonts can still load from four pinned CDN hosts. The CLI is no longer described as released. The CLI keeps provider keys in owner-only files on Linux or when the keyring is turned off. The DPDP parental consent row is corrected for the new age rule: web sign-up now asks for an age and refuses anyone under 13, but the age is self-declared and no parental permission is verified, so the row still reads Not implemented. The date at the top is now labelled Last updated, not Last reviewed. The next review date is unchanged."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "e5c18c477b8d328e",
+          "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The page title and description read Trust and compliance status instead of a dated posture ledger, the lede drops A posture ledger, not a badge wall, the section and contents label Do not take our word for it read Checks you can run yourself, and two sentences of commentary on certification claims and on the tables being wrong are shortened. No row, date, change record entry or the statement that no SOC 2 report, ISO 27001 certificate or third-party penetration test is held changed. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
@@ -644,6 +684,11 @@
           "date": null,
           "digest": "6b90ba223dda8dad",
           "note": "Adds rows for the two new pages, Supported countries and regions and Government and law-enforcement requests. The model licences row now shows that page’s own policy date instead of the model list’s sync date. The index prints no date of its own. Same-day revision before release: the Supported countries row says the page lists the countries and regions where the service is not offered, instead of where United States sanctions law excludes it."
+        },
+        {
+          "date": null,
+          "digest": "caded007dbecc9a9",
+          "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The Trust row reads claims, each with its date, where it said claims with honest dates, and the Data use row reads common questions, where it said the questions people actually ask. The index prints no date of its own. No provider, recipient, retention period, right, limitation or commitment was added or removed."
         }
       ]
     },
@@ -665,6 +710,11 @@
           "digest": "f19a56cf29c3d27d",
           "note": "Re-issued on 2026-10-08, the public launch date, on the owner’s instruction. One change to the text: it drops the clause saying the appointment of a representative is being progressed, which nothing on record supports, and says instead that no date has been set and that this page will say so when one is appointed.",
           "summary": "Re-issued on the public launch date, 2026-10-08. No change to the text."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "ffef9d4b401f937d",
+          "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. Drops It is recorded here rather than glossed over and the reason given for not setting an appointment date. The page still says no representative is appointed, that the Article 27 obligation is live and unmet, and that no date is set. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
@@ -751,6 +801,11 @@
           "digest": "45735cb55d9e58e3",
           "note": "First dated version, on the owner’s instruction: the page now prints 2026-10-08 as its policy date, like the other documents, and labels the model catalogue’s date as when the model list was last synced. No change to the licence text or the table.",
           "summary": "This page now carries its own date, 2026-10-08, the public launch day. The date it printed before was the day the model list was last synced, and it is still shown under that name. No licence text changed."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "eccaf0a8f7088a60",
+          "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The sentence saying the table is generated from the model registry the router reads ends rather than written by hand, where it ended so it cannot drift from what actually runs. No model or licence changed. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
@@ -784,6 +839,11 @@
           "digest": "814ac9b4875af33e",
           "note": "The Free plan’s default route changed in the model registry on 2026-10-13: OpenRouter’s free router was removed from the catalogue on the owner’s instruction because it kept answering that it was overloaded, and the Free plan’s own model became an OpenAI model that AGI pays for out of the Free usage allowance. Section 04 named Alibaba Cloud Model Studio or OpenRouter’s free router as the recipient of a Free plan chat on the default model; it now names Alibaba Cloud Model Studio or OpenAI. Nothing else changed. The text was revised on 2026-10-13; the date moved to 2026-10-15, the day it shipped.",
           "summary": "Changes who can receive a Free plan chat on the default model: Alibaba Cloud Model Studio, at its international endpoint in Singapore, or OpenAI, where it said OpenRouter’s free router. OpenRouter’s free router no longer answers Free plan chats."
+        },
+        {
+          "date": "2026-10-15",
+          "digest": "333837760e7dfae7",
+          "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. Section 07 is titled Your rights, and how each is handled, where it said what actually happens; section 09 is titled Children, where it said stated honestly; and the children section drops we are naming it rather than implying otherwise. The statement that no verifiable parental consent or age verification is performed, that this is a gap against the Act and that it is tracked as an open item is unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
@@ -805,6 +865,11 @@
           "digest": "336470ef3ff5976a",
           "note": "Re-issued on 2026-10-08, the public launch date, on the owner’s instruction. No change to the text.",
           "summary": "Re-issued on the public launch date, 2026-10-08. No change to the text."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "0a1c2081240d2bbb",
+          "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The lede said everything on the page is a control, not a description of one, and tells you exactly what happens when you press the button; it now says each control says whether it is self-serve or needs a person and what happens when you use it. No control or route changed. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
@@ -832,6 +897,11 @@
           "digest": "396ed002419b24b6",
           "note": "The Free plan’s default route changed in the model registry on 2026-10-13: OpenRouter’s free router was removed from the catalogue on the owner’s instruction because it kept answering that it was overloaded, and the Free plan’s own model became an OpenAI model that AGI pays for out of the Free usage allowance. The answer on training named Alibaba Cloud Model Studio or OpenRouter’s free router as the recipient of a Free plan chat on the default model; it now names Alibaba Cloud Model Studio or OpenAI. Nothing else changed. The text was revised on 2026-10-13; the date moved to 2026-10-15, the day it shipped.",
           "summary": "Changes who can receive a Free plan chat on the default model: Alibaba Cloud Model Studio, at its international endpoint in Singapore, or OpenAI, where it said OpenRouter’s free router. OpenRouter’s free router no longer answers Free plan chats. Nothing else about how your data is used changed."
+        },
+        {
+          "date": "2026-10-15",
+          "digest": "eecee151f7d4de94",
+          "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The section titled Why this page cannot drift addressed the page’s editors and said the page names no retention window and no recipient, while its answers name Alibaba Cloud Model Studio, OpenAI, Singapore and the 24-hour deletion schedule; it now says each answer is a summary, that the privacy policy governs, and keeps the same four links. The questions heading, the lede and seven answers drop rhetoric about honesty and what people get wrong; the GDPR and DPDP answer no longer says those are not badges anyone issues, which overlooked the certification schemes GDPR Article 42 provides for, and says compliance with either is not a single yes or no. Every provider named, the Free plan routing sentence, the 24-hour deletion window, the absence of EU, UK and India residency, the absence of a shutdown commitment and of a SOC 2 report or ISO 27001 certificate are unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
@@ -891,6 +961,11 @@
           "digest": "b5149551c8668937",
           "note": "Describes connectors by the credential behind them and adds connectors you sign in to at the provider: AGI stores the encrypted access and refresh tokens, the granted scopes and an account label, deletes its copy on disconnect or account deletion and asks the provider to revoke where a revocation endpoint is configured. Replaces the statement that no provider tokens are stored on the web and that only Desktop completes a sign-in flow. First recorded under 2026-10-07, the day it reached main, when the launch was expected that day. Production never served that date, so the entry is dated 2026-10-08, the day it ships. Same-day revision before release, after connectors were locked as coming soon behind connectorsReleased() in packages/contracts/types/src/connector-release.ts: the lede, the contents entry and the connectors heading said which scopes are requested today, and the section now says no connector can be connected yet and that it describes what is requested once they open.",
           "summary": "Adds connectors you sign in to at the provider. For those, AGI stores the access token and any refresh token encrypted in your account, together with the scopes granted and a label for the connected account. When you disconnect, or your account is deleted, AGI deletes its copy and asks the provider to revoke the tokens where it can; otherwise remove AGI in that provider account settings. Connectors whose provider registration is not in place are marked Needs setup and cannot be connected."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "4045373434688e72",
+          "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The lede sentence saying some of the page is less flattering than a marketing page would write it now says the page states the limits of these protections as well as what they do, and the Honest limits eyebrow reads Limits; the section anchor stays honest-limits so existing links keep working. Every limit of the injection escalation is unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },

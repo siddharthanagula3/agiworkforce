@@ -89,10 +89,7 @@ export default function AgentPermissionsPage() {
               The exact default authority of the agent on each surface, the limits of the
               protections we ship, the connector scopes requested once connectors open, and every
               way to take access back.{' '}
-              <strong>
-                Some of this is less flattering than a marketing page would write it. That is the
-                point. You cannot review a permission model you have to infer.
-              </strong>{' '}
+              <strong>It states the limits of these protections as well as what they do.</strong>{' '}
               The rules that govern how you use it are at{' '}
               <a href="/acceptable-use" className="agi-ds-link">
                 /acceptable-use
@@ -196,7 +193,7 @@ export default function AgentPermissionsPage() {
               <Section id="honest-limits" labelledBy="agi-perm-limits-title" rule>
                 <Stack gap="loose">
                   <div>
-                    <Eyebrow>Honest limits</Eyebrow>
+                    <Eyebrow>Limits</Eyebrow>
                     <h2 className="agi-ds-h2" id="agi-perm-limits-title">
                       What the injection escalation does not catch.
                     </h2>

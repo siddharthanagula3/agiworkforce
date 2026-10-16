@@ -111,7 +111,7 @@ const NOT_YET: readonly LedgerRow[] = [
   {
     label: 'No 24/7 coverage',
     value:
-      'Alerts go by email to the on-call rotation when one is configured, and otherwise to a single monitored mailbox, and escalate while an alert keeps firing; there is no round-the-clock coverage. We do not claim 24/7 support because a small team could not staff it honestly; response follows the business-hours and business-day targets above.',
+      'Alerts go by email to the on-call rotation when one is configured, and otherwise to a single monitored mailbox, and escalate while an alert keeps firing; there is no round-the-clock coverage. We do not offer 24/7 support; response follows the business-hours and business-day targets above.',
   },
   {
     label: 'No recovery objectives',
@@ -162,9 +162,8 @@ export default function SlaPage() {
             <Prose>
               Below each service level names the objective, the window it is computed over, and the
               production table it is computed from. A domain with no instrument yet says so instead
-              of carrying a number. The list comes from the same file the burn-rate alerting reads,
-              so a target here and what is actually measured cannot drift apart. Current attainment
-              is on{' '}
+              of carrying a number. The list comes from the same file the burn-rate alerting reads.
+              Current attainment is on{' '}
               <Link href="/status" className="agi-ds-link">
                 /status
               </Link>
@@ -242,7 +241,7 @@ export default function SlaPage() {
                 Security mechanisms
               </Button>
               <Button href="/trust" variant="secondary">
-                Dated posture ledger
+                Trust and compliance status
               </Button>
               <Button href="/support" variant="secondary">
                 Get support
