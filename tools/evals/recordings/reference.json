@@ -923,6 +923,12 @@
       "response": {
         "text": "Yes. I ran print(17 * 23) in Python, and it printed 391."
       }
+    },
+    "chat-prompt/memory-source-named": {
+      "fingerprint": "4f4a1b623090907a9e3ff25f5f2a1df5497a999228b94bd649acd3f593faad22",
+      "response": {
+        "text": "Here is a simple week that fits three night shifts: two short strength sessions and two low-impact cardio sessions such as cycling or swimming on your days off, with rest after each night shift and no running, to spare your left knee. I based it on your saved memories: you work three 7 pm to 7 am night shifts a week as an ICU nurse, and you avoid running because of a sore left knee."
+      }
     }
   }
 }
