@@ -61,7 +61,7 @@ export default function Error({
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
               onClick={reset}
-              className="inline-flex h-12 items-center justify-center rounded-full bg-primary px-8 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              className="inline-flex h-12 items-center justify-center rounded-full bg-foreground px-8 text-sm font-medium text-background hover:bg-foreground/90 transition-colors"
             >
               <RefreshCw className="h-4 w-4 me-2" aria-hidden="true" />
               {t('boundary.tryAgain', 'Try again')}
@@ -88,7 +88,10 @@ export default function Error({
           <div className="mt-16 pt-8 border-t border-border">
             <p className="text-muted-foreground text-sm">
               {t('boundary.keepsHappening', 'If this keeps happening,')}{' '}
-              <Link href="/contact" className="text-primary hover:opacity-80">
+              <Link
+                href="/contact"
+                className="text-foreground underline underline-offset-4 hover:no-underline"
+              >
                 {t('boundary.contactSupport', 'contact support')}
               </Link>
               .
