@@ -110,6 +110,13 @@ const STEP_FORMAT_PATTERNS = [/\bstep by step\b/iu, /\bnumbered steps\b/iu];
 const CODE_FORMAT_PATTERNS = [/\bcode only\b/iu, /\b(?:return|output|give me) (?:the )?code\b/iu];
 const MARKDOWN_DOCUMENT_PATTERNS = [/\bmarkdown document\b/iu, /\bmarkdown file\b/iu];
 const PLAIN_TEXT_PATTERNS = [/\bplain text\b/iu];
+const REQUESTED_WORD_COUNT_PATTERN = /\b(\d{2,5})(?:-| )?words?\b/iu;
+const OUTPUT_TOKENS_PER_REQUESTED_WORD = 2;
+
+function requestedWordCount(message: string): number | null {
+  const count = REQUESTED_WORD_COUNT_PATTERN.exec(message)?.[1];
+  return count ? Number.parseInt(count, 10) : null;
+}
 
 const DIRECT_QUESTION = /^(?:is|are|was|were|do|does|did|has|have|had|can|could|will|would)\b/iu;
 const POLITE_REQUEST = /^(?:can|could|will|would)\s+you\b/iu;
@@ -190,6 +197,7 @@ function outputTokenBudget(
   requestedMaxOutputTokens: number | undefined,
   modelMaxOutputTokens: number | undefined,
   modelMinimumOutputTokens: number | undefined,
+  requestedWords: number | null,
 ): number {
   const limits = [
     bindingDepth === null
@@ -197,6 +205,7 @@ function outputTokenBudget(
       : Math.max(
           RESPONSE_OUTPUT_TOKEN_CEILINGS[bindingDepth],
           positiveInteger(modelMinimumOutputTokens) ?? 1,
+          (requestedWords ?? 0) * OUTPUT_TOKENS_PER_REQUESTED_WORD,
         ),
     positiveInteger(requestedMaxOutputTokens),
     positiveInteger(modelMaxOutputTokens),
@@ -254,16 +263,24 @@ function buildInstruction(input: {
   format: AnswerFormat;
   explanationRequired: boolean;
   clarification: ClarificationRequirement;
+  requestedWords: number | null;
 }): string {
   if (input.clarification === 'required') {
     return 'Ask one concise clarification question. Do not speculate or add background.';
   }
-  const parts = [formatInstruction(input.format), depthInstruction(input.depth)].filter(Boolean);
-  parts.push(
-    input.explanationRequired
-      ? 'Include the requested reasoning.'
-      : 'Do not add examples, alternatives, headings, a recap, or an offer to continue unless needed for correctness.',
-  );
+  const parts = [
+    formatInstruction(input.format),
+    input.requestedWords === null
+      ? depthInstruction(input.depth)
+      : `Write about ${input.requestedWords} words, as requested.`,
+  ].filter(Boolean);
+  if (input.explanationRequired) {
+    parts.push('Include the requested reasoning.');
+  } else if (input.requestedWords === null) {
+    parts.push(
+      'Do not add examples, alternatives, headings, a recap, or an offer to continue unless needed for correctness.',
+    );
+  }
   if (input.clarification === 'uncertain') {
     parts.push(
       'Ask one concise question only if different interpretations would materially change correctness or a consequential action.',
@@ -277,6 +294,7 @@ export function planResponseBudget(input: ResponseBudgetInput): ResponseBudgetPl
   const requestedFormat = explicitFormat(input.message, requestedDepth, input.apiResponseFormat);
   const acceptedAssessment = input.semanticAssessment?.accepted ? input.semanticAssessment : null;
   const inferredDepth = deterministicDepth(input.message, input.taskType);
+  const requestedWords = requestedWordCount(input.message);
 
   let depth =
     requestedDepth ?? acceptedAssessment?.answerDepth ?? inferredDepth ?? ('normal' as const);
@@ -306,10 +324,17 @@ export function planResponseBudget(input: ResponseBudgetInput): ResponseBudgetPl
       input.requestedMaxOutputTokens,
       input.modelMaxOutputTokens,
       input.modelMinimumOutputTokens,
+      requestedWords,
     ),
     explanationRequired,
     clarification,
     source,
-    instruction: buildInstruction({ depth, format, explanationRequired, clarification }),
+    instruction: buildInstruction({
+      depth,
+      format,
+      explanationRequired,
+      clarification,
+      requestedWords,
+    }),
   };
 }

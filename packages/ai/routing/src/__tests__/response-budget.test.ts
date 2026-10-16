@@ -17,6 +17,41 @@ describe('response budget planning', () => {
     expect(plan.clarification).toBe(entry.clarificationRequired);
   });
 
+  it('asks for the length a user named instead of telling the model to be brief', () => {
+    const plan = planResponseBudget({
+      message:
+        'Draft, but do not send, a 600-word email from Mira to Devon about a mock launch, with 6 short paragraphs and a bold deadline.',
+      taskType: 'creative_writing',
+    });
+
+    expect(plan.instruction).toContain('Write about 600 words, as requested.');
+    expect(plan.instruction).not.toContain('Do not add examples');
+    expect(plan.instruction).not.toContain('without extra background');
+  });
+
+  it('reads a word count written as words as well as with a hyphen', () => {
+    expect(
+      planResponseBudget({ message: 'Summarise this in about 150 words.', taskType: 'general' })
+        .instruction,
+    ).toContain('Write about 150 words, as requested.');
+  });
+
+  it('never caps a named length below what it needs, even under a short assessment', () => {
+    const plan = planResponseBudget({
+      message: 'Write a 600-word cover letter.',
+      taskType: 'creative_writing',
+      semanticAssessment: {
+        accepted: true,
+        answerDepth: 'short',
+        answerFormat: 'mixed',
+        explanationRequired: false,
+        clarification: 'not_required',
+      },
+    });
+
+    expect(plan.outputTokenBudget).toBeGreaterThanOrEqual(1_200);
+  });
+
   it('lets exact user depth and format instructions override a semantic assessment', () => {
     const semanticAssessment: SemanticResponseAssessment = {
       accepted: true,
