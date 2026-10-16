@@ -196,6 +196,10 @@ export async function extractPdfAttachmentContent(
     throw new PdfAttachmentUnreadableError(filename);
   }
 
+  // pdf.mjs loads its worker through an import() the function file tracer cannot
+  // follow, so the deployed bundle has no worker file. Importing it here by name
+  // ships it and registers globalThis.pdfjsWorker, which pdf.mjs uses instead.
+  await import('pdfjs-dist/legacy/build/pdf.worker.mjs');
   const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const loadingTask = getDocument({
     data: new Uint8Array(data),
