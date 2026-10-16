@@ -37,6 +37,7 @@ import {
   PREVIEW_GEOMETRY,
   PreviewRoot,
   TrafficLights,
+  WEB_COMPOSER_PLACEHOLDER,
 } from './AppPreviews';
 
 const WORK_SCENE_CLASS = 'agi-work';
@@ -81,7 +82,7 @@ function WorkComposer() {
   return (
     <div className="agi-work-composer">
       <div className="agi-app-composer">
-        <span className="agi-app-placeholder">Follow up</span>
+        <span className="agi-app-placeholder">{WEB_COMPOSER_PLACEHOLDER.turnActive}</span>
         <div className="agi-app-composer-row">
           <Plus className="agi-app-icon agi-app-icon--lg" />
           <span className="agi-app-seg">
@@ -274,7 +275,7 @@ export function DiffScenePreview({ className }: { className?: string }) {
       label="Authored example of a file edit waiting for approval in a chat"
       className={className}
       chats={DIFF_SIDEBAR_CHATS}
-      composer={<AppComposer />}
+      composer={<AppComposer placeholder={WEB_COMPOSER_PLACEHOLDER.turnActive} />}
     >
       <p className="agi-app-user">{DIFF_TASK}</p>
       <div className="agi-app-reply">

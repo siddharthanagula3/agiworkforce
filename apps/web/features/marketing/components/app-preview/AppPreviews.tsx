@@ -66,6 +66,7 @@ const NEW_CHAT_GREETING = greetingHeadline('afternoon', 0);
 export const WEB_COMPOSER_PLACEHOLDER = {
   thread: englishResources.chat.placeholder,
   empty: englishResources.chat.placeholderEmpty,
+  turnActive: 'Follow up',
 } as const;
 
 export function NewChatGreeting() {
@@ -265,7 +266,7 @@ export function ReplyActions({ markMore }: { markMore?: number }) {
 }
 
 export function AppComposer({
-  placeholder = 'Ask anything. Type / for commands',
+  placeholder = WEB_COMPOSER_PLACEHOLDER.thread,
   draft,
   markModel,
   children,
@@ -397,7 +398,11 @@ function AppShell({
         />
         <div className="agi-app-main" data-view={view}>
           {view === 'new-chat' ? <NewChatGreeting /> : children}
-          <AppComposer />
+          <AppComposer
+            placeholder={
+              view === 'new-chat' ? WEB_COMPOSER_PLACEHOLDER.empty : WEB_COMPOSER_PLACEHOLDER.thread
+            }
+          />
         </div>
       </div>
     </PreviewRoot>

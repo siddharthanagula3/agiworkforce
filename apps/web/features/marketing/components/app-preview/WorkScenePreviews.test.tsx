@@ -8,7 +8,7 @@ import { detectFileDiff, TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types
 import { KIND_TO_BADGE } from '@agiworkforce/unified-chat';
 import { AGI_WORK_LABEL } from '@/features/chat/lib/agi-work';
 import { APP_NAV_DESTINATIONS } from '@/shared/components/layout/app-nav-items';
-import { PREVIEW_GEOMETRY } from './AppPreviews';
+import { PREVIEW_GEOMETRY, WEB_COMPOSER_PLACEHOLDER } from './AppPreviews';
 import { AgentRunScenePreview, DiffScenePreview, ImageScenePreview } from './WorkScenePreviews';
 
 const repoRoot = resolve(__dirname, '../../../../../..');
@@ -318,6 +318,10 @@ describe('file edit waiting for approval', () => {
       '  const first = await fetchFirst();\n  render(first, { stream: true });\n  return first.status;',
   };
   const diff = detectFileDiff(request);
+
+  it('keeps the turn open in the composer while the decision is outstanding', () => {
+    expect(texts(container, '.agi-app-placeholder')).toEqual([WEB_COMPOSER_PLACEHOLDER.turnActive]);
+  });
 
   it('opens the run on the decision it is holding', () => {
     expect(text(container, '.agi-app-user')).toBe(

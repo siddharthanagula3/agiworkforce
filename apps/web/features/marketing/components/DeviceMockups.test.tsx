@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { englishResources } from '@agiworkforce/i18n/en';
 import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { GREETING_TIME_BANDS } from '@agiworkforce/utils/greeting';
 import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
@@ -113,7 +114,7 @@ describe('Web and Desktop share the real app shell', () => {
     const { container } = render(element);
     const composer = container.querySelector('.agi-app-composer');
     expect(composer?.querySelector('.agi-app-placeholder')?.textContent).toBe(
-      'Ask anything. Type / for commands',
+      englishResources.chat.placeholder,
     );
     expect(
       Array.from(composer?.querySelectorAll('.agi-app-seg span') ?? [], (item) => item.textContent),
@@ -125,9 +126,30 @@ describe('Web and Desktop share the real app shell', () => {
     expect(container.textContent).not.toMatch(/Enter to send|Best \(auto\)|Served by/u);
   });
 
-  it('the real composer still carries the placeholder the preview shows', () => {
-    expect(readSource('apps/web/features/chat/components/Composer/ChatComposerNew.tsx')).toContain(
-      'Ask anything. Type / for commands',
+  it('the web chat renders the chat strings the preview composer shows', () => {
+    const page = readSource('apps/web/features/chat/pages/WebChatPage.tsx');
+    expect(page).toContain("placeholder={t('chat:placeholder')}");
+    expect(page).toContain("placeholder={t('chat:placeholderEmpty')}");
+    expect(page).toContain('<GreetingBanner showWorkspace />');
+  });
+
+  it.each([
+    ['web', <WebWindow key="web" view="new-chat" />],
+    ['desktop', <DesktopWindow key="desktop" view="new-chat" />],
+  ] as const)(
+    '%s new chat shows the greeting over the empty-chat placeholder',
+    (_name, element) => {
+      const { container } = render(element);
+      expect(container.querySelector('.agi-app-greeting')).not.toBeNull();
+      expect(container.querySelector('.agi-app-placeholder')?.textContent).toBe(
+        englishResources.chat.placeholderEmpty,
+      );
+    },
+  );
+
+  it('Desktop shows the web chat strings because it loads the web app by default', () => {
+    expect(readSource('apps/desktop/electron/config.ts')).toContain(
+      "process.env['AGI_CLOUD_RENDERER'] === 'bundled' ? 'bundled' : 'remote';",
     );
   });
 

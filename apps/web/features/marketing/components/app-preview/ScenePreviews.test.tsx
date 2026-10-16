@@ -44,7 +44,7 @@ import { WEB_SETTINGS_NAV_GROUPS } from '@/features/settings/components/web-sett
 import { e2bExecutionToolDefs, WRITE_FILE_TOOL } from '@/lib/e2b/execution-tools';
 import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 import { APP_NAV_DESTINATIONS } from '@/shared/components/layout/app-nav-items';
-import { PREVIEW_GEOMETRY } from './AppPreviews';
+import { PREVIEW_GEOMETRY, WEB_COMPOSER_PLACEHOLDER } from './AppPreviews';
 import { greetingHeadline } from '@agiworkforce/utils/greeting';
 import {
   APPROVAL_SCENE_REQUEST,
@@ -2608,6 +2608,48 @@ describe('the /web close-up and research steps are scaled pictures of the produc
     ]);
     expectSource('apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts', [
       'Only the searches approved on the research plan run, exactly as written.',
+    ]);
+  });
+});
+
+describe('every web scene composer shows what the web chat renders in that state', () => {
+  it.each(scenes)('%s never shows the composer component default', (_scene, make) => {
+    expect(draw(make()).textContent).not.toContain('Ask anything. Type / for commands');
+  });
+
+  it('opens the memory settings over an empty chat with its greeting', () => {
+    const root = draw(<MemoryScenePreview />);
+    const main = requiredNode(root, '.agi-app-main[data-view="new-chat"]');
+    expect(Array.from(main.children, (child) => child.className)).toEqual([
+      'agi-app-greeting',
+      'agi-app-composer',
+    ]);
+    expect(text(root, '.agi-app-placeholder')).toBe(englishResources.chat.placeholderEmpty);
+  });
+
+  it.each([
+    ['research plan', () => <ResearchScenePreview />],
+    ['composer', () => <ComposerScenePreview view="attachments" />],
+  ] as const)('the %s scene sits in a conversation that is not answering', (_name, make) => {
+    const root = draw(make());
+    for (const shown of texts(root, '.agi-app-placeholder'))
+      expect(shown).toBe(englishResources.chat.placeholder);
+  });
+
+  it('keeps the turn open while a tool waits for approval', () => {
+    expect(text(draw(<ApprovalScenePreview />), '.agi-app-placeholder')).toBe(
+      WEB_COMPOSER_PLACEHOLDER.turnActive,
+    );
+    expectSource('apps/web/features/chat/components/Composer/ChatComposerNew.tsx', [
+      `const TURN_ACTIVE_PLACEHOLDER = '${WEB_COMPOSER_PLACEHOLDER.turnActive}';`,
+      'const isTurnActive = isLoading || isGenerating;',
+      '? TURN_ACTIVE_PLACEHOLDER',
+    ]);
+    expectSource('apps/web/features/chat/pages/WebChatPage.tsx', [
+      'isGenerating={isStreaming || imageTurnActive}',
+    ]);
+    expectSource('apps/web/features/chat/components/messages/MessageBubble.tsx', [
+      "// The turn's SSE connection stays open while a decision is outstanding, so",
     ]);
   });
 });

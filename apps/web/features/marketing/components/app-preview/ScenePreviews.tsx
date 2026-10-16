@@ -688,9 +688,9 @@ export function MemoryScenePreview({
         </>
       }
     >
-      <div className="agi-app-main">
-        <div className="agi-app-thread" />
-        <AppComposer />
+      <div className="agi-app-main" data-view="new-chat">
+        <NewChatGreeting />
+        <AppComposer placeholder={WEB_COMPOSER_PLACEHOLDER.empty} />
       </div>
     </SceneShell>
   );
@@ -992,7 +992,7 @@ export function ApprovalScenePreview({ className }: { className?: string }) {
             </div>
           </div>
         </div>
-        <AppComposer />
+        <AppComposer placeholder={WEB_COMPOSER_PLACEHOLDER.turnActive} />
       </div>
     </SceneShell>
   );
