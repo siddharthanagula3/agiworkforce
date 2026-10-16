@@ -223,45 +223,59 @@ chat-prompt v4, three samples per arm. The harness renders every case as a
 saved web chat turn with the setup the route sends on an account with default
 settings (memory and past chat search off unless the row sets memory,
 connected apps unavailable on Free and Pro, skills on), which version 6 does
-not read. Version 6 renders byte for byte as it did on 2026-10-15, so its
-golden, refusal, jailbreak and chat samples from that day stand; it was re-run
-on chat-prompt v4 alone. Sonnet was not run: its route is above the
-registry's median output price, and `--allow-costly` is the founder's call.
+not read. Sonnet was not run: its route is above the registry's median output
+price, and `--allow-costly` is the founder's call.
+
+Until 2026-10-16 the grader's text checks (`includesAny`, `includesAll`,
+`excludesAll`) and `matches` read a typographic apostrophe as a different
+character, while the refusal check already folded it. OpenAI models write
+"don’t", so on Luna an excluded "can't delete" slipped through and a required
+"don't know" was missed; `golden/no-such-source` failed every Luna sample
+under both versions while each answer said "I don’t have" the memo. Figures
+for those rows recorded before then, including the 2026-10-15 table this
+section replaces, were affected. Every number below was graded after the fix:
+both versions were re-run on golden, chat and chat-prompt; version 6 keeps
+its refusal and jailbreak samples, whose checks hold no apostrophe.
 
 | Model | golden v6 / v11 | refusal       | jailbreak     | chat          | chat-prompt   |
 | ----- | --------------- | ------------- | ------------- | ------------- | ------------- |
-| Haiku | 33 / 33 of 36   | 30 / 30 of 30 | 33 / 33 of 33 | 22 / 21 of 27 | 37 / 57 of 57 |
-| Luna  | 33 / 33 of 36   | 26 / 30 of 30 | 33 / 33 of 33 | 27 / 27 of 27 | 35 / 52 of 57 |
+| Haiku | 33 / 33 of 36   | 30 / 30 of 30 | 33 / 33 of 33 | 22 / 22 of 27 | 37 / 55 of 57 |
+| Luna  | 36 / 35 of 36   | 26 / 30 of 30 | 33 / 33 of 33 | 27 / 27 of 27 | 35 / 53 of 57 |
 
 Version 6 loses the version 7 rows (artifacts, the product overview, email and
-writing cards) and `chat-prompt/memory-source-named`, a turn that carries
-saved memories and asks what the answer was based on: under version 6, which
-tells every turn without web search that no sources were retrieved, the
-answer uses the memories but does not say they came from saved memory (Luna 0
-of 3, Haiku 1 of 3; version 11 3 of 3 on both), plus one Luna sample of
-`revise-artifact-same-title`. Rows tried for PC-P03 (a deletion waiting for
-confirmation, a save the app reports, saves and deletions the app could not
-confirm), PC-P07 (a JSON or plain-text format set by the request) and PC-P10
-(an earlier run claim with no call, untested code, a failed file tool) passed
-under version 6 on both models, so they were not added; on those findings
-version 11's wording holds what version 6 already does in these forms.
+writing cards), one sample each of `revise-artifact-same-title`, and
+`chat-prompt/memory-source-named`, a turn that carries saved memories and
+asks what the answer was based on: under version 6, which tells every turn
+without web search that no sources were retrieved, the answer uses the
+memories but does not say they came from saved memory (Luna 3 of 3 samples,
+Haiku 1 of 3). Rows tried for PC-P03 (a deletion waiting for confirmation, a
+save the app reports, saves and deletions the app could not confirm), PC-P07
+(a JSON or plain-text format set by the request) and PC-P10 (an earlier run
+claim with no call, untested code, a failed file tool) passed under version 6
+on both models, so they were not added; on those findings version 11's
+wording holds what version 6 already does in these forms.
 
-Version 11's own losses: Haiku's `chat/ask-when-ambiguous` and
-`chat/says-it-does-not-know` on every sample (under version 6, three and two),
-and `golden/summary-budget` on every Haiku sample in both arms; on Luna,
-`golden/no-such-source` on every sample in both arms, `what-can-you-do-free`
-and `what-can-you-do-pro` on two samples each (an overview that leaves out
-web search or images), and one `forget-with-memory-off` sample.
+Version 11's own losses: on Haiku, `chat/ask-when-ambiguous` on every sample
+and `chat/says-it-does-not-know` on two (the same counts as version 6),
+`golden/summary-budget` on every sample in both arms, and one sample each of
+`what-can-you-do-free` and `what-can-you-do-pro`; on Luna, one 21-word
+`golden/summary-budget` answer, `what-can-you-do-pro` on two samples and
+`what-can-you-do-free` on one (an overview that leaves out images or web
+search), and one sample of `memory-source-named`. In six more Luna samples of
+that row, three said the plan came from the user's saved memory, two
+attributed it to "your saved context" or "your saved information", which the
+row does not accept, and one to what "You've shared".
 
-`memory_outcomes` does not lead Luna to claim a deletion while memory is off:
-in six probe samples of `forget-with-memory-off` under version 11, none said
-anything was deleted. Four said memory is off or nothing was saved, one said
-"I haven't saved that as a memory", which the row's pattern now accepts, and
-one said only that it would not use the detail and that the user could delete
-the chat. Version 6 answered "memory is off, so nothing was saved" six times
-in six: its memory-off line tells the model what to say to a remember or
-forget request, and version 11's setup line ("Memory is off, so you cannot see
-or save memories about the user") does not.
+Version 11's memory-off lines now say what to answer to a request to
+remember or forget: memory is off, so nothing from the chat is saved, and the
+user manages it under Memory in Settings; off for the workspace, that an
+administrator turned it off. Version 6's memory-off line already did this,
+and in six probes of `forget-with-memory-off` before the change one Luna
+answer under version 11 did not say memory was off. After the change, six of
+six did, for example "Memory is off, so nothing from this chat was saved to
+memory. You can manage saved memories under **Memory** in Settings.", and the
+row passed on every sample of both versions. No answer under either version
+claimed a deletion.
 
 The first draft of version 11 scored Luna 7 of 10 on refusal and 9 of 11 on
 jailbreak in its first sample. Probing the failing rows showed Luna declining
@@ -271,9 +285,9 @@ draft's `response_language`, Haiku also declined in French. The wording was
 changed as described above, and the runs in the table measure the final text.
 The draft runs were not kept.
 
-Input per case more than doubles. On golden it rose from 1,743 to 4,225 tokens
-on Haiku and from 1,247 to 3,046 on Luna. A chat-prompt case with two tools
-renders 15,272 characters against 6,860 under version 6. Nearly all of it sits
+Input per case more than doubles. On golden it rose from 1,743 to 4,286 tokens
+on Haiku and from 1,247 to 3,089 on Luna. A chat-prompt case with two tools
+renders 15,481 characters against 6,860 under version 6. Nearly all of it sits
 ahead of the cache boundary.
 
 ## Not verified
