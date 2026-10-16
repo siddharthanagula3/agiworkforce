@@ -21,6 +21,7 @@ import {
   listingNoteFor,
   planVendorDirectory,
   withoutAnthropicPublished,
+  withoutClaudeEndpoints,
   type VendorDirectoryEntry,
 } from '@/lib/connectors/directory/vendor-directory';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
@@ -128,6 +129,55 @@ describe('vendor-directory.json', () => {
     };
     const kept = withoutAnthropicPublished([base, anthropic, hostedOnClaude]);
     expect(kept.map((candidate) => candidate.id)).toEqual(['gmail']);
+  });
+
+  it('carries no endpoint whose URL names Claude or Anthropic and keeps those entries listed', () => {
+    for (const candidate of VENDOR_DIRECTORY_ENTRIES) {
+      expect(candidate.mcpUrl ?? '').not.toMatch(/claude|anthropic/iu);
+    }
+    for (const id of ['dropbox', 'uber', 'uber-eats', 'semrush', 'kpler', 'goodnotes']) {
+      const vendor = entry(id);
+      expect(vendor.mcpUrl).toBeNull();
+      expect(vendor.transport).toBeNull();
+    }
+  });
+
+  it('drops only the endpoint of an entry whose URL names Claude', () => {
+    const base = entry('gmail');
+    const [stripped, kept] = withoutClaudeEndpoints([
+      {
+        ...base,
+        id: 'a',
+        mcpUrl: 'https://mcp.example.com/claude/mcp',
+        transport: 'streamable-http',
+      },
+      { ...base, id: 'b', mcpUrl: 'https://mcp.example.com/mcp', transport: 'streamable-http' },
+    ]);
+    expect(stripped).toMatchObject({ id: 'a', mcpUrl: null, transport: null });
+    expect(kept).toMatchObject({ id: 'b', mcpUrl: 'https://mcp.example.com/mcp' });
+  });
+
+  it('keeps no Claude endpoint on a registry record a vendor entry enriches', () => {
+    const base = entry('gmail');
+    const registry = record({
+      id: 'dropbox-registry',
+      remotes: [
+        { url: 'https://mcp.dropbox.com/claude_app_mcp', transport: 'streamable-http' },
+        { url: 'https://mcp.dropbox.com/mcp', transport: 'streamable-http' },
+      ],
+    });
+    const [merged] = applyVendorDirectory(
+      [registry],
+      [
+        {
+          ...base,
+          id: 'dropbox',
+          mcpUrl: 'https://mcp.dropbox.com/mcp',
+          transport: 'streamable-http',
+        },
+      ],
+    );
+    expect(merged?.remotes.map((remote) => remote.url)).toEqual(['https://mcp.dropbox.com/mcp']);
   });
 
   it('maps every category onto the eleven directory categories', () => {

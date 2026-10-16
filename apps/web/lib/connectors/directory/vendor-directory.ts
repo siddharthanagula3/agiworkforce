@@ -60,7 +60,32 @@ export function withoutAnthropicPublished(
   return entries.filter((entry) => !isAnthropicPublished(entry));
 }
 
-export const VENDOR_DIRECTORY_ENTRIES: readonly VendorDirectoryEntry[] = withoutAnthropicPublished(
+const CLAUDE_ENDPOINT = /claude|anthropic/iu;
+
+function namesClaudeEndpoint(url: string): boolean {
+  return CLAUDE_ENDPOINT.test(url);
+}
+
+export function withoutClaudeEndpoints(
+  entries: readonly VendorDirectoryEntry[],
+): VendorDirectoryEntry[] {
+  return entries.map((entry) =>
+    entry.mcpUrl && namesClaudeEndpoint(entry.mcpUrl)
+      ? { ...entry, mcpUrl: null, transport: null }
+      : entry,
+  );
+}
+
+function withoutClaudeRemotes(record: DirectoryRecord): DirectoryRecord {
+  const remotes = record.remotes.filter((remote) => !namesClaudeEndpoint(remote.url));
+  return remotes.length === record.remotes.length ? record : { ...record, remotes };
+}
+
+function publishableEntries(entries: readonly VendorDirectoryEntry[]): VendorDirectoryEntry[] {
+  return withoutClaudeEndpoints(withoutAnthropicPublished(entries));
+}
+
+export const VENDOR_DIRECTORY_ENTRIES: readonly VendorDirectoryEntry[] = publishableEntries(
   vendorDirectoryJson as VendorDirectoryEntry[],
 );
 
@@ -335,7 +360,7 @@ export function planVendorDirectory(
   const created: DirectoryRecord[] = [];
   const withoutEndpoint: VendorDirectoryEntry[] = [];
   const skipped: VendorDirectoryEntry[] = [];
-  for (const entry of withoutAnthropicPublished(entries)) {
+  for (const entry of publishableEntries(entries)) {
     const match = findMatch(entry, index, claimed);
     if (match) {
       claimed.add(match.record.id);
@@ -361,7 +386,7 @@ export function applyVendorDirectory(
   const plan = planVendorDirectory(records, entries);
   const byId = new Map(records.map((record) => [record.id, record]));
   for (const match of plan.matches) {
-    byId.set(match.record.id, enrichWithVendor(match.record, match.entry));
+    byId.set(match.record.id, withoutClaudeRemotes(enrichWithVendor(match.record, match.entry)));
   }
   for (const record of plan.created) {
     if (!byId.has(record.id)) byId.set(record.id, record);

@@ -945,8 +945,8 @@
     "name": "Brevo",
     "summary": "Analyze campaigns, know your audience and create drafts.",
     "description": "Connect Brevo to the assistant to analyze email campaign performance and A/B test results, look up contacts, and explore audience segments in plain language, all without leaving your conversation. the assistant can also generate HTML email templates, draft email campaigns, and draft SMS campaigns, saved directly to your Brevo account for you to review before sending. the assistant will never send or schedule email campaigns, and will never delete anything on your behalf. Available on all Brevo plans.You can use Brevo to:Analyse Campaign Performance: \"How did my last 5 email campaigns perform?",
-    "mcpUrl": "https://mcp.brevo.com/v1/anthropic/mcp",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "Brevo",
       "url": "https://www.brevo.com/"
@@ -2045,8 +2045,8 @@
     "name": "Descript",
     "summary": "Import, edit, or create video with prompts.",
     "description": "Descript is a video editor you can direct through conversation. Describe what you want, clean up a podcast episode, pull highlight clips from an interview or translate a video into Spanish. Descript handles the end-to-end production: transcribing, removing filler words, cleaning up background noise, adding captions, adding visuals and more.You can use Descript to:Edit by transcript: \"Remove every 'um' and 'uh' from this episode\"Pull highlights: \"Find the 3 best clips from my interview for social\"Generate audio: \"Create an Overdub voiceover for this intro paragraph\"",
-    "mcpUrl": "https://api.descript.com/v2/mcp/claude",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "Descript",
       "url": "https://descript.com/"
@@ -2185,8 +2185,8 @@
     "name": "DirectBooker",
     "summary": "Compare hotels, then book direct.",
     "description": "Direct is best, for better rates and better service. DirectBooker helps you discover and compare hotels at your destination: the right neighborhood, the right vibe, the amenities you need. See real-time rates, access member prices and special packages only available when you book direct, then go straight to the hotel's official site to reserve.",
-    "mcpUrl": "https://www.directbooker.ai/claude",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "DirectBooker, Inc",
       "url": "https://www.directbooker.ai/"
@@ -2325,8 +2325,8 @@
     "name": "Dropbox",
     "summary": "Search, organize, and take action on your Dropbox content.",
     "description": "The Dropbox connector for the assistant connects your Dropbox files directly to the assistant, so you can search, organize, save generated content, and create sharing links without switching tools. It respects your existing Dropbox permissions, and the assistant only works with files you already have access to.You can use Dropbox to:Find files: \"Search my Dropbox for the Q3 budget spreadsheet\"Save generated content: \"Save this summary as a new file in my Dropbox /Projects folder\"Share with a link: \"Create a shared link for /Marketing/brand-guidelines.pdf\"Organize: \"Move everything in…",
-    "mcpUrl": "https://mcp.dropbox.com/claude_app_mcp",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "Dropbox",
       "url": "https://www.dropbox.com/"
@@ -3065,8 +3065,8 @@
     "name": "Goodnotes",
     "summary": "Turn AI insights into documents.",
     "description": "Goodnotes instantly converts AI conversations into editable Goodnotes files. Create custom vector graphics and illustrations from SVG code for freeform drawings, icons, logos, and artistic designs. Generate structured diagrams from Mermaid syntax including flowcharts, mindmaps, and timelines. Render markdown content as beautifully formatted rich text documents.",
-    "mcpUrl": "https://claude-mcp-api.ml.goodnotes.com/mcp",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "Goodnotes",
       "url": "https://goodnotes.com/"
@@ -4025,8 +4025,8 @@
     "name": "Kpler",
     "summary": "Explore Kpler's maritime and commodities intelligence.",
     "description": "The Kpler MCP connector gives the assistant read-only access to Kpler's maritime and commodities intelligence, analyst-verified trade flows, AIS vessel tracking, port calls, refinery operations, freight markets, compliance risk, and supply/demand balances. Ask questions in plain English instead of writing API calls or SQL. Built for the analysts, traders, compliance officers, and operators who already use Kpler day-to-day.",
-    "mcpUrl": "https://claude.mcp.kpler.com/v1/mcp/",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "Kpler",
       "url": "https://www.kpler.com/"
@@ -4445,8 +4445,8 @@
     "name": "Lusha",
     "summary": "Find and enrich B2B contacts and companies.",
     "description": "Connect Lusha to the assistant to access verified B2B contact and company data without leaving your chat. Lusha is a sales intelligence platform with 300M+ verified contacts, direct emails, phone numbers, and mobile numbers, plus actionable buyer signals used across sales, marketing, and RevOps workflows. Backed by GDPR, CCPA, SOC 2 Type II, and ISO 27701 compliance.",
-    "mcpUrl": "https://mcp.lusha.com/mcp/claude",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "Lusha",
       "url": "https://lusha.com/"
@@ -4525,8 +4525,8 @@
     "name": "Malwarebytes",
     "summary": "Check links, phones, and emails for scams.",
     "description": "Verify links, emails, phone numbers, and domains against Malwarebytes threat intelligence directly from the assistant. Get instant scam verdicts, domain ownership details, and risk levels for unknown callers, shortened URLs, and suspicious messages before you click, call, or reply. Report suspicious indicators back to Malwarebytes to help protect others.You can use Malwarebytes to:Ask a question: \"What can you help me do with Malwarebytes?\"Explore your data: \"Summarize the most recent activity in Malwarebytes.\"",
-    "mcpUrl": "https://scamguard.malwarebytes.com/claude/mcp",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "Malwarebytes",
       "url": "https://malwarebytes.com/"
@@ -5825,8 +5825,8 @@
     "name": "Ramp Data",
     "summary": "Search and analyze Ramp spend across 50,000+ businesses.",
     "description": "Ramp Data MCP enables the assistant users to access Ramp Data from billions of dollars in real corporate spend across 50,000+ businesses, including Ramp Rate (vendor adoption, pricing, and switching trends) and the AI Index (how businesses are spending on AI). Ramp Data is used by founders, procurement leads, researchers, investors, and policy analysts and is cited by leading publications like NYT, WSJ, Bloomberg, and more.You can use Ramp Data to:Explore category and vendor landscapes: \"List all Ramp Rate software categories, then give me the adoption summary and top 10 vendors for…",
-    "mcpUrl": "https://mcp.ramp.com/ramp-data/anthropic/mcp",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "Ramp",
       "url": "https://ramp.com/"
@@ -5905,8 +5905,8 @@
     "name": "Replit",
     "summary": "Turn ideas into apps and websites instantly.",
     "description": "Replit's MCP server lets users create, update, and manage full-stack web and mobile applications directly from the assistant using natural language. Powered by Replit Agent, it transforms prompts into live, deployed apps, complete with databases, authentication, and custom domains. Users can iterate on their apps conversationally, ask the Agent questions about their project, and access a live preview URL as the app builds. No coding experience required.",
-    "mcpUrl": "https://replit-mcp.com/anthropic/mcp",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "Replit",
       "url": "https://replit.com/"
@@ -6145,8 +6145,8 @@
     "name": "Semrush",
     "summary": "SEO, competitor research, and traffic analysis.",
     "description": "Semrush data helps you plan and improve SEO, uncover competitor strategies, find keyword opportunities, research backlinks, audit websites, and reveal paid tactics.Use Semrush in the assistant:Find keyword opportunities: \"Find keyword opportunities for [your topic] with search volume over 1,000 and low difficulty. Group them by intent.\"Surface competitor gaps: \"Find keywords where [competitor] ranks in the top 5 but we do not appear at all.",
-    "mcpUrl": "https://mcp.semrush.com/claude/v1/mcp",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "Semrush Holdings, Inc.",
       "url": "https://www.semrush.com/"
@@ -6365,8 +6365,8 @@
     "name": "Agentic Presentations by SlidesGPT",
     "summary": "Make presentations and slides, export to PowerPoint.",
     "description": "Use SlidesGPT to generate presentations with AI. First, name a topic that the presentation should be about. SlidesGPT will generate your presentation slides. Finally you can export to PowerPoint. Available features include: generate a structure and outline for a presentation, choose layouts and themes, refine slide content in a chat-based conversation, export and download as PowerPoint, Google Slides, PDF, and more.You can use Agentic Presentations by SlidesGPT to:Generate a deck: \"Create a 10-slide presentation on Q3 product roadmap highlights\"Apply branding: \"Apply our corporate theme to…",
-    "mcpUrl": "https://claude.slidesgpt.com/mcp",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "Lightstone GmbH",
       "url": "https://slidesgpt.com/"
@@ -7125,8 +7125,8 @@
     "name": "Trellis",
     "summary": "The assistant for Trial Court Litigators.",
     "description": "Trellis, the assistant for Trial Court Litigators gives the assistant direct access to the largest state trial court dataset in the U.S., including dockets, rulings, verdicts, and filings, enabling legal research, judge and opposing counsel analytics, expert witness vetting, and motion drafting grounded in real precedent.",
-    "mcpUrl": "https://mcp.trellis.law/anthropic",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "Trellis",
       "url": "https://trellis.law/"
@@ -7265,8 +7265,8 @@
     "name": "Uber",
     "summary": "Get Uber price & time estimates for any ride option.",
     "description": "Get accurate, real-time Uber fare estimates between any two locations in the United States. This tool instantly shows you available ride options, such as UberX, UberXL, Comfort, and Black, along with pricing, estimated arrival times, and product details. What You Can Do - Check up-to-the-minute fare estimates for on-demand (immediate) trips - Compare ride options across Uber products - View ETA, pricing ranges, and key product features - Jump directly into booking your trip in the Uber app, all ride requests are handed off to the official Uber app to be completed securely - Request estimates…",
-    "mcpUrl": "https://mcp.uber.com/claude/rides-3p/mcp",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "Uber",
       "url": "https://www.uber.com/"
@@ -7285,8 +7285,8 @@
     "name": "Uber Eats",
     "summary": "Explore restaurants and dishes.",
     "description": "Get food delivery to your doorstep from thousands of amazing local and national restaurants. Search and browse restaurants and dishes near you to find the meal you crave.You can use Uber Eats to:Find dinner: \"What sushi places near me are open and deliver in under 30 minutes?\"Discover dishes: \"Find the highest-rated birria tacos available for delivery right now\"Browse by craving: \"Show me healthy lunch bowls under $15 nearby\"",
-    "mcpUrl": "https://mcp.ubereats.com/eats-claude/mcp",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "Uber",
       "url": "https://www.ubereats.com/"
@@ -7725,8 +7725,8 @@
     "name": "Wyndham Hotels and Resorts",
     "summary": "Discover the right Wyndham Hotel for you, faster.",
     "description": "Finding the right place to stay shouldn't be complicated. With the assistant, you can explore and compare Wyndham Hotels & Resorts just by asking. Search hotels by city and travel dates, narrow options by amenities like pools or pet-friendly, and get quick, easy answers to your questions. Whether you're planning a weekend getaway, a family vacation, or a work trip, find the right Wyndham hotel for you faster using natural language and personalized results.You can use Wyndham Hotels and Resorts to:Find Hotels by Location: \"Find Wyndham hotels in Orlando for next weekend\"Search by Amenities:…",
-    "mcpUrl": "https://mcp.wyndhamhotels.com/claude/mcp",
-    "transport": "streamable-http",
+    "mcpUrl": null,
+    "transport": null,
     "publisher": {
       "name": "Wyndham Hotels and Resorts",
       "url": "https://www.wyndhamhotels.com/"
