@@ -1,9 +1,9 @@
 {
   "_description": "Data-fetching routes that render no loading, empty or error state. Measured at a committed revision, never against a dirty tree. These counts only shrink: a new route must ship all three states, and closing an old gap lowers the ceiling for everyone after you.",
-  "_measuredAt": "4b80b100a0",
+  "_measuredAt": "6b195380d0",
   "maxMissing": {
-    "loading": 24,
+    "loading": 22,
     "empty": 11,
-    "error": 5
+    "error": 4
   }
 }
