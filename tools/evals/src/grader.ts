@@ -183,7 +183,7 @@ export function gradeCheck(check: Check, response: ModelResponse): CheckResult {
       );
     }
     case 'matches': {
-      const matched = new RegExp(check.pattern, 'i').test(text);
+      const matched = new RegExp(check.pattern, 'i').test(foldApostrophes(text));
       return result(
         check,
         matched,

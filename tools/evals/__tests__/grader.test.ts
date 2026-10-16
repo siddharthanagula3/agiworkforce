@@ -108,6 +108,15 @@ describe('gradeCheck', () => {
     );
   });
 
+  it('reads a typographic apostrophe as a straight one in a matches check', () => {
+    expect(
+      gradeCheck(
+        { kind: 'matches', pattern: "(don'?t|do not)\\s+have" },
+        { text: 'I don\u2019t have that memo.' },
+      ).passed,
+    ).toBe(true);
+  });
+
   it('grades matches case-insensitively', () => {
     expect(
       gradeCheck({ kind: 'matches', pattern: '^\\W*negative\\b' }, { text: 'Negative.' }).passed,
