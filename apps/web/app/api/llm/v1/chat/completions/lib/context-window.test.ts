@@ -301,4 +301,10 @@ describe('fitsModelContextWindow', () => {
   it('has no evidence against a model whose window is unknown', () => {
     expect(fitsModelContextWindow(longConversation, 'unknown-model', 100)).toBe(true);
   });
+
+  it('still decides from the conversation when the reply allowance is missing', () => {
+    const short: TrimmableMessage[] = [{ role: 'user', content: 'hi' }];
+    expect(fitsModelContextWindow(short, TEST_MODEL, Number.NaN)).toBe(true);
+    expect(fitsModelContextWindow(longConversation, TEST_MODEL, Number.NaN)).toBe(false);
+  });
 });

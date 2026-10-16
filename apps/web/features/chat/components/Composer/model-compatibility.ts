@@ -44,9 +44,10 @@ export function estimateConversationTokens(
  * trim have to agree, so both read this.
  */
 export function contextBudgetTokens(contextWindow: number, maxOutputTokens: number): number {
+  const replyAllowance = Number.isFinite(maxOutputTokens) ? Math.max(0, maxOutputTokens) : 0;
   return Math.max(
     MIN_CONTEXT_BUDGET_TOKENS,
-    contextWindow - Math.max(0, maxOutputTokens) - CONTEXT_RESERVE_TOKENS,
+    contextWindow - replyAllowance - CONTEXT_RESERVE_TOKENS,
   );
 }
 

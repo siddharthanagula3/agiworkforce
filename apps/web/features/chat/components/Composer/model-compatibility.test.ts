@@ -40,6 +40,13 @@ describe('contextBudgetTokens', () => {
   it('ignores a negative reply allowance rather than crediting it', () => {
     expect(contextBudgetTokens(50_000, -10_000)).toBe(50_000 - CONTEXT_RESERVE_TOKENS);
   });
+
+  it('reads a missing reply allowance as none instead of returning no budget at all', () => {
+    expect(contextBudgetTokens(50_000, Number.NaN)).toBe(50_000 - CONTEXT_RESERVE_TOKENS);
+    expect(contextBudgetTokens(50_000, undefined as unknown as number)).toBe(
+      50_000 - CONTEXT_RESERVE_TOKENS,
+    );
+  });
 });
 
 describe('estimateConversationTokens', () => {
