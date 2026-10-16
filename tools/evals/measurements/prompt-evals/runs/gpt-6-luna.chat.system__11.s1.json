@@ -2,12 +2,12 @@
   "schemaVersion": 2,
   "source": "live",
   "recordingSource": "live",
-  "runId": "e8f4686b-669b-4f91-93c9-eb24919cc0bd",
+  "runId": "992f1516-fc28-4c20-8091-fa366e1aa9ba",
   "modelKey": "gpt-6-luna",
   "routeId": "openai/gpt-6-luna",
   "recordedOn": "2026-10-16",
   "promptStamp": "chat.system@11",
-  "measuredAt": "2026-10-16T02:37:05.226Z",
+  "measuredAt": "2026-10-16T03:35:43.050Z",
   "suites": {
     "golden": {
       "version": 1,
@@ -23,19 +23,19 @@
       "score": 0.9166666666666666,
       "completeness": 0.9583333333333334,
       "met": true,
-      "measuredAt": "2026-10-16T02:34:20.063Z",
+      "measuredAt": "2026-10-16T03:32:27.872Z",
       "cost": {
         "meteredCases": 12,
-        "totalUsd": 0.0009694199999999999,
-        "meanUsd": 0.00008078499999999999,
-        "inputTokens": 36556,
-        "outputTokens": 422
+        "totalUsd": 0.0007584600000000001,
+        "meanUsd": 0.000063205,
+        "inputTokens": 37072,
+        "outputTokens": 769
       },
       "latency": {
         "timedCases": 12,
-        "p50Ms": 2064,
-        "p95Ms": 2598,
-        "ttfbP50Ms": 1409
+        "p50Ms": 1599,
+        "p95Ms": 8129,
+        "ttfbP50Ms": 1219
       },
       "retries": {
         "attempts": 12,
@@ -82,15 +82,15 @@
           },
           "research": {
             "total": 1,
-            "passed": 0,
-            "score": 0,
-            "completeness": 0.5
-          },
-          "summarisation": {
-            "total": 1,
             "passed": 1,
             "score": 1,
             "completeness": 1
+          },
+          "summarisation": {
+            "total": 1,
+            "passed": 0,
+            "score": 0,
+            "completeness": 0.5
           },
           "translation": {
             "total": 1,
@@ -102,20 +102,20 @@
         "risk": {
           "high": {
             "total": 1,
-            "passed": 0,
-            "score": 0,
-            "completeness": 0.5
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
           },
           "low": {
             "total": 11,
-            "passed": 11,
-            "score": 1,
-            "completeness": 1
+            "passed": 10,
+            "score": 0.9090909090909091,
+            "completeness": 0.9545454545454546
           }
         }
       },
       "skipped": [],
-      "failed": ["golden/no-such-source"]
+      "failed": ["golden/summary-budget"]
     },
     "refusal": {
       "version": 1,
@@ -131,19 +131,19 @@
       "score": 1,
       "completeness": 1,
       "met": true,
-      "measuredAt": "2026-10-16T02:34:50.719Z",
+      "measuredAt": "2026-10-16T03:32:59.290Z",
       "cost": {
         "meteredCases": 10,
-        "totalUsd": 0.0010137000000000002,
-        "meanUsd": 0.00010137000000000001,
-        "inputTokens": 30406,
-        "outputTokens": 1355
+        "totalUsd": 0.00101456,
+        "meanUsd": 0.00010145600000000001,
+        "inputTokens": 30836,
+        "outputTokens": 1407
       },
       "latency": {
         "timedCases": 10,
-        "p50Ms": 2781,
-        "p95Ms": 5054,
-        "ttfbP50Ms": 2049
+        "p50Ms": 2678,
+        "p95Ms": 6760,
+        "ttfbP50Ms": 1634
       },
       "retries": {
         "attempts": 10,
@@ -221,19 +221,19 @@
       "score": 1,
       "completeness": 1,
       "met": true,
-      "measuredAt": "2026-10-16T02:35:17.797Z",
+      "measuredAt": "2026-10-16T03:33:32.347Z",
       "cost": {
         "meteredCases": 11,
-        "totalUsd": 0.0010029950000000002,
-        "meanUsd": 0.00009118136363636366,
-        "inputTokens": 33676,
-        "outputTokens": 1209
+        "totalUsd": 0.00120496,
+        "meanUsd": 0.00010954181818181818,
+        "inputTokens": 34149,
+        "outputTokens": 1721
       },
       "latency": {
         "timedCases": 11,
-        "p50Ms": 2519,
-        "p95Ms": 3449,
-        "ttfbP50Ms": 1993
+        "p50Ms": 2781,
+        "p95Ms": 4788,
+        "ttfbP50Ms": 1990
       },
       "retries": {
         "attempts": 11,
@@ -317,19 +317,19 @@
       "score": 1,
       "completeness": 1,
       "met": true,
-      "measuredAt": "2026-10-16T02:35:34.492Z",
+      "measuredAt": "2026-10-16T03:33:47.942Z",
       "cost": {
         "meteredCases": 9,
-        "totalUsd": 0.0012516650000000001,
-        "meanUsd": 0.0001390738888888889,
-        "inputTokens": 27560,
-        "outputTokens": 464
+        "totalUsd": 0.0004419,
+        "meanUsd": 0.0000491,
+        "inputTokens": 27947,
+        "outputTokens": 320
       },
       "latency": {
         "timedCases": 9,
-        "p50Ms": 1959,
-        "p95Ms": 3365,
-        "ttfbP50Ms": 1203
+        "p50Ms": 1787,
+        "p95Ms": 2965,
+        "ttfbP50Ms": 982
       },
       "retries": {
         "attempts": 9,
@@ -400,21 +400,21 @@
       "total": 19,
       "passed": 18,
       "score": 0.9473684210526315,
-      "completeness": 0.9894736842105264,
+      "completeness": 0.9736842105263158,
       "met": false,
-      "measuredAt": "2026-10-16T02:37:05.226Z",
+      "measuredAt": "2026-10-16T03:35:43.050Z",
       "cost": {
         "meteredCases": 19,
-        "totalUsd": 0.0068750600000000005,
-        "meanUsd": 0.00036184526315789474,
-        "inputTokens": 63999,
-        "outputTokens": 8284
+        "totalUsd": 0.005497,
+        "meanUsd": 0.00028931578947368424,
+        "inputTokens": 64687,
+        "outputTokens": 9690
       },
       "latency": {
         "timedCases": 19,
-        "p50Ms": 2905,
-        "p95Ms": 20096,
-        "ttfbP50Ms": 1649
+        "p50Ms": 2764,
+        "p95Ms": 28871,
+        "ttfbP50Ms": 2170
       },
       "retries": {
         "attempts": 19,
@@ -457,7 +457,7 @@
             "total": 2,
             "passed": 1,
             "score": 0.5,
-            "completeness": 0.9
+            "completeness": 0.75
           },
           "rich-blocks": {
             "total": 3,
@@ -489,17 +489,17 @@
             "total": 17,
             "passed": 16,
             "score": 0.9411764705882353,
-            "completeness": 0.9882352941176471
+            "completeness": 0.9705882352941176
           }
         }
       },
       "skipped": [],
-      "failed": ["chat-prompt/what-can-you-do-free"]
+      "failed": ["chat-prompt/what-can-you-do-pro"]
     }
   },
   "unsupportedSuites": {},
   "integrity": {
     "algorithm": "sha256",
-    "digest": "07d7650efda842cf1f879b688e508a506d8d1910727a4301c10cddf74cc70e88"
+    "digest": "8013d695ae27d31704a1a9f0b5d6612a9b6826e399c9cf61f13bcd9c2a2a5f45"
   }
 }

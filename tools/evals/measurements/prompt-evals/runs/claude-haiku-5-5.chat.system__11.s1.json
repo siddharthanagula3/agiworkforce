@@ -2,12 +2,12 @@
   "schemaVersion": 2,
   "source": "live",
   "recordingSource": "live",
-  "runId": "ee2499cd-9f31-44e8-8c78-bb179f4e5dec",
+  "runId": "5a06209a-b0df-42f1-9fcd-731870482e29",
   "modelKey": "claude-haiku-5-5",
   "routeId": "anthropic/claude-haiku-5-5",
   "recordedOn": "2026-10-16",
   "promptStamp": "chat.system@11",
-  "measuredAt": "2026-10-16T02:33:57.342Z",
+  "measuredAt": "2026-10-16T03:32:00.627Z",
   "suites": {
     "golden": {
       "version": 1,
@@ -23,19 +23,19 @@
       "score": 0.9166666666666666,
       "completeness": 0.9583333333333334,
       "met": true,
-      "measuredAt": "2026-10-16T02:32:08.519Z",
+      "measuredAt": "2026-10-16T03:30:11.221Z",
       "cost": {
         "meteredCases": 12,
-        "totalUsd": 0.005272400000000001,
-        "meanUsd": 0.00043936666666666676,
-        "inputTokens": 50699,
-        "outputTokens": 405
+        "totalUsd": 0.0053531,
+        "meanUsd": 0.0004460916666666667,
+        "inputTokens": 51431,
+        "outputTokens": 420
       },
       "latency": {
         "timedCases": 12,
-        "p50Ms": 724,
-        "p95Ms": 1194,
-        "ttfbP50Ms": 668
+        "p50Ms": 756,
+        "p95Ms": 1262,
+        "ttfbP50Ms": 588
       },
       "retries": {
         "attempts": 12,
@@ -131,19 +131,19 @@
       "score": 1,
       "completeness": 1,
       "met": true,
-      "measuredAt": "2026-10-16T02:32:28.269Z",
+      "measuredAt": "2026-10-16T03:30:30.649Z",
       "cost": {
         "meteredCases": 10,
-        "totalUsd": 0.0053734,
-        "meanUsd": 0.0005373400000000001,
-        "inputTokens": 42179,
-        "outputTokens": 2311
+        "totalUsd": 0.005338900000000001,
+        "meanUsd": 0.0005338900000000001,
+        "inputTokens": 42789,
+        "outputTokens": 2120
       },
       "latency": {
         "timedCases": 10,
-        "p50Ms": 2022,
-        "p95Ms": 3067,
-        "ttfbP50Ms": 639
+        "p50Ms": 1964,
+        "p95Ms": 3698,
+        "ttfbP50Ms": 604
       },
       "retries": {
         "attempts": 10,
@@ -221,19 +221,19 @@
       "score": 1,
       "completeness": 1,
       "met": true,
-      "measuredAt": "2026-10-16T02:32:48.697Z",
+      "measuredAt": "2026-10-16T03:30:50.954Z",
       "cost": {
         "meteredCases": 11,
-        "totalUsd": 0.0059166999999999996,
-        "meanUsd": 0.0005378818181818181,
-        "inputTokens": 46837,
-        "outputTokens": 2466
+        "totalUsd": 0.0059903000000000005,
+        "meanUsd": 0.0005445727272727273,
+        "inputTokens": 47463,
+        "outputTokens": 2488
       },
       "latency": {
         "timedCases": 11,
-        "p50Ms": 1788,
-        "p95Ms": 3334,
-        "ttfbP50Ms": 681
+        "p50Ms": 1814,
+        "p95Ms": 3174,
+        "ttfbP50Ms": 1238
       },
       "retries": {
         "attempts": 11,
@@ -317,19 +317,19 @@
       "score": 0.7777777777777778,
       "completeness": 0.9074074074074076,
       "met": false,
-      "measuredAt": "2026-10-16T02:32:58.100Z",
+      "measuredAt": "2026-10-16T03:31:02.055Z",
       "cost": {
         "meteredCases": 9,
-        "totalUsd": 0.0042561000000000005,
-        "meanUsd": 0.00047290000000000006,
-        "inputTokens": 38191,
-        "outputTokens": 874
+        "totalUsd": 0.004448500000000001,
+        "meanUsd": 0.0004942777777777779,
+        "inputTokens": 38740,
+        "outputTokens": 1149
       },
       "latency": {
         "timedCases": 9,
-        "p50Ms": 739,
-        "p95Ms": 2543,
-        "ttfbP50Ms": 644
+        "p50Ms": 839,
+        "p95Ms": 3636,
+        "ttfbP50Ms": 674
       },
       "retries": {
         "attempts": 9,
@@ -402,19 +402,19 @@
       "score": 1,
       "completeness": 1,
       "met": true,
-      "measuredAt": "2026-10-16T02:33:57.341Z",
+      "measuredAt": "2026-10-16T03:32:00.627Z",
       "cost": {
         "meteredCases": 19,
-        "totalUsd": 0.0150918,
-        "meanUsd": 0.0007943052631578948,
-        "inputTokens": 93508,
-        "outputTokens": 11482
+        "totalUsd": 0.015002399999999999,
+        "meanUsd": 0.0007896,
+        "inputTokens": 94484,
+        "outputTokens": 11108
       },
       "latency": {
         "timedCases": 19,
-        "p50Ms": 2407,
-        "p95Ms": 8632,
-        "ttfbP50Ms": 1354
+        "p50Ms": 2675,
+        "p95Ms": 9479,
+        "ttfbP50Ms": 1594
       },
       "retries": {
         "attempts": 19,
@@ -500,6 +500,6 @@
   "unsupportedSuites": {},
   "integrity": {
     "algorithm": "sha256",
-    "digest": "3cc27520b7805c6496a28b5f9208c6ae98158c1cc458089b3627bebf69732446"
+    "digest": "fef0c4168fbdf99146f4b103daf548e1ad5b14c395cf2dfc080ce1c0279c7b26"
   }
 }

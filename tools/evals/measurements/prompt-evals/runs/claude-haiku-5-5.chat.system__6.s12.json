@@ -2,13 +2,205 @@
   "schemaVersion": 2,
   "source": "live",
   "recordingSource": "live",
-  "runId": "125b04c1-6948-47f0-bdb5-1bec4710fbce",
+  "runId": "58a1e8ae-5fde-4bac-bc5c-d490523da4bb",
   "modelKey": "claude-haiku-5-5",
   "routeId": "anthropic/claude-haiku-5-5",
   "recordedOn": "2026-10-16",
   "promptStamp": "chat.system@6",
-  "measuredAt": "2026-10-16T02:50:24.694Z",
+  "measuredAt": "2026-10-16T03:50:09.119Z",
   "suites": {
+    "golden": {
+      "version": 1,
+      "priority": "P0",
+      "provenance": {
+        "kind": "authored",
+        "source": "hand-written in this repository as the cross-capability smoke corpus every model must hold",
+        "authoredOn": "2026-08-09"
+      },
+      "threshold": 0.9,
+      "total": 12,
+      "passed": 11,
+      "score": 0.9166666666666666,
+      "completeness": 0.9583333333333334,
+      "met": true,
+      "measuredAt": "2026-10-16T03:49:02.587Z",
+      "cost": {
+        "meteredCases": 12,
+        "totalUsd": 0.0024375000000000004,
+        "meanUsd": 0.00020312500000000004,
+        "inputTokens": 20915,
+        "outputTokens": 692
+      },
+      "latency": {
+        "timedCases": 12,
+        "p50Ms": 767,
+        "p95Ms": 1887,
+        "ttfbP50Ms": 616
+      },
+      "retries": {
+        "attempts": 12,
+        "retried": 0,
+        "retryCostUsd": null
+      },
+      "slices": {
+        "family": {
+          "agentic": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "classification": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "coding": {
+            "total": 2,
+            "passed": 2,
+            "score": 1,
+            "completeness": 1
+          },
+          "extraction": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "instruction_following": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "reasoning": {
+            "total": 3,
+            "passed": 3,
+            "score": 1,
+            "completeness": 1
+          },
+          "research": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "summarisation": {
+            "total": 1,
+            "passed": 0,
+            "score": 0,
+            "completeness": 0.5
+          },
+          "translation": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          }
+        },
+        "risk": {
+          "high": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "low": {
+            "total": 11,
+            "passed": 10,
+            "score": 0.9090909090909091,
+            "completeness": 0.9545454545454546
+          }
+        }
+      },
+      "skipped": [],
+      "failed": ["golden/summary-budget"]
+    },
+    "chat": {
+      "version": 2,
+      "priority": "P1",
+      "provenance": {
+        "kind": "authored",
+        "source": "hand-written in this repository from the conversational behaviours the chat surface promises, plus factual and citation rows over synthetic sources supplied with the row",
+        "authoredOn": "2026-09-18"
+      },
+      "threshold": 1,
+      "total": 9,
+      "passed": 7,
+      "score": 0.7777777777777778,
+      "completeness": 0.9074074074074076,
+      "met": false,
+      "measuredAt": "2026-10-16T03:49:13.696Z",
+      "cost": {
+        "meteredCases": 9,
+        "totalUsd": 0.0019403,
+        "meanUsd": 0.00021558888888888888,
+        "inputTokens": 15853,
+        "outputTokens": 710
+      },
+      "latency": {
+        "timedCases": 9,
+        "p50Ms": 832,
+        "p95Ms": 3655,
+        "ttfbP50Ms": 622
+      },
+      "retries": {
+        "attempts": 9,
+        "retried": 0,
+        "retryCostUsd": null
+      },
+      "slices": {
+        "family": {
+          "citations": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "clarification": {
+            "total": 1,
+            "passed": 0,
+            "score": 0,
+            "completeness": 0.5
+          },
+          "factual": {
+            "total": 2,
+            "passed": 1,
+            "score": 0.5,
+            "completeness": 0.8333333333333333
+          },
+          "instruction-following": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "memory": {
+            "total": 3,
+            "passed": 3,
+            "score": 1,
+            "completeness": 1
+          },
+          "system-adherence": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          }
+        },
+        "risk": {
+          "low": {
+            "total": 9,
+            "passed": 7,
+            "score": 0.7777777777777778,
+            "completeness": 0.9074074074074076
+          }
+        }
+      },
+      "skipped": [],
+      "failed": ["chat/ask-when-ambiguous", "chat/says-it-does-not-know"]
+    },
     "chat-prompt": {
       "version": 4,
       "priority": "P1",
@@ -20,23 +212,23 @@
       },
       "threshold": 1,
       "total": 19,
-      "passed": 13,
-      "score": 0.6842105263157895,
-      "completeness": 0.8535087719298247,
+      "passed": 12,
+      "score": 0.631578947368421,
+      "completeness": 0.8359649122807017,
       "met": false,
-      "measuredAt": "2026-10-16T02:50:24.691Z",
+      "measuredAt": "2026-10-16T03:50:09.119Z",
       "cost": {
         "meteredCases": 19,
-        "totalUsd": 0.0099871,
-        "meanUsd": 0.0005256368421052631,
+        "totalUsd": 0.0095161,
+        "meanUsd": 0.0005008473684210526,
         "inputTokens": 46326,
-        "outputTokens": 10709
+        "outputTokens": 9767
       },
       "latency": {
         "timedCases": 19,
-        "p50Ms": 2146,
-        "p95Ms": 9274,
-        "ttfbP50Ms": 1404
+        "p50Ms": 2426,
+        "p95Ms": 8202,
+        "ttfbP50Ms": 1314
       },
       "retries": {
         "attempts": 19,
@@ -89,9 +281,9 @@
           },
           "sources": {
             "total": 2,
-            "passed": 2,
-            "score": 1,
-            "completeness": 1
+            "passed": 1,
+            "score": 0.5,
+            "completeness": 0.8333333333333333
           },
           "untrusted-content": {
             "total": 1,
@@ -109,9 +301,9 @@
           },
           "low": {
             "total": 17,
-            "passed": 11,
-            "score": 0.6470588235294118,
-            "completeness": 0.8362745098039216
+            "passed": 10,
+            "score": 0.5882352941176471,
+            "completeness": 0.8166666666666667
           }
         }
       },
@@ -122,13 +314,14 @@
         "chat-prompt/what-can-you-do-free",
         "chat-prompt/what-can-you-do-pro",
         "chat-prompt/recruiter-follow-up-email",
-        "chat-prompt/linkedin-bio-writing-block"
+        "chat-prompt/linkedin-bio-writing-block",
+        "chat-prompt/memory-source-named"
       ]
     }
   },
   "unsupportedSuites": {},
   "integrity": {
     "algorithm": "sha256",
-    "digest": "8e61ba7c5e9fe7cc6bd30a8520f165b4edf42b8d57220692529787a42c24078b"
+    "digest": "1045a650386eef3cc82a8871275b5ebe529b6246276b804e73dec9a62deb2783"
   }
 }

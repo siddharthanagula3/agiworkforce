@@ -2,12 +2,12 @@
   "schemaVersion": 2,
   "source": "live",
   "recordingSource": "live",
-  "runId": "97081402-b91b-47bd-a40b-7a6748b5982a",
+  "runId": "6368d5e4-706c-4abd-a917-aca5c692f23c",
   "modelKey": "claude-haiku-5-5",
   "routeId": "anthropic/claude-haiku-5-5",
   "recordedOn": "2026-10-16",
   "promptStamp": "chat.system@11",
-  "measuredAt": "2026-10-16T02:44:12.704Z",
+  "measuredAt": "2026-10-16T03:43:27.558Z",
   "suites": {
     "golden": {
       "version": 1,
@@ -23,19 +23,19 @@
       "score": 0.9166666666666666,
       "completeness": 0.9583333333333334,
       "met": true,
-      "measuredAt": "2026-10-16T02:42:22.217Z",
+      "measuredAt": "2026-10-16T03:41:18.007Z",
       "cost": {
         "meteredCases": 12,
-        "totalUsd": 0.005317400000000002,
-        "meanUsd": 0.0004431166666666668,
-        "inputTokens": 50699,
-        "outputTokens": 495
+        "totalUsd": 0.0053366,
+        "meanUsd": 0.0004447166666666667,
+        "inputTokens": 51431,
+        "outputTokens": 387
       },
       "latency": {
         "timedCases": 12,
-        "p50Ms": 746,
-        "p95Ms": 1489,
-        "ttfbP50Ms": 676
+        "p50Ms": 803,
+        "p95Ms": 3254,
+        "ttfbP50Ms": 689
       },
       "retries": {
         "attempts": 12,
@@ -131,19 +131,19 @@
       "score": 1,
       "completeness": 1,
       "met": true,
-      "measuredAt": "2026-10-16T02:42:43.841Z",
+      "measuredAt": "2026-10-16T03:41:41.098Z",
       "cost": {
         "meteredCases": 10,
-        "totalUsd": 0.0055109,
-        "meanUsd": 0.00055109,
-        "inputTokens": 42179,
-        "outputTokens": 2586
+        "totalUsd": 0.0054039,
+        "meanUsd": 0.00054039,
+        "inputTokens": 42834,
+        "outputTokens": 2241
       },
       "latency": {
         "timedCases": 10,
-        "p50Ms": 2329,
-        "p95Ms": 2864,
-        "ttfbP50Ms": 1413
+        "p50Ms": 1984,
+        "p95Ms": 6229,
+        "ttfbP50Ms": 586
       },
       "retries": {
         "attempts": 10,
@@ -221,19 +221,19 @@
       "score": 1,
       "completeness": 1,
       "met": true,
-      "measuredAt": "2026-10-16T02:43:04.540Z",
+      "measuredAt": "2026-10-16T03:42:03.562Z",
       "cost": {
         "meteredCases": 11,
-        "totalUsd": 0.005918700000000001,
-        "meanUsd": 0.0005380636363636365,
-        "inputTokens": 46837,
-        "outputTokens": 2470
+        "totalUsd": 0.006095300000000001,
+        "meanUsd": 0.000554118181818182,
+        "inputTokens": 47463,
+        "outputTokens": 2698
       },
       "latency": {
         "timedCases": 11,
-        "p50Ms": 1668,
-        "p95Ms": 3326,
-        "ttfbP50Ms": 640
+        "p50Ms": 2317,
+        "p95Ms": 3192,
+        "ttfbP50Ms": 1456
       },
       "retries": {
         "attempts": 11,
@@ -313,23 +313,23 @@
       },
       "threshold": 1,
       "total": 9,
-      "passed": 7,
-      "score": 0.7777777777777778,
-      "completeness": 0.9074074074074076,
+      "passed": 8,
+      "score": 0.8888888888888888,
+      "completeness": 0.9444444444444444,
       "met": false,
-      "measuredAt": "2026-10-16T02:43:15.056Z",
+      "measuredAt": "2026-10-16T03:42:24.857Z",
       "cost": {
         "meteredCases": 9,
-        "totalUsd": 0.0043696,
-        "meanUsd": 0.00048551111111111114,
-        "inputTokens": 38191,
-        "outputTokens": 1101
+        "totalUsd": 0.004314000000000001,
+        "meanUsd": 0.00047933333333333346,
+        "inputTokens": 38740,
+        "outputTokens": 880
       },
       "latency": {
         "timedCases": 9,
-        "p50Ms": 823,
-        "p95Ms": 3360,
-        "ttfbP50Ms": 728
+        "p50Ms": 1003,
+        "p95Ms": 12152,
+        "ttfbP50Ms": 812
       },
       "retries": {
         "attempts": 9,
@@ -352,9 +352,9 @@
           },
           "factual": {
             "total": 2,
-            "passed": 1,
-            "score": 0.5,
-            "completeness": 0.8333333333333333
+            "passed": 2,
+            "score": 1,
+            "completeness": 1
           },
           "instruction-following": {
             "total": 1,
@@ -378,14 +378,14 @@
         "risk": {
           "low": {
             "total": 9,
-            "passed": 7,
-            "score": 0.7777777777777778,
-            "completeness": 0.9074074074074076
+            "passed": 8,
+            "score": 0.8888888888888888,
+            "completeness": 0.9444444444444444
           }
         }
       },
       "skipped": [],
-      "failed": ["chat/ask-when-ambiguous", "chat/says-it-does-not-know"]
+      "failed": ["chat/ask-when-ambiguous"]
     },
     "chat-prompt": {
       "version": 4,
@@ -402,19 +402,19 @@
       "score": 1,
       "completeness": 1,
       "met": true,
-      "measuredAt": "2026-10-16T02:44:12.704Z",
+      "measuredAt": "2026-10-16T03:43:27.557Z",
       "cost": {
         "meteredCases": 19,
-        "totalUsd": 0.014706799999999999,
-        "meanUsd": 0.0007740421052631578,
-        "inputTokens": 93508,
-        "outputTokens": 10712
+        "totalUsd": 0.0152779,
+        "meanUsd": 0.0008041,
+        "inputTokens": 94484,
+        "outputTokens": 11659
       },
       "latency": {
         "timedCases": 19,
-        "p50Ms": 2626,
-        "p95Ms": 8172,
-        "ttfbP50Ms": 1250
+        "p50Ms": 2416,
+        "p95Ms": 8939,
+        "ttfbP50Ms": 1535
       },
       "retries": {
         "attempts": 19,
@@ -500,6 +500,6 @@
   "unsupportedSuites": {},
   "integrity": {
     "algorithm": "sha256",
-    "digest": "2ae9c5912098c95377c76ab7a57a36ca2787d9350647ff2c49a21694ec7fe324"
+    "digest": "0b87cd7b4772093b538404e38ce1dc82459ac2de08f374828568d6edeea5e458"
   }
 }
