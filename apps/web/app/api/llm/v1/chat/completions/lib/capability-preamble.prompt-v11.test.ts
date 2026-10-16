@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { EXPLICIT_ARTIFACT_MARKER_FOR } from '@agiworkforce/artifacts';
@@ -94,6 +97,24 @@ describe('chat system prompt version 11 in the manifest', () => {
     }
     expect(text('email_and_writing_cards')).toContain('language email');
     expect(text('artifact_apps')).toContain('window.agi.complete(prompt)');
+  });
+
+  it('says in its release record that the reply-language rule was left out, not carried', () => {
+    const ledgerFile = path.resolve(
+      import.meta.dirname,
+      ...Array<string>(9).fill('..'),
+      'packages/ai/model-registry/catalog/routing-policies.json',
+    );
+    const record = (
+      JSON.parse(readFileSync(ledgerFile, 'utf8')) as {
+        release: { records: readonly { id: string; reason: string }[] };
+      }
+    ).release.records.find((entry) => entry.id === `${CHAT_SYSTEM_PROMPT_ID}@${V11}`);
+    const carried = record?.reason.split('From the audit:')[0] ?? '';
+
+    expect(record).toBeDefined();
+    expect(carried).toContain('response language rule is left out');
+    expect(carried).not.toMatch(/From @8 to @10:[^;]*\bresponse language\b/u);
   });
 
   it('carries every section versions 8 to 10 added to version 4 but the reply-language rule', () => {
