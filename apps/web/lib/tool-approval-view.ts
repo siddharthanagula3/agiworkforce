@@ -273,42 +273,42 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
       'Presses a key or shortcut on your computer, such as Enter or a menu shortcut, in whatever app is in front.',
   },
   device_browser_read_page: {
-    label: 'Read your Chrome tab',
+    label: 'Read your Chrome tab through AGI Desktop',
     description:
       'Reads the address, title and visible text of the active tab in your paired Chrome, on sites you approved in the extension.',
   },
   device_browser_screenshot: {
-    label: 'Capture your Chrome tab',
+    label: 'Capture your Chrome tab through AGI Desktop',
     description:
       'Captures the visible part of the active tab in your paired Chrome, on sites you approved in the extension.',
   },
   device_browser_console: {
-    label: 'Read the Chrome console',
+    label: 'Read the Chrome console through AGI Desktop',
     description:
       'Reads the console messages the active tab in your paired Chrome logged. The desktop app always asks first.',
   },
   device_browser_network: {
-    label: 'Read Chrome network activity',
+    label: 'Read Chrome network activity through AGI Desktop',
     description:
       'Reads the requests the active tab in your paired Chrome made, with addresses and status. The desktop app always asks first.',
   },
   device_browser_navigate: {
-    label: 'Open a page in Chrome',
+    label: 'Open a page in Chrome through AGI Desktop',
     description:
       'Opens an address in the active tab of your paired Chrome. Only sites you approved in the extension can be opened.',
   },
   device_browser_click: {
-    label: 'Click in Chrome',
+    label: 'Click in Chrome through AGI Desktop',
     description:
       'Clicks an element on the active tab of your paired Chrome, which can submit a form, on sites you approved.',
   },
   device_browser_type: {
-    label: 'Type in Chrome',
+    label: 'Type in Chrome through AGI Desktop',
     description:
       'Types into a field on the active tab of your paired Chrome, on sites you approved in the extension.',
   },
   device_browser_download: {
-    label: 'Download through Chrome',
+    label: 'Download in Chrome through AGI Desktop',
     description:
       'Downloads a file through your paired Chrome into your downloads folder. The desktop app always asks first.',
   },

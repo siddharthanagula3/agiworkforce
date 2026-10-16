@@ -65,6 +65,14 @@ describe('the published tool table is the platform tool table', () => {
     }
   });
 
+  it('names no two tools alike, so no row reads as a repeat of another', () => {
+    const rows = buildToolApprovalToolRows();
+    const repeated = rows.filter(
+      (row, index) => rows.findIndex((other) => other.label === row.label) !== index,
+    );
+    expect(repeated.map((row) => `${row.name}: ${row.label}`)).toEqual([]);
+  });
+
   it('follows the approval predicate rather than a written-down verdict', () => {
     const scratch = {
       toolNames: ['write_file', 'web_search'],
