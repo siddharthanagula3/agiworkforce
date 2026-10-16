@@ -8,9 +8,14 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { MessageBubble } from './MessageBubble';
 
+type CsrfModule = typeof import('@/lib/client/csrf');
+
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 const getCsrfToken = vi.hoisted(() => vi.fn<() => Promise<string>>());
-vi.mock('@/lib/client/csrf', () => ({ getCsrfToken }));
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<CsrfModule>()),
+  getCsrfToken,
+}));
 
 const toolCallId = 'draft-call';
 const draft = {
