@@ -1,7 +1,12 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import type { CSSProperties } from 'react';
-import { Eyebrow, Prose, Section } from '@/features/marketing/components/system';
-import { OfflineHeading, OfflineStatus } from './OfflineStatus';
+import { Eyebrow, Section } from '@/features/marketing/components/system';
+import {
+  OfflineCaptivePortalHint,
+  OfflineHeading,
+  OfflineStatus,
+  OfflineSummary,
+} from './OfflineStatus';
 
 export const metadata = buildMetadata({
   title: 'No connection',
@@ -32,16 +37,9 @@ export default function OfflinePage() {
               <Eyebrow>Connection</Eyebrow>
               <OfflineHeading />
             </div>
-            <Prose>
-              AGI Workforce cannot reach the network. Nothing you had open was lost, and unsent
-              messages stay in the composer.
-            </Prose>
+            <OfflineSummary />
             <OfflineStatus />
-            <Prose size="sm">
-              A captive portal (hotel, airport, or office Wi-Fi that wants a sign-in first) looks
-              identical to being offline. Open any other site to see whether it redirects you to a
-              login page; a VPN or corporate proxy that blocks our domains produces the same result.
-            </Prose>
+            <OfflineCaptivePortalHint />
           </div>
         </Section>
       </main>

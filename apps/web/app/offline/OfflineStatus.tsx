@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from 'react';
 import { useOnlineStatus } from '@agiworkforce/unified-chat';
-import { ButtonRow } from '@/features/marketing/components/system';
+import { ButtonRow, Prose } from '@/features/marketing/components/system';
 
 const centeredStackStyle: CSSProperties = { alignItems: 'center' };
 
@@ -23,6 +23,32 @@ export function OfflineHeading() {
           ? 'You’re back online.'
           : 'You’re offline.'}
     </h1>
+  );
+}
+
+const KEPT_WORK = 'Nothing you had open was lost, and unsent messages stay in the composer.';
+
+export function OfflineSummary() {
+  const online = useOnlineStatus();
+
+  return (
+    <Prose>
+      {online === true ? KEPT_WORK : `AGI Workforce cannot reach the network. ${KEPT_WORK}`}
+    </Prose>
+  );
+}
+
+export function OfflineCaptivePortalHint() {
+  const online = useOnlineStatus();
+
+  if (online === true) return null;
+
+  return (
+    <Prose size="sm">
+      A captive portal (hotel, airport, or office Wi-Fi that wants a sign-in first) looks identical
+      to being offline. Open any other site to see whether it redirects you to a login page; a VPN
+      or corporate proxy that blocks our domains produces the same result.
+    </Prose>
   );
 }
 
