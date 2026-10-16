@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { loadArtifactsPackage } from '../src/artifacts-package';
@@ -27,6 +30,28 @@ const registry: RegistryLike = {
 };
 
 const corpus = loadDataset('chat-prompt');
+
+interface CatalogModel {
+  readonly name: string;
+  readonly developer: string;
+  readonly knowledgeCutoff?: string;
+}
+
+const catalog = JSON.parse(
+  readFileSync(
+    fileURLToPath(new URL('../../../packages/contracts/types/src/models.json', import.meta.url)),
+    'utf8',
+  ),
+) as {
+  readonly models: Readonly<Record<string, CatalogModel>>;
+  readonly developers: Readonly<Record<string, { readonly label: string }>>;
+};
+
+const [measuredKey, measuredModel] = Object.entries(catalog.models).find(
+  ([, model]) =>
+    model.knowledgeCutoff !== undefined && catalog.developers[model.developer] !== undefined,
+) ?? ['', { name: '', developer: '' }];
+const measuredDeveloper = catalog.developers[measuredModel.developer]?.label ?? '';
 
 function row(id: string): EvalCase {
   const found = corpus.cases.find((entry) => entry.id === id);
@@ -127,21 +152,22 @@ describe('rendering version 7 for a web chat turn', () => {
 
 describe('rendering version 11 for a web chat turn', () => {
   it('states the model the run measures, from the catalog, and says it is not known without one', async () => {
-    const measured = await loadChatPromptRenderer(11, '2026-10-15', 'claude-haiku-5-5');
+    const measured = await loadChatPromptRenderer(11, '2026-10-15', measuredKey);
     const unnamed = await loadChatPromptRenderer(11, '2026-10-15');
     const rendered = measured.render(row('chat-prompt/make-a-calculator'));
 
+    expect(measuredKey.length).toBeGreaterThan(0);
     expect(rendered).toContain(
-      'This turn runs on Claude Haiku 5.5, a model made by Anthropic, which the user selected.',
+      `This turn runs on ${measuredModel.name}, a model made by ${measuredDeveloper}, which the user selected.`,
     );
-    expect(rendered).toContain("Claude Haiku 5.5's training data runs to about");
+    expect(rendered).toContain(`${measuredModel.name}'s training data runs to about`);
     expect(unnamed.render(row('chat-prompt/make-a-calculator'))).toContain(
       'Which model serves this turn is not stated here.',
     );
   });
 
   it('gives a case that declares its memory the setup of a saved web chat, in its project', async () => {
-    const v11 = await loadChatPromptRenderer(11, '2026-10-15', 'claude-haiku-5-5');
+    const v11 = await loadChatPromptRenderer(11, '2026-10-15', measuredKey);
     const inProject = v11.render(row('chat-prompt/project-file-source-named'));
 
     expect(inProject).toContain(
@@ -157,7 +183,7 @@ describe('rendering version 11 for a web chat turn', () => {
   });
 
   it('sends the web chat its cards and artifact apps, and its Settings', async () => {
-    const rendered = (await loadChatPromptRenderer(11, '2026-10-15', 'claude-haiku-5-5')).render(
+    const rendered = (await loadChatPromptRenderer(11, '2026-10-15', measuredKey)).render(
       row('chat-prompt/recruiter-follow-up-email'),
     );
 
@@ -169,7 +195,7 @@ describe('rendering version 11 for a web chat turn', () => {
   it('renders versions before 8 the same whether or not the run names its model', async () => {
     for (const version of [6, 7]) {
       const plain = await loadChatPromptRenderer(version, '2026-10-15');
-      const named = await loadChatPromptRenderer(version, '2026-10-15', 'claude-haiku-5-5');
+      const named = await loadChatPromptRenderer(version, '2026-10-15', measuredKey);
       for (const id of [
         'chat-prompt/forget-with-memory-off',
         'chat-prompt/project-file-source-named',
