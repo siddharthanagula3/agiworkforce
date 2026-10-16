@@ -177,8 +177,39 @@ describe('rendering version 11 for a web chat turn', () => {
     expect(inProject).toContain(
       'Under your answer, the app shows the user the sources it gave you:\n- the saved memories, listed under Sources\n- a link to each project file it supplied',
     );
-    expect(v11.render(row('chat-prompt/make-a-calculator'))).not.toContain(
-      'What is set up for this chat right now:',
+  });
+
+  it('gives every other case the setup the route sends for a saved web chat on default settings', async () => {
+    const v11 = await loadChatPromptRenderer(11, '2026-10-15', measuredKey);
+    const rendered = v11.render(row('chat-prompt/make-a-calculator'));
+
+    expect(rendered).toContain(
+      "What is set up for this chat right now:\n- This chat is saved in the user's chat history.\n- Memory is off,",
+    );
+    expect(rendered).toContain('- Search past chats is off');
+    expect(rendered).toContain('- Connected apps are not available on this turn');
+    expect(rendered).toContain('- Skills the user has installed');
+    expect(rendered).not.toContain('Under your answer, the app shows the user the sources');
+  });
+
+  it('adds the memory and project file tool lines when a case offers those tools', async () => {
+    const v11 = await loadChatPromptRenderer(11, '2026-10-15', measuredKey);
+    const sections = (await import('../../../apps/web/lib/prompts/chat-system-prompt')) as {
+      chatSystemPromptSections: (version: number) => Readonly<Record<string, string>>;
+    };
+    const text = sections.chatSystemPromptSections(11);
+    const tool = (name: string) => ({ name, description: name, inputSchema: { type: 'object' } });
+    const withTools = {
+      ...row('chat-prompt/project-file-source-named'),
+      tools: [tool('save_memory'), tool('search_files')],
+    };
+
+    expect(v11.render(withTools)).toContain(`${text['memory_on']}\n${text['memory_tools']}`);
+    expect(v11.render(withTools)).toContain(
+      `${text['project_with_files']}\n${text['project_file_tools']}`,
+    );
+    expect(v11.render(row('chat-prompt/project-file-source-named'))).not.toContain(
+      text['memory_tools'],
     );
   });
 

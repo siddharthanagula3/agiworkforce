@@ -11,12 +11,13 @@
  * capabilities are the handshake's grant for the case's `plan` (free when
  * absent), from a fixture a web test holds to the product. A version that
  * states the serving model is told the measured model, as the user's choice,
- * from the model catalog. A case that declares its memory also gets the chat
- * setup a saved web chat has: that memory, no past chats, no personalization,
- * no connected apps, no installed skills, and its `project` when it names one,
- * with the web chat's links to the sources the turn supplied. The clock is
- * pinned to noon UTC on the recording date, so one recording renders one
- * request.
+ * from the model catalog. Every case gets the chat setup the route sends for a
+ * saved web chat on an account with default settings: memory off and past chat
+ * search off unless the case declares its memory, no personalization, connected
+ * apps on only where the plan grants them, skills on, its `project` when it
+ * names one, the memory and file tool lines when it offers those tools, and the
+ * web chat's links to the sources the turn supplied. The clock is pinned to
+ * noon UTC on the recording date, so one recording renders one request.
  *
  * @module evals/chat-prompt
  * @packageDocumentation
@@ -42,7 +43,16 @@ const TEMPORARY_CHAT_RETENTION_MODULE = fileURLToPath(
   new URL('../../../apps/web/lib/server/temporary-files/retention.ts', import.meta.url),
 );
 const TEMPORARY_CHAT_RETENTION_DAYS = /export const TEMPORARY_CHAT_RETENTION_DAYS = (\d+);/u;
+const MEMORY_TOOLS_MODULE = fileURLToPath(
+  new URL('../../../apps/web/lib/server/tools/memory-tools.ts', import.meta.url),
+);
+const FILE_SEARCH_TOOLS_MODULE = fileURLToPath(
+  new URL('../../../apps/web/lib/server/tools/file-search-tool.ts', import.meta.url),
+);
+const TOOL_NAME_EXPORT = /export const [A-Z_]+_TOOL_NAME = '([a-z_]+)';/gu;
+const CONNECTORS_CAPABILITY = 'canUseConnectors';
 const DEFAULT_PLAN: ChatTurnPlan = 'free';
+const DEFAULT_MEMORY: ChatTurnMemory = 'off';
 
 type Sections = Readonly<Record<string, string>>;
 
@@ -67,8 +77,8 @@ interface ChatSetupState {
   readonly projectChats: boolean;
   readonly personalization: 'none';
   readonly toolsSupported: boolean;
-  readonly connectors: 'off';
-  readonly skills: 'none';
+  readonly connectors: 'on' | 'unavailable';
+  readonly skills: 'on';
 }
 
 interface AssemblyModule {
@@ -144,21 +154,30 @@ function temporaryChatRetentionDays(): number {
   return Number(match[1]);
 }
 
-function webChatSetup(
-  memory: ChatTurnMemory,
-  project: ChatTurnProject | undefined,
-): ChatSetupState {
+/**
+ * The tool names a server-only module exports, read from its source because the
+ * module cannot load outside the web app.
+ */
+function exportedToolNames(module: string): ReadonlySet<string> {
+  const names = new Set(
+    [...readFileSync(module, 'utf8').matchAll(TOOL_NAME_EXPORT)].map((match) => match[1] ?? ''),
+  );
+  if (names.size === 0) throw new Error(`${module} no longer exports a *_TOOL_NAME string`);
+  return names;
+}
+
+function webChatSetup(evalCase: EvalCase, capabilities: readonly string[]): ChatSetupState {
   return {
     savedChat: true,
     temporaryChat: false,
-    memory,
+    memory: evalCase.memory ?? DEFAULT_MEMORY,
     pastChats: false,
-    project: project ?? 'none',
+    project: evalCase.project ?? 'none',
     projectChats: false,
     personalization: 'none',
     toolsSupported: true,
-    connectors: 'off',
-    skills: 'none',
+    connectors: capabilities.includes(CONNECTORS_CAPABILITY) ? 'on' : 'unavailable',
+    skills: 'on',
   };
 }
 
@@ -190,28 +209,31 @@ export async function loadChatPromptRenderer(
   >;
   const servingModel = servingModelFor(modelKey, assembly.formatKnowledgeCutoff);
   const retentionDays = temporaryChatRetentionDays();
+  const memoryTools = exportedToolNames(MEMORY_TOOLS_MODULE);
+  const fileSearchTools = exportedToolNames(FILE_SEARCH_TOOLS_MODULE);
   const utc = `${recordedOn}T12:00:00.000Z`;
   return {
     version,
     stamp: chatPromptStamp(version),
     render: (evalCase) => {
+      const toolNames = (evalCase.tools ?? []).map((tool) => tool.name);
+      const productCapabilities = capabilities[evalCase.plan ?? DEFAULT_PLAN];
       const { body, time } = assembly.assembleChatSystemPrompt(
         sections,
         {
-          toolNames: (evalCase.tools ?? []).map((tool) => tool.name),
+          toolNames,
           ...(evalCase.memory === undefined ? {} : { memory: evalCase.memory }),
           artifactMarkers,
-          productCapabilities: capabilities[evalCase.plan ?? DEFAULT_PLAN],
+          productCapabilities,
           servingModel,
-          ...(evalCase.memory === undefined
-            ? {}
-            : {
-                setup: {
-                  chat: webChatSetup(evalCase.memory, evalCase.project),
-                  tools: { memoryTools: false, fileSearchTools: false },
-                  temporaryChatRetentionDays: retentionDays,
-                },
-              }),
+          setup: {
+            chat: webChatSetup(evalCase, productCapabilities),
+            tools: {
+              memoryTools: toolNames.some((name) => memoryTools.has(name)),
+              fileSearchTools: toolNames.some((name) => fileSearchTools.has(name)),
+            },
+            temporaryChatRetentionDays: retentionDays,
+          },
           settingsGuidance: 'web',
           sourceLinks: true,
           writingCards: true,
