@@ -62,6 +62,17 @@ describe('the free model promotion notice', () => {
     expect(notice.textContent?.toLowerCase()).not.toContain('unlimited');
   });
 
+  it('is shown once to an account, even when it is never dismissed', async () => {
+    signedInOn('free');
+    const { unmount } = render(<FreeModelPromotionNotice />);
+    expect(await screen.findByTestId('free-model-promotion-notice')).toBeTruthy();
+    unmount();
+
+    render(<FreeModelPromotionNotice />);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByTestId('free-model-promotion-notice')).toBeNull();
+  });
+
   it('stays dismissed for the account that dismissed it', async () => {
     signedInOn('free');
     const { unmount } = render(<FreeModelPromotionNotice />);

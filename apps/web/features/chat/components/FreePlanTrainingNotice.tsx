@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Info, X as XIcon } from 'lucide-react';
 
@@ -15,7 +14,7 @@ import {
   FREE_PLAN_TRAINING_NOTICE_LINK_LABEL,
   FREE_PLAN_TRAINING_NOTICE_TITLE,
 } from '@/lib/compliance/free-plan-training-disclosure';
-import { readAcknowledgedAccount, rememberAcknowledgedAccount } from '../lib/account-notice';
+import { useShownOnceNotice } from '../lib/account-notice';
 
 export const FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY = 'agi.notice.free-plan-training';
 
@@ -23,22 +22,17 @@ export function FreePlanTrainingNotice() {
   const accountId = useBillingStore((state) => state.user?.id ?? null);
   const subscription = useBillingStore((state) => state.subscription);
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
-  const [dismissed, setDismissed] = useState(true);
-
   // A tier that has not resolved yet is not a Free tier, so nothing is shown
   // until the account's own plan has answered for itself.
   const onFreePlan =
     billingPolicyReady && isFreeBillingPlanTier(normalizeBillingPlanTier(subscription?.tier));
 
-  useEffect(() => {
-    if (!onFreePlan || !accountId) {
-      setDismissed(true);
-      return;
-    }
-    setDismissed(readAcknowledgedAccount(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY) === accountId);
-  }, [onFreePlan, accountId]);
+  const { visible, dismiss } = useShownOnceNotice(
+    onFreePlan ? FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY : null,
+    accountId,
+  );
 
-  if (dismissed || !onFreePlan || !accountId) return null;
+  if (!visible || !onFreePlan || !accountId) return null;
 
   return (
     <div
@@ -60,10 +54,7 @@ export function FreePlanTrainingNotice() {
       </p>
       <button
         type="button"
-        onClick={() => {
-          rememberAcknowledgedAccount(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY, accountId);
-          setDismissed(true);
-        }}
+        onClick={dismiss}
         aria-label={FREE_PLAN_TRAINING_NOTICE_DISMISS_LABEL}
         className="-me-1 flex h-7 w-7 shrink-0 touch-manipulation items-center justify-center rounded-md text-[var(--chat-text-muted)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] [@media(hover:none)]:h-11 [@media(hover:none)]:w-11"
       >

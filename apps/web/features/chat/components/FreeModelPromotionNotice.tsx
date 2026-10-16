@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Info, X as XIcon } from 'lucide-react';
 
 import {
@@ -16,7 +15,7 @@ import {
   FREE_MODEL_PROMOTION_NOTICE_TITLE,
   freeModelPromotionHeadline,
 } from '../lib/free-model-promotion-copy';
-import { readAcknowledgedAccount, rememberAcknowledgedAccount } from '../lib/account-notice';
+import { useShownOnceNotice } from '../lib/account-notice';
 
 const STORAGE_KEY_PREFIX = 'agi.notice.free-model-promotion';
 
@@ -31,17 +30,9 @@ export function FreeModelPromotionNotice() {
   const storageKey = promotion
     ? `${STORAGE_KEY_PREFIX}.${promotion.modelId}.${promotion.endsAt}`
     : null;
-  const [dismissed, setDismissed] = useState(true);
+  const { visible, dismiss } = useShownOnceNotice(modelName ? storageKey : null, accountId);
 
-  useEffect(() => {
-    if (!storageKey || !accountId) {
-      setDismissed(true);
-      return;
-    }
-    setDismissed(readAcknowledgedAccount(storageKey) === accountId);
-  }, [storageKey, accountId]);
-
-  if (dismissed || !promotion || !modelName || !storageKey || !accountId) return null;
+  if (!visible || !promotion || !modelName || !storageKey || !accountId) return null;
 
   return (
     <div
@@ -58,10 +49,7 @@ export function FreeModelPromotionNotice() {
       </p>
       <button
         type="button"
-        onClick={() => {
-          rememberAcknowledgedAccount(storageKey, accountId);
-          setDismissed(true);
-        }}
+        onClick={dismiss}
         aria-label={FREE_MODEL_PROMOTION_DISMISS_LABEL}
         className="-me-1 flex h-7 w-7 shrink-0 touch-manipulation items-center justify-center rounded-md text-[var(--chat-text-muted)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] [@media(hover:none)]:h-11 [@media(hover:none)]:w-11"
       >

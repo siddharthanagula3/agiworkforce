@@ -95,15 +95,44 @@ describe('the free model data notice', () => {
     expect(screen.queryByTestId('free-plan-training-notice')).toBeNull();
   });
 
-  it('stays dismissed for the account that dismissed it', () => {
+  it('is shown once to an account, even when it is never dismissed', () => {
+    signedInOn('free');
+    const first = render(<FreePlanTrainingNotice />);
+    expect(screen.getByTestId('free-plan-training-notice')).toBeTruthy();
+    expect(
+      JSON.parse(window.localStorage.getItem(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY) ?? '[]'),
+    ).toEqual([ACCOUNT.id]);
+
+    first.unmount();
+    render(<FreePlanTrainingNotice />);
+    expect(screen.queryByTestId('free-plan-training-notice')).toBeNull();
+  });
+
+  it('stays gone for the account that dismissed it', () => {
     signedInOn('free');
     const first = render(<FreePlanTrainingNotice />);
 
     fireEvent.click(screen.getByLabelText('Dismiss the free model data notice'));
     expect(screen.queryByTestId('free-plan-training-notice')).toBeNull();
-    expect(window.localStorage.getItem(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY)).toBe(ACCOUNT.id);
 
     first.unmount();
+    render(<FreePlanTrainingNotice />);
+    expect(screen.queryByTestId('free-plan-training-notice')).toBeNull();
+  });
+
+  it('shows once to each account that uses the browser, however they alternate', () => {
+    signedInOn('free', 'user_a');
+    render(<FreePlanTrainingNotice />).unmount();
+    signedInOn('free', 'user_b');
+    const second = render(<FreePlanTrainingNotice />);
+    expect(screen.getByTestId('free-plan-training-notice')).toBeTruthy();
+    second.unmount();
+
+    signedInOn('free', 'user_a');
+    const third = render(<FreePlanTrainingNotice />);
+    expect(screen.queryByTestId('free-plan-training-notice')).toBeNull();
+    third.unmount();
+    signedInOn('free', 'user_b');
     render(<FreePlanTrainingNotice />);
     expect(screen.queryByTestId('free-plan-training-notice')).toBeNull();
   });
