@@ -10,6 +10,8 @@ import { retrieveSupportChunks } from '../retrieval/retrieve';
 const COLLECTION_QUERIES: readonly { query: string; docId: string }[] = [
   { query: 'how do I sign up for a new account', docId: 'signing-up' },
   { query: 'start a new chat and edit a message', docId: 'chat-basics' },
+  { query: 'how do I switch to dark theme', docId: 'chat-basics' },
+  { query: 'how do I switch to dark theme and change the accent colour', docId: 'chat-basics' },
   { query: 'temporary chat not saved to history', docId: 'temporary-chats' },
   { query: 'share a conversation with a public link', docId: 'sharing-conversations' },
   { query: 'attach a pdf file to a chat', docId: 'files-and-attachments' },

@@ -2,7 +2,7 @@
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
   "documentCount": 45,
-  "chunkCount": 251,
+  "chunkCount": 252,
   "documents": [
     {
       "id": "account-security",
@@ -443,6 +443,17 @@
       "path": "/chat",
       "category": "chat",
       "tags": [
+        "theme",
+        "dark theme",
+        "dark mode",
+        "light mode",
+        "appearance",
+        "accent colour",
+        "high contrast",
+        "motion",
+        "chat font",
+        "text size",
+        "display language",
         "chat",
         "new chat",
         "conversation",
@@ -459,7 +470,7 @@
         "thinking",
         "response style"
       ],
-      "updated": "2026-10-12",
+      "updated": "2026-10-16",
       "source": "content/support/chat-basics.md",
       "chunks": [
         {
@@ -507,6 +518,13 @@
         {
           "id": "chat-basics#6",
           "ordinal": 6,
+          "heading": "Change the theme and appearance",
+          "headingPath": "Start, steer and manage a chat › Change the theme and appearance",
+          "text": "Open Settings, General and find the **Preferences** group. The **Appearance**\nrow sets the theme: System follows your device, while Light and Dark stay as\nyou chose. To switch to dark theme, choose Dark there.\n\nThe rows beneath it change how the app looks. **Accent colour** offers AGI\namber, Green, Blue, Violet and Rose. **High contrast** is a switch. **Motion**\noffers System, which follows your device setting, and Reduced, which turns down\nanimation in streaming responses and other interface elements. **Chat font**\nchanges the typeface of message text to Sans, Serif or Dyslexic friendly, and\ncode stays monospace. **Chat text size** runs from Small to Large.\n\n**Display Language** translates pricing, marketing pages, device sign-in, and\nthe app's navigation: the sidebar, menus, and the composer's own labels.\nSettings field labels and your conversations are unaffected."
+        },
+        {
+          "id": "chat-basics#7",
+          "ordinal": 7,
           "heading": "When a chat will not load",
           "headingPath": "Start, steer and manage a chat › When a chat will not load",
           "text": "The failure notice says \"Chat could not be displayed\" and offers **Try again**.\nIf the browser is offline it says \"You are offline\" instead. In both cases your\nmessages are already saved, so retrying or opening a different conversation\nloses nothing."

@@ -3,8 +3,8 @@ id: chat-basics
 title: Start, steer and manage a chat
 path: /chat
 category: chat
-tags: chat, new chat, conversation, compose, send message, edit message, regenerate, retry, branch, variant, rename, archive, delete chat, thinking, response style
-updated: 2026-10-12
+tags: theme, dark theme, dark mode, light mode, appearance, accent colour, high contrast, motion, chat font, text size, display language, chat, new chat, conversation, compose, send message, edit message, regenerate, retry, branch, variant, rename, archive, delete chat, thinking, response style
+updated: 2026-10-16
 scope: public
 ---
 
@@ -58,6 +58,23 @@ The conversation title menu renames a chat. Archiving moves it out of the
 sidebar without deleting anything, and Settings holds an **Archived chats** list
 that restores a chat or moves it to **Recently deleted**. A deleted chat stays
 there for 30 days, so you can restore it, and is then deleted for good.
+
+## Change the theme and appearance
+
+Open Settings, General and find the **Preferences** group. The **Appearance**
+row sets the theme: System follows your device, while Light and Dark stay as
+you chose. To switch to dark theme, choose Dark there.
+
+The rows beneath it change how the app looks. **Accent colour** offers AGI
+amber, Green, Blue, Violet and Rose. **High contrast** is a switch. **Motion**
+offers System, which follows your device setting, and Reduced, which turns down
+animation in streaming responses and other interface elements. **Chat font**
+changes the typeface of message text to Sans, Serif or Dyslexic friendly, and
+code stays monospace. **Chat text size** runs from Small to Large.
+
+**Display Language** translates pricing, marketing pages, device sign-in, and
+the app's navigation: the sidebar, menus, and the composer's own labels.
+Settings field labels and your conversations are unaffected.
 
 ## When a chat will not load
 
