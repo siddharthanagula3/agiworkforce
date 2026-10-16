@@ -26,6 +26,27 @@ describe('siteIconUrlOf', () => {
     ).toBe(`${SITE}/docs`);
     expect(siteIconUrlOf(directoryRecord({ id: 'none' }))).toBeNull();
   });
+
+  it('never borrows the favicon of a code forge that only hosts the docs', () => {
+    expect(
+      siteIconUrlOf(
+        directoryRecord({
+          id: 'monday',
+          websiteUrl: null,
+          documentationUrl: 'https://github.com/mondaycom/mcp',
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      siteIconUrlOf(
+        directoryRecord({
+          id: 'forge-site',
+          websiteUrl: 'https://github.com/vendor/repo',
+          documentationUrl: `${SITE}/docs`,
+        }),
+      ),
+    ).toBe(`${SITE}/docs`);
+  });
 });
 
 describe('pendingSiteIconSource and hasResolvedSiteIcon', () => {

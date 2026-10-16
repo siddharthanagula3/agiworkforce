@@ -1,10 +1,19 @@
-import { originOf } from '@/lib/connectors/directory/hosts';
+import { isCodeForgeHost, originOf } from '@/lib/connectors/directory/hosts';
 import type { DirectoryIconSource, DirectoryRecord } from '@/lib/connectors/directory/types';
 
 const SITE_ICON: DirectoryIconSource = 'site';
 
+function isVendorSiteUrl(url: string | null): url is string {
+  if (!url) return false;
+  try {
+    return !isCodeForgeHost(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
 export function siteIconUrlOf(record: DirectoryRecord): string | null {
-  return record.websiteUrl ?? record.documentationUrl;
+  return [record.websiteUrl, record.documentationUrl].find(isVendorSiteUrl) ?? null;
 }
 
 export function pendingSiteIconSource(record: DirectoryRecord): boolean {
