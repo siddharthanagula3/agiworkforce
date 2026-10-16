@@ -1,9 +1,11 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Blocks, Check } from 'lucide-react';
-import type { PluginDraft } from '@agiworkforce/cloud-contracts';
+import type { AgentActivityState } from '@agiworkforce/client-runtime';
+import { readPluginDraftToolResult, type PluginDraft } from '@agiworkforce/cloud-contracts';
 import { Spinner } from '@agiworkforce/ui';
+import { hasCanonicalToolActivity } from '@agiworkforce/unified-chat';
 
 import { getCsrfToken } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -15,6 +17,7 @@ import {
   PLUGIN_AUTHORED_PATH,
   SKILLS_PATH,
 } from '@/features/directory/constants';
+import type { ToolEntry } from './messages/ToolTimeline';
 
 const DRAFT_LABEL = 'Plugin draft';
 const SAVE_PLUGIN_LABEL = 'Save plugin';
@@ -156,3 +159,64 @@ function PluginDraftCardImpl({ draft, className }: { draft: PluginDraft; classNa
 }
 
 export const PluginDraftCard = memo(PluginDraftCardImpl);
+
+interface DraftToolStep {
+  id: string;
+  name: string;
+  completed: boolean;
+  output: unknown;
+}
+
+function turnToolSteps(
+  activity: Pick<AgentActivityState, 'entries'> | undefined,
+  tools: readonly ToolEntry[] | undefined,
+): DraftToolStep[] {
+  if (activity && hasCanonicalToolActivity(activity)) {
+    return activity.entries.flatMap((entry) =>
+      entry.kind === 'tool'
+        ? [
+            {
+              id: entry.toolCallId,
+              name: entry.name,
+              completed: entry.status === 'completed',
+              output: entry.output,
+            },
+          ]
+        : [],
+    );
+  }
+  return (tools ?? []).map((tool, index) => ({
+    id: tool.toolCallId ?? tool.id ?? `${tool.name}-${index}`,
+    name: tool.name,
+    completed: tool.status === 'completed',
+    output: tool.result,
+  }));
+}
+
+export function latestTurnPluginDraft(
+  activity: Pick<AgentActivityState, 'entries'> | undefined,
+  tools: readonly ToolEntry[] | undefined,
+): { id: string; draft: PluginDraft } | null {
+  const steps = turnToolSteps(activity, tools);
+  for (let index = steps.length - 1; index >= 0; index -= 1) {
+    const step = steps[index]!;
+    if (!step.completed) continue;
+    const draft = readPluginDraftToolResult(step.name, step.output);
+    if (draft) return { id: step.id, draft };
+  }
+  return null;
+}
+
+export function TurnPluginDraftCard({
+  activity,
+  tools,
+  className,
+}: {
+  activity?: Pick<AgentActivityState, 'entries'>;
+  tools?: readonly ToolEntry[];
+  className?: string;
+}) {
+  const latest = useMemo(() => latestTurnPluginDraft(activity, tools), [activity, tools]);
+  if (!latest) return null;
+  return <PluginDraftCard key={latest.id} draft={latest.draft} className={className} />;
+}

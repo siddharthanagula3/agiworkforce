@@ -31,12 +31,7 @@ import {
   type ConnectorConnectRequest,
 } from '../../lib/connector-connect-required';
 import { ConnectorConnectCard } from '../ConnectorConnectCard';
-import { PluginDraftCard } from '../PluginDraftCard';
-import {
-  CHAT_CODE_RUN_TOOL_NAME,
-  readPluginDraftToolResult,
-  type ToolApprovalReview,
-} from '@agiworkforce/cloud-contracts';
+import { CHAT_CODE_RUN_TOOL_NAME, type ToolApprovalReview } from '@agiworkforce/cloud-contracts';
 import { isDesktopHost } from '@/features/desktop-host';
 import { CodeRunAgain } from './CodeRunAgain';
 
@@ -466,10 +461,6 @@ function TimelineStepRow({
   const hasSources = isWebSearch && searchSources && searchSources.length > 0;
 
   const connectRequest = useMemo(() => findConnectRequest(tool), [tool]);
-  const pluginDraft = useMemo(
-    () => (tool.status === 'completed' ? readPluginDraftToolResult(tool.name, tool.result) : null),
-    [tool],
-  );
 
   const humanLabel =
     tool.summary ?? humanizeToolName(tool.name, tool.args, tool.parameters, tool.statusPhrase);
@@ -533,11 +524,6 @@ function TimelineStepRow({
           />
         </div>
       )}
-      {pluginDraft ? (
-        <div className="ps-7 mt-1.5">
-          <PluginDraftCard draft={pluginDraft} />
-        </div>
-      ) : null}
       {hasSources && (
         <div className="ps-7 mt-1 text-xs text-muted-foreground">
           {translateUiPlural('chat', 'counts.sources', searchSources!.length, {

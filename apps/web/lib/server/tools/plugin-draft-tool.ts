@@ -12,6 +12,7 @@ import {
   SKILL_DRAFT_NAME_MAX_LENGTH,
 } from '@agiworkforce/skills';
 
+import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { authoredSkillIssues } from '@/features/plugins/server/directory/authored-plugin';
 import { PLUGIN_DIRECTORY_MAX_SKILLS_PER_INSTALL } from '@/features/plugins/server/directory/constants';
 
@@ -38,6 +39,11 @@ const PluginDraftArgs = z
       .max(PLUGIN_DIRECTORY_MAX_SKILLS_PER_INSTALL),
   })
   .strict();
+
+export const PLUGIN_DRAFT_CARD_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>([
+  'web',
+  'desktop',
+]);
 
 export function isPluginDraftTool(name: string): boolean {
   return name === PLUGIN_DRAFT_TOOL_NAME;
@@ -130,7 +136,8 @@ export function executePluginDraftTool(args: Record<string, unknown>): {
   return {
     content: JSON.stringify({
       [PLUGIN_DRAFT_RESULT_KEY]: draft,
-      shown: 'The user sees this plugin with a Save button. It is not saved until they press it.',
+      shown:
+        'The user sees this plugin as a draft card under your reply, with its own Save buttons. It is not saved until they press one. Call it the draft card.',
     }),
     isError: false,
   };

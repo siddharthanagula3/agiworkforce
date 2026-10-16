@@ -204,6 +204,7 @@ import { formatBytes } from '@shared/utils/format';
 import { ComparisonResponse } from './ComparisonResponse';
 import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
+import { TurnPluginDraftCard } from '../PluginDraftCard';
 import { useComparisonStore } from '../../stores/comparison-store';
 import {
   hasResponseRatingDetails,
@@ -2654,6 +2655,14 @@ const MessageBubbleComponent = function MessageBubble({
             </button>
           )}
           {nonInterleavedToolsFollowProse && nonInterleavedToolBlock}
+
+          {!isUser ? (
+            <TurnPluginDraftCard
+              activity={canonicalActivity}
+              tools={message.metadata?.tools}
+              className="mt-3"
+            />
+          ) : null}
 
           {/* Interactive cards sit AFTER the prose that motivated them and
               before the artifact chip, matching where the model emitted them.

@@ -145,6 +145,7 @@ import {
 import {
   asksForPluginDraft,
   isPluginDraftTool,
+  PLUGIN_DRAFT_CARD_SURFACES,
   pluginDraftToolDefinition,
 } from '@/lib/server/tools/plugin-draft-tool';
 import { userSkillAuthoringEnabled } from '@/lib/services/user-skill-authoring';
@@ -1009,7 +1010,7 @@ export function applyPluginDraftToolCapability(
     !params.pluginDraftsAllowed ||
     !request.stream ||
     params.isTemporary ||
-    !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
+    !PLUGIN_DRAFT_CARD_SURFACES.has(params.surface)
   ) {
     return;
   }
