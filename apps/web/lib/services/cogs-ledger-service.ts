@@ -1328,11 +1328,7 @@ export async function countUserFeatureUnitsSince(
   return numberFrom(row?.units);
 }
 
-/**
- * Bytes served to the account since `since` that spend its download allowance,
- * in GiB. Egress accrued as exempt stays in the ledger as a cost but is not
- * counted here.
- */
+/** Excludes egress accrued as exempt, which the ledger still records as a cost. */
 export async function countUserDownloadAllowanceGibSince(
   userId: string,
   since: Date,

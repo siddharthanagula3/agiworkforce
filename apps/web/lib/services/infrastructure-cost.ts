@@ -38,7 +38,6 @@ export function recordEgressBytes(input: {
   surface?: string | null;
   provider: string;
   sourceRef?: string;
-  /** Served without spending the account's download allowance; still a cost. */
   downloadAllowanceExempt?: boolean;
 }): void {
   if (!Number.isFinite(input.bytes) || input.bytes <= 0) return;

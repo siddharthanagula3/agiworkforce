@@ -30,10 +30,7 @@ export interface ContextTrimResult {
   budgetTokens: number;
   /** Still over budget once everything shrinkable was cut; protected instructions and the latest user message were left whole. */
   protectedOverflow?: true;
-  /**
-   * The overflow is the latest user message: everything else fits once it is
-   * left out, so no fit can send it and the turn is refused before the provider.
-   */
+  /** Everything but the latest user message fits, so no trim can send the turn. */
   latestUserMessageOverflow?: true;
 }
 

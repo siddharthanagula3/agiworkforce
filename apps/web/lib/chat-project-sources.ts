@@ -70,7 +70,6 @@ export function toMemoryCitationsHeaderValue(
 
 export const PAST_CHAT_CITATIONS_HEADER = 'x-agi-past-chat-citations';
 
-/** Set by a client that draws a link to each chat named in PAST_CHAT_CITATIONS_HEADER. */
 export const PAST_CHAT_LINKS_REQUEST_KEY = 'x_past_chat_links' as const;
 
 export function toPastChatSourcesHeaderValue(

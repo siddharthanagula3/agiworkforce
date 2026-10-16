@@ -1319,11 +1319,7 @@ export type ProcessedRequest = {
   connectorsAllowed?: boolean;
   toolExecutionObserved?: boolean;
   requestedModel: string;
-  /**
-   * The promoted model the caller picked, when the promotion did not admit the
-   * turn and it went to the Free plan model instead. Recorded as the requested
-   * model of the persisted turn; billing and routing keep `requestedModel`.
-   */
+  /** Persisted as the turn's requested model only; billing and routing keep `requestedModel`. */
   selectedModel?: string;
   provider: string;
   estimatedCostMicrousd?: number;
@@ -2882,7 +2878,6 @@ const MAX_TOTAL_LENGTH = 1000000;
 export interface ProcessRequestOptions {
   workspaceControls?: ResolvedWorkspaceControls | null;
   scopedDbPromise?: Promise<UserScopedDb>;
-  /** What the user ruled out when a resumed turn began, read back from its checkpoint. */
   turnToolProhibition?: TurnToolProhibition | null;
 }
 
