@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   EXPLICIT_EXECUTION_INTENT_PHRASES,
   detectExplicitCodeExecutionIntent,
+  hasCodeExecutionOfferIntent,
   hasExplicitCodeExecutionOptOut,
   hasExplicitCodeExecutionIntent,
 } from './explicit-execution-intent';
@@ -149,5 +150,53 @@ describe('detectExplicitCodeExecutionIntent', () => {
   it('agrees with the boolean wrapper', () => {
     expect(hasExplicitCodeExecutionIntent(LIVE_DEFECT_PROMPT)).toBe(true);
     expect(hasExplicitCodeExecutionIntent('how do I reverse a list in python')).toBe(false);
+  });
+});
+
+describe('hasCodeExecutionOfferIntent', () => {
+  it.each([
+    'use Python to print the first 10 square numbers',
+    'With JavaScript, list the primes under 50',
+    'In a Python script, compute the first 12 Fibonacci numbers',
+    'Using Node.js to generate 5 random UUIDs',
+    'print the first 10 square numbers in Python',
+    'Can you please evaluate 2**100 in Python',
+    'Using Python, print the first 10 squares',
+    'In JavaScript, generate 5 random numbers',
+  ])('offers the tool for %s', (prompt) => {
+    expect(hasCodeExecutionOfferIntent(prompt)).toBe(true);
+  });
+
+  it('offers without forcing when the request names a runtime but no run directive', () => {
+    const prompt = 'use Python to print the first 10 square numbers';
+    expect(hasCodeExecutionOfferIntent(prompt)).toBe(true);
+    expect(detectExplicitCodeExecutionIntent(prompt)).toBeNull();
+  });
+
+  it('includes everything the forcing detector hears', () => {
+    expect(hasCodeExecutionOfferIntent(LIVE_DEFECT_PROMPT)).toBe(true);
+    expect(hasCodeExecutionOfferIntent('Run this script and show the output')).toBe(true);
+  });
+
+  it.each([
+    'what does print() do in Python?',
+    'How do I use Python to print a list?',
+    'Is Python better than Java for beginners?',
+    'Python was created in 1991 by Guido van Rossum',
+    'Why do people use Python to build websites?',
+    'Why is list slow in Python?',
+    'Explain how to use SQL to list tables',
+    'In Python, what is a list?',
+    'With Python, how do I print a list?',
+    'Using Python, explain list comprehensions',
+    'In SQL, what does LIST mean?',
+    "Don't run any code, just use Python to print the answer in prose",
+    '',
+  ])('leaves %j alone', (prompt) => {
+    expect(hasCodeExecutionOfferIntent(prompt)).toBe(false);
+  });
+
+  it('treats a pasted snippet with no ask as context', () => {
+    expect(hasCodeExecutionOfferIntent('```python\nprint(list(range(3)))\n```')).toBe(false);
   });
 });

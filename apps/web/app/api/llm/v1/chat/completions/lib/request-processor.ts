@@ -85,7 +85,7 @@ import {
   type WebSearchRequirement,
 } from '@/lib/web-search/required-search';
 import {
-  hasExplicitCodeExecutionIntent as hasExplicitCodeExecutionRequest,
+  hasCodeExecutionOfferIntent,
   hasExplicitCodeExecutionOptOut,
 } from '@/lib/code-execution/explicit-execution-intent';
 import {
@@ -818,7 +818,7 @@ export function applyImplicitManagedToolIntent(
 
   const hasExplicitCodeExecutionIntent =
     !hasExplicitCodeExecutionOptOut(context.prompt) &&
-    (hasExplicitCodeExecutionRequest(context.prompt) ||
+    (hasCodeExecutionOfferIntent(context.prompt) ||
       (RE_CODE_EXECUTION_ACTION.test(context.prompt) &&
         RE_CODE_EXECUTION_SUBJECT.test(context.prompt)) ||
       (RE_DATA_EXECUTION_ACTION.test(context.prompt) &&

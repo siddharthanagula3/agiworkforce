@@ -12,6 +12,7 @@ import {
   resolveWebSearchRequirement,
   shouldOfferWebSearchForTurn,
 } from '@/lib/web-search/required-search';
+import { resolveCodeExecutionRequirement } from '@/lib/code-execution/required-execution';
 import { resolveRequiredExecutionEnforcement } from '@/lib/code-execution/required-execution';
 import {
   EXECUTE_CODE_TOOL,
@@ -108,6 +109,52 @@ describe('implicit managed-tool intent', () => {
     });
 
     expect(chatRequest.code_execution).toBe(true);
+  });
+
+  it.each([
+    'DOT: use Python to print the first 10 square numbers.',
+    'With JavaScript, list the primes under 50.',
+    'In a Python script, compute the first 12 Fibonacci numbers.',
+  ])('offers but does not force code execution for %s', (prompt) => {
+    const chatRequest = request({ model: getRoutingSlotModel('coding_fast') });
+
+    applyImplicitManagedToolIntent()(chatRequest, {
+      prompt,
+      taskType: 'general',
+      planTier: 'free',
+    });
+
+    expect(chatRequest.code_execution).toBe(true);
+    expect(
+      resolveCodeExecutionRequirement({
+        codeExecutionEnabled: chatRequest.code_execution,
+        requestedByCaller: false,
+        userMessage: prompt,
+      }).required,
+    ).toBe(false);
+  });
+
+  it.each([
+    'what does print() do in Python?',
+    'Is Python better than Java for beginners?',
+    'How do I use Python to print a list?',
+  ])('neither offers nor forces code execution for %s', (prompt) => {
+    const chatRequest = request();
+
+    applyImplicitManagedToolIntent()(chatRequest, {
+      prompt,
+      taskType: 'general',
+      planTier: 'free',
+    });
+
+    expect(chatRequest.code_execution).toBeUndefined();
+    expect(
+      resolveCodeExecutionRequirement({
+        codeExecutionEnabled: chatRequest.code_execution,
+        requestedByCaller: false,
+        userMessage: prompt,
+      }).required,
+    ).toBe(false);
   });
 
   it('offers code execution when the user names the capability instead of a verb', () => {

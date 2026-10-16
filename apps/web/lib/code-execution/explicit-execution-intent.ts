@@ -140,6 +140,31 @@ const RUN_DIRECTIVE_PATTERN = buildPhrasePattern(RUN_DIRECTIVE_PHRASES);
 const COMPUTATION_VERB_PATTERN = buildPhrasePattern(COMPUTATION_VERB_PHRASES);
 const RUNTIME_SUBJECT_PATTERN = buildPhrasePattern(RUNTIME_SUBJECT_PHRASES);
 const EXPLANATION_FRAME_PATTERN = buildPhrasePattern(EXPLANATION_FRAME_PHRASES);
+const OFFER_VERB_PHRASES: readonly string[] = [
+  ...COMPUTATION_VERB_PHRASES,
+  'print',
+  'prints',
+  'list',
+  'generate',
+  'evaluate',
+];
+
+const NAMED_RUNTIME = '(?:python3?|javascript|typescript|node\\.?js|sql|bash|shell)';
+const NAMED_RUNTIME_INSTRUCTION_PATTERN = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(?:use|using|with|via|in)\\s+(?:(?:a|an|the|some)\\s+)?${NAMED_RUNTIME}(?:\\s+(?:script|code|snippet|program))?\\s*(?:,|\\bto\\b)`,
+  'iu',
+);
+const IMPERATIVE_OFFER_VERB_PATTERN = new RegExp(
+  `^\\s*(?:please\\s+|(?:can|could|would)\\s+you\\s+(?:please\\s+)?)?(?:${[...OFFER_VERB_PHRASES]
+    .sort((a, b) => b.length - a.length)
+    .map(escapeForPattern)
+    .join('|')})(?![\\p{L}\\p{N}_])`,
+  'iu',
+);
+const NAMED_RUNTIME_PATTERN = new RegExp(
+  `(?<![\\p{L}\\p{N}_])${NAMED_RUNTIME}(?![\\p{L}\\p{N}_])`,
+  'iu',
+);
 const EXECUTION_OPT_OUT_PATTERN =
   /\b(?:do\s+not|don't|dont|never|avoid|without|no)\s+(?:(?:search(?:\s+the)?\s+web|web\s+search)\s+(?:or|and)\s+)?(?:actually\s+)?(?:run|running|execute|executing|use|using)\s+(?:(?:the|this|that|any|your|some)\s+)?(?:code|script|program|python|javascript|sandbox|tool)\b/iu;
 
@@ -235,4 +260,35 @@ export function hasExplicitCodeExecutionOptOut(text: string): boolean {
 
 export function hasExplicitCodeExecutionIntent(text: string): boolean {
   return detectExplicitCodeExecutionIntent(text) !== null;
+}
+
+/** Offers the tool only; detectExplicitCodeExecutionIntent alone decides a forced run. */
+export function hasCodeExecutionOfferIntent(text: string): boolean {
+  if (!text) return false;
+  if (hasExplicitCodeExecutionOptOut(text)) return false;
+  if (detectExplicitCodeExecutionIntent(text) !== null) return true;
+
+  const request = requestTextOnly(text);
+  const explanationAt = matchIndex(EXPLANATION_FRAME_PATTERN, request);
+  const framed = NAMED_RUNTIME_INSTRUCTION_PATTERN.exec(request);
+  if (framed) {
+    const rest = request.slice(framed.index + framed[0].length);
+    if (
+      IMPERATIVE_OFFER_VERB_PATTERN.test(rest) &&
+      !(explanationAt >= 0 && explanationAt < framed.index)
+    ) {
+      return true;
+    }
+  }
+
+  for (const clause of request.matchAll(CLAUSE_BREAK)) {
+    if (
+      IMPERATIVE_OFFER_VERB_PATTERN.test(clause[0]) &&
+      NAMED_RUNTIME_PATTERN.test(clause[0]) &&
+      !(explanationAt >= 0 && explanationAt < clause.index)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
