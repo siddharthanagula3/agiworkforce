@@ -2,12 +2,12 @@
   "schemaVersion": 2,
   "source": "live",
   "recordingSource": "live",
-  "runId": "27bbad65-1dc6-494f-a78c-c2be7df9543a",
+  "runId": "e8f4686b-669b-4f91-93c9-eb24919cc0bd",
   "modelKey": "gpt-6-luna",
   "routeId": "openai/gpt-6-luna",
   "recordedOn": "2026-10-16",
   "promptStamp": "chat.system@11",
-  "measuredAt": "2026-10-16T00:20:59.947Z",
+  "measuredAt": "2026-10-16T02:37:05.226Z",
   "suites": {
     "golden": {
       "version": 1,
@@ -23,19 +23,19 @@
       "score": 0.9166666666666666,
       "completeness": 0.9583333333333334,
       "met": true,
-      "measuredAt": "2026-10-16T00:18:15.723Z",
+      "measuredAt": "2026-10-16T02:34:20.063Z",
       "cost": {
         "meteredCases": 12,
-        "totalUsd": 0.0009177649999999999,
-        "meanUsd": 0.00007648041666666665,
-        "inputTokens": 34480,
-        "outputTokens": 400
+        "totalUsd": 0.0009694199999999999,
+        "meanUsd": 0.00008078499999999999,
+        "inputTokens": 36556,
+        "outputTokens": 422
       },
       "latency": {
         "timedCases": 12,
-        "p50Ms": 1577,
-        "p95Ms": 3178,
-        "ttfbP50Ms": 1282
+        "p50Ms": 2064,
+        "p95Ms": 2598,
+        "ttfbP50Ms": 1409
       },
       "retries": {
         "attempts": 12,
@@ -131,19 +131,19 @@
       "score": 1,
       "completeness": 1,
       "met": true,
-      "measuredAt": "2026-10-16T00:18:43.337Z",
+      "measuredAt": "2026-10-16T02:34:50.719Z",
       "cost": {
         "meteredCases": 10,
-        "totalUsd": 0.0009193999999999999,
-        "meanUsd": 0.00009193999999999999,
-        "inputTokens": 28676,
-        "outputTokens": 1201
+        "totalUsd": 0.0010137000000000002,
+        "meanUsd": 0.00010137000000000001,
+        "inputTokens": 30406,
+        "outputTokens": 1355
       },
       "latency": {
         "timedCases": 10,
-        "p50Ms": 2576,
-        "p95Ms": 3654,
-        "ttfbP50Ms": 1711
+        "p50Ms": 2781,
+        "p95Ms": 5054,
+        "ttfbP50Ms": 2049
       },
       "retries": {
         "attempts": 10,
@@ -221,19 +221,19 @@
       "score": 1,
       "completeness": 1,
       "met": true,
-      "measuredAt": "2026-10-16T00:19:12.081Z",
+      "measuredAt": "2026-10-16T02:35:17.797Z",
       "cost": {
         "meteredCases": 11,
-        "totalUsd": 0.001055965,
-        "meanUsd": 0.00009599681818181819,
-        "inputTokens": 31773,
-        "outputTokens": 1353
+        "totalUsd": 0.0010029950000000002,
+        "meanUsd": 0.00009118136363636366,
+        "inputTokens": 33676,
+        "outputTokens": 1209
       },
       "latency": {
         "timedCases": 11,
-        "p50Ms": 2655,
-        "p95Ms": 3654,
-        "ttfbP50Ms": 2214
+        "p50Ms": 2519,
+        "p95Ms": 3449,
+        "ttfbP50Ms": 1993
       },
       "retries": {
         "attempts": 11,
@@ -317,19 +317,19 @@
       "score": 1,
       "completeness": 1,
       "met": true,
-      "measuredAt": "2026-10-16T00:19:29.151Z",
+      "measuredAt": "2026-10-16T02:35:34.492Z",
       "cost": {
         "meteredCases": 9,
-        "totalUsd": 0.001247305,
-        "meanUsd": 0.00013858944444444443,
-        "inputTokens": 26003,
-        "outputTokens": 566
+        "totalUsd": 0.0012516650000000001,
+        "meanUsd": 0.0001390738888888889,
+        "inputTokens": 27560,
+        "outputTokens": 464
       },
       "latency": {
         "timedCases": 9,
-        "p50Ms": 1415,
-        "p95Ms": 4481,
-        "ttfbP50Ms": 1218
+        "p50Ms": 1959,
+        "p95Ms": 3365,
+        "ttfbP50Ms": 1203
       },
       "retries": {
         "attempts": 9,
@@ -388,36 +388,36 @@
       "failed": []
     },
     "chat-prompt": {
-      "version": 3,
+      "version": 4,
       "priority": "P1",
       "provenance": {
         "kind": "authored",
         "source": "hand-written in this repository from a reported Free-plan turn (a model asked to search the web about the user's own resume, with tools but no search attached, refused with an invented privacy reason) and from the eval cases proposed in the 2026-10-10 chat system prompt research summary",
         "authoredOn": "2026-10-10",
-        "notes": "Every row assumes the product chat system prompt is rendered in front of it, with the turn state the row declares: the tools it offers and, where set, its memory state. The people, resume and companies are invented. Rows added on 2026-10-11 cover artifacts, the product capabilities overview on Free and Pro, and email and writing blocks. Rows added on 2026-10-15 cover an artifact revision kept under its title, an exact format asked for over the email card, a memory deletion the app reports, a project file the web chat links under the answer, and a tool claim held to the code run the turn holds."
+        "notes": "Every row assumes the product chat system prompt is rendered in front of it, with the turn state the row declares: the tools it offers and, where set, its memory state. The people, resume and companies are invented. Rows added on 2026-10-11 cover artifacts, the product capabilities overview on Free and Pro, and email and writing blocks. Rows added on 2026-10-15 cover an artifact revision kept under its title, an exact format asked for over the email card, a memory deletion the app reports, a project file the web chat links under the answer, and a tool claim held to the code run the turn holds. A row added on 2026-10-16 covers saved memories named as the source of an answer on a turn without web search."
       },
       "threshold": 1,
-      "total": 18,
-      "passed": 16,
-      "score": 0.8888888888888888,
-      "completeness": 0.9611111111111111,
+      "total": 19,
+      "passed": 18,
+      "score": 0.9473684210526315,
+      "completeness": 0.9894736842105264,
       "met": false,
-      "measuredAt": "2026-10-16T00:20:59.947Z",
+      "measuredAt": "2026-10-16T02:37:05.226Z",
       "cost": {
-        "meteredCases": 18,
-        "totalUsd": 0.0076735499999999995,
-        "meanUsd": 0.0004263083333333333,
-        "inputTokens": 57960,
-        "outputTokens": 7907
+        "meteredCases": 19,
+        "totalUsd": 0.0068750600000000005,
+        "meanUsd": 0.00036184526315789474,
+        "inputTokens": 63999,
+        "outputTokens": 8284
       },
       "latency": {
-        "timedCases": 18,
-        "p50Ms": 2506,
-        "p95Ms": 23856,
-        "ttfbP50Ms": 1902
+        "timedCases": 19,
+        "p50Ms": 2905,
+        "p95Ms": 20096,
+        "ttfbP50Ms": 1649
       },
       "retries": {
-        "attempts": 18,
+        "attempts": 19,
         "retried": 0,
         "retryCostUsd": null
       },
@@ -443,9 +443,9 @@
           },
           "memory-honesty": {
             "total": 2,
-            "passed": 1,
-            "score": 0.5,
-            "completeness": 0.75
+            "passed": 2,
+            "score": 1,
+            "completeness": 1
           },
           "privacy": {
             "total": 2,
@@ -466,8 +466,8 @@
             "completeness": 1
           },
           "sources": {
-            "total": 1,
-            "passed": 1,
+            "total": 2,
+            "passed": 2,
             "score": 1,
             "completeness": 1
           },
@@ -486,20 +486,20 @@
             "completeness": 1
           },
           "low": {
-            "total": 16,
-            "passed": 14,
-            "score": 0.875,
-            "completeness": 0.95625
+            "total": 17,
+            "passed": 16,
+            "score": 0.9411764705882353,
+            "completeness": 0.9882352941176471
           }
         }
       },
       "skipped": [],
-      "failed": ["chat-prompt/forget-with-memory-off", "chat-prompt/what-can-you-do-free"]
+      "failed": ["chat-prompt/what-can-you-do-free"]
     }
   },
   "unsupportedSuites": {},
   "integrity": {
     "algorithm": "sha256",
-    "digest": "651e608dc955a0bd4717e49a7338cd14bd9f9ce30fd6bc1e33a0d0e95ff6acdf"
+    "digest": "07d7650efda842cf1f879b688e508a506d8d1910727a4301c10cddf74cc70e88"
   }
 }

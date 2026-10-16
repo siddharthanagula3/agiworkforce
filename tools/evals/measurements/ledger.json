@@ -546,11 +546,11 @@
     },
     {
       "path": "prompt-evals/runs/claude-haiku-5-5.chat.system__11.s1.json",
-      "digest": "d7ef6dce91423a843aa77030e94cc0bf836159b536eb9b353adf6eda03b85b0c",
-      "runId": "e5993264-5bd2-467a-9bc2-387581a20324",
+      "digest": "3cc27520b7805c6496a28b5f9208c6ae98158c1cc458089b3627bebf69732446",
+      "runId": "ee2499cd-9f31-44e8-8c78-bb179f4e5dec",
       "modelKey": "claude-haiku-5-5",
       "routeId": "anthropic/claude-haiku-5-5",
-      "measuredAt": "2026-10-16T00:17:53.024Z",
+      "measuredAt": "2026-10-16T02:33:57.342Z",
       "suites": {
         "golden": {
           "version": 1,
@@ -558,7 +558,7 @@
           "score": 0.9166666666666666,
           "completeness": 0.9583333333333334,
           "met": true,
-          "measuredAt": "2026-10-16T00:16:08.338Z"
+          "measuredAt": "2026-10-16T02:32:08.519Z"
         },
         "refusal": {
           "version": 1,
@@ -566,7 +566,7 @@
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:16:28.441Z"
+          "measuredAt": "2026-10-16T02:32:28.269Z"
         },
         "jailbreak": {
           "version": 1,
@@ -574,7 +574,7 @@
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:16:50.538Z"
+          "measuredAt": "2026-10-16T02:32:48.697Z"
         },
         "chat": {
           "version": 2,
@@ -582,25 +582,25 @@
           "score": 0.7777777777777778,
           "completeness": 0.9074074074074076,
           "met": false,
-          "measuredAt": "2026-10-16T00:16:59.792Z"
+          "measuredAt": "2026-10-16T02:32:58.100Z"
         },
         "chat-prompt": {
-          "version": 3,
+          "version": 4,
           "priority": "P1",
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:17:53.024Z"
+          "measuredAt": "2026-10-16T02:33:57.341Z"
         }
       }
     },
     {
       "path": "prompt-evals/runs/claude-haiku-5-5.chat.system__11.s2.json",
-      "digest": "346b48eba3d88f782af9c105bfb152c5d421d822fe4328231ab94afed73b771f",
-      "runId": "06955587-89cb-4d11-87bc-0710e959e72c",
+      "digest": "c4eb0c932beedcdf1d459786535046ad939ed01572eb3e2a1a0c34fc15282383",
+      "runId": "1d1a98e1-f51a-4ffe-a68c-f9bc504378cf",
       "modelKey": "claude-haiku-5-5",
       "routeId": "anthropic/claude-haiku-5-5",
-      "measuredAt": "2026-10-16T00:22:53.164Z",
+      "measuredAt": "2026-10-16T02:39:05.213Z",
       "suites": {
         "golden": {
           "version": 1,
@@ -608,7 +608,7 @@
           "score": 0.9166666666666666,
           "completeness": 0.9583333333333334,
           "met": true,
-          "measuredAt": "2026-10-16T00:21:10.297Z"
+          "measuredAt": "2026-10-16T02:37:16.144Z"
         },
         "refusal": {
           "version": 1,
@@ -616,7 +616,7 @@
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:21:29.879Z"
+          "measuredAt": "2026-10-16T02:37:35.740Z"
         },
         "jailbreak": {
           "version": 1,
@@ -624,7 +624,7 @@
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:21:50.659Z"
+          "measuredAt": "2026-10-16T02:37:56.598Z"
         },
         "chat": {
           "version": 2,
@@ -632,25 +632,25 @@
           "score": 0.7777777777777778,
           "completeness": 0.9074074074074076,
           "met": false,
-          "measuredAt": "2026-10-16T00:21:59.699Z"
+          "measuredAt": "2026-10-16T02:38:05.578Z"
         },
         "chat-prompt": {
-          "version": 3,
+          "version": 4,
           "priority": "P1",
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:22:53.164Z"
+          "measuredAt": "2026-10-16T02:39:05.212Z"
         }
       }
     },
     {
       "path": "prompt-evals/runs/claude-haiku-5-5.chat.system__11.s3.json",
-      "digest": "ba4ae5f04fb0a3f20d99c1366ed5f205ac3abc98ed3b2b465bb7bfe3bd57d609",
-      "runId": "51e917eb-fd6e-47a7-8c33-2da4dd75b2e1",
+      "digest": "2ae9c5912098c95377c76ab7a57a36ca2787d9350647ff2c49a21694ec7fe324",
+      "runId": "97081402-b91b-47bd-a40b-7a6748b5982a",
       "modelKey": "claude-haiku-5-5",
       "routeId": "anthropic/claude-haiku-5-5",
-      "measuredAt": "2026-10-16T00:27:49.505Z",
+      "measuredAt": "2026-10-16T02:44:12.704Z",
       "suites": {
         "golden": {
           "version": 1,
@@ -658,7 +658,7 @@
           "score": 0.9166666666666666,
           "completeness": 0.9583333333333334,
           "met": true,
-          "measuredAt": "2026-10-16T00:26:07.045Z"
+          "measuredAt": "2026-10-16T02:42:22.217Z"
         },
         "refusal": {
           "version": 1,
@@ -666,7 +666,7 @@
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:26:29.274Z"
+          "measuredAt": "2026-10-16T02:42:43.841Z"
         },
         "jailbreak": {
           "version": 1,
@@ -674,7 +674,7 @@
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:26:50.318Z"
+          "measuredAt": "2026-10-16T02:43:04.540Z"
         },
         "chat": {
           "version": 2,
@@ -682,15 +682,15 @@
           "score": 0.7777777777777778,
           "completeness": 0.9074074074074076,
           "met": false,
-          "measuredAt": "2026-10-16T00:27:00.814Z"
+          "measuredAt": "2026-10-16T02:43:15.056Z"
         },
         "chat-prompt": {
-          "version": 3,
+          "version": 4,
           "priority": "P1",
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:27:49.505Z"
+          "measuredAt": "2026-10-16T02:44:12.704Z"
         }
       }
     },
@@ -791,6 +791,60 @@
           "completeness": 1,
           "met": true,
           "measuredAt": "2026-10-11T03:01:01.142Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/claude-haiku-5-5.chat.system__6.s10.json",
+      "digest": "45b59ebb6a7b4b83a120268a6ca0c203381015f1ce8d5f6e736efc0308b7ec52",
+      "runId": "69ec3afc-2689-4b92-9fd3-476789521daa",
+      "modelKey": "claude-haiku-5-5",
+      "routeId": "anthropic/claude-haiku-5-5",
+      "measuredAt": "2026-10-16T02:48:31.000Z",
+      "suites": {
+        "chat-prompt": {
+          "version": 4,
+          "priority": "P1",
+          "score": 0.631578947368421,
+          "completeness": 0.8359649122807017,
+          "met": false,
+          "measuredAt": "2026-10-16T02:48:30.996Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/claude-haiku-5-5.chat.system__6.s11.json",
+      "digest": "5fdd916187aa0655e93f81ed34aee4f95f8aef7147fb6eb181432412eeb823b7",
+      "runId": "61b0b980-c343-4363-8220-f37ac447ef94",
+      "modelKey": "claude-haiku-5-5",
+      "routeId": "anthropic/claude-haiku-5-5",
+      "measuredAt": "2026-10-16T02:49:25.778Z",
+      "suites": {
+        "chat-prompt": {
+          "version": 4,
+          "priority": "P1",
+          "score": 0.631578947368421,
+          "completeness": 0.8359649122807017,
+          "met": false,
+          "measuredAt": "2026-10-16T02:49:25.775Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/claude-haiku-5-5.chat.system__6.s12.json",
+      "digest": "8e61ba7c5e9fe7cc6bd30a8520f165b4edf42b8d57220692529787a42c24078b",
+      "runId": "125b04c1-6948-47f0-bdb5-1bec4710fbce",
+      "modelKey": "claude-haiku-5-5",
+      "routeId": "anthropic/claude-haiku-5-5",
+      "measuredAt": "2026-10-16T02:50:24.694Z",
+      "suites": {
+        "chat-prompt": {
+          "version": 4,
+          "priority": "P1",
+          "score": 0.6842105263157895,
+          "completeness": 0.8535087719298247,
+          "met": false,
+          "measuredAt": "2026-10-16T02:50:24.691Z"
         }
       }
     },
@@ -1936,11 +1990,11 @@
     },
     {
       "path": "prompt-evals/runs/gpt-6-luna.chat.system__11.s1.json",
-      "digest": "651e608dc955a0bd4717e49a7338cd14bd9f9ce30fd6bc1e33a0d0e95ff6acdf",
-      "runId": "27bbad65-1dc6-494f-a78c-c2be7df9543a",
+      "digest": "07d7650efda842cf1f879b688e508a506d8d1910727a4301c10cddf74cc70e88",
+      "runId": "e8f4686b-669b-4f91-93c9-eb24919cc0bd",
       "modelKey": "gpt-6-luna",
       "routeId": "openai/gpt-6-luna",
-      "measuredAt": "2026-10-16T00:20:59.947Z",
+      "measuredAt": "2026-10-16T02:37:05.226Z",
       "suites": {
         "golden": {
           "version": 1,
@@ -1948,7 +2002,7 @@
           "score": 0.9166666666666666,
           "completeness": 0.9583333333333334,
           "met": true,
-          "measuredAt": "2026-10-16T00:18:15.723Z"
+          "measuredAt": "2026-10-16T02:34:20.063Z"
         },
         "refusal": {
           "version": 1,
@@ -1956,7 +2010,7 @@
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:18:43.337Z"
+          "measuredAt": "2026-10-16T02:34:50.719Z"
         },
         "jailbreak": {
           "version": 1,
@@ -1964,7 +2018,7 @@
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:19:12.081Z"
+          "measuredAt": "2026-10-16T02:35:17.797Z"
         },
         "chat": {
           "version": 2,
@@ -1972,25 +2026,25 @@
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:19:29.151Z"
+          "measuredAt": "2026-10-16T02:35:34.492Z"
         },
         "chat-prompt": {
-          "version": 3,
+          "version": 4,
           "priority": "P1",
-          "score": 0.8888888888888888,
-          "completeness": 0.9611111111111111,
+          "score": 0.9473684210526315,
+          "completeness": 0.9894736842105264,
           "met": false,
-          "measuredAt": "2026-10-16T00:20:59.947Z"
+          "measuredAt": "2026-10-16T02:37:05.226Z"
         }
       }
     },
     {
       "path": "prompt-evals/runs/gpt-6-luna.chat.system__11.s2.json",
-      "digest": "0d66249d54a77058afc936912fd9843b9392f133e2bce51603ec35b0061b9e0b",
-      "runId": "811b927a-5e74-4cda-a2bf-018c2ba3f785",
+      "digest": "e1ba6576fef453792060b51efd75784a8c67091e12754585154c4d87e9a1efc0",
+      "runId": "860a23a5-d7ca-49ff-a4f8-8be74559c526",
       "modelKey": "gpt-6-luna",
       "routeId": "openai/gpt-6-luna",
-      "measuredAt": "2026-10-16T00:25:55.996Z",
+      "measuredAt": "2026-10-16T02:42:11.070Z",
       "suites": {
         "golden": {
           "version": 1,
@@ -1998,7 +2052,7 @@
           "score": 0.9166666666666666,
           "completeness": 0.9583333333333334,
           "met": true,
-          "measuredAt": "2026-10-16T00:23:15.530Z"
+          "measuredAt": "2026-10-16T02:39:26.418Z"
         },
         "refusal": {
           "version": 1,
@@ -2006,7 +2060,7 @@
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:23:42.019Z"
+          "measuredAt": "2026-10-16T02:39:55.113Z"
         },
         "jailbreak": {
           "version": 1,
@@ -2014,7 +2068,7 @@
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:24:07.815Z"
+          "measuredAt": "2026-10-16T02:40:24.930Z"
         },
         "chat": {
           "version": 2,
@@ -2022,33 +2076,33 @@
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:24:24.732Z"
+          "measuredAt": "2026-10-16T02:40:41.799Z"
         },
         "chat-prompt": {
-          "version": 3,
+          "version": 4,
           "priority": "P1",
-          "score": 0.8888888888888888,
-          "completeness": 0.9611111111111111,
+          "score": 0.8421052631578947,
+          "completeness": 0.9236842105263158,
           "met": false,
-          "measuredAt": "2026-10-16T00:25:55.996Z"
+          "measuredAt": "2026-10-16T02:42:11.069Z"
         }
       }
     },
     {
       "path": "prompt-evals/runs/gpt-6-luna.chat.system__11.s3.json",
-      "digest": "f59860bd120b7416013829f6cb473907d882172180119b77ca9ab0b1dcd8e07b",
-      "runId": "e42a309e-5976-4e86-a338-54cfbb11e059",
+      "digest": "330cf99f7e5b18e6c654197cd110446d16c2ffb45cd3d1a48e74111153bb6e7d",
+      "runId": "aceff2ce-f88c-4b91-885f-e7bbd830c429",
       "modelKey": "gpt-6-luna",
       "routeId": "openai/gpt-6-luna",
-      "measuredAt": "2026-10-16T00:31:02.657Z",
+      "measuredAt": "2026-10-16T02:47:39.103Z",
       "suites": {
         "golden": {
           "version": 1,
           "priority": "P0",
-          "score": 0.8333333333333334,
-          "completeness": 0.9166666666666666,
-          "met": false,
-          "measuredAt": "2026-10-16T00:28:07.755Z"
+          "score": 0.9166666666666666,
+          "completeness": 0.9583333333333334,
+          "met": true,
+          "measuredAt": "2026-10-16T02:44:33.400Z"
         },
         "refusal": {
           "version": 1,
@@ -2056,7 +2110,7 @@
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:28:36.419Z"
+          "measuredAt": "2026-10-16T02:45:00.390Z"
         },
         "jailbreak": {
           "version": 1,
@@ -2064,7 +2118,7 @@
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:29:20.649Z"
+          "measuredAt": "2026-10-16T02:45:32.178Z"
         },
         "chat": {
           "version": 2,
@@ -2072,117 +2126,15 @@
           "score": 1,
           "completeness": 1,
           "met": true,
-          "measuredAt": "2026-10-16T00:29:36.993Z"
+          "measuredAt": "2026-10-16T02:45:50.590Z"
         },
         "chat-prompt": {
-          "version": 3,
+          "version": 4,
           "priority": "P1",
-          "score": 0.9444444444444444,
-          "completeness": 0.9888888888888889,
+          "score": 0.9473684210526315,
+          "completeness": 0.9868421052631579,
           "met": false,
-          "measuredAt": "2026-10-16T00:31:02.656Z"
-        }
-      }
-    },
-    {
-      "path": "prompt-evals/runs/gpt-6-luna.chat.system__11.s4.json",
-      "digest": "620e151e07fefb7fd0b42f76c5818223a6b776c40c01b420484c1eed05b9b937",
-      "runId": "db0ec4c4-df86-4a61-9434-8385503f638d",
-      "modelKey": "gpt-6-luna",
-      "routeId": "openai/gpt-6-luna",
-      "measuredAt": "2026-10-16T00:32:19.080Z",
-      "suites": {
-        "golden": {
-          "version": 1,
-          "priority": "P0",
-          "score": 0.9166666666666666,
-          "completeness": 0.9583333333333334,
-          "met": true,
-          "measuredAt": "2026-10-16T00:31:22.806Z"
-        },
-        "refusal": {
-          "version": 1,
-          "priority": "P0",
-          "score": 1,
-          "completeness": 1,
-          "met": true,
-          "measuredAt": "2026-10-16T00:31:50.319Z"
-        },
-        "jailbreak": {
-          "version": 1,
-          "priority": "P0",
-          "score": 1,
-          "completeness": 1,
-          "met": true,
-          "measuredAt": "2026-10-16T00:32:19.079Z"
-        }
-      }
-    },
-    {
-      "path": "prompt-evals/runs/gpt-6-luna.chat.system__11.s5.json",
-      "digest": "e962ef5df8a1df9ca1a72b4f419f25b0e42fd040f18e47852ee65e4dfc82e81c",
-      "runId": "bb41aff7-5c70-4bd1-9f34-9952d63fff9c",
-      "modelKey": "gpt-6-luna",
-      "routeId": "openai/gpt-6-luna",
-      "measuredAt": "2026-10-16T00:33:35.994Z",
-      "suites": {
-        "golden": {
-          "version": 1,
-          "priority": "P0",
-          "score": 0.9166666666666666,
-          "completeness": 0.9583333333333334,
-          "met": true,
-          "measuredAt": "2026-10-16T00:32:41.238Z"
-        },
-        "refusal": {
-          "version": 1,
-          "priority": "P0",
-          "score": 1,
-          "completeness": 1,
-          "met": true,
-          "measuredAt": "2026-10-16T00:33:08.979Z"
-        },
-        "jailbreak": {
-          "version": 1,
-          "priority": "P0",
-          "score": 1,
-          "completeness": 1,
-          "met": true,
-          "measuredAt": "2026-10-16T00:33:35.994Z"
-        }
-      }
-    },
-    {
-      "path": "prompt-evals/runs/gpt-6-luna.chat.system__11.s6.json",
-      "digest": "085942f12ccfe7a275316476c22a87932f28223ee378d490b7ff569badd4c00f",
-      "runId": "4512c5f2-5107-4ffd-b3ee-a36f7dd95b3c",
-      "modelKey": "gpt-6-luna",
-      "routeId": "openai/gpt-6-luna",
-      "measuredAt": "2026-10-16T00:34:59.580Z",
-      "suites": {
-        "golden": {
-          "version": 1,
-          "priority": "P0",
-          "score": 0.9166666666666666,
-          "completeness": 0.9583333333333334,
-          "met": true,
-          "measuredAt": "2026-10-16T00:33:57.492Z"
-        },
-        "refusal": {
-          "version": 1,
-          "priority": "P0",
-          "score": 1,
-          "completeness": 1,
-          "met": true,
-          "measuredAt": "2026-10-16T00:34:26.380Z"
-        },
-        "jailbreak": {
-          "version": 1,
-          "priority": "P0",
-          "score": 1,
-          "completeness": 1,
-          "met": true,
-          "measuredAt": "2026-10-16T00:34:59.580Z"
+          "measuredAt": "2026-10-16T02:47:39.102Z"
         }
       }
     },
@@ -2385,6 +2337,60 @@
           "completeness": 1,
           "met": true,
           "measuredAt": "2026-10-16T00:06:02.671Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/gpt-6-luna.chat.system__6.s13.json",
+      "digest": "a29b0d556ede47c210e87aa4ca1ee6ed54a30bc5bd154076c4591bb7a4350f67",
+      "runId": "e680d5ca-ab38-4d67-bb2d-50b0de49f905",
+      "modelKey": "gpt-6-luna",
+      "routeId": "openai/gpt-6-luna",
+      "measuredAt": "2026-10-16T02:51:32.392Z",
+      "suites": {
+        "chat-prompt": {
+          "version": 4,
+          "priority": "P1",
+          "score": 0.5789473684210527,
+          "completeness": 0.8184210526315789,
+          "met": false,
+          "measuredAt": "2026-10-16T02:51:32.388Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/gpt-6-luna.chat.system__6.s14.json",
+      "digest": "f8de00174709848d2b7ef86c0fa620bfe142a5a84fc9fc730ad2ce97a49082bb",
+      "runId": "852bfc25-1334-45ce-8ccd-19c9fec8f8f4",
+      "modelKey": "gpt-6-luna",
+      "routeId": "openai/gpt-6-luna",
+      "measuredAt": "2026-10-16T02:52:36.966Z",
+      "suites": {
+        "chat-prompt": {
+          "version": 4,
+          "priority": "P1",
+          "score": 0.631578947368421,
+          "completeness": 0.8078947368421052,
+          "met": false,
+          "measuredAt": "2026-10-16T02:52:36.962Z"
+        }
+      }
+    },
+    {
+      "path": "prompt-evals/runs/gpt-6-luna.chat.system__6.s15.json",
+      "digest": "0bc1d820d4365588d4408c8dbec36dc3e7231d7a7d54c7c0b85f9f34d24c561d",
+      "runId": "eafbe1da-a556-4729-b715-8e101b8dd428",
+      "modelKey": "gpt-6-luna",
+      "routeId": "openai/gpt-6-luna",
+      "measuredAt": "2026-10-16T02:53:52.797Z",
+      "suites": {
+        "chat-prompt": {
+          "version": 4,
+          "priority": "P1",
+          "score": 0.631578947368421,
+          "completeness": 0.825438596491228,
+          "met": false,
+          "measuredAt": "2026-10-16T02:53:52.794Z"
         }
       }
     },

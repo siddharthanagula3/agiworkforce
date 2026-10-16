@@ -2,12 +2,12 @@
   "schemaVersion": 2,
   "source": "live",
   "recordingSource": "live",
-  "runId": "06955587-89cb-4d11-87bc-0710e959e72c",
+  "runId": "1d1a98e1-f51a-4ffe-a68c-f9bc504378cf",
   "modelKey": "claude-haiku-5-5",
   "routeId": "anthropic/claude-haiku-5-5",
   "recordedOn": "2026-10-16",
   "promptStamp": "chat.system@11",
-  "measuredAt": "2026-10-16T00:22:53.164Z",
+  "measuredAt": "2026-10-16T02:39:05.213Z",
   "suites": {
     "golden": {
       "version": 1,
@@ -23,19 +23,19 @@
       "score": 0.9166666666666666,
       "completeness": 0.9583333333333334,
       "met": true,
-      "measuredAt": "2026-10-16T00:21:10.297Z",
+      "measuredAt": "2026-10-16T02:37:16.144Z",
       "cost": {
         "meteredCases": 12,
-        "totalUsd": 0.0050407,
-        "meanUsd": 0.0004200583333333334,
-        "inputTokens": 47867,
-        "outputTokens": 508
+        "totalUsd": 0.0052739000000000015,
+        "meanUsd": 0.0004394916666666668,
+        "inputTokens": 50699,
+        "outputTokens": 408
       },
       "latency": {
         "timedCases": 12,
-        "p50Ms": 712,
-        "p95Ms": 1505,
-        "ttfbP50Ms": 614
+        "p50Ms": 751,
+        "p95Ms": 1325,
+        "ttfbP50Ms": 675
       },
       "retries": {
         "attempts": 12,
@@ -131,19 +131,19 @@
       "score": 1,
       "completeness": 1,
       "met": true,
-      "measuredAt": "2026-10-16T00:21:29.879Z",
+      "measuredAt": "2026-10-16T02:37:35.740Z",
       "cost": {
         "meteredCases": 10,
-        "totalUsd": 0.0051154,
-        "meanUsd": 0.00051154,
-        "inputTokens": 39864,
-        "outputTokens": 2258
+        "totalUsd": 0.005383400000000001,
+        "meanUsd": 0.0005383400000000001,
+        "inputTokens": 42179,
+        "outputTokens": 2331
       },
       "latency": {
         "timedCases": 10,
-        "p50Ms": 1888,
-        "p95Ms": 3010,
-        "ttfbP50Ms": 687
+        "p50Ms": 1904,
+        "p95Ms": 3162,
+        "ttfbP50Ms": 634
       },
       "retries": {
         "attempts": 10,
@@ -221,19 +221,19 @@
       "score": 1,
       "completeness": 1,
       "met": true,
-      "measuredAt": "2026-10-16T00:21:50.659Z",
+      "measuredAt": "2026-10-16T02:37:56.598Z",
       "cost": {
         "meteredCases": 11,
-        "totalUsd": 0.005565100000000001,
-        "meanUsd": 0.0005059181818181819,
-        "inputTokens": 44241,
-        "outputTokens": 2282
+        "totalUsd": 0.0058967,
+        "meanUsd": 0.0005360636363636364,
+        "inputTokens": 46792,
+        "outputTokens": 2435
       },
       "latency": {
         "timedCases": 11,
-        "p50Ms": 1994,
-        "p95Ms": 2902,
-        "ttfbP50Ms": 1256
+        "p50Ms": 1680,
+        "p95Ms": 3334,
+        "ttfbP50Ms": 685
       },
       "retries": {
         "attempts": 11,
@@ -317,19 +317,19 @@
       "score": 0.7777777777777778,
       "completeness": 0.9074074074074076,
       "met": false,
-      "measuredAt": "2026-10-16T00:21:59.699Z",
+      "measuredAt": "2026-10-16T02:38:05.578Z",
       "cost": {
         "meteredCases": 9,
-        "totalUsd": 0.003983700000000001,
-        "meanUsd": 0.0004426333333333334,
-        "inputTokens": 36067,
-        "outputTokens": 754
+        "totalUsd": 0.0042176,
+        "meanUsd": 0.00046862222222222226,
+        "inputTokens": 38191,
+        "outputTokens": 797
       },
       "latency": {
         "timedCases": 9,
-        "p50Ms": 756,
-        "p95Ms": 2640,
-        "ttfbP50Ms": 596
+        "p50Ms": 752,
+        "p95Ms": 2055,
+        "ttfbP50Ms": 651
       },
       "retries": {
         "attempts": 9,
@@ -388,36 +388,36 @@
       "failed": ["chat/ask-when-ambiguous", "chat/says-it-does-not-know"]
     },
     "chat-prompt": {
-      "version": 3,
+      "version": 4,
       "priority": "P1",
       "provenance": {
         "kind": "authored",
         "source": "hand-written in this repository from a reported Free-plan turn (a model asked to search the web about the user's own resume, with tools but no search attached, refused with an invented privacy reason) and from the eval cases proposed in the 2026-10-10 chat system prompt research summary",
         "authoredOn": "2026-10-10",
-        "notes": "Every row assumes the product chat system prompt is rendered in front of it, with the turn state the row declares: the tools it offers and, where set, its memory state. The people, resume and companies are invented. Rows added on 2026-10-11 cover artifacts, the product capabilities overview on Free and Pro, and email and writing blocks. Rows added on 2026-10-15 cover an artifact revision kept under its title, an exact format asked for over the email card, a memory deletion the app reports, a project file the web chat links under the answer, and a tool claim held to the code run the turn holds."
+        "notes": "Every row assumes the product chat system prompt is rendered in front of it, with the turn state the row declares: the tools it offers and, where set, its memory state. The people, resume and companies are invented. Rows added on 2026-10-11 cover artifacts, the product capabilities overview on Free and Pro, and email and writing blocks. Rows added on 2026-10-15 cover an artifact revision kept under its title, an exact format asked for over the email card, a memory deletion the app reports, a project file the web chat links under the answer, and a tool claim held to the code run the turn holds. A row added on 2026-10-16 covers saved memories named as the source of an answer on a turn without web search."
       },
       "threshold": 1,
-      "total": 18,
-      "passed": 18,
+      "total": 19,
+      "passed": 19,
       "score": 1,
       "completeness": 1,
       "met": true,
-      "measuredAt": "2026-10-16T00:22:53.164Z",
+      "measuredAt": "2026-10-16T02:39:05.212Z",
       "cost": {
-        "meteredCases": 18,
-        "totalUsd": 0.0135885,
-        "meanUsd": 0.0007549166666666666,
-        "inputTokens": 85205,
-        "outputTokens": 10136
+        "meteredCases": 19,
+        "totalUsd": 0.015069799999999998,
+        "meanUsd": 0.0007931473684210525,
+        "inputTokens": 93508,
+        "outputTokens": 11438
       },
       "latency": {
-        "timedCases": 18,
-        "p50Ms": 2421,
-        "p95Ms": 7406,
-        "ttfbP50Ms": 1653
+        "timedCases": 19,
+        "p50Ms": 2683,
+        "p95Ms": 8216,
+        "ttfbP50Ms": 1563
       },
       "retries": {
-        "attempts": 18,
+        "attempts": 19,
         "retried": 0,
         "retryCostUsd": null
       },
@@ -466,8 +466,8 @@
             "completeness": 1
           },
           "sources": {
-            "total": 1,
-            "passed": 1,
+            "total": 2,
+            "passed": 2,
             "score": 1,
             "completeness": 1
           },
@@ -486,8 +486,8 @@
             "completeness": 1
           },
           "low": {
-            "total": 16,
-            "passed": 16,
+            "total": 17,
+            "passed": 17,
             "score": 1,
             "completeness": 1
           }
@@ -500,6 +500,6 @@
   "unsupportedSuites": {},
   "integrity": {
     "algorithm": "sha256",
-    "digest": "346b48eba3d88f782af9c105bfb152c5d421d822fe4328231ab94afed73b771f"
+    "digest": "c4eb0c932beedcdf1d459786535046ad939ed01572eb3e2a1a0c34fc15282383"
   }
 }
