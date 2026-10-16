@@ -992,7 +992,7 @@ export function ApprovalScenePreview({ className }: { className?: string }) {
             </div>
           </div>
         </div>
-        <AppComposer placeholder={WEB_COMPOSER_PLACEHOLDER.turnActive} />
+        <AppComposer turnActive />
       </div>
     </SceneShell>
   );

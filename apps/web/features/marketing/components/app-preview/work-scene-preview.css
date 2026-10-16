@@ -284,15 +284,6 @@
   position: relative;
 }
 
-[data-design='agi'] .agi-app-send.agi-work-stop {
-  background: var(--chat-text-primary);
-  color: var(--chat-bg);
-}
-
-[data-design='agi'] .agi-work-stop-glyph {
-  fill: currentColor;
-}
-
 [data-design='agi'] .agi-work-bar {
   display: flex;
   align-items: center;

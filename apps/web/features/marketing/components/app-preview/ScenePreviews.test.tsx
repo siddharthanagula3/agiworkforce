@@ -2632,14 +2632,19 @@ describe('every web scene composer shows what the web chat renders in that state
     ['composer', () => <ComposerScenePreview view="attachments" />],
   ] as const)('the %s scene sits in a conversation that is not answering', (_name, make) => {
     const root = draw(make());
+    expect(root.querySelector('.agi-app-stop')).toBeNull();
+    expect(root.querySelector('.agi-app-send .lucide-audio-lines')).not.toBeNull();
     for (const shown of texts(root, '.agi-app-placeholder'))
       expect(shown).toBe(englishResources.chat.placeholder);
   });
 
   it('keeps the turn open while a tool waits for approval', () => {
-    expect(text(draw(<ApprovalScenePreview />), '.agi-app-placeholder')).toBe(
-      WEB_COMPOSER_PLACEHOLDER.turnActive,
-    );
+    const root = draw(<ApprovalScenePreview />);
+    expect(text(root, '.agi-app-placeholder')).toBe(WEB_COMPOSER_PLACEHOLDER.turnActive);
+    const slot = root.querySelector('.agi-app-composer-row')?.lastElementChild;
+    expect(slot).toHaveClass('agi-app-send', 'agi-app-stop');
+    expect(slot?.querySelector('svg.lucide-square')).not.toBeNull();
+    expect(root.querySelector('.agi-app-composer .lucide-audio-lines')).toBeNull();
     expectSource('apps/web/features/chat/components/Composer/ChatComposerNew.tsx', [
       `const TURN_ACTIVE_PLACEHOLDER = '${WEB_COMPOSER_PLACEHOLDER.turnActive}';`,
       'const isTurnActive = isLoading || isGenerating;',
@@ -2647,6 +2652,16 @@ describe('every web scene composer shows what the web chat renders in that state
     ]);
     expectSource('apps/web/features/chat/pages/WebChatPage.tsx', [
       'isGenerating={isStreaming || imageTurnActive}',
+    ]);
+    expectSource('apps/web/features/chat/components/Composer/ChatComposerNew.tsx', [
+      "const sendButtonMode = isTurnActive ? 'stop' : 'send';",
+      "{onEnterVoiceMode && canUseVoice && sendButtonMode !== 'stop' && !hasContent ? (",
+    ]);
+    expectSource('apps/web/features/chat/components/Composer/SendButton.tsx', [
+      "if (mode === 'stop') {",
+      'aria-label="Stop the current response"',
+      '<Square className="h-4 w-4" fill="currentColor" aria-hidden="true" />',
+      'rounded-full bg-foreground text-background',
     ]);
     expectSource('apps/web/features/chat/components/messages/MessageBubble.tsx', [
       "// The turn's SSE connection stays open while a decision is outstanding, so",

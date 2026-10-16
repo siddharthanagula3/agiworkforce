@@ -503,6 +503,15 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
   color: var(--chat-text-primary);
 }
 
+[data-design='agi'] .agi-app-send.agi-app-stop {
+  background: var(--chat-text-primary);
+  color: var(--chat-bg);
+}
+
+[data-design='agi'] .agi-app-stop-glyph {
+  fill: currentColor;
+}
+
 [data-design='agi'] .agi-app-tabstrip,
 [data-design='agi'] .agi-app-toolbar {
   display: flex;

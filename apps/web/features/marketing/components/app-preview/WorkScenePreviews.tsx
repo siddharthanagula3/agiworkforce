@@ -15,7 +15,6 @@ import {
   PauseCircle,
   Play,
   Plus,
-  Square,
 } from 'lucide-react';
 import {
   detectFileDiff,
@@ -34,6 +33,7 @@ import { AgiMark } from '@/shared/components/agi/AgiMark';
 import {
   AppComposer,
   AppSidebar,
+  ComposerStop,
   PREVIEW_GEOMETRY,
   PreviewRoot,
   TrafficLights,
@@ -99,9 +99,7 @@ function WorkComposer() {
             <ChevronDown className="agi-app-icon agi-app-icon--sm" />
           </span>
           <Mic className="agi-app-icon agi-app-icon--lg" />
-          <span className="agi-app-send agi-work-stop">
-            <Square className="agi-app-icon agi-work-stop-glyph" />
-          </span>
+          <ComposerStop />
         </div>
       </div>
       <div className="agi-work-bar">
@@ -275,7 +273,7 @@ export function DiffScenePreview({ className }: { className?: string }) {
       label="Authored example of a file edit waiting for approval in a chat"
       className={className}
       chats={DIFF_SIDEBAR_CHATS}
-      composer={<AppComposer placeholder={WEB_COMPOSER_PLACEHOLDER.turnActive} />}
+      composer={<AppComposer turnActive />}
     >
       <p className="agi-app-user">{DIFF_TASK}</p>
       <div className="agi-app-reply">

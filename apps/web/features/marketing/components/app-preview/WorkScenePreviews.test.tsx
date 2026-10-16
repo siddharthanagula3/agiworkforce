@@ -247,7 +247,7 @@ describe('AGI Work run in the thread', () => {
     const composer = container.querySelector('.agi-work-composer') as HTMLElement;
     expect(texts(composer, '.agi-app-seg span[data-on]')).toEqual([AGI_WORK_LABEL]);
     expect(text(composer, '.agi-app-placeholder')).toBe('Follow up');
-    expect(composer.querySelector('.agi-app-send.agi-work-stop svg')).not.toBeNull();
+    expect(composer.querySelector('.agi-app-send.agi-app-stop svg')).not.toBeNull();
     expect(texts(composer, '.agi-work-bar > span')).toEqual(['Project', 'Files', 'Connectors']);
     expect(composer.querySelectorAll('.agi-work-bar svg')).toHaveLength(3);
   });
@@ -321,6 +321,10 @@ describe('file edit waiting for approval', () => {
 
   it('keeps the turn open in the composer while the decision is outstanding', () => {
     expect(texts(container, '.agi-app-placeholder')).toEqual([WEB_COMPOSER_PLACEHOLDER.turnActive]);
+    const slot = container.querySelector('.agi-app-composer-row')?.lastElementChild;
+    expect(slot).toHaveClass('agi-app-send', 'agi-app-stop');
+    expect(slot?.querySelector('svg.lucide-square')).not.toBeNull();
+    expect(container.querySelector('.agi-app-composer .lucide-audio-lines')).toBeNull();
   });
 
   it('opens the run on the decision it is holding', () => {

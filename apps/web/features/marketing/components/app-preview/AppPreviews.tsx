@@ -45,6 +45,7 @@ import {
   Shield,
   Signal,
   Slash,
+  Square,
   SquarePen,
   TerminalSquare,
   ThumbsDown,
@@ -265,24 +266,37 @@ export function ReplyActions({ markMore }: { markMore?: number }) {
   );
 }
 
+export function ComposerStop() {
+  return (
+    <span className="agi-app-send agi-app-stop">
+      <Square className="agi-app-icon agi-app-stop-glyph" />
+    </span>
+  );
+}
+
 export function AppComposer({
-  placeholder = WEB_COMPOSER_PLACEHOLDER.thread,
+  placeholder,
   draft,
   markModel,
+  turnActive = false,
   children,
 }: {
   placeholder?: string;
   draft?: string;
   markModel?: number;
+  turnActive?: boolean;
   children?: ReactNode;
 }) {
+  const shownPlaceholder =
+    placeholder ??
+    (turnActive ? WEB_COMPOSER_PLACEHOLDER.turnActive : WEB_COMPOSER_PLACEHOLDER.thread);
   return (
     <div className="agi-app-composer">
       {children}
       {draft ? (
         <span className="agi-app-draft">{draft}</span>
       ) : (
-        <span className="agi-app-placeholder">{placeholder}</span>
+        <span className="agi-app-placeholder">{shownPlaceholder}</span>
       )}
       <div className="agi-app-composer-row">
         <Plus className="agi-app-icon agi-app-icon--lg" />
@@ -302,9 +316,13 @@ export function AppComposer({
           </span>
         </Marked>
         <Mic className="agi-app-icon agi-app-icon--lg" />
-        <span className="agi-app-send">
-          <AudioLines className="agi-app-icon" />
-        </span>
+        {turnActive ? (
+          <ComposerStop />
+        ) : (
+          <span className="agi-app-send">
+            <AudioLines className="agi-app-icon" />
+          </span>
+        )}
       </div>
     </div>
   );
